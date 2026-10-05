@@ -1452,6 +1452,14 @@ impl WasmGcEmitter {
 					}
 					return;
 				}
+				// a lone word that names nothing is a symbol; one close to a defined name may be a typo (near-miss warning)
+				if !self.data_context {
+					if let Err(error) = self.warn_near_miss(s) {
+						let message = match error { Node::Error(reason) => reason.drop_meta().name(), other => other.serialize() };
+						self.emit_type_error(func, message);
+						return;
+					}
+				}
 				self.emit_string_call(func, s, "new_symbol");
 			}
 			Node::Key(left, op, right) => {

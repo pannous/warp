@@ -40,8 +40,12 @@ fn juxtaposed_text(argument: &Node) -> Option<Node> {
 /// The Ask topic of `xs.insert(i, x)` with two Ints: answers are remembered per topic
 const INSERT_ORDER_TOPIC: &str = "insert-order";
 /// The got-it topic of an unknown word applied to a value (`cube 3`)
-/// `quote cube 3`, `data cube 3`: the rest is data (P62)
-const QUOTE_WORDS: [&str; 2] = ["quote", "data"];
+/// `data cube 3`: the rest is data (P62, P63: `data` is the word for what never runs)
+const QUOTE_WORDS: [&str; 1] = ["data"];
+/// The got-it topic of a lone word close to a defined name
+const NEAR_MISS_TOPIC: &str = "near-miss";
+/// Words the near-miss warning compares with besides the program's own names
+const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "reverse"];
 
 impl WasmGcEmitter {
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
@@ -601,7 +605,12 @@ impl WasmGcEmitter {
 	/// lists (`hello world`) are not judged here
 	fn unknown_word_error(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<String> {
 		let in_code = matches!((bracket, separator), (Bracket::None | Bracket::Round, Separator::Space) | (Bracket::Square, _));
-		let is_value = |item: &Node| !matches!(item.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
+		// an argument: a value or a name the program defines (`cube x`); unknown words alone are symbols (`[red green]`)
+		let is_value = |item: &Node| match item.drop_meta() {
+			Node::Symbol(name) => self.unknown_word(item).is_none() && !name.is_empty(),
+			Node::List(_, Bracket::Curly, _) => false,
+			_ => true,
+		};
 		// only lists of atoms: a list with an operator (`foo x = 3`) names its undefined variable on its own
 		let is_atom = |item: &Node| matches!(item.drop_meta(), Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(..));
 		if self.data_context || !in_code || !items.iter().any(is_value) || !items.iter().all(is_atom) {
@@ -610,7 +619,7 @@ impl WasmGcEmitter {
 		let name = items.iter().find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))?;
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
 		let text = written.serialize().trim().to_string();
-		let message = format!("undefined: {name} in `{text}`; define {name}, or write `quote {text}` for data");
+		let message = format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data");
 		Some(crate::diagnostic::Diagnostic::at(&written, message).to_string())
 	}
 
@@ -619,7 +628,29 @@ impl WasmGcEmitter {
 		!self.resolves_call(name) && !crate::units::is_unit(name) && self.ctx.type_registry.get_by_name(name).is_none()
 	}
 
-	/// `quote cube 3`, `data cube 3`: the words after the prefix as data (P62); true when it was one
+	/// `pirnt`: a lone word that names nothing but is one or two letters away from a defined name; a got-it warning
+	pub(super) fn warn_near_miss(&self, word: &str) -> Result<(), Node> {
+		use crate::diagnostic::{ask, reading, Ask, Fallback};
+		if word.chars().count() < 3 || self.is_known_word(word) {
+			return Ok(());
+		}
+		let allowed = if word.chars().count() < 6 { 1 } else { 2 };
+		let mut names: Vec<String> = self.ctx.user_functions.keys().chain(self.ctx.user_globals.keys()).cloned().collect();
+		names.extend(self.scope.local_names());
+		names.extend(KNOWN_WORDS.iter().map(|word| word.to_string()));
+		let Some(near) = names.into_iter().filter(|name| name != word).find(|name| edit_distance(word, name) <= allowed) else { return Ok(()) };
+		let question = Ask::new(NEAR_MISS_TOPIC, format!("`{word}` names nothing: a symbol, or did you mean {near}?"),
+			vec![reading("the symbol", &format!("data {word}")), reading(&format!("the name {near}"), &near)], Fallback::Warning).written(word);
+		let (line, column) = self.source_position.unwrap_or((0, 0));
+		let question = question.at(line, column);
+		ask(&question).map(|_| ())
+	}
+
+	fn is_known_word(&self, word: &str) -> bool {
+		self.resolves_call(word) || crate::units::is_unit(word) || crate::analyzer::type_word_kind(word).is_some()
+	}
+
+	/// `data cube 3`: the words after the prefix as data (P62); true when it was one
 	fn emit_quoted(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
 		let [prefix, rest @ ..] = items else { return false };
 		if *bracket != Bracket::None || *separator != Separator::Space || rest.is_empty() || !matches!(prefix.drop_meta(), Node::Symbol(word) if QUOTE_WORDS.contains(&word.as_str())) {
@@ -790,4 +821,26 @@ impl WasmGcEmitter {
 		};
 		name.filter(|name| self.ctx.user_functions.contains_key(name))
 	}
+}
+
+/// Edit distance (insertions, deletions, substitutions, adjacent swaps) between two words
+fn edit_distance(a: &str, b: &str) -> usize {
+	let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+	let mut rows = vec![vec![0usize; b.len() + 1]; a.len() + 1];
+	for (i, row) in rows.iter_mut().enumerate() {
+		row[0] = i;
+	}
+	for j in 0..=b.len() {
+		rows[0][j] = j;
+	}
+	for i in 1..=a.len() {
+		for j in 1..=b.len() {
+			let cost = usize::from(a[i - 1] != b[j - 1]);
+			rows[i][j] = (rows[i - 1][j] + 1).min(rows[i][j - 1] + 1).min(rows[i - 1][j - 1] + cost);
+			if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+				rows[i][j] = rows[i][j].min(rows[i - 2][j - 2] + 1);
+			}
+		}
+	}
+	rows[a.len()][b.len()]
 }
