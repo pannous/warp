@@ -143,3 +143,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 p60-catch-except
 - P60: `try {…} catch {…}`, `catch e {…}`, `try: … except: …`, `except E:` / `except E as e:` are synonyms of `try X else Y`
   (wasp_parser FALLBACK_WORDS, parse_caught_name); using the caught name is a loud error for now.
+
+## 2026-10-05 p47-task-list-literal (P47 stage 1)
+- `[a, b]` of task variables gave the last result only: inside `[…]` an unbracketed sequence ending in a value (the
+  checked await) is a computed element, not a statement (analyzer is_statement).
