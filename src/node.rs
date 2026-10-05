@@ -734,12 +734,9 @@ impl Node {
 	}
 
 	// member functions taking self
+	/// The number of elements (P40: size counts elements, byte_size gives bytes): `len`
 	pub fn size(&self) -> usize {
-		match self {
-			List(elements, _, _) => elements.len(),
-			Meta { node, .. } => node.size(),
-			_ => 0,
-		}
+		self.len()
 	}
 
 	pub fn get(&self, i: usize) -> &Node {
@@ -875,8 +872,8 @@ impl Node {
 		}
 	}
 
-	// fixme unify with size() ?
-	// fixme create one variant which counts meta comment nodes and one which ignores them
+	/// The number of elements of a list (0 for anything else). Comments are never elements: the parser attaches them
+	/// as metadata to the neighbouring element (`a // note` is one element), so no variant needs to count them.
 	pub fn len(&self) -> usize {
 		match self {
 			List(items, _, _) => items.len(),
