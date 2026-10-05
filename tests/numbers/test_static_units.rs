@@ -30,8 +30,8 @@ fn test_dimension_errors_are_compile_errors() {
 
 #[test]
 fn test_unsupported_uses_stay_loud() {
-	// print is covered since stage 3 (test_static_units_output.rs); lists are not yet
-	fails_with("total = 0 m; for i in 1..3 { total += 5 m }; xs = [total, 1 m]; xs#1", "quantities compute only in constant expressions");
+	// print since stage 3, list elements since stage 4; a whole list printed is not yet
+	fails_with("total = 0 m; for i in 1..3 { total += 5 m }; xs = [total, 1 m]; print xs", "quantities compute only in constant expressions");
 }
 
 #[test]

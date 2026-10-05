@@ -5,8 +5,8 @@ use crate::common::fails_with;
 #[test]
 fn test_quantities_at_run_time_fail_loudly_naming_the_unit() {
 	// loops and branches compute since static units stage 1 (test_static_units.rs), functions since stage 2
-	// print since stage 3
-	for code in ["xs = [1 m, 2 m]; xs#1 + xs#2", "sqrt(4 m)"] {
+	// print since stage 3, list elements and √ since stage 4
+	for code in ["xs = [1 m, 2 m]; print xs"] {
 		fails_with(code, "quantities compute only in constant expressions");
 	}
 }
