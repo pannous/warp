@@ -22,6 +22,7 @@ mod test_to_definition;
 mod test_multi_value;
 mod test_undefined_calls;
 mod test_tuple_returns;
+mod test_type_dispatch;
 mod test_typed_signatures;
 mod test_object_arguments;
 mod test_return_type_dispatch;
