@@ -504,6 +504,9 @@ PASSED:
   ✓ functions::test_named_arguments::a_missing_or_unknown_argument_is_an_error
   ✓ functions::test_named_arguments::named_arguments_set_free_variables_of_the_body
   ✓ functions::test_named_arguments::named_arguments_set_parameters_in_any_order
+  ✓ functions::test_nonlocal_passed_around::test_a_nested_function_passed_around_reads_the_current_value
+  ✓ functions::test_nonlocal_passed_around::test_a_nested_function_reads_a_main_level_variable
+  ✓ functions::test_nonlocal_passed_around::test_a_sibling_calls_a_nested_function
   ✓ functions::test_object_arguments::a_class_instance_is_passed_to_a_class_typed_parameter
   ✓ functions::test_object_arguments::a_class_instance_is_passed_to_an_untyped_parameter
   ✓ functions::test_object_arguments::a_missing_field_of_a_map_argument_is_an_error
@@ -2196,4 +2199,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-35 ignored, 2191 passed, 0 failed, 2191 total tested
+35 ignored, 2194 passed, 0 failed, 2194 total tested
