@@ -52,6 +52,7 @@ pub fn lower(node: Node) -> Node {
 	extract_user_functions(&mut context, &node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
 	collect_assigned_names(&node, &mut shadowed);
+	shadowed.extend(context.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())));
 	expand(node, &shadowed)
 }
 
@@ -124,6 +125,9 @@ fn expand(node: Node, shadowed: &HashSet<String>) -> Node {
 			}
 			Node::List(items.into_iter().map(|item| expand(item, shadowed)).collect(), bracket, separator)
 		}
+		Node::Key(subject, Op::Eq, right) if is_declaration(&subject, &right, shadowed).is_some() => {
+			expand(is_declaration(&subject, &right, shadowed).expect("guarded"), shadowed)
+		}
 		Node::Key(subject, Op::Eq, right) => match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
 			Some(spec) if is_equality_operand(&right) => compared_with_type(*subject, &right, spec, shadowed),
 			Some(spec) => is_type_call(expand(*subject, shadowed), spec),
@@ -133,6 +137,20 @@ fn expand(node: Node, shadowed: &HashSet<String>) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(expand(*node, shadowed)), data },
 		other => other,
 	}
+}
+
+/// `x is number 9` of a name the program assigns nowhere declares it (wiki Features.md, inventions.md): `x:number = 9`
+fn is_declaration(subject: &Node, right: &Node, shadowed: &HashSet<String>) -> Option<Node> {
+	let Node::Symbol(name) = subject.drop_meta() else { return None };
+	let Node::List(items, _, _) = right.drop_meta() else { return None };
+	let (value, type_words) = items.split_last()?;
+	let words = symbol_words(type_words)?;
+	if shadowed.contains(name) || is_equality_operand(right) || type_spec(&words, shadowed).is_none() {
+		return None;
+	}
+	let type_word = Node::Symbol(words.last()?.to_string());
+	let typed = Node::Key(Box::new(subject.clone()), Op::Colon, Box::new(type_word));
+	Some(Node::Key(Box::new(typed), Op::Assign, Box::new(value.clone())))
 }
 
 /// `x is a number` is the items `x is a` and `number`: the words after the comparison continue the type phrase

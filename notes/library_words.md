@@ -99,8 +99,8 @@ Any other hyphenated name stays a symbol. test_hyphen_units stays ignored: it ne
 `3 is int`, `x is a number` (a/an optional), `[1 2] is list of int`, `[1 2] is ints`, `π is real`. The emitter answers it statically from the
 name `type(x)` reports (`static_type_name`); `type_matches`: `number` covers int, rational, real, float; `real` covers int, rational,
 real; `rational` covers int; `list of number` covers every list of numbers; `text` also accepts a codepoint (a one-character string).
-A variable or user function named like the type word (`int=3; 3 is int`) keeps equality; `x is y` stays equality. `x is number 9` is
-not handled (unclear). `type of x` is `type(x)` (the parser reads `type of` as a declaration head). `x as number = 9` is `x:number=9`.
+A variable or user function named like the type word (`int=3; 3 is int`) keeps equality; `x is y` stays equality. `x is number 9` of a
+name assigned nowhere declares it (`x:number = 9`, wiki Features.md), of a variable it tests type and value. `type of x` is `type(x)` (the parser reads `type of` as a declaration head). `x as number = 9` is `x:number=9`.
 Static means `x=f(); x is int` uses the compile-time kind of x, like `type(x)`.
 
 # Lambdas (compile-time)
