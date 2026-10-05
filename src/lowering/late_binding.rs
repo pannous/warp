@@ -22,7 +22,7 @@ use crate::operators::{is_function_keyword, Op};
 use std::collections::{HashMap, HashSet};
 
 const GLOBAL: &str = "global";
-const NONLOCAL: &str = "nonlocal";
+pub(crate) const NONLOCAL: &str = "nonlocal";
 const NEEDLESS_CHARGING_TOPIC: &str = "needless-charging";
 
 pub fn lower(program: Node) -> Result<Node, Node> {
@@ -47,7 +47,7 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 	late_bound.extend(declared);
 	late_bound.sort();
 	late_bound.dedup();
-	Ok(declare_global(without_nonlocal_declarations(program), &late_bound))
+	Ok(declare_global(without_nonlocal_declarations(crate::nonlocal_cells::lower(program)?), &late_bound))
 }
 
 /// The late-binding check of the functions defined in `statements` whose free variables `scope` binds: main's
@@ -119,7 +119,7 @@ fn check_function_body(function: &UserFunctionDef) -> Result<(), Node> {
 
 /// The names a function body declares `nonlocal` in its own statements (`nonlocal y`, `nonlocal a, b`), not those of
 /// the functions defined in it
-fn declared_nonlocals(body: &Node) -> Vec<String> {
+pub(crate) fn declared_nonlocals(body: &Node) -> Vec<String> {
 	body_statements(body).iter().flat_map(nonlocal_names).collect()
 }
 

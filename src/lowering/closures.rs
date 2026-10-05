@@ -405,6 +405,12 @@ impl Lifting {
 				Node::Key(Box::new(choice), op, Box::new(self.function_value(*chosen, bound)))
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.function_value(*node, bound)), data },
+			// `{inc = () => 5; inc}`: a body ending in a function gives its value
+			Node::List(mut items, bracket @ (Bracket::Curly | Bracket::Round), separator @ (Separator::Semicolon | Separator::Newline)) if !items.is_empty() => {
+				let last = items.pop().expect("not empty");
+				items.push(self.function_value(last, bound));
+				Node::List(items, bracket, separator)
+			}
 			other => other,
 		}
 	}
