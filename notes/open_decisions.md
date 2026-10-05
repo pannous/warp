@@ -5,9 +5,6 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P28 `real x;` (declared without a value) read before an assignment: loud error "x is declared without a value"
-  (Java/Kotlin) / zero value of the type (Go). Assumed: error (analyzer::check_unassigned_declarations). Night
-  session 2026-10-04.
 - P29 `pair.0`: counts from 0 like `pair[0]` (Rust/Swift tuples) / from 1 like `pair#1`. Assumed: from 0
   (library_words method_call). Night session 2026-10-04.
 - P30 `xs.pop()` gives the last item and removes it from the variable (Python); `xs.pop()!` style mutation markers
@@ -54,15 +51,6 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   mode makes it an error). Asked by worker warp-90, branch unknown-word. 2026-10-05.
   User 2026-10-05, undecided: "i'm not certain probably the second one [loud error] or we need to declare data in
   the beginning of the file or I don't know let's discuss it later". Keep the warning until discussed.
-- P56 Uniscript entities (row 37, branch fix-uniscript-entities, all four assumed as recommended): (1) `\name` inside
-  double-quoted texts: no, code only (`"\nat"` stays newline+"at", not ℕ); (2) `\epsilon`/`\phi` are ε U+03B5 and
-  φ U+03C6 (not LaTeX's lunate ϵ/ϕ); (3) an unknown `\name` is the loud error "unknown entity \name"; (4) `∞` has no
-  value yet: f64 infinity now, or wait for the hyperreals (ω)? Asked by the Fixer warp-2d. 2026-10-05.
-- P57 Hyperreals (branch hyperreals, notes/hyperreals.md; ε exact with integer exponents, compile time only):
-  (1) `1/(1+ε)` (an infinite series): keep the error (recommended) / truncated series marked approximate
-  (HyperApproxInv.lean); (2) dual-number mode (ε² = 0) via `use dual`: later (recommended) / now; (3) hyperreals at
-  run time (a WASM GC representation): later with exact reals at run time (recommended) / now. Asked by warp-90.
-  2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -75,6 +63,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Decided 2026-10-05 (user, multiple choice, all as recommended)
+- P56(2-4) `\:epsilon`/`\:phi` are ε U+03B5 / φ U+03C6; an unknown entity name is a loud error; `∞` is f64
+  infinity now (ω stays the hyperreal infinite).
+- P57 hyperreals: `1/(1+ε)` stays an error; dual-number mode and run-time hyperreals later (with exact reals at run
+  time).
 - Standing rule (user): "it's allowed to un ignore test that are suddenly passing". Removing `#[ignore]` from a test
   that passes unedited needs no question; editing its assertions still does.
 - P49b a whole float is no int either: `f(x:int)` called with 2.0 is refused like `x:int = 2.0` (write `2.0 as int`).
@@ -118,6 +110,13 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P58 `xs#a..b` (range from xs#a, or a slice?): user: "create a strong warning and I don't care how to interpret
   it". So: unparenthesized `xs#a..b` keeps the range and gets a strong warning naming both explicit forms,
   `xs#(a..b)` / `xs#(a…b)` (the 1-based slice) and `(xs#a)..b` (the range).
+
+- P56(1) uniscript entities: user: "yes, they should work everywhere but they have the syntax \:". The entity form
+  is `\:name` (wiki/uniscript.md: `\:infinity == ∞`, long form `<:name>`), in code AND inside texts; a bare
+  `\name` is no entity (so `"\nat"` stays newline+"at"). The branch fix-uniscript-entities moves from `\name` to
+  `\:name`.
+- P28 `real x;` read before any assignment: user chose "Zero value (Go)": x reads as the zero/empty value of its
+  type. The loud error (analyzer::check_unassigned_declarations) is undone.
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
