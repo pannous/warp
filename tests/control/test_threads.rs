@@ -69,8 +69,8 @@ fn texts_floats_characters_and_lists_cross_to_a_task() {
 }
 
 #[test]
-fn an_exact_number_beyond_the_fixnums_cannot_cross_yet() {
-	crate::common::fails_with("m(t) := t + 1; job = go m(2.5); await job", "cannot cross to another task yet");
+fn an_exact_number_crosses_to_a_task() {
+	is!("m(t) := t + 1; job = go m(2.5); await job", 3.5);
 }
 
 #[test]
