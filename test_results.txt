@@ -173,6 +173,10 @@ PASSED:
   ✓ control::test_try_list_index::indexing_empty_is_out_of_range
   ✓ control::test_try_named_traps::a_missing_field_is_caught
   ✓ control::test_try_named_traps::indexing_a_number_is_not_a_list
+  ✓ control::test_try_stack_overflow::a_try_without_a_direct_call_keeps_todays_behaviour
+  ✓ control::test_try_stack_overflow::the_instance_keeps_working_after_a_caught_overflow
+  ✓ control::test_try_stack_overflow::try_catches_the_stack_overflow_of_a_call
+  ✓ control::test_try_stack_overflow::untrusted_code_may_guard_a_call
   ✓ control::test_type_word_filter_loops::test_a_literal_list_of_matching_items_needs_no_filter
   ✓ control::test_type_word_filter_loops::test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if
   ✓ control::test_type_word_filter_loops::test_a_type_word_loop_visits_only_items_of_that_type
@@ -1934,6 +1938,10 @@ PASSED:
   ✓ welcoming::test_item_list_cast_hint::a_c_style_definition_is_no_cast
   ✓ welcoming::test_item_list_cast_hint::a_type_word_item_in_a_comma_list_is_no_cast
   ✓ welcoming::test_item_list_cast_hint::a_written_constructor_call_is_still_hinted
+  ✓ welcoming::test_lone_words::test_a_lone_word_is_a_symbol
+  ✓ welcoming::test_lone_words::test_a_word_applied_to_an_argument_is_an_error
+  ✓ welcoming::test_lone_words::test_a_word_close_to_a_name_warns
+  ✓ welcoming::test_lone_words::test_data_is_the_data_prefix
   ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
   ✓ welcoming::test_style_dont_care::any_axis_can_stop_caring
   ✓ welcoming::test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
@@ -2062,4 +2070,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2057 passed, 0 failed, 2057 total tested
+37 ignored, 2065 passed, 0 failed, 2065 total tested
