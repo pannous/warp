@@ -92,7 +92,14 @@ impl Broadcast {
 	fn rewrite(&self, node: Node) -> Node {
 		match node {
 			Node::List(items, bracket, separator) => {
-				let items: Vec<Node> = items.into_iter().map(|item| self.rewrite(item)).collect();
+				// `map square [1 2 3]`: the iteration word applies square itself (lambdas.rs), no broadcast inside it
+				let iterates = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::function_values::ITERATION_WORDS.contains(&word.as_str()));
+				let items: Vec<Node> = items.into_iter().map(|item| match item.drop_meta() {
+					Node::List(inner, inner_bracket, inner_separator) if iterates => {
+						Node::List(inner.iter().cloned().map(|part| self.rewrite(part)).collect(), inner_bracket.clone(), inner_separator.clone())
+					}
+					_ => self.rewrite(item),
+				}).collect();
 				self.broadcast_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
