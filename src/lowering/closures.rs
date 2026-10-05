@@ -334,7 +334,10 @@ impl Lifting {
 		match node {
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(_)) => {
 				let value = self.walk(*value, bound);
-				Node::Key(target, op, Box::new(self.function_value(value, bound)))
+				// P83: `g = add` is no alias, add needs its arguments (`g = function add` is one)
+				let bare_function = matches!(value.drop_meta(), Node::Symbol(name) if !bound.contains(name) && self.function_named(name).is_some()) && crate::closures::referenced_function(&value).is_none();
+				let value = if bare_function { value } else { self.function_value(value, bound) };
+				Node::Key(target, op, Box::new(value))
 			}
 			Node::Key(list, Op::Hash, index) if self.indexed_call(&list, &index).is_some() => {
 				let (position, arguments) = self.indexed_call(&list, &index).expect("guarded");
