@@ -34,6 +34,11 @@ PASSED:
   ✓ control::test_empty_block_binding::an_empty_block_can_be_bound
   ✓ control::test_empty_block::a_program_that_is_only_an_empty_block_is_empty
   ✓ control::test_empty_block::an_empty_block_inside_a_statement_is_a_value
+  ✓ control::test_error_branch_kind::test_an_error_branch_keeps_the_other_branch_kind
+  ✓ control::test_error_branch_kind::test_an_error_value_stays_a_value
+  ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
+  ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
+  ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
   ✓ control::test_for_implicit_it::a_colon_body_is_the_rest_of_the_line
   ✓ control::test_for_implicit_it::a_for_loop_without_a_variable_walks_it
   ✓ control::test_for_it::a_symbol_prints_its_name
@@ -121,6 +126,7 @@ PASSED:
   ✓ control::test_top_level_block::test_top_level_newlines_yield_the_last_item
   ✓ control::test_top_level_block::test_top_level_semicolons_yield_the_last_item
   ✓ control::test_trap_messages::integer_modulo_by_zero_names_the_division
+  ✓ control::test_try_braceless_call::a_braceless_call_is_guarded
   ✓ control::test_try_deep::caught_errors_leave_later_errors_loud
   ✓ control::test_try_deep::nested_try_restores_the_depth_on_both_paths
   ✓ control::test_try_deep::try_catches_a_failed_cast
@@ -149,6 +155,9 @@ PASSED:
   ✓ control::test_try_list_index::indexing_empty_is_out_of_range
   ✓ control::test_try_named_traps::a_missing_field_is_caught
   ✓ control::test_try_named_traps::indexing_a_number_is_not_a_list
+  ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
+  ✓ control::test_unwrap::test_unwrap_gives_the_value
+  ✓ control::test_unwrap::test_unwrap_of_nothing_or_an_error_is_loud
   ✓ control::test_variable_signals::after_a_function_runs_after_each_statement_calling_it
   ✓ control::test_variable_signals::on_set_runs_after_each_write_with_the_value
   ✓ control::test_variable_signals::once_never_runs_when_the_condition_never_holds
@@ -782,6 +791,7 @@ PASSED:
   ✓ numbers::test_implicit_libm::test_libm_in_a_function_without_import
   ✓ numbers::test_implicit_libm::test_libm_on_a_runtime_value_without_import
   ✓ numbers::test_implicit_libm::test_user_function_named_like_libm_wins
+  ✓ numbers::test_infinity::infinity_is_a_float_value
   ✓ numbers::test_law::test_law_asserted_at_call_sites
   ✓ numbers::test_law::test_law_does_not_change_program_result
   ✓ numbers::test_law::test_law_float_parameter_kinds
@@ -1315,6 +1325,7 @@ PASSED:
   ✓ text::test_character_comparison::test_ord_is_the_code_point
   ✓ text::test_chr::chr_is_the_inverse_of_ord
   ✓ text::test_constant_expression_text::a_constant_expression_converts_by_its_value
+  ✓ text::test_count_in::count_occurrences
   ✓ text::test_declared_text_one_character::a_declared_text_takes_a_one_character_text
   ✓ text::test_interpolation::a_dollar_before_a_digit_or_space_is_a_dollar_sign
   ✓ text::test_interpolation::an_unknown_name_in_a_hole_is_loud
@@ -1989,4 +2000,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-40 ignored, 1984 passed, 0 failed, 1984 total tested
+40 ignored, 1995 passed, 0 failed, 1995 total tested
