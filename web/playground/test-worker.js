@@ -7,17 +7,28 @@ prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 let module; // the compiled test binary
 
+// an instance of the test binary with libtest arguments, printing through `hooks`
+function instantiate(args, hooks) {
+	let instance;
+	const memory = () => instance.exports.memory;
+	instance = new WebAssembly.Instance(module, {
+		wasi_snapshot_preview1: wasiImports(memory, ["tests", ...args], hooks.print),
+		warp_host: warpHost(memory, hooks),
+	});
+	return instance;
+}
+
+// blocks known only at run time compile with the test binary itself: it exports the page's compiler entry points
+// (src/web.rs web_eval_block), so the blocks run the code under test, with no warp.wasm to build
+self.BLOCK_COMPILER = hooks => instantiate([], hooks).exports;
+
 // run the binary with libtest arguments: {code, output, trapped}
 function runBinary(args) {
 	let output = "";
 	const print = text => { output += text; };
 	const hooks = { print, panicked: print };
-	let instance;
-	const memory = () => instance.exports.memory;
-	instance = new WebAssembly.Instance(module, {
-		wasi_snapshot_preview1: wasiImports(memory, ["tests", ...args], print),
-		warp_host: warpHost(memory, hooks),
-	});
+	forgetBlockCompiler(); // a compiler instance of this test's own, printing into its output
+	const instance = instantiate(args, hooks);
 	try {
 		instance.exports._start();
 		return { code: 0, output };

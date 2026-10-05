@@ -49,6 +49,10 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   the same path as the playground. wasi.js: args, clocks, random, stdout/stderr, a file system whose "." is the served
   repository (directories via http.server's listing page) with an in-memory overlay for writes, per test.
 - First full run (2026-10-03, 2 workers): 1140 passed, 18 failed, 75 ignored (70 #[ignore] + 5 skipped) in ~19 s.
+- Blocks known only at run time (`!`, `interpret`, host.js run_block) compile with the test binary itself: it exports
+  web_eval_block like warp.wasm, and test-worker.js hands host.js `BLOCK_COMPILER`, which makes a compiler instance of
+  it per test. Before (2026-10-05) run_block looked for web/playground/warp.wasm, which a checkout only has after
+  build.sh, and test_run_time_blocks + test_block_parameters failed (10 tests).
 
 ### What cannot run in the browser, and why
 - Not compiled (`#[cfg(feature = "native")]` on their mod lines in tests/main.rs): wasmtime APIs (test_gc_struct,

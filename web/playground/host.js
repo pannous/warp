@@ -474,22 +474,30 @@ function runProgram(bytes, hooks) {
 }
 
 // The compiler that runs the blocks a program builds at run time (run_block): loaded on first use, an instance of its own,
-// so it never re-enters the compiler whose program is running. A page sets BLOCK_COMPILER_URL to its compiler's URL.
+// so it never re-enters the compiler whose program is running. A page sets BLOCK_COMPILER_URL to its compiler's URL, or
+// BLOCK_COMPILER to a function giving the exports of a new compiler instance (test-worker.js: the test binary itself).
 let blockCompilerExports;
 function blockCompiler(hooks) {
-	if (!blockCompilerExports) {
-		const url = self.BLOCK_COMPILER_URL ?? "warp.wasm";
-		let bytes;
-		try {
-			bytes = getSync(url, undefined, true);
-		} catch (failure) {
-			throw new Error(`a block known only at run time needs the warp compiler ${url} (${failure.message}): build it with web/playground/build.sh`);
-		}
-		let exports;
-		exports = new WebAssembly.Instance(new WebAssembly.Module(bytes), { warp_host: warpHost(() => exports.memory, hooks) }).exports;
-		blockCompilerExports = exports;
-	}
+	blockCompilerExports ??= self.BLOCK_COMPILER ? self.BLOCK_COMPILER(hooks) : compilerFromUrl(hooks);
 	return blockCompilerExports;
+}
+
+// the next block gets a new compiler instance: after a trap the old one is unusable
+function forgetBlockCompiler() {
+	blockCompilerExports = undefined;
+}
+
+function compilerFromUrl(hooks) {
+	const url = self.BLOCK_COMPILER_URL ?? "warp.wasm";
+	let bytes;
+	try {
+		bytes = getSync(url, undefined, true);
+	} catch (failure) {
+		throw new Error(`a block known only at run time needs the warp compiler ${url} (${failure.message}): build it with web/playground/build.sh`);
+	}
+	let exports;
+	exports = new WebAssembly.Instance(new WebAssembly.Module(bytes), { warp_host: warpHost(() => exports.memory, hooks) }).exports;
+	return exports;
 }
 
 // the report of src/web.rs eval_block_report: {result: tree} or {error: message}
@@ -498,7 +506,13 @@ function evalBlock(hooks, request) {
 	const bytes = utf8.encode(request);
 	const pointer = compiler.web_alloc(bytes.length);
 	new Uint8Array(compiler.memory.buffer, pointer, bytes.length).set(bytes);
-	const length = compiler.web_eval_block(pointer, bytes.length);
+	let length;
+	try {
+		length = compiler.web_eval_block(pointer, bytes.length);
+	} catch (trap) {
+		forgetBlockCompiler();
+		throw trap;
+	}
 	const report = JSON.parse(readText(compiler, compiler.web_report(), length));
 	compiler.web_free(pointer, bytes.length);
 	return report;
