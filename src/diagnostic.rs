@@ -276,24 +276,37 @@ impl Ask {
 	}
 }
 
+/// The answer to "got it?" (user, 2026-10-05): this expression only (remembered by its written text), all of this
+/// kind (the topic), or no (keep reminding)
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum GotIt {
+	This,
+	All,
+	No,
+}
+
 /// Who says "got it" to a warning or note so it is never shown again: the terminal in the CLI, the playground's
 /// buttons, a list in tests. Nobody (the default) means the warning simply shows
 pub trait Acknowledger {
-	/// Whether the user said "got it" to `topic` before this run (a host keeping its own list, like the playground)
-	fn has_acknowledged(&self, _topic: &str) -> bool {
+	/// Whether the user said "got it" to `key` before this run (a topic, or `topic@written` for one expression; a host
+	/// keeping its own list, like the playground)
+	fn has_acknowledged(&self, _key: &str) -> bool {
 		false
 	}
 
-	/// Asked once per run after a warning or note of `topic` was shown: does the user say "got it" now?
-	fn acknowledge(&self, topic: &str) -> bool;
+	/// Asked once per run after a warning or note of `topic` was shown for the `written` expression
+	fn acknowledge(&self, topic: &str, written: &str) -> GotIt;
 }
 
-/// Acknowledges the listed topics, for tests
+/// Acknowledges the listed topics for all expressions, for tests
 pub struct Acknowledging(pub Vec<String>);
 
 impl Acknowledger for Acknowledging {
-	fn acknowledge(&self, topic: &str) -> bool {
-		self.0.iter().any(|acknowledged| acknowledged == topic)
+	fn acknowledge(&self, topic: &str, _written: &str) -> GotIt {
+		match self.0.iter().any(|acknowledged| acknowledged == topic) {
+			true => GotIt::All,
+			false => GotIt::No,
+		}
 	}
 }
 
@@ -301,11 +314,28 @@ impl Acknowledger for Acknowledging {
 pub struct TerminalAcknowledger;
 
 impl Acknowledger for TerminalAcknowledger {
-	fn acknowledge(&self, _topic: &str) -> bool {
-		eprint!("      got it? [y = don't tell me again, Enter = keep reminding] ");
+	fn acknowledge(&self, _topic: &str, _written: &str) -> GotIt {
+		eprint!("      got it? [y = this expression, a = all of this kind, n/Enter = keep reminding] ");
 		let mut line = String::new();
-		std::io::stdin().read_line(&mut line).is_ok_and(|_| matches!(line.trim(), "y" | "Y" | "yes"))
+		match std::io::stdin().read_line(&mut line).map(|_| line.trim().to_lowercase()).as_deref() {
+			Ok("y" | "yes") => GotIt::This,
+			Ok("a" | "all") => GotIt::All,
+			_ => GotIt::No,
+		}
 	}
+}
+
+/// The key "got it" for one expression is remembered by: `topic@written`, on one line
+fn expression_key(topic: &str, written: &str) -> String {
+	format!("{topic}@{}", written.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+/// A line of the program that says `// got it`: its warnings and notes stay quiet (user, 2026-10-05)
+const GOT_IT_COMMENT: &str = "// got it";
+
+/// Whether the source line `line` (1-based) of the program being compiled carries a `// got it` comment
+fn silenced_by_comment(line: usize) -> bool {
+	line > 0 && SOURCE.with(|source| source.borrow().lines().nth(line - 1).is_some_and(|text| text.to_lowercase().contains(GOT_IT_COMMENT)))
 }
 
 thread_local! {
@@ -314,6 +344,8 @@ thread_local! {
 	static ACKNOWLEDGEMENTS_FILE: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
 	static NOTES_SHOWN: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
 	static ASSUMPTIONS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
+	/// The source of the program being compiled, for its `// got it` comments
+	static SOURCE: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 }
 
 /// Who acknowledges the warnings and notes of later compilations on this thread; `None` (the default): nobody
@@ -360,7 +392,7 @@ pub fn use_acknowledgements_file(path: impl Into<std::path::PathBuf>) {
 /// The topics acknowledged in the acknowledgements file, none without one
 fn load_acknowledgements() {
 	let saved = ACKNOWLEDGEMENTS_FILE.with(|file| file.borrow().as_ref().and_then(|path| std::fs::read_to_string(path).ok())).unwrap_or_default();
-	let topics = saved.lines().filter_map(|line| line.split_once(" = "))
+	let topics = saved.lines().filter_map(|line| line.rsplit_once(" = "))
 		.filter(|(_, value)| value.trim() == ACKNOWLEDGED)
 		.filter_map(|(key, _)| key.trim().strip_prefix(ACKNOWLEDGED_PREFIX).map(str::to_string));
 	ACKNOWLEDGED_TOPICS.with(|acknowledged| *acknowledged.borrow_mut() = topics.collect());
@@ -374,10 +406,13 @@ pub fn begin_program() {
 	load_acknowledgements();
 }
 
-fn is_acknowledged(topic: &str) -> bool {
+/// Acknowledged for the whole topic, or for this written expression
+fn is_acknowledged(topic: &str, written: &str) -> bool {
 	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
-	ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().contains(topic))
-		|| acknowledger.is_some_and(|acknowledger| acknowledger.has_acknowledged(topic))
+	[topic.to_string(), expression_key(topic, written)].iter().any(|key| {
+		ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().contains(key))
+			|| acknowledger.as_ref().is_some_and(|acknowledger| acknowledger.has_acknowledged(key))
+	})
 }
 
 fn remember_acknowledged(topic: &str) {
@@ -391,14 +426,17 @@ fn remember_acknowledged(topic: &str) {
 	}
 }
 
-/// After a warning or note of `topic` was shown, once per run: does the user say "got it"? Then it is never shown again
-fn offer_acknowledgement(topic: &str) {
+/// After a warning or note of `topic` was shown, once per run: does the user say "got it", for this expression or all of
+/// the kind? Then it is not shown again
+fn offer_acknowledgement(topic: &str, written: &str) {
 	if !NOTES_SHOWN.with(|shown| shown.borrow_mut().insert(topic.to_string())) {
 		return;
 	}
 	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
-	if acknowledger.is_some_and(|acknowledger| acknowledger.acknowledge(topic)) {
-		remember_acknowledged(topic);
+	match acknowledger.map_or(GotIt::No, |acknowledger| acknowledger.acknowledge(topic, written)) {
+		GotIt::This => remember_acknowledged(&expression_key(topic, written)),
+		GotIt::All => remember_acknowledged(topic),
+		GotIt::No => {}
 	}
 }
 
@@ -406,11 +444,11 @@ fn offer_acknowledgement(topic: &str) {
 /// acknowledges it, then never again; it never blocks non-interactive runs, which just show the hint
 pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 	let hints_off = crate::normalize::hint_mode() == crate::normalize::HintMode::Off;
-	if hints_off || is_acknowledged(topic) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic)) {
+	if hints_off || is_acknowledged(topic, written) || silenced_by_comment(crate::normalize::hint_line()) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic)) {
 		return;
 	}
 	crate::normalize::hint(written, preferred, reason);
-	offer_acknowledgement(topic);
+	offer_acknowledgement(topic, written);
 }
 
 /// The reading the program gets: an error-fallback ambiguity is an error naming every explicit form; otherwise the
@@ -424,9 +462,11 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 	if warning_mode() == WarningMode::Error {
 		return Err(diagnostic.into_error());
 	}
-	if !is_acknowledged(&question.topic) {
+	// the expression "got it" for this one remembers: the question names it (`written` is only the replaced word, `upto`)
+	let expression = &question.question;
+	if !is_acknowledged(&question.topic, expression) && !silenced_by_comment(question.line) {
 		report(&[diagnostic])?;
-		offer_acknowledgement(&question.topic);
+		offer_acknowledgement(&question.topic, expression);
 	}
 	Ok(question.default)
 }
@@ -440,6 +480,7 @@ pub fn take_assumptions() -> Vec<Diagnostic> {
 /// Run `body` (the parser) with warnings as errors when a line of the source says `use strict`,
 /// so the warnings of parse-time Asks obey it too
 pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
+	SOURCE.with(|source| *source.borrow_mut() = code.to_string());
 	match code.lines().any(|line| line.split_whitespace().eq(STRICT_PRAGMA)) {
 		true => with_warning_mode(WarningMode::Error, body),
 		false => body(),
