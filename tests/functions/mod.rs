@@ -12,6 +12,7 @@ mod test_functions;
 mod test_lambdas;
 mod test_method_words;
 mod test_method_syntax_calls;
+mod test_failed_word;
 mod test_optional_words;
 mod test_parameter_call_kinds;
 mod test_parameter_codepoint_calls;

@@ -50,8 +50,11 @@ const EXCLUSIVE_DOTS: &str = "..";
 /// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
 const KOTLIN_RANGE: &str = "kotlin-range";
 const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [("if", Op::If, false), ("unless", Op::If, true), ("while", Op::While, false), ("until", Op::While, true)];
-/// Words that test a value for being ø or falsy, sugar for `not x`
-const TEST_WORDS: [&str; 5] = ["empty", "missing", "absent", "unknown", "undefined"];
+/// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
+const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefined", FAILED_WORD];
+const FAILED_WORD: &str = "failed";
+/// The runtime test of `x failed` (wasm_emitter/text_builtins.rs)
+const IS_ERROR_CALL: &str = "is_error";
 const EMPTY_WORD: &str = "empty";
 /// Words that may follow a test word and so end the condition
 const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
@@ -2649,7 +2652,7 @@ impl WaspParser {
 		})
 	}
 
-	/// `x empty`, `x missing`, `x is absent` … at the end of a condition are `not x` (wiki/null.md).
+	/// `x empty`, `x missing`, `x is absent` … at the end of a condition are `not x` (wiki/null.md); `x failed` is `is_error(x)`.
 	/// The word must end the condition: a block, colon, `then`/`else`/`and`/`or` or the end of the statement follows.
 	/// `x is empty` stays the comparison with ø.
 	fn try_parse_test_word(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
@@ -2673,6 +2676,9 @@ impl WaspParser {
 			return None;
 		}
 		self.advance_by(end);
+		if *word == FAILED_WORD {
+			return Some(Node::List(vec![Symbol(IS_ERROR_CALL.to_string()), lhs.clone()], Bracket::Round, Separator::None));
+		}
 		Some(Node::Key(Box::new(Empty), Op::Not, Box::new(lhs.clone())))
 	}
 
