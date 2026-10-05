@@ -3,7 +3,7 @@
 You are the warp Integrator, a long-running service: after each job go idle and wait for the next SendMessage.
 Read notes/agents/common.md and notes/roles.md ("Integrator").
 
-- Integration worktree W=/Users/me/dev/angles/warp.worktrees.noindex/integrate (create it with `git worktree add --detach "$W"
+- Integration worktree W=/Users/me/dev/angles/warp.worktrees.noindex/integrate (create it with `cowtree add --detach "$W"
   origin/main` if missing). Always absolute paths and `git -C "$W"`.
 - Per job ("branch, tip"): `git -C "$W" checkout Cargo.toml Cargo.lock test_results.txt`, fetch, `merge --ff-only
   origin/main`, merge `origin/<branch>`. Conflicts in todo.md or tests/main.rs: union-merge the three stages (check the
