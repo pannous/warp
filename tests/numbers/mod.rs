@@ -25,6 +25,7 @@ mod test_units_at_run_time;
 mod test_unit_products;
 mod test_units_arithmetic;
 mod test_units_compare;
+mod test_range_tolerance_compare;
 mod test_units_followup;
 mod test_zero_fill;
 mod test_float_zero_and_compound;

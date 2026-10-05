@@ -373,6 +373,7 @@ fn negate(value: Value) -> Evaluated {
 
 fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 	match (left, op, right) {
+		(left @ (Value::Tolerance(_) | Value::Range(_)), Op::Eq | Op::Ne, right @ (Value::Tolerance(_) | Value::Range(_))) => same_span(left, op, right),
 		(Value::Tolerance(_) | Value::Range(_), _, _) | (_, _, Value::Tolerance(_) | Value::Range(_)) => {
 			fail(format!("arithmetic on a value with tolerance or a range is not supported: {op}"))
 		}
@@ -537,6 +538,25 @@ fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 		_ => order.is_ge(),
 	};
 	Ok(Value::Number(holds as i64))
+}
+
+/// A range or a value with tolerance as the closed span it covers, and its unit: `1950 ± 50 AD` is 1900 to 2000 AD
+fn span(value: &Value) -> Option<(i64, i64, Option<&'static str>)> {
+	match value {
+		Value::Range(range) => Some((range.from, range.to, Some(range.unit.name))),
+		Value::Tolerance(tolerance) => Some((tolerance.value - tolerance.tolerance, tolerance.value + tolerance.tolerance, tolerance.unit.map(|unit| unit.name))),
+		_ => None,
+	}
+}
+
+/// `1900 - 2000 AD == 1950 AD ± 50`: the same span in the same unit
+fn same_span(left: Value, op: Op, right: Value) -> Evaluated {
+	let (Some((from, to, unit)), Some((other_from, other_to, other_unit))) = (span(&left), span(&right)) else { return Err(Stop::Unsupported) };
+	if unit != other_unit {
+		return fail(format!("cannot compare spans in different units: {} and {}", unit.unwrap_or("no unit"), other_unit.unwrap_or("no unit")));
+	}
+	let same = (from, to) == (other_from, other_to);
+	Ok(Value::Number((same == (op == Op::Eq)) as i64))
 }
 
 fn sum(left: Quantity, op: Op, right: Quantity) -> Evaluated {
