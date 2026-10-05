@@ -62,7 +62,7 @@ pub fn lower(node: Node) -> Node {
 			let items: Vec<Node> = items.into_iter().map(lower_inside).collect();
 			let call = Node::List(items, bracket, separator);
 			match &call {
-				Node::List(items, _, separator) if items.len() == 2 && is_name(&items[0]) && is_marked(&items[1])
+				Node::List(items, _, separator) if items.len() == 2 && is_name(&items[0]) && is_marked(&items[1]) && is_name(&unmarked(items[1].clone()))
 					&& !matches!(separator, Separator::Semicolon | Separator::Newline) => {
 					let variable = unmarked(items[1].clone());
 					Node::Key(Box::new(variable), Op::Assign, Box::new(strip_marks(call, false)))
@@ -96,7 +96,19 @@ fn strip_marks(node: Node, unwrap: bool) -> Node {
 	}
 }
 
+/// `x!` that blocks.rs did not run: a name unwraps (row 27, `unwrap`), any other expression would be a block known only at
+/// run time, which needs the run-time compiler (wiki/charged.md section 5): a loud error until it exists
 fn unwrapped(name: Node) -> Node {
+	// `x.upper!` (no block field, blocks.rs ran those): x = x.upper (D2)
+	if let Node::Key(receiver, Op::Dot, method) = name.drop_meta() {
+		if is_name(receiver) && is_method(method) {
+			return Node::Key(receiver.clone(), Op::Assign, Box::new(name.clone()));
+		}
+	}
+	if !is_name(&name) {
+		let written = crate::normalize::operand_text(&name);
+		return crate::node::error(&format!("{written} is only known at run time: `!` needs a constant block"));
+	}
 	Node::List(vec![Node::Symbol(UNWRAP.to_string()), name], Bracket::Round, Separator::None)
 }
 

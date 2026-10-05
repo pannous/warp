@@ -21,3 +21,12 @@
   rebuilt (meta attributes like `@unit("cm") {x:1}` stay).
 - `help = {print: "there is help"}; help!` runs the object as code: each `key: value` is the call `key(value)`.
 Next: code/block prefixes, block parameters for if/while/for/def.
+
+## Stage 3 (branch blocks-3)
+- Parser: every suffix `!`/`!!` is a mutation mark (`BANG_BP` 165: `xs#2!` runs `xs#2`, `x!+1` adds), Dot forms included;
+  blocks.rs consumes the marks of compile-time blocks; mutation.rs then unwraps names, does `x.upper!` (D2), and fails
+  loudly on any other expression ("only known at run time") until warp-29's run_time_blocks pass lowers it (P73 = (a):
+  `x!` forces; the kind decides, statically where known).
+- `x = code e` / `x = block e` bind blocks; `y = data e; y!` runs with the got-it warning "running data as code".
+- Block parameters: `f(c, body:block) := …` is expanded at each call like a macro: other parameters bound once to
+  `param·mN`, `body!` → `(arg)`, bare `body` → `data arg`; the definition itself is dropped. Cap: 1000 expansions.
