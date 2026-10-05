@@ -55,14 +55,21 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 /// main makes global so that the call reads them; in a function body the call reads its captures as they are then.
 fn check_definitions(statements: &[Node], definitions: &[Definition], scope: &Scope, skip: &dyn Fn(&Definition, &str) -> bool, enclosing: Option<&UserFunctionDef>) -> Result<Vec<String>, Node> {
 	let callers = callers(definitions, &|name| written_names(enclosing, name));
+	// asked for every free variable of every definition: worked out once per statement and per definition
+	let defines_functions: Vec<bool> = statements.iter().map(|statement| !functions_in(statement).is_empty()).collect();
 	let mut late_bound: Vec<String> = vec![];
 	for definition in definitions {
-		let free = captured_variables(&definition.function, scope).into_iter().map(|(name, _)| name)
-			.filter(|name| !scope.is_global(name) && !skip(definition, name) && !callers.contains_key(name));
+		let free: Vec<String> = captured_variables(&definition.function, scope).into_iter().map(|(name, _)| name)
+			.filter(|name| !scope.is_global(name) && !skip(definition, name) && !callers.contains_key(name))
+			.collect();
+		if free.is_empty() {
+			continue;
+		}
+		let bound_before = variables_of(&statements[..definition.index]);
 		for variable in free {
-			let changes = changes_after(statements, definition.index, &variable);
+			let changes = changes_after(statements, &defines_functions, definition.index, &variable);
 			let parameter = enclosing.is_some_and(|function| function.params.iter().any(|param| param.name == variable));
-			let unbound_before = !parameter && !binds(&statements[..definition.index], &variable);
+			let unbound_before = !parameter && bound_before.lookup(&variable).is_none();
 			let checked = match (unbound_before, changes.split_first()) {
 				(true, Some((_, later))) => {
 					if enclosing.is_none() {
@@ -314,6 +321,17 @@ fn without_statements(program: Node, dropped: &dyn Fn(&Node) -> bool) -> Node {
 	})
 }
 
+/// Every symbol in `node`
+fn symbols_read(node: &Node) -> HashSet<&str> {
+	let mut symbols = HashSet::new();
+	node.visit(&mut |part| {
+		if let Node::Symbol(name) = part {
+			symbols.insert(name.as_str());
+		}
+	});
+	symbols
+}
+
 fn reads_any(node: &Node, names: &dyn Fn(&str) -> bool) -> bool {
 	let mut found = false;
 	node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if names(name)));
@@ -361,11 +379,16 @@ fn callers(definitions: &[Definition], written: &dyn Fn(&str) -> Vec<String>) ->
 	let names: HashSet<&String> = definitions.iter().map(|definition| &definition.function.name).collect();
 	let spellings: HashMap<&String, Vec<String>> = names.iter().map(|name| (*name, written(name))).collect();
 	let mut callers: HashMap<String, HashSet<String>> = names.iter().map(|name| ((*name).clone(), HashSet::from([(*name).clone()]))).collect();
+	// each body's callees once: the loop below runs until nothing changes
+	let callees: Vec<Vec<&String>> = definitions.iter().map(|definition| {
+		let read = symbols_read(&definition.function.body);
+		names.iter().copied().filter(|callee| *callee != &definition.function.name && spellings[*callee].iter().any(|name| read.contains(name.as_str()))).collect()
+	}).collect();
 	loop {
 		let mut changed = false;
-		for definition in definitions {
+		for (definition, callees) in definitions.iter().zip(&callees) {
 			let caller = &definition.function.name;
-			for callee in names.iter().filter(|callee| *callee != &caller && reads_any(&definition.function.body, &|word| spellings[*callee].iter().any(|name| name == word))) {
+			for callee in callees {
 				let known: Vec<String> = callers[caller].iter().cloned().collect();
 				let entry = callers.get_mut(*callee).expect("a defined function");
 				for name in known {
@@ -379,10 +402,10 @@ fn callers(definitions: &[Definition], written: &dyn Fn(&str) -> Vec<String>) ->
 	}
 }
 
-/// The changes of `variable` in the statements after `index`, outside function definitions
-fn changes_after<'a>(statements: &'a [Node], index: usize, variable: &str) -> Vec<Change<'a>> {
+/// The changes of `variable` in the statements after `index`, outside the statements that define functions
+fn changes_after<'a>(statements: &'a [Node], defines_functions: &[bool], index: usize, variable: &str) -> Vec<Change<'a>> {
 	statements.iter().enumerate().skip(index + 1)
-		.filter(|(_, statement)| functions_in(statement).is_empty())
+		.filter(|(index, _)| !defines_functions[*index])
 		.flat_map(|(index, statement)| changes_in(statement, variable).into_iter().map(move |node| Change { index, node }))
 		.collect()
 }
@@ -411,10 +434,11 @@ fn is_mutating_call(call: &Node) -> bool {
 	matches!(method, Some(Node::Symbol(name)) if is_list_mutating_method(name))
 }
 
-fn binds(statements: &[Node], variable: &str) -> bool {
+/// The variables `statements` bind
+fn variables_of(statements: &[Node]) -> Scope {
 	let mut scope = Scope::new();
 	collect_variables(&Node::List(statements.to_vec(), Bracket::None, Separator::Newline), &mut scope);
-	scope.lookup(variable).is_some()
+	scope
 }
 
 /// Can a call of one of `users` run after the change? In a later statement, or in the change's own statement outside
