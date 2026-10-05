@@ -30,6 +30,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - P68 `square 3 + square(4)` with `square := it²` is 361, read as square(3 + square(4)). Recommended: a got-it warning
   naming both readings `square(3) + square(4)` / `square(3 + square(4))` when a braceless call's argument contains an
   operator. Asked by warp-2d. 2026-10-05.
+- P69 Run-time `!` (feasibility study notes/runtime_eval.md, warp-29: feasible, compile the block at run time via a
+  host import, ~10-15 agent-days; spec wiki/charged.md not yet released): (a) may a block assign the `!` site's
+  locals? Recommended: no (a snapshot; only declared globals); (b) the default grant and tainting of data read at run
+  time (eval_untrusted); (c) a `warp compile`d module containing run-time `!` that runs outside warp's hosts (error at
+  compile time / bundle the compiler / refuse at run time). 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
