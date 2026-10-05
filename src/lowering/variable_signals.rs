@@ -76,7 +76,11 @@ impl Signals {
 	fn lower(&mut self, node: Node, listeners: &[Listener]) -> Node {
 		match node {
 			Node::List(items, bracket, separator) if is_statement_list(&bracket, &separator) => {
-				Node::List(self.statements(items, listeners), bracket, separator)
+				// checks added to a block of one statement (`{ x = i }`) make it a sequence: `{ x = i; check }`
+				let count = items.len();
+				let statements = self.statements(items, listeners);
+				let separator = if statements.len() > count { Separator::Semicolon } else { separator };
+				Node::List(statements, bracket, separator)
 			}
 			Node::List(items, bracket, separator) => {
 				Node::List(items.into_iter().map(|item| self.lower(item, listeners)).collect(), bracket, separator)
