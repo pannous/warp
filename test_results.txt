@@ -104,6 +104,7 @@ PASSED:
   ✓ control::test_switch_value::a_switch_can_be_bound
   ✓ control::test_task_closures::a_capturing_text_lambda_runs_in_a_task
   ✓ control::test_task_closures::a_parameter_named_like_a_unit_is_the_parameter
+  ✓ control::test_task_list_literal::a_list_of_task_values_holds_each_result
   ✓ control::test_task_values::a_function_value_crosses_to_a_task
   ✓ control::test_task_values::a_task_gives_the_result_of_its_function
   ✓ control::test_task_values::a_task_pauses_and_resumes
@@ -1925,6 +1926,9 @@ PASSED:
   ✓ welcoming::test_unknown_prefix_word::an_unknown_word_applied_to_a_value_warns
   ✓ welcoming::test_unknown_prefix_word::known_words_and_plain_data_do_not_warn
   ✓ welcoming::test_unknown_prefix_word::the_call_form_stays_an_error
+  ✓ welcoming::test_unknown_word_error::test_an_unknown_word_with_a_value_is_an_error_in_code
+  ✓ welcoming::test_unknown_word_error::test_data_contexts_keep_unknown_words
+  ✓ welcoming::test_unknown_word_error::test_known_words_are_untouched
   ✓ welcoming::test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing
   ✓ welcoming::test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
   ✓ welcoming::test_warning_mode::the_strict_flag_turns_warnings_into_errors
@@ -2044,4 +2048,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2039 passed, 0 failed, 2039 total tested
+37 ignored, 2043 passed, 0 failed, 2043 total tested
