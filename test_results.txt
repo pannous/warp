@@ -96,10 +96,13 @@ PASSED:
   ✓ control::test_object_blocks::test_statements_in_braces_are_a_block
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
+  ✓ control::test_run_time_blocks::a_bang_known_only_at_run_time_runs_the_block
   ✓ control::test_run_time_blocks::a_block_over_defined_names_does_not_warn
   ✓ control::test_run_time_blocks::a_block_over_names_defined_nowhere_warns
   ✓ control::test_run_time_blocks::a_failing_run_time_block_names_the_block
+  ✓ control::test_run_time_blocks::a_run_time_block_calls_the_programs_functions
   ✓ control::test_run_time_blocks::a_run_time_block_gets_no_capabilities
+  ✓ control::test_run_time_blocks::a_run_time_block_hands_back_ratios_and_big_ints
   ✓ control::test_run_time_blocks::a_run_time_block_reads_the_values_where_it_runs
   ✓ control::test_run_time_blocks::compiling_a_run_time_block_warns_about_the_host
   ✓ control::test_run_time_blocks::interpret_of_a_constant_block_runs_it_where_written
@@ -384,6 +387,9 @@ PASSED:
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
   ✓ functions::test_float_to_int_parameter::a_float_for_an_int_parameter_is_refused
   ✓ functions::test_float_to_int_parameter::an_explicit_cast_or_an_int_passes
+  ✓ functions::test_folding_in_bodies::a_call_on_a_parameter_stays
+  ✓ functions::test_folding_in_bodies::a_constant_call_in_a_body_is_folded
+  ✓ functions::test_folding_in_bodies::a_constant_call_in_a_loop_is_folded
   ✓ functions::test_function_keyword::function_defines_like_def
   ✓ functions::test_function_values::test_a_function_argument_of_a_specialised_function_is_passed_on
   ✓ functions::test_function_values::test_a_lambda_that_captures_is_passed_as_a_closure
@@ -1846,6 +1852,7 @@ PASSED:
   ✓ welcoming::test_fixits::a_hint_offers_its_preferred_form
   ✓ welcoming::test_fixits::bare_list_fixes
   ✓ welcoming::test_fixits::braceless_call_fixes
+  ✓ welcoming::test_fixits::codepoint_is_the_preferred_name
   ✓ welcoming::test_fixits::list_operator_fixes
   ✓ welcoming::test_fixits::local_or_global_fixes
   ✓ welcoming::test_fixits::loop_it_fix
@@ -1854,6 +1861,7 @@ PASSED:
   ✓ welcoming::test_fixits::signed_operand_fixes
   ✓ welcoming::test_fixits::suffix_word_fixes
   ✓ welcoming::test_fixits::the_page_gets_each_fix_as_an_edit
+  ✓ welcoming::test_fixits::the_page_says_got_it_for_one_expression
   ✓ welcoming::test_fixits::word_fixes
   ✓ welcoming::test_footguns::test_addition_is_associative_by_default
   ✓ welcoming::test_footguns::test_and_or_ternary_is_linted
@@ -1983,6 +1991,10 @@ PASSED:
   ✓ welcoming::test_footguns::test_while_loop_may_diverge
   ✓ welcoming::test_footguns::test_zero_string_is_truthy
   ✓ welcoming::test_footguns::test_zoned_time_records_its_rules_version
+  ✓ welcoming::test_got_it_scope::a_got_it_comment_silences_its_line
+  ✓ welcoming::test_got_it_scope::got_it_for_all_silences_the_kind
+  ✓ welcoming::test_got_it_scope::got_it_for_this_silences_only_that_expression
+  ✓ welcoming::test_got_it_scope::no_keeps_reminding
   ✓ welcoming::test_got_it_warnings::a_dangerous_ambiguity_stays_an_error_even_when_acknowledged
   ✓ welcoming::test_got_it_warnings::a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_show
   ✓ welcoming::test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
@@ -2126,4 +2138,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2121 passed, 0 failed, 2121 total tested
+37 ignored, 2133 passed, 0 failed, 2133 total tested

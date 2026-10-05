@@ -510,7 +510,7 @@ const COUNT_NOT_INTEGRAL: &str = "count_must_be_an_integer";
 /// `m.a * 2` with a text in m.a, where the kinds are known only at run time (NODE_ARITHMETIC)
 pub(super) const NOT_A_NUMBER: &str = "not_a_number";
 /// P65: arithmetic a text can't do on a character fails; its code point is ord(c)
-pub(super) const CHARACTER_IS_NO_NUMBER: &str = "a character is not a number in arithmetic: ord(c) gives its code point";
+pub(super) const CHARACTER_IS_NO_NUMBER: &str = "a character is not a number in arithmetic: codepoint(c) gives its code point";
 
 /// The division in an index `n/2`, also behind the 0-based shift of `xs[n/2]` (`xs#(n/2 + 1)`)
 fn divided_index(index: &Node) -> Option<(&Node, &Node)> {

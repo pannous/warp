@@ -33,7 +33,7 @@ pub use try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 mod witness;
 pub(crate) mod wasi_emitter;
 
-pub use big_int::{is_fixnum, INT_RUNTIME};
+pub use big_int::{is_fixnum, EXACT_BUILDERS, INT_RUNTIME};
 
 /// Something emission found it must have that the analysis pass did not request
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -388,6 +388,19 @@ impl WasmGcEmitter {
 				}
 			}
 			self.ctx.captures.insert(function.name, captures);
+		}
+	}
+
+	/// A host that hands values into the program (run_block's result, a task's value) builds an exact number beyond the
+	/// fixnums from fixnum pieces with these (tasks.rs Builders)
+	fn export_exact_builders(&mut self) {
+		let hands_values_in = [crate::host::RUN_BLOCK, crate::host::TASK_SPAWN_VALUES, crate::host::TASK_AWAIT_VALUE].iter().any(|word| self.ctx.ffi_imports.contains_key(*word));
+		if !hands_values_in || !self.int_runtime() {
+			return;
+		}
+		for name in EXACT_BUILDERS {
+			let index = self.func_index(name);
+			self.exports.export(name, ExportKind::Func, index);
 		}
 	}
 
@@ -1151,6 +1164,7 @@ impl WasmGcEmitter {
 		constructors::emit_all_constructors(self);
 		self.emit_runtime_errors(); // before the int runtime: exact_div fails divide_by_zero
 		self.emit_int_runtime();
+		self.export_exact_builders();
 		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
 		// Emit list and string operation functions
 		self.emit_list_ops();
@@ -1843,6 +1857,9 @@ impl WasmGcEmitter {
 	/// A list where an f64 is wanted: a call of an FFI or user function (`(f)` without arguments too), a builtin, or
 	/// statements whose last one gives the value
 	fn emit_float_list(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
+		if self.is_library_word_call(items, bracket, separator) {
+			return self.emit_node_as_f64(func, &Node::List(items.to_vec(), bracket.clone(), separator.clone()));
+		}
 		if items.len() >= 2 || *bracket == Bracket::Round {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
 				if self.ctx.ffi_imports.contains_key(fn_name) {
@@ -2749,6 +2766,21 @@ impl WasmGcEmitter {
 	}
 
 	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
+	/// `'7' as int` is 7; `'x' as int` is no number (invalid_number, which `try` catches), hinted toward `codepoint('x')`
+	fn emit_character_cast(&mut self, func: &mut Function, character: char, target_type: &Node) {
+		if !character.is_ascii_digit() {
+			let (target, codepoint) = (target_type.name(), crate::library_words::CODEPOINT);
+			crate::normalize::hint(&format!("'{character}' as {target}"), &format!("{codepoint}('{character}') as {target}"), "a character that is no digit is no number; codepoint gives its code point");
+		}
+		self.emit_text_cast(func, &character.to_string(), target_type);
+	}
+
+	/// `reverse(xs)`, `codepoint(c)`: a call of a library word the program does not define itself
+	fn is_library_word_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		crate::analyzer::call_name(items, bracket, separator)
+			.is_some_and(|name| library_ops::LIBRARY_FUNCTIONS.iter().any(|(word, _)| *word == name) && !self.ctx.user_functions.contains_key(name))
+	}
+
 	fn emit_text_cast(&mut self, func: &mut Function, text: &str, target_type: &Node) {
 		match crate::wasp_parser::number_in_text(text) {
 			Some(number) => self.emit_cast(func, &Node::Number(number), target_type),
@@ -2916,8 +2948,8 @@ impl WasmGcEmitter {
 		match value {
 			Node::Number(Number::Float(f)) => self.emit_int_node(func, *f as i64),
 			Node::Text(s) => self.emit_text_cast(func, s, target_type),
-			// a character is a one-character text: its digit, else invalid_number; its code point is ord(c)
-			Node::Char(c) => self.emit_text_cast(func, &c.to_string(), target_type),
+			// a character is a one-character text: its digit, else invalid_number; its code point is codepoint(c)
+			Node::Char(c) => self.emit_character_cast(func, *c, target_type),
 			_ if self.get_type(value).is_float() => {
 				self.emit_float_value(func, value);
 				self.emit_truncating_cast(func);
@@ -2957,12 +2989,17 @@ impl WasmGcEmitter {
 	fn emit_cast_to_float(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
 		match value {
 			Node::Text(s) => self.emit_text_cast(func, s, target_type),
-			Node::Char(c) => self.emit_float_node(func, c.to_string().parse().unwrap_or(*c as i64 as f64)),
+			Node::Char(c) => self.emit_character_cast(func, *c, target_type),
 			Node::Number(Number::Int(n)) => self.emit_float_node(func, *n as f64),
 			// a text, or a value known only at run time, parses its digits
 			_ if matches!(self.get_type(value), Kind::Text | Kind::Empty) => {
 				self.emit_node_instructions(func, value);
 				self.emit_call(func, list_ops::TEXT_AS_FLOAT);
+				self.emit_call(func, "new_float");
+			}
+			// `codepoint(c) as float`: a library word's number result (a text one parses above)
+			Node::List(items, bracket, separator) if self.is_library_word_call(items, bracket, separator) => {
+				self.emit_node_as_f64(func, value);
 				self.emit_call(func, "new_float");
 			}
 			_ => {

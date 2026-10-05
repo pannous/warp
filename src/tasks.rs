@@ -26,6 +26,8 @@ const STOPPED: &str = "task stopped";
 /// The exported constructors a value is rebuilt with in an instance
 const CONSTRUCTORS: [&str; 9] = ["new_empty", "new_int", "new_float", "new_codepoint", "new_text", "new_symbol", "new_key", "new_list",
 	crate::wasm_emitter::CLOSURE_REBUILD];
+use crate::wasm_emitter::EXACT_BUILDERS;
+const LIMB_BITS: i64 = 32;
 /// The node fields (CLAUDE.md "Serialization") and the closure's captured values (wasm_emitter/closures.rs)
 const KIND_FIELD: usize = 0;
 const DATA_FIELD: usize = 1;
@@ -48,6 +50,8 @@ pub enum TaskValue {
 	Key(Box<TaskValue>, i64, Box<TaskValue>),
 	/// a function value: its target's name and its captured values, rebuilt by the module's closure_rebuild
 	Closure(String, Box<TaskValue>),
+	/// an exact number beyond the fixnums: numerator and denominator (1 for an integer)
+	Exact(num_bigint::BigInt, num_bigint::BigInt),
 }
 
 impl TaskValue {
@@ -55,7 +59,10 @@ impl TaskValue {
 		use crate::extensions::numbers::Number;
 		Ok(match node.drop_meta() {
 			Node::Empty => TaskValue::Empty,
-			Node::Number(Number::Int(n)) => TaskValue::Int(*n),
+			Node::Number(Number::Int(n)) if crate::wasm_emitter::is_fixnum(*n) => TaskValue::Int(*n),
+			Node::Number(Number::Int(n)) => TaskValue::Exact((*n).into(), 1.into()),
+			Node::Number(Number::BigInt(n)) => TaskValue::Exact((*n).clone(), 1.into()),
+			Node::Number(Number::Quotient(n, d)) => TaskValue::Exact((*n).into(), (*d).into()),
 			Node::Number(Number::Float(x)) => TaskValue::Float(*x),
 			Node::Char(c) => TaskValue::Char(*c),
 			Node::Text(text) => TaskValue::Text(text.clone()),
@@ -93,7 +100,7 @@ pub(crate) struct Builders {
 impl Builders {
 	pub(crate) fn of(lookup: &mut dyn FnMut(&str) -> Option<wasmtime::Extern>) -> Result<Builders> {
 		let mut functions = HashMap::new();
-		for name in CONSTRUCTORS {
+		for &name in CONSTRUCTORS.iter().chain(EXACT_BUILDERS.iter()) {
 			if let Some(function) = lookup(name).and_then(|export| export.into_func()) {
 				functions.insert(name, function);
 			}
@@ -103,10 +110,36 @@ impl Builders {
 	}
 
 	fn call(&self, name: &str, arguments: &[Val], store: &mut StoreContextMut<'_, HostState>) -> Result<Val> {
+		self.call_into(name, arguments, Val::AnyRef(None), store)
+	}
+
+	fn call_into(&self, name: &str, arguments: &[Val], result: Val, store: &mut StoreContextMut<'_, HostState>) -> Result<Val> {
 		let function = self.functions.get(name).ok_or_else(|| anyhow!("the module exports no {name}"))?;
-		let mut result = [Val::AnyRef(None)];
-		function.call(&mut *store, arguments, &mut result)?;
-		Ok(result[0])
+		let mut results = [result];
+		function.call(&mut *store, arguments, &mut results)?;
+		Ok(results[0])
+	}
+
+	fn int_operation(&self, name: &str, a: i64, b: i64, store: &mut StoreContextMut<'_, HostState>) -> Result<i64> {
+		Ok(self.call_into(name, &[Val::I64(a), Val::I64(b)], Val::I64(0), store)?.unwrap_i64())
+	}
+
+	/// The Int handle of an integer: a fixnum as it is, a larger one composed from 32-bit limbs
+	fn integer_handle(&self, n: &num_bigint::BigInt, store: &mut StoreContextMut<'_, HostState>) -> Result<i64> {
+		use num_traits::ToPrimitive;
+		if let Some(small) = n.to_i64().filter(|small| crate::wasm_emitter::is_fixnum(*small)) {
+			return Ok(small);
+		}
+		let (sign, limbs) = n.to_u32_digits();
+		let mut handle = 0;
+		for limb in limbs.iter().rev() {
+			handle = self.int_operation(EXACT_BUILDERS[0], handle, LIMB_BITS, store)?;
+			handle = self.int_operation(EXACT_BUILDERS[1], handle, *limb as i64, store)?;
+		}
+		match sign {
+			num_bigint::Sign::Minus => self.int_operation(EXACT_BUILDERS[2], 0, handle, store),
+			_ => Ok(handle),
+		}
 	}
 
 	pub(crate) fn build(&self, value: &TaskValue, store: &mut StoreContextMut<'_, HostState>) -> Result<Val> {
@@ -128,6 +161,17 @@ impl Builders {
 				let first = self.build(item, store)?;
 				self.call("new_list", &[first, rest, Val::I64(*bracket)], store)
 			}),
+			TaskValue::Exact(numerator, denominator) => {
+				let numerator = self.integer_handle(numerator, store)?;
+				let handle = match denominator == &num_bigint::BigInt::from(1) {
+					true => numerator,
+					false => {
+						let denominator = self.integer_handle(denominator, store)?;
+						self.int_operation(EXACT_BUILDERS[3], numerator, denominator, store)?
+					}
+				};
+				self.call("new_int", &[Val::I64(handle)], store)
+			}
 			TaskValue::Closure(name, captured) => {
 				let name = self.build(&TaskValue::Symbol(name.clone()), store)?;
 				let captured = match captured.as_ref() {

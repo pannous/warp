@@ -43,18 +43,6 @@ pub(crate) fn bang_target(node: &Node) -> Option<(Node, bool)> {
 	}
 }
 
-/// The name a `!` or `!!` follows, and whether it was `!!`
-pub(crate) fn bang_of(node: &Node) -> Option<(String, bool)> {
-	let Node::Meta { node: inner, data } = node else { return None };
-	match data.as_ref() {
-		Node::Key(key, _, value) if key.name() == MUTATED_MARK => {
-			let Node::Symbol(name) = inner.drop_meta() else { return None };
-			Some((name.clone(), matches!(value.drop_meta(), Node::Number(n) if *n == FULLY)))
-		}
-		_ => bang_of(inner),
-	}
-}
-
 /// `upper x!` → `x = upper x`; every other marked name is just the name
 pub fn lower(node: Node) -> Node {
 	match node {

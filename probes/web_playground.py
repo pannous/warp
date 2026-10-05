@@ -96,10 +96,20 @@ def main():
 	browser("click", ".got-it")
 	time.sleep(1.5)
 	after = (browser("get", "text", "#value"), "upto" in browser("get", "text", "#diagnostics"))
-	silenced = before == ("6", True) and after == ("6", False)
-	print(f"{'ok  ' if silenced else 'FAIL'} got it silences the upto warning: {before} → {after}")
+	silenced = before == ("6", True) and after == ("6", False) and "upto@" in browser("get", "text", "#acknowledged")
+	print(f"{'ok  ' if silenced else 'FAIL'} got it silences this upto expression: {before} → {after}")
 	if not silenced: failures.append("got it")
 	browser("eval", "playground.forgetAll()")
+
+	# "// got it" says it in the code: the comment on the warning's line silences it
+	browser("select", "#examples", "ambiguity")
+	time.sleep(1.5)
+	browser("eval", "[...document.querySelectorAll('.got-it')].find(button => button.textContent === '// got it').click()")
+	time.sleep(1.5)
+	commented = ("// got it" in json.loads(browser("eval", "playground.code()")), "upto" in browser("get", "text", "#diagnostics"), browser("get", "text", "#value"))
+	ok = commented == (True, False, "6")
+	print(f"{'ok  ' if ok else 'FAIL'} the // got it button comments the line and silences it: {commented}")
+	if not ok: failures.append("got it comment")
 
 	# "I meant: ..." rewrites the code at the warning and runs it again: the inclusive reading of `1 upto 4` is 1+2+3+4
 	browser("select", "#examples", "ambiguity")

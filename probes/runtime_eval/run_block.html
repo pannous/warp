@@ -8,6 +8,9 @@ const PROGRAMS = [
 	"n=3; t=\"ab\"; ys = [data n+1, data t+\"c\"]; interpret(ys#2)",
 	"y = data q+1; interpret y",
 	"y = data print(\"hi\"); interpret y",
+	"def twice(x): x*2; y = data twice(21); interpret y",
+	"y = data 7/2; z = interpret y; z*2",
+	"y = data 2^70; z = interpret y; z+1",
 ];
 const worker = new Worker("../../web/playground/worker.js?compiler=warp.debug.wasm");
 const lines = [];

@@ -95,3 +95,17 @@ GitHub raw files at the pinned tag (`raw.githubusercontent.com/<owner>/<repo>/v<
 `use uniscript` works; a program's `read(path)` of a URL (the package's data/entities.idx) fetches its bytes as they
 are (host.js `readBytes`, no newline added, like the native read). Browser suite: 1452 passed, 15 failed (inherent);
 night 2026-10-04 end: 1497 passed, the same 15 failed (downloads, module files, package pins, lean, threads, strict flag).
+
+## Feature parity (2026-10-05, fixer)
+Every feature area of 2026-10-04/05 runs in the browser build with its native tests unchanged:
+`tests/queue.sh cargo browser-test -- test_unit test_units test_counting_units test_hyperreals test_structural_patterns
+test_filter_loops test_type_word_filter_loops test_job_lists test_return_type_dispatch test_type_dispatch
+test_trait_runtime_dispatch test_operator_declarations test_operator_precedence test_superscript_operator_declarations
+test_mutating_bang test_unwrap test_failed_word test_raise test_try_catch_except test_try_stack_overflow
+test_uniscript_entities` → 114 of 114 (natively 115: untrusted_code_may_guard_a_call is native-only). Areas: units
+(literals, conversion, products, composites, comparisons, at run time), hyperreals, structural patterns, filter loops,
+job lists (three one-second jobs ~1 s with cross-origin isolation), dispatch (parameter, return type, trait runtime),
+custom operators, `x!` / failed / raise / try-catch / a caught stack overflow (guarded_call in host.js), entities.
+No gaps found. A test that reads a compiled module natively (wasm_reader) must be `#[cfg(feature = "native")]`, else
+the browser build of the tests does not compile (test_precomputed, fixed here; test_ffi_warning_once and
+the_strict_flag_turns_warnings_into_errors before).

@@ -65,7 +65,7 @@ const SYNONYMS: [(&str, &[&str]); 23] = [
 	(SLICE, &[]),
 	(COPY, &["clone"]),
 	("replace", &[]),
-	(ORD, &["ordinal", "codepoint"]),
+	(ORD, &["ordinal", CODEPOINT]),
 	(IS_DIGIT, &["isdigit"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
@@ -82,8 +82,11 @@ pub const RUNTIME_WORDS: [(&str, usize); 17] = [
 	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (COLLECTION_POSITION, 2), (MAP_GET_OR, 3), (SLICE, 3),
 	(MAP_WITHOUT, 2),
 ];
-/// `ord(c)`, `ordinal(c)`, `codepoint(c)`: the code point of a character (`c as int` is only its digit)
+/// `codepoint(c)`, `ord(c)`, `ordinal(c)`: the code point of a character (`c as int` is only its digit). Inside the
+/// compiler it is `ord`, since `codepoint` is also a type word
 pub const ORD: &str = "ord";
+/// P74 (user, 2026-10-05): "make codepoint the default name": the spelling hints, fixes and docs use
+pub const CODEPOINT: &str = "codepoint";
 /// `slice(x, start, end)`: the items or characters start…end-1, 0-based (`a[1:3]`, `s.slice(1)`)
 pub const SLICE: &str = "slice";
 /// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end
@@ -150,6 +153,11 @@ pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 
 pub fn is_runtime_word(name: &str) -> bool {
 	RUNTIME_WORDS.iter().any(|(word, _)| *word == name)
+}
+
+/// A word of the library, under any of its spellings: `codepoint(c)` calls it, it is no type constructor
+pub fn is_library_word(name: &str) -> bool {
+	is_runtime_word(name) || canonical_word(name).is_some()
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {

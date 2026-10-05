@@ -24,8 +24,10 @@ in case the user did indeed intend something different". Builds the "Later: chan
   `start: null` when the text was not found (the page shows a disabled button: loud, not silent). Warnings also carry
   `topic` for "got it".
 - Playground (web/playground/playground.js): each fix is a button; clicking replaces the range (CodeMirror
-  `posFromIndex`) and runs again. "got it" sits inline next to the warning's fixes (topic-wide, as before; the
-  per-expression `[y/a/n]` + `// got it` comment is another worker's, the `topic` field is what it needs).
+  `posFromIndex`) and runs again. Next to the fixes, "got it" in the three scopes of got-it-scope (user, 2026-10-05):
+  "got it" (this expression: the warning's `expression_key` `topic@expression` joins the page's acknowledged list),
+  "got it: all <topic>" (the topic), "// got it" (appends the comment to the warning's line). Notes without a
+  warning use the report's `got_it` [{topic, expression}].
 
 ## Inventory: every warning, its default reading and its fixes
 | warning / error (topic) | where | default (taken) | fixes offered |
@@ -46,11 +48,12 @@ in case the user did indeed intend something different". Builds the "Later: chan
 | `true + true` (error) | analyzer `check_boolean_arithmetic` | none | `int(true) + int(true)` |
 | `1==1==1` (error) | wasp_parser `chained_equality` | none | `1==1 and 1 == 1`, `(1==1) == 1` |
 | `3 & 4 == 4` (error) | wasp_parser `logic_mixed_with_comparison` | none | `3 & (4 == 4)`, `(3 & 4) == 4` |
-| `"a" as int` (error) | wasp_parser string literal | none | `ord('a')` |
+| `"a" as int` (error) | wasp_parser string literal | none | `codepoint('a') as int` (P74) |
+| `'a' as float` (hint; the value is invalid_number) | wasm_emitter `emit_character_cast` | none | `codepoint('a') as float` |
 | `c and t or o` | analyzer lint | as written | `if c then t else o` |
 | `2 * 1.5 as int` | analyzer lint | the whole | `(2 * 1.5) as int`, `2 * 1.5:int` |
 | `-7 % 3` | analyzer lint | Euclidean | `-7 rem 3` (C/Java/JS) |
-| loop `it` hides the function's `it` | analyzer `hidden_function_it` | the loop's | `outer_it=it; for … {… outer_it …}` |
+| loop `it` hides the function's `it` (`for 1..3 {…}` and `for i in xs {…}`) | analyzer `hidden_function_it` | the loop's | `outer_it=it; for … {… outer_it …}` |
 | `(1, 2) == 1, 2` | tuples.rs | `((1,2) == 1), 2` | `(1, 2) == (1, 2)` |
 | `xs#1..3` | wasp_parser `hash_range_warning` | range from xs#1 | `xs#(1..3)` slice, `(xs#1)..3` |
 | style hints, educate_once notes (`let`, `**`, quotes, `&&`, `len(x)`, `x == int`, `a.copy()`, `o.field`) | normalize, lowering | as written | the preferred form (when the text is literally in the source) |
@@ -67,10 +70,15 @@ in case the user did indeed intend something different". Builds the "Later: chan
 ## Tests
 tests/welcoming/test_fixits.rs: one test per category applies the fix and checks the result's value with warnings as
 errors (the explicit form must not warn again). Browser: probes/web_playground.py clicks "I meant: ..." on the
-ambiguity example (6 → 10) and the braceless-call error fix (→ 25), and the inline "got it".
+ambiguity example (6 → 10) and the braceless-call error fix (→ 25), "got it" for one expression and the "// got it"
+comment button; tests/welcoming/test_fixits.rs `the_page_says_got_it_for_one_expression` checks the report's keys.
 
 ## Findings on the way
 - `[1 -1]` still warns (signed-operand inside brackets), so the list's explicit form is `1 (-1)`.
-- `for i in 1..3 {…it…}` in a function hides the function's `it` without a warning; the old prose fix `for i in …`
-  did not help (the loop still binds `it`).
-- `"x" as float` still names `'x' as float`, which a later decision made an error (`ord('x')`).
+- `for i in 1..3 {…it…}` in a function hid the function's `it` without a warning (the loop binds `it` to the item
+  too); warned now (#23).
+- P74 (user): `codepoint(c)` is the preferred name (`ord`, `ordinal` stay synonyms; inside the compiler the word is
+  `ord`, since `codepoint` is also a type word and `codepoint(x)` would read as its constructor). `'x' as float` was
+  120 at compile time but `'x' as int` an error: both are invalid_number now, hinted toward `codepoint('x') as …`.
+  `codepoint(c) as float` (and a library word's number in float arithmetic) failed with "cannot extract a numeric
+  value": fixed.
