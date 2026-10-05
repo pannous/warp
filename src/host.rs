@@ -477,7 +477,7 @@ fn foreign_call(mut caller: Caller<'_, HostState>, runtime: Option<wasmtime::Roo
 	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("foreign_call: the module exports no memory".into())) };
 	let mut store = caller.as_context_mut();
 	let [runtime, module, member, call, arguments] = [runtime, module, member, call, arguments].map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
-	let answer = crate::foreign::call(&runtime.name(), &module.name(), &member.name(), call == 1, &arguments).map_err(failure)?;
+	let answer = crate::foreign::call(&runtime.name(), &module, &member.name(), call == 1, &arguments).map_err(failure)?;
 	let value = TaskValue::of(&answer).map_err(|problem| failure(problem.to_string()))?;
 	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;

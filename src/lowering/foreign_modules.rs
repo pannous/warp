@@ -22,7 +22,7 @@ pub fn lower(program: Node) -> Node {
 	if modules.is_empty() {
 		return program;
 	}
-	rewrite(program, &modules)
+	Foreign { modules: &modules, values: HashMap::new() }.rewrite(program)
 }
 
 /// `use python "math"` → (alias math, (python, math)); `use python "os.path" as path` → (path, (python, os.path))
@@ -49,34 +49,79 @@ fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 	Some((alias, (runtime.clone(), module)))
 }
 
-fn rewrite(node: Node, modules: &HashMap<String, (String, String)>) -> Node {
-	if let Node::List(items, _, _) = node.drop_meta() {
-		if foreign_use(items).is_some() {
-			return Node::Empty;
-		}
+/// The modules `use` names, and the variables holding a value of another runtime (`d = datetime.date(2020, 1, 2)`):
+/// a member of either is reached through foreign_call
+struct Foreign<'a> {
+	modules: &'a HashMap<String, (String, String)>,
+	values: HashMap<String, String>,
+}
+
+/// `foreign_call(runtime, …)`: its runtime
+fn foreign_runtime(node: &Node) -> Option<String> {
+	let Node::List(items, Bracket::Round, Separator::None) = node.drop_meta() else { return None };
+	match items.as_slice() {
+		[call, runtime, ..] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL) => match runtime.drop_meta() {
+			Node::Text(runtime) => Some(runtime.clone()),
+			_ => None,
+		},
+		_ => None,
 	}
-	if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
-		let alias = match receiver.drop_meta() { Node::Symbol(alias) => Some(alias), _ => None };
-		if let Some((runtime, module)) = alias.and_then(|alias| modules.get(alias)) {
-			let (member, is_call, arguments) = match member.drop_meta() {
-				Node::Symbol(member) => (member.clone(), false, Node::Empty),
-				Node::List(items, Bracket::Round, _) => match items.split_first() {
-					Some((head, arguments)) if matches!(head.drop_meta(), Node::Symbol(_)) => {
-						let arguments = arguments.iter().cloned().map(|argument| rewrite(argument, modules)).collect();
-						(head.name(), true, Node::List(arguments, Bracket::Square, Separator::Space))
-					}
+}
+
+impl Foreign<'_> {
+	/// The runtime and the module (its name as text) or the handle (the value itself) a receiver names
+	fn receiver(&self, receiver: &Node) -> Option<(String, Node)> {
+		if let Node::Symbol(name) = receiver.drop_meta() {
+			if let Some((runtime, module)) = self.modules.get(name) {
+				return Some((runtime.clone(), Node::Text(module.clone())));
+			}
+			if let Some(runtime) = self.values.get(name) {
+				return Some((runtime.clone(), receiver.clone()));
+			}
+		}
+		foreign_runtime(receiver).map(|runtime| (runtime, receiver.clone()))
+	}
+
+	fn rewrite(&mut self, node: Node) -> Node {
+		if let Node::List(items, _, _) = node.drop_meta() {
+			if foreign_use(items).is_some() {
+				return Node::Empty;
+			}
+		}
+		if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
+			let receiver = self.rewrite(receiver.as_ref().clone());
+			if let Some((runtime, module)) = self.receiver(&receiver) {
+				let (member, is_call, arguments) = match member.drop_meta() {
+					Node::Symbol(member) => (member.clone(), false, Node::Empty),
+					Node::List(items, Bracket::Round, _) => match items.split_first() {
+						Some((head, arguments)) if matches!(head.drop_meta(), Node::Symbol(_)) => {
+							let arguments = arguments.iter().cloned().map(|argument| self.rewrite(argument)).collect();
+							(head.name(), true, Node::List(arguments, Bracket::Square, Separator::Space))
+						}
+						_ => return node,
+					},
 					_ => return node,
-				},
-				_ => return node,
-			};
-			let text = |text: &str| Node::Text(text.to_string());
-			return Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(runtime), text(module), text(&member), Node::int(i64::from(is_call)), arguments], Bracket::Round, Separator::None);
+				};
+				let text = |text: &str| Node::Text(text.to_string());
+				return Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(&runtime), module, text(&member), Node::int(i64::from(is_call)), arguments], Bracket::Round, Separator::None);
+			}
 		}
-	}
-	match node {
-		Node::Key(left, op, right) => Node::Key(Box::new(rewrite(*left, modules)), op, Box::new(rewrite(*right, modules))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| rewrite(item, modules)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node, modules)), data },
-		other => other,
+		match node {
+			// `d = datetime.date(2020, 1, 2)`: d holds a value of that runtime, `d.isoformat()` asks it
+			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
+				let value = self.rewrite(*value);
+				if let Node::Symbol(name) = target.drop_meta() {
+					match foreign_runtime(&value) {
+						Some(runtime) => self.values.insert(name.clone(), runtime),
+						None => self.values.remove(name),
+					};
+				}
+				Node::Key(target, op, Box::new(value))
+			}
+			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
+			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
+			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
+			other => other,
+		}
 	}
 }
