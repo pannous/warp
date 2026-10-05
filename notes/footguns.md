@@ -92,16 +92,18 @@
   `warp data` has no JSON output option.
 
 ## Work area "closures-defaults" (2026-09-27)
-- Fixed: closures capture outer variables by value at the definition point (`test_closures_capture_values`,
+- Fixed: closures capture outer / loop variables (`test_closures_capture_values`,
   `test_closures_in_loop_capture_each_iteration`). `analyzer::captured_variables` finds free variables bound in main;
   each gets a mutable WASM global per function, set where the definition appears (`emit_closure_capture`), and the body
   reads it through `user_globals` while it is compiled. Ref-kind (list/text) globals are nullable `ref $Node`.
 - Fixed: default arguments are evaluated at every call (`test_default_argument_is_fresh_per_call`). Parameters take the
   kind of their default (`analyzer::param_kind`), so list/text/float defaults no longer panic in numeric emission.
-- Decided: capture by value (DESIGN.md immutable bindings) over by-reference (wiki/assignment.md `z := y*y` sketch).
-- Left open: functions are not first-class, so "a list of closures from a loop" is not expressible; a name is its latest
-  definition. Functions still only see main-level variables (no nested functions capturing a function's locals);
-  a call before the definition reads zero/null globals. `a.add(1)` on a list does not mutate it (lists area).
+- Decided (revised 2026-10-05, wiki/charged.md §3 / wiki/Footguns.md): free variables are read at call time (late
+  binding); a change after the definition needs `global`/`nonlocal` or is a compile error; loop variables stay
+  per-iteration. Earlier decision was capture by value at definition (DESIGN.md immutable bindings).
+  (`tests/functions/test_late_binding.rs`)
+- Left open at the time: functions were not first-class; nested capture and first-class closures have since landed
+  (notes/closures.md). `a.add(1)` on a list does not mutate it (lists area).
 
 ## Work area "truthiness-null-errors" (2026-09-27)
 - Fixed: declared types enforced (`x:int=5;x="five"` → Error with position and fix-it; `x:float=5` widens), null-use check
