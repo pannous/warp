@@ -16,6 +16,7 @@ fn libm_calls_are_pure() {
 #[test]
 fn libm_runs_untrusted_and_in_pure_functions() {
 	assert_eq!(eval_untrusted("exp(0)"), Node::int(1));
-	assert!(matches!(eval_untrusted("import strlen from \"c\"; strlen(\"ab\")"), Node::Error(_)));
+	// P88 (user 2026-10-05): untrusted code gets every capability for now, libc included
+	assert_eq!(eval_untrusted("import strlen from \"c\"; strlen(\"ab\")"), Node::int(2));
 	is!("wave(x) := exp(x) ! Pure\nwave(0)", 1);
 }
