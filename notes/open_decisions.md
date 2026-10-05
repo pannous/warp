@@ -65,6 +65,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P75 fix buttons read "I meant: <replacement>", the meaning as a tooltip (warp-ea's default).
 - P77 `warp build --exe prog.wasp`: the executable prints what the program prints, then its value as `print` shows
   it (texts without quotes); exit code 0, 1 on a trap (asked by the aot worker warp-ec; as recommended).
+- P78 modifiers from other languages before a definition (`public`, `static`, `extern C`, `inline`, `virtual`,
+  `final`, `private`, `volatile`, `native`, …): accepted and skipped with a got-it note "public has no meaning in
+  wasp"; words with a wasp meaning (`global`, `const`) keep it; a lone definition stays ø, so test_modifiers is edited
+  to call the function (user decision). Asked by warp-90; as recommended.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
