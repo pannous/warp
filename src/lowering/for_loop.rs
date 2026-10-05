@@ -82,6 +82,8 @@ fn for_in(items: &[Node]) -> Option<Node> {
 	let names = loop_names(variable)?;
 	let (iterable, body) = match rest {
 		[iterable, body] => (iterable.clone(), body.clone()),
+		// `for i in 1 to 5\n  puti i`: the words after the iterable are the body
+		[iterable, words @ ..] if words.len() > 1 => (iterable.clone(), Node::List(words.to_vec(), Bracket::None, Separator::Space)),
 		[colon] => match colon.drop_meta() {
 			Node::Key(iterable, Op::Colon, body) => (iterable.as_ref().clone(), body.as_ref().clone()),
 			_ => return None,

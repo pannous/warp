@@ -1310,7 +1310,6 @@ fn test_for_loop_classic() {
 }
 
 #[test]
-#[ignore]
 fn test_for_loops() {
 	{
 		// todo: fix for wasm
