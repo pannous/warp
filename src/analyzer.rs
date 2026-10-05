@@ -874,7 +874,7 @@ fn declares_local(body: &Node, name: &str) -> bool {
 }
 
 /// The program's first main-level assignment of each name becomes its `global` declaration (`global n` if none)
-fn declare_global(program: Node, names: &[String]) -> Node {
+pub(crate) fn declare_global(program: Node, names: &[String]) -> Node {
 	if names.is_empty() {
 		return program;
 	}
@@ -915,7 +915,7 @@ fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
 }
 
 /// The assignments (kept with their positions) whose changed variable satisfies `wanted`, in source order
-fn find_assignments<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool) -> Vec<(&'a Node, &'a String)> {
+pub(crate) fn find_assignments<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool) -> Vec<(&'a Node, &'a String)> {
 	let mut found: Vec<(&'a Node, &'a String)> = assignment_target_root(node.drop_meta()).filter(|name| wanted(name)).map(|name| (node, name)).into_iter().collect();
 	match node.drop_meta() {
 		Node::Key(left, _, right) => found.extend(find_assignments(left, wanted).into_iter().chain(find_assignments(right, wanted))),

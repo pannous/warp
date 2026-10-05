@@ -159,7 +159,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(crate::node::error(&format!(
 			"capability denied: {name} needs the {} capability, which eval does not grant", capability.name())));
 	}
-	let node = crate::analyzer::resolve_main_variable_assignments(without_constraints(node))?;
+	let node = crate::analyzer::resolve_main_variable_assignments(crate::late_binding::lower(without_constraints(node))?)?;
 	if let Some(error) = crate::analyzer::diagnose(&node) {
 		return Err(error);
 	}
