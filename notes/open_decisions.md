@@ -27,6 +27,65 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   (library_words method_call). Night session 2026-10-04.
 - P30 `xs.pop()` gives the last item and removes it from the variable (Python); `xs.pop()!` style mutation markers
   are not required. Assumed: Python semantics. Night session 2026-10-04.
+- P35 `m.remove(k)` on a map and `xs.index_of(x)` on a list: remove the key from the variable and give its value
+  (Python dict.pop) / give a new map; `index_of` 0-based (Python) / 1-based like `x in xs` and `in` on texts.
+  Implemented defaults (supervisor, night 2026-10-04): remove takes the entry out of m and gives its value (ø when
+  absent), analyzer::removed_key + the runtime map_without; index_of is the 1-based position, 0 when absent
+  (a synonym of collection_position). Test: tests/lists/test_remove_and_index_of.rs.
+- P44 Shared arrays across tasks (user P33 step 6, notes/threads.md): `shared xs = int[n]` makes n Ints (zeros) in a
+  memory every task of the run shares; `xs#i` reads, `xs#i = v` writes, `xs#i += v` / `-=` add atomically (the value
+  is the new one), `#xs` / `count(xs)` is n; `go f(xs)` passes the same array, the one exception to copying, marked by
+  `shared`; a parameter given a shared array is shared inside its function. Ints only for now. Implemented default;
+  alternatives: `atomic` instead of `shared`, an explicit `xs.add(i, v)` instead of atomic `+=`. Night 2026-10-04.
+- P45 A variable given values of two kinds: `x = 5; x = [1]; x` was 1 (the variable kept its first kind) and
+  `x = "a"; x = 5; x + 1` an internal cast failure. Implemented default: a variable given values of two kinds that do
+  not mix (a list then an Int, a text then an Int; Int and Float still widen to Float) is held as a Node and computes
+  by its run-time kind, as a variable first bound to ø is: `x = [1]` then `x = 5; x + 1` is 6, and a loop variable may
+  reuse a list's name. Alternative: a compile error "x was a list, is given an Int: use another name". Night 2026-10-04.
+- P46 Type-name patterns in `for` (wiki/for.md): `for friend in [foe1, friend1, foe2, friend2]: print it` walks only
+  the items whose name matches the loop variable's type name, and `for (it>2) in [1,2,3,4]` the items a condition
+  holds for. Proposed default (parked, supervisor): `for NAME in xs` stays every item; a filtered walk is written
+  `for x in xs where cond` (or `xs.filter(…)`), and a type-named walk `for friend in xs` filters by the declared type
+  `friend` only when one is declared. Not implemented. Night 2026-10-04.
+- P47 Lists of tasks: a job used as a value awaits it (the auto-cast, P33), so `jobs.add(j)` awaits j at once and
+  tasks cannot be collected without running them one after the other (200 tasks of 200 ms: 41 s). Proposed default
+  (supervisor): adding a job to a list keeps the handle unawaited, the auto-cast applies only where a value is needed
+  (arithmetic, print, a call taking a number), and `await all jobs` waits for every job of a list, giving their
+  results. Not implemented. 2026-10-05.
+- P48 Custom operators (wiki/operator.md): `prefix operator ⁻ := it*-1`, `suffix operator ³ := it*it*it`,
+  `suffix operator ⁰ := 1`. Proposed syntax (parked, supervisor): exactly the wiki's, `prefix operator SYMBOL := body`
+  and `suffix operator SYMBOL := body` with `it` the operand, plus `infix operator SYMBOL := a op b`-style bodies naming
+  `left` and `right`; prefix and suffix operators bind tighter than any infix one (like `-x` and `x²` today), a new
+  infix operator binds like `+` unless declared `infix operator SYMBOL precedence of *`. The parser learns the symbol
+  from the declaration before the rest of the file (one pre-scan), so a use before the declaration works. Not
+  implemented. 2026-10-05.
+- P49 A float passed to an int parameter (tests/types/test_types.rs test_function_argument_cast, ignored "soon"):
+  today a call converts nothing, `fun addi(int x,int y){x+y}; addi(2.2,2.2)` is 4.4; the test expects 4 there
+  (each argument truncated to the declared int) but contradicts itself: `float addi(int x,int y){x+y}` is expected to
+  give 4.4 on one line and "4." (2+2 as a float) on another. Options: (a) truncate to the declared int (2.2 → 2, so 4
+  and 4.0), (b) refuse at compile time ("2.2 is no int: write 2.2 as int"), (c) keep today's (the declaration is
+  ignored for floats). Proposed default: (b), wasp never loses digits silently. The test needs editing either way.
+  2026-10-05.
+- P50 Broadcasting a function with a declared parameter (wiki/broadcasting.md, notes/broadcasting.md):
+  `square number = number*number; square [1 2 3]` (the wiki's own example) and `foo(x:int):=x+1; foo([1 2 3])`.
+  The wiki says all functions broadcast; tests/functions/test_argument_kinds.rs and test_parameter_call_kinds.rs expect
+  the type error `foo needs an Int for parameter x`. Assumed (worker broadcasting): only an undeclared parameter used
+  as an arithmetic operand broadcasts (`square:=it*it`, `square(x):=x*x`), a declared one keeps the type error.
+  Proposed: a declared scalar type broadcasts too (it says "one element"), the two tests change to a list-typed or
+  text argument. Also open: `print [1 2 3]` printing one element per line (wiki_features row 24) is not done; today it
+  prints the list. 2026-10-05.
+Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
+Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
+uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
+#24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
+
+## User to-dos (not questions)
+- Branch `claude/shared-kind-constants` (only unmerged commit: the dropped cloud pilot report); the hook refuses, run
+  `git -C /Users/me/dev/angles/warp push origin --delete claude/shared-kind-constants`. From BOSS-cheeky-shannon.
+- Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
+  the session title → Edit cloud environment). From BOSS-cheeky-shannon.
+
+## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
   type word (P20 forbids it as a function name). Options: `show(p:person)` (Haskell) / `description(p:person)` (Swift)
   / allow `text(p:person)` as the one exception. Not implemented yet (todo.md "Traits: Printable"). Night 2026-10-04.
@@ -39,11 +98,6 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - P34 DECIDED (user, 2026-10-04): a number subscript on an empty `{}` keys it as a map (`d={}; d[1]="a"` → {1:"a"}). `d = {}; d[1] = "a"`: a number subscript of an empty `{}` indexes it as a list (index out of range) / keys it as a
   map like a text subscript does (Lua tables, JS objects). Assumed: list indexing (today's behaviour, a loud error).
   Night 2026-10-04.
-- P35 `m.remove(k)` on a map and `xs.index_of(x)` on a list: remove the key from the variable and give its value
-  (Python dict.pop) / give a new map; `index_of` 0-based (Python) / 1-based like `x in xs` and `in` on texts.
-  Implemented defaults (supervisor, night 2026-10-04): remove takes the entry out of m and gives its value (ø when
-  absent), analyzer::removed_key + the runtime map_without; index_of is the 1-based position, 0 when absent
-  (a synonym of collection_position). Test: tests/lists/test_remove_and_index_of.rs.
 - P36 DECIDED (user, 2026-10-04): implement unit conversion as proposed below. Unit conversion: `100 cm in m`, `2 h in minutes`, `3 km as m` are undefined today (`in` places a time in a zone,
   `as` casts to a type). Proposed default: `quantity in unit` and `quantity as unit` give the quantity in that unit of
   the same dimension, exact when it divides (`100 cm in m` → `1 m`), else a ratio (`150 cm in m` → `3/2 m`); the unit
@@ -79,50 +133,6 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   setting past the end is a loud, catchable `index out of range` error, as the existing tests have it
   (`x=(1 2 3);x#4=0`, test_footguns). An experimental growth (night 2026-10-04) was dropped before commit; the
   ignored tests expecting growth (test_array_creation) stay ignored.
-- P44 Shared arrays across tasks (user P33 step 6, notes/threads.md): `shared xs = int[n]` makes n Ints (zeros) in a
-  memory every task of the run shares; `xs#i` reads, `xs#i = v` writes, `xs#i += v` / `-=` add atomically (the value
-  is the new one), `#xs` / `count(xs)` is n; `go f(xs)` passes the same array, the one exception to copying, marked by
-  `shared`; a parameter given a shared array is shared inside its function. Ints only for now. Implemented default;
-  alternatives: `atomic` instead of `shared`, an explicit `xs.add(i, v)` instead of atomic `+=`. Night 2026-10-04.
-- P45 A variable given values of two kinds: `x = 5; x = [1]; x` was 1 (the variable kept its first kind) and
-  `x = "a"; x = 5; x + 1` an internal cast failure. Implemented default: a variable given values of two kinds that do
-  not mix (a list then an Int, a text then an Int; Int and Float still widen to Float) is held as a Node and computes
-  by its run-time kind, as a variable first bound to ø is: `x = [1]` then `x = 5; x + 1` is 6, and a loop variable may
-  reuse a list's name. Alternative: a compile error "x was a list, is given an Int: use another name". Night 2026-10-04.
-- P46 Type-name patterns in `for` (wiki/for.md): `for friend in [foe1, friend1, foe2, friend2]: print it` walks only
-  the items whose name matches the loop variable's type name, and `for (it>2) in [1,2,3,4]` the items a condition
-  holds for. Proposed default (parked, supervisor): `for NAME in xs` stays every item; a filtered walk is written
-  `for x in xs where cond` (or `xs.filter(…)`), and a type-named walk `for friend in xs` filters by the declared type
-  `friend` only when one is declared. Not implemented. Night 2026-10-04.
-- P47 Lists of tasks: a job used as a value awaits it (the auto-cast, P33), so `jobs.add(j)` awaits j at once and
-  tasks cannot be collected without running them one after the other (200 tasks of 200 ms: 41 s). Proposed default
-  (supervisor): adding a job to a list keeps the handle unawaited, the auto-cast applies only where a value is needed
-  (arithmetic, print, a call taking a number), and `await all jobs` waits for every job of a list, giving their
-  results. Not implemented. 2026-10-05.
-- P48 Custom operators (wiki/operator.md): `prefix operator ⁻ := it*-1`, `suffix operator ³ := it*it*it`,
-  `suffix operator ⁰ := 1`. Proposed syntax (parked, supervisor): exactly the wiki's, `prefix operator SYMBOL := body`
-  and `suffix operator SYMBOL := body` with `it` the operand, plus `infix operator SYMBOL := a op b`-style bodies naming
-  `left` and `right`; prefix and suffix operators bind tighter than any infix one (like `-x` and `x²` today), a new
-  infix operator binds like `+` unless declared `infix operator SYMBOL precedence of *`. The parser learns the symbol
-  from the declaration before the rest of the file (one pre-scan), so a use before the declaration works. Not
-  implemented. 2026-10-05.
-- P49 A float passed to an int parameter (tests/types/test_types.rs test_function_argument_cast, ignored "soon"):
-  today a call converts nothing, `fun addi(int x,int y){x+y}; addi(2.2,2.2)` is 4.4; the test expects 4 there
-  (each argument truncated to the declared int) but contradicts itself: `float addi(int x,int y){x+y}` is expected to
-  give 4.4 on one line and "4." (2+2 as a float) on another. Options: (a) truncate to the declared int (2.2 → 2, so 4
-  and 4.0), (b) refuse at compile time ("2.2 is no int: write 2.2 as int"), (c) keep today's (the declaration is
-  ignored for floats). Proposed default: (b), wasp never loses digits silently. The test needs editing either way.
-  2026-10-05.
-Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
-Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
-uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
-#24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
-
-## User to-dos (not questions)
-- Branch `claude/shared-kind-constants` (only unmerged commit: the dropped cloud pilot report); the hook refuses, run
-  `git -C /Users/me/dev/angles/warp push origin --delete claude/shared-kind-constants`. From BOSS-cheeky-shannon.
-- Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
-  the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Decided by the user (2026-09-29) — implementation: notes/cloud_tasks.md
 - #1 yes: avoid panics everywhere, errors as values. #2 leave the trailers. #3 juxtaposition yes, spaced only if the unit exists.
