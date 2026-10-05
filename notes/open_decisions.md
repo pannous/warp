@@ -5,21 +5,6 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P22 known-type field mismatch: `p:photo = pic{width:3}` (pic a known other type, lacks height). Error that teaches
-  `pic like photo` (D4 "Strict" + the like philosophy) or a got-it warning, then duck typed?
-  Options: Error, teach `like` / Got-it warning (error under `use strict`). Assumed: warning (branch default; it
-  conflicts with the recorded decisions, so likely undone). Asked by warp-bc, branch claude/like-keyword 19f8b73f.
-  Asked once 2026-10-03, no answer (user away).
-- P23 type-word clash scope: does the clash error cover every type word incl. generic ones (`number := …`), or only
-  concrete types (int/float/double)? Options: Every type word / Concrete types only. Assumed: every type word.
-  Asked by warp-bc, branch claude/type-word-user-function.
-- P24 should the suffix form `4 doubled` and the number-dot form `4.square` call user functions?
-  Options: Yes, both (a letter after `4.` is never a decimal) / Suffix form only / Neither. Assumed: unsupported
-  (todo.md). Asked by warp-bc. Note: the suffix form is wiki syntax (D9 `1+2 squared`).
-  Night 2026-10-04: the number-dot form `4.square` calls square now (a letter after `4.` is never a decimal).
-- P26 is libm (sin, exp, …) pure? Today any libm call needs the Ffi capability, so eval_untrusted refuses pure math
-  and a `! pure` function calling sin is a violation. Options: libm counts as pure (deterministic, no effects) /
-  libm stays Ffi like any C library. Assumed: Ffi. Asked by warp-d2, branch implicit-libm (effects.rs).
 - P28 `real x;` (declared without a value) read before an assignment: loud error "x is declared without a value"
   (Java/Kotlin) / zero value of the type (Go). Assumed: error (analyzer::check_unassigned_declarations). Night
   session 2026-10-04.
@@ -79,6 +64,31 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   (Decided #7)? Then call-shaped data in code needs brackets: `[cube 3]`, `(cube 3)`, which contradicts rule 3 of
   notes/unresolved_call_survey.md (`print 3` as data). Proposed: keep the warning (wasp is a data notation; strict
   mode makes it an error). Asked by worker warp-90, branch unknown-word. 2026-10-05.
+- P52 Calling a `to` phrase with its prepositions: `to add number a to number b: a+b` is called `add(1, 2)` today;
+  should `add 1 to 2` work too, and `square of 4` for `square of a number`? Today `1 to 2` is a range and `x of y` a
+  field lookup, so `add 1 to 2` is add(1..2). Proposed: when the name is a phrase-defined function, its own
+  prepositions win; everywhere else the operators keep their meaning. Asked by warp-90, branch type-name-params.
+  2026-10-05.
+- P53 test_wasm::test_custom_operators stays ignored only because its `.5³` line expects Rust's `1 / 8` (integer
+  division, 0) while the value is 0.125. Options: change that line to 0.125 and un-ignore (recommended) / leave it
+  ignored. Assumed: ignored. Asked by warp-90, branch custom-operators 28ee01c2. 2026-10-05.
+- P54 tests/operators/test_operator_declarations.rs::test_precedence_declarations_are_refused pins
+  `infix operator ⊕ := a+b; operator ⊕ has precedence above +` as "not supported yet"; the new feature makes it work
+  (X must be a declared operator; built-ins are never re-ranked). Options: replace the assertion with the positive
+  result (recommended) / keep the refusal, drop the feature. Assumed: replaced in its own commit. Asked by warp-90,
+  branch operator-precedence. 2026-10-05.
+- P55 test_while_nop_issue (ignored) expects `x=0;while x++<11: nop;` to be 11, but a while loop's value is its last
+  body value (Decided 2026-09-30). Options: rewrite the test to `…;x` (gives 11 today, recommended) / a loop whose
+  body has no value gives the condition variable. Assumed: stays ignored. Asked by the Fixer warp-2d. 2026-10-05.
+- P56 Uniscript entities (row 37, branch fix-uniscript-entities, all four assumed as recommended): (1) `\name` inside
+  double-quoted texts: no, code only (`"\nat"` stays newline+"at", not ℕ); (2) `\epsilon`/`\phi` are ε U+03B5 and
+  φ U+03C6 (not LaTeX's lunate ϵ/ϕ); (3) an unknown `\name` is the loud error "unknown entity \name"; (4) `∞` has no
+  value yet: f64 infinity now, or wait for the hyperreals (ω)? Asked by the Fixer warp-2d. 2026-10-05.
+- P57 Hyperreals (branch hyperreals, notes/hyperreals.md; ε exact with integer exponents, compile time only):
+  (1) `1/(1+ε)` (an infinite series): keep the error (recommended) / truncated series marked approximate
+  (HyperApproxInv.lean); (2) dual-number mode (ε² = 0) via `use dual`: later (recommended) / now; (3) hyperreals at
+  run time (a WASM GC representation): later with exact reals at run time (recommended) / now. Asked by warp-90.
+  2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -89,6 +99,14 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   `git -C /Users/me/dev/angles/warp push origin --delete claude/shared-kind-constants`. From BOSS-cheeky-shannon.
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
+
+## Decided 2026-10-05 (user, multiple choice, all as recommended)
+- P22 `p:photo = pic{width:3}` with pic a known other type: an error that teaches `pic like photo`. The warning
+  default on claude/like-keyword is undone.
+- P23 the type-word clash error covers every type word, generic ones (`number := …`) included (as assumed).
+- P24 the suffix form `4 doubled` calls a user function too (like `4.square`, wiki D9 `1+2 squared`). Not done yet.
+- P26 libm (sin, exp, …) counts as pure: no Ffi capability, allowed in eval_untrusted and `! pure` functions.
+  The Ffi assumption (effects.rs) is undone.
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
