@@ -16,3 +16,4 @@ mod test_floor_quotient;
 mod test_pipeline;
 mod test_compound_assignment;
 mod test_tuple_comparison_warning;
+mod test_like_known_type_mismatch;

@@ -84,3 +84,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   sets, logic, relations): expanded to their character before parsing, outside texts and comments; an unknown
   `\name` is the loud "unknown entity \name" (tests/parser/test_uniscript_entities.rs). The full table and `<:…>`
   blocks stay with the uniscript package.
+
+## 2026-10-05 p22-like-error
+- P22 was already the behaviour on main (a known other type is an error teaching `pic like photo`); pinned the
+  missing-field case (tests/operators/test_like_known_type_mismatch.rs). Ad hoc names (`pic{…}` with no class pic) keep
+  their field warnings: `like` needs declared types.
