@@ -24,10 +24,15 @@ const BODY_PLACEHOLDER: &str = "memo_body";
 pub fn lower(program: Node) -> Node {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &program);
+	// the shape first: the effects and variables of the whole program only when some function has it
+	let candidates: Vec<&UserFunctionDef> = context.user_functions.values().filter(|function| has_memoizable_shape(function)).collect();
+	if candidates.is_empty() {
+		return program;
+	}
 	let report = EffectReport::of(&program);
 	let mut main = Scope::new();
 	collect_variables(&program, &mut main);
-	let mut memoized: Vec<String> = context.user_functions.values()
+	let mut memoized: Vec<String> = candidates.into_iter()
 		.filter(|function| is_memoizable(function, &report, &main))
 		.map(|function| function.name.clone())
 		.collect();
@@ -38,7 +43,8 @@ pub fn lower(program: Node) -> Node {
 	rewritten(program, &memoized)
 }
 
-fn is_memoizable(function: &UserFunctionDef, report: &EffectReport, main: &Scope) -> bool {
+/// One Int parameter, an Int result, an expression body calling the function itself at least twice
+fn has_memoizable_shape(function: &UserFunctionDef) -> bool {
 	let [param] = function.params.as_slice() else { return false };
 	let mut self_calls = 0;
 	function.body.visit(&mut |part| if let Node::List(items, _, _) = part.drop_meta() {
@@ -48,7 +54,11 @@ fn is_memoizable(function: &UserFunctionDef, report: &EffectReport, main: &Scope
 	function.body.visit(&mut |part| expression &= !matches!(part.drop_meta(), Node::List(_, Bracket::Curly, _) | Node::List(_, _, Separator::Semicolon | Separator::Newline))
 		&& part.drop_meta().name() != "return");
 	expression && self_calls >= 2 && param_kind(param) == Kind::Int && function.return_kind == Kind::Int && function.tuple_kinds.is_empty()
-		&& report.effects_of(&function.name).is_some_and(|effects| effects.is_subset_of(EffectSet::of(&[Effect::Div])))
+}
+
+/// A function of that shape that is pure (but for dividing) and reads no variable of main
+fn is_memoizable(function: &UserFunctionDef, report: &EffectReport, main: &Scope) -> bool {
+	report.effects_of(&function.name).is_some_and(|effects| effects.is_subset_of(EffectSet::of(&[Effect::Div])))
 		&& captured_variables(function, main).is_empty()
 }
 

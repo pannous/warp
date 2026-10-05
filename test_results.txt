@@ -302,6 +302,11 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_zlib_discovery
   ✓ ffi::test_ffi::test_import_from_pattern_emit
   ✓ ffi::test_ffi::test_import_from_pattern_parse
+  ✓ ffi::test_foreign_js::test_an_unknown_js_member_is_loud
+  ✓ ffi::test_foreign_js::test_js_globals
+  ✓ ffi::test_foreign_js::test_js_modules
+  ✓ ffi::test_foreign_js::test_untrusted_code_gets_no_js
+  ✓ ffi::test_foreign_js::test_values_held_from_another_runtime_compare
   ✓ ffi::test_foreign_python::test_a_python_error_is_loud
   ✓ ffi::test_foreign_python::test_python_calls_and_reads
   ✓ ffi::test_foreign_python::test_python_values_cross_exactly
@@ -593,6 +598,9 @@ PASSED:
   ✓ functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
   ✓ functions::test_runtime_kind_arithmetic::fields_of_a_map_parameter_compute_by_their_values
+  ✓ functions::test_several_arguments::test_a_scalar_function_broadcasts_over_them
+  ✓ functions::test_several_arguments::test_parenthesized_arguments_keep_their_count
+  ✓ functions::test_several_arguments::test_several_arguments_are_one_list
   ✓ functions::test_spaced_assign_definition::a_recursive_spaced_definition_with_equals_defines_the_function
   ✓ functions::test_specialised_variants::a_constant_argument_unrolls_the_recursion
   ✓ functions::test_specialised_variants::an_unbounded_specialisation_keeps_the_call
@@ -2252,4 +2260,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-33 ignored, 2247 passed, 0 failed, 2247 total tested
+33 ignored, 2255 passed, 0 failed, 2255 total tested

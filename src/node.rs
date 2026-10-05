@@ -690,6 +690,14 @@ impl Node {
 		}
 	}
 
+	/// Whether one of `words` occurs as a symbol anywhere in the tree: a pass about these words has nothing to do
+	/// without one, and can skip working out the program's functions
+	pub fn mentions_any(&self, words: &[&str]) -> bool {
+		let mut found = false;
+		self.visit(&mut |node| found |= matches!(node, Symbol(name) if words.contains(&name.as_str())));
+		found
+	}
+
 	/// Call `action` on this node and every descendant (pre-order, Meta dropped)
 	pub fn visit<'a>(&'a self, action: &mut dyn FnMut(&'a Node)) {
 		let node = self.drop_meta();

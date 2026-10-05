@@ -144,13 +144,17 @@ pub enum Capability {
 	Sql,
 	/// Runs typed `sh` commands (`exec`)
 	Process,
+	/// Modules of another runtime, `use python "math"` (foreign_call, src/foreign.rs; user decision P89)
+	Foreign,
 }
 
 impl Capability {
-	/// Capabilities `eval` grants; running queries or programs needs a host that grants more
-	pub const GRANTED_BY_EVAL: [Capability; 4] = [Host, Wasi, Ffi, Libm];
-	/// Capabilities untrusted code gets
-	pub const GRANTED_UNTRUSTED: [Capability; 1] = [Libm];
+	pub const ALL: [Capability; 7] = [Host, Wasi, Ffi, Libm, Sql, Process, Foreign];
+	/// Capabilities `eval` grants: all of them for now (user decision P88, "currently allow everything to everyone");
+	/// the checks stay, a host that grants less will narrow this
+	pub const GRANTED_BY_EVAL: [Capability; 7] = Capability::ALL;
+	/// Capabilities untrusted code gets: all of them for now too (P88)
+	pub const GRANTED_UNTRUSTED: [Capability; 7] = Capability::ALL;
 
 	pub fn name(self) -> &'static str {
 		match self {
@@ -160,6 +164,7 @@ impl Capability {
 			Libm => "libm",
 			Sql => "sql",
 			Process => "process",
+			Foreign => "foreign",
 		}
 	}
 }
@@ -399,6 +404,9 @@ impl Resolver<'_> {
 		}
 		if name == crate::host::RUN_BLOCK {
 			return Some(External { capability: Host, effects: EffectSet::of(&[Eval]) });
+		}
+		if name == crate::host::FOREIGN_CALL {
+			return Some(External { capability: Foreign, effects: EffectSet::of(&[IO, FFI]) });
 		}
 		if let Some(import) = self.context.ffi_imports.get(name) {
 			// libm is pure (P26): untrusted code and `! Pure` functions may call it

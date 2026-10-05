@@ -312,6 +312,10 @@ fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &S
 		if name == crate::closures::CLOSURE_NEW {
 			return Kind::Function;
 		}
+		// another runtime's value: any Node, held like a map value (its kind decided at run time)
+		if name == crate::host::FOREIGN_CALL {
+			return Kind::Empty;
+		}
 		// a cell's value is held as a Node, like a map value (Empty), and joins a text or adds at run time
 		if crate::wasm_emitter::cells::CELL_WORDS.contains(&name.as_str()) {
 			return if name == crate::wasm_emitter::cells::CELL_NEW { Kind::Data } else { Kind::Empty };

@@ -1140,17 +1140,18 @@ impl WasmGcEmitter {
 		}
 		self.config.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
 		self.config.emit_wasi_imports |= effects.needs(Capability::Wasi);
-		self.config.emit_host_imports |= effects.needs(Capability::Host);
+		// another runtime's module is reached through the host word foreign_call
+		self.config.emit_host_imports |= effects.needs(Capability::Host) || effects.needs(Capability::Foreign);
 	}
 
 	/// Import modules this module declares, known after `emit_for_node`
 	pub fn imports(&self, capability: crate::effects::Capability) -> bool {
 		use crate::effects::Capability::*;
 		match capability {
-			Host => self.config.emit_host_imports,
+			Host | Foreign => self.config.emit_host_imports,
 			Wasi => self.config.emit_wasi_imports,
 			Ffi | Libm => self.config.emit_ffi_imports,
-			Sql | Process => false, // never imported: eval refuses such modules before emission
+			Sql | Process => false, // no host implements execute or exec yet: such a module fails to link, loudly
 		}
 	}
 
@@ -2224,8 +2225,11 @@ impl WasmGcEmitter {
 
 	/// Emit both operands as Ints and apply an arithmetic, xor or comparison operator
 	fn emit_int_operands_op(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
-		// `s < "b"`, `c >= "0"` with a text: ordered by code points (node_order, as sort orders them)
-		if op.is_ordering() && [left, right].iter().any(|side| self.get_type(side) == Kind::Text) {
+		// `s < "b"`, `c >= "0"` with a text: ordered by code points (node_order, as sort orders them); a value held as a
+		// Node (a cell's, another runtime's: `time.time() > 0`) by its value, an Int or a Float decided at run time
+		// (an element `xs#2` keeps its own path: a character there compares by code point, `x#2 > 50`)
+		let held_node = |side: &&Node| matches!(self.get_type(side), Kind::Empty | Kind::Data) && !matches!(side.drop_meta(), Node::Key(_, Op::Hash, _));
+		if op.is_ordering() && [left, right].iter().any(|side| self.get_type(side) == Kind::Text || held_node(side)) {
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);
 			self.emit_call(func, library_ops::NODE_ORDER);

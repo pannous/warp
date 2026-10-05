@@ -24,6 +24,6 @@ fn test_a_python_error_is_loud() {
 
 #[test]
 fn test_untrusted_code_gets_no_python() {
-	let result = warp::pipeline::eval_untrusted("use python math; math.pi");
-	assert!(result.serialize().contains("capability"), "{result:?}");
+	// P88 (user 2026-10-05): untrusted code gets every capability for now, foreign ones (P89) included
+	assert_eq!(warp::pipeline::eval_untrusted("use python math; math.pi"), std::f64::consts::PI);
 }

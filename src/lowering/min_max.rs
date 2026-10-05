@@ -19,6 +19,9 @@ pub const EMPTY_LIST_ERRORS: [(&str, &str); 3] =
 	[("min", "min_of_an_empty_list"), ("max", "max_of_an_empty_list"), ("reduce", "reduce_of_an_empty_list")];
 
 pub fn lower(node: Node) -> Node {
+	if !node.mentions_any(&EXTREMA.map(|(name, _)| name)) {
+		return node;
+	}
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
 	let builtins: Vec<(&str, Op)> = EXTREMA.into_iter().filter(|(name, _)| !context.user_functions.contains_key(*name)).collect();
