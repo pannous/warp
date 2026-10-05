@@ -32,3 +32,9 @@ fn test_dimension_errors_are_compile_errors() {
 fn test_unsupported_uses_stay_loud() {
 	fails_with("total = 0 m; for i in 1..3 { total += 5 m }; print total", "quantities compute only in constant expressions");
 }
+
+#[test]
+fn test_compiling_a_quantity_result_is_refused_until_output_is_supported() {
+	let compiled = warp::pipeline::compile("total = 0 m; for i in 1..3 { total += 5 m }; total");
+	assert!(matches!(compiled, Err(warp::Node::Error(_))));
+}

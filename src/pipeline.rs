@@ -363,6 +363,10 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 	crate::diagnostic::begin_program();
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let node = crate::folding::precompute(lower_for_emission(program)?);
+		// a compiled module gives back the SI amount of a final quantity, its unit would be lost (static units stage 3: output)
+		if let Some(units) = crate::units::static_units::take_result_units() {
+			return Err(crate::node::error(&format!("compiling a program whose result is a quantity ({}) is not supported yet; run it with eval", crate::units::static_units::units_shown(&units))));
+		}
 		warn_about_run_time_blocks(&node)?;
 		choose_module(&node)
 	})

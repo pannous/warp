@@ -58,6 +58,11 @@ pub(crate) fn take_result_units() -> Option<Vec<Factor>> {
 	RESULT_UNITS.with(|cell| cell.borrow_mut().take())
 }
 
+/// The units as written: `km/h`
+pub(crate) fn units_shown(units: &[Factor]) -> String {
+	units_text(units)
+}
+
 /// A run-time amount in SI base units as the quantity it is in `units`
 pub(crate) fn quantity_of(value: Node, units: &[Factor]) -> Node {
 	let Some(amount) = exact_amount(&value) else { return value };

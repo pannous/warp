@@ -41,5 +41,5 @@ becomes a use case.
 Variables, loops (`total += 5 m`), while loops and if-branches compute quantities at run time: signatures checked at
 compile time (DimensionError for `+ - ==` and branches of different units, and a variable given another signature), unit
 literals as exact SI amounts, the final value read back in the finest written unit. `compile` of a program whose result is
-a quantity still runs as an SI number (only eval reads it back): stage 3 (print/return) covers output.
+a quantity is refused for now (only eval reads it back): stage 3 (print/return) covers output.
 Next stages: functions (specialised per unit signature), then print/return/as.
