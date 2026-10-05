@@ -6,7 +6,7 @@
 //! `x = …` ends the block.
 //! Stage 2: `x = {statements}` is a block too (no warning: braces say so), an object's computed `key: value` entry is an
 //! uncharged block (`o.s1!` runs it, `o.s1 + 1` is the type error, the object holds it as data), and `obj!` of an object
-//! literal runs it as code: each `key: value` is the call `key(value)` (`help!`). `key := value` object entries are value-now like `=` (P71 top-level `:=` is unchanged).
+//! literal runs it as code: each `key: value` is the call `key(value)` (`help!`). `key := value` entries are values like `key = value` while P71 is open, unless they define a function (`it`).
 //! Stage 3: `x = code e` / `x = block e` are blocks, `y = data e; y!` runs with a got-it warning ("running data as code"),
 //! and a function with a `block` parameter (`when_not(c, body:block) := if not c { body! }`) is expanded at every call:
 //! its other parameters bound to fresh names, `body!` the argument's code, so names resolve where the call is written.
@@ -137,6 +137,15 @@ fn is_computed(value: &Node) -> bool {
 }
 
 /// The entries of an object literal `{k: v, k = v}`: every item names a key
+/// `s = e`, or `s := e` that defines no function (no `it`; P71 open, read as now): the field and e
+fn value_entry(entry: &Node) -> Option<(&Node, &Node)> {
+	match entry.drop_meta() {
+		Node::Key(field, Op::Assign, value) => Some((field, value)),
+		Node::Key(field, Op::Define, value) if !crate::wasp_parser::mentions(value, IT) => Some((field, value)),
+		_ => None,
+	}
+}
+
 fn object_entries(value: &Node) -> Option<&Vec<Node>> {
 	let Node::List(items, Bracket::Curly, _) = value.drop_meta() else { return None };
 	let is_entry = |item: &Node| matches!(item.drop_meta(), Node::Key(key, Op::Colon | Op::Assign | Op::Define, _) if matches!(key.drop_meta(), Node::Symbol(_)));
@@ -242,7 +251,7 @@ impl Blocks {
 					return Node::Empty;
 				}
 				// a plain object stays as it is; its entries can run as code (`help!`)
-				let rewritten = |entry: &Node| uncharged(entry).is_some() || matches!(entry.drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
+				let rewritten = |entry: &Node| uncharged(entry).is_some() || value_entry(entry).is_some();
 				if let Some(entries) = object_entries(value).filter(|entries| !entries.iter().any(rewritten)) {
 					let pairs: Vec<(Node, Node)> = entries.iter().filter_map(|entry| match entry.drop_meta() {
 						Node::Key(key, Op::Colon, value) => Some((key.as_ref().clone(), value.as_ref().clone())),
@@ -253,8 +262,7 @@ impl Blocks {
 					self.objects.insert(name, pairs);
 					return lowered;
 				}
-				// `o = {s1: a+b, …}`: computed entries are blocks the object holds as data, `s3 = …` / `s := …` entries values
-				let rewritten = |entry: &Node| uncharged(entry).is_some() || matches!(entry.drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
+				// `o = {s1: a+b, …}`: computed entries are blocks the object holds as data, `s3 = …` entries values
 				if let Some(entries) = object_entries(value).filter(|entries| entries.iter().any(rewritten)) {
 					let name = name.clone();
 					self.forget(&name);
@@ -270,13 +278,13 @@ impl Blocks {
 								let data = Node::List(vec![Node::Symbol(DATA_WORD.to_string()), block], Bracket::None, Separator::Space);
 								Node::Key(Box::new(Node::Symbol(field)), Op::Colon, Box::new(data))
 							}
-							None => match entry.drop_meta() {
-								// `s3 = a+b` / `s := clock()`: a value entry, evaluated now (object := is value-now; top-level P71 := unchanged)
-								Node::Key(field, Op::Assign | Op::Define, value) => {
-									let value = self.rewrite(value.as_ref().clone());
-									Node::Key(field.clone(), Op::Colon, Box::new(Node::List(vec![value], Bracket::Round, Separator::None)))
+							// `s3 = a+b`, `s3 := a+b` (P71 open: now): a value entry, evaluated now
+							None => match value_entry(&entry) {
+								Some((field, value)) => {
+									let value = self.rewrite(value.clone());
+									Node::Key(Box::new(field.clone()), Op::Colon, Box::new(Node::List(vec![value], Bracket::Round, Separator::None)))
 								}
-								_ => self.rewrite(entry),
+								None => self.rewrite(entry),
 							},
 						});
 					}
