@@ -39,6 +39,8 @@ decided rules), mark it in code/notes as an assumption, keep working, and SendMe
 If the answer differs, the change is undone or redone as a normal small task. Edits to existing tests count as such a
 decision too: make the edit on the branch in its own commit (named in the message), so reverting it is one revert;
 the Integrator merges it and the Interviewer gets the question.
+User, 2026-10-05: "it's allowed to un ignore test that are suddenly passing": dropping `#[ignore]` from a test that
+passes unedited needs no question; editing its assertions still needs a decision.
 
 ## Integrator (also the Tester)
 The only session that runs the full suite and the only one that pushes code to main.

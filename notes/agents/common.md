@@ -26,6 +26,8 @@ rules in notes/open_decisions.md and wiki/Footguns.md.
   The git hook lets both through once nothing is lost: a worktree whose only uncommitted change is the Cargo.toml /
   Cargo.lock build tweak and whose commits a ref holds, a branch whose tip main or a remote branch holds. If it blocks,
   something would be lost: look before you delete.
+- Un-ignoring tests (user, 2026-10-05): "it's allowed to un ignore test that are suddenly passing". Dropping
+  `#[ignore]` from a test that passes unedited needs no question; editing its assertions still needs a decision.
 - Use absolute paths and `git -C <worktree>` in scripts. Conventional commit messages; no Co-Authored-By, session
   trailers or links. Unrelated problems you meet go into todo.md on your branch.
 - Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub wikis can only serve `master` (notes/wiki_branch.md), so wiki
