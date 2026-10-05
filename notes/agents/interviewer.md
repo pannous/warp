@@ -12,6 +12,6 @@ Read notes/agents/common.md, notes/roles.md ("Interviewer", "Never blocked by a 
   decision already answers, order by impact.
 - Recording: move each answer to the Decided section with the date and the user's words, then tell the asking session
   and the Supervisor whether the assumption stands or must be undone (and which worker should do it).
-- Notes-only commits go straight to main from a temporary worktree (add --detach origin/main, commit, pull --rebase,
-  push, remove).
+- Notes-only commits go straight to main from a temporary worktree (`cowtree add --detach <path> origin/main`,
+  commit, pull --rebase, push HEAD:main, remove).
 Start: tidy the queue, then tell the Supervisor "interviewer ready, <n> pending".

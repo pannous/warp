@@ -44,7 +44,8 @@ passes unedited needs no question; editing its assertions still needs a decision
 
 ## Integrator (also the Tester)
 The only session that runs the full suite and the only one that pushes code to main.
-- Keeps one integration worktree (/Users/me/dev/angles/warp.worktrees.noindex/integrate, detached, follows origin/main).
+- Keeps one integration worktree (/Users/me/dev/angles/warp.worktrees.noindex/integrate, detached, follows origin/main;
+  created with `cowtree add --detach <path> origin/main`).
 - Workers send it "branch, tip, filters"; it merges the branch (union-resolves todo.md / tests/main.rs, sends real
   conflicts back to the worker), runs `./test.sh` with the integration build tweak, and pushes to main only at 0 failed
   and no drop in the test count. Otherwise it reports the failures to the worker (and the supervisor if it's a decision).
