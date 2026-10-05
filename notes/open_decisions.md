@@ -124,6 +124,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P91 one shared analysis per compile (extract_user_functions, EffectReport::of), refreshed only when a pass changed
   the program: yes, as its own card after warp-90's and warp-2d's lowering work lands, one pass converted first to
   show the gain. Asked by warp-ec; as recommended.
+- P92 `foo()` with explicit empty parentheses is a call: an undefined name is "undefined function: foo" (also a
+  mistyped or unlinked zero-argument C call); a bare `foo` stays a symbol. Asked by the Fixer warp-2d (card
+  unknown-zero-arg-call); as recommended.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
