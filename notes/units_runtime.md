@@ -57,3 +57,18 @@ decimal prints as the decimal: 2.5 km/h), `q as km` / `q in km` check the dimens
 shown, a final conversion decides how the result reads, `return q` carries the signature and all returns of a function
 must agree. Still a loud error: lists of quantities, math functions (sqrt, max) of quantities, recursion, string
 interpolation (no `$x` interpolation yet), and `compile` of a program whose result is a quantity.
+
+## Stage 4 done (branch static-units-4): lists, sqrt, interpolation
+A variable holding a list of quantities has one element signature (`xs = [1 m, 2 m]`; `[1 m, 2 s]` is a DimensionError):
+`xs#i`, `sum max min first last` give an element, `count size length` a number, `for x in xs` binds x with the element
+signature. `max(a, b)` of quantities too. `√a` halves the powers (`√` of an odd power is a DimensionError). `"${d}"`
+shows the unit (interpolation lowers to `text_form(d)`). Still a loud error: a whole list printed or returned, lists
+built at run time (`xs.add(1 m)`), recursion with quantities.
+
+## Later: `compile` of a program whose result is a quantity (refused today)
+A compiled module returns the SI amount; options to keep the unit:
+1. A custom section `wasp.units` naming the unit of `main`'s result (`m/s`, with the SI scale), read by wasm_reader and
+   any host that wants the quantity; the result stays a number, zero run-time cost, hosts that ignore it see SI amounts.
+2. `main` returns a GC struct `{amount, unit text}` (or the text `"5 km/h"`): self-describing for every host, but the
+   result type changes for programs whose result is a quantity.
+Recommendation: 1, the names section already carries metadata this way ("use WASM names excessively").

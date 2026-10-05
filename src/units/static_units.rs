@@ -7,6 +7,8 @@
 //! cover (lists, interpolation, recursion) leaves the program unchanged: the unit stays the loud undefined-variable error.
 //! Stage 3: `print q`, `"text " + q` and a final value show the unit (`str(amount / unit) + " km"` at run time), `q as km`
 //! and `q in km` check the dimension and choose the unit shown, `return q` carries the signature (all returns agree).
+//! Stage 4: a variable holding a list of quantities has one element signature (`xs = [1 m, 2 m]`), used by `xs#i`,
+//! `sum max min first last count` and `for x in xs`; `√q` halves the powers; `${q}` interpolation shows the unit.
 
 use super::{finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
 use crate::extensions::numbers::Number;
@@ -26,6 +28,12 @@ const SPECIALISATION_SEPARATOR: &str = "·u";
 const TEXT_WORD: &str = "str";
 const PRINT_WORD: &str = "print";
 const RETURN_WORD: &str = "return";
+/// The text of a value: `str(q)`, and `text_form(q)` of `${q}` interpolation (interpolation.rs)
+const TEXT_WORDS: [&str; 2] = [TEXT_WORD, "text_form"];
+/// List words that give an element: its signature
+const ELEMENT_WORDS: [&str; 5] = ["sum", "max", "min", "first", "last"];
+/// List words that give a plain number
+const COUNT_WORDS: [&str; 3] = ["count", "size", "length"];
 
 type Signature = Vec<(Dimension, i32)>;
 
@@ -55,7 +63,7 @@ pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 			definitions.insert(name, definition);
 		}
 	});
-	let mut inference = Inference { variables: HashMap::new(), definitions, specialised: HashMap::new(), in_progress: vec![], new_definitions: vec![], display: display.clone(), returns: vec![] };
+	let mut inference = Inference { variables: HashMap::new(), lists: HashMap::new(), definitions, specialised: HashMap::new(), in_progress: vec![], new_definitions: vec![], display: display.clone(), returns: vec![] };
 	match inference.infer(program.clone()) {
 		Ok((node, result)) => {
 			// a final `q as km` shows km
@@ -181,6 +189,8 @@ type Specialisation = (String, Vec<Signature>);
 
 struct Inference {
 	variables: HashMap<String, Signature>,
+	/// Variables holding a list of quantities: the signature of its elements
+	lists: HashMap<String, Signature>,
 	definitions: HashMap<String, Definition>,
 	/// Specialised functions: their name and result signature
 	specialised: HashMap<Specialisation, (String, Signature)>,
@@ -232,6 +242,8 @@ impl Inference {
 				let (node, signature) = self.infer(*node)?;
 				Ok((Node::Meta { node: Box::new(node), data }, signature))
 			}
+			// a list of quantities only through its elements (`xs#i`, `sum(xs)`, `for x in xs`): printed whole it would show SI amounts
+			Node::Symbol(name) if self.lists.contains_key(&name) => Err(Stop::Unsupported),
 			Node::Symbol(name) => match (self.variables.get(&name), unit_named(&name)) {
 				(Some(signature), _) => Ok((Node::Symbol(name.clone()), signature.clone())),
 				(None, Some(unit)) => Ok((si_literal(unit).ok_or(Stop::Unsupported)?, vec![(unit.dimension, 1)])),
@@ -240,6 +252,13 @@ impl Inference {
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
 				let Node::Symbol(name) = target.drop_meta() else { return self.plain_key(*target, op, *value) };
 				let name = name.clone();
+				if let Node::List(items, Bracket::Square, separator) = value.drop_meta() {
+					let (items, element) = self.list_elements(items.clone())?;
+					if !element.is_empty() {
+						self.lists.insert(name, element);
+						return Ok((Node::Key(target, op, Box::new(Node::List(items, Bracket::Square, separator.clone()))), vec![]));
+					}
+				}
 				let (value, signature) = self.infer(*value)?;
 				if let Some(earlier) = self.variables.get(&name).filter(|earlier| **earlier != signature) {
 					return Err(Stop::Error(format!("DimensionError: {name} was {}, is given {}", shown(earlier), shown(&signature))));
@@ -300,6 +319,21 @@ impl Inference {
 				let signature = if matches!(op, Op::Then | Op::Else) { signature } else { vec![] };
 				Ok((Node::Key(Box::new(left), op, Box::new(right)), signature))
 			}
+			// `xs#2`: an element of a list of quantities
+			Node::Key(list, Op::Hash, index) if matches!(list.drop_meta(), Node::Symbol(name) if self.lists.contains_key(name)) => {
+				let element = self.lists[&list.name()].clone();
+				let (index, _) = self.infer(*index)?;
+				Ok((Node::Key(list, Op::Hash, Box::new(index)), element))
+			}
+			// `√a`: the powers halve, an odd power has no root
+			Node::Key(nothing, Op::Sqrt, value) if matches!(nothing.drop_meta(), Node::Empty) => {
+				let (value, signature) = self.infer(*value)?;
+				if signature.iter().any(|(_, power)| power % 2 != 0) {
+					return Err(Stop::Error(format!("DimensionError: √ of {} has no unit (an odd power)", shown(&signature))));
+				}
+				let signature = signature.iter().map(|(dimension, power)| (*dimension, power / 2)).collect();
+				Ok((Node::Key(nothing, Op::Sqrt, Box::new(value)), signature))
+			}
 			// `q.s`: a field name is no unit
 			Node::Key(object, Op::Dot, field) => {
 				let (object, signature) = self.infer(*object)?;
@@ -343,11 +377,76 @@ impl Inference {
 		quantity_text(value, &units).ok_or(Stop::Unsupported)
 	}
 
+	/// The items of a list literal and their one signature: items of different units are a DimensionError
+	fn list_elements(&mut self, items: Vec<Node>) -> Result<(Vec<Node>, Signature), Stop> {
+		let mut lowered = vec![];
+		let mut element: Option<Signature> = None;
+		for item in items {
+			let (item, signature) = self.infer(item)?;
+			match &element {
+				Some(earlier) if *earlier != signature => {
+					return Err(Stop::Error(format!("DimensionError: a list of {} and {}", shown(earlier), shown(&signature))));
+				}
+				_ => element = Some(signature),
+			}
+			lowered.push(item);
+		}
+		Ok((lowered, element.unwrap_or_default()))
+	}
+
+	/// The element signature of a list of quantities a word applies to: `sum(xs)` of a list variable, `max(a, b)` of quantities
+	fn list_word(&mut self, word: &str, arguments: &[Node]) -> Option<Result<(Vec<Node>, Signature), Stop>> {
+		if !ELEMENT_WORDS.contains(&word) && !COUNT_WORDS.contains(&word) {
+			return None;
+		}
+		let element = match arguments {
+			[list] => match list.drop_meta() {
+				Node::Symbol(name) => self.lists.get(name).cloned()?,
+				_ => return None,
+			},
+			_ if ELEMENT_WORDS.contains(&word) => match self.list_elements(arguments.to_vec()) {
+				Ok((items, element)) if !element.is_empty() => return Some(Ok((items, element))),
+				Ok(_) => return None,
+				Err(stop) => return Some(Err(stop)),
+			},
+			_ => return None,
+		};
+		let signature = if COUNT_WORDS.contains(&word) { vec![] } else { element };
+		Some(Ok((arguments.to_vec(), signature)))
+	}
+
 	/// `print q`, `q in km`, `return q`: the forms of stage 3 written as lists; None for any other list
 	fn output_form(&mut self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Result<(Node, Signature), Stop>> {
 		let call_or_words = matches!((bracket, separator), (Bracket::None, Separator::Space) | (Bracket::Round, Separator::None));
 		let word = |node: &Node, wanted: &str| matches!(node.drop_meta(), Node::Symbol(w) if w == wanted);
+		if call_or_words {
+			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+				if let Some(found) = self.list_word(name, &items[1..]) {
+					return Some(found.map(|(arguments, signature)| (Node::List([vec![items[0].clone()], arguments].concat(), bracket.clone(), separator.clone()), signature)));
+				}
+			}
+		}
+		// `for x in xs` of a list of quantities: x has the element signature
+		if let [for_word, variable, in_word, list, body] = items {
+			if word(for_word, "for") && word(in_word, super::IN_WORD) {
+				if let (Node::Symbol(name), Node::Symbol(list_name)) = (variable.drop_meta(), list.drop_meta()) {
+					if let Some(element) = self.lists.get(list_name).cloned() {
+						self.variables.insert(name.clone(), element);
+						return Some(self.infer(body.clone()).map(|(body, _)| {
+							(Node::List(vec![for_word.clone(), variable.clone(), in_word.clone(), list.clone(), body], bracket.clone(), separator.clone()), vec![])
+						}));
+					}
+				}
+			}
+		}
 		match items {
+			[head, value] if call_or_words && TEXT_WORDS.iter().any(|text| word(head, text)) => Some((|| {
+				let (value, signature) = self.infer(value.clone())?;
+				if signature.is_empty() {
+					return Ok((Node::List(vec![head.clone(), value], bracket.clone(), separator.clone()), vec![]));
+				}
+				Ok((self.as_text(value, &signature, None)?, vec![]))
+			})()),
 			[head, value] if call_or_words && word(head, PRINT_WORD) => Some((|| {
 				let shown_units = conversion_target(value);
 				let (value, signature) = self.infer(value.clone())?;
