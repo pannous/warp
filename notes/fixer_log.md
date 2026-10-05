@@ -98,3 +98,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - P49: a fractional literal or a variable holding one passed to a declared int parameter is the compile error
   "2.2 is no int: write 2.2 as int" (analyzer infer_parameters_from_calls); 2.0 passes (no digits lost, assumption).
   test_function_argument_cast edited (approved) and un-ignored.
+
+## 2026-10-05 fix-infinity
+- `∞` is the float infinity (Number::Inf, typed Float): `∞ > 1e300`, `-∞`, `1.0/0.0 == ∞`, `\:infinity`
+  (tests/numbers/test_infinity.rs). P56 (4) default; ω stays the hyperreal.
