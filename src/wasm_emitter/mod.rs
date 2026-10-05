@@ -2660,9 +2660,14 @@ impl WasmGcEmitter {
 		};
 		let then_value = branch_value(then_expr);
 		let else_value = else_expr.map(branch_value);
-		// get_type sees capture globals in user_globals; branch_kind(scope) alone types a free var as Symbol (g-rT0c)
+		// a block yields its last statement; get_type sees capture globals in user_globals, where branch_kind(scope)
+		// alone types a free var as Symbol (g-rT0c)
+		let branch_type = |emitter: &Self, value: &Node| match value.drop_meta() {
+			Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => emitter.get_type(&statements[statements.len() - 1]),
+			other => emitter.get_type(other),
+		};
 		let is_node_valued = |emitter: &Self, value: &Node| {
-			let kind = emitter.get_type(value);
+			let kind = branch_type(emitter, value);
 			!matches!(value.drop_meta(), Node::Empty) && (emitter.is_structured_value(value) || kind.is_ref() || kind == Kind::Codepoint)
 		};
 		if is_node_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_node_valued(self, value)) {
@@ -2676,7 +2681,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		// a float branch (`if c then {x} else {0}` of a float x): both branches as floats, the value its Float node
-		let is_float_valued = |emitter: &Self, value: &Node| emitter.get_type(value) == Kind::Float;
+		let is_float_valued = |emitter: &Self, value: &Node| branch_type(emitter, value) == Kind::Float;
 		if is_float_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_float_valued(self, value)) {
 			self.emit_if_then_else_raw(func, left, else_expr, ValType::F64, Self::emit_float_value);
 			self.emit_call(func, "new_float");
