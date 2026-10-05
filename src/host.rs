@@ -153,7 +153,7 @@ use anyhow::Result;
 #[cfg(feature = "native")]
 use log::trace;
 #[cfg(feature = "native")]
-use wasmtime::{AsContextMut, Caller, Engine, Extern, Linker, Memory, Module, Val};
+use wasmtime::{AsContextMut, Caller, Engine, Extern, Linker, Memory, Val};
 
 #[cfg(feature = "native")]
 /// The state of a running program, one for all its imports: host functions, WASI and FFI share one linker, so a program
@@ -274,7 +274,7 @@ fn read_into_memory(caller: &mut Caller<'_, HostState>, path_ptr: i32, path_len:
 fn run_wasm_simple(bytes: &[u8]) -> Result<i64> {
 	let engine = gc_engine();
 	let mut store = crate::util::fueled_store(&engine, ());
-	let module = Module::new(&engine, bytes)?;
+	let module = crate::run::module_cache::compiled_module(&engine, bytes)?;
 	let linker = Linker::new(&engine);
 	let instance = linker.instantiate(&mut store, &module)?;
 

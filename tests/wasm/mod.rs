@@ -10,6 +10,8 @@ mod test_name_subsection_order;
 mod test_wasm_emitter;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_wasm_reader;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_compiled_module_cache;
 mod test_wasm;
 mod test_wast;
 mod test_wasm_names_order;
