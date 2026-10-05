@@ -1,7 +1,7 @@
 # Ahead-of-time compilation (native, wasmtime 49)
 
 Every run compiled its module with Cranelift (`Module::new`). Survey and measurements from 2026-10-05; probes in
-probes/aot/ (`measure.sh`: wasmtime CLI JIT vs .cwasm; `standalone.sh`: a standalone executable).
+probes/aot/ (`measure.sh`: wasmtime CLI JIT vs .cwasm; `standalone.sh`: a standalone executable; `shared_runtime.sh`: two-Module Linker / `warp_runtime`).
 
 ## Finding 0: tests compiled with an unoptimized Cranelift (fixed, on main)
 `[profile.dev.package.wasmtime] opt-level = 3` optimized only the wasmtime crate itself; cranelift-codegen, regalloc2 and
@@ -86,6 +86,8 @@ module repeats their machine code. A shared runtime module linked to the program
 2. Done (branch aot): the on-disk module cache for every native run, and `warp compile --aot`.
 3. Done (g-qV5Y, g-qV8Y): one shared gc_engine per process (a repeated run is a map lookup) and `warp build --exe`.
 4. Later: link programs against one shared runtime module instead of emitting the runtime into each module.
+   Probe (g-qV-s first slice): `probes/aot/shared_runtime.sh` proves two-Module + Linker with import
+   `"warp_runtime"` (no component model); production INT_RUNTIME / emit split is still Later.
 
 ## Test-suite time (./test.sh)
 test.sh prints `TIMING: compile N s, run N s` and the 15 slowest tests (libtest `--report-time`, enabled on stable by
