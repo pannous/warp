@@ -2927,6 +2927,7 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	infer_forwarded_parameters(ctx); // the kinds closures gave their parameters reach the functions that pass them
 	let globals = declared_globals(node);
 	ctx.field_kinds = program_field_kinds(node);
+	let globals = with_closure_captures(ctx, node, globals);
 	refine_return_kinds(ctx, &globals);
 	// a widened parameter can make the arguments it passes on floats too: until nothing changes (each round widens one)
 	let parameter_count: usize = ctx.user_functions.values().map(|function| function.params.len()).sum();
@@ -3015,6 +3016,24 @@ fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, passed: &mu
 		Node::Meta { node, .. } => collect_argument_kinds(node, scope, ctx, passed),
 		_ => {}
 	}
+}
+
+/// The kinds a closure's body sees for the variables it captures from the program (`t = "!"; shout = s => s + t`),
+/// added to the declared globals where no global of that name exists: without them `s + t` is a type error and the
+/// closure's result kind is lost
+fn with_closure_captures(ctx: &Context, program: &Node, mut globals: HashMap<String, Local>) -> HashMap<String, Local> {
+	if ctx.closure_targets.is_empty() {
+		return globals;
+	}
+	let mut outer = Scope::new();
+	collect_variables(program, &mut outer);
+	let parameters: HashSet<&str> = ctx.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.as_str())).collect();
+	for (name, local) in outer.locals {
+		if !parameters.contains(name.as_str()) {
+			globals.entry(name).or_insert(local);
+		}
+	}
+	globals
 }
 
 /// The program's `global` declarations with their kinds

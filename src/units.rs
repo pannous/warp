@@ -228,12 +228,17 @@ fn needs_quantities(node: &Node) -> bool {
 	}
 }
 
-/// `m=5;3m`: a variable of that name shadows the unit
+/// `m=5;3m`: a variable of that name shadows the unit, and so does a parameter: `s => s + t`, `f(s) := …`
 fn defines_unit_name(node: &Node) -> bool {
+	let names_unit = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if unit_named(name).is_some());
+	let names_parameter = |head: &Node| match head.drop_meta() {
+		Node::List(items, _, _) => items.iter().any(|item| names_unit(item) || matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if names_unit(name))),
+		other => names_unit(other),
+	};
 	let defines = match node.drop_meta() {
-		Node::Key(target, Op::Assign | Op::Define | Op::Colon, _) => {
-			matches!(target.drop_meta(), Node::Symbol(name) if unit_named(name).is_some())
-		}
+		Node::Key(head, Op::Assign | Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => names_parameter(head),
+		Node::Key(target, Op::Assign | Op::Define | Op::Colon, _) => names_unit(target),
+		Node::Key(parameters, Op::Arrow | Op::FatArrow, _) => names_parameter(parameters),
 		_ => false,
 	};
 	defines || children(node).into_iter().any(defines_unit_name)
