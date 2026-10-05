@@ -476,6 +476,18 @@ enum UserOperatorKind {
 struct UserOperator {
 	glyph: Vec<char>,
 	kind: UserOperatorKind,
+	/// How tight it binds: a suffix's power, a prefix's right power, an infix's left power (its right one is one more)
+	level: u8,
+}
+
+impl UserOperatorKind {
+	fn default_level(self) -> u8 {
+		match self {
+			UserOperatorKind::Suffix => USER_SUFFIX_BP,
+			UserOperatorKind::Prefix => USER_PREFIX_RIGHT_BP,
+			UserOperatorKind::Infix => USER_INFIX_BP.0,
+		}
+	}
 }
 
 const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
@@ -485,6 +497,9 @@ const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] = [("prefix", UserOperatorKi
 const USER_SUFFIX_BP: u8 = 200;
 const USER_PREFIX_RIGHT_BP: u8 = 155;
 const USER_INFIX_BP: (u8, u8) = (140, 141);
+/// `operator ⊕ has precedence above *`: ⊕ binds this much tighter than `*`; the built-in levels are at least 5 apart
+const PRECEDENCE_STEP: u8 = 2;
+const PRECEDENCE_DIRECTIONS: [(&str, bool); 2] = [("above", true), ("below", false)];
 
 /// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit.
 /// ASSUMPTION P48: superscript digits and signs too (`suffix operator ³`, `prefix operator ⁻`, wiki/operator.md)
@@ -555,11 +570,47 @@ fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 			_ => None,
 		};
 		if let Some((glyph, kind)) = declared.filter(|(glyph, _)| is_operator_glyph(glyph)) {
-			found.push(UserOperator { glyph: glyph.chars().collect(), kind });
+			found.push(UserOperator { glyph: glyph.chars().collect(), kind, level: kind.default_level() });
+		}
+	}
+	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
+	for statement in source.lines().flat_map(|line| line.split(';')) {
+		let words: Vec<&str> = statement.split_whitespace().collect();
+		if let Ok(Some((glyph, level))) = precedence_declaration(&words, &found) {
+			found.iter_mut().filter(|operator| operator.glyph == glyph.chars().collect::<Vec<char>>()).for_each(|operator| operator.level = level);
 		}
 	}
 	found.sort_by_key(|operator| std::cmp::Reverse(operator.glyph.len()));
 	found
+}
+
+/// `operator ⊕ has precedence above|below [operator] Y`: the glyph ⊕ and its new level; Ok(None) for any other statement,
+/// Err for a precedence declaration that cannot be followed (a built-in ⊕, an unknown Y)
+fn precedence_declaration<'a>(words: &[&'a str], declared: &[UserOperator]) -> Result<Option<(&'a str, u8)>, String> {
+	let ["operator", glyph, "has", "precedence", direction, rest @ ..] = words else { return Ok(None) };
+	let Some((_, above)) = PRECEDENCE_DIRECTIONS.iter().find(|(word, _)| word == direction) else { return Ok(None) };
+	let other = match rest {
+		["operator", other] | [other] => *other,
+		_ => return Ok(None),
+	};
+	if !declared.iter().any(|operator| operator.glyph.iter().collect::<String>() == *glyph) {
+		return Err(format!("operator {glyph} is built in: only a declared operator gets a precedence (`infix operator {glyph} := …` first)"));
+	}
+	let reference = match declared.iter().find(|operator| operator.glyph.iter().collect::<String>() == other) {
+		Some(operator) => operator.level,
+		None => built_in_level(other).ok_or_else(|| format!("unknown operator {other} in `operator {glyph} has precedence {direction} {other}`"))?,
+	};
+	let level = if *above { reference.saturating_add(PRECEDENCE_STEP) } else { reference.saturating_sub(PRECEDENCE_STEP) };
+	Ok(Some((glyph, level)))
+}
+
+/// The left binding power of a built-in infix operator written as `text` (`*`, `+`, `and`)
+fn built_in_level(text: &str) -> Option<u8> {
+	let parser = WaspParser::new_with_options(text.to_string(), ParserOptions { data_mode: true, ..ParserOptions::default() });
+	match parser.peek_operator() {
+		Some((op, length)) if length == text.chars().count() => Some(op.binding_power().0),
+		_ => None,
+	}
 }
 
 /// The single argument `(int x)` of `f(int x)` is the typed parameter `x:int`, so that flattening the call `f(T, y)` into
@@ -647,7 +698,7 @@ impl WaspParser {
 	/// `3‼`: the call of the suffix operator on the left operand
 	fn try_parse_user_suffix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let operator = self.user_operator_at(&[UserOperatorKind::Suffix])?;
-		if min_bp > USER_SUFFIX_BP {
+		if min_bp > operator.level {
 			return None;
 		}
 		self.advance_by(operator.glyph.len());
@@ -657,7 +708,7 @@ impl WaspParser {
 	/// `2 ⊕ 3`: the call of the infix operator on both operands
 	fn try_parse_user_infix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let operator = self.user_operator_at(&[UserOperatorKind::Infix])?;
-		let (left_bp, right_bp) = USER_INFIX_BP;
+		let (left_bp, right_bp) = (operator.level, operator.level + 1);
 		if left_bp < min_bp {
 			return None;
 		}
@@ -672,7 +723,7 @@ impl WaspParser {
 		let operator = self.user_operator_at(&[UserOperatorKind::Prefix])?;
 		self.advance_by(operator.glyph.len());
 		self.skip_spaces();
-		let operand = self.parse_expr(USER_PREFIX_RIGHT_BP);
+		let operand = self.parse_expr(operator.level);
 		Some(operator_call(&operator.glyph, vec![operand]))
 	}
 
@@ -688,7 +739,13 @@ impl WaspParser {
 			while !matches!(self.current_char(), '\n' | ';' | '\0') {
 				self.advance();
 			}
-			return Some(error("operator precedence declarations are not supported yet"));
+			// the pre-scan applied it (scan_user_operators); here only its error is reported
+			let statement: Vec<&str> = std::iter::once("operator").chain(words.iter().copied()).collect();
+			return Some(match precedence_declaration(&statement, &self.user_operators) {
+				Ok(Some(_)) => Empty,
+				Ok(None) => error(&format!("an operator precedence is declared `operator ⊕ has precedence above|below Y`, not `operator {}`", words.join(" "))),
+				Err(message) => error(&message),
+			});
 		}
 		let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| *keyword == word)?;
 		let glyph = declared_glyph(&words).filter(|glyph| is_operator_glyph(glyph))?;

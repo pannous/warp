@@ -62,7 +62,10 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   Implemented as the assumption (worker warp-90, branch custom-operators): prefix/suffix/infix declarations existed
   (src/wasp_parser.rs `scan_user_operators`); added superscript glyphs (`suffix operator ³`, `prefix operator ⁻`) that
   override the built-in power, and the short `suffix ⁰ := 1`. Marked `ASSUMPTION P48` in the code, test file
-  tests/operators/test_superscript_operator_declarations.rs. Precedence declarations stay refused.
+  tests/operators/test_superscript_operator_declarations.rs. Precedence (branch operator-precedence):
+  `operator ⊕ has precedence above|below [operator] Y` sets a declared ⊕ two binding-power steps above or below Y (any
+  built-in or declared operator), wherever the statement stands; built-in operators are never re-ranked (an error).
+  tests/operators/test_operator_precedence.rs.
   test_wasm::test_custom_operators stays ignored: its `.5³` line expects Rust's `1 / 8` (= 0), the value is 0.125.
 - P49 A float passed to an int parameter (tests/types/test_types.rs test_function_argument_cast, ignored "soon"):
   today a call converts nothing, `fun addi(int x,int y){x+y}; addi(2.2,2.2)` is 4.4; the test expects 4 there

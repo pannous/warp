@@ -6,6 +6,7 @@ mod test_logic_grouped_operands;
 mod test_mutating_bang;
 mod test_negated_call;
 mod test_operator_declarations;
+mod test_operator_precedence;
 mod test_superscript_operator_declarations;
 mod test_operator_parsing;
 mod test_operators;
