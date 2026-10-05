@@ -27,10 +27,10 @@ impl Acknowledger for PageAcknowledger {
 		self.acknowledged.contains(topic)
 	}
 
-	/// The page answers later, with its "got it" button
-	fn acknowledge(&self, topic: &str) -> bool {
+	/// The page answers later, with its "got it" button (for the whole topic)
+	fn acknowledge(&self, topic: &str, _written: &str) -> crate::diagnostic::GotIt {
 		self.notes.borrow_mut().push(topic.to_string());
-		false
+		crate::diagnostic::GotIt::No
 	}
 }
 
