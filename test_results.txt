@@ -181,6 +181,12 @@ PASSED:
   ✓ control::test_type_word_filter_loops::test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if
   ✓ control::test_type_word_filter_loops::test_a_type_word_loop_visits_only_items_of_that_type
   ✓ control::test_type_word_filter_loops::test_an_adjective_with_a_type_word_is_a_condition
+  ✓ control::test_uncharged_blocks::test_a_block_is_no_value
+  ✓ control::test_uncharged_blocks::test_a_computed_colon_warns_where_it_is_written
+  ✓ control::test_uncharged_blocks::test_bang_runs_a_block
+  ✓ control::test_uncharged_blocks::test_data_is_the_expression_as_written
+  ✓ control::test_uncharged_blocks::test_literals_and_objects_after_colon_keep_their_meaning
+  ✓ control::test_uncharged_blocks::test_names_in_a_block_resolve_where_it_runs
   ✓ control::test_unwrap_message::test_an_error_value_in_node_arithmetic_keeps_its_message
   ✓ control::test_unwrap_message::test_unwrapping_an_empty_optional_in_arithmetic_names_it
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
@@ -2070,4 +2076,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2065 passed, 0 failed, 2065 total tested
+37 ignored, 2071 passed, 0 failed, 2071 total tested
