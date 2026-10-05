@@ -507,13 +507,13 @@ const PRECEDENCE_STEP: u8 = 2;
 const PRECEDENCE_DIRECTIONS: [(&str, bool); 2] = [("above", true), ("below", false)];
 
 /// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit.
-/// ASSUMPTION P48: superscript digits and signs too (`suffix operator ³`, `prefix operator ⁻`, wiki/operator.md)
+/// Superscript digits and signs too (P48, user-decided) (`suffix operator ³`, `prefix operator ⁻`, wiki/operator.md)
 fn is_operator_glyph(glyph: &str) -> bool {
 	let is_superscript = |c: char| superscript_digit(c).is_some() || superscript_sign(c).is_some();
 	!glyph.is_empty() && glyph.chars().all(|c| is_superscript(c) || (!c.is_alphanumeric() && !c.is_whitespace())) && !glyph.is_ascii()
 }
 
-/// `suffix operator ⁰ := …` and, ASSUMPTION P48, the short `suffix ⁰ := …`: the glyph and the words after `:=`
+/// `suffix operator ⁰ := …` and the short `suffix ⁰ := …` (P48): the glyph and the words after `:=`
 fn declared_glyph<'a>(words: &'a [&'a str]) -> Option<&'a str> {
 	match words {
 		["operator", glyph, ":=", ..] | [glyph, ":=", ..] => Some(glyph),
@@ -776,7 +776,11 @@ impl WaspParser {
 		self.advance_by(":=".len());
 		let body = self.parse_expr(0);
 		let parameters = match kind {
-			UserOperatorKind::Infix => vec![Symbol("a".to_string()), Symbol("b".to_string())],
+			// P48 names the operands `left` and `right`; `a` and `b` stay accepted
+			UserOperatorKind::Infix => {
+				let names = if mentions(&body, "left") || mentions(&body, "right") { ["left", "right"] } else { ["a", "b"] };
+				names.map(|name| Symbol(name.to_string())).to_vec()
+			}
 			_ => vec![Symbol("it".to_string())],
 		};
 		let head = operator_call(&glyph, parameters);
@@ -2151,7 +2155,7 @@ impl WaspParser {
 			self.skip_spaces_and_inline_comments(); // not newlines: they are separators
 
 			// Step 2: Suffix (led)
-			// ASSUMPTION P48: a declared suffix operator wins over the built-in one of the same glyph (`suffix operator ³`)
+			// P48: a declared suffix operator wins over the built-in one of the same glyph (`suffix operator ³`)
 			if let Some(updated) = self.try_parse_user_suffix(&lhs, min_bp).or_else(|| self.try_parse_suffix(&lhs, min_bp)) {
 				lhs = updated;
 				continue;
