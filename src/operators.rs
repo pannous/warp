@@ -8,10 +8,12 @@ pub const TYPE_OPERAND_BP: u8 = 250;
 
 /// Unicode spellings of operators (wiki/alias.md): glyph, operator and the canonical spelling the style hints suggest.
 /// One table for the lexer and the hints; the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`.
-pub const GLYPH_OPERATORS: [(char, Op, &str); 15] = [
+pub const GLYPH_OPERATORS: [(char, Op, &str); 17] = [
 	('∧', Op::And, "and"), ('⋀', Op::And, "and"),
 	('∨', Op::Or, "or"), ('⋁', Op::Or, "or"),
 	('⊻', Op::Xor, "xor"),
+	// the unit product of a printed quantity (`6 m·kg`); generated names use `·` only after parsing
+	('·', Op::Mul, "*"), ('⋅', Op::Mul, "*"),
 	('≟', Op::Eq, "=="), ('≡', Op::Eq, "=="), ('﹦', Op::Eq, "=="),
 	('‐', Op::Sub, "-"), ('‑', Op::Sub, "-"), ('‒', Op::Sub, "-"), ('–', Op::Sub, "-"), ('—', Op::Sub, "-"), ('―', Op::Sub, "-"), ('−', Op::Sub, "-"),
 ];
