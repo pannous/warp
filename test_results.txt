@@ -1,6 +1,6 @@
 Compiling tests...
 [1m[92m   Compiling[0m warp v0.1.1 (/Users/me/dev/angles/warp)
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 7.94s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 7.89s
 [1m[92m  Executable[0m unittests src/lib.rs (/Users/me/.cargo/shared-target.noindex/debug/deps/warp-e999132fc2e074e6)
 [1m[92m  Executable[0m unittests src/main.rs (/Users/me/.cargo/shared-target.noindex/debug/deps/warp-8bd04aaa42dee573)
 [1m[92m  Executable[0m tests/main.rs (/Users/me/.cargo/shared-target.noindex/debug/deps/tests-292912525fffdf32)
@@ -15,41 +15,41 @@ test ffi::tests::test_map_c_type_to_valtype ... ok
 test function::tests::test_arg ... ok
 test ffi::tests::test_extract_function_signature_void_return ... ok
 test ffi::tests::test_extract_function_signature_simple ... ok
-test ffi::tests::test_header_sig_to_ffi_sig ... ok
-test function::tests::test_function_host ... ok
-test function::tests::test_function_builder ... ok
-test function::tests::test_kind_to_valtype ... ok
-test ffi_parser::tests::test_parse_simple_function ... ok
 test ffi::tests::test_extract_function_signature_multi_param ... ok
 test ffi_parser::tests::test_parse_two_params ... ok
 test ffi::tests::test_extract_function_signature_pointer ... ok
 test ffi_parser::tests::test_parse_void_params ... ok
+test function::tests::test_function_host ... ok
 test ffi_parser::tests::test_parse_int32_return ... ok
+test ffi_parser::tests::test_parse_simple_function ... ok
+test function::tests::test_function_builder ... ok
 test ffi_parser::tests::test_parse_pointer_param ... ok
+test ffi::tests::test_header_sig_to_ffi_sig ... ok
+test function::tests::test_kind_to_valtype ... ok
 test wisp_parser::tests::test_wisp_defn ... ignored
 test function::tests::test_function_registry ... ok
 test function::tests::test_signature_builder ... ok
-test normalize::tests::test_hint_mode ... ok
 test wisp_parser::tests::test_wisp_list ... ok
-test wisp_parser::tests::test_wisp_emit_compound ... ok
-test wisp_parser::tests::test_wisp_cons_dotted_pair ... ok
-test normalize::tests::test_style_swap ... ok
+test normalize::tests::test_hint_mode ... ok
 test function::tests::test_signature_format ... ok
-test wisp_parser::tests::test_wisp_emit_atoms ... ok
-test wisp_parser::tests::test_wisp_call ... ok
-test wisp_parser::tests::test_wisp_key_pair ... ok
-test wisp_parser::tests::test_wisp_meta ... ok
-test wisp_parser::tests::test_wisp_nested ... ok
-test wisp_parser::tests::test_wisp_basic_atom_types ... ok
-test wisp_parser::tests::test_wisp_tag ... ok
-test wisp_parser::tests::test_wisp_sexpr_types ... ok
-test wisp_parser::tests::test_wisp_shorthand_operators ... ok
-test wisp_parser::tests::test_wisp_sexpr_types_superfluous_empty_node ... ok
-test wisp_parser::tests::test_wisp_roundtrip_sexpr ... ok
-test wisp_parser::tests::test_wisp_roundtrip_nested ... ok
-test wisp_parser::tests::test_wisp_roundtrip_compound ... ok
+test wisp_parser::tests::test_wisp_cons_dotted_pair ... ok
 test function::tests::test_function_locals ... ok
+test wisp_parser::tests::test_wisp_basic_atom_types ... ok
+test wisp_parser::tests::test_wisp_emit_compound ... ok
+test wisp_parser::tests::test_wisp_nested ... ok
+test wisp_parser::tests::test_wisp_meta ... ok
+test wisp_parser::tests::test_wisp_call ... ok
+test normalize::tests::test_style_swap ... ok
+test wisp_parser::tests::test_wisp_key_pair ... ok
+test wisp_parser::tests::test_wisp_emit_atoms ... ok
 test wisp_parser::tests::test_wisp_roundtrip_atoms ... ok
+test wisp_parser::tests::test_wisp_roundtrip_sexpr ... ok
+test wisp_parser::tests::test_wisp_sexpr_types ... ok
+test wisp_parser::tests::test_wisp_roundtrip_compound ... ok
+test wisp_parser::tests::test_wisp_roundtrip_nested ... ok
+test wisp_parser::tests::test_wisp_shorthand_operators ... ok
+test wisp_parser::tests::test_wisp_tag ... ok
+test wisp_parser::tests::test_wisp_sexpr_types_superfluous_empty_node ... ok
 test host::tests::test_host_state ... ok
 test ffi::tests::test_parse_header_file_math ... ok
 test ffi_parser::tests::test_parse_system_headers ... ok
@@ -66,173 +66,178 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 [1m[92m     Running[0m tests/main.rs (/Users/me/.cargo/shared-target.noindex/debug/deps/tests-292912525fffdf32)
 
-running 1953 tests
+running 1955 tests
 test control::test_blocks::test_indent_as_block ... ok
+test control::test_blocks::test_group_cascade1 ... ok
 test control::test_blocks::test_group_cascade2 ... ok
 test control::test_condition_block::a_condition_still_ends_before_its_block ... ok
-test control::test_blocks::test_group_cascade1 ... ok
 test control::test_blocks::test_group_cascade ... ok
 1
-1
 test control::test_block_statements::a_list_result_after_a_print_is_read ... ok
+1
 test control::test_block_statements::a_statement_group_in_a_function_body_runs ... ok
 1
 test control::test_block_statements::a_print_in_a_block_runs_before_its_list_value ... ok
 test control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return ... ok
 test control::test_do_block::a_user_function_named_do_wins ... ok
-test control::test_do_block::do_runs_a_block_literal ... ok
 test control::test_blocks::test_matrix_comma_index ... ok
-test control::test_control_words::trailing_if_guards_the_statement ... ok
+test control::test_do_block::do_runs_a_block_literal ... ok
+12345test control::test_control_words::trailing_if_guards_the_statement ... ok
 test control::test_empty_block::a_program_that_is_only_an_empty_block_is_empty ... ok
 test control::test_empty_block::an_empty_block_inside_a_statement_is_a_value ... ok
 test control::test_do_block::do_still_joins_a_while_condition_with_its_body ... ok
 test control::test_empty_block_binding::a_bound_empty_block_counts_zero ... ok
-12345test control::test_empty_block_binding::an_empty_block_can_be_bound ... ok
-test control::test_control_words::unless_runs_its_block_when_the_condition_is_false ... ok
-test control::test_control_words::bang_evaluates_a_block ... ok
+test control::test_empty_block_binding::an_empty_block_can_be_bound ... ok
 test control::test_block_assigns_outer::the_declared_and_returned_forms_change_it ... ok
+test control::test_control_words::bang_evaluates_a_block ... ok
+test control::test_control_words::unless_runs_its_block_when_the_condition_is_false ... ok
 test control::test_control_words::until_loops_while_the_condition_is_false ... ok
+hello
 test control::test_for_loop::test_for_classic_three_part_header ... ok
-test control::test_for_loop::test_for_over_exclusive_range ... ok
 7test control::test_braceless_output_calls::a_braceless_output_call_is_worth_an_int ... ok
+test control::test_for_loop::test_for_over_exclusive_range ... ok
+test control::test_control_words::trailing_while_and_until_repeat_the_statement ... ok
 1
 2
-test control::test_control_words::trailing_while_and_until_repeat_the_statement ... ok
 test control::test_each_colon::a_range_do_walks_it ... ok
 test control::test_for_loop::test_for_with_colon_body ... ok
-test control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call ... ok
 test control::test_branch_assigned_variables::a_text_assigned_in_both_branches_is_read_after_them ... ok
+test control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body ... ok
+test control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call ... ok
+test control::test_do_block::do_runs_a_named_block ... ok
 test control::test_for_loop::test_for_over_list_literal ... ok
 test control::test_iteration_words::test_a_wrong_function_is_an_error ... ok
-test control::test_for_loop::test_for_over_inclusive_range ... ok
-test control::test_do_block::do_runs_a_named_block ... ok
-test control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body ... ok
-test control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged ... ok
 test control::test_for_loop::test_for_over_list_variable ... ok
-test control::test_iteration_words::test_words_a_program_defines_win ... ok
 test control::test_blocks::test_matrix_order ... ok
-test control::test_for_loop::test_nested_for ... ok
+test control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged ... ok
+test control::test_for_loop::test_for_over_inclusive_range ... ok
 test control::test_control_words::n_times_repeats_its_block ... ok
+test control::test_iteration_words::test_words_a_program_defines_win ... ok
+test control::test_for_loop::test_nested_for ... ok
+foe1
+friend1
+test control::test_for_it::a_symbol_prints_its_name ... ok
 test control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments ... ok
 test control::test_iteration_words::test_reduce_of_an_empty_list_is_an_error ... ok
-test control::test_loop_forms::ranges_in_for_headers_stay_ranges ... ok
-test control::test_for_implicit_it::a_colon_body_is_the_rest_of_the_line ... ok
-test control::test_loop_forms::upto_excludes_the_end_unlike_to ... ok
 test control::test_each_colon::each_and_all_with_a_colon_walk_the_list ... ok
+test control::test_for_implicit_it::a_colon_body_is_the_rest_of_the_line ... ok
+test control::test_for_it::it_is_the_loop_variable ... ok
+test control::test_loop_forms::ranges_in_for_headers_stay_ranges ... ok
 test control::test_for_loop::test_loop_body_with_a_list_statement ... ok
 test control::test_loop_value::a_while_loop_of_one_expression_gives_its_value ... ok
+test control::test_loops_in_functions::a_multi_line_function_with_a_loop ... ok
 test control::test_loop_forms::a_range_is_a_list_in_a_variable ... ok
 test control::test_if_value_kind::test_if_of_characters_joins_a_text ... ok
-test control::test_loop_value::a_walking_loop_gives_its_last_body_value ... ok
-test control::test_loops_in_functions::a_multi_line_function_with_a_loop ... ok
-test control::test_not_condition_block::a_negated_condition_in_a_loop ... ok
 test control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_parameter ... ok
+test control::test_loop_forms::upto_excludes_the_end_unlike_to ... ok
+test control::test_loop_value::a_walking_loop_gives_its_last_body_value ... ok
 test control::test_not_condition_block::a_negated_condition_takes_its_block ... ok
-test control::test_loop_forms::for_without_variable_binds_it ... ok
+test control::test_not_condition_block::a_negated_condition_in_a_loop ... ok
 test control::test_for_implicit_it::a_for_loop_without_a_variable_walks_it ... ok
+test control::test_loop_forms::for_without_variable_binds_it ... ok
+test control::test_switch_match::a_user_function_named_switch_wins ... ok
 test control::test_switch_match::a_switch_is_a_value ... ok
 test control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables ... ok
-12345test control::test_switch_match::a_user_function_named_switch_wins ... ok
+12345test control::test_shared_arrays::a_shared_array_reads_writes_and_adds ... ok
 test control::test_iteration_words::test_each_runs_the_body_per_item_and_is_the_last_value ... ok
-test control::test_shared_arrays::a_shared_array_reads_writes_and_adds ... ok
-test control::test_shared_arrays::a_shared_array_of_floats ... ok
-test control::test_shared_arrays::tasks_add_to_one_shared_array ... ok
-test control::test_shared_arrays::tasks_add_floats_to_one_shared_array ... ok
 test control::test_switch_match::match_is_another_word_for_switch ... ok
 test control::test_switch_match::no_case_and_no_default_is_a_loud_error ... ok
+test control::test_shared_arrays::a_shared_array_of_floats ... ok
+test control::test_shared_arrays::tasks_add_floats_to_one_shared_array ... ok
+test control::test_shared_arrays::tasks_add_to_one_shared_array ... ok
+test control::test_switch_match::only_the_chosen_body_runs ... ok
 test control::test_switch_value::a_parenthesized_switch_takes_part_in_arithmetic ... ok
 test control::test_switch_match::a_switch_picks_the_case_of_its_subject ... ok
-test control::test_switch_match::only_the_chosen_body_runs ... ok
-123test control::test_loop_value::a_counting_loop_gives_its_last_body_value ... ok
-test control::test_many_tasks::hundreds_of_tasks_run_at_once ... ok
-test control::test_tasks::a_program_may_define_its_own_go ... ok
 test control::test_iteration_words::test_fold ... ok
+123test control::test_loop_value::a_counting_loop_gives_its_last_body_value ... ok
+test control::test_tasks::a_program_may_define_its_own_go ... ok
+test control::test_many_tasks::hundreds_of_tasks_run_at_once ... ok
+test control::test_switch_match::the_default_case_catches_what_nothing_else_matches ... ok
 test control::test_tasks::stopping_a_finished_task_warns_and_changes_nothing ... ok
 test control::test_switch_value::a_switch_can_be_bound ... ok
-test control::test_switch_match::the_default_case_catches_what_nothing_else_matches ... ok
-test control::test_switch_no_case_value::no_case_shows_the_runtime_value ... ok
 test control::test_task_values::the_failure_of_a_task_is_caught_by_try ... ok
+test control::test_switch_no_case_value::no_case_shows_the_runtime_value ... ok
 test control::test_threads::a_task_of_a_list_parameter_runs_where_it_starts ... ok
 test control::test_tasks::a_finished_tasks_handler_runs_and_a_stop_handler_never ... ok
 test control::test_threads::an_error_in_a_task_is_the_error_of_await ... ok
-test control::test_tasks::await_gives_the_value_of_a_task ... ok
 test control::test_iteration_words::test_reduce ... ok
 test control::test_threads::a_task_nobody_awaits_finishes_before_the_program_ends ... ok
+test control::test_threads::a_stop_handler_runs_once_the_task_stopped ... ok
+test control::test_tasks::await_gives_the_value_of_a_task ... ok
+test control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit ... ok
+test control::test_threads::an_exact_number_beyond_the_fixnums_cannot_cross_yet ... ok
 test control::test_task_values::two_tasks_overlap ... ok
 test control::test_threads::a_task_of_other_values_runs_where_it_starts ... ok
-test control::test_threads::a_stop_handler_runs_once_the_task_stopped ... ok
-test control::test_threads::an_exact_number_beyond_the_fixnums_cannot_cross_yet ... ok
-test control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit ... ok
 test control::test_times_count_once::a_trailing_if_guards_the_whole_assignment ... ok
 test control::test_threads::stop_ends_a_running_task ... ok
 test control::test_top_level_block::test_branch_block_yields_its_last_item ... ok
 test control::test_threads::await_binds_its_task_inside_an_expression ... ok
-test control::test_threads::await_gives_the_result_of_the_thread ... ok
 test control::test_top_level_block::test_data_object_block_keeps_all_keys ... ok
 test control::test_top_level_block::test_function_body_block_yields_its_last_item ... ok
 test control::test_top_level_block::test_top_level_newlines_yield_the_last_item ... ok
 test control::test_top_level_block::test_top_level_semicolons_yield_the_last_item ... ok
+test control::test_threads::await_gives_the_result_of_the_thread ... ok
 test control::test_iteration_words::test_filter ... ok
-test control::test_task_values::a_task_pauses_and_resumes ... ok
-test control::test_task_values::a_function_value_crosses_to_a_task ... ok
 test control::test_try_deep::try_catches_a_failed_cast ... ok
-test control::test_trap_messages::integer_modulo_by_zero_names_the_division ... ok
 test control::test_times_count_once::times_evaluates_its_count_once ... ok
+test control::test_task_values::a_task_pauses_and_resumes ... ok
+test control::test_trap_messages::integer_modulo_by_zero_names_the_division ... ok
 test control::test_times_count_once::trailing_while_stays_a_plain_while_with_a_hint ... ok
+test control::test_task_values::a_function_value_crosses_to_a_task ... ok
 test control::test_threads::tasks_run_at_the_same_time ... ok
 test control::test_try_deep::try_in_a_loop_catches_each_time ... ok
 test control::test_try_else::try_falls_back_on_an_error_value ... ok
-test control::test_try_else::assert_gives_the_condition_or_an_error ... ok
 test control::test_threads::try_catches_the_failure_of_a_task ... ok
 test control::test_threads::a_paused_task_waits_for_resume ... ok
-test control::test_try_deep::try_catches_an_error_inside_a_called_function ... ok
+test control::test_try_else::assert_gives_the_condition_or_an_error ... ok
 test control::test_threads::a_finish_handler_runs_after_the_statement_that_saw_the_task_finish ... ok
-test control::test_task_values::a_task_gives_the_result_of_its_function ... ok
+test control::test_try_deep::try_catches_an_error_inside_a_called_function ... ok
 test control::test_try_else::try_of_an_assignment_assigns_the_fallback ... ok
+test control::test_task_values::a_task_gives_the_result_of_its_function ... ok
 test control::test_try_deep::caught_errors_leave_later_errors_loud ... ok
 test control::test_try_else::try_falls_back_when_the_index_is_out_of_range ... ok
 test control::test_try_exits_and_naming::a_jump_inside_a_try_keeps_the_try_catching ... ok
-test control::test_threads::function_values_cross_to_a_task ... ok
 test control::test_try_deep::try_catches_an_error_inside_an_expression ... ok
-test control::test_try_deep::try_inside_a_called_function_restores_the_depth ... ok
-test control::test_try_exits_and_naming::bare_try_else_still_works ... ok
 test control::test_try_else_value::an_arrow_fallback_is_a_function_value ... ok
+test control::test_threads::function_values_cross_to_a_task ... ok
+test control::test_try_exits_and_naming::bare_try_else_still_works ... ok
+test control::test_try_deep::try_inside_a_called_function_restores_the_depth ... ok
 test control::test_try_else::try_falls_back_on_division_and_modulo_by_zero ... ok
 test control::test_threads::texts_floats_characters_and_lists_cross_to_a_task ... ok
 test control::test_try_else::try_keeps_a_value ... ok
 test control::test_try_exits_and_naming::continue_out_of_a_try_restores_the_depth ... ok
+test control::test_try_named_traps::indexing_a_number_is_not_a_list ... ok
 test control::test_try_division::try_catches_every_error_of_a_division ... ok
 test control::test_try_index_and_float::a_float_value_passes_through_try_and_if ... ok
-test control::test_try_named_traps::indexing_a_number_is_not_a_list ... ok
 test control::test_variable_signals::once_never_runs_when_the_condition_never_holds ... ok
-test control::test_welcome_forms::loop_runs_until_break ... ok
-test control::test_try_else_value::try_else_takes_a_value_or_an_action ... ok
 test control::test_variable_signals::on_set_runs_after_each_write_with_the_value ... ok
+test control::test_try_else_value::try_else_takes_a_value_or_an_action ... ok
+test control::test_welcome_forms::loop_runs_until_break ... ok
 test control::test_try_deep::nested_try_restores_the_depth_on_both_paths ... ok
 countdown halfway done
 test control::test_variable_signals::the_wiki_countdown ... ok
+test control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body_with_space ... ok
 test control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body ... ok
-test control::test_try_index_and_float::modulo_by_zero_is_a_named_error_try_catches ... ok
 test ffi::test_download::a_failed_download_is_an_error_value ... ok
 test ffi::test_ffi::test_c_type_mapping ... ok
-test control::test_threads::lists_cross_to_a_task ... ok
-test ffi::test_ffi::test_extract_function_signature ... ignored
 test ffi::test_ffi::test_a_lone_import_with_a_comment_is_empty ... ok
-test control::test_while_value::test_while_value_of_untouched_loop_is_empty ... ok
-test control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body_with_space ... ok
-test ffi::test_ffi::test_a_program_of_imports_only_is_empty ... ok
+test ffi::test_ffi::test_extract_function_signature ... ignored
 test control::test_variable_signals::once_runs_the_first_time_the_condition_holds ... ok
+test ffi::test_ffi::test_a_program_of_imports_only_is_empty ... ok
 test ffi::test_download::download_fetches_like_fetch ... ok
-test ffi::test_ffi::test_ffi_atol ... ok
+test control::test_try_index_and_float::modulo_by_zero_is_a_named_error_try_catches ... ok
+test control::test_threads::lists_cross_to_a_task ... ok
 test control::test_variable_signals::after_a_function_runs_after_each_statement_calling_it ... ok
+test control::test_while_value::test_while_value_of_untouched_loop_is_empty ... ok
+test ffi::test_ffi::test_ffi_atol ... ok
 test ffi::test_ffi::test_ffi_curl_discovery ... ok
-test control::test_try_exits_and_naming::break_out_of_a_try_restores_the_depth ... ok
-test control::test_welcome_forms::match_cases_may_be_written_with_fat_arrows ... ok
 test control::test_try_named_traps::a_missing_field_is_caught ... ok
-test ffi::test_ffi::test_ffi_atoi ... ok
+test control::test_try_exits_and_naming::break_out_of_a_try_restores_the_depth ... ok
+test ffi::test_ffi::test_ffi_atof ... ok
+test control::test_welcome_forms::match_cases_may_be_written_with_fat_arrows ... ok
 test ffi::test_ffi::test_ffi_cos_works ... ok
 test control::test_variable_signals::whenever_runs_each_time_the_condition_holds ... ok
-test ffi::test_ffi::test_ffi_atof ... ok
+test ffi::test_ffi::test_ffi_atoi ... ok
 test ffi::test_ffi::test_ffi_generic_discovery ... ok
 test ffi::test_ffi::test_ffi_header_parser ... ok
 test ffi::test_ffi::test_ffi_import_pattern ... ok
@@ -241,97 +246,97 @@ test ffi::test_ffi::test_ffi_fmin_wasp_file ... ok
 test ffi::test_ffi::test_ffi_png_discovery ... ok
 test control::test_try_exits_and_naming::return_out_of_a_try_restores_the_depth ... ok
 test ffi::test_ffi::test_ffi_raylib_combined ... ignored, requires raylib library and FFI signatures
-test control::test_try_index_and_float::indexing_what_may_be_no_list_falls_back ... ok
+test ffi::test_ffi::test_ffi_raylib_discovery ... ok
 test ffi::test_ffi::test_ffi_sdl_combined ... ignored, requires SDL2 library and FFI signatures
 test ffi::test_ffi::test_ffi_sdl_debug ... ignored, requires SDL2 library and FFI signatures
 test ffi::test_ffi::test_ffi_sdl_init ... ignored, requires SDL2 library and wasp files
 test ffi::test_ffi::test_ffi_sdl_red_square_demo ... ignored, requires SDL2 library and display
 test ffi::test_ffi::test_ffi_sdl_version ... ignored, requires SDL2 library and FFI signatures
 test ffi::test_ffi::test_ffi_sdl_window ... ignored, requires SDL2 library and FFI signatures
-test ffi::test_ffi::test_ffi_raylib_discovery ... ok
+test control::test_try_index_and_float::indexing_what_may_be_no_list_falls_back ... ok
 test ffi::test_ffi::test_ffi_combined ... ok
-test ffi::test_ffi::test_ffi_fabs ... ok
-test ffi::test_ffi::test_ffi_sqlite_discovery ... ok
 test ffi::test_ffi::test_ffi_rand ... ok
+test ffi::test_ffi::test_ffi_sqlite_discovery ... ok
 test ffi::test_ffi::test_ffi_fabs_from_m ... ok
-test ffi::test_ffi::test_ffi_sin_pi_half ... ok
-test ffi::test_ffi::test_ffi_sqrt_works ... ok
+test ffi::test_ffi::test_ffi_fabs ... ok
 test ffi::test_ffi::test_ffi_sin_works ... ok
-test ffi::test_ffi::test_ffi_abs_from_c ... ok
+test ffi::test_ffi::test_ffi_sin_pi_half ... ok
 test ffi::test_ffi::test_ffi_fmod ... ok
-test ffi::test_ffi::test_ffi_string_comparison_logic ... ok
-test ffi::test_ffi::test_ffi_strcmp ... ok
 test ffi::test_ffi::test_ffi_math_pipeline ... ok
-test ffi::test_ffi::test_ffi_cos ... ok
-test ffi::test_ffi::test_ffi_zlib_discovery ... ok
-test ffi::test_ffi::test_import_from_pattern_parse ... ok
+test ffi::test_ffi::test_ffi_sqrt_works ... ok
 test ffi::test_ffi::test_ffi_strlen ... ok
-test ffi::test_ffi_warning_once::the_ffi_warning_is_printed_once ... ok
+test ffi::test_ffi::test_ffi_abs_from_c ... ok
+test ffi::test_ffi::test_ffi_zlib_discovery ... ok
+test ffi::test_ffi::test_ffi_string_comparison_logic ... ok
+test ffi::test_ffi::test_import_from_pattern_parse ... ok
+test ffi::test_ffi::test_ffi_strcmp ... ok
+test ffi::test_ffi::test_ffi_cos ... ok
+test ffi::test_ffi::test_ffi_nested_calls ... ok
 test ffi::test_glibc_math_header::a_glibc_style_math_header_declares_libm ... ok
 test ffi::test_glibc_math_header::glibc_math_macros_expand_to_double_declarations ... ok
 test ffi::test_host::test_emit_host_imports ... ok
+test ffi::test_ffi_warning_once::the_ffi_warning_is_printed_once ... ok
 test ffi::test_host::test_emitter_with_host_imports_valid ... ok
-test ffi::test_ffi::test_ffi_strncmp ... ok
 test ffi::test_host::test_host_run_import ... ok
 test ffi::test_host::test_host_fetch_import ... ok
+test ffi::test_ffi::test_ffi_strncmp ... ok
 read
-test ffi::test_ffi::test_ffi_nested_calls ... ok
-test ffi::test_ffi::test_ffi_fmax ... ok
-test ffi::test_ffi::test_ffi_floor ... ok
+test ffi::test_ffi::test_ffi_trigonometry_combined ... ok
+test ffi::test_libc_results::atol_returns_a_long ... ok
 called C
 test ffi::test_host_words::test_a_program_prints_and_uses_the_host ... ok
-test ffi::test_libc_results::atol_returns_a_long ... ok
 test ffi::test_ffi::test_ffi_fmin ... ok
-test ffi::test_ffi::test_ffi_trigonometry_combined ... ok
+test ffi::test_ffi::test_ffi_floor ... ok
+test ffi::test_ffi_import_group::a_group_with_spaces_is_imported ... ok
 test ffi::test_libc_results::strcmp_orders_texts ... ok
 test ffi::test_libm_linking::the_table_serves_libm_when_the_headers_declare_nothing ... ok
 test ffi::test_libc_results::strncmp_compares_a_prefix ... ok
+test ffi::test_ffi::test_ffi_fmax ... ok
 oktest ffi::test_wasi::test_fd_write ... ok
-test ffi::test_ffi_import_group::a_group_with_spaces_is_imported ... ok
 hellotest ffi::test_wasi::test_fd_write_raw ... ok
-test ffi::test_ffi::test_dynlib_import_emit ... ok
+5656test ffi::test_wasi::test_wasi_puti ... ok
 test functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error ... ok
-56test functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element ... ok
-56test ffi::test_wasi::test_wasi_puti ... ok
+test ffi::test_ffi::test_dynlib_import_emit ... ok
+test ffi::test_ffi::test_ffi_string_math_combined ... ok
 test functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error ... ok
 test functions::test_bare_function_name::test_bare_name_counts_only_required_parameters ... ok
-test ffi::test_libc_results::strlen_returns_a_size ... ok
-test functions::test_bare_function_name::test_bare_name_of_function_with_parameter_is_an_error ... ok
-test ffi::test_ffi::test_ffi_string_math_combined ... ok
 test functions::test_argument_kinds::counting_a_parameter_makes_it_a_list ... ok
+test functions::test_bare_function_name::test_bare_name_of_function_with_parameter_is_an_error ... ok
+test functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element ... ok
 test functions::test_bare_function_name::test_bare_name_of_typed_function_is_an_error ... ok
-test ffi::test_ffi::test_ffi_ceil ... ok
 test functions::test_bare_function_name::test_bare_name_of_function_without_parameters_calls_it ... ok
-test ffi::test_host_words::test_clock_and_sleep ... ok
-test functions::test_call_arity::text_builtins_and_library_words_check_their_values_too ... ok
+test ffi::test_ffi::test_ffi_tan ... ok
 test ffi::test_libc_results::strlen_inside_a_program ... ok
+test ffi::test_libc_results::strlen_returns_a_size ... ok
+test functions::test_call_arity::text_builtins_and_library_words_check_their_values_too ... ok
+test ffi::test_ffi::test_ffi_ceil ... ok
 test ffi::test_libm_linking::libm_comes_from_the_headers_when_they_declare_it ... ok
 3.1test ffi::test_wasi::test_wasi_putf ... ok
-test ffi::test_ffi::test_ffi_tan ... ok
-test functions::test_block_function::data_blocks_stay_data ... ok
+test ffi::test_host_words::test_clock_and_sleep ... ok
 test ffi::test_ffi::test_ffi_sin ... ok
-test functions::test_bare_function_name::test_bare_name_of_function_with_only_defaults_calls_it ... ok
 test ffi::test_ffi_import_group::a_group_of_three_names_is_imported ... ok
+test functions::test_block_function::data_blocks_stay_data ... ok
+test functions::test_bare_function_name::test_bare_name_of_function_with_only_defaults_calls_it ... ok
 test ffi::test_host_words::test_random_stays_in_range ... ok
-test functions::test_closures::a_float_reassigned_from_its_closure_stays_a_float ... ok
 test ffi::test_ffi::test_import_from_pattern_emit ... ok
+test functions::test_closures::a_float_reassigned_from_its_closure_stays_a_float ... ok
 test functions::test_closures::test_a_closure_prints_as_its_function ... ok
 test functions::test_closures::test_a_lambda_without_parameters ... ok
 test functions::test_argument_kinds::matching_arguments_still_pass ... ok
-test functions::test_closures::a_loop_variable_over_function_values_is_called ... ok
 test functions::test_closures::test_a_parameter_declared_a_function ... ok
 test functions::test_closures::test_calling_a_non_function_or_the_wrong_arity_is_loud ... ok
+test functions::test_closures::a_loop_variable_over_function_values_is_called ... ok
+test ffi::test_ffi::test_ffi_text_arguments_known_at_run_time ... ok
+test functions::test_closures::test_curried_closures ... ok
 test functions::test_call_arity::extra_or_missing_values_are_errors ... ok
 test functions::test_closures::test_closures_returning_text ... ok
 test functions::test_closures::test_closure_held_in_a_variable_passed_on ... ok
-test ffi::test_ffi::test_ffi_text_arguments_known_at_run_time ... ok
-test functions::test_closures::test_curried_closures ... ok
 test functions::test_closures::test_not_a_function_stays_loud ... ok
 test functions::test_closures::test_float_closure ... ok
-test functions::test_call_arity::a_default_reads_the_parameters_before_it ... ok
-test functions::test_closures::closures_of_ints_are_called_without_boxes ... ok
-test functions::test_block_function::a_block_using_it_is_a_function ... ok
 test functions::test_closures::test_lambda_in_a_variable ... ok
+test functions::test_closures::closures_of_ints_are_called_without_boxes ... ok
+test functions::test_call_arity::a_default_reads_the_parameters_before_it ... ok
+test functions::test_block_function::a_block_using_it_is_a_function ... ok
 test functions::test_closures::test_capturing_lambda_passed_to_a_function ... ok
 test functions::test_closures::test_closure_captures_by_value ... ok
 test functions::test_closures::test_chained_calls_of_returned_closures ... ok
@@ -342,99 +347,99 @@ test functions::test_effects::test_declared_constraint_violation_names_span_and_
 test functions::test_effects::test_effect_set_names ... ok
 test functions::test_effects::test_effects_are_inferred_from_calls ... ok
 test functions::test_effects::test_effects_of_query ... ok
-test functions::test_effects::test_effects_propagate_through_callers_and_recursion ... ok
-test functions::test_effects::test_imports_follow_effects ... ok
 test functions::test_closures::test_compose_returns_a_closure ... ok
+test functions::test_effects::test_effects_propagate_through_callers_and_recursion ... ok
 test functions::test_closures::test_a_list_of_closures ... ok
+test functions::test_effects::test_imports_follow_effects ... ok
 test functions::test_def_forms::a_parameter_tested_for_membership_is_no_function ... ok
+test functions::test_closures::a_function_value_out_of_try_or_a_block_is_called ... ok
 test functions::test_closures::test_function_chosen_at_run_time ... ok
 test functions::test_def_forms::a_def_function_calls_its_function_parameter ... ok
-test functions::test_closures::a_function_value_out_of_try_or_a_block_is_called ... ok
 test functions::test_def_without_parameters::a_def_without_parameters_is_a_function ... ok
 test functions::test_function_values::test_a_lambda_that_captures_is_passed_as_a_closure ... ok
 test functions::test_effects::test_declared_constraint_holds ... ok
-test functions::test_closures::test_returned_closure ... ok
 test functions::test_closures::an_item_of_a_function_list_called_directly ... ok
+test functions::test_closures::test_returned_closure ... ok
 test functions::test_function_values::test_a_lambda_that_captures_nothing_is_a_value ... ok
 test functions::test_definition_value::a_spaced_definition_names_its_parameters ... ok
 test functions::test_function_values::test_an_alias_of_a_function ... ok
 test functions::test_definition_value::it_names_the_one_parameter_of_a_definition ... ok
-test functions::test_function_values::test_a_function_argument_of_a_specialised_function_is_passed_on ... ok
-test functions::test_functions::test_fibonacci_typed2 ... ok
 test functions::test_functions::test_fibonacci_auto_typed ... ok
-test functions::test_function_values::test_an_explicit_reference ... ok
-test functions::test_functions::test_function_declaration_parse ... ok
+test functions::test_functions::test_fibonacci_typed2 ... ok
 test functions::test_functions::test_fibonacci_auto_param ... ok
+test functions::test_functions::test_float_return_through_main ... ok
+test functions::test_functions::test_function_declaration_parse ... ok
+test functions::test_function_values::test_a_function_argument_of_a_specialised_function_is_passed_on ... ok
 test functions::test_functions::test_graph_params ... ok
 test functions::test_functions::test_modifiers ... ignored
 test functions::test_functions::test_params ... ok
 test functions::test_functions::test_rename_wasm_function ... ok
 test functions::test_functions::test_stacked_lambdas ... ignored
-test functions::test_functions::test_float_return_through_main ... ok
 test functions::test_function_values::test_ordinary_calls_are_untouched ... ok
+test functions::test_function_values::test_an_explicit_reference ... ok
 test functions::test_functions::test_wit_function ... ignored
 test functions::test_function_values::test_a_parameter_called_as_a_function ... ok
 test functions::test_definition_value::a_definition_alone_is_empty ... ok
-test functions::test_functions::test2def ... ok
 test functions::test_functions::test_variable_reassignment ... ok
-3
-test functions::test_closures::test_map_and_reduce_with_a_closure_variable ... ok
-test functions::test_functions::test_fibonacci_typed ... ok
+test functions::test_functions::test2def ... ok
 test functions::test_function_keyword::function_defines_like_def ... ok
-test functions::test_def_forms::definition_forms_agree ... ok
 test functions::test_function_values::test_map_with_on ... ok
-test functions::test_inlining::an_inlined_helper_updates_the_list_handed_back ... ok
-test functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called ... ok
-test functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged ... ok
+test functions::test_closures::test_map_and_reduce_with_a_closure_variable ... ok
+test functions::test_def_forms::definition_forms_agree ... ok
+3
+test functions::test_functions::test_fibonacci_typed ... ok
 test functions::test_functions::test_function_definitions ... ok
+test functions::test_inlining::an_inlined_helper_updates_the_list_handed_back ... ok
+test functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged ... ok
 test functions::test_lambdas::test_a_lambda_that_cannot_be_inlined_is_a_closure_value ... ok
 test functions::test_lambdas::test_lambda_captures_by_value ... ok
-test functions::test_method_words::test_chars_of_text_literal_in_assignment ... ok
 test functions::test_method_syntax_calls::test_method_syntax_calls_a_libm_function ... ok
+test functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called ... ok
+test functions::test_method_words::test_chars_of_text_literal_in_assignment ... ok
 test functions::test_method_syntax_calls::test_method_syntax_calls_a_rounding_function ... ok
 1
 2
 test functions::test_lambdas::test_block_called_with_bindings ... ok
-test functions::test_lambdas::test_named_functions_and_data_are_untouched ... ok
 test functions::test_function_values::test_partial_application_of_an_iteration_word ... ok
-test functions::test_method_words::test_known_words_and_data_stay_data ... ok
 test functions::test_functions::test_default_params ... ok
-test functions::test_lambdas::test_map_as_a_method ... ok
+test functions::test_lambdas::test_named_functions_and_data_are_untouched ... ok
+test functions::test_method_words::test_known_words_and_data_stay_data ... ok
 test functions::test_method_words::test_join ... ok
-test functions::test_method_words::test_unknown_method_word_is_an_error ... ok
 test functions::test_function_values::test_operators_as_values ... ok
+test functions::test_method_words::test_unknown_method_word_is_an_error ... ok
+test functions::test_lambdas::test_map_as_a_method ... ok
 test functions::test_method_words::test_split ... ok
 test functions::test_method_words::test_user_function_as_method_word ... ok
 test functions::test_method_words::test_reverse ... ok
 test functions::test_multi_value::test_divmod_returns_quotient_and_remainder ... ok
 test functions::test_multi_value::test_int_divmod_returns_both_results ... ok
-1
-2
 test functions::test_method_words::test_sort ... ok
 test functions::test_named_arguments::a_missing_or_unknown_argument_is_an_error ... ok
 test functions::test_lambdas::test_assigned_lambda_is_a_function ... ok
+1
+2
 test functions::test_multi_value::test_optimized_multi_value_division ... ok
 test functions::test_method_words::test_join_and_split_edge_cases ... ok
 test functions::test_method_words::test_replace ... ok
-test functions::test_method_words::test_library_words_refuse_what_they_cannot_do ... ok
-test functions::test_object_arguments::a_number_for_a_class_typed_parameter_is_a_type_error ... ok
 test functions::test_lambda_spaced_body::a_lambda_body_may_be_a_spaced_call ... ok
+test functions::test_object_arguments::a_number_for_a_class_typed_parameter_is_a_type_error ... ok
+test functions::test_method_words::test_library_words_refuse_what_they_cannot_do ... ok
 test functions::test_object_arguments::an_instance_of_another_class_is_a_type_error ... ok
-test functions::test_object_arguments::a_class_instance_is_passed_to_an_untyped_parameter ... ok
 test functions::test_object_arguments::a_missing_field_of_a_map_argument_is_an_error ... ok
+test functions::test_object_arguments::a_class_instance_is_passed_to_an_untyped_parameter ... ok
 test functions::test_object_arguments::the_to_phrase_types_its_parameter_by_the_class ... ok
-test functions::test_method_words::test_first_and_last ... ok
+test functions::test_named_arguments::named_arguments_set_free_variables_of_the_body ... ok
 test functions::test_parameter_call_kinds::a_type_error_names_the_kind_with_its_article ... ok
 test functions::test_parameter_call_kinds::disagreeing_calls_are_a_loud_error_naming_both_kinds ... ok
-test functions::test_named_arguments::named_arguments_set_free_variables_of_the_body ... ok
 test functions::test_named_arguments::named_arguments_set_parameters_in_any_order ... ok
+test functions::test_method_words::test_first_and_last ... ok
 test functions::test_parameter_codepoint_calls::a_character_literal_argument_disagrees_with_a_text_argument ... ok
 test functions::test_parameter_codepoint_calls::a_character_literal_argument_disagrees_with_an_int_argument ... ok
 test functions::test_optional_words::is_with_a_test_word ... ok
 test functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error ... ok
-test functions::test_method_words::test_sum ... ok
 test functions::test_lambda_spaced_body::a_list_of_functions_holds_each_with_its_own_capture ... ok
 test functions::test_parameter_overloads::an_int_widens_to_a_float_variant ... ok
+test functions::test_method_words::test_sum ... ok
 test functions::test_optional_words::test_words_work_in_other_conditions ... ok
 test functions::test_parameter_call_kinds::untyped_parameter_takes_the_kind_all_calls_agree_on ... ok
 test functions::test_parameter_call_kinds::untyped_parameter_with_int_calls_or_none_stays_int ... ok
@@ -443,69 +448,69 @@ test functions::test_partial_application::a_returned_zero_argument_closure_is_ca
 test functions::test_optional_words::test_words_read_as_not ... ok
 test functions::test_property_access::test_non_objects_keep_the_undefined_function_rule ... ok
 test functions::test_lambdas::test_map_over_a_block_or_lambda ... ok
+test functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit ... ok
 test functions::test_functions::test_function_declaration ... ok
 test functions::test_partial_application::a_placeholder_makes_a_partial_application ... ok
 test functions::test_multi_value::test_big_division_results_unchanged ... ok
-test functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit ... ok
 test functions::test_property_assign::test_assigning_a_field_of_a_non_object_is_an_error ... ok
-test functions::test_property_assign::test_a_one_entry_object_counts_one_pair ... ok
 test functions::test_property_access::test_dot_on_an_object_literal ... ok
+test functions::test_property_assign::test_a_one_entry_object_counts_one_pair ... ok
 test functions::test_property_access::test_object_data_stays_data ... ok
 test functions::test_object_arguments::a_parameter_reads_a_field_of_a_map_argument ... ok
 test functions::test_property_access::test_bracket_lookup_by_text_never_traps ... ok
 test functions::test_property_access::test_field_names_win_over_library_words_on_an_object ... ok
 test functions::test_property_words::test_property_word_counts_text_characters ... ok
 test functions::test_property_words::test_property_word_after_a_name_counts ... ok
-test functions::test_picked_calls::a_function_picked_from_a_list_is_called ... ok
 test functions::test_property_access::test_dot_on_a_variable_and_nested ... ok
 test functions::test_multi_value::test_big_exact_division_results_unchanged ... ok
+test functions::test_picked_calls::a_function_picked_from_a_list_is_called ... ok
 test functions::test_return_type_dispatch::test_a_picked_overload_warns_nothing ... ok
 test functions::test_property_assign::test_assignment_has_value_semantics ... ok
 test functions::test_return_type_dispatch::test_a_typed_parameter_picks_the_overload ... ok
 test functions::test_return_type_dispatch::test_no_expected_type_takes_the_first_overload_with_a_warning ... ok
 test functions::test_property_words::test_property_word_agrees_with_of_and_getter ... ok
-test functions::test_property_assign::test_assigning_a_new_field_adds_it ... ok
 test functions::test_property_access::test_of_and_possessive ... ok
+test functions::test_property_assign::test_assigning_a_new_field_adds_it ... ok
 test functions::test_return_type_dispatch::test_a_single_definition_with_a_result_type ... ok
+test functions::test_suffix_words::a_user_function_or_variable_takes_the_suffix_word ... ok
 test functions::test_property_assign::test_assign_a_field ... ok
-test functions::test_spaced_assign_definition::a_recursive_spaced_definition_with_equals_defines_the_function ... ok
 test functions::test_suffix_words::an_ungrouped_mix_asks ... ok
+test functions::test_spaced_assign_definition::a_recursive_spaced_definition_with_equals_defines_the_function ... ok
 test functions::test_suffix_words::a_variable_is_no_suffix_form ... ok
 test functions::test_suffix_words::an_unknown_word_is_no_suffix_form ... ok
-test functions::test_suffix_words::a_user_function_or_variable_takes_the_suffix_word ... ok
 test functions::test_return_type_dispatch::test_the_result_type_can_be_inferred_from_the_body ... ok
-test functions::test_property_access::test_missing_key_is_a_loud_error ... ok
-test functions::test_runtime_kind_arithmetic::a_def_body_reads_fields_of_its_parameters ... ok
 test functions::test_to_definition::a_typed_phrase_parameter_is_named_by_its_type ... ok
-test functions::test_property_assign::test_assign_a_nested_field ... ok
+test functions::test_runtime_kind_arithmetic::a_def_body_reads_fields_of_its_parameters ... ok
+test functions::test_return_type_dispatch::test_a_typed_declaration_picks_the_overload ... ok
+test functions::test_property_access::test_missing_key_is_a_loud_error ... ok
 test functions::test_tuple_returns::test_bare_list_assignment_still_asks ... ok
 test functions::test_tuple_returns::test_destructuring_arity_mismatch_is_loud ... ok
-test functions::test_return_type_dispatch::test_a_typed_declaration_picks_the_overload ... ok
+test functions::test_property_assign::test_assign_a_nested_field ... ok
 test functions::test_return_type_dispatch::test_as_picks_the_overload ... ok
-test functions::test_to_definition::nand_is_not_and ... ok
+test functions::test_suffix_words::each_reading_has_its_explicit_form ... ok
 test functions::test_property_assign::test_safe_navigation ... ok
 test functions::test_tuple_returns::test_tuple_function_returns_wasm_multi_value ... ok
-test functions::test_suffix_words::each_reading_has_its_explicit_form ... ok
+test functions::test_to_definition::nand_is_not_and ... ok
 test functions::test_method_words::test_upper_and_lower ... ok
-test functions::test_tuple_returns::test_parallel_assignment_and_swap ... ok
-test functions::test_tuple_returns::test_tuple_function_as_whole_value_is_a_list ... ok
 test functions::test_tuple_returns::test_recursive_tuple_function ... ok
+test functions::test_tuple_returns::test_tuple_function_as_whole_value_is_a_list ... ok
 test functions::test_to_definition::to_takes_a_block_or_an_indented_block_as_body ... ok
-test functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value ... ok
-test functions::test_undefined_calls::test_declared_type_constructs ... ok
 test functions::test_to_definition::to_stays_a_range_and_a_variable_name ... ok
-test functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number ... ok
+test functions::test_functions::test_variables ... ok
+test functions::test_tuple_returns::test_parallel_assignment_and_swap ... ok
+test functions::test_undefined_calls::test_declared_type_constructs ... ok
 42
-test functions::test_typed_signatures::spaced_typed_signature ... ok
+test functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number ... ok
+test functions::test_undefined_calls::test_paren_data_stays_data ... ok
 test functions::test_undefined_calls::test_type_constructor_arity_is_checked ... ok
 test functions::test_undefined_calls::test_unresolved_call_in_function_body ... ok
 test functions::test_undefined_calls::test_unresolved_call_in_operand_position ... ok
 test functions::test_undefined_calls::test_unresolved_call_inside_collections ... ok
 test functions::test_undefined_calls::test_unresolved_call_is_an_error ... ok
-test functions::test_undefined_calls::test_variable_is_not_callable ... ok
 42
-test functions::test_functions::test_variables ... ok
-test functions::test_undefined_calls::test_paren_data_stays_data ... ok
+test functions::test_undefined_calls::test_variable_is_not_callable ... ok
+test functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value ... ok
+test functions::test_typed_signatures::spaced_typed_signature ... ok
 test functions::test_runtime_kind_arithmetic::fields_of_a_map_parameter_compute_by_their_values ... ok
 hi
 test functions::test_undefined_calls::test_print_returns_its_value_without_a_capability_error ... ok
@@ -513,56 +518,56 @@ test lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_
 test functions::test_tuple_returns::test_tuple_returns_inside_functions ... ok
 test functions::test_to_definition::to_defines_a_function_with_a_body_to_the_end_of_the_statement ... ok
 test functions::test_suffix_words::library_suffix_words ... ok
-test functions::test_undefined_calls::test_resolved_calls_are_unchanged ... ok
 test lists::test_bare_list_assignment::each_reading_has_its_explicit_form ... ok
+test functions::test_undefined_calls::test_resolved_calls_are_unchanged ... ok
 test functions::test_suffix_words::a_function_name_with_ed_is_its_suffix_form ... ok
+test functions::test_tuple_returns::test_two_returned_values_destructure ... ok
+test lists::test_byte_size::byte_size_counts_bytes_and_size_counts_elements ... ok
 test functions::test_user_method_form::a_user_function_taking_a_function_in_method_form ... ok
 test functions::test_user_method_form::a_user_function_is_called_in_method_form ... ok
-test lists::test_byte_size::byte_size_counts_bytes_and_size_counts_elements ... ok
-test functions::test_user_method_form::a_method_form_call_passes_the_further_arguments ... ok
 test lists::test_decimal_list_elements::a_decimal_element_compares ... ok
-test functions::test_tuple_returns::test_two_returned_values_destructure ... ok
+test functions::test_user_method_form::a_method_form_call_passes_the_further_arguments ... ok
 test lists::test_empty_list_argument::a_call_without_arguments_has_none ... ok
 test lists::test_empty_items::a_list_keeps_its_empty_items ... ok
 test lists::test_empty_list_argument::an_empty_list_inside_a_list_is_an_item ... ok
 test lists::test_empty_list_argument::an_empty_list_literal_is_a_call_argument ... ok
 test lists::test_empty_items::an_empty_item_reads_as_empty_in_the_text_of_a_list ... ok
-test functions::test_typed_returns::test_block_bodies_and_returns_convert_too ... ok
-test lists::test_empty_list_count::a_one_element_list_still_counts_one ... ok
+test functions::test_typed_returns::test_return_type_after_the_parameters ... ok
 test lists::test_bare_list_assignment::a_bracketed_list_never_asks ... ok
-test functions::test_typed_signatures::several_typed_parameters ... ok
+test lists::test_empty_list_count::a_one_element_list_still_counts_one ... ok
+test functions::test_typed_returns::test_block_bodies_and_returns_convert_too ... ok
+test lists::test_decimal_list_elements::a_decimal_element_can_be_assigned ... ok
+test lists::test_empty_list_count::a_loop_over_an_empty_list_does_not_run ... ok
 test lists::test_empty_list_count::the_count_of_an_empty_list_is_zero ... ok
 test functions::test_typed_returns::test_type_before_the_name_converts_the_result ... ok
-test functions::test_typed_returns::test_return_type_after_the_parameters ... ok
-test lists::test_decimal_list_elements::a_decimal_element_can_be_assigned ... ok
+test functions::test_typed_signatures::several_typed_parameters ... ok
 test functions::test_typed_lambda::a_lambda_parameter_declares_its_type ... ok
-test lists::test_empty_list_count::a_loop_over_an_empty_list_does_not_run ... ok
 test lists::test_decimal_list_elements::a_loop_walks_decimal_elements ... ok
 test lists::test_empty_list_argument::a_function_receives_the_empty_list ... ok
 test lists::test_index_assignment::test_simple_index_assign ... ok
-test lists::test_index_assignment::test_index_assign_25_elements ... ok
 test lists::test_fractional_count::a_whole_count_in_a_variable_repeats ... ok
 test lists::test_index_assignment::test_index_assign_with_variable ... ok
-test lists::test_index_assignment::test_index_assign_in_while_with_increment ... ok
+test lists::test_index_assignment::test_index_assign_25_elements ... ok
 test lists::test_index_assignment::test_index_assign_in_while_loop ... ok
-test lists::test_key_lookup::test_key_is_evaluated ... ok
-test lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic ... ok
+test lists::test_index_assignment::test_index_assign_in_while_with_increment ... ok
 test lists::test_empty_list_count::a_counting_property_is_a_number_in_arithmetic ... ok
 test lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check ... ok
+test lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic ... ok
+test lists::test_key_lookup::test_key_is_evaluated ... ok
 test lists::test_list_number_comparison::ordering_a_list_with_a_number_is_a_loud_error ... ok
-test lists::test_list_number_comparison::a_list_is_not_equal_to_a_number ... ok
-test lists::test_dynamic_range::a_list_grows_from_empty_by_adding_lists ... ok
-test lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error ... ok
 test lists::test_decimal_list_elements::a_decimal_element_takes_part_in_arithmetic ... ok
+test lists::test_dynamic_range::a_list_grows_from_empty_by_adding_lists ... ok
 test lists::test_key_lookup::test_missing_key_is_an_error ... ok
-test lists::test_decimal_list_elements::the_extremum_of_a_decimal_list ... ok
+test lists::test_list_number_comparison::a_list_is_not_equal_to_a_number ... ok
+test lists::test_list_parameters::a_list_literal_assigned_to_a_parameter ... ok
+test lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error ... ok
 test lists::test_list_plus_number::a_list_literal_plus_a_number_asks ... ok
 test lists::test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error ... ok
 test lists::test_key_lookup::test_object_variable_is_looked_up_by_key ... ok
 test lists::test_key_lookup::test_text_value_is_looked_up ... ok
-test lists::test_list_parameters::a_list_literal_assigned_to_a_parameter ... ok
-test lists::test_lists::test_array_creation ... ignored, user: lists don't grow by index
 test lists::test_list_parameters::named_parameter_indexed_as_list ... ok
+test lists::test_lists::test_array_creation ... ignored, user: lists don't grow by index
+test lists::test_decimal_list_elements::the_extremum_of_a_decimal_list ... ok
 test lists::test_lists::test_array_initialization ... ignored
 test lists::test_lists::test_array_initialization_basics ... ignored
 test lists::test_lists::test_array_operations ... ignored
@@ -574,126 +579,109 @@ test lists::test_list_truthiness::a_list_of_nothing_is_truthy ... ok
 test lists::test_lists::test_indexed ... ok
 test lists::test_lists::test_iteration ... ok
 test lists::test_list_parameters::implicit_it_indexed_as_list ... ok
-test lists::test_lists::test_array_indices ... ok
-test lists::test_lists::test_while_nop_issue ... ignored, while loop with nop needs investigation
 test lists::test_dynamic_range::a_recursive_list_function_in_a_ternary ... ok
+test lists::test_lists::test_while_nop_issue ... ignored, while loop with nop needs investigation
 test lists::test_dynamic_range::a_range_with_variable_bounds_is_a_list ... ok
+test lists::test_lists::test_array_indices ... ok
 test lists::test_lists::test_index ... ok
 test lists::test_list_parameters::indexed_parameter_can_be_called_repeatedly_and_combined ... ok
 test lists::test_min_max::test_min_max_arguments_must_be_side_effect_free ... ok
-test lists::test_long_list_result::a_long_list_result_reads_back ... ok
-test lists::test_list_plus_number::each_reading_has_its_explicit_form ... ok
 test lists::test_key_subscript_hint::a_text_key_subscript_gets_no_index_hint ... ok
+test lists::test_list_plus_number::each_reading_has_its_explicit_form ... ok
+test lists::test_long_list_result::a_long_list_result_reads_back ... ok
 test lists::test_min_max::test_min_needs_two_arguments ... ok
 test lists::test_map_variables::a_missing_key_of_a_map_variable_is_the_same_error ... ok
 test lists::test_min_max_lists::test_a_single_number_is_still_refused ... ok
-test lists::test_min_max::test_min_max_of_ints ... ok
 test lists::test_lists::test_index_offset ... ok
 test lists::test_min_max::test_user_definition_wins_over_the_builtin ... ok
+test lists::test_min_max::test_min_max_of_ints ... ok
 test lists::test_list_arithmetic::test_square_list_keeps_all_items_that_are_arithmetic ... ok
 test lists::test_lists::test_root_list_strings ... ok
 test lists::test_min_max_lists::test_several_arguments_still_work ... ok
 test lists::test_min_max::test_min_max_of_floats_and_mixed ... ok
 test lists::test_min_max_lists::test_extremum_of_a_list_variable_in_float_arithmetic ... ok
-test lists::test_min_max_lists::test_extremum_of_a_list_literal ... ok
 test lists::test_lists::test_root_lists ... ok
+test lists::test_min_max_lists::test_extremum_of_a_list_literal ... ok
 test lists::test_map_variables::a_map_variable_reads_as_the_node_of_its_entries ... ok
 test lists::test_min_max::test_min_max_of_variables_and_expressions ... ok
 test lists::test_lists::test_array_size ... ok
-test lists::test_number_keys::a_list_keeps_its_positions ... ok
 test lists::test_min_max_lists::test_extremum_of_an_empty_list_is_an_error ... ok
-test lists::test_node_lists::a_list_parameter_indexed_in_a_loop_is_linear ... ok
+test lists::test_number_keys::a_list_keeps_its_positions ... ok
 test lists::test_nested_maps::a_map_inside_a_map_keeps_its_braces ... ok
+test lists::test_node_lists::a_list_parameter_indexed_in_a_loop_is_linear ... ok
+test lists::test_list_of_objects::an_element_of_a_list_of_objects_has_fields ... ok
 test lists::test_numbered_fields::numbered_fields_of_a_tuple ... ok
 test lists::test_find_any_all::find_any_and_all_test_the_elements ... ok
-test lists::test_list_of_objects::an_element_of_a_list_of_objects_has_fields ... ok
 oktest lists::test_node_lists::a_list_parameter_walked_by_a_for_loop_takes_the_array ... ok
 test lists::test_min_max_lists::test_extremum_of_a_list_variable ... ok
 test lists::test_number_keys::a_number_subscript_keys_an_empty_map ... ok
-test lists::test_node_lists::a_list_parameter_holds_whatever_elements_its_callers_pass ... ok
-test lists::test_signed_operand_list::an_unbracketed_assignment_of_the_list_asks_once_more ... ok
-test lists::test_list_plus_number::the_explicit_forms_never_ask ... ok
-test lists::test_remove_and_index_of::a_stack_built_from_empty_pops ... ok
-test lists::test_signed_operand_list::under_strict_the_default_is_an_error ... ok
-test lists::test_remove_and_index_of::index_of_is_the_one_based_position ... ok
 test lists::test_set_past_the_end::setting_into_the_empty_list_is_an_index_error ... ok
+test lists::test_signed_operand_list::an_unbracketed_assignment_of_the_list_asks_once_more ... ok
+test lists::test_node_lists::a_list_parameter_holds_whatever_elements_its_callers_pass ... ok
+test lists::test_remove_and_index_of::index_of_is_the_one_based_position ... ok
+test lists::test_list_plus_number::the_explicit_forms_never_ask ... ok
+test lists::test_signed_operand_list::under_strict_the_default_is_an_error ... ok
+test lists::test_remove_and_index_of::a_stack_built_from_empty_pops ... ok
 test lists::test_node_lists::a_loop_over_a_list_of_mixed_kinds_keeps_each_element ... ok
-test lists::test_size_count::test_size_is_element_count ... ok
-test lists::test_size_count::test_size_of_text_is_character_count ... ok
 test lists::test_node_lists::loops_over_a_list_are_linear ... ok
-test lists::test_signed_operand_list::a_glued_sign_after_a_space_is_a_list_by_default ... ok
-test lists::test_size_property_word::test_property_word_agrees_with_size_of ... ok
+test lists::test_size_count::test_size_is_element_count ... ok
 test lists::test_set_past_the_end::setting_past_the_end_is_catchable ... ok
-test lists::test_pop::pop_gives_the_last_item ... ok
+test lists::test_size_property_word::test_property_word_agrees_with_size_of ... ok
+test lists::test_signed_operand_list::a_glued_sign_after_a_space_is_a_list_by_default ... ok
+test lists::test_size_count::test_size_of_text_is_character_count ... ok
 test lists::test_pop::pop_removes_the_last_item ... ok
-test lists::test_signed_operand_list::each_reading_has_its_explicit_form ... ok
-test lists::test_remove_and_index_of::remove_takes_a_key_out_of_a_map_variable ... ok
+test lists::test_pop::pop_gives_the_last_item ... ok
 test lists::test_size_property_word::test_property_word_after_a_name_counts_like_dot_property ... ok
 test lists::test_node_lists::a_recursive_list_function_passes_its_array ... ok
+test lists::test_signed_operand_list::each_reading_has_its_explicit_form ... ok
+test lists::test_remove_and_index_of::remove_takes_a_key_out_of_a_map_variable ... ok
 test lists::test_size_count::test_bytes_need_explicit_unit ... ok
-test lists::test_typed_lists::test_int_list_literal_is_an_array ... ok
 test lists::test_node_lists::a_node_list_keeps_its_elements_and_values ... ok
+test lists::test_typed_lists::test_int_list_literal_is_an_array ... ok
 test lists::test_typed_lists::test_mixed_list_stays_cons_cells ... ok
-test lists::test_signed_operand_list::spaced_or_glued_operators_stay_arithmetic ... ok
 test lists::test_typed_lists::test_int_array_errors_like_cons_list ... ok
-test lists::test_typed_lists::test_int_array_reads_back_as_the_same_node ... ok
+test lists::test_signed_operand_list::spaced_or_glued_operators_stay_arithmetic ... ok
 test lists::test_tuples::test_loop_over_list_with_global_tuple ... ok
+test lists::test_typed_lists::test_int_array_reads_back_as_the_same_node ... ok
 test lists::test_lists::test_index_offset_advanced ... ok
-test lists::test_typed_lists::test_int_expression_items_are_an_array ... ok
-test lists::test_unpacking::for_loop_unpacking ... ok
 test lists::test_unpacking::list_target ... ok
 test lists::test_unpacking::nested_unpacking ... ok
+test lists::test_typed_lists::test_int_expression_items_are_an_array ... ok
 test lists::test_unpacking::parenthesized_target ... ok
 test lists::test_typed_lists::test_int_arrays_inside_functions ... ok
+test lists::test_unpacking::for_loop_unpacking ... ok
 test lists::test_unpacking::star_init ... ok
 test lists::test_tuples::test_tuple_of_computed_items ... ok
+test lists::test_unpacking::star_rest_from_values ... ok
 test lists::test_unpacking::star_rest_empty ... ok
-test lists::test_unpacking::too_many_values_is_loud ... ok
 test lists::test_unpacking::star_rest_from_tuple_function ... ok
 test lists::test_unpacking::underscore_discards ... ok
-test lists::test_typed_lists::test_zero_filled_int_list_is_an_array ... ok
-test lists::test_unpacking::star_rest_from_values ... ok
-test lists::test_unpacking::too_few_values_is_loud ... ok
 test lists::test_unpacking::swap ... ok
+test lists::test_typed_lists::test_zero_filled_int_list_is_an_array ... ok
+test lists::test_unpacking::too_few_values_is_loud ... ok
+test lists::test_unpacking::too_many_values_is_loud ... ok
 test lists::test_unpacking::unpack_text ... ok
 test lists::test_unpacking::unpack_tuple_function ... ok
 test modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous ... ok
 test modules::test_folder_scope::inline_code_has_no_folder_scope ... ok
-test lists::test_unpacking::star_middle ... ok
+test lists::test_unpacking::unpack_tuple_values ... ok
 test modules::test_folder_scope::the_file_itself_wins_over_its_siblings ... ok
 test modules::test_header_search::a_header_comes_from_the_first_include_directory_holding_it ... ok
 test modules::test_header_search::only_sdl_names_read_the_sdl_headers ... ok
 test modules::test_include::a_missing_include_lists_the_searched_paths ... ok
-test lists::test_unpacking::star_rest_from_list ... ok
-test lists::test_unpacking::unpack_tuple_values ... ok
 test lists::test_unpacking::unpack_list_function ... ok
-test lists::test_unpacking::unpack_list_variable ... ok
+test lists::test_unpacking::star_middle ... ok
 test lists::test_unpacking::unpack_list_literal ... ok
+test lists::test_unpacking::unpack_list_variable ... ok
 test lists::test_unpacking::unpack_parenthesized_tuple ... ok
-test modules::test_include::use_imports_only_the_declarations ... ok
 test modules::test_folder_scope::sibling_definitions_are_visible_without_use ... ok
-test lists::test_typed_lists::test_int_array_assignment_keeps_value_semantics ... ok
+test modules::test_include::use_imports_only_the_declarations ... ok
+test modules::test_include::a_nested_include_is_found_next_to_the_including_file ... ok
+test lists::test_unpacking::star_rest_from_list ... ok
 test modules::test_package_pin::a_pinned_package_links_its_cached_version ... ok
 test modules::test_package_pin::header_signatures_are_parsed_once ... ok
 test modules::test_package_tools::a_package_tool_lives_in_the_package_build_directory ... ok
-Note: switching to '8a07951a7599e84556066e919364648b1d872a4e'.
-
-You are in 'detached HEAD' state. You can look around, make experimental
-changes and commit them, and you can discard any commits you make in this
-state without impacting any branches by switching back to a branch.
-
-If you want to create a new branch to retain commits you create, you may
-do so (now or later) by using -c with the switch command. Example:
-
-  git switch -c <new-branch-name>
-
-Or undo this operation with:
-
-  git switch -
-
-Turn off this advice by setting config variable advice.detachedHead to false
-
-test modules::test_include::a_nested_include_is_found_next_to_the_including_file ... ok
+test lists::test_typed_lists::test_int_array_assignment_keeps_value_semantics ... ok
 test modules::test_package_tools::a_package_without_a_tool_says_so ... ok
 test modules::test_packages::a_package_is_fetched_once_into_packages ... ok
 test modules::test_packages::module_directory_is_where_the_module_lives ... ok
@@ -715,22 +703,39 @@ Or undo this operation with:
 
 Turn off this advice by setting config variable advice.detachedHead to false
 
-test lists::test_typed_lists::test_float_list_is_a_float_array ... ok
+test modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin ... ok
 test modules::test_use_modules::test_module_statements_are_not_imported ... ok
 test modules::test_use_modules::test_module_using_module_imports_transitively_and_survives_cycles ... ok
 test modules::test_use_modules::test_search_order_prefers_earlier_directory ... ok
-test modules::test_include::including_a_file_twice_includes_it_once_and_cycles_terminate ... ok
-test modules::test_package_pin::a_changed_clone_stands_in_for_the_pin ... ok
-test modules::test_use_modules::test_use_loads_module_from_samples ... ok
-test modules::test_use_modules::test_use_missing_module_is_an_error_value ... ok
-test lists::test_typed_lists::test_map_and_element_wise_over_int_arrays ... ok
-test modules::test_use_modules::test_warp_extension_is_found ... ok
+test lists::test_typed_lists::test_float_list_is_a_float_array ... ok
 test modules::test_use_modules::test_use_imports_globals_and_functions ... ok
-test modules::test_module_cache::test_different_modules_not_cached ... ok
+Note: switching to '8a07951a7599e84556066e919364648b1d872a4e'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+test modules::test_include::including_a_file_twice_includes_it_once_and_cycles_terminate ... ok
+test modules::test_use_modules::test_use_missing_module_is_an_error_value ... ok
+test modules::test_package_pin::a_changed_clone_stands_in_for_the_pin ... ok
+test modules::test_use_modules::test_warp_extension_is_found ... ok
+test modules::test_use_modules::test_use_loads_module_from_samples ... ok
 test modules::test_use_modules::test_use_math_stays_builtin ... ok
-test modules::test_module_cache::test_module_cache_reuse ... ok
-test modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin ... ok
 test modules::test_use_modules::test_use_twice_is_a_no_op ... ok
+test modules::test_module_cache::test_module_cache_reuse ... ok
+test lists::test_typed_lists::test_map_and_element_wise_over_int_arrays ... ok
+test lists::test_typed_lists::test_appended_int_list_is_an_array ... ok
 test node::node_values_test::test_values_empty ... ok
 test node::node_values_test::test_values_key ... ok
 test node::node_values_test::test_values_list ... ok
@@ -765,124 +770,124 @@ test node::test_normalization::test_cast_constructor ... ok
 test node::test_normalization::test_cast_style_constructor ... ok
 test node::test_normalization::test_conditional ... ok
 test node::test_normalization::test_define_keyword ... ok
+test modules::test_module_cache::test_different_modules_not_cached ... ok
 test modules::test_include::include_splices_the_whole_file_and_runs_it ... ok
-test lists::test_typed_lists::test_appended_int_list_is_an_array ... ok
-test modules::test_versions::versions_compare_part_by_part ... ok
+test modules::test_versions::an_older_version_comes_from_its_git_tag ... ok
 test modules::test_versions::version_is_a_soft_keyword ... ok
+test modules::test_versions::versions_compare_part_by_part ... ok
 test modules::test_include::require_and_import_are_use ... ok
 test lists::test_typed_lists::test_int_array_index_count_sum_for ... ok
-test modules::test_versions::an_older_version_comes_from_its_git_tag ... ok
 test modules::test_versions::version_literals_have_two_dots_or_more ... ok
 test lists::test_map_variables::two_million_keys_are_set_and_found ... ok
 test modules::test_packages::use_loads_the_module_of_a_package ... ok
 test node::test_normalization::test_each_form_is_hinted_once_when_evaluated ... ok
 test node::test_normalization::test_function_definition ... ok
-test node::test_normalization::test_indexing ... ok
+test node::test_normalization::test_function_definition_def_style ... ok
 test node::test_normalization::test_list_type_style_generic ... ok
+test node::test_normalization::test_function_hint_quotes_the_body_form_actually_written ... ok
+test node::test_normalization::test_generic_list_type_hints_plural ... ok
 test node::test_normalization::test_hints_are_off_when_the_mode_is_off ... ok
-test node::test_normalization::test_of_list_type_hints_plural ... ok
-test node::test_normalization::test_logical_operators_symbol_style ... ok
+test node::test_normalization::test_indexing ... ok
+test node::test_normalization::test_length_prefix_under_bracket_style ... ok
+test node::test_normalization::test_list_of_lists_has_no_plural_spelling ... ok
 test node::test_normalization::test_list_type_hint_is_emitted_once_when_evaluated ... ok
 test node::test_normalization::test_list_type_hint_with_values_and_position ... ok
-test node::test_normalization::test_generic_list_type_hints_plural ... ok
-test node::test_normalization::test_function_definition_def_style ... ok
-test node::test_normalization::test_one_character_strings_have_no_canonical_quote ... ok
-test node::test_normalization::test_length_prefix_under_bracket_style ... ok
-test node::test_normalization::test_plural_list_type_is_canonical ... ok
-test node::test_normalization::test_string_type_word_is_hinted_once_with_the_cast ... ok
-test node::test_normalization::test_quotes_are_symmetric ... ok
-test numbers::test_angle::test_function_params ... ignored
-test node::test_normalization::test_variable_definition_let_style ... ok
-test node::test_normalization::test_variable_definition ... ok
 test node::test_normalization::test_list_type_style_of ... ok
-test node::test_normalization::test_ranges_have_no_canonical_form ... ok
-test node::test_normalization::test_list_of_lists_has_no_plural_spelling ... ok
-test node::test_normalization::test_function_hint_quotes_the_body_form_actually_written ... ok
+test node::test_normalization::test_logical_operators_symbol_style ... ok
 test node::test_normalization::test_quote_hint_position_is_the_opening_quote ... ok
-test node::test_normalization::test_power_operator ... ok
+test node::test_normalization::test_quotes_are_symmetric ... ok
 test node::test_normalization::test_logical_operators ... ok
+test numbers::test_angle::test_function_params ... ignored
+test node::test_normalization::test_ranges_have_no_canonical_form ... ok
+test node::test_normalization::test_string_type_word_is_hinted_once_with_the_cast ... ok
+test node::test_normalization::test_one_character_strings_have_no_canonical_quote ... ok
+test node::test_normalization::test_plural_list_type_is_canonical ... ok
+test node::test_normalization::test_power_operator ... ok
+test node::test_normalization::test_variable_definition ... ok
+test node::test_normalization::test_of_list_type_hints_plural ... ok
+test node::test_normalization::test_variable_definition_let_style ... ok
 test modules::test_versions::tagged_version_literals ... ok
 test numbers::test_counting_units::size_of_text_in_unit ... ok
 test numbers::test_counting_units::count_unit_of_text ... ok
-test numbers::test_declared_float_exact_reals::test_declared_float_global_accepts_exact_reals ... ok
 test lists::test_typed_lists::test_sum_of_a_typed_list_is_one_operation ... ok
-test numbers::test_angle::test_switch ... ok
+test numbers::test_declared_float_exact_reals::test_declared_float_global_accepts_exact_reals ... ok
 test numbers::test_angle::test_switch_evaluation ... ok
+test numbers::test_angle::test_switch ... ok
 test numbers::test_declared_float_exact_reals::test_undeclared_and_int_targets_keep_their_rules ... ok
 test numbers::test_duration_text::a_duration_and_a_date_have_their_text ... ok
-test numbers::test_declared_float_exact_reals::test_declared_float_reassignment_accepts_exact_reals ... ok
 test numbers::test_declared_float_exact_reals::test_declared_float_parameter_accepts_exact_reals ... ok
-test lists::test_typed_lists::test_float_array_elements_are_numbers ... ok
+test numbers::test_declared_float_exact_reals::test_declared_float_reassignment_accepts_exact_reals ... ok
 test numbers::test_fixed_width_ints::test_fixed_width_assignment_traps_on_overflow ... ok
 test numbers::test_angle::test_if_call_zero ... ok
-test numbers::test_angle::test_logic_precedence ... ok
 test numbers::test_fixed_width_ints::test_fixed_width_declaration_traps_on_overflow ... ok
-test numbers::test_float_assignment::test_float_assignment_in_exact_context_is_refused_loudly ... ok
+test numbers::test_angle::test_logic_precedence ... ok
 test numbers::test_declared_float_exact_reals::test_declared_float_accepts_exact_reals ... ok
+test numbers::test_float_assignment::test_float_assignment_in_exact_context_is_refused_loudly ... ok
+test lists::test_typed_lists::test_float_array_elements_are_numbers ... ok
 test numbers::test_float_bit_operations::test_logical_and_bit_operators_on_a_float_are_refused_loudly ... ok
 test numbers::test_float_bit_operations::test_logical_and_bit_operators_on_ints_still_work ... ok
 test numbers::test_float_assignment::test_as_float_promotes_and_never_truncates ... ok
 test numbers::test_float_exact_context::test_ffi_float_result_in_exact_context_is_refused_loudly ... ok
 test numbers::test_float_exact_context::test_float_read_in_exact_context_is_refused_loudly ... ok
 test numbers::test_angle::test_call ... ok
-test numbers::test_declared_float_exact_reals::test_declared_float_rounds_an_exact_expression_once ... ok
 test numbers::test_fixed_width_ints::test_a_parameter_may_be_named_like_a_type ... ok
 test numbers::test_angle::test_if_gt ... ok
+test numbers::test_declared_float_exact_reals::test_declared_float_rounds_an_exact_expression_once ... ok
 test numbers::test_float_parameters::test_unknown_parameter_type_is_reported ... ok
 test numbers::test_float_parameters::test_float_parameter_keeps_all_digits ... ok
 test numbers::test_float_parameters::test_float_local_inside_float_function ... ok
-test numbers::test_float_assignment::test_float_local_assignment_keeps_its_float_value ... ok
 test numbers::test_fixed_width_ints::test_plain_int_stays_unbounded ... ok
-test numbers::test_float_parameters::test_user_function_shadows_ffi_name ... ok
+test numbers::test_float_assignment::test_float_local_assignment_keeps_its_float_value ... ok
 test numbers::test_float_parameters::test_parameter_passed_a_float_returning_call ... ok
-test numbers::test_fixed_width_ints::test_fixed_width_values_in_range ... ok
-test numbers::test_float_exact_context::test_explicit_cast_truncates_a_float ... ok
-test numbers::test_float_parameters::test_float_parameter_keeps_fraction ... ok
+test numbers::test_float_parameters::test_user_function_shadows_ffi_name ... ok
 test numbers::test_angle::test_if_two ... ok
-test numbers::test_float_promotion::test_float_modulo_keeps_fraction ... ok
+test numbers::test_float_exact_context::test_explicit_cast_truncates_a_float ... ok
+test numbers::test_fixed_width_ints::test_fixed_width_values_in_range ... ok
+test numbers::test_float_parameters::test_float_parameter_keeps_fraction ... ok
 test numbers::test_float_promotion::test_float_power_keeps_fraction ... ok
-test numbers::test_float_promotion::test_undefined_float_power_is_refused_loudly ... ok
+test numbers::test_float_promotion::test_float_modulo_keeps_fraction ... ok
 test modules::test_versions::use_requires_a_version_of_a_package ... ok
 test numbers::test_fixed_width_ints::test_fixed_width_arithmetic_traps_on_overflow ... ok
-test numbers::test_float_promotion::test_float_comparison_does_not_truncate ... ok
+test numbers::test_float_promotion::test_undefined_float_power_is_refused_loudly ... ok
 test numbers::test_implicit_libm::test_user_function_named_like_libm_wins ... ok
+test numbers::test_float_promotion::test_float_comparison_does_not_truncate ... ok
 test numbers::test_law::test_law_asserted_at_call_sites ... ok
 test numbers::test_law::test_law_float_parameter_kinds ... ok
-test numbers::test_float_promotion::test_fractional_exponent_uses_libm_pow ... ok
-test numbers::test_law::test_law_lean_export ... ok
-test numbers::test_law::test_law_lean_export_modulo_is_euclidean ... ok
 test numbers::test_implicit_libm::test_libm_on_a_runtime_value_without_import ... ok
+test numbers::test_law::test_law_lean_export ... ok
 test numbers::test_angle::test_if ... ok
+test numbers::test_law::test_law_lean_export_modulo_is_euclidean ... ok
+test numbers::test_float_promotion::test_fractional_exponent_uses_libm_pow ... ok
 test numbers::test_float_promotion::test_literal_float_operations_do_not_truncate ... ok
 test numbers::test_law::test_law_stated ... ok
 test numbers::test_float_to_int_range::test_float_beyond_int_range_fails_cleanly ... ok
-test numbers::test_float_to_int_range::test_rounding_functions_give_exact_ints ... ok
 0.25
 test numbers::test_float_text::test_float_joins_texts ... ok
+test numbers::test_float_to_int_range::test_rounding_functions_give_exact_ints ... ok
 test numbers::test_implicit_libm::test_libm_in_a_function_without_import ... ok
 test numbers::test_law::test_law_violation_reported_by_verify ... ok
 test numbers::test_math::test_absolute_value_arithmetic ... ok
 test numbers::test_angle::test_truthy_and ... ok
 test numbers::test_math::test_eval ... ok
 test numbers::test_math::test_fraction_multiplication ... ok
-test numbers::test_log_base::log_takes_a_base ... ok
 test numbers::test_law::test_law_does_not_change_program_result ... ok
+test numbers::test_log_base::log_takes_a_base ... ok
 test numbers::test_math::test_hypen_versus_minus ... ok
 test numbers::test_math::test_hyphen_units ... ignored
-test numbers::test_math::test_abs_alias ... ok
+test numbers::test_math::test_harder_arithmetic ... ok
 test numbers::test_math::test_global_with_pi ... ok
 test numbers::test_math::test_logarithm_in_runtime ... ok
-test numbers::test_math::test_harder_arithmetic ... ok
-test numbers::test_math::test_if_then_else ... ok
+test numbers::test_math::test_abs_alias ... ok
+test numbers::test_math::test_arithmetic ... ok
 test numbers::test_math::test_power ... ok
 test numbers::test_math::test_primitive_types ... ignored
+test numbers::test_math::test_if_then_else ... ok
 test numbers::test_float_zero_and_compound::test_float_compound_assignment_in_a_loop ... ok
-test numbers::test_math::test_arithmetic ... ok
-test numbers::test_math::test_if_block_syntax ... ok
+test numbers::test_float_zero_and_compound::test_float_zero_fill_holds_floats ... ok
 test numbers::test_math::test_sin ... ok
 test numbers::test_math::test_sinus_wasp_import ... ok
 test numbers::test_math::test_sqrt_alias ... ok
-test numbers::test_float_zero_and_compound::test_float_zero_fill_holds_floats ... ok
+test numbers::test_math::test_if_block_syntax ... ok
 test numbers::test_math::test_runtime_equality_autocast ... ok
 test numbers::test_math::test_units ... ok
 test numbers::test_math::test_ternary_with_comparison ... ok
@@ -895,11 +900,11 @@ test numbers::test_math::test_modulo ... ok
 test numbers::test_number::test_hex ... ok
 test numbers::test_math::test_simple_variables ... ok
 test numbers::test_rational_type::test_other_mixes_stay_plain_lists ... ok
-test numbers::test_rational_type::test_pi_is_real_whatever_its_representation ... ok
 test numbers::test_math::test_while_loop ... ok
 test numbers::test_math::test_modulo_with_variables ... ok
-test numbers::test_round_to_digits::round_without_digits_is_whole ... ok
+test numbers::test_rational_type::test_pi_is_real_whatever_its_representation ... ok
 test numbers::test_math::test_compound_assignment ... ok
+test numbers::test_round_to_digits::round_without_digits_is_whole ... ok
 test numbers::test_shift_operators::test_angle_brackets_still_delimit_generics ... ok
 test numbers::test_rational_type::test_floats_are_not_rational ... ok
 test numbers::test_shift_operators::test_shift_of_a_float_is_refused ... ok
@@ -913,12 +918,12 @@ test numbers::test_unbounded_int::test_big_int_to_float ... ok
 test numbers::test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies ... ok
 test numbers::test_shift_operators::test_shifts_of_big_exact_ints ... ok
 test numbers::test_shift_operators::test_shift_of_a_non_integer_or_by_a_bad_count_is_an_error ... ok
-test modules::test_package_tools::a_package_tool_runs_in_the_package_directory ... ok
 test numbers::test_shift_operators::test_shift_precedence_and_variables ... ok
-test numbers::test_unbounded_int::test_big_division_and_remainder ... ok
+test modules::test_package_tools::a_package_tool_runs_in_the_package_directory ... ok
 test numbers::test_unbounded_int::test_factorial_and_fib_stay_exact ... ok
-test numbers::test_rational_type::test_rational_and_rationals_are_type_words ... ok
 test numbers::test_shift_operators::test_shift_right_floors_by_a_power_of_two ... ok
+test numbers::test_rational_type::test_rational_and_rationals_are_type_words ... ok
+test numbers::test_unbounded_int::test_big_division_and_remainder ... ok
 test numbers::test_unit_conversion::a_duration_converts_to_a_time_unit ... ok
 test numbers::test_unit_conversion::a_quantity_converts_to_a_unit_of_its_dimension ... ok
 test numbers::test_unit_conversion::an_inexact_conversion_is_a_ratio ... ok
@@ -932,8 +937,8 @@ test numbers::test_units_arithmetic::test_scaling_a_quantity ... ok
 test numbers::test_units_arithmetic::test_spaced_known_unit_multiplies ... ok
 test numbers::test_units_arithmetic::test_spaced_unknown_unit_stays_a_list ... ok
 test numbers::test_units_arithmetic::test_unit_sum_uses_the_finer_unit ... ok
+test numbers::test_unit_word_keys::minutes_are_a_time_unit ... ok
 test numbers::test_unbounded_int::test_overflow_promotes_neg_abs ... ok
-test numbers::test_units_arithmetic::test_variable_shadows_the_unit ... ok
 test numbers::test_units_compare::division_by_another_dimension_is_a_composite_unit ... ok
 test numbers::test_units_compare::mixed_dimensions_are_a_loud_dimension_error ... ok
 test numbers::test_units_compare::quantities_compare_in_the_finer_unit ... ok
@@ -946,58 +951,58 @@ test numbers::test_units_followup::test_single_quantity_keeps_its_unit ... ok
 test numbers::test_units_followup::test_tolerance_in_a_unit ... ok
 test numbers::test_units_followup::test_unit_sum_serializes_in_the_smallest_unit ... ok
 test numbers::test_units_followup::test_value_with_tolerance_prints_back ... ok
-test numbers::test_unit_word_keys::minutes_are_a_time_unit ... ok
+test numbers::test_units_arithmetic::test_variable_shadows_the_unit ... ok
 test numbers::test_units_compare::a_variable_may_change_from_nothing_to_a_number_in_a_loop ... ok
-test numbers::test_unbounded_int::test_overflow_promotes_pow ... ok
-test numbers::test_zero_fill::a_zero_list_of_nothing_is_empty ... ok
-test numbers::test_zero_fill::a_computed_size_is_a_runtime_count ... ok
 test numbers::test_unbounded_int::test_i64_opt_out_wraps ... ok
-test numbers::test_unbounded_int::test_overflow_promotes_add_sub ... ok
-test numbers::test_unbounded_int::test_overflow_promotes_mul ... ok
+test numbers::test_zero_fill::a_computed_size_is_a_runtime_count ... ok
+test numbers::test_zero_fill::a_zero_list_of_nothing_is_empty ... ok
+test numbers::test_unbounded_int::test_overflow_promotes_pow ... ok
 test operators::test_add_to::add_to_an_empty_list ... ok
+test numbers::test_unbounded_int::test_overflow_promotes_add_sub ... ok
 test numbers::test_zero_fill::a_large_zero_list_has_its_size ... ok
-test operators::test_add_to::add_to_takes_an_expression ... ok
+test numbers::test_unbounded_int::test_overflow_promotes_mul ... ok
 test numbers::test_zero_fill::a_zero_list_is_still_a_list_of_zeros ... ok
-test numbers::test_unit_word_keys::a_unit_word_key_after_a_number ... ok
-test operators::test_equality_never_chains::orderings_still_chain ... ok
-test operators::test_floor_quotient::floor_division_warns_nothing_about_percent ... ok
+test operators::test_add_to::add_to_takes_an_expression ... ok
 test numbers::test_unbounded_int::test_small_arithmetic_unchanged ... ok
-test operators::test_compound_assignment::a_number_variable_refuses_a_text_in_a_loop_too ... ok
+test numbers::test_unit_word_keys::a_unit_word_key_after_a_number ... ok
+test operators::test_floor_quotient::floor_division_warns_nothing_about_percent ... ok
 test operators::test_add_to::add_to_appends_an_element ... ok
+test operators::test_equality_never_chains::orderings_still_chain ... ok
+test operators::test_compound_assignment::a_number_variable_refuses_a_text_in_a_loop_too ... ok
 test operators::test_floor_quotient::the_dividend_is_evaluated_once ... ok
 test operators::test_equality_never_chains::equality_compares_the_result_of_an_ordering ... ok
 test operators::test_in_position::maps_and_has_keep_their_truth_value ... ok
 test operators::test_like::a_known_other_type_teaches_like ... ok
+test operators::test_floor_quotient::floor_of_an_exact_number_beyond_f64 ... ok
 test operators::test_less_than_compare::test_generics_still_start_after_a_type_name ... ok
 test operators::test_in_position::the_position_never_warns ... ok
-test operators::test_floor_quotient::floor_of_an_exact_number_beyond_f64 ... ok
-test numbers::test_unbounded_int::test_comparisons_across_small_and_big ... ok
 test operators::test_compound_assignment::a_list_variable_concatenates_with_plus_assign ... ok
-test operators::test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison ... ok
+test numbers::test_unbounded_int::test_comparisons_across_small_and_big ... ok
 test operators::test_in_position::a_found_first_element_is_truthy ... ok
+test operators::test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison ... ok
 test operators::test_like::a_typed_variable_holds_its_type ... ok
 test operators::test_like::like_goes_one_way ... ok
 test operators::test_like::a_typed_variable_refuses_a_known_other_type_until_like ... ok
 test operators::test_like::like_relates_declared_types_only ... ok
-test operators::test_floor_quotient::floor_division_is_euclidean ... ok
 test operators::test_in_position::in_gives_the_one_based_position ... ok
 test operators::test_like::an_extra_field_is_a_warning ... ok
+test operators::test_floor_quotient::floor_division_is_euclidean ... ok
 test operators::test_logic_grouped_operands::a_grouped_comparison_is_the_left_operand_of_and ... ok
 test operators::test_logic_grouped_operands::a_negation_is_the_left_operand_of_and_and_or ... ok
-test operators::test_logic_grouped_operands::the_logic_table_of_negations ... ok
 test operators::test_like::a_missing_field_is_a_warning ... ok
+test operators::test_logic_grouped_operands::the_logic_table_of_negations ... ok
 test operators::test_like::a_like_type_is_judged_by_its_uses ... ok
 test operators::test_like::a_type_can_be_like_several_and_likeness_chains ... ok
-test operators::test_like::an_ad_hoc_name_is_checked_by_its_fields ... ok
 test operators::test_logical_calls::test_call_operand_is_evaluated_once ... ok
+test operators::test_like::an_ad_hoc_name_is_checked_by_its_fields ... ok
 test operators::test_negated_call::test_function_applied_to_a_negative_number ... ok
 test operators::test_negated_call::test_builtin_name_bound_as_a_parameter_stays_subtraction ... ok
-test operators::test_mutating_bang::bang_after_a_block_or_lone_name_evaluates ... ok
 test operators::test_negated_call::test_variable_minus_number_stays_subtraction ... ok
-test operators::test_operator_declarations::test_infix_operator_declared_by_its_pattern ... ok
-test operators::test_like::an_unknown_value_is_duck_typed_by_its_uses ... ok
-test operators::test_operator_declarations::test_precedence_declarations_are_refused ... ok
 test operators::test_mutating_bang::without_bang_the_value_is_unchanged ... ok
+test operators::test_mutating_bang::bang_after_a_block_or_lone_name_evaluates ... ok
+test operators::test_operator_declarations::test_infix_operator_declared_by_its_pattern ... ok
+test operators::test_operator_declarations::test_precedence_declarations_are_refused ... ok
+test operators::test_like::an_unknown_value_is_duck_typed_by_its_uses ... ok
 test operators::test_operator_declarations::test_operators_declared_later_are_known_to_the_whole_program ... ok
 test operators::test_operator_parsing::call_with_an_expression_argument_is_name_and_key ... ok
 test operators::test_operator_parsing::equals_and_colon_make_keys_with_their_own_operator ... ok
@@ -1034,20 +1039,20 @@ test operators::test_operators::test_add_with_meta ... ok
 test operators::test_operators::test_for_each ... ok
 test operators::test_operators::test_key ... ok
 test operators::test_operators::test_while_true_forever ... ok
-test operators::test_operator_declarations::test_built_in_operators_are_untouched ... ok
-test operators::test_operator_declarations::test_prefix_operator ... ok
-test numbers::test_angle::test_if_math ... ok
 test operators::test_logical_calls::test_call_operand_of_and_or ... ok
+test operators::test_operator_declarations::test_prefix_operator ... ok
+test operators::test_operator_declarations::test_built_in_operators_are_untouched ... ok
 test operators::test_logical_calls::test_node_operand_of_and_or ... ok
-test operators::test_structural_equality::a_switch_chooses_a_case_by_the_same_equality ... ok
+test numbers::test_angle::test_if_math ... ok
 test operators::test_mutating_bang::a_function_with_bang_on_its_argument_assigns_back ... ok
+test operators::test_mutating_bang::a_method_with_bang_assigns_back ... ok
+test operators::test_structural_equality::a_switch_chooses_a_case_by_the_same_equality ... ok
 test operators::test_operator_declarations::test_suffix_operator ... ok
 test operators::test_pipeline::a_pipeline_over_several_lines ... ok
-test operators::test_mutating_bang::a_method_with_bang_assigns_back ... ok
-test operators::test_structural_equality::a_text_never_equals_a_number ... ok
 test operators::test_operator_declarations::test_infix_operator ... ok
-test operators::test_structural_equality::variables_holding_structures_compare_by_value ... ok
+test operators::test_structural_equality::a_text_never_equals_a_number ... ok
 test operators::test_pipeline::a_pipeline_calls_each_stage_with_the_value ... ok
+test operators::test_structural_equality::variables_holding_structures_compare_by_value ... ok
 test operators::test_truthiness_of_objects::an_object_is_truthy ... ok
 test parser::test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order ... ok
 test parser::test_attributes::attribute_names_may_be_kebab_case ... ok
@@ -1062,19 +1067,19 @@ test parser::test_comments::test_comments2 ... ok
 test parser::test_comments::test_comments_in_html_structure ... ok
 test parser::test_comments::test_inline_comments ... ok
 test parser::test_comments::test_line_comments ... ok
-test operators::test_structural_equality::the_entry_order_of_an_object_does_not_matter ... ok
+test operators::test_tuple_comparison_warning::a_parenthesized_tuple_comparison_does_not_warn ... ok
 test parser::test_dollar_names::dollar_digit_stays_a_parameter_reference ... ok
 test parser::test_dollar_names::dollar_names_keep_their_sigil ... ok
-test operators::test_tuple_comparison_warning::a_parenthesized_tuple_comparison_does_not_warn ... ok
 test parser::test_dollar_names::dollar_names_survive_eval ... ok
+test operators::test_structural_equality::the_entry_order_of_an_object_does_not_matter ... ok
 test operators::test_structural_equality::objects_compare_by_their_entries ... ok
 test parser::test_glyph_aliases::glyphs_inside_text_stay_text ... ok
 test operators::test_structural_equality::lists_compare_element_by_element ... ok
 test operators::test_operator_parsing::test_division_type_upgrade ... ok
 test parser::test_inline_comments::test_block_comment_between_name_and_assignment ... ok
-test operators::test_structural_equality::not_equal_is_the_negation ... ok
-test parser::test_comments::test_nested_block_comments ... ok
+test parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment ... ok
 test operators::test_tuple_comparison_warning::a_tuple_compared_with_a_bare_comma_list_warns ... ok
+test operators::test_structural_equality::not_equal_is_the_negation ... ok
 test parser::test_json::test_block_node_json ... ok
 test parser::test_json::test_complex_node_json ... ok
 test parser::test_json::test_data_node_json ... ok
@@ -1090,11 +1095,11 @@ test parser::test_json::test_node_neq_json ... ok
 test parser::test_json::test_node_to_json_compact ... ok
 test parser::test_json::test_simple_values ... ok
 test parser::test_juxtaposition::test_data_mode_never_multiplies ... ok
-test parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment ... ok
-test parser::test_inline_comments::test_hash_without_space_is_still_the_index_operator ... ok
-test parser::test_inline_comments::test_hash_comment_ends_the_expression_not_the_program ... ok
-test parser::test_juxtaposition::test_ordinals_are_not_products ... ok
 test parser::test_inline_comments::test_hash_comment_after_a_statement_keeps_the_newline_separator ... ok
+test parser::test_comments::test_nested_block_comments ... ok
+test parser::test_inline_comments::test_hash_without_space_is_still_the_index_operator ... ok
+test parser::test_juxtaposition::test_ordinals_are_not_products ... ok
+test parser::test_inline_comments::test_hash_comment_ends_the_expression_not_the_program ... ok
 test parser::test_juxtaposition::test_spaced_number_and_symbol_is_still_a_list ... ok
 test parser::test_juxtaposition::test_undefined_symbol_is_the_normal_error ... ok
 test parser::test_meta::test_meta ... ok
@@ -1107,10 +1112,10 @@ test parser::test_meta_attributes::test_at_in_data_stays_text ... ok
 test parser::test_glyph_aliases::logic_glyphs_are_and_or ... ok
 test parser::test_comments::test_comments ... ok
 test parser::test_glyph_aliases::equality_glyphs_compare ... ok
-test parser::test_juxtaposition::test_julia_grouping_division ... ok
 test parser::test_juxtaposition::test_number_times_parenthesis ... ok
-test parser::test_juxtaposition::test_postfix_binds_to_the_symbol ... ok
+test parser::test_juxtaposition::test_julia_grouping_division ... ok
 test parser::test_inline_comments::test_block_comment_between_operands ... ok
+test parser::test_juxtaposition::test_postfix_binds_to_the_symbol ... ok
 test parser::test_meta_attributes::test_meta_entries_survive_eval ... ok
 test parser::test_meta_attributes::test_meta_key_in_parsed_data ... ok
 test parser::test_meta_attributes::test_glued_at_reads_meta_in_code ... ok
@@ -1119,10 +1124,10 @@ test parser::test_meta_attributes::test_counts_and_positions_skip_meta_entries .
 test parser::test_meta_attributes::test_prefix_attribute_survives_emission ... ok
 test operators::test_structural_equality::a_float_equals_the_same_exact_number ... ok
 test parser::test_newline_precedence::newline_form_is_really_evaluated - should panic ... ok
-test parser::test_newline_precedence::test_fibonacci_auto_param_newline ... ok
 test parser::test_meta_attributes::test_dot_at_reads_and_writes_meta ... ok
-test parser::test_newline_precedence::test_fibonacci_auto_typed_newline ... ok
+test parser::test_newline_precedence::test_fibonacci_auto_param_newline ... ok
 test parser::test_meta_attributes::test_keys_values_entries_skip_meta_entries ... ok
+test parser::test_newline_precedence::test_fibonacci_auto_typed_newline ... ok
 test parser::test_newline_precedence::a_method_call_starting_the_next_line_continues_the_expression ... ok
 test parser::test_meta_attributes::test_field_first_then_meta_fallback ... ok
 test parser::test_glyph_aliases::dash_glyphs_subtract ... ok
@@ -1163,15 +1168,15 @@ test parser::test_parser::test_use ... ok
 hi
 hi
 test parser::test_newline_precedence::test_fibonacci_typed_newline ... ok
+test parser::test_number_glyphs::test_number_glyphs_at_end_of_input ... ok
 a
 b
 test parser::test_one_line_statements::separated_prints_still_run ... ok
-test parser::test_number_glyphs::test_number_glyphs_at_end_of_input ... ok
-test parser::test_meta_attributes::test_meta_stays_reachable ... ok
 test parser::test_meta_attributes::test_iteration_skips_meta_entries ... ok
+test parser::test_meta_attributes::test_meta_stays_reachable ... ok
 test parser::test_number_glyphs::test_multi_digit_superscript_exponent ... ok
-test parser::test_semicolon_square::test_square_brackets_keep_all_newline_items ... ok
 test parser::test_parser_sugar::block_comment_with_hash_is_ignored ... ok
+test parser::test_semicolon_square::test_square_brackets_keep_all_newline_items ... ok
 test parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items ... ok
 test parser::test_parser_sugar::hex_word_reads_a_hexadecimal_number ... ok
 test parser::test_statement_terminators::semicolon_at_line_end_separates_statements_like_the_newline ... ok
@@ -1179,19 +1184,19 @@ test parser::test_statement_terminators::semicolon_inside_a_line_still_groups ..
 test parser::test_meta_attributes::test_meta_entries_stay_behind_the_fields ... ok
 test parser::test_statement_sequence::test_statement_sequence_with_grouped_list_in_the_middle ... ok
 test parser::test_statements_after_type::a_type_declaration_alone_is_empty ... ok
-test parser::test_parser_sugar::doc_comments_do_not_change_behaviour ... ok
 test parser::test_meta_attributes::test_meta_key_inside_a_literal_is_no_field ... ok
-test parser::test_superscript_signs::a_negative_superscript_on_a_variable ... ok
+test parser::test_parser_sugar::doc_comments_do_not_change_behaviour ... ok
 test parser::test_parser_sugar::elvis_takes_the_left_unless_it_is_falsy ... ok
+test parser::test_superscript_signs::a_negative_superscript_on_a_variable ... ok
+test parser::test_number_glyphs::test_square_and_cube_inside_arithmetic ... ok
 test parser::test_parser_sugar::backslash_at_line_end_continues_the_statement ... ok
 test parser::test_statements_after_type::variables_assigned_next_to_a_type_declaration_keep_their_values ... ok
-test parser::test_number_glyphs::test_square_and_cube_inside_arithmetic ... ok
+test parser::test_superscript_signs::a_superscript_plus_adds_to_the_exponent_chain ... ok
 test parser::test_surface_syntax::be_defines_like_colon_equals ... ok
 test parser::test_number_glyphs::test_vulgar_fractions_are_exact ... ok
-test parser::test_superscript_signs::a_superscript_plus_adds_to_the_exponent_chain ... ok
 test parser::test_symbol_hyphen::test_hyphen_between_words_stays_kebab_case ... ok
-test parser::test_parser_sugar::final_constant_and_val_bind_once_like_const ... ok
 test parser::test_superscript_signs::superscript_digits_without_sign_still_work ... ok
+test parser::test_symbol_hyphen::test_decrement_inside_a_loop_body ... ok
 test parser::test_wasp_format::test_empty_structures ... ok
 test parser::test_wasp_format::test_function_syntax ... ok
 test parser::test_wasp_format::test_list_operations ... ok
@@ -1225,48 +1230,50 @@ test parser::test_xml::test_xml_roundtrip ... ok
 test parser::test_xml::test_xml_to_json ... ok
 test parser::test_xml::test_xml_with_attributes ... ok
 test programs::test_algo_dijkstra::probe_snippets ... ignored, probe
+test parser::test_parser_sugar::final_constant_and_val_bind_once_like_const ... ok
 test parser::test_spaced_required_fields::spaced_fields_keep_the_required_mark ... ok
-test parser::test_symbol_hyphen::test_decrement_inside_a_loop_body ... ok
 test programs::test_algo_levenshtein::probe_levenshtein_snippets ... ignored, probe
 test parser::test_symbol_hyphen::test_trailing_decrement_is_not_part_of_the_name ... ok
 test parser::test_superscript_signs::a_negative_superscript_is_a_reciprocal_power ... ok
-test programs::test_algo_levenshtein::test_levenshtein ... ok
-test parser::test_surface_syntax::similarity_tolerance_is_settable ... ok
-test programs::test_algo_dijkstra::test_dijkstra_idiomatic ... ok
 test programs::test_algo_levenshtein::test_levenshtein_idiomatic ... ok
-test programs::test_algo_sieve::probe_sieve_snippets ... ignored, probe
+test parser::test_surface_syntax::similarity_tolerance_is_settable ... ok
+test programs::test_algo_levenshtein::test_levenshtein ... ok
 test parser::test_wasp_format::html_attributes_and_repeated_tags_in_data ... ok
-test programs::test_algo_dijkstra::test_dijkstra ... ok
-test programs::test_algo_sorting::probe_sorting_snippets ... ignored, probe
+test programs::test_algo_sieve::probe_sieve_snippets ... ignored, probe
+test programs::test_algo_dijkstra::test_dijkstra_idiomatic ... ok
 test parser::test_surface_syntax::unicode_operators_are_their_ascii_spelling ... ok
-test programs::test_algo_life::test_life ... ok
-test programs::test_all_samples::test_parse_all_samples ... ok
-test programs::test_algo_queens::test_queens_idiomatic ... ok
-test programs::test_algo_life::test_life_idiomatic ... ok
+test programs::test_algo_sorting::probe_sorting_snippets ... ignored, probe
+test programs::test_algo_dijkstra::test_dijkstra ... ok
 test programs::test_algo_queens::test_queens ... ok
+test programs::test_algo_queens::test_queens_idiomatic ... ok
+test programs::test_all_samples::test_parse_all_samples ... ok
+test programs::test_algo_life::test_life ... ok
+test programs::test_algo_life::test_life_idiomatic ... ok
 test programs::test_algo_sieve::test_sieve ... ok
 test programs::test_algo_sieve::test_sieve_idiomatic ... ok
 test programs::test_calculator_fixes::test_float_function_ending_in_a_loop ... ok
 test programs::test_algo_sorting::test_sorting ... ok
 test programs::test_algo_sorting::test_sorting_idiomatic ... ok
-test parser::test_surface_syntax::space_before_bracket_passes_the_list ... ok
 test programs::test_calculator_fixes::test_else_on_the_next_line ... ok
-test programs::test_calculator_fixes::test_text_comparisons ... ok
 test programs::test_json_parser_fixes::test_mixed_returns_are_nodes ... ok
+test programs::test_calculator_fixes::test_text_comparisons ... ok
+test parser::test_surface_syntax::space_before_bracket_passes_the_list ... ok
 test programs::test_calculator_fixes::test_error_returns ... ok
 test programs::test_calculator_fixes::test_run_time_math ... ok
 test programs::test_kitchensink::test_kitchensink_complex_tree ... ok
 test programs::test_kitchensink::test_kitchensink_wasmtime_execution ... ok
 test programs::test_samples::test_ackermann ... ok
-test programs::test_data_structure_fixes::test_list_comprehension ... ok
 test programs::test_data_structure_fixes::test_named_tuple_fields ... ok
+test programs::test_data_structure_fixes::test_list_comprehension ... ok
 test programs::test_json_parser_fixes::test_field_of_a_call_result ... ok
 test parser::test_surface_syntax::similarity_combines_and_takes_any_operand ... ok
-test programs::test_samples::test_comments ... ok
 test programs::test_data_structure_fixes::test_data_key_read_as_a_variable ... ok
+test programs::test_samples::test_comments ... ok
+test programs::test_samples::test_factorial ... ok
 test programs::test_samples::test_collatz ... ok
 test programs::test_samples::test_fibonacci ... ok
-test programs::test_samples::test_factorial ... ok
+test programs::test_samples::test_fizzbuzz ... ok
+test programs::test_samples::test_parse_all_samples ... ok
 Tree structure:
 └── 50
     ├── 30
@@ -1283,9 +1290,7 @@ Height:   4
 Contains 40? 1
 Contains 42? 0
 test programs::test_samples::test_binary_tree ... ok
-test programs::test_samples::test_fizzbuzz ... ok
 test programs::test_samples::test_gcd ... ok
-test programs::test_samples::test_parse_all_samples ... ok
 test programs::test_samples::test_quadratic ... ok
 14
 20
@@ -1293,24 +1298,13 @@ test programs::test_samples::test_quadratic ... ok
 1
 5
 test programs::test_samples::test_calculator ... ok
-test programs::test_samples::test_data_structures ... ok
-test programs::test_samples::test_primes ... ok
-test programs::test_samples::test_power ... ok
 test parser::test_surface_syntax::similarity_has_relative_tolerance ... ok
+test programs::test_samples::test_data_structures ... ok
+test programs::test_samples::test_power ... ok
 test programs::test_json_parser_fixes::test_text_of_a_run_time_value ... ok
-test programs::test_samples::test_sin ... ok
+test programs::test_samples::test_primes ... ok
 test programs::test_samples::test_sine ... ok
-                    
-                    
-                    
-                    
-     █              
-      █             
-    ███             
-                    
-                    
-                    
-test programs::test_samples::test_game_of_life ... ok
+test programs::test_samples::test_sin ... ok
                                                                                 
                                                                                 
                                                                                 
@@ -1355,21 +1349,32 @@ test programs::test_samples::test_mandelbrot ... ok
 test programs::test_samples::test_sum ... ok
 test scope::test_colon_body_assignment::test_if_colon_body_with_assignment ... ok
 test scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else ... ok
+                    
+                    
+                    
+                    
+     █              
+      █             
+    ███             
+                    
+                    
+                    
+test programs::test_samples::test_game_of_life ... ok
 Alice
 [95 87 92]
 test programs::test_samples::test_json_parser ... ok
-Original: [64 34 25 12 22 11 90 42 15 77]
-Sorted:   [11 12 15 22 25 34 42 64 77 90]
-Sorted 100 elements in 1ms
-test programs::test_samples::test_quicksort ... ok
 test scope::test_colon_body_assignment::test_while_colon_body_with_assignment ... ok
 test scope::test_colon_body_extent::test_colon_body_of_while_stops_at_newline ... ok
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
-test scope::test_colon_body_extent::test_colon_body_of_while_stops_at_semicolon ... ok
+Original: [64 34 25 12 22 11 90 42 15 77]
+Sorted:   [11 12 15 22 25 34 42 64 77 90]
+Sorted 100 elements in 0ms
+test programs::test_samples::test_quicksort ... ok
 test scope::test_data_scope::test_a_key_shadows_the_subtraction_of_its_parts ... ok
+test scope::test_colon_body_extent::test_colon_body_of_while_stops_at_semicolon ... ok
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -1390,8 +1395,8 @@ test scope::test_data_scope::test_a_key_shadows_the_subtraction_of_its_parts ...
 -------------------- .....::::::    ......:::::::    .....:::-------------------
 --------------------  ......::::.    ......:::::     ......::-------------------
 --------------------   ..........     ........:.      .......-------------------
----------------------    .......       .........        ....--------------------
 test scope::test_data_scope::test_other_hyphenated_names_stay_symbols ... ok
+---------------------    .......       .........        ....--------------------
 -----------------:::::     ...  ::      .......::        ..:::::----------------
 -----::::::::::::::::::       :::::       ....:::::       :---------------------
 ::::::::::::::::::::::::::::::::::::         ::::::::---------------------------
@@ -1408,21 +1413,6 @@ test scope::test_data_scope::test_other_hyphenated_names_stay_symbols ... ok
 :::::::::::::-------------------------------------------------------------------
 ::::::::::----------------------------------------------------------------------
 test programs::test_samples::test_raytracer ... ok
-test scope::test_colon_body_assignment::test_if_colon_body_with_compound_assignment ... ok
-test scope::test_colon_body_assignment::test_while_colon_body_with_compound_assignment ... ok
-Puzzle:
-5 3 . | . 7 . | . . . 
-6 . . | 1 9 5 | . . . 
-. 9 8 | . . . | . 6 . 
-------+-------+------
-8 . . | . 6 . | . . 3 
-4 . . | 8 . 3 | . . 1 
-7 . . | . 2 . | . . 6 
-------+-------+------
-. 6 . | . . . | 2 8 . 
-. . . | 4 1 9 | . . 5 
-. . . | . 8 . | . 7 9 
-
 ....................
 ...........*........
 ....................
@@ -1440,8 +1430,24 @@ Puzzle:
 ....................
 Score: 40
 test programs::test_samples::test_snake ... ok
-test scope::test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads ... ok
+test scope::test_colon_body_assignment::test_if_colon_body_with_compound_assignment ... ok
 test scope::test_eval_state::every_eval_shows_its_educate_once_note ... ok
+test scope::test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads ... ok
+test scope::test_colon_body_assignment::test_while_colon_body_with_compound_assignment ... ok
+Puzzle:
+5 3 . | . 7 . | . . . 
+6 . . | 1 9 5 | . . . 
+. 9 8 | . . . | . 6 . 
+------+-------+------
+8 . . | . 6 . | . . 3 
+4 . . | 8 . 3 | . . 1 
+7 . . | . 2 . | . . 6 
+------+-------+------
+. 6 . | . . . | 2 8 . 
+. . . | 4 1 9 | . . 5 
+. . . | . 8 . | . 7 9 
+
+test scope::test_data_scope::test_kebab_keys_are_read_back ... ok
 Solution:
 5 3 4 | 6 7 8 | 9 1 2 
 6 7 2 | 1 9 5 | 3 4 8 
@@ -1455,24 +1461,23 @@ Solution:
 2 8 7 | 4 1 9 | 6 3 5 
 3 4 5 | 2 8 6 | 1 7 9 
 test programs::test_samples::test_sudoku ... ok
-test scope::test_export_declaration::test_export_without_initializer_is_zero ... ok
-test scope::test_data_scope::test_kebab_keys_are_read_back ... ok
 test scope::test_export_declaration::test_exported_variable_can_be_assigned ... ok
 test scope::test_export_declaration::test_export_of_a_function_stays_a_function ... ok
-test scope::test_export_declaration::test_type_words_come_from_the_analyzer ... ok
-test scope::test_global_constant_words::global_with_every_constant_word ... ok
+test scope::test_export_declaration::test_export_without_initializer_is_zero ... ok
 test scope::test_export_declaration::test_export_with_type_word_keeps_the_value ... ok
+test scope::test_export_declaration::test_type_words_come_from_the_analyzer ... ok
 test scope::test_global_modifiers::test_global_with_export ... ok
+test scope::test_global_constant_words::global_with_every_constant_word ... ok
 test scope::test_eval_state::an_eval_does_not_see_the_assumptions_of_the_one_before ... ok
-test scope::test_global_modifiers::test_global_with_typed_define ... ok
 test scope::test_global_modifiers::test_global_with_type_word ... ok
 test scope::test_global_modifiers::test_global_with_modifier_words ... ok
+test scope::test_global_modifiers::test_global_with_typed_define ... ok
 test scope::test_global_modifiers::test_global_without_initializer_keeps_the_type_word_out_of_the_name ... ok
 test scope::test_global_modifiers::test_type_word_alone_is_still_a_name ... ok
 test scope::test_eval_state::a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value ... ok
-test scope::test_data_scope::test_a_key_can_refer_to_an_earlier_key ... ok
 test scope::test_global_modifiers::test_typed_global_without_initializer_is_zero ... ok
 test scope::test_globals::test_global_reassignment ... ok
+test scope::test_data_scope::test_a_key_can_refer_to_an_earlier_key ... ok
 Tree structure:
 └── 50
     ├── 30
@@ -1489,88 +1494,88 @@ Height:   4
 Contains 40? 1
 Contains 42? 0
 test scope::test_globals::test_global_int_multiple ... ok
-test scope::test_globals::test_global_int_simple ... ok
 test scope::test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type ... ok
-test scope::test_globals::test_global_with_expression ... ok
+test scope::test_globals::test_global_int_simple ... ok
+test scope::test_result_word::a_program_may_name_its_own_result ... ok
 test scope::test_undefined_variable::test_undefined_variable_compound_assignment_is_an_error_value ... ok
 test scope::test_undefined_variable::test_undefined_variable_increment_is_an_error_value ... ok
 test scope::test_undefined_variable::test_undefined_variable_use_is_an_error_value ... ok
 test scope::test_undefined_variable::test_unsupported_array_phrase_names_the_undefined_variable ... ok
 test scope::test_use_scopes::siblings_are_invisible_without_a_scope ... ok
 test scope::test_use_scopes::use_folder_in_inline_code_is_the_working_directory ... ok
-test scope::test_result_word::a_program_may_name_its_own_result ... ok
 test scope::test_global_declaration::test_global_without_initializer ... ok
-test scope::test_use_scopes::use_package_sees_every_file_below_the_package_folder ... ok
+test scope::test_globals::test_global_with_expression ... ok
 test scope::test_colon_body_assignment::test_for_colon_body_with_assignments ... ok
+test scope::test_use_scopes::use_package_sees_every_file_below_the_package_folder ... ok
 test sweeps::test_panic_sweep::test_cube_root_prefix_is_an_error_or_a_value ... ok
+test scope::test_data_scope::test_without_a_key_a_hyphenated_name_of_variables_subtracts ... ok
 test scope::test_globals::test_global_float_with_pi ... ok
 test sweeps::test_panic_sweep::test_float_function_result_in_exact_context_is_an_error ... ok
-test sweeps::test_panic_sweep::test_global_declaration_of_a_non_name_is_an_error ... ok
 test sweeps::test_panic_sweep::test_malformed_ternary_is_an_error ... ok
-test sweeps::test_panic_sweep::test_missing_argument_without_default_is_an_error ... ok
+test sweeps::test_panic_sweep::test_global_declaration_of_a_non_name_is_an_error ... ok
 test sweeps::test_panic_sweep::test_non_constant_range_bound_is_an_error ... ok
+test sweeps::test_panic_sweep::test_missing_argument_without_default_is_an_error ... ok
 test sweeps::test_panic_sweep::test_struct_field_of_an_unknown_type_is_an_error ... ok
 test sweeps::test_panic_sweep::test_update_of_a_non_variable_is_an_error ... ok
-test scope::test_data_scope::test_without_a_key_a_hyphenated_name_of_variables_subtracts ... ok
 test scope::test_variable_kind_change::a_loop_variable_may_reuse_the_name_of_a_list ... ok
 test sweeps::test_sweep_fixes::a_lone_false_is_zero ... ok
 test sweeps::test_todo::test_array_constructor ... ignored, user: size = count, byte_size gives bytes (P40)
 test sweeps::test_sweep_fixes::do_runs_an_add_to_phrase ... ok
 test sweeps::test_todo::test_array_type_generics ... ignored, todo
-test sweeps::test_panic_sweep::test_float_compound_assignment_uses_the_float_operator ... ok
 test sweeps::test_todo::test_if_then_else ... ok
-01test scope::test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type ... ok
+01test sweeps::test_panic_sweep::test_float_compound_assignment_uses_the_float_operator ... ok
 14
 20
 12
 1
 5
+test scope::test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type ... ok
 test sweeps::test_todo::test_lambda_comparison ... ok
 test scope::test_result_word::result_is_the_value_of_the_statement_before ... ok
-test sweeps::test_todo::test_lambda_simple ... ok
-test scope::test_variable_kind_change::a_variable_holds_its_last_value_of_another_kind ... ok
+test sweeps::test_todo::test_index_assign_in_loop ... ok
+test sweeps::test_todo::test_lambda_with_multiply ... ok
 test sweeps::test_todo::test_polymorphic_dispatch ... ignored, requires polymorphic function dispatch
+test sweeps::test_todo::test_lambda_simple ... ok
+test sweeps::test_todo::test_sqrt_arithmetic ... ok
+test scope::test_variable_kind_change::a_variable_holds_its_last_value_of_another_kind ... ok
+test sweeps::test_todo::test_array_length ... ok
+oktest sweeps::test_todo::test_list_index_after_puts ... ok
 3
 test sweeps::test_todo::test_print_function ... ok
-test sweeps::test_todo::test_sqrt_arithmetic ... ok
-oktest sweeps::test_todo::test_list_index_after_puts ... ok
 test sweeps::test_todo::test_type_annotated ... ok
-test sweeps::test_todo::test_index_assign_in_loop ... ok
-test sweeps::test_todo::test_array_length ... ok
-test sweeps::test_todo::test_lambda_with_multiply ... ok
-test sweeps::test_todo::test_param_reference ... ok
 test sweeps::test_todo::test_type_equivalence ... ok
-test scope::test_use_scopes::use_project_sees_every_file_below_the_project_root ... ok
-test sweeps::test_todo::test_utf8_char_indexing ... ok
 test text::test_cast_to_string::a_list_literal_as_string_is_its_text ... ok
+test sweeps::test_todo::test_utf8_char_indexing ... ok
 test text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text ... ok
+test sweeps::test_todo::test_param_reference ... ok
 test text::test_cast_to_string::an_object_literal_as_string_is_its_text ... ok
+test scope::test_use_scopes::use_project_sees_every_file_below_the_project_root ... ok
 test text::test_character_comparison::test_character_element_of_text_compares ... ok
 123test sweeps::test_sweep_fixes::a_builtin_call_statement_runs_inside_a_loop_body ... ok
-test sweeps::test_todo::test_type ... ok
 test scope::test_global_declaration::test_compound_assignment_on_a_global ... ok
+test sweeps::test_todo::test_type ... ok
 test text::test_character_comparison::test_one_character_text_as_int ... ok
 test text::test_character_comparison::test_character_variable_compares_with_character_literal ... ok
 test text::test_interpolation::an_unknown_name_in_a_hole_is_loud ... ok
-test text::test_interpolation::a_dollar_before_a_digit_or_space_is_a_dollar_sign ... ok
-test text::test_interpolation::data_keeps_dollars_as_text ... ok
 test text::test_character_comparison::test_non_digit_character_as_int_is_no_number ... ok
-test text::test_character_comparison::test_int_of_character_is_its_digit ... ok
+test text::test_interpolation::data_keeps_dollars_as_text ... ok
+test text::test_interpolation::a_dollar_before_a_digit_or_space_is_a_dollar_sign ... ok
 test text::test_character_comparison::test_ord_is_the_code_point ... ok
-test text::test_interpolation::single_quotes_stay_literal ... ok
+test text::test_character_comparison::test_int_of_character_is_its_digit ... ok
 test text::test_character_comparison::test_character_test_words ... ok
+test text::test_interpolation::single_quotes_stay_literal ... ok
 test text::test_interpolation::the_normalizer_hints_the_swift_form ... ok
 test programs::test_kitchensink::test_kitchensink_all_node_types ... ok
-test text::test_library_unicode::reverse_works_on_text_by_code_points ... ok
 test text::test_declared_text_one_character::a_declared_text_takes_a_one_character_text ... ok
+test text::test_library_unicode::reverse_works_on_text_by_code_points ... ok
+test numbers::test_law::test_law_overflow_promotion_holds_in_property_tests ... ok
 test text::test_chr::chr_is_the_inverse_of_ord ... ok
 test text::test_interpolation::holes_take_text_results_of_library_words ... ok
-test numbers::test_law::test_law_overflow_promotion_proved_by_lean ... ok
 test text::test_library_unicode::sort_still_orders_ints ... ok
-test numbers::test_law::test_law_overflow_promotion_holds_in_property_tests ... ok
+test numbers::test_law::test_law_overflow_promotion_proved_by_lean ... ok
 test text::test_interpolation::curly_dollar_holes_interpolate_bare_dollars_stay_text ... ok
-test text::test_library_unicode::sort_orders_texts ... ok
 name:Joe
+test text::test_library_unicode::sort_orders_texts ... ok
 test text::test_library_unicode::sort_orders_mixed_numbers ... ok
 test text::test_nested_list_text::a_count_takes_the_indexed_element ... ok
 test text::test_map_text::a_map_has_a_text ... ok
@@ -1579,36 +1584,36 @@ test text::test_interpolation::dollar_arguments_and_templates_keep_working ... o
 hi hi
 {a:1 b:[1 2]}
 test text::test_map_text::a_map_prints_and_is_the_value_of_print ... ok
-test text::test_interpolation::holes_take_parameters_lists_and_exact_numbers ... ok
-a 3
 AB
+a 3
+test text::test_interpolation::holes_take_parameters_lists_and_exact_numbers ... ok
 hi hi
+test text::test_print_arguments::print_joins_its_arguments_with_a_space ... ok
 test text::test_print_juxtaposed::the_joined_text_is_written ... ok
 [1 2]
 x changed to 3
 test text::test_print_juxtaposed::a_text_next_to_values_prints_joined ... ok
-test text::test_print_arguments::print_joins_its_arguments_with_a_space ... ok
 test text::test_print_type_error::print_of_a_type_error_reports_that_error ... ok
 n 3
 test text::test_print_arguments::print_of_several_arguments_is_worth_the_printed_text ... ok
-test text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal ... ok
 test text::test_print_arguments::print_of_a_braceless_call_prints_its_result ... ok
-test text::test_quote_output::test_codepoints_keep_single_quotes ... ok
-[[1 2] [3]]
-test text::test_print_lists::print_of_a_list_is_worth_the_list ... ok
 AB
 test text::test_print_arguments::print_of_a_braceless_call_is_worth_its_result ... ok
+test text::test_quote_output::test_codepoints_keep_single_quotes ... ok
+test text::test_library_unicode::sort_orders_floats ... ok
+[[1 2] [3]]
+test text::test_print_lists::print_of_a_list_is_worth_the_list ... ok
 test text::test_quote_output::test_evaluated_text_prints_with_the_canonical_quote ... ok
 test text::test_quote_output::test_serialized_text_parses_back ... ok
+test text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal ... ok
 test text::test_quote_output::test_is_macro_round_trips_text ... ok
-test text::test_interpolation::swift_holes_interpolate_any_expression ... ok
 test text::test_quote_output::test_texts_inside_lists_print_with_the_canonical_quote ... ok
-test text::test_library_unicode::sort_orders_floats ... ok
+test text::test_interpolation::swift_holes_interpolate_any_expression ... ok
 test text::test_string::test_first_char ... ok
 test text::test_string::test_interpolation ... ok
 test text::test_string::test_map ... ok
-test text::test_string::test_primitive_char ... ok
 test text::test_put_runtime_values::putf_writes_a_float_variable ... ok
+test text::test_string::test_primitive_char ... ok
 test text::test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error ... ok
 test text::test_string::test_primitive_hello ... ok
 test text::test_string::test_primitive_int ... ok
@@ -1618,8 +1623,8 @@ test text::test_string::test_string_at ... ok
 test text::test_string::test_primitive_string ... ok
 test text::test_string::test_string_basics ... ok
 test text::test_string::test_string_from ... ok
-test text::test_string::test_string_concatenation ... ok
 test text::test_constant_expression_text::a_constant_expression_converts_by_its_value ... ok
+test text::test_string::test_string_concatenation ... ok
 test text::test_string::test_primitive_float ... ok
 test text::test_string::test_string_operations ... ignored
 test text::test_string::test_string_set_at ... ok
@@ -1627,32 +1632,35 @@ test text::test_string::test_string_substring ... ok
 test text::test_string::test_string_substring_from ... ok
 test text::test_put_runtime_values::puti_writes_a_loop_variable ... ok
 test text::test_runtime_text_as_int::a_text_beyond_i64_parses_unbounded ... ok
-test text::test_nested_list_text::an_index_is_an_atom_so_a_method_applies_to_the_element ... ok
 test text::test_print_lists::print_of_a_list_writes_its_text ... ok
 test text::test_library_unicode::upper_and_lower_cover_unicode_scripts ... ok
+test text::test_nested_list_text::an_index_is_an_atom_so_a_method_applies_to_the_element ... ok
 test text::test_print_type_error::text_times_number_says_how_to_repeat_a_text ... ok
-test text::test_text_bytes::bytes_of_a_one_character_text_in_a_variable ... ok
 test text::test_text_building::appending_in_a_loop_is_linear ... ok
-test text::test_text_bytes::byte_slice_cuts_by_byte_offsets ... ok
+test text::test_text_bytes::bytes_of_a_one_character_text_in_a_variable ... ok
 test text::test_runtime_text_as_int::a_text_variable_converts_to_int ... ok
-test text::test_runtime_kind_texts::two_texts_of_run_time_kind_concatenate ... ok
+test text::test_text_bytes::byte_slice_cuts_by_byte_offsets ... ok
 test text::test_text_casts::a_double_quoted_text_as_float_is_loud ... ok
+test text::test_runtime_kind_texts::two_texts_of_run_time_kind_concatenate ... ok
 test text::test_text_casts::a_single_quoted_codepoint_still_converts ... ok
 test text::test_text_bytes::text_plus_number_stays_a_type_error ... ok
 test text::test_text_building::a_text_grown_in_place_leaves_its_earlier_value ... ok
 test text::test_text_bytes::byte_at_reads_one_byte ... ok
 test text::test_text_casts::an_int_list_variable_as_string_is_its_text ... ok
-test text::test_text_functions::a_block_with_an_if_statement_is_code_not_data ... ok
 test text::test_text_bytes::plus_equals_appends_to_a_text ... ok
+test text::test_text_functions::a_block_with_an_if_statement_is_code_not_data ... ok
 test text::test_text_functions::an_if_with_text_branches_makes_a_text_function ... ok
 test text::test_string::test_string_index ... ok
 test text::test_text_concat::text_plus_number_stays_an_error ... ok
 test text::test_text_functions::error_makes_an_error_value_of_a_text ... ok
 test text::test_text_getters::text_getters_read_texts_and_errors ... ok
 test text::test_text_concat::concatenation_takes_results_of_functions_and_library_words ... ok
-test text::test_text_bytes::plus_concatenates_texts_and_characters ... ok
-test text::test_text_repeat::text_times_float_or_text_stays_a_type_error ... ok
 test text::test_text_functions::return_from_a_statement_gives_back_the_node ... ok
+test text::test_text_repeat::text_times_float_or_text_stays_a_type_error ... ok
+test text::test_text_bytes::plus_concatenates_texts_and_characters ... ok
+test text::test_text_concat::text_variables_and_compound_assignment ... ok
+test text::test_text_repeat::n_times_text_is_the_explicit_repeat ... ok
+test text::test_text_as_float::test_text_as_float ... ok
                     
                     
                     
@@ -1663,33 +1671,30 @@ test text::test_text_functions::return_from_a_statement_gives_back_the_node ... 
                     
                     
                     
-test text::test_text_as_float::test_text_as_float ... ok
-test text::test_text_concat::text_variables_and_compound_assignment ... ok
-test text::test_text_repeat::n_times_text_is_the_explicit_repeat ... ok
 test text::test_string::test_string_index_by_variable ... ok
 test text::test_text_runtime::reverse_of_a_text_is_by_characters ... ok
-test text::test_text_getters::compiled_uniscript_converts_like_the_browser_page ... ok
-test text::test_text_runtime::the_characters_of_a_runtime_text ... ok
+test text::test_text_repeat::text_repeat_names_the_explicit_form ... ok
 test text::test_text_concat::texts_concatenate_with_plus ... ok
 test text::test_string::test_string_indices ... ok
-test text::test_text_variable_assignment::a_one_letter_text_can_be_reassigned ... ok
+test text::test_text_variable_assignment::a_one_letter_text_variable_reads_back_as_a_letter ... ok
+test text::test_text_runtime::the_characters_of_a_runtime_text ... ok
 test types::test_array_types::hints::test_bracketed_list_type_hints_the_plural_word ... ok
 test types::test_array_types::hints::test_plural_word_needs_no_hint ... ok
-test text::test_text_variable_assignment::a_one_letter_text_variable_reads_back_as_a_letter ... ok
-test text::test_text_repeat::text_repeat_names_the_explicit_form ... ok
-test text::test_text_bytes::read_loads_a_file_as_bytes ... ok
-test text::test_unicode_escape::a_unicode_escape_is_its_code_point ... ok
+test text::test_text_getters::compiled_uniscript_converts_like_the_browser_page ... ok
+test text::test_text_variable_assignment::a_one_letter_text_can_be_reassigned ... ok
 test types::test_array_types::test_bracketed_type_is_a_list_of_that_type ... ok
-test text::test_text_runtime::join_and_concatenation_take_non_ascii_characters ... ok
-test text::test_text_search::a_text_contains_a_text ... ok
+test text::test_unicode_escape::a_unicode_escape_is_its_code_point ... ok
 test text::test_text_plus_float_call::a_float_call_joins_a_text_by_its_value ... ok
-test types::test_array_types::test_plural_declarations_are_lists ... ok
+test text::test_text_bytes::read_loads_a_file_as_bytes ... ok
+test text::test_text_runtime::join_and_concatenation_take_non_ascii_characters ... ok
 test types::test_array_types::test_count_times_type_is_a_typed_array ... ok
+test types::test_array_types::test_plural_declarations_are_lists ... ok
+test types::test_array_types::test_declaration_with_count_times_type ... ok
 test types::test_cast_bugs::nonsense_casts_are_loud ... ok
 test types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data ... ok
 test types::test_constructor_vs_data::test_construction_checks_field_types ... ok
-test types::test_array_types::test_declaration_with_count_times_type ... ok
 test types::test_cast_bugs::a_cast_to_char_can_be_stored ... ok
+test text::test_text_search::a_text_contains_a_text ... ok
 test types::test_constructor_vs_data::test_construction_needs_every_required_field ... ok
 test types::test_cast_bugs::a_text_as_list_is_its_characters ... ok
 test types::test_constructor_vs_data::test_construction_rejects_an_undeclared_field ... ok
@@ -1702,23 +1707,23 @@ test types::test_data::test_node_data_type_mismatch ... ok
 test types::test_data::test_node_data_various_types ... ok
 test text::test_text_search::a_text_starts_and_ends_with_a_text ... ok
 test types::test_declaration_without_value::reading_a_declaration_without_value_is_an_error ... ok
-test text::test_trim::trim_drops_whitespace_at_both_ends ... ok
 test types::test_constructor_vs_data::test_data_is_never_validated ... ok
-Alice
-[95 87 92]
-test types::test_cast_bugs::a_one_character_text_can_be_indexed ... ok
+test text::test_trim::trim_drops_whitespace_at_both_ends ... ok
 test types::test_float_fields::test_captured_variable_set_by_a_call ... ok
+test types::test_cast_bugs::a_one_character_text_can_be_indexed ... ok
 test types::test_declaration_without_value::a_declaration_assigned_before_reading_works ... ok
 test types::test_constructor_vs_data::test_construction_is_not_data ... ok
-test types::test_array_types::test_typed_array_as_a_value ... ok
 test types::test_generic_types::test_angle_brackets_after_a_name_are_not_a_variable_lookup ... ok
+test types::test_constructor_vs_data::test_construction_reads_its_fields ... ok
+test types::test_array_types::test_typed_array_as_a_value ... ok
+test types::test_generic_types::test_type_of_a_literal_list_stays ... ok
 test types::test_generic_types::test_nested_type_applications ... ok
 test types::test_cast_bugs::a_runtime_value_as_string ... ok
-test types::test_generic_types::test_type_of_a_literal_list_stays ... ok
-test types::test_constructor_vs_data::test_construction_reads_its_fields ... ok
-test types::test_generic_types::test_angle_and_of_forms_are_the_same_type ... ok
-test types::test_person_struct::test_person_struct_roundtrip ... ok
 test types::test_float_fields::test_zero_argument_call_in_float_context ... ok
+test types::test_person_struct::test_person_struct_roundtrip ... ok
+test types::test_generic_types::test_angle_and_of_forms_are_the_same_type ... ok
+Alice
+[95 87 92]
 test types::test_float_fields::test_global_from_a_call ... ok
 test types::test_real_text::an_exact_real_as_text_is_symbolic ... ok
 test types::test_real_text::an_exact_real_joins_a_text_symbolically ... ok
@@ -1726,106 +1731,169 @@ test types::test_float_fields::test_float_conditionals ... ok
 test types::test_float_fields::test_declared_float_field_in_arithmetic ... ok
 test types::test_generic_types::test_comparisons_and_shifts_are_not_type_applications ... ok
 P a
-test numbers::test_law::test_law_float_parameters_are_tested ... ok
 test types::test_records::test_parameter_passed_a_text_by_recursion ... ok
-test types::test_iterable::for_walks_what_iterate_gives ... ok
-test types::test_records_classes::a_missing_required_field_is_an_error ... ok
-test types::test_iterable::in_searches_what_iterate_gives ... ok
+test numbers::test_law::test_law_float_parameters_are_tested ... ok
 test types::test_constructor_vs_data::test_construction_fills_defaults_and_leaves_optional_fields_out ... ok
+test types::test_records_classes::a_missing_required_field_is_an_error ... ok
 test text::test_text_repeat::text_times_int_repeats ... ok
+test types::test_iterable::for_walks_what_iterate_gives ... ok
+test types::test_iterable::in_searches_what_iterate_gives ... ok
 test text::test_text_runtime::upper_and_lower_map_latin_greek_and_cyrillic ... ok
+test types::test_records::test_optional_field_marks ... ok
 test types::test_records::test_recursive_list_function ... ok
 test types::test_records_classes::record_stays_usable_as_a_variable_name ... ok
-test types::test_records::test_optional_field_marks ... ok
-test types::test_records_classes::a_record_is_a_struct ... ok
-test types::test_records::test_returns ... ok
-test types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result ... ok
 P a
+test types::test_records_classes::a_record_is_a_struct ... ok
 test types::test_printable::print_and_interpolation_call_the_printable_operation ... ok
-test types::test_records::test_optional_field_is_empty_and_settable ... ok
-test types::test_struct_types::test_class_instance2 ... ok
+test types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result ... ok
+test types::test_records::test_returns ... ok
 test types::test_struct_types::test_class_definition ... ok
+test types::test_struct_types::test_class_instance2 ... ok
 test types::test_struct_types::test_class_instance_explicit ... ok
 test types::test_struct_types::test_class_instance_magic_roundtrip ... ok
 test types::test_struct_types::test_class_instance_raw ... ok
+test numbers::test_law::test_law_tested_with_generated_inputs ... ok
 test types::test_struct_types::test_debug_format ... ok
 test types::test_struct_types::test_magic_object_mismatch - should panic ... ok
 test types::test_struct_types::test_magic_object_roundtrip ... ok
-test types::test_struct_types::test_symbol ... ok
+test types::test_records::test_optional_field_is_empty_and_settable ... ok
 test types::test_struct_types::test_codepoint ... ok
+test types::test_struct_types::test_symbol ... ok
 test types::test_struct_types::test_text ... ok
-test numbers::test_law::test_law_tested_with_generated_inputs ... ok
 test types::test_trait_constraints::elements_that_do_not_conform_are_a_compile_error ... ok
 test types::test_struct_field_of_constructor::a_field_of_a_constructor_call ... ok
-test types::test_records_classes::an_optional_field_defaults_to_null ... ok
 test types::test_records_classes::an_enum_names_its_cases_by_index ... ok
+test types::test_printable::as_text_str_and_text_call_the_printable_operation ... ok
 test types::test_struct_field_of_constructor::a_missing_field_is_an_error_value ... ok
 test types::test_records_classes::a_class_has_untyped_fields ... ok
-test types::test_printable::as_text_str_and_text_call_the_printable_operation ... ok
 test types::test_struct_field_of_constructor::a_field_in_arithmetic ... ok
+test types::test_records_classes::an_optional_field_defaults_to_null ... ok
 test types::test_traits::test_a_builtin_trait_cannot_be_redeclared ... ok
-test types::test_struct_field_of_constructor::a_field_of_a_constructed_struct_variable ... ok
-test types::test_traits::test_a_compare_with_mismatched_types_is_no_conformance ... ok
 test types::test_trait_default_methods::a_type_overrides_the_default_method ... ok
-test types::test_traits::test_a_type_without_the_operation_of_a_declared_trait ... ok
+test types::test_traits::test_a_compare_with_mismatched_types_is_no_conformance ... ok
 test types::test_trait_default_methods::a_type_with_the_required_operations_conforms ... ok
+test types::test_traits::test_a_type_without_the_operation_of_a_declared_trait ... ok
+test types::test_struct_field_of_constructor::a_field_of_a_constructed_struct_variable ... ok
 test types::test_trait_runtime_dispatch::a_variable_reassigned_a_value_of_run_time_type_dispatches_at_run_time ... ok
 test types::test_trait_runtime_dispatch::a_loop_over_mixed_instances_dispatches_at_run_time ... ok
+test types::test_spaced_construction::test_field_of_a_declared_type_reads_at_run_time ... ok
 test types::test_traits::test_a_claim_of_a_declared_trait_is_checked ... ok
 test types::test_spaced_construction::test_spaced_construction_of_a_declared_type ... ok
-test types::test_spaced_construction::test_field_of_a_declared_type_reads_at_run_time ... ok
 test types::test_traits::test_an_explicit_conformance_claim_needs_the_operation ... ok
 test types::test_spaced_construction::test_entry_named_like_a_variable_keeps_its_name ... ok
-test types::test_trait_runtime_dispatch::an_element_of_a_mixed_list_dispatches_at_run_time ... ok
 test types::test_traits::test_instances_are_equatable_by_their_fields ... ok
+test types::test_traits::test_a_user_type_orders_with_less_than ... ok
 test types::test_traits::test_ordering_a_type_without_compare_is_a_compile_error ... ok
 test types::test_traits::test_sorting_a_type_without_compare_names_the_trait_and_the_fix ... ok
+test types::test_trait_runtime_dispatch::an_element_of_a_mixed_list_dispatches_at_run_time ... ok
 test types::test_traits::test_mixed_kinds_stay_not_comparable ... ok
-test types::test_traits::test_a_user_type_orders_with_less_than ... ok
 test types::test_traits::test_conformance_is_a_type_test ... ok
-test types::test_traits::test_builtin_kinds_stay_comparable ... ok
+test types::test_trait_constraints::a_list_annotation_reads_both_ways ... ok
 test types::test_type_name_matching::test_a_declared_class_types_its_noun ... ok
 test types::test_traits::test_a_user_type_sorts_through_its_compare ... ok
-test types::test_trait_constraints::a_list_annotation_reads_both_ways ... ok
+test types::test_traits::test_builtin_kinds_stay_comparable ... ok
 test types::test_traits::test_conformance_to_a_declared_trait_is_a_type_test ... ok
+test types::test_trait_default_methods::a_conforming_type_gets_the_default_method ... ok
+test types::test_type_name_matching::test_an_unknown_noun_is_an_untyped_name ... ok
 test types::test_type_name_matching::test_phrases_differing_only_by_unknown_nouns_are_a_redefinition ... ok
 test types::test_type_name_matching::test_a_multi_word_noun_is_named_and_typed_by_its_head ... ok
-test types::test_type_name_matching::test_an_unknown_noun_is_an_untyped_name ... ok
-test types::test_trait_default_methods::a_conforming_type_gets_the_default_method ... ok
-test types::test_traits::test_a_user_type_overrides_equality_with_equals ... ok
 test types::test_traits::test_a_declared_trait_dispatches_by_type ... ok
-test types::test_trait_constraints::a_constrained_list_parameter_takes_conforming_elements ... ok
-test types::test_tuple_values::a_tuple_with_a_variable_is_assigned_whole ... ok
+test types::test_traits::test_a_user_type_overrides_equality_with_equals ... ok
 test types::test_type_of::test_type_symbol ... ok
 test types::test_type_of::test_type_inside_a_function_body ... ok
+test types::test_trait_constraints::a_constrained_list_parameter_takes_conforming_elements ... ok
 test types::test_type_of::test_type_typed_variable ... ok
 test types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is ... ok
-Hello main.wasptest types::test_type_test_is_only::is_tests_types ... ok
-test types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test ... ok
+test types::test_tuple_values::a_tuple_with_a_variable_is_assigned_whole ... ok
+test types::test_type_test_is_only::is_tests_types ... ok
 test types::test_type_name_matching::test_lone_type_word_parameter_is_it ... ok
 test types::test_traits::test_min_and_max_of_a_user_type ... ok
-test types::test_traits::test_two_user_types_each_have_their_own_compare ... ok
+test types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test ... ok
 test types::test_type_name_matching::test_type_word_is_the_parameter_name ... ok
 test types::test_type_name_matching::test_type_then_name_parameter ... ok
 test types::test_type_tests::test_pi_is_real_and_a_number ... ok
+test types::test_traits::test_two_user_types_each_have_their_own_compare ... ok
 test types::test_type_tests::test_articles_are_optional ... ok
 test types::test_trait_equals_membership::membership_uses_the_equals_override ... ok
-test types::test_type_of_real_variable::a_variable_holding_pi_is_real ... ok
+test types::test_type_upgrading::test_float_plus_int_type_upgrading ... ok
 test types::test_type_upgrading::test_int_plus_pi_type_upgrading ... ok
 test types::test_type_word_user_function::a_clash_is_an_error_not_a_warning ... ok
-test types::test_type_upgrading::test_float_plus_int_type_upgrading ... ok
+test types::test_type_of_real_variable::a_variable_holding_pi_is_real ... ok
 test types::test_type_word_user_function::defining_a_function_named_like_a_type_word_is_an_error ... ok
 test types::test_type_upgrading::test_global_with_float ... ok
 test types::test_type_name_matching::test_prepositions_separate_parameter_slots ... ok
-test types::test_type_word_user_function::the_type_word_still_casts_without_a_definition ... ok
-test types::test_type_tests::test_a_variable_on_the_right_stays_equality ... ok
 test types::test_type_tests::test_type_of_is_type ... ok
-test types::test_type_upgrading::test_global_with_reference ... ok
+test types::test_type_word_user_function::the_type_word_still_casts_without_a_definition ... ok
 test types::test_type_tests::test_list_type_tests ... ok
-test types::test_typed_arrays::a_typed_list_beyond_an_array_index_is_out_of_memory ... ok
+test types::test_type_upgrading::test_global_with_reference ... ok
 test types::test_tuple_values::tuples_compare_element_by_element ... ok
+test types::test_typed_arrays::a_typed_list_beyond_an_array_index_is_out_of_memory ... ok
 test types::test_typed_arrays::a_typed_list_read_before_its_assignment_is_empty ... ok
+test types::test_type_tests::test_a_variable_on_the_right_stays_equality ... ok
+test types::test_typed_arrays::test_typed_array_assignment_past_the_end_is_an_error ... ok
 test types::test_type_words::test_type_constructor_words ... ok
+Hello main.wasptest types::test_type_name_matching::test_to_phrase_with_a_type_word ... ok
+test types::test_types::test_bad_type ... ok
+test types::test_type_word_user_function::the_number_dot_form_calls_a_user_function ... ok
+test types::test_typed_arrays::a_type_word_subscript_is_a_zero_filled_list_anywhere ... ok
+test types::test_types::test_deep_type ... ok
+test types::test_type_word_user_function::a_function_with_another_name_is_no_clash ... ok
+test types::test_types::test_emit_cast_tuple ... ignored, tuple comparison with cast - complex
+test types::test_types::test_empty_typed_functions ... ok
+test types::test_types::test_function_argument_cast ... ignored, soon
+test types::test_type_tests::test_as_declaration ... ok
+test types::test_types::test_generics ... ignored
+test types::test_typed_arrays::test_typed_array_declaration_with_count_first ... ok
+test types::test_types::test_polymorphism ... ok
+test types::test_types::test_polymorphism2 ... ok
+test types::test_types::test_go_types ... ok
+test types::test_types::test_return_types ... ignored
+test types::test_types::test_type_confusion ... ok
+test types::test_types::test_type_node ... ok
+test types::test_types::test_type_registry ... ok
+test types::test_types::test_type_registry_from_node ... ok
+test types::test_types::test_type_synonyms ... ok
+test types::test_types::test_typed_functions ... ok
+test types::test_types::test_types ... ok
+test types::test_types::test_types_simple ... ok
+test types::test_types::test_types_simple2 ... ok
+test types::test_typed_arrays::test_typed_array_declaration_with_subscript ... ok
+test types::test_types::test_constructor_cast ... ok
+test types::test_types_scope::test_kebab_key_that_is_also_subtraction_warns ... ok
+test types::test_types_scope::test_data_key_is_a_scope ... ok
+test types::test_types_scope::test_type_of_list_names_its_element_type ... ok
+test types::test_type_tests::test_scalar_type_tests ... ok
+test types::test_type_words::test_type_first_parameter ... ok
+test types::test_typed_arrays::test_typed_array_of_other_types ... ok
+test wasm::test_compile_only::compile_command_emits_the_same_struct_module_as_eval ... ok
+test types::test_types_scope::test_type_of_mixed_list_is_plain_list ... ok
+test types::test_types::test_user_type_wasm_emission ... ok
+test wasm::test_emitter::test_optimizer_graph_generation ... ok
+test types::test_type_upgrading::test_float_operations ... ok
+test wasm::test_gc_name_registry::struct_types_of_many_engines_share_the_name_cache ... ok
+test wasm::test_emitter::test_tools_available ... ok
+test wasm::test_gc_struct::test_class_instance_raw ... ok
+test wasm::test_gc_struct::test_gc_object_index_access ... ok
+test wasm::test_gc_struct::test_gc_struct_macro ... ok
+test wasm::test_gc_struct::test_raw_person_struct ... ok
+test wasm::test_name_subsection_order::name_subsections_ascend_in_raw_struct_modules ... ok
+test wasm::test_name_subsection_order::name_subsections_ascend_in_compiled_programs ... ok
+test types::test_types_scope::test_plural_type_word_denotes_a_list ... ok
+test wasm::test_read_bytes_plain_result::a_main_without_a_result_is_empty ... ok
+test wasm::test_read_bytes_plain_result::a_null_result_is_empty ... ok
+test wasm::test_read_bytes_plain_result::a_plain_f64_result_is_a_float ... ok
+test wasm::test_read_bytes_plain_result::a_plain_i32_result_is_an_int ... ok
+test wasm::test_read_bytes_plain_result::a_plain_i64_result_is_an_int ... ok
+test wasm::test_optimizer_extended_const::optimizer_keeps_extended_constant_expressions ... ok
+test wasm::test_wasm::test_all_wasm ... ignored, NEVER TEST ALL again ;) each #test individually! (todo possible in wasm?)
+test wasm::test_wasm::test_arguments ... ignored
+test wasm::test_wasm::test_array_indices_wasm ... ignored
+test wasm::test_wasm::test_assert ... ignored
+test wasm::test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic ... ok
+test wasm::test_wasm::test_canvas ... ignored
+test wasm::test_wasm::test_comparison_id ... ignored, user: no id/square builtins
+test wasm::test_wasm::test_comparison_id_precedence ... ignored, user: no id/square builtins
+test wasm::test_compile_only::compile_command_writes_wasm_without_running ... ok
                                                                                 
                                                                                 
                                                                                 
@@ -1840,6 +1908,7 @@ test types::test_type_words::test_type_constructor_words ... ok
                                      -:                                         
                                    .@@@@.                                       
                                    .@@@@.      .                                
+test types::test_types::test_auto_type ... ok
                             .-@.:@@@@@@@@@@......                               
                            ..+@@@@@@@@@@@@@@@@@.                                
                .           .@@@@@@@@@@@@@@@@@@@. .                              
@@ -1866,88 +1935,24 @@ test types::test_type_words::test_type_constructor_words ... ok
                                                                                 
                                                                                 
                                                                                 
-test types::test_typed_arrays::test_typed_array_assignment_past_the_end_is_an_error ... ok
-test types::test_type_name_matching::test_to_phrase_with_a_type_word ... ok
-test types::test_types::test_bad_type ... ok
-test types::test_typed_arrays::a_type_word_subscript_is_a_zero_filled_list_anywhere ... ok
-test types::test_type_word_user_function::the_number_dot_form_calls_a_user_function ... ok
-test types::test_types::test_deep_type ... ok
-test types::test_type_tests::test_as_declaration ... ok
-test types::test_types::test_emit_cast_tuple ... ignored, tuple comparison with cast - complex
-test types::test_types::test_empty_typed_functions ... ok
-test types::test_types::test_function_argument_cast ... ignored, soon
-test types::test_type_word_user_function::a_function_with_another_name_is_no_clash ... ok
-test types::test_types::test_generics ... ignored
-test types::test_types::test_go_types ... ok
-test types::test_types::test_polymorphism ... ok
-test types::test_types::test_polymorphism2 ... ok
-test types::test_typed_arrays::test_typed_array_declaration_with_subscript ... ok
-test types::test_types::test_return_types ... ignored
-test types::test_types::test_type_confusion ... ok
-test types::test_types::test_type_node ... ok
-test types::test_types::test_type_registry ... ok
-test types::test_types::test_type_registry_from_node ... ok
-test types::test_types::test_type_synonyms ... ok
-test types::test_types::test_typed_functions ... ok
-test types::test_types::test_types ... ok
-test types::test_types::test_types_simple ... ok
-test types::test_types::test_types_simple2 ... ok
-test types::test_typed_arrays::test_typed_array_declaration_with_count_first ... ok
-test types::test_types::test_constructor_cast ... ok
-test types::test_types_scope::test_kebab_key_that_is_also_subtraction_warns ... ok
-test types::test_types_scope::test_data_key_is_a_scope ... ok
-test types::test_type_upgrading::test_float_operations ... ok
-test types::test_type_words::test_type_first_parameter ... ok
-test wasm::test_compile_only::compile_command_emits_the_same_struct_module_as_eval ... ok
-test types::test_types_scope::test_type_of_list_names_its_element_type ... ok
-test types::test_types_scope::test_type_of_mixed_list_is_plain_list ... ok
-test types::test_typed_arrays::test_typed_array_of_other_types ... ok
-test types::test_types::test_user_type_wasm_emission ... ok
-test wasm::test_emitter::test_optimizer_graph_generation ... ok
-test wasm::test_emitter::test_tools_available ... ok
-test wasm::test_gc_name_registry::struct_types_of_many_engines_share_the_name_cache ... ok
-test wasm::test_gc_struct::test_class_instance_raw ... ok
-test wasm::test_gc_struct::test_gc_object_index_access ... ok
-test wasm::test_gc_struct::test_gc_struct_macro ... ok
-test wasm::test_gc_struct::test_raw_person_struct ... ok
-test types::test_type_tests::test_scalar_type_tests ... ok
-test wasm::test_name_subsection_order::name_subsections_ascend_in_raw_struct_modules ... ok
-test types::test_types_scope::test_plural_type_word_denotes_a_list ... ok
-test wasm::test_name_subsection_order::name_subsections_ascend_in_compiled_programs ... ok
-test wasm::test_read_bytes_plain_result::a_main_without_a_result_is_empty ... ok
-test wasm::test_read_bytes_plain_result::a_null_result_is_empty ... ok
-test wasm::test_read_bytes_plain_result::a_plain_f64_result_is_a_float ... ok
-test wasm::test_read_bytes_plain_result::a_plain_i32_result_is_an_int ... ok
-test wasm::test_read_bytes_plain_result::a_plain_i64_result_is_an_int ... ok
-test wasm::test_optimizer_extended_const::optimizer_keeps_extended_constant_expressions ... ok
-test wasm::test_wasm::test_all_wasm ... ignored, NEVER TEST ALL again ;) each #test individually! (todo possible in wasm?)
-test wasm::test_wasm::test_arguments ... ignored
-test wasm::test_wasm::test_array_indices_wasm ... ignored
-test wasm::test_wasm::test_assert ... ignored
-test wasm::test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic ... ok
-test wasm::test_wasm::test_canvas ... ignored
-test wasm::test_wasm::test_comparison_id ... ignored, user: no id/square builtins
-test wasm::test_wasm::test_comparison_id_precedence ... ignored, user: no id/square builtins
-test types::test_types::test_auto_type ... ok
-test wasm::test_compile_only::compile_command_writes_wasm_without_running ... ok
 test wasm::test_wasm::test_const_return ... ok
 test wasm::test_wasm::test_custom_operators ... ignored
 test wasm::test_wasm::test_dom ... ok
 test wasm::test_wasm::test_dom_property ... ignored
-test types::test_types::test_polymorphism3 ... ok
+test types::test_types::test_cast_as ... ok
 test wasm::test_wasm::test_emitter ... ok
+test types::test_types::test_polymorphism3 ... ok
 test wasm::test_wasm::test_auto_smarty ... ok
-test wasm::test_emitter::test_compact_int ... ok
 test wasm::test_wasm::test_for_loops ... ignored
 test wasm::test_wasm::test_get_element_by_id ... ignored
-test types::test_types::test_cast_as ... ok
-test wasm::test_emitter::test_compact_empty ... ok
+test wasm::test_emitter::test_compact_int ... ok
+test wasm::test_optimizer_exceptions::optimized_try_still_catches ... ok
 test wasm::test_wasm::test_host_download ... ignored
 test wasm::test_wasm::test_host_integration ... ignored
-test wasm::test_optimizer_exceptions::optimized_try_still_catches ... ok
+test wasm::test_emitter::test_compact_empty ... ok
 test wasm::test_wasm::test_import_wasm ... ignored
-test wasm::test_wasm::test_get_local ... ok
 test types::test_types::test_auto_type_nan ... ok
+test wasm::test_wasm::test_get_local ... ok
 test wasm::test_wasm::test_logarithm ... ok
 test wasm::test_wasm::test_logarithm2 ... ignored
 test wasm::test_emitter::test_compact_float ... ok
@@ -1975,37 +1980,61 @@ test wasm::test_wasm::test_recent_random_bugs ... ignored
 test wasm::test_wasm::test_root ... ok
 test wasm::test_wasm::test_root_float ... ok
 test wasm::test_wasm::test_emit_basics ... ok
-test wasm::test_wasm::test_range ... ok
+test types::test_traits::test_trait_synonyms_declare_a_trait ... ok
 test wasm::test_wasm::test_sinus ... ignored
 test wasm::test_wasm::test_sinus2 ... ignored
-test types::test_traits::test_trait_synonyms_declare_a_trait ... ok
-test wasm::test_wasm::test_comparison_primitives ... ok
+test wasm::test_wasm::test_range ... ok
 test wasm::test_wasm::test_is ... ok
+test wasm::test_wasm::test_comparison_primitives ... ok
 test wasm::test_wasm::test_square_precedence ... ok
 test wasm::test_wasm::test_squares ... ignored, user: no id/square builtins
 test wasm::test_wasm::test_round_floor_ceiling ... ok
 test wasm::test_wasm::test_todo_browser ... ok
 test wasm::test_wasm::test_wasm_function_calls ... ignored, user: no id/square builtins
-test wasm::test_wasm::test_string_concat_wasm ... ok
 test types::test_types::test_emit_cast ... ok
-test wasm::test_wasm::test_wasm_if ... ok
+test wasm::test_wasm::test_string_concat_wasm ... ok
 test wasm::test_wasm::test_globals ... ok
-Original: [64 34 25 12 22 11 90 42 15 77]
-Sorted:   [11 12 15 22 25 34 42 64 77 90]
-Sorted 100 elements in 1ms
+test wasm::test_wasm::test_wasm_if ... ok
 test wasm::test_wasm::test_wasm_increment ... ok
 test wasm::test_wasm::test_self_modifying ... ok
 test wasm::test_wasm::test_object_properties_wasm ... ok
 test wasm::test_wasm::test_square ... ok
-test wasm::test_wasm::test_smart_return_harder ... ok
 test wasm::test_wasm::test_wasm_logic_on_objects ... ok
+test wasm::test_wasm::test_smart_return_harder ... ok
 test wasm::test_wasm::test_wasm_mutable_global ... ok
+Original: [64 34 25 12 22 11 90 42 15 77]
+Sorted:   [11 12 15 22 25 34 42 64 77 90]
+Sorted 100 elements in 1ms
+test numbers::test_law::test_law_proved_by_lean has been running for over 60 seconds
 test wasm::test_wasm::test_norm2 ... ok
 test wasm::test_wasm::test_wasm_mutable_global_imports ... ignored
 test wasm::test_wasm::test_wasm_runtime_extension ... ignored
 test wasm::test_wasm::test_wasm_stuff ... ignored, user: no id/square builtins
-test numbers::test_law::test_law_proved_by_lean has been running for over 60 seconds
 test wasm::test_wasm::test_wasm_logic_primitives ... ok
+test wasm::test_wasm::test_wasm_logic_unary ... ok
+test wasm::test_wasm::test_wasm_typed_globals ... ok
+test wasm::test_wasm::test_wasm_logic_unary_variables ... ok
+test wasm::test_wasm::test_wasm_while ... ok
+test wasm::test_wasm::test_wasm_ternary ... ok
+test wasm::test_wasm_emitter::test_emit_gc_types ... ok
+test wasm::test_wasm::test_wasm_mutable_global2 ... ok
+test wasm::test_wasm_emitter::test_emit_for_node_tree_shaking ... ok
+test wasm::test_wasm_emitter::test_node_kind_enum_abi ... ok
+test wasm::test_wasm_emitter::test_function_usage_tracking ... ok
+test wasm::test_wasm_emitter::test_generate_wasm ... ok
+test wasm::test_wasm_names_order::name_subsections_and_maps_are_in_order ... ok
+test wasm::test_wasm_reader::test_create_wasm_gc_nodes_from_host_concept ... ok
+test wasm::test_wasm_reader::test_node_serialization_workflow_design ... ok
+test wasm::test_wasm_reader::test_wasm_gc_node_reading_concept ... ok
+test wasm::test_wast::test_parse ... ignored
+test wasm::test_wast::test_wast ... ignored
+test wasm::test_wit::test_timeout_protection ... ok
+test wasm::test_wit::test_wit_parse ... ok
+test wasm::test_wit_types::wit_struct_is_a_plain_word ... ok
+test wasm::test_wit_types::wit_type_arguments_close_at_the_first_angle_bracket ... ok
+test wasm::test_wasm_emitter::test_wasm_roundtrip_via_is ... ok
+test wasm::wasm_optimizer_test::test_executable_tree_shaking ... ok
+test wasm::wasm_optimizer_test::test_no_optimization ... ok
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -2023,12 +2052,14 @@ test wasm::test_wasm::test_wasm_logic_primitives ... ok
 -----------------------.::::::-----..:::::::::-----..:::::----------------------
 ----------------------.:::::::::--....:::::::::-- ...::::::---------------------
 ---------------------..:::::::::: ....::::::::::  ....::::::--------------------
+test wasm::wasm_optimizer_test::test_tools_availability ... ok
 -------------------- ..:::::::::: ....::::::::::  ....:::::::-------------------
 --------------------...:::::::::: .....:::::::::   ....::::::-------------------
 --------------------....::::::::   .....:::::::::  .....:::::-------------------
 -------------------- ....:::::::   ......::::::::   .....::::-------------------
 -------------------- .....::::::    ......:::::::    .....:::-------------------
 --------------------  ......::::.    ......:::::     ......::-------------------
+test wasm::wasm_optimizer_test::test_library_optimization ... ok
 --------------------   ..........     ........:.      .......-------------------
 ---------------------    .......       .........        ....--------------------
 -----------------:::::     ...  ::      .......::        ..:::::----------------
@@ -2044,45 +2075,21 @@ test wasm::test_wasm::test_wasm_logic_primitives ... ok
 :::::::::::::::::::::::---------------------------------------------------------
 ::::::::::::::::::::------------------------------------------------------------
 :::::::::::::::::---------------------------------------------------------------
-test wasm::test_wasm::test_wasm_logic_unary ... ok
 :::::::::::::-------------------------------------------------------------------
 ::::::::::----------------------------------------------------------------------
-test wasm::test_wasm::test_wasm_typed_globals ... ok
-test wasm::test_wasm::test_wasm_logic_unary_variables ... ok
-test wasm::test_wasm::test_wasm_while ... ok
-test wasm::test_wasm::test_wasm_ternary ... ok
-test wasm::test_wasm_emitter::test_emit_gc_types ... ok
-test wasm::test_wasm_emitter::test_function_usage_tracking ... ok
-test wasm::test_wasm_emitter::test_emit_for_node_tree_shaking ... ok
-test wasm::test_wasm_emitter::test_node_kind_enum_abi ... ok
-test wasm::test_wasm::test_wasm_mutable_global2 ... ok
-test wasm::test_wasm_emitter::test_wasm_roundtrip_via_is ... ok
-test wasm::test_wasm_names_order::name_subsections_and_maps_are_in_order ... ok
-test wasm::test_wasm_reader::test_create_wasm_gc_nodes_from_host_concept ... ok
-test wasm::test_wasm_reader::test_node_serialization_workflow_design ... ok
-test wasm::test_wasm_reader::test_wasm_gc_node_reading_concept ... ok
-test wasm::test_wast::test_parse ... ignored
-test wasm::test_wast::test_wast ... ignored
-test wasm::test_wit::test_timeout_protection ... ok
-test wasm::test_wit::test_wit_parse ... ok
-test wasm::test_wit_types::wit_struct_is_a_plain_word ... ok
-test wasm::test_wit_types::wit_type_arguments_close_at_the_first_angle_bracket ... ok
-test wasm::test_wasm_emitter::test_generate_wasm ... ok
-test wasm::wasm_optimizer_test::test_library_optimization ... ok
-test wasm::wasm_optimizer_test::test_no_optimization ... ok
-test wasm::wasm_optimizer_test::test_tools_availability ... ok
-test wasm::wasm_optimizer_test::test_executable_tree_shaking ... ok
 test wasm::test_wasm::test_wasm_logic_combined ... ok
 test wasm::test_wasm::test_wasm_logic_negated ... ok
 test wasm::test_wasm::test_smart_return ... ok
 test wasm::test_wasm_emitter::test_wasm_roundtrip ... ok
 test web::test_uniscript::an_unknown_entity_is_an_error ... ok
+test wasm::test_wasm::test_float_operators ... ok
 test wasm::test_wasm::test_wasm_function_definiton ... ok
 test wasm::test_wasm::test_comparison_math ... ok
-test wasm::test_wasm::test_float_operators ... ok
 test wasm::test_wasm::test_wasm_variables0 ... ok
 test wasm::test_wasm::test_wasm_while2 ... ok
 test wasm::test_wasm::test_norm ... ok
+test web::test_uniscript::spelling_back_round_trips ... ok
+test wasm::test_wasm::test_wasm_logic ... ok
 ....................
 ...........*........
 ....................
@@ -2099,8 +2106,6 @@ test wasm::test_wasm::test_norm ... ok
 ....................
 ....................
 Score: 40
-test web::test_uniscript::spelling_back_round_trips ... ok
-test wasm::test_wasm::test_wasm_logic ... ok
 test web::test_uniscript::groups_join_hieroglyphs_and_compose_ideographs ... ok
 test web::test_web::test_canvas ... ignored
 test web::test_web::test_dom ... ignored
@@ -2110,13 +2115,13 @@ test web::test_web::test_html_wasp ... ok
 test web::test_web::test_inner_html ... ignored, later
 test web::test_web::test_js ... ignored
 test web::test_uniscript::the_marker_is_escaped_by_single_character_entities ... ok
-test web::test_web_playground::a_trap_in_the_page_names_the_runtime_error ... ok
-test web::test_web_playground::a_tree_from_the_page_reads_like_from_gc_object ... ok
 test web::test_web_playground::a_returned_value_has_its_own_kind_on_every_platform ... ok
+test web::test_web_playground::a_tree_from_the_page_reads_like_from_gc_object ... ok
+test web::test_web_playground::a_trap_in_the_page_names_the_runtime_error ... ok
 test web::test_web_playground::an_acknowledged_warning_is_silent_and_the_value_stays ... ok
-test wasm::test_wasm::test_math_operators ... ok
-test welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once ... ok
 test web::test_uniscript::greek_is_transliterated_phonetically ... ok
+test welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once ... ok
+test wasm::test_wasm::test_math_operators ... ok
 test web::test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge ... ok
 test web::test_uniscript::use_strict_makes_uniscript_warnings_errors ... ok
 test welcoming::test_error_positions::a_rebuilt_node_reports_the_position_of_its_parts ... ok
@@ -2124,6 +2129,25 @@ test welcoming::test_error_positions::an_error_found_while_emitting_names_its_st
 test welcoming::test_error_positions::an_unclosed_group_names_where_it_opened ... ok
 test welcoming::test_error_positions::an_unknown_method_names_its_line ... ok
 test welcoming::test_error_positions::an_unterminated_text_names_where_it_opened ... ok
+test welcoming::test_c_style::test_if_parenthesized_condition_then_statement ... ok
+test welcoming::test_footguns::test_and_or_ternary_is_linted ... ok
+test welcoming::test_footguns::test_addition_is_associative_by_default ... ok
+test welcoming::test_footguns::test_approximation_is_marked ... ok
+test welcoming::test_c_style::test_if_assigning_a_float ... ok
+test welcoming::test_footguns::test_as_float_converts_exact_values ... ok
+test welcoming::test_footguns::test_booleans_are_not_numbers ... ok
+test web::test_web_playground::evaluate_reports_the_value_the_cli_prints ... ok
+test welcoming::test_footguns::test_braceless_call_as_operand ... ok
+test welcoming::test_c_style::test_c_style_definition ... ok
+test welcoming::test_footguns::test_braceless_call_in_argument_is_ambiguous ... ok
+test welcoming::test_footguns::test_braceless_call_takes_whole_argument ... ok
+test welcoming::test_footguns::test_calendar_day_is_not_24_hours ... ok
+test welcoming::test_footguns::test_calendar_overflow_is_explicit ... ok
+test welcoming::test_footguns::test_case_mapping_is_locale_independent ... ok
+test welcoming::test_footguns::test_chained_comparison ... ok
+test welcoming::test_footguns::test_braceless_recursive_call_takes_identifier_argument ... ok
+test welcoming::test_footguns::test_character_indexing_is_unicode_safe ... ok
+test web::test_uniscript::unicode_spells_back_as_uniscript ... ok
 Puzzle:
 5 3 . | . 7 . | . . . 
 6 . . | 1 9 5 | . . . 
@@ -2137,10 +2161,6 @@ Puzzle:
 . . . | 4 1 9 | . . 5 
 . . . | . 8 . | . 7 9 
 
-test welcoming::test_c_style::test_if_parenthesized_condition_then_statement ... ok
-test welcoming::test_footguns::test_and_or_ternary_is_linted ... ok
-test welcoming::test_c_style::test_if_assigning_a_float ... ok
-test welcoming::test_footguns::test_approximation_is_marked ... ok
 Solution:
 5 3 4 | 6 7 8 | 9 1 2 
 6 7 2 | 1 9 5 | 3 4 8 
@@ -2153,172 +2173,157 @@ Solution:
 9 6 1 | 5 3 7 | 2 8 4 
 2 8 7 | 4 1 9 | 6 3 5 
 3 4 5 | 2 8 6 | 1 7 9 
-test web::test_web_playground::evaluate_reports_the_value_the_cli_prints ... ok
-test welcoming::test_footguns::test_as_float_converts_exact_values ... ok
-test welcoming::test_footguns::test_booleans_are_not_numbers ... ok
-test welcoming::test_footguns::test_addition_is_associative_by_default ... ok
-test welcoming::test_footguns::test_braceless_call_as_operand ... ok
-test welcoming::test_c_style::test_c_style_definition ... ok
-test welcoming::test_footguns::test_braceless_call_takes_whole_argument ... ok
-test welcoming::test_footguns::test_braceless_call_in_argument_is_ambiguous ... ok
-test welcoming::test_footguns::test_calendar_day_is_not_24_hours ... ok
-test welcoming::test_footguns::test_calendar_overflow_is_explicit ... ok
-test welcoming::test_footguns::test_case_mapping_is_locale_independent ... ok
-test welcoming::test_footguns::test_chained_comparison ... ok
-test welcoming::test_footguns::test_character_indexing_is_unicode_safe ... ok
-test welcoming::test_footguns::test_braceless_recursive_call_takes_identifier_argument ... ok
-test web::test_uniscript::unicode_spells_back_as_uniscript ... ok
 test welcoming::test_footguns::test_compiler_failures_are_error_values ... ok
 test web::test_uniscript::full_blocks_keep_their_spaces ... ok
 test welcoming::test_footguns::test_as_converts_the_whole_expression ... ok
 test welcoming::test_footguns::test_cosine_of_pi ... ok
-test welcoming::test_footguns::test_closures_in_loop_capture_each_iteration ... ok
+test welcoming::test_footguns::test_braceless_argument_extent_is_consistent ... ok
 test welcoming::test_footguns::test_cube_roots_are_exact ... ok
 test welcoming::test_footguns::test_const_is_single_assignment ... ok
 test welcoming::test_footguns::test_data_keeps_number_literals ... ok
 test welcoming::test_footguns::test_date_and_time_types_are_distinct ... ok
-test welcoming::test_footguns::test_braceless_argument_extent_is_consistent ... ok
+test welcoming::test_footguns::test_closures_in_loop_capture_each_iteration ... ok
 test welcoming::test_footguns::test_data_does_not_execute ... ok
-test welcoming::test_footguns::test_append_method_rebinds_the_list ... ok
-test welcoming::test_footguns::test_closures_capture_values ... ok
 test welcoming::test_footguns::test_count_of_text_without_unit ... ok
+test welcoming::test_footguns::test_closures_capture_values ... ok
+test welcoming::test_footguns::test_append_method_rebinds_the_list ... ok
 test welcoming::test_footguns::test_duplicate_keys_are_reported ... ok
 test web::test_uniscript::colors_and_geometry_are_suffix_controls ... ok
 test welcoming::test_footguns::test_division_is_not_truncating ... ok
-test welcoming::test_footguns::test_compound_index_assignment ... ok
-test welcoming::test_footguns::test_date_literal_needs_strict_form ... ok
 test welcoming::test_footguns::test_empty_condition_does_not_panic ... ok
-test welcoming::test_footguns::test_digit_separators ... ok
+test welcoming::test_footguns::test_date_literal_needs_strict_form ... ok
+test welcoming::test_footguns::test_compound_index_assignment ... ok
 test web::test_uniscript::the_index_matches_the_readable_entities ... ok
+test welcoming::test_footguns::test_digit_separators ... ok
 test welcoming::test_footguns::test_euler_identity ... ok
 test welcoming::test_footguns::test_empty_parens_is_the_empty_list ... ok
 test welcoming::test_footguns::test_default_argument_is_fresh_per_call ... ok
-test welcoming::test_footguns::test_explicit_wrap_inside_function ... ok
 test welcoming::test_footguns::test_equal_literals_are_not_shared ... ok
+test welcoming::test_footguns::test_explicit_wrap_inside_function ... ok
+test welcoming::test_footguns::test_failed_fetch_is_an_error_value ... ok
 test welcoming::test_footguns::test_equality_does_not_chain ... ok
 test welcoming::test_footguns::test_fetch_result_needs_a_check ... ok
-test welcoming::test_footguns::test_failed_fetch_is_an_error_value ... ok
-test welcoming::test_footguns::test_exact_decimal_arithmetic ... ok
 test welcoming::test_footguns::test_equals_in_condition_compares ... ok
+test welcoming::test_footguns::test_exact_decimal_arithmetic ... ok
 test welcoming::test_footguns::test_empty_values_are_falsy ... ok
 test welcoming::test_footguns::test_hidden_side_effect_is_rejected ... ok
+test web::test_uniscript::effect_words_stack_on_one_operand ... ok
 test welcoming::test_footguns::test_equality_across_kinds_is_structural ... ok
 test welcoming::test_footguns::test_increment_changes_variable ... ok
-test web::test_uniscript::effect_words_stack_on_one_operand ... ok
-test welcoming::test_footguns::test_division_by_zero_is_extended_rational ... ok
-test welcoming::test_footguns::test_fast_floats_are_not_associative ... ok
 test welcoming::test_footguns::test_infinite_loop_runs_out_of_fuel ... ok
-test welcoming::test_footguns::test_fuel_budget_can_be_raised ... ok
-test web::test_uniscript::entities_become_characters ... ok
+test welcoming::test_footguns::test_fast_floats_are_not_associative ... ok
+test welcoming::test_footguns::test_division_by_zero_is_extended_rational ... ok
 test welcoming::test_footguns::test_exact_rationals_stay_exact ... ok
+test web::test_uniscript::entities_become_characters ... ok
+test welcoming::test_footguns::test_fuel_budget_can_be_raised ... ok
+test welcoming::test_footguns::test_integers_beyond_double_precision ... ok
 test welcoming::test_footguns::test_index_out_of_bounds_is_an_error ... ok
 test welcoming::test_footguns::test_law_catches_a_false_property ... ok
-test welcoming::test_footguns::test_integers_beyond_double_precision ... ok
 test welcoming::test_footguns::test_leading_zero_is_not_octal ... ok
-test welcoming::test_footguns::test_fetch_times_out_loudly ... ok
 test welcoming::test_footguns::test_logic_binds_weaker_than_comparison ... ok
-test welcoming::test_footguns::test_months_are_one_based ... ok
 test welcoming::test_footguns::test_integer_overflow_does_not_wrap ... ok
+test welcoming::test_footguns::test_months_are_one_based ... ok
+test welcoming::test_footguns::test_fetch_times_out_loudly ... ok
 test welcoming::test_footguns::test_nan_bits_are_canonical ... ok
 test welcoming::test_footguns::test_is_compares_by_value ... ok
 test welcoming::test_footguns::test_invalid_number_text_is_an_error ... ok
 test welcoming::test_footguns::test_negative_modulo_is_linted ... ok
-three tasks of 500 ms took 527 ms
+test welcoming::test_footguns::test_law_holds_because_integers_do_not_wrap ... ok
+test welcoming::test_footguns::test_newline_ends_statement ... ok
+test welcoming::test_footguns::test_negative_power_precedence ... ok
+test welcoming::test_footguns::test_no_implicit_time_zone ... ok
+test welcoming::test_footguns::test_negative_index_is_an_error ... ok
+test welcoming::test_footguns::test_no_loose_equality ... ok
+test welcoming::test_footguns::test_norway_problem_in_data ... ok
+test welcoming::test_footguns::test_mutation_through_alias_is_not_visible ... ok
+test welcoming::test_footguns::test_null_needs_a_check ... ok
+test welcoming::test_footguns::test_finite_domain_function_equality ... ok
+test welcoming::test_footguns::test_index_assignment_of_multi_byte_character ... ok
+test welcoming::test_footguns::test_no_array_store_exception ... ok
+test web::test_uniscript::unsupported_characters_and_combinations_warn ... ok
+test welcoming::test_footguns::test_function_equality_up_to_renaming ... ok
+test welcoming::test_footguns::test_number_of_chars_in_text ... ok
+test welcoming::test_footguns::test_number_of_codepoints_in_text ... ok
+three tasks of 500 ms took 528 ms
 hello!
 10
 stopped
 both tasks counted to 2000
 no third item
 test programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error ... ok
-test welcoming::test_footguns::test_law_holds_because_integers_do_not_wrap ... ok
-test welcoming::test_footguns::test_newline_ends_statement ... ok
-test welcoming::test_footguns::test_no_implicit_time_zone ... ok
-test welcoming::test_footguns::test_negative_power_precedence ... ok
-test welcoming::test_footguns::test_no_loose_equality ... ok
-test welcoming::test_footguns::test_norway_problem_in_data ... ok
-test welcoming::test_footguns::test_mutation_through_alias_is_not_visible ... ok
-test welcoming::test_footguns::test_null_needs_a_check ... ok
-test welcoming::test_footguns::test_index_assignment_of_multi_byte_character ... ok
-test welcoming::test_footguns::test_negative_index_is_an_error ... ok
-test web::test_uniscript::unsupported_characters_and_combinations_warn ... ok
-test welcoming::test_footguns::test_no_array_store_exception ... ok
-test welcoming::test_footguns::test_number_of_chars_in_text ... ok
-test welcoming::test_footguns::test_function_equality_up_to_renaming ... ok
-test welcoming::test_footguns::test_finite_domain_function_equality ... ok
-test welcoming::test_footguns::test_number_of_codepoints_in_text ... ok
 test welcoming::test_footguns::test_pi_compares_by_interval_arithmetic ... ok
 test welcoming::test_footguns::test_pi_plus_euler_prints_symbolically ... ok
+test web::test_uniscript::the_header_declares_uniscript_and_its_version ... ok
 test welcoming::test_footguns::test_number_of_graphemes_in_text ... ok
 test welcoming::test_footguns::test_not_binds_weaker_than_comparison ... ok
-test welcoming::test_footguns::test_power_is_right_associative ... ok
-test welcoming::test_footguns::test_parameter_shadows_outer_variable ... ok
 test welcoming::test_footguns::test_list_plus_concatenates ... ok
+test welcoming::test_footguns::test_parameter_shadows_outer_variable ... ok
 test welcoming::test_footguns::test_repeated_local_time_needs_disambiguation ... ok
-test web::test_uniscript::the_header_declares_uniscript_and_its_version ... ok
+test welcoming::test_footguns::test_negative_literals_after_power_fix ... ok
 test welcoming::test_footguns::test_rule_change_is_not_silent ... ok
 test welcoming::test_footguns::test_running_queries_and_commands_needs_a_capability ... ok
-test welcoming::test_footguns::test_leading_dot_literal ... ok
+test welcoming::test_footguns::test_power_is_right_associative ... ok
 test welcoming::test_footguns::test_scientific_notation ... ok
-test welcoming::test_footguns::test_negative_literals_after_power_fix ... ok
+test welcoming::test_footguns::test_leading_dot_literal ... ok
 test welcoming::test_footguns::test_shell_holes_are_whole_arguments ... ok
 test welcoming::test_footguns::test_sine_at_rational_multiple_of_pi ... ok
 test welcoming::test_footguns::test_skipped_local_time_can_be_chosen_explicitly ... ok
 test welcoming::test_footguns::test_sql_from_built_text_is_rejected ... ok
-test welcoming::test_footguns::test_number_of_bytes_in_text ... ok
+test welcoming::test_footguns::test_shrinking_recursion_is_total ... ok
 test welcoming::test_footguns::test_square_roots_are_reduced ... ok
 test welcoming::test_footguns::test_square_roots_multiply_exactly ... ok
 test welcoming::test_footguns::test_pure_rejects_divergence ... ok
-test welcoming::test_footguns::test_shrinking_recursion_is_total ... ok
 test welcoming::test_footguns::test_sum_of_different_roots_stays_exact ... ok
-test welcoming::test_footguns::test_string_equality_is_by_value ... ok
+test welcoming::test_footguns::test_number_of_bytes_in_text ... ok
 test welcoming::test_footguns::test_sum_of_quotients_is_not_truncated ... ok
 test welcoming::test_footguns::test_optional_local_runs ... ok
 test welcoming::test_footguns::test_sql_holes_are_parameters_not_text ... ok
 test welcoming::test_footguns::test_optional_type_declaration ... ok
+test welcoming::test_footguns::test_string_equality_is_by_value ... ok
 test welcoming::test_footguns::test_norm_bars_are_brackets ... ok
 test welcoming::test_footguns::test_type_annotation_is_enforced ... ok
 test welcoming::test_footguns::test_undefined_variable_is_an_error ... ok
 test welcoming::test_footguns::test_unicode_normalization ... ok
 test welcoming::test_footguns::test_unproven_recursion_may_diverge ... ok
 test welcoming::test_footguns::test_while_loop_may_diverge ... ok
-test welcoming::test_footguns::test_zero_string_is_truthy ... ok
+test welcoming::test_footguns::test_prefix_increment ... ok
 test welcoming::test_footguns::test_zoned_time_records_its_rules_version ... ok
 test welcoming::test_got_it_warnings::a_dangerous_ambiguity_stays_an_error_even_when_acknowledged ... ok
-test welcoming::test_footguns::test_prefix_increment ... ok
 test welcoming::test_footguns::test_symbolic_logic_next_to_comparison_needs_grouping ... ok
+test welcoming::test_footguns::test_zero_string_is_truthy ... ok
 test welcoming::test_got_it_warnings::a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_show ... ok
 test welcoming::test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form ... ok
 test welcoming::test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns ... ok
 test welcoming::test_footguns::test_text_units_are_explicit ... ok
 test welcoming::test_it_shadow_warning::a_loop_it_still_shadows_the_function_it ... ok
-test welcoming::test_footguns::test_polynomial_function_equality ... ok
 test welcoming::test_item_list_cast_hint::a_c_style_definition_is_no_cast ... ok
-test welcoming::test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program ... ok
-test welcoming::test_style_dont_care::an_explicit_function_style_still_hints ... ok
 test welcoming::test_item_list_cast_hint::a_type_word_item_in_a_comma_list_is_no_cast ... ok
 test welcoming::test_item_list_cast_hint::a_written_constructor_call_is_still_hinted ... ok
+test welcoming::test_style_dont_care::an_explicit_function_style_still_hints ... ok
 test welcoming::test_style_dont_care::any_axis_can_stop_caring ... ok
+test welcoming::test_footguns::test_polynomial_function_equality ... ok
 test welcoming::test_footguns::test_scientific_notation_forms ... ok
+test welcoming::test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program ... ok
 test welcoming::test_got_it_warnings::the_explicit_forms_say_it_without_a_warning ... ok
-test welcoming::test_it_shadow_warning::a_loop_it_without_a_function_it_does_not_warn ... ok
 test welcoming::test_footguns::test_text_is_indexed_by_grapheme ... ok
-test welcoming::test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing ... ok
 test welcoming::test_warning_mode::use_strict_turns_a_lint_warning_into_an_error ... ok
+test welcoming::test_it_shadow_warning::a_loop_it_without_a_function_it_does_not_warn ... ok
+test welcoming::test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing ... ok
 test welcoming::test_welcoming_ask::an_acknowledged_ambiguity_still_compiles_the_same_way ... ok
 test welcoming::test_welcoming_ask::an_educating_note_shows_until_acknowledged ... ok
 test welcoming::test_welcoming_ask::an_old_answers_line_never_picks_a_reading ... ok
 test welcoming::test_welcoming_ask::an_unanswered_ask_falls_back_to_its_default_or_its_error ... ok
 test welcoming::test_welcoming_ask::an_unanswered_error_ask_names_every_explicit_form ... ok
-test welcoming::test_footguns::test_rounding_mode_is_named ... ok
-test welcoming::test_welcoming_ask::questions_quote_prefix_operators_as_written ... ok
 test welcoming::test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error ... ok
+test welcoming::test_welcoming_ask::questions_quote_prefix_operators_as_written ... ok
 test welcoming::test_footguns::test_text_plus_number_is_a_type_error ... ok
-test welcoming::test_welcoming_break::break_outside_a_loop_is_a_compile_error ... ok
-test welcoming::test_warning_mode::the_strict_flag_turns_warnings_into_errors ... ok
 test welcoming::test_welcoming_ask::every_for_header_bound_minus_one_asks ... ok
+test welcoming::test_welcoming_break::break_outside_a_loop_is_a_compile_error ... ok
+test welcoming::test_footguns::test_rounding_mode_is_named ... ok
+test welcoming::test_warning_mode::the_strict_flag_turns_warnings_into_errors ... ok
 test welcoming::test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error ... ok
-test welcoming::test_welcoming_ask::a_runtime_error_names_the_range_hint_and_the_guesses_behind_it ... ok
 test welcoming::test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion ... ok
+test welcoming::test_welcoming_ask::a_runtime_error_names_the_range_hint_and_the_guesses_behind_it ... ok
 test welcoming::test_welcoming_break::next_is_continue_unless_it_names_a_variable ... ok
 test welcoming::test_welcoming_ask::upto_asks_and_defaults_to_exclusive ... ok
 test welcoming::test_welcoming_count_argument::a_count_inside_brackets_is_a_value_not_a_comment ... ok
@@ -2327,101 +2332,101 @@ test welcoming::test_welcoming_elements::bracketed_elements_stay_list_items ... 
 test welcoming::test_welcoming_globals::test_changing_an_undeclared_main_variable_educates ... ok
 test welcoming::test_welcoming_empty_push::levenshtein_with_a_pushed_row ... ok
 test welcoming::test_welcoming_globals::test_fresh_binding_of_a_main_name_asks_local_or_global ... ok
-test welcoming::test_welcoming_elements::loop_variable_over_nested_lists ... ok
 test welcoming::test_welcoming_elements::returned_list_literal ... ok
 test welcoming::test_footguns::test_number_declaration_spellings_agree ... ok
+test welcoming::test_welcoming_elements::loop_variable_over_nested_lists ... ok
 called
 called
 test welcoming::test_welcoming_globals::test_print_statement_in_a_function ... ok
 test web::test_uniscript::block_types_style_their_operands ... ok
-test welcoming::test_welcoming_globals::test_own_names_and_reads_stay_fine ... ok
-test welcoming::test_welcoming_indent::one_end_for_both_then_and_do_is_ambiguous ... ok
-test welcoming::test_welcoming_break::continue_skips_to_the_next_pass_and_keeps_the_for_step ... ok
-test welcoming::test_welcoming_elements::variables_bound_to_elements_keep_their_type ... ok
 test welcoming::test_footguns::test_modulo_and_remainder_are_both_named ... ok
-test welcoming::test_welcoming_elements::one_character_texts_as_keys_and_arguments ... ok
+test welcoming::test_welcoming_indent::one_end_for_both_then_and_do_is_ambiguous ... ok
+test welcoming::test_welcoming_globals::test_own_names_and_reads_stay_fine ... ok
+test welcoming::test_welcoming_globals::test_function_changes_a_declared_global ... ok
+test welcoming::test_welcoming_elements::variables_bound_to_elements_keep_their_type ... ok
+test welcoming::test_welcoming_break::continue_skips_to_the_next_pass_and_keeps_the_for_step ... ok
 test welcoming::test_welcoming_listparams::declared_list_parameters_refuse_other_kinds ... ok
+test welcoming::test_welcoming_elements::one_character_texts_as_keys_and_arguments ... ok
 test welcoming::test_footguns::test_typed_literals_bind_tightly ... ok
 test welcoming::test_welcoming_break::break_leaves_the_innermost_loop ... ok
-test welcoming::test_welcoming_globals::test_function_changes_a_declared_global ... ok
 test welcoming::test_welcoming_globals::test_reassigning_from_a_rounding_builtin ... ok
-test welcoming::test_welcoming_listparams::parameters_shadow_literal_variables ... ok
 test welcoming::test_welcoming_listexpr::a_function_local_does_not_leak_into_the_caller ... ok
-test welcoming::test_welcoming_empty_push::an_empty_list_is_typed_by_its_first_push ... ok
+test welcoming::test_welcoming_listparams::parameters_shadow_literal_variables ... ok
 test welcoming::test_welcoming_listparams::indexed_text_parameters ... ok
+test welcoming::test_welcoming_empty_push::an_empty_list_is_typed_by_its_first_push ... ok
+test welcoming::test_welcoming_indent::do_end_and_then_end_enclose_all_their_statements ... ok
 test welcoming::test_welcoming_listexpr::a_list_literal_keeps_its_computed_elements ... ok
 test welcoming::test_welcoming_globals::test_function_changes_global_floats_lists_and_texts ... ok
-test welcoming::test_welcoming_indent::do_end_and_then_end_enclose_all_their_statements ... ok
 test welcoming::test_welcoming_listparams::list_parameters_inferred_from_counting_walking_forwarding ... ok
 test welcoming::test_welcoming_maps::test_dijkstra_core ... ok
 test welcoming::test_welcoming_maps::test_for_destructures_pairs ... ok
 test welcoming::test_welcoming_listexpr::push_takes_any_expression ... ok
 test welcoming::test_welcoming_maps::test_absent_key ... ok
 test welcoming::test_welcoming_listparams::list_annotations_on_parameters ... ok
-test welcoming::test_welcoming_maps::test_one_character_argument_is_a_text ... ok
 test welcoming::test_welcoming_indent::an_indented_block_after_a_trailing_colon_is_the_body ... ok
-test welcoming::test_welcoming_maps::test_for_key_value_in_a_map ... ok
 test welcoming::test_welcoming_maps::test_for_in_a_map_walks_its_keys ... ok
-test welcoming::test_welcoming_maps::test_empty_map_grows ... ok
+test welcoming::test_welcoming_maps::test_one_character_argument_is_a_text ... ok
+test welcoming::test_welcoming_maps::test_for_key_value_in_a_map ... ok
 test welcoming::test_welcoming_maps::test_quoted_and_unquoted_keys_are_the_same_key ... ok
-test welcoming::test_welcoming_parse::else_takes_a_python_colon ... ok
+test welcoming::test_welcoming_maps::test_empty_map_grows ... ok
+test welcoming::test_welcoming_maps::test_list_returned_by_a_function_holds_maps ... ok
 test welcoming::test_welcoming_parse::for_destructures_a_tuple_or_comma_names ... ok
 test welcoming::test_welcoming_parse::membership_in_binds_like_a_comparison ... ok
-test welcoming::test_welcoming_parse::a_counting_word_after_return_is_the_variable ... ok
 test welcoming::test_welcoming_parse::a_space_before_a_bracket_makes_a_list ... ok
-test welcoming::test_welcoming_maps::test_list_returned_by_a_function_holds_maps ... ok
+test welcoming::test_welcoming_maps::test_keys_values_has ... ok
+test welcoming::test_welcoming_parse::else_takes_a_python_colon ... ok
+test welcoming::test_welcoming_parse::a_counting_word_after_return_is_the_variable ... ok
 test welcoming::test_welcoming_maps::test_key_in_a_variable ... ok
 3
-test welcoming::test_welcoming_maps::test_keys_values_has ... ok
-test welcoming::test_welcoming_maps::test_quoted_key_with_a_list_value ... ok
 test welcoming::test_welcoming_listexpr::min_and_max_take_any_expressions ... ok
-3
-test welcoming::test_welcoming_parse::elif_elsif_and_elseif_are_else_if ... ok
 test welcoming::test_welcoming_maps::test_in_and_contains ... ok
+test welcoming::test_welcoming_parse::elif_elsif_and_elseif_are_else_if ... ok
+test welcoming::test_welcoming_maps::test_quoted_key_with_a_list_value ... ok
+3
 test welcoming::test_welcoming_parse::return_takes_the_whole_expression ... ok
-test welcoming::test_welcoming_print::test_exact_variable_assigned_a_float_widens ... ok
 test welcoming::test_welcoming_maps::test_map_parameter ... ok
 test welcoming::test_welcoming_slices::a_hint_is_given_once_per_compilation ... ok
-2.5
+test welcoming::test_welcoming_print::test_exact_variable_assigned_a_float_widens ... ok
 test welcoming::test_welcoming_rangeblock::range_calls_are_exclusive_ranges ... ok
+2.5
 test welcoming::test_welcoming_slices::a_negative_index_or_bound_is_an_error_that_names_last ... ok
-hi
-c
 test welcoming::test_welcoming_slices::copy_and_clone_are_the_value_itself ... ok
+hi
 test welcoming::test_welcoming_parse::else_if_chains_another_if ... ok
+c
 c
 test welcoming::test_welcoming_sugar::a_glued_hash_name_statement_counts ... ok
 5
 test welcoming::test_welcoming_slices::a_fractional_index_error_names_the_fix ... ok
 test welcoming::test_welcoming_listparams::list_parameters_inferred_in_every_definition_form ... ok
+test welcoming::test_welcoming_slices::the_slice_method_takes_an_optional_end ... ok
 [1 2]
 test welcoming::test_welcoming_print::test_print_runtime_values ... ok
-test welcoming::test_welcoming_slices::the_slice_method_takes_an_optional_end ... ok
 test welcoming::test_welcoming_sugar::an_unknown_word_as_statement_is_loud ... ok
 test welcoming::test_welcoming_slices::a_fractional_index_in_a_variable_must_be_an_integer ... ok
-test numbers::test_law::test_law_proved_by_lean ... ok
 test welcoming::test_welcoming_sugar::a_hash_glued_to_an_expression_counts_at_line_start ... ok
-test welcoming::test_welcoming_slices::range_slices_of_a_list ... ok
 test welcoming::test_welcoming_slices::slices_of_a_text_are_texts_of_characters ... ok
+test welcoming::test_welcoming_slices::range_slices_of_a_list ... ok
+test numbers::test_law::test_law_proved_by_lean ... ok
 test welcoming::test_welcoming_sugar::len_counts ... ok
-test welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged ... ok
 test welcoming::test_welcoming_sugar::n_times_a_one_element_list_repeats_it ... ok
+test welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged ... ok
 test welcoming::test_welcoming_sugar::an_answered_ask_compiles_the_chosen_reading ... ok
 test welcoming::test_welcoming_sugar::insert_never_guesses_the_argument_order ... ok
+test welcoming::test_welcoming_sugar::a_fractional_index_says_so ... ok
+test welcoming::test_footguns::test_undecidable_function_equality_is_an_error ... ok
+test welcoming::test_welcoming_slices::a_fractional_bound_must_be_an_integer_like_an_index ... ok
 test welcoming::test_welcoming_sugar::a_spaced_double_slash_is_always_a_comment_and_says_so_once ... ok
 test welcoming::test_welcoming_sugar::the_empty_list_counts_zero_and_grows ... ok
-test welcoming::test_footguns::test_undecidable_function_equality_is_an_error ... ok
-test welcoming::test_welcoming_sugar::a_fractional_index_says_so ... ok
-test welcoming::test_welcoming_slices::a_fractional_bound_must_be_an_integer_like_an_index ... ok
 test welcoming::test_welcoming_sugar::glued_double_slash_is_floor_division ... ok
-test welcoming::test_welcoming_sugar::a_number_joins_a_text_in_its_text_form ... ok
-test welcoming::test_welcoming_rangeblock::a_variable_range_end_keeps_the_block_as_loop_body ... ok
 test welcoming::test_welcoming_sugar::let_var_and_const_declare_inside_any_block ... ok
-test welcoming::test_welcoming_print::test_exact_numbers_have_a_text_form ... ok
+test welcoming::test_welcoming_rangeblock::a_variable_range_end_keeps_the_block_as_loop_body ... ok
+test welcoming::test_welcoming_sugar::a_number_joins_a_text_in_its_text_form ... ok
 test welcoming::test_welcoming_slices::python_slices_of_a_list ... ok
+test welcoming::test_welcoming_print::test_exact_numbers_have_a_text_form ... ok
 test welcoming::test_footguns::test_proof_model_matches_unbounded_int ... ok
 
-test result: ok. 1881 passed; 0 failed; 72 ignored; 0 measured; 0 filtered out; finished in 149.43s
+test result: ok. 1883 passed; 0 failed; 72 ignored; 0 measured; 0 filtered out; finished in 149.41s
 
 [1m[92m   Doc-tests[0m warp
 
@@ -2473,6 +2478,8 @@ PASSED:
   ✓ control::test_empty_block::an_empty_block_inside_a_statement_is_a_value
   ✓ control::test_for_implicit_it::a_colon_body_is_the_rest_of_the_line
   ✓ control::test_for_implicit_it::a_for_loop_without_a_variable_walks_it
+  ✓ control::test_for_it::a_symbol_prints_its_name
+  ✓ control::test_for_it::it_is_the_loop_variable
   ✓ control::test_for_loop::test_for_classic_three_part_header
   ✓ control::test_for_loop::test_for_over_exclusive_range
   ✓ control::test_for_loop::test_for_over_inclusive_range
@@ -4363,4 +4370,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-41 ignored, 1920 passed, 0 failed, 1920 total tested
+41 ignored, 1922 passed, 0 failed, 1922 total tested

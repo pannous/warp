@@ -75,7 +75,7 @@ impl WasmGcEmitter {
 			_ => match self.get_type(value) {
 				// a list prints the text `str(xs)` gives, nested lists in brackets (user, P32), a map or an entry likewise;
 				// print gives the value
-				Kind::List | Kind::Key | Kind::Empty => {
+				Kind::List | Kind::Key | Kind::Symbol | Kind::Empty => {
 					let held = self.emit_dynamic_text(func, value);
 					self.emit_call(func, PRINT_VALUE);
 					Self::emit_list(func, &[I::Drop, I::LocalGet(held), I::RefAsNonNull]);

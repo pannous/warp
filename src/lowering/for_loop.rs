@@ -88,7 +88,11 @@ fn for_in(items: &[Node]) -> Option<Node> {
 		},
 		_ => return None,
 	};
-	let body = block_items(&body);
+	let mut body = block_items(&body);
+	// `for word in text: print it`: it is the loop variable too
+	if matches!(names.as_slice(), [name] if name != IMPLICIT_VARIABLE) {
+		body = body.into_iter().map(|statement| it_as(statement, variable)).collect();
+	}
 	if names.len() > 1 {
 		return Some(destructuring_loop(&names, iterable, body));
 	}
@@ -96,6 +100,18 @@ fn for_in(items: &[Node]) -> Option<Node> {
 		Node::Key(start, op @ (Op::Range | Op::To), end) => counting_loop(variable, start, *op, end, body),
 		_ => walking_loop(variable, iterable, body),
 	})
+}
+
+/// `it` replaced by the loop variable, except inside a block or a lambda of the body, whose own parameter it is
+fn it_as(node: Node, variable: &Node) -> Node {
+	match node {
+		Node::Symbol(name) if name == IMPLICIT_VARIABLE => variable.clone(),
+		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Arrow | Op::FatArrow, _) => node,
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| it_as(item, variable)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(it_as(*left, variable)), op, Box::new(it_as(*right, variable))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(it_as(*node, variable)), data },
+		other => other,
+	}
 }
 
 /// The range an iterable spells: `(a..b)` is `a..b`, Python's `range(n)` is `0..n` and `range(a, b)` is `a..b`
