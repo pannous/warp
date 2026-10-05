@@ -68,13 +68,6 @@ impl Node {
 			data: Box::new(meta),
 		}
 	}
-	pub fn class(&self) -> Node {
-		todo!("class via kind and/or metadata?")
-	}
-	pub fn typ(&self) -> Node {
-		// including Ast(Node, AstKind) !
-		todo!("typ via kind or field and/or metadata?")
-	}
 	pub fn is_nil(&self) -> bool {
 		*self == Empty
 	}

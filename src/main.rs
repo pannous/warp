@@ -172,9 +172,8 @@ fn run_command(args: &[String]) {
         print_and_exit(run::wasmtime_runner::run_wat(&wat_code));
     } else if arg_string.ends_with(".wasm") || arg_string.ends_with(&format!(".{MACHINE_CODE_EXTENSION}")) {
         if args.len() >= 3 {
-            {
-                todo!("linking files needs compilation with WABT_MERGE");
-            }
+            eprintln!("Error: running several wasm files together (linking {}) is not supported yet; run one file", args[1..].join(" "));
+            std::process::exit(1);
         } else {
             print_and_exit(run::wasmtime_runner::run(&arg_string));
         }
