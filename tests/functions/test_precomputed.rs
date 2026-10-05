@@ -16,6 +16,7 @@ fn folded(code: &str) -> String {
 }
 
 #[test]
+#[cfg(feature = "native")] // reads the compiled module with wasmtime
 fn a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module() {
 	let fib = folded("def fib(n): n<2 ? n : fib(n-1)+fib(n-2); x = fib(20); x+1");
 	assert!(fib.contains("6765") && !fib.contains("(fib 20)"), "{fib}");
