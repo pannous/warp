@@ -3692,7 +3692,7 @@ pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 pub(crate) fn text_unit(word: &str) -> Option<&'static str> {
 	match word {
 		"byte" | "bytes" => Some("bytes"),
-		"char" | "chars" | "codepoint" | "codepoints" => Some("codepoints"),
+		"char" | "chars" | "character" | "characters" | "codepoint" | "codepoints" => Some("codepoints"),
 		"grapheme" | "graphemes" => Some("graphemes"),
 		_ => None,
 	}
@@ -3761,8 +3761,12 @@ fn property_of_name(items: &[Node], separator: &Separator, variables: &HashSet<S
 fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<Node> {
 	let [print, phrase] = items else { return None };
 	let Node::List(phrase, Bracket::None | Bracket::Round, _) = phrase.drop_meta() else { return None };
-	// `chars in "hello"` arrives as the words or as `chars (in "hello")`
-	let (name, in_word, collection) = match phrase.as_slice() {
+	// `chars in "hello"` arrives as the words or as `chars (in "hello")`, optionally after `all`
+	let phrase = match phrase.as_slice() {
+		[all, rest @ ..] if is_word(all, "all") => rest,
+		words => words,
+	};
+	let (name, in_word, collection) = match phrase {
 		[name, in_word, collection] => (name, in_word, collection),
 		[name, rest] => match rest.drop_meta() {
 			Node::List(rest, _, _) if rest.len() == 2 => (name, &rest[0], &rest[1]),
