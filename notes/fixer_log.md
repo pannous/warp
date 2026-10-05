@@ -154,3 +154,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 p47-task-list-literal (P47 stage 1)
 - `[a, b]` of task variables gave the last result only: inside `[…]` an unbracketed sequence ending in a value (the
   checked await) is a computed element, not a statement (analyzer is_statement).
+
+## 2026-10-05 p47-job-lists (P47 stages 2-4)
+- `jobs.add(go f(i))` keeps tasks unawaited; reads of the list await every job, `jobs#i` one, `await all xs` every
+  one (notes/threads.md "Job lists"); three one-second jobs take ~1 s.
