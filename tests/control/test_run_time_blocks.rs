@@ -52,7 +52,8 @@ fn running_a_run_time_block_is_the_eval_effect() {
 
 #[test]
 fn a_run_time_block_gets_no_capabilities() {
-	crate::common::fails_with("y = data print(\"hi\"); interpret y", "a block run at run time is pure: print needs the wasi capability");
+	// P88 (user 2026-10-05): every capability is granted for now, a block run at run time prints
+	warp::is!("y = data print(\"hi\"); interpret y", "hi");
 }
 
 // Step 4: a compiled module that runs blocks at run time says it needs a warp host
