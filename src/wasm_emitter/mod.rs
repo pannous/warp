@@ -1140,17 +1140,18 @@ impl WasmGcEmitter {
 		}
 		self.config.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
 		self.config.emit_wasi_imports |= effects.needs(Capability::Wasi);
-		self.config.emit_host_imports |= effects.needs(Capability::Host);
+		// another runtime's module is reached through the host word foreign_call
+		self.config.emit_host_imports |= effects.needs(Capability::Host) || effects.needs(Capability::Foreign);
 	}
 
 	/// Import modules this module declares, known after `emit_for_node`
 	pub fn imports(&self, capability: crate::effects::Capability) -> bool {
 		use crate::effects::Capability::*;
 		match capability {
-			Host => self.config.emit_host_imports,
+			Host | Foreign => self.config.emit_host_imports,
 			Wasi => self.config.emit_wasi_imports,
 			Ffi | Libm => self.config.emit_ffi_imports,
-			Sql | Process => false, // never imported: eval refuses such modules before emission
+			Sql | Process => false, // no host implements execute or exec yet: such a module fails to link, loudly
 		}
 	}
 
