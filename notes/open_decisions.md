@@ -63,26 +63,6 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   (HyperApproxInv.lean); (2) dual-number mode (ε² = 0) via `use dual`: later (recommended) / now; (3) hyperreals at
   run time (a WASM GC representation): later with exact reals at run time (recommended) / now. Asked by warp-90.
   2026-10-05.
-- P49b `f(x:int) := …; f(2.0)` passes (2.0 loses no digits); only a fractional value is the P49 error. But
-  `x:int = 2.0` is already the error "cannot assign float". Options: refuse 2.0 too, one rule for parameters and
-  declarations (recommended) / allow whole floats in both / keep the difference. Assumed: keep it. Asked by the Fixer
-  warp-2d. 2026-10-05.
-- P45b the P45 error fires only where both kinds are evident from the source (literals, list literals, number
-  arithmetic). Where a kind is only inferred (`x = 5; x = f()` with f giving a list, a loop variable reusing a list's
-  name), the Node fallback stays, because checking inferred kinds gave ~10 false errors in existing tests. Options:
-  keep this until inference is reliable (recommended) / fix the inference first and error everywhere. Assumed: the
-  first. Asked by warp-90, branch p45-kind-change a4ae4feb. 2026-10-05.
-- P58 Slices with `#`: `xs#2..4` is today the range from the value xs#2 to 4 (for loops use it). Assumed (branch
-  fix-hash-slices): `xs#(2…4)` is the 1-based slice [2 3 4], `xs#(2..4)` → [2 3], `xs[1..3]` stays the 0-based
-  bracket slice, unparenthesized `xs#a..b` stays the range. Alternative: `xs#a..b` slices, the range needs
-  `(xs#a)..b`. Asked by the Fixer warp-2d. 2026-10-05.
-- P59 Five ignored tests need an edit or a decision (Fixer warp-2d), recommended edits:
-  (1) test_array_creation: `pixel=[];pixel[1]=15` expects growth (decided: error, P43): expect "index out of range",
-  keep the `pixel:int[100]` lines, drop `pixel array;…`. (2) test_array_initialization_basics counts the parse tree:
-  use `is!("x : 100 numbers; count(x)", 100)`. (3) test_array_initialization: fix the `;[` typo; drop
-  `x is array of size 100` / `x is a 100 integer array` unless the user wants these phrases. (4)
-  test_array_type_generics expects `list<int>`: expect "list of int" (decided). (5) test_hyphen_units
-  `1900 - 2000 AD == 1950 AD ± 50` (interval equality): keep ignored as a later feature. 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -95,6 +75,13 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Decided 2026-10-05 (user, multiple choice, all as recommended)
+- P49b a whole float is no int either: `f(x:int)` called with 2.0 is refused like `x:int = 2.0` (write `2.0 as int`).
+- P45b the P45 error covers kinds evident from the source; inferred kinds keep the Node fallback until inference is
+  reliable.
+- P59 the Fixer's five ignored tests get the recommended edits (user decision): test_array_creation expects "index
+  out of range" (keeps `pixel:int[100]`, drops `pixel array;…`); test_array_initialization_basics uses
+  `count(x)`; test_array_initialization: typo fixed, the two natural-language array phrases dropped;
+  test_array_type_generics expects "list of int"; test_hyphen_units stays ignored (interval equality, later).
 - P52 a phrase-defined function is called with its own prepositions (`add 1 to 2`, `square of 4`); everywhere else
   `to` stays a range and `of` a field lookup.
 - P53 test_custom_operators: the `.5³` line becomes 0.125, the test is un-ignored (user decision).
@@ -125,6 +112,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the kinds evident from literals (`x = [1]; x = 5` → "x was a List, is given an Int: use another name"). Where a
   kind is only inferred (a call's result, a loop variable reusing a list's name) the Node fallback still holds the
   value: an error there would rest on guessed kinds (function results default to Int before inference).
+
+- P58 `xs#a..b` (range from xs#a, or a slice?): user: "create a strong warning and I don't care how to interpret
+  it". So: unparenthesized `xs#a..b` keeps the range and gets a strong warning naming both explicit forms,
+  `xs#(a..b)` / `xs#(a…b)` (the 1-based slice) and `(xs#a)..b` (the range).
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
