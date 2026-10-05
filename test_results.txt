@@ -423,6 +423,9 @@ PASSED:
   ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
   ✓ functions::test_partial_application::a_placeholder_makes_a_partial_application
   ✓ functions::test_partial_application::a_returned_zero_argument_closure_is_called
+  ✓ functions::test_phrase_calls::test_prepositions_keep_their_meaning_elsewhere
+  ✓ functions::test_phrase_calls::test_spaced_phrases_are_called_with_their_prepositions
+  ✓ functions::test_phrase_calls::test_to_phrases_are_called_with_their_prepositions
   ✓ functions::test_picked_calls::a_function_picked_from_a_list_is_called
   ✓ functions::test_property_access::test_bracket_lookup_by_text_never_traps
   ✓ functions::test_property_access::test_dot_on_a_variable_and_nested
@@ -499,6 +502,7 @@ PASSED:
   ✓ functions::test_user_method_form::a_method_form_call_passes_the_further_arguments
   ✓ functions::test_user_method_form::a_user_function_is_called_in_method_form
   ✓ functions::test_user_method_form::a_user_function_taking_a_function_in_method_form
+  ✓ functions::test_whole_float_to_int_parameter::a_whole_float_for_an_int_parameter_is_refused
   ✓ host::tests::test_host_state
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
@@ -1167,7 +1171,7 @@ PASSED:
   ✓ parser::test_symbol_hyphen::test_trailing_decrement_is_not_part_of_the_name
   ✓ parser::test_uniscript_entities::an_unknown_entity_is_an_error
   ✓ parser::test_uniscript_entities::entities_are_their_characters
-  ✓ parser::test_uniscript_entities::entities_stay_text_inside_quotes_and_comments
+  ✓ parser::test_uniscript_entities::entities_expand_inside_double_quoted_texts
   ✓ parser::test_wasp_format::html_attributes_and_repeated_tags_in_data
   ✓ parser::test_wasp_format::test_empty_structures
   ✓ parser::test_wasp_format::test_function_syntax
@@ -1477,6 +1481,8 @@ PASSED:
   ✓ types::test_data::test_node_data_various_types
   ✓ types::test_declaration_without_value::a_declaration_assigned_before_reading_works
   ✓ types::test_declaration_without_value::reading_a_declaration_without_value_is_an_error
+  ✓ types::test_declaration_zero_value::a_declaration_reads_as_the_zero_value_of_its_type
+  ✓ types::test_declaration_zero_value::a_text_declaration_is_empty
   ✓ types::test_float_fields::test_captured_variable_set_by_a_call
   ✓ types::test_float_fields::test_declared_float_field_in_arithmetic
   ✓ types::test_float_fields::test_float_conditionals
@@ -1667,6 +1673,7 @@ PASSED:
   ✓ wasm::test_wasm::test_comparison_math
   ✓ wasm::test_wasm::test_comparison_primitives
   ✓ wasm::test_wasm::test_const_return
+  ✓ wasm::test_wasm::test_custom_operators
   ✓ wasm::test_wasm::test_dom
   ✓ wasm::test_wasm::test_emit_basics
   ✓ wasm::test_wasm::test_emitter
@@ -2022,4 +2029,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-38 ignored, 2017 passed, 0 failed, 2017 total tested
+37 ignored, 2024 passed, 0 failed, 2024 total tested
