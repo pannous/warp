@@ -106,7 +106,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   `\name` is no entity (so `"\nat"` stays newline+"at"). The branch fix-uniscript-entities moves from `\name` to
   `\:name`.
 - P28 `real x;` read before any assignment: user chose "Zero value (Go)": x reads as the zero/empty value of its
-  type. The loud error (analyzer::check_unassigned_declarations) is undone.
+  type. The loud error (analyzer::check_unassigned_declarations) is undone. Done: declarations::lower_bare_declarations
+  makes `T x` of a fresh name `x:T = zero` (0, 0.0, "", []); after an assignment of x, `int x` stays a conversion.
 
 - P47 lists of tasks: user: "Jobs and tasks are as[ynchronous] by definition if someone waits for one result that
   should not affect the others". So a started job runs on its own; putting it in a list (`jobs.add(j)`) or awaiting

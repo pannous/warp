@@ -551,6 +551,59 @@ fn never_happens(located: &Node, message: &str) -> Node {
 /// definition `square(x) := x*x`; `x y z := y*y+u` names x of the parameters y and z. A braceless call ending the body
 /// keeps its argument (`fibonacci number := … + fibonacci it - 2`, wiki/Home.md), and in a definition of one named
 /// parameter `it` is that parameter
+/// P28 (user, 2026-10-05: "Zero value (Go)"): `real x;` declares x with the zero value of its type, `x:real = 0.0`.
+/// Only a fresh name: after `x = "5"`, `int x` is the conversion of x
+pub fn lower_bare_declarations(program: Node) -> Node {
+	// a program of only `int n` is one statement
+	match zero_declaration(&program, &std::collections::HashSet::new()) {
+		Some(declaration) => declaration,
+		None => declarations_in(program),
+	}
+}
+
+fn declarations_in(node: Node) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			let statements = matches!(separator, Separator::Semicolon | Separator::Newline);
+			let mut assigned = std::collections::HashSet::new();
+			let items = items.into_iter().map(|item| {
+				let item = declarations_in(item);
+				let declared = if statements { zero_declaration(&item, &assigned) } else { None };
+				crate::library_words::collect_assigned_names(&item, &mut assigned);
+				declared.unwrap_or(item)
+			}).collect();
+			Node::List(items, bracket, separator)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(declarations_in(*left)), op, Box::new(declarations_in(*right))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(declarations_in(*node)), data },
+		other => other,
+	}
+}
+
+/// `T name` of a type word with a zero value and a name not assigned before: `name:T = zero`
+fn zero_declaration(statement: &Node, assigned: &std::collections::HashSet<String>) -> Option<Node> {
+	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
+	let [type_word, name] = items.as_slice() else { return None };
+	let (Node::Symbol(type_name), Node::Symbol(variable)) = (type_word.drop_meta(), name.drop_meta()) else { return None };
+	if assigned.contains(variable) || crate::analyzer::type_word_kind(variable).is_some() {
+		return None;
+	}
+	let zero = zero_value(crate::analyzer::type_word_kind(type_name)?)?;
+	let typed = Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()));
+	Some(Node::Key(Box::new(typed), Op::Assign, Box::new(zero)))
+}
+
+fn zero_value(kind: crate::type_kinds::Kind) -> Option<Node> {
+	use crate::type_kinds::Kind;
+	Some(match kind {
+		Kind::Int => Node::int(0),
+		Kind::Float => Node::Number(crate::extensions::numbers::Number::Float(0.0)),
+		Kind::Text => Node::Text(String::new()),
+		Kind::List => Node::List(vec![], Bracket::Square, Separator::Space),
+		_ => return None,
+	})
+}
+
 pub fn lower_spaced_definitions(node: Node) -> Node {
 	match node {
 		Node::List(items, _, _) if colon_iteration(&items).is_some() => lower_spaced_definitions(colon_iteration(&items).expect("guarded")),
