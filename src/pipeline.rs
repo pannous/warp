@@ -83,8 +83,8 @@ fn lawful_program(code: &str) -> Result<Node, Node> {
 pub fn eval_untrusted(code: &str) -> Node {
 	crate::diagnostic::begin_program();
 	let program = WaspParser::parse(code);
-	match crate::effects::EffectReport::of(&program).externals.keys().next() {
-		Some(external) => crate::node::error(&format!("untrusted code has no capabilities, refusing to call {external}")),
+	match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
+		Some((external, _)) => crate::node::error(&format!("untrusted code has no capabilities but pure libm, refusing to call {external}")),
 		None => eval_parsed(program, code),
 	}
 }

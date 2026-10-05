@@ -89,3 +89,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - P22 was already the behaviour on main (a known other type is an error teaching `pic like photo`); pinned the
   missing-field case (tests/operators/test_like_known_type_mismatch.rs). Ad hoc names (`pic{…}` with no class pic) keep
   their field warnings: `like` needs declared types.
+
+## 2026-10-05 p26-libm-pure
+- P26: libm calls carry no FFI effect; a Libm capability (granted to eval and untrusted code) keeps them imported
+  (tests/functions/test_libm_pure.rs; two pinned tests edited in their own commit).
