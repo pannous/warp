@@ -20,8 +20,8 @@ rules in notes/open_decisions.md and wiki/Footguns.md.
   binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean,
   never pkill by pattern.
 - The warp CLI binary is shared too: `<target-dir>/debug/warp` is whichever worktree built last. To probe your own code,
-  build and copy it into your worktree's scratch/ in ONE command (`cargo build --offline --bin warp && cp <target-dir>/debug/warp scratch/warp`)
-  and run the copy; a copy taken later can be another session's build.
+  run `scripts/own-warp.sh` (builds offline and atomically copies into `scratch/warp`) and run that path; a copy taken
+  later can be another session's build.
 - Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, clean up,
   report one line to the Supervisor.
 - Clean up after the merge: you are allowed and expected to remove your own worktree and branch, nobody else will.
@@ -32,6 +32,6 @@ rules in notes/open_decisions.md and wiki/Footguns.md.
 - Un-ignoring tests (user, 2026-10-05): "it's allowed to un ignore test that are suddenly passing". Dropping
   `#[ignore]` from a test that passes unedited needs no question; editing its assertions still needs a decision.
 - Use absolute paths and `git -C <worktree>` in scripts. Conventional commit messages; no Co-Authored-By, session
-  trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; it falls back to todo.md on your branch when the board is unreachable).
+  trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; it falls back to todo.md on your branch when the board is unreachable). Batch board writes through Supervisor when several agents are active — see AGENTS.md "Batch board writes" (GitHub GraphQL rate limits).
 - Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub wikis can only serve `master` (notes/wiki_branch.md), so wiki
   edits go to master (`git push origin HEAD:master`); there is no `main` branch in the wiki.

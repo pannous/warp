@@ -6,7 +6,7 @@
 //! `x = …` ends the block.
 //! Stage 2: `x = {statements}` is a block too (no warning: braces say so), an object's computed `key: value` entry is an
 //! uncharged block (`o.s1!` runs it, `o.s1 + 1` is the type error, the object holds it as data), and `obj!` of an object
-//! literal runs it as code: each `key: value` is the call `key(value)` (`help!`). `key := value` entries are untouched (P71).
+//! literal runs it as code: each `key: value` is the call `key(value)` (`help!`). `key := value` object entries are value-now like `=` (P71 top-level `:=` is unchanged).
 //! Stage 3: `x = code e` / `x = block e` are blocks, `y = data e; y!` runs with a got-it warning ("running data as code"),
 //! and a function with a `block` parameter (`when_not(c, body:block) := if not c { body! }`) is expanded at every call:
 //! its other parameters bound to fresh names, `body!` the argument's code, so names resolve where the call is written.
@@ -242,7 +242,7 @@ impl Blocks {
 					return Node::Empty;
 				}
 				// a plain object stays as it is; its entries can run as code (`help!`)
-				let rewritten = |entry: &Node| uncharged(entry).is_some() || matches!(entry.drop_meta(), Node::Key(_, Op::Assign, _));
+				let rewritten = |entry: &Node| uncharged(entry).is_some() || matches!(entry.drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
 				if let Some(entries) = object_entries(value).filter(|entries| !entries.iter().any(rewritten)) {
 					let pairs: Vec<(Node, Node)> = entries.iter().filter_map(|entry| match entry.drop_meta() {
 						Node::Key(key, Op::Colon, value) => Some((key.as_ref().clone(), value.as_ref().clone())),
@@ -253,8 +253,8 @@ impl Blocks {
 					self.objects.insert(name, pairs);
 					return lowered;
 				}
-				// `o = {s1: a+b, …}`: computed entries are blocks the object holds as data, `s3 = …` entries values
-				let rewritten = |entry: &Node| uncharged(entry).is_some() || matches!(entry.drop_meta(), Node::Key(_, Op::Assign, _));
+				// `o = {s1: a+b, …}`: computed entries are blocks the object holds as data, `s3 = …` / `s := …` entries values
+				let rewritten = |entry: &Node| uncharged(entry).is_some() || matches!(entry.drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
 				if let Some(entries) = object_entries(value).filter(|entries| entries.iter().any(rewritten)) {
 					let name = name.clone();
 					self.forget(&name);
@@ -271,8 +271,8 @@ impl Blocks {
 								Node::Key(Box::new(Node::Symbol(field)), Op::Colon, Box::new(data))
 							}
 							None => match entry.drop_meta() {
-								// `s3 = a+b`: a value entry, evaluated now
-								Node::Key(field, Op::Assign, value) => {
+								// `s3 = a+b` / `s := clock()`: a value entry, evaluated now (object := is value-now; top-level P71 := unchanged)
+								Node::Key(field, Op::Assign | Op::Define, value) => {
 									let value = self.rewrite(value.as_ref().clone());
 									Node::Key(field.clone(), Op::Colon, Box::new(Node::List(vec![value], Bracket::Round, Separator::None)))
 								}

@@ -164,6 +164,7 @@ fn tree_of(node: &Node) -> Option<Value> {
 		Node::Number(Number::Int(n)) => json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), "1"] }, "chain": [] }),
 		Node::Number(Number::BigInt(n)) => json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), "1"] }, "chain": [] }),
 		Node::Number(Number::Quotient(n, d)) => json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), d.to_string()] }, "chain": [] }),
+		Node::Number(Number::BigQuotient(q)) => json!({ "kind": kind(Kind::Int), "data": { "exact": [q.numerator.to_string(), q.denominator.to_string()] }, "chain": [] }),
 		Node::Number(Number::Float(x)) if x.is_finite() => json!({ "kind": kind(Kind::Float), "data": { "float": x }, "chain": [] }),
 		Node::Text(text) => json!({ "kind": kind(Kind::Text), "data": { "text": text }, "chain": [] }),
 		Node::Symbol(text) => json!({ "kind": kind(Kind::Symbol), "data": { "text": text }, "chain": [] }),

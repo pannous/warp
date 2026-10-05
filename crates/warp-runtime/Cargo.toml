@@ -1,0 +1,14 @@
+# Compiler-less wasmtime runtime for `warp build --exe` (notes/aot.md §Next).
+# Features match probes/aot/standalone_runner.rs: no Cranelift, so a prebuilt stub + appended .cwasm needs no Rust toolchain.
+[package]
+name = "warp-runtime"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "warp-runtime"
+path = "src/main.rs"
+
+[dependencies]
+wasmtime = { version = "49.0.1", default-features = false, features = ["runtime", "gc", "gc-copying", "std"] }

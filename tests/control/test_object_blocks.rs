@@ -1,5 +1,5 @@
 //! wiki/charged.md section 4, stage 2: `{statements}` assigned is a block, an object's computed `key: value` entry is an
-//! uncharged block (`o.s1!` runs it, `o.s1 + 1` is a type error), `key = value` entries are values, and `obj!` runs an
+//! uncharged block (`o.s1!` runs it, `o.s1 + 1` is a type error), `key = value` / `key := value` entries are values, and `obj!` runs an
 //! object as code: each `key: value` is the call `key(value)` (`help!`)
 use crate::common::fails_with;
 use warp::diagnostic::take_warnings;
@@ -34,4 +34,11 @@ fn test_a_computed_entry_warns_where_it_is_written() {
 #[test]
 fn test_an_object_runs_as_code() {
 	is!("help = {print: \"there is help\"}; help!", "there is help");
+}
+
+#[test]
+fn test_charged_object_fields_are_value_now() {
+	// g-qUmA: object `:=` is value-now like `=` (top-level P71 := unchanged)
+	is!("o = {a: 1, s := clock()}; o.a", 1);
+	is!("o = {a: 1, s := clock()}; o.s > 1700000000000", true);
 }

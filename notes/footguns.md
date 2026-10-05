@@ -92,16 +92,18 @@
   `warp data` has no JSON output option.
 
 ## Work area "closures-defaults" (2026-09-27)
-- Fixed: closures capture outer variables by value at the definition point (`test_closures_capture_values`,
+- Fixed: closures capture outer / loop variables (`test_closures_capture_values`,
   `test_closures_in_loop_capture_each_iteration`). `analyzer::captured_variables` finds free variables bound in main;
   each gets a mutable WASM global per function, set where the definition appears (`emit_closure_capture`), and the body
   reads it through `user_globals` while it is compiled. Ref-kind (list/text) globals are nullable `ref $Node`.
 - Fixed: default arguments are evaluated at every call (`test_default_argument_is_fresh_per_call`). Parameters take the
   kind of their default (`analyzer::param_kind`), so list/text/float defaults no longer panic in numeric emission.
-- Decided: capture by value (DESIGN.md immutable bindings) over by-reference (wiki/assignment.md `z := y*y` sketch).
-- Left open: functions are not first-class, so "a list of closures from a loop" is not expressible; a name is its latest
-  definition. Functions still only see main-level variables (no nested functions capturing a function's locals);
-  a call before the definition reads zero/null globals. `a.add(1)` on a list does not mutate it (lists area).
+- Decided (revised 2026-10-05, wiki/charged.md §3 / wiki/Footguns.md): free variables are read at call time (late
+  binding); a change after the definition needs `global`/`nonlocal` or is a compile error; loop variables stay
+  per-iteration. Earlier decision was capture by value at definition (DESIGN.md immutable bindings).
+  (`tests/functions/test_late_binding.rs`)
+- Left open at the time: functions were not first-class; nested capture and first-class closures have since landed
+  (notes/closures.md). `a.add(1)` on a list does not mutate it (lists area).
 
 ## Work area "truthiness-null-errors" (2026-09-27)
 - Fixed: declared types enforced (`x:int=5;x="five"` → Error with position and fix-it; `x:float=5` widens), null-use check
@@ -123,7 +125,8 @@
 - Decimal literals with ≤ 15 significant digits are exact (`Number::is_exact_decimal`); π, sqrt, FFI floats stay f64.
 - Left open (Decision needed in Footguns.md): negative modulo (existing tests pin C semantics), rounding-mode naming,
   bool kind, and `test_float_plus_int_type_upgrading` which requires a Float where the exact result is now a Quotient.
-- Other gaps: ratios with parts beyond i64 read back as f64 (Quotient is (i64,i64)); `3 == 3.0000000000000001` still true
+- Fixed: ratios with parts beyond i64 read back as `Number::BigQuotient` (exact), not f64; Quotient stays (i64,i64).
+- Other gaps: `3 == 3.0000000000000001` still true
   (literal parsed to f64 first); `law`/Lean export still treats `/` as unsupported ("yields a Float" comment in law/lean.rs is stale).
 ## Work area "injection" (2026-09-27)
 - Fixed (verified via CI on claude/footguns-injection): `src/injection.rs` lowers `sql "…"` / `sh "…"` before effects and

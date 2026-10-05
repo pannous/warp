@@ -8,7 +8,7 @@
 use crate::analyzer::{captured_variables, collect_variables, Scope};
 use crate::effects::EffectReport;
 use crate::extensions::numbers::Number;
-use crate::late_binding::{functions_in, statements_of};
+use crate::late_binding::{changes_in, functions_in, map_statements, statements_of};
 use crate::node::{Bracket, Node, Separator};
 use crate::function_values::{definitions, Definition};
 use crate::operators::Op;
@@ -20,10 +20,144 @@ const MAX_VARIANTS: usize = 32;
 /// Between a function's name and the constant arguments of its variant: `power·n3`
 const VARIANT_SEPARATOR: &str = "·";
 
-/// The precomputed paths of a compiled module: constant arguments specialised, the variants inlined where small,
-/// constant calls folded
+/// The precomputed paths of a compiled module: constant free variables inlined, constant arguments specialised, the
+/// variants inlined where small, constant calls folded
 pub fn precompute(program: Node) -> Node {
-	fold_constant_calls(specialise_constant_arguments(program))
+	fold_constant_calls(specialise_constant_arguments(fold_constant_free_variables(program)))
+}
+
+/// Constant free variables folded (wiki/charged.md §3): a main-level variable bound once to a constant before a
+/// function's definition and never changed is the same value at every call, so the function's body reads the
+/// constant itself (`k = 3; def f(x){x+k}` → `x+3`), and Int arithmetic left constant is computed (`k*k` → `9`).
+/// Not inlined: a `global` variable (also one first bound after the definition, which late binding made global), a
+/// variable changed anywhere in main, a non-constant value, a declared type, a body that defines functions of its own
+/// or changes the variable, a name also used as a key or property (`m.k`, `{k:1}`). A function body with no inlined
+/// variable keeps its form.
+pub fn fold_constant_free_variables(program: Node) -> Node {
+	let statements = statements_of(&program);
+	let mut main = Scope::new();
+	collect_variables(&program, &mut main);
+	let mut index = 0;
+	map_statements(program, &mut |statement| {
+		let rewritten = with_constant_free_variables(statement, &statements, index, &main);
+		index += 1;
+		rewritten
+	})
+}
+
+/// The definition in statement `index` with its constant free variables in place
+fn with_constant_free_variables(statement: Node, statements: &[Node], index: usize, main: &Scope) -> Node {
+	let functions = functions_in(&statement);
+	let [function] = functions.as_slice() else { return statement };
+	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = statement.drop_meta() else { return statement };
+	let is_head = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if *name == function.name));
+	if !is_head || defines_functions(body) {
+		return statement;
+	}
+	let constants: Vec<(String, Node)> = captured_variables(function, main).into_iter()
+		.map(|(name, _)| name)
+		.filter(|name| !main.is_global(name) && changes_in(body, name).is_empty() && is_read_as_value_only(body, name))
+		.filter_map(|name| constant_binding(statements, index, &name).map(|value| (name, value)))
+		.collect();
+	if constants.is_empty() {
+		return statement;
+	}
+	let mut folded = body.as_ref().clone();
+	for (name, value) in &constants {
+		folded = crate::library_words::substitute(folded, name, value);
+	}
+	let rewritten = Node::Key(head.clone(), *op, Box::new(computed(folded)));
+	match statement {
+		Node::Meta { data, .. } => Node::Meta { node: Box::new(rewritten), data },
+		_ => rewritten,
+	}
+}
+
+/// The constant `name` is bound to by the only change of it in main: a statement `name = constant` before the
+/// definition in statement `index`, the name without a declared type
+fn constant_binding(statements: &[Node], index: usize, name: &str) -> Option<Node> {
+	let mut changes = statements.iter().enumerate()
+		.filter(|(_, statement)| functions_in(statement).is_empty())
+		.flat_map(|(at, statement)| changes_in(statement, name).into_iter().map(move |change| (at, statement, change)));
+	let (at, statement, change) = changes.next()?;
+	if changes.next().is_some() || at >= index || !std::ptr::eq(statement.drop_meta(), change.drop_meta()) {
+		return None;
+	}
+	match change.drop_meta() {
+		Node::Key(target, Op::Assign, value) if is_plain_symbol(target) && is_constant(value) => Some(value.drop_meta().clone()),
+		_ => None,
+	}
+}
+
+/// A name without a declared type (`x:T = v` keeps T as a Symbol in a Meta around x, analyzer `lower_declarations`)
+fn is_plain_symbol(node: &Node) -> bool {
+	match node {
+		Node::Symbol(_) => true,
+		Node::Meta { node, data } => !matches!(data.as_ref(), Node::Symbol(_)) && is_plain_symbol(node),
+		_ => false,
+	}
+}
+
+/// A function or lambda defined inside the body: its parameters could shadow a main-level name
+fn defines_functions(body: &Node) -> bool {
+	let mut found = false;
+	body.visit(&mut |node| found |= matches!(node, Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _)));
+	found
+}
+
+/// Is every use of `name` in `node` a read of its value: not a property (`m.k`), a key (`m#k`, `{k: 1}`), a target
+fn is_read_as_value_only(node: &Node, name: &str) -> bool {
+	let named = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == name);
+	let mentions = |node: &Node| {
+		let mut found = false;
+		node.visit(&mut |part| found |= matches!(part, Node::Symbol(word) if word == name));
+		found
+	};
+	match node {
+		Node::Meta { node, .. } => is_read_as_value_only(node, name),
+		// `c ? a : b`: both branches are values
+		Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
+			Node::Key(chosen, Op::Colon, otherwise) => [condition, chosen, otherwise].iter().all(|part| is_read_as_value_only(part, name)),
+			_ => is_read_as_value_only(condition, name) && is_read_as_value_only(branches, name),
+		},
+		Node::Key(left, Op::Colon, right) => !mentions(left) && is_read_as_value_only(right, name),
+		Node::Key(left, Op::Dot | Op::Hash, right) => !named(right) && is_read_as_value_only(left, name) && is_read_as_value_only(right, name),
+		Node::Key(left, _, right) => is_read_as_value_only(left, name) && is_read_as_value_only(right, name),
+		Node::List(items, _, _) => items.iter().all(|item| is_read_as_value_only(item, name)),
+		_ => true,
+	}
+}
+
+/// Int arithmetic of constants computed (`3*4` → `12`) and a condition on constants decided: what is left of a body
+/// once its free variables are constants. A comparison is computed only as a condition (its value is a boolean)
+fn computed(node: Node) -> Node {
+	let node = match node {
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(computed).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(computed(*left)), op, Box::new(computed(*right))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(computed(*node)), data },
+		other => other,
+	};
+	match node.drop_meta() {
+		Node::Key(left, op @ (Op::Add | Op::Sub | Op::Mul), right) => match decided(Node::Key(left.clone(), *op, right.clone())) {
+			value @ Node::Number(Number::Int(_)) => value,
+			_ => node,
+		},
+		Node::Key(if_then, Op::Else, _) => match if_then.drop_meta() {
+			Node::Key(head, Op::Then, _) => match head.drop_meta() {
+				Node::Key(_, Op::If, condition) if is_int_comparison(condition) => decided(node),
+				_ => node,
+			},
+			_ => node,
+		},
+		Node::Key(condition, Op::Question, _) if is_int_comparison(condition) => decided(node),
+		_ => node,
+	}
+}
+
+/// `3 > 2`: a comparison of two Int constants
+fn is_int_comparison(node: &Node) -> bool {
+	let int = |node: &Node| matches!(node.drop_meta(), Node::Number(Number::Int(_)));
+	matches!(node.drop_meta(), Node::Key(left, Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge, right) if int(left) && int(right))
 }
 
 pub fn fold_constant_calls(program: Node) -> Node {

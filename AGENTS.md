@@ -254,8 +254,11 @@ use `cargo fix --offline --allow-dirty --lib --bins` after each commit and commi
 ## To-dos
 This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
 not in todo.md: every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next); `todo list`,
-`todo move <card> <column>`, `todo done <card>` (never delete a card). Without the board, `todo add` falls back to
-todo.md "## Fallback"; `todo import` moves those entries later.
+`todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). `todo done` moves the card to Done and
+links the fixing commit in its body (default HEAD, so run it right after committing the fix). Without the board,
+`todo add` falls back to todo.md "## Fallback"; `todo import` moves those entries later.
+
+**Batch board writes.** The `todo` CLI talks to GitHub Projects over GraphQL. That quota is shared and bursts run out fast when several agents call `todo list` / `todo done` / `todo move` in parallel — the board then returns "API rate limit exceeded" until the window resets (often under an hour). Prefer one writer (Supervisor): queue Done marks and column moves, apply them in one short batch, and avoid polling `todo list` from every worker. This is not a Fritz/Grok setting; fewer parallel board calls is the fix.
 
 Other than fixme comment you can find new tasks via tests marked #[ignore = "next"] or even #[ignore = "soon"] 
 un-ignore everything once it passes 
