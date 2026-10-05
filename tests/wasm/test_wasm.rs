@@ -1069,13 +1069,9 @@ fn test_square() {
 	is!(".1", 0.1);
 	{
 		// and !LINUX // todo why
-		skip!(
-
-			is!("i=-9;√-i", 3);
+		is!("i=-9;√-i", 3);
 		is!("n=3;2ⁿ", 8);
 		is!("n=3.0;2.0ⁿ", 8);
-		//	function attempted to return an incompatible value WHAT DO YOU MEAN!?
-		);
 	}
 }
 

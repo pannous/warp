@@ -32,6 +32,8 @@ RUN_SECONDS=$((SECONDS - RUN_START))
 
 # Strip ANSI color codes so the summary greps work on the raw log
 sed -i '' $'s/\033\[[0-9;]*m//g' "$TEMP_FILE"
+# output with a newline can push a result onto the next line (`test x ... ` then `ok <0.003s>`): join the two
+awk '/ \.\.\. $/ { printf "%s", $0; next } { print }' "$TEMP_FILE" > "$TEMP_FILE.joined" && mv "$TEMP_FILE.joined" "$TEMP_FILE"
 
 # Count test results
 # a test's own output (a wasm program writing to stdout) can glue onto its "test … ok" line: match the test anywhere

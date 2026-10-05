@@ -352,6 +352,15 @@ fn superscript_sign(ch: char) -> Option<i64> {
 	}
 }
 
+/// Superscript letters and the letters they raise: `2ⁿ` is 2^n
+const SUPERSCRIPT_LETTERS: [(char, char); 25] = [('ᵃ', 'a'), ('ᵇ', 'b'), ('ᶜ', 'c'), ('ᵈ', 'd'), ('ᵉ', 'e'), ('ᶠ', 'f'), ('ᵍ', 'g'),
+	('ʰ', 'h'), ('ⁱ', 'i'), ('ʲ', 'j'), ('ᵏ', 'k'), ('ˡ', 'l'), ('ᵐ', 'm'), ('ⁿ', 'n'), ('ᵒ', 'o'), ('ᵖ', 'p'), ('ʳ', 'r'),
+	('ˢ', 's'), ('ᵗ', 't'), ('ᵘ', 'u'), ('ᵛ', 'v'), ('ʷ', 'w'), ('ˣ', 'x'), ('ʸ', 'y'), ('ᶻ', 'z')];
+
+fn superscript_letter(ch: char) -> Option<char> {
+	SUPERSCRIPT_LETTERS.iter().find(|(raised, _)| *raised == ch).map(|(_, letter)| *letter)
+}
+
 fn superscript_digit(ch: char) -> Option<i64> {
 	SUPERSCRIPT_DIGITS.chars().position(|digit| digit == ch).map(|position| position as i64)
 }
@@ -3040,8 +3049,48 @@ impl WaspParser {
 		(length > 0).then_some((exponent, length, signed))
 	}
 
-	/// `x⁴` is x^4, `x⁻¹` is 1/x; the single digits ² and ³ keep their dedicated square and cube operators
+	/// The exponent of superscript terms with a letter among them: `ⁿ` → n, `ⁿ⁺ᵐ` → n+m, `ⁿ⁺¹` → n+1; its length in
+	/// characters and whether it starts with ⁻
+	fn superscript_variable_exponent(&self) -> Option<(Node, usize, bool)> {
+		let at = |offset: usize| self.chars.get(self.pos + offset).copied();
+		let (mut terms, mut length, mut has_letter) = (vec![], 0usize, false);
+		loop {
+			let sign = at(length).and_then(superscript_sign);
+			let start = length + usize::from(sign.is_some());
+			let letters: String = (start..).map_while(|offset| at(offset).and_then(superscript_letter)).collect();
+			let digits: Vec<i64> = (start..).map_while(|offset| at(offset).and_then(superscript_digit)).collect();
+			let term = if !letters.is_empty() {
+				has_letter = true;
+				length = start + letters.chars().count();
+				Node::Symbol(letters)
+			} else if !digits.is_empty() {
+				length = start + digits.len();
+				Node::int(digits.iter().fold(0i64, |run, digit| run.saturating_mul(10).saturating_add(*digit)))
+			} else {
+				break;
+			};
+			terms.push((sign.unwrap_or(1), term));
+		}
+		if !has_letter {
+			return None;
+		}
+		let negative = terms.first().is_some_and(|(sign, _)| *sign < 0);
+		let mut terms = terms.into_iter();
+		let (_, first) = terms.next()?;
+		let exponent = terms.fold(first, |sum, (sign, term)| Node::Key(Box::new(sum), if sign < 0 { Op::Sub } else { Op::Add }, Box::new(term)));
+		Some((exponent, length, negative))
+	}
+
+	/// `x⁴` is x^4, `x⁻¹` is 1/x, `2ⁿ` is 2^n; the single digits ² and ³ keep their dedicated square and cube operators
 	fn try_parse_superscript_power(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		if let Some((exponent, length, negative)) = self.superscript_variable_exponent() {
+			if Op::Pow.binding_power().0 < min_bp {
+				return None;
+			}
+			self.advance_by(length);
+			let power = Node::Key(Box::new(lhs.clone()), Op::Pow, Box::new(exponent));
+			return Some(if negative { Node::Key(Box::new(Node::int(1)), Op::Div, Box::new(power)) } else { power });
+		}
 		let (exponent, length, signed) = self.superscript_exponent()?;
 		let (op, right) = match (exponent, length, signed) {
 			(2, 1, false) => (Op::Square, Empty),
@@ -3590,6 +3639,10 @@ impl WaspParser {
 			return number;
 		}
 		let next = self.current_char();
+		// `2ⁿ` raises, it multiplies nothing (try_parse_superscript_power)
+		if superscript_letter(next).is_some() {
+			return number;
+		}
 		let tight = (next.is_alphabetic() || next == '_' || next == '(') && !self.at_ordinal_suffix();
 		if !tight && !self.at_spaced_unit() {
 			return number;
