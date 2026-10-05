@@ -72,7 +72,8 @@ pub fn parameter_slots(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str)
 		return Err(format!("two parameters are named {shared}: use one-word parameter names here (`first name`, `last name` need multi-word identifiers)"));
 	}
 	if let [Node::Key(name, Op::Colon, type_name)] = parameters.as_slice() {
-		if name == type_name && uses_it(body) {
+		// `fibonacci number := … number … it …` uses both: the parameter keeps its name and `it` is the same value
+		if name == type_name && uses_it(body) && !uses_name(body, &name.name()) {
 			parameters = vec![typed(IT, &type_name.name())];
 		}
 	}
@@ -89,6 +90,12 @@ pub fn uses_it(node: &Node) -> bool {
 	uses_name(node, IT)
 }
 
+/// The parameters of a spaced definition head `name words… = body` (also `:=`): its slots when a word is a known type
+/// word; None for `f x = …` without one, which keeps its old meaning (each word a parameter)
+pub fn spaced_parameters(words: &[&str], body: &Node) -> Option<Result<Vec<Node>, String>> {
+	words.iter().any(|word| is_type_word(word)).then(|| parameter_slots(words, body, &is_type_word))
+}
+
 /// The statement `name words… last = body` (parsed as the items `name`, `words…`, `last=body`) as `name(params) := body`
 fn spaced_definition(items: &[Node]) -> Option<Node> {
 	let (name, rest) = items.split_first()?;
@@ -96,10 +103,7 @@ fn spaced_definition(items: &[Node]) -> Option<Node> {
 	let name = word(name).filter(|name| names_a_function(name))?;
 	let Node::Key(last_word, Op::Assign | Op::Define, body) = last.drop_meta() else { return None };
 	let words: Vec<&str> = middle.iter().chain(std::iter::once(last_word.as_ref())).map(word).collect::<Option<_>>()?;
-	if !words.iter().any(|word| is_type_word(word)) {
-		return None; // `f x = …` without a type word keeps its old meaning
-	}
-	let parameters = match parameter_slots(&words, body, &is_type_word) {
+	let parameters = match spaced_parameters(&words, body)? {
 		Ok(parameters) => parameters,
 		Err(message) => return Some(crate::node::error(&message)),
 	};

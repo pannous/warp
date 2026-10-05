@@ -562,11 +562,11 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 		Node::List(items, bracket, separator) if spaced_definition(&items).is_some() => {
 			let (name, parameters, body) = spaced_definition(&items).expect("guarded");
 			let body = lower_spaced_definitions(body);
-			let body = match parameters.as_slice() {
-				[Node::Symbol(parameter)] if parameter != IT_PARAMETER => crate::law::substitute(&body, &[(IT_PARAMETER.to_string(), Node::Symbol(parameter.clone()))].into()),
-				_ => body,
-			};
 			let head = Node::List([vec![name], parameters].concat(), Bracket::Round, Separator::None);
+			let body = match one_parameter(&head) {
+				Some(parameter) => crate::law::substitute(&body, &[(IT_PARAMETER.to_string(), Node::Symbol(parameter))].into()),
+				None => body,
+			};
 			let _ = (bracket, separator);
 			Node::Key(Box::new(head), Op::Define, Box::new(body))
 		}
@@ -627,24 +627,15 @@ fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
 		return None;
 	}
 	let words: Vec<Node> = parameters.iter().map(|parameter| parameter.drop_meta().clone()).chain(std::iter::once(last.drop_meta().clone())).collect();
-	Some((name.drop_meta().clone(), typed_words(words), applied_to_last(body.as_ref().clone(), extra)))
-}
-
-/// `int x y` as the parameters `x:int`, `y`: a type word types the name after it
-fn typed_words(words: Vec<Node>) -> Vec<Node> {
-	let mut parameters = vec![];
-	let mut words = words.into_iter().peekable();
-	while let Some(word) = words.next() {
-		let is_type = matches!(&word, Node::Symbol(name) if crate::analyzer::type_word_kind(name).is_some());
-		match words.peek() {
-			Some(Node::Symbol(_)) if is_type => {
-				let name = words.next().expect("peeked");
-				parameters.push(Node::Key(Box::new(name), Op::Colon, Box::new(word)));
-			}
-			_ => parameters.push(word),
-		}
-	}
-	parameters
+	let names: Vec<String> = words.iter().map(Node::name).collect();
+	let names: Vec<&str> = names.iter().map(String::as_str).collect();
+	// one parse with type_name_matching: `square of a number := …` takes the same slots as with `=`
+	let parameters = match crate::type_name_matching::spaced_parameters(&names, body) {
+		None => words,
+		Some(Ok(parameters)) => parameters,
+		Some(Err(_)) => return None, // type_name_matching reports it
+	};
+	Some((name.drop_meta().clone(), parameters, applied_to_last(body.as_ref().clone(), extra)))
 }
 
 /// The one named parameter of a definition head `f(x)` (`f(x:int)`), not `it`
