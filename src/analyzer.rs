@@ -3635,6 +3635,8 @@ fn lift_nested_defs_walk(ctx: &mut Context, node: Node, parent: &str, renames: &
 			op,
 			Box::new(lift_nested_defs_walk(ctx, *right, parent, renames)),
 		),
+		// quoted data (the program a run-time block carries) is not code of this body
+		quoted if crate::run_time_blocks::is_data(&quoted) => quoted,
 		Node::List(items, bracket, separator) => {
 			if items.len() >= 2 {
 				if let Node::Symbol(keyword) = items[0].drop_meta() {
