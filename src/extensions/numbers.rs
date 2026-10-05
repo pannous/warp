@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use num_bigint::BigInt;
-use super::reals::Real;
+use super::reals::{Rational, Real};
 use num_integer::Integer;
 use num_traits::{One, Pow, Signed, ToPrimitive, Zero};
 
@@ -12,6 +12,10 @@ fn deserialize_leaked_real<'de, D: serde::Deserializer<'de>>(deserializer: D) ->
 
 fn deserialize_leaked_bigint<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static BigInt, D::Error> {
 	BigInt::deserialize(deserializer).map(|big| &*Box::leak(Box::new(big)))
+}
+
+fn deserialize_leaked_rational<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static Rational, D::Error> {
+	Rational::deserialize(deserializer).map(|ratio| &*Box::leak(Box::new(ratio)))
 }
 
 // PartialEq per hand!
@@ -29,6 +33,9 @@ pub enum Number {
 	/// Integer beyond i64: always normalized, a value that fits i64 is `Int`.
 	/// Leaked to keep Number Copy: every distinct big value costs its memory for the process lifetime.
 	BigInt(#[serde(deserialize_with = "deserialize_leaked_bigint")] &'static BigInt),
+	/// Exact ratio whose numerator or denominator exceeds i64. Leaked like BigInt to keep Number Copy.
+	/// A ratio that fits in two i64 is always `Quotient`.
+	BigQuotient(#[serde(deserialize_with = "deserialize_leaked_rational")] &'static Rational),
 	/// Exact real beyond Q (2√2, π/2, 3+√2) or a marked approximation (≈0.841…), see reals.rs.
 	/// Rationals never take this form. Leaked like BigInt to keep Number Copy.
 	Real(#[serde(deserialize_with = "deserialize_leaked_real")] &'static Real),
@@ -45,6 +52,7 @@ impl Number {
 			Number::Int(i) => *i == 0,
 			Number::BigInt(b) => b.is_zero(),
 			Number::Quotient(n, _d) => *n == 0,
+			Number::BigQuotient(q) => q.is_zero(),
 			Number::Complex(r, i) => *r == 0.0 && *i == 0.0,
 			Number::Float(f) => *f == 0.0,
 			Number::Real(r) => r.is_zero(),
@@ -56,6 +64,7 @@ impl Number {
 			Number::Int(i) => i.abs() as f64,
 			Number::BigInt(b) => b.to_f64().unwrap_or(f64::INFINITY).abs(),
 			Number::Quotient(n, d) => (*n as f64 / *d as f64).abs(),
+			Number::BigQuotient(q) => q.to_f64().abs(),
 			Number::Complex(r, i) => (r * r + i * i).sqrt(),
 			Number::Float(f) => f.abs(),
 			Number::Real(r) => r.to_f64().abs(),
@@ -89,9 +98,16 @@ impl Number {
 	}
 
 	/// Exact numerator/denominator in lowest terms: an integral value is an integer, n/0 is ±∞ or NaN.
-	/// Parts beyond i64 have no `Quotient` form yet and fall back to a (warned) Float approximation.
+	/// Parts beyond i64 become `BigQuotient` (exact), never a silent Float.
 	pub fn ratio(numerator: Number, denominator: Number) -> Number {
-		let (numerator, denominator) = (numerator.to_bigint(), denominator.to_bigint());
+		let (numerator, denominator) = match (&numerator, &denominator) {
+			(Number::Quotient(..) | Number::BigQuotient(_), _) | (_, Number::Quotient(..) | Number::BigQuotient(_)) => {
+				let left = numerator.to_rational();
+				let right = denominator.to_rational();
+				(left.numerator * right.denominator, left.denominator * right.numerator)
+			}
+			_ => (numerator.to_bigint(), denominator.to_bigint()),
+		};
 		if denominator.is_zero() {
 			return match numerator.signum().to_i64() {
 				Some(1) => Number::Inf,
@@ -99,34 +115,49 @@ impl Number {
 				_ => Number::Nan,
 			};
 		}
-		let divisor = numerator.gcd(&denominator) * denominator.signum();
-		let (numerator, denominator) = (numerator / &divisor, denominator / &divisor);
-		if denominator.is_one() {
-			return Number::from_bigint(numerator);
+		Number::from_rational(Rational::new(numerator, denominator))
+	}
+
+	/// Normalize: a ratio that fits two i64 is `Quotient`, only larger ones are `BigQuotient`
+	pub fn from_rational(ratio: Rational) -> Number {
+		if ratio.is_integer() {
+			return Number::from_bigint(ratio.numerator);
 		}
-		match (numerator.to_i64(), denominator.to_i64()) {
+		match (ratio.numerator.to_i64(), ratio.denominator.to_i64()) {
 			(Some(n), Some(d)) => Number::Quotient(n, d),
-			_ => {
-				log::warn!("ratio {numerator}/{denominator} exceeds i64 parts, approximated as Float");
-				Number::Float(numerator.to_f64().unwrap_or(f64::NAN) / denominator.to_f64().unwrap_or(f64::NAN))
-			}
+			_ => Number::BigQuotient(Box::leak(Box::new(ratio))),
+		}
+	}
+
+	pub fn to_rational(&self) -> Rational {
+		match self {
+			Number::Int(i) => Rational::integer(*i),
+			Number::BigInt(b) => Rational::integer((*b).clone()),
+			Number::Quotient(n, d) => Rational::new(BigInt::from(*n), BigInt::from(*d)),
+			Number::BigQuotient(q) => (*q).clone(),
+			other => panic!("not a rational: {}", other),
 		}
 	}
 
 	/// `n/d` as an exact decimal when it terminates (denominator 2^a·5^b): 1/8 → "0.125", 1/3 → None
 	fn terminating_decimal(numerator: i64, denominator: i64) -> Option<String> {
+		Number::terminating_decimal_big(BigInt::from(numerator), BigInt::from(denominator))
+	}
+
+	fn terminating_decimal_big(numerator: BigInt, denominator: BigInt) -> Option<String> {
 		let divisor = numerator.gcd(&denominator) * denominator.signum();
-		let (numerator, denominator) = (BigInt::from(numerator / divisor), denominator / divisor);
-		let (mut rest, mut digits) = (denominator, 0u32);
-		for factor in [2, 5] {
+		let (numerator, denominator) = (numerator / &divisor, denominator / &divisor);
+		let (mut rest, mut digits) = (denominator.clone(), 0u32);
+		for factor in [2i64, 5] {
+			let factor = BigInt::from(factor);
 			let mut count = 0;
-			while rest % factor == 0 {
-				rest /= factor;
+			while (&rest % &factor).is_zero() {
+				rest /= &factor;
 				count += 1;
 			}
 			digits = digits.max(count);
 		}
-		if rest != 1 {
+		if !rest.is_one() {
 			return None;
 		}
 		let scaled = (numerator * BigInt::from(10).pow(digits) / denominator).to_string();
@@ -162,6 +193,10 @@ impl Display for Number {
 				Some(decimal) => write!(f, "{}", decimal),
 				None => write!(f, "{}/{}", numer, denom),
 			},
+			Number::BigQuotient(q) => match Number::terminating_decimal_big(q.numerator.clone(), q.denominator.clone()) {
+				Some(decimal) => write!(f, "{}", decimal),
+				None => write!(f, "{}", q),
+			},
 			Number::Complex(real, imag) => write!(f, "{} + {}i", real, imag),
 			Number::Real(real) => write!(f, "{}", real),
 			Number::Nan => write!(f, "NaN"),
@@ -177,11 +212,13 @@ impl Add for Number {
 	fn add(self, other: Self) -> Self::Output {
 		match (self, other) {
 			(Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => {
-				// a/b + c/d = (ad + bc) / bd
-				Number::Quotient(n1 * d2 + n2 * d1, d1 * d2)
+				Number::from_rational(Rational::new(BigInt::from(n1), BigInt::from(d1)).add(&Rational::new(BigInt::from(n2), BigInt::from(d2))))
 			}
 			(Number::Int(n1), Number::Int(n2)) => n1.checked_add(n2).map(Number::Int).unwrap_or_else(|| Number::from_bigint(BigInt::from(n1) + BigInt::from(n2))),
 			(a, b) if a.is_integer() && b.is_integer() => Number::from_bigint(a.to_bigint() + b.to_bigint()),
+			(a, b) if matches!(a, Number::Quotient(..) | Number::BigQuotient(_)) || matches!(b, Number::Quotient(..) | Number::BigQuotient(_)) => {
+				Number::from_rational(a.to_rational().add(&b.to_rational()))
+			}
 			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 + n2),
 			(Number::Complex(r1, i1), Number::Complex(r2, i2)) => Number::Complex(r1 + r2, i1 + i2),
 			// Mixed type conversions - convert to Float
@@ -201,6 +238,7 @@ impl Neg for Number {
 			Number::BigInt(big) => Number::from_bigint(-big.clone()),
 			Number::Float(f) => Number::Float(-f),
 			Number::Quotient(n, d) => Number::Quotient(-n, d),
+			Number::BigQuotient(q) => Number::from_rational(q.neg()),
 			Number::Complex(r, i) => Number::Complex(-r, -i),
 			Number::Real(r) => Number::real(r.neg()),
 			Number::Inf => Number::NegInf,
@@ -216,11 +254,13 @@ impl Sub for Number {
 	fn sub(self, other: Self) -> Self::Output {
 		match (self, other) {
 			(Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => {
-				// a/b - c/d = (ad - bc) / bd
-				Number::Quotient(n1 * d2 - n2 * d1, d1 * d2)
+				Number::from_rational(Rational::new(BigInt::from(n1), BigInt::from(d1)).add(&Rational::new(BigInt::from(n2), BigInt::from(d2)).neg()))
 			}
 			(Number::Int(n1), Number::Int(n2)) => n1.checked_sub(n2).map(Number::Int).unwrap_or_else(|| Number::from_bigint(BigInt::from(n1) - BigInt::from(n2))),
 			(a, b) if a.is_integer() && b.is_integer() => Number::from_bigint(a.to_bigint() - b.to_bigint()),
+			(a, b) if matches!(a, Number::Quotient(..) | Number::BigQuotient(_)) || matches!(b, Number::Quotient(..) | Number::BigQuotient(_)) => {
+				Number::from_rational(a.to_rational().add(&b.to_rational().neg()))
+			}
 			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 - n2),
 			(Number::Complex(r1, i1), Number::Complex(r2, i2)) => Number::Complex(r1 - r2, i1 - i2),
 			// Mixed type conversions - convert to Float
@@ -237,11 +277,13 @@ impl Mul for Number {
 	fn mul(self, other: Self) -> Self::Output {
 		match (self, other) {
 			(Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => {
-				// a/b * c/d = ac / bd
-				Number::Quotient(n1 * n2, d1 * d2)
+				Number::from_rational(Rational::new(BigInt::from(n1), BigInt::from(d1)).mul(&Rational::new(BigInt::from(n2), BigInt::from(d2))))
 			}
 			(Number::Int(n1), Number::Int(n2)) => n1.checked_mul(n2).map(Number::Int).unwrap_or_else(|| Number::from_bigint(BigInt::from(n1) * BigInt::from(n2))),
 			(a, b) if a.is_integer() && b.is_integer() => Number::from_bigint(a.to_bigint() * b.to_bigint()),
+			(a, b) if matches!(a, Number::Quotient(..) | Number::BigQuotient(_)) || matches!(b, Number::Quotient(..) | Number::BigQuotient(_)) => {
+				Number::from_rational(a.to_rational().mul(&b.to_rational()))
+			}
 			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 * n2),
 			(Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 * n2),
 			(Number::Float(n1), Number::Int(n2)) => Number::Float(n1 * n2 as f64),
@@ -259,18 +301,18 @@ impl Div for Number {
 
 	fn div(self, other: Self) -> Self::Output {
 		match (self, other) {
-			(Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => {
-				Number::Quotient(n1 * d2, d1 * n2)
-			}
-			(Number::Quotient(q1, q2), Number::Int(n2)) => Number::Quotient(q1, q2 * n2),
 			(Number::Quotient(q1, q2), Number::Float(n2)) => {
 				Number::Float(q1 as f64 / q2 as f64 * n2)
 			}
-			(Number::Int(n1), Number::Quotient(q1, q2)) => Number::Quotient(n1 * q2, q1),
 			(Number::Float(n1), Number::Quotient(q1, q2)) => {
 				Number::Float(n1 / q1 as f64 / q2 as f64)
 			}
-			(Number::Int(n1), Number::Int(n2)) => Number::Quotient(n1, n2),
+			(Number::BigQuotient(q), Number::Float(n2)) => Number::Float(q.to_f64() / n2),
+			(Number::Float(n1), Number::BigQuotient(q)) => Number::Float(n1 / q.to_f64()),
+			(a, b) if matches!(a, Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_))
+				&& matches!(b, Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_)) => {
+				Number::ratio(a, b)
+			}
 			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 / n2),
 			(Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 / n2),
 			(Number::Float(n1), Number::Int(n2)) => Number::Float(n1 / n2 as f64),
@@ -293,6 +335,7 @@ impl From<Number> for f64 {
 			Number::BigInt(b) => b.to_f64().unwrap_or(f64::NAN),
 			Number::Float(f) => f,
 			Number::Quotient(numer, denom) => numer as f64 / denom as f64,
+			Number::BigQuotient(q) => q.to_f64(),
 			Number::Complex(_, _) => unimplemented!(),
 			Number::Real(r) => r.to_f64(),
 			Number::Nan => f64::NAN,
@@ -324,8 +367,21 @@ impl PartialEq for Number {
 			// (Number::Float(f1), Number::Float(f2)) => f1 == f2,
 			(Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => n1 * d2 == n2 * d1,
 			(Number::Quotient(n, d), Number::Int(i)) | (Number::Int(i), Number::Quotient(n, d)) => *n == i * d,
+			(Number::BigQuotient(q1), Number::BigQuotient(q2)) => q1 == q2,
+			(Number::BigQuotient(q), Number::Quotient(n, d)) | (Number::Quotient(n, d), Number::BigQuotient(q)) => {
+				**q == Rational::new(BigInt::from(*n), BigInt::from(*d))
+			}
+			(Number::BigQuotient(q), Number::Int(i)) | (Number::Int(i), Number::BigQuotient(q)) => {
+				q.is_integer() && q.numerator == BigInt::from(*i)
+			}
+			(Number::BigQuotient(q), Number::BigInt(b)) | (Number::BigInt(b), Number::BigQuotient(q)) => {
+				q.is_integer() && &q.numerator == *b
+			}
 			(quotient @ Number::Quotient(..), Number::Float(f)) | (Number::Float(f), quotient @ Number::Quotient(..)) => {
 				f64::from(*quotient) as f32 == *f as f32
+			}
+			(Number::BigQuotient(q), Number::Float(f)) | (Number::Float(f), Number::BigQuotient(q)) => {
+				q.to_f64() as f32 == *f as f32
 			}
 			(Number::Complex(r1, i1), Number::Complex(r2, i2)) => r1 == r2 && i1 == i2,
 			(Number::Real(a), Number::Real(b)) => a == b,
@@ -353,6 +409,7 @@ impl PartialEq<i32> for Number {
 			Number::Int(i) => *i == *other as i64,
 			Number::Float(f) => *f == *other as f64,
 			Number::Quotient(n, d) => *n / d == *other as i64,
+			Number::BigQuotient(q) => q.is_integer() && q.numerator == BigInt::from(*other),
 			Number::Complex(r, i) => *r == *other as f64 && *i == 0.0,
 			_ => false,
 		}
@@ -365,6 +422,7 @@ impl PartialEq<i64> for Number {
 			Number::Int(i) => *i == *other,
 			Number::Float(f) => *f == *other as f64,
 			Number::Quotient(n, d) => *n / d == *other,
+			Number::BigQuotient(q) => q.is_integer() && q.numerator == BigInt::from(*other),
 			Number::Complex(r, i) => *r == *other as f64 && *i == 0.0,
 			_ => false,
 		}
@@ -391,6 +449,7 @@ impl PartialEq<f32> for Number {
 			Number::BigInt(b) => b.to_f32() == Some(*other),
 			Number::Float(f) => *f as f32 == *other,
 			Number::Quotient(n, d) => *n as f32 / *d as f32 == *other,
+			Number::BigQuotient(q) => q.to_f64() as f32 == *other,
 			Number::Complex(r, i) => *r as f32 == *other && *i == 0.0,
 			Number::Real(r) => r.to_f64() as f32 == *other,
 			Number::Nan => other.is_nan(),

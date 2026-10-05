@@ -193,6 +193,7 @@ fn number_value(number: &Number) -> Evaluated {
 		Number::Int(n) => exact(Rational::integer(*n)),
 		Number::BigInt(n) => exact(Rational::integer((*n).clone())),
 		Number::Quotient(n, d) => exact(Rational::new(BigInt::from(*n), BigInt::from(*d))),
+		Number::BigQuotient(q) => exact((*q).clone()),
 		Number::Float(f) if Number::is_exact_decimal(*f) => {
 			let (n, d) = crate::wasm_emitter::exact::decimal_fraction(*f);
 			exact(Rational::new(n, d))

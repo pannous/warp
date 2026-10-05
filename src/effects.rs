@@ -605,7 +605,7 @@ fn moves_toward(argument: &Node, parameter: &str, bound: Bound) -> bool {
 fn is_finite(number: &crate::extensions::numbers::Number) -> bool {
 	use crate::extensions::numbers::Number;
 	match number {
-		Number::Int(_) | Number::Quotient(..) | Number::BigInt(_) => true,
+		Number::Int(_) | Number::Quotient(..) | Number::BigQuotient(_) | Number::BigInt(_) => true,
 		Number::Float(value) => value.is_finite(),
 		_ => false,
 	}
@@ -618,12 +618,14 @@ fn sign(number: &crate::extensions::numbers::Number) -> i8 {
 		Number::Int(value) => *value > 0,
 		Number::Float(value) => value.is_finite() && *value > 0.0,
 		Number::Quotient(numerator, denominator) => (*numerator > 0) == (*denominator > 0) && *numerator != 0,
+		Number::BigQuotient(q) => !q.is_zero() && !q.is_negative(),
 		_ => return 0,
 	};
 	let negative = match number {
 		Number::Int(value) => *value < 0,
 		Number::Float(value) => value.is_finite() && *value < 0.0,
 		Number::Quotient(numerator, denominator) => (*numerator > 0) != (*denominator > 0) && *numerator != 0,
+		Number::BigQuotient(q) => q.is_negative(),
 		_ => false,
 	};
 	if positive { 1 } else if negative { -1 } else { 0 }
