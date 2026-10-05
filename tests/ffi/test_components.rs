@@ -60,3 +60,10 @@ fn test_component_failures_are_loud() {
 	fails_with(&format!("use wasm \"{path}\" as r; r.fib(1, 2)"), "fib takes 1 arguments (n), got 2");
 	fails_with("use wasm \"no/such.wasm\" as lib; lib.f(1)", "cannot load the component");
 }
+
+/// a field of a call result is the field of the record the component gave (card foreign-results)
+#[test]
+fn test_a_field_of_a_component_result_is_read() {
+	let path = rust_component();
+	is!(&format!("use wasm \"{path}\" as r; r.stats_of(\"hello big world\").letters"), 13);
+}
