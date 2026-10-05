@@ -57,8 +57,11 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
      `compiler` feature (Cranelift + the component model it turns off); the browser build gets only the word names.
    - Engines turn off the component model and its concurrency support, else the .cwasm refuses to load into a
      runtime built without them.
-   - macOS: appending keeps the ad-hoc signature valid enough to run, `codesign -v` reports "failed strict
-     validation"; a signed release would put the machine code in a Mach-O section instead (like bun --compile).
+   - macOS (2026-10-05, crates/warp-runtime/src/macho.rs): the stub's signature is dropped, the machine code appended
+     inside the __LINKEDIT segment (its file and memory size grown to cover it), and warp signs the executable ad hoc
+     (`codesign --sign - --force`): `codesign --verify --strict` passes. Plain appending after the signature ran but
+     failed strict validation. A Developer ID signature for distribution is the same codesign call with an identity.
+     The executable finds its program before the signature (LC_CODE_SIGNATURE), elsewhere at the end of the file.
 4. **wasmtime's own CLI**: `wasmtime compile -W gc=y,function-references=y` + `wasmtime run --allow-precompiled`
    works for import-free programs (11–12 ms per process).
 

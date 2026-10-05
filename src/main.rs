@@ -299,6 +299,13 @@ fn write_standalone_executable(code: &str, target: &str) {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&output, fs::Permissions::from_mode(EXECUTABLE_MODE)).unwrap_or_else(|failure| fail(failure.to_string()));
     }
+    // macOS starts only signed executables: an ad-hoc signature, which `codesign --verify --strict` accepts
+    #[cfg(target_os = "macos")]
+    match std::process::Command::new("codesign").args(["--sign", "-", "--force"]).arg(&output).output() {
+        Ok(signed) if signed.status.success() => {}
+        Ok(signed) => fail(format!("codesign {} failed: {}", output.display(), String::from_utf8_lossy(&signed.stderr).trim())),
+        Err(failure) => fail(format!("cannot run codesign for {}: {failure}", output.display())),
+    }
     println!("wrote {} ({} bytes: runtime {}, machine code {})", output.display(), executable.len(), stub.display(), machine_code.len());
 }
 

@@ -7,6 +7,8 @@ pub mod engine;
 #[cfg(feature = "engine")]
 pub mod libm;
 #[cfg(feature = "engine")]
+pub mod macho;
+#[cfg(feature = "engine")]
 pub mod output;
 #[cfg(feature = "engine")]
 pub mod standalone;
