@@ -17,6 +17,39 @@ const MAP_WORD: &str = "map";
 /// Declared parameter kinds that take one element of a list (P50)
 const SCALAR_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint];
 
+/// P84 (user: "This should have already been done with broadcasting"): several juxtaposed arguments of a function of one
+/// parameter are one list, `sum 1 2 3` is `sum [1 2 3]`, and a scalar function broadcasts over it (`square 1 2 3`).
+/// After the lambda passes, which make `sum := fold +` a function of one parameter; `f(1, 2, 3)` stays an arity error.
+pub fn lower_several_arguments(program: Node) -> Node {
+	let mut found = Vec::new();
+	definitions(&program, &mut found);
+	implicit_definitions(&program, &mut found);
+	let single: HashSet<String> = found.iter().filter(|definition| definition.params.len() == 1).map(|definition| definition.name.clone()).collect();
+	if single.is_empty() {
+		return program;
+	}
+	let mut gathered = false;
+	let program = gather_arguments(program, &single, &mut gathered);
+	if gathered { lower(program) } else { program }
+}
+
+/// `f 1 2 3` → `f [1 2 3]` of the functions `single`
+fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -> Node {
+	match node {
+		Node::List(items, Bracket::None, Separator::Space) if items.len() > 2 && matches!(items[0].drop_meta(), Node::Symbol(name) if single.contains(name)) => {
+			*gathered = true;
+			let mut items: Vec<Node> = items.into_iter().map(|item| gather_arguments(item, single, gathered)).collect();
+			let arguments = items.split_off(1);
+			items.push(Node::List(arguments, Bracket::Square, Separator::Space));
+			Node::List(items, Bracket::None, Separator::Space)
+		}
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| gather_arguments(item, single, gathered)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(gather_arguments(*left, single, gathered)), op, Box::new(gather_arguments(*right, single, gathered))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(gather_arguments(*node, single, gathered)), data },
+		other => other,
+	}
+}
+
 pub fn lower(program: Node) -> Node {
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
