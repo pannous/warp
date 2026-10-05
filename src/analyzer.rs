@@ -1699,10 +1699,43 @@ fn kebab_ambiguities(program: &Node) -> Vec<Diagnostic> {
 		if parts.len() < 2 || !parts.iter().all(|part| variables.contains(part)) {
 			return;
 		}
-		let message = format!("`{name}` is a data key here, but {} are also variables: `{}` would subtract", parts.join(" and "), parts.join(" - "));
-		warnings.push(Diagnostic::at(item, message).fix(format!("write {} for the subtraction", parts.join(" - "))));
+		let subtraction = parts.join(" - ");
+		let message = format!("`{name}` is a data key here, but {} are also variables: `{subtraction}` would subtract", parts.join(" and "));
+		let warning = Diagnostic::at(item, message).fix(format!("write {subtraction} for the subtraction"));
+		warnings.push(kebab_fixes(warning, program, name, &subtraction));
 	});
 	warnings
+}
+
+/// The readings of a kebab data key (user, P81): the data key quoted, when nothing reads it bare; the subtraction at
+/// each bare read (the key quoted); the data key renamed with underscores, at the key and at each bare read
+fn kebab_fixes(warning: Diagnostic, program: &Node, name: &str, subtraction: &str) -> Diagnostic {
+	let mut reads = vec![];
+	bare_reads(program, name, &mut reads);
+	let quoted = format!("\"{name}\"");
+	let at_reads = |fix: crate::fixits::Fix, replacement: &str| reads.iter().fold(fix, |fix, read| fix.and(name, replacement, *read));
+	let renamed = name.replace('-', "_");
+	let warning = match reads.is_empty() {
+		true => warning.offer(format!("the data key {name}"), name, quoted),
+		false => warning.offering(at_reads(crate::fixits::fix(format!("the subtraction {subtraction}"), name, quoted), subtraction)),
+	};
+	warning.offering(at_reads(crate::fixits::fix(format!("the data key, renamed {renamed}"), name, &renamed), &renamed))
+}
+
+/// Where `name` is read bare: not as a data key (`a-b:2`) or a member (`x.a-b`), which already mean the key
+fn bare_reads(node: &Node, name: &str, reads: &mut Vec<(usize, usize)>) {
+	match node {
+		Node::Meta { node: inner, .. } if matches!(inner.drop_meta(), Node::Symbol(read) if read == name) => reads.extend(crate::diagnostic::position(node)),
+		Node::Meta { node, .. } => bare_reads(node, name, reads),
+		Node::Key(_, Op::Colon, value) if data_binding(node).is_some() => bare_reads(value, name, reads),
+		Node::Key(left, Op::Dot, _) => bare_reads(left, name, reads),
+		Node::Key(left, _, right) => {
+			bare_reads(left, name, reads);
+			bare_reads(right, name, reads);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| bare_reads(item, name, reads)),
+		_ => {}
+	}
 }
 
 /// A symbol that is not a variable reads the value of the data key of that name given earlier in the same block:

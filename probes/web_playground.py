@@ -128,6 +128,15 @@ def main():
 	value = browser("get", "text", "#value")
 	print(f"{'ok  ' if value == '25' else 'FAIL'} the fix of an ambiguous braceless call: {value}")
 	if value != "25": failures.append("error fix button")
+	# a fix of several edits: the kebab key renamed at the key and at its read (P81)
+	browser("eval", "playground.setCode('a=5; b=1; a-b:2; a-b')")
+	time.sleep(1.5)
+	browser("eval", "[...document.querySelectorAll('.apply-fix')].find(button => button.textContent === 'I meant: a_b').click()")
+	time.sleep(1.5)
+	renamed = (browser("get", "text", "#value"), json.loads(browser("eval", "playground.code()")))
+	ok = renamed == ("2", "a=5; b=1; a_b:2; a_b")
+	print(f"{'ok  ' if ok else 'FAIL'} a fix of several edits renames the key and its read: {renamed}")
+	if not ok: failures.append("multi-edit fix button")
 
 	# the debug build (?debug, warp.debug.wasm) compiles the same programs
 	browser("open", PAGE + "?debug")

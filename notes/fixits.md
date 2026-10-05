@@ -6,25 +6,28 @@ in case the user did indeed intend something different". Builds the "Later: chan
 ## Mechanism
 - `fixits::Fix { meaning, written, replacement, at }` (src/fixits.rs): one reading the user might have meant. `written`
   is the text as the compiler shows it (serialized: spacing and list commas may differ from the source), `at` an
-  optional position when the text stands elsewhere than the diagnostic (main's `n=0` for `global n=0`).
+  optional position when the text stands elsewhere than the diagnostic (main's `n=0` for `global n=0`), `also` the
+  further edits one reading needs elsewhere (`.and(written, replacement, at)`: a data key and its reads).
 - `Diagnostic.fixes: Vec<Fix>` and `Diagnostic.topic` (src/diagnostic.rs); `.offer(meaning, written, replacement)`
   adds one, dropping a fix that changes nothing (the reading already written). Every `Ask` turns each reading into a
   fix by itself (`written` → `explicit_form`); a reading whose edit differs says so with `reading(..).replacing(written,
   replacement)` or `.fixed_by(fix)`. The prose `fix` stays as it was (messages unchanged).
 - `fixits::locate(source, line, column, written)`: every place the text stands, comparing without whitespace and
   commas, on word boundaries (`n =` never matches inside `fn =`); the one nearest the position wins.
-  `fixits::edit` → `Edit { range (bytes), replacement }`, `fixits::fixed(source, line, column, fix)` → the new source.
+  `fixits::edit` → `Edit { range (bytes), replacement }`; `fixits::edits` → all of a fix's edits, the last in the
+  source first (None when one is missing or two overlap); `fixits::fixed(source, line, column, fix)` → the new source.
   A later `warp fix` or an LSP code action starts there (`utf16_offset` for LSP/JS positions).
 - Errors lose their Diagnostic when they become `Node::Error`, so `Diagnostic::into_error` keeps the ones with fixes
   (`diagnostic::take_error_diagnostics`).
 - Hints (`normalize::hint`) are rewrites: `CapturedHint::fix()`; `normalize::advise` is a hint whose preferred form
   is said elsewhere (`global x` for a block's assignment) and offers no fix.
 - Web report (src/web.rs `evaluate`): warnings, `errors` (only when the program failed) and hints carry `fixes`:
-  `{label: "I meant: …", meaning, written, replacement, start, end}` with UTF-16 offsets of the editor text;
-  `start: null` when the text was not found (the page shows a disabled button: loud, not silent). Warnings also carry
+  `{label: "I meant: …", meaning, written, replacement, start, end, edits: [{start, end, replacement}]}` with UTF-16
+  offsets of the editor text; `start: null` (and no edits) when a text was not found (the page shows a disabled
+  button: loud, not silent). Warnings also carry
   `topic` for "got it".
-- Playground (web/playground/playground.js): each fix is a button; clicking replaces the range (CodeMirror
-  `posFromIndex`) and runs again. Next to the fixes, "got it" in the three scopes of got-it-scope (user, 2026-10-05):
+- Playground (web/playground/playground.js): each fix is a button; clicking applies its edits, the last in the text
+  first (CodeMirror `posFromIndex`), and runs again. Next to the fixes, "got it" in the three scopes of got-it-scope (user, 2026-10-05):
   "got it" (this expression: the warning's `expression_key` `topic@expression` joins the page's acknowledged list),
   "got it: all <topic>" (the topic), "// got it" (appends the comment to the warning's line). Notes without a
   warning use the report's `got_it` [{topic, expression}].
@@ -56,12 +59,13 @@ in case the user did indeed intend something different". Builds the "Later: chan
 | loop `it` hides the function's `it` (`for 1..3 {…}` and `for i in xs {…}`) | analyzer `hidden_function_it` | the loop's | `outer_it=it; for … {… outer_it …}` |
 | `(1, 2) == 1, 2` | tuples.rs | `((1,2) == 1), 2` | `(1, 2) == (1, 2)` |
 | `xs#1..3` | wasp_parser `hash_range_warning` | range from xs#1 | `xs#(1..3)` slice, `(xs#1)..3` |
+| kebab data key `a-b:2`, a and b variables (P81) | analyzer `kebab_fixes` | the data key | `"a-b":2` (only when nothing reads `a-b` bare); the subtraction `a - b` at every bare read (the key quoted); the key renamed `a_b` at the key and every bare read |
+| `for int in xs`, `for Friend in xs`, `for (it>2) in xs` (for-filter) | wasp_parser `filtered_body` | the filter | the header `for x in xs.filter(x => x is int)` / `for it in xs.filter(it => it>2)`, the body unchanged (none when the body names the item by the type word) |
 | style hints, educate_once notes (`let`, `**`, quotes, `&&`, `len(x)`, `x == int`, `a.copy()`, `o.field`) | normalize, lowering | as written | the preferred form (when the text is literally in the source) |
 
 ## No fix yet (todo.md)
-- kebab data key `a-b:2` with variables a, b: both readings need edits at the key and at its reads (several edits per
-  fix; Fix has one).
-- type-filter loop `for int in xs` (filter-loop): the explicit form `for x in xs { if x is int {…} }` needs the body.
+- type-filter loop whose body names the item by the type word (`for int in xs: print int`): the explicit header
+  renames the item, so the body's reads would need edits too.
 - `like`-checked data lacking or adding fields (traits.rs `field_warnings`): no value to invent for a missing field.
 - task control that never happens (declarations.rs `never_happens`), folder-scope module warnings (modules.rs):
   nothing in the source to rewrite.
