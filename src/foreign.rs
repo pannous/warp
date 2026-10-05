@@ -33,8 +33,9 @@ const INTERPRETERS: [Interpreter; 2] = [
 const BIG_INTEGER_KEY: &str = "$int";
 /// The request loop the child runs: {"module", "member", "arguments"} → {"value"} or {"error"}
 const FOREIGN_PYTHON_LOOP: &str = r#"
-import sys, json, importlib, numbers
+import sys, json, importlib, numbers, operator, types
 handles = {}
+operators = types.SimpleNamespace(**vars(operator), len=len, list=list)
 def handle(value):
     handles[len(handles) + 1] = value
     return {"$handle": len(handles), "type": type(value).__name__, "text": repr(value)[:200]}
@@ -62,7 +63,7 @@ for line in sys.stdin:
     request = json.loads(line)
     try:
         module = request["module"]
-        value = unplain(module) if isinstance(module, dict) else importlib.import_module(module)
+        value = unplain(module) if isinstance(module, dict) else operators if module == "operator" else importlib.import_module(module)
         for part in request["member"].split("."):
             value = getattr(value, part)
         if request["arguments"] is not None:
@@ -89,7 +90,11 @@ const plain = value => {
 	if (typeof value === "function" || typeof value === "object") return handle(value); // a Date, a Map, an instance, a function
 	return value;
 };
-const load = async name => name in globalThis ? globalThis[name] : (() => { try { return require(name); } catch (failure) { return import(name); } })();
+// what wasp's operators on a value of this runtime forward to (lowering/foreign_modules.rs)
+const operator = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
+	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
+	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
+const load = async name => name === "operator" ? operator : name in globalThis ? globalThis[name] : (() => { try { return require(name); } catch (failure) { return import(name); } })();
 let pending = Promise.resolve();
 require("readline").createInterface({ input: process.stdin }).on("line", line => {
 	pending = pending.then(async () => {
@@ -123,14 +128,17 @@ static RUNNING: Mutex<Vec<(&'static str, Runtime)>> = Mutex::new(Vec::new());
 /// `runtime.module.member(arguments…)`, or the member itself when it is no call, as a Node; `module` is a module's name
 /// or a handle
 pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments: &Node) -> Result<Node, String> {
-	let Some(interpreter) = INTERPRETERS.iter().find(|interpreter| interpreter.runtime == runtime) else {
-		return Err(format!("no foreign runtime {runtime}: known are {}", crate::foreign_modules::FOREIGN_RUNTIMES.join(", ")));
-	};
 	let arguments = match arguments.drop_meta() {
 		_ if !is_call => Value::Null,
 		Node::Empty => Value::Array(vec![]),
 		Node::List(items, _, _) => Value::Array(items.iter().map(json_of).collect()),
 		single => Value::Array(vec![json_of(single)]),
+	};
+	if runtime == crate::foreign_modules::COMPONENT_RUNTIME {
+		return component_call(&module.drop_meta().name(), member, &arguments);
+	}
+	let Some(interpreter) = INTERPRETERS.iter().find(|interpreter| interpreter.runtime == runtime) else {
+		return Err(format!("no foreign runtime {runtime}: known are {}", crate::foreign_modules::FOREIGN_RUNTIMES.join(", ")));
 	};
 	let (module, module_json) = match module.drop_meta() {
 		Node::Text(name) | Node::Symbol(name) => (name.clone(), Value::String(name.clone())),
@@ -144,6 +152,14 @@ pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments
 		(Some(value), _) => Ok(node_of(value)),
 		_ => Err(format!("{runtime} answered neither a value nor an error: {answer}")),
 	}
+}
+
+/// `lib.f(x)` of a component (src/components.rs): only calls, a component exports functions
+fn component_call(path: &str, member: &str, arguments: &Value) -> Result<Node, String> {
+	let Value::Array(arguments) = arguments else {
+		return Err(format!("wasm {path}: {member} is a function of the component, call it: {member}(…)"));
+	};
+	crate::components::call(path, member, arguments).map(|value| node_of(&value)).map_err(|failure| format!("wasm {path}: {failure}"))
 }
 
 /// One request line out, one answer line back; the child is started on first use and again after it ended

@@ -144,7 +144,7 @@ function programImports(holder, hooks) {
 				const [runtimeName, moduleName, memberName] = [runtime, module, member].map(node => plainOfTree(readNode(program_, node)));
 				if (runtimeName !== "js") throw new Error(`${runtimeName} ${moduleName}.${memberName}: ${runtimeName} runs only in the native host (the warp CLI)`);
 				// a module's name, or a handle: an object of the page kept behind an id (src/foreign.rs)
-				let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : globalThis[moduleName];
+				let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
 				if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
 				for (const part of memberName.split(".")) {
 					if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
@@ -476,6 +476,11 @@ function plainOfTree(tree) {
 		default: return null;
 	}
 }
+
+// what wasp's operators on a value of the page forward to (src/lowering/foreign_modules.rs), as in src/foreign.rs's loop
+const FOREIGN_OPERATORS = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
+	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
+	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
 
 // objects of the page without a plain form (a Date, a Map, an instance, a function), kept for foreign_call behind ids:
 // they cross as `{$handle: id, type, text}` and are the object again when they come back

@@ -253,6 +253,10 @@ PASSED:
   ✓ ffi_parser::tests::test_parse_two_params
   ✓ ffi_parser::tests::test_parse_void_params
   ✓ ffi_parser::tests::test_raylib_functions
+  ✓ ffi::test_components::test_a_component_written_in_wat_is_called
+  ✓ ffi::test_components::test_a_field_of_a_component_result_is_read
+  ✓ ffi::test_components::test_a_rust_crate_built_as_a_component_is_called
+  ✓ ffi::test_components::test_component_failures_are_loud
   ✓ ffi::test_download::a_failed_download_is_an_error_value
   ✓ ffi::test_download::download_fetches_like_fetch
   ✓ ffi::test_ffi_gaps::a_library_header_named_otherwise_is_found
@@ -315,6 +319,10 @@ PASSED:
   ✓ ffi::test_foreign_js::test_js_modules
   ✓ ffi::test_foreign_js::test_untrusted_code_gets_no_js
   ✓ ffi::test_foreign_js::test_values_held_from_another_runtime_compare
+  ✓ ffi::test_foreign_operators::test_js_indexing_and_counting
+  ✓ ffi::test_foreign_operators::test_plain_values_keep_their_operators
+  ✓ ffi::test_foreign_operators::test_python_indexing_counting_iteration
+  ✓ ffi::test_foreign_operators::test_python_operators
   ✓ ffi::test_foreign_python::test_a_python_error_is_loud
   ✓ ffi::test_foreign_python::test_python_calls_and_reads
   ✓ ffi::test_foreign_python::test_python_values_cross_exactly
@@ -354,6 +362,9 @@ PASSED:
   ✓ function::tests::test_kind_to_valtype
   ✓ function::tests::test_signature_builder
   ✓ function::tests::test_signature_format
+  ✓ functions::test_analysis_memo::test_a_changed_tree_is_analysed_anew
+  ✓ functions::test_analysis_memo::test_an_analysis_that_says_something_runs_again
+  ✓ functions::test_analysis_memo::test_the_same_tree_is_analysed_once
   ✓ functions::test_anonymous_application::test_a_block_applied_to_a_juxtaposed_argument
   ✓ functions::test_anonymous_application::test_a_data_block_is_not_applied
   ✓ functions::test_anonymous_application::test_an_anonymous_function_broadcasts_over_a_list
@@ -379,6 +390,9 @@ PASSED:
   ✓ functions::test_call_arity::a_default_reads_the_parameters_before_it
   ✓ functions::test_call_arity::extra_or_missing_values_are_errors
   ✓ functions::test_call_arity::text_builtins_and_library_words_check_their_values_too
+  ✓ functions::test_call_result_fields::a_field_of_a_call_result_is_read_from_the_result
+  ✓ functions::test_call_result_fields::a_field_of_a_parenthesized_object_is_read
+  ✓ functions::test_call_result_fields::counting_words_of_a_call_result_stay_counts
   ✓ functions::test_captured_containers::test_a_captured_list_element_keeps_its_kind
   ✓ functions::test_captured_containers::test_a_captured_object_field_keeps_its_kind
   ✓ functions::test_closure_value_arguments::test_a_closure_in_a_list_takes_a_text
@@ -433,6 +447,8 @@ PASSED:
   ✓ functions::test_effects::test_effects_of_query
   ✓ functions::test_effects::test_effects_propagate_through_callers_and_recursion
   ✓ functions::test_effects::test_imports_follow_effects
+  ✓ functions::test_empty_call::a_name_and_a_group_stay_symbols_and_defined_calls_run
+  ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
   ✓ functions::test_float_to_int_parameter::a_float_for_an_int_parameter_is_refused
@@ -2276,4 +2292,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2271 passed, 0 failed, 2271 total tested
+31 ignored, 2287 passed, 0 failed, 2287 total tested

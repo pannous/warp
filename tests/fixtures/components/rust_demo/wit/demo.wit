@@ -1,0 +1,15 @@
+package warp:demo;
+
+interface text-tools {
+  record stats { words: u32, letters: u32 }
+  enum shape { circle, square }
+  words: func(text: string) -> list<string>;
+  stats-of: func(text: string) -> stats;
+  sides: func(of: shape) -> u32;
+  checked-sqrt: func(x: f64) -> result<f64, string>;
+}
+
+world demo {
+  export fib: func(n: u32) -> u64;
+  export text-tools;
+}

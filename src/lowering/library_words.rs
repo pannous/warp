@@ -726,6 +726,9 @@ impl Lowering {
 		};
 		let may_hold_object = match variable {
 			Node::Symbol(variable) => !self.plain.contains(variable) && !self.context.user_functions.contains_key(variable),
+			// the value of a call: `f().name`, `lib.stats_of(t).words` (foreign_call), or a parenthesized object `({a:1}).a`
+			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => true,
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => matches!(items[0].drop_meta(), Node::List(_, Bracket::Curly, _)),
 			// an element of a computed list: `users.filter(…)#1.name`
 			_ => matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
 		};

@@ -4319,7 +4319,8 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 /// `(name args)`, `(name, args)` and `[name args]` are data.
 pub fn call_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
 	match (items, bracket, separator) {
-		([head, _, ..], Bracket::Round, Separator::None) => match head.drop_meta() {
+		// `f()` is a call too (user, P92): the empty parentheses are glued to the name, unlike the group `(f)`
+		([head, ..], Bracket::Round, Separator::None) => match head.drop_meta() {
 			Node::Symbol(name) => Some(name),
 			_ => None,
 		},
