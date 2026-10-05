@@ -1658,7 +1658,14 @@ impl WaspParser {
 		} else {
 			self.functions_with_parameters.insert(name.clone());
 			self.phrase_definitions.insert(name.clone(), parameters.clone());
-			Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None)
+			let head = Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None);
+			// P52: the prepositions of the phrase, for phrase_calls to read calls like `add 1 to 2`
+			let pattern = crate::phrase_calls::pattern_text(&words);
+			if pattern.split(' ').any(|part| part != crate::phrase_calls::SLOT) {
+				Node::Meta { node: Box::new(head), data: Box::new(Node::key(crate::phrase_calls::PHRASE_MARK, Node::Text(pattern))) }
+			} else {
+				head
+			}
 		};
 		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
 	}

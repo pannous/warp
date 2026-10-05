@@ -99,7 +99,8 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 20] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 21] = [
+	crate::phrase_calls::lower,
 	crate::welcome_forms::lower, crate::number_keys::lower,
 	crate::declarations::lower_tasks, crate::shared_arrays::lower, crate::variable_signals::lower, crate::declarations::lower_c_functions, crate::declarations::lower_spaced_definitions, crate::result_word::lower, crate::picked_calls::lower, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
 	crate::tuples::lower, crate::mutation::lower, crate::host::lower_aliases, crate::modules::resolve,
