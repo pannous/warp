@@ -541,7 +541,13 @@ impl Inference {
 		let statements = matches!(separator, Separator::Semicolon | Separator::Newline) || bracket == Bracket::Curly;
 		let is_loop = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if LOOP_WORDS.contains(&word.as_str()));
 		// `5 km`: an amount and a unit
-		let is_amount_and_unit = items.len() == 2 && bracket == Bracket::None && separator == Separator::Space
+		// the amount is a value: a number, an expression or a variable, never a word like `use` in `use m` (the libm module)
+		let is_amount = |item: &Node| match item.drop_meta() {
+			Node::Symbol(name) => self.variables.contains_key(name),
+			Node::Text(_) | Node::Char(_) => false,
+			_ => true,
+		};
+		let is_amount_and_unit = items.len() == 2 && bracket == Bracket::None && separator == Separator::Space && is_amount(&items[0])
 			&& matches!(items[1].drop_meta(), Node::Symbol(name) if unit_named(name).is_some() && !self.variables.contains_key(name));
 		let mut lowered = vec![];
 		let mut signatures = vec![];

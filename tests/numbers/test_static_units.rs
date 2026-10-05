@@ -39,3 +39,10 @@ fn test_compiling_a_quantity_result_is_refused_until_output_is_supported() {
 	let compiled = warp::pipeline::compile("total = 0 m; for i in 1..3 { total += 5 m }; total");
 	assert!(matches!(compiled, Err(warp::Node::Error(_))));
 }
+
+#[test]
+fn test_a_word_before_a_unit_name_is_no_amount() {
+	// `use m` imports the libm module m: no metres (the static pass left `use` as an undefined variable)
+	assert!(!matches!(eval("total = 0 m; for i in 1..3 { total += 5 m }; total"), warp::Node::Error(_)));
+	assert!(!eval("use m; 3").serialize().contains("undefined variable: use"));
+}
