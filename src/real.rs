@@ -14,7 +14,9 @@ use num_traits::ToPrimitive;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-pub const FUNCTIONS: [&str; 5] = ["sin", "cos", "tan", "ln", "exp"];
+pub const FUNCTIONS: [&str; 6] = ["sin", "cos", "tan", "ln", "exp", STANDARD_PART];
+/// st(x): the standard part of a finite hyperreal (wiki/hyperreals.md)
+const STANDARD_PART: &str = "st";
 /// `x as string`, `str(x)`: the text form of an exact value
 const TEXT_TYPES: [&str; 4] = ["string", "str", "text", "String"];
 
@@ -121,6 +123,7 @@ fn lower_reals(node: Node) -> Node {
 	match node {
 		Node::Number(Number::Real(real)) => match real {
 			Real::Exact(exact) if exact.has_imaginary() => error(&format!("{exact} is complex: ⅈ is only supported in constant expressions")),
+			Real::Exact(exact) if exact.has_epsilon() => error(&format!("{exact} is a hyperreal: ε and ω are only supported in constant expressions")),
 			_ => Node::Number(Number::Float(real.to_f64())),
 		},
 		Node::Key(left, Op::Cbrt, _) if matches!(left.drop_meta(), Node::Empty) => {
@@ -262,7 +265,7 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 fn convert(value: Value, target: &str) -> Evaluated {
 	match (value, target) {
 		(value, text) if TEXT_TYPES.contains(&text) => Ok(Value::Text(text_of(value)?)),
-		(Value::Real(real), "float" | "fast" | "f64" | "double") => Ok(Value::Float(real.to_f64())),
+		(Value::Real(real), "float" | "fast" | "f64" | "double") => Ok(Value::Float(finite_f64(&real)?)),
 		(value @ Value::Real(_), "real" | "exact") => Ok(value),
 		(value @ Value::Float(_), "float" | "fast" | "f64" | "double") => Ok(value),
 		_ => Err(Stop::Unsupported),
@@ -328,6 +331,9 @@ fn root(real: Real, index: u32) -> Result<Real, Stop> {
 		if let Some(root) = exact.root(index) {
 			return Ok(Real::Exact(root));
 		}
+		if exact.has_epsilon() {
+			return fail(format!("{symbol}({exact}) has no exact form: only a single term with a power of ε divisible by {index} has a root"));
+		}
 		if exact.has_imaginary() {
 			return fail(format!("{symbol}({exact}) has no exact form and complex approximations are not supported"));
 		}
@@ -345,10 +351,18 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 	}
 }
 
+/// The f64 of a real; a hyperreal has none (an infinitesimal is no float), which is an error, never 0
+fn finite_f64(real: &Real) -> Result<f64, Stop> {
+	match real {
+		Real::Exact(exact) if exact.has_epsilon() => fail(format!("{exact} is a hyperreal and has no float value; st({exact}) is its standard part")),
+		_ => Ok(real.to_f64()),
+	}
+}
+
 fn float_of(value: Value) -> Result<f64, Stop> {
 	match value {
 		Value::Float(f) => Ok(f),
-		Value::Real(real) => Ok(real.to_f64()),
+		Value::Real(real) => finite_f64(&real),
 		Value::Bool(_) | Value::Text(_) => Err(Stop::Unsupported),
 	}
 }
@@ -387,6 +401,8 @@ fn real_arithmetic(a: Real, op: Op, b: Real) -> Result<Real, Stop> {
 		Op::Div => match y.inverse() {
 			Some(inverse) => Ok(Real::Exact(x.mul(&inverse))),
 			None if x.has_imaginary() || y.has_imaginary() => fail(format!("{x}/({y}) has no exact form yet")),
+			// 1/(1+ε) = 1-ε+ε²-…: an exact Laurent polynomial cannot hold infinitely many terms
+			None if x.has_epsilon() || y.has_epsilon() => fail(format!("{x}/({y}) needs infinitely many powers of ε, it has no exact form")),
 			// no rationalization of sums yet: 1/(1+√2) is approximated
 			None => approximate(x.to_f64() / y.to_f64(), || format!("{x}/({y})")),
 		},
@@ -449,10 +465,22 @@ fn call(function: &str, argument: Value) -> Evaluated {
 			"cos" => f.cos(),
 			"tan" => f.tan(),
 			"ln" => f.ln(),
+			STANDARD_PART => f,
 			_ => f.exp(),
 		}));
 	}
 	let real = real_operand(argument)?;
+	if let Real::Exact(exact) = &real {
+		if function == STANDARD_PART {
+			return exact.standard_part().map(|part| Value::Real(Real::Exact(part))).map_err(Stop::Error);
+		}
+		if exact.has_epsilon() {
+			return fail(format!("{function}({exact}) of a hyperreal has no exact form"));
+		}
+	}
+	if function == STANDARD_PART {
+		return Ok(Value::Real(real)); // a real is its own standard part
+	}
 	Ok(Value::Real(match function {
 		"sin" | "cos" | "tan" => trigonometric(function, real)?,
 		"ln" => logarithm(real)?,

@@ -3775,6 +3775,9 @@ fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 		"τ" | "tau" => Some(real(Exact::pi().scale(&Rational::integer(2)))),
 		"euler" | "ℯ" => Some(real(Exact::euler())),
 		"ⅈ" => Some(real(Exact::imaginary())),
+		// hyperreals (wiki/hyperreals.md): the glyphs only, `epsilon` stays a free name like `e`
+		"ε" => Some(real(Exact::epsilon())),
+		"ω" => Some(real(Exact::omega())),
 		"⚠️" | "⚡" | "⚡️" => Some(error(s)),
 		_ => None,
 	}
