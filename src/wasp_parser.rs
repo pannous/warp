@@ -486,9 +486,19 @@ const USER_SUFFIX_BP: u8 = 200;
 const USER_PREFIX_RIGHT_BP: u8 = 155;
 const USER_INFIX_BP: (u8, u8) = (140, 141);
 
-/// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit
+/// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit.
+/// ASSUMPTION P48: superscript digits and signs too (`suffix operator ³`, `prefix operator ⁻`, wiki/operator.md)
 fn is_operator_glyph(glyph: &str) -> bool {
-	!glyph.is_empty() && glyph.chars().all(|c| !c.is_alphanumeric() && !c.is_whitespace()) && !glyph.is_ascii()
+	let is_superscript = |c: char| superscript_digit(c).is_some() || superscript_sign(c).is_some();
+	!glyph.is_empty() && glyph.chars().all(|c| is_superscript(c) || (!c.is_alphanumeric() && !c.is_whitespace())) && !glyph.is_ascii()
+}
+
+/// `suffix operator ⁰ := …` and, ASSUMPTION P48, the short `suffix ⁰ := …`: the glyph and the words after `:=`
+fn declared_glyph<'a>(words: &'a [&'a str]) -> Option<&'a str> {
+	match words {
+		["operator", glyph, ":=", ..] | [glyph, ":=", ..] => Some(glyph),
+		_ => None,
+	}
 }
 
 fn is_plain_name(word: &str) -> bool {
@@ -547,7 +557,9 @@ fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	for statement in source.lines().flat_map(|line| line.split(';')) {
 		let words: Vec<&str> = statement.split_whitespace().collect();
 		let declared = match words.as_slice() {
-			[kind, "operator", glyph, ":=", ..] => OPERATOR_KINDS.iter().find(|(word, _)| word == kind).map(|(_, kind)| (*glyph, *kind)),
+			[kind, rest @ ..] if declared_glyph(rest).is_some() => {
+				OPERATOR_KINDS.iter().find(|(word, _)| word == kind).and_then(|(_, kind)| Some((declared_glyph(rest)?, *kind)))
+			}
 			[left, glyph, right, ":=", ..] if is_plain_name(left) && is_plain_name(right) => Some((*glyph, UserOperatorKind::Infix)),
 			_ => None,
 		};
@@ -689,14 +701,14 @@ impl WaspParser {
 			return Some(error("operator precedence declarations are not supported yet"));
 		}
 		let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| *keyword == word)?;
-		let [operator_word, glyph, ":=", ..] = words.as_slice() else { return None };
-		if *operator_word != "operator" || !is_operator_glyph(glyph) {
-			return None;
-		}
+		let glyph = declared_glyph(&words).filter(|glyph| is_operator_glyph(glyph))?;
+		let has_operator_word = words.first() == Some(&"operator");
 		let glyph: Vec<char> = glyph.chars().collect();
 		self.skip_spaces();
-		self.advance_by("operator".chars().count());
-		self.skip_spaces();
+		if has_operator_word {
+			self.advance_by("operator".chars().count());
+			self.skip_spaces();
+		}
 		self.advance_by(glyph.len());
 		self.skip_spaces();
 		self.advance_by(":=".len());
@@ -2058,7 +2070,8 @@ impl WaspParser {
 			self.skip_spaces_and_inline_comments(); // not newlines: they are separators
 
 			// Step 2: Suffix (led)
-			if let Some(updated) = self.try_parse_suffix(&lhs, min_bp).or_else(|| self.try_parse_user_suffix(&lhs, min_bp)) {
+			// ASSUMPTION P48: a declared suffix operator wins over the built-in one of the same glyph (`suffix operator ³`)
+			if let Some(updated) = self.try_parse_user_suffix(&lhs, min_bp).or_else(|| self.try_parse_suffix(&lhs, min_bp)) {
 				lhs = updated;
 				continue;
 			}
