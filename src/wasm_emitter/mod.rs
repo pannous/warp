@@ -449,7 +449,7 @@ impl WasmGcEmitter {
 	/// Any call in the body of outer may reach `outer·inner` (directly, through a sibling, or passed as a value:
 	/// `apply(inner)`), and inner reads outer's variables as they are now (`nonlocal y`, cards g-qUkY, g-rQ-U): the
 	/// capture globals of all of outer's nested functions are set anew before each call
-	fn refresh_enclosing_captures(&mut self, func: &mut Function) {
+	pub(super) fn refresh_enclosing_captures(&mut self, func: &mut Function) {
 		let Some(compiling) = self.compiling.clone() else { return };
 		for inner in self.nested_functions(&compiling) {
 			self.emit_closure_capture(func, &inner);
@@ -1956,6 +1956,13 @@ impl WasmGcEmitter {
 		// the statements run as numbers, the last one gives the f64
 		let (last, statements) = items.split_last().expect("a list of items");
 		for statement in statements {
+			// a nested definition has no code here, its captures are taken (as in emit_statement_sequence)
+			if self.is_definition(statement) {
+				if let Some(name) = self.defined_function_name(statement) {
+					self.emit_closure_capture(func, &name);
+				}
+				continue;
+			}
 			self.emit_discarded_statement(func, statement, Self::emit_numeric_value);
 			func.instruction(&I::Drop);
 		}

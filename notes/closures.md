@@ -72,3 +72,11 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
 - Float parameters of a closure unbox only from Float nodes (an Int argument traps).
 - Variables assigned in another function's body count as capturable everywhere (names, not scopes).
 - Mutable capture (counters, `c=c+1` inside a closure) stays by value per D7: each call sees the value at creation.
+
+## Nested functions as values, nonlocal cells (card nonlocal-inner)
+- A nested `outer·inner` reads its captures from globals; outer refreshes them before every call it makes
+  (`refresh_enclosing_captures`). Used as a value, `closure_new(outer·inner)` stores the current capture values in the
+  closure and its entry sets the globals from them before the call, so `make(1)` and `make(2)` keep their own `k`.
+- `nonlocal y` written by inner: y lives in a cell, a one-element shared array (lowering/nonlocal_cells.rs, `y·cell`,
+  shared_get/set/add, the f variants for floats); the closure carries the cell's handle, so a counter returned by
+  `make()` keeps its own cell. Text or list values changed by inner are an error for now (cells hold numbers).
