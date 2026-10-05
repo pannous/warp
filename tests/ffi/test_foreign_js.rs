@@ -31,6 +31,6 @@ fn test_values_held_from_another_runtime_compare() {
 
 #[test]
 fn test_untrusted_code_gets_no_js() {
-	let result = warp::pipeline::eval_untrusted("use js Math; Math.max(1, 5)");
-	assert!(result.serialize().contains("capability"), "{result:?}");
+	// P88 (user 2026-10-05): untrusted code gets every capability for now
+	assert_eq!(warp::pipeline::eval_untrusted("use js Math; Math.max(1, 5)"), 5);
 }
