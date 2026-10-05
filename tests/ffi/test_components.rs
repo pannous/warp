@@ -82,3 +82,10 @@ fn test_resource_failures_are_loud() {
 	fails_with(&using("c = r.counter(1); c.nope()"), "counter#1: a counter has no method nope");
 	fails_with(&using("r.total([r.stats_of(\"x\")])"), "is no handle of a resource");
 }
+
+/// a field of a call result is the field of the record the component gave (card foreign-results)
+#[test]
+fn test_a_field_of_a_component_result_is_read() {
+	let path = rust_component();
+	is!(&format!("use wasm \"{path}\" as r; r.stats_of(\"hello big world\").letters"), 13);
+}
