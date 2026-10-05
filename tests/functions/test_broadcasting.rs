@@ -30,7 +30,7 @@ fn test_scalar_calls_and_list_functions_do_not_broadcast() {
 	assert_eq!(printed("square:=it*it; square 3"), "9");
 	assert_eq!(printed("size(xs):=count(xs); size [1 2 3]"), "3");
 	assert_eq!(printed("second(xs):=xs#2; second [5 6 7]"), "6");
-	fails_with("inc(x:int):=x+1; inc [1 2]", "inc needs an Int for parameter x"); // declared parameters: open decision P50
+	assert_eq!(printed("inc(x:int):=x+1; inc [1 2]"), "[2 3]"); // declared parameters broadcast (P50)
 }
 
 #[test]

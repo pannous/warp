@@ -12,6 +12,8 @@
 - Lawful by construction (notes/laws.md "lawful lifting"): the rewrite is element-wise application of a pure function,
   so `map id = id` and `map (f∘g) = map f ∘ map g` hold; no per-function proof needed.
 
-Open (notes/open_decisions.md P50): declared parameters (`x:int`, the wiki's `square number = …`) keep the type error;
-`print [1 2 3]` one element at a time; lists only known at run time (a parameter, a function result) are not broadcast;
+- P50 (user, 2026-10-05): a parameter declared with a scalar type (`x:int`, `t:text`, the wiki's `square number = …`)
+  broadcasts too; `xs:list` takes the list. `print [1 2 3]` keeps printing the list.
+
+Open: lists only known at run time (a parameter, a function result) are not broadcast;
 multi-argument folding (`sum [1 2 3]` as `sum(1, sum(2, 3))`) is not done.

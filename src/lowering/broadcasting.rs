@@ -1,10 +1,12 @@
 //! Functions broadcast over lists and pairs (wiki/broadcasting.md, notes/broadcasting.md): `square [1 2 3]` is
 //! `[square(1) square(2) square(3)]`, `square [a:1 b:2]` is `[a:square(1) b:square(2)]`, and a variable only ever assigned
-//! a list literal is mapped (`square xs` → `map xs square`). Only a function of one undeclared parameter that the body
-//! uses as an arithmetic operand broadcasts; a function of a list (`count(xs)`, `xs#2`) takes the list whole. A declared
-//! parameter (`x:int`, `square number`) keeps its type error (open decision P50). Operators never broadcast (`[1 2 3]*2`).
+//! a list literal is mapped (`square xs` → `map xs square`). A function of one parameter broadcasts when the parameter is
+//! declared with a scalar type (`x:int`, `square number`, P50) or, undeclared, is an arithmetic operand of the body; a
+//! function of a list (`count(xs)`, `xs#2`, `xs:list`) takes the list whole. Operators never broadcast (`[1 2 3]*2`).
 
+use crate::analyzer::annotated_kind;
 use crate::function_values::{definitions, Definition};
+use crate::type_kinds::Kind;
 use crate::lambdas::IMPLICIT_PARAMETER;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -12,6 +14,8 @@ use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
 const MAP_WORD: &str = "map";
+/// Declared parameter kinds that take one element of a list (P50)
+const SCALAR_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint];
 
 pub fn lower(program: Node) -> Node {
 	let mut found = Vec::new();
@@ -41,7 +45,11 @@ fn implicit_definitions(node: &Node, found: &mut Vec<Definition>) {
 
 fn needs_a_scalar(definition: &Definition) -> bool {
 	let [param] = definition.params.as_slice() else { return false };
-	matches!(param.drop_meta(), Node::Symbol(name) if is_arithmetic_operand(&definition.body, name))
+	match param.drop_meta() {
+		Node::Key(_, Op::Colon, type_node) => annotated_kind(type_node).is_some_and(|kind| SCALAR_KINDS.contains(&kind)),
+		Node::Symbol(name) => is_arithmetic_operand(&definition.body, name),
+		_ => false,
+	}
 }
 
 fn is_arithmetic_operand(body: &Node, name: &str) -> bool {
