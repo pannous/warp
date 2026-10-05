@@ -944,6 +944,13 @@ impl WaspParser {
 		(self.line_nr, self.column)
 	}
 
+	/// The word of `length` characters just read (0: the one at the cursor) follows a `.`: `math.sqrt`, `math.pi` name
+	/// a member, no operator or constant
+	fn at_member_name(&self, length: usize) -> bool {
+		let start = self.pos.saturating_sub(length);
+		start > 0 && self.chars.get(start - 1) == Some(&'.') && self.chars.get(start).is_some_and(|first| first.is_alphabetic())
+	}
+
 	fn prev_char(&self) -> char {
 		if self.pos == 0 { '\0' } else { *self.chars.get(self.pos - 1).unwrap_or(&'\0') }
 	}
@@ -1968,7 +1975,7 @@ impl WaspParser {
 			return self.parse_url(symbol);
 		}
 
-		if let Some(constant) = check_constants(&symbol, self.options.data_mode) {
+		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count())) {
 			return constant; // if true {} fall through :?
 		}
 
@@ -2191,7 +2198,7 @@ impl WaspParser {
 			statement
 		} else if let Some(awaited) = self.try_parse_await() {
 			awaited
-		} else if let Some((op, chars)) = self.peek_prefix_operator() {
+		} else if let Some((op, chars)) = self.peek_prefix_operator().filter(|_| !self.at_member_name(0)) {
 			let (prefix_line, prefix_column) = self.get_position();
 			self.hint_operator(chars, true);
 			self.advance_by(chars);
