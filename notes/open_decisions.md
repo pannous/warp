@@ -94,7 +94,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P46 type-name and condition patterns in `for` (`for friend in [foe1, friend1, …]`, `for (it>2) in xs`): user:
   "this should give a warning, though if the user is unfamiliar, he needs to confirm that he understands the filter".
   So the wiki forms filter as written, with an educate_once "got it" warning naming the filter (the user confirms
-  with got-it; notes/welcoming.md). Not implemented.
+  with got-it; notes/welcoming.md). Done (branch p46-filter-loops, wasp_parser try_parse_for_in): `for friend in xs`
+  with a declared class (instance_of, the item is `it` and `friend` in the body), `for (it>2) in xs`; got-it topic
+  `for-filter`. Not done: built-in type words (`for int in xs` stays a variable named int) and `for (even number) in`.
 - P61 `x is <value>` with a new name x (old test `x is 100 times [0]`): user: "educate the user to use the be key
   word for definitions". `is` stays a comparison; with an undefined x the warning/error teaches `x be <value>`
   (wiki/be.md, an alias of `:=`; the parser does not accept `be` yet, notes/normalization_audit.md). The test edit to
