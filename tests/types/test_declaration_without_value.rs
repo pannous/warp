@@ -1,11 +1,11 @@
-// `real x;` declares x without a value: reading it before an assignment is a loud error, never a silent zero
-use crate::common::fails_with;
+// `real x;` declares x without a value: P28 (user, 2026-10-05) reads it as the zero value of its type (Go)
 use warp::is;
 
 #[test]
 fn reading_a_declaration_without_value_is_an_error() {
-	fails_with("real x; x*x", "x is declared without a value");
-	fails_with("int x; x=x+1; x", "x is declared without a value");
+	// P28: no longer an error, the zero value (test_declaration_zero_value.rs)
+	is!("real x; x*x", 0);
+	is!("int x; x=x+1; x", 1);
 }
 
 #[test]
