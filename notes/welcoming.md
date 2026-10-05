@@ -81,7 +81,9 @@ User decisions from that round:
 - New ambiguities: build an `Ask` where the ambiguity is still visible (often the parser, which knows the written form),
   give every reading its explicit form, pick Error only when a wrong guess would silently corrupt results.
 
-## Later: change the code to the intended form (not built)
+## Change the code to the intended form (built 2026-10-05 for the playground: notes/fixits.md)
+Each reading is a `Fix` on the diagnostic, the playground shows it as an "I meant: …" button. Still open: `warp fix`,
+IDE quick fixes, fixes that need several edits. The original design note:
 The user's "intelligent intent to change the code": instead of a question that changes what the source means, an
 action that rewrites the source to the explicit form the user picks, so the file itself says it. Seed data is already
 there: every `Ask` keeps `written` (the ambiguous text), `line`/`column` and each reading's `explicit_form`, and the
