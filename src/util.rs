@@ -46,6 +46,10 @@ pub fn deterministic_config() -> Config {
 	config.wasm_function_references(true);
 	config.cranelift_nan_canonicalization(true);
 	config.gc_heap_initial_size(GC_HEAP_INITIAL_BYTES);
+	// warp runs core modules, no components: the machine code (`warp compile --aot`) then also loads into a wasmtime
+	// runtime built without the component model (notes/aot.md, standalone executable / warp-runtime)
+	config.wasm_component_model(false);
+	config.concurrency_support(false);
 	config
 }
 

@@ -11,7 +11,12 @@ use extensions::numbers::Number;
 const DEFAULT_COMPILED_NAME: &str = "out.wasm";
 /// `warp compile --aot` also writes the machine code (wasmtime's .cwasm), which `warp <file>.cwasm` runs
 const AOT_FLAG: &str = "--aot";
+/// `warp build --exe`: standalone executable = prebuilt warp-runtime stub + appended .cwasm (notes/aot.md)
+const EXE_FLAG: &str = "--exe";
 const MACHINE_CODE_EXTENSION: &str = "cwasm";
+const STANDALONE_EXTENSION: &str = "exe";
+const RUNTIME_STUB_NAME: &str = "warp-runtime";
+const CWASM_TRAILER_MAGIC: &[u8; 8] = b"WRPCwasm";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
@@ -123,9 +128,13 @@ fn run_command(args: &[String]) {
     } else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
         // DONE: don't run, just compile and save binary
         let target = extract_after(&arg_string, " ");
-        let (ahead_of_time, target) = match target.strip_prefix(AOT_FLAG) {
+        let (standalone, target) = match target.strip_prefix(EXE_FLAG) {
             Some(rest) => (true, rest.trim_start().to_string()),
             None => (false, target),
+        };
+        let (ahead_of_time, target) = match target.strip_prefix(AOT_FLAG) {
+            Some(rest) => (true, rest.trim_start().to_string()),
+            None => (standalone, target), // --exe implies ahead-of-time machine code
         };
         let code = source_of(&target);
         match wasm_emitter::compile(&code) {
@@ -133,7 +142,10 @@ fn run_command(args: &[String]) {
                 let output_path = compiled_output_path(&target);
                 fs::write(&output_path, &module.bytes).expect("could not write the compiled module");
                 println!("compiled {} bytes to {}", module.bytes.len(), output_path);
-                if ahead_of_time {
+                if standalone {
+                    let machine_path = write_machine_code(&module.bytes, &output_path);
+                    write_standalone_executable(&machine_path, &target);
+                } else if ahead_of_time {
                     write_machine_code(&module.bytes, &output_path);
                 }
             }
@@ -239,19 +251,73 @@ fn compiled_output_path(target: &str) -> String {
 }
 
 /// `warp compile --aot`: the module compiled to machine code for this machine and wasmtime version, next to the .wasm
-fn write_machine_code(bytes: &[u8], wasm_path: &str) {
+fn write_machine_code(bytes: &[u8], wasm_path: &str) -> std::path::PathBuf {
     let path = std::path::Path::new(wasm_path).with_extension(MACHINE_CODE_EXTENSION);
     let (engine, _) = wasm_reader::engine_for(bytes);
     match engine.precompile_module(bytes) {
         Ok(machine_code) => {
             fs::write(&path, &machine_code).expect("could not write the machine code");
             println!("compiled {} bytes of machine code to {}", machine_code.len(), path.display());
+            path
         }
         Err(failure) => {
             eprintln!("could not compile to machine code: {failure}");
             std::process::exit(1);
         }
     }
+}
+
+/// `warp build --exe`: copy the prebuilt compiler-less `warp-runtime` stub and append the .cwasm
+/// (`[stub][cwasm][u64 le length][WRPCwasm]`). Releases ship `warp-runtime` next to `warp` (notes/aot.md).
+fn write_standalone_executable(cwasm_path: &std::path::Path, target: &str) {
+    let stub = runtime_stub_path();
+    let stub_bytes = fs::read(&stub).unwrap_or_else(|e| {
+        eprintln!(
+            "warp build --exe: missing runtime stub at {} ({e}). Build crates/warp-runtime and place `{}` next to `warp` (or set WARP_RUNTIME_STUB).",
+            stub.display(),
+            RUNTIME_STUB_NAME
+        );
+        std::process::exit(1);
+    });
+    let cwasm = fs::read(cwasm_path).expect("could not read the machine code for --exe");
+    let out = standalone_output_path(target);
+    let mut bytes = stub_bytes;
+    bytes.extend_from_slice(&cwasm);
+    bytes.extend_from_slice(&(cwasm.len() as u64).to_le_bytes());
+    bytes.extend_from_slice(CWASM_TRAILER_MAGIC);
+    fs::write(&out, &bytes).expect("could not write the standalone executable");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = fs::metadata(&out).expect("stat standalone").permissions();
+        permissions.set_mode(permissions.mode() | 0o111);
+        fs::set_permissions(&out, permissions).expect("chmod +x standalone");
+    }
+    println!("wrote standalone executable {} ({} bytes)", out.display(), bytes.len());
+}
+
+fn standalone_output_path(target: &str) -> std::path::PathBuf {
+    if file_exists(target) {
+        std::path::Path::new(target).with_extension(STANDALONE_EXTENSION)
+    } else {
+        std::path::PathBuf::from(format!("out.{STANDALONE_EXTENSION}"))
+    }
+}
+
+/// Prebuilt `warp-runtime` next to this `warp` binary, or `WARP_RUNTIME_STUB`.
+fn runtime_stub_path() -> std::path::PathBuf {
+    if let Ok(path) = std::env::var("WARP_RUNTIME_STUB") {
+        return std::path::PathBuf::from(path);
+    }
+    if let Ok(warp) = std::env::current_exe() {
+        if let Some(dir) = warp.parent() {
+            let candidate = dir.join(RUNTIME_STUB_NAME);
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+    }
+    std::path::PathBuf::from(RUNTIME_STUB_NAME)
 }
 
 /// Parse tree as s-expression: `(op left right)` for keys, `[items]` for lists
