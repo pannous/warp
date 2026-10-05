@@ -8,6 +8,7 @@ mod test_empty_block;
 mod test_for_loop;
 mod test_if_call_condition;
 mod test_if_value_kind;
+mod test_if_then_assign;
 mod test_if_empty_branch;
 mod test_iteration_words;
 mod test_loop_forms;
