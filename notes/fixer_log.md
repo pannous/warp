@@ -78,3 +78,9 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - A non-Int list element read as a number inside `try` (`x=[1,"ab"]; try -x#2 else 7`) was a cast trap: list_at reads
   its element through get_int_value (code point of a character, else not_an_int); the runtime errors and getters are
   emitted before the list ops now (tests/control/test_try_list_index.rs).
+
+## 2026-10-05 fix-uniscript-entities
+- `\alpha` / `\:infinity` uniscript entities in code (src/uniscript_entities.rs, ~150 LaTeX and English names, Greek,
+  sets, logic, relations): expanded to their character before parsing, outside texts and comments; an unknown
+  `\name` is the loud "unknown entity \name" (tests/parser/test_uniscript_entities.rs). The full table and `<:…>`
+  blocks stay with the uniscript package.

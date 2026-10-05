@@ -33,6 +33,7 @@ pub mod shared;
 pub mod wasm_optimizer;
 pub mod wasp_parser;
 pub mod wisp_parser;
+pub mod uniscript_entities;
 pub mod operators;
 pub mod meta;
 pub mod host;
