@@ -132,3 +132,6 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 p56-entities
 - P56: entities are `\:name` only, in code and inside double-quoted texts (the text parser expands them); a bare
   `\alpha` is the error "a uniscript entity is written \:alpha"; unknown `\:name` is loud in code and texts.
+
+## 2026-10-05 p49b-whole-float
+- P49b: a whole float (2.0, y=3.0) passed to an int parameter is refused too ("2.0 is no int: write 2.0 as int").
