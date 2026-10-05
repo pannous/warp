@@ -34,8 +34,8 @@ sed -i '' $'s/\033\[[0-9;]*m//g' "$TEMP_FILE"
 
 # Count test results
 # a test's own output (a wasm program writing to stdout) can glue onto its "test … ok" line: match the test anywhere
-# or right after it, before its time (`... ok2`, `... ok      <0.008s>`); `ignored, <reason>` lines stay uncounted
-results() { grep -a -o -E "test [A-Za-z0-9_:]+ \.\.\. $1($|[^,])" "$TEMP_FILE" | sed -E "s/ \.\.\. $1.*/ ... $1/"; }
+# or around its result (`... ok2`, `... ok      <0.008s>`, `... ----::::ok <0.001s>`); `ignored, <reason>` lines stay uncounted
+results() { grep -a -o -E "test [A-Za-z0-9_:]+ \.\.\. (.*[^A-Za-z])?$1($|[^,])" "$TEMP_FILE" | sed -E "s/^(test [^ ]+) \.\.\. .*/\1 ... $1/"; }
 SLOWEST_COUNT=15
 slowest() { grep -a -o -E "test [A-Za-z0-9_:]+ \.\.\. [A-Za-z]+ <[0-9.]+s>$" "$TEMP_FILE" | sed -E 's/^test ([^ ]+) .* <([0-9.]+)s>$/\2 \1/' | sort -rn | head -$SLOWEST_COUNT; }
 TOTAL_PASSED=$(results ok | wc -l | tr -d ' ')
