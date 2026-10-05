@@ -15,14 +15,9 @@ const PAGE_BITS: u32 = 16;
 /// `download <url>` is `fetch <url>`; `random(n)` is `random_below(n)`)
 const HOST_ALIASES: [(&str, Option<usize>, &str); 2] = [("download", None, "fetch"), ("random", Some(1), RANDOM_BELOW)];
 
-/// The words of the program's environment, imported from the "host" module and called like C functions (ffi.rs):
-/// `sleep(ms)` pauses, `random()` is a float in [0, 1), `random_below(n)` an int in 0..n, `clock()` the milliseconds
-/// since the Unix epoch. A program that defines a word of the same name keeps its own.
-pub const HOST_LIBRARY: &str = "host";
-const SLEEP: &str = "sleep";
-const RANDOM: &str = "random";
-const RANDOM_BELOW: &str = "random_below";
-const CLOCK: &str = "clock";
+/// The words of the program's environment, imported from the "host" module and called like C functions (ffi.rs);
+/// sleep, random, random_below and clock need no compiler and live in warp-runtime (runtime/src/host_words.rs)
+pub use warp_runtime::host_words::{CLOCK, HOST_LIBRARY, RANDOM, RANDOM_BELOW, SLEEP};
 /// `go f(x)` on a thread (tasks.rs): task_spawn(function name, up to four Int arguments) → task id, task_await(id) → result
 pub const TASK_SPAWN: &str = "task_spawn";
 pub const TASK_AWAIT: &str = "task_await";
@@ -80,27 +75,6 @@ pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec
 		(SHARED_WORDS[0], vec![I64], vec![I64]), (SHARED_WORDS[1], vec![I64, I64], vec![I64]), (SHARED_WORDS[2], vec![I64, I64, I64], vec![I64]),
 		(SHARED_WORDS[3], vec![I64, I64, I64], vec![I64]), (SHARED_WORDS[4], vec![I64], vec![I64]),
 		(SHARED_FLOAT_WORDS[0], vec![I64, I64], vec![F64]), (SHARED_FLOAT_WORDS[1], vec![I64, I64, F64], vec![F64]), (SHARED_FLOAT_WORDS[2], vec![I64, I64, F64], vec![F64])]
-}
-
-/// xorshift64*, seeded from the clock once per process: random enough for games and samples, not for secrets
-#[cfg(feature = "native")]
-fn next_random() -> u64 {
-	use std::sync::atomic::{AtomicU64, Ordering};
-	static STATE: AtomicU64 = AtomicU64::new(0);
-	let mut x = STATE.load(Ordering::Relaxed);
-	if x == 0 {
-		x = (milliseconds_since_epoch() as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
-	}
-	x ^= x >> 12;
-	x ^= x << 25;
-	x ^= x >> 27;
-	STATE.store(x, Ordering::Relaxed);
-	x.wrapping_mul(0x2545_F491_4F6C_DD1D)
-}
-
-#[cfg(feature = "native")]
-fn milliseconds_since_epoch() -> i64 {
-	std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as i64)
 }
 
 /// guarded_call(name, arguments): the node wrapper `name` called with the argument list in the caller's own instance;
@@ -401,11 +375,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	)?;
 
 	linker.func_wrap(HOST_LIBRARY, GUARDED_CALL, guarded_call)?;
-	linker.func_wrap(HOST_LIBRARY, SLEEP, |milliseconds: i64| std::thread::sleep(Duration::from_millis(milliseconds.max(0) as u64)))?;
-	// the top 53 bits make a uniform f64 in [0, 1)
-	linker.func_wrap(HOST_LIBRARY, RANDOM, || (next_random() >> 11) as f64 / (1u64 << 53) as f64)?;
-	linker.func_wrap(HOST_LIBRARY, RANDOM_BELOW, |bound: i64| if bound <= 0 { 0 } else { (next_random() % bound as u64) as i64 })?;
-	linker.func_wrap(HOST_LIBRARY, CLOCK, milliseconds_since_epoch)?;
+	warp_runtime::host_words::link_host_words(linker)?;
 	linker.func_wrap(HOST_LIBRARY, RUN_BLOCK, run_block)?;
 
 	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected

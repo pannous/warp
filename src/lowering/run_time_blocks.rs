@@ -117,7 +117,11 @@ fn lower_statements(program: Node, applies: &dyn Fn(&Node) -> bool, lower: &dyn 
 	}
 	match program {
 		Node::List(_, bracket, separator) => Node::List(lowered, bracket, separator),
-		Node::Meta { data, .. } => Node::Meta { node: Box::new(Node::List(lowered, Bracket::None, Separator::Newline)), data },
+		// LineInfo (and similar) may wrap a whole program; a bang mark must stay on the expression
+		// (`ø!` has no LineInfo, so the mutated Meta is outermost — do not promote it onto a list)
+		Node::Meta { data, .. } if crate::mutation::bang_target(&program).is_none() => {
+			Node::Meta { node: Box::new(Node::List(lowered, Bracket::None, Separator::Newline)), data }
+		}
 		_ => lowered.into_iter().next().unwrap_or(Node::Empty),
 	}
 }
@@ -197,16 +201,18 @@ fn is_mutating_call(node: &Node) -> bool {
 		&& matches!(items[0].drop_meta(), Node::Symbol(_)) && crate::mutation::bang_target(&items[1]).is_some_and(|(inner, _)| matches!(inner, Node::Symbol(_))))
 }
 
-fn is_data(node: &Node) -> bool {
+pub(crate) fn is_data(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == crate::blocks::DATA_WORD))
 }
 
-/// A `!` mark this pass runs at run time: on an expression but a name or a field, or on a name holding data
+/// A `!` mark this pass runs at run time: on an expression but a name or a field, or on a name holding data.
+/// Empty (`ø!`) stays mutation.rs's unwrap (P73 force of an optional).
 fn run_time_bang(node: &Node, holders: &[String]) -> Option<Node> {
 	let (inner, _) = crate::mutation::bang_target(node)?;
 	match &inner {
 		Node::Symbol(name) => holders.contains(name).then_some(inner),
 		Node::Key(_, Op::Dot, _) => None,
+		Node::Empty => None,
 		_ => Some(inner),
 	}
 }

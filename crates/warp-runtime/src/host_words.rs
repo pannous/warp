@@ -1,0 +1,50 @@
+//! The words of the program's environment, imported from the "host" module and called like C functions:
+//! `sleep(ms)` pauses, `random()` is a float in [0, 1), `random_below(n)` an int in 0..n, `clock()` the milliseconds
+//! since the Unix epoch. A program that defines a word of the same name keeps its own. warp adds the words that need
+//! its compiler, the network or threads (host.rs); these need nothing.
+pub const HOST_LIBRARY: &str = "host";
+pub const SLEEP: &str = "sleep";
+pub const RANDOM: &str = "random";
+pub const RANDOM_BELOW: &str = "random_below";
+pub const CLOCK: &str = "clock";
+/// The words link_host_words provides
+pub const BASIC_HOST_WORDS: [&str; 4] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK];
+
+#[cfg(feature = "engine")]
+pub use linking::*;
+
+#[cfg(feature = "engine")]
+mod linking {
+	use super::*;
+	use std::time::Duration;
+	use wasmtime::{Linker, Result};
+
+	/// Link sleep, random, random_below and clock, for a store of any state
+	pub fn link_host_words<T: 'static>(linker: &mut Linker<T>) -> Result<()> {
+		linker.func_wrap(HOST_LIBRARY, SLEEP, |milliseconds: i64| std::thread::sleep(Duration::from_millis(milliseconds.max(0) as u64)))?;
+		// the top 53 bits make a uniform f64 in [0, 1)
+		linker.func_wrap(HOST_LIBRARY, RANDOM, || (next_random() >> 11) as f64 / (1u64 << 53) as f64)?;
+		linker.func_wrap(HOST_LIBRARY, RANDOM_BELOW, |bound: i64| if bound <= 0 { 0 } else { (next_random() % bound as u64) as i64 })?;
+		linker.func_wrap(HOST_LIBRARY, CLOCK, milliseconds_since_epoch)?;
+		Ok(())
+	}
+
+	/// xorshift64*, seeded from the clock once per process: random enough for games and samples, not for secrets
+	fn next_random() -> u64 {
+		use std::sync::atomic::{AtomicU64, Ordering};
+		static STATE: AtomicU64 = AtomicU64::new(0);
+		let mut x = STATE.load(Ordering::Relaxed);
+		if x == 0 {
+			x = (milliseconds_since_epoch() as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
+		}
+		x ^= x >> 12;
+		x ^= x << 25;
+		x ^= x >> 27;
+		STATE.store(x, Ordering::Relaxed);
+		x.wrapping_mul(0x2545_F491_4F6C_DD1D)
+	}
+
+	fn milliseconds_since_epoch() -> i64 {
+		std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as i64)
+	}
+}

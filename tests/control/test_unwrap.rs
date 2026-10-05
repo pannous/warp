@@ -14,6 +14,7 @@ fn test_unwrap_gives_the_value() {
 #[test]
 fn test_unwrap_of_nothing_or_an_error_is_loud() {
 	fails_with("x=ø; x!", "unwrapped ø");
+	fails_with("ø!", "unwrapped ø");
 	// in arithmetic the declared Int fails first (loud, though not yet with the unwrap message)
 	assert!(matches!(warp::wasm_emitter::eval("x:int?=ø; x!+1"), warp::Node::Error(_)));
 	fails_with("x=error(\"bad\"); x!", "bad");

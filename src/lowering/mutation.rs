@@ -93,6 +93,10 @@ fn unwrapped(name: Node) -> Node {
 			return Node::Key(receiver.clone(), Op::Assign, Box::new(name.clone()));
 		}
 	}
+	// `ø!`: P73 force — Empty unwraps like a name holding ø
+	if matches!(name.drop_meta(), Node::Empty) {
+		return Node::List(vec![Node::Symbol(UNWRAP.to_string()), name], Bracket::Round, Separator::None);
+	}
 	if !is_name(&name) {
 		let written = crate::normalize::operand_text(&name);
 		return crate::node::error(&format!("{written} is only known at run time: `!` needs a constant block"));

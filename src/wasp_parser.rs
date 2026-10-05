@@ -86,7 +86,7 @@ fn is_print_word(node: &Node) -> bool {
 }
 
 /// `print` or the call `print(…)`: a print statement starts here
-fn starts_print(node: &Node) -> bool {
+pub(crate) fn starts_print(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, _) => items.first().is_some_and(is_print_word),
 		other => is_print_word(other),
@@ -102,7 +102,7 @@ fn one_expression(words: &[Node]) -> Node {
 }
 
 /// The call print(a, b, …): its arguments are separated by commas, like Python's
-fn print_call(arguments: impl IntoIterator<Item = Node>) -> Node {
+pub(crate) fn print_call(arguments: impl IntoIterator<Item = Node>) -> Node {
 	Node::List([Symbol(PRINT_WORD.to_string())].into_iter().chain(arguments).collect(), Bracket::Round, Separator::None)
 }
 
@@ -253,7 +253,7 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 }
 
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
-const FILTER_LOOP_TOPIC: &str = "for-filter";
+pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
 /// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
 const EVEN_WORD: &str = "even";
 const ODD_WORD: &str = "odd";
@@ -864,7 +864,8 @@ impl WaspParser {
 		if options == ParserOptions::default() {
 			crate::normalize::check_style(&program);
 		}
-		if program.is_nothing() { Empty } else { program }
+		// marked Empty (`ø!`) is P73 force-unwrap, not a vacant program (is_nothing looks through Meta)
+		if program.is_nothing() && crate::mutation::bang_target(&program).is_none() { Empty } else { program }
 	}
 
 	fn end_of_input(&self) -> bool {
@@ -2372,7 +2373,8 @@ impl WaspParser {
 			}
 			let rhs_start = self.pos;
 			let rhs = block_body.unwrap_or_else(|| self.parse_expr(r_bp));
-			let rhs_written: String = self.chars[rhs_start.min(self.pos)..self.pos].iter().collect();
+			let rhs_end = self.pos.min(self.chars.len());
+			let rhs_written: String = self.chars[rhs_start.min(rhs_end)..rhs_end].iter().collect();
 
 			if op == Op::Define && !matches!(lhs.drop_meta(), Node::List(..)) && !mentions(&rhs, "it") {
 				self.functions.remove(&lhs.name()); // `x := 5` defines a value, not a function
@@ -2729,7 +2731,10 @@ impl WaspParser {
 			return None;
 		}
 		self.advance_by("in".len());
+		// in the header `xs {` is the collection and the body, as in any for loop, not a construction of xs
+		let outer_header = std::mem::replace(&mut self.in_for_header, true);
 		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
+		self.in_for_header = outer_header;
 		self.skip_spaces();
 		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
 		let body = match body_word {
@@ -2943,14 +2948,12 @@ impl WaspParser {
 		}
 		let mutated = crate::mutation::mutated_variable(lhs).cloned();
 		// `o.s1!`: a field (no method) may hold a block too (wiki/charged.md section 4)
-		let is_field = matches!(lhs.drop_meta(), Node::Key(_, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)));
-		// any expression may be run (wiki/charged.md section 5): `xs#2!`, `f(x)!`; blocks.rs inlines what is known at compile time
-		let is_evaluable = is_field || !matches!(lhs.drop_meta(), Node::Empty);
+		// any expression may be run (wiki/charged.md section 5): `xs#2!`, `f(x)!`; Empty too (`ø!` P73 force → unwrap)
 		// `name! email?`: glued to its name and followed by a space, the `!` is a suffix even when an operand follows
 		// `x!+1`: glued to its name and followed by an infix operator, the `!` is a suffix too
 		// `x!!`: run fully, a suffix as well
 		let glued_suffix = !self.prev_char().is_whitespace() && (matches!(self.peek_char(1), ' ' | '\t' | '!') || INFIX_AFTER_BANG.contains(&self.peek_char(1)));
-		if self.current_char() != '!' || self.peek_char(1) == '=' || (self.operand_follows(1) && !glued_suffix) || !(is_evaluable || mutated.is_some()) {
+		if self.current_char() != '!' || self.peek_char(1) == '=' || (self.operand_follows(1) && !glued_suffix) {
 			return None;
 		}
 		self.advance();
@@ -2968,6 +2971,8 @@ impl WaspParser {
 			(None, Node::Symbol(_)) => crate::mutation::marked(lhs.clone()),
 			// `{a*a}!` evaluates the block on the spot
 			(None, Node::List(_, Bracket::Curly, _)) => lhs.clone(),
+			// `ø!`: P73 force → unwrap (direct call; marking Empty is stripped by is_nothing / run_time_blocks)
+			(None, Node::Empty) => Node::List(vec![Node::Symbol(crate::mutation::UNWRAP.to_string()), lhs.clone()], Bracket::Round, Separator::None),
 			(None, _) if fully => crate::mutation::marked_fully(lhs.clone()),
 			(None, _) => crate::mutation::marked(lhs.clone()),
 		})

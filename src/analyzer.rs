@@ -456,6 +456,10 @@ fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 	} else if kinds.contains(&Kind::List) {
 		// a list and a list (or ø, the empty list) is a list; a list and anything else a Node of its run-time kind
 		if kinds.iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) { Kind::List } else { Kind::Data }
+	} else if kinds.contains(&Kind::Empty) {
+		// a Node whose kind is known only at run time (an awaited job's result, ø): the value keeps that kind, so
+		// `(if c then 0 else job_result) + 1` adds at run time instead of failing as text
+		Kind::Empty
 	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
 		Kind::Text
 	} else if then_kind == Kind::Float || else_kind == Kind::Float {
@@ -3242,8 +3246,10 @@ fn with_closure_captures(ctx: &Context, program: &Node, mut globals: HashMap<Str
 			}
 			None => captured_variables(function, &outer),
 		};
+		// the binding itself, its declared or literal type with it (`k = {a: 10}`: `k.a` is an Int there too)
 		for (name, kind) in captured {
-			globals.entry(name.clone()).or_insert_with(|| Local::new(0, name, kind));
+			let binding = outer.lookup(&name).cloned().map(|local| Local { kind, ..local });
+			globals.entry(name.clone()).or_insert_with(|| binding.unwrap_or_else(|| Local::new(0, name, kind)));
 		}
 	}
 	globals
@@ -3635,6 +3641,8 @@ fn lift_nested_defs_walk(ctx: &mut Context, node: Node, parent: &str, renames: &
 			op,
 			Box::new(lift_nested_defs_walk(ctx, *right, parent, renames)),
 		),
+		// quoted data (the program a run-time block carries) is not code of this body
+		quoted if crate::run_time_blocks::is_data(&quoted) => quoted,
 		Node::List(items, bracket, separator) => {
 			if items.len() >= 2 {
 				if let Node::Symbol(keyword) = items[0].drop_meta() {
@@ -3850,7 +3858,7 @@ pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 pub(crate) fn text_unit(word: &str) -> Option<&'static str> {
 	match word {
 		"byte" | "bytes" => Some("bytes"),
-		"char" | "chars" | "codepoint" | "codepoints" => Some("codepoints"),
+		"char" | "chars" | "character" | "characters" | "codepoint" | "codepoints" => Some("codepoints"),
 		"grapheme" | "graphemes" => Some("graphemes"),
 		_ => None,
 	}
@@ -3919,8 +3927,12 @@ fn property_of_name(items: &[Node], separator: &Separator, variables: &HashSet<S
 fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<Node> {
 	let [print, phrase] = items else { return None };
 	let Node::List(phrase, Bracket::None | Bracket::Round, _) = phrase.drop_meta() else { return None };
-	// `chars in "hello"` arrives as the words or as `chars (in "hello")`
-	let (name, in_word, collection) = match phrase.as_slice() {
+	// `chars in "hello"` arrives as the words or as `chars (in "hello")`, optionally after `all`
+	let phrase = match phrase.as_slice() {
+		[all, rest @ ..] if is_word(all, "all") => rest,
+		words => words,
+	};
+	let (name, in_word, collection) = match phrase {
 		[name, in_word, collection] => (name, in_word, collection),
 		[name, rest] => match rest.drop_meta() {
 			Node::List(rest, _, _) if rest.len() == 2 => (name, &rest[0], &rest[1]),
