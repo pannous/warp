@@ -35,3 +35,4 @@ mod test_print_walk;
 mod test_count_in;
 mod test_character_arithmetic;
 mod test_print_all_characters;
+mod test_add_to_text;

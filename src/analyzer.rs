@@ -2173,7 +2173,7 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
 pub fn lower_declarations(node: Node) -> Node {
 	let variables = assigned_names(&node).into_iter().map(str::to_string).collect();
-	let mut names = Names { values: names_used_as_values(&node), variables };
+	let mut names = Names { values: names_used_as_values(&node), variables, texts: text_variables(&node) };
 	names.values.extend(names.variables.iter().cloned());
 	lower_declarations_among(node, &names)
 }
@@ -2358,6 +2358,24 @@ fn rename_symbol(node: Node, from: &str, to: &str) -> Node {
 struct Names {
 	variables: HashSet<String>,
 	values: HashSet<String>,
+	/// Variables only ever given a text: `add "c" to x` appends to the text
+	texts: HashSet<String>,
+}
+
+/// Variables whose every assigned value is a text literal or an update of the variable itself (`x = x + "c"`)
+fn text_variables(program: &Node) -> HashSet<String> {
+	let mut texts: HashMap<String, bool> = HashMap::new();
+	program.visit(&mut |part| {
+		let Node::Key(target, Op::Assign | Op::Define, value) = part else { return };
+		let Node::Symbol(name) = target.drop_meta() else { return };
+		let is_text = match value.drop_meta() {
+			Node::Text(_) | Node::Char(_) => true,
+			Node::Key(left, _, _) => matches!(left.drop_meta(), Node::Symbol(updated) if updated == name),
+			_ => false,
+		};
+		*texts.entry(name.clone()).or_insert(true) &= is_text;
+	});
+	texts.into_iter().filter(|(_, only_texts)| *only_texts).map(|(name, _)| name).collect()
 }
 
 /// Words that stand as values somewhere: not as the head of a call, a type annotation (`x:int`, `as int`) or the
@@ -2481,7 +2499,12 @@ fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Node::Key(list, Op::Dot, call) if inserted_element(&list, &call).is_some() => lowered_insert(list, &call),
 		Node::Key(list, Op::Dot, call) if appended_element(&list, &call).is_some() => {
 			let element = lower(appended_element(&list, &call).expect("guarded").clone());
-			let appended = Node::Key(list.clone(), Op::Add, Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)));
+			// `add "c" to x` of a text: the text grows (wiki row 29); of a list: the list gets the element
+			let added = match names.texts.contains(&list.name()) {
+				true => element,
+				false => Node::List(vec![element], Bracket::Square, Separator::Space),
+			};
+			let appended = Node::Key(list.clone(), Op::Add, Box::new(added));
 			Node::Key(list, Op::Assign, Box::new(appended))
 		}
 		Node::Key(list, Op::Dot, call) if popped_list(&list, &call).is_some() => popped_list(&list, &call).expect("guarded"),
