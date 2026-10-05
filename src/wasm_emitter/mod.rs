@@ -2226,7 +2226,9 @@ impl WasmGcEmitter {
 	fn emit_int_operands_op(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		// `s < "b"`, `c >= "0"` with a text: ordered by code points (node_order, as sort orders them); a value held as a
 		// Node (a cell's, another runtime's: `time.time() > 0`) by its value, an Int or a Float decided at run time
-		if op.is_ordering() && [left, right].iter().any(|side| matches!(self.get_type(side), Kind::Text | Kind::Empty | Kind::Data)) {
+		// (an element `xs#2` keeps its own path: a character there compares by code point, `x#2 > 50`)
+		let held_node = |side: &&Node| matches!(self.get_type(side), Kind::Empty | Kind::Data) && !matches!(side.drop_meta(), Node::Key(_, Op::Hash, _));
+		if op.is_ordering() && [left, right].iter().any(|side| self.get_type(side) == Kind::Text || held_node(side)) {
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);
 			self.emit_call(func, library_ops::NODE_ORDER);
