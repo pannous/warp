@@ -115,6 +115,11 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   later. Asked by warp-90 (card hijack-stdlib).
 - P89 foreign runtimes (`use python "math"`) get their own capability, not Ffi (granted to everyone for now, P88).
   Asked by warp-90.
+- P90 the debug module ./test.wasm stays written at every compile (user chose "keep always on" over the recommended
+  WARP_DEBUG_WASM switch). Asked by warp-ec.
+- P91 one shared analysis per compile (extract_user_functions, EffectReport::of), refreshed only when a pass changed
+  the program: yes, as its own card after warp-90's and warp-2d's lowering work lands, one pass converted first to
+  show the gain. Asked by warp-ec; as recommended.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
