@@ -801,6 +801,22 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 		[] => first,
 		_ => Node::List([vec![first], rest.to_vec()].concat(), Bracket::None, Separator::Space),
 	};
+	// `all numbers > 2: body`: the comparison acts on every item (wiki/iteration.md), a filter loop (P46, its warning)
+	let (list, body) = match list.drop_meta() {
+		Node::Key(collection, op, value) if op.is_comparison() => {
+			let condition = Node::Key(Box::new(Node::Symbol(IT_PARAMETER.to_string())), *op, value.clone());
+			let written = format!("{} {op} {}", word.drop_meta().name(), crate::normalize::operand_text(value));
+			let question = crate::diagnostic::Ask::new(crate::wasp_parser::FILTER_LOOP_TOPIC, format!("`{written}: …` visits only the items that pass its filter"),
+				vec![crate::diagnostic::reading("filter the items", &format!("for it in … {{ if it {op} {} {{ … }} }}", crate::normalize::operand_text(value)))],
+				crate::diagnostic::Fallback::Warning).written(&written).at_node(word);
+			if let Err(error) = crate::diagnostic::ask(&question) {
+				return Some(error);
+			}
+			let guarded = Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::If, Box::new(condition))), Op::Then, Box::new(body));
+			(collection.as_ref().clone(), guarded)
+		}
+		_ => (list, body),
+	};
 	let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
 	Some(Node::List(vec![Node::Symbol("for".into()), list, block], Bracket::None, Separator::Space))
 }

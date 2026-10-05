@@ -65,3 +65,4 @@ mod test_try_stack_overflow;
 mod test_run_time_blocks;
 mod test_catch_binding;
 mod test_filter_loop_over_variable;
+mod test_all_with_condition;

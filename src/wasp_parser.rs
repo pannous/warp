@@ -251,7 +251,7 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 }
 
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
-const FILTER_LOOP_TOPIC: &str = "for-filter";
+pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
 /// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
 const EVEN_WORD: &str = "even";
 const ODD_WORD: &str = "odd";
