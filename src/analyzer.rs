@@ -2158,7 +2158,7 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{type_name}? to allow ø")));
 	}
 	let expected = builtin_type_kind(type_name)?;
-	let actual = literal_kind(value)?;
+	let actual = computed_literal_kind(value)?;
 	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
 	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint; // `"a"` parses as a codepoint
 	if expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text {
@@ -2933,6 +2933,30 @@ pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 		Node::Char(_) => Some(Kind::Codepoint),
 		Node::Key(nothing, Op::Neg, operand) if matches!(nothing.drop_meta(), Node::Empty) => literal_kind(operand),
 		_ => None,
+	}
+}
+
+/// The kind of a literal or of arithmetic on literals: `π*1000000` is a float, `2*3` and `2.0*3` (exact decimals) Ints
+fn computed_literal_kind(value: &Node) -> Option<Kind> {
+	match value.drop_meta() {
+		Node::Key(left, op, right) if op.is_arithmetic() && !matches!(left.drop_meta(), Node::Empty) => {
+			match (operand_kind(left)?, operand_kind(right)?) {
+				(Kind::Int, Kind::Int) => Some(Kind::Int),
+				(Kind::Float | Kind::Int, Kind::Float | Kind::Int) => Some(Kind::Float),
+				_ => None,
+			}
+		}
+		_ => literal_kind(value),
+	}
+}
+
+/// An operand of arithmetic on literals: an exact decimal stays exact (`2.0*3` is 6), a real constant is a float
+fn operand_kind(operand: &Node) -> Option<Kind> {
+	match operand.drop_meta() {
+		Node::Symbol(name) if REAL_CONSTANTS.contains(&name.as_str()) => Some(Kind::Float),
+		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Some(Kind::Int),
+		Node::Key(..) => computed_literal_kind(operand),
+		_ => literal_kind(operand),
 	}
 }
 
