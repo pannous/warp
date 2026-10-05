@@ -3214,19 +3214,36 @@ fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, passed: &mu
 	}
 }
 
-/// The kinds a closure's body sees for the variables it captures from the program (`t = "!"; shout = s => s + t`),
-/// added to the declared globals where no global of that name exists: without them `s + t` is a type error and the
-/// closure's result kind is lost
+/// Free variables a function reads from main (or an enclosing function) keep their kinds for return-kind inference:
+/// without them `if x > limit then limit else x` types `limit` as Symbol, the function as Text, and a numeric `+` of
+/// two calls traps (g-rT0c). Closures need the same (`t = "!"; shout = s => s + t`). Kinds are merged only where no
+/// declared global of that name exists.
 fn with_closure_captures(ctx: &Context, program: &Node, mut globals: HashMap<String, Local>) -> HashMap<String, Local> {
-	if ctx.closure_targets.is_empty() {
-		return globals;
-	}
 	let mut outer = Scope::new();
 	collect_variables(program, &mut outer);
-	let parameters: HashSet<&str> = ctx.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.as_str())).collect();
-	for (name, local) in outer.locals {
-		if !parameters.contains(name.as_str()) {
-			globals.entry(name).or_insert(local);
+	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
+	functions.sort_by(|a, b| a.name.cmp(&b.name));
+	for function in functions {
+		let enclosing = ctx.enclosing_functions.get(&function.name).and_then(|name| ctx.user_functions.get(name));
+		let captured: Vec<(String, Kind)> = match enclosing {
+			Some(enclosing) => {
+				let mut enclosing_scope = Scope::new();
+				for param in &enclosing.params {
+					enclosing_scope.define_param(param.name.clone(), param_kind(param));
+				}
+				collect_variables(&enclosing.body, &mut enclosing_scope);
+				let mut captured = captured_variables(function, &enclosing_scope);
+				captured.extend(
+					captured_variables(function, &outer)
+						.into_iter()
+						.filter(|(name, _)| enclosing_scope.lookup(name).is_none()),
+				);
+				captured
+			}
+			None => captured_variables(function, &outer),
+		};
+		for (name, kind) in captured {
+			globals.entry(name.clone()).or_insert_with(|| Local::new(0, name, kind));
 		}
 	}
 	globals

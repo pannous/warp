@@ -54,3 +54,4 @@ mod test_folding_in_bodies;
 mod test_specialised_variants;
 mod test_memoization;
 mod test_constant_free_variables;
+mod test_free_var_if_arms;
