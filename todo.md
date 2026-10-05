@@ -15,7 +15,7 @@ The supervisor should remove the DONE elements after a while.
 - `1/0` is ∞ (f64) when it is not directly under `try` (`{1/0}`, `f() := 1/0; f()`), while `try 1/0 else 7` catches a division by zero: exact division by zero is either an error or ∞, not both. (fixer 2026-10-05)
 - `catch e` / `except E as e`: the caught error is no value yet (a fallback that uses e is a loud error); binding it needs the error value or the trap detail in the fallback. (fixer 2026-10-05, P60)
 - DONE: `warp --help` prints only the wiki link, not the usage list that a bare `warp` shows (found while rewriting README, 2026-10-05) (fix-help)
-- `square 3 + square(4)` with `square := it²` gives 361 (parsed as square(3+square(4))): silent footgun, deserves an Ask warning?
+- DONE: `square 3 + square(4)` with `square := it²` gives 361 (parsed as square(3+square(4))): silent footgun, deserves an Ask warning? (p68-braceless-warning: a got-it warning naming both readings, P68)
 - `a=1;b=2; x : a+b; x!` prints the symbol `x` silently: `x!` on a name falls through to the mutation marker (wasp_parser `try_parse_evaluate_bang`); charged.md §5 wants 3 (constant quote) or a loud error. (runtime-eval study, 2026-10-05, notes/runtime_eval.md)
 - `nonlocal y` (wiki/charged.md §3) waits for nested function definitions: `def outer(){ y=1; def inner(){ y }; inner() }` is "expected a variable to assign to, got (inner)"; ignored test test_late_binding::nonlocal_reads_the_enclosing_functions_current_value. (late-binding, 2026-10-05)
 - Charged object fields `{a: 1, s := clock()}` are "cannot extract a numeric value from a:1": the effectful-getter warning and per-read timing exist only for main-level `name := expr` so far. (late-binding, 2026-10-05)
