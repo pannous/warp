@@ -100,6 +100,10 @@ const SDL_PREFIX: &str = "SDL_";
 /// The libc functions link_libc_functions defines by hand; any other libc import is linked from the process
 const HAND_LINKED_LIBC: [&str; 8] = ["abs", "strlen", "atoi", "atol", "atof", "strcmp", "strncmp", "rand"];
 
+/// C type words: a "declaration" named after one is a function pointer or a cast (`int (*_close)(void *);`), never a
+/// function the program could call; taken for one, it would shadow wasp's own `int(…)`
+pub(crate) const C_TYPE_WORDS: [&str; 13] = ["int", "char", "void", "long", "short", "unsigned", "signed", "float", "double", "const", "struct", "union", "enum"];
+
 /// C keywords that start a statement: a line holding one declares no function
 const C_STATEMENT_KEYWORDS: [&str; 9] = ["return", "if", "else", "while", "for", "do", "switch", "case", "goto"];
 
@@ -166,6 +170,9 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
     while name.starts_with('*') {
         name = name[1..].to_string();
         pointer_marks.push('*');
+    }
+    if name.is_empty() || C_TYPE_WORDS.contains(&name.as_str()) {
+        return None;
     }
 
     // Return type is everything before the name

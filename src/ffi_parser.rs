@@ -130,7 +130,7 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
         name = name[1..].to_string();
     }
 
-    if name.is_empty() || !name.chars().next()?.is_alphabetic() {
+    if name.is_empty() || !name.chars().next()?.is_alphabetic() || crate::ffi::C_TYPE_WORDS.contains(&name.as_str()) {
         return None;
     }
 
