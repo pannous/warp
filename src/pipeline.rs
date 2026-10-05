@@ -221,10 +221,10 @@ fn eval_program(node: Node) -> Node {
 	}
 }
 
-/// The message of `error("…")`
+/// The message of `error("…")`, or of `raise …`, which always fails the run
 pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {
 	match value.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error") => Some(&items[1]),
+		Node::List(items, Bracket::Round, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error" || word == crate::wasm_emitter::text_builtins::RAISE) => Some(&items[1]),
 		_ => None,
 	}
 }

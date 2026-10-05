@@ -38,6 +38,8 @@ const READ: &str = "read";
 const READ_TEXT: &str = "read_text";
 const HOST_READ: &str = "host_read";
 const ERROR: &str = "error";
+/// `raise X` (`throw X`): an exception, the runtime error returned_error with X as its detail, which `try` catches
+pub const RAISE: &str = "raise";
 /// `is_error(x)`: 1 when x is an Error value; `try X else Y` tests its result with it
 const IS_ERROR: &str = "is_error";
 const ERROR_OF: &str = "error_of";
@@ -50,8 +52,8 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 12] = [
-	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
+const TEXT_BUILTINS: [(&str, usize, Kind); 13] = [
+	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (RAISE, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
 	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
 	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int), (CHR, 1, Kind::Codepoint),
 ];
@@ -196,6 +198,10 @@ impl WasmGcEmitter {
 			(ERROR, [message]) => {
 				self.emit_node_instructions(func, message);
 				self.emit_call(func, ERROR_OF);
+			}
+			(RAISE, [message]) => {
+				self.emit_trap_detail(func, message);
+				self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);
 			}
 			// a hole names a variable: a word that names nothing is loud, never its own spelling
 			(TEXT_FORM, [value]) => match value.drop_meta() {
