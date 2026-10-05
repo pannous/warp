@@ -139,3 +139,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 p58-hash-range-warning
 - P58: `xs#a..b` stays the range from the value xs#a, with a warning naming the slice xs#(a..b) and the range (xs#a)..b
   (wasp_parser hash_range_warning).
+
+## 2026-10-05 p60-catch-except
+- P60: `try {…} catch {…}`, `catch e {…}`, `try: … except: …`, `except E:` / `except E as e:` are synonyms of `try X else Y`
+  (wasp_parser FALLBACK_WORDS, parse_caught_name); using the caught name is a loud error for now.

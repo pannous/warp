@@ -219,6 +219,8 @@ fn is_unindexable_keyword(node: &Node) -> bool {
 /// The marker calls the parser leaves for `try X else Y` and `assert C else X`, lowered in `library_words`
 pub const TRY_MARKER: &str = "try·else";
 pub const ASSERT_MARKER: &str = "assert·else";
+/// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
+const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
 const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
 /// `nand` and its glyph pair, both `not (a and b)`
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
@@ -1404,7 +1406,7 @@ impl WaspParser {
 			return None;
 		}
 		GUARD_MARKERS.iter().map(|(word, marker)| (*word, *marker))
-			.find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t'))
+			.find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t' | '{' | ':'))
 			.map(|(_, marker)| marker)
 	}
 
@@ -1414,14 +1416,21 @@ impl WaspParser {
 		let word_length = GUARD_MARKERS.iter().find(|(_, known)| *known == marker).map_or(0, |(word, _)| word.len());
 		self.advance_by(word_length);
 		self.skip_spaces();
+		self.skip_python_colon();
 		let outer = std::mem::replace(&mut self.stops_at_else, true);
 		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_guarded_phrase());
 		self.stops_at_else = outer;
 		self.skip_spaces();
-		let fallback = if self.matches_keyword("else") {
-			self.advance_by("else".len());
+		let fallback = if let Some((word, ahead)) = self.fallback_word_ahead() {
+			self.advance_by(ahead + word.len());
 			self.skip_spaces();
-			self.parse_expr(0)
+			let caught = if word == ELSE_KEYWORD { None } else { self.parse_caught_name(word) };
+			self.skip_python_colon();
+			let fallback = self.parse_expr(0);
+			if let Some(name) = caught.filter(|name| mentions(&fallback, name)) {
+				return error(&format!("`catch {name}`: the caught error is no value yet, write the fallback without {name} (`try X catch {{ Y }}`)"));
+			}
+			fallback
 		} else if marker == TRY_MARKER {
 			return error("`try` needs an `else`: `try X else Y`");
 		} else {
@@ -1430,12 +1439,46 @@ impl WaspParser {
 		Node::List(vec![Symbol(marker.to_string()), guarded, fallback], Bracket::Round, Separator::None)
 	}
 
+	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),
+	/// with how many blanks (line breaks included) come before it
+	fn fallback_word_ahead(&self) -> Option<(&'static str, usize)> {
+		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		FALLBACK_WORDS.iter().find(|word| self.word_at(ahead) == **word).map(|word| (*word, ahead))
+	}
+
+	/// `catch e`, `except ZeroDivisionError`, `except ValueError as e`: the name the error would be bound to
+	fn parse_caught_name(&mut self, word: &str) -> Option<String> {
+		if !self.is_identifier_start(0) {
+			return None;
+		}
+		let mut name = self.word_at(0);
+		self.advance_by(name.chars().count());
+		self.skip_spaces();
+		if self.matches_keyword("as") {
+			self.advance_by(2);
+			self.skip_spaces();
+			name = self.word_at(0);
+			self.advance_by(name.chars().count());
+			self.skip_spaces();
+			return Some(name);
+		}
+		(word == "catch").then_some(name) // `except ZeroDivisionError` names a type, `catch e` a binding
+	}
+
+	/// Python's `try:` and `except:` end with a colon; the block may start on the next line
+	fn skip_python_colon(&mut self) {
+		if self.current_char() == ':' {
+			self.advance();
+			self.skip_whitespace();
+		}
+	}
+
 	/// The guarded part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else 3`)
 	fn parse_guarded_phrase(&mut self) -> Node {
 		let mut items = vec![self.parse_expr(0)];
 		loop {
 			self.skip_spaces();
-			if self.matches_keyword("else") || matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',') {
+			if FALLBACK_WORDS.iter().any(|word| self.matches_keyword(word)) || matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',') {
 				break;
 			}
 			let position = self.pos;
