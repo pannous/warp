@@ -79,6 +79,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   (Decided #7)? Then call-shaped data in code needs brackets: `[cube 3]`, `(cube 3)`, which contradicts rule 3 of
   notes/unresolved_call_survey.md (`print 3` as data). Proposed: keep the warning (wasp is a data notation; strict
   mode makes it an error). Asked by worker warp-90, branch unknown-word. 2026-10-05.
+- P52 Calling a `to` phrase with its prepositions: `to add number a to number b: a+b` is called `add(1, 2)`; should
+  `add 1 to 2` call it too (and `square of 4` for `square of a number`)? Today `1 to 2` is a range and `x of y` a field
+  lookup, so `add 1 to 2` is add(1..2). Proposed: a phrase call matches the defined prepositions first when the name is
+  a phrase-defined function, else the operators keep their meaning. Not implemented. Asked by worker warp-90, branch
+  type-name-params. 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),

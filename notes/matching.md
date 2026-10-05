@@ -44,6 +44,10 @@ implemented in src/lowering/type_name_matching.rs (`parameter_slots`, used by th
    multi-word classes, because `class full name {…}` cannot be declared yet (the parser takes one word after `class`).
 5. A slot that is a single known type word and the only parameter is also `it` (`fibonacci number`, `foo of int`).
 6. Spaced heads without any known type word (`f x = …`) keep their old meaning; the `to` phrase always uses the slots.
+7. One parse for every spelling: `=` and `:=` heads both go through `type_name_matching::spaced_parameters`
+   (declarations::spaced_definition delegates to it), the `to` phrase takes a `:` or a `{…}` body. A lone type-word
+   parameter is `it` only when the body does not use the word itself (`fibonacci number := … number … it …` keeps
+   `number`, and `it` means the same value). Tests: tests/types/test_type_name_definition_forms.rs.
 
 Object arguments (tests/functions/test_object_arguments.rs): an untyped parameter reads fields of the object it gets
 (`measure(p) := p.width; measure({width:3})`), and an argument known at compile time not to be an instance of a

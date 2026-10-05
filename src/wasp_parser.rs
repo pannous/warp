@@ -1530,7 +1530,8 @@ impl WaspParser {
 		let mut parameters = Vec::new();
 		loop {
 			self.skip_spaces();
-			if self.current_char() == ':' && self.peek_char(1) != '=' {
+			// `to square a number: …` or `to square a number { … }`
+			if (self.current_char() == ':' && self.peek_char(1) != '=') || self.current_char() == '{' {
 				break;
 			}
 			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
@@ -1541,8 +1542,10 @@ impl WaspParser {
 				}
 			}
 		}
-		self.advance(); // the colon
-		self.skip_spaces();
+		if self.current_char() == ':' {
+			self.advance();
+			self.skip_spaces();
+		}
 		let body = self.parse_definition_body();
 		self.functions.insert(name.clone());
 		let words: Vec<&str> = parameters.iter().map(String::as_str).collect();
