@@ -75,6 +75,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Decided 2026-10-05 (user, multiple choice, all as recommended)
+- Standing rule (user): "it's allowed to un ignore test that are suddenly passing". Removing `#[ignore]` from a test
+  that passes unedited needs no question; editing its assertions still does.
 - P49b a whole float is no int either: `f(x:int)` called with 2.0 is refused like `x:int = 2.0` (write `2.0 as int`).
 - P45b the P45 error covers kinds evident from the source; inferred kinds keep the Node fallback until inference is
   reliable.
