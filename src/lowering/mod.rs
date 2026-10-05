@@ -23,6 +23,7 @@ pub mod printable;
 pub mod phrase_words;
 pub mod picked_calls;
 pub mod result_word;
+pub mod run_time_blocks;
 pub mod shared_arrays;
 pub mod switch;
 pub mod traits;

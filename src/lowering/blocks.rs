@@ -26,7 +26,7 @@ struct Blocks {
 }
 
 /// `x : a+b` of a computed expression: the name and the block
-fn uncharged(node: &Node) -> Option<(String, Node)> {
+pub(crate) fn uncharged(node: &Node) -> Option<(String, Node)> {
 	let Node::Key(target, Op::Colon, value) = node.drop_meta() else { return None };
 	let Node::Symbol(name) = target.drop_meta() else { return None };
 	is_computed(value).then(|| (name.clone(), value.as_ref().clone()))
