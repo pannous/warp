@@ -140,6 +140,8 @@ PASSED:
   ✓ control::test_switch_value::a_switch_can_be_bound
   ✓ control::test_task_closures::a_capturing_text_lambda_runs_in_a_task
   ✓ control::test_task_closures::a_parameter_named_like_a_unit_is_the_parameter
+  ✓ control::test_task_exact::a_big_integer_crosses_to_a_task_and_back
+  ✓ control::test_task_exact::a_ratio_crosses_to_a_task_and_back
   ✓ control::test_task_list_literal::a_list_of_task_values_holds_each_result
   ✓ control::test_task_values::a_function_value_crosses_to_a_task
   ✓ control::test_task_values::a_task_gives_the_result_of_its_function
@@ -157,7 +159,7 @@ PASSED:
   ✓ control::test_threads::a_task_of_a_list_parameter_runs_where_it_starts
   ✓ control::test_threads::a_task_of_other_values_runs_where_it_starts
   ✓ control::test_threads::an_error_in_a_task_is_the_error_of_await
-  ✓ control::test_threads::an_exact_number_beyond_the_fixnums_cannot_cross_yet
+  ✓ control::test_threads::an_exact_number_crosses_to_a_task
   ✓ control::test_threads::await_binds_its_task_inside_an_expression
   ✓ control::test_threads::await_gives_the_result_of_the_thread
   ✓ control::test_threads::function_values_cross_to_a_task
@@ -2194,4 +2196,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-35 ignored, 2189 passed, 0 failed, 2189 total tested
+35 ignored, 2191 passed, 0 failed, 2191 total tested
