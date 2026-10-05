@@ -370,7 +370,7 @@ impl WasmGcEmitter {
 
 	/// Give every outer variable a function reads a global, set from the variable where the function is defined
 	fn allocate_closure_captures(&mut self, program: &Node) {
-		let mut outer = Scope::with_function_kinds(self.user_function_kinds()); // `x = g()` holds what g returns
+		let mut outer = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone()); // `x = g()` holds what g returns
 		collect_variables(program, &mut outer);
 		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values().cloned().collect();
 		for function in functions {
@@ -480,7 +480,7 @@ impl WasmGcEmitter {
 		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
 
 		// Create function scope with parameters
-		let function_scope = Scope::with_function_kinds(self.user_function_kinds());
+		let function_scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
 		let saved_scope = std::mem::replace(&mut self.scope, function_scope);
 		// declared globals are changed in place, never shadowed by a local of the same name
 		self.scope.globals = self.ctx.declared_globals.clone();
@@ -730,6 +730,14 @@ impl WasmGcEmitter {
 			// Call of a user function, also braceless: `f 3`
 			Node::List(items, _, _) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(name) if self.ctx.user_functions.contains_key(name)) => {
 				let Node::Symbol(name) = items[0].drop_meta() else { unreachable!() };
+				if let Some(arity) = crate::closures::closure_call_arity(name) {
+					let callee = items.get(1).and_then(|argument| match argument.drop_meta() {
+						Node::Symbol(variable) => Some(variable.as_str()),
+						_ => None,
+					});
+					let kinds = self.user_function_kinds();
+					return crate::closures::closure_call_site_kind(callee, arity, &self.ctx, &kinds);
+				}
 				self.ctx.user_functions[name].return_kind
 			}
 			// Arithmetic: recursively check operands with our get_type
@@ -2435,7 +2443,7 @@ impl WasmGcEmitter {
 
 	/// Every `global` of the program exists before any function is compiled, so function bodies can change it
 	fn allocate_declared_globals(&mut self, program: &Node) {
-		let mut main = Scope::with_function_kinds(self.user_function_kinds()); // `global g = vec(1, 2)` holds what vec returns
+		let mut main = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone()); // `global g = vec(1, 2)` holds what vec returns
 		collect_variables(program, &mut main);
 		let mut names: Vec<&String> = main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
 		names.sort();

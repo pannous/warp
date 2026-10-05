@@ -285,7 +285,25 @@ fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &S
 		if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
 			return infer_type(&items[1], scope); // `return x` is worth x
 		}
-		if let Some(kind) = scope.function_kind(name) {
+		if let Some(arity) = crate::closures::closure_call_arity(name) {
+			let callee = items.get(1).and_then(|argument| match argument.drop_meta() {
+				Node::Symbol(variable) => Some(variable.as_str()),
+				_ => None,
+			});
+			if let Some(variable) = callee {
+				if let Some(targets) = scope.closure_targets_of(variable) {
+					if !targets.is_empty() {
+						let mut kinds = targets.iter().map(|target| scope.function_kind(target).unwrap_or(Kind::Data));
+						let first = kinds.next().unwrap_or(Kind::Data);
+						return if kinds.all(|kind| kind == first) { first } else { Kind::Data };
+					}
+				}
+			}
+			if let Some(kind) = scope.function_kind(name) {
+				return kind;
+			}
+			let _ = arity;
+		} else if let Some(kind) = scope.function_kind(name) {
 			return kind;
 		}
 		if name == crate::closures::CLOSURE_NEW {
@@ -961,6 +979,8 @@ pub struct Scope {
 	pub locals: HashMap<String, Local>,
 	pub types: HashMap<String, Node>,  // User-defined types
 	pub function_kinds: HashMap<String, Kind>,  // Return kinds of user functions, which shadow FFI names like `pow`
+	/// Variables that hold a closure → `closure_new` targets they may contain (per-site closure_call kinds)
+	pub closure_variable_targets: HashMap<String, HashSet<String>>,
 	pub globals: HashMap<String, Local>,  // Declared `global` (kind and type, no slot): assigning them later must not create a shadowing local
 	pub parent: Option<Box<Scope>>,
 }
@@ -975,6 +995,7 @@ impl Scope {
 			locals: HashMap::new(),
 			types: HashMap::new(),
 			function_kinds: HashMap::new(),
+			closure_variable_targets: HashMap::new(),
 			globals: HashMap::new(),
 			parent: Some(Box::new(self.clone())),
 		}
@@ -982,6 +1003,16 @@ impl Scope {
 
 	pub fn with_function_kinds(function_kinds: HashMap<String, Kind>) -> Self {
 		Scope { function_kinds, ..Scope::default() }
+	}
+
+	pub fn with_closure_targets(mut self, closure_variable_targets: HashMap<String, HashSet<String>>) -> Self {
+		self.closure_variable_targets = closure_variable_targets;
+		self
+	}
+
+	/// Targets a closure variable may hold, looking through parent scopes
+	pub fn closure_targets_of(&self, name: &str) -> Option<&HashSet<String>> {
+		self.closure_variable_targets.get(name).or_else(|| self.parent.as_ref().and_then(|parent| parent.closure_targets_of(name)))
 	}
 
 	pub fn is_global(&self, name: &str) -> bool {
@@ -2841,8 +2872,8 @@ pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 /// Extract user-defined functions from the AST into context
 /// Infer return type of a function body given its parameters
 /// The parameters and variables of a function body, typed
-fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Scope {
-	let mut scope = Scope::with_function_kinds(function_kinds.clone());
+fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>, closure_variable_targets: &HashMap<String, HashSet<String>>) -> Scope {
+	let mut scope = Scope::with_function_kinds(function_kinds.clone()).with_closure_targets(closure_variable_targets.clone());
 	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
 		scope.define_param(param.name.clone(), param_kind(param));
@@ -2853,9 +2884,9 @@ fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<S
 
 /// The kinds of the values `return a, b` gives back, position by position over every such return:
 /// one kind when all agree, Float for Int mixed with Float, else a Node
-fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Vec<Kind> {
+fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>, closure_variable_targets: &HashMap<String, HashSet<String>>) -> Vec<Kind> {
 	let Some(arity) = crate::tuples::tuple_arity(body) else { return vec![] };
-	let scope = function_body_scope(params, body, function_kinds, globals);
+	let scope = function_body_scope(params, body, function_kinds, globals, closure_variable_targets);
 	let mut kinds: Vec<Option<Kind>> = vec![None; arity];
 	body.visit(&mut |node| {
 		for (kind, value) in kinds.iter_mut().zip(crate::tuples::returned_values(node).unwrap_or_default()) {
@@ -2871,11 +2902,11 @@ fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<Str
 	kinds.into_iter().map(|kind| kind.unwrap_or(Kind::Data)).collect()
 }
 
-fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Kind {
+fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>, closure_variable_targets: &HashMap<String, HashSet<String>>) -> Kind {
 	if crate::tuples::tuple_arity(body).is_some() {
 		return Kind::List; // used whole, a tuple function's values are packed into a list
 	}
-	let scope = function_body_scope(params, body, function_kinds, globals);
+	let scope = function_body_scope(params, body, function_kinds, globals, closure_variable_targets);
 	// `return error("…")` is the failure path: it does not decide what the function returns
 	let is_error = |value: &Node| {
 		let value = match value.drop_meta() {
@@ -2985,7 +3016,7 @@ pub fn param_kind(param: &Param) -> Kind {
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
 fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, body);
-	let return_kind = infer_function_return_kind(&params, body, &HashMap::new(), &HashMap::new());
+	let return_kind = infer_function_return_kind(&params, body, &HashMap::new(), &HashMap::new(), &HashMap::new());
 	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, tuple_kinds: vec![], func_index: None }
 }
 
@@ -3112,11 +3143,11 @@ fn widen_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String,
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
 	function_kinds.extend(ctx.field_kinds.clone());
 	let mut passed: HashMap<(String, usize), HashSet<Kind>> = HashMap::new();
-	let mut main = Scope::with_function_kinds(function_kinds.clone());
+	let mut main = Scope::with_function_kinds(function_kinds.clone()).with_closure_targets(ctx.closure_variable_targets.clone());
 	collect_variables(program, &mut main);
 	collect_argument_kinds(program, &main, ctx, &mut passed);
 	for function in ctx.user_functions.values() {
-		let scope = function_body_scope(&function.params, &function.body, &function_kinds, globals);
+		let scope = function_body_scope(&function.params, &function.body, &function_kinds, globals, &ctx.closure_variable_targets);
 		collect_argument_kinds(&function.body, &scope, ctx, &mut passed);
 	}
 	let mut changed = false;
@@ -3423,13 +3454,13 @@ fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 		let inferred: Vec<(String, Kind)> = ctx.user_functions.values()
 			.map(|function| {
 				let kind = crate::closures::closure_call_kind(&function.name, ctx, &function_kinds)
-					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds, globals));
+					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds, globals, &ctx.closure_variable_targets));
 				// `if t == ø { return [] }; return f(t.left) + [x]`: assumed to return an Int, the recursion makes an
 				// error of the last value; assumed to return a Node of unknown kind, it settles
 				let kind = if kind == Kind::Error && function_kinds.get(&function.name) == Some(&Kind::Int) {
 					let mut unknown_recursion = function_kinds.clone();
 					unknown_recursion.insert(function.name.clone(), Kind::Empty);
-					infer_function_return_kind(&function.params, &function.body, &unknown_recursion, globals)
+					infer_function_return_kind(&function.params, &function.body, &unknown_recursion, globals, &ctx.closure_variable_targets)
 				} else {
 					kind
 				};
@@ -3438,7 +3469,7 @@ fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 			.collect();
 		let tuples: Vec<(String, Kind)> = ctx.user_functions.values()
 			.flat_map(|function| {
-				let kinds = infer_tuple_kinds(&function.params, &function.body, &function_kinds, globals);
+				let kinds = infer_tuple_kinds(&function.params, &function.body, &function_kinds, globals, &ctx.closure_variable_targets);
 				kinds.into_iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(&function.name, index), kind)).collect::<Vec<_>>()
 			})
 			.collect();
