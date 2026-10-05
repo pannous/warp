@@ -87,8 +87,22 @@ pub fn eval_untrusted(code: &str) -> Node {
 	let program = WaspParser::parse(code);
 	match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
 		Some((external, _)) => crate::node::error(&format!("untrusted code has no capabilities but pure libm, refusing to call {external}")),
-		None => eval_parsed(program, code),
+		None => with_granted(&crate::effects::Capability::GRANTED_UNTRUSTED, || eval_parsed(program, code)),
 	}
+}
+
+thread_local! {
+	/// What the program being compiled may call: eval's grant, or the untrusted one (checked again after lowering,
+	/// which brings calls of its own: `use python math` → foreign_call)
+	static GRANTED: std::cell::Cell<&'static [crate::effects::Capability]> = const { std::cell::Cell::new(&crate::effects::Capability::GRANTED_BY_EVAL) };
+}
+
+/// `run` with the program granted only `granted`
+fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnOnce() -> T) -> T {
+	let before = GRANTED.with(|current| current.replace(granted));
+	let result = run();
+	GRANTED.with(|current| current.set(before));
+	result
 }
 
 /// A compiled program and the host capabilities its imports need.
@@ -102,7 +116,9 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 26] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 27] = [
+	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
+	crate::foreign_modules::lower,
 	crate::phrase_calls::lower,
 	crate::welcome_forms::lower, crate::number_keys::lower,
 	crate::declarations::lower_tasks, crate::shared_arrays::lower, crate::variable_signals::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::result_word::lower, crate::picked_calls::lower, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
@@ -127,7 +143,7 @@ fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
 /// Everything before code generation. `Err` is the final value of the program when it needs no module
 /// (a constant answer, an error, a denied capability).
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
-	use crate::effects::{without_constraints, Capability, EffectReport};
+	use crate::effects::{without_constraints, EffectReport};
 
 	let node = run_passes(node, &SOURCE_PASSES);
 	if let Some(error) = node.first_error() {
@@ -158,7 +174,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
 	}
-	if let Some((name, capability)) = effects.denied(&Capability::GRANTED_BY_EVAL) {
+	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
 		return Err(crate::node::error(&format!(
 			"capability denied: {name} needs the {} capability, which eval does not grant", capability.name())));
 	}

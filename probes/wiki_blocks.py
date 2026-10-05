@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Run every fenced code block of the wiki pages (```, ```wasp, ```warp) as a program through `warp eval` and list the
 blocks that end in an error, with the error: which documented features do not run yet.
-Usage: probes/wiki_blocks.py [wiki/page.md …]   (default: every wiki page)"""
+Usage: [WARP=path/to/warp] probes/wiki_blocks.py [wiki/page.md …]   (default: every wiki page)"""
 import glob
+import os
 import re
 import subprocess
 import sys
 
-WARP = "/Users/me/.cargo/shared-target.noindex/debug/warp"
+# a private copy (env WARP) keeps other worktrees' builds of the shared debug/warp out of the run
+WARP = os.environ.get("WARP", "/Users/me/.cargo/shared-target.noindex/debug/warp")
 FENCE = re.compile(r"^```(\w*)\s*$")
 LANGUAGES = {"", "wasp", "warp", "angle"}
 TIMEOUT_SECONDS = 20

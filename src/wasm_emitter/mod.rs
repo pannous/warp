@@ -414,7 +414,7 @@ impl WasmGcEmitter {
 	/// A host that hands values into the program (run_block's result, a task's value) builds an exact number beyond the
 	/// fixnums from fixnum pieces with these (tasks.rs Builders)
 	fn export_exact_builders(&mut self) {
-		let hands_values_in = [crate::host::RUN_BLOCK, crate::host::TASK_SPAWN, crate::host::TASK_AWAIT, crate::host::TASK_SPAWN_VALUES, crate::host::TASK_AWAIT_VALUE].iter().any(|word| self.ctx.ffi_imports.contains_key(*word));
+		let hands_values_in = [crate::host::RUN_BLOCK, crate::host::FOREIGN_CALL, crate::host::TASK_SPAWN, crate::host::TASK_AWAIT, crate::host::TASK_SPAWN_VALUES, crate::host::TASK_AWAIT_VALUE].iter().any(|word| self.ctx.ffi_imports.contains_key(*word));
 		if !hands_values_in || !self.int_runtime() {
 			return;
 		}

@@ -302,6 +302,10 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_zlib_discovery
   ✓ ffi::test_ffi::test_import_from_pattern_emit
   ✓ ffi::test_ffi::test_import_from_pattern_parse
+  ✓ ffi::test_foreign_python::test_a_python_error_is_loud
+  ✓ ffi::test_foreign_python::test_python_calls_and_reads
+  ✓ ffi::test_foreign_python::test_python_values_cross_exactly
+  ✓ ffi::test_foreign_python::test_untrusted_code_gets_no_python
   ✓ ffi::test_glibc_math_header::a_glibc_style_math_header_declares_libm
   ✓ ffi::test_glibc_math_header::glibc_math_macros_expand_to_double_declarations
   ✓ ffi::test_host_words::test_a_program_prints_and_uses_the_host
@@ -432,6 +436,9 @@ PASSED:
   ✓ functions::test_free_var_if_arms::non_foldable_capped_sum
   ✓ functions::test_free_var_if_arms::ternary_capped_sum
   ✓ functions::test_free_var_if_arms::then_arm_only_free_var_sum
+  ✓ functions::test_function_aliases::test_a_bare_alias_is_the_error_with_the_fix
+  ✓ functions::test_function_aliases::test_a_function_argument_stays_bare
+  ✓ functions::test_function_aliases::test_an_alias_names_the_function
   ✓ functions::test_function_keyword::function_defines_like_def
   ✓ functions::test_function_references::test_a_bare_name_needing_arguments_is_an_error_with_the_fix
   ✓ functions::test_function_references::test_a_body_returns_a_function_reference
@@ -833,6 +840,7 @@ PASSED:
   ✓ node::node_values_test::test_values_meta
   ✓ node::node_values_test::test_values_nested_key
   ✓ node::node_values_test::test_values_number
+  ✓ node::test_node_add::adding_unrelated_nodes_is_an_error_naming_both_kinds
   ✓ node::test_node_operators::test_chaining
   ✓ node::test_node_operators::test_complex_expression
   ✓ node::test_node_operators::test_mixed_types
@@ -1260,6 +1268,7 @@ PASSED:
   ✓ parser::test_number_glyphs::test_vulgar_fractions_are_exact
   ✓ parser::test_one_line_statements::separated_prints_still_run
   ✓ parser::test_one_line_statements::two_prints_on_one_line_need_a_separator
+  ✓ parser::test_parse_long_sources::a_long_source_parses_in_linear_time
   ✓ parser::test_parser_sugar::backslash_at_line_end_continues_the_statement
   ✓ parser::test_parser_sugar::block_comment_with_hash_is_ignored
   ✓ parser::test_parser_sugar::doc_comments_do_not_change_behaviour
@@ -1336,6 +1345,7 @@ PASSED:
   ✓ parser::test_wasp_position::test_position_in_json_output
   ✓ parser::test_wasp_position::test_position_tracking
   ✓ parser::test_wasp_position::test_position_with_comments
+  ✓ parser::test_wisp_def_params::a_wisp_def_tells_the_parameters_from_the_body
   ✓ parser::test_xml::test_boolean_attribute
   ✓ parser::test_xml::test_cdata
   ✓ parser::test_xml::test_complex_xml_document
@@ -2242,4 +2252,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-33 ignored, 2237 passed, 0 failed, 2237 total tested
+33 ignored, 2247 passed, 0 failed, 2247 total tested

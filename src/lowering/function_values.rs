@@ -144,10 +144,16 @@ fn aliases(node: &Node, functions: &HashSet<String>, assigned: &mut HashMap<Stri
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			if let Node::Symbol(name) = target.drop_meta() {
 				*assigned.entry(name.clone()).or_default() += 1;
-				if let Node::Symbol(function) = value.drop_meta() {
-					let named = found.get(function).unwrap_or(function);
-					if functions.contains(named) {
-						found.insert(name.clone(), named.clone());
+				// `g = function add` / `g = &add` (P83: a bare `g = add` needs add's arguments), `h = g` of an alias
+				let function = match (crate::closures::referenced_function(value), value.drop_meta()) {
+					(Some(function), _) => Some(function),
+					(None, Node::Symbol(alias)) if found.contains_key(alias) => Some(alias.clone()),
+					_ => None,
+				};
+				if let Some(function) = function {
+					let named = found.get(&function).cloned().unwrap_or(function);
+					if functions.contains(&named) {
+						found.insert(name.clone(), named);
 					}
 				}
 			}

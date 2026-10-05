@@ -326,7 +326,8 @@ impl EffectReport {
 
 	/// First capability the module needs beyond `granted`, with the external that needs it
 	pub fn denied(&self, granted: &[Capability]) -> Option<(String, Capability)> {
-		self.externals.iter().find(|(_, external)| !granted.contains(&external.capability))
+		// `try f(x) else …` calls the program's own function through the host (guarded_call): nothing from outside
+		self.externals.iter().filter(|(name, _)| name.as_str() != crate::host::GUARDED_CALL).find(|(_, external)| !granted.contains(&external.capability))
 			.map(|(name, external)| (name.clone(), external.capability))
 	}
 
