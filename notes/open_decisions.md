@@ -63,6 +63,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   fix offer `codepoint('x') as float`; P27 stands. tests/text/test_text_casts.rs may be edited for the hint text (user
   decision). Asked by warp-ea (fixits).
 - P75 fix buttons read "I meant: <replacement>", the meaning as a tooltip (warp-ea's default).
+- P77 `warp build --exe prog.wasp`: the executable prints what the program prints, then its value as `print` shows
+  it (texts without quotes); exit code 0, 1 on a trap (asked by the aot worker warp-ec; as recommended).
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
