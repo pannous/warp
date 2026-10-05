@@ -1,0 +1,2 @@
+fib := if it < 2 then it else fib(it - 1) + fib(it - 2)
+fib(20)
