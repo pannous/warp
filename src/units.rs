@@ -2,13 +2,18 @@
 //! Programs made of integers and units are evaluated here at compile time; sums convert to the finer unit.
 //! `1950 ± 50` is a value with tolerance, `1900 - 2000 AD` a range; both print back in the form they were written.
 //! The canonical unit of a result is the smallest unit involved: `3km+10m` is `3010 m`.
+//! A quantity is an amount times units to powers: `6 m²`, `6 m·kg`, `5 km/h` (km·h⁻¹), `1 kg·m/s²`.
 //! Anything else (floats, variables, functions) takes the normal path, where a unit word is an ordinary symbol.
 
 use crate::extensions::numbers::Number;
 use crate::meta::Dada;
-use crate::node::{error, Bracket, Node};
+use crate::node::{error, Bracket, Node, Separator};
+use std::collections::HashMap;
 use crate::operators::Op;
 use std::fmt;
+use crate::extensions::reals::Rational;
+use num_bigint::BigInt;
+use num_traits::ToPrimitive;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Dimension {
@@ -26,9 +31,10 @@ struct Unit {
 	factor: i64,
 }
 
-const UNITS: [Unit; 11] = [
+const UNITS: [Unit; 12] = [
 	Unit { name: "ms", dimension: Dimension::Time, factor: 1 },
 	Unit { name: "s", dimension: Dimension::Time, factor: 1_000 },
+	Unit { name: "min", dimension: Dimension::Time, factor: 60_000 },
 	Unit { name: "h", dimension: Dimension::Time, factor: 3_600_000 },
 	Unit { name: "mm", dimension: Dimension::Length, factor: 1 },
 	Unit { name: "cm", dimension: Dimension::Length, factor: 10 },
@@ -40,50 +46,112 @@ const UNITS: [Unit; 11] = [
 	Unit { name: "AD", dimension: Dimension::Era, factor: 1 },
 ];
 
+/// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36). Quantities keep the short
+/// names, `2 minutes` stays a duration of the time module.
+const LONG_NAMES: [(&str, &str); 12] = [
+	("millisecond", "ms"), ("second", "s"), ("minute", "min"), ("hour", "h"),
+	("millimeter", "mm"), ("centimeter", "cm"), ("meter", "m"), ("metre", "m"), ("kilometer", "km"),
+	("milligram", "mg"), ("gram", "g"), ("kilogram", "kg"),
+];
+/// `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
+const IN_WORD: &str = "in";
+
 fn unit_named(name: &str) -> Option<&'static Unit> {
 	UNITS.iter().find(|unit| unit.name == name)
+}
+
+/// A conversion target: a unit by its short name or its long name, `minute` or `minutes`
+fn target_unit(node: &Node) -> Option<&'static Unit> {
+	let Node::Symbol(name) = node.drop_meta() else { return None };
+	let singular = name.strip_suffix('s').unwrap_or(name);
+	unit_named(name).or_else(|| LONG_NAMES.iter().find(|(long, _)| *long == singular || *long == name).and_then(|(_, short)| unit_named(short)))
 }
 
 pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
 }
 
-/// An integer amount of a unit; a quantity equals the bare number of its own unit: `3km+10m == 3010`
+/// A unit to a power within a quantity: km¹, h⁻¹, m²
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Quantity {
-	pub amount: i64,
+struct Factor {
 	unit: &'static Unit,
+	power: i32,
+}
+
+/// An exact amount (a whole number or a fraction: `3/2 m`, `23/18 m/s`) of a product of units to powers: `3 m`, `6 m²`,
+/// `6 m·kg`, `5 km/h` (km·h⁻¹), `1 kg·m/s²`.
+/// A quantity equals the bare number of its own unit: `3km+10m == 3010`
+#[derive(Clone, Debug, PartialEq)]
+pub struct Quantity {
+	amount: Rational,
+	factors: Vec<Factor>,
+}
+
+const SUPERSCRIPT_DIGITS: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+/// Between the units of a product: `m·kg`
+const UNIT_PRODUCT: &str = "·";
+
+fn superscript(n: u32) -> String {
+	n.to_string().chars().filter_map(|digit| digit.to_digit(10)).map(|digit| SUPERSCRIPT_DIGITS[digit as usize]).collect()
+}
+
+/// `m·kg/s²`: the units with a positive power, then those with a negative one after a slash
+fn units_text(factors: &[Factor]) -> String {
+	let side = |positive: bool| {
+		let units = factors.iter().filter(|factor| (factor.power > 0) == positive).map(|factor| match factor.power.unsigned_abs() {
+			1 => factor.unit.name.to_string(),
+			power => format!("{}{}", factor.unit.name, superscript(power)),
+		});
+		units.collect::<Vec<String>>().join(UNIT_PRODUCT)
+	};
+	match (side(true), side(false)) {
+		(above, below) if below.is_empty() => above,
+		(above, below) if above.is_empty() => format!("1/{below}"),
+		(above, below) => format!("{above}/{below}"),
+	}
 }
 
 impl fmt::Display for Quantity {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{} {}", self.amount, self.unit.name)
+		write!(f, "{} {}", self.amount, units_text(&self.factors))
 	}
 }
 
 impl Quantity {
-	fn in_unit(&self, target: &'static Unit) -> Result<i64, String> {
-		let scaled = self.amount.checked_mul(self.unit.factor).ok_or_else(|| overflow(self))?;
-		Ok(scaled / target.factor)
+	fn of(amount: i64, unit: &'static Unit) -> Quantity {
+		Quantity { amount: Rational::integer(amount), factors: vec![Factor { unit, power: 1 }] }
+	}
+
+	/// Is the amount the whole number n: a quantity equals the bare number of its own unit (`3km+10m == 3010`)
+	pub fn is_amount(&self, n: i64) -> bool {
+		self.amount == Rational::integer(n)
+	}
+
+	fn with_amount(&self, amount: Rational) -> Quantity {
+		Quantity { amount, factors: self.factors.clone() }
+	}
+
+	/// The one unit of a plain quantity (`3 m`), None for a power or a product
+	fn single_unit(&self) -> Option<&'static Unit> {
+		match self.factors.as_slice() {
+			[Factor { unit, power: 1 }] => Some(unit),
+			_ => None,
+		}
 	}
 }
 
-fn overflow(quantity: &Quantity) -> String {
-	format!("{quantity} overflows the integer range")
-}
-
-/// A quantity per unit of another dimension: `10 km / 2 h` is `5 km/h`
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Rate {
-	amount: i64,
-	numerator: &'static Unit,
-	denominator: &'static Unit,
-}
-
-impl fmt::Display for Rate {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{} {}/{}", self.amount, self.numerator.name, self.denominator.name)
+/// Dimension → power, the same for `km/h` and `m/s`; two quantities add or compare only with equal signatures
+fn signature(factors: &[Factor]) -> Vec<(Dimension, i32)> {
+	let mut powers: Vec<(Dimension, i32)> = vec![];
+	for factor in factors {
+		match powers.iter_mut().find(|(dimension, _)| *dimension == factor.unit.dimension) {
+			Some((_, power)) => *power += factor.power,
+			None => powers.push((factor.unit.dimension, factor.power)),
+		}
 	}
+	powers.retain(|(_, power)| *power != 0);
+	powers.sort_by_key(|(dimension, _)| *dimension as u8);
+	powers
 }
 
 /// `1950 ± 50 cm`: the unit is absent for plain numbers
@@ -123,8 +191,11 @@ pub fn describe(data: &Dada) -> Option<String> {
 	if let Some(tolerance) = data.downcast_ref::<Tolerance>() {
 		return Some(tolerance.to_string());
 	}
-	if let Some(rate) = data.downcast_ref::<Rate>() {
-		return Some(rate.to_string());
+	if let Some(duration) = data.downcast_ref::<crate::time::Duration>() {
+		return Some(duration.to_string());
+	}
+	if let Some(time) = data.downcast_ref::<crate::time::Time>() {
+		return Some(time.to_string());
 	}
 	data.downcast_ref::<Range>().map(|range| range.to_string())
 }
@@ -133,7 +204,6 @@ pub fn describe(data: &Dada) -> Option<String> {
 enum Value {
 	Number(i64),
 	Quantity(Quantity),
-	Rate(Rate),
 	Tolerance(Tolerance),
 	Range(Range),
 }
@@ -157,8 +227,9 @@ pub fn answer(program: &Node) -> Option<Node> {
 	}
 	match evaluate(program) {
 		Ok(Value::Number(n)) => Some(Node::int(n)),
+		// a ratio of two quantities of one dimension that is no whole number: `1 m / 3 m` is 1/3
+		Ok(Value::Quantity(quantity)) if quantity.factors.is_empty() => Some(quotient_node(&quantity.amount)),
 		Ok(Value::Quantity(quantity)) => Some(Node::data(quantity)),
-		Ok(Value::Rate(rate)) => Some(Node::data(rate)),
 		Ok(Value::Tolerance(tolerance)) => Some(Node::data(tolerance)),
 		Ok(Value::Range(range)) => Some(Node::data(range)),
 		Err(Stop::Error(message)) => Some(error(&message)),
@@ -177,36 +248,114 @@ fn children(node: &Node) -> Vec<&Node> {
 fn needs_quantities(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(name) => unit_named(name).is_some(),
+		// `3010 meters`: a long name counts after an amount
+		Node::List(items, Bracket::None, _) if matches!(items.as_slice(), [_, unit] if target_unit(unit).is_some()) => true,
 		Node::Key(_, Op::PlusMinus, _) => true,
 		other => children(other).into_iter().any(needs_quantities),
 	}
 }
 
-/// `m=5;3m`: a variable of that name shadows the unit
+/// `m=5;3m`: a variable of that name shadows the unit, and so does a parameter: `s => s + t`, `f(s) := …`
 fn defines_unit_name(node: &Node) -> bool {
+	let names_unit = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if unit_named(name).is_some());
+	let names_parameter = |head: &Node| match head.drop_meta() {
+		Node::List(items, _, _) => items.iter().any(|item| names_unit(item) || matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if names_unit(name))),
+		other => names_unit(other),
+	};
 	let defines = match node.drop_meta() {
-		Node::Key(target, Op::Assign | Op::Define | Op::Colon, _) => {
-			matches!(target.drop_meta(), Node::Symbol(name) if unit_named(name).is_some())
-		}
+		Node::Key(head, Op::Assign | Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => names_parameter(head),
+		Node::Key(target, Op::Assign | Op::Define | Op::Colon, _) => names_unit(target),
+		Node::Key(parameters, Op::Arrow | Op::FatArrow, _) => names_parameter(parameters),
 		_ => false,
 	};
 	defines || children(node).into_iter().any(defines_unit_name)
 }
 
+/// Quantities assigned to variables earlier in the program: `x = 2 km; x + 1 m`
+type Variables = HashMap<String, Value>;
+
 fn evaluate(node: &Node) -> Evaluated {
+	evaluate_in(node, &mut Variables::new())
+}
+
+fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 	match node.drop_meta() {
 		Node::Number(Number::Int(n)) => Ok(Value::Number(*n)),
-		Node::Symbol(name) => unit_named(name)
-			.map(|unit| Value::Quantity(Quantity { amount: 1, unit }))
-			.ok_or(Stop::Unsupported),
-		Node::Key(left, Op::Neg, right) if matches!(left.as_ref(), Node::Empty) => negate(evaluate(right)?),
-		Node::Key(left, op, right) => arithmetic(evaluate(left)?, *op, evaluate(right)?),
+		Node::Symbol(name) => match variables.get(name) {
+			Some(value) => Ok(value.clone()),
+			None => unit_named(name).map(|unit| Value::Quantity(Quantity::of(1, unit))).ok_or(Stop::Unsupported),
+		},
+		Node::Key(target, Op::Assign | Op::Define, value) => {
+			let Node::Symbol(name) = target.drop_meta() else { return Err(Stop::Unsupported) };
+			let value = evaluate_in(value, variables)?;
+			variables.insert(name.clone(), value.clone());
+			Ok(value)
+		}
+		Node::Key(left, Op::Neg, right) if matches!(left.as_ref(), Node::Empty) => negate(evaluate_in(right, variables)?),
+		// `6 m² as cm²` reads `(6 m² as cm)²`: the power belongs to the target unit
+		Node::Key(conversion, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) && powered_conversion(conversion, *op).is_some() => {
+			let (quantity, target) = powered_conversion(conversion, *op).expect("guarded");
+			convert(evaluate_in(quantity, variables)?, target)
+		}
+		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
+			let exponent = if *op == Op::Square { 2 } else { 3 };
+			arithmetic(evaluate_in(base, variables)?, Op::Pow, Value::Number(exponent))
+		}
+		Node::Key(quantity, Op::As, unit) if unit_expression(unit).is_some() => convert(evaluate_in(quantity, variables)?, unit_expression(unit).expect("guarded")),
+		Node::Key(left, op, right) => arithmetic(evaluate_in(left, variables)?, *op, evaluate_in(right, variables)?),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => evaluate_in(&items[0], variables),
+		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) if items.len() > 1 => {
+			items.iter().try_fold(Value::Number(0), |_, item| evaluate_in(item, variables))
+		}
 		Node::List(items, Bracket::None, _) => match items.as_slice() {
-			[single] => evaluate(single),
-			[count, unit] if is_unit_word(unit) => arithmetic(evaluate(count)?, Op::Mul, evaluate(unit)?),
+			[single] => evaluate_in(single, variables),
+			[count, unit] if is_unit_word(unit) => arithmetic(evaluate_in(count, variables)?, Op::Mul, evaluate_in(unit, variables)?),
+			// `3010 meters`, and a unit after an expression belongs to its last amount: `3km+10m == 3010 meters`
+			[amount, unit] if target_unit(unit).is_some() => match amount.drop_meta() {
+				Node::Key(..) => evaluate_in(&with_unit(amount, unit), variables),
+				_ => arithmetic(evaluate_in(amount, variables)?, Op::Mul, Value::Quantity(Quantity::of(1, target_unit(unit).expect("guarded")))),
+			},
+			[quantity, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == IN_WORD) && unit_expression(unit).is_some() => {
+				convert(evaluate_in(quantity, variables)?, unit_expression(unit).expect("guarded"))
+			}
 			_ => Err(Stop::Unsupported),
 		},
 		_ => Err(Stop::Unsupported),
+	}
+}
+
+/// `q as cm` under a power: the quantity and the powered target units
+fn powered_conversion(conversion: &Node, op: Op) -> Option<(&Node, Vec<Factor>)> {
+	let Node::Key(quantity, Op::As, unit) = conversion.drop_meta() else { return None };
+	let exponent = if op == Op::Square { 2 } else { 3 };
+	let target = unit_expression(unit)?.into_iter().map(|factor| Factor { power: factor.power * exponent, ..factor }).collect();
+	Some((quantity, target))
+}
+
+/// A conversion target written as units: `m`, `minutes`, `cm²`, `km/h`, `kg*m/s²`
+fn unit_expression(node: &Node) -> Option<Vec<Factor>> {
+	match node.drop_meta() {
+		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
+			let exponent = if *op == Op::Square { 2 } else { 3 };
+			Some(unit_expression(base)?.into_iter().map(|factor| Factor { power: factor.power * exponent, ..factor }).collect())
+		}
+		Node::Key(left, Op::Mul, right) => Some([unit_expression(left)?, unit_expression(right)?].concat()),
+		Node::Key(left, Op::Div, right) => Some([unit_expression(left)?, inverse(&unit_expression(right)?)].concat()),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => unit_expression(&items[0]),
+		other => target_unit(other).map(|unit| vec![Factor { unit, power: 1 }]),
+	}
+}
+
+fn inverse(factors: &[Factor]) -> Vec<Factor> {
+	factors.iter().map(|factor| Factor { power: -factor.power, ..*factor }).collect()
+}
+
+
+/// The unit given to the last amount of an expression: `a == 3010` with `meters` is `a == (3010 meters)`
+fn with_unit(expression: &Node, unit: &Node) -> Node {
+	match expression.drop_meta() {
+		Node::Key(left, op, right) => Node::Key(left.clone(), *op, Box::new(with_unit(right, unit))),
+		amount => Node::List(vec![amount.clone(), unit.clone()], Bracket::None, Separator::Space),
 	}
 }
 
@@ -217,8 +366,7 @@ fn is_unit_word(node: &Node) -> bool {
 fn negate(value: Value) -> Evaluated {
 	match value {
 		Value::Number(n) => Ok(Value::Number(-n)),
-		Value::Quantity(quantity) => Ok(Value::Quantity(Quantity { amount: -quantity.amount, ..quantity })),
-		Value::Rate(rate) => Ok(Value::Rate(Rate { amount: -rate.amount, ..rate })),
+		Value::Quantity(quantity) => Ok(Value::Quantity(quantity.with_amount(quantity.amount.neg()))),
 		Value::Tolerance(_) | Value::Range(_) => fail("cannot negate a value with tolerance or a range"),
 	}
 }
@@ -229,7 +377,7 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 			fail(format!("arithmetic on a value with tolerance or a range is not supported: {op}"))
 		}
 		(left, Op::PlusMinus, right) => tolerance(left, right),
-		(Value::Number(from), Op::Sub, Value::Quantity(end)) => range(from, end),
+		(Value::Number(from), Op::Sub, Value::Quantity(end)) if end.single_unit().is_some() => range(from, end),
 		(Value::Number(a), Op::Add | Op::Sub | Op::Mul, Value::Number(b)) => {
 			let result = match op {
 				Op::Add => a.checked_add(b),
@@ -240,83 +388,180 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 		}
 		(Value::Quantity(a), Op::Add | Op::Sub, Value::Quantity(b)) => sum(a, op, b),
 		(Value::Quantity(a), Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge, Value::Quantity(b)) => compare(a, op, b),
-		(Value::Quantity(a), Op::Div, Value::Quantity(b)) => quotient(a, b),
-		(Value::Number(_), Op::Add, Value::Quantity(other)) | (Value::Quantity(other), Op::Add | Op::Sub, Value::Number(_)) => {
-			fail(format!("incompatible operands: a plain number and {}", other.unit.name))
+		(Value::Quantity(a), Op::Mul, Value::Quantity(b)) => {
+			combine(a.amount.mul(&b.amount), [a.factors.clone(), b.factors.clone()].concat())
 		}
-		(Value::Number(n), Op::Mul, Value::Quantity(q)) | (Value::Quantity(q), Op::Mul, Value::Number(n)) => q
-			.amount
-			.checked_mul(n)
-			.map(|amount| Value::Quantity(Quantity { amount, ..q }))
-			.ok_or_else(|| Stop::Error(overflow(&q))),
-		(Value::Quantity(q), Op::Div, Value::Number(n)) if n != 0 && q.amount % n == 0 => {
-			Ok(Value::Quantity(Quantity { amount: q.amount / n, ..q }))
+		(Value::Quantity(a), Op::Div, Value::Quantity(b)) if !b.amount.is_zero() => {
+			combine(a.amount.mul(&b.amount.inverse().expect("not zero")), [a.factors.clone(), inverse(&b.factors)].concat())
+		}
+		(Value::Quantity(_), Op::Div, Value::Quantity(_)) => fail("division by zero"),
+		(Value::Quantity(q), Op::Pow, Value::Number(n)) => power(q, n),
+		(Value::Number(_), Op::Add, Value::Quantity(other)) | (Value::Quantity(other), Op::Add | Op::Sub, Value::Number(_)) => {
+			fail(format!("incompatible operands: a plain number and {}", units_text(&other.factors)))
+		}
+		(Value::Number(n), Op::Mul, Value::Quantity(q)) | (Value::Quantity(q), Op::Mul, Value::Number(n)) => {
+			Ok(Value::Quantity(q.with_amount(q.amount.mul(&Rational::integer(n)))))
+		}
+		(Value::Quantity(q), Op::Div, Value::Number(n)) if n != 0 => {
+			Ok(Value::Quantity(q.with_amount(q.amount.mul(&Rational::new(BigInt::from(1), BigInt::from(n))))))
 		}
 		_ => Err(Stop::Unsupported),
 	}
 }
 
-/// The finer of two units of one dimension: the canonical unit of a result
-fn finer_unit(a: &'static Unit, b: &'static Unit) -> Result<&'static Unit, Stop> {
-	if a.dimension != b.dimension {
-		return fail(format!("DimensionError: incompatible units: {} and {}", a.name, b.name));
+/// `150 cm in m` is `3/2 m`, `6 m² in cm²` is `60000 cm²`, `36 km/h in m/s` is `10 m/s`; other dimensions: DimensionError
+fn convert(value: Value, target: Vec<Factor>) -> Evaluated {
+	let Value::Quantity(quantity) = value else { return Err(Stop::Unsupported) };
+	if signature(&quantity.factors) != signature(&target) {
+		return fail(format!("DimensionError: {quantity} cannot be converted to {}", units_text(&target)));
 	}
-	Ok(if a.factor <= b.factor { a } else { b })
+	let in_target = |factor: &Factor| target.iter().find(|wanted| wanted.unit.dimension == factor.unit.dimension).map_or(factor.unit, |wanted| wanted.unit);
+	Ok(Value::Quantity(Quantity { amount: quantity.amount.mul(&scale(&quantity.factors, in_target)), factors: target }))
 }
 
-/// Comparison of two quantities in their finer unit: `3km == 3000m`, answered 1 or 0
+
+/// Milliseconds in a day, a duration's `days` counted at their nominal length
+const DAY_MILLISECONDS: i128 = 86_400_000;
+const NANOS_PER_MILLISECOND: i128 = 1_000_000;
+
+/// A duration of the time module in a time unit: `2 hours in minutes` is `120 min` (P36). None when the word names no
+/// time unit; an error for months (no fixed length) or a part of a millisecond
+pub fn duration_in(duration: &crate::time::Duration, unit_word: &str) -> Option<Node> {
+	let target = target_unit(&Node::Symbol(unit_word.to_string()))?;
+	if target.dimension != Dimension::Time {
+		return Some(error(&format!("DimensionError: {duration} cannot be converted to {}", target.name)));
+	}
+	if duration.months != 0 {
+		return Some(error(&format!("DimensionError: {duration} has no fixed length in {}", target.name)));
+	}
+	let nanos = duration.nanos + duration.days as i128 * DAY_MILLISECONDS * NANOS_PER_MILLISECOND;
+	if nanos % NANOS_PER_MILLISECOND != 0 {
+		return Some(error(&format!("{duration} is no whole number of milliseconds")));
+	}
+	let milliseconds = i64::try_from(nanos / NANOS_PER_MILLISECOND).ok()?;
+	let quantity = Quantity::of(milliseconds, unit_named("ms").expect("a unit"));
+	Some(match convert(Value::Quantity(quantity), vec![Factor { unit: target, power: 1 }]) {
+		Ok(Value::Quantity(quantity)) => Node::data(quantity),
+		Err(Stop::Error(message)) => error(&message),
+		_ => return None,
+	})
+}
+
+/// The amount of a quantity in other units, as a factor: Π (unit/target)^power over its factors (1 km/h in m/s is 5/18)
+fn scale(factors: &[Factor], target: impl Fn(&Factor) -> &'static Unit) -> Rational {
+	factors.iter().fold(Rational::integer(1), |product, factor| {
+		let ratio = Rational::new(BigInt::from(factor.unit.factor), BigInt::from(target(factor).factor));
+		let ratio = if factor.power > 0 { ratio } else { ratio.inverse().expect("unit factors are positive") };
+		(0..factor.power.unsigned_abs()).fold(product, |product, _| product.mul(&ratio))
+	})
+}
+
+/// `1 m / 3 m` is the number 1/3
+fn quotient_node(amount: &Rational) -> Node {
+	match (amount.numerator.to_i64(), amount.denominator.to_i64()) {
+		(Some(numerator), Some(1)) => Node::int(numerator),
+		(Some(numerator), Some(denominator)) => Node::Number(Number::Quotient(numerator, denominator)),
+		_ => Node::Number(Number::Float(amount.to_f64())),
+	}
+}
+
+fn whole(amount: &Rational) -> Option<i64> {
+	amount.is_integer().then(|| amount.numerator.to_i64()).flatten()
+}
+
+/// The finest unit of each dimension among the factors: the unit a result counts in ("unit sums use the finer unit")
+fn finest_units(factors: &[Factor]) -> Vec<&'static Unit> {
+	let mut finest: Vec<&'static Unit> = vec![];
+	for factor in factors {
+		match finest.iter_mut().find(|unit| unit.dimension == factor.unit.dimension) {
+			Some(unit) if factor.unit.factor < unit.factor => *unit = factor.unit,
+			Some(_) => {}
+			None => finest.push(factor.unit),
+		}
+	}
+	finest
+}
+
+fn finest_of<'a>(finest: &'a [&'static Unit]) -> impl Fn(&Factor) -> &'static Unit + 'a {
+	move |factor| finest.iter().find(|unit| unit.dimension == factor.unit.dimension).copied().unwrap_or(factor.unit)
+}
+
+/// An amount times the factors as one quantity: each dimension counts in its finest unit, its powers add
+/// (`3 m * 2 m` is `6 m²`, `2 m * 3 kg` is `6 m·kg`, `10 km/h * 30 min` is `5 km`); no unit left is a plain number
+fn combine(amount: Rational, factors: Vec<Factor>) -> Evaluated {
+	let finest = finest_units(&factors);
+	let result: Vec<Factor> = signature(&factors).into_iter()
+		.map(|(dimension, power)| Factor { unit: finest.iter().find(|unit| unit.dimension == dimension).copied().expect("a unit per dimension"), power })
+		.collect();
+	let result = order_of_appearance(result, &factors);
+	let amount = amount.mul(&scale(&factors, finest_of(&finest)));
+	Ok(match whole(&amount) {
+		Some(number) if result.is_empty() => Value::Number(number),
+		_ => Value::Quantity(Quantity { amount, factors: result }),
+	})
+}
+
+/// The factors in the order their dimensions were first written: `2 m * 3 kg` is `m·kg`
+fn order_of_appearance(mut result: Vec<Factor>, written: &[Factor]) -> Vec<Factor> {
+	let first = |dimension: Dimension| written.iter().position(|factor| factor.unit.dimension == dimension).unwrap_or(usize::MAX);
+	result.sort_by_key(|factor| first(factor.unit.dimension));
+	result
+}
+
+/// `(2 km)²` is `4 km²`
+fn power(base: Quantity, exponent: i64) -> Evaluated {
+	let exponent = u32::try_from(exponent).ok().filter(|exponent| *exponent >= 1).ok_or(Stop::Unsupported)?;
+	let amount = (1..exponent).fold(base.amount.clone(), |amount, _| amount.mul(&base.amount));
+	let factors = base.factors.iter().map(|factor| Factor { power: factor.power * exponent as i32, ..*factor }).collect();
+	Ok(Value::Quantity(Quantity { amount, factors }))
+}
+
+/// Both amounts counted in the finer unit of each dimension: `m²` and `cm²` count in cm², `m²` and `m` do not mix
+fn aligned(left: &Quantity, right: &Quantity) -> Result<(Rational, Rational, Vec<Factor>), Stop> {
+	if signature(&left.factors) != signature(&right.factors) {
+		return fail(format!("DimensionError: incompatible units: {} and {}", units_text(&left.factors), units_text(&right.factors)));
+	}
+	let finest = finest_units(&[left.factors.clone(), right.factors.clone()].concat());
+	let target = finest_of(&finest);
+	let factors: Vec<Factor> = left.factors.iter().map(|factor| Factor { unit: target(factor), ..*factor }).collect();
+	let amount = |quantity: &Quantity| quantity.amount.mul(&scale(&quantity.factors, &target));
+	Ok((amount(left), amount(right), factors))
+}
+
+/// Comparison of two quantities in their finer units: `3km == 3000m`, answered 1 or 0
 fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
-	let finer = finer_unit(left.unit, right.unit)?;
-	let (x, y) = (left.in_unit(finer).map_err(Stop::Error)?, right.in_unit(finer).map_err(Stop::Error)?);
+	let (x, y, _) = aligned(&left, &right)?;
+	let order = x.compare(&y);
 	let holds = match op {
-		Op::Eq => x == y,
-		Op::Ne => x != y,
-		Op::Lt => x < y,
-		Op::Gt => x > y,
-		Op::Le => x <= y,
-		_ => x >= y,
+		Op::Eq => order.is_eq(),
+		Op::Ne => order.is_ne(),
+		Op::Lt => order.is_lt(),
+		Op::Gt => order.is_gt(),
+		Op::Le => order.is_le(),
+		_ => order.is_ge(),
 	};
 	Ok(Value::Number(holds as i64))
 }
 
-/// `6 m / 2 m` is the number 3; `10 km / 2 h` is the rate 5 km/h. A result that is no whole number is not supported yet.
-fn quotient(dividend: Quantity, divisor: Quantity) -> Evaluated {
-	if divisor.amount == 0 {
-		return fail("division by zero");
-	}
-	if dividend.unit.dimension != divisor.unit.dimension {
-		if dividend.amount % divisor.amount != 0 {
-			return fail(format!("{dividend} / {divisor} is not a whole number of {}/{} yet", dividend.unit.name, divisor.unit.name));
-		}
-		return Ok(Value::Rate(Rate { amount: dividend.amount / divisor.amount, numerator: dividend.unit, denominator: divisor.unit }));
-	}
-	let finer = finer_unit(dividend.unit, divisor.unit)?;
-	let (x, y) = (dividend.in_unit(finer).map_err(Stop::Error)?, divisor.in_unit(finer).map_err(Stop::Error)?);
-	if y == 0 || x % y != 0 {
-		return fail(format!("{dividend} / {divisor} is not a whole number yet"));
-	}
-	Ok(Value::Number(x / y))
-}
-
 fn sum(left: Quantity, op: Op, right: Quantity) -> Evaluated {
-	let finer = finer_unit(left.unit, right.unit)?;
-	let (x, y) = (left.in_unit(finer).map_err(Stop::Error)?, right.in_unit(finer).map_err(Stop::Error)?);
-	let amount = if op == Op::Add { x.checked_add(y) } else { x.checked_sub(y) };
-	match amount {
-		Some(amount) => Ok(Value::Quantity(Quantity { amount, unit: finer })),
-		None => fail(format!("{left} {op} {right} overflows the integer range")),
-	}
+	let (x, y, factors) = aligned(&left, &right)?;
+	let amount = if op == Op::Add { x.add(&y) } else { x.add(&y.neg()) };
+	Ok(Value::Quantity(Quantity { amount, factors }))
 }
 
 /// `1950 ± 50`, `1950 cm ± 50` and `1950 ± 50 cm` all count in the unit that is present
 fn tolerance(center: Value, spread: Value) -> Evaluated {
+	let plain = |quantity: &Quantity| quantity.single_unit().ok_or_else(|| Stop::Error(format!("a tolerance applies to numbers and plain quantities, not {quantity}")));
+	let counted = |amount: &Rational| whole(amount).ok_or_else(|| Stop::Error(format!("a tolerance counts whole numbers, not {amount}")));
 	let (value, tolerance, unit) = match (center, spread) {
 		(Value::Number(value), Value::Number(tolerance)) => (value, tolerance, None),
-		(Value::Quantity(value), Value::Number(tolerance)) => (value.amount, tolerance, Some(value.unit)),
-		(Value::Number(value), Value::Quantity(tolerance)) => (value, tolerance.amount, Some(tolerance.unit)),
+		(Value::Quantity(value), Value::Number(tolerance)) => (counted(&value.amount)?, tolerance, Some(plain(&value)?)),
+		(Value::Number(value), Value::Quantity(tolerance)) => (value, counted(&tolerance.amount)?, Some(plain(&tolerance)?)),
 		(Value::Quantity(value), Value::Quantity(tolerance)) => {
-			let finer = finer_unit(value.unit, tolerance.unit)?;
-			(value.in_unit(finer).map_err(Stop::Error)?, tolerance.in_unit(finer).map_err(Stop::Error)?, Some(finer))
+			plain(&value)?;
+			plain(&tolerance)?;
+			let (value, tolerance, factors) = aligned(&value, &tolerance)?;
+			(counted(&value)?, counted(&tolerance)?, Some(factors[0].unit))
 		}
 		_ => return fail("a tolerance applies to numbers and quantities"),
 	};
@@ -328,8 +573,9 @@ fn tolerance(center: Value, spread: Value) -> Evaluated {
 
 /// A plain number minus a quantity is a range in that unit: `1900 - 2000 AD`
 fn range(from: i64, end: Quantity) -> Evaluated {
-	if from > end.amount {
+	let to = whole(&end.amount).ok_or_else(|| Stop::Error(format!("a range counts whole numbers, not {end}")))?;
+	if from > to {
 		return fail(format!("descending range: {from} - {end}"));
 	}
-	Ok(Value::Range(Range { from, to: end.amount, unit: end.unit }))
+	Ok(Value::Range(Range { from, to, unit: end.single_unit().expect("guarded by arithmetic") }))
 }

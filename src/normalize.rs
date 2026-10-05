@@ -50,6 +50,22 @@ pub struct CapturedHint {
     /// `line:column`, empty when the emitting stage knows no position
     pub position: String,
     pub reason: String,
+    /// Whether `canonical` replaces `original` in the source (a rewrite), or is advice about it (`global x`)
+    pub rewrites: bool,
+}
+
+impl CapturedHint {
+    /// The preferred form as an applicable fix of the original; advice is no fix
+    pub fn fix(&self) -> Option<crate::fixits::Fix> {
+        self.rewrites.then(|| crate::fixits::fix(&self.reason, &self.original, &self.canonical))
+    }
+
+    /// The line and column of `position` (`file:line:column` or `line:column`), 0:0 for none
+    pub fn line_and_column(&self) -> (usize, usize) {
+        let mut parts = self.position.rsplit(':').map(|part| part.parse().unwrap_or(0));
+        let column = parts.next().unwrap_or(0);
+        (parts.next().unwrap_or(0), column)
+    }
 }
 
 /// Run `action` and return the hints it emitted on this thread (hints are still printed)
@@ -67,6 +83,11 @@ pub fn set_hint_position(line: usize, column: usize) {
         p.line = line;
         p.column = column;
     });
+}
+
+/// The line of the current hint position, 0 when unknown
+pub fn hint_line() -> usize {
+    HINT_POSITION.with(|pos| pos.borrow().line)
 }
 
 /// Set the current file for hint messages
@@ -324,8 +345,17 @@ pub fn clear_shown_hints() {
 // Core Hint Function
 // ============================================================================
 
-/// Emit a normalization hint to stderr
+/// Emit a normalization hint to stderr: `canonical` is what to write instead of `original`
 pub fn hint(original: &str, canonical: &str, reason: &str) {
+    emit_hint(original, canonical, reason, true);
+}
+
+/// A hint whose preferred form does not replace the original text (it is said elsewhere: `global x`)
+pub fn advise(original: &str, preferred: &str, reason: &str) {
+    emit_hint(original, preferred, reason, false);
+}
+
+fn emit_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
     let mode = hint_mode();
     if mode == HintMode::Off || HINTS_MUTED.with(|muted| muted.get()) {
         return;
@@ -341,7 +371,7 @@ pub fn hint(original: &str, canonical: &str, reason: &str) {
     let pos = position_string();
     CAPTURED_HINTS.with(|captured| {
         if let Some(hints) = captured.borrow_mut().as_mut() {
-            hints.push(CapturedHint { original: original.to_string(), canonical: canonical.to_string(), position: pos.clone(), reason: reason.to_string() });
+            hints.push(CapturedHint { original: original.to_string(), canonical: canonical.to_string(), position: pos.clone(), reason: reason.to_string(), rewrites });
         }
     });
     if pos.is_empty() {
@@ -689,7 +719,24 @@ pub fn operand_text(node: &Node) -> String {
             };
             format!("{left}{op}{gap}{}", operand_text(right))
         }
-        other => other.serialize(),
+        other => as_written(other.clone()).serialize(),
+    }
+}
+
+/// The node as its source spelled it where a pass lowered sugar: `floor_quotient(a, b)` is `a//b`, `area·square` is `area`
+fn as_written(node: Node) -> Node {
+    match node {
+        Node::List(items, bracket, separator) => match items.as_slice() {
+            [word, dividend, divisor] if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) => {
+                Node::Symbol(format!("{}//{}", operand_text(dividend), operand_text(divisor)))
+            }
+            _ => Node::List(items.into_iter().map(as_written).collect(), bracket, separator),
+        },
+        Node::Key(left, op, right) => Node::Key(Box::new(as_written(*left)), op, Box::new(as_written(*right))),
+        Node::Meta { node, data } => Node::Meta { node: Box::new(as_written(*node)), data },
+        // a witness `area·square` was written `area`
+        Node::Symbol(name) if name.contains('·') => Node::Symbol(name.split('·').next().unwrap_or_default().to_string()),
+        other => other,
     }
 }
 
@@ -777,7 +824,8 @@ fn signature_of(definition: &Node) -> Option<(String, String, BodyForm)> {
 /// Emit the hints for every non-canonical form in the parsed program that the parser cannot see while reading characters
 pub fn check_style(program: &Node) {
     walk(program, &mut |node, positioned| match node {
-        Node::List(items, _, _) => check_items(items, positioned),
+        // `[int, 3]` and `[double, f]` are items, never the call int(3)
+        Node::List(items, bracket, separator) if *bracket != Bracket::Square && *separator != crate::node::Separator::Colon => check_items(items, positioned),
         Node::Key(_, Op::Colon, right) => {
             if let Node::List(items, Bracket::Square, _) = right.drop_meta() {
                 if let [element] = items.as_slice() {
@@ -849,8 +897,14 @@ fn check_items(items: &[Node], positioned: &Node) {
                 hints::function_keyword(word, &name, &parameters, body_form);
             }
         }
-        (type_word, [argument]) if crate::analyzer::type_word_kind(&type_word.to_lowercase()).is_some() => {
+        // `codepoint(c)` is a library word (P74), not the type's constructor
+        (type_word, [argument]) if crate::analyzer::type_word_kind(&type_word.to_lowercase()).is_some() && !crate::library_words::is_library_word(type_word) => {
             let is_call = match argument.drop_meta() {
+                // `int g(int x) {…}` defines g, `int(…)` would convert
+                Node::List(parts, Bracket::Round, _) if matches!(parts.as_slice(), [_, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))) => false,
+                // `text(p:person)` heads the Printable operation of a declared type (P31)
+                Node::List(parts, Bracket::Round, _) if matches!(parts.as_slice(), [part] if matches!(part.drop_meta(), Node::Key(_, Op::Colon, _))) => false,
+                Node::Key(_, Op::Colon, _) => false,
                 Node::List(_, Bracket::Round, _) => true,
                 Node::Symbol(_) | Node::Key(_, Op::Assign | Op::Define, _) => false, // `int x` and `int x = 1` declare
                 _ => true,

@@ -7,12 +7,17 @@ use crate::extensions::reals::{Exact, Rational, Real};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::operators::{glyph_operator, is_function_keyword, Op};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
-use crate::*;
 use log::warn;
 use std::fs::read_to_string;
 use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
+/// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
+/// The schemes of a URL read as one text: `https://pannous.com`
+const URL_SCHEMES: [&str; 7] = ["http", "https", "ftp", "file", "data", "ws", "wss"];
+const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
+const BYTES_WORD: &str = "bytes";
+const IT_WORD: &str = "it";
 const MAX_INTEGER_EXPONENT: i64 = 4096;
 /// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; `0.1l` (long double) → exact, the default anyway
 const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
@@ -44,14 +49,24 @@ const EXCLUSIVE_DOTS: &str = "..";
 /// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
 const KOTLIN_RANGE: &str = "kotlin-range";
 const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [("if", Op::If, false), ("unless", Op::If, true), ("while", Op::While, false), ("until", Op::While, true)];
-/// Words that test a value for being ø or falsy, sugar for `not x`
-const TEST_WORDS: [&str; 5] = ["empty", "missing", "absent", "unknown", "undefined"];
+/// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
+const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefined", FAILED_WORD];
+const FAILED_WORD: &str = "failed";
+/// The runtime test of `x failed` (wasm_emitter/text_builtins.rs)
+const IS_ERROR_CALL: &str = "is_error";
 const EMPTY_WORD: &str = "empty";
+/// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
+const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
 /// Words that may follow a test word and so end the condition
 const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 /// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
 const RETURN_KEYWORD: &str = "return";
+/// `await job` waits for a task; its operand binds like the operand of a unary minus (Op::Neg)
+const AWAIT_KEYWORD: &str = "await";
+/// `await all jobs`: every task of a list (P47)
+const AWAIT_ALL_WORD: &str = "all";
+const AWAIT_OPERAND_BP: u8 = 155;
 const PRINT_WORD: &str = "print";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
@@ -111,6 +126,7 @@ pub(crate) fn print_arguments_of(call: &[Node], bracket: &Bracket) -> Vec<Node> 
 /// `print first xs` prints the one expression `first xs`, and in `print a, b` the comma binds looser than the space,
 /// so the comma list [[print a], b] becomes the call print(a, b)
 fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
+	let items = if separator == Separator::Space { with_arrow_bodies(items) } else { items };
 	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
 		return Node::List(items, bracket, separator);
 	}
@@ -129,15 +145,119 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 	}
 }
 
+/// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not
+/// further items; a run of entries `1 => "a" 2 => "b"` stays a list of pairs
+fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
+	let is_arrow = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::FatArrow, _));
+	let Some(arrow) = items.iter().position(is_arrow) else { return items };
+	if arrow + 1 == items.len() || items[arrow + 1..].iter().any(is_arrow) {
+		return items;
+	}
+	let rest = items.split_off(arrow + 1);
+	let Node::Key(parameters, op, body) = items.pop().expect("the arrow").drop_meta().clone() else { unreachable!("an arrow") };
+	let body = one_expression(&[vec![*body], rest].concat());
+	items.push(Node::Key(parameters, op, Box::new(body)));
+	items
+}
+
+/// `for chars in text {…it…}` (also characters, codepoints, bytes): the variable `it` over `chars(text)`, or over the
+/// bytes `(0..text.bytes).map(i => byte_at(text, i))`; None when the body reads the word itself (a variable named chars)
+fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node, Node)> {
+	let Node::Symbol(word) = variable.drop_meta() else { return None };
+	let mentions = |name: &str| {
+		let mut found = false;
+		body.visit(&mut |part| found |= matches!(part, Node::Symbol(symbol) if symbol == name));
+		found
+	};
+	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || mentions(word) {
+		return None;
+	}
+	let call = |name: &str, arguments: Vec<Node>| Node::List([vec![Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None);
+	let walked = if word == BYTES_WORD {
+		let offset = Symbol("byte·offset".to_string());
+		let count = Node::Key(Box::new(iterable.clone()), Op::Dot, Box::new(Symbol(BYTES_WORD.to_string())));
+		let offsets = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
+		let byte = Node::Key(Box::new(offset.clone()), Op::FatArrow, Box::new(call("byte_at", vec![iterable.clone(), offset])));
+		Node::Key(Box::new(Node::List(vec![offsets], Bracket::Round, Separator::None)), Op::Dot, Box::new(call("map", vec![byte])))
+	} else {
+		call("chars", vec![iterable.clone()])
+	};
+	Some((Symbol(IT_WORD.to_string()), walked))
+}
+
+/// The infix operators continue_expr reads apart from the operator table
+enum SpecialInfix {
+	/// `a mod b`, `a rem b`
+	Keyword(Op),
+	/// `7//2`, `7 div 2`, `x//=2`
+	FloorDivision { compound: bool },
+	/// `xs |> f(a)`
+	Pipeline,
+	/// `xs .+ 4`
+	ElementWise(Op),
+	/// `x in xs`
+	Membership,
+}
+
+impl SpecialInfix {
+	fn applied(self, lhs: Node, operand: Node) -> Node {
+		match self {
+			SpecialInfix::Keyword(op) => Node::Key(Box::new(lhs), op, Box::new(operand)),
+			SpecialInfix::FloorDivision { compound } => {
+				let quotient = floor_division(lhs.clone(), operand);
+				if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient }
+			}
+			SpecialInfix::Pipeline => piped(lhs, operand),
+			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
+			SpecialInfix::Membership => Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), operand], Bracket::None, Separator::Space),
+		}
+	}
+}
+
 fn is_unindexable_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if UNINDEXABLE_KEYWORDS.contains(&word.as_str()))
 }
 /// The marker calls the parser leaves for `try X else Y` and `assert C else X`, lowered in `library_words`
 pub const TRY_MARKER: &str = "try·else";
 pub const ASSERT_MARKER: &str = "assert·else";
+/// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
+const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
 const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
 /// `nand` and its glyph pair, both `not (a and b)`
-const NAND_SPELLINGS: [&str; 2] = ["nand", "¬&"];
+/// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
+fn item_named(node: Node, name: &str, item: &Node) -> Node {
+	match node {
+		Symbol(symbol) if symbol == name => item.clone(),
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(head)) if head == name) => {
+			let mut items = items.into_iter();
+			let head = items.next().expect("a head");
+			Node::List(std::iter::once(head).chain(items.map(|part| item_named(part, name, item))).collect(), Bracket::Round, Separator::None)
+		}
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|part| item_named(part, name, item)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(item_named(*left, name, item)), op, Box::new(item_named(*right, name, item))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(item_named(*node, name, item)), data },
+		other => other,
+	}
+}
+
+/// A list literal whose items all are literals of the type: `[1, 2]` for `number`
+fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
+	let Node::List(items, Bracket::Square, _) = iterable.drop_meta() else { return false };
+	let spec = crate::analyzer::type_word_kind(type_name).map(|_| type_name).unwrap_or(type_name);
+	items.iter().all(|item| match item.drop_meta() {
+		Node::Number(_) | Node::Text(_) | Node::Char(_) => crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec),
+		_ => false,
+	})
+}
+
+/// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
+const FILTER_LOOP_TOPIC: &str = "for-filter";
+/// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
+const EVEN_WORD: &str = "even";
+const ODD_WORD: &str = "odd";
+/// How tight a suffix `!` binds: below the index `#` (170), above `^` (160) and arithmetic
+const BANG_BP: u8 = 165;
+const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
@@ -232,11 +352,28 @@ fn is_identifier_char(c: char) -> bool {
 	c.is_alphanumeric() || c == '_'
 }
 
-/// `a // b` (Python) as `(a - a % b) / b`: `%` is Euclidean, so this is floor(a/b) for a positive divisor
+/// `floor_quotient(a, b)`: what `a // b` and `a div b` are, the Euclidean quotient that goes with `%`
+/// (a == b*(a//b) + a%b): floor(a/b) for a positive divisor, ceil(a/b) for a negative one. Each operand is evaluated
+/// once, and an exact quotient rounds exactly (wasm_emitter exact_euclid_div)
+pub const FLOOR_QUOTIENT: &str = "floor_quotient";
+
+/// `|>` binds below range and arithmetic, above `as` and comparisons
+const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
+
+/// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`
+fn piped(value: Node, stage: Node) -> Node {
+	match stage.drop_meta() {
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(_))) => {
+			let mut items = items.clone();
+			items.insert(1, value);
+			Node::List(items, Bracket::Round, Separator::None)
+		}
+		_ => Node::List(vec![stage, value], Bracket::Round, Separator::None),
+	}
+}
+
 fn floor_division(dividend: Node, divisor: Node) -> Node {
-	let remainder = Node::Key(Box::new(dividend.clone()), Op::Mod, Box::new(divisor.clone()));
-	let multiple = Node::Key(Box::new(dividend), Op::Sub, Box::new(remainder));
-	Node::Key(Box::new(multiple), Op::Div, Box::new(divisor))
+	Node::List(vec![Symbol(FLOOR_QUOTIENT.to_string()), dividend, divisor], Bracket::Round, Separator::None)
 }
 
 /// Read and parse a WASP file
@@ -288,6 +425,36 @@ pub fn number_in_text(text: &str) -> Option<Number> {
 	}
 }
 
+/// `(col // 3) * 3`: a spaced `//` after code starts a comment, and when the rest of its line closes a bracket that is
+/// open before it, the writer meant floor division. The line, column and the hidden closing bracket.
+fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char)> {
+	for (line_index, line) in input.lines().enumerate() {
+		let chars: Vec<char> = line.chars().collect();
+		let (mut depth, mut quote): (i32, Option<char>) = (0, None);
+		for (column, &c) in chars.iter().enumerate() {
+			match (quote, c) {
+				(Some(open), _) if c == open => quote = None,
+				(Some(_), _) => {}
+				(None, '"' | '\'') => quote = Some(c),
+				(None, '(' | '[' | '{') => depth += 1,
+				(None, ')' | ']' | '}') => depth -= 1,
+				(None, '/') if chars.get(column + 1) == Some(&'/') => {
+					let spaced = column > 0 && chars[column - 1] == ' ' && chars.get(column + 2) == Some(&' ');
+					let rest = &chars[column + 2..];
+					let closes = rest.iter().map(|c| match c { ')' | ']' | '}' => 1, '(' | '[' | '{' => -1, _ => 0 }).sum::<i32>();
+					if spaced && depth > 0 && closes > 0 {
+						let closer = rest.iter().find(|c| matches!(c, ')' | ']' | '}')).copied().unwrap_or(')');
+						return Some((line_index + 1, column + 1, closer));
+					}
+					break;
+				}
+				_ => {}
+			}
+		}
+	}
+	None
+}
+
 /// Parse-only path for untrusted data: nothing is evaluated, no word is guessed to be a boolean
 pub fn parse_data(input: &str) -> Node {
 	WaspParser::parse_with_options(input, ParserOptions::data())
@@ -313,6 +480,8 @@ pub struct WaspParser {
 	equals_compares: bool,
 	/// Inside the iterable of `for x in …` a block is the loop body, never an argument: `for i in 0..n {…}`
 	in_for_header: bool,
+	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
+	group_start: (usize, usize),
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
 	stops_at_else: bool,
 	/// The position of the sign in `1 -1` read as the list `[1 -1]`: no enclosing expression subtracts it either (`x=1 -1`)
@@ -348,6 +517,18 @@ enum UserOperatorKind {
 struct UserOperator {
 	glyph: Vec<char>,
 	kind: UserOperatorKind,
+	/// How tight it binds: a suffix's power, a prefix's right power, an infix's left power (its right one is one more)
+	level: u8,
+}
+
+impl UserOperatorKind {
+	fn default_level(self) -> u8 {
+		match self {
+			UserOperatorKind::Suffix => USER_SUFFIX_BP,
+			UserOperatorKind::Prefix => USER_PREFIX_RIGHT_BP,
+			UserOperatorKind::Infix => USER_INFIX_BP.0,
+		}
+	}
 }
 
 const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
@@ -357,18 +538,33 @@ const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] = [("prefix", UserOperatorKi
 const USER_SUFFIX_BP: u8 = 200;
 const USER_PREFIX_RIGHT_BP: u8 = 155;
 const USER_INFIX_BP: (u8, u8) = (140, 141);
+/// `operator ⊕ has precedence above *`: ⊕ binds this much tighter than `*`; the built-in levels are at least 5 apart
+const PRECEDENCE_STEP: u8 = 2;
+const PRECEDENCE_DIRECTIONS: [(&str, bool); 2] = [("above", true), ("below", false)];
 
-/// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit
+/// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit.
+/// Superscript digits and signs too (P48, user-decided) (`suffix operator ³`, `prefix operator ⁻`, wiki/operator.md)
 fn is_operator_glyph(glyph: &str) -> bool {
-	!glyph.is_empty() && glyph.chars().all(|c| !c.is_alphanumeric() && !c.is_whitespace()) && !glyph.is_ascii()
+	let is_superscript = |c: char| superscript_digit(c).is_some() || superscript_sign(c).is_some();
+	!glyph.is_empty() && glyph.chars().all(|c| is_superscript(c) || (!c.is_alphanumeric() && !c.is_whitespace())) && !glyph.is_ascii()
+}
+
+/// `suffix operator ⁰ := …` and the short `suffix ⁰ := …` (P48): the glyph and the words after `:=`
+fn declared_glyph<'a>(words: &'a [&'a str]) -> Option<&'a str> {
+	match words {
+		["operator", glyph, ":=", ..] | [glyph, ":=", ..] => Some(glyph),
+		_ => None,
+	}
 }
 
 fn is_plain_name(word: &str) -> bool {
 	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
-/// The type names a source declares: the word after `class`, `struct`, `record` or `type` (not the call `type(x)`)
+/// The type names a source declares: the word after `class`, `struct`, `record` or `type` (not the call `type(x)`),
+/// outside comments and texts (`// the type end` declares nothing)
 fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
+	let source = code_only(source);
 	let words: Vec<&str> = source.split(|c: char| !is_identifier_char(c) && c != '(').flat_map(|word| word.split_inclusive('(')).filter(|word| !word.is_empty()).collect();
 	words.windows(2)
 		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
@@ -378,22 +574,93 @@ fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 		.collect()
 }
 
+/// The source with its comments (`// …`, `/* … */`) and texts (`"…"`, `'…'`) blanked out
+fn code_only(source: &str) -> String {
+	let chars: Vec<char> = source.chars().collect();
+	let mut code = String::with_capacity(source.len());
+	let mut at = 0;
+	while at < chars.len() {
+		match text_or_comment_end(&chars, at) {
+			Some(end) => {
+				code.push(' ');
+				at = end;
+			}
+			None => {
+				code.push(chars[at]);
+				at += 1;
+			}
+		}
+	}
+	code
+}
+
+/// The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `chars[at]`, if one starts there
+pub(crate) fn text_or_comment_end(chars: &[char], at: usize) -> Option<usize> {
+	let (c, next) = (chars[at], chars.get(at + 1).copied());
+	let skip_until = |from: usize, end: &[char]| (from..chars.len()).find(|&i| chars[i..].starts_with(end)).map_or(chars.len(), |i| i + end.len());
+	let after = match (c, next) {
+		('/', Some('/')) if at == 0 || chars[at - 1] != ':' => (at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len()),
+		('/', Some('*')) => skip_until(at + 2, &['*', '/']),
+		('"' | '\'', _) => skip_until(at + 1, &[c]),
+		_ => return None,
+	};
+	Some(after.max(at + 1))
+}
+
 /// The operators a source declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
 fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	let mut found: Vec<UserOperator> = Vec::new();
 	for statement in source.lines().flat_map(|line| line.split(';')) {
 		let words: Vec<&str> = statement.split_whitespace().collect();
 		let declared = match words.as_slice() {
-			[kind, "operator", glyph, ":=", ..] => OPERATOR_KINDS.iter().find(|(word, _)| word == kind).map(|(_, kind)| (*glyph, *kind)),
+			[kind, rest @ ..] if declared_glyph(rest).is_some() => {
+				OPERATOR_KINDS.iter().find(|(word, _)| word == kind).and_then(|(_, kind)| Some((declared_glyph(rest)?, *kind)))
+			}
 			[left, glyph, right, ":=", ..] if is_plain_name(left) && is_plain_name(right) => Some((*glyph, UserOperatorKind::Infix)),
 			_ => None,
 		};
 		if let Some((glyph, kind)) = declared.filter(|(glyph, _)| is_operator_glyph(glyph)) {
-			found.push(UserOperator { glyph: glyph.chars().collect(), kind });
+			found.push(UserOperator { glyph: glyph.chars().collect(), kind, level: kind.default_level() });
+		}
+	}
+	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
+	for statement in source.lines().flat_map(|line| line.split(';')) {
+		let words: Vec<&str> = statement.split_whitespace().collect();
+		if let Ok(Some((glyph, level))) = precedence_declaration(&words, &found) {
+			found.iter_mut().filter(|operator| operator.glyph == glyph.chars().collect::<Vec<char>>()).for_each(|operator| operator.level = level);
 		}
 	}
 	found.sort_by_key(|operator| std::cmp::Reverse(operator.glyph.len()));
 	found
+}
+
+/// `operator ⊕ has precedence above|below [operator] Y`: the glyph ⊕ and its new level; Ok(None) for any other statement,
+/// Err for a precedence declaration that cannot be followed (a built-in ⊕, an unknown Y)
+fn precedence_declaration<'a>(words: &[&'a str], declared: &[UserOperator]) -> Result<Option<(&'a str, u8)>, String> {
+	let ["operator", glyph, "has", "precedence", direction, rest @ ..] = words else { return Ok(None) };
+	let Some((_, above)) = PRECEDENCE_DIRECTIONS.iter().find(|(word, _)| word == direction) else { return Ok(None) };
+	let other = match rest {
+		["operator", other] | [other] => *other,
+		_ => return Ok(None),
+	};
+	if !declared.iter().any(|operator| operator.glyph.iter().collect::<String>() == *glyph) {
+		return Err(format!("operator {glyph} is built in: only a declared operator gets a precedence (`infix operator {glyph} := …` first)"));
+	}
+	let reference = match declared.iter().find(|operator| operator.glyph.iter().collect::<String>() == other) {
+		Some(operator) => operator.level,
+		None => built_in_level(other).ok_or_else(|| format!("unknown operator {other} in `operator {glyph} has precedence {direction} {other}`"))?,
+	};
+	let level = if *above { reference.saturating_add(PRECEDENCE_STEP) } else { reference.saturating_sub(PRECEDENCE_STEP) };
+	Ok(Some((glyph, level)))
+}
+
+/// The left binding power of a built-in infix operator written as `text` (`*`, `+`, `and`)
+fn built_in_level(text: &str) -> Option<u8> {
+	let parser = WaspParser::new_with_options(text.to_string(), ParserOptions { data_mode: true, ..ParserOptions::default() });
+	match parser.peek_operator() {
+		Some((op, length)) if length == text.chars().count() => Some(op.binding_power().0),
+		_ => None,
+	}
 }
 
 /// The single argument `(int x)` of `f(int x)` is the typed parameter `x:int`, so that flattening the call `f(T, y)` into
@@ -405,6 +672,16 @@ fn typed_parameter(arguments: Node) -> Node {
 			Node::Key(Box::new(items[1].clone()), Op::Colon, Box::new(items[0].clone()))
 		}
 		_ => arguments,
+	}
+}
+
+/// Every argument of `f(int x, float y)` as its typed parameter
+fn typed_parameters(arguments: Node) -> Node {
+	match arguments.drop_meta() {
+		Node::List(items, bracket, Separator::Colon) => {
+			Node::List(items.iter().cloned().map(typed_parameter).collect(), bracket.clone(), Separator::Colon)
+		}
+		_ => typed_parameter(arguments),
 	}
 }
 
@@ -426,6 +703,7 @@ impl WaspParser {
 	/// Source text is normalized to NFC, so equal-looking text and identifiers are equal
 	pub fn new_with_options(input: String, options: ParserOptions) -> Self {
 		let input: String = input.nfc().collect();
+		let input = if options.data_mode { input } else { crate::uniscript_entities::expand_entities(&input) };
 		let current_line = input.lines().next().unwrap_or("").to_string();
 		let chars: Vec<char> = input.chars().collect();
 		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
@@ -446,6 +724,7 @@ impl WaspParser {
 			options,
 			equals_compares: false,
 			in_for_header: false,
+			group_start: (0, 0),
 			stops_at_else: false,
 			signed_list_element: None,
 			stops_at_end: false,
@@ -470,7 +749,7 @@ impl WaspParser {
 	/// `3‼`: the call of the suffix operator on the left operand
 	fn try_parse_user_suffix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let operator = self.user_operator_at(&[UserOperatorKind::Suffix])?;
-		if min_bp > USER_SUFFIX_BP {
+		if min_bp > operator.level {
 			return None;
 		}
 		self.advance_by(operator.glyph.len());
@@ -480,7 +759,7 @@ impl WaspParser {
 	/// `2 ⊕ 3`: the call of the infix operator on both operands
 	fn try_parse_user_infix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let operator = self.user_operator_at(&[UserOperatorKind::Infix])?;
-		let (left_bp, right_bp) = USER_INFIX_BP;
+		let (left_bp, right_bp) = (operator.level, operator.level + 1);
 		if left_bp < min_bp {
 			return None;
 		}
@@ -495,7 +774,7 @@ impl WaspParser {
 		let operator = self.user_operator_at(&[UserOperatorKind::Prefix])?;
 		self.advance_by(operator.glyph.len());
 		self.skip_spaces();
-		let operand = self.parse_expr(USER_PREFIX_RIGHT_BP);
+		let operand = self.parse_expr(operator.level);
 		Some(operator_call(&operator.glyph, vec![operand]))
 	}
 
@@ -511,23 +790,33 @@ impl WaspParser {
 			while !matches!(self.current_char(), '\n' | ';' | '\0') {
 				self.advance();
 			}
-			return Some(error("operator precedence declarations are not supported yet"));
+			// the pre-scan applied it (scan_user_operators); here only its error is reported
+			let statement: Vec<&str> = std::iter::once("operator").chain(words.iter().copied()).collect();
+			return Some(match precedence_declaration(&statement, &self.user_operators) {
+				Ok(Some(_)) => Empty,
+				Ok(None) => error(&format!("an operator precedence is declared `operator ⊕ has precedence above|below Y`, not `operator {}`", words.join(" "))),
+				Err(message) => error(&message),
+			});
 		}
 		let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| *keyword == word)?;
-		let [operator_word, glyph, ":=", ..] = words.as_slice() else { return None };
-		if *operator_word != "operator" || !is_operator_glyph(glyph) {
-			return None;
-		}
+		let glyph = declared_glyph(&words).filter(|glyph| is_operator_glyph(glyph))?;
+		let has_operator_word = words.first() == Some(&"operator");
 		let glyph: Vec<char> = glyph.chars().collect();
 		self.skip_spaces();
-		self.advance_by("operator".chars().count());
-		self.skip_spaces();
+		if has_operator_word {
+			self.advance_by("operator".chars().count());
+			self.skip_spaces();
+		}
 		self.advance_by(glyph.len());
 		self.skip_spaces();
 		self.advance_by(":=".len());
 		let body = self.parse_expr(0);
 		let parameters = match kind {
-			UserOperatorKind::Infix => vec![Symbol("a".to_string()), Symbol("b".to_string())],
+			// P48 names the operands `left` and `right`; `a` and `b` stay accepted
+			UserOperatorKind::Infix => {
+				let names = if mentions(&body, "left") || mentions(&body, "right") { ["left", "right"] } else { ["a", "b"] };
+				names.map(|name| Symbol(name.to_string())).to_vec()
+			}
 			_ => vec![Symbol("it".to_string())],
 		};
 		let head = operator_call(&glyph, parameters);
@@ -565,6 +854,9 @@ impl WaspParser {
 	}
 
 	pub fn parse_with_options(input: &str, options: ParserOptions) -> Node {
+		if let Some((line, column, closer)) = comment_hiding_a_closer(input).filter(|_| !options.data_mode) {
+			return error(&format!("`//` at {line}:{column} starts a comment that hides the closing `{closer}`: floor division is written glued, a//b"));
+		}
 		let mut parser = WaspParser::new_with_options(input.to_string(), options);
 		let program = parser.parse_list_with_separators(None, Bracket::None);
 		if options == ParserOptions::default() {
@@ -678,7 +970,7 @@ impl WaspParser {
 		let (first, sign, number) = (lhs.serialize(), self.current_char(), &signed[1..]);
 		let written = format!("{first} {signed}");
 		let readings = vec![
-			crate::diagnostic::reading("the list", &format!("[{written}]")),
+			crate::diagnostic::reading("the list", &format!("{first} ({signed})")), // also inside brackets: `[1 (-1) 2]`
 			crate::diagnostic::reading("arithmetic", &format!("{first} {sign} {number}")),
 		];
 		let question = crate::diagnostic::Ask::new(SIGNED_OPERAND_TOPIC, format!("is `{written}` a list or arithmetic?"), readings, crate::diagnostic::Fallback::Warning)
@@ -734,8 +1026,51 @@ impl WaspParser {
 		}
 	}
 
-	/// Length of `\` plus trailing blanks and the newline, when the backslash ends its line
+	/// Is the keyword at the cursor followed (after blanks) by `{`: `div {…}` is a tag, not the operator
+	fn word_opens_block(&self, word: &str) -> bool {
+		let after = word.chars().count();
+		let gap = (after..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		self.peek_char(after + gap) == '{'
+	}
+
+	/// The identifier starting `offset` characters ahead
+	fn word_at(&self, offset: usize) -> String {
+		(offset..).map(|at| self.peek_char(at)).take_while(|c| is_identifier_char(*c)).collect()
+	}
+
+	/// The identifier that ends right before the cursor and the blanks before it, on this line
+	fn word_before(&self) -> &str {
+		let line = &self.input_before_cursor();
+		let trimmed = line.trim_end_matches([' ', '\t', '\r']);
+		let start = trimmed.rfind(|c: char| !is_identifier_char(c)).map_or(0, |at| at + trimmed[at..].chars().next().map_or(1, char::len_utf8));
+		match &trimmed[start..] {
+			"then" => "then",
+			ELSE_KEYWORD => ELSE_KEYWORD,
+			_ => "",
+		}
+	}
+
+	/// The source line up to the cursor
+	fn input_before_cursor(&self) -> String {
+		let before: String = self.chars[..self.pos].iter().rev().take_while(|c| **c != '\n').collect();
+		before.chars().rev().collect()
+	}
+
+	/// Length of `\` plus trailing blanks and the newline, when the backslash ends its line; or of the line break and
+	/// indentation before a method call that starts the next line (`numbers\n    .map(square)`, as in JS, Kotlin, Swift)
 	fn line_continuation_length(&self) -> Option<usize> {
+		if matches!(self.current_char(), '\n' | '\r') && !self.options.data_mode {
+			let mut length = 1;
+			while matches!(self.peek_char(length), ' ' | '\t' | '\r' | '\n') {
+				length += 1;
+			}
+			let starts_method = self.peek_char(length) == '.' && (self.peek_char(length + 1).is_alphabetic() || self.peek_char(length + 1) == '_');
+			let starts_pipeline = self.peek_char(length) == '|' && self.peek_char(length + 1) == '>';
+			// `if c then⏎ a⏎ else⏎ b`: a line ending in then/else, or one starting with else, continues the if
+			let starts_else = self.word_at(length) == ELSE_KEYWORD;
+			let ends_in_branch_word = matches!(self.word_before(), "then" | ELSE_KEYWORD);
+			return (starts_method || starts_pipeline || starts_else || ends_in_branch_word).then_some(length);
+		}
 		if self.current_char() != '\\' {
 			return None;
 		}
@@ -768,15 +1103,24 @@ impl WaspParser {
 		self.current_char() == '/' && matches!(self.peek_char(1), '*' | '#')
 	}
 
-	/// The text of a `/* … */` or `/# … #/` comment, the parser standing on its opening
+	/// The text of a `/* … */` or `/# … #/` comment, the parser standing on its opening; comments nest:
+	/// `/* outer /* inner */ still outer */`
 	fn consume_block_comment(&mut self) -> String {
-		let closing_mark = if self.peek_char(1) == '#' { '#' } else { '*' };
+		let mark = if self.peek_char(1) == '#' { '#' } else { '*' };
 		self.advance_by(2);
 		let mut block = String::new();
+		let mut depth = 1;
 		while self.current_char() != '\0' {
-			if self.current_char() == closing_mark && self.peek_char(1) == '/' {
+			let pair = (self.current_char(), self.peek_char(1));
+			if pair == (mark, '/') || pair == ('/', mark) {
+				depth += if pair.0 == '/' { 1 } else { -1 };
+				if depth == 0 {
+					self.advance_by(2);
+					break;
+				}
+				block.extend([pair.0, pair.1]);
 				self.advance_by(2);
-				break;
+				continue;
 			}
 			block.push(self.current_char());
 			self.advance();
@@ -1100,7 +1444,7 @@ impl WaspParser {
 			return None;
 		}
 		GUARD_MARKERS.iter().map(|(word, marker)| (*word, *marker))
-			.find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t'))
+			.find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t' | '{' | ':'))
 			.map(|(_, marker)| marker)
 	}
 
@@ -1110,20 +1454,78 @@ impl WaspParser {
 		let word_length = GUARD_MARKERS.iter().find(|(_, known)| *known == marker).map_or(0, |(word, _)| word.len());
 		self.advance_by(word_length);
 		self.skip_spaces();
+		self.skip_python_colon();
 		let outer = std::mem::replace(&mut self.stops_at_else, true);
-		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_expr(0));
+		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_guarded_phrase());
 		self.stops_at_else = outer;
 		self.skip_spaces();
-		let fallback = if self.matches_keyword("else") {
-			self.advance_by("else".len());
+		let mut caught = None;
+		let fallback = if let Some((word, ahead)) = self.fallback_word_ahead() {
+			self.advance_by(ahead + word.len());
 			self.skip_spaces();
+			caught = if word == ELSE_KEYWORD { None } else { self.parse_caught_name(word) };
+			self.skip_python_colon();
 			self.parse_expr(0)
 		} else if marker == TRY_MARKER {
 			return error("`try` needs an `else`: `try X else Y`");
 		} else {
 			Empty
 		};
-		Node::List(vec![Symbol(marker.to_string()), guarded, fallback], Bracket::Round, Separator::None)
+		// `catch e { … }` (P67): the name the fallback reads the caught Error by, a fourth item
+		let binding = caught.filter(|name| mentions(&fallback, name)).map(Symbol);
+		Node::List([vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(), Bracket::Round, Separator::None)
+	}
+
+	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),
+	/// with how many blanks (line breaks included) come before it
+	fn fallback_word_ahead(&self) -> Option<(&'static str, usize)> {
+		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		FALLBACK_WORDS.iter().find(|word| self.word_at(ahead) == **word).map(|word| (*word, ahead))
+	}
+
+	/// `catch e`, `except ZeroDivisionError`, `except ValueError as e`: the name the error would be bound to
+	fn parse_caught_name(&mut self, word: &str) -> Option<String> {
+		if !self.is_identifier_start(0) {
+			return None;
+		}
+		let mut name = self.word_at(0);
+		self.advance_by(name.chars().count());
+		self.skip_spaces();
+		if self.matches_keyword("as") {
+			self.advance_by(2);
+			self.skip_spaces();
+			name = self.word_at(0);
+			self.advance_by(name.chars().count());
+			self.skip_spaces();
+			return Some(name);
+		}
+		(word == "catch").then_some(name) // `except ZeroDivisionError` names a type, `catch e` a binding
+	}
+
+	/// Python's `try:` and `except:` end with a colon; the block may start on the next line
+	fn skip_python_colon(&mut self) {
+		if self.current_char() == ':' {
+			self.advance();
+			self.skip_whitespace();
+		}
+	}
+
+	/// The guarded part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else 3`)
+	fn parse_guarded_phrase(&mut self) -> Node {
+		let mut items = vec![self.parse_expr(0)];
+		loop {
+			self.skip_spaces();
+			if FALLBACK_WORDS.iter().any(|word| self.matches_keyword(word)) || matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',') {
+				break;
+			}
+			let position = self.pos;
+			let item = self.parse_expr(0);
+			if self.pos == position {
+				break;
+			}
+			items.push(item);
+		}
+		if items.len() == 1 { items.remove(0) } else { Node::List(items, Bracket::None, Separator::Space) }
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)
@@ -1218,11 +1620,20 @@ impl WaspParser {
 				}
 			}
 			'"' | '\'' | '«' => self.parse_string(),
+			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs)
+			'*' if self.is_identifier_start(1) => {
+				self.advance();
+				match self.parse_symbol() {
+					Ok(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
+					Err(message) => error(&message),
+				}
+			}
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
 			'ø' => { self.advance(); return Empty }
+			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
 			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
 			'$' if self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_' => self.parse_dollar_name(),
@@ -1239,6 +1650,14 @@ impl WaspParser {
 				self.parse_number()
 			}
 			ch if ch.is_alphabetic() || ch == '_' => self.parse_symbol_with_suffix(),
+			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
+				(0..length).for_each(|_| self.advance());
+				error(&crate::uniscript_entities::unknown_entity(&name))
+			}
+			'\\' if let Some(name) = crate::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
+				(0..=name.len()).for_each(|_| self.advance());
+				error(&format!("a uniscript entity is written \\:{name}, not \\{name}"))
+			}
 			ch => {
 				warn!(
 					"Unexpected character '{}' at line {}, column {}",
@@ -1288,7 +1707,8 @@ impl WaspParser {
 		let mut parameters = Vec::new();
 		loop {
 			self.skip_spaces();
-			if self.current_char() == ':' && self.peek_char(1) != '=' {
+			// `to square a number: …` or `to square a number { … }`
+			if (self.current_char() == ':' && self.peek_char(1) != '=') || self.current_char() == '{' {
 				break;
 			}
 			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
@@ -1299,8 +1719,10 @@ impl WaspParser {
 				}
 			}
 		}
-		self.advance(); // the colon
-		self.skip_spaces();
+		if self.current_char() == ':' {
+			self.advance();
+			self.skip_spaces();
+		}
 		let body = self.parse_definition_body();
 		self.functions.insert(name.clone());
 		let words: Vec<&str> = parameters.iter().map(String::as_str).collect();
@@ -1320,7 +1742,14 @@ impl WaspParser {
 		} else {
 			self.functions_with_parameters.insert(name.clone());
 			self.phrase_definitions.insert(name.clone(), parameters.clone());
-			Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None)
+			let head = Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None);
+			// P52: the prepositions of the phrase, for phrase_calls to read calls like `add 1 to 2`
+			let pattern = crate::phrase_calls::pattern_text(&words);
+			if pattern.split(' ').any(|part| part != crate::phrase_calls::SLOT) {
+				Node::Meta { node: Box::new(head), data: Box::new(Node::key(crate::phrase_calls::PHRASE_MARK, Node::Text(pattern))) }
+			} else {
+				head
+			}
 		};
 		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
 	}
@@ -1487,21 +1916,8 @@ impl WaspParser {
 			self.skip_spaces();
 		}
 
-		// Check for URL pattern: scheme://...
-		// Common schemes: http, https, ftp, file, data, ws, wss
-		if matches!(symbol.as_str(), "http" | "https" | "ftp" | "file" | "data" | "ws" | "wss")
-			&& self.current_char() == ':'
-			&& self.peek_char(1) == '/'
-			&& self.peek_char(2) == '/'
-		{
-			// Parse entire URL as a single token
-			let mut url = symbol;
-			// Consume :// and the rest of the URL
-			while !self.is_url_terminator(self.current_char()) {
-				url.push(self.current_char());
-				self.advance();
-			}
-			return Node::Text(url);
+		if self.url_follows(&symbol) {
+			return self.parse_url(symbol);
 		}
 
 		if let Some(constant) = check_constants(&symbol, self.options.data_mode) {
@@ -1557,27 +1973,8 @@ impl WaspParser {
 		if self.options.wit_mode && self.current_char() == '<' {
 			return self.parse_type_application(symbol);
 		}
-		let declares_type = TYPE_DECLARATION_WORDS.contains(&symbol.as_str())
-			|| (symbol == RECORD_WORD && self.name_and_block_follow())
-			|| (symbol == "type" && self.current_char() != '(');
-		if !self.options.wit_mode && declares_type {
-			self.skip_whitespace();
-			let type_name = match self.parse_symbol() {
-				Ok(s) => s,
-				Err(e) => return error(&e),
-			};
-			self.skip_whitespace();
-			let body = if self.current_char() == '{' {
-				let block = self.parse_bracketed('{');
-				// Transform field values from Symbol to Type nodes
-				Self::transform_fields_to_types(block)
-			} else {
-				Empty
-			};
-			return Node::Type {
-				name: Box::new(Symbol(type_name)),
-				body: Box::new(body),
-			};
+		if !self.options.wit_mode && self.declares_type(&symbol) {
+			return self.parse_type_declaration();
 		}
 
 		// `point {x:1}` with blanks constructs a declared type like the glued `point{x:1}` (open decision 41)
@@ -1589,8 +1986,48 @@ impl WaspParser {
 			return Node::Key(Box::new(Symbol(symbol)), Op::None, Box::new(block));
 		}
 
-		// Check for IMMEDIATE suffix blocks (no space allowed)
-		// This distinguishes List<int> (generic) from x < y (comparison)
+		self.parse_glued_suffix(symbol)
+	}
+
+	/// `http://…`, `file://…`: the scheme of a URL, the rest of which reads as one text
+	fn url_follows(&self, symbol: &str) -> bool {
+		URL_SCHEMES.contains(&symbol) && self.current_char() == ':' && self.peek_char(1) == '/' && self.peek_char(2) == '/'
+	}
+
+	fn parse_url(&mut self, scheme: String) -> Node {
+		let mut url = scheme;
+		while !self.is_url_terminator(self.current_char()) {
+			url.push(self.current_char());
+			self.advance();
+		}
+		Node::Text(url)
+	}
+
+	/// `class Name {…}`, `struct`, `type Name {…}`, `record Name {…}`; `class:"btn"`, `type:email` (html attributes),
+	/// `x.class` and `type(x)` are no declarations
+	fn declares_type(&self, symbol: &str) -> bool {
+		let is_key = self.current_char() == ':' && self.peek_char(1) != '=';
+		let start = self.pos.saturating_sub(symbol.chars().count());
+		let is_field = start > 0 && self.chars[start - 1] == '.';
+		!is_key && !is_field && (TYPE_DECLARATION_WORDS.contains(&symbol)
+			|| (symbol == RECORD_WORD && self.name_and_block_follow())
+			|| (symbol == "type" && self.current_char() != '('))
+	}
+
+	/// The name and the `{fields}` of a type declaration, after its keyword
+	fn parse_type_declaration(&mut self) -> Node {
+		self.skip_whitespace();
+		let type_name = match self.parse_symbol() {
+			Ok(name) => name,
+			Err(message) => return error(&message),
+		};
+		self.skip_whitespace();
+		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
+		Node::Type { name: Box::new(Symbol(type_name)), body: Box::new(body) }
+	}
+
+	/// What is glued to a word: `name{…}`, `List<int>`, `p@unit`, `f(args)`, `f(params) {body}`; else the word itself
+	fn parse_glued_suffix(&mut self, symbol: String) -> Node {
 		let ch = self.current_char();
 		match ch {
 			'{' => {
@@ -1640,7 +2077,7 @@ impl WaspParser {
 					// Function with body: name(params) { body }
 					let body = self.parse_bracketed('{');
 					let signature = Node::List(
-						vec![Symbol(symbol), args_node],
+						vec![Symbol(symbol), typed_parameters(args_node)],
 						Bracket::Round,
 						Separator::None,
 					);
@@ -1650,7 +2087,7 @@ impl WaspParser {
 				} else {
 					// Function call: name(params) -> List([symbol, args...])
 					let mut items = vec![Symbol(symbol)];
-					match typed_parameter(args_node) {
+					match typed_parameters(args_node) {
 						Node::List(args, _, _) => items.extend(args),
 						Node::Empty => {}
 						other => items.push(other),
@@ -1686,6 +2123,8 @@ impl WaspParser {
 			call
 		} else if let Some(statement) = self.try_parse_return() {
 			statement
+		} else if let Some(awaited) = self.try_parse_await() {
+			awaited
 		} else if let Some((op, chars)) = self.peek_prefix_operator() {
 			let (prefix_line, prefix_column) = self.get_position();
 			self.hint_operator(chars, true);
@@ -1706,6 +2145,33 @@ impl WaspParser {
 		};
 
 		self.continue_expr(lhs, min_bp)
+	}
+
+	/// `await a + await b`: `await` takes its operand like a unary minus, so each task is awaited before the sum.
+	/// `await(x)` (a call or a definition of a function `await`) and `await = …` stay as they are
+	fn try_parse_await(&mut self) -> Option<Node> {
+		if !self.matches_keyword(AWAIT_KEYWORD) {
+			return None;
+		}
+		let before_keyword = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		self.advance_by(AWAIT_KEYWORD.len());
+		let called = self.current_char() == '(';
+		self.skip_spaces();
+		let names_a_variable = self.peek_operator().is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
+		if called || names_a_variable || matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0' | ')') {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword;
+			return None;
+		}
+		// `await all jobs` (P47): every task of a list
+		if self.matches_keyword(AWAIT_ALL_WORD) && self.peek_char(AWAIT_ALL_WORD.len()) == ' ' && (self.is_identifier_start(AWAIT_ALL_WORD.len() + 1) || matches!(self.peek_char(AWAIT_ALL_WORD.len() + 1), '[' | '(')) {
+			self.advance_by(AWAIT_ALL_WORD.len());
+			self.skip_spaces();
+			let list = self.parse_expr(AWAIT_OPERAND_BP);
+			let all = Node::List(vec![Symbol(AWAIT_ALL_WORD.to_string()), list], Bracket::None, Separator::Space);
+			return Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), all], Bracket::None, Separator::Space));
+		}
+		let operand = self.parse_expr(AWAIT_OPERAND_BP);
+		Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), operand], Bracket::None, Separator::Space))
 	}
 
 	/// `return` takes the whole expression after it: `return -1` is no subtraction from `return`
@@ -1729,6 +2195,50 @@ impl WaspParser {
 		Some(Node::List(vec![Symbol(RETURN_KEYWORD.to_string()), value], Bracket::None, Separator::Space))
 	}
 
+	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
+	fn special_infix(&self, lhs: &Node) -> Option<(SpecialInfix, usize, (u8, u8))> {
+		// `a mod b` is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
+		for (word, op) in [("mod", Op::Mod), ("rem", Op::Rem)] {
+			if self.matches_keyword(word) {
+				return Some((SpecialInfix::Keyword(op), word.len(), op.binding_power()));
+			}
+		}
+		// Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`;
+		// `div{…}` and `div {…}` are the html tag, and data never computes
+		let word_division = self.matches_keyword("div") && !self.options.data_mode && !self.word_opens_block("div");
+		if word_division || self.at_floor_division() {
+			let compound = !word_division && self.peek_char(2) == '=';
+			let op = if compound { Op::Assign } else { Op::Div };
+			return Some((SpecialInfix::FloorDivision { compound }, if compound || word_division { 3 } else { 2 }, op.binding_power()));
+		}
+		// the pipeline `xs |> f(a)` is the call `f(xs, a)`, `xs |> f` is `f(xs)` (F#, Elixir); it binds below arithmetic
+		// and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
+		if self.current_char() == '|' && self.peek_char(1) == '>' {
+			return Some((SpecialInfix::Pipeline, 2, PIPELINE_BINDING_POWER));
+		}
+		// element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
+		if let Some(op) = self.element_wise_operator() {
+			return Some((SpecialInfix::ElementWise(op), 2, op.binding_power()));
+		}
+		// membership `x in xs` binds like `==`, kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`;
+		// a unit word stays in the flat counting phrase: `number of chars in t`
+		let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
+		if self.matches_keyword(IN_KEYWORD) && !counts_units {
+			return Some((SpecialInfix::Membership, IN_KEYWORD.len(), Op::Eq.binding_power()));
+		}
+		None
+	}
+
+	/// The right operand of a special infix operator, None when it binds looser than `min_bp` (nothing consumed)
+	fn special_operand(&mut self, width: usize, (left, right): (u8, u8), min_bp: u8) -> Option<Node> {
+		if left < min_bp {
+			return None;
+		}
+		self.advance_by(width);
+		self.skip_whitespace();
+		Some(self.parse_expr(right))
+	}
+
 	/// The infix and suffix operators after an already parsed left operand, binding tighter than `min_bp`
 	fn continue_expr(&mut self, mut lhs: Node, min_bp: u8) -> Node {
 		const ARGUMENT_BP: u8 = 140; // a braceless argument takes arithmetic, stops at ranges and comparisons: f 3-1 > 5
@@ -1740,7 +2250,8 @@ impl WaspParser {
 			self.skip_spaces_and_inline_comments(); // not newlines: they are separators
 
 			// Step 2: Suffix (led)
-			if let Some(updated) = self.try_parse_suffix(&lhs, min_bp).or_else(|| self.try_parse_user_suffix(&lhs, min_bp)) {
+			// P48: a declared suffix operator wins over the built-in one of the same glyph (`suffix operator ³`)
+			if let Some(updated) = self.try_parse_user_suffix(&lhs, min_bp).or_else(|| self.try_parse_suffix(&lhs, min_bp)) {
 				lhs = updated;
 				continue;
 			}
@@ -1755,7 +2266,7 @@ impl WaspParser {
 				continue;
 			}
 
-			if let Some(updated) = self.try_parse_evaluate_bang(&lhs)
+			if let Some(updated) = self.try_parse_evaluate_bang(&lhs, min_bp)
 				.or_else(|| self.try_parse_control_suffix(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
 				.or_else(|| self.try_parse_nand(&lhs, min_bp))
@@ -1764,65 +2275,10 @@ impl WaspParser {
 				continue;
 			}
 
-			// Step 3a: `a mod b` is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
-			let keyword_op = if self.matches_keyword("mod") { Some(Op::Mod) } else if self.matches_keyword("rem") { Some(Op::Rem) } else { None };
-			if let Some(op) = keyword_op {
-				let (l_bp, r_bp) = op.binding_power();
-				if l_bp < min_bp {
-					break;
-				}
-				self.advance_by(3);
-				self.skip_whitespace();
-				let divisor = self.parse_expr(r_bp);
-				lhs = Node::Key(Box::new(lhs), op, Box::new(divisor));
-				previous_comparand = None;
-				continue;
-			}
-
-			// Step 3b: Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`
-			let word_division = self.matches_keyword("div");
-			if word_division || self.at_floor_division() {
-				let compound = !word_division && self.peek_char(2) == '=';
-				let op = if compound { Op::Assign } else { Op::Div };
-				let (l_bp, r_bp) = op.binding_power();
-				if l_bp < min_bp {
-					break;
-				}
-				self.advance_by(if compound || word_division { 3 } else { 2 });
-				self.skip_whitespace();
-				let divisor = self.parse_expr(r_bp);
-				let quotient = floor_division(lhs.clone(), divisor);
-				lhs = if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient };
-				previous_comparand = None;
-				continue;
-			}
-
-			// Step 3d: element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
-			if let Some(op) = self.element_wise_operator() {
-				let (l_bp, r_bp) = op.binding_power();
-				if l_bp < min_bp {
-					break;
-				}
-				self.advance_by(2);
-				self.skip_whitespace();
-				let operand = self.parse_expr(r_bp);
-				lhs = crate::analyzer::element_wise(lhs, op, operand);
-				previous_comparand = None;
-				continue;
-			}
-
-			// Step 3c: membership `x in xs` binds like `==`, kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`
-			// a unit word stays in the flat counting phrase: `number of chars in t`
-			let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
-			if self.matches_keyword(IN_KEYWORD) && !counts_units {
-				let (l_bp, r_bp) = Op::Eq.binding_power();
-				if l_bp < min_bp {
-					break;
-				}
-				self.advance_by(IN_KEYWORD.len());
-				self.skip_whitespace();
-				let collection = self.parse_expr(r_bp);
-				lhs = Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), collection], Bracket::None, Separator::Space);
+			// Step 3a–e: the operators the infix table does not hold (`mod`, `//`, `|>`, `.+`, `in`, see SpecialInfix)
+			if let Some((infix, width, binding)) = self.special_infix(&lhs) {
+				let Some(operand) = self.special_operand(width, binding, min_bp) else { break };
+				lhs = infix.applied(lhs, operand);
 				previous_comparand = None;
 				continue;
 			}
@@ -1908,7 +2364,9 @@ impl WaspParser {
 			if op == Op::Colon {
 				self.equals_compares = false; // in `if c: x=1` the colon ends the condition, the rest is the body
 			}
+			let rhs_start = self.pos;
 			let rhs = block_body.unwrap_or_else(|| self.parse_expr(r_bp));
+			let rhs_written: String = self.chars[rhs_start.min(self.pos)..self.pos].iter().collect();
 
 			if op == Op::Define && !matches!(lhs.drop_meta(), Node::List(..)) && !mentions(&rhs, "it") {
 				self.functions.remove(&lhs.name()); // `x := 5` defines a value, not a function
@@ -1943,16 +2401,29 @@ impl WaspParser {
 			}
 
 			let rhs = if op == Op::Eq && written != IS_WORD { crate::type_tests::equality_operand(rhs) } else { rhs };
+			if op == Op::Eq && written == IS_WORD {
+				lhs = crate::type_tests::with_compared_text(lhs, rhs_written.trim());
+			}
 			let op = if op == Op::Assign && is_function_block(&lhs, &rhs) {
 				self.functions.insert(lhs.name());
 				Op::Define
 			} else {
 				op
 			};
+			if let Some(warning) = hash_range_warning(&lhs, op, &written, &rhs) {
+				if let Err(strict) = crate::diagnostic::report(&[warning]) {
+					lhs = strict;
+					continue;
+				}
+			}
 			lhs = match previous_comparand.take() {
 				Some(middle) if op.is_ordering() => {
 					let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs.clone()));
 					Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
+				}
+				_ if op == Op::Hash && hash_slice_bounds(&rhs).is_some() => {
+					let (start, end) = hash_slice_bounds(&rhs).expect("guarded");
+					Node::List(vec![Symbol(SLICE_WORD.to_string()), lhs, start, end], Bracket::Round, Separator::None)
 				}
 				_ => Node::Key(Box::new(lhs), op, Box::new(rhs.clone())),
 			};
@@ -1981,6 +2452,8 @@ impl WaspParser {
 		match op {
 			Op::Inc | Op::Dec => self.parse_expr(left_bp),
 			Op::If | Op::While => self.with_equals_comparing(true, |parser| parser.parse_expr(right_bp)),
+			// `#m#1` counts `m#1`: indexing a count is never meant
+			Op::Hash => self.parse_expr(left_bp - 1),
 			_ => self.parse_expr(right_bp),
 		}
 	}
@@ -2026,6 +2499,16 @@ impl WaspParser {
 			let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
 			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
 			return self.parse_optional_else(if_then, ElseParseMode::Atom);
+		}
+
+		// `if (x < 0) return -1`: C's parenthesized condition, then the statement on the same line
+		let is_grouped = matches!(rhs.drop_meta(), Node::List(_, Bracket::Round, _));
+		if is_grouped && self.at_body_start() && !self.matches_keyword("then") && !self.matches_keyword("else") {
+			let outer = std::mem::replace(&mut self.stops_at_else, true);
+			let then_expr = self.parse_expr(0);
+			self.stops_at_else = outer;
+			let if_then = Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(rhs))), Op::Then, Box::new(then_expr));
+			return self.parse_optional_else(if_then, ElseParseMode::Expr);
 		}
 
 		Node::Key(Box::new(Empty), Op::If, Box::new(rhs))
@@ -2094,30 +2577,191 @@ impl WaspParser {
 		Some(if names.len() == 1 { names.remove(0) } else { Node::List(names, bracket, Separator::Colon) })
 	}
 
-	/// `for x in iterable: body` and `for x in iterable {body}`, after the word `for`; the body of a colon runs to the end of the statement
+	/// `for x in iterable: body` and `for x in iterable {body}`, after the word `for`; the body of a colon runs to the end of
+	/// the statement. `for 1..10 : print it` names no variable (wiki/for.md): `for iterable {body}`, whose items are `it`
 	fn try_parse_for_in(&mut self) -> Option<Node> {
 		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		self.skip_spaces();
+		if let Some(filtered) = self.try_parse_condition_loop() {
+			return Some(filtered);
+		}
 		let variable = self.parse_loop_variable();
 		self.skip_spaces();
-		let Some(variable) = variable.filter(|_| self.matches_keyword("in")) else {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_header;
-			return None;
-		};
-		self.advance_by("in".len());
+		let named = variable.filter(|_| self.matches_keyword("in"));
+		if named.is_some() {
+			self.advance_by("in".len());
+		} else {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_header.clone();
+			self.skip_spaces();
+			if self.current_char() == '(' { // `for(i=0;i<n;i++)`
+				(self.pos, self.line_nr, self.column, self.current_line) = before_header;
+				return None;
+			}
+		}
 		let outer_header = std::mem::replace(&mut self.in_for_header, true);
 		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
 		self.in_for_header = outer_header;
 		self.skip_spaces();
 		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
-		let body = if let Some(word) = body_word { // `for i in 0..n: body`, `for i in 0..n do body`
-			self.advance_by(word.len());
-			let indented_block = if word == ":" && self.only_blanks_before_newline() { self.parse_indented_block() } else { None };
-			indented_block.unwrap_or_else(|| self.with_equals_comparing(false, |parser| parser.parse_expr(0)))
-		} else {
-			self.parse_atom()
+		let Some(variable) = named else {
+			// only the colon and do forms: `for 1..3 {…}` is read where for loops are lowered
+			let Some(word) = body_word else {
+				(self.pos, self.line_nr, self.column, self.current_line) = before_header;
+				return None;
+			};
+			let body = self.colon_body(word);
+			let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
+			return Some(Node::List(vec![Symbol("for".to_string()), iterable, block], Bracket::None, Separator::Space));
 		};
+		let body = match body_word {
+			Some(word) => self.colon_body(word), // `for i in 0..n: body`, `for i in 0..n do body`
+			None => self.parse_atom(),
+		};
+		// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the item
+		// (P46), a call `friend(…)` still constructs
+		let (variable, body) = match variable.drop_meta() {
+			Symbol(name) if self.declared_types.contains(name) => {
+				let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+				let test = Node::List(vec![Symbol(crate::traits::INSTANCE_OF.to_string()), it.clone(), Node::Text(name.clone())], Bracket::Round, Separator::None);
+				let body = item_named(body, name, &it);
+				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), test, body) {
+					Ok(body) => (it, body),
+					Err(error) => return Some(error),
+				}
+			}
+			// `for number in xs`: a type word visits only the items of that type, under its own name; a literal list whose items
+			// all are of the type needs no filter
+			Symbol(name) if crate::analyzer::type_word_kind(name).is_some() && !literal_items_of_type(&iterable, name) => {
+				let test = self.type_test(&variable, name).expect("a type word");
+				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), test, body) {
+					Ok(body) => (variable, body),
+					Err(error) => return Some(error),
+				}
+			}
+			_ => (variable, body),
+		};
+		// `for chars in text: print it`: a unit word walks the text by that unit, the item is `it`
+		if let Some((unit, iterable)) = unit_iteration(&variable, &iterable, &body) {
+			return Some(Node::List(vec![Symbol("for".to_string()), unit, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space));
+		}
 		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+	}
+
+	/// `for (it>2) in xs: body` (wiki/for.md, P46): the items the condition holds for, as `it`; None (nothing consumed)
+	/// for any other header
+	fn try_parse_condition_loop(&mut self) -> Option<Node> {
+		let before = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		if self.current_char() != '(' {
+			return None;
+		}
+		self.advance();
+		// the expressions up to `)`: one condition `it>2`, or the words `even number`
+		let mut parts = vec![];
+		loop {
+			self.skip_spaces();
+			if matches!(self.current_char(), ')' | '\0' | '\n') {
+				break;
+			}
+			let start = self.pos;
+			parts.push(self.with_equals_comparing(true, |parser| parser.parse_expr(0)));
+			if self.pos == start {
+				break;
+			}
+		}
+		let condition = match parts.len() {
+			1 => parts.remove(0),
+			_ => Node::List(parts, Bracket::None, Separator::Space),
+		};
+		let mentions_it = crate::wasp_parser::mentions(&condition, crate::lambdas::IMPLICIT_PARAMETER);
+		// `(even number)`: an adjective and a type word
+		let condition = if mentions_it { Some(condition) } else { self.adjective_condition(&condition) };
+		let Some(condition) = condition.filter(|_| self.current_char() == ')') else {
+			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			return None;
+		};
+		self.advance();
+		self.skip_spaces();
+		if !self.matches_keyword("in") {
+			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			return None;
+		}
+		self.advance_by("in".len());
+		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
+		self.skip_spaces();
+		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
+		let body = match body_word {
+			Some(word) => self.colon_body(word),
+			None => self.parse_atom(),
+		};
+		let shown = crate::normalize::operand_text(&condition);
+		let body = match self.filtered_body(&format!("for ({shown}) in …"), &format!("for it in … {{ if {shown} {{ … }} }}"), condition, body) {
+			Ok(body) => body,
+			Err(error) => return Some(error),
+		};
+		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+		Some(Node::List(vec![Symbol("for".to_string()), it, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+	}
+
+	/// `(even number)` in a loop header: `even(it)` (built in: `it%2==0`, `odd` its opposite, else the user's function) and
+	/// `it is number`; None for anything else
+	fn adjective_condition(&self, words: &Node) -> Option<Node> {
+		// the two words, spaced or read as the call `even(number)`
+		let Node::List(items, Bracket::None | Bracket::Round, Separator::Space | Separator::None) = words.drop_meta() else { return None };
+		let [adjective, type_word] = items.as_slice() else { return None };
+		let Symbol(adjective) = adjective.drop_meta() else { return None };
+		let Symbol(type_name) = type_word.drop_meta() else { return None };
+		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+		let type_test = self.type_test(&it, type_name)?;
+		let parity = |op: Op| Node::Key(Box::new(Node::Key(Box::new(it.clone()), Op::Mod, Box::new(Node::int(2)))), op, Box::new(Node::int(0)));
+		let adjective_test = match adjective.as_str() {
+			word if self.functions.contains(word) => Node::List(vec![Symbol(word.to_string()), it.clone()], Bracket::Round, Separator::None),
+			EVEN_WORD => parity(Op::Eq),
+			ODD_WORD => parity(Op::Ne),
+			word => Node::List(vec![Symbol(word.to_string()), it.clone()], Bracket::Round, Separator::None),
+		};
+		Some(Node::Key(Box::new(type_test), Op::And, Box::new(adjective_test)))
+	}
+
+	/// `value is T` for a loop filter: a declared type by its instances, a type word by its runtime kind; None for any other word
+	fn type_test(&self, value: &Node, type_name: &str) -> Option<Node> {
+		let test = if self.declared_types.contains(type_name) {
+			crate::traits::INSTANCE_OF
+		} else if crate::analyzer::type_word_kind(type_name).is_some() {
+			crate::type_tests::IS_TYPE
+		} else {
+			return None;
+		};
+		Some(Node::List(vec![Symbol(test.to_string()), value.clone(), Node::Text(type_name.to_string())], Bracket::Round, Separator::None))
+	}
+
+	/// The body of a filtering loop: run only when `test` holds; the filter is announced once (got-it warning, P46)
+	fn filtered_body(&self, written: &str, explicit: &str, test: Node, body: Node) -> Result<Node, Node> {
+		let question = format!("`{written}` visits only the items that pass its filter");
+		let readings = vec![reading("filter the items", explicit)];
+		ask(&Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning).written(written).at(self.line_nr, self.column))?;
+		let guarded = Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(test))), Op::Then, Box::new(body));
+		Ok(Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon))
+	}
+
+	/// The body after `:` or `do`: an indented block under a colon at the end of the line, else the rest of the line
+	fn colon_body(&mut self, word: &str) -> Node {
+		self.advance_by(word.len());
+		let indented_block = if word == ":" && self.only_blanks_before_newline() { self.parse_indented_block() } else { None };
+		indented_block.unwrap_or_else(|| self.rest_of_statement())
+	}
+
+	/// The words up to the end of the line, one expression: the colon body `print i` of `for i in 1..3 : print i`
+	fn rest_of_statement(&mut self) -> Node {
+		let mut words = vec![self.with_equals_comparing(false, |parser| parser.parse_expr(0))];
+		loop {
+			while matches!(self.current_char(), ' ' | '\t') {
+				self.advance();
+			}
+			if !self.can_start_atom() {
+				return one_expression(&words);
+			}
+			words.push(self.with_equals_comparing(false, |parser| parser.parse_expr(0)));
+		}
 	}
 
 	fn finish_while_prefix(&mut self, rhs: Node) -> Node {
@@ -2147,6 +2791,12 @@ impl WaspParser {
 	/// `else body`, and `else if` / `elif` / `elsif` / `elseif` chaining a whole new `if … {…} else …`
 	fn parse_optional_else(&mut self, if_then: Node, mode: ElseParseMode) -> Node {
 		self.skip_spaces();
+		// `}` then `else …` on the next line belongs to this if
+		if self.else_on_a_later_line() {
+			while matches!(self.current_char(), ' ' | '\t' | '\n' | '\r') {
+				self.advance();
+			}
+		}
 		let else_expr = if let Some(word) = self.at_else_if_word() {
 			self.advance_by(word.len());
 			self.parse_else_if()
@@ -2169,6 +2819,14 @@ impl WaspParser {
 			return if_then;
 		};
 		Node::Key(Box::new(if_then), Op::Else, Box::new(else_expr))
+	}
+
+	/// Do line breaks and blanks, then the word `else`, follow the cursor
+	fn else_on_a_later_line(&self) -> bool {
+		let gap = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t' | '\n' | '\r')).count();
+		let crosses_line = (0..gap).any(|at| self.peek_char(at) == '\n');
+		let word = ELSE_KEYWORD.chars().enumerate().all(|(i, c)| self.peek_char(gap + i) == c) && !is_identifier_char(self.peek_char(gap + ELSE_KEYWORD.len()));
+		crosses_line && word
 	}
 
 	fn at_else_if_word(&self) -> Option<&'static str> {
@@ -2235,23 +2893,44 @@ impl WaspParser {
 	/// `{a*a}!` and `f!` at the end of a statement evaluate the block or name, which a block does on the spot anyway.
 	/// After a function or method the `!` mutates in place (user decision D2, by position): `x.upper!` and `upper(x)!`
 	/// assign the result back to x; in `upper x!` the name is marked for crate::mutation to do the same.
-	fn try_parse_evaluate_bang(&mut self, lhs: &Node) -> Option<Node> {
+	fn try_parse_evaluate_bang(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		// `xs#2!` runs xs#2, not the index 2: the suffix binds looser than `#`, tighter than arithmetic (`x!+1`)
+		if min_bp > BANG_BP {
+			return None;
+		}
 		let mutated = crate::mutation::mutated_variable(lhs).cloned();
-		let is_evaluable = matches!(lhs.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
+		// `o.s1!`: a field (no method) may hold a block too (wiki/charged.md section 4)
+		let is_field = matches!(lhs.drop_meta(), Node::Key(_, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)));
+		// any expression may be run (wiki/charged.md section 5): `xs#2!`, `f(x)!`; blocks.rs inlines what is known at compile time
+		let is_evaluable = is_field || !matches!(lhs.drop_meta(), Node::Empty);
 		// `name! email?`: glued to its name and followed by a space, the `!` is a suffix even when an operand follows
-		let glued_suffix = !self.prev_char().is_whitespace() && matches!(self.peek_char(1), ' ' | '\t');
+		// `x!+1`: glued to its name and followed by an infix operator, the `!` is a suffix too
+		// `x!!`: run fully, a suffix as well
+		let glued_suffix = !self.prev_char().is_whitespace() && (matches!(self.peek_char(1), ' ' | '\t' | '!') || INFIX_AFTER_BANG.contains(&self.peek_char(1)));
 		if self.current_char() != '!' || self.peek_char(1) == '=' || (self.operand_follows(1) && !glued_suffix) || !(is_evaluable || mutated.is_some()) {
 			return None;
 		}
 		self.advance();
+		// `x!!` runs a block fully, nested blocks too (wiki/charged.md section 5)
+		let fully = self.current_char() == '!' && self.peek_char(1) != '=';
+		if fully {
+			self.advance();
+		}
 		Some(match (mutated, lhs.drop_meta()) {
+			// `o.s1!` runs a block field, `x.upper!` mutates (D2): blocks.rs knows which, mutation.rs mutates the rest
+			(Some(_), Node::Key(_, Op::Dot, _)) if fully => crate::mutation::marked_fully(lhs.clone()),
+			(Some(_), Node::Key(_, Op::Dot, _)) => crate::mutation::marked(lhs.clone()),
 			(Some(variable), _) => Node::Key(Box::new(variable), Op::Assign, Box::new(lhs.clone())),
+			(None, Node::Symbol(_)) if fully => crate::mutation::marked_fully(lhs.clone()),
 			(None, Node::Symbol(_)) => crate::mutation::marked(lhs.clone()),
-			(None, _) => lhs.clone(),
+			// `{a*a}!` evaluates the block on the spot
+			(None, Node::List(_, Bracket::Curly, _)) => lhs.clone(),
+			(None, _) if fully => crate::mutation::marked_fully(lhs.clone()),
+			(None, _) => crate::mutation::marked(lhs.clone()),
 		})
 	}
 
-	/// `x empty`, `x missing`, `x is absent` … at the end of a condition are `not x` (wiki/null.md).
+	/// `x empty`, `x missing`, `x is absent` … at the end of a condition are `not x` (wiki/null.md); `x failed` is `is_error(x)`.
 	/// The word must end the condition: a block, colon, `then`/`else`/`and`/`or` or the end of the statement follows.
 	/// `x is empty` stays the comparison with ø.
 	fn try_parse_test_word(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
@@ -2275,6 +2954,9 @@ impl WaspParser {
 			return None;
 		}
 		self.advance_by(end);
+		if *word == FAILED_WORD {
+			return Some(Node::List(vec![Symbol(IS_ERROR_CALL.to_string()), lhs.clone()], Bracket::Round, Separator::None));
+		}
 		Some(Node::Key(Box::new(Empty), Op::Not, Box::new(lhs.clone())))
 	}
 
@@ -2431,7 +3113,9 @@ impl WaspParser {
 			return None;
 		}
 		self.advance(); // skip ']'
-		if slice_bounds(&indices[0]).is_none() {
+		// `int[n]` is n zeros of the type unless int is a variable (analyzer lower_declarations): no indexing hint
+		let names_a_type = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::zero_list(Empty, word).is_some());
+		if slice_bounds(&indices[0]).is_none() && !names_a_type {
 			crate::normalize::set_position_of(lhs);
 			norm::index_operator(&crate::normalize::operand_text(lhs), &crate::normalize::operand_text(&indices[0]), true);
 		}
@@ -2559,10 +3243,11 @@ impl WaspParser {
 		loop {
 			let ch = self.current_char();
 			if ch == '\0' {
-				return error("Unterminated string");
+				return error(&format!("Unterminated string: the text opened at {quote_line}:{quote_column} has no closing `{quote}`"));
 			}
 			if ch == quote {
 				self.advance(); // skip closing quote
+				let s: String = s.nfc().collect(); // an escape (`e\u{301}`) may leave it unnormalized
 				if is_template {
 					return crate::interpolation::template_text(&template);
 				}
@@ -2576,8 +3261,10 @@ impl WaspParser {
 				if let Some(c) = chars.next() {
 					if chars.next().is_none() {
 						if let Some(number_type) = self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
-							let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); only a single-quoted character converts to its code point");
-							return Diagnostic { message, line: quote_line, column: quote_column, fix: Some(format!("'{c}' as {number_type}")) }.into_error();
+							let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character");
+							let explicit = format!("{}('{c}') as {number_type}", crate::library_words::CODEPOINT);
+							return Diagnostic { message, line: quote_line, column: quote_column, ..Default::default() }.fix(&explicit)
+								.offer("the code point of the character", format!("\"{c}\" as {number_type}"), explicit).into_error();
 						}
 						return Node::codepoint(c);
 					}
@@ -2605,9 +3292,19 @@ impl WaspParser {
 				let escaped = self.current_char();
 				is_template |= interpolates && escaped == '$'; // an escaped dollar is never a hole, also in sql/sh
 				match escaped {
+					':' if interpolates && self.peek_char(1).is_ascii_alphabetic() => {
+						let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos - 1) else { unreachable!("a letter follows") };
+						let Some(character) = crate::uniscript_entities::entity(&name) else { return error(&crate::uniscript_entities::unknown_entity(&name)) };
+						(0..length - 2).for_each(|_| self.advance());
+						character
+					}
 					'n' => '\n',
 					't' => '\t',
 					'r' => '\r',
+					'u' if self.peek_char(1) == '{' => match self.unicode_escape() {
+						Ok(c) => c,
+						Err(message) => return error(&message),
+					},
 					c => c,
 				}
 			} else {
@@ -2620,6 +3317,21 @@ impl WaspParser {
 				c => template.push(c),
 			}
 		}
+	}
+
+	/// `\u{e9}` after the backslash: the code point of the hex digits; the closing `}` is left for the caller to skip
+	fn unicode_escape(&mut self) -> Result<char, String> {
+		self.advance(); // skip `u`, now at `{`
+		let mut hex = String::new();
+		while self.peek_char(1).is_ascii_hexdigit() {
+			self.advance();
+			hex.push(self.current_char());
+		}
+		if self.peek_char(1) != '}' {
+			return Err(format!("\\u{{{hex}…: a unicode escape is hex digits in braces, like \\u{{e9}}"));
+		}
+		self.advance(); // now at `}`
+		u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32).ok_or_else(|| format!("\\u{{{hex}}} is no unicode code point"))
 	}
 
 	/// The number type of a following `as int` / `as float` …
@@ -2709,12 +3421,17 @@ impl WaspParser {
 		Node::Key(Box::new(number), Op::Mul, Box::new(factor))
 	}
 
-	/// `2 km` multiplies only when `km` is a known unit; any other spaced word keeps the list `[2 foo]`
+	/// `2 km` multiplies only when `km` is a known unit; any other spaced word keeps the list `[2 foo]`, and so does a
+	/// unit word that starts the next entry or assignment: `{w:2 h:3}`
 	fn at_spaced_unit(&self) -> bool {
 		let rest = &self.chars[self.pos..];
 		let spaces = rest.iter().take_while(|c| **c == ' ').count();
 		let word: String = rest[spaces..].iter().take_while(|c| is_identifier_char(**c)).collect();
-		spaces > 0 && crate::units::is_unit(&word)
+		let after_word: String = rest[spaces + word.chars().count()..].iter().skip_while(|c| **c == ' ').take(2).collect();
+		let starts_entry = after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==");
+		// `2 m²`: the power is no part of the unit's name
+		let unit = word.trim_end_matches(|c: char| superscript_digit(c).is_some());
+		spaces > 0 && crate::units::is_unit(unit) && !starts_entry
 	}
 
 	fn at_ordinal_suffix(&self) -> bool {
@@ -2805,8 +3522,9 @@ impl WaspParser {
 
 		self.push_digits(&mut num_str);
 		let mut is_float = false;
-		// Only consume . as decimal if NOT followed by another . (range operator)
-		if self.current_char() == '.' && self.peek_char(1) != '.' {
+		// Only consume . as decimal if NOT followed by another . (range operator) or a word (`4.square` calls square)
+		let after_point = self.peek_char(1);
+		if self.current_char() == '.' && after_point != '.' && !(after_point.is_alphabetic() || after_point == '_') {
 			is_float = true;
 			num_str.push('.');
 			self.advance();
@@ -3005,6 +3723,8 @@ impl WaspParser {
 			'<' => ('>', Bracket::Round),
 			_ => panic!("Invalid bracket: {}", open),
 		};
+		let start = self.get_position();
+		let outer_start = std::mem::replace(&mut self.group_start, start);
 		self.advance(); // skip opening bracket
 		let compares = self.equals_compares && bracket_type != Bracket::Curly; // a block is not the condition
 		// `for i in (0 until n)` and `(0..n-1)` are still the header; a block or a list inside it is not
@@ -3012,6 +3732,7 @@ impl WaspParser {
 		let outer_header = std::mem::replace(&mut self.in_for_header, inner_header);
 		let list = self.with_equals_comparing(compares, |parser| parser.parse_list_with_separators(Some(close), bracket_type));
 		self.in_for_header = outer_header;
+		self.group_start = outer_start;
 		list
 	}
 
@@ -3209,6 +3930,10 @@ impl WaspParser {
 				None => self.end_of_input() || self.at_block_close(),
 			};
 			if at_end {
+				if let Some(closer) = close.filter(|_| ch == '\0') {
+					let (line, column) = self.group_start;
+					return error(&format!("`{closer}` is missing: the group opened at {line}:{column} runs to the end of the input"));
+				}
 				if close.is_some() {
 					self.advance(); // consume closing bracket
 				}
@@ -3431,6 +4156,9 @@ fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 		"τ" | "tau" => Some(real(Exact::pi().scale(&Rational::integer(2)))),
 		"euler" | "ℯ" => Some(real(Exact::euler())),
 		"ⅈ" => Some(real(Exact::imaginary())),
+		// hyperreals (wiki/hyperreals.md): the glyphs only, `epsilon` stays a free name like `e`
+		"ε" => Some(real(Exact::epsilon())),
+		"ω" => Some(real(Exact::omega())),
 		"⚠️" | "⚡" | "⚡️" => Some(error(s)),
 		_ => None,
 	}
@@ -3480,13 +4208,13 @@ fn chained_equality(lhs: &Node, op: Op, rhs: &Node) -> Diagnostic {
 		_ => left.clone(),
 	};
 	let symbol = op.as_str();
-	Diagnostic {
-		message: format!("ambiguous: equality does not chain in {left} {symbol} {right}"),
-		line: 0,
-		column: 0,
-		fix: Some(format!("{left} and {middle} {symbol} {right} or ({left}) {symbol} {right}")),
-	}
+	let (chained, grouped) = (format!("{left} and {middle} {symbol} {right}"), format!("({left}) {symbol} {right}"));
+	Diagnostic::default().fix(format!("{chained} or {grouped}")).message(format!("ambiguous: equality does not chain in {left} {symbol} {right}"))
+		.offer("both equalities, as Python chains them", format!("{left} {symbol} {right}"), chained)
+		.offer("compare the first result, as C does", format!("{left} {symbol} {right}"), grouped)
 }
+
+const COMPARISON_FIRST: &str = "the comparison first, as C";
 
 /// `3 & 4 == 4` is `(3&4)==4` in Python but `3 & (4==4)` in C: `&`/`|` next to an ungrouped comparison is ambiguous.
 /// The word forms `and`/`or` read unambiguously and are not affected: `x==1 and y==2`.
@@ -3496,21 +4224,25 @@ fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<D
 		_ => None,
 	};
 	let (left, right) = (lhs.serialize(), rhs.serialize());
-	let fix = match (comparison(lhs), comparison(rhs)) {
-		(None, Some((a, op, b))) => format!("{left} {symbol} ({a} {op} {b}) or ({left} {symbol} {a}) {op} {b}"),
-		(Some((a, op, b)), None) => format!("({a} {op} {b}) {symbol} {right} or {a} {op} ({b} {symbol} {right})"),
-		(Some(_), Some(_)) => format!("({left}) {symbol} ({right})"),
+	let readings = match (comparison(lhs), comparison(rhs)) {
+		(None, Some((a, op, b))) => vec![(COMPARISON_FIRST.to_string(), format!("{left} {symbol} ({a} {op} {b})")), (format!("`{symbol}` first, as Python"), format!("({left} {symbol} {a}) {op} {b}"))],
+		(Some((a, op, b)), None) => vec![(COMPARISON_FIRST.to_string(), format!("({a} {op} {b}) {symbol} {right}")), (format!("`{symbol}` first, as Python"), format!("{a} {op} ({b} {symbol} {right})"))],
+		(Some(_), Some(_)) => vec![("both comparisons first".to_string(), format!("({left}) {symbol} ({right})"))],
 		(None, None) => return None,
 	};
 	let word = if symbol == '&' { "and" } else { "or" };
-	Some(Diagnostic {
-		message: format!("ambiguous: `{symbol}` mixed with a comparison in {left} {symbol} {right}; group it or write `{word}`"),
-		line: 0,
-		column: 0,
-		fix: Some(fix),
-	})
+	let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
+	let written = format!("{left} {symbol} {right}");
+	let diagnostic = Diagnostic::default().fix(forms.join(" or "))
+		.message(format!("ambiguous: `{symbol}` mixed with a comparison in {written}; group it or write `{word}`"));
+	Some(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form)))
 }
 
+
+/// The number a subscript was written with, `1` of `d[1]`, kept on its shifted index `d#2`: a map keyed by numbers
+/// reads it (number_keys.rs, P34)
+#[derive(Clone, Debug, PartialEq)]
+pub struct WrittenIndex(pub Number);
 
 /// `target[index]` is the 1-based `target#(index+1)`; a numeric index is shifted at parse time.
 /// A slice `target[start:end]`, `target[start..end]`, `target[start...last]` is the call `slice(target, start, end)`.
@@ -3529,7 +4261,7 @@ pub fn subscript(target: Node, index: Node) -> Node {
 	}
 	let one = Node::Number(Number::Int(1));
 	let one_based = match index.drop_meta() {
-		Node::Number(n) => Node::Number(*n + Number::Int(1)),
+		Node::Number(n) => Node::meta(Node::Number(*n + Number::Int(1)), Node::data(WrittenIndex(*n))),
 		_ => Node::Key(Box::new(index), Op::Add, Box::new(one)),
 	};
 	Node::Key(Box::new(target), Op::Hash, Box::new(one_based))
@@ -3554,6 +4286,31 @@ fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 		_ => return None,
 	};
 	Some((start.as_ref().clone(), end))
+}
+
+/// `xs#a..b` reads as the range from the value xs#a; P58 (user: "create a strong warning"): a warning naming the slice
+/// `xs#(a..b)` and the range `(xs#a)..b`
+fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) -> Option<Diagnostic> {
+	let Node::Key(target, Op::Hash, index) = lhs.drop_meta() else { return None };
+	if !matches!(op, Op::Range | Op::To) {
+		return None;
+	}
+	let (target, index, end) = (target.serialize(), index.serialize(), rhs.serialize());
+	let (target, index, end) = (target.trim(), index.trim(), end.trim());
+	let (as_written, slice, range) = (format!("{target}#{index}{written}{end}"), format!("{target}#({index}{written}{end})"), format!("({target}#{index}){written}{end}"));
+	let message = format!("{as_written} is the range from the value {target}#{index}: for the slice write {slice}, for the range write {range}");
+	Some(Diagnostic::at(lhs, message).offer("the slice", &as_written, slice).offer("the range from the value", &as_written, range))
+}
+
+/// `xs#(a…b)`, `xs#(a..b)`: the 0-based start and exclusive end of a 1-based slice (`xs#a` is 1-based); only a range in
+/// parentheses, `xs#a..b` stays the range from the value xs#a
+fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
+	let Node::List(items, Bracket::Round, _) = index.drop_meta() else { return None };
+	let [range] = items.as_slice() else { return None };
+	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else { return None };
+	let minus_one = |bound: &Node| Node::Key(Box::new(bound.clone()), Op::Sub, Box::new(Node::Number(Number::Int(1))));
+	let end = if *op == Op::To { end.as_ref().clone() } else { minus_one(end) };
+	Some((minus_one(start), end))
 }
 
 /// The written index of a subscript's 1-based index `index+1`, when it was not a number (inverse of `subscript`)

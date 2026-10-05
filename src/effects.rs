@@ -49,10 +49,12 @@ pub enum Effect {
 	Unsafe,
 	/// May diverge: not provably terminating (Koka's `div`)
 	Div,
+	/// Runs a block known only at run time (`interpret e`, host run_block): its code is not known to the compiler
+	Eval,
 }
 
 impl Effect {
-	pub const ALL: [Effect; 7] = [State, Allocation, IO, FFI, Async, Unsafe, Div];
+	pub const ALL: [Effect; 8] = [State, Allocation, IO, FFI, Async, Unsafe, Div, Eval];
 
 	fn bit(self) -> u8 {
 		1 << self as u8
@@ -136,6 +138,8 @@ pub enum Capability {
 	Host,
 	Wasi,
 	Ffi,
+	/// The pure math functions of libm (P26), linked like Ffi but granted to every program, untrusted ones included
+	Libm,
 	/// Runs typed `sql` templates (`execute`)
 	Sql,
 	/// Runs typed `sh` commands (`exec`)
@@ -144,13 +148,16 @@ pub enum Capability {
 
 impl Capability {
 	/// Capabilities `eval` grants; running queries or programs needs a host that grants more
-	pub const GRANTED_BY_EVAL: [Capability; 3] = [Host, Wasi, Ffi];
+	pub const GRANTED_BY_EVAL: [Capability; 4] = [Host, Wasi, Ffi, Libm];
+	/// Capabilities untrusted code gets
+	pub const GRANTED_UNTRUSTED: [Capability; 1] = [Libm];
 
 	pub fn name(self) -> &'static str {
 		match self {
 			Host => "host",
 			Wasi => "wasi",
 			Ffi => "ffi",
+			Libm => "libm",
 			Sql => "sql",
 			Process => "process",
 		}
@@ -222,9 +229,13 @@ impl EffectReport {
 		let resolver = Resolver { context: &context };
 
 		let mut report = EffectReport::default();
+		let globals = main_level_globals(program);
 		for (name, definition) in &context.user_functions {
 			let mut function = resolver.function(&definition.body);
 			let parameters: Vec<&str> = definition.params.iter().map(|param| param.name.as_str()).collect();
+			if reads_global(&definition.body, &globals, &parameters) {
+				function.perform(State); // shared state read at call time (wiki/charged.md §3): never folded nor memoized
+			}
 			if function.calls.contains(name) && !recursion_shrinks(name, &parameters, &definition.body) {
 				function.perform(Div);
 			}
@@ -385,8 +396,15 @@ impl Resolver<'_> {
 		if self.context.user_functions.contains_key(name) {
 			return None;
 		}
-		if self.context.ffi_imports.contains_key(name) {
-			return Some(External { capability: Ffi, effects: EffectSet::of(&[FFI]) });
+		if name == crate::host::RUN_BLOCK {
+			return Some(External { capability: Host, effects: EffectSet::of(&[Eval]) });
+		}
+		if let Some(import) = self.context.ffi_imports.get(name) {
+			// libm is pure (P26): untrusted code and `! Pure` functions may call it
+			return Some(match import.library == crate::ffi::LIBM {
+				true => External { capability: Libm, effects: EffectSet::PURE },
+				false => External { capability: Ffi, effects: EffectSet::of(&[FFI]) },
+			});
 		}
 		trusted_external(name)
 	}
@@ -436,6 +454,20 @@ impl FunctionEffects {
 		self.own = self.own.union(effect);
 		self.effects = self.effects.union(effect);
 	}
+}
+
+/// The variables the program declares `global` at its main level (`global limit = 10`)
+fn main_level_globals(program: &Node) -> Vec<String> {
+	let mut main = crate::analyzer::Scope::new();
+	crate::analyzer::collect_variables(program, &mut main);
+	main.globals.into_keys().collect()
+}
+
+/// Does a function body read one of `globals` that is not one of its parameters?
+fn reads_global(body: &Node, globals: &[String], parameters: &[&str]) -> bool {
+	let mut found = false;
+	body.visit(&mut |node| found |= matches!(node, Node::Symbol(name) if globals.contains(name) && !parameters.contains(&name.as_str())));
+	found
 }
 
 /// `while 0 {…}` / `while false {…}` never runs its body

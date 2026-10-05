@@ -36,6 +36,24 @@ The rewrite is scripted: `probes/ci-policy/apply_policy.py <workflow.yml> <owner
 - No other recently pushed pannous repo has workflows.
 
 ## Open
-- russh CodeQL fails also on its schedule (likely code scanning not enabled for a private repo) and russh Rust/Semver
-  were red on every push: the nightly runs will keep mailing until those are fixed.
-- warpgate Test was red on main and on dependabot PRs; PRs still run (policy keeps pull_request).
+- russh (fixed 2026-10-04, cecaa23): clippy on Linux (`speed_t` is u32 there: allow useless_conversion), the Windows job
+  builds the workspace without the unix-only rssh crate, russh 0.64.0 for the fork's breaking changes (semver check
+  against crates.io 0.63.3). Rust and Semver dispatched green. CodeQL Advanced is disabled on the fork: code scanning
+  needs GitHub Advanced Security on a private repo ("Code scanning is not enabled for this repository").
+- warpgate Test (fix c0a084ac, 2026-10-04): the autouse session fixture `report_generation` (tests/conftest.py) runs
+  `cargo llvm-cov run --all-features`, a full rebuild that exceeded pytest's 300 s timeout; the workflow now prebuilds
+  it before `run.sh`. Verify the dispatched run (pannous/warpgate actions); dependabot PRs still run.
+- warpgate Test, later 2026-10-04: two runs lost the runner with coverage-instrumented binaries; integration tests now
+  run on a plain `cargo build --all-features` (7fb2e47f). Run 37176521946 then completed the whole suite with ~15 real
+  failures (mysql CLI missing on the runner: mysql/target_credential_encryption/db_migrations/admin_approval_protocols;
+  vnc ×4; web_ssh hung 14 min, then exit 143 before pytest's summary). 3758040a/6551bc0a: mysql-client, a resource line
+  every 2 min, `timeout --signal=INT 80m` around pytest (an early end still prints failures), -rfE, per-test 180 s.
+  Run 37181090813 lost the runner again during pytest ("The hosted runner lost communication", no log of the Run
+  step survives that). 5f5bb7f9: the Tests job is a matrix of three shards (every third test file; shard 1 also runs
+  the Rust unit tests, the API SDK tests and SonarCloud), each on its own runner. Run 37186712652: green, 641 tests
+  (452 + 73 + 116), pytest 5–9 min per shard, peak memory 3.2/7.9 GB. 0bcb4aec/97d548bf: a Build job builds the UI,
+  the test SDK and target/debug/warpgate once (artifact warpgate-build: binary, tests/api_sdk, warpgate-web/dist,
+  which a debug build reads at run time through rust-embed), a Unit job runs the coverage unit tests and SonarCloud,
+  the shards only download, build the docker images and run pytest. The artifact needs include-hidden-files: the UI
+  manifest is warpgate-web/dist/.vite/manifest.json (d70f02c7). Run 37192266038: all green in 22 minutes (Build 8,
+  Unit 17, shards 10–14), against about 90 minutes on one runner before.

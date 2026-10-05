@@ -1,0 +1,16 @@
+// Mandelbrot set visualization
+// Classic fractal computation
+
+def mandelbrot(cx, cy, max_iter) {
+    x = 0.0
+    y = 0.0
+    iter = 0
+    while x*x + y*y <= 4 and iter < max_iter {
+        xtemp = x*x - y*y + cx
+        y = 2*x*y + cy
+        x = xtemp
+        iter = iter + 1
+    }
+    return iter
+}
+mandelbrot(-0.5, 0.0, 3)

@@ -71,3 +71,25 @@ Node implementation is never removed: it is the fallback for any list the analys
   (decimals are exact rationals), so ints came first.
 - Typed parameters and return values (a function taking `xs: ints`) would avoid the Node conversion at calls.
 - `sort` of a typed list could sort the i64 array in place for fixnums (ratios/big ints need the exact comparison).
+
+## Node lists (2026-10-04)
+`ElementType::Node`: a list variable of any elements is a `$NodeList` (length, `(array (mut (ref null $Node)))`, the
+kind of the list node it stands for, so tuples keep their brackets) when the program indexes or counts it (`xs#i`,
+`#xs`, which every for loop does). It starts from a literal, ø, appends, or `node_list_of` (one pass over a Node
+list: a call's result, a parameter, another list variable); every other use reads it as a Node (`node_list_as_node`).
+An `if` statement whose branch appends to a typed list runs its branches as statements (list_emitter
+emit_discarded_branches), else the branch value rebuilt the Node list on every append (filter was quadratic).
+5000 items (probes/night/bench_lists.sh): for loop 41 s → 0.6 s, filter 130 s → 0.5 s, index writes overflowed the
+stack (recursive list_with_at) → 0.5 s. Parameters stay Nodes: a function indexing its list parameter still walks it.
+- Small helpers are inlined (src/lowering/inlining.rs: not recursive, no free variables, no locals shared with the rest of the
+  program, ≤ 8 statements, one final return), so `arr = swap(arr, i, j)` updates the caller's array; `x = (t = x; …; t)`
+  shares one array without copies (moved_lists). A list parameter indexed in a loop and not reassigned from a call there
+  is copied into an array once (`arr·list = arr`). quicksort_partitioned of 1000: 32 s → 12.5 s; what remains is the
+  Node conversion per recursive call (a $NodeList ABI for parameters and results would remove it).
+- Array calling convention (src/wasm_emitter/list_abi.rs, 2026-10-04): a function whose list parameter p is used only
+  through its copy `p·list = p` takes p as a `$NodeList` (the callee copies it with one array.copy, values stay values);
+  a function whose every result is such an array or a call of another such function returns the `$NodeList`. Callers
+  convert only where a Node is needed. quicksort_partitioned of 1000: 12.5 s → 0.9 s. Not for closure targets, tuple
+  functions or text parameters. Any single copy `v = p` counts when v is a Node list (a for loop's `x·items = p`), and a
+  caller's Int/Float list passes through `int_list_as_node_list` (one node per element, no cons cells): 20 sums of a
+  20000-element list 5.3 s → 2.5 s (debug build).

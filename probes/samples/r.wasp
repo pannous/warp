@@ -1,0 +1,15 @@
+// Simple ray tracer
+// Renders spheres with lighting
+
+type Vec3 { x: float, y: float, z: float }
+
+def vec(x, y, z) := Vec3 { x: x, y: y, z: z }
+def add(a, b) := vec(a.x + b.x, a.y + b.y, a.z + b.z)
+def sub(a, b) := vec(a.x - b.x, a.y - b.y, a.z - b.z)
+def mul(v, s) := vec(v.x * s, v.y * s, v.z * s)
+def dot(a, b) := a.x * b.x + a.y * b.y + a.z * b.z
+def length(v) := sqrt(dot(v, v))
+def normalize(v) := mul(v, 1.0 / length(v))
+
+global light = mul(vec(1, 1, -1), 0.5)
+light.x

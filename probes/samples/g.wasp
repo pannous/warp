@@ -1,0 +1,61 @@
+// Conway's Game of Life
+// Cellular automaton simulation on a torus (the edges wrap)
+// the grid is a flat list of cells, row by row; lists are values, so the grid is global for the functions to change it
+
+width = 20
+height = 10
+generations = 8
+global grid = []
+for i in 0 to width * height - 1 { grid.push(false) }
+
+def cell(x, y) { return grid#(y * width + x + 1) }
+
+// Initialize with glider
+def spawn_glider(x, y) {
+    for (dx, dy) in [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)] {
+        grid#((y + dy) * width + x + dx + 1) = true
+    }
+}
+
+spawn_glider(2, 2)
+
+def count_neighbors(x, y) {
+    neighbors = 0
+    for dy in -1 to 1 {
+        for dx in -1 to 1 {
+            if dx != 0 or dy != 0 {
+                nx = (x + dx + width) % width
+                ny = (y + dy + height) % height
+                if cell(nx, ny) { neighbors = neighbors + 1 }
+            }
+        }
+    }
+    return neighbors
+}
+
+def step() {
+    new_grid = []
+    for y in 0..height {
+        for x in 0..width {
+            n = count_neighbors(x, y)
+            // Rules: B3/S23
+            new_grid.push(n == 3 or (cell(x, y) and n == 2))
+        }
+    }
+    grid = new_grid
+}
+
+def render() {
+    for y in 0..height {
+        line = ""
+        for x in 0..width {
+            line = line + (if cell(x, y) then "█" else " ")
+        }
+        print line
+    }
+}
+step()
+render()
+live = 0
+for i in 1 to count(grid) { if grid#i { live = live + 1 } }
+live

@@ -30,7 +30,7 @@ the uniscript repository's `fonts/dist` (`UNISCRIPT_FONTS`) or `~/Library/Fonts`
 - Bytes go into memory by the rule of `src/host.rs write_bytes_to_caller` (the exported `text_heap` bump pointer, fresh
   pages when it is 0 or full), then `new_text(ptr, len)`.
 - Results: JS cannot read WASM GC struct fields, so warp now exports `get_text_ptr` / `get_text_len` next to `get_kind`
-  (the `$String` of a Text, Symbol or Error, 0 otherwise). `tests/test_text_getters.rs` does the same in wasmtime.
+  (the `$String` of a Text, Symbol or Error, 0 otherwise). `tests/text/test_text_getters.rs` does the same in wasmtime.
 - After each conversion `text_heap` is reset to its value after init: `out += …` allocates a fresh text per append, and
   the results are copied out immediately, so memory does not grow with typing.
 

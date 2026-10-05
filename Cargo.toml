@@ -33,7 +33,7 @@ deprecated = "warn"
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
 default = ["native", "validate"]
-native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:ureq", "dep:rustyline", "dep:libloading"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:ureq", "dep:rustyline", "dep:libloading"]
 # validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
@@ -74,8 +74,9 @@ libloading = { version = "0.9", optional = true }  # Dynamic library loading for
 #It exposes an API for parsing and generating WebAssembly modules, and a set of tools for interacting with them.
 #wabt = "0.2.0" # C++ WebAssembly Binary Toolkit, exposes only wasm2wat wat2wasm DEAD (2023-02)
 
-wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-drc", "runtime", "wat"], optional = true }
+wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-copying", "runtime", "wat"], optional = true }
 wasmtime-wasi = { version = "49.0.1", optional = true }
+sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (src/run/module_cache.rs); wasmtime uses it already
 #wasmtime-runtime = "*" # Wasmtime runtime
 #wasmtime-wasi = "*" # WASI support for Wasmtime
 #wasmtime-wast = "*" # Wast support for Wasmtime
@@ -109,6 +110,28 @@ debug = true           # IDE needs debug symbols for breakpoints
 split-debuginfo = "unpacked"  # Faster on macOS
 codegen-units = 16     # Rust default (256 was wasteful)
 
+# tests run the programs on wasmtime too: its GC at full speed (two million map entries took 40 s unoptimized)
+[profile.dev.package.wasmtime]
+opt-level = 3
+# every run compiles its module with Cranelift: unoptimized, it took 118 of the 122 s of a functions:: test run
+# (581 modules, 200 ms each); at opt-level 3 the run takes 15 s
+[profile.dev.package.cranelift-codegen]
+opt-level = 3
+[profile.dev.package.cranelift-frontend]
+opt-level = 3
+[profile.dev.package.cranelift-bforest]
+opt-level = 3
+[profile.dev.package.cranelift-entity]
+opt-level = 3
+[profile.dev.package.regalloc2]
+opt-level = 3
+[profile.dev.package.wasmtime-internal-cranelift]
+opt-level = 3
+[profile.dev.package.wasmtime-environ]
+opt-level = 3
+[profile.dev.package.wasmparser]
+opt-level = 3
+
 [profile.test]
 inherits = "dev"       # Use dev profile for tests
 
@@ -134,6 +157,11 @@ lto = true             # Full LTO for maximum treeshaking
 codegen-units = 1      # Single codegen unit for best optimization
 panic = "abort"        # Smaller binary, no unwinding
 strip = true           # Strip symbols
+
+# the native runtime runs the programs: its GC and libcalls at full speed (a size-optimized wasmtime ran a GC-heavy
+# map program 2.5× slower than the wasmtime CLI); the web build has no wasmtime, so its size is untouched
+[profile.release.package.wasmtime]
+opt-level = 3
 
 [lib]
 # Only rlib: the browser build asks for the cdylib itself (web/playground/build.sh: `cargo rustc --crate-type cdylib`).

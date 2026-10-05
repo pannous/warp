@@ -5,6 +5,7 @@
 
 use crate::diagnostic::{self, Acknowledger};
 use crate::extensions::numbers::Number;
+use crate::fixits::{self, Fix};
 use crate::meta::{Dada, DataType};
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::{Kind, KIND_MASK};
@@ -15,48 +16,90 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use crate::type_kinds::KIND_BITS;
 
-/// The topics the page already said "got it" to; every other warning or note shown is recorded for its "got it" button
+/// The topics and expressions (`topic@expression`) the page already said "got it" to; every other warning or note shown
+/// is recorded for its "got it" buttons: the topic and the key of its expression
 struct PageAcknowledger {
 	acknowledged: HashSet<String>,
-	notes: Rc<RefCell<Vec<String>>>,
+	notes: Rc<RefCell<Vec<(String, String)>>>,
 }
 
 impl Acknowledger for PageAcknowledger {
-	fn has_acknowledged(&self, topic: &str) -> bool {
-		self.acknowledged.contains(topic)
+	fn has_acknowledged(&self, key: &str) -> bool {
+		self.acknowledged.contains(key)
 	}
 
-	/// The page answers later, with its "got it" button
-	fn acknowledge(&self, topic: &str) -> bool {
-		self.notes.borrow_mut().push(topic.to_string());
-		false
+	/// The page answers later, with its "got it" buttons: this expression, or all of the kind
+	fn acknowledge(&self, topic: &str, written: &str) -> crate::diagnostic::GotIt {
+		self.notes.borrow_mut().push((topic.to_string(), diagnostic::expression_key(topic, written)));
+		crate::diagnostic::GotIt::No
 	}
 }
 
 /// Compile and run `code` as `warp file.wasp` does, with the topics the page acknowledged. The report (JSON):
-/// `value` (what the CLI prints), `error`, `warnings`, `hints`, `notes` (topics of the warnings and notes shown that
-/// the user can say "got it" to) and `runtime_warnings`. Acknowledging silences a warning, never changes the value.
+/// `value` (what the CLI prints), `error`, `errors` (the failed program's errors with fixes), `warnings`, `hints`,
+/// `notes` (topics of the warnings and notes shown that the user can say "got it" to), `got_it` (each of them with the
+/// `topic@expression` key that silences only its expression; a warning carries its own as `expression_key`) and
+/// `runtime_warnings`. Warnings, errors and hints carry `fixes` ("I meant: …" buttons, fixes_json). The acknowledged set
+/// holds topics and expression keys. Acknowledging silences a warning, never changes the value.
 pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	let notes = Rc::new(RefCell::new(Vec::new()));
 	let acknowledger = PageAcknowledger { acknowledged, notes: notes.clone() };
 	diagnostic::take_warnings();
+	diagnostic::take_error_diagnostics();
 	diagnostic::take_runtime_warnings();
 	let (result, hints) = diagnostic::with_acknowledger(acknowledger, || crate::normalize::capture_hints(|| crate::wasm_emitter::eval(code)));
-	let warnings: Vec<Value> = diagnostic::take_warnings().iter().map(|warning| json!({
-		"message": warning.message, "line": warning.line, "column": warning.column, "fix": warning.fix,
-	})).collect();
-	let hints: Vec<Value> = hints.iter().map(|hint| json!({
-		"original": hint.original, "canonical": hint.canonical, "position": hint.position, "reason": hint.reason,
-	})).collect();
+	let warnings: Vec<Value> = diagnostic::take_warnings().iter().map(|warning| diagnostic_json(code, warning)).collect();
+	let is_error = matches!(result.drop_meta(), Node::Error(_));
+	let errors: Vec<Value> = unique(diagnostic::take_error_diagnostics()).iter().filter(|_| is_error).map(|error| diagnostic_json(code, error)).collect();
+	let hints: Vec<Value> = hints.iter().map(|hint| {
+		let (line, column) = hint.line_and_column();
+		json!({
+			"original": hint.original, "canonical": hint.canonical, "position": hint.position, "reason": hint.reason,
+			"fixes": fixes_json(code, line, column, &hint.fix().into_iter().collect::<Vec<_>>()),
+		})
+	}).collect();
 	json!({
 		"value": result.serialize(),
-		"error": matches!(result.drop_meta(), Node::Error(_)),
+		"error": is_error,
+		"errors": errors,
 		"warnings": warnings,
 		"runtime_warnings": diagnostic::take_runtime_warnings(),
 		"hints": hints,
 		"asks": [], // no Asks any more (every ambiguity is a warning or an error); kept until the page stops reading it
-		"notes": *notes.borrow(),
+		"notes": notes.borrow().iter().map(|(topic, _)| topic).collect::<Vec<_>>(),
+		"got_it": notes.borrow().iter().map(|(topic, expression)| json!({"topic": topic, "expression": expression})).collect::<Vec<_>>(),
 	})
+}
+
+/// A warning or error for the page: its words, position, "got it" topic and the fixes it offers
+fn diagnostic_json(code: &str, diagnostic: &diagnostic::Diagnostic) -> Value {
+	json!({
+		"message": diagnostic.message, "line": diagnostic.line, "column": diagnostic.column, "fix": diagnostic.fix,
+		"topic": diagnostic.topic, "expression_key": diagnostic.expression_key, "fixes": fixes_json(code, diagnostic.line, diagnostic.column, &diagnostic.fixes),
+	})
+}
+
+/// Each fix as the page applies it: replace the UTF-16 range `start`..`end` of the editor's text with `replacement`.
+/// A fix whose text the source does not show has `start` and `end` null: the page shows it, but cannot apply it
+fn fixes_json(code: &str, line: usize, column: usize, fixes: &[Fix]) -> Vec<Value> {
+	fixes.iter().filter(|fix| fix.changes_something()).map(|fix| {
+		let range = fixits::edit(code, line, column, fix).map(|edit| edit.range);
+		let offset = |at: fn(&std::ops::Range<usize>) -> usize| range.as_ref().map(|range| fixits::utf16_offset(code, at(range)));
+		json!({
+			"label": fix.label(), "meaning": fix.meaning, "written": fix.written, "replacement": fix.replacement,
+			"start": offset(|range| range.start), "end": offset(|range| range.end),
+		})
+	}).collect()
+}
+
+/// Lowering may build the same error twice: each one once
+fn unique(diagnostics: Vec<diagnostic::Diagnostic>) -> Vec<diagnostic::Diagnostic> {
+	let mut seen = Vec::new();
+	diagnostics.into_iter().filter(|diagnostic| {
+		let new = !seen.contains(diagnostic);
+		seen.push(diagnostic.clone());
+		new
+	}).collect()
 }
 
 /// The topics the page acknowledged: a JSON array of topics, or the older object whose `ack:<topic>` keys are the
@@ -90,8 +133,51 @@ pub fn run_outcome(outcome: &Value) -> Node {
 		}
 		return crate::wasm_emitter::trap_error(&trace, engine_words(message));
 	}
+	if let Some(message) = outcome.get("error").and_then(Value::as_str) {
+		return crate::node::error(message); // a host word failed with its own message (run_block)
+	}
 	let failure = outcome.get("failure").and_then(Value::as_str).unwrap_or("the page sent no outcome");
 	crate::node::error(&format!("could not run the program: {failure}"))
+}
+
+/// The page's run_block (host.js; src/host.rs natively): the block and what it sees as trees (`{block, names, values,
+/// definitions}`), its value as a tree back (`{"result": tree}`) or `{"error": message}`
+pub fn eval_block_report(request: &Value) -> Value {
+	let tree = |key: &str| request.get(key).map(node_from_tree).unwrap_or(Node::Empty);
+	match crate::pipeline::eval_block(tree("block"), &tree("names"), &tree("values"), &tree("definitions")) {
+		Err(message) => json!({ "error": message }),
+		Ok(result) => match tree_of(&result) {
+			Some(tree) => json!({ "result": tree }),
+			None => json!({ "error": crate::pipeline::cannot_hand_back(&result) }),
+		},
+	}
+}
+
+/// A value as the tree host.js buildValue builds in a module (the inverse of node_from_tree for the values a task or a
+/// block hands back); None for what has no constructor there yet (an error, a type)
+fn tree_of(node: &Node) -> Option<Value> {
+	let kind = |kind: Kind| (kind as i64).to_string();
+	Some(match node.drop_meta() {
+		Node::Empty => json!({ "kind": kind(Kind::Empty), "data": null, "chain": [] }),
+		Node::Number(Number::Int(n)) if crate::wasm_emitter::is_fixnum(*n) => json!({ "kind": kind(Kind::Int), "data": { "int": n.to_string() }, "chain": [] }),
+		// beyond the fixnums: host.js composes it from fixnum pieces (src/tasks.rs EXACT_BUILDERS)
+		Node::Number(Number::Int(n)) => json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), "1"] }, "chain": [] }),
+		Node::Number(Number::BigInt(n)) => json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), "1"] }, "chain": [] }),
+		Node::Number(Number::Quotient(n, d)) => json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), d.to_string()] }, "chain": [] }),
+		Node::Number(Number::Float(x)) if x.is_finite() => json!({ "kind": kind(Kind::Float), "data": { "float": x }, "chain": [] }),
+		Node::Text(text) => json!({ "kind": kind(Kind::Text), "data": { "text": text }, "chain": [] }),
+		Node::Symbol(text) => json!({ "kind": kind(Kind::Symbol), "data": { "text": text }, "chain": [] }),
+		Node::Char(c) => json!({ "kind": kind(Kind::Codepoint), "data": { "i31": *c as u32 }, "chain": [] }),
+		Node::Key(left, op, right) => {
+			let key_kind = (crate::operators::op_to_code(op) << KIND_BITS) | Kind::Key as i64;
+			json!({ "kind": key_kind.to_string(), "key": [tree_of(left)?, tree_of(right)?] })
+		}
+		Node::List(items, bracket, _) => {
+			let list_kind = (crate::wasm_emitter::bracket_info(bracket) << KIND_BITS) | Kind::List as i64;
+			json!({ "kind": list_kind.to_string(), "items": items.iter().map(tree_of).collect::<Option<Vec<_>>>()? })
+		}
+		_ => return None,
+	})
 }
 
 /// V8's trap messages and the words wasmtime uses for them, so a runtime error reads the same in the CLI and the page
@@ -152,8 +238,8 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 			Node::Char(data.get("i31").and_then(Value::as_u64).and_then(|code| char::from_u32(code as u32)).unwrap_or('\0'))
 		}
 		tag if tag == Kind::Key as i64 => Node::Key(Box::new(data_node()), crate::operators::code_to_op(info), Box::new(value_node())),
-		tag if tag == Kind::Block as i64 => list_node(data_node(), value, Bracket::Curly),
-		tag if tag == Kind::List as i64 => list_node(data_node(), value, bracket_of(info)),
+		tag if tag == Kind::Block as i64 => list_node(data.get("node").map(node_from_tree), value, Bracket::Curly),
+		tag if tag == Kind::List as i64 => list_node(data.get("node").map(node_from_tree), value, bracket_of(info)),
 		tag if tag == Kind::Data as i64 => {
 			let type_name = text();
 			Node::Data(Dada { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: DataType::Other })
@@ -174,9 +260,9 @@ fn bracket_of(info: i64) -> Bracket {
 	}
 }
 
-/// A cons cell: its first item, then the items of the rest
-fn list_node(first: Node, rest: Option<Node>, bracket: Bracket) -> Node {
-	let mut items: Vec<Node> = Some(first).into_iter().filter(|item| *item != Node::Empty).collect();
+/// A cons cell: its first item, then the items of the rest; no first item is the empty list's cell, a ø item is kept
+fn list_node(first: Option<Node>, rest: Option<Node>, bracket: Bracket) -> Node {
+	let mut items: Vec<Node> = first.into_iter().collect();
 	match rest {
 		Some(Node::List(rest_items, _, _)) => items.extend(rest_items),
 		Some(Node::Empty) | None => {}
@@ -226,7 +312,36 @@ mod page {
 		pub fn now_ms() -> f64;
 		/// A panic message of the compiler, shown instead of a bare `unreachable`
 		pub fn panicked(message: *const u8, length: usize);
+		/// Fetch a text (a path of the served repository or a URL) and keep it; its length in bytes, -1 when missing
+		pub fn fetch(url: *const u8, length: usize) -> isize;
+		/// Copy the kept fetched text to `into`
+		pub fn take_fetched(into: *mut u8);
 	}
+}
+
+/// Without the page (a build without `native` outside wasm): the file itself
+#[cfg(not(any(target_arch = "wasm32", feature = "native")))]
+pub fn fetch_text(address: &str) -> Option<String> {
+	std::fs::read_to_string(address).ok()
+}
+
+/// A text the page fetches for the compiler (module files, packages), remembered per address: `None` when missing
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+pub fn fetch_text(address: &str) -> Option<String> {
+	thread_local! {
+		static FETCHED: RefCell<std::collections::HashMap<String, Option<String>>> = RefCell::new(std::collections::HashMap::new());
+	}
+	if let Some(known) = FETCHED.with(|fetched| fetched.borrow().get(address).cloned()) {
+		return known;
+	}
+	let length = unsafe { page::fetch(address.as_ptr(), address.len()) };
+	let text = (length >= 0).then(|| {
+		let mut bytes = vec![0u8; length as usize];
+		unsafe { page::take_fetched(bytes.as_mut_ptr()) };
+		String::from_utf8_lossy(&bytes).into_owned()
+	});
+	FETCHED.with(|fetched| fetched.borrow_mut().insert(address.to_string(), text.clone()));
+	text
 }
 
 /// Run a compiled module in the embedding host and read its outcome
@@ -287,6 +402,18 @@ mod exports {
 		})));
 		let acknowledged = super::acknowledged_topics(text(acknowledged, acknowledged_length));
 		let report = evaluate(text(code, code_length), acknowledged).to_string().into_bytes();
+		REPORT.with(|kept| {
+			*kept.borrow_mut() = report;
+			kept.borrow().len()
+		})
+	}
+
+	/// Run a block of a running program (host.js run_block): the request JSON as eval_block_report takes it; returns the
+	/// length of the report, read at `web_report()`
+	#[no_mangle]
+	pub extern "C" fn web_eval_block(request: *const u8, request_length: usize) -> usize {
+		let request = serde_json::from_str::<Value>(text(request, request_length)).unwrap_or_default();
+		let report = eval_block_report(&request).to_string().into_bytes();
 		REPORT.with(|kept| {
 			*kept.borrow_mut() = report;
 			kept.borrow().len()

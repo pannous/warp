@@ -19,6 +19,9 @@ CHECKS = {
 	"xs=[1 2]; xs#5": 'Error("index out of range")',
 	"2^100": "1267650600228229401496703205376",
 	"1/3": "1/3",
+	# packages and module files come through the page (warp_host.fetch, host.read of a URL)
+	'use uniscript; uniscript("<:alpha>")': '"α"',
+	"include tests/fixtures/counter; counter": "11",
 }
 UPTO = "x=0; for i in 1 upto 4 {x+=i}; x"
 
@@ -90,13 +93,41 @@ def main():
 	browser("select", "#examples", "ambiguity")
 	time.sleep(1.5)
 	before = (browser("get", "text", "#value"), "upto" in browser("get", "text", "#diagnostics"))
-	browser("click", ".note button")
+	browser("click", ".got-it")
 	time.sleep(1.5)
 	after = (browser("get", "text", "#value"), "upto" in browser("get", "text", "#diagnostics"))
-	silenced = before == ("6", True) and after == ("6", False)
-	print(f"{'ok  ' if silenced else 'FAIL'} got it silences the upto warning: {before} → {after}")
+	silenced = before == ("6", True) and after == ("6", False) and "upto@" in browser("get", "text", "#acknowledged")
+	print(f"{'ok  ' if silenced else 'FAIL'} got it silences this upto expression: {before} → {after}")
 	if not silenced: failures.append("got it")
 	browser("eval", "playground.forgetAll()")
+
+	# "// got it" says it in the code: the comment on the warning's line silences it
+	browser("select", "#examples", "ambiguity")
+	time.sleep(1.5)
+	browser("eval", "[...document.querySelectorAll('.got-it')].find(button => button.textContent === '// got it').click()")
+	time.sleep(1.5)
+	commented = ("// got it" in json.loads(browser("eval", "playground.code()")), "upto" in browser("get", "text", "#diagnostics"), browser("get", "text", "#value"))
+	ok = commented == (True, False, "6")
+	print(f"{'ok  ' if ok else 'FAIL'} the // got it button comments the line and silences it: {commented}")
+	if not ok: failures.append("got it comment")
+
+	# "I meant: ..." rewrites the code at the warning and runs it again: the inclusive reading of `1 upto 4` is 1+2+3+4
+	browser("select", "#examples", "ambiguity")
+	time.sleep(1.5)
+	browser("eval", "[...document.querySelectorAll('.apply-fix')].find(button => button.textContent === 'I meant: ...').click()")
+	time.sleep(1.5)
+	fixed = (browser("get", "text", "#value"), "for i in 1 ... 4" in json.loads(browser("eval", "playground.code()")), "upto" in browser("get", "text", "#diagnostics"))
+	ok = fixed == ("10", True, False)
+	print(f"{'ok  ' if ok else 'FAIL'} the fix button rewrites `upto` to `...` and runs again: {fixed}")
+	if not ok: failures.append("fix button")
+	# an ambiguity error offers its readings too
+	browser("eval", "playground.setCode('square:=it*it; square 3 + square 4')")
+	time.sleep(1.5)
+	browser("eval", "[...document.querySelectorAll('.apply-fix')].find(button => button.textContent === 'I meant: square(3) + square(4)').click()")
+	time.sleep(1.5)
+	value = browser("get", "text", "#value")
+	print(f"{'ok  ' if value == '25' else 'FAIL'} the fix of an ambiguous braceless call: {value}")
+	if value != "25": failures.append("error fix button")
 
 	# the debug build (?debug, warp.debug.wasm) compiles the same programs
 	browser("open", PAGE + "?debug")

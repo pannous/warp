@@ -1,0 +1,4 @@
+transpose(m) := { rows = #m; cols = #m#1; t = []; for c in 1..cols+1 { row = []; for r in 1..rows+1 { row.add(m#r#c) }; t.add(row) }; t }
+m = [[1 2 3] [4 5 6]]
+t = transpose(m)
+str(t)

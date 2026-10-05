@@ -50,7 +50,8 @@ fn test_effects_are_inferred_from_calls() {
 	assert_eq!(effects("def greet(x){puts x};greet 'a'", "greet"), EffectSet::of(&[IO]));
 	assert_eq!(effects("f := puts it", "f"), EffectSet::of(&[IO]));
 	assert_eq!(effects("x=fetch https://a.com/t;x", "main"), EffectSet::of(&[IO]));
-	assert_eq!(effects("use m;floor(4.5)", "main"), EffectSet::of(&[FFI]));
+	assert_eq!(effects("use m;floor(4.5)", "main"), EffectSet::PURE); // libm is pure (P26)
+	assert_eq!(effects("import strlen from \"c\"; strlen(\"ab\")", "main"), EffectSet::of(&[FFI]));
 	assert_eq!(effects("puts", "fd_write"), EffectSet::of(&[IO, Unsafe]));
 }
 

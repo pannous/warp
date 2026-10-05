@@ -1,114 +1,86 @@
-# 🌀Warp
+# 🌀 Warp
 
-<!-- 🌀 𖦹 𓏲 w 𓍢 𐀸 we ꩜ -->
+**A data format that is also a programming language, compiled straight to WebAssembly GC.**
 
-𖦹 **Warp** is a new **data format** and **programming language** that is wasm-first and written in Rust.  
-Warp is a rewrite of [Wasp](https://github.com/pannous/wasp) which was written in c⁺⁺ [Angle](
-https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script) which were python experiments.  
-
-## Features
-- [Perfect](wiki/Perfect) Programming language for both humans and agents.
-- [Goal](/wiki/): Free of [footguns](wiki/Footguns)
-- **Wasm-first**: Designed to compile to WebAssembly efficiently, as structs.
--  JS/JSON/XML/YAML (de)serialization built-in
--  Full [Documentation](https://github.com/pannous/warp/wiki)
-
-## Example
-
-### as data format
 ```warp
-contact{
-		name: James
-		age: 33
-}
+contact{ name: James  age: 33 }
+contact.age + 1                      // 34
 ```
-That's it. Similar to JSON but no quotes around keys and symbols.
 
-### as programming language
-```warp
-use math
-to square(number){
- return number²
-}
+The same notation holds your config, your markup and your program. Warp compiles it to WebAssembly GC structs
+(no linear-memory runtime, no JS glue), and the compiler is itself a WebAssembly module.
+
+▶ **[Try it in your browser](https://warp.pannous.com/)**: nothing to install. The compiler runs locally in a Web
+Worker.
+
+## Why Warp
+
+- **Data is code.** Like Lisp, but with blocks, lists, key-value pairs and tags instead of s-expressions.
+  JSON-like, but no quotes around keys or symbols. Reads and writes JSON, XML and YAML.
+- **Wasm GC first.** A `class Person{name:String age:i64}` becomes a real `(struct …)` type, and the module carries
+  full name sections. Rust hosts read these objects back as typed values (see below).
+- **No silent footguns.** When code could mean two things, the compiler doesn't guess quietly. It warns with the
+  reading it took and the explicit form, or it refuses when a wrong guess would corrupt results
+  ([Footguns](https://github.com/pannous/warp/wiki/Footguns)):
+  ```
+  for i in 1 upto 4 { x += i }
+  warning: does `upto 4` include 4? (`..<` or `..` exclude it, `to` or `...` include it) (taking exclusive); fix: ..<
+  ```
+- **Little ceremony.** Implicit `it`, inferred parameter and return types, Unicode operators, and English words for
+  operators where they read better:
+  ```warp
+  square := it²
+  square(3) + square(4)              // 25
+
+  fib := if it < 2 then it else fib(it - 1) + fib(it - 2)
+  fib(20)                            // 6765
+  ```
+- **Markup is just data.**
+  ```warp
+  html{ body{ h1: "Welcome"  p: "made of data" } }
+  ```
+
+## Install & run
+
+```bash
+git clone https://github.com/pannous/warp && cd warp
+cargo build --release
+target/release/warp samples/fibonacci.wasp   # run a file
+target/release/warp eval "6*7"               # evaluate code
+target/release/warp repl                     # interactive console
 ```
-or simpler `square:=it²` showing optional return types, it keyword, type and parameter inference.
 
-### Wasm interop
- 🎉  The warp programming language has FULL Rust WebAssembly roundtrip support for structs:
- ```
+`samples/` contains classics (game of life, Dijkstra, Levenshtein, a JSON parser, a neural net) in both a
+Python-like style and an idiomatic Warp style.
+
+## Rust ⇄ Wasm GC round trip
+
+```rust
 let alice = Person { name: "Alice".into(), age: 30 };
 is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
 ```
-
-either with prior declaration of the struct type: 
+`is!` parses, compiles, runs the module in wasmtime and reads the GC object back. The compiler emits:
+```wat
+(type $String (struct (field $ptr i32) (field $len i32)))
+(type $Person (struct (field $name (ref $String)) (field $age i64)))
+(func $main (result (ref $Person))
+  i32.const 0  i32.const 5  struct.new $String
+  i64.const 30
+  struct.new $Person)
+(data (i32.const 0) "Alice")
 ```
-wasm_struct! {
-	Person {
-		name: String,
-		age: i64,
-	}
-}
+Declare the Rust side with `wasm_struct! { Person { name: String, age: i64 } }`, or inline:
+`wasm_object! { Person { name: String = "Alice", age: i64 = 30 } }`.
 
-// or directly inline:
-let alice = wasm_object! { Person { name: String = "Alice", age: i64 = 30 } };
-```
-What happens is that the WASP compiler emits
+Untyped data travels as one universal GC type, `$Node {kind: i64, data: anyref, value: (ref null $Node)}`. It mirrors
+the host enum `Node` (`Text`, `Symbol`, `Number`, `Key`, `List`, `Type`, `Meta`, `Data`) in
+[src/node.rs](src/node.rs).
 
-```
-(module
-  (type $String (;0;) (struct (field $ptr i32) (field $len i32)))
-  (type $Person (;1;) (struct (field $name (ref $String)) (field $age i64)))
-  (type (;2;) (func (result (ref $Person))))
-  (memory (;0;) 1)
-  (export "memory" (memory 0))
-  (export "main" (func $main))
-  (func $main (;0;) (type 2) (result (ref $Person))
-    i32.const 0
-    i32.const 5
-    struct.new $String
-    i64.const 30
-    struct.new $Person
-  )
-  (data (;0;) (i32.const 0) "Alice")
-)
-```
+## Status
 
-### Unstructured Data: Node
+Experimental and moving fast. 2036 tests pass (`cargo test`). The language spec lives in the
+[wiki](https://github.com/pannous/warp/wiki), and parts of it are not implemented yet. Warp is a Rust rewrite of
+[Wasp](https://github.com/pannous/wasp) (C++), which follows the Python experiments
+[Angle](https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script).
 
-The above example or any object can be expressed in the general universal Data type node:
-```
-(type $Node (struct 
-	(field $kind i64) 
-	(field $data anyref) 
-	(field $value (ref null $Node))
-	))
-```
-
-Which has a host equivalent of:
-```
-pub enum Node {
-	// Kind(i64), enum NodeKind in serialization via external map
-	// Id(i64), // unique internal(?) node id for graph structures (put in metadata)
-	Empty, 
-	Text(String),
-	Symbol(String),
-	Number(Number),
-	Key(Box<Node>, Op, Box<Node>), 
-	List(Vec<Node>, Bracket, Separator),
-	Type { name: Box<Node>, body: Box<Node> }, 
-	Meta { node: Box<Node>, data: Box<Node> }, // general node extension
-	Data(Dada), // most generic container for any kind of data not captured by other node types
-}
-```
-
-The `Key` type is the most important node and used as Pair e.g. for html{input(type=text)} … and most AST types
-Most other are atoms. Type name as node to allow meta info.
-
-## Develop
-`git checkout --single-branch --branch main https://github.com/pannous/warp`
-
-## Build & Test
-`cargo test --all`
-[tests](https://github.com/pannous/warp/tree/main/tests)
-
-289 passed, 0 failed, 289 total tested
+Feedback, issues and especially "this surprised me" reports are welcome.

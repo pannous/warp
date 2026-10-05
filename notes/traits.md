@@ -42,10 +42,11 @@ area(square(3))                      // 9: calls area·square
 square(1) is shape                   // false: perimeter is missing
 area(dot(1))                         // compile error: dot is not shape: area(dot(1)) needs area(x:dot); fix: define area(x:dot) := …
 ```
-An operation called on a value whose type is unknown at compile time calls the one type that defines it, else it is a
-compile error asking for a type annotation (no runtime dispatch for declared traits yet).
+An operation called on a value whose type is unknown at compile time calls the one type that defines it; when several
+types define it, a generated dispatcher `area·dispatch(x) := if instance_of(x, "rect") then area·rect(x) else
+area·square(x)` picks the witness at run time (traits::with_dispatchers; `instance_of` reads the instance's type name).
 
-## Lowering (src/traits.rs)
+## Lowering (src/lowering/traits.rs)
 - `lower_declarations` (before type_tests): `trait shape{…}` becomes ø carrying the `Trait` (Meta data), which later
   passes collect (`Traits::of`); `x is shape` becomes the type test `is_type(x, "shape")`.
 - `lower_conformances` (after type_constructor): a definition of a trait operation whose first parameter (every
@@ -66,14 +67,30 @@ compile error asking for a type annotation (no runtime dispatch for declared tra
   needs their indices, while node_order is compiled before them; the global bridges the two. A type without a witness
   traps `not comparable`.
 
+## Default methods (2026-10-04)
+`trait shape{area; describe(s) := area(s) * 2}`: a requirement written as a definition is an operation with a default
+body (`Operation::default`). `traits::with_default_methods` defines it, first parameter typed, for every type that defines
+the other operations (`area(s:square)`) but not this one; lower_conformances then makes it the witness `describe·square`.
+
+## Membership through equals (2026-10-04)
+`x in xs` (position) and `xs.has(x)` of an instance whose type overrides `equals` search the list with `equals·T`
+(traits::position_by_equals, a loop lowered in lower_dispatch); without an override they compare structurally.
+
+## Generic constraints (2026-10-04)
+`smallest(xs: Comparable list) := (sort xs)#1`: the annotation `xs: T list` (analyzer::with_list_annotation; the parser
+leaves `list` as the next signature item) is `list of T`, T a type word, a declared type or a trait. A list of a trait
+holds Nodes; where the function is called with a list of instances of a known type, each operation of the trait must
+have its witness (traits::unmet_constraint): `dot is not Comparable: smallest([dot{x:3}]) needs compare(a:dot, b:dot)`.
+Lists of numbers or texts pass (sorted by value at run time). `xs: list of T` reads the same.
+
 ## Fixed on the way
 `x = sort [3 1]; x#1` trapped (sort/split/reverse results were held as Ints), `(sort xs)#1` indexed the data list
 `(sort xs)`, elements of a list of instances were held as Ints, `lower(a) == lower(b)` compared numbers.
 
+## Printable and Iterable (2026-10-04, lowering/printable.rs)
+`text(p:person)` (P31) and `iterate(b:bag)` become the witnesses `text·person`, `iterate·bag`; where an instance's type
+is known, `as text` / str / print / interpolation call the first, `for x in b` and `x in b` walk what the second gives.
+The pass runs right after type_constructor: later passes would read `for x in b` of an instance as a walk of its keys.
+
 ## Later
-- runtime dispatch of declared operations (a witness table per operation, like compare's)
-- default methods `trait shape{area; describe(s) := "area " + area(s)}` (now a loud error)
-- Printable (`text(p:person)` for interpolation and `as text`), Iterable
-- generic constraints `sort(xs: Comparable list)`
-- `x in xs`, `xs.has(x)` through an `equals` override (they compare structurally at runtime now)
 - `<` defined directly (`a:person < b:person := …`) and methods in the class body as sugar for the witnesses

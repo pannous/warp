@@ -3,6 +3,7 @@
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use wasm_encoder::*;
+use Instruction as I;
 
 use super::WasmGcEmitter;
 
@@ -31,31 +32,29 @@ impl WasmGcEmitter {
 					self.emit_fetch_call(func, &url, timeout);
 					// Store in ref-type local variable
 					if let Some(local) = self.scope.lookup(var_name) {
-						func.instruction(&Instruction::LocalTee(local.position));
+						func.instruction(&I::LocalTee(local.position));
 					}
 					return;
 				}
 			}
 		}
 
-		// text += more → text = text + more
+		// text += more → text = text + more, list += [x] → list = list + [x]
 		if op.is_compound_assign() && op.base_op() == Op::Add {
 			let concatenation = Node::Key(Box::new(left.clone()), Op::Add, Box::new(right.clone()));
-			if self.get_type(&concatenation) == crate::type_kinds::Kind::Text {
+			if matches!(self.get_type(&concatenation), crate::type_kinds::Kind::Text | crate::type_kinds::Kind::List) {
 				self.emit_key_node(func, left, &Op::Assign, &concatenation);
 				return;
 			}
 		}
 
-		// Skip user function definitions - they're already compiled
-		if *op == Op::Define {
-			if let Node::Symbol(name) = left.drop_meta() {
-				if self.ctx.user_functions.contains_key(name) {
-					// Function definitions don't produce a value
-					self.emit_closure_capture(func, name);
-					return;
-				}
-			}
+		// Skip user function definitions - they're already compiled; a definition's value is ø: `square := it*it` or
+		// `f(x) := x + 1` alone is a program of no value
+		let definition = Node::Key(Box::new(left.clone()), *op, Box::new(right.clone()));
+		if let Some(name) = self.defined_function_name(&definition).filter(|name| self.ctx.user_functions.contains_key(name)) {
+			self.emit_closure_capture(func, &name);
+			self.emit_call(func, "new_empty");
+			return;
 		}
 
 		// Route to emit_arithmetic for numeric operations
@@ -81,7 +80,7 @@ impl WasmGcEmitter {
 		if is_ref_assign {
 			if let Node::Symbol(name) = left.drop_meta() {
 				if self.emit_typed_list_store(func, name, right) {
-					func.instruction(&Instruction::Drop);
+					func.instruction(&I::Drop);
 					self.emit_typed_list_as_node(func, name);
 					return;
 				}
@@ -89,7 +88,7 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, right);
 				// Store in ref-type local
 				if let Some(local) = self.scope.lookup(name) {
-					func.instruction(&Instruction::LocalTee(local.position));
+					func.instruction(&I::LocalTee(local.position));
 				}
 			}
 			return;
@@ -160,10 +159,10 @@ impl WasmGcEmitter {
 		if use_float {
 			self.emit_float_value(func, left);
 			self.emit_float_value(func, left);
-			func.instruction(&Instruction::F64Mul);
+			func.instruction(&I::F64Mul);
 			if op == Op::Cube {
 				self.emit_float_value(func, left);
-				func.instruction(&Instruction::F64Mul);
+				func.instruction(&I::F64Mul);
 			}
 			self.emit_call(func, "new_float");
 		} else {
@@ -186,19 +185,19 @@ impl WasmGcEmitter {
 			Op::Sqrt => {
 				// √x = sqrt(x), returns float
 				self.emit_float_value(func, right);
-				func.instruction(&Instruction::F64Sqrt);
+				func.instruction(&I::F64Sqrt);
 				self.emit_call(func, "new_float");
 			}
 			Op::Neg => {
 				// -x = 0 - x
 				let use_float = self.get_type(right).is_float();
 				if use_float {
-					func.instruction(&Instruction::F64Const(0.0.into()));
+					func.instruction(&I::F64Const(0.0.into()));
 					self.emit_float_value(func, right);
-					func.instruction(&Instruction::F64Sub);
+					func.instruction(&I::F64Sub);
 					self.emit_call(func, "new_float");
 				} else {
-					self.emit_numeric_value(func, right);
+					self.emit_arithmetic_operand(func, right);
 					let range = self.int_range(right);
 					self.emit_int_neg(func, range);
 					self.emit_call(func, "new_int");
@@ -207,8 +206,8 @@ impl WasmGcEmitter {
 			Op::Not => {
 				// not x = x is falsy: 0, ø and errors
 				self.emit_condition(func, right, Self::emit_numeric_value);
-				func.instruction(&Instruction::I32Eqz);
-				func.instruction(&Instruction::I64ExtendI32U);
+				func.instruction(&I::I32Eqz);
+				func.instruction(&I::I64ExtendI32U);
 				self.emit_call(func, "new_int");
 			}
 			Op::Abs => {
@@ -218,7 +217,7 @@ impl WasmGcEmitter {
 				// Fallback: emit as Key node
 				self.emit_node_instructions(func, &Node::Empty);
 				self.emit_node_instructions(func, right);
-				func.instruction(&Instruction::I64Const(crate::operators::op_to_code(op)));
+				func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
 				self.emit_call(func, "new_key");
 			}
 		}
@@ -229,7 +228,7 @@ impl WasmGcEmitter {
 		let use_float = self.get_type(right).is_float();
 		if use_float {
 			self.emit_float_value(func, right);
-			func.instruction(&Instruction::F64Abs);
+			func.instruction(&I::F64Abs);
 			self.emit_call(func, "new_float");
 		} else {
 			self.emit_numeric_value(func, right);
@@ -299,7 +298,7 @@ impl WasmGcEmitter {
 		// Default: emit as Key node
 		self.emit_node_instructions(func, left);
 		self.emit_node_instructions(func, right);
-		func.instruction(&Instruction::I64Const(crate::operators::op_to_code(&Op::Dot)));
+		func.instruction(&I::I64Const(crate::operators::op_to_code(&Op::Dot)));
 		self.emit_call(func, "new_key");
 	}
 
@@ -310,17 +309,22 @@ impl WasmGcEmitter {
 			Node::Symbol(name) if *op == Op::Colon => self.emit_string_call(func, name, "new_symbol"),
 			_ => self.emit_node_instructions(func, left),
 		}
-		// For struct instances like Person{...}, emit block as list
+		// For struct instances like Person{...}, emit block as list; the value of an entry `a:{b:1}` stays a map
 		let right_node = right.drop_meta();
-		if let Node::List(items, Bracket::Curly, sep) = right_node {
+		if let (Node::List(items, Bracket::Curly, sep), false) = (right_node, *op == Op::Colon) {
 			// Convert curly block to square list, preserving inner ops
 			let list_node = Node::List(items.clone(), Bracket::Square, sep.clone());
 			self.emit_node_instructions(func, &list_node);
+		} else if *op == Op::Colon {
+			// the value of an entry is data: unknown words in it stay words (P62)
+			let outer = std::mem::replace(&mut self.data_context, true);
+			self.emit_node_instructions(func, right_node);
+			self.data_context = outer;
 		} else {
 			self.emit_node_instructions(func, right_node);
 		}
 		// Preserve the op for roundtrip
-		func.instruction(&Instruction::I64Const(crate::operators::op_to_code(op)));
+		func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
 		self.emit_call(func, "new_key");
 	}
 }

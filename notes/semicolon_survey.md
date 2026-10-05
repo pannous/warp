@@ -24,8 +24,8 @@ seen failing per test.
 ## Checked and not conflicting
 
 - `(1;2;3)`, `(a;b;c)` (tests/lists/test_lists.rs:188, 204), `[1;2;3]`, `[a;b;c]` (:195, :211): stay lists.
-- `(1, 2; 3, 4)[1][0]` and `[1,0]` (tests/test_blocks.rs:86, :91): stay a matrix. These fail if `(…)` is treated as a block.
-- tests/test_wasm.rs:1347 `'hello';(1 2 3 4);10` → 10: already passes, agrees.
+- `(1, 2; 3, 4)[1][0]` and `[1,0]` (tests/control/test_blocks.rs:86, :91): stay a matrix. These fail if `(…)` is treated as a block.
+- tests/wasm/test_wasm.rs:1347 `'hello';(1 2 3 4);10` → 10: already passes, agrees.
 - tests/parser/test_semicolon_square.rs: pins `[1;2;3]` and `[1\n2\n3]` equal to `[1 2 3]`; passes before and after.
 - Wiki tensor `t=(1 2, 3 4; 5 6, 7 8)` (wiki/list.md:89): in no test.
 

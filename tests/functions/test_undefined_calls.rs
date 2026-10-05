@@ -44,9 +44,11 @@ fn test_resolved_calls_are_unchanged() {
 #[test]
 fn test_paren_data_stays_data() {
 	assert_eq!(parse_data("frobnicate(3)").to_string(), "(frobnicate 3)");
-	assert!(!matches!(eval("(frobnicate 3)"), warp::Node::Error(_)));
+	// P62 (user, 2026-10-05): brackets in code are code, an unknown word next to a value is the error; data needs `quote`
+	assert!(matches!(eval("(frobnicate 3)"), warp::Node::Error(_)));
 	assert!(!matches!(eval("(frobnicate, 3)"), warp::Node::Error(_)));
-	assert!(!matches!(eval("[frobnicate 3]"), warp::Node::Error(_)));
+	assert!(matches!(eval("[frobnicate 3]"), warp::Node::Error(_)));
+	assert!(!matches!(eval("data (frobnicate 3)"), warp::Node::Error(_))); // P63: `data`, not `quote`
 }
 
 #[test]

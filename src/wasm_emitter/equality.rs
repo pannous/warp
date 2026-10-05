@@ -24,6 +24,8 @@ impl WasmGcEmitter {
 		match node.drop_meta() {
 			Node::Empty | Node::Text(_) | Node::List(_, Bracket::Square, _) => true,
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_structured_value(&items[0]),
+			// a tuple `(y, 4)`: compared element by element, never as its last value
+			Node::List(_, Bracket::Round, Separator::Colon) => true,
 			// a call whose result is a text or a list: `lower(a) == lower(b)`
 			Node::List(_, Bracket::Round, Separator::None) => matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List),
 			// an indexed element is a Node of any kind: 'héllo'#2 is a codepoint
@@ -64,8 +66,10 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// `==`/`!=` by value: structured values, and any text (`peek() == " "` of a function returning text)
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
-		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right))
+		let is_text = |node: &Node| self.get_type(node) == Kind::Text;
+		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right) || is_text(left) || is_text(right))
 	}
 
 	/// Push i64 1/0 for `left == right` or `left != right` compared by value

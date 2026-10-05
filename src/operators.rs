@@ -2,16 +2,18 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 /// Keywords that introduce function definitions
-pub const FUNCTION_KEYWORDS: [&str; 5] = ["fun", "fn", "def", "define", "function"];
+pub const FUNCTION_KEYWORDS: [&str; 6] = ["fun", "fn", "def", "define", "function", "func"];
 /// Right binding power of `as`: higher than every infix operator, so the target type is a single atom
 pub const TYPE_OPERAND_BP: u8 = 250;
 
 /// Unicode spellings of operators (wiki/alias.md): glyph, operator and the canonical spelling the style hints suggest.
 /// One table for the lexer and the hints; the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`.
-pub const GLYPH_OPERATORS: [(char, Op, &str); 15] = [
+pub const GLYPH_OPERATORS: [(char, Op, &str); 17] = [
 	('∧', Op::And, "and"), ('⋀', Op::And, "and"),
 	('∨', Op::Or, "or"), ('⋁', Op::Or, "or"),
 	('⊻', Op::Xor, "xor"),
+	// the unit product of a printed quantity (`6 m·kg`); generated names use `·` only after parsing
+	('·', Op::Mul, "*"), ('⋅', Op::Mul, "*"),
 	('≟', Op::Eq, "=="), ('≡', Op::Eq, "=="), ('﹦', Op::Eq, "=="),
 	('‐', Op::Sub, "-"), ('‑', Op::Sub, "-"), ('‒', Op::Sub, "-"), ('–', Op::Sub, "-"), ('—', Op::Sub, "-"), ('―', Op::Sub, "-"), ('−', Op::Sub, "-"),
 ];
@@ -143,7 +145,8 @@ impl Op {
 			// Member access (tightest infix)
 			Op::Dot | Op::SafeDot => (180, 181),
 			Op::Scope => (175, 176),
-			Op::Hash => (170, 171), // index operator #
+			// index operator #: its index is an atom, so `w#1.upper()` is `(w#1).upper()`
+			Op::Hash => (170, 182),
 
 			// Power (right-assoc: 2^3^4 = 2^(3^4))
 			Op::Pow => (160, 159),
@@ -384,26 +387,23 @@ impl fmt::Display for Op {
 	}
 }
 
+/// Every operator by its code in the kind field of a Key node (`(code << 8) | Kind::Key`); the first five are the
+/// codes earlier modules stored, the rest follow, so a quoted expression (`data 1+2`) reads back with its operator
+const OP_CODES: [Op; 57] = [
+	Op::None, Op::Colon, Op::Assign, Op::Define, Op::Dot,
+	Op::SafeDot, Op::Scope, Op::Arrow, Op::FatArrow, Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Rem, Op::Pow,
+	Op::Shl, Op::Shr, Op::AddAssign, Op::SubAssign, Op::MulAssign, Op::DivAssign, Op::ModAssign, Op::PowAssign,
+	Op::AndAssign, Op::OrAssign, Op::XorAssign, Op::Lt, Op::Gt, Op::Le, Op::Ge, Op::Eq, Op::Ne, Op::Similar, Op::And,
+	Op::Or, Op::Xor, Op::Not, Op::Neg, Op::Sqrt, Op::Cbrt, Op::Abs, Op::Inc, Op::Dec, Op::Square, Op::Cube,
+	Op::Question, Op::If, Op::Then, Op::Else, Op::While, Op::Do, Op::Hash, Op::Range, Op::To, Op::As, Op::PlusMinus,
+];
+
 /// Encode Op as i64 for storage in kind field
 pub fn op_to_code(op: &Op) -> i64 {
-	match op {
-		Op::None => 0,
-		Op::Colon => 1,
-		Op::Assign => 2,
-		Op::Define => 3,
-		Op::Dot => 4,
-		_ => 0, // Default to None for other ops
-	}
+	OP_CODES.iter().position(|known| known == op).unwrap_or(0) as i64
 }
 
 /// Decode i64 back to Op
 pub fn code_to_op(code: i64) -> Op {
-	match code {
-		0 => Op::None,
-		1 => Op::Colon,
-		2 => Op::Assign,
-		3 => Op::Define,
-		4 => Op::Dot,
-		_ => Op::None,
-	}
+	usize::try_from(code).ok().and_then(|index| OP_CODES.get(index)).copied().unwrap_or(Op::None)
 }

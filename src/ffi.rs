@@ -9,11 +9,14 @@
 // 1. Built-in signatures from ffi_parser (libc, libm basics)
 // 2. System header parsing for extended functions (SDL2, raylib, etc.)
 
+#[cfg(feature = "native")]
 use anyhow::Result;
 #[cfg(feature = "native")]
 use libloading::Library;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+#[cfg(feature = "native")]
+use std::sync::Arc;
+use std::sync::OnceLock;
 #[cfg(feature = "native")]
 use wasmtime::{Engine, FuncType, Linker, Val, ValType};
 
@@ -239,10 +242,59 @@ pub fn get_library_header_paths(library: &str) -> Vec<String> {
     crate::ffi_parser::find_library_headers(resolve_library_alias(library))
 }
 
+/// glibc's math.h declares libm through the macros of this header: `__MATHCALL (sqrt,, (_Mdouble_ __x));`
+const GLIBC_MATHCALLS: &str = "bits/mathcalls.h";
+/// The glibc declaration macros: (macro, whether its first argument is the result type)
+const GLIBC_MATH_MACROS: [(&str, bool); 7] = [
+    ("__MATHCALL_VEC", false), ("__MATHCALLX", false), ("__MATHCALL", false),
+    ("__MATHDECL_VEC", true), ("__MATHDECLX", true), ("__MATHDECL_1", true), ("__MATHDECL", true),
+];
+
+/// The header text, followed by the double variants of glibc's mathcalls.h declarations when it includes that header
+fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
+    if !content.contains(GLIBC_MATHCALLS) {
+        return content;
+    }
+    let header_dir = std::path::Path::new(header_path).parent().map(|dir| dir.to_string_lossy().to_string()).unwrap_or_default();
+    let dirs: Vec<String> = std::iter::once(header_dir).chain(crate::ffi_parser::include_dirs()).collect();
+    match crate::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| std::fs::read_to_string(path).ok()) {
+        Some(mathcalls) => format!("{content}\n{}", expand_glibc_math_macros(&mathcalls)),
+        None => content,
+    }
+}
+
+/// `__MATHCALL (sqrt,, (_Mdouble_ __x));` → `double sqrt (double __x);`, `__MATHDECL (int,ilogb,, (_Mdouble_ __x));` →
+/// `int ilogb (double __x);`: plain declarations of the double variants
+pub fn expand_glibc_math_macros(source: &str) -> String {
+    let declaration = |line: &str| -> Option<String> {
+        let (macro_name, typed) = GLIBC_MATH_MACROS.iter().find(|(name, _)| line.strip_prefix(name).is_some_and(|rest| rest.trim_start().starts_with('(')))?;
+        let inner = line[macro_name.len()..].trim_start().strip_prefix('(')?;
+        let inner = &inner[..inner.rfind(')')?];
+        let mut parts = vec![String::new()];
+        let mut depth = 0;
+        for c in inner.chars() {
+            match c {
+                '(' => depth += 1,
+                ')' => depth -= 1,
+                ',' if depth == 0 => {
+                    parts.push(String::new());
+                    continue;
+                }
+                _ => {}
+            }
+            parts.last_mut()?.push(c);
+        }
+        let (result, rest) = if *typed { (parts.first()?.trim().to_string(), &parts[1..]) } else { ("double".to_string(), &parts[..]) };
+        let (name, arguments) = (rest.first()?.trim(), rest.get(2)?.trim());
+        Some(format!("{} {name} {};", result.replace("_Mdouble_", "double"), arguments.replace("_Mdouble_", "double")))
+    };
+    source.lines().filter_map(|line| declaration(line.trim())).collect::<Vec<_>>().join("\n")
+}
+
 /// Parse a header file and extract all function signatures
 pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
     let content = match std::fs::read_to_string(path) {
-        Ok(c) => c,
+        Ok(c) => with_glibc_mathcalls(c, path),
         Err(_) => return Vec::new(),
     };
 
@@ -325,6 +377,7 @@ fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature>
 // Extern C Functions and Hardcoded Signatures (Fallback)
 // ============================================================================
 
+#[cfg(feature = "native")]
 // Extern C functions from libc/libm
 extern "C" {
 	// libm math functions
@@ -358,7 +411,9 @@ extern "C" {
 /// Deliberately hand-linked FFI examples (user decision 2026-10-03, kept as marked examples): the explicit form of what
 /// the header-driven path (get_signatures_from_headers + link_dynamic_library) does by reflection; keep the table.
 /// link_libm uses it only when the headers declare nothing for "m" (glibc's __MATHCALL macros): headers first.
+#[cfg(feature = "native")]
 const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 11] = [("fabs", fabs), ("floor", floor), ("ceil", ceil), ("round", round), ("sqrt", sqrt), ("sin", sin), ("cos", cos), ("tan", tan), ("exp", exp), ("log", log), ("log10", log10)];
+#[cfg(feature = "native")]
 const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 4] = [("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow)];
 
 /// Get known FFI function signatures by parsing system header files, once per process
@@ -487,6 +542,8 @@ fn parse_ffi_signatures() -> HashMap<String, FfiSignature> {
         sigs.entry(name.to_string())
             .or_insert_with(|| FfiSignature::new(name, "m", vec![ValType::F64; arity], vec![ValType::F64]));
     }
+    // `ln(x)` is the natural logarithm: libm's log under the name the program calls
+    sigs.insert("ln".to_string(), FfiSignature::new("log", "m", vec![ValType::F64], vec![ValType::F64]));
     sigs.insert(
         "rand".to_string(),
         FfiSignature {
@@ -555,7 +612,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 }
 
 /// The import module of libm
-const LIBM: &str = "m";
+pub const LIBM: &str = "m";
 
 /// Where the libm functions of a run come from
 #[derive(Debug, PartialEq)]

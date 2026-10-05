@@ -6,7 +6,7 @@ Experiment: scratch worktree `probes/float_trunc_wt` at 637a1677, `emit_truncate
 
 ## Results
 - Refuse at all 8 sites: 641 pass / 1 fail of 642 (baseline: 0 fail). Same result when the two explicit-cast sites keep truncating.
-- The only existing test that fails: `tests/test_float_parameters.rs::test_float_local_inside_float_function`
+- The only existing test that fails: `tests/numbers/test_float_parameters.rs::test_float_local_inside_float_function`
   (`half(x:float) := {y=x/2; y+1}`). Reason: site 2 below — the value of the assignment `y=x/2` is pushed in Int context
   (LocalTee, then truncate) although the statement value is discarded. The truncation there is not a semantic read at all, it is a
   wrong-context emit; the fix is to leave the assignment value as f64 (emit in float context), not to keep truncating.

@@ -3,7 +3,7 @@
 User decision 2026-10-03 (notes/open_decisions.md, D5): "General rule". Any noun can name a type or a parameter
 (wiki/matching.md, wiki/type.md, wiki/signature.md). This note sets the rule for the open details: unknown words
 (`photo`) and multi-word names. Status: approved by warp-43 (2026-10-03) as an assumption for the user to review;
-implemented in src/type_name_matching.rs (`parameter_slots`, used by the `to` phrase in wasp_parser.rs and by the spaced
+implemented in src/lowering/type_name_matching.rs (`parameter_slots`, used by the `to` phrase in wasp_parser.rs and by the spaced
 `f T x = …` form), tests/types/test_type_name_matching.rs.
 
 ## Forms covered
@@ -44,8 +44,14 @@ implemented in src/type_name_matching.rs (`parameter_slots`, used by the `to` ph
    multi-word classes, because `class full name {…}` cannot be declared yet (the parser takes one word after `class`).
 5. A slot that is a single known type word and the only parameter is also `it` (`fibonacci number`, `foo of int`).
 6. Spaced heads without any known type word (`f x = …`) keep their old meaning; the `to` phrase always uses the slots.
+8. Calls with the phrase's prepositions (P52, user): `add 1 to 2`, `square of 4`, `move 1 from 2 to 3`
+   (src/lowering/phrase_calls.rs, the first source pass). Elsewhere `to` stays a range and `of` a field lookup.
+7. One parse for every spelling: `=` and `:=` heads both go through `type_name_matching::spaced_parameters`
+   (declarations::spaced_definition delegates to it), the `to` phrase takes a `:` or a `{…}` body. A lone type-word
+   parameter is `it` only when the body does not use the word itself (`fibonacci number := … number … it …` keeps
+   `number`, and `it` means the same value). Tests: tests/types/test_type_name_definition_forms.rs.
 
-Object arguments (tests/test_object_arguments.rs): an untyped parameter reads fields of the object it gets
+Object arguments (tests/functions/test_object_arguments.rs): an untyped parameter reads fields of the object it gets
 (`measure(p) := p.width; measure({width:3})`), and an argument known at compile time not to be an instance of a
 class-typed parameter is an error (`keep 3`, `keep(page{…})` for `keep(p:photo)`: "keep needs a photo for parameter p,
 got 3 (an Int)"). An argument of unknown type, or a written map, is judged by the fields its uses read ("no field width").

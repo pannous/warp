@@ -28,11 +28,28 @@ test_host, test_wasm_reader, test_gc_struct; the Integrator's full run is the fi
 - #14 AGENTS.md architecture/build/test sections match the tree (CLAUDE.md untouched, see question 8).
 
 #2 (user decision 2026-10-03, "Remove them"): the 21 C++ feature flags and their `#[cfg]` branches in src/main.rs,
-tests/test_wasm.rs and tests/test_web.rs are gone (the default-build branch kept); `--all-features` is now `native` +
+tests/wasm/test_wasm.rs and tests/test_web.rs are gone (the default-build branch kept); `--all-features` is now `native` +
 `optimizer` + `ffi`, the same program as plain `cargo test` plus the optimizer and FFI tests.
 
-smarty.rs (user decision 2026-10-03): deleted with its asserts (`test_smart_types` in tests/test_angle.rs) and
+smarty.rs (user decision 2026-10-03): deleted with its asserts (`test_smart_types` in tests/numbers/test_angle.rs) and
 tests/test_asts.rs, the only user of the `syn` dev-dependency, which is gone too.
+
+#4 (2026-10-04): lower_for_emission runs two ordered pass tables (`SOURCE_PASSES`, `MEANING_PASSES`) instead of an
+11-deep nested call, and the driver (eval, compile, lower, the pass tables, run_module) lives in src/pipeline.rs;
+wasm_emitter re-exports the entry points and keeps emit_module, the trap reading and the raw-struct module. The 21
+pure lowering passes live in src/lowering/ (the crate root re-exports them, so `crate::mutation` paths stay); the
+mixed modules (analyzer, modules, host, real, time, units) stay in src/.
+
+#11 (2026-10-04, part): emit_numeric_value 337 → 142 lines, emit_float_value 212 → 142, emit_cast one function per
+target type, emit_list_node 232 → 144, continue_expr 249 → 177 (SpecialInfix), emit_exact_functions, emit_text_builtins
+and emit_list_ops split into named sections, parse_symbol_with_suffix 202 → 93, infer_type (infer_list_type), main → apply_flags + run_command.
+
+#19 (2026-10-04, part): the bignum runtimes (big_trim, mag_cmp/add/sub/mul/divmod, int_store, int_pow, int_box) name
+their local slots; calendar.rs names HOUR, MINUTE and the civil-day era constants at the top. Open: the Unicode range
+tables (strings.rs, text_unicode.rs) and the operator precedences are data tables, left as numbers.
+
+#16 (2026-10-04): every wasm_emitter file writes instructions as `I::X` (`use Instruction as I`); only `use
+Instruction::…` imports still spell the type.
 
 Left, because they need a decision, edit tests, or would collide with the sessions editing the same files now:
 #4/#5/#10 moves and splits (every open branch touches mod.rs, analyzer.rs,
@@ -46,7 +63,7 @@ Observed once: a 4-thread run aborted in `test_struct_types::test_magic_object_m
 | # | Finding | Files | Sev | Effort | Proposal | Kind |
 |---|---------|-------|-----|--------|----------|------|
 | 1 | `main.rs` redeclares all 45 modules with `mod x;`: the whole compiler is compiled twice (lib + bin), 107 bin warnings | src/main.rs | High | S | `main.rs` uses `warp::…`, drop its `mod` list and the "modules also need to be used in main.rs" comments in lib.rs | Mechanical |
-| 2 | 21 stale C++ feature flags (`WASM`, `WASMEDGE`, `RUNTIME_ONLY`, `release`, `wasm`, …); agents run tests with `--all-features`, which flips 53 `#[cfg]` branches (35 in tests/test_wasm.rs, 15 in main.rs, 3 in test_web.rs) | Cargo.toml, src/main.rs, tests/test_wasm.rs, tests/web/test_web.rs | High | S | Keep `native`, `optimizer`, `ffi`; delete the rest and their `cfg` branches (keep the branch that runs today) | Mechanical + test edit (needs OK) |
+| 2 | 21 stale C++ feature flags (`WASM`, `WASMEDGE`, `RUNTIME_ONLY`, `release`, `wasm`, …); agents run tests with `--all-features`, which flips 53 `#[cfg]` branches (35 in tests/wasm/test_wasm.rs, 15 in main.rs, 3 in test_web.rs) | Cargo.toml, src/main.rs, tests/wasm/test_wasm.rs, tests/web/test_web.rs | High | S | Keep `native`, `optimizer`, `ffi`; delete the rest and their `cfg` branches (keep the branch that runs today) | Mechanical + test edit (needs OK) |
 | 3 | Dead files and dead dependencies: `compiler/` (wasm_reader declared but unused, parity_wasm_reader not even declared), `run/wasmer_runner.rs`, `run/wasmedge_runner.rs`, `ast.rs`, `wasm_emitter/node_emitter.rs`, `extensions/_mod.rs`, `smarty.rs` (self-described OBSOLETE C++ ABI), `bin/test_op.rs`; crates `parity-wasm`, `wasm-ast`, `regex` used by nothing, `syn` (dev) used only by a test of syn itself | 10 files, ~1 000 lines, 4 crates | High | S | Delete (list in §4) | Mechanical; smarty/test_asts need test OK |
 | 4 | The compile pipeline (`lower_for_emission`, `eval*`, `compile`, `run_module`, ~330 lines) lives in `wasm_emitter/mod.rs`; 25 lowering passes are flat `src/*.rs` files, composed by a 7-deep nested call | src/wasm_emitter/mod.rs, 22 src/*.rs | High | M | `src/pipeline.rs` (driver) + `src/lowering/` with an ordered `PASSES` table (§1) | Mechanical moves; pass order unchanged |
 | 5 | One 42-module dependency cycle (every module except leaves); `wasm_emitter` fans out to 41 modules, `node` (the core type) depends on parser, wasm_reader, gc_traits; `extensions` depends on analyzer and emitter | whole crate | Med | M | Follows from #4, #8, #9: node becomes a leaf, emitter stops importing passes, test macros leave `extensions` | Design |
@@ -261,7 +278,7 @@ Whole files (never referenced, or only by a test of themselves):
 - `src/ast.rs` (103): 7 structs never constructed, `walk` unused.
 - `src/wasm_emitter/node_emitter.rs` (100): `EmitContext`, `NodeEmitter` never used.
 - `src/extensions/_mod.rs` (8): not a module (extensions.rs is).
-- `src/smarty.rs` (221): its own header says "OBSOLETE"; used only by `tests/test_angle.rs` (decision: delete with test?).
+- `src/smarty.rs` (221): its own header says "OBSOLETE"; used only by `tests/numbers/test_angle.rs` (decision: delete with test?).
 - `src/bin/test_op.rs` (58): a debugging printer, built as a second binary.
 - `tests/test_asts.rs`: tests the `syn` crate, the only reason for the heavy `syn` v3 "full" dev-dependency.
 - `tests/probes/*.rs` (2 files): not in tests/main.rs, never compiled.
@@ -337,14 +354,14 @@ by constants defined mid-file (list_ops.rs 1014–1016 `SQUARE_BRACKET_INFO`, `K
   `tests/control/` (loops, switch, try, if), `tests/functions/`, `tests/units_time/`, `tests/modules/` (use, packages,
   folder scope), `tests/welcoming/` (15 `test_welcoming_*`), `tests/algo/` (6 `test_algo_*`), `tests/runtime/` (wasm,
   wasi, host, ffi, gc_struct, reader). A pure `git mv` + `mod` lines, no test body changes.
-- Not tests in tests/: `probe_*.rs` ×7 (probe_footguns.rs 1 088 lines runs in the suite), `tests/probes/*.rs` (dead),
-  `tests/notes/` (session notes → notes/OLD), `tests/test_utils.rs` (dead cache, 11 warnings), `tests/test_todo.rs` /
+- Not tests in tests/: `probe_*.rs` ×7 (test_footguns.rs 1 088 lines runs in the suite), `tests/probes/*.rs` (dead),
+  `tests/notes/` (session notes → notes/OLD), `tests/test_utils.rs` (dead cache, 11 warnings), `tests/sweeps/test_todo.rs` /
   `test_node_todo.rs` (todo lists as tests).
 - Oversized: test_wasm.rs 1 781 (a port of the C++ test_wasm.cpp, 35 feature `cfg` branches, 65 assertion lines
-  repeated inside the file), probe_footguns.rs 1 088, test_ffi.rs 621, test_types.rs 602, test_xml.rs 537.
+  repeated inside the file), test_footguns.rs 1 088, test_ffi.rs 621, test_types.rs 602, test_xml.rs 537.
 - Duplicated assertions: 250 identical `is!/eq!/assert_eq!` lines appear more than once (e.g. `is!("42", 42)` ×6);
   between files mostly test_wasm.rs ↔ test_angle.rs / test_global_modifiers.rs, probe_type.rs ↔ test_todo.rs,
-  probe_footguns.rs ↔ test_size_count.rs. When a probe's case is promoted to a test, delete it from the probe.
+  test_footguns.rs ↔ test_size_count.rs. When a probe's case is promoted to a test, delete it from the probe.
 - Overlapping names to merge when grouped: test_wasm_emitter / test_emitter (optimizer-gated) / test_wasm;
   test_operators / test_node_operators; test_switch_* ×3; test_units_* ×3; test_text_* ×7; test_web / test_web_playground;
   test_wit / test_wit_types; test_min_max / test_min_max_lists.
@@ -393,9 +410,9 @@ contract `fn(Node) -> Result<Node, Node>`) · #8 runtime API · #9 hard-coded li
 
 ## Open questions for the user
 
-1. May the stale C++ feature flags go, including their `#[cfg]` branches in tests/test_wasm.rs and tests/web/test_web.rs
+1. May the stale C++ feature flags go, including their `#[cfg]` branches in tests/wasm/test_wasm.rs and tests/web/test_web.rs
    (keeping the branch that runs today)?
-2. Delete `smarty.rs` with its asserts in tests/test_angle.rs, and `tests/test_asts.rs` (a test of `syn`)?
+2. Delete `smarty.rs` with its asserts in tests/numbers/test_angle.rs, and `tests/test_asts.rs` (a test of `syn`)?
 3. Regroup tests/ into topic subdirectories (pure moves), and move `probe_*.rs` out of the suite?
 4. Keep the Wisp format (wisp_parser.rs, 946 lines, no integration test, no user)?
 5. Which GC reading API stays: `GcObject` or the `gc_traits` wrappers?

@@ -9,6 +9,7 @@ use super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
 use wasm_encoder::{Function, Instruction};
+use Instruction as I;
 
 const BREAK_WORDS: [&str; 1] = ["break"];
 const CONTINUE_WORDS: [&str; 2] = ["continue", "next"];
@@ -126,7 +127,7 @@ impl WasmGcEmitter {
 		let target = if jump == Jump::Break { labels.break_frame } else { labels.continue_frame };
 		let depth = open_control_frames(func) - target;
 		self.emit_leave_tries(func, target);
-		func.instruction(&Instruction::Br(depth as u32));
+		func.instruction(&I::Br(depth as u32));
 		true
 	}
 

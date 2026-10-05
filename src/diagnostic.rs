@@ -1,22 +1,34 @@
 //! Compiler diagnostics: what went wrong, where, and how to fix it.
 //! Errors become `Node::Error` values (never panics); warnings (lints) are reported and compilation continues.
 
+use crate::fixits::Fix;
 use crate::node::Node;
 use std::fmt;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Diagnostic {
 	pub message: String,
 	pub line: usize,
 	pub column: usize,
+	/// How to fix it, in words (shown after `; fix: `)
 	pub fix: Option<String>,
+	/// The same as edits a host applies: one per reading the user might have meant (src/fixits.rs)
+	pub fixes: Vec<Fix>,
+	/// The kind of warning, which "got it" silences (an Ask's topic)
+	pub topic: Option<String>,
+	/// What "got it" for this expression only remembers: `topic@expression` (expression_key)
+	pub expression_key: Option<String>,
 }
 
 impl Diagnostic {
-	/// A diagnostic at the source position of `node` (0:0 if the parser recorded none)
+	/// A diagnostic at the source position of `node`, else of its first part that has one (0:0 if the parser recorded none)
 	pub fn at(node: &Node, message: impl Into<String>) -> Self {
-		let (line, column) = node.get_lineinfo().map(|info| (info.line_nr, info.column)).unwrap_or_default();
-		Diagnostic { message: message.into(), line, column, fix: None }
+		let (line, column) = position(node).unwrap_or_default();
+		Diagnostic { message: message.into(), line, column, ..Default::default() }
+	}
+
+	pub fn message(self, message: impl Into<String>) -> Self {
+		Diagnostic { message: message.into(), ..self }
 	}
 
 	pub fn fix(mut self, replacement: impl Into<String>) -> Self {
@@ -24,14 +36,57 @@ impl Diagnostic {
 		self
 	}
 
+	/// Offer a reading as an applicable fix: `written` (as in the source, spacing aside) becomes `replacement`
+	pub fn offer(self, meaning: impl Into<String>, written: impl Into<String>, replacement: impl Into<String>) -> Self {
+		self.offering(crate::fixits::fix(meaning, written, replacement))
+	}
+
+	pub fn offering(mut self, offered: Fix) -> Self {
+		if offered.changes_something() {
+			self.fixes.push(offered);
+		}
+		self
+	}
+
+	/// The error, remembered with its fixes for a host to offer (take_error_diagnostics)
 	pub fn into_error(self) -> Node {
-		crate::node::error(&self.to_string())
+		let error = crate::node::error(&self.to_string());
+		if !self.fixes.is_empty() {
+			ERROR_DIAGNOSTICS.with(|errors| errors.borrow_mut().push(self));
+		}
+		error
+	}
+}
+
+/// Does a message end its description with a position ` at line:column`
+pub fn names_position(message: &str) -> bool {
+	let description = message.split("; fix: ").next().unwrap_or(message);
+	description.rsplit_once(" at ").is_some_and(|(_, place)| {
+		place.split_once(':').is_some_and(|(line, column)| !line.is_empty() && line.chars().all(|c| c.is_ascii_digit()) && column.chars().all(|c| c.is_ascii_digit()) && !column.is_empty())
+	})
+}
+
+/// The line and column the parser recorded for `node`, or for the first of its parts that has them: a node a lowering
+/// pass rebuilt keeps the positions of the parts it was built from
+pub fn position(node: &Node) -> Option<(usize, usize)> {
+	if let Some(info) = node.get_lineinfo() {
+		return Some((info.line_nr, info.column));
+	}
+	match node {
+		Node::Meta { node, .. } => position(node),
+		Node::Key(left, _, right) => position(left).or_else(|| position(right)),
+		Node::List(items, _, _) => items.iter().find_map(position),
+		_ => None,
 	}
 }
 
 impl fmt::Display for Diagnostic {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{} at {}:{}", self.message, self.line, self.column)?;
+		write!(f, "{}", self.message)?;
+		// 0:0 is no position: a diagnostic of something written nowhere in the source
+		if self.line > 0 {
+			write!(f, " at {}:{}", self.line, self.column)?;
+		}
 		if let Some(fix) = &self.fix {
 			write!(f, "; fix: {}", fix)?;
 		}
@@ -57,6 +112,7 @@ thread_local! {
 	static WARNING_MODE: std::cell::Cell<WarningMode> = const { std::cell::Cell::new(WarningMode::Warn) };
 	static RUNTIME_WARNINGS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 	static COMPILE_WARNINGS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
+	static ERROR_DIAGNOSTICS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// The warning mode of every later compilation on this thread (the CLI's `--strict`)
@@ -91,6 +147,11 @@ pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 /// The compile-time warnings reported on this thread since the last call (a host without a terminal shows them)
 pub fn take_warnings() -> Vec<Diagnostic> {
 	COMPILE_WARNINGS.with(|reported| std::mem::take(&mut *reported.borrow_mut()))
+}
+
+/// The errors with fixes made on this thread since the last call (the page offers their fixes when the program fails)
+pub fn take_error_diagnostics() -> Vec<Diagnostic> {
+	ERROR_DIAGNOSTICS.with(|errors| std::mem::take(&mut *errors.borrow_mut()))
 }
 
 /// A warning the running program reports with `warning(message)`
@@ -146,10 +207,24 @@ pub enum Fallback {
 pub struct Reading {
 	pub meaning: String,
 	pub explicit_form: String,
+	/// The edit that says this reading, when it is not the Ask's `written` text replaced by `explicit_form`
+	/// (`let n =` for `n =`, where the explicit form shows `let n = …`)
+	pub fix: Option<Fix>,
 }
 
 pub fn reading(meaning: &str, explicit_form: &str) -> Reading {
-	Reading { meaning: meaning.to_string(), explicit_form: explicit_form.to_string() }
+	Reading { meaning: meaning.to_string(), explicit_form: explicit_form.to_string(), fix: None }
+}
+
+impl Reading {
+	pub fn replacing(self, written: impl Into<String>, replacement: impl Into<String>) -> Self {
+		let fix = crate::fixits::fix(&self.meaning, written, replacement);
+		self.fixed_by(fix)
+	}
+
+	pub fn fixed_by(self, fix: Fix) -> Self {
+		Reading { fix: Some(fix), ..self }
+	}
 }
 
 /// An ambiguity: its readings, the default reading and whether guessing it is allowed (`fallback`)
@@ -181,7 +256,7 @@ impl Ask {
 	}
 
 	pub fn at_node(self, node: &Node) -> Self {
-		let (line, column) = node.get_lineinfo().map(|info| (info.line_nr, info.column)).unwrap_or_default();
+		let (line, column) = position(node).unwrap_or_default();
 		self.at(line, column)
 	}
 
@@ -197,28 +272,44 @@ impl Ask {
 				(format!("{} (too ambiguous to guess)", self.question), forms.join(" or "))
 			}
 		};
-		Diagnostic { message, line: self.line, column: self.column, fix: Some(fix) }
+		let expression_key = Some(expression_key(&self.topic, &self.question));
+		let diagnostic = Diagnostic { message, line: self.line, column: self.column, fix: Some(fix), topic: Some(self.topic.clone()), fixes: vec![], expression_key };
+		let fixes = self.readings.iter().map(|reading| reading.fix.clone().unwrap_or_else(|| crate::fixits::fix(&reading.meaning, &self.written, &reading.explicit_form)));
+		fixes.fold(diagnostic, Diagnostic::offering)
 	}
+}
+
+/// The answer to "got it?" (user, 2026-10-05): this expression only (remembered by its written text), all of this
+/// kind (the topic), or no (keep reminding)
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum GotIt {
+	This,
+	All,
+	No,
 }
 
 /// Who says "got it" to a warning or note so it is never shown again: the terminal in the CLI, the playground's
 /// buttons, a list in tests. Nobody (the default) means the warning simply shows
 pub trait Acknowledger {
-	/// Whether the user said "got it" to `topic` before this run (a host keeping its own list, like the playground)
-	fn has_acknowledged(&self, _topic: &str) -> bool {
+	/// Whether the user said "got it" to `key` before this run (a topic, or `topic@written` for one expression; a host
+	/// keeping its own list, like the playground)
+	fn has_acknowledged(&self, _key: &str) -> bool {
 		false
 	}
 
-	/// Asked once per run after a warning or note of `topic` was shown: does the user say "got it" now?
-	fn acknowledge(&self, topic: &str) -> bool;
+	/// Asked once per run after a warning or note of `topic` was shown for the `written` expression
+	fn acknowledge(&self, topic: &str, written: &str) -> GotIt;
 }
 
-/// Acknowledges the listed topics, for tests
+/// Acknowledges the listed topics for all expressions, for tests
 pub struct Acknowledging(pub Vec<String>);
 
 impl Acknowledger for Acknowledging {
-	fn acknowledge(&self, topic: &str) -> bool {
-		self.0.iter().any(|acknowledged| acknowledged == topic)
+	fn acknowledge(&self, topic: &str, _written: &str) -> GotIt {
+		match self.0.iter().any(|acknowledged| acknowledged == topic) {
+			true => GotIt::All,
+			false => GotIt::No,
+		}
 	}
 }
 
@@ -226,11 +317,28 @@ impl Acknowledger for Acknowledging {
 pub struct TerminalAcknowledger;
 
 impl Acknowledger for TerminalAcknowledger {
-	fn acknowledge(&self, _topic: &str) -> bool {
-		eprint!("      got it? [y = don't tell me again, Enter = keep reminding] ");
+	fn acknowledge(&self, _topic: &str, _written: &str) -> GotIt {
+		eprint!("      got it? [y = this expression, a = all of this kind, n/Enter = keep reminding] ");
 		let mut line = String::new();
-		std::io::stdin().read_line(&mut line).is_ok_and(|_| matches!(line.trim(), "y" | "Y" | "yes"))
+		match std::io::stdin().read_line(&mut line).map(|_| line.trim().to_lowercase()).as_deref() {
+			Ok("y" | "yes") => GotIt::This,
+			Ok("a" | "all") => GotIt::All,
+			_ => GotIt::No,
+		}
 	}
+}
+
+/// The key "got it" for one expression is remembered by: `topic@written`, on one line
+pub fn expression_key(topic: &str, written: &str) -> String {
+	format!("{topic}@{}", written.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+/// A line of the program that says `// got it`: its warnings and notes stay quiet (user, 2026-10-05)
+const GOT_IT_COMMENT: &str = "// got it";
+
+/// Whether the source line `line` (1-based) of the program being compiled carries a `// got it` comment
+fn silenced_by_comment(line: usize) -> bool {
+	line > 0 && SOURCE.with(|source| source.borrow().lines().nth(line - 1).is_some_and(|text| text.to_lowercase().contains(GOT_IT_COMMENT)))
 }
 
 thread_local! {
@@ -239,6 +347,8 @@ thread_local! {
 	static ACKNOWLEDGEMENTS_FILE: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
 	static NOTES_SHOWN: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
 	static ASSUMPTIONS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
+	/// The source of the program being compiled, for its `// got it` comments
+	static SOURCE: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 }
 
 /// Who acknowledges the warnings and notes of later compilations on this thread; `None` (the default): nobody
@@ -261,6 +371,22 @@ pub fn with_acknowledger<R>(acknowledger: impl Acknowledger + 'static, body: imp
 }
 
 /// Remember "got it" across runs in `path` (one `ack:<topic> = acknowledged` per line), loading the ones already there
+/// The `ack:` lines of the answers file earlier versions wrote, appended to the acknowledgements file when it lacks
+/// them, so acknowledged notes stay quiet after the rename
+pub fn adopt_acknowledgements(old_file: &str, file: &str) {
+	let Ok(old) = std::fs::read_to_string(old_file) else { return };
+	let current = std::fs::read_to_string(file).unwrap_or_default();
+	let is_acknowledgement = |line: &&str| line.split_once(" = ").is_some_and(|(key, value)| key.trim().starts_with(ACKNOWLEDGED_PREFIX) && value.trim() == ACKNOWLEDGED);
+	let adopted: Vec<&str> = old.lines().filter(is_acknowledgement).filter(|line| !current.lines().any(|known| known.trim() == line.trim())).collect();
+	if adopted.is_empty() {
+		return;
+	}
+	let separator = if current.is_empty() || current.ends_with('\n') { "" } else { "\n" };
+	if let Err(failure) = std::fs::write(file, format!("{current}{separator}{}\n", adopted.join("\n"))) {
+		eprintln!("could not adopt the acknowledgements of {old_file}: {failure}");
+	}
+}
+
 pub fn use_acknowledgements_file(path: impl Into<std::path::PathBuf>) {
 	ACKNOWLEDGEMENTS_FILE.with(|file| *file.borrow_mut() = Some(path.into()));
 	load_acknowledgements();
@@ -269,7 +395,7 @@ pub fn use_acknowledgements_file(path: impl Into<std::path::PathBuf>) {
 /// The topics acknowledged in the acknowledgements file, none without one
 fn load_acknowledgements() {
 	let saved = ACKNOWLEDGEMENTS_FILE.with(|file| file.borrow().as_ref().and_then(|path| std::fs::read_to_string(path).ok())).unwrap_or_default();
-	let topics = saved.lines().filter_map(|line| line.split_once(" = "))
+	let topics = saved.lines().filter_map(|line| line.rsplit_once(" = "))
 		.filter(|(_, value)| value.trim() == ACKNOWLEDGED)
 		.filter_map(|(key, _)| key.trim().strip_prefix(ACKNOWLEDGED_PREFIX).map(str::to_string));
 	ACKNOWLEDGED_TOPICS.with(|acknowledged| *acknowledged.borrow_mut() = topics.collect());
@@ -283,10 +409,13 @@ pub fn begin_program() {
 	load_acknowledgements();
 }
 
-fn is_acknowledged(topic: &str) -> bool {
+/// Acknowledged for the whole topic, or for this written expression
+fn is_acknowledged(topic: &str, written: &str) -> bool {
 	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
-	ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().contains(topic))
-		|| acknowledger.is_some_and(|acknowledger| acknowledger.has_acknowledged(topic))
+	[topic.to_string(), expression_key(topic, written)].iter().any(|key| {
+		ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().contains(key))
+			|| acknowledger.as_ref().is_some_and(|acknowledger| acknowledger.has_acknowledged(key))
+	})
 }
 
 fn remember_acknowledged(topic: &str) {
@@ -300,14 +429,17 @@ fn remember_acknowledged(topic: &str) {
 	}
 }
 
-/// After a warning or note of `topic` was shown, once per run: does the user say "got it"? Then it is never shown again
-fn offer_acknowledgement(topic: &str) {
+/// After a warning or note of `topic` was shown, once per run: does the user say "got it", for this expression or all of
+/// the kind? Then it is not shown again
+fn offer_acknowledgement(topic: &str, written: &str) {
 	if !NOTES_SHOWN.with(|shown| shown.borrow_mut().insert(topic.to_string())) {
 		return;
 	}
 	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
-	if acknowledger.is_some_and(|acknowledger| acknowledger.acknowledge(topic)) {
-		remember_acknowledged(topic);
+	match acknowledger.map_or(GotIt::No, |acknowledger| acknowledger.acknowledge(topic, written)) {
+		GotIt::This => remember_acknowledged(&expression_key(topic, written)),
+		GotIt::All => remember_acknowledged(topic),
+		GotIt::No => {}
 	}
 }
 
@@ -315,11 +447,11 @@ fn offer_acknowledgement(topic: &str) {
 /// acknowledges it, then never again; it never blocks non-interactive runs, which just show the hint
 pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 	let hints_off = crate::normalize::hint_mode() == crate::normalize::HintMode::Off;
-	if hints_off || is_acknowledged(topic) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic)) {
+	if hints_off || is_acknowledged(topic, written) || silenced_by_comment(crate::normalize::hint_line()) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic)) {
 		return;
 	}
 	crate::normalize::hint(written, preferred, reason);
-	offer_acknowledgement(topic);
+	offer_acknowledgement(topic, written);
 }
 
 /// The reading the program gets: an error-fallback ambiguity is an error naming every explicit form; otherwise the
@@ -333,9 +465,11 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 	if warning_mode() == WarningMode::Error {
 		return Err(diagnostic.into_error());
 	}
-	if !is_acknowledged(&question.topic) {
+	// the expression "got it" for this one remembers: the question names it (`written` is only the replaced word, `upto`)
+	let expression = &question.question;
+	if !is_acknowledged(&question.topic, expression) && !silenced_by_comment(question.line) {
 		report(&[diagnostic])?;
-		offer_acknowledgement(&question.topic);
+		offer_acknowledgement(&question.topic, expression);
 	}
 	Ok(question.default)
 }
@@ -349,6 +483,7 @@ pub fn take_assumptions() -> Vec<Diagnostic> {
 /// Run `body` (the parser) with warnings as errors when a line of the source says `use strict`,
 /// so the warnings of parse-time Asks obey it too
 pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
+	SOURCE.with(|source| *source.borrow_mut() = code.to_string());
 	match code.lines().any(|line| line.split_whitespace().eq(STRICT_PRAGMA)) {
 		true => with_warning_mode(WarningMode::Error, body),
 		false => body(),

@@ -1,5 +1,5 @@
 #![cfg_attr(test, allow(unused))] // main() is not compiled under test
-use warp::{diagnostic, extensions, law, package_tools, run, util, wasm_emitter, wasp_parser};
+use warp::{diagnostic, extensions, law, package_tools, run, util, wasm_emitter, wasm_reader, wasp_parser};
 use warp::node;
 use std::env;
 use std::fs;
@@ -9,12 +9,17 @@ use wasm_emitter::eval;
 use extensions::numbers::Number;
 
 const DEFAULT_COMPILED_NAME: &str = "out.wasm";
+/// `warp compile --aot` also writes the machine code (wasmtime's .cwasm), which `warp <file>.cwasm` runs
+const AOT_FLAG: &str = "--aot";
+const MACHINE_CODE_EXTENSION: &str = "cwasm";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
 const ACKNOWLEDGEMENTS_FILE: &str = ".wasp-acknowledged";
+/// What earlier versions called the acknowledgements file: its `ack:` lines are adopted
+const OLD_ANSWERS_FILE: &str = ".wasp-answers";
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
 
@@ -29,7 +34,13 @@ fn node_to_i32(node: &Node) -> i32 {
 #[cfg(not(test))]
 fn main() {
     let mut args: Vec<String> = env::args().collect();
-    let _executable_path = &args[0];
+    apply_flags(&mut args);
+    run_command(&args);
+}
+
+/// `--fuel <steps>`, `--strict`, `--no-ask` take effect and leave the arguments; the answers file is read
+#[cfg(not(test))]
+fn apply_flags(args: &mut Vec<String>) {
     // `--fuel <steps>`: execution budget of every run (default util::DEFAULT_FUEL, env WARP_FUEL)
     if let Some(flag) = args.iter().position(|arg| arg == "--fuel") {
         match args.get(flag + 1).and_then(|steps| steps.replace('_', "").parse::<u64>().ok()) {
@@ -53,8 +64,13 @@ fn main() {
     if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
         diagnostic::set_acknowledger(Some(std::rc::Rc::new(diagnostic::TerminalAcknowledger)));
     }
+    diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
     diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
+}
 
+/// What the command line asks for: a file, a subcommand (`eval`, `compile`, `verify`, `tool` …) or code to evaluate
+#[cfg(not(test))]
+fn run_command(args: &[String]) {
     // CGI mode detection
     if env::var("SERVER_SOFTWARE").is_ok() {
         println!("Content-Type: text/plain\n");
@@ -84,7 +100,7 @@ fn main() {
     if arg_string.ends_with(".html") || arg_string.ends_with(".htm") {
         println!("warp compiled without webview");
     } else if let Some(target) = arg_string.strip_prefix("verify ") {
-        let code = if file_exists(target) { load_file(target) } else { target.to_string() };
+        let code = source_of(target);
         let reports = law::verify(&code);
         reports.iter().for_each(|report| println!("{}", report));
         std::process::exit(reports.iter().any(|report| report.failed()) as i32);
@@ -102,17 +118,24 @@ fn main() {
             }
         }
     } else if let Some(target) = arg_string.strip_prefix("data ") {
-        let text = if file_exists(target) { load_file(target) } else { target.to_string() };
+        let text = source_of(target);
         println!("{}", wasp_parser::parse_data(&text).serialize());
     } else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
         // DONE: don't run, just compile and save binary
         let target = extract_after(&arg_string, " ");
-        let code = if file_exists(&target) { load_file(&target) } else { target.clone() };
+        let (ahead_of_time, target) = match target.strip_prefix(AOT_FLAG) {
+            Some(rest) => (true, rest.trim_start().to_string()),
+            None => (false, target),
+        };
+        let code = source_of(&target);
         match wasm_emitter::compile(&code) {
             Ok(module) => {
                 let output_path = compiled_output_path(&target);
                 fs::write(&output_path, &module.bytes).expect("could not write the compiled module");
                 println!("compiled {} bytes to {}", module.bytes.len(), output_path);
+                if ahead_of_time {
+                    write_machine_code(&module.bytes, &output_path);
+                }
             }
             Err(final_value) => {
                 eprintln!("nothing to compile: {}", final_value.serialize());
@@ -123,24 +146,18 @@ fn main() {
         if !file_exists(&arg_string) {
             eprintln!("Error: Could not read file '{}'", arg_string);
         }
-        let result = eval(&arg_string); // a file: its folder is in scope (D15)
-        println!("{}", result.serialize());
-        std::process::exit(node_to_i32(&result));
+        print_and_exit(eval(&arg_string)); // a file: its folder is in scope (D15)
     } else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {
         // Compile WAT/WAST text format to WASM binary, then execute
         let wat_code = load_file(&arg_string);
-        let result = run::wasmtime_runner::run_wat(&wat_code);
-        println!("{}", result.serialize());
-        std::process::exit(node_to_i32(&result));
-    } else if arg_string.ends_with(".wasm") {
+        print_and_exit(run::wasmtime_runner::run_wat(&wat_code));
+    } else if arg_string.ends_with(".wasm") || arg_string.ends_with(&format!(".{MACHINE_CODE_EXTENSION}")) {
         if args.len() >= 3 {
             {
                 todo!("linking files needs compilation with WABT_MERGE");
             }
         } else {
-            let result = run::wasmtime_runner::run(&arg_string);
-            println!("{}", result.serialize());
-            std::process::exit(node_to_i32(&result));
+            print_and_exit(run::wasmtime_runner::run(&arg_string));
         }
     } else if arg_string == "test" || arg_string == "tests" {
         {
@@ -157,6 +174,11 @@ fn main() {
         let code = arg_string.strip_prefix("eval ").unwrap_or("");
         let result = eval(code);
         println!("» {}", result.serialize());
+    } else if let Some(code) = arg_string.strip_prefix("lower ") {
+        match wasm_emitter::lower(code) {
+            Ok(lowered) => println!("{}", lowered.serialize()),
+            Err(final_value) => println!("no module needed: {}", final_value.serialize()),
+        }
     } else if let Some(code) = arg_string.strip_prefix("parse ") {
         println!("{}", structure(&wasp_parser::parse(code)));
     } else if matches!(arg_string.as_str(), "repl"| "console" | "start" | "run") {
@@ -172,7 +194,7 @@ fn main() {
         // CGI/server mode
         println!("Content-Type: text/plain\n");
         let prog = arg_string.strip_prefix("server ").or(arg_string.strip_prefix("serv ")).unwrap_or("");
-        let prog = if file_exists(prog) { load_file(prog) } else { prog.to_string() };
+        let prog = source_of(prog);
         if !prog.is_empty() {
             let result = eval(&prog);
             println!("{}", result.serialize());
@@ -184,7 +206,8 @@ fn main() {
             // lsp_main();
             println!("LSP not yet implemented");
         }
-    } else if arg_string.contains("help") {
+    } else if matches!(arg_string.as_str(), "help" | "--help" | "-h") {
+        usage();
         println!("detailed documentation can be found at https://github.com/pannous/warp/wiki");
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
         println!("Wasp 🐝 {}", WARP_VERSION);
@@ -195,12 +218,39 @@ fn main() {
     }
 }
 
+/// The program's value printed, its Int the exit status
+fn print_and_exit(result: Node) -> ! {
+    println!("{}", result.serialize());
+    std::process::exit(node_to_i32(&result));
+}
+
+/// The text of the file `target` names, else `target` itself as code
+fn source_of(target: &str) -> String {
+    if file_exists(target) { load_file(target) } else { target.to_string() }
+}
+
 /// `dir/program.warp` compiles to `dir/program.wasm`; inline code compiles to `out.wasm`
 fn compiled_output_path(target: &str) -> String {
     if file_exists(target) {
         std::path::Path::new(target).with_extension("wasm").to_string_lossy().into_owned()
     } else {
         DEFAULT_COMPILED_NAME.to_string()
+    }
+}
+
+/// `warp compile --aot`: the module compiled to machine code for this machine and wasmtime version, next to the .wasm
+fn write_machine_code(bytes: &[u8], wasm_path: &str) {
+    let path = std::path::Path::new(wasm_path).with_extension(MACHINE_CODE_EXTENSION);
+    let (engine, _) = wasm_reader::engine_for(bytes);
+    match engine.precompile_module(bytes) {
+        Ok(machine_code) => {
+            fs::write(&path, &machine_code).expect("could not write the machine code");
+            println!("compiled {} bytes of machine code to {}", machine_code.len(), path.display());
+        }
+        Err(failure) => {
+            eprintln!("could not compile to machine code: {failure}");
+            std::process::exit(1);
+        }
     }
 }
 
@@ -224,8 +274,9 @@ fn structure(node: &Node) -> String {
 fn usage() {
     // println!("Usage: warp [options] [file]");
     println!("  warp <file.warp>     Execute a warp file");
-    println!("  warp <file.wasm>     Run a wasm file");
+    println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
     println!("  warp eval <code>     Evaluate code");
+    println!("  warp lower <code>    Show the program after the lowering passes");
     println!("  warp parse <code>    Show the parsed AST");
     println!("  warp verify <file>   Test and prove the laws of a file");
     println!("  warp data <file>     Read untrusted data without evaluating it");
@@ -234,6 +285,7 @@ fn usage() {
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
     println!("  warp compile <file|code>  Compile to <file>.wasm (out.wasm for inline code) without running");
+    println!("  warp compile --aot <file|code>  Also compile to machine code, <file>.cwasm, for this machine");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");
     println!("  warp version         Show version");

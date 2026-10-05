@@ -1,22 +1,18 @@
-#![allow(dead_code, unused_imports)]
 // type string = str; NO! ugly for a reason!
-use crate::extensions::lists::{map, Filter, VecExtensions, VecExtensions2};
+use crate::extensions::lists::{map, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::meta::{CloneAny, Dada, DataType, LineInfo};
+use crate::meta::{Dada, DataType, LineInfo};
 #[cfg(feature = "native")]
 use crate::wasm_reader::GcObject;
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::any::Any;
+use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::fmt;
 use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 use crate::operators::{is_function_keyword, Op};
 // use warp::type_kinds::{AstKind, NodeKind};
 use crate::node::Node::*;
-use crate::type_kinds::{AstKind, Kind, KIND_MASK};
-use crate::wasp_parser::parse;
+use crate::type_kinds::Kind;
 
 /// Prefix of a `@name(value)` annotation key
 pub const ATTRIBUTE_MARK: char = '@';
@@ -297,161 +293,8 @@ impl Node {
 
 	/// Convert compact 3-field WASM GC object to Node
 	#[cfg(feature = "native")]
-	/// Layout: kind (i64), data (ref null any), value (ref null $Node)
 	pub fn from_gc_object(obj: &GcObject) -> Node {
-		// Read the kind field (i64), lower 8 bits are the tag
-		let kind = match obj.kind() {
-			Ok(k) => k,
-			Err(_) => return Empty, // Null ref becomes Empty
-		};
-		let tag = (kind & KIND_MASK) as u8;
-
-		match tag {
-			t if t == Kind::Empty as u8 => Empty,
-
-			t if t == Kind::Int as u8 => {
-				match obj.read_int() {
-					Ok(number) => Node::Number(number),
-					Err(e) => Node::Error(Box::new(Text(format!("unreadable Int: {}", e)))),
-				}
-			}
-
-			t if t == Kind::Float as u8 => {
-				// data field contains boxed f64
-				match obj.read_boxed_f64() {
-					Ok(val) => Node::Number(Number::Float(val)),
-					Err(_) => Node::Number(Number::Float(0.0)),
-				}
-			}
-
-			t if t == Kind::Text as u8 => {
-				// data field contains $String struct
-				match obj.text() {
-					Ok(s) => Text(s),
-					Err(e) => Text(format!("Error reading text: {}", e)),
-				}
-			}
-
-			t if t == Kind::Error as u8 => match obj.text() {
-				Ok(reason) => Node::Error(Box::new(Text(reason))),
-				Err(e) => Node::Error(Box::new(Text(format!("Error reading error: {}", e)))),
-			},
-
-			t if t == Kind::Codepoint as u8 => {
-				// data field contains i31ref with codepoint
-				match obj.read_i31() {
-					Ok(code) => {
-						if let Some(c) = char::from_u32(code as u32) {
-							Char(c)
-						} else {
-							Char('\0')
-						}
-					}
-					Err(_) => Char('\0'),
-				}
-			}
-
-			t if t == Kind::Symbol as u8 => {
-				// data field contains $String struct
-				match obj.text() {
-					Ok(s) => Symbol(s),
-					Err(e) => Symbol(format!("Error reading symbol: {}", e)),
-				}
-			}
-
-			t if t == Kind::Key as u8 => {
-				// data field contains key node, value field contains value node
-				// op_info is encoded in upper bits of kind: (op_info << 8) | Key
-				let op_code = (kind >> 8) & 0xFF;
-				let op = crate::operators::code_to_op(op_code);
-				let key = match obj.data_as_node() {
-					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-					Err(_) => Box::new(Empty),
-				};
-				let value = match obj.value() {
-					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-					Err(_) => Box::new(Empty),
-				};
-				Key(key, op, value)
-			}
-
-			t if t == Kind::Block as u8 => {
-				// data=first item, value=rest, bracket info in upper bits of kind
-				Self::read_list_from_gc(obj, Bracket::Curly, kind)
-			}
-
-			t if t == Kind::List as u8 => {
-				// data=first item, value=rest, bracket info in upper bits of kind
-				let bracket_info = (kind >> 8) & 0xFF;
-				let bracket = match bracket_info {
-					0 => Bracket::Curly,
-					1 => Bracket::Square,
-					2 => Bracket::Round,
-					3 => Bracket::Less,
-					_ => Bracket::None,
-				};
-				Self::read_list_from_gc(obj, bracket, kind)
-			}
-
-			t if t == Kind::Data as u8 => {
-				// For now, read type_name from text
-				let type_name = obj.text().unwrap_or_default();
-				Data(Dada {
-					data: Box::new(format!("<wasm data: {}>", type_name)),
-					type_name,
-					data_type: DataType::Other,
-				})
-			}
-
-			// a closure reads as the name of its function
-			t if t == Kind::Function as u8 => match obj.value() {
-				Ok(name) => Node::from_gc_object(&name),
-				Err(_) => Symbol("function".to_string()),
-			},
-
-			t if t == Kind::TypeDef as u8 => {
-				// data = name node, value = body node
-				let name = match obj.data_as_node() {
-					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-					Err(_) => Box::new(Empty),
-				};
-				let body = match obj.value() {
-					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-					Err(_) => Box::new(Empty),
-				};
-				Type { name, body }
-			}
-
-			_ => Text(format!("Unknown Kind: {}", tag)),
-		}
-	}
-
-	/// Read a list from compact GC representation
-	#[cfg(feature = "native")]
-	fn read_list_from_gc(obj: &GcObject, bracket: Bracket, _kind: i64) -> Node {
-		let mut items = Vec::new();
-
-		// data = first item
-		if let Ok(first_obj) = obj.data_as_node() {
-			let first = Self::from_gc_object(&first_obj);
-			if first != Empty {
-				items.push(first);
-			}
-		}
-
-		// value = rest (either single item or nested list)
-		if !obj.value_is_null() {
-			if let Ok(rest_obj) = obj.value() {
-				let rest = Self::from_gc_object(&rest_obj);
-				match rest {
-					List(rest_items, _, _) => items.extend(rest_items),
-					Empty => {}
-					other => items.push(other),
-				}
-			}
-		}
-
-		List(items, bracket, Separator::None)
+		obj.to_node()
 	}
 
 	/// Placeholder for a missing feature: an error value, never a fake result
@@ -1069,6 +912,8 @@ impl Node {
 		let List(items, Bracket::Curly, _) = self.drop_meta() else { return None };
 		let mut seen = std::collections::HashSet::new();
 		items.iter().filter_map(|item| match item.drop_meta() {
+			// repeated tags `div{…} div{…}` are children, as repeated elements in XML/HTML, not duplicate keys
+			Key(_, Op::Colon, value) if matches!(value.drop_meta(), List(_, Bracket::Curly, _)) => None,
 			Key(key, Op::Colon, _) => match key.drop_meta() {
 				Symbol(name) | Text(name) => Some(name.clone()),
 				_ => None,
@@ -1596,7 +1441,7 @@ impl PartialEq<i64> for Node {
 			Node::Number(Number::Real(r)) => r.to_f64() == *other as f64,
 			Key(_, _, v) => v.as_ref().eq(other), // Compare value of Key
 			Meta { node, .. } => node.as_ref().eq(other),
-			Data(data) => data.downcast_ref::<crate::units::Quantity>().is_some_and(|quantity| quantity.amount == *other),
+			Data(data) => data.downcast_ref::<crate::units::Quantity>().is_some_and(|quantity| quantity.is_amount(*other)),
 			_ => false,
 		}
 	}
@@ -2346,20 +2191,6 @@ pub fn text_node(p0: String) -> Node {
 
 pub fn node(p0: &str) -> Node {
 	Text(p0.s())
-}
-
-// Now no pass can accidentally drop meta!
-fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
-	match n {
-		Meta { node: inner, data } => Meta {
-			node: Box::new(map_node(*inner, f)),
-			data,
-		},
-		// Now no pass can accidentally drop meta!
-		List(xs, br, sep) => List(xs.into_iter().map(|x| map_node(x, f)).collect(), br, sep),
-
-		other => f(other),
-	}
 }
 
 // ============ Free Convenience Constructors ============

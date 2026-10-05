@@ -1,0 +1,15 @@
+mod test_algo_dijkstra;
+mod test_algo_levenshtein;
+mod test_algo_life;
+mod test_algo_queens;
+mod test_algo_sieve;
+mod test_algo_sorting;
+mod test_all_samples;
+mod test_kitchensink;
+mod test_samples;
+mod test_calculator_fixes;
+mod test_json_parser_fixes;
+mod test_data_structure_fixes;
+mod test_samples_run_cleanly;
+mod test_cli_help;
+mod test_warp_command;

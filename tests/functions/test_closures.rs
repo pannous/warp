@@ -109,3 +109,40 @@ fn test_calling_a_non_function_or_the_wrong_arity_is_loud() {
 	fails_with("make_adder(n) := (x => x+n); a = make_adder(1); a(1, 2)", "wrong number of arguments");
 	fails_with("apply(f, x):=f(x); n=3; apply(n, 1)", "not a function");
 }
+
+#[test]
+fn an_item_of_a_function_list_called_directly() {
+	is!("fs=[x=>x*2, x=>x+1]; (fs#2)(5)", 6);
+	is!("fs=[x=>x*2, x=>x+1]; fs#2(5)", 6);
+	is!("fs=[x=>x*2, x=>x+1]; fs#1(5)", 10);
+}
+
+#[test]
+fn a_loop_variable_over_function_values_is_called() {
+	is!("fs=[x=>x*2, x=>x+1]; s=0; for f in fs { s+=f(1) }; s", 4);
+}
+
+#[test]
+fn a_function_value_out_of_try_or_a_block_is_called() {
+	is!("f = try 1 + [1 2]#5 else (e => e * 2); f(4)", 8);
+	is!("f = try (x=>x+1) else (e => e * 2); f(4)", 5);
+	is!("f = {x => x+1}; f(2)", 3);
+}
+
+#[test]
+fn closures_of_ints_are_called_without_boxes() {
+	// 300000 calls through a closure parameter: seconds when every call boxed its argument and result
+	is!("apply(g, n) := { s=0; for i in 0..n { s = g(s) }; s }; k=1; apply(x => x+k, 300000)", 300000);
+	is!("fs=[x=>x+1, x=>x*2.5]; fs#2(2)", 5);
+}
+
+#[test]
+fn closures_given_floats_take_floats() {
+	is!("fs=[x=>x*2.0, x=>x+0.5]; g = fs#1; g(1.5 as float)", 3.0);
+	is!("k=2.5 as float; f = (x => x*k); fs=[f]; h=fs#1; h(2.0 as float)", 5.0);
+}
+
+#[test]
+fn a_float_reassigned_from_its_closure_stays_a_float() {
+	is!("apply(g, n) := { s=0.5 as float; for i in 0..n { s = g(s) }; s }; k = 1.5 as float; apply(x => x*k, 3)", 1.6875);
+}

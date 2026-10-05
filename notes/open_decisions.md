@@ -5,7 +5,30 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-(none pending) Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
+- P63 (rest) a comma tuple `(frobnicate, 3)` in code: data (worker default) or code like `[cube 3]`? (1) and (2) are
+  decided (see Decided 2026-10-05, interview). Asked by warp-90. 2026-10-05.
+- P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
+  as they are at `!` and assigns only declared globals. User 2026-10-05: "Later"; revisit when run-time `!` is built.
+- P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
+  loop changes are captured per iteration, every other variable follows late binding (recommended) / every variable
+  is captured per iteration and never checked (worker default on branch late-binding, keeps the test → 3). User
+  2026-10-05: "Later". Asked by warp-29.
+- P71 What does `:=` mean without parameters? The spec (wiki/charged.md section 2) says charged (`z := y*y`
+  re-evaluated at every use); the implementation and every mainstream language (Go, Pascal, Python's walrus) read it
+  as now: `y=3; z:=y*y; y=4; z` → 9, `x := 5; x = 6` → 6; the user's own model was "like let, later = may
+  overwrite". The original wiki said "semi charged, evaluated upon normal evaluation of the parent context"; "every
+  use" came from the Interviewer's table. Options: (1) now, unless it defines a function (parameters or `it`:
+  `square := it*it` stays a function), zero-parameter charged definitions via `def` (recommended); (2) always charged,
+  `z = 6` after it an error; (3) Go-strict: `:=` declares a new variable, `=` only reassigns. User 2026-10-05: "idk".
+  Assumed until decided: today's behaviour (1); workers do not change zero-parameter `:=` semantics, and the
+  "needless charging" note applies to `def` only. If (2) is chosen: the per-use getter is ~20 lines, commit 0b687e03 on
+  branch late-binding (warp-29).
+- P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
+  forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
+  run-time blocks are always pure. Asked by warp-29.
+Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
+work on branch runtime-units-survey pauses.
+Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
@@ -15,6 +38,178 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   `git -C /Users/me/dev/angles/warp push origin --delete claude/shared-kind-constants`. From BOSS-cheeky-shannon.
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
+
+## Decided 2026-10-05 (user, multiple-choice interview, all as recommended unless quoted)
+- Data vs code (P51, P62, P63 (1-2), charge levels, D7 revised): specified in wiki/charged.md, the single source;
+  RELEASED for implementation by the user on 2026-10-05 ("you have the green light, go ahead and implement
+  everything"). Tests the spec changes may be edited, each edit in its own commit naming the release. User words on
+  the way: P51 "should obviously be an error unless we're in a clear data context"; "def == deferred"; "def should
+  behave exactly like Python … but close"; "y=3; def z(): y*y; y=4; z() gives a compiler error unless we explicitly
+  define it as global"; "with some precomputed, precompiled paths"; naming `block`/`code`, `data` for what never
+  runs, `quote` dropped. Work packages assigned by the Supervisor (blocks warp-90, late binding + precomputed paths
+  warp-29, run-time `!` later).
+- P70 (late binding, warp-29): (a) a change is an error only where a later call can see it; (b) `global` may stand on
+  the variable at main level or in the reading function; (d) a pure getter over constants may be computed once
+  (folding). All as recommended; spec wiki/charged.md 77061c2. (c) later.
+- P72 memoization: no syntax; the compiler decides alone which pure functions to memoize (asked by warp-29; the user
+  chose "Compiler decides alone" over the recommended `memo def`). Constant calls are folded in `warp compile` output
+  only, not in eval/is! (worker assumption).
+- P73 `x!` has one meaning, force: a block runs, an optional unwraps (or errors), a plain value is itself; the kind
+  decides, statically where known, else at run time (asked by warp-90). Spec wiki/charged.md 37ccaf7.
+- P74 user: "use the opportunity to make codepoint the default name. since this is a sub type of integer, it should
+  be castable to float", clarified: `codepoint(c)` is the preferred name in hints, fixes and docs (`ord`, `ordinal`
+  stay synonyms); it gives an Int, so `codepoint('x') as float` is 120.0; `'x' as float` stays an error whose hint and
+  fix offer `codepoint('x') as float`; P27 stands. tests/text/test_text_casts.rs may be edited for the hint text (user
+  decision). Asked by warp-ea (fixits).
+- P75 fix buttons read "I meant: <replacement>", the meaning as a tooltip (warp-ea's default).
+- Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
+  written text; a `// got it` comment silences that line in the source.
+- P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
+  comparisons keep code points.
+- P66 Int division by zero is always the catchable divide_by_zero; only float division (1.0/0.0) is ∞.
+- P67 `catch e` / `except E as e`: e is the Error value (its message).
+- P68 a braceless call whose argument contains an operator (`square 3 + square(4)`) gets a got-it warning naming
+  `square(3) + square(4)` and `square(3 + square(4))`; the reading stays.
+- P69b a block arriving at run time is pure by default, more rights only by explicit grant; run-time data is tainted.
+- P69c user: "warning and lazy loading of a shared compiler": `warp compile` with run-time `!` warns, the module loads
+  a shared compiler lazily at the first `!`.
+- P48 custom operators: the wiki syntax as proposed (`prefix operator ⁻ := it*-1`, `suffix operator ³ := …`,
+  `infix operator ⊕ := left+right`), prefix/suffix tightest, new infix like `+`, the symbol known file-wide (pre-scan).
+- P29 `pair.0` counts from 0 (like `pair[0]`).
+- P30/P35 keep as implemented: `xs.pop()` removes and gives the last item, `m.remove(k)` removes and gives the value
+  (ø when absent), `xs.index_of(x)` is 1-based, 0 when absent.
+- P44 shared arrays keep `shared xs = int[n]` with atomic `xs#i += v`, Ints only for now. Re-asked: `atomic` is a synonym of `shared` (below).
+- P56(2-4) `\:epsilon`/`\:phi` are ε U+03B5 / φ U+03C6; an unknown entity name is a loud error; `∞` is f64
+  infinity now (ω stays the hyperreal infinite).
+- P57 hyperreals: `1/(1+ε)` stays an error; dual-number mode and run-time hyperreals later (with exact reals at run
+  time).
+- Standing rule (user): "it's allowed to un ignore test that are suddenly passing". Removing `#[ignore]` from a test
+  that passes unedited needs no question; editing its assertions still does.
+- P49b a whole float is no int either: `f(x:int)` called with 2.0 is refused like `x:int = 2.0` (write `2.0 as int`).
+- P45b the P45 error covers kinds evident from the source; inferred kinds keep the Node fallback until inference is
+  reliable.
+- P59 the Fixer's five ignored tests get the recommended edits (user decision): test_array_creation expects "index
+  out of range" (keeps `pixel:int[100]`, drops `pixel array;…`); test_array_initialization_basics uses
+  `count(x)`; test_array_initialization: typo fixed, the two natural-language array phrases dropped;
+  test_array_type_generics expects "list of int"; test_hyphen_units stays ignored (interval equality, later).
+- P52 a phrase-defined function is called with its own prepositions (`add 1 to 2`, `square of 4`); everywhere else
+  `to` stays a range and `of` a field lookup.
+- P53 test_custom_operators: the `.5³` line becomes 0.125, the test is un-ignored (user decision).
+- P54 test_precedence_declarations_are_refused asserts the working `operator ⊕ has precedence above +` (user
+  decision); only declared operators are ranked, built-ins never re-ranked.
+- P55 test_while_nop_issue is rewritten to `x=0;while x++<11: nop;x` → 11 (user decision); a loop's value stays its
+  last body value.
+- P50 a declared scalar parameter broadcasts over a list too (`foo(x:int):=x+1; foo([1 2 3])` → [2 3 4], the wiki's
+  `square number = …; square [1 2 3]`); test_argument_kinds and test_parameter_call_kinds change to a text argument
+  (user decision). `print [1 2 3]` keeps printing the list (not asked; the recommended default stands).
+- P49 a float passed to an int parameter is a compile error ("2.2 is no int: write 2.2 as int"); the ignored
+  test_function_argument_cast is edited accordingly (user decision).
+- P22 `p:photo = pic{width:3}` with pic a known other type: an error that teaches `pic like photo`. The warning
+  default on claude/like-keyword is undone.
+- P23 the type-word clash error covers every type word, generic ones (`number := …`) included (as assumed).
+- P24 the suffix form `4 doubled` calls a user function too (like `4.square`, wiki D9 `1+2 squared`). Done (branch
+  suffix-calls): every English past form, +d/+ed, a doubled final consonant (`stopped`), y → ied (`copied`);
+  tests/functions/test_suffix_word_spellings.rs. The example itself needs a function named `double`, which P20 forbids
+  (a type word): `double(x):=…` is "double is a type; rename your function".
+- P26 libm (sin, exp, …) counts as pure: no Ffi capability, allowed in eval_untrusted and `! pure` functions.
+  The Ffi assumption (effects.rs) is undone.
+
+## Decided 2026-10-05 (user, own words)
+- P45 a variable given values of two kinds that do not mix (`x=[1]; x=5`): user: "compile error unless we are in
+  script mode, which is not defined yet". The implemented Node fallback is undone outside a future script mode;
+  the error names the variable and suggests another name. Int→Float widening stays. Script mode: a new open topic.
+  Done (branch p45-kind-change): analyzer::check_kind_changes on the program as written, before lowering, compares
+  the kinds evident from literals (`x = [1]; x = 5` → "x was a List, is given an Int: use another name"). Where a
+  kind is only inferred (a call's result, a loop variable reusing a list's name) the Node fallback still holds the
+  value: an error there would rest on guessed kinds (function results default to Int before inference).
+
+- P58 `xs#a..b` (range from xs#a, or a slice?): user: "create a strong warning and I don't care how to interpret
+  it". So: unparenthesized `xs#a..b` keeps the range and gets a strong warning naming both explicit forms,
+  `xs#(a..b)` / `xs#(a…b)` (the 1-based slice) and `(xs#a)..b` (the range).
+
+- P56(1) uniscript entities: user: "yes, they should work everywhere but they have the syntax \:". The entity form
+  is `\:name` (wiki/uniscript.md: `\:infinity == ∞`, long form `<:name>`), in code AND inside texts; a bare
+  `\name` is no entity (so `"\nat"` stays newline+"at"). The branch fix-uniscript-entities moves from `\name` to
+  `\:name`.
+- P28 `real x;` read before any assignment: user chose "Zero value (Go)": x reads as the zero/empty value of its
+  type. The loud error (analyzer::check_unassigned_declarations) is undone. Done: declarations::lower_bare_declarations
+  makes `T x` of a fresh name `x:T = zero` (0, 0.0, "", []); after an assignment of x, `int x` stays a conversion.
+
+- P47 lists of tasks: user: "Jobs and tasks are as[ynchronous] by definition if someone waits for one result that
+  should not affect the others". So a started job runs on its own; putting it in a list (`jobs.add(j)`) or awaiting
+  another job never waits for it, only a use that needs this job's value does. The recommended default fits:
+  awaiting only where a value is needed, `await all jobs` for a list.
+
+- P46 type-name and condition patterns in `for` (`for friend in [foe1, friend1, …]`, `for (it>2) in xs`): user:
+  "this should give a warning, though if the user is unfamiliar, he needs to confirm that he understands the filter".
+  So the wiki forms filter as written, with an educate_once "got it" warning naming the filter (the user confirms
+  with got-it; notes/welcoming.md). Done (branch p46-filter-loops, wasp_parser try_parse_for_in): `for friend in xs`
+  with a declared class (instance_of, the item is `it` and `friend` in the body), `for (it>2) in xs`; got-it topic
+  `for-filter`. Built-in type words filter too (`for number in xs`, under their own name; a literal list of matching
+  items needs no filter) and an adjective with a type word is a condition (`for (even number) in xs`: even/odd built
+  in, else the user's function), branch p46-type-word-filters.
+- P61 `x is <value>` with a new name x (old test `x is 100 times [0]`): user: "educate the user to use the be key
+  word for definitions". `is` stays a comparison; with an undefined x the warning/error teaches `x be <value>`
+  (wiki/be.md, an alias of `:=`, parsed since 67c405a5: `x be 3`, `x be number 3`). The test edit to
+  `x = 100 times [0]` (Fixer, branch decided-test-edits) stands, or uses `be` once it parses. Asked by warp-2d.
+  Follow-up (user, multiple choice): the typed form too. `x is number 9` with an undefined x no longer declares
+  (fix-is-declaration is undone); it teaches `x be number 9` (or `x:number = 9`); `is` is always a comparison.
+
+- P44 re-asked: user: "make shared and atomic synonyms". `atomic xs = int[n]` is the same as `shared xs = int[n]`;
+  the rest stays (atomic `+=`/`-=`, `go f(xs)` passes the same array).
+- P60 catch handlers: user: "later, but also at the Classical track catch and try except syntax synonyms". The
+  function-level handlers (`catch (no food){…}`, `on error{…}`, Error.md) come later; now the classical
+  `try {…} catch {…}` (with `catch e`) and Python's `try: … except: …` become synonyms of `try X else Y`.
+  Asked by the Fixer warp-2d.
+
+## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
+- P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
+  type word (P20 forbids it as a function name). Options: `show(p:person)` (Haskell) / `description(p:person)` (Swift)
+  / allow `text(p:person)` as the one exception. Not implemented yet (todo.md "Traits: Printable"). Night 2026-10-04.
+- P32 DECIDED (user, 2026-10-04): `print xs` of a list prints the str(xs) text; the pinned test in tests/welcoming/test_welcoming_print.rs may change for it. `print xs` of a list variable: allow it with the text `str(xs)` gives ("[1 2]", nested lists too) / keep the error
+  "print of a List has no runtime text yet" that tests/welcoming/test_welcoming_print.rs pins. Recommended: allow
+  (the text exists now); needs the edit of that pinned test. Night 2026-10-04.
+- P33 DECIDED (user, 2026-10-04): REAL threads for `go` (WASM threads with shared memory natively, Web Workers in the browser); last, as a big project: notes/threads.md first. Real concurrency for `go`: tasks now finish where they start (one thread), so pause/stop handlers never run (a
+  warning). Options: keep it / wasm threads + shared memory natively and Web Workers in the browser / an event loop
+  with explicit yields (`await` points). Assumed: keep it. Night 2026-10-04.
+- P34 DECIDED (user, 2026-10-04): a number subscript on an empty `{}` keys it as a map (`d={}; d[1]="a"` → {1:"a"}). `d = {}; d[1] = "a"`: a number subscript of an empty `{}` indexes it as a list (index out of range) / keys it as a
+  map like a text subscript does (Lua tables, JS objects). Assumed: list indexing (today's behaviour, a loud error).
+  Night 2026-10-04.
+- P36 DECIDED (user, 2026-10-04): implement unit conversion as proposed below. Unit conversion: `100 cm in m`, `2 h in minutes`, `3 km as m` are undefined today (`in` places a time in a zone,
+  `as` casts to a type). Proposed default: `quantity in unit` and `quantity as unit` give the quantity in that unit of
+  the same dimension, exact when it divides (`100 cm in m` → `1 m`), else a ratio (`150 cm in m` → `3/2 m`); the unit
+  words take their long names too (minute(s), hour(s), meter(s)); a unit of another dimension is the DimensionError.
+  Not implemented (not in the wiki). Night 2026-10-04.
+- P37 DECIDED (user, 2026-10-04): named arguments f(name=value)/f(name:value) set parameters and free variables of the body; no implicit capture of same-named variables, a missing argument stays an error. Implemented (src/lowering/named_arguments.rs): `name:{…}` stays an ad-hoc instance (it parses like `name{…}`), so an object passed by name is written `name={…}`; `s:shape` in a signature is a declaration. Gap filling (wiki/gap-filling.md, binding.md, inventions.md): `f y := y*y+v; f(y=2, v=3)` → 7, `fun={x*y};
+  fun(x:2 y:3)` → 6, `x=7; f(x):=x*x; f()` → 49: named arguments bind a function's free variables, and a missing
+  argument takes the variable of its name. Proposed default: named arguments `f(name=value)`/`f(name:value)` may set
+  parameters and free variables of the body; a missing argument stays an error (implicit capture of a same-named
+  variable is too surprising). Not implemented. Night 2026-10-04.
+- P38 DECIDED (user, 2026-10-04): keep the current default. Variable listeners (wiki/signal.md Todo: "shall event listeners be registrable post-hoc?"): `once x==5 {…}` and
+  `whenever cond {…}` are implemented (src/lowering/variable_signals.rs) as checks after each later write of a variable
+  the condition reads, in the statements after the listener and their loop bodies; writes before it, in functions
+  called later, or in an outer block are not seen, and the condition holding when the listener is declared does not
+  fire it. Alternatives: hoist listeners to the top of their block (post-hoc registration), or watch writes in called
+  functions too (needs global flags). `on set x {…}` (value = the new value) works the same way, and `after tested:` /
+  `before test {…}` (a defined function, also named in the past tense) run after/before each later statement that
+  calls it, once per statement even if it calls it twice. `during` is not implemented. Night 2026-10-04.
+- P39 DECIDED (user, 2026-10-04): neither `id` nor `square` becomes a builtin; the 5 tests stay ignored ("user: no id/square builtins"). Builtins `id` and `square` (C++ wasp's test runtime words): five ignored tests use them (test_comparison_id,
+  test_comparison_id_precedence, test_wasm_function_calls, test_wasm_stuff, test_squares); braceless user functions
+  already bind the same way (`f 3+4`). Should they be global library words (a user definition winning), given `square`
+  is also a shape type in the trait tests? Parked for the user. Night 2026-10-04.
+- P40 DECIDED (user, 2026-10-04): size = count; `byte_size` gives bytes; test_array_constructor stays ignored (P40). `size` of a typed array: test_array_constructor (ignored) wants `size(640000*int)` = 2560000 bytes, the passing
+  test_array_length says `size` is a synonym for count. Which is right (bytes as `byte_size`?)? Parked for the user.
+- P41 DECIDED (user, 2026-10-04): no separator, as implemented. Juxtaposed print arguments: `print "x changed to " value` prints the parts joined without a separator ("x changed
+  to 3"), only when the first part is a text literal (`print first xs` stays a call); commas still join with a space.
+  Implemented default (wiki/signal.md example). Alternative: join with a space like the comma form. Night 2026-10-04.
+- P42 DECIDED (user, 2026-10-04): keep the parse (comma looser than ==) and warn strongly when a tuple is compared to a bare comma expression `(…) == 2.0, 4`, suggesting parentheses. Comma against `==`: `(2 as float, 4.3 as int) == 2.0, 4` (ignored test_emit_cast_tuple) wants the right side
+  to be the tuple (2.0, 4); today the comma binds looser than `==`, so it is `((…) == 2.0), 4`. Tuples in parentheses
+  compare element by element now (`(…) == (2.0, 4)` → 1). Change the precedence (or only for a tuple on the left)?
+  Not changed. Night 2026-10-04.
+- P43 DECIDED (user, 2026-10-04): lists do not grow when an item is set past the end, the empty list included;
+  setting past the end is a loud, catchable `index out of range` error, as the existing tests have it
+  (`x=(1 2 3);x#4=0`, test_footguns). An experimental growth (night 2026-10-04) was dropped before commit; the
+  ignored tests expecting growth (test_array_creation) stay ignored.
 
 ## Decided by the user (2026-09-29) — implementation: notes/cloud_tasks.md
 - #1 yes: avoid panics everywhere, errors as values. #2 leave the trailers. #3 juxtaposition yes, spaced only if the unit exists.
@@ -36,11 +231,17 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   or a newline" (wasp_parser.rs grouped_list, tests/parser/test_one_line_statements.rs).
 - text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
   text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text).
-  Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/test_text_repeat.rs).
+  Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/text/test_text_repeat.rs).
   text * float and text * text stay type errors; `n times "ab"` is the explicit repeat. This replaces "`"5"*3` stays a
   type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Non-digit characters (P27, asked by warp-d2), user to warp-d2, verbatim: "use ord ordinal codepoint() to get the
+  code point". So `ord(c)` / `ordinal(c)` / `codepoint(c)` give the code point; `c as int` / `int(c)` of a non-digit
+  character is invalid_number, digits stay digits. Revises #35's `'A' as int` → 65. Branch int-of-char edits
+  test_text_casts and test_cast_bugs accordingly (user decision).
+- int of a character (P25, asked by warp-d2): user to warp-d2, verbatim: "obviously one of five is five". `int('5')`
+  is 5 (main does this since a13b4fd6; pinned by tests/text/test_character_comparison.rs, branch int-of-char).
 - Text quotes in printed output (asked by warp-6c; user WIP commit ec968e18 expected single quotes in
   tests/test_method_words.rs): "Keep double quotes". The printer keeps `"HELLO"`; the WIP test edits are reverted to
   double quotes (user decision) and the 5 ignored tests un-ignored.
@@ -66,7 +267,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   master stays the only branch, agents push `HEAD:master`. The hook blocks agents, so the user runs
   `git -C /Users/me/dev/angles/warp/wiki push origin --delete main`.
 - #10 Polish notation for .wat/.wast (P18): "Keep parked". test_wast stays ignored.
-- #16 commented `"a".s() + 2` lines in tests/test_string.rs (P19): "Delete the lines" (approved test-file edit).
+- #16 commented `"a".s() + 2` lines in tests/text/test_string.rs (P19): "Delete the lines" (approved test-file edit).
 - tests/ layout (P14, code quality 3), verbatim: "The official policy was that probes are can be turned into a real
   tests by condensing that what really matters. We should start a new agent to sort that all out and just grouped into
   folders". A new agent condenses the `probe_*.rs` files into real tests (keeping what matters) and groups tests/ into
@@ -76,7 +277,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - D10 return-type polymorphism (P17): "Dispatch on return type" (un-parked). `render "hello" as pdf` /
   `docx example = render "x"` pick the overload by the expected type; ambiguous → got-it warning (assumed under the
   Asks-become-warnings rule).
-- smarty.rs + tests/test_asts.rs (P10, code quality 2): "Delete both" (with smarty's asserts in tests/test_angle.rs).
+- smarty.rs + tests/test_asts.rs (P10, code quality 2): "Delete both" (with smarty's asserts in tests/numbers/test_angle.rs).
 - Wisp format (P11, code quality 4): "Keep + add a roundtrip test".
 - GC reading API (P12, code quality 5): "GcObject". The gc_traits wrappers go.
 - libm table (P13, code quality 6): "Keep the table", then verbatim: "Mark the FFI deliberately S. examples and maybe
@@ -93,7 +294,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - vendor/ (P8), verbatim: "currently we don't need it but maybe we want to run an off-line agent later again so let's
   just note that it's currently deactivated". The docs (Cargo.toml, AGENTS.md) say vendoring is deactivated for now;
   `--offline` builds from the registry cache.
-- Stale C++ feature flags (P9, code quality 1): "Remove them". The `#[cfg]` branches in tests/test_wasm.rs and
+- Stale C++ feature flags (P9, code quality 1): "Remove them". The `#[cfg]` branches in tests/wasm/test_wasm.rs and
   tests/web/test_web.rs go, keeping the branch that runs today (approved test edit).
 - Asks become got-it warnings (user to BOSS-cheeky-shannon, verbatim): "I really love the got it mechanism for the
   warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever the user pics we
@@ -108,12 +309,13 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - D9 fallback (P5): "Error". An unanswered `1+2 squared` is an error naming both groupings (assumption stands).
 - D1 `$` (P6), verbatim: "sorry, I don't know what a hole means but only the one with the curly braces must interpolate
   the other is text like dollar money". So `"${expr}"` interpolates, bare `"$x"` stays the literal text `$x`.
-  Revises D1's "also `$x`": tests/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
+  Revises D1's "also `$x`": tests/text/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
   `"\(expr)"` was not asked about and stays.
 - Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
   `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
 - Closure Int->Int fast path (P3, asked by warp-5e): user "no" (same answer, first item). Closure calls keep boxing.
-- D7 / #33 closures: "By value + educate". Blocks keep capturing by value (`x=1; inc:={x=x+1}; do inc; x` → 1); a block
+- D7 / #33 closures (SUPERSEDED 2026-10-05 by wiki/charged.md: late binding, `global` for changing variables):
+  "By value + educate". Blocks keep capturing by value (`x=1; inc:={x=x+1}; do inc; x` → 1); a block
   that assigns an outer variable gets a hint: use `global x` or return the value. The wiki's lazy `:=` examples get updated.
 - D3 `[1 2 3]+4`: "Ask". Like `[x]*n`: append or add to each element? Fallback Error. `.+` is element-wise,
   `xs + [4]` concatenates.
@@ -139,7 +341,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   rule for unknown words (`photo`) and multi-word class names.
 - D4 constructor vs data: "Distinguish". `T{…}` with a known type constructs/validates, `k:{…}` is plain data, not equal.
 - D8 `≈` / `~` / `circa`: "Relative 1e-9 + override". Default relative tolerance 1e-9, settable via `tolerance = …`.
-- D15 auto-imports: "Later", parked. D10 return-type polymorphism: "Park", parked.
+- D15 auto-imports: "Later", parked. D10 return-type polymorphism: parked then, un-parked later as P17 ("Dispatch on return type", done: notes/dispatch.md, src/lowering/overloads.rs).
 - #25 / #36 `first [10, 5]`, `reduce [7] …`: "if by subscript you mean index then we already have a rule that space
   disabled index". So a space before `[` never indexes; reading these as an index is a bug against that rule:
   `word [..]` passes the list as an argument, only glued `a[..]` indexes.
@@ -152,7 +354,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - #26 library: "Extend all". Unicode upper/lower, sort any comparable values, reverse works on text.
 - #23: "Warn on `it` shadowing". A loop's `it` still shadows a function's `it`, with a warning.
   #31 (switch message shows value; `min`/`d` units): neither option chosen, stays open.
-- #35: "Lists join to "[1 2]"" (the tests/test_cast_to_string.rs assertion may be edited; a general runtime serializer
+- #35: "Lists join to "[1 2]"" (the tests/text/test_cast_to_string.rs assertion may be edited; a general runtime serializer
   later) and ""x" as float is loud" (error with a hint; only single-quote codepoints convert to numbers).
 - #34 deep traps under `try`: "Later". #37 first-class functions by specialisation: "Enough for now".
 - #14e: `download <url>` is an alias of `fetch`.
@@ -194,10 +396,12 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   hint `str(13)`. Reversed: the 2026-09 "no implicit conversion" rule (DESIGN.md "Dangerous implicitness", wiki/Footguns.md
   "String + number"), which was there because one-character strings used to add as code points (`"5"+3` → 56). `"5"*3`
   stays a type error. Flipped tests: test_text_concat::text_plus_number_stays_an_error,
-  probe_footguns::test_text_plus_number_is_a_type_error, test_text_bytes::text_plus_number_stays_a_type_error.
+  test_footguns::test_text_plus_number_is_a_type_error, test_text_bytes::text_plus_number_stays_a_type_error.
   Not yet: a runtime ratio (`y=2.5; "x"+y`, also `y as string`) prints garbage: list_join has no text form for ratios.
-- `//` glued to its operand (`7//2`, `x//=2`) is Python floor division, lowered to `(a - a%b)/b` (`%` is Euclidean: exact
-  for a positive divisor, `-7//-2` gives 4 where Python gives 3); `x // note` (space before) stays a comment.
+- `//` glued to its operand (`7//2`, `x//=2`) is Python floor division, the Euclidean quotient that goes with `%`
+  (`floor_quotient(a, b)` since 2026-10-04, same results as the earlier `(a - a%b)/b`: floor for a positive divisor,
+  `-7//-2` gives 4 where Python gives 3); `x // note` (space before) stays a comment, and one whose comment hides a
+  closing bracket (`(col // 3)`) is a parse error naming the `//` (no reinterpretation).
   `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an integer` unless the
   division is exact, with the hint `n//2`.
 - Spaced `a // b` — USER DECISION 2026-10-03 (fix-floor-ask-3): "just make it a warning to the user that it's read
@@ -206,7 +410,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   is a comment; floor division is written glued: a//b", shown until acknowledged, never again after. The earlier
   floor-or-comment Ask and its spacing/ASCII/default heuristics (fix-floor-ask, -2) are gone.
 - #28 decided (supervisor warp-f3 under the welcoming policy, reported to the user): `x=ø; x.size` and `xs=[]; xs.count`
-  are 0; arithmetic on ø still needs the check. Changed line: tests/probe_footguns.rs test_null_needs_a_check
+  are 0; arithmetic on ø still needs the check. Changed line: tests/welcoming/test_footguns.rs test_null_needs_a_check
   (`x=ø; x.size` → 0); tests/lists/test_empty_list_count.rs un-ignored.
 - `#` directly followed by a non-space starts an expression (count): `#s`, `#a-1`, `#f(x)`, also at line start
   (fix-sugar-4; before only `#name` as a whole statement counted). Comments: `# text` (space or tab), `#!` (shebang),
@@ -236,17 +440,17 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
     `[x].map(x => x*n)`; a list variable times a number stays the plain type error. Topic `insert-order`
     (list_emitter insert_position_and_value, two Int arguments): "position first, as Python" / "value first, as wasp".
     Unanswered (tests, CI, pipes): "<question> (too ambiguous to guess); fix: <both explicit forms>". The list-times
-    question starts with "type error: list * number:" so probe_footguns' `[1 2 3]*2` → "type error" still holds.
+    question starts with "type error: list * number:" so test_footguns' `[1 2 3]*2` → "type error" still holds.
   Not yet: `insert 4 at 0`, `at end/start/head`, `x is 100 times [0]` (`is` compares).
 
 
 ## Decided 2026-10-02
 - `upto` excludes the end as wiki/range.md says (`1 upto 10` = 1..9); every `upto` hints the explicit forms
-  (`..<`/`..` exclusive, `to`/`...` inclusive). tests/test_loop_forms.rs `upto_excludes_the_end_unlike_to` follows.
+  (`..<`/`..` exclusive, `to`/`...` inclusive). tests/control/test_loop_forms.rs `upto_excludes_the_end_unlike_to` follows.
 
 ## Original questions
 ## Blocking finished work
-1. **should_panic test** `tests/probe_footguns.rs:56-60` pins the old compiler panic on undefined variables.
+1. **should_panic test** `tests/welcoming/test_footguns.rs:56-60` pins the old compiler panic on undefined variables.
    B9(2) turns all 9 panics into `Error('undefined variable: a')`. Replace with `fails_with("a+1", "undefined variable: a")`?
    (work saved in probes/b9_part2.patch)
 2. **Claude-Session trailers** in 27 pushed supervisor commits (forbidden by global CLAUDE.md): rewrite history or leave?
@@ -254,7 +458,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 ## Language design
 3. **Juxtaposition** `3x` → `3*x` (wiki/number.md specifies it; experiment: 0 regressions, makes test_implicit_multiplication pass):
    `1/2x` = `1/(2x)` (Julia) or `(1/2)x`? ordinals `2nd` stay text? `2i` / `2e` complex / constant or product? spaced `2 km` once units exist?
-4. **Lists (B8)**: `size` of a list = bytes (wiki/Footguns.md decision) or element count? assigning past the end = error or grow?
+4. **Lists (B8)**: `size` of a list = bytes (wiki/Footguns.md decision) or element count? assigning past the end = error (DECIDED, user 2026-10-04, see P43).
    typed array declarations `x : 100 int`, `pixel:int[100]`, `640000*int`? value of a `while` loop (C++: 0, Rust test: 11)?
 5. **Units**: `1 m + 1km`, `1950 ± 50`, `1900 - 2000 AD` (wiki/unit.md) — unit values as identifiers, so `3km` = `3*km`?
 6. **Data as scope**: does `a-b:2 c-d:4 a-b` resolve the symbol to its key's value (2)?
@@ -274,8 +478,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 ## Test defects (can't pass unedited)
 14b. DECIDED 2026-10-03 (minimal edits). test_wasm expectation defects (exact float compares 4.00001, 2.9999999999999996; `i=123.4;i` → 123; ø expected 0;
     object truthiness; text+text concat) — list in A14 slice 1 report, notes/todo_sweep_task.md A14.
-14. RESOLVED (near! in tests/test_math.rs). `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
-14c. RESOLVED (line commented out). `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
+14. RESOLVED (near! in tests/numbers/test_math.rs). `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
+14c. RESOLVED (line commented out). `test_named_data_sections` ends with `exit(0)` (tests/wasm/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
 14d. CLOSED 2026-10-03 (correct for the Key model). `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?
 14e. DECIDED 2026-10-03 (alias of fetch). `download <url>` was never implemented (only `fetch`); add as an alias of fetch?
 15. DECIDED 2026-09-30 (delete). `test_paint_wasm`: `w` never assigned, `(x-c)` is a kebab name — edit or delete?
@@ -303,7 +507,7 @@ D16 overflow contradict Decided rules). Found while implementing:
     Extend to Unicode / all comparable values? In-place `x.upper!` (wiki D2) not added.
 27. DECIDED 2026-10-03 (Unicode + be). Leftovers from earlier sessions: Unicode operators (≤ ≥ ≠ × ÷ ¬ √) and `is` for `==`: canonical or alternatives?
     `be` for `:=` (wiki/be.md) is not accepted by the parser: implement or drop?
-28. DECIDED 2026-10-02 (see the top: size of ø is 0). `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/probe_footguns.rs:634
+28. DECIDED 2026-10-02 (see the top: size of ø is 0). `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/welcoming/test_footguns.rs:634
     (`fails_with("x=ø; x.size", "fix: if x {")`, test_null_needs_a_check) pins the null-check error. Change or remove
     that assertion line? The fix (a small arm in check_null_use) is ready; tests/lists/test_empty_list_count.rs waits #[ignore]d.
 29. OBSOLETE (checkout now only behind origin). The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from
@@ -320,7 +524,7 @@ D16 overflow contradict Decided rules). Found while implementing:
 34. DECIDED 2026-10-03 (now, round 3). `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
     (`try 1 + [1 2]#5 else 0`) still ends the program. Full catching needs a host import that runs the guarded body.
     Worth it?
-35. DECIDED 2026-10-03 (see the top). `x=[1 2]; x as string` stays a loud error because tests/test_cast_to_string.rs (added today by a worker) pins it;
+35. DECIDED 2026-10-03 (see the top). `x=[1 2]; x as string` stays a loud error because tests/text/test_cast_to_string.rs (added today by a worker) pins it;
     a join-based "[1 2]" for int lists is ready, a general runtime serializer would be the real fix. Allow editing
     that assertion? Also `"x" as float` → 120 (character code, like `'A' as int` → 65): OK or loud?
 36. DECIDED 2026-10-03 (see 25). Parser: `reduce [7] (a b)->a+b` and `first [10, 5]` read `word [..]` as a subscript (see 25).

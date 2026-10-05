@@ -2,7 +2,7 @@
 Rust implementation over the same data files: https://github.com/pannous/uniscript (~/dev/uniscript).
 
 `use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. `use uniscript` fetches github.com/pannous/uniscript into packages/uniscript and loads its uniscript.wasp (notes/packages.md); index format: its src/index.rs.
-Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tests/test_text_bytes.rs, tests/test_text_functions.rs.
+Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tests/text/test_text_bytes.rs, tests/text/test_text_functions.rs.
 
 ## Language features added for it (Rust)
 - `text + text`, `text + 'c'`, `'a' + 'b'` concatenate (`text_concat`, a codepoint is UTF-8 encoded by reusing
@@ -28,7 +28,7 @@ Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tes
 - `/` is exact division (rationals): use `>> 1` for halving indices.
 - `global g = read(…)` fails ("undefined variable: read"); `const g = read(…)` works and is imported by `use`.
 - Unannotated parameters are Int: annotate text parameters `f(t:text)`.
-- The ignored test `test_string_concat_wasm` (tests/test_wasm.rs) now passes; it is left ignored (existing tests are not edited).
+- The ignored test `test_string_concat_wasm` (tests/wasm/test_wasm.rs) now passes; it is left ignored (existing tests are not edited).
 
 ## Design decisions
 - Controls follow their character (uniscript repository, fonts/README.md): `<:red A>` → A U+E0072. A block's own entry wins over the suffix,

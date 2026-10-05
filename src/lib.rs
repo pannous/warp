@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports)]
+
 // shared code with wasp tests etc
 // only lib.rs allows reexporting as:
 // use warp::extensions::*; etc
@@ -20,11 +20,20 @@ pub mod type_kinds;
 pub mod gc_traits;
 pub mod context;
 pub mod wasm_emitter;
+pub mod pipeline;
+/// The lowering passes the pipeline runs (src/pipeline.rs), each a module of its own; re-exported at the crate root
+pub mod lowering;
+pub use lowering::{ambiguous_forms, blocks, broadcasting, closures, comprehensions, declarations, folding, for_loop, function_values, inlining, lambdas, late_binding, library_words, meta_entries, min_max, mutation, named_arguments, number_keys, shared_arrays, overloads, phrase_calls, phrase_words, picked_calls, printable, result_word, run_time_blocks, switch, traits, tuples, type_constructor, type_name_matching, type_tests, variable_signals, versions, welcome_forms};
 #[cfg(feature = "native")]
 pub mod wasm_reader;
+#[cfg(feature = "native")]
+pub mod tasks;
+#[cfg(feature = "native")]
+pub mod shared;
 pub mod wasm_optimizer;
 pub mod wasp_parser;
 pub mod wisp_parser;
+pub mod uniscript_entities;
 pub mod operators;
 pub mod meta;
 pub mod host;
@@ -39,33 +48,15 @@ pub mod effects;
 pub mod injection;
 pub mod interpolation;
 pub mod diagnostic;
+pub mod fixits;
 pub mod time;
 pub mod real;
 pub mod units;
-pub mod for_loop;
-pub mod type_constructor;
-pub mod type_name_matching;
-pub mod meta_entries;
-pub mod function_values;
-pub mod lambdas;
-pub mod closures;
-pub mod library_words;
-pub mod type_tests;
-pub mod min_max;
-pub mod mutation;
-pub mod switch;
-pub mod phrase_words;
-pub mod declarations;
 pub mod fixed_width;
 pub mod modules;
 #[cfg(feature = "native")]
 pub mod package_tools;
-pub mod versions;
 pub mod web;
-pub mod ambiguous_forms;
-pub mod tuples;
-pub mod traits;
-pub mod overloads;
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of wasp

@@ -1,0 +1,55 @@
+// Binary Search Tree
+// Classic data structure with insert, search, traverse
+
+// trees are values: insert returns the tree with the value added; an empty tree is ø
+type Tree {
+    value: int
+    left?
+    right?
+}
+
+def node(value) := Tree { value: value }
+
+def insert(tree, value) {
+    if tree == ø { return node(value) }
+    if value < tree.value {
+        tree.left = insert(tree.left, value)
+    } else if value > tree.value {
+        tree.right = insert(tree.right, value)
+    }
+    return tree
+}
+
+def search(tree, value) {
+    if tree == ø { return false }
+    if value == tree.value { return true }
+    if value < tree.value { return search(tree.left, value) }
+    return search(tree.right, value)
+}
+
+def inorder(tree) {
+    if tree == ø { return [] }
+    return inorder(tree.left) + [tree.value] + inorder(tree.right)
+}
+
+def preorder(tree) {
+    if tree == ø { return [] }
+    return [tree.value] + preorder(tree.left) + preorder(tree.right)
+}
+
+def height(tree) {
+    if tree == ø { return 0 }
+    return 1 + max(height(tree.left), height(tree.right))
+}
+
+def print_tree(tree, prefix, is_left) {
+    if tree == ø { return }
+    print prefix + (is_left ? "├── " : "└── ") + tree.value
+    new_prefix = prefix + (is_left ? "│   " : "    ")
+    print_tree(tree.left, new_prefix, true)
+    print_tree(tree.right, new_prefix, false)
+}
+
+x = Tree{value: 2, right: Tree{value: 3, right: Tree{value: 4}}}
+print_tree(x, "", false)
+0

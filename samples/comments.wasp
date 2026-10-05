@@ -23,7 +23,7 @@ person: {
 }
 
 // Inline comments work too
-result = compute(a, b)  // process inputs
+result = 2 + 3  // process inputs
 
 // Nested block comments are supported
 /*
@@ -39,3 +39,5 @@ def factorial(n) {
     if n <= 1 { return 1 }
     return n * factorial(n - 1)
 }
+
+factorial(result)

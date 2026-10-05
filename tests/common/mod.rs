@@ -56,3 +56,34 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 	});
 	format!("http://{address}/data")
 }
+
+/// What the warp binary writes to stdout running `code` (no questions asked)
+#[cfg(feature = "native")]
+pub fn printed(code: &str) -> String {
+	let output = warp_command().args(["--no-ask", code]).output().expect("warp runs");
+	String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+/// A command running this checkout's warp binary. Every checkout builds the one shared target/debug/warp, so another
+/// worktree's build can replace it while these tests run: at first use it is linked (or copied) to a file of its own,
+/// named by this checkout's version (each checkout builds `version = "0.1.1-<branch>"`), and checked by that version
+#[cfg(feature = "native")]
+pub fn warp_command() -> std::process::Command {
+	static BINARY: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+	let binary = BINARY.get_or_init(|| {
+		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp"));
+		let own = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("warp-{}", env!("CARGO_PKG_VERSION")));
+		let _ = std::fs::remove_file(&own);
+		// a hard link keeps this build even when cargo relinks target/debug/warp to a newer one; a copy where links fail
+		if std::fs::hard_link(shared, &own).is_err() {
+			std::fs::copy(shared, &own).expect("copy the warp binary");
+		}
+		let version = std::process::Command::new(&own).arg("version").output().expect("warp runs");
+		let version = String::from_utf8_lossy(&version.stdout).to_string();
+		assert!(version.contains(env!("CARGO_PKG_VERSION")),
+			"{} is another checkout's build ({}), not version {}: another worktree built warp in between; run the tests again",
+			shared.display(), version.trim(), env!("CARGO_PKG_VERSION"));
+		own
+	});
+	std::process::Command::new(binary)
+}

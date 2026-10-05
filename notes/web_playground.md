@@ -53,7 +53,7 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 ### What cannot run in the browser, and why
 - Not compiled (`#[cfg(feature = "native")]` on their mod lines in tests/main.rs): wasmtime APIs (test_gc_struct,
   test_person_struct, test_struct_types, test_text_getters, test_wasm_reader, test_wasm_emitter, test_utils,
-  test_compile_only, test_host, probe_footguns (one wasmtime test in it)), network/ureq (test_web), the package tool
+  test_compile_only, test_host, test_footguns (one wasmtime test in it)), network/ureq (test_web), the package tool
   runner (test_package_tools, test_uniscript).
 - Skipped by libtest itself: the 5 `#[should_panic]` tests (test_node_operators type mismatches,
   test_newline_precedence::newline_form_is_really_evaluated): with panic=abort libtest ignores them.
@@ -62,8 +62,22 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   - std::env::temp_dir panics on WASI: test_use_modules (4)
   - lean: test_law::test_law_proved_by_lean, test_law_overflow_promotion_proved_by_lean
   - git clones / tags of packages: test_package_pin (4), test_packages::use_loads_the_module_of_a_package, test_versions (3)
+  - threads: test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads; a directory walk below the project
+    root: test_use_scopes::use_project_sees_every_file_below_the_project_root (2026-10-04: 1437 passed, 17 failed)
+- libc in the browser (host.js `c`, 2026-10-04): rand, srand, abs, labs, strlen, strcmp, strncmp, atoi, atol, atof;
+  the shims follow src/ffi.rs signatures: i64 results (size_t, long) are BigInts, strcmp/strncmp get (pointer, length)
+  pairs, the others C strings read up to their zero byte (tests/ffi/test_libc_results.rs); anything else of libc still
+  throws "c.X is not available in the browser"
+- Samples: tests/programs/test_samples_run_cleanly.rs runs every sample but raylib/SDL in both; 2026-10-04 all 64 give
+  the same result natively and in the browser
 - Ideas: should_panic needs panic=unwind (nightly -Zbuild-std with wasm exception handling); git/lean/process tests could
   get a host import that asks the static server to run them, which defeats the point of the browser run.
+
+## Tasks on Workers (2026-10-04, notes/threads.md step 5)
+- host.js startTask: a task runs on a Worker of a pool (task-worker.js) when the page is cross-origin isolated, else at
+  once in a fresh instance. The pool is made by worker.js / test-worker.js at start (prepareTaskPool): a Worker made
+  while a program runs would never start. test_in_browser.py sends COOP/COEP; index.html registers
+  coi-serviceworker.js, which adds them on GitHub Pages (one reload, guarded by sessionStorage "isolating").
 
 ## Published: https://warp.pannous.com/ (user request 2026-10-03)
 - .github/workflows/pages.yml ("Playground") builds warp.wasm + samples.js with web/playground/build.sh on a push to
@@ -73,3 +87,25 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   user; *.pannous.com otherwise points to the pannous.com server.
 - The tests page is not published (it needs test_in_browser.py's endpoints and the 38 MB test binary).
 - C headers in the browser tests: WARP_INCLUDE=/include, served by name as /__include__/<header> from INCLUDE_DIRS.
+
+## Modules and packages in the browser (2026-10-04)
+The compiler reads module files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `fetch_text`,
+cached per address), a path of the served repository or a URL. A registered package (packages.wasp) is read from its
+GitHub raw files at the pinned tag (`raw.githubusercontent.com/<owner>/<repo>/v<version>/…`, served to any page), so
+`use uniscript` works; a program's `read(path)` of a URL (the package's data/entities.idx) fetches its bytes as they
+are (host.js `readBytes`, no newline added, like the native read). Browser suite: 1452 passed, 15 failed (inherent);
+night 2026-10-04 end: 1497 passed, the same 15 failed (downloads, module files, package pins, lean, threads, strict flag).
+
+## Feature parity (2026-10-05, fixer)
+Every feature area of 2026-10-04/05 runs in the browser build with its native tests unchanged:
+`tests/queue.sh cargo browser-test -- test_unit test_units test_counting_units test_hyperreals test_structural_patterns
+test_filter_loops test_type_word_filter_loops test_job_lists test_return_type_dispatch test_type_dispatch
+test_trait_runtime_dispatch test_operator_declarations test_operator_precedence test_superscript_operator_declarations
+test_mutating_bang test_unwrap test_failed_word test_raise test_try_catch_except test_try_stack_overflow
+test_uniscript_entities` → 114 of 114 (natively 115: untrusted_code_may_guard_a_call is native-only). Areas: units
+(literals, conversion, products, composites, comparisons, at run time), hyperreals, structural patterns, filter loops,
+job lists (three one-second jobs ~1 s with cross-origin isolation), dispatch (parameter, return type, trait runtime),
+custom operators, `x!` / failed / raise / try-catch / a caught stack overflow (guarded_call in host.js), entities.
+No gaps found. A test that reads a compiled module natively (wasm_reader) must be `#[cfg(feature = "native")]`, else
+the browser build of the tests does not compile (test_precomputed, fixed here; test_ffi_warning_once and
+the_strict_flag_turns_warnings_into_errors before).

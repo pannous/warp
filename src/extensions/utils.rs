@@ -1,11 +1,12 @@
 use std::fs::{create_dir_all, File};
+#[cfg(all(feature = "native", not(test)))]
 use std::io::ErrorKind;
 use std::io::Write;
 use std::path::Path;
 //noinspection ALL
-use crate::extensions::strings::StringExtensions;
 
 /// Without the native feature (the compiler in the browser) there is no network: the page's host does the fetching at run time
+#[cfg(not(feature = "native"))]
 const NO_NETWORK: &str = "no network in this build of warp (compiled without the native feature)";
 
 #[cfg(not(feature = "native"))]
@@ -17,7 +18,7 @@ pub fn download(url: &str) -> String {
 // test mode (native): use mock
 #[cfg(all(test, feature = "native"))]
 pub fn download(url: &str) -> String {
-	"mock".s() + url
+	format!("mock{url}")
 }
 
 // normal mode (native): use ureq

@@ -40,8 +40,8 @@ What a place declared `photo` accepts, a parameter `keep(p:photo)` and a typed v
 `image like photo` declares that an image may stand wherever a photo is expected. It is a promise, not a conversion:
 the image is still judged by its uses, so a field it lacks fails loudly where it is read. Unknown values get the benefit
 of the doubt (a newcomer's untyped code runs), known types never mix silently (two declared types that happen to share
-fields are a decision the writer states once, in one line). Implemented in src/traits.rs (`Likeness`,
-`Dispatch::refused_argument`), tests/test_like.rs, wiki page wiki_pages/like.md.
+fields are a decision the writer states once, in one line). Implemented in src/lowering/traits.rs (`Likeness`,
+`Dispatch::refused_argument`), tests/operators/test_like.rs, wiki page wiki_pages/like.md.
 
 ## Field test 2026-10-02
 Agents wrote standard algorithms (sorting, life, sieve, levenshtein, queens/hanoi, dijkstra) in their natural
@@ -68,12 +68,16 @@ User decisions from that round:
   `Acknowledging(topics)` for tests, the playground's page list (src/web.rs `PageAcknowledger`, report `notes`).
   Remembered as `ack:<topic> = acknowledged` in `.wasp-acknowledged` (CLI, working directory). Non-interactive runs
   just show the warning, never block; `--no-ask` never prompts.
+- Scope (user, 2026-10-05): the prompt answers `GotIt::{This, All, No}`: `[y this / a all of this kind / n]`. "This"
+  remembers one expression, `ack:<topic>@<expression> = acknowledged` (an Ask by its question, which names the
+  expression; educate_once by its written text); "all" the topic. A `// got it` comment on a line silences the
+  warnings and notes of that line (diagnostic::silenced_by_comment). The playground still acknowledges whole topics.
 - Users: `a upto b` (topic `upto`) and the for-header bound `0..n-1` (topic `kotlin-range`, Kotlin's `..` is inclusive),
   both default exclusive, fallback Warning (src/wasp_parser.rs `range_reading`); `local-or-global` (src/analyzer.rs
   `resolve_main_variable_assignments`, default a new local `let n = …`, explicit main's `global n = …`); `signed-operand`
   `1 -1` (default the list `[1 -1]`). Error fallback: `list-times` `[x]*n`, `insert-order`, `list-plus` `[1 2 3]+4`,
   `bare-list` `a=1 2 3`, `suffix-precedence` `1+2 squared`. Explicit forms (`..<`, `...`, `to`, `global n`, `[4]`, `.+`
-  …) never warn. tests/test_got_it_warnings.rs, test_welcoming_ask.rs, test_welcoming_globals.rs.
+  …) never warn. tests/welcoming/test_got_it_warnings.rs, test_welcoming_ask.rs, test_welcoming_globals.rs.
 - A wrong guess fails far away, so `eval` names it: a runtime error lists the defaults the warnings took
   (`assumed at 23:13, 24:15: …; fix: ..<`, diagnostic::take_assumptions), and an index out of range in a program with an
   exclusive range adds "hint: `..` excludes the end; `...` or `to` include it". The kotlin-range warning fires for every
@@ -81,7 +85,9 @@ User decisions from that round:
 - New ambiguities: build an `Ask` where the ambiguity is still visible (often the parser, which knows the written form),
   give every reading its explicit form, pick Error only when a wrong guess would silently corrupt results.
 
-## Later: change the code to the intended form (not built)
+## Change the code to the intended form (built 2026-10-05 for the playground: notes/fixits.md)
+Each reading is a `Fix` on the diagnostic, the playground shows it as an "I meant: …" button. Still open: `warp fix`,
+IDE quick fixes, fixes that need several edits. The original design note:
 The user's "intelligent intent to change the code": instead of a question that changes what the source means, an
 action that rewrites the source to the explicit form the user picks, so the file itself says it. Seed data is already
 there: every `Ask` keeps `written` (the ambiguous text), `line`/`column` and each reading's `explicit_form`, and the

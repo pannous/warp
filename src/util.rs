@@ -1,4 +1,3 @@
-use serde_json::json;
 use std::cell::Cell;
 #[cfg(feature = "native")]
 use wasmtime::{Config, Engine, Store};
@@ -9,6 +8,10 @@ use wasmtime::{Config, Engine, Store};
 pub const DEFAULT_FUEL: u64 = 10_000_000_000;
 /// Environment variable that overrides `DEFAULT_FUEL`
 pub const FUEL_VARIABLE: &str = "WARP_FUEL";
+/// The GC heap a run starts with: reserved, committed lazily by the OS; a heap starting empty collects (walking every
+/// frame of a deep recursion) at each of its many small growths
+#[cfg(feature = "native")]
+const GC_HEAP_INITIAL_BYTES: u64 = 1 << 30;
 
 thread_local! {
 	static FUEL_OVERRIDE: Cell<Option<u64>> = const { Cell::new(None) };
@@ -42,6 +45,7 @@ pub fn deterministic_config() -> Config {
 	config.wasm_gc(true);
 	config.wasm_function_references(true);
 	config.cranelift_nan_canonicalization(true);
+	config.gc_heap_initial_size(GC_HEAP_INITIAL_BYTES);
 	config
 }
 
@@ -59,6 +63,16 @@ pub fn fetch(url: &str) -> String {
 	crate::extensions::utils::download(url)
 }
 
+/// The engine of a program that starts tasks (tasks.rs): gc_engine's settings plus epoch interruption, the check
+/// points where a task stops or pauses
+#[cfg(feature = "native")]
+pub fn task_engine() -> Engine {
+	let mut config = deterministic_config();
+	config.consume_fuel(true);
+	config.epoch_interruption(true);
+	Engine::new(&config).expect("Failed to create WASM engine")
+}
+
 /// Create a WASM engine with GC, function references, canonical NaNs and fuel metering.
 /// This is the standard configuration for all wasp WASM operations; create its stores with `fueled_store`.
 #[cfg(feature = "native")]
@@ -70,7 +84,7 @@ pub fn gc_engine() -> Engine {
 
 
 pub fn show_type_name<T>(_: &T) {
-	use std::any::{type_name, type_name_of_val};
+	use std::any::type_name;
 	// println!("{}", type_name_of_val(*json!({"name": "Alice"})));
 	println!("{}", type_name::<T>());
 }

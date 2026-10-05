@@ -4,6 +4,16 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>warp playground</title>
+	<script>
+		// tasks on Workers need shared memory, which needs cross-origin isolation: a service worker adds the headers
+		// GitHub Pages cannot send, then the page reloads once under it (coi-serviceworker.js)
+		if (!self.crossOriginIsolated && "serviceWorker" in navigator && !sessionStorage.getItem("isolating")) {
+			navigator.serviceWorker.register("coi-serviceworker.js").then(() => {
+				sessionStorage.setItem("isolating", "1");
+				if (!navigator.serviceWorker.controller) location.reload();
+			}, () => {});
+		}
+	</script>
 	<link rel="stylesheet" href="codemirror/codemirror.min.css">
 	<link rel="stylesheet" href="playground.css">
 	<script src="codemirror/codemirror.min.js"></script>

@@ -124,3 +124,11 @@ fn test_empty_structures() {
 	println!("Empty block: {}", json);
 	assert!(json.contains("leer"));
 }
+
+#[test]
+fn html_attributes_and_repeated_tags_in_data() {
+	let parsed = warp::wasp_parser::parse_data("{div{class:\"ab\"} div{type:email}}");
+	assert_eq!(parsed.serialize(), "{div{class:\"ab\"} div{type:email}}");
+	warp::is!("x={class:\"btn\" type:\"email\"}; x.class", "btn");
+	warp::is!("7 div 2", 3);
+}

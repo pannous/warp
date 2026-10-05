@@ -10,7 +10,7 @@ way. Proven on 2026-10-03 (about 30 branches merged, suite 1345 → 1525 passed,
    detached tmux and prints each claude.ai/code URL:
    - warp-integrator (merge, full suite, push to main)
    - warp-interviewer (the only one who asks you decision questions; talk to it when you have a minute)
-   - warp-fixer (small to-dos, todo.md, ignored "next"/"soon" tests)
+   - warp-fixer (small to-dos from the board `todo list`, ignored "next"/"soon" tests)
 3. Feature workers are spawned per task by the supervisor with `notes/agents/start.sh worker <name> "<task>"`.
 
 Spawned sessions get generated names (warp-6c …). Find them with ListAgents: the tmux column shows the role

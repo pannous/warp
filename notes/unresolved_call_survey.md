@@ -1,5 +1,8 @@
 # Unresolved call in code position (decision #7, survey A15)
 
+Superseded in part: rule 3 below (paren data with a space stays data) no longer holds; the current rule is
+wiki/charged.md section 1 "Unknown words".
+
 `print(3)`, `square(3.0)` or `min(1,2)` with nothing defined silently evaluates to the data `(print 3)`.
 Experiment: export of 8f070776 in `probes/a15_wt` (own target dir; main untouched), one check in
 `emit_list_node` (src/wasm_emitter/list_emitter.rs), placed after every resolver (user function, FFI, WASI, introspection, type

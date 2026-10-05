@@ -3,7 +3,8 @@
 //! One mechanism, not a zoo of special types: an exact number is a sparse polynomial with rational
 //! coefficients over named generators (π, ℯ, ⅈ, square and cube roots), kept in a normal form by
 //! simplification rules. This mirrors the Lean model `HyperGeneral` (a list of coefficient × exponent
-//! pairs, simplified to a normal form); hyperreal generators ε and ω = ε⁻¹ fit the same shape later.
+//! pairs, simplified to a normal form). The hyperreal generator ε takes any integer exponent (ω = ε⁻¹):
+//! an exact number is then a Laurent polynomial in ε (notes/hyperreals.md).
 //!
 //! Normal form: no zero coefficients; π and ℯ carry any nonzero integer exponent; ⅈ appears at most
 //! once (ⅈ² = -1); a monomial has at most one square root √r with r > 1 square-free and at most one cube
@@ -102,8 +103,8 @@ impl fmt::Display for Rational {
 }
 
 /// A named generator of the polynomial ring. The derived order is the print order: `π√2`, `ℯ∛3`.
-/// Room for hyperreals later: an `Epsilon` generator with any integer exponent (ω = ε⁻¹); comparisons then
-/// decide by the lowest ε power first and only then by the real coefficients computed here.
+/// `Epsilon` is the hyperreal infinitesimal with any integer exponent (ω = ε⁻¹); comparisons decide by the lowest
+/// ε power first and only then by the real coefficients.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Generator {
 	Pi,
@@ -113,6 +114,8 @@ pub enum Generator {
 	SquareRoot(BigInt),
 	/// ∛r, r > 1 cube-free
 	CubeRoot(BigInt),
+	/// ε, the canonical positive infinitesimal: 0 < ε < r for every positive real r
+	Epsilon,
 }
 
 impl Generator {
@@ -123,6 +126,7 @@ impl Generator {
 			Generator::Imaginary => f64::NAN,
 			Generator::SquareRoot(r) => r.to_f64().unwrap_or(f64::INFINITY).sqrt(),
 			Generator::CubeRoot(r) => r.to_f64().unwrap_or(f64::INFINITY).cbrt(),
+			Generator::Epsilon => f64::NAN, // no f64 holds an infinitesimal: callers refuse hyperreals first
 		}
 	}
 }
@@ -135,6 +139,7 @@ impl fmt::Display for Generator {
 			Generator::Imaginary => write!(f, "ⅈ"),
 			Generator::SquareRoot(r) => write!(f, "√{r}"),
 			Generator::CubeRoot(r) => write!(f, "∛{r}"),
+			Generator::Epsilon => write!(f, "ε"),
 		}
 	}
 }
@@ -158,6 +163,10 @@ impl Monomial {
 
 	fn has_imaginary(&self) -> bool {
 		self.exponent(&Generator::Imaginary) != 0
+	}
+
+	fn without(&self, generator: &Generator) -> Monomial {
+		Monomial(self.0.iter().filter(|(g, _)| g != generator).cloned().collect())
 	}
 
 	/// Product as coefficient × monomial in normal form
@@ -197,7 +206,7 @@ impl Monomial {
 		let mut result = Monomial::one();
 		for (generator, exponent) in &self.0 {
 			let factor = match generator {
-				Generator::Pi | Generator::Euler => Monomial(vec![(generator.clone(), -exponent)]),
+				Generator::Pi | Generator::Euler | Generator::Epsilon => Monomial(vec![(generator.clone(), -exponent)]),
 				Generator::Imaginary => {
 					coefficient = coefficient.neg();
 					Monomial::of(Generator::Imaginary)
@@ -228,9 +237,13 @@ impl Monomial {
 impl fmt::Display for Monomial {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		for (generator, exponent) in &self.0 {
-			write!(f, "{generator}")?;
-			if *exponent != 1 {
-				write!(f, "{}", superscript(*exponent))?;
+			let (symbol, exponent) = match generator {
+				Generator::Epsilon if *exponent < 0 => (OMEGA.to_string(), -exponent),
+				_ => (generator.to_string(), *exponent),
+			};
+			write!(f, "{symbol}")?;
+			if exponent != 1 {
+				write!(f, "{}", superscript(exponent))?;
 			}
 		}
 		Ok(())
@@ -246,6 +259,9 @@ fn superscript(n: i64) -> String {
 		})
 		.collect()
 }
+
+/// How ε⁻ⁿ prints: ω, ω²
+const OMEGA: &str = "ω";
 
 /// Trial division bound for reducing radicands. After removing primes below it, a cofactor below
 /// BOUND^(k+1) has at most k prime factors, so a perfect-power test finishes the reduction exactly.
@@ -347,6 +363,38 @@ impl Exact {
 		self.0.keys().any(Monomial::has_imaginary)
 	}
 
+	pub fn epsilon() -> Exact {
+		Exact::generator(Generator::Epsilon)
+	}
+
+	pub fn omega() -> Exact {
+		Exact::term(Rational::integer(1), Monomial(vec![(Generator::Epsilon, -1)]))
+	}
+
+	/// A hyperreal that is no real: some term has a power of ε
+	pub fn has_epsilon(&self) -> bool {
+		self.0.keys().any(|monomial| monomial.exponent(&Generator::Epsilon) != 0)
+	}
+
+	/// The terms with ε^power, ε removed from them
+	fn epsilon_part(&self, power: i64) -> Exact {
+		let terms = self.0.iter().filter(|(monomial, _)| monomial.exponent(&Generator::Epsilon) == power);
+		Exact(terms.map(|(monomial, coefficient)| (monomial.without(&Generator::Epsilon), coefficient.clone())).collect())
+	}
+
+	/// The lowest power of ε among the terms: negative for an infinite number, positive for an infinitesimal
+	fn lowest_epsilon_power(&self) -> Option<i64> {
+		self.0.keys().map(|monomial| monomial.exponent(&Generator::Epsilon)).min()
+	}
+
+	/// The standard part st(x): the real nearest to a finite hyperreal; an error for an infinite one
+	pub fn standard_part(&self) -> Result<Exact, String> {
+		match self.lowest_epsilon_power() {
+			Some(power) if power < 0 => Err(format!("st({self}): {self} is infinite, it has no standard part")),
+			_ => Ok(self.epsilon_part(0)),
+		}
+	}
+
 	pub fn add(&self, other: &Exact) -> Exact {
 		let mut terms = self.0.clone();
 		for (monomial, coefficient) in &other.0 {
@@ -415,7 +463,7 @@ impl Exact {
 		let mut result = Exact::integer(1);
 		for (generator, exponent) in &monomial.0 {
 			match generator {
-				Generator::Pi | Generator::Euler if exponent % index as i64 == 0 => {
+				Generator::Pi | Generator::Euler | Generator::Epsilon if exponent % index as i64 == 0 => {
 					result = result.mul(&Exact::term(Rational::integer(1), Monomial(vec![(generator.clone(), exponent / index as i64)])));
 				}
 				_ => return None,
@@ -452,6 +500,11 @@ impl Exact {
 		}
 		if self.has_imaginary() {
 			return Err(format!("{self} is complex, complex numbers are not ordered"));
+		}
+		if self.has_epsilon() {
+			// the terms of the lowest ε power outweigh all others; ε itself is positive
+			let lowest = self.lowest_epsilon_power().unwrap_or(0);
+			return self.epsilon_part(lowest).sign();
 		}
 		let mut precision = 64;
 		while precision <= PRECISION_BUDGET {
@@ -574,6 +627,7 @@ fn generator_interval(generator: &Generator, precision: usize) -> Interval {
 			Interval { lo: root.clone(), hi: root + 1 }
 		}
 		Generator::Imaginary => unreachable!("complex values are rejected before interval evaluation"),
+		Generator::Epsilon => unreachable!("hyperreals are signed by their ε powers before interval evaluation"),
 	}
 }
 

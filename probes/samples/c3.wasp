@@ -1,0 +1,13 @@
+// Expression Calculator
+// Parsing and evaluating arithmetic expressions
+// the parser state is global: functions change it (closures would capture copies)
+
+global input = ""
+global pos = 0
+
+def peek() := if pos < input.bytes then byte_slice(input, pos, pos + 1) else ""
+def advance() { pos = pos + 1; return byte_slice(input, pos - 1, pos) }
+def skip_spaces() { while peek() == " " { advance() } }
+def is_digit_text(c) := c != "" and c >= "0" and c <= "9"
+def is_letter_text(c) := c != "" and c >= "a" and c <= "z"
+input = "25"; pos = 0; start = pos; advance(); advance(); byte_slice(input, start, pos) as float

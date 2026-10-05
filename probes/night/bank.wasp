@@ -1,0 +1,8 @@
+class account{owner:text balance:int}
+deposit(a:account, n) := account(a.owner, a.balance + n)
+withdraw(a:account, n) := if n > a.balance then error("insufficient funds") else account(a.owner, a.balance - n)
+acc = account("bo", 10)
+acc = deposit(acc, 5)
+acc = withdraw(acc, 3)
+r = try withdraw(acc, 100) else "refused"
+acc.owner + ": " + str(acc.balance) + " " + r

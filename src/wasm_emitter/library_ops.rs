@@ -6,7 +6,9 @@ use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
 use ValType::Ref;
-use crate::type_kinds::{CURLY_LIST_KIND, SQUARE_LIST_KIND};
+use crate::type_kinds::{CURLY_BRACKET_INFO, CURLY_LIST_KIND, KIND_BITS, SQUARE_LIST_KIND};
+/// The bracket info in a list's kind, above its KIND_BITS
+const BRACKET_INFO_MASK: i64 = 0xff;
 use crate::wasm_emitter::layout::BYTE;
 
 const KEY_KIND: i64 = Kind::Key as i64;
@@ -16,15 +18,19 @@ const DECIMAL_BASE: i64 = 10;
 const ZERO_DIGIT: i32 = b'0' as i32;
 const MINUS_SIGN: i32 = b'-' as i32;
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
+/// The text of a ø item in the text of a list (`str([1, ø])` is "[1 ø]")
+const EMPTY_TEXT: &str = "ø";
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 15] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 17] = [
 	(crate::library_words::MAP_KEYS, crate::library_words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
 	(crate::library_words::MAP_ENTRIES, crate::library_words::MAP_ENTRIES),
 	(crate::library_words::COLLECTION_CONTAINS, crate::library_words::COLLECTION_CONTAINS),
 	(crate::library_words::COLLECTION_POSITION, crate::library_words::COLLECTION_POSITION),
 	(crate::library_words::MAP_GET_OR, crate::library_words::MAP_GET_OR),
+	(crate::library_words::MAP_WITHOUT, crate::library_words::MAP_WITHOUT),
+	(crate::library_words::ORD, CODEPOINT_OF),
 	("chars", "text_chars"),
 	("field_with", "field_with"),
 	("reverse", "list_reverse"),
@@ -36,6 +42,11 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 15] = [
 	(crate::library_words::SLICE, NODE_SLICE),
 ];
 pub const NODE_SLICE: &str = "node_slice";
+pub const LIST_JOIN: &str = "list_join";
+/// list_text(list, separator): list_join that also takes nested lists, for the text of a list (`str(xs)`)
+pub const LIST_TEXT: &str = "list_text";
+/// codepoint_of(node) -> Int node: the code point of a character, the runtime error not_a_character for anything else
+pub const CODEPOINT_OF: &str = "codepoint_of";
 pub const NODE_ORDER: &str = "node_order";
 
 impl WasmGcEmitter {
@@ -53,6 +64,20 @@ impl WasmGcEmitter {
 		self.emit_list_join();
 		self.emit_print_value(); // after list_join, which gives the text
 		self.emit_node_slice(); // after list_reverse, text_chars and list_join, which it calls
+		self.emit_codepoint_of();
+	}
+
+	fn emit_codepoint_of(&mut self) {
+		if !self.should_emit_function(CODEPOINT_OF) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		self.runtime_function(CODEPOINT_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
+			s.emit_require_kind(f, 0, Kind::Codepoint, "not_a_character");
+			f.instruction(&I::LocalGet(0));
+			s.emit_codepoint_of_node(f);
+			s.call(f, "new_int");
+		});
 	}
 
 	/// Push the i64 of the Int node in local `node`
@@ -67,7 +92,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Trap unless the node in local `local` has kind `expected`
-	fn emit_require_kind(&self, func: &mut Function, local: u32, expected: Kind, error: &'static str) {
+	pub(super) fn emit_require_kind(&self, func: &mut Function, local: u32, expected: Kind, error: &'static str) {
 		self.emit_field(func, local, 0);
 		Self::emit_list(func, &[I::I64Const(expected as i64), I::I64Ne]);
 		self.emit_fail_if(func, error);
@@ -327,23 +352,34 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// list_join(list, separator): the items (texts, ints, ASCII characters) as one text with the separator between them
+	/// list_join(list, separator): the items (texts, ints, ASCII characters) as one text with the separator between them;
+	/// list_text(list, separator), the text of a list (`str(xs)`), also takes nested lists, each as "[…]" ("{…}" for a
+	/// map), entries as "key:value" and symbols as their names
 	fn emit_list_join(&mut self) {
-		if !self.should_emit_function("list_join") {
-			return;
+		for (name, nested) in [(LIST_JOIN, false), (LIST_TEXT, true)] {
+			if self.should_emit_function(name) {
+				self.emit_joining(name, nested);
+			}
 		}
+	}
+
+	fn emit_joining(&mut self, name: &'static str, nested: bool) {
 		self.emit_text_heap_global();
 		self.emit_int_to_decimal();
 		self.emit_exact_text();
 		self.emit_float_text(); // after int_to_decimal, which it calls
 		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
+		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
+		let map_texts = [self.allocate_string("{"), self.allocate_string("}"), self.allocate_string(":")];
+		let empty_text = self.allocate_string(EMPTY_TEXT);
+		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
 		locals.push(ValType::I64);
-		self.runtime_function("list_join", vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
+		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
 			let (bound, address, position, is_first, number) = (4, 5, 6, 7, 8);
 			let is_kind = |f: &mut Function, kind: Kind| {
@@ -354,6 +390,69 @@ impl WasmGcEmitter {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
+				// list_text: a nested list as its literal, "[" + list_text(item, " ") + "]", a map in braces
+				if nested {
+					let [open, close, space] = texts;
+					let [open_map, close_map, colon] = map_texts;
+					let new_text = |f: &mut Function, (pointer, length): (u32, u32)| {
+						Self::emit_list(f, &[I32Const(pointer as i32), I32Const(length as i32)]);
+						s.call(f, "new_text");
+					};
+					let masked_kind_is = |f: &mut Function, kind: Kind| {
+						s.emit_field(f, element, 0);
+						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq]);
+					};
+					// a symbol (a map's key) as its name
+					is_kind(f, Kind::Symbol);
+					Self::emit_list(f, &[I::If(BlockType::Empty), I::I64Const(Kind::Text as i64)]);
+					s.emit_field(f, element, 1);
+					Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::LocalSet(element), I::End]);
+					// an entry key:value as list_text([key value], ":"), ø for a missing value
+					masked_kind_is(f, Kind::Key);
+					f.instruction(&I::If(BlockType::Empty));
+					Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND)]);
+					s.emit_field(f, element, 1);
+					Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND)]);
+					s.emit_field(f, element, 2);
+					Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Result(node_ref))]);
+					s.call(f, "new_empty");
+					f.instruction(&I::Else);
+					s.emit_field(f, element, 2);
+					Self::emit_list(f, &[I::RefAsNonNull, I::End, I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type)]);
+					new_text(f, colon);
+					Self::emit_list(f, &[I::Call(own_index), I::LocalSet(element), I::End]);
+					// a curly list is a map: its bracket info, above the kind (other info may sit higher still)
+					let is_map = |f: &mut Function| {
+						s.emit_field(f, element, 0);
+						Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(BRACKET_INFO_MASK), I::I64And, I::I64Const(CURLY_BRACKET_INFO), I::I64Eq]);
+					};
+					masked_kind_is(f, Kind::List);
+					f.instruction(&I::If(BlockType::Empty));
+					is_map(f);
+					f.instruction(&I::If(BlockType::Result(node_ref)));
+					new_text(f, open_map);
+					f.instruction(&I::Else);
+					new_text(f, open);
+					f.instruction(&I::End);
+					f.instruction(&I::LocalGet(element));
+					new_text(f, space);
+					f.instruction(&I::Call(own_index));
+					s.call(f, super::text_builtins::TEXT_CONCAT);
+					is_map(f);
+					f.instruction(&I::If(BlockType::Result(node_ref)));
+					new_text(f, close_map);
+					f.instruction(&I::Else);
+					new_text(f, close);
+					f.instruction(&I::End);
+					s.call(f, super::text_builtins::TEXT_CONCAT);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+					// a ø item reads as ø, as Node::serialize writes it
+					is_kind(f, Kind::Empty);
+					f.instruction(&I::If(BlockType::Empty));
+					Self::emit_list(f, &[I32Const(empty_text.0 as i32), I32Const(empty_text.1 as i32)]);
+					s.call(f, "new_text");
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
 				is_kind(f, Kind::Float);
 				f.instruction(&I::If(BlockType::Empty));
 				s.emit_field(f, element, 1);

@@ -45,6 +45,15 @@ pub struct TypeManager {
 	pub float_array_type: u32,
 	pub float_list_type: u32,
 
+	/// $NodeArray = (array (mut (ref null $Node))), the items of a $NodeList: a list variable of any elements held as an
+	/// array (list_dispatch.rs); $NodeList also keeps the kind of the list it stands for (its brackets)
+	pub node_array_type: u32,
+	pub node_list_type: u32,
+
+	/// $NodeMap = (struct (field $count (mut i32)) (field $keys (mut (ref $NodeArray))) (field $values (mut (ref $NodeArray)))
+	/// (field $slots (mut (ref $Limbs)))): a map variable held as a hash table (map_backend.rs)
+	pub node_map_type: u32,
+
 	/// Next available type index
 	next_type_idx: u32,
 
@@ -78,6 +87,9 @@ impl TypeManager {
 			int_list_type: 0,
 			float_array_type: 0,
 			float_list_type: 0,
+			node_array_type: 0,
+			node_list_type: 0,
+			node_map_type: 0,
 			next_type_idx: 0,
 			type_errors: Vec::new(),
 			user_type_indices: HashMap::new(),
@@ -148,6 +160,35 @@ impl TypeManager {
 		self.emit_big_int_types();
 		(self.int_array_type, self.int_list_type) = self.emit_typed_list_types(ValType::I64);
 		(self.float_array_type, self.float_list_type) = self.emit_typed_list_types(ValType::F64);
+		self.emit_node_list_types();
+		self.emit_node_map_type();
+	}
+
+	fn emit_node_map_type(&mut self) {
+		let reference = |index: u32| Val(Ref(RefType { nullable: false, heap_type: HeapType::Concrete(index) }));
+		self.types.ty().struct_(vec![
+			FieldType { element_type: Val(ValType::I32), mutable: true }, // count
+			FieldType { element_type: reference(self.node_array_type), mutable: true }, // keys, capacity = their length
+			FieldType { element_type: reference(self.node_array_type), mutable: true }, // values
+			FieldType { element_type: reference(self.limbs_type), mutable: true }, // slots: entry index or -1
+		]);
+		self.node_map_type = self.next_type_idx;
+		self.next_type_idx += 1;
+	}
+
+	/// $NodeArray and $NodeList = (struct (field $length (mut i32)) (field $items (mut (ref $NodeArray))) (field $kind (mut i64)))
+	fn emit_node_list_types(&mut self) {
+		let element = Ref(self.node_ref(true));
+		self.types.ty().array(&Val(element), true);
+		let array = self.next_type_idx;
+		let items = RefType { nullable: false, heap_type: HeapType::Concrete(array) };
+		self.types.ty().struct_(vec![
+			FieldType { element_type: Val(ValType::I32), mutable: true }, // length
+			FieldType { element_type: Val(Ref(items)), mutable: true }, // items, capacity = their length
+			FieldType { element_type: Val(ValType::I64), mutable: true }, // kind of the list node, with its brackets
+		]);
+		self.next_type_idx += 2;
+		(self.node_array_type, self.node_list_type) = (array, array + 1);
 	}
 
 	/// The array of `element`s and the growable list holding it: (struct (field $length (mut i32)) (field $items (mut (ref $array))))
@@ -220,34 +261,22 @@ impl TypeManager {
 
 	/// Convert a FieldDef to a WASM FieldType
 	pub fn field_def_to_wasm_field(&mut self, field: &FieldDef) -> FieldType {
-		let element_type = match field.type_name.as_str() {
-			// Node-mode: map wasp types to WASM types
-			"Int" | "i64" | "long" => Val(ValType::I64),
-			"Float" | "f64" | "double" => Val(ValType::F64),
-			"i32" | "int" => Val(ValType::I32),
-			"f32" | "float" => Val(ValType::F32),
-			"Text" | "String" | "string" => Val(Ref(RefType {
-				nullable: true,
-				heap_type: HeapType::Concrete(self.string_type),
-			})),
-			"Node" => Val(Ref(RefType {
-				nullable: true,
-				heap_type: HeapType::Concrete(self.node_type),
-			})),
-			// an untyped field (`class contact {name email?}`) holds any Node, ø included
-			other if other.trim_end_matches('?') == crate::type_kinds::UNTYPED_FIELD => Val(Ref(self.node_ref(true))),
-			// User-defined types
-			other => {
-				if let Some(&type_idx) = self.user_type_indices.get(other) {
-					Val(Ref(RefType {
-						nullable: true,
-						heap_type: HeapType::Concrete(type_idx),
-					}))
-				} else {
-					self.type_errors.push(format!("unknown type: {other} of field {}", field.name));
+		use crate::type_kinds::FieldStorage;
+		let reference = |heap_type| Val(Ref(RefType { nullable: true, heap_type }));
+		let element_type = match crate::type_kinds::field_storage(&field.type_name) {
+			FieldStorage::I64 => Val(ValType::I64),
+			FieldStorage::F64 => Val(ValType::F64),
+			FieldStorage::I32 => Val(ValType::I32),
+			FieldStorage::F32 => Val(ValType::F32),
+			FieldStorage::Text => reference(HeapType::Concrete(self.string_type)),
+			FieldStorage::Node => reference(HeapType::Concrete(self.node_type)),
+			FieldStorage::Named => match self.user_type_indices.get(&field.type_name) {
+				Some(&type_idx) => reference(HeapType::Concrete(type_idx)),
+				None => {
+					self.type_errors.push(format!("unknown type: {} of field {}", field.type_name, field.name));
 					Val(Ref(self.node_ref(true)))
 				}
-			}
+			},
 		};
 
 		FieldType {
@@ -306,3 +335,4 @@ impl TypeManager {
 		&mut self.user_type_indices
 	}
 }
+

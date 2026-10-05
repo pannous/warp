@@ -14,7 +14,11 @@ use num_traits::ToPrimitive;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-pub const FUNCTIONS: [&str; 5] = ["sin", "cos", "tan", "ln", "exp"];
+pub const FUNCTIONS: [&str; 6] = ["sin", "cos", "tan", "ln", "exp", STANDARD_PART];
+/// st(x): the standard part of a finite hyperreal (wiki/hyperreals.md)
+const STANDARD_PART: &str = "st";
+/// `x as string`, `str(x)`: the text form of an exact value
+const TEXT_TYPES: [&str; 4] = ["string", "str", "text", "String"];
 
 /// Largest integer exponent computed exactly; beyond it the power is approximated
 const MAX_EXACT_EXPONENT: i64 = 10_000;
@@ -25,6 +29,8 @@ enum Value {
 	/// explicit `as float`: IEEE from here on
 	Float(f64),
 	Bool(bool),
+	/// a text joined with an exact value keeps its symbolic form: `"f" + √2` is "f√2"
+	Text(String),
 }
 
 enum Stop {
@@ -117,6 +123,7 @@ fn lower_reals(node: Node) -> Node {
 	match node {
 		Node::Number(Number::Real(real)) => match real {
 			Real::Exact(exact) if exact.has_imaginary() => error(&format!("{exact} is complex: ⅈ is only supported in constant expressions")),
+			Real::Exact(exact) if exact.has_epsilon() => error(&format!("{exact} is a hyperreal: ε and ω are only supported in constant expressions")),
 			_ => Node::Number(Number::Float(real.to_f64())),
 		},
 		Node::Key(left, Op::Cbrt, _) if matches!(left.drop_meta(), Node::Empty) => {
@@ -148,7 +155,7 @@ fn is_type_test_of_real(items: &[Node]) -> bool {
 fn type_name_before_lowering(argument: &Node) -> String {
 	match crate::analyzer::literal_number_type_word(argument) {
 		Some(word) => word.to_string(),
-		None => crate::analyzer::list_type_name(argument, &crate::analyzer::Scope::new()),
+		None => crate::analyzer::shown_list_type_name(argument, &crate::analyzer::Scope::new()),
 	}
 }
 
@@ -171,6 +178,8 @@ fn evaluate(node: &Node, scope: &mut Scope) -> Evaluated {
 		Node::Number(number) => number_value(number),
 		Node::True => Ok(Value::Bool(true)),
 		Node::False => Ok(Value::Bool(false)),
+		Node::Text(text) => Ok(Value::Text(text.clone())),
+		Node::Char(character) => Ok(Value::Text(character.to_string())),
 		Node::Symbol(name) => scope.get(name).cloned().ok_or(Stop::Unsupported),
 		Node::Key(left, op, right) => key(left, *op, right, scope),
 		Node::List(items, _, separator) => list(items, separator, scope),
@@ -201,6 +210,9 @@ fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 		[head, argument] if function_name(head).is_some() && !scope.contains_key(&head.name()) => {
 			let argument = evaluate(argument, scope)?;
 			call(function_name(head).unwrap_or_default(), argument)
+		}
+		[head, argument] if TEXT_TYPES.contains(&head.name().as_str()) && !scope.contains_key(&head.name()) => {
+			convert(evaluate(argument, scope)?, &head.name())
 		}
 		_ if matches!(separator, Separator::Semicolon | Separator::Newline) => {
 			let mut last = Err(Stop::Unsupported);
@@ -240,7 +252,11 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 			_ => Err(Stop::Unsupported),
 		},
 		_ if op.is_comparison() => compare(evaluate(left, scope)?, op, evaluate(right, scope)?),
-		Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Pow => arithmetic(evaluate(left, scope)?, op, evaluate(right, scope)?),
+		Op::Add => match (evaluate(left, scope)?, evaluate(right, scope)?) {
+			(left @ Value::Text(_), right) | (left, right @ Value::Text(_)) => Ok(Value::Text(text_of(left)? + &text_of(right)?)),
+			(left, right) => arithmetic(left, op, right),
+		},
+		Op::Sub | Op::Mul | Op::Div | Op::Pow => arithmetic(evaluate(left, scope)?, op, evaluate(right, scope)?),
 		_ => Err(Stop::Unsupported),
 	}
 }
@@ -248,10 +264,20 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 /// `x as float` / `as fast` / `as f64`: the f64 nearest to the exact value; `as real` / `as exact` keep it
 fn convert(value: Value, target: &str) -> Evaluated {
 	match (value, target) {
-		(Value::Real(real), "float" | "fast" | "f64" | "double") => Ok(Value::Float(real.to_f64())),
+		(value, text) if TEXT_TYPES.contains(&text) => Ok(Value::Text(text_of(value)?)),
+		(Value::Real(real), "float" | "fast" | "f64" | "double") => Ok(Value::Float(finite_f64(&real)?)),
 		(value @ Value::Real(_), "real" | "exact") => Ok(value),
 		(value @ Value::Float(_), "float" | "fast" | "f64" | "double") => Ok(value),
 		_ => Err(Stop::Unsupported),
+	}
+}
+
+/// The text form of a value: an exact real symbolically (`√2`, `π/2`), as it prints
+fn text_of(value: Value) -> Result<String, Stop> {
+	match value {
+		Value::Text(text) => Ok(text),
+		Value::Bool(_) => Err(Stop::Unsupported),
+		number => Ok(number.into_node().serialize()),
 	}
 }
 
@@ -305,6 +331,9 @@ fn root(real: Real, index: u32) -> Result<Real, Stop> {
 		if let Some(root) = exact.root(index) {
 			return Ok(Real::Exact(root));
 		}
+		if exact.has_epsilon() {
+			return fail(format!("{symbol}({exact}) has no exact form: only a single term with a power of ε divisible by {index} has a root"));
+		}
 		if exact.has_imaginary() {
 			return fail(format!("{symbol}({exact}) has no exact form and complex approximations are not supported"));
 		}
@@ -322,11 +351,19 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 	}
 }
 
+/// The f64 of a real; a hyperreal has none (an infinitesimal is no float), which is an error, never 0
+fn finite_f64(real: &Real) -> Result<f64, Stop> {
+	match real {
+		Real::Exact(exact) if exact.has_epsilon() => fail(format!("{exact} is a hyperreal and has no float value; st({exact}) is its standard part")),
+		_ => Ok(real.to_f64()),
+	}
+}
+
 fn float_of(value: Value) -> Result<f64, Stop> {
 	match value {
 		Value::Float(f) => Ok(f),
-		Value::Real(real) => Ok(real.to_f64()),
-		Value::Bool(_) => Err(Stop::Unsupported),
+		Value::Real(real) => finite_f64(&real),
+		Value::Bool(_) | Value::Text(_) => Err(Stop::Unsupported),
 	}
 }
 
@@ -364,6 +401,8 @@ fn real_arithmetic(a: Real, op: Op, b: Real) -> Result<Real, Stop> {
 		Op::Div => match y.inverse() {
 			Some(inverse) => Ok(Real::Exact(x.mul(&inverse))),
 			None if x.has_imaginary() || y.has_imaginary() => fail(format!("{x}/({y}) has no exact form yet")),
+			// 1/(1+ε) = 1-ε+ε²-…: an exact Laurent polynomial cannot hold infinitely many terms
+			None if x.has_epsilon() || y.has_epsilon() => fail(format!("{x}/({y}) needs infinitely many powers of ε, it has no exact form")),
 			// no rationalization of sums yet: 1/(1+√2) is approximated
 			None => approximate(x.to_f64() / y.to_f64(), || format!("{x}/({y})")),
 		},
@@ -426,10 +465,22 @@ fn call(function: &str, argument: Value) -> Evaluated {
 			"cos" => f.cos(),
 			"tan" => f.tan(),
 			"ln" => f.ln(),
+			STANDARD_PART => f,
 			_ => f.exp(),
 		}));
 	}
 	let real = real_operand(argument)?;
+	if let Real::Exact(exact) = &real {
+		if function == STANDARD_PART {
+			return exact.standard_part().map(|part| Value::Real(Real::Exact(part))).map_err(Stop::Error);
+		}
+		if exact.has_epsilon() {
+			return fail(format!("{function}({exact}) of a hyperreal has no exact form"));
+		}
+	}
+	if function == STANDARD_PART {
+		return Ok(Value::Real(real)); // a real is its own standard part
+	}
 	Ok(Value::Real(match function {
 		"sin" | "cos" | "tan" => trigonometric(function, real)?,
 		"ln" => logarithm(real)?,
@@ -600,6 +651,7 @@ impl Value {
 				None => Node::Number(Number::real(Real::Exact(exact))),
 			},
 			Value::Real(approximation) => Node::Number(Number::real(approximation)),
+			Value::Text(text) => Node::Text(text),
 		}
 	}
 }

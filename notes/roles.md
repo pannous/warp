@@ -39,10 +39,13 @@ decided rules), mark it in code/notes as an assumption, keep working, and SendMe
 If the answer differs, the change is undone or redone as a normal small task. Edits to existing tests count as such a
 decision too: make the edit on the branch in its own commit (named in the message), so reverting it is one revert;
 the Integrator merges it and the Interviewer gets the question.
+User, 2026-10-05: "it's allowed to un ignore test that are suddenly passing": dropping `#[ignore]` from a test that
+passes unedited needs no question; editing its assertions still needs a decision.
 
 ## Integrator (also the Tester)
 The only session that runs the full suite and the only one that pushes code to main.
-- Keeps one integration worktree (/Users/me/dev/angles/warp.worktrees.noindex/integrate, detached, follows origin/main).
+- Keeps one integration worktree (/Users/me/dev/angles/warp.worktrees.noindex/integrate, detached, follows origin/main;
+  created with `cowtree add --detach <path> origin/main`).
 - Workers send it "branch, tip, filters"; it merges the branch (union-resolves todo.md / tests/main.rs, sends real
   conflicts back to the worker), runs `./test.sh` with the integration build tweak, and pushes to main only at 0 failed
   and no drop in the test count. Otherwise it reports the failures to the worker (and the supervisor if it's a decision).
@@ -54,7 +57,7 @@ The only session that runs the full suite and the only one that pushes code to m
 - Keeps the baseline (test_results.txt) and the "Merged" lines on the board; tells the supervisor after each merge.
 
 ## Workers
-- One task, one branch, one worktree: `git worktree add -b <name> /Users/me/dev/angles/warp.worktrees.noindex/<name>
+- One task, one branch, one worktree: `cowtree add -b <name> /Users/me/dev/angles/warp.worktrees.noindex/<name>
   origin/main`. Outside the repo, so grep/IDE/cargo of the main checkout never see it, and `.noindex` keeps Spotlight out.
   Uncommitted build tweak in it: `version = "0.1.1-<name>"` (notes/build_speed.md).
 - Test first, then implement. While developing, only targeted tests and only through the queue:

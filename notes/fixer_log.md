@@ -6,7 +6,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - `print(a, b)` and `print a, b` print their arguments joined by a space (Python), worth the joined text.
   The parser turns the comma list `[[print a], b]` into the call `print(a, b)` (wasp_parser.rs
   `print_call_with_several_arguments`); the emitter prints `join([a, b], " ")` (list_emitter.rs `printed_value`).
-  tests/test_print_arguments.rs (CLI stdout + is!, also in the browser).
+  tests/text/test_print_arguments.rs (CLI stdout + is!, also in the browser).
 - `warp parse` shows closing brackets and the separators (`,` `;` `⏎`), so a merged statement is visible.
 - Found, in todo.md: one-line statements separated by spaces merge into one list; text * int (proposed to the supervisor).
 
@@ -24,12 +24,12 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-03 fix-text-as-int
 - `x="12"; x as int` / `int(x)` / `xs#1 as int` parse the text at run time (list_ops.rs `text_as_int`: optional sign,
-  decimal digits; else runtime error "invalid number"); was "not an int". tests/test_runtime_text_as_int.rs.
+  decimal digits; else runtime error "invalid number"); was "not an int". tests/text/test_runtime_text_as_int.rs.
 
 ## 2026-10-03 fix-declared-text
 - `string x = "a"`, `x:string = "a"`, `text x = "a"` and a later `x = "c"`: a one-character text (parsed as a codepoint)
   assigned to a declared text is that text (analyzer.rs assignment_mismatch + lower_declarations_among).
-  tests/test_declared_text_one_character.rs.
+  tests/text/test_declared_text_one_character.rs.
 
 ## 2026-10-03 fix-spaced-required
 - `class person{name! email?}`: a `!` glued to its name and followed by a space is the suffix (required field / evaluate
@@ -40,7 +40,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-03 fix-constant-text
 - `str(1+2)`, `"" + (1+2)`, `"a" + 2*3`: an Int constant expression converts by its value ("3", "a6"), not its source
   (emit_cast "string": the source-text branch is for data and names only). Float/real constants still serialize (todo).
-  tests/test_constant_expression_text.rs.
+  tests/text/test_constant_expression_text.rs.
 
 ## 2026-10-03 fix-wasm-target
 - A package tool build without the wasm32-wasip1 standard library reports "missing rust target wasm32-wasip1; fix:
@@ -56,4 +56,110 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - text * int repeats (`"ab"*2` → "abab", `"5"*3` → "555"), educate_once "got it" warning naming `n times text`, and
   `int("5")*3` for a digit text (user decision "Python repeat"). `n times "ab"` / `n times g` repeat (parser marker
   `times·text`, a non-text is an error naming `n times [x]`). text * float/text stay type errors.
-  tests/test_text_repeat.rs; approved edits of test_print_type_error, probe_footguns, test_welcoming_sugar in their own commit.
+  tests/text/test_text_repeat.rs; approved edits of test_print_type_error, test_footguns, test_welcoming_sugar in their own commit.
+
+## 2026-10-04 fix-ignored (the #[ignore = "next"/"soon"] sweep)
+- Python unpacking (tests/probe_destructuring.rs, all 15 "next" probes now pass): `a, b = xs` of a list, text or
+  `(1, 2)` unpacks by position (tuple_emitter.rs emit_unpacking; another count is the runtime error "wrong number of
+  values"); `a, *rest = …` / `*init, last` / `a, *mid, z` (parser: `*name` → the starred symbol, tuples.rs STARRED;
+  node_slice for the rest); `[a, b] = v`, `(a, b) = 1, 2`, nested `(a, b), c = …` (hidden `unpacked·i` names).
+- `f(int x, float y)` / `fun f(int a, int b){…}`: every comma argument may be a typed parameter (typed_parameters).
+- Exact reals join texts symbolically in constant programs (real.rs Value::Text): `"f" + sqrt(2)` → "f√2", `π/2 as
+  string` → "π/2" (user: "√2 if we preserve that information symbolically").
+- test_types "soon" tests un-ignored where they pass (their assertions are comments): test_typed_functions,
+  test_empty_typed_functions, test_polymorphism, test_polymorphism2. Still ignored, need real features: return-type
+  annotations `def f(x):float := …` (undefined function f), overloading by parameter type (test_polymorphism3), and
+  test_function_argument_cast (C-style `float addi(int x,int y){…}` return-typed definitions, int parameters
+  truncating float arguments).
+
+## 2026-10-05 fix-ignored-2
+- Indexing ø (`x=ø; x#1`, `x[0]`) was a raw "wasm trap: cast failure" a `try` could not catch; ø is the empty list,
+  so emit_list_walk fails index_out_of_range (tests/control/test_try_empty_index.rs).
+- A non-Int list element read as a number inside `try` (`x=[1,"ab"]; try -x#2 else 7`) was a cast trap: list_at reads
+  its element through get_int_value (code point of a character, else not_an_int); the runtime errors and getters are
+  emitted before the list ops now (tests/control/test_try_list_index.rs).
+
+## 2026-10-05 fix-uniscript-entities
+- `\alpha` / `\:infinity` uniscript entities in code (src/uniscript_entities.rs, ~150 LaTeX and English names, Greek,
+  sets, logic, relations): expanded to their character before parsing, outside texts and comments; an unknown
+  `\name` is the loud "unknown entity \name" (tests/parser/test_uniscript_entities.rs). The full table and `<:…>`
+  blocks stay with the uniscript package.
+
+## 2026-10-05 p22-like-error
+- P22 was already the behaviour on main (a known other type is an error teaching `pic like photo`); pinned the
+  missing-field case (tests/operators/test_like_known_type_mismatch.rs). Ad hoc names (`pic{…}` with no class pic) keep
+  their field warnings: `like` needs declared types.
+
+## 2026-10-05 p26-libm-pure
+- P26: libm calls carry no FFI effect; a Libm capability (granted to eval and untrusted code) keeps them imported
+  (tests/functions/test_libm_pure.rs; two pinned tests edited in their own commit).
+
+## 2026-10-05 p49-float-to-int-param
+- P49: a fractional literal or a variable holding one passed to a declared int parameter is the compile error
+  "2.2 is no int: write 2.2 as int" (analyzer infer_parameters_from_calls); 2.0 passes (no digits lost, assumption).
+  test_function_argument_cast edited (approved) and un-ignored.
+
+## 2026-10-05 fix-count-in
+- `count x in y` counts occurrences (items of a list, characters of a text, substrings of a text) instead of being
+  read as count(x in y) = 1; `count bytes in t` is t.bytes. Own pass before the lambdas (library_words::lower_count_in).
+
+## 2026-10-05 fix-try-raise
+- `try f x else y`: the guarded part may be a braceless call (was "`try` needs an `else`" after the first word)
+  (tests/control/test_try_braceless_call.rs).
+
+## 2026-10-05 fix-infinity
+- `∞` is the float infinity (Number::Inf, typed Float): `∞ > 1e300`, `-∞`, `1.0/0.0 == ∞`, `\:infinity`
+  (tests/numbers/test_infinity.rs). P56 (4) default; ω stays the hyperreal.
+
+## 2026-10-05 fix-hash-slices
+- Slices: `xs[a..b]`, `xs[a:b]`, text and variable bounds already worked; new `xs#(a…b)` / `xs#(a..b)` 1-based
+  slices (wasp_parser hash_slice_bounds). Unparenthesized `xs#a..b` stays the range from the value xs#a (it works on
+  main: `xs#1..6`), so it is no slice; queued as a question.
+
+## 2026-10-05 fix-is-declaration
+- `x is number 9` of a name assigned nowhere (and no parameter) declares it, `x:number = 9` (wiki Features.md,
+  inventions.md); of a variable it stays the type-and-value test (lowering/type_tests.rs is_declaration).
+
+## 2026-10-05 fix-raise
+- `raise X` / `throw X` / `raise error("m")`: the builtin raise(X) fails the run through returned_error with X as its
+  detail; `try` catches it, an Int if treats it as the failure branch (pipeline::returned_error_message). `catch` is
+  not built: the wiki form (function-level `catch (no food){}` handlers) is queued as a question.
+
+## 2026-10-05 decided-test-edits
+- P55: test_while_nop_issue reads x after the loop, un-ignored. P59: four array tests edited and un-ignored (own commit);
+  `x is 100 times [0]` written as the assignment `x = 100 times [0]` (assumption, `is` compares).
+
+## 2026-10-05 p56-entities
+- P56: entities are `\:name` only, in code and inside double-quoted texts (the text parser expands them); a bare
+  `\alpha` is the error "a uniscript entity is written \:alpha"; unknown `\:name` is loud in code and texts.
+
+## 2026-10-05 p49b-whole-float
+- P49b: a whole float (2.0, y=3.0) passed to an int parameter is refused too ("2.0 is no int: write 2.0 as int").
+
+## 2026-10-05 p58-hash-range-warning
+- P58: `xs#a..b` stays the range from the value xs#a, with a warning naming the slice xs#(a..b) and the range (xs#a)..b
+  (wasp_parser hash_range_warning).
+
+## 2026-10-05 p60-catch-except
+- P60: `try {…} catch {…}`, `catch e {…}`, `try: … except: …`, `except E:` / `except E as e:` are synonyms of `try X else Y`
+  (wasp_parser FALLBACK_WORDS, parse_caught_name); using the caught name is a loud error for now.
+
+## 2026-10-05 p61-is-teaches-be
+- P61: `is` always compares; `x is v` with x unbound is the error "undefined variable: x; `is` compares, a definition is
+  written `x be v`" (v as written: the parser keeps it as meta "compared with"); the `x is number 9` declaration undone.
+
+## 2026-10-05 p44-atomic
+- P44: `atomic xs = int[n]` is `shared xs = int[n]` (shared_arrays SHARED_WORDS).
+
+## 2026-10-05 p47-task-list-literal (P47 stage 1)
+- `[a, b]` of task variables gave the last result only: inside `[…]` an unbracketed sequence ending in a value (the
+  checked await) is a computed element, not a statement (analyzer is_statement).
+
+## 2026-10-05 p47-job-lists (P47 stages 2-4)
+- `jobs.add(go f(i))` keeps tasks unawaited; reads of the list await every job, `jobs#i` one, `await all xs` every
+  one (notes/threads.md "Job lists"); three one-second jobs take ~1 s.
+
+## 2026-10-05 zero-warnings-2
+- Redo of claude/zero-warnings-0h6ky3 on current main (its 13 commits conflicted with two days of changes; its CI half
+  was already on main): crate-level allows gone, dead code deleted as that branch chose, native-only items cfg-gated;
+  all six CI warning/clippy commands pass locally. The old remote is renamed archive/zero-warnings-0h6ky3.

@@ -4,6 +4,7 @@
 use super::WasmGcEmitter;
 use crate::type_kinds::{any_heap_type, Kind, KIND_BITS};
 use wasm_encoder::*;
+use Instruction as I;
 use ValType::Ref;
 
 /// Where a constructor's kind field comes from
@@ -23,14 +24,14 @@ impl WasmGcEmitter {
 		let node = Ref(self.node_ref(false));
 		self.exported_function(name, params, vec![node], vec![], |s, func| {
 			if kind_field == KindField::WithInfo {
-				Self::emit_list(func, &[Instruction::LocalGet(2), Instruction::I64Const(KIND_BITS), Instruction::I64Shl]);
+				Self::emit_list(func, &[I::LocalGet(2), I::I64Const(KIND_BITS), I::I64Shl]);
 			}
 			s.emit_kind(func, kind);
 			if kind_field == KindField::WithInfo {
-				func.instruction(&Instruction::I64Or);
+				func.instruction(&I::I64Or);
 			}
 			Self::emit_list(func, &fields);
-			func.instruction(&Instruction::StructNew(s.type_manager.node_type));
+			func.instruction(&I::StructNew(s.type_manager.node_type));
 		});
 	}
 }
@@ -52,7 +53,7 @@ pub fn emit_all_constructors(emitter: &mut WasmGcEmitter) {
 		emitter.emit_node_constructor("new_int", Kind::Int, vec![ValType::I64], Plain, vec![LocalGet(0), StructNew(i64_box), no_value()]);
 	}
 	emitter.emit_node_constructor("new_float", Kind::Float, vec![ValType::F64], Plain, vec![LocalGet(0), StructNew(f64_box), no_value()]);
-	emitter.emit_node_constructor("new_codepoint", Kind::Codepoint, vec![ValType::I32], Plain, vec![LocalGet(0), Instruction::RefI31, no_value()]);
+	emitter.emit_node_constructor("new_codepoint", Kind::Codepoint, vec![ValType::I32], Plain, vec![LocalGet(0), I::RefI31, no_value()]);
 	let text = || vec![LocalGet(0), LocalGet(1), StructNew(string), no_value()];
 	emitter.emit_node_constructor("new_text", Kind::Text, vec![ValType::I32, ValType::I32], Plain, text());
 	emitter.emit_node_constructor("new_symbol", Kind::Symbol, vec![ValType::I32, ValType::I32], Plain, text());

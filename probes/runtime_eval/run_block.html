@@ -1,0 +1,30 @@
+<!-- run_block in the browser: serve the repository root, open /probes/runtime_eval/run_block.html (build.sh debug first).
+     Each program runs in the playground's worker; #results shows the reports (value or error) -->
+<title>run_block probe</title>
+<pre id="results">running…</pre>
+<script>
+const PROGRAMS = [
+	"xs = [data a+1, data a*2]; a = 5; interpret(xs#2)",
+	"n=3; t=\"ab\"; ys = [data n+1, data t+\"c\"]; interpret(ys#2)",
+	"y = data q+1; interpret y",
+	"y = data print(\"hi\"); interpret y",
+	"def twice(x): x*2; y = data twice(21); interpret y",
+	"y = data 7/2; z = interpret y; z*2",
+	"y = data 2^70; z = interpret y; z+1",
+	"f(b) := b!; xs=[data a+1, data 0]; a=1; f(xs#1)",
+	"g() := [data 2*3, data 0]; g()#1!",
+	"y = data (p = (1 : 2); p); interpret y",
+];
+const worker = new Worker("../../web/playground/worker.js?compiler=warp.debug.wasm");
+const lines = [];
+let next = 0;
+const send = () => worker.postMessage({ id: next, code: PROGRAMS[next], acknowledged: [] });
+worker.onmessage = ({ data }) => {
+	if (data.type === "ready") return send();
+	if (data.type === "failed") return results.textContent = "failed: " + data.message;
+	if (data.type !== "report") return;
+	lines.push(`${PROGRAMS[data.id]}  →  ${data.report.value}`);
+	results.textContent = lines.join("\n") + (++next < PROGRAMS.length ? "\n…" : "\ndone");
+	if (next < PROGRAMS.length) send();
+};
+</script>

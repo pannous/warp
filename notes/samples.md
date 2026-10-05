@@ -1,7 +1,7 @@
 # Sample sweep (samples/, started 2026-10-03)
 
 Goal: every `samples/*.wasp` runs, ideally by fixing the language rather than the sample. Each fixed sample gets an
-`is!("samples/x.wasp", …)` line in tests/test_samples.rs.
+`is!("samples/x.wasp", …)` line in tests/programs/test_samples.rs.
 
 ## How to sweep
 - Build, then copy the binary at once: `cargo build --offline --bin warp && cp ~/.cargo/shared-target.noindex/debug/warp probes/samples/warp`.
@@ -9,7 +9,7 @@ Goal: every `samples/*.wasp` runs, ideally by fixing the language rather than th
 - Skip `raylib_*` / `sdl_*` in sweeps: they open real windows.
 - `test.wasm` in the cwd is the last emitted module, written before validation: `wasm-tools print test.wasm` shows the
   function behind an "internal error: WASM validation failed".
-- `samples/life_kotlin_ranges.wasp` fails on purpose (tests/test_welcoming_ask.rs pins its explanation).
+- `samples/life_kotlin_ranges.wasp` fails on purpose (tests/welcoming/test_welcoming_ask.rs pins its explanation).
 
 ## Wasp habits the old samples get wrong (sample-side fixes)
 - Lists are values: a function cannot change a list it is passed. Return the new list, or make the state `global`.
@@ -27,7 +27,22 @@ return-kind inference, `and`/`or` decided at run time for calls and Nodes, `if` 
 run-time field reads of declared fields, `{x: x}` keys, call shapes, declared field kinds, float parameter widening,
 float-path conditionals/returns/zero-arg calls, globals and captures typed with function kinds.
 
-## Still failing (2026-10-03 evening)
-async, binary_tree, calculator, circle, comments, control_flow, data_structures, errors, functions, html, html_dsl,
-json_parser, mandelbrot, modules, natural, netbase, neural_net, particles, polymorphism (needs overloading, todo.md),
-sample, sin, sine, test_ffi_extended, types, wasm_interop, webgpu; raylib/sdl not run (windows).
+Later batches: records (optional fields, field_with on instances, bare return, recursive list functions), nested block
+comments, C-style `real f(real x) {…}` definitions and `if (c) statement`.
+- Output filters: `grep -v '^      '` (to hide hint continuation lines) also hides indented program output.
+- `tau`/`τ`, `pi` are constants: a variable cannot be named so.
+- `real` is the exact real type; use `float` for IEEE arithmetic.
+
+Branch samples-2 / implicit-libm (warp-d2): a character variable compares by code point (`c >= '0'`), words
+`is_digit` `is_alpha` `is_alphanumeric`, method syntax for builtins (`x.round()`, `x.floor()`, `x.sin()`; user
+functions since 3da746b), `x="5"; x as int` is 5, and libm called without import links libm (exp/sin/… compiled to
+their argument at run time before).
+
+## Still failing (2026-10-03 night)
+Split 2026-10-03: sample fixer (branch samples) takes async … mandelbrot; warp-d2 takes modules … webgpu.
+neural_net next blockers: `Matrix(r, c, fn)`, `Array(n, fn)`, `m[i, j]`, `round(x, 3)` (todo.md), plus `global` for
+the weights (sample side). calculator / json_parser now pass the character tests and stop at nested functions sharing
+`pos` and dynamic objects.
+async, calculator, circle, control_flow, data_structures, errors, functions, html, html_dsl, json_parser, mandelbrot,
+modules, natural, netbase, neural_net, particles, polymorphism (needs parameter overloading, todo.md), sample,
+test_ffi_extended, types, wasm_interop, webgpu; raylib/sdl not run (windows).

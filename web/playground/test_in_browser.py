@@ -54,6 +54,12 @@ def serve(binary):
 			self.send_response(204)
 			self.end_headers()
 
+		def end_headers(self):
+			# cross-origin isolation: SharedArrayBuffer for tasks on Workers (host.js startTask)
+			self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+			self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+			super().end_headers()
+
 		def log_message(self, *_):
 			pass
 	class Server(http.server.ThreadingHTTPServer):

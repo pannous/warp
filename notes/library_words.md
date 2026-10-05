@@ -1,6 +1,6 @@
 # Library words: `.word`, `word(x)`, `word x`
 
-`src/library_words.rs` lowers the three spellings to one call `word(x, args)`; `src/wasm_emitter/library_ops.rs` holds the
+`src/lowering/library_words.rs` lowers the three spellings to one call `word(x, args)`; `src/wasm_emitter/library_ops.rs` holds the
 runtime functions. A user function or a variable of the same name wins (the word is not lowered).
 
 | Word (aliases) | Args | How |
@@ -42,7 +42,7 @@ emitted by `emit_indexed_node` as `map_find`, and on a miss the runtime error `n
 
 ## Map words (fix-maps, Dijkstra field test)
 
-One map path for every spelling (tests/test_welcoming_maps.rs, probes/maps/):
+One map path for every spelling (tests/welcoming/test_welcoming_maps.rs, probes/maps/):
 - Keys compare by name at runtime: `map_key_name` turns a text or a character (`"A"` is a Codepoint) into the symbol of the
   same letters, used by `map_entry_has_key` and `field_with`. So `{"A":1}`, `{A:1}`, `m["A"]`, `m.A`, `k="A"; m[k]` are one key.
 - `{}` is the empty object: `d["A"]=5` grows it (`field_with` on ø returns the entry), `d[k]=v` with a variable key too.
@@ -79,10 +79,8 @@ lists (`analyzer::typed_array_value`, `zero_list`). `x:[number]` is `x:list of n
 (a plural type word before a name is a declaration). The bracket spelling `[number]` hints the plural `numbers`
 (`ListTypeStyle::Bracket`); the fixed-array spellings have no canonical form yet (both are decided as valid), so they get no hint.
 
-Ignored tests that still cannot pass unedited: test_array_creation (`pixel=[];pixel[1]=15` assigns past the end, Decided an error;
-`pixel array`), test_array_initialization_basics (`analyze(parse(..))` on `x : 100 numbers` counts the parse tree, not the lowered list),
-test_array_initialization (`x : 100 * ints;[ x.length` is a typo, and `x is array of size 100`, `x is a 100 integer array` are
-natural-language forms), test_array_type_generics (expects `list<int>`, decided `list of int`).
+The ignored array tests were edited by user decision P59 (2026-10-05) and pass: test_array_creation (setting past the end
+is `index out of range`), test_array_initialization_basics, test_array_initialization, test_array_type_generics (`list of int`).
 
 
 # Data as scope (Decided #6)
@@ -95,17 +93,17 @@ Any other hyphenated name stays a symbol. test_hyphen_units stays ignored: it ne
 
 # Type tests
 
-`src/type_tests.rs` (first lowering pass): a type phrase after `is` (or `==`) turns equality into `is_type(x, "spec")`:
+`src/lowering/type_tests.rs` (first lowering pass): a type phrase after `is` (or `==`) turns equality into `is_type(x, "spec")`:
 `3 is int`, `x is a number` (a/an optional), `[1 2] is list of int`, `[1 2] is ints`, `π is real`. The emitter answers it statically from the
 name `type(x)` reports (`static_type_name`); `type_matches`: `number` covers int, rational, real, float; `real` covers int, rational,
 real; `rational` covers int; `list of number` covers every list of numbers; `text` also accepts a codepoint (a one-character string).
-A variable or user function named like the type word (`int=3; 3 is int`) keeps equality; `x is y` stays equality. `x is number 9` is
-not handled (unclear). `type of x` is `type(x)` (the parser reads `type of` as a declaration head). `x as number = 9` is `x:number=9`.
+A variable or user function named like the type word (`int=3; 3 is int`) keeps equality; `x is y` stays equality. `x is number 9` tests
+type and value; with x defined nowhere it is an error teaching `x be number 9` (P61). `type of x` is `type(x)` (the parser reads `type of` as a declaration head). `x as number = 9` is `x:number=9`.
 Static means `x=f(); x is int` uses the compile-time kind of x, like `type(x)`.
 
 # Lambdas (compile-time)
 
-`src/lambdas.rs` (lowered right after type_tests). Functions are not first-class values yet, so a lambda is lowered where it stands:
+`src/lowering/lambdas.rs` (lowered right after type_tests). Functions are not first-class values yet, so a lambda is lowered where it stands:
 `f = x=>x*x`, `f = (x y)->x+y`, `f = (x, y) => x+y`, and `f = {it*2}` (a block only when it uses `it`; `p={a:1}` stays an object) become
 the definition `f(x):=…` at that point, so variables are captured by value there (`n=10; f = x=>x+n; n=20; f 1` is 11). `{x*x}(x=5)` defines
 an anonymous function and calls it (`{x+y}(x=1 y=2)`). `map xs F`, `map(xs, F)`, `xs.map(F)`, `xs.map {it*it}` with F a block, a lambda or a defined function is the loop
@@ -126,7 +124,7 @@ application (write `it < k`).
 # First-class functions (compile-time)
 
 Choice: no funcref table. The emitter gives every user function its own signature (i64, f64 or node per parameter and result, by inferred
-kind), so a table needs one uniform signature and boxing wrappers for all of them. Instead `src/function_values.rs` specialises: a function
+kind), so a table needs one uniform signature and boxing wrappers for all of them. Instead `src/lowering/function_values.rs` specialises: a function
 that uses a parameter as a function (`f(x)`, `f x`, `map xs f`, or passing it on) is replaced by one copy per function it is called with,
 `apply(double, 3)` calls `apply__double(3)` with `double` in place of `f` (specialisations sit where the original definition was, so captures by value
 behave). What can be passed: a defined function, `&name` (the parser reads it as the name), an alias (`g = double`, assigned once), an

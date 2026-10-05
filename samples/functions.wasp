@@ -3,7 +3,7 @@
 
 // Pure function with := (single expression)
 def square := it * it
-def double := it * 2
+def twice := it * 2
 def add := a + b
 
 // Named parameters

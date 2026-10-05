@@ -50,7 +50,7 @@ Recursive descent parser that converts text input to Node AST:
 - Handles comments (`//` line and `/* */` block) attached as metadata
 - Parses literals (numbers, strings, symbols), groups ((), [], {}), and structures
 
-### Pipeline (`src/wasm_emitter/mod.rs`: `compile`, `eval`)
+### Pipeline (`src/pipeline.rs`: `compile`, `eval`, `lower`)
 
 parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such as `mutation.rs`, `lambdas.rs`,
 `library_words.rs`, `switch.rs`, plus `analyzer.rs`) → analysis and diagnostics → WASM GC emitter → run.
@@ -98,13 +98,13 @@ cargo test --test tests <file_stem>::  # Run one test file: tests/<topic>/*.rs a
 
 - `tests/node/test_node.rs` - Tests Node AST operations
 - `tests/parser/test_parser.rs` - Tests parser functionality
-- `tests/test_wasm_emitter.rs` - Tests WASM GC code generation
-- `tests/test_wasm_reader.rs` - Tests reading WASM GC objects (see below)
+- `tests/wasm/test_wasm_emitter.rs` - Tests WASM GC code generation
+- `tests/wasm/test_wasm_reader.rs` - Tests reading WASM GC objects (see below)
 
 ## WASM GC Reading Patterns
 
 The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection
-(`src/gc_traits.rs`, examples in `tests/test_wasm_reader.rs` and `tests/test_gc_struct.rs`):
+(`src/gc_traits.rs`, examples in `tests/wasm/test_wasm_reader.rs` and `tests/wasm/test_gc_struct.rs`):
 
 - Loading WAT modules with GC types enabled
 - Reading GC struct fields by index
@@ -197,8 +197,8 @@ Current spec lives in `src/wasm_emitter/type_manager.rs` and `src/wasm_emitter/c
 
 4. Verification pointers:
 
-   - `tests/test_wasm_emitter.rs` covers `test_wasm_roundtrip` and `test_wasm_roundtrip_via_is`
-   - `tests/test_wasm_reader.rs` documents the GC reading pattern
+   - `tests/wasm/test_wasm_emitter.rs` covers `test_wasm_roundtrip` and `test_wasm_roundtrip_via_is`
+   - `tests/wasm/test_wasm_reader.rs` documents the GC reading pattern
 
 5. Round-trip remains:
 
@@ -227,7 +227,8 @@ Don't cargo clean unless absolutely necessary!
 
 The /probes/ folder is NOT a place to doublicate worktrees!
 One branch per task, in a git worktree outside the repo: /Users/me/dev/angles/warp.worktrees.noindex/<name>
-(notes/roles.md), or work on the same branch for small changes 
+(notes/roles.md), or work on the same branch for small changes.
+Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same arguments as `git worktree add`, which a hook blocks).
 
 ## Folders
 - `probes/` = hand-written probe sources only (.wasp .md .rs .py .sh .lean .html, each under 100 KB), tracked: commit them, no `git add -f` needed.
@@ -249,6 +250,12 @@ Your branch is up to date with 'origin/main'.
 nothing to commit
 
 use `cargo fix --offline --allow-dirty --lib --bins` after each commit and commit again (`--lib --bins` keeps it out of tests/, `--allow-dirty` because cargo flags git-ignored non-.rs files as dirty)
+
+## To-dos
+This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
+not in todo.md: every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next); `todo list`,
+`todo move <card> <column>`, `todo done <card>` (never delete a card). Without the board, `todo add` falls back to
+todo.md "## Fallback"; `todo import` moves those entries later.
 
 Other than fixme comment you can find new tasks via tests marked #[ignore = "next"] or even #[ignore = "soon"] 
 un-ignore everything once it passes 

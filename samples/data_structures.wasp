@@ -4,7 +4,7 @@
 // Simple list with various separators (all equivalent)
 colors = [red, green, blue]
 numbers = [1, 2, 3, 4, 5]
-mixed = [1 "two" three 4.0]
+mixed = data [1 "two" three 4.0] // a word among values is data only after `data` (P62, P63)
 
 // Key-value pairs (maps/objects)
 person: {
@@ -38,3 +38,6 @@ evens = [x for x in numbers if x % 2 == 0]
 // Tuple-like pairs
 point = (x: 10, y: 20)
 range = (min: 0, max: 100)
+
+// everything at once: the third employee, how many squares and evens, a tuple field
+ceo_name + " " + str(count(squares) + count(evens)) + " " + str(point.y)

@@ -3,16 +3,16 @@
 use crate::analyzer::{call_name, is_statement, is_unbracketed_block, type_word_kind};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
-use crate::normalize::hints as norm;
 use wasm_encoder::*;
+use Instruction as I;
 
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 16] = [
+const BUILTIN_CALLS: [&str; 17] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
-	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM,
+	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF,
 ];
 
 const PRINT: &str = "print";
@@ -22,12 +22,29 @@ const PRINT_ARGUMENT_SEPARATOR: &str = " ";
 /// The value `print` writes: its one argument, or several joined by a space
 fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
 	match crate::wasp_parser::print_arguments_of(call, bracket).as_slice() {
-		[single] => single.clone(),
+		[single] => juxtaposed_text(single).unwrap_or_else(|| single.clone()),
 		several => super::joined_text(several, PRINT_ARGUMENT_SEPARATOR),
+	}
+}
+
+/// `print "x changed to " value` (wiki/signal.md): a text followed by values prints them joined, without separator
+fn juxtaposed_text(argument: &Node) -> Option<Node> {
+	match argument.drop_meta() {
+		Node::List(parts, Bracket::None, Separator::Space) if matches!(parts.first().map(Node::drop_meta), Some(Node::Text(_))) => {
+			Some(super::joined_text(parts, ""))
+		}
+		_ => None,
 	}
 }
 /// The Ask topic of `xs.insert(i, x)` with two Ints: answers are remembered per topic
 const INSERT_ORDER_TOPIC: &str = "insert-order";
+/// The got-it topic of an unknown word applied to a value (`cube 3`)
+/// `data cube 3`: the rest is data (P62, P63: `data` is the word for what never runs)
+const QUOTE_WORDS: [&str; 3] = ["data", "code", "block"];
+/// The got-it topic of a lone word close to a defined name
+const NEAR_MISS_TOPIC: &str = "near-miss";
+/// Words the near-miss warning compares with besides the program's own names
+const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "reverse"];
 
 impl WasmGcEmitter {
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
@@ -73,34 +90,110 @@ impl WasmGcEmitter {
 		if self.resolves_call(name) {
 			return false;
 		}
-		let diagnostic = crate::diagnostic::Diagnostic::at(&items[0], format!("undefined function: {name}"));
+		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
+		let diagnostic = crate::diagnostic::Diagnostic::at(&call, format!("undefined function: {name}"));
 		self.emit_type_error(func, diagnostic.to_string());
+		true
+	}
+
+	/// `f(a, b…)` or `(f)` of a user function, an FFI import or a text builtin
+	fn emit_function_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) -> bool {
+		let Some(Node::Symbol(fn_name)) = items.first().map(Node::drop_meta) else { return false };
+		if items.len() < 2 && *bracket != Bracket::Round {
+			return false;
+		}
+		if self.ctx.user_functions.contains_key(fn_name) {
+			self.emit_user_function_call(func, fn_name, &items[1..]);
+		} else if self.ctx.ffi_imports.contains_key(fn_name) {
+			self.emit_ffi_call(func, fn_name, &items[1..], None);
+		} else if items.len() >= 2 && super::text_builtins::text_builtin_kind(fn_name, items.len() - 1).is_some() {
+			self.emit_text_builtin(func, fn_name, &items[1..]);
+		} else {
+			return false;
+		}
+		true
+	}
+
+	/// `return value`: leaves the open tries and the function
+	fn emit_return_statement(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		let [word, value] = items else { return false };
+		if !matches!(word.drop_meta(), Node::Symbol(s) if s == "return") {
+			return false;
+		}
+		self.emit_returned_value(func, value);
+		self.emit_leave_tries(func, 0);
+		func.instruction(&I::Return);
+		func.instruction(&I::Unreachable); // nothing follows a return, the block type still wants a value
+		true
+	}
+
+	/// `n times "ab"`: the text repeated; anything but a text is refused
+	fn emit_text_times(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		let [word, count, repeated] = items else { return false };
+		if !matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::TEXT_TIMES) {
+			return false;
+		}
+		match self.get_type(repeated) {
+			crate::Kind::Text | crate::Kind::Codepoint => self.emit_text_repeat(func, repeated, count),
+			kind => {
+				let reason = format!("`n times x` repeats a text (or a list: `n times [x]`), {} is {}", repeated.serialize(), crate::analyzer::kind_with_article(kind));
+				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
+			}
+		}
+		true
+	}
+
+	/// `print x` and the WASI calls puts, puti, putl, putf, fd_write; their i64 result is boxed like any value
+	fn emit_wasi_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) -> bool {
+		if items.len() < 2 || !self.config.emit_wasi_imports {
+			return false;
+		}
+		let Node::Symbol(word) = items[0].drop_meta() else { return false };
+		match word.as_str() {
+			PRINT => {
+				self.emit_print(func, &printed_value(items, bracket));
+				return true;
+			}
+			"puts" => {
+				self.emit_wasi_puts(func, &items[1]);
+				func.instruction(&I::I64ExtendI32S);
+			}
+			"puti" | "putl" => {
+				self.emit_wasi_puti(func, &items[1]);
+				self.emit_numeric_value(func, &items[1]);
+			}
+			"putf" => {
+				self.emit_wasi_putf(func, &items[1]);
+				func.instruction(&I::I64ExtendI32S);
+			}
+			"fd_write" if items.len() >= 5 => self.emit_wasi_fd_write_call(func, &items[1..]),
+			_ => return false,
+		}
+		self.emit_call(func, "new_int");
 		true
 	}
 
 	/// Emit instructions for List(items, bracket, separator) nodes
 	/// Dispatches based on list contents and bracket type
 	pub(super) fn emit_list_node(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
-		if items.is_empty() {
+		if items.is_empty() || self.emit_task_check(func, items) {
 			self.emit_call(func, "new_empty");
+			return;
+		}
+		if self.emit_quoted(func, items, bracket, separator) {
 			return;
 		}
 
 		if items.len() == 1 && *bracket != Bracket::Square {
-			// Check for zero-argument function call: (funcname)
-			if *bracket == Bracket::Round {
-				if let Node::Symbol(fn_name) = items[0].drop_meta() {
-					if self.ctx.user_functions.contains_key(fn_name) {
-						self.emit_user_function_call(func, fn_name, &[]);
-						return;
-					}
-					if self.ctx.ffi_imports.contains_key(fn_name) {
-						self.emit_ffi_call(func, fn_name, &[], None);
-						return;
-					}
-				}
+			if !self.emit_function_call(func, items, bracket) {
+				self.emit_node_instructions(func, &items[0]);
 			}
-			self.emit_node_instructions(func, &items[0]);
+			return;
+		}
+
+		// a lone import or use statement (the whole program) is worth ø
+		if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == "import" || word == "use") && items.len() >= 2 {
+			self.emit_call(func, "new_empty");
 			return;
 		}
 
@@ -112,69 +205,8 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// Check for return statement: return value
-		if items.len() == 2 {
-			if let Node::Symbol(s) = items[0].drop_meta() {
-				if s == "return" {
-					// Emit the return value and return instruction
-					self.emit_node_instructions(func, &items[1]);
-					self.emit_leave_tries(func, 0);
-					func.instruction(&Instruction::Return);
-					// Unreachable after return, push dummy value
-					func.instruction(&Instruction::Unreachable);
-					return;
-				}
-			}
-		}
-
-		if let [word, count, repeated] = items {
-			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::TEXT_TIMES) {
-				match self.get_type(repeated) {
-					crate::Kind::Text | crate::Kind::Codepoint => self.emit_text_repeat(func, repeated, count),
-					kind => {
-						let reason = format!("`n times x` repeats a text (or a list: `n times [x]`), {} is {}", repeated.serialize(), crate::analyzer::kind_with_article(kind));
-						self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
-					}
-				}
-				return;
-			}
-		}
-
-		if items.len() >= 2 && self.config.emit_wasi_imports && matches!(items[0].drop_meta(), Node::Symbol(name) if name == PRINT) {
-			self.emit_print(func, &printed_value(items, bracket));
+		if self.emit_return_statement(func, items) || self.emit_text_times(func, items) || self.emit_wasi_call(func, items, bracket) {
 			return;
-		}
-
-		// WASI calls: puts, puti, putl, putf, fd_write — their i64 result is boxed like any value
-		if items.len() >= 2 && self.config.emit_wasi_imports {
-			if let Node::Symbol(s) = items[0].drop_meta() {
-				let emitted = match s.as_str() {
-					"puts" => {
-						self.emit_wasi_puts(func, &items[1]);
-						func.instruction(&Instruction::I64ExtendI32S);
-						true
-					}
-					"puti" | "putl" => {
-						self.emit_wasi_puti(func, &items[1]);
-						self.emit_numeric_value(func, &items[1]);
-						true
-					}
-					"putf" => {
-						self.emit_wasi_putf(func, &items[1]);
-						func.instruction(&Instruction::I64ExtendI32S);
-						true
-					}
-					"fd_write" if items.len() >= 5 => {
-						self.emit_wasi_fd_write_call(func, &items[1..]);
-						true
-					}
-					_ => false,
-				};
-				if emitted {
-					self.emit_call(func, "new_int");
-					return;
-				}
-			}
 		}
 
 		// Check for introspection and math functions
@@ -198,6 +230,23 @@ impl WasmGcEmitter {
 			}
 		}
 
+		if let [word, instance, type_name] = items {
+			if let (Node::Symbol(name), Node::Text(type_name)) = (word.drop_meta(), type_name.drop_meta()) {
+				if name == crate::traits::INSTANCE_OF {
+					self.emit_instance_of(func, instance, type_name);
+					self.emit_call(func, "new_int");
+					return;
+				}
+			}
+		}
+		if let [word, dividend, divisor] = items {
+			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) {
+				self.emit_floor_quotient(func, dividend, divisor);
+				self.emit_call(func, "new_int");
+				return;
+			}
+		}
+
 		// Check for range function: range start end
 		if items.len() == 3 {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
@@ -208,23 +257,8 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// Check for user function call: [Symbol("funcname"), arg1, arg2, ...]
-		if items.len() >= 2 {
-			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.ctx.user_functions.contains_key(fn_name) {
-					self.emit_user_function_call(func, fn_name, &items[1..]);
-					return;
-				}
-				// Check for FFI function call
-				if self.ctx.ffi_imports.contains_key(fn_name) {
-					self.emit_ffi_call(func, fn_name, &items[1..], None);
-					return;
-				}
-				if super::text_builtins::text_builtin_kind(fn_name, items.len() - 1).is_some() {
-					self.emit_text_builtin(func, fn_name, &items[1..]);
-					return;
-				}
-			}
+		if self.emit_function_call(func, items, bracket) {
+			return;
 		}
 
 		if self.emit_library_word_call(func, items, bracket, separator) || self.emit_type_test(func, items, bracket, separator) {
@@ -254,6 +288,10 @@ impl WasmGcEmitter {
 		}
 
 		if self.reject_unresolved_call(func, items, bracket, separator) {
+			return;
+		}
+		if let Some(message) = self.unknown_word_error(items, bracket, separator) {
+			self.emit_type_error(func, message);
 			return;
 		}
 
@@ -298,21 +336,50 @@ impl WasmGcEmitter {
 		};
 		match (kind, crate::analyzer::literal_number_type_word(arg)) {
 			(_, Some(number_word)) => number_word.to_string(),
-			(crate::type_kinds::Kind::List, _) => crate::analyzer::list_type_name(arg, &self.scope),
+			(crate::type_kinds::Kind::List, _) => crate::analyzer::shown_list_type_name(arg, &self.scope),
 			_ => kind.to_string(),
 		}
 	}
 
-	/// `is_type(x, "spec")`: 1 when the static type of x is the spec, else 0
+	/// `is_type(x, "spec")` as a Node: its 1 or 0
 	fn emit_type_test(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
+		if !self.emit_type_test_value(func, &call) {
+			return false;
+		}
+		self.emit_call(func, "new_int");
+		true
+	}
+
+	/// `is_type(x, "spec")` as an i64 1 or 0: from the static type of x when it is known, else from the run-time kind of the
+	/// value (node_kind_in) or, for a declared type, the instance's type (instance_of); true when it was one
+	pub(super) fn emit_type_test_value(&mut self, func: &mut Function, node: &Node) -> bool {
+		let Node::List(items, bracket, separator) = node.drop_meta() else { return false };
 		if call_name(items, bracket, separator) != Some(crate::type_tests::IS_TYPE) {
 			return false;
 		}
-		let [_, subject, spec] = items else { return false };
+		let [_, subject, spec] = items.as_slice() else { return false };
 		let Node::Text(spec) = spec.drop_meta() else { return false };
-		let answer = crate::type_tests::type_matches(&self.static_type_name(subject), spec);
-		func.instruction(&Instruction::I64Const(answer as i64));
-		self.emit_call(func, "new_int");
+		let unknown = !matches!(subject.drop_meta(), Node::Number(_)) && matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data);
+		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
+		match crate::type_tests::runtime_kinds(spec).filter(|_| unknown && !declared_type) {
+			Some(kinds) => {
+				let mask = kinds.iter().fold(0i64, |mask, kind| mask | 1 << (*kind as i64));
+				self.emit_node_instructions(func, subject);
+				func.instruction(&I::RefAsNonNull);
+				func.instruction(&I::I64Const(mask));
+				self.emit_call(func, crate::type_tests::NODE_KIND_IN);
+			}
+			// an instance's static kind is no type name: its declared type is read at run time
+			None if declared_type => {
+				let instance_test = Node::List(vec![Node::Symbol(crate::traits::INSTANCE_OF.to_string()), subject.clone(), Node::Text(spec.clone())], Bracket::Round, Separator::None);
+				self.emit_numeric_value(func, &instance_test);
+			}
+			None => {
+				let answer = crate::type_tests::type_matches(&self.static_type_name(subject), spec);
+				func.instruction(&I::I64Const(answer as i64));
+			}
+		}
 		true
 	}
 
@@ -343,47 +410,56 @@ impl WasmGcEmitter {
 			"type" => {
 				let type_name = self.static_type_name(arg);
 				let (ptr, len) = self.allocate_string(&type_name);
-				func.instruction(&Instruction::I32Const(ptr as i32));
-				func.instruction(&Instruction::I32Const(len as i32));
+				func.instruction(&I::I32Const(ptr as i32));
+				func.instruction(&I::I32Const(len as i32));
 				self.emit_call(func, "new_symbol");
 				true
 			}
 			"ceil" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, Instruction::F64Ceil);
+				self.emit_rounded_as_int(func, arg, I::F64Ceil);
+				true
+			}
+			// an exact number floors exactly, also beyond the f64 range
+			"floor" if !self.ctx.ffi_imports.contains_key(fn_name) && self.get_type(arg) == crate::Kind::Int => {
+				self.emit_numeric_value(func, arg);
+				if self.int_runtime() {
+					self.emit_call(func, "exact_floor");
+				}
+				self.emit_call(func, "new_int");
 				true
 			}
 			"floor" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, Instruction::F64Floor);
+				self.emit_rounded_as_int(func, arg, I::F64Floor);
 				true
 			}
 			// round half up (JS Math.round, Excel for x ≥ 0): floor(x) + (x - floor(x) ≥ ½), x kept as bits in a scratch local
 			"round_half_up" => {
 				let bits = self.scratch(0);
 				self.emit_float_value(func, arg);
-				func.instruction(&Instruction::I64ReinterpretF64);
-				func.instruction(&Instruction::LocalTee(bits));
-				func.instruction(&Instruction::F64ReinterpretI64);
-				func.instruction(&Instruction::F64Floor);
-				func.instruction(&Instruction::LocalGet(bits));
-				func.instruction(&Instruction::F64ReinterpretI64);
-				func.instruction(&Instruction::LocalGet(bits));
-				func.instruction(&Instruction::F64ReinterpretI64);
-				func.instruction(&Instruction::F64Floor);
-				func.instruction(&Instruction::F64Sub);
-				func.instruction(&Instruction::F64Const(0.5f64.into()));
-				func.instruction(&Instruction::F64Ge);
-				func.instruction(&Instruction::F64ConvertI32U);
-				func.instruction(&Instruction::F64Add);
+				func.instruction(&I::I64ReinterpretF64);
+				func.instruction(&I::LocalTee(bits));
+				func.instruction(&I::F64ReinterpretI64);
+				func.instruction(&I::F64Floor);
+				func.instruction(&I::LocalGet(bits));
+				func.instruction(&I::F64ReinterpretI64);
+				func.instruction(&I::LocalGet(bits));
+				func.instruction(&I::F64ReinterpretI64);
+				func.instruction(&I::F64Floor);
+				func.instruction(&I::F64Sub);
+				func.instruction(&I::F64Const(0.5f64.into()));
+				func.instruction(&I::F64Ge);
+				func.instruction(&I::F64ConvertI32U);
+				func.instruction(&I::F64Add);
 				self.emit_integral_float_as_int(func);
 				true
 			}
 			// round = round half even (IEEE 754 default, Python 3, .NET): 2.5 → 2, 3.5 → 4
 			"round_half_even" => {
-				self.emit_rounded_as_int(func, arg, Instruction::F64Nearest);
+				self.emit_rounded_as_int(func, arg, I::F64Nearest);
 				true
 			}
 			"round" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, Instruction::F64Nearest);
+				self.emit_rounded_as_int(func, arg, I::F64Nearest);
 				true
 			}
 			_ => false,
@@ -395,6 +471,54 @@ impl WasmGcEmitter {
 		self.emit_float_value(func, arg);
 		func.instruction(&rounding);
 		self.emit_integral_float_as_int(func);
+	}
+
+	/// `instance_of(x, "T")` as i64: 1 when x is an instance (a Key node) whose type name, its data, is T
+	pub(super) fn emit_instance_of(&mut self, func: &mut Function, instance: &Node, type_name: &str) {
+		let node_type = self.type_manager.node_type;
+		self.emit_node_instructions(func, instance);
+		let instance_local = self.node_scratch();
+		func.instruction(&I::LocalSet(instance_local));
+		self.emit_field(func, instance_local, 0);
+		Self::emit_list(func, &[
+			I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(crate::Kind::Key as i64), I::I64Eq,
+			I::If(BlockType::Result(ValType::I64)),
+		]);
+		self.emit_field(func, instance_local, 1);
+		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+		let (pointer, length) = self.allocate_string(type_name);
+		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+		self.emit_call(func, "new_symbol");
+		self.emit_call(func, super::VALUES_EQUAL);
+		func.instruction(&I::I64ExtendI32U);
+		Self::emit_list(func, &[I::Else, I::I64Const(0), I::End]);
+	}
+
+	/// `a // b` as i64: the Euclidean quotient, exact for exact operands (exact_euclid_div), else of the f64 quotient
+	pub(super) fn emit_floor_quotient(&mut self, func: &mut Function, dividend: &Node, divisor: &Node) {
+		let floats = self.get_type(dividend).is_float() || self.get_type(divisor).is_float();
+		if !floats {
+			self.emit_numeric_value(func, dividend);
+			self.emit_numeric_value(func, divisor);
+			self.emit_call(func, "exact_euclid_div");
+			return;
+		}
+		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
+		self.emit_float_value(func, dividend);
+		self.emit_float_value(func, divisor);
+		func.instruction(&I::I64ReinterpretF64);
+		func.instruction(&I::LocalTee(divisor_bits));
+		func.instruction(&I::F64ReinterpretI64);
+		func.instruction(&I::F64Div);
+		func.instruction(&I::I64ReinterpretF64);
+		func.instruction(&I::LocalSet(quotient));
+		// a negative divisor rounds the quotient up, a positive one down
+		Self::emit_list(func, &[
+			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Ceil,
+			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Floor,
+			I::LocalGet(divisor_bits), I::I64Const(0), I::I64LtS, I::Select,
+		]);
+		self.emit_truncating_cast(func);
 	}
 
 	/// An integral f64 on the stack → exact Int node
@@ -433,8 +557,12 @@ impl WasmGcEmitter {
 				self.emit_undefined_variable(func, &name);
 			} else {
 				self.emit_discarded_statement(func, item, emit);
-				func.instruction(&Instruction::Drop);
+				func.instruction(&I::Drop);
 			}
+		}
+		// only definitions and imports: the sequence is worth ø
+		if last_statement.is_none() {
+			emit(self, func, &Node::Empty);
 		}
 	}
 
@@ -471,6 +599,70 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// P51/P62 (user): an unknown word next to a value in code (`cube 3`, `(cube 3)`, `[cube 3]`) is an error, never silent
+	/// data. Data contexts keep it: a `quote`/`data` prefix and the values of an object literal (`data_context`); all-word
+	/// lists (`hello world`) are not judged here
+	fn unknown_word_error(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<String> {
+		let in_code = matches!((bracket, separator), (Bracket::None | Bracket::Round, Separator::Space) | (Bracket::Square, _));
+		// an argument: a value or a name the program defines (`cube x`); unknown words alone are symbols (`[red green]`)
+		let is_value = |item: &Node| match item.drop_meta() {
+			Node::Symbol(name) => self.unknown_word(item).is_none() && !name.is_empty(),
+			Node::List(_, Bracket::Curly, _) => false,
+			_ => true,
+		};
+		// only lists of atoms: a list with an operator (`foo x = 3`) names its undefined variable on its own
+		let is_atom = |item: &Node| matches!(item.drop_meta(), Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(..));
+		if self.data_context || !in_code || !items.iter().any(is_value) || !items.iter().all(is_atom) {
+			return None;
+		}
+		let name = items.iter().find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))?;
+		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
+		let text = written.serialize().trim().to_string();
+		let message = format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data");
+		Some(crate::diagnostic::Diagnostic::at(&written, message).to_string())
+	}
+
+	/// A word that names nothing the program or the language knows: no function, type, unit or keyword
+	fn is_undefined_word(&self, name: &str) -> bool {
+		!self.resolves_call(name) && !crate::units::is_unit(name) && self.ctx.type_registry.get_by_name(name).is_none()
+	}
+
+	/// `pirnt`: a lone word that names nothing but is one or two letters away from a defined name; a got-it warning
+	pub(super) fn warn_near_miss(&self, word: &str) -> Result<(), Node> {
+		use crate::diagnostic::{ask, reading, Ask, Fallback};
+		if word.chars().count() < 3 || self.is_known_word(word) {
+			return Ok(());
+		}
+		let allowed = if word.chars().count() < 6 { 1 } else { 2 };
+		let mut names: Vec<String> = self.ctx.user_functions.keys().chain(self.ctx.user_globals.keys()).cloned().collect();
+		names.extend(self.scope.local_names());
+		names.extend(KNOWN_WORDS.iter().map(|word| word.to_string()));
+		let Some(near) = names.into_iter().filter(|name| name != word).find(|name| edit_distance(word, name) <= allowed) else { return Ok(()) };
+		let question = Ask::new(NEAR_MISS_TOPIC, format!("`{word}` names nothing: a symbol, or did you mean {near}?"),
+			vec![reading("the symbol", &format!("data {word}")), reading(&format!("the name {near}"), &near)], Fallback::Warning).written(word);
+		let (line, column) = self.source_position.unwrap_or((0, 0));
+		let question = question.at(line, column);
+		ask(&question).map(|_| ())
+	}
+
+	fn is_known_word(&self, word: &str) -> bool {
+		self.resolves_call(word) || crate::units::is_unit(word) || crate::analyzer::type_word_kind(word).is_some()
+	}
+
+	/// `data cube 3`: the words after the prefix as data (P62); true when it was one
+	fn emit_quoted(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		let [prefix, rest @ ..] = items else { return false };
+		if *bracket != Bracket::None || *separator != Separator::Space || rest.is_empty() || !matches!(prefix.drop_meta(), Node::Symbol(word) if QUOTE_WORDS.contains(&word.as_str())) {
+			return false;
+		}
+		// data never runs: the expression as it is written (`data 1+2` is 1+2)
+		match rest {
+			[only] => self.emit_literal(func, only),
+			many => self.emit_literal(func, &Node::List(many.to_vec(), Bracket::None, Separator::Space)),
+		}
+		true
+	}
+
 	/// A bare word that is no variable, global or function
 	fn unknown_word(&self, item: &Node) -> Option<String> {
 		let Node::Symbol(name) = item.drop_meta() else { return None };
@@ -480,16 +672,81 @@ impl WasmGcEmitter {
 
 	/// A statement whose value is dropped keeps its own representation instead of being forced into an exact Int:
 	/// an assignment to a float variable its f64, a text or list update (`s += "a"` in a loop body) its Node
+	/// Statements run for their effects (a loop jump among them as the jump), their values dropped
+	pub(super) fn emit_discarded_statements(&mut self, func: &mut Function, statements: &[Node]) {
+		for statement in statements {
+			if !self.emit_loop_jump(func, statement) {
+				self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
+				func.instruction(&I::Drop);
+			}
+		}
+	}
+
 	pub(super) fn emit_discarded_statement(&mut self, func: &mut Function, item: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
+		if self.emit_discarded_branches(func, item) {
+			return;
+		}
 		if let Some((name, value)) = self.typed_list_store(item) {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
-		} else if self.is_float_assignment(item) {
-			self.emit_float_value(func, item);
+		} else if self.is_float_assignment(item) || self.is_float_call(item) {
+			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
 		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) {
 			self.emit_node_instructions(func, item);
 		} else {
 			emit(self, func, item);
 		}
+	}
+
+	/// A call giving a float (`shared_addf(xs, i, v)`)
+	fn is_float_call(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
+			&& self.get_type(node).is_float()
+	}
+
+	/// Statements whose last value is an exact number (`{i*10}`, `{puti(i)}`): none that `emit_discarded_statement`
+	/// keeps in another representation (a float, text or list update, a typed list store), no float
+	pub(super) fn ends_in_number(&self, statements: &[Node]) -> bool {
+		statements.last().is_some_and(|last| {
+			!self.is_float_assignment(last) && !self.is_ref_update(last) && !self.is_ref_value(last)
+				&& self.typed_list_store(last).is_none() && !self.get_type(last).is_ref() && !self.is_float_call(last)
+		})
+	}
+
+	/// An `if` statement whose branches store a typed list (`if x > 10 then {out = out + [x]}`, what filter lowers to): its
+	/// branches run as statements, so the stored list never becomes a Node; leaves a value for the caller to drop
+	fn emit_discarded_branches(&mut self, func: &mut Function, item: &Node) -> bool {
+		let (if_then, otherwise) = match item.drop_meta() {
+			Node::Key(if_then, Op::Else, otherwise) => (if_then.as_ref(), Some(otherwise.as_ref())),
+			other => (other, None),
+		};
+		let Node::Key(condition, Op::Then, then) = if_then.drop_meta() else { return false };
+		let Node::Key(_, Op::If, condition) = condition.drop_meta() else { return false };
+		let stores_typed_list = |branch: &Node| {
+			let mut found = false;
+			branch.visit(&mut |part| found |= self.typed_list_store(part).is_some());
+			found
+		};
+		if !stores_typed_list(then) && !otherwise.is_some_and(stores_typed_list) {
+			return false;
+		}
+		self.emit_condition(func, condition, Self::emit_block_value);
+		func.instruction(&I::If(BlockType::Empty));
+		self.emit_branch_statements(func, then);
+		if let Some(otherwise) = otherwise {
+			func.instruction(&I::Else);
+			self.emit_branch_statements(func, otherwise);
+		}
+		func.instruction(&I::End);
+		func.instruction(&I::I64Const(0)); // the statement's value, dropped
+		true
+	}
+
+	fn emit_branch_statements(&mut self, func: &mut Function, branch: &Node) {
+		let statements = match branch.drop_meta() {
+			Node::List(items, Bracket::Curly, _) => items.clone(),
+			other => vec![other.clone()],
+		};
+		self.emit_discarded_statements(func, &statements);
 	}
 
 	/// `s += "a"`, `xs = xs + [1]`, and an `if` whose branch does such an update
@@ -514,15 +771,25 @@ impl WasmGcEmitter {
 	}
 
 	/// `x = v`, `x += v` to a float variable: float arithmetic also in a loop body
-	fn is_float_assignment(&self, item: &Node) -> bool {
+	/// `x = …` of a float variable, or an `if` with a branch ending in one (`if (x > t) x = x - t`,
+	/// `if op == "+" { advance(); left = left + term() } else { return left }`)
+	pub(super) fn is_float_assignment(&self, item: &Node) -> bool {
+		let branch_assigns_float = |branch: &Node| match branch.drop_meta() {
+			Node::List(items, Bracket::Curly, _) => items.last().is_some_and(|last| self.is_float_assignment(last)),
+			other => self.is_float_assignment(other),
+		};
 		match item.drop_meta() {
 			Node::Key(left, op, _) if matches!(op, Op::Define | Op::Assign) || op.is_compound_assign() => self.is_float_variable(left),
+			Node::Key(_, Op::Then, then) => branch_assigns_float(then),
+			Node::Key(if_then, Op::Else, otherwise) => {
+				matches!(if_then.drop_meta(), Node::Key(_, Op::Then, then) if branch_assigns_float(then)) || branch_assigns_float(otherwise)
+			}
 			_ => false,
 		}
 	}
 
 	/// Function definitions and imports: compiled ahead, no runtime value
-	fn is_definition(&self, item: &Node) -> bool {
+	pub(super) fn is_definition(&self, item: &Node) -> bool {
 		self.defined_function_name(item).is_some() || match item.drop_meta() {
 			Node::List(list_items, _, _) if list_items.len() >= 2 => {
 				matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || s == "use" || s == "import")
@@ -552,4 +819,26 @@ impl WasmGcEmitter {
 		};
 		name.filter(|name| self.ctx.user_functions.contains_key(name))
 	}
+}
+
+/// Edit distance (insertions, deletions, substitutions, adjacent swaps) between two words
+fn edit_distance(a: &str, b: &str) -> usize {
+	let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+	let mut rows = vec![vec![0usize; b.len() + 1]; a.len() + 1];
+	for (i, row) in rows.iter_mut().enumerate() {
+		row[0] = i;
+	}
+	for (j, cell) in rows[0].iter_mut().enumerate() {
+		*cell = j;
+	}
+	for i in 1..=a.len() {
+		for j in 1..=b.len() {
+			let cost = usize::from(a[i - 1] != b[j - 1]);
+			rows[i][j] = (rows[i - 1][j] + 1).min(rows[i][j - 1] + 1).min(rows[i - 1][j - 1] + cost);
+			if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+				rows[i][j] = rows[i][j].min(rows[i - 2][j - 2] + 1);
+			}
+		}
+	}
+	rows[a.len()][b.len()]
 }

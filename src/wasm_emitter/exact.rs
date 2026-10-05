@@ -111,11 +111,15 @@ impl WasmGcEmitter {
 	}
 
 	pub(crate) fn emit_exact_functions(&mut self) {
-		let (i64t, i32t, f64t) = (ValType::I64, ValType::I32, ValType::F64);
-		let ratio = self.type_manager.ratio_type;
-		let ratio_ref = self.ratio_ref();
+		self.emit_exact_integers();
+		self.emit_exact_ratios();
+		self.emit_exact_operations();
+	}
 
-		// ── integer helpers with inline fast paths ──
+	/// The Int helpers with inline fast paths: add, sub, quot, rem, gcd
+	fn emit_exact_integers(&mut self) {
+		let i64t = ValType::I64;
+
 		for (name, machine, slow) in [("int_add", I::I64Add, "int_add_slow"), ("int_sub", I::I64Sub, "int_sub_slow")] {
 			// locals: result
 			self.runtime_function(name, vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
@@ -153,8 +157,14 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalSet(2), I::LocalGet(1), I::LocalSet(0), I::LocalGet(2), I::LocalSet(1), I::Br(0), I::End, I::End]);
 			f.instruction(&I::LocalGet(0));
 		});
+	}
 
-		// ── ratios ──
+	/// The ratios: is_ratio, numerator, denominator, ratio_new, exact_div
+	fn emit_exact_ratios(&mut self) {
+		let (i64t, i32t) = (ValType::I64, ValType::I32);
+		let ratio = self.type_manager.ratio_type;
+		let ratio_ref = self.ratio_ref();
+
 		self.runtime_function("is_ratio", vec![i64t], vec![i32t], vec![], |s, f| {
 			s.emit_fixnum_test(f, &[0]);
 			Self::emit_list(f, &[I::If(BlockType::Result(i32t)), I::I32Const(0), I::Else]);
@@ -212,6 +222,9 @@ impl WasmGcEmitter {
 				s.cross_product(f, 1, 0);
 				s.call(f, "ratio_new");
 			};
+			// P66: an exact division by zero is the catchable error divide_by_zero (0 is the fixnum 0)
+			Self::emit_list(f, &[I::LocalGet(1), I::I64Eqz]);
+			s.emit_fail_if(f, super::list_ops::DIVIDE_BY_ZERO);
 			s.emit_fixnum_test(f, &[0, 1]);
 			Self::emit_list(f, &[
 				I::If(BlockType::Result(i64t)),
@@ -239,8 +252,12 @@ impl WasmGcEmitter {
 			ratio_of_both(f);
 			Self::emit_list(f, &[I::End, I::End, I::End]);
 		});
+	}
 
-		// ── dispatch from the Int slow paths ──
+	/// The exact operations the Int slow paths dispatch to: add, sub, compare, trunc, rem, mod, floor, pow, shifts
+	fn emit_exact_operations(&mut self) {
+		let (i64t, i32t, f64t) = (ValType::I64, ValType::I32, ValType::F64);
+
 		for (name, combine, integer_op) in [("exact_add", "int_add", "int_add_slow"), ("exact_sub", "int_sub", "int_sub_slow")] {
 			self.exact_dispatch(name, i64t, |s, f| {
 				s.cross_product(f, 0, 1);
@@ -356,6 +373,36 @@ impl WasmGcEmitter {
 			s.call(f, "exact_abs");
 			s.call(f, "exact_add");
 			Self::emit_list(f, &[I::Else, I::LocalGet(2), I::End]);
+		});
+
+		// exact_floor(x): the largest integer ≤ x, exact also beyond the f64 range (`floor(10^30/3)`, `a//b`)
+		self.runtime_function("exact_floor", vec![i64t], vec![i64t], vec![], |s, f| {
+			f.instruction(&I::LocalGet(0));
+			s.call(f, "is_ratio");
+			Self::emit_list(f, &[I::If(BlockType::Result(i64t)), I::LocalGet(0)]);
+			s.call(f, "exact_trunc");
+			Self::emit_list(f, &[I::LocalGet(0), I::I64Const(0)]);
+			s.call(f, "exact_cmp");
+			// a negative ratio truncates up: one less
+			Self::emit_list(f, &[I::I32Const(0), I::I32LtS, I::I64ExtendI32U]);
+			s.call(f, "exact_sub");
+			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::End]);
+		});
+
+		// exact_euclid_div(a, b): the quotient of a // b that goes with a % b: floor(a/b) for b > 0, ceil(a/b) =
+		// -floor(-a/b) for b < 0
+		self.runtime_function("exact_euclid_div", vec![i64t, i64t], vec![i64t], vec![], |s, f| {
+			Self::emit_list(f, &[I::LocalGet(1), I::I64Const(0)]);
+			s.call(f, "exact_cmp");
+			Self::emit_list(f, &[I::I32Const(0), I::I32LtS, I::If(BlockType::Result(i64t)), I::I64Const(0), I::I64Const(0), I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "exact_div");
+			s.call(f, "exact_sub");
+			s.call(f, "exact_floor");
+			s.call(f, "exact_sub");
+			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "exact_div");
+			s.call(f, "exact_floor");
+			f.instruction(&I::End);
 		});
 
 		// x /= y: an integer x stays an integer, the Euclidean quotient (x - x % y) / y matching %; a ratio x divides exactly

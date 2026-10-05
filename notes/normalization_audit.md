@@ -48,7 +48,7 @@ with stale positions; definitions, `!`, `&`, `|`, `list<int>`, `s[1]`, `s.length
 | `x = 5` vs `x := 5` | assignment and definition differ in meaning, no canonical form |
 | Unicode `≤ ≥ ≠ × ÷ ¬ ∧ ⋁ √`, `is` for `==` | accepted aliases, no canonical form declared in `Style` (open decision) |
 | `s.size`, `s.count` vs `s.length` | wiki/alias.md wants them normed; needs the receiver's type (a user object may own a `count` field), so the parser cannot decide. Open: do it in the analyzer |
-| `x be 5` (wiki/be.md, alias of `:=`) | not accepted by the parser at all, unimplemented |
+| `x be 5` (wiki/be.md, alias of `:=`) | parsed (67c405a5), also `x be number 5` |
 | `int[100]`, `100 int` typed arrays | distinct declarations, not spellings of one form |
 | `#s` at the start of a line | a comment, not a length |
 
