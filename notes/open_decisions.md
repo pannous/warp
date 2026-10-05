@@ -88,6 +88,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P81 the kebab-key warning (`a=5; b=1; a-b:2; a-b`) offers "the data key": `"a-b":2` (only when nothing reads `a-b`
   bare in that block) and "the subtraction" at each bare read: `a - b`. No renaming fix. Asked by the Fixer warp-2d
   (card g-qU1o, was parked in Later; the user answered anyway); as recommended.
+- P81 the kebab-key warning (`a=5; b=1; a-b:2; a-b`) offers three fixes: "the data key": `"a-b":2` (only when nothing
+  reads `a-b` bare in that block); "the subtraction" at each bare read: `a - b`; and "the data key, renamed a_b": the
+  key → `a_b:2` and every bare read → `a_b` (always applicable, renames the key in the data). Asked by the Fixer
+  warp-2d (card g-qU1o, was parked in Later; the user answered anyway): option B, "also offer renaming".
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
