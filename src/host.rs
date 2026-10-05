@@ -61,14 +61,18 @@ pub const MAX_TASK_ARGUMENTS: usize = 4;
 pub const SHARED_WORDS: [&str; 5] = ["shared_new", "shared_get", "shared_set", "shared_add", "shared_count"];
 /// The same for an array of floats (`shared xs = float[n]`), its cells holding the bits: get, set, add
 pub const SHARED_FLOAT_WORDS: [&str; 3] = ["shared_getf", "shared_setf", "shared_addf"];
-pub const HOST_WORDS: [&str; 22] = [GUARDED_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
+/// `interpret e` of a block known only at run time (wiki/charged.md §5, notes/runtime_eval.md): run_block(block, names,
+/// values) compiles the block with the names bound to the values the program had where it ran it, runs it, and gives
+/// its value
+pub const RUN_BLOCK: &str = "run_block";
+pub const HOST_WORDS: [&str; 23] = [GUARDED_CALL, RUN_BLOCK, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
 	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2]];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 22] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 23] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(GUARDED_CALL, vec![I32, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
+	[(GUARDED_CALL, vec![I32, node], vec![node]), (RUN_BLOCK, vec![node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
 		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node]), (TASK_STATUS, vec![I64], vec![I64]), (TASK_POLL, vec![], vec![]),
@@ -397,6 +401,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, RANDOM, || (next_random() >> 11) as f64 / (1u64 << 53) as f64)?;
 	linker.func_wrap(HOST_LIBRARY, RANDOM_BELOW, |bound: i64| if bound <= 0 { 0 } else { (next_random() % bound as u64) as i64 })?;
 	linker.func_wrap(HOST_LIBRARY, CLOCK, milliseconds_since_epoch)?;
+	linker.func_wrap(HOST_LIBRARY, RUN_BLOCK, run_block)?;
 
 	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
 	linker.func_wrap("host", "warn", |mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32| {
@@ -464,6 +469,26 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	)?;
 
 	Ok(())
+}
+
+/// The host side of run_block: the block and the values it sees come in as Nodes, the block's value goes back as one
+#[cfg(feature = "native")]
+fn run_block(mut caller: Caller<'_, HostState>, block: Option<wasmtime::Rooted<wasmtime::AnyRef>>, names: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
+	values: Option<wasmtime::Rooted<wasmtime::AnyRef>>) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
+	use crate::tasks::{Builders, TaskFailure, TaskValue};
+	let failure = |message: String| wasmtime::Error::new(TaskFailure(message));
+	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("run_block: the module exports no memory".into())) };
+	let mut store = caller.as_context_mut();
+	let [block, names, values] = [block, names, values].map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
+	let written = block.serialize();
+	let result = crate::pipeline::eval_block(block, &names, &values);
+	if let Node::Error(message) = result.drop_meta() {
+		return Err(failure(format!("the block {} failed: {}", written.trim(), message.serialize().trim_matches('"'))));
+	}
+	let value = TaskValue::of(&result).map_err(|_| failure(format!("the block {} gave {}, a value run_block cannot hand back yet", written.trim(), result.serialize().trim())))?;
+	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
+	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
+	Ok(built.unwrap_anyref().copied())
 }
 
 #[cfg(feature = "native")]

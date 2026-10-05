@@ -18,3 +18,5 @@ The supervisor should remove the DONE elements after a while.
 - `square 3 + square(4)` with `square := it²` gives 361 (parsed as square(3+square(4))): silent footgun, deserves an Ask warning?
 - DONE (blocks-1 gives 3) `a=1;b=2; x : a+b; x!` prints the symbol `x` silently: `x!` on a name falls through to the mutation marker (wasp_parser `try_parse_evaluate_bang`); charged.md §5 wants 3 (constant quote) or a loud error. (runtime-eval study, 2026-10-05, notes/runtime_eval.md)
 - Silent wrong `!`: `y = data 1+2; y!` gives `1+2`, `xs#2!` and `5!` give "… not ø" (suffix `!` parsed as Not). warp-90 marks every suffix `!` in blocks stage 3; run-time ones become run_block (package 4, warp-29). (run-block-0, 2026-10-05)
+- `[data a]` (one item) is the call `data(a)` ("undefined: data in `[data a]`"), `[(data q+1), 2]` is "undefined function: data", `[data 1/0]` is `[data ∞]`: the data prefix inside list literals. (run-block-1, 2026-10-05)
+- run_block hands values back through the task constructors (tasks.rs TaskValue): an exact ratio or big Int result (`interpret(data 7/2)`) is the loud error "a value run_block cannot hand back yet". (run-block-1, 2026-10-05)

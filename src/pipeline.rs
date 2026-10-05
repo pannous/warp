@@ -99,11 +99,11 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 24] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 25] = [
 	crate::phrase_calls::lower,
 	crate::welcome_forms::lower, crate::number_keys::lower,
 	crate::declarations::lower_tasks, crate::shared_arrays::lower, crate::variable_signals::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::result_word::lower, crate::picked_calls::lower, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
-	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::blocks::lower, crate::mutation::lower, crate::host::lower_aliases, crate::modules::resolve,
+	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::mutation::lower, crate::host::lower_aliases, crate::modules::resolve,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
 	crate::analyzer::lower_negated_calls,
 ];
@@ -224,6 +224,29 @@ fn eval_program(node: Node) -> Node {
 
 /// The words of an exception (library_words lowers them to the call raise(X))
 pub(crate) const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
+
+/// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
+/// names separated by spaces) are bound to `values` first, the values the program had where it ran the block
+pub fn eval_block(block: Node, names: &Node, values: &Node) -> Node {
+	let names: Vec<String> = match names.drop_meta() {
+		Node::Text(names) => names.split_whitespace().map(str::to_string).collect(),
+		_ => vec![],
+	};
+	let values: Vec<Node> = match values.drop_meta() {
+		Node::List(items, _, _) => items.clone(),
+		Node::Empty => vec![],
+		single => vec![single.clone()],
+	};
+	let as_written = |value: Node| match value.drop_meta() {
+		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty => value,
+		_ => Node::List(vec![Node::Symbol(crate::blocks::DATA_WORD.to_string()), value], Bracket::None, Separator::Space),
+	};
+	let mut statements: Vec<Node> = names.into_iter().zip(values)
+		.map(|(name, value)| Node::Key(Box::new(Node::Symbol(name)), Op::Assign, Box::new(as_written(value))))
+		.collect();
+	statements.push(block);
+	eval_parsed(Node::List(statements, Bracket::None, Separator::Newline), "")
+}
 
 /// The message of `error("…")`, or of `raise …`, which always fails the run
 pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {

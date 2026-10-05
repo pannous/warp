@@ -11,7 +11,7 @@ use crate::operators::Op;
 use std::collections::HashMap;
 
 /// The data prefix a bare block name becomes: the block as it is written (list_emitter emit_quoted)
-const DATA_WORD: &str = "data";
+pub(crate) const DATA_WORD: &str = "data";
 /// The got-it topic of `x : a+b`, which keeps a block where a value may have been meant
 const BLOCK_TOPIC: &str = "uncharged-block";
 
