@@ -51,3 +51,20 @@ them) and test binaries (5936 files) in the shared target dir: it reached 183 GB
 shared and small in comparison. `~/dev/bin/prune-cargo-target.sh` (cron, every 6 hours, log in
 ~/.companion/logs/prune-cargo-target.log) deletes warp's incremental caches and test/lib binaries untouched for 12
 hours; dependencies stay. After the first cleanup: 80 GB.
+
+## Test-suite wall clock (card suite-wall, 2026-10-05)
+test.sh prints `TIMING: compile N s, run N s; tests summed N s (N s per thread)` and keeps every test's seconds in
+data/test_times.txt. When the per-thread sum is close to the run's wall clock, the threads were busy to the end: the
+run is bound by total test time, not by one slow test, and only cutting what many tests pay helps.
+- 2026-10-05 before: run 36 s. After the late-binding fix: run 22 s, tests summed 273 s (17 s per thread); the 180
+  tests of 0.2 s or more were 234 s of it. web::test_uniscript alone was 64 s (every conversion compiled
+  `use uniscript` again: now one program per test), upper/lower walked all code points per module (now once).
+- Where a program's time goes (debug build, `use uniscript; uniscript("…")`, ~0.4 s): lowering 0.2 s (parse of the
+  package 40 ms, late binding 115 → 30 ms, ~23 passes of ~6 ms that each rebuild the tree), emission 70 ms, run 90 ms
+  (Cranelift on a module-cache miss). Small programs: ~5 ms lowering, ~2 ms emission, ~18 ms Cranelift on a miss.
+- Tried and dropped: Cranelift's incremental cache (Config::enable_incremental_compilation, per-function): functions::
+  + uniscript got slower, 32 → 42 s. Building warp itself at opt-level 1 for tests: the slow tests ran 1.75× faster,
+  but an incremental test build grew from 7–12 s to 16–39 s, about what the run saves and a loss for every worker's
+  targeted run.
+- Left as they are: tests that sleep or overlap tasks on purpose (control::test_threads, test_job_lists), Lean proofs,
+  the two-million-key map (runtime GC work).
