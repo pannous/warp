@@ -99,6 +99,13 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   (supervisor): adding a job to a list keeps the handle unawaited, the auto-cast applies only where a value is needed
   (arithmetic, print, a call taking a number), and `await all jobs` waits for every job of a list, giving their
   results. Not implemented. 2026-10-05.
+- P48 Custom operators (wiki/operator.md): `prefix operator ⁻ := it*-1`, `suffix operator ³ := it*it*it`,
+  `suffix operator ⁰ := 1`. Proposed syntax (parked, supervisor): exactly the wiki's, `prefix operator SYMBOL := body`
+  and `suffix operator SYMBOL := body` with `it` the operand, plus `infix operator SYMBOL := a op b`-style bodies naming
+  `left` and `right`; prefix and suffix operators bind tighter than any infix one (like `-x` and `x²` today), a new
+  infix operator binds like `+` unless declared `infix operator SYMBOL precedence of *`. The parser learns the symbol
+  from the declaration before the rest of the file (one pre-scan), so a use before the declaration works. Not
+  implemented. 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
