@@ -149,3 +149,17 @@ fn codepoint_is_the_preferred_name() {
 	let (_, hints) = capture_hints(|| eval("codepoint('x')"));
 	assert!(hints.is_empty(), "codepoint(c) is no type constructor: {hints:?}");
 }
+
+#[test]
+fn the_page_says_got_it_for_one_expression() {
+	let code = "x=0; for i in 1 upto 4 {x+=i}; for i in 1 upto 3 {x+=i}; x";
+	let report = warp::web::evaluate(code, Default::default());
+	let first = report["warnings"][0]["expression_key"].as_str().unwrap_or_else(|| panic!("{report}")).to_string();
+	assert!(first.starts_with("upto@"), "{first}");
+	assert_eq!(report["got_it"][0]["topic"], "upto");
+	let silenced = warp::web::evaluate(code, [first].into_iter().collect());
+	let warnings = silenced["warnings"].as_array().unwrap();
+	assert_eq!(warnings.len(), 1, "the other upto still warns: {silenced}");
+	assert!(warnings[0]["message"].as_str().unwrap().contains("upto 3"), "{silenced}");
+	assert_eq!(silenced["value"], report["value"]);
+}

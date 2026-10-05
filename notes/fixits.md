@@ -24,8 +24,10 @@ in case the user did indeed intend something different". Builds the "Later: chan
   `start: null` when the text was not found (the page shows a disabled button: loud, not silent). Warnings also carry
   `topic` for "got it".
 - Playground (web/playground/playground.js): each fix is a button; clicking replaces the range (CodeMirror
-  `posFromIndex`) and runs again. "got it" sits inline next to the warning's fixes (topic-wide, as before; the
-  per-expression `[y/a/n]` + `// got it` comment is another worker's, the `topic` field is what it needs).
+  `posFromIndex`) and runs again. Next to the fixes, "got it" in the three scopes of got-it-scope (user, 2026-10-05):
+  "got it" (this expression: the warning's `expression_key` `topic@expression` joins the page's acknowledged list),
+  "got it: all <topic>" (the topic), "// got it" (appends the comment to the warning's line). Notes without a
+  warning use the report's `got_it` [{topic, expression}].
 
 ## Inventory: every warning, its default reading and its fixes
 | warning / error (topic) | where | default (taken) | fixes offered |
@@ -68,7 +70,8 @@ in case the user did indeed intend something different". Builds the "Later: chan
 ## Tests
 tests/welcoming/test_fixits.rs: one test per category applies the fix and checks the result's value with warnings as
 errors (the explicit form must not warn again). Browser: probes/web_playground.py clicks "I meant: ..." on the
-ambiguity example (6 → 10) and the braceless-call error fix (→ 25), and the inline "got it".
+ambiguity example (6 → 10) and the braceless-call error fix (→ 25), "got it" for one expression and the "// got it"
+comment button; tests/welcoming/test_fixits.rs `the_page_says_got_it_for_one_expression` checks the report's keys.
 
 ## Findings on the way
 - `[1 -1]` still warns (signed-operand inside brackets), so the list's explicit form is `1 (-1)`.
