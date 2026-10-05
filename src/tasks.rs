@@ -84,14 +84,14 @@ fn exact(n: i64) -> Result<TaskValue, String> {
 }
 
 /// The constructors, memory and text heap of one instance: what a TaskValue is rebuilt with
-struct Builders {
+pub(crate) struct Builders {
 	functions: HashMap<&'static str, Func>,
 	memory: Memory,
 	heap: Option<Global>,
 }
 
 impl Builders {
-	fn of(lookup: &mut dyn FnMut(&str) -> Option<wasmtime::Extern>) -> Result<Builders> {
+	pub(crate) fn of(lookup: &mut dyn FnMut(&str) -> Option<wasmtime::Extern>) -> Result<Builders> {
 		let mut functions = HashMap::new();
 		for name in CONSTRUCTORS {
 			if let Some(function) = lookup(name).and_then(|export| export.into_func()) {
@@ -109,7 +109,7 @@ impl Builders {
 		Ok(result[0])
 	}
 
-	fn build(&self, value: &TaskValue, store: &mut StoreContextMut<'_, HostState>) -> Result<Val> {
+	pub(crate) fn build(&self, value: &TaskValue, store: &mut StoreContextMut<'_, HostState>) -> Result<Val> {
 		match value {
 			TaskValue::Empty => self.call("new_empty", &[], store),
 			TaskValue::Int(n) => self.call("new_int", &[Val::I64(*n)], store),
@@ -474,7 +474,7 @@ fn failure_message(failure: anyhow::Error) -> String {
 }
 
 /// The zero-terminated text at `pointer` in the caller's memory: the function name
-fn c_string(caller: &mut Caller<'_, HostState>, pointer: i32) -> Result<String> {
+pub(crate) fn c_string(caller: &mut Caller<'_, HostState>, pointer: i32) -> Result<String> {
 	let memory = caller.get_export("memory").and_then(|export| export.into_memory()).ok_or_else(|| anyhow!("no memory export"))?;
 	let bytes = memory.data(&*caller);
 	let start = pointer as usize;

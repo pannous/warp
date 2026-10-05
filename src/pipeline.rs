@@ -222,10 +222,15 @@ fn eval_program(node: Node) -> Node {
 	}
 }
 
+/// The words of an exception (library_words lowers them to the call raise(X))
+pub(crate) const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
+
 /// The message of `error("…")`, or of `raise …`, which always fails the run
 pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {
 	match value.drop_meta() {
 		Node::List(items, Bracket::Round, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error" || word == crate::wasm_emitter::text_builtins::RAISE) => Some(&items[1]),
+		// `raise X` / `throw X` before library_words makes them the call raise(X)
+		Node::List(items, Bracket::None, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if RAISE_WORDS.contains(&word.as_str())) => Some(&items[1]),
 		_ => None,
 	}
 }

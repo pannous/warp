@@ -42,7 +42,8 @@ const ERROR: &str = "error";
 pub const RAISE: &str = "raise";
 /// `is_error(x)`: 1 when x is an Error value; `try X else Y` tests its result with it
 const IS_ERROR: &str = "is_error";
-const ERROR_OF: &str = "error_of";
+/// error_of(text) → Error: exported, the host builds the Error of a caught stack overflow with it (guarded_call)
+pub const ERROR_OF: &str = "error_of";
 const WARNING: &str = "warning";
 const WARN_TEXT: &str = "warn_text";
 const HOST_WARN: &str = "host_warn";
@@ -496,7 +497,7 @@ impl WasmGcEmitter {
 
 		// error_of(text): an Error node carrying the text as its reason
 		if self.should_emit_function(ERROR_OF) {
-			self.runtime_function(ERROR_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
+			self.exported_function(ERROR_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
 				Self::emit_list(f, &[I::LocalGet(0)]);
 				s.call(f, TEXT_OF);
 				f.instruction(&I::LocalSet(0));

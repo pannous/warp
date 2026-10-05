@@ -2838,7 +2838,7 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 			Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") => &items[1],
 			other => other,
 		};
-		matches!(value.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == "error"))
+		crate::pipeline::returned_error_message(value).is_some() // `error("…")` or `raise …`
 	};
 	// `if c { return "text" }; …`: a returned Node makes the function return Nodes
 	// (`return [dist, prev]`: a List when every returned Node is one)
@@ -3099,7 +3099,7 @@ fn called_functions(items: &[Node]) -> Vec<(String, Vec<&Node>)> {
 	};
 	match head.as_str() {
 		crate::declarations::TASK_GO | crate::host::TASK_SPAWN => started.map(|name| (name, items[2..].iter().collect())).into_iter().collect(),
-		crate::host::TASK_SPAWN_VALUES => match (started, items.get(2)) {
+		crate::host::TASK_SPAWN_VALUES | crate::host::GUARDED_CALL => match (started, items.get(2)) {
 			(Some(wrapper), Some(list)) => {
 				let mut calls = vec![(wrapper.clone(), vec![list])];
 				if let (Some(function), Node::List(arguments, _, _)) = (wrapper.strip_suffix(crate::declarations::NODE_WRAPPER_SUFFIX), list.drop_meta()) {
@@ -4084,6 +4084,10 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
+					// the host builds a caught stack overflow's Error with the module's own error_of
+					if name == crate::host::GUARDED_CALL {
+						ctx.required_functions.insert(crate::wasm_emitter::text_builtins::ERROR_OF);
+					}
 					// a program that controls tasks polls at its loops, where a paused task waits (browser)
 					if name == crate::host::TASK_CONTROL {
 						add_ffi_import(ctx, crate::host::TASK_POLL, crate::host::HOST_LIBRARY);

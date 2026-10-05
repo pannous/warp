@@ -363,7 +363,7 @@ const CROSSING_KINDS: [crate::type_kinds::Kind; 8] = {
 pub fn resolve_tasks(node: Node) -> Node {
 	use crate::type_kinds::Kind;
 	let mut has_task = false;
-	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(word(items.first().unwrap_or(&Node::Empty)).as_str(), TASK_GO | TASK_VALUE | TASK_CONTROL_MARK | TASK_LIST | TASK_ELEMENT)));
+	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(word(items.first().unwrap_or(&Node::Empty)).as_str(), TASK_GO | TASK_VALUE | TASK_CONTROL_MARK | TASK_LIST | TASK_ELEMENT | crate::wasp_parser::TRY_MARKER)));
 	if !has_task {
 		return node;
 	}
@@ -382,6 +382,15 @@ pub fn resolve_tasks(node: Node) -> Node {
 	};
 	let node = TaskHandlers { path: &path, count: std::cell::Cell::new(0) }.lower(node, &[]);
 	let wrapped = std::cell::RefCell::new(std::collections::BTreeMap::new());
+	// the guardable functions, with the type word their Node result converts back to (it comes back from the host as a Node)
+	let guardable = |function: &str| context.user_functions.get(function).filter(|definition| definition.tuple_kinds.is_empty())
+		.map(|definition| match definition.return_kind {
+			Kind::Int => Some("int"),
+			Kind::Float => Some("float"),
+			Kind::Text => Some("text"),
+			_ => None,
+		});
+	let node = guarded_calls(node, &guardable, &wrapped);
 	let node = resolved(node, &path, &wrapped);
 	with_node_wrappers(node, &wrapped.into_inner())
 }
@@ -542,6 +551,36 @@ fn checked_await(await_word: &str, job: &Node) -> Node {
 	use crate::host::{TASK_CHECK, TASK_FAILURE, TASK_JOIN};
 	let check = marker(TASK_CHECK, vec![marker(TASK_JOIN, vec![job.clone()]), marker(TASK_FAILURE, vec![job.clone()])]);
 	Node::List(vec![check, marker(await_word, vec![job.clone()])], Bracket::None, Separator::Semicolon)
+}
+
+/// `try f(a, b) else Y` of a user function f: the guarded call goes through the host, `guarded_call("f·node", [a, b])`,
+/// whose stack overflow is an Error `try` catches (host.rs guarded_call); f's node wrapper is the one tasks use. Any other
+/// guarded expression stays as it is
+fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static str>>, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
+	match node {
+		Node::List(items, bracket, separator) if items.len() == 3 && word(&items[0]) == crate::wasp_parser::TRY_MARKER => {
+			let items: Vec<Node> = items.into_iter().map(|item| guarded_calls(item, guardable, wrapped)).collect();
+			let guarded = match items[1].drop_meta() {
+				Node::List(call, Bracket::Round, _) if matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(function)) if guardable(function).is_some()) => {
+					let function = word(&call[0]);
+					wrapped.borrow_mut().insert(function.clone(), call.len() - 1);
+					let arguments = Node::List(call[1..].to_vec(), Bracket::Square, Separator::Colon);
+					let guarded = marker(crate::host::GUARDED_CALL, vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments]);
+					// an Int, Float or Text result is that again (a caught overflow's Error fails the conversion, which `try` catches)
+					match guardable(&function).flatten() {
+						Some(type_word) => Node::Key(Box::new(guarded), Op::As, Box::new(Node::Symbol(type_word.to_string()))),
+						None => guarded,
+					}
+				}
+				_ => items[1].clone(),
+			};
+			Node::List(vec![items[0].clone(), guarded, items[2].clone()], bracket, separator)
+		}
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| guarded_calls(item, guardable, wrapped)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(guarded_calls(*left, guardable, wrapped)), op, Box::new(guarded_calls(*right, guardable, wrapped))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(guarded_calls(*node, guardable, wrapped)), data },
+		other => other,
+	}
 }
 
 /// Every result of a job list: `jobs.map(awaited_job => <checked await of awaited_job>)`

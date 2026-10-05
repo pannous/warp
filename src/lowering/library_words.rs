@@ -31,8 +31,6 @@ pub const MAP_WORD_FUNCTIONS: [&str; 7] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, CO
 const IN_WORD: &str = "in";
 /// `count x in y` (count_in): the occurrences of an item or a character, or of a substring in a text
 const COUNT_WORD: &str = "count";
-/// `raise X` and its synonym `throw X` (wiki Exception.md)
-const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
 const COUNT_HAYSTACK: &str = "counted_haystack";
 const COUNT_NEEDLE: &str = "counted_needle";
 const COUNT_ITEM_TEMPLATE: &str = "count(filter(counted_haystack, counted_item => counted_item == counted_needle))";
@@ -196,7 +194,7 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 /// `raise X`, `throw X`, `raise(X)`: the call `raise(X)`; `raise error("m")` raises the message m
 fn raise_call(items: &[Node]) -> Option<Node> {
 	let [word, raised] = items else { return None };
-	if !RAISE_WORDS.iter().any(|raise| is_marker(word, raise)) {
+	if !crate::pipeline::RAISE_WORDS.iter().any(|raise| is_marker(word, raise)) {
 		return None;
 	}
 	let message = crate::pipeline::returned_error_message(raised).unwrap_or(raised).clone();
