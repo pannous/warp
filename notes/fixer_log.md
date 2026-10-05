@@ -124,3 +124,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - `raise X` / `throw X` / `raise error("m")`: the builtin raise(X) fails the run through returned_error with X as its
   detail; `try` catches it, an Int if treats it as the failure branch (pipeline::returned_error_message). `catch` is
   not built: the wiki form (function-level `catch (no food){}` handlers) is queued as a question.
+
+## 2026-10-05 decided-test-edits
+- P55: test_while_nop_issue reads x after the loop, un-ignored. P59: four array tests edited and un-ignored (own commit);
+  `x is 100 times [0]` written as the assignment `x = 100 times [0]` (assumption, `is` compares).

@@ -79,10 +79,8 @@ lists (`analyzer::typed_array_value`, `zero_list`). `x:[number]` is `x:list of n
 (a plural type word before a name is a declaration). The bracket spelling `[number]` hints the plural `numbers`
 (`ListTypeStyle::Bracket`); the fixed-array spellings have no canonical form yet (both are decided as valid), so they get no hint.
 
-Ignored tests that still cannot pass unedited: test_array_creation (`pixel=[];pixel[1]=15` assigns past the end, Decided an error;
-`pixel array`), test_array_initialization_basics (`analyze(parse(..))` on `x : 100 numbers` counts the parse tree, not the lowered list),
-test_array_initialization (`x : 100 * ints;[ x.length` is a typo, and `x is array of size 100`, `x is a 100 integer array` are
-natural-language forms), test_array_type_generics (expects `list<int>`, decided `list of int`).
+The ignored array tests were edited by user decision P59 (2026-10-05) and pass: test_array_creation (setting past the end
+is `index out of range`), test_array_initialization_basics, test_array_initialization, test_array_type_generics (`list of int`).
 
 
 # Data as scope (Decided #6)

@@ -77,9 +77,9 @@ fn test_type_annotated() {
 
 
 #[test]
-#[ignore = "todo"]
+// P59 (user, 2026-10-05): the type is written `list of int` (decided), not `list<int>`
 fn test_array_type_generics() {
-	is!("pixels=(1,2,3);type(pixels)","list<int>");
+	is!("pixels=(1,2,3);type(pixels)","list of int");
 }
 
 
