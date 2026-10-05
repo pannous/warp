@@ -1479,7 +1479,6 @@ fn test_root_float() {
 	is!("√42*√42", 42); // round AFTER! ok with f64! f32 result 41.99999 => 41
 }
 #[test]
-#[ignore]
 fn test_node_data_binary_reconstruction() {
 	eq!(parse("y:{x:2 z:3}").serialize(), "y{x:2 z:3}"); // todo y:{} vs y{}
 	is!("y:{x:2 z:3}", parse("y:{x:2 z:3}")); // looks trivial but is epitome of binary (de)serialization!
