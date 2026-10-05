@@ -1983,6 +1983,10 @@ PASSED:
   ✓ welcoming::test_footguns::test_while_loop_may_diverge
   ✓ welcoming::test_footguns::test_zero_string_is_truthy
   ✓ welcoming::test_footguns::test_zoned_time_records_its_rules_version
+  ✓ welcoming::test_got_it_scope::a_got_it_comment_silences_its_line
+  ✓ welcoming::test_got_it_scope::got_it_for_all_silences_the_kind
+  ✓ welcoming::test_got_it_scope::got_it_for_this_silences_only_that_expression
+  ✓ welcoming::test_got_it_scope::no_keeps_reminding
   ✓ welcoming::test_got_it_warnings::a_dangerous_ambiguity_stays_an_error_even_when_acknowledged
   ✓ welcoming::test_got_it_warnings::a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_show
   ✓ welcoming::test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
@@ -2126,4 +2130,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2121 passed, 0 failed, 2121 total tested
+37 ignored, 2125 passed, 0 failed, 2125 total tested
