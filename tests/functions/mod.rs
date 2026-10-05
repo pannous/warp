@@ -65,3 +65,4 @@ mod test_foreign_modifiers;
 mod test_closure_value_arguments;
 mod test_function_references;
 mod test_function_aliases;
+mod test_several_arguments;

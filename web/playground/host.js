@@ -137,6 +137,24 @@ function programImports(holder, hooks) {
 				}
 				return buildValue(module, report.result);
 			},
+			// a module of another runtime (src/foreign.rs): `use js Math` is the page's own globalThis.Math; Python and
+			// npm modules need the native host
+			foreign_call: (runtime, module, member, call, argumentList) => {
+				const program_ = program();
+				const [runtimeName, moduleName, memberName] = [runtime, module, member].map(node => plainOfTree(readNode(program_, node)));
+				if (runtimeName !== "js") throw new Error(`${runtimeName} ${moduleName}.${memberName}: ${runtimeName} runs only in the native host (the warp CLI)`);
+				let owner = null, value = globalThis[moduleName];
+				if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
+				for (const part of memberName.split(".")) {
+					if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
+					[owner, value] = [value, value[part]];
+				}
+				if (plainOfTree(readNode(program_, call)) === 1) {
+					const given = plainOfTree(readNode(program_, argumentList));
+					value = value.apply(owner, given === null ? [] : Array.isArray(given) ? given : [given]);
+				}
+				return buildValue(program_, treeOfPlain(value));
+			},
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
 			sleep: milliseconds => {
 				const until = Date.now() + Number(milliseconds);
@@ -432,6 +450,45 @@ function buildValue(module, tree) {
 		}
 		default: throw new Error(`a value of kind ${kind & KIND_MASK} cannot cross to another task yet`);
 	}
+}
+
+// a value of the program (a reader.js tree) as a plain JavaScript value, for foreign_call: lists arrays, `{a:1}` objects
+const KIND_KEY = 6n;
+function plainOfTree(tree) {
+	const kind = BigInt(tree.kind);
+	const payload = tree.data ?? {};
+	const items = () => [payload.node, ...(tree.chain ?? []).map(cell => cell.data?.node)].filter(Boolean);
+	switch (Number(kind & KIND_MASK)) {
+		case 0: return null;
+		case 1:
+			if (payload.ratio) return Number(payload.ratio[0].int) / Number(payload.ratio[1].int);
+			return payload.int === undefined ? null : Number(payload.int);
+		case 2: return Number(payload.float);
+		case 3: case 5: return payload.text;
+		case 4: return String.fromCodePoint(payload.i31);
+		case 6: return { [plainOfTree(payload.node)]: plainOfTree(tree.chain?.[0] ?? { kind: "0" }) };
+		case 7: case 8: {
+			const values = items();
+			const isObject = (kind >> 8n) === 0n && values.length > 0 && values.every(item => (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
+			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfTree);
+		}
+		default: return null;
+	}
+}
+
+// a plain JavaScript value as a tree buildValue builds: arrays square lists, objects `{key:value …}`, booleans 1/0
+const SQUARE_LIST = String((1n << 8n) | KIND_LIST);
+const CURLY_LIST = String(KIND_LIST);
+const COLON_KEY = String((1n << 8n) | KIND_KEY); // src/operators.rs OP_CODES: Colon is 1
+function treeOfPlain(value) {
+	if (value === null || value === undefined) return { kind: "0", data: null, chain: [] };
+	if (typeof value === "boolean") return { kind: KIND_INT, data: { int: value ? "1" : "0" }, chain: [] };
+	if (typeof value === "bigint") return { kind: KIND_INT, data: { int: String(value) }, chain: [] };
+	if (typeof value === "number") return Number.isSafeInteger(value) ? { kind: KIND_INT, data: { int: String(value) }, chain: [] } : { kind: KIND_FLOAT, data: { float: value }, chain: [] };
+	if (typeof value === "string") return textTree(value);
+	if (Array.isArray(value) || value instanceof Set) return { kind: SQUARE_LIST, items: [...value].map(treeOfPlain) };
+	if (typeof value === "object") return { kind: CURLY_LIST, items: Object.entries(value).map(([key, item]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: key }, chain: [] }, treeOfPlain(item)] })) };
+	return textTree(String(value));
 }
 
 // the Int handle of an exact number beyond the fixnums, composed from fixnum pieces with the module's exported Int

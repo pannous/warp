@@ -80,4 +80,16 @@ step 3.
   now also applies to the check after lowering (pipeline `GRANTED`).
 - AOT (warp-ec, 2026-10-05): `warp build --exe` names foreign_call as a missing import and refuses the program; the stub
   could link it later (std::process only) but an exe silently needing python3 would surprise.
-- Next: `use js "…"` with node/deno on the same protocol and globalThis in the browser host; the C gaps; handles.
+- Next: the C gaps (card ffi-gaps); handles (card foreign-handles).
+
+## Step 2: `use js` (branch use-js)
+- `use js Math` / `use js "path"`: natively a `node --no-warnings -e` child running FOREIGN_JS_LOOP (`WARP_NODE` names
+  another node-compatible runtime, e.g. bun): a global (`Math`, `JSON`, `crypto`) or a module it requires or imports;
+  a method is applied to its object; a promise is awaited; BigInts beyond 64 bits cross as `{"$int": …}`.
+- Browser (web/playground/host.js foreign_call): runtime "js" is the page's own globalThis, synchronously; Python and npm
+  modules are a loud error there ("runs only in the native host"). Trees ↔ plain values: plainOfTree, treeOfPlain.
+- foreign_call(runtime, module, member, call, arguments): `call` (1/0) says a call from a read, since an empty
+  argument list arrives as ø.
+- Results are held as Nodes (Kind::Empty, like map values): arithmetic and text joining decide at run time, and an
+  ordering comparison of a held Node goes through node_order (`time.time() > 0`, also cells).
+

@@ -61,7 +61,7 @@ pub const SHARED_FLOAT_WORDS: [&str; 3] = ["shared_getf", "shared_setf", "shared
 /// values, definitions) compiles the block with the names bound to the values the program had where it ran it and the
 /// program's function definitions, runs it, and gives its value
 pub const RUN_BLOCK: &str = "run_block";
-/// foreign_call(runtime, module, member, arguments): a module of another runtime (src/foreign.rs), Nodes in and out
+/// foreign_call(runtime, module, member, call, arguments): a module of another runtime (src/foreign.rs), Nodes in and out
 pub const FOREIGN_CALL: &str = "foreign_call";
 /// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
 pub const VALUE_GIVING_WORDS: [&str; 2] = [RUN_BLOCK, FOREIGN_CALL];
@@ -72,7 +72,7 @@ pub const HOST_WORDS: [&str; 24] = [GUARDED_CALL, RUN_BLOCK, FOREIGN_CALL, SLEEP
 pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 24] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(GUARDED_CALL, vec![I32, node], vec![node]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (FOREIGN_CALL, vec![node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
+	[(GUARDED_CALL, vec![I32, node], vec![node]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
 		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node]), (TASK_STATUS, vec![I64], vec![I64]), (TASK_POLL, vec![], vec![]),
@@ -471,13 +471,13 @@ fn run_block(mut caller: Caller<'_, HostState>, block: Option<wasmtime::Rooted<w
 /// answer goes back as one (src/foreign.rs)
 #[cfg(feature = "native")]
 fn foreign_call(mut caller: Caller<'_, HostState>, runtime: Option<wasmtime::Rooted<wasmtime::AnyRef>>, module: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
-	member: Option<wasmtime::Rooted<wasmtime::AnyRef>>, arguments: Option<wasmtime::Rooted<wasmtime::AnyRef>>) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
+	member: Option<wasmtime::Rooted<wasmtime::AnyRef>>, call: Option<wasmtime::Rooted<wasmtime::AnyRef>>, arguments: Option<wasmtime::Rooted<wasmtime::AnyRef>>) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
 	use crate::tasks::{Builders, TaskFailure, TaskValue};
 	let failure = |message: String| wasmtime::Error::new(TaskFailure(message));
 	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("foreign_call: the module exports no memory".into())) };
 	let mut store = caller.as_context_mut();
-	let [runtime, module, member, arguments] = [runtime, module, member, arguments].map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
-	let answer = crate::foreign::call(&runtime.name(), &module.name(), &member.name(), &arguments).map_err(failure)?;
+	let [runtime, module, member, call, arguments] = [runtime, module, member, call, arguments].map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
+	let answer = crate::foreign::call(&runtime.name(), &module.name(), &member.name(), call == 1, &arguments).map_err(failure)?;
 	let value = TaskValue::of(&answer).map_err(|problem| failure(problem.to_string()))?;
 	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
@@ -506,6 +506,9 @@ mod tests {
 
 /// `download url` → `fetch url`: an alias at the head of an application or call, unless the program defines the alias itself
 pub fn lower_aliases(node: Node) -> Node {
+	if !node.mentions_any(&HOST_ALIASES.map(|(alias, _, _)| alias)) {
+		return node;
+	}
 	let mut defined = std::collections::HashSet::new();
 	crate::library_words::collect_assigned_names(&node, &mut defined);
 	let mut context = crate::context::Context::new();

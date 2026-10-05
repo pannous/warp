@@ -26,6 +26,9 @@ pub const NO_CASE_PREFIX: &str = "no_case_";
 const UNNAMED_SUBJECT: &str = "value";
 
 pub fn lower(node: Node) -> Node {
+	if !node.mentions_any(&SWITCH_WORDS) {
+		return node;
+	}
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
 	let words: Vec<&str> = SWITCH_WORDS.into_iter().filter(|word| !context.user_functions.contains_key(*word)).collect();

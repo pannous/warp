@@ -1,8 +1,9 @@
 //! The host side of foreign_call(runtime, module, member, arguments) (lowering/foreign_modules.rs,
 //! notes/stdlib_connectors.md): one long-lived child per runtime and warp process, started on first use, speaking one
 //! JSON line per request and per answer. Python: `python3 -u` running FOREIGN_PYTHON_LOOP (`WARP_PYTHON` names another
-//! interpreter). A read (`arguments` ø) gives the member itself, a call gives its result; values without a JSON form
-//! come back as their repr text; an exception is an error with the Python message.
+//! interpreter); JavaScript: `node` running FOREIGN_JS_LOOP (`WARP_NODE`), a global (`Math`) or a module it requires.
+//! A read (`arguments` ø) gives the member itself, a call gives its result (a promise awaited); values without a JSON
+//! form come back as their text; an exception is an error with the runtime's message.
 
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
@@ -12,9 +13,20 @@ use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::Mutex;
 
-const PYTHON: &str = "python";
-const PYTHON_VARIABLE: &str = "WARP_PYTHON";
-const DEFAULT_PYTHON: &str = "python3";
+/// A runtime: its name in `use <runtime> …`, the variable naming its interpreter, the default interpreter, and how it
+/// runs its loop script
+struct Interpreter {
+	runtime: &'static str,
+	variable: &'static str,
+	default: &'static str,
+	arguments: [&'static str; 2],
+	script: &'static str,
+}
+
+const INTERPRETERS: [Interpreter; 2] = [
+	Interpreter { runtime: "python", variable: "WARP_PYTHON", default: "python3", arguments: ["-u", "-c"], script: FOREIGN_PYTHON_LOOP },
+	Interpreter { runtime: "js", variable: "WARP_NODE", default: "node", arguments: ["--no-warnings", "-e"], script: FOREIGN_JS_LOOP },
+];
 /// An integer beyond 64 bits, sent as its digits: `{"$int": "15511210043330985984000000"}`
 const BIG_INTEGER_KEY: &str = "$int";
 /// The request loop the child runs: {"module", "member", "arguments"} → {"value"} or {"error"}
@@ -46,26 +58,61 @@ for line in sys.stdin:
     print(json.dumps(answer), flush=True)
 "#;
 
+/// The same loop for node: a global (`Math`, `JSON`) or a module it requires or imports; a method keeps its object
+const FOREIGN_JS_LOOP: &str = r#"
+const plain = value => {
+	if (typeof value === "bigint") return value >= -(2n ** 63n) && value < 2n ** 63n ? Number(value) : { "$int": value.toString() };
+	if (value === undefined || typeof value === "symbol") return null;
+	if (typeof value === "function") return String(value);
+	if (Array.isArray(value) || value instanceof Set) return [...value].map(plain);
+	if (value instanceof Map) return Object.fromEntries([...value].map(([key, item]) => [String(key), plain(item)]));
+	if (value !== null && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, plain(item)]));
+	return value;
+};
+const load = async name => name in globalThis ? globalThis[name] : (() => { try { return require(name); } catch (failure) { return import(name); } })();
+let pending = Promise.resolve();
+require("readline").createInterface({ input: process.stdin }).on("line", line => {
+	pending = pending.then(async () => {
+		const request = JSON.parse(line);
+		let answer;
+		try {
+			let owner = null, value = await load(request.module);
+			for (const part of request.member.split(".")) {
+				if (value?.[part] === undefined) throw new ReferenceError(`${request.module} has no ${request.member}`);
+				[owner, value] = [value, value[part]];
+			}
+			if (request.arguments !== null) value = await value.apply(owner, request.arguments);
+			answer = { value: plain(value) };
+		} catch (failure) {
+			answer = { error: failure instanceof Error ? failure.name + ": " + failure.message : String(failure) };
+		}
+		process.stdout.write(JSON.stringify(answer) + "\n");
+	});
+});
+"#;
+
 struct Runtime {
 	_child: Child,
 	input: ChildStdin,
 	output: BufReader<ChildStdout>,
 }
 
-static PYTHON_RUNTIME: Mutex<Option<Runtime>> = Mutex::new(None);
+/// The running children, by runtime
+static RUNNING: Mutex<Vec<(&'static str, Runtime)>> = Mutex::new(Vec::new());
 
-/// `runtime.module.member(arguments…)` (a read when `arguments` is ø) as a Node
-pub fn call(runtime: &str, module: &str, member: &str, arguments: &Node) -> Result<Node, String> {
-	if runtime != PYTHON {
+/// `runtime.module.member(arguments…)`, or the member itself when it is no call, as a Node
+pub fn call(runtime: &str, module: &str, member: &str, is_call: bool, arguments: &Node) -> Result<Node, String> {
+	let Some(interpreter) = INTERPRETERS.iter().find(|interpreter| interpreter.runtime == runtime) else {
 		return Err(format!("no foreign runtime {runtime}: known are {}", crate::foreign_modules::FOREIGN_RUNTIMES.join(", ")));
-	}
+	};
 	let arguments = match arguments.drop_meta() {
-		Node::Empty => Value::Null,
+		_ if !is_call => Value::Null,
+		Node::Empty => Value::Array(vec![]),
 		Node::List(items, _, _) => Value::Array(items.iter().map(json_of).collect()),
 		single => Value::Array(vec![json_of(single)]),
 	};
 	let request = serde_json::json!({"module": module, "member": member, "arguments": arguments});
-	let answer = exchange(&request.to_string()).map_err(|failure| format!("{runtime}: {failure}"))?;
+	let answer = exchange(interpreter, &request.to_string()).map_err(|failure| format!("{runtime}: {failure}"))?;
 	let answer: Value = serde_json::from_str(&answer).map_err(|failure| format!("{runtime} answered no JSON: {failure}"))?;
 	match (answer.get("value"), answer.get("error")) {
 		(_, Some(Value::String(error))) => Err(format!("{runtime} {module}.{member}: {error}")),
@@ -75,25 +122,26 @@ pub fn call(runtime: &str, module: &str, member: &str, arguments: &Node) -> Resu
 }
 
 /// One request line out, one answer line back; the child is started on first use and again after it ended
-fn exchange(request: &str) -> Result<String, String> {
-	let mut runtime = PYTHON_RUNTIME.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-	if runtime.is_none() {
-		*runtime = Some(start_python()?);
+fn exchange(interpreter: &'static Interpreter, request: &str) -> Result<String, String> {
+	let mut running = RUNNING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+	if !running.iter().any(|(runtime, _)| *runtime == interpreter.runtime) {
+		running.push((interpreter.runtime, start(interpreter)?));
 	}
-	let running = runtime.as_mut().expect("started");
+	let index = running.iter().position(|(runtime, _)| *runtime == interpreter.runtime).expect("started");
+	let child = &mut running[index].1;
 	let mut answer = String::new();
-	let sent = writeln!(running.input, "{request}").and_then(|_| running.input.flush());
-	if sent.is_err() || running.output.read_line(&mut answer).map_err(|failure| failure.to_string())? == 0 {
-		*runtime = None;
+	let sent = writeln!(child.input, "{request}").and_then(|_| child.input.flush());
+	if sent.is_err() || child.output.read_line(&mut answer).map_err(|failure| failure.to_string())? == 0 {
+		running.remove(index);
 		return Err("the interpreter ended".into());
 	}
 	Ok(answer)
 }
 
-fn start_python() -> Result<Runtime, String> {
-	let python = std::env::var(PYTHON_VARIABLE).unwrap_or_else(|_| DEFAULT_PYTHON.to_string());
-	let mut child = Command::new(&python).args(["-u", "-c", FOREIGN_PYTHON_LOOP]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit())
-		.spawn().map_err(|failure| format!("cannot start {python} ({failure}); set {PYTHON_VARIABLE} to an interpreter"))?;
+fn start(interpreter: &Interpreter) -> Result<Runtime, String> {
+	let program = std::env::var(interpreter.variable).unwrap_or_else(|_| interpreter.default.to_string());
+	let mut child = Command::new(&program).args(interpreter.arguments).arg(interpreter.script).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit())
+		.spawn().map_err(|failure| format!("cannot start {program} ({failure}); set {} to an interpreter", interpreter.variable))?;
 	let input = child.stdin.take().ok_or("no stdin")?;
 	let output = BufReader::new(child.stdout.take().ok_or("no stdout")?);
 	Ok(Runtime { _child: child, input, output })
