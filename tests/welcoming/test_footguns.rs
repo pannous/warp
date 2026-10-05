@@ -582,7 +582,9 @@ fn test_type_annotation_is_enforced() {
 #[test]
 fn test_closures_capture_values() {
 	is!("x=1;f(y):=x+y;f(1)", 2);
-	is!("x=1;f(y):=x+y;x=5;f(1)", 2); // captured at definition; by reference (JS, Python): 6
+	// late binding (wiki/charged.md §3, released 2026-10-05): a change a later call would see is an error, `global x` reads it
+	fails_with("x=1;f(y):=x+y;x=5;f(1)", "f reads x (line 1): declare `global x` in f");
+	is!("global x=1;f(y):=x+y;x=5;f(1)", 6);
 	is!("xs=(1 2 3);f(i):=xs#i;f(2)", 2);
 }
 
