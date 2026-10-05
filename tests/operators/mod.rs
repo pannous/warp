@@ -5,6 +5,7 @@ mod test_less_than_compare;
 mod test_logic_grouped_operands;
 mod test_mutating_bang;
 mod test_negated_call;
+mod test_nand_spellings;
 mod test_operator_declarations;
 mod test_operator_precedence;
 mod test_superscript_operator_declarations;
