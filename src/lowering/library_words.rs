@@ -29,6 +29,12 @@ pub const MAP_GET_OR: &str = "map_get_or";
 pub const MAP_WITHOUT: &str = "map_without";
 pub const MAP_WORD_FUNCTIONS: [&str; 7] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT];
 const IN_WORD: &str = "in";
+/// `count x in y` (count_in): the occurrences of an item or a character, or of a substring in a text
+const COUNT_WORD: &str = "count";
+const COUNT_HAYSTACK: &str = "counted_haystack";
+const COUNT_NEEDLE: &str = "counted_needle";
+const COUNT_ITEM_TEMPLATE: &str = "count(filter(counted_haystack, counted_item => counted_item == counted_needle))";
+const COUNT_SUBSTRING_TEMPLATE: &str = "count(split(counted_haystack, counted_needle)) - 1";
 const FOR_WORD: &str = "for";
 /// `log(x)` is libm's natural logarithm; `log(x, base)` divides by the base's
 const LOG_WORD: &str = "log";
@@ -180,6 +186,46 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 		}
 	});
 	names
+}
+
+/// The pass of `count x in y` (count_in), before the lambdas its rewrite uses are lowered and before `x in y` is membership
+pub fn lower_count_in(node: Node) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => match count_in(&items) {
+			Some(occurrences) => lower_count_in(occurrences),
+			None => Node::List(items.into_iter().map(lower_count_in).collect(), bracket, separator),
+		},
+		Node::Key(left, op, right) => Node::Key(Box::new(lower_count_in(*left)), op, Box::new(lower_count_in(*right))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_count_in(*node)), data },
+		other => other,
+	}
+}
+
+/// `count x in y`: how often x occurs in y. A text of several characters counts as a substring of a text (`count "an"
+/// in "banana"` → 2), anything else as an item of a list or a character of a text; `count bytes in t` is `t.bytes`
+fn count_in(items: &[Node]) -> Option<Node> {
+	// `count 'a' in s` arrives as the words or as `count ('a' in s)`
+	let phrase: Vec<Node> = match items {
+		[count, phrase] => match phrase.drop_meta() {
+			Node::List(rest, Bracket::None, _) => [vec![count.clone()], rest.clone()].concat(),
+			_ => return None,
+		},
+		_ => items.to_vec(),
+	};
+	let [count, needle, in_word, haystack @ ..] = phrase.as_slice() else { return None };
+	if !is_marker(count, COUNT_WORD) || !is_marker(in_word, IN_WORD) || haystack.is_empty() {
+		return None;
+	}
+	let haystack = match haystack {
+		[single] => single.clone(),
+		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
+	};
+	if let Some(unit) = matches!(needle.drop_meta(), Node::Symbol(_)).then(|| crate::analyzer::text_unit(&needle.name())).flatten() {
+		return Some(Node::Key(Box::new(haystack), Op::Dot, Box::new(Node::Symbol(unit.to_string()))));
+	}
+	let substring = matches!(needle.drop_meta(), Node::Text(text) if text.chars().count() > 1) && !matches!(haystack.drop_meta(), Node::List(_, Bracket::Square, _));
+	let template = if substring { COUNT_SUBSTRING_TEMPLATE } else { COUNT_ITEM_TEMPLATE };
+	Some(substitute(substitute(parse(template), COUNT_HAYSTACK, &haystack), COUNT_NEEDLE, needle))
 }
 
 /// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding or libm

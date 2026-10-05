@@ -84,3 +84,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   sets, logic, relations): expanded to their character before parsing, outside texts and comments; an unknown
   `\name` is the loud "unknown entity \name" (tests/parser/test_uniscript_entities.rs). The full table and `<:…>`
   blocks stay with the uniscript package.
+
+## 2026-10-05 fix-count-in
+- `count x in y` counts occurrences (items of a list, characters of a text, substrings of a text) instead of being
+  read as count(x in y) = 1; `count bytes in t` is t.bytes. Own pass before the lambdas (library_words::lower_count_in).
