@@ -436,6 +436,9 @@ PASSED:
   ✓ functions::test_free_var_if_arms::non_foldable_capped_sum
   ✓ functions::test_free_var_if_arms::ternary_capped_sum
   ✓ functions::test_free_var_if_arms::then_arm_only_free_var_sum
+  ✓ functions::test_function_aliases::test_a_bare_alias_is_the_error_with_the_fix
+  ✓ functions::test_function_aliases::test_a_function_argument_stays_bare
+  ✓ functions::test_function_aliases::test_an_alias_names_the_function
   ✓ functions::test_function_keyword::function_defines_like_def
   ✓ functions::test_function_references::test_a_bare_name_needing_arguments_is_an_error_with_the_fix
   ✓ functions::test_function_references::test_a_body_returns_a_function_reference
@@ -2249,4 +2252,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-33 ignored, 2244 passed, 0 failed, 2244 total tested
+33 ignored, 2247 passed, 0 failed, 2247 total tested
