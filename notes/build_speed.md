@@ -37,7 +37,8 @@ version gives both copies `libwarp-ac4e8b88….rlib` (the second one "fresh", i.
 versions give different hashes for the lib and the tests binary.
 The `crate-type = ["rlib"]` half of the old tweak is gone: Cargo.toml no longer lists a `cdylib` (the playground build
 asks for it, web/playground/build.sh), which was what made cargo name the rlib without a hash. Still shared by every
-copy: the uplifted `debug/libwarp.rlib` (nothing links it) and the binary `debug/warp`: copy that right after building.
+copy: the uplifted `debug/libwarp.rlib` (nothing links it) and the binary `debug/warp`. The remaining shared artifact
+that probes actually run is the bin: `scripts/own-warp.sh` builds offline and keeps a private copy under `scratch/warp`.
 
 ## Spotlight (2026-10-03)
 The shared target dir is `~/.cargo/shared-target.noindex` (renamed from shared-target): the `.noindex` suffix keeps
