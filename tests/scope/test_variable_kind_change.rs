@@ -5,9 +5,10 @@ use warp::*;
 
 #[test]
 fn a_variable_holds_its_last_value_of_another_kind() {
-	is!("x = 5; x = [1]; x", ints(vec![1]));
-	is!("x = [1,2]; x = 5; x + 1", 6);
-	is!("x = \"a\"; x = 5; x + 1", 6);
+	// P45 (user, 2026-10-05): written kinds that do not mix are a compile error (test_variable_kind_clash.rs)
+	assert!(matches!(warp::wasm_emitter::eval("x = 5; x = [1]; x"), Node::Error(_)));
+	assert!(matches!(warp::wasm_emitter::eval("x = [1,2]; x = 5; x + 1"), Node::Error(_)));
+	assert!(matches!(warp::wasm_emitter::eval("x = \"a\"; x = 5; x + 1"), Node::Error(_)));
 }
 
 #[test]

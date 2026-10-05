@@ -129,6 +129,9 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
+	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
+		return Err(kind_change.into_error());
+	}
 	let node = crate::interpolation::lower(crate::injection::lower_templates(node)?);
 	let node = crate::function_equality::decide_comparisons(node);
 	if let Node::Error(_) = node {
