@@ -2,8 +2,10 @@
 //! notes/stdlib_connectors.md): one long-lived child per runtime and warp process, started on first use, speaking one
 //! JSON line per request and per answer. Python: `python3 -u` running FOREIGN_PYTHON_LOOP (`WARP_PYTHON` names another
 //! interpreter); JavaScript: `node` running FOREIGN_JS_LOOP (`WARP_NODE`), a global (`Math`) or a module it requires.
-//! A read (`arguments` ø) gives the member itself, a call gives its result (a promise awaited); values without a JSON
-//! form come back as their text; an exception is an error with the runtime's message.
+//! A read gives the member itself, a call gives its result (a promise awaited); an exception is an error with the
+//! runtime's message. A value without a JSON form stays in its runtime behind an id, a handle: it crosses as the record
+//! `{$handle: 7, type: "date", text: "datetime.date(2020, 1, 2)"}` and is that object again when it comes back, as an
+//! argument or as the receiver of `d.isoformat()` (the module position). Handles live until warp ends.
 
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
@@ -31,7 +33,17 @@ const INTERPRETERS: [Interpreter; 2] = [
 const BIG_INTEGER_KEY: &str = "$int";
 /// The request loop the child runs: {"module", "member", "arguments"} → {"value"} or {"error"}
 const FOREIGN_PYTHON_LOOP: &str = r#"
-import sys, json, importlib
+import sys, json, importlib, numbers
+handles = {}
+def handle(value):
+    handles[len(handles) + 1] = value
+    return {"$handle": len(handles), "type": type(value).__name__, "text": repr(value)[:200]}
+def unplain(value):
+    if isinstance(value, dict):
+        return handles[value["$handle"]] if "$handle" in value else {key: unplain(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [unplain(item) for item in value]
+    return value
 def plain(value):
     if isinstance(value, int) and not isinstance(value, bool) and not -2**63 <= value < 2**63:
         return {"$int": str(value)}
@@ -41,17 +53,20 @@ def plain(value):
         return [plain(item) for item in value]
     if isinstance(value, dict):
         return {str(key): plain(item) for key, item in value.items()}
-    if hasattr(value, "tolist"):
-        return plain(value.tolist())
-    return repr(value)
+    if isinstance(value, numbers.Integral):
+        return plain(int(value))
+    if isinstance(value, numbers.Real) and not isinstance(value, numbers.Rational):
+        return float(value)
+    return handle(value)
 for line in sys.stdin:
     request = json.loads(line)
     try:
-        value = importlib.import_module(request["module"])
+        module = request["module"]
+        value = unplain(module) if isinstance(module, dict) else importlib.import_module(module)
         for part in request["member"].split("."):
             value = getattr(value, part)
         if request["arguments"] is not None:
-            value = value(*request["arguments"])
+            value = value(*unplain(request["arguments"]))
         answer = {"value": plain(value)}
     except BaseException as failure:
         answer = {"error": type(failure).__name__ + ": " + str(failure)}
@@ -60,13 +75,18 @@ for line in sys.stdin:
 
 /// The same loop for node: a global (`Math`, `JSON`) or a module it requires or imports; a method keeps its object
 const FOREIGN_JS_LOOP: &str = r#"
+const handles = [];
+const handle = value => (handles.push(value), { "$handle": handles.length, type: value?.constructor?.name ?? typeof value, text: String(value).slice(0, 200) });
+const unplain = value => Array.isArray(value) ? value.map(unplain)
+	: value !== null && typeof value === "object" ? ("$handle" in value ? handles[value.$handle - 1] : Object.fromEntries(Object.entries(value).map(([key, item]) => [key, unplain(item)])))
+	: value;
 const plain = value => {
 	if (typeof value === "bigint") return value >= -(2n ** 63n) && value < 2n ** 63n ? Number(value) : { "$int": value.toString() };
 	if (value === undefined || typeof value === "symbol") return null;
-	if (typeof value === "function") return String(value);
-	if (Array.isArray(value) || value instanceof Set) return [...value].map(plain);
-	if (value instanceof Map) return Object.fromEntries([...value].map(([key, item]) => [String(key), plain(item)]));
-	if (value !== null && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, plain(item)]));
+	if (Array.isArray(value)) return value.map(plain);
+	const prototype = value !== null && typeof value === "object" ? Object.getPrototypeOf(value) : undefined;
+	if (prototype === Object.prototype || prototype === null) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, plain(item)]));
+	if (typeof value === "function" || typeof value === "object") return handle(value); // a Date, a Map, an instance, a function
 	return value;
 };
 const load = async name => name in globalThis ? globalThis[name] : (() => { try { return require(name); } catch (failure) { return import(name); } })();
@@ -76,12 +96,12 @@ require("readline").createInterface({ input: process.stdin }).on("line", line =>
 		const request = JSON.parse(line);
 		let answer;
 		try {
-			let owner = null, value = await load(request.module);
+			let owner = null, value = typeof request.module === "object" ? unplain(request.module) : await load(request.module);
 			for (const part of request.member.split(".")) {
 				if (value?.[part] === undefined) throw new ReferenceError(`${request.module} has no ${request.member}`);
 				[owner, value] = [value, value[part]];
 			}
-			if (request.arguments !== null) value = await value.apply(owner, request.arguments);
+			if (request.arguments !== null) value = await value.apply(owner, unplain(request.arguments));
 			answer = { value: plain(value) };
 		} catch (failure) {
 			answer = { error: failure instanceof Error ? failure.name + ": " + failure.message : String(failure) };
@@ -100,8 +120,9 @@ struct Runtime {
 /// The running children, by runtime
 static RUNNING: Mutex<Vec<(&'static str, Runtime)>> = Mutex::new(Vec::new());
 
-/// `runtime.module.member(arguments…)`, or the member itself when it is no call, as a Node
-pub fn call(runtime: &str, module: &str, member: &str, is_call: bool, arguments: &Node) -> Result<Node, String> {
+/// `runtime.module.member(arguments…)`, or the member itself when it is no call, as a Node; `module` is a module's name
+/// or a handle
+pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments: &Node) -> Result<Node, String> {
 	let Some(interpreter) = INTERPRETERS.iter().find(|interpreter| interpreter.runtime == runtime) else {
 		return Err(format!("no foreign runtime {runtime}: known are {}", crate::foreign_modules::FOREIGN_RUNTIMES.join(", ")));
 	};
@@ -111,7 +132,11 @@ pub fn call(runtime: &str, module: &str, member: &str, is_call: bool, arguments:
 		Node::List(items, _, _) => Value::Array(items.iter().map(json_of).collect()),
 		single => Value::Array(vec![json_of(single)]),
 	};
-	let request = serde_json::json!({"module": module, "member": member, "arguments": arguments});
+	let (module, module_json) = match module.drop_meta() {
+		Node::Text(name) | Node::Symbol(name) => (name.clone(), Value::String(name.clone())),
+		handle => (handle.serialize(), json_of(handle)),
+	};
+	let request = serde_json::json!({"module": module_json, "member": member, "arguments": arguments});
 	let answer = exchange(interpreter, &request.to_string()).map_err(|failure| format!("{runtime}: {failure}"))?;
 	let answer: Value = serde_json::from_str(&answer).map_err(|failure| format!("{runtime} answered no JSON: {failure}"))?;
 	match (answer.get("value"), answer.get("error")) {
@@ -151,6 +176,13 @@ fn json_of(node: &Node) -> Value {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Square | Bracket::Round | Bracket::None, _) => Value::Array(items.iter().map(json_of).collect()),
 		Node::Key(key, Op::Colon, value) => serde_json::json!({ key.name(): json_of(value) }),
+		// an object, a handle among them: `{$handle: 7, …}`
+		Node::List(items, Bracket::Curly, _) if items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) => Value::Object(
+			items.iter().filter_map(|item| match item.drop_meta() {
+				Node::Key(key, _, value) => Some((key.name(), json_of(value))),
+				_ => None,
+			}).collect(),
+		),
 		// an exact rational (`2.5` is 5/2) crosses as a float, an integer as itself
 		Node::Number(Number::Int(integer)) => Value::from(*integer),
 		Node::Number(number) => Value::from(f64::from(*number)),

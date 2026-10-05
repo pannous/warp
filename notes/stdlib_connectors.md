@@ -93,3 +93,16 @@ step 3.
 - Results are held as Nodes (Kind::Empty, like map values): arithmetic and text joining decide at run time, and an
   ordering comparison of a held Node goes through node_order (`time.time() > 0`, also cells).
 
+
+## Step 3: handles (branch foreign-handles)
+- A value without a JSON form stays in its runtime: Python's loop and node's loop keep a table (id → object), the page's
+  host.js too (foreignHandles). It crosses as `{$handle: 7, type: "date", text: "datetime.date(2020, 1, 2)"}`, prints
+  as that record, and is the object again when it comes back (an argument, or the receiver in the module position).
+- Lowering (foreign_modules.rs `Foreign`): a variable assigned a foreign call holds that runtime's value
+  (`d = datetime.date(2020, 1, 2); d.isoformat()`); a chained call asks the runtime of its receiver
+  (`np.array([1, 2, 3]).sum()`). Reassigning the variable ends that.
+- Python numbers stay numbers: integral types (numpy ints) as Ints, inexact reals (numpy floats) as Floats; exact
+  rationals (Fraction) and Decimals are handles. JS: Dates, Maps, class instances, functions are handles.
+- Shared rules with C's handles (warp-2d, card ffi-handles, table in src/ffi.rs): ids never addresses, one table per
+  runtime, freed at the end of the run, no user-visible free yet.
+- Not yet: operators on handles (`a * 2` of a numpy array is "not a number"): forwarding them is the next step.

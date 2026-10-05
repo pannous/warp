@@ -143,7 +143,8 @@ function programImports(holder, hooks) {
 				const program_ = program();
 				const [runtimeName, moduleName, memberName] = [runtime, module, member].map(node => plainOfTree(readNode(program_, node)));
 				if (runtimeName !== "js") throw new Error(`${runtimeName} ${moduleName}.${memberName}: ${runtimeName} runs only in the native host (the warp CLI)`);
-				let owner = null, value = globalThis[moduleName];
+				// a module's name, or a handle: an object of the page kept behind an id (src/foreign.rs)
+				let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : globalThis[moduleName];
 				if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
 				for (const part of memberName.split(".")) {
 					if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
@@ -151,7 +152,7 @@ function programImports(holder, hooks) {
 				}
 				if (plainOfTree(readNode(program_, call)) === 1) {
 					const given = plainOfTree(readNode(program_, argumentList));
-					value = value.apply(owner, given === null ? [] : Array.isArray(given) ? given : [given]);
+					value = value.apply(owner, (given === null ? [] : Array.isArray(given) ? given : [given]).map(unhandled));
 				}
 				return buildValue(program_, treeOfPlain(value));
 			},
@@ -476,6 +477,13 @@ function plainOfTree(tree) {
 	}
 }
 
+// objects of the page without a plain form (a Date, a Map, an instance, a function), kept for foreign_call behind ids:
+// they cross as `{$handle: id, type, text}` and are the object again when they come back
+const foreignHandles = [];
+const handleOf = value => ({ $handle: foreignHandles.push(value), type: value?.constructor?.name ?? typeof value, text: String(value).slice(0, 200) });
+const unhandled = value => value !== null && typeof value === "object" && "$handle" in value ? foreignHandles[value.$handle - 1] : value;
+const isPlainObject = value => [Object.prototype, null].includes(Object.getPrototypeOf(value));
+
 // a plain JavaScript value as a tree buildValue builds: arrays square lists, objects `{key:value …}`, booleans 1/0
 const SQUARE_LIST = String((1n << 8n) | KIND_LIST);
 const CURLY_LIST = String(KIND_LIST);
@@ -486,7 +494,8 @@ function treeOfPlain(value) {
 	if (typeof value === "bigint") return { kind: KIND_INT, data: { int: String(value) }, chain: [] };
 	if (typeof value === "number") return Number.isSafeInteger(value) ? { kind: KIND_INT, data: { int: String(value) }, chain: [] } : { kind: KIND_FLOAT, data: { float: value }, chain: [] };
 	if (typeof value === "string") return textTree(value);
-	if (Array.isArray(value) || value instanceof Set) return { kind: SQUARE_LIST, items: [...value].map(treeOfPlain) };
+	if (Array.isArray(value)) return { kind: SQUARE_LIST, items: value.map(treeOfPlain) };
+	if (typeof value === "function" || (typeof value === "object" && !isPlainObject(value))) return treeOfPlain(handleOf(value));
 	if (typeof value === "object") return { kind: CURLY_LIST, items: Object.entries(value).map(([key, item]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: key }, chain: [] }, treeOfPlain(item)] })) };
 	return textTree(String(value));
 }
