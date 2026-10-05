@@ -25,6 +25,7 @@ PASSED:
   ✓ control::test_branch_assigned_variables::a_text_assigned_in_both_branches_is_read_after_them
   ✓ control::test_catch_binding::catch_binds_the_error
   ✓ control::test_catch_binding::except_as_binds_the_error
+  ✓ control::test_charged_fields::test_define_entries_are_values
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
   ✓ control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
   ✓ control::test_control_words::bang_evaluates_a_block
@@ -97,6 +98,8 @@ PASSED:
   ✓ control::test_object_blocks::test_charged_object_fields_are_value_now
   ✓ control::test_object_blocks::test_computed_entries_are_uncharged
   ✓ control::test_object_blocks::test_statements_in_braces_are_a_block
+  ✓ control::test_object_functions::test_fields_are_in_scope_of_function_entries
+  ✓ control::test_object_functions::test_function_entries_are_callable
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
   ✓ control::test_run_time_blocks::a_bang_known_only_at_run_time_runs_the_block
@@ -1781,6 +1784,10 @@ PASSED:
   ✓ wasm::test_read_bytes_plain_result::a_plain_i32_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::a_plain_i64_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
+  ✓ wasm::test_standalone_executable::test_build_exe_prints_lists_as_print_does
+  ✓ wasm::test_standalone_executable::test_build_exe_refuses_imports_the_runtime_lacks
+  ✓ wasm::test_standalone_executable::test_build_exe_runs_the_program_and_prints_its_value
+  ✓ wasm::test_standalone_executable::test_machine_code_rides_at_the_end_of_the_executable
   ✓ wasm::test_wasm_emitter::test_emit_for_node_tree_shaking
   ✓ wasm::test_wasm_emitter::test_emit_gc_types
   ✓ wasm::test_wasm_emitter::test_function_usage_tracking
@@ -2179,4 +2186,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2174 passed, 0 failed, 2174 total tested
+37 ignored, 2181 passed, 0 failed, 2181 total tested
