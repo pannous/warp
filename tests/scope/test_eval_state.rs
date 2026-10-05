@@ -39,6 +39,7 @@ fn a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value() {
 	});
 }
 
+#[cfg_attr(not(feature = "native"), ignore = "browser: spawns a thread")]
 #[test]
 fn the_hint_mode_of_one_thread_is_not_another_threads() {
 	std::thread::spawn(|| set_hint_mode(HintMode::Off)).join().unwrap();

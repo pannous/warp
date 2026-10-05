@@ -72,6 +72,7 @@ fn test_law_lean_export_modulo_is_euclidean() {
 	assert!(source.contains("(Int.tmod x (3 : Int))"), "{source}");
 }
 
+#[cfg_attr(not(feature = "native"), ignore = "browser: needs the lean prover")]
 #[test]
 fn test_law_proved_by_lean() {
 	crate::requires!(crate::common::LEAN);
@@ -98,6 +99,7 @@ fn test_law_overflow_promotion_holds_in_property_tests() {
 	assert_eq!(property_test(&lawful, &lawful.laws[0], PROPERTY_TRIALS, PROMOTING), Verdict::Holds);
 }
 
+#[cfg_attr(not(feature = "native"), ignore = "browser: needs the lean prover")]
 #[test]
 fn test_law_overflow_promotion_proved_by_lean() {
 	crate::requires!(crate::common::LEAN);
