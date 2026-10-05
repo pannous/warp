@@ -178,7 +178,7 @@ pub fn lower(code: &str) -> Result<Node, Node> {
 /// answer of a program that needs no module.
 pub fn compile(code: &str) -> Result<CompiledModule, Node> {
 	crate::diagnostic::begin_program();
-	crate::diagnostic::in_program_mode(lawful_program(code)?, |program| choose_module(&lower_for_emission(program)?))
+	crate::diagnostic::in_program_mode(lawful_program(code)?, |program| choose_module(&crate::folding::fold_constant_calls(lower_for_emission(program)?)))
 }
 
 /// `TypeName:{field:value, ...}` compiles to a raw struct module, everything else to the standard Node encoding.
@@ -237,7 +237,7 @@ pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {
 
 /// Run a compiled program with the linker its imports need
 #[cfg(feature = "native")]
-fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
+pub(crate) fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
 	use crate::wasm_reader::{read_bytes_with_imports, Imports};
 	let result = if needs_ffi || needs_wasi || needs_host {
 		read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })
@@ -249,7 +249,7 @@ fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: Compi
 
 /// Without wasmtime the embedding host runs the program (the browser playground: web.rs)
 #[cfg(not(feature = "native"))]
-fn run_module(module: CompiledModule) -> Node {
+pub(crate) fn run_module(module: CompiledModule) -> Node {
 	crate::web::run_in_host(&module.bytes)
 }
 

@@ -66,7 +66,7 @@ struct Change<'a> {
 	node: &'a Node,
 }
 
-fn statements_of(program: &Node) -> Vec<Node> {
+pub(crate) fn statements_of(program: &Node) -> Vec<Node> {
 	match program.drop_meta() {
 		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
 		_ => vec![program.clone()],
@@ -85,7 +85,7 @@ fn map_statements(program: Node, transform: &mut dyn FnMut(Node) -> Node) -> Nod
 
 /// The functions a statement defines when it is a definition itself; one inside a loop or block keeps capturing the
 /// values of that iteration (loop variables need no declaration)
-fn functions_in(statement: &Node) -> Vec<UserFunctionDef> {
+pub(crate) fn functions_in(statement: &Node) -> Vec<UserFunctionDef> {
 	let is_definition = match statement.drop_meta() {
 		Node::Key(_, Op::Define | Op::Assign, _) => true,
 		Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)),

@@ -7,6 +7,7 @@ pub mod broadcasting;
 pub mod closures;
 pub mod comprehensions;
 pub mod declarations;
+pub mod folding;
 pub mod for_loop;
 pub mod function_values;
 pub mod inlining;

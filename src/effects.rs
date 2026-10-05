@@ -227,9 +227,13 @@ impl EffectReport {
 		let resolver = Resolver { context: &context };
 
 		let mut report = EffectReport::default();
+		let globals = main_level_globals(program);
 		for (name, definition) in &context.user_functions {
 			let mut function = resolver.function(&definition.body);
 			let parameters: Vec<&str> = definition.params.iter().map(|param| param.name.as_str()).collect();
+			if reads_global(&definition.body, &globals, &parameters) {
+				function.perform(State); // shared state read at call time (wiki/charged.md §3): never folded nor memoized
+			}
 			if function.calls.contains(name) && !recursion_shrinks(name, &parameters, &definition.body) {
 				function.perform(Div);
 			}
@@ -445,6 +449,20 @@ impl FunctionEffects {
 		self.own = self.own.union(effect);
 		self.effects = self.effects.union(effect);
 	}
+}
+
+/// The variables the program declares `global` at its main level (`global limit = 10`)
+fn main_level_globals(program: &Node) -> Vec<String> {
+	let mut main = crate::analyzer::Scope::new();
+	crate::analyzer::collect_variables(program, &mut main);
+	main.globals.into_keys().collect()
+}
+
+/// Does a function body read one of `globals` that is not one of its parameters?
+fn reads_global(body: &Node, globals: &[String], parameters: &[&str]) -> bool {
+	let mut found = false;
+	body.visit(&mut |node| found |= matches!(node, Node::Symbol(name) if globals.contains(name) && !parameters.contains(&name.as_str())));
+	found
 }
 
 /// `while 0 {…}` / `while false {…}` never runs its body
