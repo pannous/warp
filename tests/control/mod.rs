@@ -62,3 +62,4 @@ mod test_task_list_literal;
 mod test_job_lists;
 mod test_try_stack_overflow;
 mod test_run_time_blocks;
+mod test_catch_binding;

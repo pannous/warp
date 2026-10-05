@@ -11,7 +11,7 @@ use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
-use crate::wasm_emitter::RAN_WITHOUT_ERROR;
+use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 
@@ -32,6 +32,8 @@ const IN_WORD: &str = "in";
 /// `count x in y` (count_in): the occurrences of an item or a character, or of a substring in a text
 const COUNT_WORD: &str = "count";
 const FLOAT_WORD: &str = "float";
+/// The name `catch e` binds, in lower_try_binding's template
+const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
 const COUNT_HAYSTACK: &str = "counted_haystack";
 const COUNT_NEEDLE: &str = "counted_needle";
 const COUNT_ITEM_TEMPLATE: &str = "count(filter(counted_haystack, counted_item => counted_item == counted_needle))";
@@ -431,6 +433,10 @@ impl Lowering {
 		match node {
 			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_marker(&items[0], TRY_MARKER) => {
 				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()))
+			}
+			// `catch e { … }`: the fallback reads the caught Error as e (P67)
+			Node::List(items, Bracket::Round, _) if items.len() == 4 && is_marker(&items[0], TRY_MARKER) => {
+				self.lower_try_binding(self.expand(items[1].clone()), self.expand(items[2].clone()), &items[3])
 			}
 			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_marker(&items[0], ASSERT_MARKER) => {
 				self.lower_assert(self.expand(items[1].clone()), self.expand(items[2].clone()))
@@ -836,6 +842,17 @@ impl Lowering {
 				&[(value, &guarded), (fallback_placeholder, &fallback)],
 			),
 		}
+	}
+
+	/// `try X catch e { Y }`: Y runs with e the caught Error: the Error X gave back, else the runtime error it raised
+	/// (caught_error, try_guard.rs)
+	fn lower_try_binding(&self, guarded: Node, fallback: Node, binding: &Node) -> Node {
+		let (value, fallback_placeholder) = (TRY_VALUE_PLACEHOLDER, TRY_FALLBACK_PLACEHOLDER);
+		self.instantiate_template(
+			&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{\
+				{CAUGHT_BINDING_PLACEHOLDER} = {CAUGHT_ERROR}(try_tmp_finished, try_tmp_value); {fallback_placeholder}}})"),
+			&[(value, &guarded), (fallback_placeholder, &fallback), (CAUGHT_BINDING_PLACEHOLDER, binding)],
+		)
 	}
 
 	/// `assert C else X` is 1 when C holds and the Error X otherwise; without a message the error says the assertion failed

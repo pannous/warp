@@ -167,7 +167,7 @@ impl FunctionValues {
 			Node::Key(_, Op::Then, chosen) => self.is_function_value(chosen),
 			Node::Key(list, Op::Hash, _) => matches!(list.drop_meta(), Node::Symbol(name) if self.lists.contains(name)),
 			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name) || self.variables.contains(name)) => true,
-			Node::List(items, _, _) if matches!(items.as_slice(), [marker, _, _] if matches!(marker.drop_meta(), Node::Symbol(word) if word == crate::wasp_parser::TRY_MARKER)) => {
+			Node::List(items, _, _) if matches!(items.as_slice(), [marker, _, _, ..] if matches!(marker.drop_meta(), Node::Symbol(word) if word == crate::wasp_parser::TRY_MARKER)) => {
 				self.is_function_value(&items[1]) || self.is_function_value(&items[2])
 			}
 			// a block is worth its last statement: `{fallback}`

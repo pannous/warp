@@ -53,10 +53,10 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 13] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 14] = [
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (RAISE, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
 	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
-	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int), (CHR, 1, Kind::Codepoint),
+	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int), (CHR, 1, Kind::Codepoint), (crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
 ];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -84,6 +84,10 @@ fn is_number(kind: Kind) -> bool {
 
 /// Runtime functions the text builtins call
 pub fn add_dependencies(required: &mut HashSet<&'static str>) {
+	// `catch e`: the caught error becomes an Error through error_of
+	if required.contains(crate::wasm_emitter::CAUGHT_ERROR) {
+		required.insert(ERROR_OF);
+	}
 	if required.contains(super::library_ops::LIST_TEXT) {
 		required.insert("list_join"); // emitted together, with the same helpers
 	}
@@ -200,6 +204,7 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, message);
 				self.emit_call(func, ERROR_OF);
 			}
+			(crate::wasm_emitter::CAUGHT_ERROR, [finished, value]) => self.emit_caught_error(func, finished, value),
 			(RAISE, [message]) => {
 				self.emit_trap_detail(func, message);
 				self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);

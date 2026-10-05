@@ -8,7 +8,7 @@ fn try_catch_is_try_else() {
 	is!("try { [1 2]#5 } catch { 7 }", 7);
 	is!("try { 5 } catch { 7 }", 5);
 	is!("try { raise \"boom\" } catch e { 7 }", 7);
-	fails_with("try { raise \"boom\" } catch e { e }", "catch e");
+	fails_with("try { raise \"boom\" } catch e { e }", "boom"); // P67: e is the caught Error
 }
 
 #[test]
