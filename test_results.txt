@@ -155,6 +155,8 @@ PASSED:
   ✓ control::test_try_list_index::indexing_empty_is_out_of_range
   ✓ control::test_try_named_traps::a_missing_field_is_caught
   ✓ control::test_try_named_traps::indexing_a_number_is_not_a_list
+  ✓ control::test_unwrap_message::test_an_error_value_in_node_arithmetic_keeps_its_message
+  ✓ control::test_unwrap_message::test_unwrapping_an_empty_optional_in_arithmetic_names_it
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
   ✓ control::test_unwrap::test_unwrap_gives_the_value
   ✓ control::test_unwrap::test_unwrap_of_nothing_or_an_error_is_loud
@@ -517,6 +519,7 @@ PASSED:
   ✓ lists::test_find_any_all::find_any_and_all_test_the_elements
   ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
   ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
+  ✓ lists::test_hash_range_slices::hash_slices_are_one_based
   ✓ lists::test_index_assignment::test_index_assign_25_elements
   ✓ lists::test_index_assignment::test_index_assign_in_while_loop
   ✓ lists::test_index_assignment::test_index_assign_in_while_with_increment
@@ -863,6 +866,9 @@ PASSED:
   ✓ numbers::test_unbounded_int::test_overflow_promotes_neg_abs
   ✓ numbers::test_unbounded_int::test_overflow_promotes_pow
   ✓ numbers::test_unbounded_int::test_small_arithmetic_unchanged
+  ✓ numbers::test_unit_composites::test_converting_powered_and_composite_units
+  ✓ numbers::test_unit_composites::test_products_of_different_dimensions
+  ✓ numbers::test_unit_composites::test_sums_need_the_same_dimensions
   ✓ numbers::test_unit_conversion::a_duration_converts_to_a_time_unit
   ✓ numbers::test_unit_conversion::a_quantity_converts_to_a_unit_of_its_dimension
   ✓ numbers::test_unit_conversion::an_inexact_conversion_is_a_ratio
@@ -941,6 +947,8 @@ PASSED:
   ✓ operators::test_mutating_bang::a_method_with_bang_assigns_back
   ✓ operators::test_mutating_bang::bang_after_a_block_or_lone_name_evaluates
   ✓ operators::test_mutating_bang::without_bang_the_value_is_unchanged
+  ✓ operators::test_nand_spellings::test_nand_binds_like_and
+  ✓ operators::test_nand_spellings::test_nand_spellings
   ✓ operators::test_negated_call::test_builtin_name_bound_as_a_parameter_stays_subtraction
   ✓ operators::test_negated_call::test_function_applied_to_a_negative_number
   ✓ operators::test_negated_call::test_variable_minus_number_stays_subtraction
@@ -1468,6 +1476,8 @@ PASSED:
   ✓ types::test_generic_types::test_nested_type_applications
   ✓ types::test_generic_types::test_type_of_a_literal_list_stays
   ✓ types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result
+  ✓ types::test_is_declaration::is_tests_an_assigned_variable
+  ✓ types::test_is_declaration::is_with_a_type_and_a_value_declares_a_new_name
   ✓ types::test_iterable::for_walks_what_iterate_gives
   ✓ types::test_iterable::in_searches_what_iterate_gives
   ✓ types::test_person_struct::test_person_struct_roundtrip
@@ -2000,4 +2010,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-40 ignored, 1995 passed, 0 failed, 1995 total tested
+40 ignored, 2005 passed, 0 failed, 2005 total tested
