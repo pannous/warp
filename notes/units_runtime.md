@@ -43,3 +43,10 @@ compile time (DimensionError for `+ - ==` and branches of different units, and a
 literals as exact SI amounts, the final value read back in the finest written unit. `compile` of a program whose result is
 a quantity is refused for now (only eval reads it back): stage 3 (print/return) covers output.
 Next stages: functions (specialised per unit signature), then print/return/as.
+
+## Stage 2 done (branch static-units-2): functions
+A call of a user function with quantity arguments (or a body with unit literals) is specialised per unit signature of its
+arguments (`speed·u0`), its result signature inferred from the body; a body with unit literals compiles only in its
+specialisations. `speed(10 km, 2 h)` → 5 km/h, `twice(3 m)` and `twice(2 s)` are two specialisations. Field names after
+`.` are no units (`q.s`). Not yet: recursion with quantities (stays the loud error), names that reuse a unit (`s = …`,
+a parameter `h`) leave the program to the compile-time evaluator.

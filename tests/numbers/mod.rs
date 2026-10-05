@@ -24,6 +24,7 @@ mod test_unit_composites;
 mod test_unit_polish;
 mod test_rational_quantities;
 mod test_static_units;
+mod test_static_units_functions;
 mod test_units_at_run_time;
 mod test_unit_products;
 mod test_units_arithmetic;

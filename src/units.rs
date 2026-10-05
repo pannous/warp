@@ -17,7 +17,7 @@ use crate::extensions::reals::Rational;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Dimension {
 	Length,
 	Mass,

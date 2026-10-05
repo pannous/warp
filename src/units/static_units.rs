@@ -2,8 +2,9 @@
 //! time (loops, branches) runs with plain exact numbers. Each expression's unit signature (dimension → power) is inferred
 //! here and checked (`+ - ==` of different signatures is a DimensionError at compile time), each unit literal becomes its
 //! amount in SI base units (`5 km` → 5000, `5 cm` → 1/20), and the program's final value is converted back to the finest
-//! written unit after the run (`RESULT_UNITS`). A quantity anywhere this stage does not cover (function arguments and
-//! results, print, lists, interpolation) leaves the program unchanged: the unit stays the loud undefined-variable error.
+//! written unit after the run (`RESULT_UNITS`). Stage 2: a function called with quantities (or whose body has unit
+//! literals) is specialised per unit signature of its arguments, `speed·u0`. A quantity anywhere these stages do not
+//! cover (print, lists, interpolation, recursion) leaves the program unchanged: the unit stays the loud undefined-variable error.
 
 use super::{finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
 use crate::extensions::numbers::Number;
@@ -18,6 +19,8 @@ use std::collections::HashMap;
 /// The SI base unit of each dimension, the unit amounts count in at run time
 const BASE_UNITS: [(Dimension, &str); 4] = [(Dimension::Length, "m"), (Dimension::Mass, "kg"), (Dimension::Time, "s"), (Dimension::Era, "AD")];
 const LOOP_WORDS: [&str; 2] = ["for", "while"];
+/// `speed·u0`: a function specialised for one unit signature of its arguments
+const SPECIALISATION_SEPARATOR: &str = "·u";
 
 type Signature = Vec<(Dimension, i32)>;
 
@@ -41,9 +44,20 @@ pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 	let mut written = vec![];
 	program.visit(&mut |node| if let Node::Symbol(name) = node { written.extend(unit_named(name)) });
 	let display = finest_units(&written.iter().map(|unit| Factor { unit, power: 1 }).collect::<Vec<_>>());
-	let mut inference = Inference { variables: HashMap::new() };
+	let mut definitions = HashMap::new();
+	program.visit(&mut |node| {
+		if let Some((name, definition)) = function_definition(node) {
+			definitions.insert(name, definition);
+		}
+	});
+	let mut inference = Inference { variables: HashMap::new(), definitions, specialised: HashMap::new(), in_progress: vec![], new_definitions: vec![] };
 	match inference.infer(program.clone()) {
 		Ok((node, result)) => {
+			let node = if inference.new_definitions.is_empty() {
+				node
+			} else {
+				Node::List([std::mem::take(&mut inference.new_definitions), vec![node]].concat(), Bracket::None, Separator::Semicolon)
+			};
 			let units: Vec<Factor> = result.iter().map(|(dimension, power)| Factor { unit: display_unit(&display, *dimension), power: *power }).collect();
 			RESULT_UNITS.with(|cell| *cell.borrow_mut() = (!units.is_empty()).then_some(units));
 			Some(Ok(node))
@@ -124,12 +138,56 @@ fn dimension_error(op: Op, left: &Signature, right: &Signature) -> Stop {
 	Stop::Error(format!("DimensionError: {} {op} {}: the units do not match", shown(left), shown(right)))
 }
 
+/// A user function `name(params) := body`: its parameter names and body
+#[derive(Clone)]
+struct Definition {
+	parameters: Vec<String>,
+	body: Node,
+}
+
+fn function_definition(node: &Node) -> Option<(String, Definition)> {
+	let Node::Key(head, Op::Define | Op::Assign, body) = node.drop_meta() else { return None };
+	let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else { return None };
+	let (name, parameters) = items.split_first()?;
+	let Node::Symbol(name) = name.drop_meta() else { return None };
+	let parameters = parameters.iter().map(|parameter| match parameter.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(name, Op::Colon, _) => Some(name.name()),
+		_ => None,
+	}).collect::<Option<Vec<_>>>()?;
+	Some((name.clone(), Definition { parameters, body: body.as_ref().clone() }))
+}
+
+/// Does the code use a unit word: not as a field name (`q.s` of a field s)
+fn mentions_units(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(name) => unit_named(name).is_some(),
+		Node::Key(object, Op::Dot, _) => mentions_units(object),
+		Node::Key(left, _, right) => mentions_units(left) || mentions_units(right),
+		Node::List(items, _, _) => items.iter().any(mentions_units),
+		_ => false,
+	}
+}
+
+/// A specialisation: the function and the unit signatures of its arguments
+type Specialisation = (String, Vec<Signature>);
+
 struct Inference {
 	variables: HashMap<String, Signature>,
+	definitions: HashMap<String, Definition>,
+	/// Specialised functions: their name and result signature
+	specialised: HashMap<Specialisation, (String, Signature)>,
+	in_progress: Vec<Specialisation>,
+	new_definitions: Vec<Node>,
 }
 
 impl Inference {
 	fn infer(&mut self, node: Node) -> Result<(Node, Signature), Stop> {
+		if let Some((_, definition)) = function_definition(&node) {
+			// a body with unit literals compiles only in its specialisations
+			let kept = if mentions_units(&definition.body) { Node::Empty } else { node };
+			return Ok((kept, vec![]));
+		}
 		match node {
 			Node::Meta { node, data } => {
 				let (node, signature) = self.infer(*node)?;
@@ -186,6 +244,14 @@ impl Inference {
 				let signature = if matches!(op, Op::Then | Op::Else) { signature } else { vec![] };
 				Ok((Node::Key(Box::new(left), op, Box::new(right)), signature))
 			}
+			// `q.s`: a field name is no unit
+			Node::Key(object, Op::Dot, field) => {
+				let (object, signature) = self.infer(*object)?;
+				if !signature.is_empty() {
+					return Err(Stop::Unsupported);
+				}
+				Ok((Node::Key(Box::new(object), Op::Dot, field), vec![]))
+			}
 			Node::Key(left, op, right) => self.plain_key(*left, op, *right),
 			Node::List(items, bracket, separator) => self.infer_list(items, bracket, separator),
 			other => Ok((other, vec![])),
@@ -212,7 +278,62 @@ impl Inference {
 		}
 	}
 
+	/// `f(a, b)` of a user function with quantities (or units in its body): the call of its specialisation
+	fn specialised_call(&mut self, items: &[Node]) -> Option<Result<(Node, Signature), Stop>> {
+		let (head, arguments) = items.split_first()?;
+		let Node::Symbol(name) = head.drop_meta() else { return None };
+		let definition = self.definitions.get(name)?.clone();
+		if definition.parameters.len() != arguments.len() {
+			return None;
+		}
+		let mut lowered = vec![];
+		let mut signatures = vec![];
+		for argument in arguments {
+			match self.infer(argument.clone()) {
+				Ok((argument, signature)) => {
+					lowered.push(argument);
+					signatures.push(signature);
+				}
+				Err(stop) => return Some(Err(stop)),
+			}
+		}
+		if signatures.iter().all(Vec::is_empty) && !mentions_units(&definition.body) {
+			return None;
+		}
+		Some(self.specialise(name, &definition, signatures).map(|(specialised, result)| {
+			(Node::List([vec![Node::Symbol(specialised)], lowered].concat(), Bracket::Round, Separator::None), result)
+		}))
+	}
+
+	/// The specialisation of a function for the unit signatures of its arguments: its name and result signature
+	fn specialise(&mut self, name: &str, definition: &Definition, signatures: Vec<Signature>) -> Result<(String, Signature), Stop> {
+		let key = (name.to_string(), signatures.clone());
+		if let Some(done) = self.specialised.get(&key) {
+			return Ok(done.clone());
+		}
+		if self.in_progress.contains(&key) {
+			return Err(Stop::Unsupported); // recursion with quantities: a later stage
+		}
+		self.in_progress.push(key.clone());
+		let outer = std::mem::replace(&mut self.variables, definition.parameters.iter().cloned().zip(signatures).collect());
+		let inferred = self.infer(definition.body.clone());
+		self.variables = outer;
+		self.in_progress.pop();
+		let (body, result) = inferred?;
+		let specialised = format!("{name}{SPECIALISATION_SEPARATOR}{}", self.specialised.len());
+		let parameters = definition.parameters.iter().map(|parameter| Node::Symbol(parameter.clone()));
+		let head = Node::List(std::iter::once(Node::Symbol(specialised.clone())).chain(parameters).collect(), Bracket::Round, Separator::None);
+		self.new_definitions.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
+		self.specialised.insert(key, (specialised.clone(), result.clone()));
+		Ok((specialised, result))
+	}
+
 	fn infer_list(&mut self, items: Vec<Node>, bracket: Bracket, separator: Separator) -> Result<(Node, Signature), Stop> {
+		if bracket == Bracket::Round && separator == Separator::None {
+			if let Some(call) = self.specialised_call(&items) {
+				return call;
+			}
+		}
 		let statements = matches!(separator, Separator::Semicolon | Separator::Newline) || bracket == Bracket::Curly;
 		let is_loop = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if LOOP_WORDS.contains(&word.as_str()));
 		// `5 km`: an amount and a unit
