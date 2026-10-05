@@ -7,8 +7,8 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 ## Pending questions (ordered by impact; recommended option first)
 - P63 (rest) a comma tuple `(frobnicate, 3)` in code: data (worker default) or code like `[cube 3]`? (1) and (2) are
   decided (see Decided 2026-10-05, interview). Asked by warp-90. 2026-10-05.
-- P69a may a run-time block assign the `!` site's local variables? Recommended: no (snapshot, declared globals only).
-  User 2026-10-05: "Later" (decide when run-time `!` is built).
+- P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
+  as they are at `!` and assigns only declared globals. User 2026-10-05: "Later"; revisit when run-time `!` is built.
 Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
 work on branch runtime-units-survey pauses.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
@@ -138,6 +138,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   literal (`{shape: cube 3}`) are data, besides data mode (`warp data`, parse_data). Explicit brackets were NOT
   chosen: `[cube 3]` / `(cube 3)` in code are code, so an unknown word there is the error too.
 
+- RELEASED (user 2026-10-05: "you have the green light, go ahead and implement everything and remove the fragments of
+  discussion so it's pure specification"): wiki/charged.md (wiki 88979a0) is the specification; tests that the spec
+  changes may be edited (user decision), each edit in its own commit naming this release. P69a takes the spec's
+  default (a run-time block reads the site's locals as they are at `!` and assigns only declared globals).
 - Data vs code, charge levels (user discussion 2026-10-05; full spec wiki/charged.md, wiki c90efe7; DO NOT implement
   before the user reviewed the spec): programs are code by default, data files data ("e: by default"); `x = e` now,
   `f := e` and `def` deferred (user: "def == deferred", "def should behave exactly like Python … but close"),
