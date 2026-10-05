@@ -17,6 +17,7 @@ mod test_filter_loops;
 mod test_type_word_filter_loops;
 mod test_structural_patterns;
 mod test_switch_match;
+mod test_object_blocks;
 mod test_uncharged_blocks;
 mod test_unwrap;
 mod test_unwrap_message;

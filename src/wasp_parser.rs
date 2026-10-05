@@ -2895,7 +2895,9 @@ impl WaspParser {
 	/// assign the result back to x; in `upper x!` the name is marked for crate::mutation to do the same.
 	fn try_parse_evaluate_bang(&mut self, lhs: &Node) -> Option<Node> {
 		let mutated = crate::mutation::mutated_variable(lhs).cloned();
-		let is_evaluable = matches!(lhs.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
+		// `o.s1!`: a field (no method) may hold a block too (wiki/charged.md section 4)
+		let is_field = matches!(lhs.drop_meta(), Node::Key(_, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)));
+		let is_evaluable = is_field || matches!(lhs.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
 		// `name! email?`: glued to its name and followed by a space, the `!` is a suffix even when an operand follows
 		// `x!+1`: glued to its name and followed by an infix operator, the `!` is a suffix too
 		// `x!!`: run fully, a suffix as well
@@ -2913,6 +2915,8 @@ impl WaspParser {
 			(Some(variable), _) => Node::Key(Box::new(variable), Op::Assign, Box::new(lhs.clone())),
 			(None, Node::Symbol(_)) if fully => crate::mutation::marked_fully(lhs.clone()),
 			(None, Node::Symbol(_)) => crate::mutation::marked(lhs.clone()),
+			(None, Node::Key(_, Op::Dot, _)) if fully => crate::mutation::marked_fully(lhs.clone()),
+			(None, Node::Key(_, Op::Dot, _)) => crate::mutation::marked(lhs.clone()),
 			(None, _) => lhs.clone(),
 		})
 	}

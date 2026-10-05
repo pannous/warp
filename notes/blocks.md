@@ -11,5 +11,13 @@
   no value: run it with x!, or write x = 1+2 for its value". `x = …` ends the block.
 - `data e` is e as written, nothing evaluated: WasmGcEmitter::emit_literal; every operator now has a code in a Key's kind
   (operators.rs OP_CODES, codes 0-4 unchanged), so `data 1+2` reads back as 1+2.
-Next stages: `{}` statements as blocks (`x = {1+2}`), `:` entries of objects uncharged and `help!`, code/block prefixes,
-block parameters for if/while/for/def.
+
+## Stage 2 (branch blocks-2)
+- `x = {1+2}`, `x = {a = 1; a*2}`: statements in braces (several, or one computed expression) are a block, silently;
+  `{1 2}` stays a data list, `{"A": 1}` a map, `{it*2}` / `{x => x+1}` lambdas.
+- `o = {s1: a+b, s3 = a+b}`: a computed `:` entry is an uncharged block the object holds as data (got-it warning where
+  written), `o.s1!` runs it where written (the parser marks the field as for `x.upper!`), `o.s1 + 1` is the type error;
+  `s3 = a+b` is a value entry (evaluated now); `:=` entries are untouched (P71). An object without such entries is not
+  rebuilt (meta attributes like `@unit("cm") {x:1}` stay).
+- `help = {print: "there is help"}; help!` runs the object as code: each `key: value` is the call `key(value)`.
+Next: code/block prefixes, block parameters for if/while/for/def.
