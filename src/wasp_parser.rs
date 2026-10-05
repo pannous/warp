@@ -1458,22 +1458,21 @@ impl WaspParser {
 		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_guarded_phrase());
 		self.stops_at_else = outer;
 		self.skip_spaces();
+		let mut caught = None;
 		let fallback = if let Some((word, ahead)) = self.fallback_word_ahead() {
 			self.advance_by(ahead + word.len());
 			self.skip_spaces();
-			let caught = if word == ELSE_KEYWORD { None } else { self.parse_caught_name(word) };
+			caught = if word == ELSE_KEYWORD { None } else { self.parse_caught_name(word) };
 			self.skip_python_colon();
-			let fallback = self.parse_expr(0);
-			if let Some(name) = caught.filter(|name| mentions(&fallback, name)) {
-				return error(&format!("`catch {name}`: the caught error is no value yet, write the fallback without {name} (`try X catch {{ Y }}`)"));
-			}
-			fallback
+			self.parse_expr(0)
 		} else if marker == TRY_MARKER {
 			return error("`try` needs an `else`: `try X else Y`");
 		} else {
 			Empty
 		};
-		Node::List(vec![Symbol(marker.to_string()), guarded, fallback], Bracket::Round, Separator::None)
+		// `catch e { … }` (P67): the name the fallback reads the caught Error by, a fourth item
+		let binding = caught.filter(|name| mentions(&fallback, name)).map(Symbol);
+		Node::List([vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(), Bracket::Round, Separator::None)
 	}
 
 	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),

@@ -29,7 +29,7 @@ mod string_table;
 mod type_manager;
 mod try_guard;
 mod tuple_emitter;
-pub use try_guard::RAN_WITHOUT_ERROR;
+pub use try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 mod witness;
 pub(crate) mod wasi_emitter;
 

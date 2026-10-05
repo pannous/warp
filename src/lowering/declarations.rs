@@ -387,8 +387,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 		.map(|definition| match definition.return_kind {
 			Kind::Int => Some("int"),
 			Kind::Float => Some("float"),
-			Kind::Text => Some("text"),
-			_ => None,
+			_ => None, // a Node (a text, a list, an Error) is used as it comes
 		});
 	let node = guarded_calls(node, &guardable, &wrapped);
 	let node = resolved(node, &path, &wrapped);
@@ -560,7 +559,7 @@ fn checked_await(await_word: &str, job: &Node) -> Node {
 /// guarded expression stays as it is
 fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static str>>, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
 	match node {
-		Node::List(items, bracket, separator) if items.len() == 3 && word(&items[0]) == crate::wasp_parser::TRY_MARKER => {
+		Node::List(items, bracket, separator) if items.len() >= 3 && word(&items[0]) == crate::wasp_parser::TRY_MARKER => {
 			let items: Vec<Node> = items.into_iter().map(|item| guarded_calls(item, guardable, wrapped)).collect();
 			let guarded = match items[1].drop_meta() {
 				Node::List(call, Bracket::Round, _) if matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(function)) if guardable(function).is_some()) => {
@@ -568,7 +567,7 @@ fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static 
 					wrapped.borrow_mut().insert(function.clone(), call.len() - 1);
 					let arguments = Node::List(call[1..].to_vec(), Bracket::Square, Separator::Colon);
 					let guarded = marker(crate::host::GUARDED_CALL, vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments]);
-					// an Int, Float or Text result is that again (a caught overflow's Error fails the conversion, which `try` catches)
+					// an Int or Float result is that again (a caught overflow's Error fails the conversion, which `try` catches)
 					match guardable(&function).flatten() {
 						Some(type_word) => Node::Key(Box::new(guarded), Op::As, Box::new(Node::Symbol(type_word.to_string()))),
 						None => guarded,
@@ -576,7 +575,7 @@ fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static 
 				}
 				_ => items[1].clone(),
 			};
-			Node::List(vec![items[0].clone(), guarded, items[2].clone()], bracket, separator)
+			Node::List([vec![items[0].clone(), guarded], items[2..].to_vec()].concat(), bracket, separator)
 		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| guarded_calls(item, guardable, wrapped)).collect(), bracket, separator),
 		Node::Key(left, op, right) => Node::Key(Box::new(guarded_calls(*left, guardable, wrapped)), op, Box::new(guarded_calls(*right, guardable, wrapped))),

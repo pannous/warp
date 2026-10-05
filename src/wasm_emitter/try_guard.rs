@@ -15,12 +15,18 @@ use Instruction as I;
 pub const RAN_WITHOUT_ERROR: &str = "ran_without_error";
 const ERROR_TAG_NAME: &str = "wasp_error";
 const TRY_DEPTH_GLOBAL: &str = "try_depth";
+const CAUGHT_ERROR_GLOBAL: &str = "caught_error_id";
+/// `caught_error(finished, value)` (P67, library_words::lower_try_binding): the Error `catch e` binds: value when the
+/// guarded statement finished (it gave back an Error), else the runtime error the latest `try` caught, by its id
+pub const CAUGHT_ERROR: &str = "caught_error";
 
 /// The tag thrown by runtime errors and the globals that track running `try`s
 #[derive(Clone, Copy)]
 pub(super) struct ErrorCatching {
 	tag: u32,
 	depth_global: u32,
+	/// the id of the error the latest `try` caught, which `catch e` reads (caught_error)
+	caught_global: u32,
 }
 
 /// Does the program contain a `try` that catches runtime errors (decided before the runtime functions are emitted)
@@ -43,7 +49,11 @@ impl WasmGcEmitter {
 		self.extra_global_names.push((self.next_global_idx, TRY_DEPTH_GLOBAL));
 		let depth_global = self.next_global_idx;
 		self.next_global_idx += 1;
-		let catching = ErrorCatching { tag: 0, depth_global };
+		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(-1));
+		self.extra_global_names.push((self.next_global_idx, CAUGHT_ERROR_GLOBAL));
+		let caught_global = self.next_global_idx;
+		self.next_global_idx += 1;
+		let catching = ErrorCatching { tag: 0, depth_global, caught_global };
 		self.error_catching = Some(catching);
 		catching
 	}
@@ -101,9 +111,36 @@ impl WasmGcEmitter {
 		func.instruction(&I::End); // try_table
 		step_depth(func, I::I32Sub);
 		Self::emit_list(func, &[I::I64Const(1), I::Br(1), I::End]); // caught
-		func.instruction(&I::Drop); // the error id
+		func.instruction(&I::GlobalSet(catching.caught_global)); // the error id, for `catch e`
 		step_depth(func, I::I32Sub);
 		Self::emit_list(func, &[I::I64Const(0), I::End]);
+	}
+
+	/// `caught_error(finished, value)` as a Node: value when finished, else the Error of the caught error's id: a raised
+	/// value's text (the trap detail) or the runtime error's message
+	pub(super) fn emit_caught_error(&mut self, func: &mut Function, finished: &Node, value: &Node) {
+		let catching = self.declare_error_catching();
+		let node_ref = ValType::Ref(self.node_ref(false));
+		self.emit_numeric_value(func, finished);
+		Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Result(node_ref))]);
+		let names = self.runtime_error_names();
+		for (id, name) in names.iter().enumerate() {
+			Self::emit_list(func, &[I::GlobalGet(catching.caught_global), I::I32Const(id as i32), I::I32Eq, I::If(BlockType::Result(node_ref))]);
+			if *name == super::list_ops::RETURNED_ERROR {
+				let detail = self.trap_detail_global();
+				Self::emit_list(func, &[I::GlobalGet(detail), I::RefAsNonNull]);
+			} else {
+				self.emit_string_call(func, &super::list_ops::runtime_error_message(name), "new_text");
+			}
+			self.emit_call(func, super::text_builtins::ERROR_OF);
+			func.instruction(&I::Else);
+		}
+		self.emit_string_call(func, "error", "new_text");
+		self.emit_call(func, super::text_builtins::ERROR_OF);
+		names.iter().for_each(|_| { func.instruction(&I::End); });
+		func.instruction(&I::Else);
+		self.emit_node_instructions(func, value);
+		func.instruction(&I::End);
 	}
 
 	/// A Node variable is a non-nullable local that wasm counts as set only after the block setting it: assigned inside

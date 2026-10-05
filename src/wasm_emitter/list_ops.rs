@@ -824,14 +824,18 @@ impl WasmGcEmitter {
 		});
 	}
 
-	pub(super) fn emit_runtime_errors(&mut self) {
-		let no_case_errors = self.ctx.missing_case_labels.iter().map(|label| format!("{}{label}", crate::switch::NO_CASE_PREFIX));
-		let no_case_errors: Vec<&'static str> = no_case_errors.map(|name| &*Box::leak(name.into_boxed_str())).collect();
+	/// The runtime error functions in id order: the fixed ones, a missing switch case per label, the fixed-width overflows
+	pub(super) fn runtime_error_names(&self) -> Vec<&'static str> {
+		let no_case_errors = self.ctx.missing_case_labels.iter().map(|label| &*Box::leak(format!("{}{label}", crate::switch::NO_CASE_PREFIX).into_boxed_str()));
 		let overflow_errors = crate::fixed_width::FIXED_WIDTHS.iter().map(|width| width.trap);
+		RUNTIME_ERRORS.into_iter().chain(no_case_errors).chain(overflow_errors).collect()
+	}
+
+	pub(super) fn emit_runtime_errors(&mut self) {
 		if self.guards_errors {
 			self.declare_error_catching(); // the error functions throw while a `try` runs
 		}
-		for (error_id, name) in RUNTIME_ERRORS.into_iter().chain(no_case_errors).chain(overflow_errors).enumerate() {
+		for (error_id, name) in self.runtime_error_names().into_iter().enumerate() {
 			self.runtime_function(name, vec![], vec![], vec![], |s, f| s.emit_error_body(f, error_id as i32));
 		}
 	}
