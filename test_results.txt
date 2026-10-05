@@ -255,6 +255,10 @@ PASSED:
   ✓ ffi_parser::tests::test_raylib_functions
   ✓ ffi::test_download::a_failed_download_is_an_error_value
   ✓ ffi::test_download::download_fetches_like_fetch
+  ✓ ffi::test_ffi_gaps::a_library_header_named_otherwise_is_found
+  ✓ ffi::test_ffi_gaps::a_pointer_result_is_refused_loudly
+  ✓ ffi::test_ffi_gaps::libc_character_classes_are_linked
+  ✓ ffi::test_ffi_gaps::sqlite3_links_without_a_panic
   ✓ ffi::test_ffi_import_group::a_group_of_three_names_is_imported
   ✓ ffi::test_ffi_import_group::a_group_with_spaces_is_imported
   ✓ ffi::test_ffi_warning_once::the_ffi_warning_is_printed_once
@@ -848,7 +852,7 @@ PASSED:
   ✓ node::node_values_test::test_values_meta
   ✓ node::node_values_test::test_values_nested_key
   ✓ node::node_values_test::test_values_number
-  ✓ node::test_node_add::adding_unrelated_nodes_is_an_error_naming_both_kinds
+  ✓ node::test_node_add::adding_unrelated_nodes_builds_the_unevaluated_sum
   ✓ node::test_node_operators::test_chaining
   ✓ node::test_node_operators::test_complex_expression
   ✓ node::test_node_operators::test_mixed_types
@@ -1636,6 +1640,8 @@ PASSED:
   ✓ types::test_array_types::test_plural_declarations_are_lists
   ✓ types::test_array_types::test_typed_array_as_a_value
   ✓ types::test_be_definitions::test_be_defines_with_a_type
+  ✓ types::test_block_data_paths::test_a_sibling_path_inside_a_block
+  ✓ types::test_block_data_paths::test_the_top_level_form_still_reads_it
   ✓ types::test_cast_bugs::a_cast_to_char_can_be_stored
   ✓ types::test_cast_bugs::a_one_character_text_can_be_indexed
   ✓ types::test_cast_bugs::a_runtime_value_as_string
@@ -1890,6 +1896,7 @@ PASSED:
   ✓ wasm::test_wasm::test_math_library
   ✓ wasm::test_wasm::test_math_operators
   ✓ wasm::test_wasm::test_math_operators_runtime
+  ✓ wasm::test_wasm::test_math_primitives
   ✓ wasm::test_wasm::test_merge_wabt
   ✓ wasm::test_wasm::test_named_data_sections
   ✓ wasm::test_wasm::test_node_data_binary_reconstruction
@@ -2242,6 +2249,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_basic_atom_types
   ✓ wisp_parser::tests::test_wisp_call
   ✓ wisp_parser::tests::test_wisp_cons_dotted_pair
+  ✓ wisp_parser::tests::test_wisp_defn
   ✓ wisp_parser::tests::test_wisp_emit_atoms
   ✓ wisp_parser::tests::test_wisp_emit_compound
   ✓ wisp_parser::tests::test_wisp_key_pair
@@ -2260,4 +2268,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-33 ignored, 2255 passed, 0 failed, 2255 total tested
+31 ignored, 2263 passed, 0 failed, 2263 total tested
