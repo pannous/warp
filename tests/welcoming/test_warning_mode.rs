@@ -33,6 +33,7 @@ fn use_strict_turns_a_lint_warning_into_an_error() {
 }
 
 #[test]
+#[cfg(feature = "native")] // runs the warp binary
 fn the_strict_flag_turns_warnings_into_errors() {
 	let run = |args: &[&str]| {
 		let output = crate::common::warp_command().args(args).output().expect("warp runs");

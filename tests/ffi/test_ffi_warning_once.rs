@@ -1,3 +1,4 @@
+#![cfg(feature = "native")] // runs the warp binary
 //! `import graphics` warns about missing FFI signatures once, not once per pass
 
 
