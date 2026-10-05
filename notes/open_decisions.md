@@ -124,7 +124,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   (computed `:` values, effectful getters), a quote used as a value is a type error with the fix ("c, d very nice");
   `quote`/`data` prefix, `block` parameters, `x!` eval. REVISES D7: free variables are read at call time (Python late
   binding), loop variables captured per iteration, reassigning a variable a deferred definition reads gets a got-it
-  note. The word `quote` is provisional (user: "not sure if I like the word"). P62/P63 are refined by this spec.
+  note → superseded (user 2026-10-05: "y=3; def z(): y*y; y=4; z() gives a compiler error unless we explicitly
+  define it as global"): a free variable that changes after the definition needs `global y` / `nonlocal y` in the
+  reading function, else a compile error at the change (wiki fceb4c5). The word `quote` is provisional (user: "not sure if I like the word"). P62/P63 are refined by this spec.
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
