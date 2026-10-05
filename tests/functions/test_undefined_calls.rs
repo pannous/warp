@@ -48,7 +48,7 @@ fn test_paren_data_stays_data() {
 	assert!(matches!(eval("(frobnicate 3)"), warp::Node::Error(_)));
 	assert!(!matches!(eval("(frobnicate, 3)"), warp::Node::Error(_)));
 	assert!(matches!(eval("[frobnicate 3]"), warp::Node::Error(_)));
-	assert!(!matches!(eval("quote (frobnicate 3)"), warp::Node::Error(_)));
+	assert!(!matches!(eval("data (frobnicate 3)"), warp::Node::Error(_))); // P63: `data`, not `quote`
 }
 
 #[test]

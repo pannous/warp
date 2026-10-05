@@ -53,7 +53,11 @@ fn position(node: &Node) -> Option<(usize, usize)> {
 
 impl fmt::Display for Diagnostic {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{} at {}:{}", self.message, self.line, self.column)?;
+		write!(f, "{}", self.message)?;
+		// 0:0 is no position: a diagnostic of something written nowhere in the source
+		if self.line > 0 {
+			write!(f, " at {}:{}", self.line, self.column)?;
+		}
 		if let Some(fix) = &self.fix {
 			write!(f, "; fix: {}", fix)?;
 		}

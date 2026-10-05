@@ -994,6 +994,15 @@ impl Scope {
 			self.parent.as_ref().and_then(|p| p.lookup(name)))
 	}
 
+	/// The names of the variables in this scope and its parents
+	pub fn local_names(&self) -> Vec<String> {
+		let mut names: Vec<String> = self.locals.keys().cloned().collect();
+		if let Some(parent) = &self.parent {
+			names.extend(parent.local_names());
+		}
+		names
+	}
+
 	/// Define a new variable in current scope
 	pub fn define(&mut self, name: String, type_node: Option<Box<Node>>, kind: Kind) -> Local {
 		let position = self.locals.len() as u32;
