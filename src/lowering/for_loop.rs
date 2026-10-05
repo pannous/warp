@@ -104,15 +104,26 @@ fn for_in(items: &[Node]) -> Option<Node> {
 	})
 }
 
-/// `it` replaced by the loop variable, except inside a block or a lambda of the body, whose own parameter it is
+/// `it` replaced by the loop variable, except inside a block or a lambda of the body, whose own parameter it is (an
+/// if's branches are no such blocks)
 fn it_as(node: Node, variable: &Node) -> Node {
 	match node {
 		Node::Symbol(name) if name == IMPLICIT_VARIABLE => variable.clone(),
+		// an if's branches are the loop's own statements: `if x > 2 { s += it }`
+		Node::Key(left, op @ (Op::Then | Op::Else), right) => Node::Key(Box::new(it_as(*left, variable)), op, Box::new(branch_it_as(*right, variable))),
 		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Arrow | Op::FatArrow, _) => node,
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| it_as(item, variable)).collect(), bracket, separator),
 		Node::Key(left, op, right) => Node::Key(Box::new(it_as(*left, variable)), op, Box::new(it_as(*right, variable))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(it_as(*node, variable)), data },
 		other => other,
+	}
+}
+
+fn branch_it_as(branch: Node, variable: &Node) -> Node {
+	match branch {
+		Node::List(items, Bracket::Curly, separator) => Node::List(items.into_iter().map(|item| it_as(item, variable)).collect(), Bracket::Curly, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(branch_it_as(*node, variable)), data },
+		other => it_as(other, variable),
 	}
 }
 

@@ -36,6 +36,8 @@ const FOREIGN_MODIFIERS: [&str; 18] = ["public", "private", "protected", "intern
 /// Modifiers with a wasp meaning that change nothing before a function definition (a function is global and constant)
 const DEFINITION_MODIFIERS: [&str; 7] = ["global", "export", "import", "const", "final", "mutable", "mut"];
 const FOREIGN_MODIFIER_TOPIC: &str = "foreign-modifier";
+/// `function add`, `func add`: a reference to a function (P82), like `&add`
+const FUNCTION_REFERENCE_WORDS: [&str; 2] = ["function", "func"];
 /// `nonlocal y` in a nested function: it reads the enclosing function's current y (lowering/late_binding.rs)
 const NONLOCAL_WORD: &str = "nonlocal";
 
@@ -1312,6 +1314,27 @@ impl WaspParser {
 			|| self.number_starts_at(0) || self.starts_function_reference()
 	}
 
+	/// `function add` (P82): the function itself where a name and then the end of the expression follow the keyword;
+	/// `function add(x) {…}` and `function add x := …` define it
+	fn function_reference_after(&mut self, keyword: &str) -> Option<Node> {
+		if !FUNCTION_REFERENCE_WORDS.contains(&keyword) || self.options.data_mode {
+			return None;
+		}
+		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		if blanks == 0 || !self.peek_char(blanks).is_alphabetic() {
+			return None;
+		}
+		let name: String = (blanks..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
+		let after = blanks + name.chars().count();
+		let rest = (after..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(after);
+		if !matches!(self.peek_char(rest), '\0' | ';' | ',' | ')' | ']' | '}' | '\n') {
+			return None;
+		}
+		self.advance_by(after);
+		self.after_function_keyword = false;
+		Some(crate::closures::function_reference(name))
+	}
+
 	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
 	fn starts_function_reference(&self) -> bool {
 		self.current_char() == '&' && self.peek_char(1).is_alphabetic() && !is_identifier_char(self.prev_char())
@@ -1634,7 +1657,7 @@ impl WaspParser {
 			'&' if self.starts_function_reference() => {
 				self.advance();
 				match self.parse_symbol() {
-					Ok(name) => Symbol(name),
+					Ok(name) => crate::closures::function_reference(name),
 					Err(message) => error(&message),
 				}
 			}
@@ -1933,6 +1956,10 @@ impl WaspParser {
 		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && !self.options.wit_mode && !self.options.data_mode);
 		if names_function && self.parameters_follow_after_blanks() {
 			self.skip_spaces();
+		}
+
+		if let Some(reference) = self.function_reference_after(&symbol) {
+			return reference;
 		}
 
 		if self.url_follows(&symbol) {
@@ -2402,7 +2429,14 @@ impl WaspParser {
 				self.equals_compares = false; // in `if c: x=1` the colon ends the condition, the rest is the body
 			}
 			let rhs_start = self.pos;
-			let rhs = block_body.unwrap_or_else(|| self.parse_expr(r_bp));
+			let rhs = match block_body {
+				Some(block) => block,
+				None if matches!(op, Op::Then | Op::Else) => {
+					let branch = self.parse_expr(r_bp);
+					self.branch_assignment(branch, r_bp)
+				}
+				None => self.parse_expr(r_bp),
+			};
 			let rhs_end = self.pos.min(self.chars.len());
 			let rhs_written: String = self.chars[rhs_start.min(rhs_end)..rhs_end].iter().collect();
 
@@ -2471,6 +2505,17 @@ impl WaspParser {
 		}
 
 		lhs
+	}
+
+	/// A branch without braces takes the whole statement: `if c then s += 5 else s = 0` assigns in the branch, where
+	/// assignment's weaker binding would end the branch at `s` and assign to the whole if. The value stops at `else`.
+	fn branch_assignment(&mut self, target: Node, branch_bp: u8) -> Node {
+		self.skip_spaces();
+		let Some((assignment, chars)) = self.peek_operator().filter(|(op, _)| *op == Op::Assign || op.is_compound_assign()) else { return target };
+		self.advance_by(chars);
+		self.skip_whitespace();
+		let value = self.parse_expr(branch_bp);
+		Node::Key(Box::new(target), assignment, Box::new(value))
 	}
 
 	/// `‖x‖` brackets a whole expression like parentheses: `‖3-5‖*2` → 4

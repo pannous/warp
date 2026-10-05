@@ -1,6 +1,7 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
 mod big_int;
+pub mod cells;
 mod closures;
 pub use closures::{CLOSURE_CAPTURED, CLOSURE_REBUILD};
 pub(crate) mod exact;
@@ -1242,6 +1243,7 @@ impl WasmGcEmitter {
 		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
 		// Emit list and string operation functions
 		self.emit_list_ops();
+		self.emit_cells();
 		self.emit_text_of();
 		self.emit_equality_ops();
 		self.emit_text_as_int(); // after the getters: it calls get_int_value
@@ -1531,7 +1533,11 @@ impl WasmGcEmitter {
 				if let Some(user_fn) = self.ctx.user_functions.get(s) {
 					match user_fn.params.iter().filter(|param| param.default.is_none()).count() {
 						0 => self.emit_user_function_call(func, s, &[]),
-						count => self.emit_type_error(func, format!("{s} needs {count} argument{}", if count == 1 { "" } else { "s" })),
+						count => {
+							// P82: the function itself is `function add` (or `&add`); a nested `outer·add` is written `add`
+							let written = s.rsplit('·').next().unwrap_or(s);
+							self.emit_type_error(func, format!("{written} needs {count} argument{}; fix: function {written}", if count == 1 { "" } else { "s" }))
+						}
 					}
 					return;
 				}
