@@ -92,6 +92,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   reads `a-b` bare in that block); "the subtraction" at each bare read: `a - b`; and "the data key, renamed a_b": the
   key → `a_b:2` and every bare read → `a_b` (always applicable, renames the key in the data). Asked by the Fixer
   warp-2d (card g-qU1o, was parked in Later; the user answered anyway): option B, "also offer renaming".
+- P82 returning a function: a function reference is written `function add` or `&add` (wiki/function-pointer.md); a
+  bare name that needs arguments is the error "add needs 1 argument" everywhere, in a body's last value too, nested
+  or top-level alike, with the fix "I meant: function add". Asked by warp-90 (card returning-top). User: "function
+  references have an extra keyword … Maybe it was just function", then the recommended option.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
