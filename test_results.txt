@@ -266,6 +266,8 @@ PASSED:
   ✓ functions::test_bare_function_name::test_bare_name_of_typed_function_is_an_error
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
+  ✓ functions::test_broadcasting_declared::test_declared_list_parameters_take_the_list
+  ✓ functions::test_broadcasting_declared::test_declared_scalar_parameters_broadcast
   ✓ functions::test_broadcasting::test_broadcasting_reaches_nested_lists
   ✓ functions::test_broadcasting::test_function_broadcasts_over_a_list
   ✓ functions::test_broadcasting::test_function_broadcasts_over_pairs_keeping_keys
@@ -428,6 +430,9 @@ PASSED:
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
   ✓ functions::test_runtime_kind_arithmetic::fields_of_a_map_parameter_compute_by_their_values
   ✓ functions::test_spaced_assign_definition::a_recursive_spaced_definition_with_equals_defines_the_function
+  ✓ functions::test_suffix_word_spellings::test_english_spellings_of_the_suffix_form
+  ✓ functions::test_suffix_word_spellings::test_suffix_form_calls_a_user_function
+  ✓ functions::test_suffix_word_spellings::test_suffix_forms_chain_and_mix_like_before
   ✓ functions::test_suffix_words::a_function_name_with_ed_is_its_suffix_form
   ✓ functions::test_suffix_words::a_user_function_or_variable_takes_the_suffix_word
   ✓ functions::test_suffix_words::a_variable_is_no_suffix_form
@@ -849,6 +854,11 @@ PASSED:
   ✓ numbers::test_unit_conversion::long_unit_names_name_the_target
   ✓ numbers::test_unit_literals::a_unit_after_a_comparison_belongs_to_its_amount
   ✓ numbers::test_unit_literals::a_variable_named_like_a_unit_stays_a_variable
+  ✓ numbers::test_unit_products::test_areas_add_divide_and_compare
+  ✓ numbers::test_unit_products::test_mixed_dimensions_stay_loud
+  ✓ numbers::test_unit_products::test_powers_of_quantities
+  ✓ numbers::test_unit_products::test_products_of_lengths_are_areas
+  ✓ numbers::test_unit_products::test_rates_times_durations
   ✓ numbers::test_unit_word_keys::a_quantity_held_in_a_variable
   ✓ numbers::test_unit_word_keys::a_unit_word_key_after_a_number
   ✓ numbers::test_unit_word_keys::minutes_are_a_time_unit
@@ -921,7 +931,7 @@ PASSED:
   ✓ operators::test_operator_declarations::test_infix_operator
   ✓ operators::test_operator_declarations::test_infix_operator_declared_by_its_pattern
   ✓ operators::test_operator_declarations::test_operators_declared_later_are_known_to_the_whole_program
-  ✓ operators::test_operator_declarations::test_precedence_declarations_are_refused
+  ✓ operators::test_operator_declarations::test_precedence_declarations_are_followed
   ✓ operators::test_operator_declarations::test_prefix_operator
   ✓ operators::test_operator_declarations::test_suffix_operator
   ✓ operators::test_operator_parsing::call_with_an_expression_argument_is_name_and_key
@@ -947,6 +957,11 @@ PASSED:
   ✓ operators::test_operator_parsing::test_unicode_le
   ✓ operators::test_operator_parsing::test_unicode_mul
   ✓ operators::test_operator_parsing::typed_name_binds_before_assignment
+  ✓ operators::test_operator_precedence::test_built_in_operators_are_not_re_ranked
+  ✓ operators::test_operator_precedence::test_declaration_order_does_not_matter
+  ✓ operators::test_operator_precedence::test_infix_operator_above_multiplication
+  ✓ operators::test_operator_precedence::test_infix_operator_below_addition
+  ✓ operators::test_operator_precedence::test_precedence_relative_to_a_declared_operator
   ✓ operators::test_operators::test_add_boxed_list_item
   ✓ operators::test_operators::test_add_item_list
   ✓ operators::test_operators::test_add_list_item_explicit
@@ -1963,4 +1978,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-40 ignored, 1958 passed, 0 failed, 1958 total tested
+40 ignored, 1973 passed, 0 failed, 1973 total tested
