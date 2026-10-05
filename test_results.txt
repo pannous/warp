@@ -1245,6 +1245,7 @@ PASSED:
   ✓ programs::test_calculator_fixes::test_float_function_ending_in_a_loop
   ✓ programs::test_calculator_fixes::test_run_time_math
   ✓ programs::test_calculator_fixes::test_text_comparisons
+  ✓ programs::test_cli_help::help_prints_the_usage
   ✓ programs::test_data_structure_fixes::test_data_key_read_as_a_variable
   ✓ programs::test_data_structure_fixes::test_list_comprehension
   ✓ programs::test_data_structure_fixes::test_named_tuple_fields
@@ -1279,6 +1280,7 @@ PASSED:
   ✓ programs::test_samples::test_snake
   ✓ programs::test_samples::test_sudoku
   ✓ programs::test_samples::test_sum
+  ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
   ✓ scope::test_colon_body_assignment::test_if_colon_body_with_assignment
@@ -2060,4 +2062,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2055 passed, 0 failed, 2055 total tested
+37 ignored, 2057 passed, 0 failed, 2057 total tested
