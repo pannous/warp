@@ -110,3 +110,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 fix-infinity
 - `∞` is the float infinity (Number::Inf, typed Float): `∞ > 1e300`, `-∞`, `1.0/0.0 == ∞`, `\:infinity`
   (tests/numbers/test_infinity.rs). P56 (4) default; ω stays the hyperreal.
+
+## 2026-10-05 fix-raise
+- `raise X` / `throw X` / `raise error("m")`: the builtin raise(X) fails the run through returned_error with X as its
+  detail; `try` catches it, an Int if treats it as the failure branch (pipeline::returned_error_message). `catch` is
+  not built: the wiki form (function-level `catch (no food){}` handlers) is queued as a question.
