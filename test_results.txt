@@ -491,6 +491,9 @@ PASSED:
   ✓ functions::test_late_binding::nonlocal_reads_the_value_at_each_call
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
+  ✓ functions::test_map_phrase::test_map_a_function_first_without_on
+  ✓ functions::test_map_phrase::test_map_a_function_on_a_list
+  ✓ functions::test_map_phrase::test_map_a_function_reference_on_a_list
   ✓ functions::test_memoization::fib_is_memoized
   ✓ functions::test_memoization::only_overlapping_recursion_is_memoized
   ✓ functions::test_method_syntax_calls::test_method_syntax_calls_a_libm_function
@@ -2229,4 +2232,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-33 ignored, 2224 passed, 0 failed, 2224 total tested
+33 ignored, 2227 passed, 0 failed, 2227 total tested
