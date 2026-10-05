@@ -29,7 +29,7 @@ fn test_block_parameters_take_their_argument_unevaluated() {
 
 #[test]
 fn test_a_bang_known_only_at_run_time_is_loud() {
-	fails_with("xs = [data a+1, data a*2]; a=5; xs#2!", "only known at run time");
+	is!("xs = [data a+1, data a*2]; a=5; xs#2!", 10); // runs at run time since run-block-5 (P73, notes/runtime_eval.md)
 	is!("x=3; x!+1", 4);
 	is!("x=\"hi\"; x.upper!; x", "HI");
 }

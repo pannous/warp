@@ -3855,6 +3855,8 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				analyze_required_functions(ctx, &Node::Number(number));
 			}
 		}
+		// run_block hands exact numbers back by composing them from fixnums (tasks.rs Builders)
+		Node::Symbol(name) if name == crate::host::RUN_BLOCK => ctx.required_functions.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]),
 		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => {
 			if op.is_arithmetic()

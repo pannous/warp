@@ -33,7 +33,7 @@ pub use try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 mod witness;
 pub(crate) mod wasi_emitter;
 
-pub use big_int::{is_fixnum, INT_RUNTIME};
+pub use big_int::{is_fixnum, EXACT_BUILDERS, INT_RUNTIME};
 
 /// Something emission found it must have that the analysis pass did not request
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -388,6 +388,19 @@ impl WasmGcEmitter {
 				}
 			}
 			self.ctx.captures.insert(function.name, captures);
+		}
+	}
+
+	/// A host that hands values into the program (run_block's result, a task's value) builds an exact number beyond the
+	/// fixnums from fixnum pieces with these (tasks.rs Builders)
+	fn export_exact_builders(&mut self) {
+		let hands_values_in = [crate::host::RUN_BLOCK, crate::host::TASK_SPAWN_VALUES, crate::host::TASK_AWAIT_VALUE].iter().any(|word| self.ctx.ffi_imports.contains_key(*word));
+		if !hands_values_in || !self.int_runtime() {
+			return;
+		}
+		for name in EXACT_BUILDERS {
+			let index = self.func_index(name);
+			self.exports.export(name, ExportKind::Func, index);
 		}
 	}
 
@@ -1151,6 +1164,7 @@ impl WasmGcEmitter {
 		constructors::emit_all_constructors(self);
 		self.emit_runtime_errors(); // before the int runtime: exact_div fails divide_by_zero
 		self.emit_int_runtime();
+		self.export_exact_builders();
 		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
 		// Emit list and string operation functions
 		self.emit_list_ops();

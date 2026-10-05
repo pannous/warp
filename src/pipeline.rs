@@ -10,6 +10,7 @@ use crate::wasp_parser::WaspParser;
 use log::warn;
 
 const INDEX_OUT_OF_RANGE: &str = "index out of range";
+const UNWRAPPED_EMPTY: &str = "unwrapped ø";
 const RANGE_END_HINT: &str = "hint: `..` excludes the end; `...` or `to` include it";
 #[cfg(feature = "native")]
 use crate::wasm_emitter::{failed_run, run_raw_struct};
@@ -101,11 +102,11 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 25] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 26] = [
 	crate::phrase_calls::lower,
 	crate::welcome_forms::lower, crate::number_keys::lower,
 	crate::declarations::lower_tasks, crate::shared_arrays::lower, crate::variable_signals::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::result_word::lower, crate::picked_calls::lower, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
-	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::mutation::lower, crate::host::lower_aliases, crate::modules::resolve,
+	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::lower, crate::host::lower_aliases, crate::modules::resolve,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
 	crate::analyzer::lower_negated_calls,
 ];
@@ -242,20 +243,25 @@ fn eval_program(node: Node) -> Node {
 pub(crate) const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
 
 /// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
-/// names separated by spaces) are bound to `values` first, the values the program had where it ran the block. The
+/// names separated by spaces) are bound to `values` first, the values the program had where it ran the block, then
+/// the program's function `definitions` follow. The
 /// block gets no capability but pure libm, wherever its code came from (user decision: pure by default)
 /// `Err` is the message the run fails with, naming the block.
-pub fn eval_block(block: Node, names: &Node, values: &Node) -> Result<Node, String> {
+pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) -> Result<Node, String> {
 	let written = block.serialize().trim().to_string();
+	if block.drop_meta() == &Node::Empty {
+		return Err(UNWRAPPED_EMPTY.to_string()); // `x!` forces: ø is the optional's loud error (P73)
+	}
 	let names: Vec<String> = match names.drop_meta() {
 		Node::Text(names) => names.split_whitespace().map(str::to_string).collect(),
 		_ => vec![],
 	};
-	let values: Vec<Node> = match values.drop_meta() {
+	let items = |list: &Node| match list.drop_meta() {
 		Node::List(items, _, _) => items.clone(),
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
+	let values = items(values);
 	let as_written = |value: Node| match value.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty => value,
 		_ => Node::List(vec![Node::Symbol(crate::blocks::DATA_WORD.to_string()), value], Bracket::None, Separator::Space),
@@ -263,6 +269,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node) -> Result<Node, Stri
 	let mut statements: Vec<Node> = names.into_iter().zip(values)
 		.map(|(name, value)| Node::Key(Box::new(Node::Symbol(name)), Op::Assign, Box::new(as_written(value))))
 		.collect();
+	statements.extend(items(definitions));
 	statements.push(block);
 	let program = Node::List(statements, Bracket::None, Separator::Newline);
 	let result = match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
@@ -276,7 +283,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node) -> Result<Node, Stri
 	}
 }
 
-/// A block's value the host has no constructor for in the running module yet (a pair, an exact ratio, a big Int)
+/// A block's value the host has no constructor for in the running module yet (a pair)
 pub fn cannot_hand_back(value: &Node) -> String {
 	format!("the block gave {}, a value run_block cannot hand back yet", value.serialize().trim())
 }

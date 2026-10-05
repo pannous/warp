@@ -136,11 +136,11 @@ pub fn run_outcome(outcome: &Value) -> Node {
 	crate::node::error(&format!("could not run the program: {failure}"))
 }
 
-/// The page's run_block (host.js; src/host.rs natively): the block and the values it sees as trees (`{block, names,
-/// values}`), its value as a tree back (`{"result": tree}`) or `{"error": message}`
+/// The page's run_block (host.js; src/host.rs natively): the block and what it sees as trees (`{block, names, values,
+/// definitions}`), its value as a tree back (`{"result": tree}`) or `{"error": message}`
 pub fn eval_block_report(request: &Value) -> Value {
 	let tree = |key: &str| request.get(key).map(node_from_tree).unwrap_or(Node::Empty);
-	match crate::pipeline::eval_block(tree("block"), &tree("names"), &tree("values")) {
+	match crate::pipeline::eval_block(tree("block"), &tree("names"), &tree("values"), &tree("definitions")) {
 		Err(message) => json!({ "error": message }),
 		Ok(result) => match tree_of(&result) {
 			Some(tree) => json!({ "result": tree }),
@@ -150,12 +150,16 @@ pub fn eval_block_report(request: &Value) -> Value {
 }
 
 /// A value as the tree host.js buildValue builds in a module (the inverse of node_from_tree for the values a task or a
-/// block hands back); None for what has no constructor there yet (a pair, an exact ratio, a big Int)
+/// block hands back); None for what has no constructor there yet (a pair)
 fn tree_of(node: &Node) -> Option<Value> {
 	let kind = |kind: Kind| (kind as i64).to_string();
 	Some(match node.drop_meta() {
 		Node::Empty => json!({ "kind": kind(Kind::Empty), "data": null, "chain": [] }),
-		Node::Number(Number::Int(n)) => json!({ "kind": kind(Kind::Int), "data": { "int": n.to_string() }, "chain": [] }),
+		Node::Number(Number::Int(n)) if crate::wasm_emitter::is_fixnum(*n) => json!({ "kind": kind(Kind::Int), "data": { "int": n.to_string() }, "chain": [] }),
+		// beyond the fixnums: host.js composes it from fixnum pieces (src/tasks.rs EXACT_BUILDERS)
+		Node::Number(Number::Int(n)) => json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), "1"] }, "chain": [] }),
+		Node::Number(Number::BigInt(n)) => json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), "1"] }, "chain": [] }),
+		Node::Number(Number::Quotient(n, d)) => json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), d.to_string()] }, "chain": [] }),
 		Node::Number(Number::Float(x)) if x.is_finite() => json!({ "kind": kind(Kind::Float), "data": { "float": x }, "chain": [] }),
 		Node::Text(text) => json!({ "kind": kind(Kind::Text), "data": { "text": text }, "chain": [] }),
 		Node::Symbol(text) => json!({ "kind": kind(Kind::Symbol), "data": { "text": text }, "chain": [] }),
