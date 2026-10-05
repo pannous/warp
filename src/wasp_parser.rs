@@ -219,7 +219,7 @@ pub const TRY_MARKER: &str = "try·else";
 pub const ASSERT_MARKER: &str = "assert·else";
 const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
 /// `nand` and its glyph pair, both `not (a and b)`
-const NAND_SPELLINGS: [&str; 2] = ["nand", "¬&"];
+const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
