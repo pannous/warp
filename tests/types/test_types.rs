@@ -424,21 +424,18 @@ fn test_generics() {
 }
 
 #[test]
-#[ignore = "soon"] // TODO: requires complete type system
+// P49 (user, 2026-10-05): a float passed to an int parameter is a compile error, never truncated
 fn test_function_argument_cast() {
 	is!("float addi(int x,int y){x+y};'hello'+5", "hello5");
 	is!("float addi(int x,int y){x+y};'hello'+5.9", "hello5.9");
-	is!(
-		"float addi(int x,int y){x+y};'hello'+addi(2.2,2.2)",
-		"hello4."
-	);
+	crate::common::fails_with("float addi(int x,int y){x+y};'hello'+addi(2.2,2.2)", "2.2 is no int: write 2.2 as int");
 	//     is!("float addi(int x,int y){x+y};'hello'+addi(2,3)", "hello5.") // OK some float cast going on!
 
 	is!("fun addier(a,b){b+a};addier(42.0,1.0)", 43);
 	is!("fun addier(int a,int b){b+a};addier(42,1)+1", 44);
-	is!("fun addi(int x,int y){x+y};addi(2.2,2.2)", 4);
+	crate::common::fails_with("fun addi(int x,int y){x+y};addi(2.2,2.2)", "2.2 is no int");
 	is!("fun addi(float x,float y){x+y};addi(2.2,2.2)", 4.4);
-	is!("float addi(int x,int y){x+y};addi(2.2,2.2)", 4.4);
+	crate::common::fails_with("float addi(int x,int y){x+y};addi(2.2,2.2)", "2.2 is no int");
 	is!("fun addier(float a,float b){b+a};addier(42,1)+1", 44);
 }
 
