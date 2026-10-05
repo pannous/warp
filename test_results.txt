@@ -1487,6 +1487,8 @@ PASSED:
   ✓ sweeps::test_todo::test_type_annotated
   ✓ sweeps::test_todo::test_type_equivalence
   ✓ sweeps::test_todo::test_utf8_char_indexing
+  ✓ text::test_add_to_text::test_add_to_a_list_still_appends
+  ✓ text::test_add_to_text::test_add_to_a_text
   ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ text::test_cast_to_string::an_object_literal_as_string_is_its_text
@@ -2232,4 +2234,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-33 ignored, 2227 passed, 0 failed, 2227 total tested
+33 ignored, 2229 passed, 0 failed, 2229 total tested
