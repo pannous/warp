@@ -24,6 +24,13 @@ const CONTINUATION_MASK: i32 = 0xC0;
 const CONTINUATION_MARK: i32 = 0x80;
 const PAYLOAD_MASK: i32 = 0x3F;
 
+/// case_table, worked out once per process: it walks every code point (100 ms in a debug build)
+fn cached_case_table(is_upper: bool) -> &'static [u8] {
+	static UPPER: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+	static LOWER: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+	(if is_upper { &UPPER } else { &LOWER }).get_or_init(|| case_table(is_upper))
+}
+
 /// The code points whose case mapping changes them, each as little-endian u32: the code point, then `MAPPED_SLOTS` mapped ones
 fn case_table(is_upper: bool) -> Vec<u8> {
 	let mut table = vec![];
@@ -103,9 +110,9 @@ impl WasmGcEmitter {
 			return;
 		}
 		self.emit_text_heap_global();
-		let case_table = case_table(is_upper);
+		let case_table = cached_case_table(is_upper);
 		let entries = (case_table.len() as u32 / ENTRY_BYTES) as i32;
-		let table = self.allocate_bytes(name, &case_table) as i32;
+		let table = self.allocate_bytes(name, case_table) as i32;
 		let node_ref = Ref(self.node_ref(false));
 		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![ValType::I32; 15], |s, f| {
 			let (pointer, end, capacity, destination, index, out) = (1, 2, 3, 4, 5, 6);
