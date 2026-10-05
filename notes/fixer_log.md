@@ -147,3 +147,6 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 p61-is-teaches-be
 - P61: `is` always compares; `x is v` with x unbound is the error "undefined variable: x; `is` compares, a definition is
   written `x be v`" (v as written: the parser keeps it as meta "compared with"); the `x is number 9` declaration undone.
+
+## 2026-10-05 p44-atomic
+- P44: `atomic xs = int[n]` is `shared xs = int[n]` (shared_arrays SHARED_WORDS).

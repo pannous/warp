@@ -9,7 +9,8 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
 
-const SHARED_WORD: &str = "shared";
+/// `shared xs = int[n]` and its synonym `atomic` (P44)
+const SHARED_WORDS: [&str; 2] = ["shared", "atomic"];
 /// The host words (src/host.rs SHARED_WORDS, SHARED_FLOAT_WORDS)
 const SHARED_NEW: &str = crate::host::SHARED_WORDS[0];
 const SHARED_COUNT: &str = crate::host::SHARED_WORDS[4];
@@ -40,7 +41,7 @@ pub fn lower(node: Node) -> Node {
 fn declaration(node: &Node) -> Option<(String, Node, Floats)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
 	let [word, assignment] = items.as_slice() else { return None };
-	if !matches!(word.drop_meta(), Node::Symbol(w) if w == SHARED_WORD) {
+	if !matches!(word.drop_meta(), Node::Symbol(w) if SHARED_WORDS.contains(&w.as_str())) {
 		return None;
 	}
 	let Node::Key(target, Op::Assign, value) = assignment.drop_meta() else { return None };
