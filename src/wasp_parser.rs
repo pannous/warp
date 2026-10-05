@@ -365,7 +365,9 @@ fn vulgar_fraction(ch: char) -> Option<(i64, i64)> {
 
 /// Characters that are numeric for Unicode but written next to a number as operators or literals of their own
 fn is_number_glyph(ch: char) -> bool {
-	superscript_digit(ch).is_some() || vulgar_fraction(ch).is_some()
+	// every such glyph is a numeric character outside ASCII: asked of every identifier character, this skips the
+	// decomposition of vulgar_fraction for all others
+	!ch.is_ascii() && ch.is_numeric() && (superscript_digit(ch).is_some() || vulgar_fraction(ch).is_some())
 }
 
 fn is_identifier_char(c: char) -> bool {
@@ -492,6 +494,8 @@ pub struct WaspParser {
 	column: usize,
 	char: char,
 	pub current_line: String,
+	/// The input's lines, for current_line at each line break (splitting the input at every one was quadratic)
+	lines: Vec<String>,
 	base_indent: usize,
 	/// Inside a block indented with spaces below a trailing `:` spaces count as indent too (elsewhere only tabs do)
 	indent_counts_spaces: bool,
@@ -722,9 +726,14 @@ impl WaspParser {
 
 	/// Source text is normalized to NFC, so equal-looking text and identifiers are equal
 	pub fn new_with_options(input: String, options: ParserOptions) -> Self {
-		let input: String = input.nfc().collect();
+		// most sources are NFC already: normalizing them only copies them, slowly in a debug build
+		let input: String = match unicode_normalization::is_nfc_quick(input.chars()) {
+			unicode_normalization::IsNormalized::Yes => input,
+			_ => input.nfc().collect(),
+		};
 		let input = if options.data_mode { input } else { crate::uniscript_entities::expand_entities(&input) };
-		let current_line = input.lines().next().unwrap_or("").to_string();
+		let lines: Vec<String> = input.lines().map(String::from).collect();
+		let current_line = lines.first().cloned().unwrap_or_default();
 		let chars: Vec<char> = input.chars().collect();
 		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
 		let declared_types = if options == ParserOptions::default() { scan_declared_types(&input) } else { Default::default() };
@@ -739,6 +748,7 @@ impl WaspParser {
 			column: 1,
 			char: '\0',
 			current_line,
+			lines,
 			base_indent: 0,
 			indent_counts_spaces: false,
 			options,
@@ -927,13 +937,7 @@ impl WaspParser {
 		if ch == '\n' {
 			self.line_nr += 1;
 			self.column = 1;
-			// Update current_line to the new line
-			let lines: Vec<&str> = self.input.lines().collect();
-			if self.line_nr > 0 && self.line_nr <= lines.len() {
-				self.current_line = lines[self.line_nr - 1].to_string();
-			} else {
-				self.current_line = String::new();
-			}
+			self.current_line = self.lines.get(self.line_nr - 1).cloned().unwrap_or_default();
 		} else {
 			self.column += 1;
 		}
@@ -4191,7 +4195,7 @@ impl WaspParser {
 
 		if items_with_seps.len() == 1 && bracket == Bracket::None {
 			// Only unwrap single items for implicit groupings
-			return items_with_seps[0].0.clone();
+			return only(items_with_seps).0;
 		}
 
 		// Collect all unique separator precedences (excluding None)
@@ -4208,7 +4212,7 @@ impl WaspParser {
 			let items: Vec<Node> = items_with_seps.into_iter().map(|(node, _)| node).collect();
 			if items.len() == 1 && bracket == Bracket::None {
 				// Only unwrap single items for implicit groupings
-				return items[0].clone();
+				return only(items);
 			}
 			return grouped_list(items, bracket, Separator::Space);
 		}
@@ -4257,7 +4261,7 @@ impl WaspParser {
 			.map(|group| {
 				if group.len() == 1 && group[0].1 == Separator::None {
 					// Single item with no further separators
-					group[0].0.clone()
+					only(group).0
 				} else {
 					// Has multiple items or tighter separators - recurse
 					// Inner groups use Bracket::None to avoid extra braces in serialization
@@ -4270,7 +4274,7 @@ impl WaspParser {
 		if grouped_nodes.len() == 1 && bracket == Bracket::None {
 			// Only unwrap single items for implicit groupings (Bracket::None)
 			// Explicit brackets like {x} or [x] should preserve the wrapper
-			grouped_nodes[0].clone()
+			only(grouped_nodes)
 		} else {
 			grouped_list(grouped_nodes, bracket, split_sep)
 		}
@@ -4308,6 +4312,11 @@ impl WaspParser {
 			other => other,
 		}
 	}
+}
+
+/// The one element of `items`, moved out (cloning it copied a whole subtree, the whole program at the top)
+fn only<T>(items: Vec<T>) -> T {
+	items.into_iter().next().expect("one element")
 }
 
 /// In data only JSON's words are literals; aliases like `yes`, `no`, `none`, `pi` stay symbols.
