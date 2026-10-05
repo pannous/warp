@@ -17,6 +17,7 @@ mod test_parameter_codepoint_calls;
 mod test_property_access;
 mod test_property_assign;
 mod test_property_words;
+mod test_suffix_word_spellings;
 mod test_suffix_words;
 mod test_to_definition;
 mod test_multi_value;
