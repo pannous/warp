@@ -214,7 +214,7 @@ impl Node {
 			Error(_) => Kind::Error,
 			False | True => Kind::Int,
 			Node::Number(num) => match num {
-				Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) => Kind::Int, // exact numbers
+				Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_) => Kind::Int, // exact numbers
 				_ => Kind::Float, // Float, Complex, Nan, Inf
 			},
 		}
@@ -1476,6 +1476,7 @@ impl PartialEq<f64> for Node {
 			Node::Number(Number::Float(f)) => f == other,
 			Node::Number(Number::Int(n)) => *n as f64 == *other,
 			Node::Number(quotient @ Number::Quotient(..)) => f64::from(*quotient) == *other,
+			Node::Number(Number::BigQuotient(q)) => q.to_f64() == *other,
 			// an exact real equals the f64 nearest to it, up to the rounding of evaluating it in f64
 			Node::Number(Number::Real(r)) => (r.to_f64() - other).abs() <= other.abs() * 4.0 * f64::EPSILON,
 			Meta { node, .. } => node.as_ref().eq(other),

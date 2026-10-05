@@ -1470,7 +1470,7 @@ const REAL_CONSTANTS: [&str; 2] = ["π", "pi"];
 pub fn number_type_word(number: &Number) -> &'static str {
 	match number {
 		Number::Int(_) | Number::BigInt(_) => INT_WORD,
-		Number::Quotient(..) => RATIONAL_WORD,
+		Number::Quotient(..) | Number::BigQuotient(_) => RATIONAL_WORD,
 		Number::Real(_) => REAL_WORD,
 		Number::Float(value) if Number::is_exact_decimal(*value) => if value.fract() == 0.0 { INT_WORD } else { RATIONAL_WORD },
 		_ => FLOAT_WORD,
@@ -1810,6 +1810,7 @@ fn is_negative(node: &Node) -> bool {
 		Node::Number(Number::Int(n)) => *n < 0,
 		Node::Number(Number::Float(f)) => *f < 0.0,
 		Node::Number(Number::Quotient(numerator, _)) => *numerator < 0,
+		Node::Number(Number::BigQuotient(q)) => q.is_negative(),
 		Node::Number(Number::BigInt(big)) => big.sign() == num_bigint::Sign::Minus,
 		Node::Key(left, Op::Neg | Op::Sub, _) => matches!(left.drop_meta(), Node::Empty),
 		Node::List(items, _, _) if items.len() == 1 => is_negative(&items[0]),

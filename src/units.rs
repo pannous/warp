@@ -458,11 +458,7 @@ fn scale(factors: &[Factor], target: impl Fn(&Factor) -> &'static Unit) -> Ratio
 
 /// `1 m / 3 m` is the number 1/3
 fn quotient_node(amount: &Rational) -> Node {
-	match (amount.numerator.to_i64(), amount.denominator.to_i64()) {
-		(Some(numerator), Some(1)) => Node::int(numerator),
-		(Some(numerator), Some(denominator)) => Node::Number(Number::Quotient(numerator, denominator)),
-		_ => Node::Number(Number::Float(amount.to_f64())),
-	}
+	Node::Number(Number::from_rational(amount.clone()))
 }
 
 fn whole(amount: &Rational) -> Option<i64> {

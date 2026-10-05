@@ -1446,7 +1446,7 @@ impl WasmGcEmitter {
 					func.instruction(&I::F64Const(Ieee64::new(f.to_bits())));
 					self.emit_call(func, "new_float");
 				}
-				Number::Float(_) | Number::Quotient(..) => {
+				Number::Float(_) | Number::Quotient(..) | Number::BigQuotient(_) => {
 					self.emit_numeric_value(func, node);
 					self.emit_call(func, "new_int");
 				}
@@ -3143,6 +3143,10 @@ impl WasmGcEmitter {
 						self.emit_exact_literal(func, &(*n).into(), &(*d).into());
 						func
 					}
+					Number::BigQuotient(q) => {
+						self.emit_exact_literal(func, &q.numerator, &q.denominator);
+						func
+					}
 					Number::Complex(r, _i) => func.instruction(&I::I64Const(*r as i64)),
 					// lowered to Float before emission (real.rs), kept total for safety
 					Number::Real(r) => func.instruction(&I::I64Const(r.to_f64() as i64)),
@@ -3321,6 +3325,9 @@ impl WasmGcEmitter {
 					}
 					Number::Quotient(n, d) => {
 						func.instruction(&I::F64Const(Ieee64::new((*n as f64 / *d as f64).to_bits())));
+					}
+					Number::BigQuotient(q) => {
+						func.instruction(&I::F64Const(Ieee64::new(q.to_f64().to_bits())));
 					}
 					Number::Complex(r, _i) => {
 						func.instruction(&I::F64Const(Ieee64::new(r.to_bits())));

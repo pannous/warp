@@ -123,7 +123,8 @@
 - Decimal literals with ≤ 15 significant digits are exact (`Number::is_exact_decimal`); π, sqrt, FFI floats stay f64.
 - Left open (Decision needed in Footguns.md): negative modulo (existing tests pin C semantics), rounding-mode naming,
   bool kind, and `test_float_plus_int_type_upgrading` which requires a Float where the exact result is now a Quotient.
-- Other gaps: ratios with parts beyond i64 read back as f64 (Quotient is (i64,i64)); `3 == 3.0000000000000001` still true
+- Fixed: ratios with parts beyond i64 read back as `Number::BigQuotient` (exact), not f64; Quotient stays (i64,i64).
+- Other gaps: `3 == 3.0000000000000001` still true
   (literal parsed to f64 first); `law`/Lean export still treats `/` as unsupported ("yields a Float" comment in law/lean.rs is stale).
 ## Work area "injection" (2026-09-27)
 - Fixed (verified via CI on claude/footguns-injection): `src/injection.rs` lowers `sql "…"` / `sh "…"` before effects and
