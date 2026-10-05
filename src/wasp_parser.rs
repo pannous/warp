@@ -2402,7 +2402,14 @@ impl WaspParser {
 				self.equals_compares = false; // in `if c: x=1` the colon ends the condition, the rest is the body
 			}
 			let rhs_start = self.pos;
-			let rhs = block_body.unwrap_or_else(|| self.parse_expr(r_bp));
+			let rhs = match block_body {
+				Some(block) => block,
+				None if matches!(op, Op::Then | Op::Else) => {
+					let branch = self.parse_expr(r_bp);
+					self.branch_assignment(branch, r_bp)
+				}
+				None => self.parse_expr(r_bp),
+			};
 			let rhs_end = self.pos.min(self.chars.len());
 			let rhs_written: String = self.chars[rhs_start.min(rhs_end)..rhs_end].iter().collect();
 
@@ -2471,6 +2478,17 @@ impl WaspParser {
 		}
 
 		lhs
+	}
+
+	/// A branch without braces takes the whole statement: `if c then s += 5 else s = 0` assigns in the branch, where
+	/// assignment's weaker binding would end the branch at `s` and assign to the whole if. The value stops at `else`.
+	fn branch_assignment(&mut self, target: Node, branch_bp: u8) -> Node {
+		self.skip_spaces();
+		let Some((assignment, chars)) = self.peek_operator().filter(|(op, _)| *op == Op::Assign || op.is_compound_assign()) else { return target };
+		self.advance_by(chars);
+		self.skip_whitespace();
+		let value = self.parse_expr(branch_bp);
+		Node::Key(Box::new(target), assignment, Box::new(value))
 	}
 
 	/// `‖x‖` brackets a whole expression like parentheses: `‖3-5‖*2` → 4
