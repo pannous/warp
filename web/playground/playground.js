@@ -1,6 +1,7 @@
 // The page: the editor, the worker that compiles and runs (worker.js), and the report shown like the CLI prints it:
 // the value, printed output, errors, warnings, hints. An ambiguity is a warning naming its explicit form; "got it"
-// silences a warning's topic in this browser (it never changes the value) until "show again".
+// silences a warning's topic in this browser (it never changes the value) until "show again". Each reading the user
+// might have meant is an "I meant: …" button that rewrites the code at the warning and runs it again (notes/fixits.md).
 
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
@@ -123,6 +124,23 @@ function diagnostic(kind, position, ...content) {
 
 const code = text => element("code", {}, text);
 
+// replace the UTF-16 range start..end of the editor's text (src/web.rs fixes_json) and run the changed code
+function applyFix(fix) {
+	editor.replaceRange(fix.replacement, editor.posFromIndex(fix.start), editor.posFromIndex(fix.end));
+	clearTimeout(typingTimer);
+	runNow();
+}
+
+// the "I meant: …" buttons of a warning, error or hint; a fix whose text the code does not show cannot be applied
+function fixButtons(fixes = []) {
+	if (fixes.length === 0) return "";
+	return element("span", { className: "fixes" }, ...fixes.map(fix => fix.start === null
+		? element("button", { disabled: true, title: `${fix.meaning} (could not find \`${fix.written}\` in the code)` }, fix.label)
+		: element("button", { className: "apply-fix", title: fix.meaning, onclick: () => applyFix(fix) }, fix.label)));
+}
+
+const gotIt = topic => element("button", { className: "got-it", title: "keep the code, stop warning about this", onclick: () => acknowledge(topic) }, "got it");
+
 function showAcknowledged() {
 	$("acknowledged").replaceChildren(...acknowledged.map(topic => element("li", {}, `${topic} `,
 		element("button", { className: "forget", title: "warn about it again", onclick: () => showAgain(topic) }, "show again"))));
@@ -135,14 +153,17 @@ function showReport(report) {
 	const printed = report.printed.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join("");
 	$("printed").textContent = printed;
 	$("printed").hidden = printed === "";
+	const notes = report.notes ?? [];
+	const inline = new Set((report.warnings ?? []).map(warning => warning.topic).filter(topic => notes.includes(topic)));
+	const shown = (kind, problem, extra = "") => diagnostic(kind, at(problem.line, problem.column), problem.message,
+		problem.fix ? element("span", { className: "fix" }, "fix: ", code(problem.fix)) : "", fixButtons(problem.fixes), extra);
 	const items = [
-		...report.warnings.map(warning => diagnostic("warning", at(warning.line, warning.column), warning.message,
-			warning.fix ? element("span", { className: "fix" }, "fix: ", code(warning.fix)) : "")),
+		...(report.errors ?? []).map(error => shown("error", error)),
+		...report.warnings.map(warning => shown("warning", warning, inline.has(warning.topic) ? gotIt(warning.topic) : "")),
 		...report.runtime_warnings.map(message => diagnostic("warning", "runtime", message)),
 		...report.hints.map(hint => diagnostic("hint", hint.position, "prefer ", code(hint.canonical), " over ", code(hint.original),
-			element("span", { className: "reason" }, hint.reason))),
-		...report.notes.map(topic => diagnostic("note", "", `the ${topic} warning above shows until you `,
-			element("button", { onclick: () => acknowledge(topic) }, "got it"))),
+			element("span", { className: "reason" }, hint.reason), fixButtons(hint.fixes))),
+		...notes.filter(topic => !inline.has(topic)).map(topic => diagnostic("note", "", `the ${topic} warning above shows until you `, gotIt(topic))),
 	];
 	$("diagnostics").replaceChildren(...items);
 	showAcknowledged();
@@ -227,6 +248,6 @@ function initialize() {
 }
 
 // for the headless probe (probes/web_playground.sh): evaluate code as the page does and return the report
-window.playground = { evaluate, lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
+window.playground = { evaluate, applyFix, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
 
 initialize();

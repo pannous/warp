@@ -840,8 +840,8 @@ fn educate_block_assignment(assignment: &Node, name: &str, block: &str) {
 	crate::normalize::set_position_of(assignment);
 	let written = crate::normalize::operand_text(assignment);
 	let reason = format!("the block {block} captures {name} by value: its change stays inside the block");
-	crate::normalize::hint(&written, &format!("global {name}"), &reason);
-	crate::normalize::hint(&written, &format!("{name} = {block}()"), "or return the value from the block and assign it");
+	crate::normalize::advise(&written, &format!("global {name}"), &reason);
+	crate::normalize::advise(&written, &format!("{name} = {block}()"), "or return the value from the block and assign it");
 }
 
 const LOCAL_OR_GLOBAL: &str = "local-or-global";

@@ -95,6 +95,10 @@ output.error { color: var(--error); }
 .hint .label { color: var(--hint); }
 .note .label { color: var(--hint); }
 .reason, .fix { display: block; color: var(--muted); padding-left: 4.5em; }
+.error .label { color: var(--error); }
+.fixes { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 0 4.5em; }
+.fixes button { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; }
+.got-it { font-size: 0.85em; padding: 0 6px; margin-left: 6px; }
 
 .silenced { margin-top: 16px; color: var(--muted); }
 .silenced ul { padding-left: 1.2em; }

@@ -116,7 +116,7 @@ fn a_hint_offers_its_preferred_form() {
 	let (_, hints) = capture_hints(|| eval(code));
 	let hint = hints.iter().find(|hint| hint.original == "**").unwrap_or_else(|| panic!("{hints:?}"));
 	let (line, column) = hint.line_and_column();
-	let source = fixed(code, line, column, &hint.fix()).expect("the hint's text is in the source");
+	let source = fixed(code, line, column, &hint.fix().expect("a rewrite")).expect("the hint's text is in the source");
 	assert_eq!(eval(&source).serialize(), "8", "{source}");
 }
 

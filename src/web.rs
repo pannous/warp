@@ -52,7 +52,7 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 		let (line, column) = hint.line_and_column();
 		json!({
 			"original": hint.original, "canonical": hint.canonical, "position": hint.position, "reason": hint.reason,
-			"fixes": fixes_json(code, line, column, &[hint.fix()]),
+			"fixes": fixes_json(code, line, column, &hint.fix().into_iter().collect::<Vec<_>>()),
 		})
 	}).collect();
 	json!({

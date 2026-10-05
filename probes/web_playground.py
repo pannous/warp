@@ -93,13 +93,31 @@ def main():
 	browser("select", "#examples", "ambiguity")
 	time.sleep(1.5)
 	before = (browser("get", "text", "#value"), "upto" in browser("get", "text", "#diagnostics"))
-	browser("click", ".note button")
+	browser("click", ".got-it")
 	time.sleep(1.5)
 	after = (browser("get", "text", "#value"), "upto" in browser("get", "text", "#diagnostics"))
 	silenced = before == ("6", True) and after == ("6", False)
 	print(f"{'ok  ' if silenced else 'FAIL'} got it silences the upto warning: {before} → {after}")
 	if not silenced: failures.append("got it")
 	browser("eval", "playground.forgetAll()")
+
+	# "I meant: ..." rewrites the code at the warning and runs it again: the inclusive reading of `1 upto 4` is 1+2+3+4
+	browser("select", "#examples", "ambiguity")
+	time.sleep(1.5)
+	browser("eval", "[...document.querySelectorAll('.apply-fix')].find(button => button.textContent === 'I meant: ...').click()")
+	time.sleep(1.5)
+	fixed = (browser("get", "text", "#value"), "for i in 1 ... 4" in json.loads(browser("eval", "playground.code()")), "upto" in browser("get", "text", "#diagnostics"))
+	ok = fixed == ("10", True, False)
+	print(f"{'ok  ' if ok else 'FAIL'} the fix button rewrites `upto` to `...` and runs again: {fixed}")
+	if not ok: failures.append("fix button")
+	# an ambiguity error offers its readings too
+	browser("eval", "playground.setCode('square:=it*it; square 3 + square 4')")
+	time.sleep(1.5)
+	browser("eval", "[...document.querySelectorAll('.apply-fix')].find(button => button.textContent === 'I meant: square(3) + square(4)').click()")
+	time.sleep(1.5)
+	value = browser("get", "text", "#value")
+	print(f"{'ok  ' if value == '25' else 'FAIL'} the fix of an ambiguous braceless call: {value}")
+	if value != "25": failures.append("error fix button")
 
 	# the debug build (?debug, warp.debug.wasm) compiles the same programs
 	browser("open", PAGE + "?debug")
