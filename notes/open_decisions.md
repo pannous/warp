@@ -13,6 +13,15 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   loop changes are captured per iteration, every other variable follows late binding (recommended) / every variable
   is captured per iteration and never checked (worker default on branch late-binding, keeps the test → 3). User
   2026-10-05: "Later". Asked by warp-29.
+- P71 What does `:=` mean without parameters? The spec (wiki/charged.md section 2) says charged (`z := y*y`
+  re-evaluated at every use); the implementation and every mainstream language (Go, Pascal, Python's walrus) read it
+  as now: `y=3; z:=y*y; y=4; z` → 9, `x := 5; x = 6` → 6; the user's own model was "like let, later = may
+  overwrite". The original wiki said "semi charged, evaluated upon normal evaluation of the parent context"; "every
+  use" came from the Interviewer's table. Options: (1) now, unless it defines a function (parameters or `it`:
+  `square := it*it` stays a function), zero-parameter charged definitions via `def` (recommended); (2) always charged,
+  `z = 6` after it an error; (3) Go-strict: `:=` declares a new variable, `=` only reassigns. User 2026-10-05: "idk".
+  Assumed until decided: today's behaviour (1); workers do not change zero-parameter `:=` semantics, and the
+  "needless charging" note applies to `def` only.
 Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
 work on branch runtime-units-survey pauses.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
