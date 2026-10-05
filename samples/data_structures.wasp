@@ -4,7 +4,7 @@
 // Simple list with various separators (all equivalent)
 colors = [red, green, blue]
 numbers = [1, 2, 3, 4, 5]
-mixed = [1 "two" three 4.0]
+mixed = quote [1 "two" three 4.0] // a word among values is data only when quoted (P62)
 
 // Key-value pairs (maps/objects)
 person: {

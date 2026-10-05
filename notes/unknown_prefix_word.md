@@ -1,14 +1,15 @@
-# An unknown word applied to a value: `cube 3`
+# An unknown word next to a value: `cube 3` (P51, P62)
 
-Decided #7 makes `cube(3)` (a call written without a space) the error `undefined function: cube`. The spaced form
-`cube 3` stayed silent data (notes/unresolved_call_survey.md, rule 3: `print 3` is one way to write call-shaped data).
-Now it stays data but warns once per topic (got-it topic `unknown-word`, notes/welcoming.md):
+User decisions 2026-10-05: P51 "should obviously be an error unless we're in a clear data context"; P62: the data
+contexts in a program are a `quote`/`data` prefix and the values of an object literal (`{shape: cube 3}`), plus data
+mode (`parse_data`, `warp data`). Brackets are no data context: `(cube 3)` and `[cube 3]` in code are code.
 
-    warning: cube is no function: `cube 3` is data, not a call (define cube(x) := … to call it) … fix: [cube 3]
-
-- Where: `WasmGcEmitter::warn_unknown_prefix_word` (src/wasm_emitter/list_emitter.rs), at the data fallthrough of
-  `emit_list_node`, after `reject_unresolved_call`. Under `use strict` the warning is an error.
-- When: a spaced list (no brackets) whose head is a word that is no variable, global, function, keyword, type or
-  library word (`resolves_call`), with at least one argument that is a value (not a bare word, not a `{…}` block).
-- Quiet: `hello world` (words only), `person{name:"Joe"}`, `[cube 3]` (written data), a defined `cube`.
-- Tests: tests/welcoming/test_unknown_prefix_word.rs. Open decision P51: a loud error instead of the warning.
+- `WasmGcEmitter::unknown_word_error` (src/wasm_emitter/list_emitter.rs): a list of atoms (spaced, `(…)` or `[…]`) with a
+  value and a word that names nothing (no variable, function, type, unit, keyword) is the error
+  "undefined: cube in `cube 3`; define cube, or write `quote cube 3` for data".
+- Data contexts: `emit_quoted` (`quote …`, `data …`) and the value of an object entry (`emit_default_key`) set
+  `data_context`, in which unknown words stay words.
+- Not judged (unchanged): all-word lists (`hello world`, `[red green blue]`) and lists with operators (`foo x = 3`
+  names its undefined variable itself). Comma tuples `(frobnicate, 3)` stay data.
+- samples/data_structures.wasp: `mixed = quote [1 "two" three 4.0]`.
+Tests: tests/welcoming/test_unknown_word_error.rs.

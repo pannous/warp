@@ -40,7 +40,8 @@ fn juxtaposed_text(argument: &Node) -> Option<Node> {
 /// The Ask topic of `xs.insert(i, x)` with two Ints: answers are remembered per topic
 const INSERT_ORDER_TOPIC: &str = "insert-order";
 /// The got-it topic of an unknown word applied to a value (`cube 3`)
-const UNKNOWN_WORD_TOPIC: &str = "unknown-word";
+/// `quote cube 3`, `data cube 3`: the rest is data (P62)
+const QUOTE_WORDS: [&str; 2] = ["quote", "data"];
 
 impl WasmGcEmitter {
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
@@ -192,6 +193,9 @@ impl WasmGcEmitter {
 			self.emit_call(func, "new_empty");
 			return;
 		}
+		if self.emit_quoted(func, items, bracket, separator) {
+			return;
+		}
 
 		if items.len() == 1 && *bracket != Bracket::Square {
 			if !self.emit_function_call(func, items, bracket) {
@@ -304,8 +308,7 @@ impl WasmGcEmitter {
 		if self.reject_unresolved_call(func, items, bracket, separator) {
 			return;
 		}
-		if let Err(error) = self.warn_unknown_prefix_word(items, bracket, separator) {
-			let message = match error { Node::Error(reason) => reason.drop_meta().name(), other => other.serialize() };
+		if let Some(message) = self.unknown_word_error(items, bracket, separator) {
 			self.emit_type_error(func, message);
 			return;
 		}
@@ -585,22 +588,42 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `cube 3`: a word that names nothing applied to a value is data, never a call; the got-it warning names both forms.
-	/// Only when an argument is a value: `hello world` and `person{…}` are plain data
-	fn warn_unknown_prefix_word(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Result<(), Node> {
-		use crate::diagnostic::{ask, reading, Ask, Fallback};
-		let [head, arguments @ ..] = items else { return Ok(()) };
-		let is_value = |argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
-		if (bracket, separator) != (&Bracket::None, &Separator::Space) || !arguments.iter().any(is_value) {
-			return Ok(());
+	/// P51/P62 (user): an unknown word next to a value in code (`cube 3`, `(cube 3)`, `[cube 3]`) is an error, never silent
+	/// data. Data contexts keep it: a `quote`/`data` prefix and the values of an object literal (`data_context`); all-word
+	/// lists (`hello world`) are not judged here
+	fn unknown_word_error(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<String> {
+		let in_code = matches!((bracket, separator), (Bracket::None | Bracket::Round, Separator::Space) | (Bracket::Square, _));
+		let is_value = |item: &Node| !matches!(item.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
+		// only lists of atoms: a list with an operator (`foo x = 3`) names its undefined variable on its own
+		let is_atom = |item: &Node| matches!(item.drop_meta(), Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(..));
+		if self.data_context || !in_code || !items.iter().any(is_value) || !items.iter().all(is_atom) {
+			return None;
 		}
-		let Some(name) = self.unknown_word(head).filter(|name| !self.resolves_call(name)) else { return Ok(()) };
+		let name = items.iter().find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))?;
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
 		let text = written.serialize().trim().to_string();
-		let question = Ask::new(UNKNOWN_WORD_TOPIC, format!("{name} is no function: `{text}` is data, not a call (define {name}(x) := … to call it)"),
-			vec![reading("data", &format!("[{text}]")), reading("a call", &format!("{name}(x) := …; {text}"))], Fallback::Warning)
-			.written(&text).at_node(&written);
-		ask(&question).map(|_| ())
+		let message = format!("undefined: {name} in `{text}`; define {name}, or write `quote {text}` for data");
+		Some(crate::diagnostic::Diagnostic::at(&written, message).to_string())
+	}
+
+	/// A word that names nothing the program or the language knows: no function, type, unit or keyword
+	fn is_undefined_word(&self, name: &str) -> bool {
+		!self.resolves_call(name) && !crate::units::is_unit(name) && self.ctx.type_registry.get_by_name(name).is_none()
+	}
+
+	/// `quote cube 3`, `data cube 3`: the words after the prefix as data (P62); true when it was one
+	fn emit_quoted(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		let [prefix, rest @ ..] = items else { return false };
+		if *bracket != Bracket::None || *separator != Separator::Space || rest.is_empty() || !matches!(prefix.drop_meta(), Node::Symbol(word) if QUOTE_WORDS.contains(&word.as_str())) {
+			return false;
+		}
+		let outer = std::mem::replace(&mut self.data_context, true);
+		match rest {
+			[only] => self.emit_node_instructions(func, only),
+			many => self.emit_list_structure(func, many, &Bracket::None),
+		}
+		self.data_context = outer;
+		true
 	}
 
 	/// A bare word that is no variable, global or function

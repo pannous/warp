@@ -315,6 +315,11 @@ impl WasmGcEmitter {
 			// Convert curly block to square list, preserving inner ops
 			let list_node = Node::List(items.clone(), Bracket::Square, sep.clone());
 			self.emit_node_instructions(func, &list_node);
+		} else if *op == Op::Colon {
+			// the value of an entry is data: unknown words in it stay words (P62)
+			let outer = std::mem::replace(&mut self.data_context, true);
+			self.emit_node_instructions(func, right_node);
+			self.data_context = outer;
 		} else {
 			self.emit_node_instructions(func, right_node);
 		}
