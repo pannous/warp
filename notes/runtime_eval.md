@@ -30,8 +30,25 @@ The first version takes the *copying* road, not the shared-store one below: simp
   element of a list of data runs through run_block (src/lowering/run_time_blocks.rs `lower_run_time_bangs`, between
   blocks.rs and mutation.rs); ø is "unwrapped ø", a value is itself. Other names keep mutation.rs's pure unwrap.
 
-Not yet: pairs as results ("cannot hand back yet"); a name whose data comes from elsewhere (a parameter, a call) still
-unwraps instead of running; sharing GC objects instead of copying.
+* run-block-6: `!` decides at run time where the kind is not known statically: an untyped parameter (`f(b) := b!`)
+  and a result of the program's functions (`g()#1!`); a function containing such a `!` has the effect Eval. A block
+  run in a body sees the parameters and every main-level variable. Pairs come back in the browser too.
+
+### Measured (2026-10-05, debug build, native): copying is not the cost, compiling is
+
+| program | time |
+|---|---|
+| one `interpret(xs#1)` | 0.59 s (whole run incl. the program's own compile) |
+| 100 × `interpret(xs#1)` in a loop | 20.7 s: ~200 ms per run_block |
+| the same with a 20 000-element list in scope (copied each time) | 20.8 s |
+
+Each run_block compiles and instantiates a fresh module; copying the values in and out does not show. So GC sharing
+waits; the win is a cache of compiled blocks. Today the values are compiled into the block (`a = 1` statements), so
+the key would change with every value: compile the block as a function of its names instead (the names, the
+definitions and the block's text as the key, the values as arguments), keep the module (or its instance), and let
+the `aot` worker's module cache (.cwasm) hold it across runs.
+
+Not yet: that cache; sharing GC objects instead of copying.
 
 ## 0. State today (measured with the CLI, debug build of 2026-10-03)
 
