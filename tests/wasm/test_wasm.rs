@@ -1163,12 +1163,11 @@ fn test_wasm_mutable_global_imports() {
 }
 
 #[test]
-#[ignore]
 fn test_custom_operators() {
 	is!("suffix operator ⁰ := 1; 3⁰", 1); // get UNITY of set (1->e let cast ok?);
 	is!("suffix ⁰ := 1; 3⁰", 1); // get UNITY of set (1->e let cast ok?);
 	is!("suffix operator ³ := it*it*it; 3³", 27); // define inside wasp!
-	is!("suffix operator ³ := it*it*it; .5³", 1 / 8);
+	is!("suffix operator ³ := it*it*it; .5³", 0.125); // user P53: 1 / 8 was Rust integer division (0)
 	is!("suffix ³ := it*it*it; 3³", 27); // define inside wasp!
 
 	//	is!(("alias to let third : the = ³"),1);
