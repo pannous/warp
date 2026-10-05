@@ -15,6 +15,7 @@ mod test_not_condition_block;
 mod test_error_branch_kind;
 mod test_switch_match;
 mod test_unwrap;
+mod test_unwrap_message;
 mod test_switch_no_case_value;
 mod test_switch_value;
 mod test_times_count_once;

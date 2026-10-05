@@ -649,6 +649,14 @@ impl WasmGcEmitter {
 					s.call(f, super::text_builtins::TEXT_CONCAT);
 					Self::emit_list(f, &[I::Return, I::End]);
 				}
+				// an Error value fails with its own message (`x!` of ø is "unwrapped ø"), never as "not a number"
+				let trap_detail = s.trap_detail_global();
+				for operand in [0, 1] {
+					s.emit_field(f, operand, 0);
+					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(operand), I::GlobalSet(trap_detail)]);
+					s.call(f, RETURNED_ERROR);
+					f.instruction(&I::End);
+				}
 				// a text, a character or a list is no number here: "x" * 2 is no 240
 				for operand in [0, 1] {
 					s.emit_field(f, operand, 0);

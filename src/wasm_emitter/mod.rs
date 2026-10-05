@@ -81,6 +81,8 @@ const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
 pub const TRAP_DETAIL: &str = "trap_detail";
 /// How a trapped run carries that value into its error: `trap detail: <value>`
 pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
+/// The global behind the export `trap_detail`: not a wasp name, so no user global meets it
+const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
 
 const TERNARY_BRANCHES: &str = "`condition ? then : else`";
 const IF_THEN: &str = "`if condition then ...`";
@@ -2426,14 +2428,20 @@ impl WasmGcEmitter {
 	/// Leave `value` in the exported global `trap_detail` (declared on first use), for the runtime error that follows
 	/// to name it: the runner reads it after the trap (wasm_reader::with_trap_detail)
 	pub(super) fn emit_trap_detail(&mut self, func: &mut Function, value: &Node) {
-		const TRAP_DETAIL_GLOBAL: &str = "trap·detail"; // not a wasp name, so no user global meets it
-		if !self.ctx.user_globals.contains_key(TRAP_DETAIL_GLOBAL) {
-			let index = self.declare_mutable_global(Kind::Empty);
-			self.exports.export(TRAP_DETAIL, ExportKind::Global, index);
-			self.ctx.user_globals.insert(TRAP_DETAIL_GLOBAL.to_string(), (index, Kind::Empty));
-		}
+		self.trap_detail_global();
 		self.emit_global_store(func, TRAP_DETAIL_GLOBAL, value);
 		func.instruction(&I::Drop);
+	}
+
+	/// The index of the exported global `trap_detail`, declared on first use
+	pub(super) fn trap_detail_global(&mut self) -> u32 {
+		if let Some((index, _)) = self.ctx.user_globals.get(TRAP_DETAIL_GLOBAL) {
+			return *index;
+		}
+		let index = self.declare_mutable_global(Kind::Empty);
+		self.exports.export(TRAP_DETAIL, ExportKind::Global, index);
+		self.ctx.user_globals.insert(TRAP_DETAIL_GLOBAL.to_string(), (index, Kind::Empty));
+		index
 	}
 
 	/// Emit global declaration and return numeric value (for use in emit_numeric_value)

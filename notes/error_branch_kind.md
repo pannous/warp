@@ -10,6 +10,7 @@
 - `x!` (D2 by position: after a plain variable): mutation.rs turns a `!` mark that no mutation consumed into the
   library word `unwrap(x)` = `if x == ø then error("unwrapped ø") else x`. An Error value stays that Error.
   `x!+1`: a `!` glued to its name and followed by an infix operator is a suffix (INFIX_AFTER_BANG).
-- Gap: `x:int?=ø; x!+1` fails loudly with "not a number" (the optional is a Node, the declared-int arithmetic fails
-  first), not yet with "unwrapped ø".
+- An Error value used as a number in Node arithmetic (node_add …) fails with its own message: it is left in the
+  exported `trap_detail` global and `returned_error` raises it (the runner reads the Error's message), so
+  `x:int?=ø; x!+1` is "unwrapped ø" and `x = f(-1); x + 1` names f's error, never "not a number".
 Tests: tests/control/test_error_branch_kind.rs, tests/control/test_unwrap.rs.
