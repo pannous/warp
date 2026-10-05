@@ -11,6 +11,30 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   near-miss warning chosen for object values. (2) the sample `mixed = [1 "two" three 4.0]` becomes
   `mixed = quote [1 "two" three 4.0]`. (3) a comma tuple `(frobnicate, 3)` stays data (P62 named spaced brackets
   only). Related to the open data-vs-code design discussion (charge levels, 2026-10-05). 2026-10-05.
+- P64 Run-time quantities (units in functions, loops, lists, print; notes/units_runtime.md, branch
+  runtime-units-survey): (1) static units like F# units of measure, the unit part of the compile-time type, zero
+  run-time cost, mixing units a compile error, ~3.5 agent-days (recommended; work started) / (2) dynamic unit values
+  like pint (run-time amount + units), needed only for units arriving from input / both later (static, plus parsing
+  input into checked values). Assumed: (1). Asked by warp-90 via warp-7e. Asked once 2026-10-05, dismissed by the user
+  mid-discussion: ask again later. 2026-10-05.
+- P65 Character arithmetic: `'5' + 1` is "51", `'5' * 2` "55" (a character acts as a one-letter text), but `-'a'` is
+  -97, `'a' % 2` 1, `sqrt('a')` 9.85 (code points); comparisons (`c >= '0'`) rightly use code points. Recommended:
+  arithmetic a text can't do (negation, %, /, sqrt) on a character is not_a_number, never its code point; `ord(c)`
+  gives the number. Asked by the Fixer warp-2d. 2026-10-05.
+- P66 `1/0` is ∞ (f64) in a block or function but a caught division by zero under `try 1/0 else 7`. Recommended:
+  exact Int division by zero is always the catchable error divide_by_zero; only float division (1.0/0.0) is ∞.
+  Asked by warp-2d. 2026-10-05.
+- P67 `catch e` / `except E as e` (P60): the fallback can't use e yet (loud error). The user once rejected
+  `try X else e => Y`, but P60 names `catch e`. Recommended: e is the Error value (its message): the error a returned
+  Error carries, or the runtime error's name / raise message for a trap. Asked by warp-2d. 2026-10-05.
+- P68 `square 3 + square(4)` with `square := it²` is 361, read as square(3 + square(4)). Recommended: a got-it warning
+  naming both readings `square(3) + square(4)` / `square(3 + square(4))` when a braceless call's argument contains an
+  operator. Asked by warp-2d. 2026-10-05.
+- P69 Run-time `!` (feasibility study notes/runtime_eval.md, warp-29: feasible, compile the block at run time via a
+  host import, ~10-15 agent-days; spec wiki/charged.md not yet released): (a) may a block assign the `!` site's
+  locals? Recommended: no (a snapshot; only declared globals); (b) the default grant and tainting of data read at run
+  time (eval_untrusted); (c) a `warp compile`d module containing run-time `!` that runs outside warp's hosts (error at
+  compile time / bundle the compiler / refuse at run time). 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -126,7 +150,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   (computed `:` values, effectful getters), a quote used as a value is a type error with the fix ("c, d very nice");
   `quote`/`data` prefix, `block` parameters, `x!` eval. REVISES D7: free variables are read at call time (Python late
   binding), loop variables captured per iteration, reassigning a variable a deferred definition reads gets a got-it
-  note. The word `quote` is provisional (user: "not sure if I like the word"). P62/P63 are refined by this spec.
+  note → superseded (user 2026-10-05: "y=3; def z(): y*y; y=4; z() gives a compiler error unless we explicitly
+  define it as global"): a free variable that changes after the definition needs `global y` / `nonlocal y` in the
+  reading function, else a compile error at the change (wiki fceb4c5). The word `quote` is provisional (user: "not sure if I like the word"). P62/P63 are refined by this spec.
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
