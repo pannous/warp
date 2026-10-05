@@ -1,5 +1,7 @@
-//! Type tests: `x is int`, `x is a number`, `[1 2] is list of int`, `[1 2] is ints` lower to `is_type(x, "spec")`, which the
-//! emitter answers from the static type name of `x` (the same as `type(x)`). `type of x` is `type(x)`.
+//! Type tests: `x is int`, `x is a number`, `[1 2] is list of int`, `[1 2] is ints`, `x is pair`, `p is friend` (a declared
+//! type) lower to `is_type(x, "spec")`, which the emitter answers in any position from the static type name of `x` (the same
+//! as `type(x)`) when it is known, else from the value's kind at run time (`runtime_kinds`, node_kind_in) or, for a
+//! declared type, its instance type (instance_of). `type of x` is `type(x)`.
 //! A type word on the right of `is` switches from equality to a type test; `x is y` with a variable stays equality.
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
@@ -11,8 +13,12 @@ use crate::operators::Op;
 use std::collections::HashSet;
 
 pub const IS_TYPE: &str = "is_type";
+/// `node_kind_in(node, mask)`: 1 when the run-time kind of node is in the bit mask of kinds (wasm_emitter list_ops.rs)
+pub const NODE_KIND_IN: &str = "node_kind_in";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const LIST_WORD: &str = "list";
+/// `x is pair`: a `key: value` pair
+const PAIR_WORD: &str = "pair";
 const OF_WORD: &str = "of";
 pub const TYPE_WORD: &str = "type";
 
@@ -24,6 +30,7 @@ fn canonical_spec_word(word: &str) -> &str {
 		"char" => "codepoint",
 		"double" | "f64" | "f32" | "fast" => "float",
 		"exact" => "rational",
+		"pair" => "key",
 		other => other,
 	}
 }
@@ -31,6 +38,7 @@ fn canonical_spec_word(word: &str) -> &str {
 /// Does a value of the static type name `actual` (`type(x)`) have the type `spec`: `number` covers every number, `real` the
 /// exact numbers and π, `rational` the whole numbers too (int is a special case of rational), `list of number` every list of numbers
 pub fn type_matches(actual: &str, spec: &str) -> bool {
+	let spec = canonical_spec_word(spec);
 	if let Some(conforms) = crate::traits::builtin_conforms(actual, spec) {
 		return conforms;
 	}
@@ -47,17 +55,51 @@ pub fn type_matches(actual: &str, spec: &str) -> bool {
 	}
 }
 
+/// The run-time kinds of a value of type `spec`, for a value whose static type is unknown (an item of a mixed list, a Node);
+/// None for a spec only the static type answers. The empty list ø is a list, as `count` takes it
+pub fn runtime_kinds(spec: &str) -> Option<Vec<crate::type_kinds::Kind>> {
+	use crate::type_kinds::Kind;
+	let spec = canonical_spec_word(spec);
+	Some(match spec {
+		_ if spec == LIST_WORD || spec.starts_with("list of ") => vec![Kind::List, Kind::Block, Kind::Empty],
+		"int" => vec![Kind::Int],
+		"float" => vec![Kind::Float],
+		"number" | "real" | "rational" => vec![Kind::Int, Kind::Float],
+		"text" => vec![Kind::Text, Kind::Codepoint],
+		"codepoint" => vec![Kind::Codepoint],
+		"symbol" => vec![Kind::Symbol],
+		"key" => vec![Kind::Key],
+		_ => return None,
+	})
+}
+
+/// The program's variables (a name of one is no type in a test) and its declared types (`class friend`: `x is friend`)
+#[derive(Default)]
+struct Names {
+	variables: HashSet<String>,
+	types: HashSet<String>,
+}
+
+impl Names {
+	fn contains(&self, name: &str) -> bool {
+		self.variables.contains(name)
+	}
+}
+
 pub fn lower(node: Node) -> Node {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
-	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
-	collect_assigned_names(&node, &mut shadowed);
-	shadowed.extend(context.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())));
-	expand(node, &shadowed)
+	let mut variables: HashSet<String> = context.user_functions.keys().cloned().collect();
+	collect_assigned_names(&node, &mut variables);
+	variables.extend(context.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())));
+	let mut registry = crate::type_kinds::TypeRegistry::new();
+	crate::analyzer::collect_all_types(&mut registry, &node);
+	let types = registry.types().iter().map(|definition| definition.name.clone()).collect();
+	expand(node, &Names { variables, types })
 }
 
 /// The spec of a type phrase (`int`, `a number`, `ints`, `list of int`, `list of list of int`), `None` when the words are no type
-fn type_spec(words: &[&str], shadowed: &HashSet<String>) -> Option<String> {
+fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 	let words = match words {
 		[article, rest @ ..] if ARTICLES.contains(article) && !rest.is_empty() => rest,
 		all => all,
@@ -68,10 +110,11 @@ fn type_spec(words: &[&str], shadowed: &HashSet<String>) -> Option<String> {
 	}
 	match (*first, rest) {
 		(LIST_WORD, []) => Some(LIST_WORD.to_string()),
+		(PAIR_WORD, []) => Some(canonical_spec_word(PAIR_WORD).to_string()),
 		(LIST_WORD, [of, element @ ..]) if *of == OF_WORD => Some(format!("{LIST_WORD} of {}", type_spec(element, shadowed)?)),
 		(word, []) => match plural_element_type(word) {
 			Some(element) => Some(format!("{LIST_WORD} of {}", canonical_spec_word(element))),
-			None if crate::traits::is_builtin_trait(word) => Some(word.to_string()),
+			None if crate::traits::is_builtin_trait(word) || shadowed.types.contains(word) => Some(word.to_string()),
 			None => type_word_kind(word).map(|_| canonical_spec_word(word).to_string()),
 		},
 		_ => None,
@@ -91,7 +134,7 @@ const EQUALITY_OPERAND: &str = "equality operand";
 /// The right side of `x == word` as the parser marks it when the word names a type
 pub fn equality_operand(word: Node) -> Node {
 	match word.drop_meta() {
-		Node::Symbol(name) if type_spec(&[name.as_str()], &HashSet::new()).is_some() => {
+		Node::Symbol(name) if type_spec(&[name.as_str()], &Names::default()).is_some() => {
 			Node::Meta { node: Box::new(word), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) }
 		}
 		_ => word,
@@ -103,7 +146,7 @@ fn is_equality_operand(node: &Node) -> bool {
 }
 
 /// `type(x) == int` compares two types; `x == int` compares a value with a type, never equal: educate toward `x is int`
-fn compared_with_type(subject: Node, word: &Node, spec: String, shadowed: &HashSet<String>) -> Node {
+fn compared_with_type(subject: Node, word: &Node, spec: String, shadowed: &Names) -> Node {
 	let compares_types = matches!(subject.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == TYPE_WORD));
 	if compares_types {
 		return is_type_call(expand(subject, shadowed), spec);
@@ -117,7 +160,7 @@ fn is_type_call(subject: Node, spec: String) -> Node {
 	Node::List(vec![Node::Symbol(IS_TYPE.to_string()), subject, Node::Text(spec)], Bracket::Round, Separator::None)
 }
 
-fn expand(node: Node, shadowed: &HashSet<String>) -> Node {
+fn expand(node: Node, shadowed: &Names) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			if let Some(call) = type_of_word(&items, shadowed).or_else(|| spaced_type_test(&items, shadowed)) {
@@ -140,7 +183,7 @@ fn expand(node: Node, shadowed: &HashSet<String>) -> Node {
 }
 
 /// `x is number 9` of a name the program assigns nowhere declares it (wiki Features.md, inventions.md): `x:number = 9`
-fn is_declaration(subject: &Node, right: &Node, shadowed: &HashSet<String>) -> Option<Node> {
+fn is_declaration(subject: &Node, right: &Node, shadowed: &Names) -> Option<Node> {
 	let Node::Symbol(name) = subject.drop_meta() else { return None };
 	let Node::List(items, _, _) = right.drop_meta() else { return None };
 	let (value, type_words) = items.split_last()?;
@@ -154,7 +197,7 @@ fn is_declaration(subject: &Node, right: &Node, shadowed: &HashSet<String>) -> O
 }
 
 /// `x is a number` is the items `x is a` and `number`: the words after the comparison continue the type phrase
-fn spaced_type_test(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
+fn spaced_type_test(items: &[Node], shadowed: &Names) -> Option<Node> {
 	let [first, tail @ ..] = items else { return None };
 	let Node::Key(subject, Op::Eq, right) = first.drop_meta() else { return None };
 	let Node::Symbol(word) = right.drop_meta() else { return None };
@@ -164,7 +207,7 @@ fn spaced_type_test(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> 
 }
 
 /// `type of x`: the parser reads `type of` as a declaration head, its argument is the next item
-fn type_of_word(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
+fn type_of_word(items: &[Node], shadowed: &Names) -> Option<Node> {
 	let [head, argument @ ..] = items else { return None };
 	if argument.is_empty() || shadowed.contains(TYPE_WORD) {
 		return None;
