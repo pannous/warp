@@ -34,7 +34,7 @@ const FOR_WORD: &str = "for";
 const LOG_WORD: &str = "log";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 22] = [
+const SYNONYMS: [(&str, &[&str]); 23] = [
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
@@ -58,6 +58,7 @@ const SYNONYMS: [(&str, &[&str]); 22] = [
 	(IS_DIGIT, &["isdigit"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
+	(crate::mutation::UNWRAP, &[]),
 ];
 const SUM: &str = "sum";
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
@@ -87,7 +88,7 @@ macro_rules! digit_test { () => { "(word_tmp >= '0' and word_tmp <= '9')" } }
 macro_rules! letter_test { () => { "((word_tmp >= 'a' and word_tmp <= 'z') or (word_tmp >= 'A' and word_tmp <= 'Z'))" } }
 /// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `word_tmp` a
 /// temporary that holds it once, `word_argument_2` … the arguments after the receiver
-const EXPANDED_WORDS: [(&str, usize, &str); 8] = [
+const EXPANDED_WORDS: [(&str, usize, &str); 9] = [
 	(ROUND_TO, 2, "round(word_tmp * 10^word_argument_2) / 10^word_argument_2"),
 	("first", 1, "word_tmp#1"),
 	("last", 1, "word_tmp#(count(word_tmp))"),
@@ -95,6 +96,8 @@ const EXPANDED_WORDS: [(&str, usize, &str); 8] = [
 	("replace", 3, "join(split(word_tmp, word_argument_2), word_argument_3)"),
 	(IS_DIGIT, 1, digit_test!()),
 	(IS_ALPHA, 1, letter_test!()),
+	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
+	(crate::mutation::UNWRAP, 1, "if word_tmp == ø then error(\"unwrapped ø\") else word_tmp"),
 	("is_alphanumeric", 1, concat!(letter_test!(), " or ", digit_test!())),
 ];
 const IS_DIGIT: &str = "is_digit";
