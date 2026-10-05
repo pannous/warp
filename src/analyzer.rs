@@ -3489,6 +3489,12 @@ fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 }
 
 fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
+	extract_user_functions_in(ctx, node, None);
+}
+
+/// Nested `def` / `f() = …` inside a function body becomes a top-level UserFunctionDef named `outer·inner`, with call
+/// sites in the enclosing body rewritten to that mangled name (wiki/charged.md §3 nested defs; card g-qUkY step 1).
+fn extract_user_functions_in(ctx: &mut Context, node: &Node, enclosing: Option<&str>) {
 	let node = node.drop_meta();
 	match node {
 		// Pattern: name(param1, param2, ...) = body
@@ -3496,13 +3502,13 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			if let Node::List(items, bracket, _) = left.drop_meta() {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
-						ctx.user_functions.insert(name.clone(), user_function(name, extract_params(items, bracket), body));
+						register_user_function(ctx, name, extract_params(items, bracket), body, enclosing);
 						return;
 					}
 				}
 			}
-			extract_user_functions_inner(ctx, left);
-			extract_user_functions_inner(ctx, body);
+			extract_user_functions_in(ctx, left, enclosing);
+			extract_user_functions_in(ctx, body, enclosing);
 		}
 		// Pattern: name x := body (with explicit parameter x using $0 or `it`)
 		Node::Key(left, Op::Define, body) => {
@@ -3514,7 +3520,7 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 						let written_call = *bracket == Bracket::Round; // `f() := [1, 2]` defines f without parameters
 						if !params.is_empty() || implicit_param || written_call {
 							let params = if params.is_empty() && implicit_param { vec![Param::untyped("it")] } else { params };
-							ctx.user_functions.insert(name.clone(), user_function(name, params, body));
+							register_user_function(ctx, name, params, body, enclosing);
 							return;
 						}
 					}
@@ -3526,12 +3532,12 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 					// a block of statements takes `it` when it reads it outside its own `for 1..n {…it…}` loops
 					let takes_it = !is_statement_block(body) || uses_it_outside_loops(body) || uses_dollar_param(body);
 					let params = if takes_it { vec![Param::untyped("it")] } else { vec![] };
-					ctx.user_functions.insert(name.clone(), user_function(name, params, body));
+					register_user_function(ctx, name, params, body, enclosing);
 					return;
 				}
 			}
-			extract_user_functions_inner(ctx, left);
-			extract_user_functions_inner(ctx, body);
+			extract_user_functions_in(ctx, left, enclosing);
+			extract_user_functions_in(ctx, body, enclosing);
 		}
 		// Check for def/fun/fn syntax
 		Node::List(items, _, _) => {
@@ -3539,21 +3545,121 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 				if let Node::Symbol(s) = items[0].drop_meta() {
 					if is_function_keyword(s) {
 						if let Some(func_def) = extract_def_function(&items[1..]) {
-							ctx.user_functions.insert(func_def.name.clone(), func_def);
+							register_user_function(ctx, &func_def.name, func_def.params, &func_def.body, enclosing);
 							return;
 						}
 					}
 				}
 			}
 			for item in items {
-				extract_user_functions_inner(ctx, item);
+				extract_user_functions_in(ctx, item, enclosing);
 			}
 		}
 		Node::Key(left, _, right) => {
-			extract_user_functions_inner(ctx, left);
-			extract_user_functions_inner(ctx, right);
+			extract_user_functions_in(ctx, left, enclosing);
+			extract_user_functions_in(ctx, right, enclosing);
 		}
 		_ => {}
+	}
+}
+
+/// Between an enclosing function and a nested `def` lifted out of its body: `outer·inner`
+const NESTED_DEF_SEPARATOR: &str = "·";
+
+fn qualify_nested_name(enclosing: Option<&str>, name: &str) -> String {
+	match enclosing {
+		Some(parent) => format!("{parent}{NESTED_DEF_SEPARATOR}{name}"),
+		None => name.to_string(),
+	}
+}
+
+fn register_user_function(ctx: &mut Context, short_name: &str, params: Vec<Param>, body: &Node, enclosing: Option<&str>) {
+	let name = qualify_nested_name(enclosing, short_name);
+	let (body, renames) = lift_nested_defs_from_body(ctx, body.clone(), &name);
+	let body = rename_nested_calls(body, &renames);
+	ctx.user_functions.insert(name.clone(), user_function(&name, params, &body));
+}
+
+/// Nested function definitions in `body` become UserFunctionDefs named `parent·short`; their statements stay (emit skips
+/// them) and call sites are renamed via the returned map.
+fn lift_nested_defs_from_body(ctx: &mut Context, body: Node, parent: &str) -> (Node, HashMap<String, String>) {
+	let mut renames = HashMap::new();
+	let body = lift_nested_defs_walk(ctx, body, parent, &mut renames);
+	(body, renames)
+}
+
+fn lift_nested_defs_walk(ctx: &mut Context, node: Node, parent: &str, renames: &mut HashMap<String, String>) -> Node {
+	match node {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lift_nested_defs_walk(ctx, *node, parent, renames)), data },
+		Node::Key(left, op @ (Op::Assign | Op::Define), body) => {
+			if let Node::List(items, bracket, separator) = left.drop_meta() {
+				if let Some(Node::Symbol(short)) = items.first().map(Node::drop_meta) {
+					let mangled = qualify_nested_name(Some(parent), short);
+					renames.insert(short.clone(), mangled.clone());
+					register_user_function(ctx, short, extract_params(items, bracket), &body, Some(parent));
+					// LHS must use the mangled name so emit's defined_function_name finds it in user_functions
+					let mut items = items.clone();
+					items[0] = Node::Symbol(mangled);
+					return Node::Key(Box::new(Node::List(items, bracket.clone(), separator.clone())), op, body);
+				}
+			}
+			Node::Key(
+				Box::new(lift_nested_defs_walk(ctx, *left, parent, renames)),
+				op,
+				Box::new(lift_nested_defs_walk(ctx, *body, parent, renames)),
+			)
+		}
+		Node::Key(left, op, right) => Node::Key(
+			Box::new(lift_nested_defs_walk(ctx, *left, parent, renames)),
+			op,
+			Box::new(lift_nested_defs_walk(ctx, *right, parent, renames)),
+		),
+		Node::List(items, bracket, separator) => {
+			if items.len() >= 2 {
+				if let Node::Symbol(keyword) = items[0].drop_meta() {
+					if is_function_keyword(keyword) {
+						if let Some(func_def) = extract_def_function(&items[1..]) {
+							renames.insert(func_def.name.clone(), qualify_nested_name(Some(parent), &func_def.name));
+							register_user_function(ctx, &func_def.name, func_def.params, &func_def.body, Some(parent));
+							return Node::List(items, bracket, separator);
+						}
+					}
+				}
+			}
+			Node::List(
+				items.into_iter().map(|item| lift_nested_defs_walk(ctx, item, parent, renames)).collect(),
+				bracket,
+				separator,
+			)
+		}
+		other => other,
+	}
+}
+
+/// `inner()` / `inner()+1` inside the enclosing body: the call head becomes `outer·inner`
+fn rename_nested_calls(node: Node, renames: &HashMap<String, String>) -> Node {
+	if renames.is_empty() {
+		return node;
+	}
+	match node {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(rename_nested_calls(*node, renames)), data },
+		Node::Key(left, op, right) => Node::Key(
+			Box::new(rename_nested_calls(*left, renames)),
+			op,
+			Box::new(rename_nested_calls(*right, renames)),
+		),
+		Node::List(items, bracket, separator) => {
+			let mut items: Vec<Node> = items.into_iter().map(|item| rename_nested_calls(item, renames)).collect();
+			if bracket == Bracket::Round {
+				if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+					if let Some(mangled) = renames.get(name) {
+						items[0] = Node::Symbol(mangled.clone());
+					}
+				}
+			}
+			Node::List(items, bracket, separator)
+		}
+		other => other,
 	}
 }
 
