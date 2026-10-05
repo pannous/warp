@@ -61,3 +61,4 @@ mod test_free_var_if_arms;
 mod test_captured_containers;
 mod test_foreign_modifiers;
 mod test_closure_value_arguments;
+mod test_function_references;

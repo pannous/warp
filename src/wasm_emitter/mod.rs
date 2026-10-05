@@ -1533,7 +1533,11 @@ impl WasmGcEmitter {
 				if let Some(user_fn) = self.ctx.user_functions.get(s) {
 					match user_fn.params.iter().filter(|param| param.default.is_none()).count() {
 						0 => self.emit_user_function_call(func, s, &[]),
-						count => self.emit_type_error(func, format!("{s} needs {count} argument{}", if count == 1 { "" } else { "s" })),
+						count => {
+							// P82: the function itself is `function add` (or `&add`); a nested `outer·add` is written `add`
+							let written = s.rsplit('·').next().unwrap_or(s);
+							self.emit_type_error(func, format!("{written} needs {count} argument{}; fix: function {written}", if count == 1 { "" } else { "s" }))
+						}
 					}
 					return;
 				}
