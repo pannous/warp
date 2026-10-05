@@ -1005,6 +1005,28 @@ impl WasmGcEmitter {
 		true
 	}
 
+	/// An operand of arithmetic as an i64: a character is no number there (P65): a character written or held is the type
+	/// error, an element read whose kind shows only at run time (`x#2` of `[1,'a']`) fails with not_a_number
+	pub(super) fn emit_arithmetic_operand(&mut self, func: &mut Function, operand: &Node) {
+		match operand.drop_meta() {
+			_ if matches!(self.get_type(operand), Kind::Codepoint | Kind::Text) => {
+				let kind = self.get_type(operand);
+				self.emit_type_error(func, format!("type error: {kind} in arithmetic: {}", list_ops::CHARACTER_IS_NO_NUMBER));
+			}
+			// an array of Ints or Floats holds no character: its fast read stays
+			Node::Key(list, Op::Hash, index) if !matches!(list.drop_meta(), Node::Empty) && !self.holds_only_numbers(list) && !self.map_is_indexed_by_key(index) => {
+				self.emit_list_element_node(func, list, index);
+				let held = self.node_scratch();
+				Self::emit_list(func, &[I::LocalTee(held), I::RefAsNonNull, I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 }]);
+				Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Codepoint as i64), I::I64Eq]);
+				self.emit_fail_if(func, list_ops::NOT_A_NUMBER);
+				Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull]);
+				self.emit_call(func, "get_int_value");
+			}
+			_ => self.emit_numeric_value(func, operand),
+		}
+	}
+
 	fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
 		// a unit reaches the emitter only where quantities are not computed yet (notes/units_runtime.md)
 		let unit_hint = if crate::units::is_unit(name) { UNIT_AT_RUN_TIME } else { "" };
@@ -1686,13 +1708,16 @@ impl WasmGcEmitter {
 	/// `√x`, `-x`, `!x`, `‖x‖` where an Int is wanted
 	fn emit_numeric_prefix(&mut self, func: &mut Function, located: &Node, op: &Op, right: &Node) {
 		match op {
+			Op::Sqrt if self.get_type(right) == Kind::Codepoint => {
+				self.emit_type_error(func, format!("type error: √ of a codepoint: {}", list_ops::CHARACTER_IS_NO_NUMBER));
+			}
 			Op::Sqrt => {
 				self.emit_float_value(func, right);
 				func.instruction(&I::F64Sqrt);
 				self.emit_float_in_exact_context(func, &located.serialize());
 			}
 			Op::Neg => {
-				self.emit_numeric_value(func, right);
+				self.emit_arithmetic_operand(func, right);
 				let range = self.int_range(right);
 				self.emit_int_neg(func, range);
 			}
@@ -2121,8 +2146,10 @@ impl WasmGcEmitter {
 			self.emit_float_comparison(func, op);
 			return;
 		}
-		self.emit_numeric_value(func, left);
-		self.emit_numeric_value(func, right);
+		// comparisons keep a character's code point (`c >= '0'`); arithmetic refuses it (P65)
+		let operand = if op.is_comparison() { Self::emit_numeric_value } else { Self::emit_arithmetic_operand };
+		operand(self, func, left);
+		operand(self, func, right);
 		let (left_range, right_range) = (self.int_range(left), self.int_range(right));
 		if op.is_comparison() {
 			self.emit_int_compare(func, op, left_range, right_range);

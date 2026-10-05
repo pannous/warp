@@ -508,7 +508,9 @@ const INDEX_NOT_INTEGRAL: &str = "index_must_be_an_integer";
 /// `y times "ab"` with y = 2.5 held in a variable (a literal fraction is a compile-time type error)
 const COUNT_NOT_INTEGRAL: &str = "count_must_be_an_integer";
 /// `m.a * 2` with a text in m.a, where the kinds are known only at run time (NODE_ARITHMETIC)
-const NOT_A_NUMBER: &str = "not_a_number";
+pub(super) const NOT_A_NUMBER: &str = "not_a_number";
+/// P65: arithmetic a text can't do on a character fails; its code point is ord(c)
+pub(super) const CHARACTER_IS_NO_NUMBER: &str = "a character is not a number in arithmetic: ord(c) gives its code point";
 
 /// The division in an index `n/2`, also behind the 0-based shift of `xs[n/2]` (`xs#(n/2 + 1)`)
 fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
@@ -1144,6 +1146,8 @@ impl WasmGcEmitter {
 			format!("a text repeats a whole number of times: `{} times {}`", crate::normalize::operand_text(count), crate::normalize::operand_text(text))
 		} else if repeats_or_scales {
 			"ambiguous: Python repeats the list, NumPy multiplies each element; write `n times [x]` to repeat, or map to multiply".into()
+		} else if left_kind == Kind::Codepoint || right_kind == Kind::Codepoint {
+			CHARACTER_IS_NO_NUMBER.into()
 		} else if left_kind == Kind::List || right_kind == Kind::List {
 			"lists only concatenate with lists (+), element-wise arithmetic needs an explicit map".into()
 		} else {

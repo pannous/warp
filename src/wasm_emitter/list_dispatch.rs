@@ -467,6 +467,11 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// A typed array of Ints or Floats: its elements are numbers, never characters (P65)
+	pub(super) fn holds_only_numbers(&self, target: &Node) -> bool {
+		self.typed_list(target).is_some_and(|(_, list)| list.element != ElementType::Node)
+	}
+
 	pub(super) fn is_typed_list(&self, target: &Node) -> bool {
 		self.typed_list(target).is_some()
 	}

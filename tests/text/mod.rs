@@ -33,3 +33,4 @@ mod test_text_building;
 mod test_map_text;
 mod test_print_walk;
 mod test_count_in;
+mod test_character_arithmetic;
