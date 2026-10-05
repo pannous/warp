@@ -316,6 +316,8 @@ PASSED:
   ✓ functions::test_effects::test_effects_of_query
   ✓ functions::test_effects::test_effects_propagate_through_callers_and_recursion
   ✓ functions::test_effects::test_imports_follow_effects
+  ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
+  ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
   ✓ functions::test_float_to_int_parameter::a_float_for_an_int_parameter_is_refused
   ✓ functions::test_float_to_int_parameter::an_explicit_cast_or_an_int_passes
   ✓ functions::test_function_keyword::function_defines_like_def
@@ -1987,4 +1989,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-40 ignored, 1982 passed, 0 failed, 1982 total tested
+40 ignored, 1984 passed, 0 failed, 1984 total tested
