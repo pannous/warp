@@ -1,5 +1,5 @@
 #![cfg_attr(test, allow(unused))] // main() is not compiled under test
-use warp::{diagnostic, extensions, law, package_tools, run, util, wasm_emitter, wasp_parser};
+use warp::{diagnostic, extensions, law, package_tools, run, util, wasm_emitter, wasm_reader, wasp_parser};
 use warp::node;
 use std::env;
 use std::fs;
@@ -9,6 +9,9 @@ use wasm_emitter::eval;
 use extensions::numbers::Number;
 
 const DEFAULT_COMPILED_NAME: &str = "out.wasm";
+/// `warp compile --aot` also writes the machine code (wasmtime's .cwasm), which `warp <file>.cwasm` runs
+const AOT_FLAG: &str = "--aot";
+const MACHINE_CODE_EXTENSION: &str = "cwasm";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
@@ -120,12 +123,19 @@ fn run_command(args: &[String]) {
     } else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
         // DONE: don't run, just compile and save binary
         let target = extract_after(&arg_string, " ");
+        let (ahead_of_time, target) = match target.strip_prefix(AOT_FLAG) {
+            Some(rest) => (true, rest.trim_start().to_string()),
+            None => (false, target),
+        };
         let code = source_of(&target);
         match wasm_emitter::compile(&code) {
             Ok(module) => {
                 let output_path = compiled_output_path(&target);
                 fs::write(&output_path, &module.bytes).expect("could not write the compiled module");
                 println!("compiled {} bytes to {}", module.bytes.len(), output_path);
+                if ahead_of_time {
+                    write_machine_code(&module.bytes, &output_path);
+                }
             }
             Err(final_value) => {
                 eprintln!("nothing to compile: {}", final_value.serialize());
@@ -141,7 +151,7 @@ fn run_command(args: &[String]) {
         // Compile WAT/WAST text format to WASM binary, then execute
         let wat_code = load_file(&arg_string);
         print_and_exit(run::wasmtime_runner::run_wat(&wat_code));
-    } else if arg_string.ends_with(".wasm") {
+    } else if arg_string.ends_with(".wasm") || arg_string.ends_with(&format!(".{MACHINE_CODE_EXTENSION}")) {
         if args.len() >= 3 {
             {
                 todo!("linking files needs compilation with WABT_MERGE");
@@ -228,6 +238,22 @@ fn compiled_output_path(target: &str) -> String {
     }
 }
 
+/// `warp compile --aot`: the module compiled to machine code for this machine and wasmtime version, next to the .wasm
+fn write_machine_code(bytes: &[u8], wasm_path: &str) {
+    let path = std::path::Path::new(wasm_path).with_extension(MACHINE_CODE_EXTENSION);
+    let (engine, _) = wasm_reader::engine_for(bytes);
+    match engine.precompile_module(bytes) {
+        Ok(machine_code) => {
+            fs::write(&path, &machine_code).expect("could not write the machine code");
+            println!("compiled {} bytes of machine code to {}", machine_code.len(), path.display());
+        }
+        Err(failure) => {
+            eprintln!("could not compile to machine code: {failure}");
+            std::process::exit(1);
+        }
+    }
+}
+
 /// Parse tree as s-expression: `(op left right)` for keys, `[items]` for lists
 fn structure(node: &Node) -> String {
     match node.drop_meta() {
@@ -248,7 +274,7 @@ fn structure(node: &Node) -> String {
 fn usage() {
     // println!("Usage: warp [options] [file]");
     println!("  warp <file.warp>     Execute a warp file");
-    println!("  warp <file.wasm>     Run a wasm file");
+    println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
     println!("  warp eval <code>     Evaluate code");
     println!("  warp lower <code>    Show the program after the lowering passes");
     println!("  warp parse <code>    Show the parsed AST");
@@ -259,6 +285,7 @@ fn usage() {
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
     println!("  warp compile <file|code>  Compile to <file>.wasm (out.wasm for inline code) without running");
+    println!("  warp compile --aot <file|code>  Also compile to machine code, <file>.cwasm, for this machine");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");
     println!("  warp version         Show version");

@@ -3846,14 +3846,14 @@ fn name_map(names: &mut Vec<(u32, &str)>) -> NameMap {
 #[cfg(feature = "native")]
 /// Run raw struct WASM and return GcObject wrapped in Node::Data
 pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
-	use wasmtime::{Linker, Module, Val};
+	use wasmtime::{Linker, Val};
 
 	// Register WASM metadata for field name lookup in Debug output
 	let module_id = crate::gc_traits::register_gc_types_from_wasm(wasm_bytes).ok();
 
 	let engine = gc_engine();
 	let mut store = crate::util::fueled_store(&engine, ());
-	let module = Module::new(&engine, wasm_bytes).map_err(|e: wasmtime::Error| e.to_string())?;
+	let module = crate::run::module_cache::compiled_module(&engine, wasm_bytes).map_err(|e: wasmtime::Error| e.to_string())?;
 
 	let linker = Linker::new(&engine);
 	let instance = linker

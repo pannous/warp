@@ -33,7 +33,7 @@ deprecated = "warn"
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
 default = ["native", "validate"]
-native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:ureq", "dep:rustyline", "dep:libloading"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:ureq", "dep:rustyline", "dep:libloading"]
 # validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
@@ -76,6 +76,7 @@ libloading = { version = "0.9", optional = true }  # Dynamic library loading for
 
 wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-copying", "runtime", "wat"], optional = true }
 wasmtime-wasi = { version = "49.0.1", optional = true }
+sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (src/run/module_cache.rs); wasmtime uses it already
 #wasmtime-runtime = "*" # Wasmtime runtime
 #wasmtime-wasi = "*" # WASI support for Wasmtime
 #wasmtime-wast = "*" # Wast support for Wasmtime

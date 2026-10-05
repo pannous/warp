@@ -282,19 +282,25 @@ pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
 	Ok(GcObject::new(result, Rc::new(RefCell::new(store)), instance))
 }
 
+/// The engine that runs `bytes` (a module, or one compiled ahead of time), and whether it is the task engine: a
+/// program that starts tasks needs its epoch interruption
+pub fn engine_for(bytes: &[u8]) -> (wasmtime::Engine, bool) {
+	let starts_tasks = crate::tasks::imports_tasks_in(bytes) || crate::run::module_cache::precompiled_for_tasks(bytes);
+	(if starts_tasks { crate::util::task_engine() } else { gc_engine() }, starts_tasks)
+}
+
 /// Instantiates `bytes` with the imports `link` adds and calls its `main` (or `_start`): the result, the store and the instance
 fn run_main<S: 'static>(
 	bytes: &[u8],
 	state: S,
 	link: impl FnOnce(&mut Linker<S>, &wasmtime::Engine, &Module) -> Result<()>,
 ) -> Result<(Val, Store<S>, Instance)> {
-	let starts_tasks = crate::tasks::imports_tasks_in(bytes);
-	let engine = if starts_tasks { crate::util::task_engine() } else { gc_engine() };
+	let (engine, starts_tasks) = engine_for(bytes);
 	let mut store = crate::util::fueled_store(&engine, state);
 	if starts_tasks {
 		store.set_epoch_deadline(crate::tasks::MAIN_EPOCH_DEADLINE);
 	}
-	let module = Module::new(&engine, bytes)?;
+	let module = crate::run::module_cache::compiled_module(&engine, bytes)?;
 	let mut linker = Linker::new(&engine);
 	link(&mut linker, &engine, &module)?;
 	let instance = linker.instantiate(&mut store, &module)?;
