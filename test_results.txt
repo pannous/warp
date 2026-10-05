@@ -968,6 +968,7 @@ PASSED:
   ✓ numbers::test_math::test_global_with_pi
   ✓ numbers::test_math::test_harder_arithmetic
   ✓ numbers::test_math::test_hypen_versus_minus
+  ✓ numbers::test_math::test_hyphen_units
   ✓ numbers::test_math::test_if_block_syntax
   ✓ numbers::test_math::test_if_then_else
   ✓ numbers::test_math::test_logarithm_in_runtime
@@ -989,6 +990,8 @@ PASSED:
   ✓ numbers::test_number::test_number
   ✓ numbers::test_number::test_number_floats
   ✓ numbers::test_number::test_number_mix
+  ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
+  ✓ numbers::test_range_tolerance_compare::spans_in_different_units_do_not_compare
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
   ✓ numbers::test_rational_quantities::test_non_whole_results_are_exact
   ✓ numbers::test_rational_type::test_floats_are_not_rational
@@ -2226,4 +2229,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-34 ignored, 2221 passed, 0 failed, 2221 total tested
+33 ignored, 2224 passed, 0 failed, 2224 total tested
