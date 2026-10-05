@@ -11,6 +11,9 @@ const PROGRAMS = [
 	"def twice(x): x*2; y = data twice(21); interpret y",
 	"y = data 7/2; z = interpret y; z*2",
 	"y = data 2^70; z = interpret y; z+1",
+	"f(b) := b!; xs=[data a+1, data 0]; a=1; f(xs#1)",
+	"g() := [data 2*3, data 0]; g()#1!",
+	"y = data (p = (1 : 2); p); interpret y",
 ];
 const worker = new Worker("../../web/playground/worker.js?compiler=warp.debug.wasm");
 const lines = [];

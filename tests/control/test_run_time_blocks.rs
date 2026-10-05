@@ -89,3 +89,20 @@ fn a_bang_known_only_at_run_time_runs_the_block() {
 	warp::is!("x = 3; x!", 3);
 	crate::common::fails_with("x = ø; x!", "unwrapped ø");
 }
+
+// The kind decides at run time where it is not known statically: a parameter, a call's result (P73)
+#[test]
+fn a_bang_on_a_parameter_or_a_call_result_decides_at_run_time() {
+	warp::is!("f(b) := b!; xs=[data a+1, data 0]; a=1; f(xs#1)", 2);
+	warp::is!("f(b) := b!; f(4)", 4);
+	crate::common::fails_with("f(b) := b!; f(ø)", "unwrapped ø");
+	warp::is!("g() := [data 2*3, data 0]; y = g()#1; y!", 6);
+	warp::is!("g() := [data 2*3, data 0]; g()#1!", 6);
+	warp::is!("h(n) := interpret(data n+k); k=10; h(1)", 11);
+	warp::is!("s=\"ab\"; up(x) := { upper x!; x }; up(s)", "AB");
+}
+
+#[test]
+fn a_run_time_block_hands_back_a_pair() {
+	assert_eq!(warp::wasm_emitter::eval("y = data (p = (1 : 2); p); z = interpret y; z").serialize(), "1:2");
+}
