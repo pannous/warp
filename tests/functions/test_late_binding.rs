@@ -51,6 +51,12 @@ fn loop_variables_are_captured_per_iteration() {
 	is!("fs = []; for i in 0..3 { fs.add(x => x + i) }; fs#1(0) + 10*fs#2(0) + 100*fs#3(0)", 210);
 }
 
+
+#[test]
+fn nested_def_without_shared_locals_is_callable() {
+	is!("def outer(){ def inner(){ 41 }; inner()+1 }; outer()", 42);
+}
+
 #[test]
 #[ignore = "soon"] // nested function definitions are not supported yet (`def outer(){ def inner(){…} }`)
 fn nonlocal_reads_the_enclosing_functions_current_value() {
