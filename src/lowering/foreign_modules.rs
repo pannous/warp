@@ -10,7 +10,10 @@ use std::collections::HashMap;
 
 const USE_WORD: &str = "use";
 /// The runtimes a `use <runtime> <module>` names: Python, and JavaScript (node natively, the page in the browser)
-pub const FOREIGN_RUNTIMES: [&str; 2] = ["python", "js"];
+pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", "js", COMPONENT_RUNTIME];
+/// `use wasm "lib.wasm" as lib`: a WebAssembly component (src/components.rs); its module is the file, found next to the
+/// program, and named after the file by default
+pub const COMPONENT_RUNTIME: &str = "wasm";
 
 pub fn lower(program: Node) -> Node {
 	let mut modules = HashMap::new();
@@ -41,11 +44,17 @@ fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 	};
 	let (module, alias) = match module.drop_meta() {
 		Node::Key(module, Op::As, alias) => (name(module)?, name(alias)?),
+		other if runtime == COMPONENT_RUNTIME => {
+			let file = name(other)?;
+			let stem = std::path::Path::new(&file).file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_else(|| file.clone());
+			(file, stem)
+		}
 		other => {
 			let module = name(other)?;
 			(module.clone(), module.rsplit('.').next().unwrap_or(&module).to_string())
 		}
 	};
+	let module = if runtime == COMPONENT_RUNTIME { crate::modules::beside_program(&module) } else { module };
 	Some((alias, (runtime.clone(), module)))
 }
 
@@ -56,13 +65,15 @@ struct Foreign<'a> {
 	values: HashMap<String, String>,
 }
 
-/// `foreign_call(runtime, …)`: its runtime
+/// `foreign_call(runtime, …)`: its runtime, when its value can stay in that runtime (a component's results are plain
+/// values: a record is an object, `s.words` its field)
 fn foreign_runtime(node: &Node) -> Option<String> {
 	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
 	match items.as_slice() {
 		// `(a * 2)`: the group of one
 		[grouped] => foreign_runtime(grouped),
 		[call, runtime, ..] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL) => match runtime.drop_meta() {
+			Node::Text(runtime) if runtime == COMPONENT_RUNTIME => None,
 			Node::Text(runtime) => Some(runtime.clone()),
 			_ => None,
 		},

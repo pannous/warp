@@ -253,6 +253,9 @@ PASSED:
   ✓ ffi_parser::tests::test_parse_two_params
   ✓ ffi_parser::tests::test_parse_void_params
   ✓ ffi_parser::tests::test_raylib_functions
+  ✓ ffi::test_components::test_a_component_written_in_wat_is_called
+  ✓ ffi::test_components::test_a_rust_crate_built_as_a_component_is_called
+  ✓ ffi::test_components::test_component_failures_are_loud
   ✓ ffi::test_download::a_failed_download_is_an_error_value
   ✓ ffi::test_download::download_fetches_like_fetch
   ✓ ffi::test_ffi_gaps::a_library_header_named_otherwise_is_found
@@ -2282,4 +2285,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2277 passed, 0 failed, 2277 total tested
+31 ignored, 2280 passed, 0 failed, 2280 total tested

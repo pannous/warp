@@ -109,3 +109,21 @@ step 3.
   `a * 2` → operator.mul(a, 2), `-a` → neg, `a#2` → getitem(a, 1) (1-based to 0-based), `#a` / `count a` / `len(a)` →
   len, `for x in a` iterates operator.list(a). Python: its operator module plus len and list; node and host.js: an
   object with the same names. `(a * 2).sum()` chains through the group.
+
+## Step 3: `use wasm` — WebAssembly components (card wit-components, branch wit-components)
+- `use wasm "lib.wasm" as lib` (alias by default the file's stem): a WebAssembly component, the general answer for Rust
+  crates and every language that compiles to components. A Rust crate builds one directly: `cargo build --target
+  wasm32-wasip2` with `wit_bindgen::generate!` exporting a WIT world (tests/fixtures/components/rust_demo: fib, words,
+  a record, an enum, a result; 84 KB). componentize-py and jco make them from Python and JS.
+- `lib.f(x)` → foreign_call("wasm", path, "f", 1, [x]); src/components.rs loads each component once per path and
+  process on an engine of its own with the component model on (the programs' engines stay core-only), WASI p2 linked
+  for its imports (stdio inherited, no files). A relative path is next to the program's file (modules::beside_program).
+- Values by the WIT type the function declares: integers range-checked into s8…u64, floats, bool, char (a one-character
+  text), string, list, tuple (list), record ({field: value}), enum (its name as text), variant (a name or {case: value}),
+  option (ø or the value), flags (a list of names). Results back: the same as JSON → Nodes; the err of a result is a
+  warp error with its message. WIT names are kebab-case: `stats_of` finds `stats-of`.
+- A component's results are plain values, not handles: `s = lib.stats_of(t); s.words` reads the record's field.
+- Not yet: resources (they would be handles: one table per runtime, ids, freed at the end), a component's exports as
+  operators, components in the browser (host.js says it runs only in the native host; jco could transpile them),
+  `warp build --exe` (refused: foreign_call is a missing import). Capability: Ffi like the other foreign runtimes, though
+  a component without preopened files is sandboxed: granting it to eval_untrusted is a later question.
