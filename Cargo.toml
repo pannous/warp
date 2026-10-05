@@ -112,6 +112,24 @@ codegen-units = 16     # Rust default (256 was wasteful)
 # tests run the programs on wasmtime too: its GC at full speed (two million map entries took 40 s unoptimized)
 [profile.dev.package.wasmtime]
 opt-level = 3
+# every run compiles its module with Cranelift: unoptimized, it took 118 of the 122 s of a functions:: test run
+# (581 modules, 200 ms each); at opt-level 3 the run takes 15 s
+[profile.dev.package.cranelift-codegen]
+opt-level = 3
+[profile.dev.package.cranelift-frontend]
+opt-level = 3
+[profile.dev.package.cranelift-bforest]
+opt-level = 3
+[profile.dev.package.cranelift-entity]
+opt-level = 3
+[profile.dev.package.regalloc2]
+opt-level = 3
+[profile.dev.package.wasmtime-internal-cranelift]
+opt-level = 3
+[profile.dev.package.wasmtime-environ]
+opt-level = 3
+[profile.dev.package.wasmparser]
+opt-level = 3
 
 [profile.test]
 inherits = "dev"       # Use dev profile for tests
