@@ -54,3 +54,11 @@ fn running_a_run_time_block_is_the_eval_effect() {
 fn a_run_time_block_gets_no_capabilities() {
 	crate::common::fails_with("y = data print(\"hi\"); interpret y", "a block run at run time is pure: print needs the wasi capability");
 }
+
+// Step 4: a compiled module that runs blocks at run time says it needs a warp host
+#[test]
+fn compiling_a_run_time_block_warns_about_the_host() {
+	take_warnings();
+	assert!(warp::pipeline::compile("xs = [data a+1, data a*2]; a = 5; interpret(xs#2)").is_ok());
+	assert!(take_warnings().iter().any(|warning| warning.message.contains("its host must provide host.run_block")));
+}

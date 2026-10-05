@@ -485,12 +485,8 @@ fn run_block(mut caller: Caller<'_, HostState>, block: Option<wasmtime::Rooted<w
 	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("run_block: the module exports no memory".into())) };
 	let mut store = caller.as_context_mut();
 	let [block, names, values] = [block, names, values].map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
-	let written = block.serialize();
-	let result = crate::pipeline::eval_block(block, &names, &values);
-	if let Node::Error(message) = result.drop_meta() {
-		return Err(failure(format!("the block {} failed: {}", written.trim(), message.serialize().trim_matches('"'))));
-	}
-	let value = TaskValue::of(&result).map_err(|_| failure(format!("the block {} gave {}, a value run_block cannot hand back yet", written.trim(), result.serialize().trim())))?;
+	let result = crate::pipeline::eval_block(block, &names, &values).map_err(failure)?;
+	let value = TaskValue::of(&result).map_err(|_| failure(crate::pipeline::cannot_hand_back(&result)))?;
 	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
 	Ok(built.unwrap_anyref().copied())

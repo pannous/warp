@@ -180,7 +180,21 @@ pub fn lower(code: &str) -> Result<Node, Node> {
 /// answer of a program that needs no module.
 pub fn compile(code: &str) -> Result<CompiledModule, Node> {
 	crate::diagnostic::begin_program();
-	crate::diagnostic::in_program_mode(lawful_program(code)?, |program| choose_module(&crate::folding::fold_constant_calls(lower_for_emission(program)?)))
+	crate::diagnostic::in_program_mode(lawful_program(code)?, |program| {
+		let node = crate::folding::fold_constant_calls(lower_for_emission(program)?);
+		warn_about_run_time_blocks(&node)?;
+		choose_module(&node)
+	})
+}
+
+/// A compiled module that runs blocks at run time needs a host with a warp compiler: say so where it is made
+fn warn_about_run_time_blocks(node: &Node) -> Result<(), Node> {
+	if !crate::effects::EffectReport::of(node).calls_external(crate::host::RUN_BLOCK) {
+		return Ok(());
+	}
+	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, format!(
+		"this module runs blocks known only at run time: its host must provide host.{} (the warp CLI, or web/playground/host.js, which loads warp.wasm on first use)",
+		crate::host::RUN_BLOCK))])
 }
 
 /// `TypeName:{field:value, ...}` compiles to a raw struct module, everything else to the standard Node encoding.
@@ -230,7 +244,9 @@ pub(crate) const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
 /// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
 /// names separated by spaces) are bound to `values` first, the values the program had where it ran the block. The
 /// block gets no capability but pure libm, wherever its code came from (user decision: pure by default)
-pub fn eval_block(block: Node, names: &Node, values: &Node) -> Node {
+/// `Err` is the message the run fails with, naming the block.
+pub fn eval_block(block: Node, names: &Node, values: &Node) -> Result<Node, String> {
+	let written = block.serialize().trim().to_string();
 	let names: Vec<String> = match names.drop_meta() {
 		Node::Text(names) => names.split_whitespace().map(str::to_string).collect(),
 		_ => vec![],
@@ -249,11 +265,20 @@ pub fn eval_block(block: Node, names: &Node, values: &Node) -> Node {
 		.collect();
 	statements.push(block);
 	let program = Node::List(statements, Bracket::None, Separator::Newline);
-	match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
+	let result = match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
 		Some((external, capability)) => crate::node::error(&format!(
 			"a block run at run time is pure: {external} needs the {} capability, which it does not get", capability.name())),
 		None => eval_parsed(program, ""),
+	};
+	match result.drop_meta() {
+		Node::Error(message) => Err(format!("the block {written} failed: {}", message.serialize().trim_matches('"'))),
+		_ => Ok(result),
 	}
+}
+
+/// A block's value the host has no constructor for in the running module yet (a pair, an exact ratio, a big Int)
+pub fn cannot_hand_back(value: &Node) -> String {
+	format!("the block gave {}, a value run_block cannot hand back yet", value.serialize().trim())
 }
 
 /// The message of `error("…")`, or of `raise …`, which always fails the run

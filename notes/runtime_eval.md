@@ -9,6 +9,24 @@ instantiate it next to the program, share GC objects, memory and globals with it
 interpreter (a) is a second implementation of the language and is only worth it later as the fast path of a hybrid (c)
 for small arithmetic blocks.** Effort to a usable native + browser version: about 10-15 agent-days (table at the end).
 
+## Implemented (2026-10-05, branches run-block-0 … run-block-3)
+
+The first version takes the *copying* road, not the shared-store one below: simpler, and the same on both hosts.
+
+* `interpret e` (the spec's word for `x!!`; src/lowering/run_time_blocks.rs): of a constant block it is `x!!`
+  (blocks.rs inlines it); of anything else it is the host word `run_block(e, "a b", [a, b])`, the main-level
+  variables assigned before it as a snapshot (the block reads them, never writes them).
+* The host (natively src/host.rs `run_block`, in the browser host.js → `web_eval_block` of a second compiler
+  instance loaded on first use) reads the three Nodes, binds the names (`pipeline::eval_block`), compiles and runs the
+  block in a module of its own, and builds the value back in the program through its constructors (tasks.rs
+  `TaskValue`). A failure is the program's error "the block q+1 failed: undefined variable: q".
+* The block is pure: no capability but libm (grants: P76, "Later"). Running it is the effect `Eval`.
+* `warp compile` warns that a module calling run_block needs a warp host.
+* Step 0: `x : a+b` over names defined nowhere warns that `x!` can never run it.
+
+Not yet: leftover suffix `!` marks (blocks-3) forcing at run time per P73; the program's functions inside the block;
+exact ratios, big Ints and pairs as results ("cannot hand back yet"); sharing GC objects instead of copying.
+
 ## 0. State today (measured with the CLI, debug build of 2026-10-03)
 
 | program | result | spec (charged.md) |
