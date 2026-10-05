@@ -1682,8 +1682,11 @@ fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 /// `name:literal` as a data binding: the name and its value
 fn data_binding(item: &Node) -> Option<(&str, &Node)> {
 	let Node::Key(key, Op::Colon, value) = item.drop_meta() else { return None };
-	let (Node::Symbol(name), Node::Number(_) | Node::Text(_) | Node::Char(_)) = (key.drop_meta(), value.drop_meta()) else { return None };
-	Some((name, value.drop_meta()))
+	let Node::Symbol(name) = key.drop_meta() else { return None };
+	// a value, or data made of values: `colors:{red:(1 0 0)}` is read by a sibling as `colors.red` (wiki variable.md)
+	let is_data = matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_))
+		|| matches!(value.drop_meta(), Node::List(items, _, _) if !items.is_empty()) && is_data_node(value);
+	is_data.then(|| (name.as_str(), value.drop_meta()))
 }
 
 fn assigned_names(program: &Node) -> HashSet<&str> {
