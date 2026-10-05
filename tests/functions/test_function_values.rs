@@ -22,7 +22,7 @@ fn test_an_explicit_reference() {
 
 #[test]
 fn test_an_alias_of_a_function() {
-	is!("double2(x):=x*2; g=double2; g 4", 8);
+	is!("double2(x):=x*2; g=function double2; g 4", 8);
 	is!("double2(x):=x*2; g=&double2; g(5)", 10);
 }
 

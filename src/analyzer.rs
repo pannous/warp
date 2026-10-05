@@ -2945,12 +2945,39 @@ fn computed_literal_kind(value: &Node) -> Option<Kind> {
 	match value.drop_meta() {
 		Node::Key(left, op, right) if op.is_arithmetic() && !matches!(left.drop_meta(), Node::Empty) => {
 			match (operand_kind(left)?, operand_kind(right)?) {
-				(Kind::Int, Kind::Int) => Some(Kind::Int),
+				// exact: whole or not by its value, `3.5*2` is 7, `3.3*2` is 6.6
+				(Kind::Int, Kind::Int) => match exact_literal_value(value) {
+					Some(exact) if !exact.is_integer() => Some(Kind::Float),
+					_ => Some(Kind::Int),
+				},
 				(Kind::Float | Kind::Int, Kind::Float | Kind::Int) => Some(Kind::Float),
 				_ => None,
 			}
 		}
 		_ => literal_kind(value),
+	}
+}
+
+/// The exact value of arithmetic on exact literals (`3.3*2` is 33/5), None for anything else or a division by zero
+fn exact_literal_value(node: &Node) -> Option<crate::extensions::reals::Rational> {
+	match node.drop_meta() {
+		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => {
+			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*f);
+			Some(crate::extensions::reals::Rational::new(numerator, denominator))
+		}
+		Node::Number(number @ (Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_))) => Some(number.to_rational()),
+		Node::Key(nothing, Op::Neg | Op::Sub, operand) if matches!(nothing.drop_meta(), Node::Empty) => Some(exact_literal_value(operand)?.neg()),
+		Node::Key(left, op, right) => {
+			let (left, right) = (exact_literal_value(left)?, exact_literal_value(right)?);
+			match op {
+				Op::Add => Some(left.add(&right)),
+				Op::Sub => Some(left.add(&right.neg())),
+				Op::Mul => Some(left.mul(&right)),
+				Op::Div => Some(left.mul(&right.inverse()?)),
+				_ => None,
+			}
+		}
+		_ => None,
 	}
 }
 

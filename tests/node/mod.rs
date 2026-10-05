@@ -3,3 +3,4 @@ mod test_node_operators;
 mod test_node_todo;
 mod test_node;
 mod test_normalization;
+mod test_node_add;
