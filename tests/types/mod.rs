@@ -37,3 +37,4 @@ mod test_tuple_values;
 mod test_printable;
 mod test_iterable;
 mod test_is_declaration;
+mod test_is_teaches_be;

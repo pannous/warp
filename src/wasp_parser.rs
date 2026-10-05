@@ -2319,7 +2319,9 @@ impl WaspParser {
 			if op == Op::Colon {
 				self.equals_compares = false; // in `if c: x=1` the colon ends the condition, the rest is the body
 			}
+			let rhs_start = self.pos;
 			let rhs = block_body.unwrap_or_else(|| self.parse_expr(r_bp));
+			let rhs_written: String = self.chars[rhs_start.min(self.pos)..self.pos].iter().collect();
 
 			if op == Op::Define && !matches!(lhs.drop_meta(), Node::List(..)) && !mentions(&rhs, "it") {
 				self.functions.remove(&lhs.name()); // `x := 5` defines a value, not a function
@@ -2354,6 +2356,9 @@ impl WaspParser {
 			}
 
 			let rhs = if op == Op::Eq && written != IS_WORD { crate::type_tests::equality_operand(rhs) } else { rhs };
+			if op == Op::Eq && written == IS_WORD {
+				lhs = crate::type_tests::with_compared_text(lhs, rhs_written.trim());
+			}
 			let op = if op == Op::Assign && is_function_block(&lhs, &rhs) {
 				self.functions.insert(lhs.name());
 				Op::Define

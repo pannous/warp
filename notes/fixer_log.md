@@ -143,3 +143,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 p60-catch-except
 - P60: `try {…} catch {…}`, `catch e {…}`, `try: … except: …`, `except E:` / `except E as e:` are synonyms of `try X else Y`
   (wasp_parser FALLBACK_WORDS, parse_caught_name); using the caught name is a loud error for now.
+
+## 2026-10-05 p61-is-teaches-be
+- P61: `is` always compares; `x is v` with x unbound is the error "undefined variable: x; `is` compares, a definition is
+  written `x be v`" (v as written: the parser keeps it as meta "compared with"); the `x is number 9` declaration undone.
