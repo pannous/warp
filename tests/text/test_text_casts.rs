@@ -14,7 +14,7 @@ fn an_int_list_variable_as_string_is_its_text() {
 #[test]
 fn a_double_quoted_text_as_float_is_loud() {
 	fails_with("\"x\" as float", "as float");
-	fails_with("\"x\" as float", "fix: 'x' as float");
+	fails_with("\"x\" as float", "fix: codepoint('x') as float"); // P74: codepoint is the preferred name
 	fails_with("\"x\" as int", "a text is no number");
 	is!("\"5\" as int", 5); // a numeric text still converts
 }
