@@ -3,10 +3,7 @@
 use warp::is;
 
 #[cfg(feature = "native")] // runs the warp binary
-fn printed(code: &str) -> String {
-	let output = std::process::Command::new(env!("CARGO_BIN_EXE_warp")).args(["--no-ask", code]).output().expect("warp runs");
-	String::from_utf8_lossy(&output.stdout).to_string()
-}
+use crate::common::printed;
 
 #[test]
 #[cfg(feature = "native")]

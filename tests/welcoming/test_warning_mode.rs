@@ -2,7 +2,6 @@
 //! `use strict` in wasp, `--strict` on the command line, `diagnostic::with_warning_mode` from Rust.
 //! `warning(message)` reports at runtime: "" as a warning, an Error value when warnings are errors.
 
-use std::process::Command;
 use warp::diagnostic::{take_runtime_warnings, with_warning_mode, WarningMode};
 use warp::wasm_emitter::eval;
 use warp::{error, is, Node};
@@ -36,7 +35,7 @@ fn use_strict_turns_a_lint_warning_into_an_error() {
 #[test]
 fn the_strict_flag_turns_warnings_into_errors() {
 	let run = |args: &[&str]| {
-		let output = Command::new(env!("CARGO_BIN_EXE_warp")).args(args).output().expect("warp runs");
+		let output = crate::common::warp_command().args(args).output().expect("warp runs");
 		String::from_utf8_lossy(&output.stdout).to_string() + &String::from_utf8_lossy(&output.stderr)
 	};
 	assert!(run(&["\"a\" + warning(\"careful\")"]).contains("warning: careful"));
