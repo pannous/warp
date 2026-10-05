@@ -1777,6 +1777,9 @@ PASSED:
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_keys_on_the_engine_settings
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_recompiles_a_damaged_entry
   ✓ wasm::test_compiled_module_cache::test_gc_engine_is_shared
+  ✓ wasm::test_dead_functions::a_module_without_dead_functions_stays_as_it_is
+  ✓ wasm::test_dead_functions::compiled_programs_carry_no_dead_functions
+  ✓ wasm::test_dead_functions::unreachable_functions_are_dropped_and_the_rest_renumbered
   ✓ wasm::test_emitter::test_compact_empty
   ✓ wasm::test_emitter::test_compact_float
   ✓ wasm::test_emitter::test_compact_int
@@ -2199,4 +2202,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-35 ignored, 2194 passed, 0 failed, 2194 total tested
+35 ignored, 2197 passed, 0 failed, 2197 total tested
