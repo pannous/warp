@@ -763,6 +763,11 @@ PASSED:
   ✓ numbers::test_float_to_int_range::test_rounding_functions_give_exact_ints
   ✓ numbers::test_float_zero_and_compound::test_float_compound_assignment_in_a_loop
   ✓ numbers::test_float_zero_and_compound::test_float_zero_fill_holds_floats
+  ✓ numbers::test_hyperreals::test_epsilon_is_positive_and_smaller_than_every_real
+  ✓ numbers::test_hyperreals::test_epsilon_times_omega_is_one
+  ✓ numbers::test_hyperreals::test_no_silent_approximation_of_hyperreals
+  ✓ numbers::test_hyperreals::test_powers_expand_exactly
+  ✓ numbers::test_hyperreals::test_standard_part
   ✓ numbers::test_implicit_libm::test_libm_in_a_function_without_import
   ✓ numbers::test_implicit_libm::test_libm_on_a_runtime_value_without_import
   ✓ numbers::test_implicit_libm::test_user_function_named_like_libm_wins
@@ -1105,6 +1110,9 @@ PASSED:
   ✓ parser::test_symbol_hyphen::test_decrement_inside_a_loop_body
   ✓ parser::test_symbol_hyphen::test_hyphen_between_words_stays_kebab_case
   ✓ parser::test_symbol_hyphen::test_trailing_decrement_is_not_part_of_the_name
+  ✓ parser::test_uniscript_entities::an_unknown_entity_is_an_error
+  ✓ parser::test_uniscript_entities::entities_are_their_characters
+  ✓ parser::test_uniscript_entities::entities_stay_text_inside_quotes_and_comments
   ✓ parser::test_wasp_format::html_attributes_and_repeated_tags_in_data
   ✓ parser::test_wasp_format::test_empty_structures
   ✓ parser::test_wasp_format::test_function_syntax
@@ -1826,6 +1834,9 @@ PASSED:
   ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
   ✓ welcoming::test_style_dont_care::any_axis_can_stop_caring
   ✓ welcoming::test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
+  ✓ welcoming::test_unknown_prefix_word::an_unknown_word_applied_to_a_value_warns
+  ✓ welcoming::test_unknown_prefix_word::known_words_and_plain_data_do_not_warn
+  ✓ welcoming::test_unknown_prefix_word::the_call_form_stays_an_error
   ✓ welcoming::test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing
   ✓ welcoming::test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
   ✓ welcoming::test_warning_mode::the_strict_flag_turns_warnings_into_errors
@@ -1945,4 +1956,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-40 ignored, 1940 passed, 0 failed, 1940 total tested
+40 ignored, 1951 passed, 0 failed, 1951 total tested
