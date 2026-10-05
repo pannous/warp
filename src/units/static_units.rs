@@ -4,7 +4,9 @@
 //! amount in SI base units (`5 km` → 5000, `5 cm` → 1/20), and the program's final value is converted back to the finest
 //! written unit after the run (`RESULT_UNITS`). Stage 2: a function called with quantities (or whose body has unit
 //! literals) is specialised per unit signature of its arguments, `speed·u0`. A quantity anywhere these stages do not
-//! cover (print, lists, interpolation, recursion) leaves the program unchanged: the unit stays the loud undefined-variable error.
+//! cover (lists, interpolation, recursion) leaves the program unchanged: the unit stays the loud undefined-variable error.
+//! Stage 3: `print q`, `"text " + q` and a final value show the unit (`str(amount / unit) + " km"` at run time), `q as km`
+//! and `q in km` check the dimension and choose the unit shown, `return q` carries the signature (all returns agree).
 
 use super::{finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
 use crate::extensions::numbers::Number;
@@ -21,6 +23,9 @@ const BASE_UNITS: [(Dimension, &str); 4] = [(Dimension::Length, "m"), (Dimension
 const LOOP_WORDS: [&str; 2] = ["for", "while"];
 /// `speed·u0`: a function specialised for one unit signature of its arguments
 const SPECIALISATION_SEPARATOR: &str = "·u";
+const TEXT_WORD: &str = "str";
+const PRINT_WORD: &str = "print";
+const RETURN_WORD: &str = "return";
 
 type Signature = Vec<(Dimension, i32)>;
 
@@ -50,15 +55,17 @@ pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 			definitions.insert(name, definition);
 		}
 	});
-	let mut inference = Inference { variables: HashMap::new(), definitions, specialised: HashMap::new(), in_progress: vec![], new_definitions: vec![] };
+	let mut inference = Inference { variables: HashMap::new(), definitions, specialised: HashMap::new(), in_progress: vec![], new_definitions: vec![], display: display.clone(), returns: vec![] };
 	match inference.infer(program.clone()) {
 		Ok((node, result)) => {
+			// a final `q as km` shows km
+			let shown_units = last_statement(program).and_then(conversion_target);
 			let node = if inference.new_definitions.is_empty() {
 				node
 			} else {
 				Node::List([std::mem::take(&mut inference.new_definitions), vec![node]].concat(), Bracket::None, Separator::Semicolon)
 			};
-			let units: Vec<Factor> = result.iter().map(|(dimension, power)| Factor { unit: display_unit(&display, *dimension), power: *power }).collect();
+			let units: Vec<Factor> = shown_units.unwrap_or_else(|| result.iter().map(|(dimension, power)| Factor { unit: display_unit(&display, *dimension), power: *power }).collect());
 			RESULT_UNITS.with(|cell| *cell.borrow_mut() = (!units.is_empty()).then_some(units));
 			Some(Ok(node))
 		}
@@ -179,6 +186,38 @@ struct Inference {
 	specialised: HashMap<Specialisation, (String, Signature)>,
 	in_progress: Vec<Specialisation>,
 	new_definitions: Vec<Node>,
+	/// The finest written unit of each dimension: the unit a quantity shows in unless converted
+	display: Vec<&'static Unit>,
+	/// The signatures of the `return`s of each function being specialised
+	returns: Vec<Vec<Signature>>,
+}
+
+/// The last statement of a program or block
+fn last_statement(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.last().and_then(last_statement),
+		other => Some(other),
+	}
+}
+
+/// The units a conversion shows: `q as km`, `q in km/h`
+fn conversion_target(node: &Node) -> Option<Vec<Factor>> {
+	match node.drop_meta() {
+		Node::Key(_, Op::As, unit) => super::unit_expression(unit),
+		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
+			[_, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == super::IN_WORD) => super::unit_expression(unit),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// The quantity in `quantity` (an SI amount at run time) as text in `units`: `str(amount / 1000) + " km"`
+fn quantity_text(quantity: Node, units: &[Factor]) -> Option<Node> {
+	let per_unit = number_node(&super::scale(units, |factor| base_unit(factor.unit.dimension)))?;
+	let amount = Node::Key(Box::new(quantity), Op::Div, Box::new(per_unit));
+	let text = Node::List(vec![Node::Symbol(TEXT_WORD.to_string()), amount], Bracket::Round, Separator::None);
+	Some(Node::Key(Box::new(text), Op::Add, Box::new(Node::Text(format!(" {}", units_text(units))))))
 }
 
 impl Inference {
@@ -216,6 +255,23 @@ impl Inference {
 					return Err(dimension_error(op, &held, &given));
 				}
 				Ok((Node::Key(Box::new(target), op, Box::new(value)), held))
+			}
+			// `q as km`: the dimension must match; the amount stays in SI units, the unit shown is chosen where it is shown
+			Node::Key(quantity, Op::As, unit) if super::unit_expression(&unit).is_some() => {
+				let target = signature(&super::unit_expression(&unit).expect("guarded"));
+				let (quantity, given) = self.infer(*quantity)?;
+				if given != target {
+					return Err(Stop::Error(format!("DimensionError: {} cannot be converted to {}", shown(&given), shown(&target))));
+				}
+				Ok((quantity, given))
+			}
+			// `"distance " + d`: the quantity joins as its text
+			Node::Key(left, Op::Add, right) if matches!(left.drop_meta(), Node::Text(_)) || matches!(right.drop_meta(), Node::Text(_)) => {
+				let (left, left_signature) = self.infer(*left)?;
+				let (right, right_signature) = self.infer(*right)?;
+				let left = self.as_text(left, &left_signature, None)?;
+				let right = self.as_text(right, &right_signature, None)?;
+				Ok((Node::Key(Box::new(left), Op::Add, Box::new(right)), vec![]))
 			}
 			Node::Key(left, op, right) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div) || op.is_comparison() => {
 				let (left, left_signature) = self.infer(*left)?;
@@ -278,6 +334,45 @@ impl Inference {
 		}
 	}
 
+	/// A value as it joins a text: a quantity as its text in `units` (else in the finest written units), anything else as it is
+	fn as_text(&self, value: Node, signature: &Signature, units: Option<Vec<Factor>>) -> Result<Node, Stop> {
+		if signature.is_empty() {
+			return Ok(value);
+		}
+		let units = units.unwrap_or_else(|| signature.iter().map(|(dimension, power)| Factor { unit: display_unit(&self.display, *dimension), power: *power }).collect());
+		quantity_text(value, &units).ok_or(Stop::Unsupported)
+	}
+
+	/// `print q`, `q in km`, `return q`: the forms of stage 3 written as lists; None for any other list
+	fn output_form(&mut self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Result<(Node, Signature), Stop>> {
+		let call_or_words = matches!((bracket, separator), (Bracket::None, Separator::Space) | (Bracket::Round, Separator::None));
+		let word = |node: &Node, wanted: &str| matches!(node.drop_meta(), Node::Symbol(w) if w == wanted);
+		match items {
+			[head, value] if call_or_words && word(head, PRINT_WORD) => Some((|| {
+				let shown_units = conversion_target(value);
+				let (value, signature) = self.infer(value.clone())?;
+				let text = self.as_text(value, &signature, shown_units)?;
+				Ok((Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()), vec![]))
+			})()),
+			[head, value] if *bracket == Bracket::None && word(head, RETURN_WORD) => Some((|| {
+				let (value, signature) = self.infer(value.clone())?;
+				if let Some(returns) = self.returns.last_mut() {
+					returns.push(signature.clone());
+				}
+				Ok((Node::List(vec![head.clone(), value], bracket.clone(), separator.clone()), signature))
+			})()),
+			[quantity, in_word, unit] if *bracket == Bracket::None && word(in_word, super::IN_WORD) && super::unit_expression(unit).is_some() => Some((|| {
+				let target = signature(&super::unit_expression(unit).expect("guarded"));
+				let (quantity, given) = self.infer(quantity.clone())?;
+				if given != target {
+					return Err(Stop::Error(format!("DimensionError: {} cannot be converted to {}", shown(&given), shown(&target))));
+				}
+				Ok((quantity, given))
+			})()),
+			_ => None,
+		}
+	}
+
 	/// `f(a, b)` of a user function with quantities (or units in its body): the call of its specialisation
 	fn specialised_call(&mut self, items: &[Node]) -> Option<Result<(Node, Signature), Stop>> {
 		let (head, arguments) = items.split_first()?;
@@ -316,10 +411,17 @@ impl Inference {
 		}
 		self.in_progress.push(key.clone());
 		let outer = std::mem::replace(&mut self.variables, definition.parameters.iter().cloned().zip(signatures).collect());
+		self.returns.push(vec![]);
 		let inferred = self.infer(definition.body.clone());
+		let returns = self.returns.pop().unwrap_or_default();
 		self.variables = outer;
 		self.in_progress.pop();
 		let (body, result) = inferred?;
+		// every `return` gives the result's units: the first one decides, the others and the last statement agree
+		let result = returns.first().cloned().unwrap_or(result);
+		if let Some(other) = returns.iter().find(|signature| **signature != result) {
+			return Err(Stop::Error(format!("DimensionError: {name} returns {} and {}", shown(&result), shown(other))));
+		}
 		let specialised = format!("{name}{SPECIALISATION_SEPARATOR}{}", self.specialised.len());
 		let parameters = definition.parameters.iter().map(|parameter| Node::Symbol(parameter.clone()));
 		let head = Node::List(std::iter::once(Node::Symbol(specialised.clone())).chain(parameters).collect(), Bracket::Round, Separator::None);
@@ -329,6 +431,9 @@ impl Inference {
 	}
 
 	fn infer_list(&mut self, items: Vec<Node>, bracket: Bracket, separator: Separator) -> Result<(Node, Signature), Stop> {
+		if let Some(output) = self.output_form(&items, &bracket, &separator) {
+			return output;
+		}
 		if bracket == Bracket::Round && separator == Separator::None {
 			if let Some(call) = self.specialised_call(&items) {
 				return call;

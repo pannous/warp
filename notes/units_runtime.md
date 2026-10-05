@@ -50,3 +50,10 @@ arguments (`speed·u0`), its result signature inferred from the body; a body wit
 specialisations. `speed(10 km, 2 h)` → 5 km/h, `twice(3 m)` and `twice(2 s)` are two specialisations. Field names after
 `.` are no units (`q.s`). Not yet: recursion with quantities (stays the loud error), names that reuse a unit (`s = …`,
 a parameter `h`) leave the program to the compile-time evaluator.
+
+## Stage 3 done (branch static-units-3): output
+`print q` and `"text " + q` show the quantity as `str(amount / unit) + " km"` at run time (a fraction with a finite
+decimal prints as the decimal: 2.5 km/h), `q as km` / `q in km` check the dimension (DimensionError) and choose the unit
+shown, a final conversion decides how the result reads, `return q` carries the signature and all returns of a function
+must agree. Still a loud error: lists of quantities, math functions (sqrt, max) of quantities, recursion, string
+interpolation (no `$x` interpolation yet), and `compile` of a program whose result is a quantity.
