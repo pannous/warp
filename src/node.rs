@@ -1327,6 +1327,12 @@ impl fmt::Display for Separator {
 
 impl PartialEq for Node {
 	fn eq(&self, other: &Self) -> bool {
+		// metadata never counts, on either side: a parsed node (with positions) equals the same value read back
+		if let Meta { node, .. } = other {
+			if !matches!(self, Meta { .. }) {
+				return self == node.as_ref();
+			}
+		}
 		match self {
 			True => {
 				match other {
