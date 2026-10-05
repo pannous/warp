@@ -1,5 +1,8 @@
 //! `switch subject {key: body …}` (also `match`): map indexing that executes. Lowered to an if/else chain over the
-//! subject, so only the chosen body runs; the `default` key catches the rest, without it a miss is the error `no case for <subject> = <value>`.
+//! subject, so only the chosen body runs; the `default` (or `_`) key catches the rest, without it a miss is the error
+//! `no case for <subject> = <value>`. A list key is a structural pattern (wiki/pattern-matching.md): `["", middle, ""]`
+//! matches a list of three whose first and last items are "", binding `middle`; `_` matches any item, lists nest, and a
+//! pair `k: v` matches a pair whose key is k.
 
 use crate::analyzer::extract_user_functions;
 use crate::context::Context;
@@ -7,8 +10,17 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;
 
-const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
-const DEFAULT_KEY: &str = "default";
+pub(crate) const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
+const DEFAULT_KEYS: [&str; 2] = ["default", WILDCARD];
+/// In a pattern: any item, bound to no name
+const WILDCARD: &str = "_";
+/// `list_of_length(x, n)`: 1 when x is at run time a list of n items (ø is the empty list), else 0 (list_ops.rs)
+pub const LIST_OF_LENGTH: &str = "list_of_length";
+/// `is_pair(x)`: 1 when x is at run time a `key: value` pair, else 0 (list_ops.rs)
+pub const IS_PAIR: &str = "is_pair";
+/// The runtime tests of a pattern, with their number of arguments
+pub const PATTERN_TESTS: [(&str, usize); 2] = [(LIST_OF_LENGTH, 2), (IS_PAIR, 1)];
+const TEXT_WORD: &str = "str";
 const SUBJECT_PREFIX: &str = "switch_subject_";
 /// Pseudo-call `switch_no_case(label: value)` the emitter turns into the runtime error function `no_case_<label>`,
 /// which eval reports as `no case for <label> = <value>`
@@ -67,8 +79,8 @@ impl Lowering<'_> {
 			None => no_case(subject, &subject_value),
 		};
 		let chain = cases.into_iter().rev().fold(miss, |otherwise, case| {
-			let matches = key(subject_value.clone(), Op::Eq, case.key);
-			let then = key(key(Node::Empty, Op::If, matches), Op::Then, case.body);
+			let (matches, body) = case_test(&subject_value, case);
+			let then = key(key(Node::Empty, Op::If, matches), Op::Then, body);
 			key(then, Op::Else, otherwise)
 		});
 		let bind = key(subject_value, Op::Assign, subject.clone());
@@ -98,7 +110,49 @@ fn key(left: Node, op: Op, right: Node) -> Node {
 }
 
 fn is_default(key: &Node) -> bool {
-	matches!(key.drop_meta(), Node::Symbol(name) if name == DEFAULT_KEY)
+	matches!(key.drop_meta(), Node::Symbol(name) if DEFAULT_KEYS.contains(&name.as_str()))
+}
+
+fn call(function: &str, arguments: Vec<Node>) -> Node {
+	Node::List([vec![Node::Symbol(function.to_string())], arguments].concat(), Bracket::Round, Separator::None)
+}
+
+/// The item at 1-based `position` of the value at `path`: `subject#2`, `subject#2#1`
+fn item(path: &Node, position: usize) -> Node {
+	key(path.clone(), Op::Hash, Node::int(position as i64))
+}
+
+/// The tests the value at `path` passes when it matches `pattern`, and the assignments of the names the pattern binds
+fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
+	match pattern.drop_meta() {
+		Node::List(items, Bracket::Square, _) => {
+			tests.push(call(LIST_OF_LENGTH, vec![path.clone(), Node::int(items.len() as i64)]));
+			for (index, part) in items.iter().enumerate() {
+				pattern_tests(part, item(&path, index + 1), tests, bindings);
+			}
+		}
+		// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
+		Node::Key(name, Op::Colon, value) => {
+			tests.push(call(IS_PAIR, vec![path.clone()]));
+			tests.push(key(call(TEXT_WORD, vec![item(&path, 1)]), Op::Eq, Node::Text(name.name())));
+			pattern_tests(value, item(&path, 2), tests, bindings);
+		}
+		Node::Symbol(name) if name == WILDCARD => {}
+		Node::Symbol(_) => bindings.push(key(pattern.drop_meta().clone(), Op::Assign, path)),
+		literal => tests.push(key(path, Op::Eq, literal.clone())),
+	}
+}
+
+/// A case as its test and its body: a list key is a structural pattern whose names are bound before the body runs
+fn case_test(subject: &Node, case: Case) -> (Node, Node) {
+	if !matches!(case.key.drop_meta(), Node::List(_, Bracket::Square, _)) {
+		return (key(subject.clone(), Op::Eq, case.key), case.body);
+	}
+	let (mut tests, mut bindings) = (vec![], vec![]);
+	pattern_tests(&case.key, subject.clone(), &mut tests, &mut bindings);
+	let test = tests.into_iter().reduce(|all, test| key(all, Op::And, test)).unwrap_or(Node::True);
+	let body = if bindings.is_empty() { case.body } else { Node::List([bindings, vec![case.body]].concat(), Bracket::Round, Separator::Semicolon) };
+	(test, body)
 }
 
 /// What the error names: a literal or a variable subject as written, anything else just "value"

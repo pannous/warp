@@ -56,6 +56,7 @@ impl WasmGcEmitter {
 			|| BUILTIN_CALLS.contains(&name)
 			|| crate::library_words::is_runtime_word(name)
 			|| name == crate::type_tests::IS_TYPE
+			|| crate::switch::PATTERN_TESTS.iter().any(|(test, _)| *test == name)
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
 			|| super::text_builtins::is_text_builtin(name)
@@ -75,6 +76,21 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, argument);
 		}
 		self.emit_call(func, function);
+		true
+	}
+
+	/// `list_of_length(x, n)`, `is_pair(x)` of a structural pattern (switch.rs): their i64 0 or 1; returns whether it was one
+	pub(super) fn emit_pattern_test(&mut self, func: &mut Function, node: &Node) -> bool {
+		let Node::List(items, _, _) = node.drop_meta() else { return false };
+		let Some((head, arguments)) = items.split_first() else { return false };
+		let Node::Symbol(name) = head.drop_meta() else { return false };
+		let Some((test, _)) = crate::switch::PATTERN_TESTS.iter().find(|(test, count)| test == name && *count == arguments.len()) else { return false };
+		self.emit_node_instructions(func, &arguments[0]);
+		func.instruction(&I::RefAsNonNull);
+		if let Some(length) = arguments.get(1) {
+			self.emit_numeric_value(func, length);
+		}
+		self.emit_call(func, test);
 		true
 	}
 
@@ -280,6 +296,11 @@ impl WasmGcEmitter {
 			}
 		}
 
+		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
+		if self.emit_pattern_test(func, &call) {
+			self.emit_call(func, "new_int");
+			return;
+		}
 		if self.reject_unresolved_call(func, items, bracket, separator) {
 			return;
 		}
