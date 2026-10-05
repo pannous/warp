@@ -56,3 +56,4 @@ mod test_memoization;
 mod test_constant_free_variables;
 mod test_free_var_if_arms;
 mod test_captured_containers;
+mod test_foreign_modifiers;
