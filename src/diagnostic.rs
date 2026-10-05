@@ -52,6 +52,7 @@ impl Diagnostic {
 	pub fn into_error(self) -> Node {
 		let error = crate::node::error(&self.to_string());
 		if !self.fixes.is_empty() {
+			note_said();
 			ERROR_DIAGNOSTICS.with(|errors| errors.borrow_mut().push(self));
 		}
 		error
@@ -133,7 +134,24 @@ pub fn with_warning_mode<R>(mode: WarningMode, body: impl FnOnce() -> R) -> R {
 }
 
 /// Compile-time warnings: printed in Warn mode, the first one is the error in Error mode
+thread_local! {
+	/// How many diagnostics this thread has said (warnings, errors with fixes, assumptions, hints): a step that says
+	/// something must run again to say it again (analysis_memo.rs remembers only silent analyses)
+	static SAID: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+pub fn said() -> u64 {
+	SAID.with(|said| said.get())
+}
+
+pub(crate) fn note_said() {
+	SAID.with(|said| said.set(said.get() + 1));
+}
+
 pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
+	if !warnings.is_empty() {
+		note_said();
+	}
 	match (warning_mode(), warnings.first()) {
 		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
 		_ => {
@@ -156,6 +174,7 @@ pub fn take_error_diagnostics() -> Vec<Diagnostic> {
 
 /// A warning the running program reports with `warning(message)`
 pub fn report_runtime_warning(message: &str) {
+	note_said();
 	eprintln!("warning: {message}");
 	RUNTIME_WARNINGS.with(|warnings| warnings.borrow_mut().push(message.to_string()));
 }
@@ -457,6 +476,7 @@ pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 /// The reading the program gets: an error-fallback ambiguity is an error naming every explicit form; otherwise the
 /// default, with a warning shown until the user says "got it" (an error under `use strict`, acknowledged or not)
 pub fn ask(question: &Ask) -> Result<usize, Node> {
+	note_said();
 	let diagnostic = question.diagnostic();
 	if question.fallback == Fallback::Error {
 		return Err(diagnostic.into_error());

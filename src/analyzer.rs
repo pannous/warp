@@ -3246,7 +3246,12 @@ fn infer_forwarded_parameters(ctx: &mut Context) {
 /// Recognizes patterns:
 /// - `name(param) = body` → Key(List[name, param], Assign, body)
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
+/// The functions, imports and closure facts of a program; the same tree is analysed once (analysis_memo.rs, P91)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
+	crate::analysis_memo::analysed(ctx, node, analyse_user_functions);
+}
+
+fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 	extract_user_functions_inner(ctx, node);
 	crate::closures::register_closure_calls(ctx, node);
 	infer_parameters_from_calls(ctx, node);

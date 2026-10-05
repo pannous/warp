@@ -68,3 +68,20 @@ run is bound by total test time, not by one slow test, and only cutting what man
   targeted run.
 - Left as they are: tests that sleep or overlap tasks on purpose (control::test_threads, test_job_lists), Lean proofs,
   the two-million-key map (runtime GC work).
+
+## P91: one analysis per program state (src/analysis_memo.rs, branch shared-analysis, 2026-10-05)
+- extract_user_functions (and every EffectReport::of, which calls it) of a fresh Context is remembered per thread by a
+  fingerprint of the whole tree, positions included (LineInfo hashed; other Rust data makes a tree unremembered), the
+  last 256 states. A hit restores exactly the fields the analysis writes (user_functions, ffi_imports, field_kinds,
+  enclosing_functions, parameter_conflicts, closure_targets, closure_variable_targets). Not remembered: an analysis
+  that changed required_functions or said something (diagnostic::said(): warnings, asks, hints, errors with fixes),
+  so a repeat says it again. `WARP_ANALYSIS_CACHE=off` for A/B.
+- Who analyses (uniscript program, 185 calls): late_binding functions_in per statement 133 calls 24 ms, law
+  function_definition 39 calls 8 ms, whole-program analyses of lambdas/effects/type_tests/analyzer 2–10 ms each (each
+  after a pass that changed the tree: those miss legitimately).
+- Measured (debug, `warp lower 'use uniscript; uniscript("<:fracture A b c >")'`, 3 runs): lowering 165 → 143 ms
+  (−13 %), analysis 78 → 56 ms; 66 of 185 analyses are hits. Typical test programs (functions:: operators::
+  welcoming::, 1 thread, A/B twice): 12.9/9.6 s off vs 12.3/9.6 s on, within noise: their analyses are ~1 ms after the
+  one-off header parse of the first.
+- Next gains: functions_in needs only the definitions a statement makes, not the full inference (a cheaper extractor
+  would remove most of late_binding's 24 ms), and whole-program analyses after passes that changed only far parts.
