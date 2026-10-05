@@ -2686,7 +2686,10 @@ impl WaspParser {
 			return None;
 		}
 		self.advance_by("in".len());
+		// in the header `xs {` is the collection and the body, as in any for loop, not a construction of xs
+		let outer_header = std::mem::replace(&mut self.in_for_header, true);
 		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
+		self.in_for_header = outer_header;
 		self.skip_spaces();
 		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
 		let body = match body_word {
