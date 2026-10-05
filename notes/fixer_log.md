@@ -128,3 +128,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 decided-test-edits
 - P55: test_while_nop_issue reads x after the loop, un-ignored. P59: four array tests edited and un-ignored (own commit);
   `x is 100 times [0]` written as the assignment `x = 100 times [0]` (assumption, `is` compares).
+
+## 2026-10-05 p60-catch-except
+- P60: `try {…} catch {…}`, `catch e {…}`, `try: … except: …`, `except E:` / `except E as e:` are synonyms of `try X else Y`
+  (wasp_parser FALLBACK_WORDS, parse_caught_name); using the caught name is a loud error for now.
