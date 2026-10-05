@@ -71,3 +71,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   annotations `def f(x):float := …` (undefined function f), overloading by parameter type (test_polymorphism3), and
   test_function_argument_cast (C-style `float addi(int x,int y){…}` return-typed definitions, int parameters
   truncating float arguments).
+
+## 2026-10-05 fix-ignored-2
+- Indexing ø (`x=ø; x#1`, `x[0]`) was a raw "wasm trap: cast failure" a `try` could not catch; ø is the empty list,
+  so emit_list_walk fails index_out_of_range (tests/control/test_try_empty_index.rs).

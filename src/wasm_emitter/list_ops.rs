@@ -891,6 +891,10 @@ impl WasmGcEmitter {
 			Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(scalar as i64), I::I64Eq]);
 			self.emit_fail_if(func, "not_a_list");
 		}
+		// ø is the empty list: it has no item at any index
+		self.emit_field(func, 0, 0);
+		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq]);
+		self.emit_fail_if(func, "index_out_of_range");
 		Self::emit_index_compare(func, I::I64LtS);
 		self.emit_fail_if(func, "index_out_of_range");
 		func.instruction(&I::LocalGet(0));
