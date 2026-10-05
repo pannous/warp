@@ -22,7 +22,8 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   `z = 6` after it an error; (3) Go-strict: `:=` declares a new variable, `=` only reassigns. User 2026-10-05: "idk".
   Assumed until decided: today's behaviour (1); workers do not change zero-parameter `:=` semantics, and the
   "needless charging" note applies to `def` only. If (2) is chosen: the per-use getter is ~20 lines, commit 0b687e03 on
-  branch late-binding (warp-29).
+  branch late-binding (warp-29). Object entries follow (1) too: `o = {a: 1, s := clock()}` evaluates `s` once, like
+  `s = …` (72a856af0, g-qUmA; wiki/charged.md §4 e0cf82f); (2) would revisit them.
 - P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
   run-time blocks are always pure. Asked by warp-29.
