@@ -137,7 +137,6 @@ PASSED:
   ✓ control::test_try_else::try_falls_back_when_the_index_is_out_of_range
   ✓ control::test_try_else::try_keeps_a_value
   ✓ control::test_try_else::try_of_an_assignment_assigns_the_fallback
-  ✓ control::test_try_empty_index::indexing_empty_is_out_of_range
   ✓ control::test_try_exits_and_naming::a_jump_inside_a_try_keeps_the_try_catching
   ✓ control::test_try_exits_and_naming::bare_try_else_still_works
   ✓ control::test_try_exits_and_naming::break_out_of_a_try_restores_the_depth
@@ -146,6 +145,8 @@ PASSED:
   ✓ control::test_try_index_and_float::a_float_value_passes_through_try_and_if
   ✓ control::test_try_index_and_float::indexing_what_may_be_no_list_falls_back
   ✓ control::test_try_index_and_float::modulo_by_zero_is_a_named_error_try_catches
+  ✓ control::test_try_list_index::a_non_int_element_is_caught
+  ✓ control::test_try_list_index::indexing_empty_is_out_of_range
   ✓ control::test_try_named_traps::a_missing_field_is_caught
   ✓ control::test_try_named_traps::indexing_a_number_is_not_a_list
   ✓ control::test_variable_signals::after_a_function_runs_after_each_statement_calling_it
@@ -439,6 +440,7 @@ PASSED:
   ✓ functions::test_to_definition::to_defines_a_function_with_a_body_to_the_end_of_the_statement
   ✓ functions::test_to_definition::to_stays_a_range_and_a_variable_name
   ✓ functions::test_to_definition::to_takes_a_block_or_an_indented_block_as_body
+  ✓ functions::test_tuple_function_values::tuple_functions_as_values
   ✓ functions::test_tuple_returns::test_bare_list_assignment_still_asks
   ✓ functions::test_tuple_returns::test_destructuring_arity_mismatch_is_loud
   ✓ functions::test_tuple_returns::test_parallel_assignment_and_swap
@@ -447,6 +449,8 @@ PASSED:
   ✓ functions::test_tuple_returns::test_tuple_function_returns_wasm_multi_value
   ✓ functions::test_tuple_returns::test_tuple_returns_inside_functions
   ✓ functions::test_tuple_returns::test_two_returned_values_destructure
+  ✓ functions::test_type_dispatch::test_type_name_variants_dispatch_by_argument
+  ✓ functions::test_type_dispatch::test_typed_parameter_variants_dispatch_by_argument
   ✓ functions::test_typed_lambda::a_lambda_parameter_declares_its_type
   ✓ functions::test_typed_returns::test_block_bodies_and_returns_convert_too
   ✓ functions::test_typed_returns::test_return_type_after_the_parameters
@@ -1941,4 +1945,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-40 ignored, 1936 passed, 0 failed, 1936 total tested
+40 ignored, 1940 passed, 0 failed, 1940 total tested
