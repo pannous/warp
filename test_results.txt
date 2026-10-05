@@ -6,6 +6,11 @@ PASSED:
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
   ✓ control::test_block_assigns_outer::the_declared_and_returned_forms_change_it
+  ✓ control::test_block_parameters::test_a_bang_known_only_at_run_time_is_loud
+  ✓ control::test_block_parameters::test_a_prefix_takes_the_rest_of_its_group
+  ✓ control::test_block_parameters::test_block_parameters_take_their_argument_unevaluated
+  ✓ control::test_block_parameters::test_code_and_block_prefixes_make_blocks
+  ✓ control::test_block_parameters::test_data_runs_with_a_warning
   ✓ control::test_block_statements::a_list_result_after_a_print_is_read
   ✓ control::test_block_statements::a_print_in_a_block_runs_before_its_list_value
   ✓ control::test_block_statements::a_statement_group_in_a_function_body_runs
@@ -17,6 +22,8 @@ PASSED:
   ✓ control::test_blocks::test_matrix_order
   ✓ control::test_braceless_output_calls::a_braceless_output_call_is_worth_an_int
   ✓ control::test_branch_assigned_variables::a_text_assigned_in_both_branches_is_read_after_them
+  ✓ control::test_catch_binding::catch_binds_the_error
+  ✓ control::test_catch_binding::except_as_binds_the_error
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
   ✓ control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
   ✓ control::test_control_words::bang_evaluates_a_block
@@ -91,6 +98,13 @@ PASSED:
   ✓ control::test_raise::try_catches_a_raise
   ✓ control::test_run_time_blocks::a_block_over_defined_names_does_not_warn
   ✓ control::test_run_time_blocks::a_block_over_names_defined_nowhere_warns
+  ✓ control::test_run_time_blocks::a_failing_run_time_block_names_the_block
+  ✓ control::test_run_time_blocks::a_run_time_block_gets_no_capabilities
+  ✓ control::test_run_time_blocks::a_run_time_block_reads_the_values_where_it_runs
+  ✓ control::test_run_time_blocks::compiling_a_run_time_block_warns_about_the_host
+  ✓ control::test_run_time_blocks::interpret_of_a_constant_block_runs_it_where_written
+  ✓ control::test_run_time_blocks::interpret_runs_a_block_known_only_at_run_time
+  ✓ control::test_run_time_blocks::running_a_run_time_block_is_the_eval_effect
   ✓ control::test_shared_arrays::a_shared_array_of_floats
   ✓ control::test_shared_arrays::a_shared_array_reads_writes_and_adds
   ✓ control::test_shared_arrays::tasks_add_floats_to_one_shared_array
@@ -1819,6 +1833,8 @@ PASSED:
   ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_wasp
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
+  ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
+  ✓ welcoming::test_braceless_call_argument::an_operator_in_a_braceless_argument_warns_with_both_readings
   ✓ welcoming::test_c_style::test_c_style_definition
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
@@ -1827,6 +1843,18 @@ PASSED:
   ✓ welcoming::test_error_positions::an_unclosed_group_names_where_it_opened
   ✓ welcoming::test_error_positions::an_unknown_method_names_its_line
   ✓ welcoming::test_error_positions::an_unterminated_text_names_where_it_opened
+  ✓ welcoming::test_fixits::a_hint_offers_its_preferred_form
+  ✓ welcoming::test_fixits::bare_list_fixes
+  ✓ welcoming::test_fixits::braceless_call_fixes
+  ✓ welcoming::test_fixits::list_operator_fixes
+  ✓ welcoming::test_fixits::local_or_global_fixes
+  ✓ welcoming::test_fixits::loop_it_fix
+  ✓ welcoming::test_fixits::operator_ambiguity_fixes
+  ✓ welcoming::test_fixits::range_end_fixes
+  ✓ welcoming::test_fixits::signed_operand_fixes
+  ✓ welcoming::test_fixits::suffix_word_fixes
+  ✓ welcoming::test_fixits::the_page_gets_each_fix_as_an_edit
+  ✓ welcoming::test_fixits::word_fixes
   ✓ welcoming::test_footguns::test_addition_is_associative_by_default
   ✓ welcoming::test_footguns::test_and_or_ternary_is_linted
   ✓ welcoming::test_footguns::test_append_method_rebinds_the_list
@@ -2098,4 +2126,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2093 passed, 0 failed, 2093 total tested
+37 ignored, 2121 passed, 0 failed, 2121 total tested
