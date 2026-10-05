@@ -1,18 +1,11 @@
 // Charged bodies read their free variables like Python functions (wiki/charged.md section 3, released 2026-10-05,
 // package 2): at call time; a free variable that changes after the definition needs `global y` in the reading function,
-// else the change is a compile error; `name := expr` is a getter evaluated at every use, an effectful one warns.
+// else the change is a compile error where a later call sees it. `name := expr` without parameters waits for P71.
 use warp::*;
-use warp::diagnostic::take_warnings;
 
 use crate::common;
 
 const DECLARE_GLOBAL: &str = "z reads y (line 1): declare `global y` in z to read its current value, or pass y as a parameter";
-
-fn warns(code: &str, needle: &str) -> bool {
-	take_warnings();
-	warp::wasm_emitter::eval(code);
-	take_warnings().iter().any(|warning| warning.message.contains(needle))
-}
 
 #[test]
 fn a_free_variable_changed_after_the_definition_is_an_error_at_the_change() {
@@ -54,19 +47,6 @@ fn a_change_no_later_call_can_observe_is_fine() {
 }
 
 #[test]
-fn a_getter_is_evaluated_at_every_use() {
-	is!("global y=3; z := y*y; y=4; z", 16);
-	common::fails_with("y=3; z := y*y; y=4; z", DECLARE_GLOBAL);
-	is!("y=3; z := y*y; z+1", 10);
-}
-
-#[test]
-fn an_effectful_getter_warns_at_the_definition() {
-	assert!(warns("t := clock(); t > 0", "t runs clock() at every read"));
-	assert!(!warns("a=1; s := a+1; s", "at every read"));
-}
-
-#[test]
 fn loop_variables_are_captured_per_iteration() {
 	is!("fs = []; for i in 0..3 { fs.add(x => x + i) }; fs#1(0) + 10*fs#2(0) + 100*fs#3(0)", 210);
 }
@@ -75,4 +55,17 @@ fn loop_variables_are_captured_per_iteration() {
 #[ignore = "soon"] // nested function definitions are not supported yet (`def outer(){ def inner(){…} }`)
 fn nonlocal_reads_the_enclosing_functions_current_value() {
 	is!("def outer(){ y=1; def inner(){ nonlocal y; y }; y=2; inner() }; outer()", 2);
+}
+
+fn hints_of(code: &str) -> Vec<(String, String)> {
+	warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code)).1.into_iter().map(|hint| (hint.canonical, hint.reason)).collect()
+}
+
+#[test]
+fn a_def_without_parameters_over_constants_gets_a_note() {
+	is!("def area(): 3*4; area()+1", 13);
+	let hints = hints_of("def area(): 3*4; area()");
+	assert!(hints.iter().any(|(canonical, reason)| canonical == "area = 3*4" && reason == "area never changes"), "{hints:?}");
+	assert!(hints_of("def t(): clock(); t()").iter().all(|(_, reason)| !reason.contains("never changes")));
+	assert!(hints_of("def double(x): x*2; double(2)").iter().all(|(_, reason)| !reason.contains("never changes")));
 }

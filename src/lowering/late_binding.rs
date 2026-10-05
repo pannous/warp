@@ -1,8 +1,7 @@
 //! Charged bodies read their free variables like Python functions (wiki/charged.md section 3, revising D7): at call
 //! time. A main-level variable a function reads and the program changes after the definition must be declared
 //! `global y` in that function; otherwise the change is a compile error where it is written, once a later call could
-//! observe it. `name := expr` is a getter, evaluated at every use: it becomes the function `name() := expr` when the
-//! timing can be observed (its expression has effects, which also warns, or reads a `global`).
+//! observe it. A `def` without parameters that always gives the same value gets the "needless charging" note.
 //!
 //! Functions keep capturing by value at the definition (wasm_emitter `emit_closure_capture`): with this check every
 //! accepted program reads the same value either way, except a variable first bound after the definition, which is
@@ -10,14 +9,14 @@
 
 use crate::analyzer::{captured_variables, collect_variables, declare_global, extract_user_functions, find_assignments, is_list_mutating_method, Scope};
 use crate::context::{Context, UserFunctionDef};
-use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
+use crate::diagnostic::Diagnostic;
 use crate::effects::EffectReport;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use std::collections::{HashMap, HashSet};
 
 const GLOBAL: &str = "global";
-const EFFECTFUL_GETTER_TOPIC: &str = "effectful-getter";
+const NEEDLESS_CHARGING_TOPIC: &str = "needless-charging";
 
 pub fn lower(program: Node) -> Result<Node, Node> {
 	let statements = statements_of(&program);
@@ -25,12 +24,13 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 	collect_variables(&program, &mut main);
 	let declared = declared_global_reads(&statements, &main);
 	let program = without_global_reads(program, &declared);
-	let (program, getters) = charged_getters(program, &main, &declared)?;
 	let statements = statements_of(&program);
 	let mut late_bound: Vec<String> = declared.clone();
-	let definitions = definitions(&statements, &getters);
+	let definitions = definitions(&statements);
 	let callers = callers(&definitions);
+	let report = EffectReport::of(&program);
 	for definition in &definitions {
+		note_needless_charging(definition, &statements, &main, &report);
 		let free = captured_variables(&definition.function, &main).into_iter().map(|(name, _)| name)
 			.filter(|name| !main.is_global(name) && !declared.contains(name) && !callers.contains_key(name));
 		for variable in free {
@@ -147,72 +147,13 @@ fn without_global_reads(program: Node, declared: &[String]) -> Node {
 	})
 }
 
-/// `name := expr` that is no function yet: its name and expression
-fn getter(statement: &Node) -> Option<(&String, &Node)> {
-	match statement.drop_meta() {
-		Node::Key(name, Op::Define, expression) if functions_in(statement).is_empty() => match name.drop_meta() {
-			Node::Symbol(name) => Some((name, expression)),
-			_ => None,
-		},
-		_ => None,
-	}
-}
-
-fn as_function(name: &str, expression: &Node) -> Node {
-	let signature = Node::List(vec![Node::Symbol(name.to_string())], Bracket::Round, Separator::None);
-	Node::Key(Box::new(signature), Op::Define, Box::new(expression.clone()))
-}
-
 fn reads_any(node: &Node, names: &dyn Fn(&str) -> bool) -> bool {
 	let mut found = false;
 	node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if names(name)));
 	found
 }
 
-/// The getters `name := expr` whose timing can be observed become `name() := expr`; an effectful one warns. Returns
-/// the program and every getter that reads a main-level variable (all are definitions for the late-binding check)
-fn charged_getters(program: Node, main: &Scope, declared: &[String]) -> Result<(Node, HashSet<String>), Node> {
-	let candidates: Vec<(String, Node, Node)> = statements_of(&program).iter()
-		.filter_map(|statement| getter(statement).map(|(name, expression)| (name.clone(), expression.clone(), statement.clone())))
-		.collect();
-	if candidates.is_empty() {
-		return Ok((program, HashSet::new()));
-	}
-	let as_functions = Node::List(candidates.iter().map(|(name, expression, _)| as_function(name, expression)).collect(), Bracket::None, Separator::Newline);
-	let report = EffectReport::of(&Node::List(vec![program.clone(), as_functions], Bracket::None, Separator::Newline));
-	let mut charged: HashSet<String> = HashSet::new();
-	let mut reading_variables: HashSet<String> = HashSet::new();
-	for (name, expression, statement) in &candidates {
-		let effectful = report.effects_of(name).is_some_and(|effects| !effects.is_pure());
-		if effectful {
-			warn_effectful_getter(name, expression, statement)?;
-		}
-		if effectful || reads_any(expression, &|word| main.is_global(word) || declared.iter().any(|name| name == word)) {
-			charged.insert(name.clone());
-		}
-		if reads_any(expression, &|word| word != name && main.lookup(word).is_some()) {
-			reading_variables.insert(name.clone());
-		}
-	}
-	let program = map_statements(program, &mut |statement| match getter(&statement) {
-		Some((name, expression)) if charged.contains(name) => as_function(name, expression),
-		_ => called_getters(statement, &charged),
-	});
-	Ok((program, reading_variables))
-}
-
-/// Every read of a charged getter `t` is the call `t()`
-fn called_getters(node: Node, charged: &HashSet<String>) -> Node {
-	match node {
-		Node::Symbol(name) if charged.contains(&name) => Node::List(vec![Node::Symbol(name)], Bracket::Round, Separator::None),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| called_getters(item, charged)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(called_getters(*left, charged)), op, Box::new(called_getters(*right, charged))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(called_getters(*node, charged)), data },
-		other => other,
-	}
-}
-
-/// `clock()` for the call `(clock)`, as it was written
+/// `3*4` for the body, `clock()` for the call `(clock)`, as it was written
 fn written_text(node: &Node) -> String {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
@@ -223,25 +164,27 @@ fn written_text(node: &Node) -> String {
 	}
 }
 
-fn warn_effectful_getter(name: &str, expression: &Node, statement: &Node) -> Result<(), Node> {
-	let written = format!("{name} := {}", written_text(expression));
-	let question = format!("{name} runs {} at every read; write {name} = … for one value", written_text(expression));
-	ask(&Ask::new(EFFECTFUL_GETTER_TOPIC, question, vec![reading("run it at every read", &written)], Fallback::Warning).written(&written).at_node(statement))?;
-	Ok(())
+/// A `def` without parameters whose body is pure and reads only constants (`def area(): 3*4`) always gives the same
+/// value: educate toward `area = 3*4` (wiki/charged.md "Needless charging"). `:=` without parameters waits for P71.
+fn note_needless_charging(definition: &Definition, statements: &[Node], main: &Scope, report: &EffectReport) {
+	let function = &definition.function;
+	let statement = &statements[definition.index];
+	let is_def = matches!(statement.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)));
+	let pure = report.effects_of(&function.name).is_some_and(|effects| effects.is_pure());
+	if !is_def || !function.params.is_empty() || !pure || reads_any(&function.body, &|word| main.is_global(word)) {
+		return;
+	}
+	crate::normalize::set_position_of(statement);
+	let value = written_text(&function.body);
+	crate::diagnostic::educate_once(NEEDLESS_CHARGING_TOPIC, &format!("def {}(): {value}", function.name), &format!("{} = {value}", function.name), &format!("{} never changes", function.name));
 }
 
-/// The functions of the main-level statements (and the getters reading variables), with their statement index
-fn definitions(statements: &[Node], getters: &HashSet<String>) -> Vec<Definition> {
+/// The functions of the main-level statements, with their statement index
+fn definitions(statements: &[Node]) -> Vec<Definition> {
 	let line_of = |statement: &Node| Diagnostic::at(statement, "").line;
-	let mut found = vec![];
-	for (index, statement) in statements.iter().enumerate() {
-		let getter_function = getter(statement).filter(|(name, _)| getters.contains(*name))
-			.map(|(name, expression)| functions_in(&as_function(name, expression)));
-		for function in getter_function.unwrap_or_else(|| functions_in(statement)) {
-			found.push(Definition { index, function, line: line_of(statement) });
-		}
-	}
-	found
+	statements.iter().enumerate()
+		.flat_map(|(index, statement)| functions_in(statement).into_iter().map(move |function| Definition { index, function, line: line_of(statement) }))
+		.collect()
 }
 
 /// Each function's name with the names of the functions that call it, transitively, itself included: a use of any of
