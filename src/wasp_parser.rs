@@ -969,7 +969,7 @@ impl WaspParser {
 		let (first, sign, number) = (lhs.serialize(), self.current_char(), &signed[1..]);
 		let written = format!("{first} {signed}");
 		let readings = vec![
-			crate::diagnostic::reading("the list", &format!("[{written}]")),
+			crate::diagnostic::reading("the list", &format!("{first} ({signed})")), // also inside brackets: `[1 (-1) 2]`
 			crate::diagnostic::reading("arithmetic", &format!("{first} {sign} {number}")),
 		];
 		let question = crate::diagnostic::Ask::new(SIGNED_OPERAND_TOPIC, format!("is `{written}` a list or arithmetic?"), readings, crate::diagnostic::Fallback::Warning)
@@ -3252,7 +3252,8 @@ impl WaspParser {
 					if chars.next().is_none() {
 						if let Some(number_type) = self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
 							let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); only a single-quoted character converts to its code point");
-							return Diagnostic { message, line: quote_line, column: quote_column, fix: Some(format!("'{c}' as {number_type}")) }.into_error();
+							return Diagnostic { message, line: quote_line, column: quote_column, ..Default::default() }.fix(format!("'{c}' as {number_type}"))
+								.offer("the code point of the character", format!("\"{c}\" as {number_type}"), format!("ord('{c}')")).into_error();
 						}
 						return Node::codepoint(c);
 					}
@@ -4196,13 +4197,13 @@ fn chained_equality(lhs: &Node, op: Op, rhs: &Node) -> Diagnostic {
 		_ => left.clone(),
 	};
 	let symbol = op.as_str();
-	Diagnostic {
-		message: format!("ambiguous: equality does not chain in {left} {symbol} {right}"),
-		line: 0,
-		column: 0,
-		fix: Some(format!("{left} and {middle} {symbol} {right} or ({left}) {symbol} {right}")),
-	}
+	let (chained, grouped) = (format!("{left} and {middle} {symbol} {right}"), format!("({left}) {symbol} {right}"));
+	Diagnostic::default().fix(format!("{chained} or {grouped}")).message(format!("ambiguous: equality does not chain in {left} {symbol} {right}"))
+		.offer("both equalities, as Python chains them", format!("{left} {symbol} {right}"), chained)
+		.offer("compare the first result, as C does", format!("{left} {symbol} {right}"), grouped)
 }
+
+const COMPARISON_FIRST: &str = "the comparison first, as C";
 
 /// `3 & 4 == 4` is `(3&4)==4` in Python but `3 & (4==4)` in C: `&`/`|` next to an ungrouped comparison is ambiguous.
 /// The word forms `and`/`or` read unambiguously and are not affected: `x==1 and y==2`.
@@ -4212,19 +4213,18 @@ fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<D
 		_ => None,
 	};
 	let (left, right) = (lhs.serialize(), rhs.serialize());
-	let fix = match (comparison(lhs), comparison(rhs)) {
-		(None, Some((a, op, b))) => format!("{left} {symbol} ({a} {op} {b}) or ({left} {symbol} {a}) {op} {b}"),
-		(Some((a, op, b)), None) => format!("({a} {op} {b}) {symbol} {right} or {a} {op} ({b} {symbol} {right})"),
-		(Some(_), Some(_)) => format!("({left}) {symbol} ({right})"),
+	let readings = match (comparison(lhs), comparison(rhs)) {
+		(None, Some((a, op, b))) => vec![(COMPARISON_FIRST.to_string(), format!("{left} {symbol} ({a} {op} {b})")), (format!("`{symbol}` first, as Python"), format!("({left} {symbol} {a}) {op} {b}"))],
+		(Some((a, op, b)), None) => vec![(COMPARISON_FIRST.to_string(), format!("({a} {op} {b}) {symbol} {right}")), (format!("`{symbol}` first, as Python"), format!("{a} {op} ({b} {symbol} {right})"))],
+		(Some(_), Some(_)) => vec![("both comparisons first".to_string(), format!("({left}) {symbol} ({right})"))],
 		(None, None) => return None,
 	};
 	let word = if symbol == '&' { "and" } else { "or" };
-	Some(Diagnostic {
-		message: format!("ambiguous: `{symbol}` mixed with a comparison in {left} {symbol} {right}; group it or write `{word}`"),
-		line: 0,
-		column: 0,
-		fix: Some(fix),
-	})
+	let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
+	let written = format!("{left} {symbol} {right}");
+	let diagnostic = Diagnostic::default().fix(forms.join(" or "))
+		.message(format!("ambiguous: `{symbol}` mixed with a comparison in {written}; group it or write `{word}`"));
+	Some(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form)))
 }
 
 
@@ -4286,8 +4286,9 @@ fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) -> Option<D
 	}
 	let (target, index, end) = (target.serialize(), index.serialize(), rhs.serialize());
 	let (target, index, end) = (target.trim(), index.trim(), end.trim());
-	let message = format!("{target}#{index}{written}{end} is the range from the value {target}#{index}: for the slice write {target}#({index}{written}{end}), for the range write ({target}#{index}){written}{end}");
-	Some(Diagnostic::at(lhs, message))
+	let (as_written, slice, range) = (format!("{target}#{index}{written}{end}"), format!("{target}#({index}{written}{end})"), format!("({target}#{index}){written}{end}"));
+	let message = format!("{as_written} is the range from the value {target}#{index}: for the slice write {slice}, for the range write {range}");
+	Some(Diagnostic::at(lhs, message).offer("the slice", &as_written, slice).offer("the range from the value", &as_written, range))
 }
 
 /// `xs#(a…b)`, `xs#(a..b)`: the 0-based start and exclusive end of a 1-based slice (`xs#a` is 1-based); only a range in

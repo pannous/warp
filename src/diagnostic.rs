@@ -1,22 +1,32 @@
 //! Compiler diagnostics: what went wrong, where, and how to fix it.
 //! Errors become `Node::Error` values (never panics); warnings (lints) are reported and compilation continues.
 
+use crate::fixits::Fix;
 use crate::node::Node;
 use std::fmt;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Diagnostic {
 	pub message: String,
 	pub line: usize,
 	pub column: usize,
+	/// How to fix it, in words (shown after `; fix: `)
 	pub fix: Option<String>,
+	/// The same as edits a host applies: one per reading the user might have meant (src/fixits.rs)
+	pub fixes: Vec<Fix>,
+	/// The kind of warning, which "got it" silences (an Ask's topic)
+	pub topic: Option<String>,
 }
 
 impl Diagnostic {
 	/// A diagnostic at the source position of `node`, else of its first part that has one (0:0 if the parser recorded none)
 	pub fn at(node: &Node, message: impl Into<String>) -> Self {
 		let (line, column) = position(node).unwrap_or_default();
-		Diagnostic { message: message.into(), line, column, fix: None }
+		Diagnostic { message: message.into(), line, column, ..Default::default() }
+	}
+
+	pub fn message(self, message: impl Into<String>) -> Self {
+		Diagnostic { message: message.into(), ..self }
 	}
 
 	pub fn fix(mut self, replacement: impl Into<String>) -> Self {
@@ -24,8 +34,25 @@ impl Diagnostic {
 		self
 	}
 
+	/// Offer a reading as an applicable fix: `written` (as in the source, spacing aside) becomes `replacement`
+	pub fn offer(self, meaning: impl Into<String>, written: impl Into<String>, replacement: impl Into<String>) -> Self {
+		self.offering(crate::fixits::fix(meaning, written, replacement))
+	}
+
+	pub fn offering(mut self, offered: Fix) -> Self {
+		if offered.changes_something() {
+			self.fixes.push(offered);
+		}
+		self
+	}
+
+	/// The error, remembered with its fixes for a host to offer (take_error_diagnostics)
 	pub fn into_error(self) -> Node {
-		crate::node::error(&self.to_string())
+		let error = crate::node::error(&self.to_string());
+		if !self.fixes.is_empty() {
+			ERROR_DIAGNOSTICS.with(|errors| errors.borrow_mut().push(self));
+		}
+		error
 	}
 }
 
@@ -39,7 +66,7 @@ pub fn names_position(message: &str) -> bool {
 
 /// The line and column the parser recorded for `node`, or for the first of its parts that has them: a node a lowering
 /// pass rebuilt keeps the positions of the parts it was built from
-fn position(node: &Node) -> Option<(usize, usize)> {
+pub fn position(node: &Node) -> Option<(usize, usize)> {
 	if let Some(info) = node.get_lineinfo() {
 		return Some((info.line_nr, info.column));
 	}
@@ -83,6 +110,7 @@ thread_local! {
 	static WARNING_MODE: std::cell::Cell<WarningMode> = const { std::cell::Cell::new(WarningMode::Warn) };
 	static RUNTIME_WARNINGS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 	static COMPILE_WARNINGS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
+	static ERROR_DIAGNOSTICS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// The warning mode of every later compilation on this thread (the CLI's `--strict`)
@@ -117,6 +145,11 @@ pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 /// The compile-time warnings reported on this thread since the last call (a host without a terminal shows them)
 pub fn take_warnings() -> Vec<Diagnostic> {
 	COMPILE_WARNINGS.with(|reported| std::mem::take(&mut *reported.borrow_mut()))
+}
+
+/// The errors with fixes made on this thread since the last call (the page offers their fixes when the program fails)
+pub fn take_error_diagnostics() -> Vec<Diagnostic> {
+	ERROR_DIAGNOSTICS.with(|errors| std::mem::take(&mut *errors.borrow_mut()))
 }
 
 /// A warning the running program reports with `warning(message)`
@@ -172,10 +205,24 @@ pub enum Fallback {
 pub struct Reading {
 	pub meaning: String,
 	pub explicit_form: String,
+	/// The edit that says this reading, when it is not the Ask's `written` text replaced by `explicit_form`
+	/// (`let n =` for `n =`, where the explicit form shows `let n = …`)
+	pub fix: Option<Fix>,
 }
 
 pub fn reading(meaning: &str, explicit_form: &str) -> Reading {
-	Reading { meaning: meaning.to_string(), explicit_form: explicit_form.to_string() }
+	Reading { meaning: meaning.to_string(), explicit_form: explicit_form.to_string(), fix: None }
+}
+
+impl Reading {
+	pub fn replacing(self, written: impl Into<String>, replacement: impl Into<String>) -> Self {
+		let fix = crate::fixits::fix(&self.meaning, written, replacement);
+		self.fixed_by(fix)
+	}
+
+	pub fn fixed_by(self, fix: Fix) -> Self {
+		Reading { fix: Some(fix), ..self }
+	}
 }
 
 /// An ambiguity: its readings, the default reading and whether guessing it is allowed (`fallback`)
@@ -223,7 +270,9 @@ impl Ask {
 				(format!("{} (too ambiguous to guess)", self.question), forms.join(" or "))
 			}
 		};
-		Diagnostic { message, line: self.line, column: self.column, fix: Some(fix) }
+		let diagnostic = Diagnostic { message, line: self.line, column: self.column, fix: Some(fix), topic: Some(self.topic.clone()), fixes: vec![] };
+		let fixes = self.readings.iter().map(|reading| reading.fix.clone().unwrap_or_else(|| crate::fixits::fix(&reading.meaning, &self.written, &reading.explicit_form)));
+		fixes.fold(diagnostic, Diagnostic::offering)
 	}
 }
 

@@ -50,6 +50,22 @@ pub struct CapturedHint {
     /// `line:column`, empty when the emitting stage knows no position
     pub position: String,
     pub reason: String,
+    /// Whether `canonical` replaces `original` in the source (a rewrite), or is advice about it (`global x`)
+    pub rewrites: bool,
+}
+
+impl CapturedHint {
+    /// The preferred form as an applicable fix of the original; advice is no fix
+    pub fn fix(&self) -> Option<crate::fixits::Fix> {
+        self.rewrites.then(|| crate::fixits::fix(&self.reason, &self.original, &self.canonical))
+    }
+
+    /// The line and column of `position` (`file:line:column` or `line:column`), 0:0 for none
+    pub fn line_and_column(&self) -> (usize, usize) {
+        let mut parts = self.position.rsplit(':').map(|part| part.parse().unwrap_or(0));
+        let column = parts.next().unwrap_or(0);
+        (parts.next().unwrap_or(0), column)
+    }
 }
 
 /// Run `action` and return the hints it emitted on this thread (hints are still printed)
@@ -324,8 +340,17 @@ pub fn clear_shown_hints() {
 // Core Hint Function
 // ============================================================================
 
-/// Emit a normalization hint to stderr
+/// Emit a normalization hint to stderr: `canonical` is what to write instead of `original`
 pub fn hint(original: &str, canonical: &str, reason: &str) {
+    emit_hint(original, canonical, reason, true);
+}
+
+/// A hint whose preferred form does not replace the original text (it is said elsewhere: `global x`)
+pub fn advise(original: &str, preferred: &str, reason: &str) {
+    emit_hint(original, preferred, reason, false);
+}
+
+fn emit_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
     let mode = hint_mode();
     if mode == HintMode::Off || HINTS_MUTED.with(|muted| muted.get()) {
         return;
@@ -341,7 +366,7 @@ pub fn hint(original: &str, canonical: &str, reason: &str) {
     let pos = position_string();
     CAPTURED_HINTS.with(|captured| {
         if let Some(hints) = captured.borrow_mut().as_mut() {
-            hints.push(CapturedHint { original: original.to_string(), canonical: canonical.to_string(), position: pos.clone(), reason: reason.to_string() });
+            hints.push(CapturedHint { original: original.to_string(), canonical: canonical.to_string(), position: pos.clone(), reason: reason.to_string(), rewrites });
         }
     });
     if pos.is_empty() {

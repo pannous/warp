@@ -241,8 +241,9 @@ fn warn_tuple_comparison(items: &[Node]) -> Result<(), Node> {
 		return Ok(());
 	}
 	let values: Vec<String> = std::iter::once(compared.as_ref()).chain(&items[1..]).map(Node::serialize).collect();
-	let message = format!(
-		"`{} {op} {}` compares the tuple with {} only, the comma binds looser than {op}: write `{} {op} ({})`",
-		tuple.serialize(), values.join(", "), compared.serialize(), tuple.serialize(), values.join(", "));
-	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(first, message)])
+	let (tuple, values) = (tuple.serialize(), values.join(", "));
+	let message = format!("`{tuple} {op} {values}` compares the tuple with {} only, the comma binds looser than {op}: write `{tuple} {op} ({values})`", compared.serialize());
+	let warning = crate::diagnostic::Diagnostic::at(first, message)
+		.offer("compare the tuple with all the values", format!("{tuple} {op} {values}"), format!("{tuple} {op} ({values})"));
+	crate::diagnostic::report(&[warning])
 }
