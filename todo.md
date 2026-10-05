@@ -14,3 +14,5 @@ The supervisor should remove the DONE elements after a while.
 - An unknown word applied to a value is silent data: `cube 3` and `square [1 2]` print ` cube 3 ` (the spaced list of symbol and number), while `cube(3)` is "undefined function: cube". A prefix application of an undefined word in code position should be the same loud error. (worker dispatch, 2026-10-05)
 - `1/0` is ∞ (f64) when it is not directly under `try` (`{1/0}`, `f() := 1/0; f()`), while `try 1/0 else 7` catches a division by zero: exact division by zero is either an error or ∞, not both. (fixer 2026-10-05)
 - `catch e` / `except E as e`: the caught error is no value yet (a fallback that uses e is a loud error); binding it needs the error value or the trap detail in the fallback. (fixer 2026-10-05, P60)
+- `warp --help` prints only the wiki link, not the usage list that a bare `warp` shows (found while rewriting README, 2026-10-05)
+- `square 3 + square(4)` with `square := it²` gives 361 (parsed as square(3+square(4))): silent footgun, deserves an Ask warning?
