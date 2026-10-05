@@ -112,7 +112,6 @@ fn test_params() {
 }
 
 #[test]
-#[ignore]
 fn test_stacked_lambdas() {
 	// currently  a:{x:1}  {y:2}  {3}
 	let result = parse("a{x:1}{y:2}{3}");
