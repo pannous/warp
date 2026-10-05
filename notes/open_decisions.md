@@ -106,6 +106,13 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   infix operator binds like `+` unless declared `infix operator SYMBOL precedence of *`. The parser learns the symbol
   from the declaration before the rest of the file (one pre-scan), so a use before the declaration works. Not
   implemented. 2026-10-05.
+- P49 A float passed to an int parameter (tests/types/test_types.rs test_function_argument_cast, ignored "soon"):
+  today a call converts nothing, `fun addi(int x,int y){x+y}; addi(2.2,2.2)` is 4.4; the test expects 4 there
+  (each argument truncated to the declared int) but contradicts itself: `float addi(int x,int y){x+y}` is expected to
+  give 4.4 on one line and "4." (2+2 as a float) on another. Options: (a) truncate to the declared int (2.2 → 2, so 4
+  and 4.0), (b) refuse at compile time ("2.2 is no int: write 2.2 as int"), (c) keep today's (the declaration is
+  ignored for floats). Proposed default: (b), wasp never loses digits silently. The test needs editing either way.
+  2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
