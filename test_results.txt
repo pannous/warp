@@ -316,6 +316,8 @@ PASSED:
   ✓ functions::test_effects::test_effects_of_query
   ✓ functions::test_effects::test_effects_propagate_through_callers_and_recursion
   ✓ functions::test_effects::test_imports_follow_effects
+  ✓ functions::test_float_to_int_parameter::a_float_for_an_int_parameter_is_refused
+  ✓ functions::test_float_to_int_parameter::an_explicit_cast_or_an_int_passes
   ✓ functions::test_function_keyword::function_defines_like_def
   ✓ functions::test_function_values::test_a_function_argument_of_a_specialised_function_is_passed_on
   ✓ functions::test_function_values::test_a_lambda_that_captures_is_passed_as_a_closure
@@ -354,6 +356,8 @@ PASSED:
   ✓ functions::test_lambdas::test_map_as_a_method
   ✓ functions::test_lambdas::test_map_over_a_block_or_lambda
   ✓ functions::test_lambdas::test_named_functions_and_data_are_untouched
+  ✓ functions::test_libm_pure::libm_calls_are_pure
+  ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
   ✓ functions::test_method_syntax_calls::test_method_syntax_calls_a_libm_function
   ✓ functions::test_method_syntax_calls::test_method_syntax_calls_a_rounding_function
   ✓ functions::test_method_words::test_chars_of_text_literal_in_assignment
@@ -902,6 +906,7 @@ PASSED:
   ✓ operators::test_in_position::the_position_never_warns
   ✓ operators::test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
   ✓ operators::test_less_than_compare::test_generics_still_start_after_a_type_name
+  ✓ operators::test_like_known_type_mismatch::a_known_other_type_lacking_a_field_teaches_like
   ✓ operators::test_like::a_known_other_type_teaches_like
   ✓ operators::test_like::a_like_type_is_judged_by_its_uses
   ✓ operators::test_like::a_missing_field_is_a_warning
@@ -1267,6 +1272,9 @@ PASSED:
   ✓ scope::test_use_scopes::use_project_sees_every_file_below_the_project_root
   ✓ scope::test_variable_kind_change::a_loop_variable_may_reuse_the_name_of_a_list
   ✓ scope::test_variable_kind_change::a_variable_holds_its_last_value_of_another_kind
+  ✓ scope::test_variable_kind_clash::a_function_body_is_checked_too
+  ✓ scope::test_variable_kind_clash::a_variable_given_another_kind_is_a_compile_error
+  ✓ scope::test_variable_kind_clash::kinds_that_mix_stay_allowed
   ✓ sweeps::test_panic_sweep::test_cube_root_prefix_is_an_error_or_a_value
   ✓ sweeps::test_panic_sweep::test_float_compound_assignment_uses_the_float_operator
   ✓ sweeps::test_panic_sweep::test_float_function_result_in_exact_context_is_an_error
@@ -1571,6 +1579,7 @@ PASSED:
   ✓ types::test_types::test_deep_type
   ✓ types::test_types::test_emit_cast
   ✓ types::test_types::test_empty_typed_functions
+  ✓ types::test_types::test_function_argument_cast
   ✓ types::test_types::test_function_return_types
   ✓ types::test_types::test_go_types
   ✓ types::test_types::test_polymorphism
@@ -1978,4 +1987,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-40 ignored, 1973 passed, 0 failed, 1973 total tested
+40 ignored, 1982 passed, 0 failed, 1982 total tested
