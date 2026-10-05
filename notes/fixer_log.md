@@ -98,3 +98,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - P49: a fractional literal or a variable holding one passed to a declared int parameter is the compile error
   "2.2 is no int: write 2.2 as int" (analyzer infer_parameters_from_calls); 2.0 passes (no digits lost, assumption).
   test_function_argument_cast edited (approved) and un-ignored.
+
+## 2026-10-05 fix-try-raise
+- `try f x else y`: the guarded part may be a braceless call (was "`try` needs an `else`" after the first word)
+  (tests/control/test_try_braceless_call.rs).
