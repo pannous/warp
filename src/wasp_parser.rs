@@ -56,6 +56,8 @@ const FAILED_WORD: &str = "failed";
 /// The runtime test of `x failed` (wasm_emitter/text_builtins.rs)
 const IS_ERROR_CALL: &str = "is_error";
 const EMPTY_WORD: &str = "empty";
+/// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
+const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
 /// Words that may follow a test word and so end the condition
 const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 /// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
@@ -2640,7 +2642,8 @@ impl WaspParser {
 		let mutated = crate::mutation::mutated_variable(lhs).cloned();
 		let is_evaluable = matches!(lhs.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
 		// `name! email?`: glued to its name and followed by a space, the `!` is a suffix even when an operand follows
-		let glued_suffix = !self.prev_char().is_whitespace() && matches!(self.peek_char(1), ' ' | '\t');
+		// `x!+1`: glued to its name and followed by an infix operator, the `!` is a suffix too
+		let glued_suffix = !self.prev_char().is_whitespace() && (matches!(self.peek_char(1), ' ' | '\t') || INFIX_AFTER_BANG.contains(&self.peek_char(1)));
 		if self.current_char() != '!' || self.peek_char(1) == '=' || (self.operand_follows(1) && !glued_suffix) || !(is_evaluable || mutated.is_some()) {
 			return None;
 		}

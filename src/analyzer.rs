@@ -235,9 +235,14 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			Node::Key(then_expr, Op::Colon, else_expr) => branches_kind(infer_type(then_expr, scope), infer_type(else_expr, scope)),
 			_ => Kind::Int,
 		},
-		// if c {a} else {b}
+		// if c {a} else {b}; an `error(…)` branch raises its error, so the other branch decides the kind (bottom kind)
 		Node::Key(if_then, Op::Else, else_expr) if matches!(if_then.drop_meta(), Node::Key(_, Op::Then, _)) => {
-			branches_kind(infer_type(if_then, scope), branch_kind(else_expr, scope))
+			let Node::Key(_, _, then_expr) = if_then.drop_meta() else { unreachable!("guarded") };
+			match (raises_error(then_expr), raises_error(else_expr)) {
+				(true, false) => branch_kind(else_expr, scope),
+				(false, true) => branch_kind(then_expr, scope),
+				_ => branches_kind(infer_type(if_then, scope), branch_kind(else_expr, scope)),
+			}
 		}
 		Node::Key(if_condition, Op::Then, then_expr) if matches!(if_condition.drop_meta(), Node::Key(_, Op::If, _)) => {
 			branches_kind(branch_kind(then_expr, scope), Kind::Int)
@@ -406,6 +411,14 @@ fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 }
 
 /// A branch `{a; b}` is worth its last statement
+/// A branch that is `error(…)` (or a block ending in it): the bottom kind, it never gives a value to its if
+pub(crate) fn raises_error(branch: &Node) -> bool {
+	match branch.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => raises_error(&statements[statements.len() - 1]),
+		other => crate::pipeline::returned_error_message(other).is_some(),
+	}
+}
+
 pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 	match branch.drop_meta() {
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], scope),

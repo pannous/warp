@@ -2184,6 +2184,15 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
+	/// `error("…")` where a number is wanted (the branch of an Int if, analyzer::raises_error): it cannot be an Error value,
+	/// so it fails the run with its message through `returned_error`, which `try` catches; true when it was one
+	fn emit_raised_error(&mut self, func: &mut Function, node: &Node) -> bool {
+		let Some(message) = returned_error_message(node) else { return false };
+		self.emit_trap_detail(func, message);
+		self.emit_runtime_error(func, list_ops::RETURNED_ERROR);
+		true
+	}
+
 	/// The value of `return x` as the function gives it back: a Node, an f64 or an i64; `return error("…")` from a
 	/// function of numbers fails the run with the message, it cannot give back an Error value
 	pub(super) fn emit_returned_value(&mut self, func: &mut Function, value: &Node) {
@@ -2993,6 +3002,9 @@ impl WasmGcEmitter {
 
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
 		self.note_position(node);
+		if self.emit_raised_error(func, node) {
+			return;
+		}
 		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
 			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Int);
 		}
@@ -3175,6 +3187,9 @@ impl WasmGcEmitter {
 	/// Integers are converted to f64 for type upgrading
 	fn emit_float_value(&mut self, func: &mut Function, node: &Node) {
 		self.note_position(node);
+		if self.emit_raised_error(func, node) {
+			return;
+		}
 		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
 			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Float);
 		}

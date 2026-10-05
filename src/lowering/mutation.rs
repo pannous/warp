@@ -8,6 +8,8 @@ use crate::operators::Op;
 
 /// Meta key on a name written `x!`
 const MUTATED_MARK: &str = "mutated";
+/// `x!` that changes nothing unwraps x (library_words: ø is a loud error)
+pub const UNWRAP: &str = "unwrap";
 
 /// The variable a call written before `!` changes: x in `x.upper`, `x.upper()` and `upper(x)`
 pub fn mutated_variable(call: &Node) -> Option<&Node> {
@@ -36,9 +38,9 @@ pub fn lower(node: Node) -> Node {
 				Node::List(items, _, separator) if items.len() == 2 && is_name(&items[0]) && is_marked(&items[1])
 					&& !matches!(separator, Separator::Semicolon | Separator::Newline) => {
 					let variable = unmarked(items[1].clone());
-					Node::Key(Box::new(variable), Op::Assign, Box::new(strip_marks(call)))
+					Node::Key(Box::new(variable), Op::Assign, Box::new(strip_marks(call, false)))
 				}
-				_ => strip_marks(call),
+				_ => strip_marks(call, true),
 			}
 		}
 		// `x.upper!`: the parser marked the method it was parsing when it met the `!`
@@ -47,7 +49,7 @@ pub fn lower(node: Node) -> Node {
 			Node::Key(receiver, Op::Assign, Box::new(call))
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
-		Node::Meta { .. } if is_marked(&node) => unmarked(node),
+		Node::Meta { .. } if is_marked(&node) => unwrapped(unmarked(node)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
 		other => other,
 	}
@@ -58,11 +60,17 @@ fn lower_inside(item: Node) -> Node {
 	if is_marked(&item) { item } else { lower(item) }
 }
 
-fn strip_marks(node: Node) -> Node {
+/// The marked names as plain names (the variable a mutation assigns) or, `unwrap`, as unwraps (`x!` alone)
+fn strip_marks(node: Node, unwrap: bool) -> Node {
+	let plain = |item: Node| if unwrap { unwrapped(unmarked(item)) } else { unmarked(item) };
 	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| if is_marked(&item) { unmarked(item) } else { item }).collect(), bracket, separator),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| if is_marked(&item) { plain(item) } else { item }).collect(), bracket, separator),
 		other => other,
 	}
+}
+
+fn unwrapped(name: Node) -> Node {
+	Node::List(vec![Node::Symbol(UNWRAP.to_string()), name], Bracket::Round, Separator::None)
 }
 
 /// The mark may sit under other meta information, such as the position the parser records
