@@ -5,26 +5,6 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P46 Type-name patterns in `for` (wiki/for.md): `for friend in [foe1, friend1, foe2, friend2]: print it` walks only
-  the items whose name matches the loop variable's type name, and `for (it>2) in [1,2,3,4]` the items a condition
-  holds for. Proposed default (parked, supervisor): `for NAME in xs` stays every item; a filtered walk is written
-  `for x in xs where cond` (or `xs.filter(…)`), and a type-named walk `for friend in xs` filters by the declared type
-  `friend` only when one is declared. Not implemented. Night 2026-10-04.
-- P48 Custom operators (wiki/operator.md): `prefix operator ⁻ := it*-1`, `suffix operator ³ := it*it*it`,
-  `suffix operator ⁰ := 1`. Proposed syntax (parked, supervisor): exactly the wiki's, `prefix operator SYMBOL := body`
-  and `suffix operator SYMBOL := body` with `it` the operand, plus `infix operator SYMBOL := a op b`-style bodies naming
-  `left` and `right`; prefix and suffix operators bind tighter than any infix one (like `-x` and `x²` today), a new
-  infix operator binds like `+` unless declared `infix operator SYMBOL precedence of *`. The parser learns the symbol
-  from the declaration before the rest of the file (one pre-scan), so a use before the declaration works. Not
-  implemented. 2026-10-05.
-  Implemented as the assumption (worker warp-90, branch custom-operators): prefix/suffix/infix declarations existed
-  (src/wasp_parser.rs `scan_user_operators`); added superscript glyphs (`suffix operator ³`, `prefix operator ⁻`) that
-  override the built-in power, and the short `suffix ⁰ := 1`. Marked `ASSUMPTION P48` in the code, test file
-  tests/operators/test_superscript_operator_declarations.rs. Precedence (branch operator-precedence):
-  `operator ⊕ has precedence above|below [operator] Y` sets a declared ⊕ two binding-power steps above or below Y (any
-  built-in or declared operator), wherever the statement stands; built-in operators are never re-ranked (an error).
-  tests/operators/test_operator_precedence.rs.
-  test_wasm::test_custom_operators stays ignored: its `.5³` line expects Rust's `1 / 8` (= 0), the value is 0.125.
 - P51 An unknown word applied to a value, `cube 3` (no `cube` defined): today data with a got-it warning
   ("cube is no function … fix: [cube 3]", notes/unknown_prefix_word.md). Should it be a loud error like `cube(3)`
   (Decided #7)? Then call-shaped data in code needs brackets: `[cube 3]`, `(cube 3)`, which contradicts rule 3 of
@@ -32,6 +12,8 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   mode makes it an error). Asked by worker warp-90, branch unknown-word. 2026-10-05.
   User 2026-10-05, undecided: "i'm not certain probably the second one [loud error] or we need to declare data in
   the beginning of the file or I don't know let's discuss it later". Keep the warning until discussed.
+- P44 (re-ask, user 2026-10-05 "can you ask P 44 again?"): shared arrays across tasks, decided once as `shared` +
+  atomic `+=` (see Decided 2026-10-05); the user wants to revisit it.
 - P60 Catch handlers: `raise X` / `throw X` are built (try catches them). The wiki's only `catch` form is Error.md's
   function-level handlers (`fun f(){ eat(); drink(); catch (no food){}; catch (drunkenness){}; on error{} }`), with
   no rule for how a name matches a raised value. Options: not built yet, `try X else Y` stays the one catching form
@@ -49,10 +31,12 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Decided 2026-10-05 (user, multiple choice, all as recommended)
+- P48 custom operators: the wiki syntax as proposed (`prefix operator ⁻ := it*-1`, `suffix operator ³ := …`,
+  `infix operator ⊕ := left+right`), prefix/suffix tightest, new infix like `+`, the symbol known file-wide (pre-scan).
 - P29 `pair.0` counts from 0 (like `pair[0]`).
 - P30/P35 keep as implemented: `xs.pop()` removes and gives the last item, `m.remove(k)` removes and gives the value
   (ø when absent), `xs.index_of(x)` is 1-based, 0 when absent.
-- P44 shared arrays keep `shared xs = int[n]` with atomic `xs#i += v`, Ints only for now.
+- P44 shared arrays keep `shared xs = int[n]` with atomic `xs#i += v`, Ints only for now. (Re-asked, see pending.)
 - P56(2-4) `\:epsilon`/`\:phi` are ε U+03B5 / φ U+03C6; an unknown entity name is a loud error; `∞` is f64
   infinity now (ω stays the hyperreal infinite).
 - P57 hyperreals: `1/(1+ε)` stays an error; dual-number mode and run-time hyperreals later (with exact reals at run
@@ -112,6 +96,15 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   should not affect the others". So a started job runs on its own; putting it in a list (`jobs.add(j)`) or awaiting
   another job never waits for it, only a use that needs this job's value does. The recommended default fits:
   awaiting only where a value is needed, `await all jobs` for a list.
+
+- P46 type-name and condition patterns in `for` (`for friend in [foe1, friend1, …]`, `for (it>2) in xs`): user:
+  "this should give a warning, though if the user is unfamiliar, he needs to confirm that he understands the filter".
+  So the wiki forms filter as written, with an educate_once "got it" warning naming the filter (the user confirms
+  with got-it; notes/welcoming.md). Not implemented.
+- P61 `x is <value>` with a new name x (old test `x is 100 times [0]`): user: "educate the user to use the be key
+  word for definitions". `is` stays a comparison; with an undefined x the warning/error teaches `x be <value>`
+  (wiki/be.md, an alias of `:=`; the parser does not accept `be` yet, notes/normalization_audit.md). The test edit to
+  `x = 100 times [0]` (Fixer, branch decided-test-edits) stands, or uses `be` once it parses. Asked by warp-2d.
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
