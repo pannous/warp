@@ -456,6 +456,10 @@ fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 	} else if kinds.contains(&Kind::List) {
 		// a list and a list (or ø, the empty list) is a list; a list and anything else a Node of its run-time kind
 		if kinds.iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) { Kind::List } else { Kind::Data }
+	} else if kinds.contains(&Kind::Empty) {
+		// a Node whose kind is known only at run time (an awaited job's result, ø): the value keeps that kind, so
+		// `(if c then 0 else job_result) + 1` adds at run time instead of failing as text
+		Kind::Empty
 	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
 		Kind::Text
 	} else if then_kind == Kind::Float || else_kind == Kind::Float {
