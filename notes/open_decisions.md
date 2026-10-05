@@ -9,6 +9,10 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   decided (see Decided 2026-10-05, interview). Asked by warp-90. 2026-10-05.
 - P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
   as they are at `!` and assigns only declared globals. User 2026-10-05: "Later"; revisit when run-time `!` is built.
+- P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
+  loop changes are captured per iteration, every other variable follows late binding (recommended) / every variable
+  is captured per iteration and never checked (worker default on branch late-binding, keeps the test → 3). User
+  2026-10-05: "Later". Asked by warp-29.
 Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
 work on branch runtime-units-survey pauses.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
@@ -31,6 +35,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   define it as global"; "with some precomputed, precompiled paths"; naming `block`/`code`, `data` for what never
   runs, `quote` dropped. Work packages assigned by the Supervisor (blocks warp-90, late binding + precomputed paths
   warp-29, run-time `!` later).
+- P70 (late binding, warp-29): (a) a change is an error only where a later call can see it; (b) `global` may stand on
+  the variable at main level or in the reading function; (d) a pure getter over constants may be computed once
+  (folding). All as recommended; spec wiki/charged.md 77061c2. (c) later.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
