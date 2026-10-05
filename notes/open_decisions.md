@@ -5,36 +5,12 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P63 P62 follow-ups (worker warp-90, defaults applied): (1) all-word lists in code (`hello world`,
-  `colors = [red, green, blue]`, samples/data_structures.wasp) stay data; only a word next to a value is judged
-  (`cube 3`, `[1 "two" three]`). Recommended: keep them data (enum-like symbols, many samples/tests), with the
-  near-miss warning chosen for object values. (2) the sample `mixed = [1 "two" three 4.0]` becomes
-  `mixed = quote [1 "two" three 4.0]`. (3) a comma tuple `(frobnicate, 3)` stays data (P62 named spaced brackets
-  only). Related to the open data-vs-code design discussion (charge levels, 2026-10-05). 2026-10-05.
-- P64 Run-time quantities (units in functions, loops, lists, print; notes/units_runtime.md, branch
-  runtime-units-survey): (1) static units like F# units of measure, the unit part of the compile-time type, zero
-  run-time cost, mixing units a compile error, ~3.5 agent-days (recommended; work started) / (2) dynamic unit values
-  like pint (run-time amount + units), needed only for units arriving from input / both later (static, plus parsing
-  input into checked values). Assumed: (1). Asked by warp-90 via warp-7e. Asked once 2026-10-05, dismissed by the user
-  mid-discussion: ask again later. 2026-10-05.
-- P65 Character arithmetic: `'5' + 1` is "51", `'5' * 2` "55" (a character acts as a one-letter text), but `-'a'` is
-  -97, `'a' % 2` 1, `sqrt('a')` 9.85 (code points); comparisons (`c >= '0'`) rightly use code points. Recommended:
-  arithmetic a text can't do (negation, %, /, sqrt) on a character is not_a_number, never its code point; `ord(c)`
-  gives the number. Asked by the Fixer warp-2d. 2026-10-05.
-- P66 `1/0` is ∞ (f64) in a block or function but a caught division by zero under `try 1/0 else 7`. Recommended:
-  exact Int division by zero is always the catchable error divide_by_zero; only float division (1.0/0.0) is ∞.
-  Asked by warp-2d. 2026-10-05.
-- P67 `catch e` / `except E as e` (P60): the fallback can't use e yet (loud error). The user once rejected
-  `try X else e => Y`, but P60 names `catch e`. Recommended: e is the Error value (its message): the error a returned
-  Error carries, or the runtime error's name / raise message for a trap. Asked by warp-2d. 2026-10-05.
-- P68 `square 3 + square(4)` with `square := it²` is 361, read as square(3 + square(4)). Recommended: a got-it warning
-  naming both readings `square(3) + square(4)` / `square(3 + square(4))` when a braceless call's argument contains an
-  operator. Asked by warp-2d. 2026-10-05.
-- P69 Run-time `!` (feasibility study notes/runtime_eval.md, warp-29: feasible, compile the block at run time via a
-  host import, ~10-15 agent-days; spec wiki/charged.md not yet released): (a) may a block assign the `!` site's
-  locals? Recommended: no (a snapshot; only declared globals); (b) the default grant and tainting of data read at run
-  time (eval_untrusted); (c) a `warp compile`d module containing run-time `!` that runs outside warp's hosts (error at
-  compile time / bundle the compiler / refuse at run time). 2026-10-05.
+- P63 (rest) a comma tuple `(frobnicate, 3)` in code: data (worker default) or code like `[cube 3]`? (1) and (2) are
+  decided (see Decided 2026-10-05, interview). Asked by warp-90. 2026-10-05.
+- P69a may a run-time block assign the `!` site's local variables? Recommended: no (snapshot, declared globals only).
+  User 2026-10-05: "Later" (decide when run-time `!` is built).
+Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
+work on branch runtime-units-survey pauses.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -46,7 +22,26 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
-## Decided 2026-10-05 (user, multiple choice, all as recommended)
+## Decided 2026-10-05 (user, multiple-choice interview, all as recommended unless quoted)
+- Data vs code spec (wiki/charged.md e193420): the type of an unevaluated expression meant to run is `block`
+  (prefixes `code x` / `block x`), `quote` is dropped, `data x` marks what never runs (`!` on it warns). Wording:
+  `=` is a value (neither), `:=` / def charged, `:` uncharged. `{}` is data by default: `:` entries uncharged, `=`
+  values, `:=` charged, statements a block (`x = {1+2}` is a block, `x!` → 3; tests relying on 3 change, user
+  decision); control flow takes block parameters.
+- Unknown words in code: a word alone is a symbol (near-miss warning), a word applied to an argument is an error,
+  brackets change nothing (`[red green]` symbols, `[cube 3]` an error). Refines P62; answers P63 (1); P63 (2): the
+  sample becomes `data [1 "two" three 4.0]` (not `quote`).
+- Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
+  written text; a `// got it` comment silences that line in the source.
+- P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
+  comparisons keep code points.
+- P66 Int division by zero is always the catchable divide_by_zero; only float division (1.0/0.0) is ∞.
+- P67 `catch e` / `except E as e`: e is the Error value (its message).
+- P68 a braceless call whose argument contains an operator (`square 3 + square(4)`) gets a got-it warning naming
+  `square(3) + square(4)` and `square(3 + square(4))`; the reading stays.
+- P69b a block arriving at run time is pure by default, more rights only by explicit grant; run-time data is tainted.
+- P69c user: "warning and lazy loading of a shared compiler": `warp compile` with run-time `!` warns, the module loads
+  a shared compiler lazily at the first `!`.
 - P48 custom operators: the wiki syntax as proposed (`prefix operator ⁻ := it*-1`, `suffix operator ³ := …`,
   `infix operator ⊕ := left+right`), prefix/suffix tightest, new infix like `+`, the symbol known file-wide (pre-scan).
 - P29 `pair.0` counts from 0 (like `pair[0]`).
