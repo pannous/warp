@@ -234,7 +234,7 @@ pub(crate) fn statements_of(program: &Node) -> Vec<Node> {
 	}
 }
 
-fn map_statements(program: Node, transform: &mut dyn FnMut(Node) -> Node) -> Node {
+pub(crate) fn map_statements(program: Node, transform: &mut dyn FnMut(Node) -> Node) -> Node {
 	match program {
 		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) =>
 			Node::List(items.into_iter().map(transform).collect(), Bracket::None, separator),
@@ -387,7 +387,7 @@ fn changes_after<'a>(statements: &'a [Node], index: usize, variable: &str) -> Ve
 }
 
 /// Assignments of `variable` (`y = …`, `y += …`, `xs#i = …`) and in-place mutations (`xs.add(v)`, `xs.pop()`)
-fn changes_in<'a>(node: &'a Node, variable: &str) -> Vec<&'a Node> {
+pub(crate) fn changes_in<'a>(node: &'a Node, variable: &str) -> Vec<&'a Node> {
 	let mut found: Vec<&Node> = find_assignments(node, &|name| name == variable).into_iter().map(|(node, _)| node).collect();
 	found.extend(mutating_calls(node, variable));
 	found
