@@ -72,3 +72,10 @@ A compiled module returns the SI amount; options to keep the unit:
 2. `main` returns a GC struct `{amount, unit text}` (or the text `"5 km/h"`): self-describing for every host, but the
    result type changes for programs whose result is a quantity.
 Recommendation: 1, the names section already carries metadata this way ("use WASM names excessively").
+
+## Stage 5 done (branch static-units-5): compiled quantities, whole lists
+Option 1 is implemented: a module whose result is a quantity carries the custom section `wasp.units` (`km:1 h:-1`),
+appended by the pipeline for eval and `compile` alike; wasm_reader (read_bytes, read_bytes_with_imports) and running a
+`.wasm` file read it back, so `warp compile …` then `warp out.wasm` prints `500 m`. A whole list of quantities prints and
+is a final value as the text `[100 cm 250 cm]` (`join(map(xs, …))` at run time). Still loud: lists grown at run time
+(`xs.add(2 m)`), recursion with quantities.

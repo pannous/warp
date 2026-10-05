@@ -63,7 +63,7 @@ pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 			definitions.insert(name, definition);
 		}
 	});
-	let mut inference = Inference { variables: HashMap::new(), lists: HashMap::new(), definitions, specialised: HashMap::new(), in_progress: vec![], new_definitions: vec![], display: display.clone(), returns: vec![] };
+	let mut inference = Inference { variables: HashMap::new(), lists: HashMap::new(), definitions, specialised: HashMap::new(), in_progress: vec![], new_definitions: vec![], display: display.clone(), returns: vec![], at_top: true };
 	match inference.infer(program.clone()) {
 		Ok((node, result)) => {
 			// a final `q as km` shows km
@@ -87,9 +87,37 @@ pub(crate) fn take_result_units() -> Option<Vec<Factor>> {
 	RESULT_UNITS.with(|cell| cell.borrow_mut().take())
 }
 
-/// The units as written: `km/h`
-pub(crate) fn units_shown(units: &[Factor]) -> String {
-	units_text(units)
+/// The custom section naming the units of `main`'s result in a module (`km:1 h:-1`): a module that returns an SI amount
+/// says which quantity it is, and running it reads the quantity back (wasm_reader)
+pub const UNITS_SECTION: &str = "wasp.units";
+const POWER_MARK: char = ':';
+
+/// The module with the `wasp.units` section of the units of its result, when the last lowered program's result has units
+pub(crate) fn with_result_units(mut bytes: Vec<u8>) -> Vec<u8> {
+	let Some(units) = take_result_units() else { return bytes };
+	let text: Vec<String> = units.iter().map(|factor| format!("{}{POWER_MARK}{}", factor.unit.name, factor.power)).collect();
+	let section = wasm_encoder::CustomSection { name: UNITS_SECTION.into(), data: text.join(" ").into_bytes().into() };
+	wasm_encoder::Section::append_to(&section, &mut bytes);
+	bytes
+}
+
+/// The result of running a module, as the quantity its `wasp.units` section names (unchanged without the section)
+pub fn with_module_units(bytes: &[u8], result: Node) -> Node {
+	match module_units(bytes) {
+		Some(units) => quantity_of(result, &units),
+		None => result,
+	}
+}
+
+fn module_units(bytes: &[u8]) -> Option<Vec<Factor>> {
+	let section = wasmparser::Parser::new(0).parse_all(bytes).filter_map(Result::ok).find_map(|payload| match payload {
+		wasmparser::Payload::CustomSection(section) if section.name() == UNITS_SECTION => Some(section.data().to_vec()),
+		_ => None,
+	})?;
+	String::from_utf8(section).ok()?.split(' ').map(|factor| {
+		let (name, power) = factor.split_once(POWER_MARK)?;
+		Some(Factor { unit: unit_named(name)?, power: power.parse().ok()? })
+	}).collect()
 }
 
 /// A run-time amount in SI base units as the quantity it is in `units`
@@ -204,6 +232,8 @@ struct Inference {
 	display: Vec<&'static Unit>,
 	/// The signatures of the `return`s of each function being specialised
 	returns: Vec<Vec<Signature>>,
+	/// Inferring the program's own statements (its last one may be a whole list of quantities)
+	at_top: bool,
 }
 
 /// The last statement of a program or block
@@ -372,6 +402,23 @@ impl Inference {
 		}
 	}
 
+		/// A whole list of quantities as text, built at run time: `"[" + join(map(xs, x => str(x / 1/100) + " cm"), " ") + "]"`
+	fn list_text(&self, name: &str) -> Result<Node, Stop> {
+		let element = self.lists.get(name).ok_or(Stop::Unsupported)?;
+		let units: Vec<Factor> = element.iter().map(|(dimension, power)| Factor { unit: display_unit(&self.display, *dimension), power: *power }).collect();
+		let per_unit = number_node(&super::scale(&units, |factor| base_unit(factor.unit.dimension))).ok_or(Stop::Unsupported)?;
+		let source = format!("\"[\" + join(map({name}, item => str(item / ({})) + \" {}\"), \" \") + \"]\"", per_unit.serialize().trim(), units_text(&units));
+		Ok(crate::wasp_parser::parse(&source))
+	}
+
+	/// The last statement of the program when it is a whole list of quantities: its text
+	fn final_list(&self, statement: &Node) -> Option<Result<Node, Stop>> {
+		match statement.drop_meta() {
+			Node::Symbol(name) if self.lists.contains_key(name) => Some(self.list_text(name)),
+			_ => None,
+		}
+	}
+
 	/// A value as it joins a text: a quantity as its text in `units` (else in the finest written units), anything else as it is
 	fn as_text(&self, value: Node, signature: &Signature, units: Option<Vec<Factor>>) -> Result<Node, Stop> {
 		if signature.is_empty() {
@@ -451,6 +498,9 @@ impl Inference {
 				}
 				Ok((self.as_text(value, &signature, None)?, vec![]))
 			})()),
+			[head, value] if call_or_words && word(head, PRINT_WORD) && matches!(value.drop_meta(), Node::Symbol(name) if self.lists.contains_key(name)) => {
+				Some(self.list_text(&value.name()).map(|text| (Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()), vec![])))
+			}
 			[head, value] if call_or_words && word(head, PRINT_WORD) => Some((|| {
 				let shown_units = conversion_target(value);
 				let (value, signature) = self.infer(value.clone())?;
@@ -555,8 +605,20 @@ impl Inference {
 			&& matches!(items[1].drop_meta(), Node::Symbol(name) if unit_named(name).is_some() && !self.variables.contains_key(name));
 		let mut lowered = vec![];
 		let mut signatures = vec![];
-		for item in items {
-			let (item, signature) = self.infer(item)?;
+		let count = items.len();
+		for (index, item) in items.into_iter().enumerate() {
+			// the program's last statement may show a whole list of quantities
+			if statements && index + 1 == count && self.at_top {
+				if let Some(text) = self.final_list(&item) {
+					lowered.push(text?);
+					signatures.push(vec![]);
+					continue;
+				}
+			}
+			let outer = std::mem::replace(&mut self.at_top, false);
+			let inferred = self.infer(item);
+			self.at_top = outer;
+			let (item, signature) = inferred?;
 			lowered.push(item);
 			signatures.push(signature);
 		}
