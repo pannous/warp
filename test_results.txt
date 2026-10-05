@@ -969,6 +969,10 @@ PASSED:
   ✓ operators::test_structural_equality::struct_instances_compare_by_their_fields
   ✓ operators::test_structural_equality::the_entry_order_of_an_object_does_not_matter
   ✓ operators::test_structural_equality::variables_holding_structures_compare_by_value
+  ✓ operators::test_superscript_operator_declarations::test_prefix_operator_on_a_superscript_sign
+  ✓ operators::test_superscript_operator_declarations::test_short_declaration_without_the_operator_word
+  ✓ operators::test_superscript_operator_declarations::test_suffix_operator_on_a_superscript_digit
+  ✓ operators::test_superscript_operator_declarations::test_undeclared_superscripts_stay_powers
   ✓ operators::test_truthiness_of_objects::an_object_is_truthy
   ✓ operators::test_truthiness_of_objects::empty_values_are_falsy
   ✓ operators::test_tuple_comparison_warning::a_parenthesized_tuple_comparison_does_not_warn
@@ -1494,6 +1498,9 @@ PASSED:
   ✓ types::test_traits::test_two_user_types_each_have_their_own_compare
   ✓ types::test_tuple_values::a_tuple_with_a_variable_is_assigned_whole
   ✓ types::test_tuple_values::tuples_compare_element_by_element
+  ✓ types::test_type_name_definition_forms::test_define_operator_takes_the_same_slots_as_assign
+  ✓ types::test_type_name_definition_forms::test_to_phrase_with_a_block_body
+  ✓ types::test_type_name_definition_forms::test_wiki_forms
   ✓ types::test_type_name_matching::test_a_declared_class_types_its_noun
   ✓ types::test_type_name_matching::test_a_multi_word_noun_is_named_and_typed_by_its_head
   ✓ types::test_type_name_matching::test_an_unknown_noun_is_an_untyped_name
@@ -1956,4 +1963,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-40 ignored, 1951 passed, 0 failed, 1951 total tested
+40 ignored, 1958 passed, 0 failed, 1958 total tested
