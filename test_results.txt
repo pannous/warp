@@ -362,6 +362,9 @@ PASSED:
   ✓ function::tests::test_kind_to_valtype
   ✓ function::tests::test_signature_builder
   ✓ function::tests::test_signature_format
+  ✓ functions::test_analysis_memo::test_a_changed_tree_is_analysed_anew
+  ✓ functions::test_analysis_memo::test_an_analysis_that_says_something_runs_again
+  ✓ functions::test_analysis_memo::test_the_same_tree_is_analysed_once
   ✓ functions::test_anonymous_application::test_a_block_applied_to_a_juxtaposed_argument
   ✓ functions::test_anonymous_application::test_a_data_block_is_not_applied
   ✓ functions::test_anonymous_application::test_an_anonymous_function_broadcasts_over_a_list
@@ -2289,4 +2292,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2284 passed, 0 failed, 2284 total tested
+31 ignored, 2287 passed, 0 failed, 2287 total tested
