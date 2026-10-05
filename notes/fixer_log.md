@@ -110,3 +110,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 fix-infinity
 - `∞` is the float infinity (Number::Inf, typed Float): `∞ > 1e300`, `-∞`, `1.0/0.0 == ∞`, `\:infinity`
   (tests/numbers/test_infinity.rs). P56 (4) default; ω stays the hyperreal.
+
+## 2026-10-05 fix-hash-slices
+- Slices: `xs[a..b]`, `xs[a:b]`, text and variable bounds already worked; new `xs#(a…b)` / `xs#(a..b)` 1-based
+  slices (wasp_parser hash_slice_bounds). Unparenthesized `xs#a..b` stays the range from the value xs#a (it works on
+  main: `xs#1..6`), so it is no slice; queued as a question.
