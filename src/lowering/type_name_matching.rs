@@ -7,7 +7,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 const ARTICLES: [&str; 3] = ["a", "an", "the"];
-const PREPOSITIONS: [&str; 10] = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on"];
+pub(crate) const PREPOSITIONS: [&str; 10] = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on"];
 const IT: &str = "it";
 /// Statement words before a typed declaration that never name a function: `global number = 3`, `let int x = 1`
 const STATEMENT_WORDS: [&str; 20] = [

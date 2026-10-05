@@ -44,6 +44,8 @@ implemented in src/lowering/type_name_matching.rs (`parameter_slots`, used by th
    multi-word classes, because `class full name {…}` cannot be declared yet (the parser takes one word after `class`).
 5. A slot that is a single known type word and the only parameter is also `it` (`fibonacci number`, `foo of int`).
 6. Spaced heads without any known type word (`f x = …`) keep their old meaning; the `to` phrase always uses the slots.
+8. Calls with the phrase's prepositions (P52, user): `add 1 to 2`, `square of 4`, `move 1 from 2 to 3`
+   (src/lowering/phrase_calls.rs, the first source pass). Elsewhere `to` stays a range and `of` a field lookup.
 7. One parse for every spelling: `=` and `:=` heads both go through `type_name_matching::spaced_parameters`
    (declarations::spaced_definition delegates to it), the `to` phrase takes a `:` or a `{…}` body. A lone type-word
    parameter is `it` only when the body does not use the word itself (`fibonacci number := … number … it …` keeps
