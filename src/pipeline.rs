@@ -2,7 +2,7 @@
 //! the WASM GC emitter (wasm_emitter) → run. `eval`, `compile` and `lower` are the entry points; wasm_emitter
 //! re-exports them.
 
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::{emit_module, find_struct_instantiation, WasmGcEmitter};
 use crate::wasp_parser::WaspParser;
