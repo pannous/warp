@@ -110,3 +110,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 fix-infinity
 - `∞` is the float infinity (Number::Inf, typed Float): `∞ > 1e300`, `-∞`, `1.0/0.0 == ∞`, `\:infinity`
   (tests/numbers/test_infinity.rs). P56 (4) default; ω stays the hyperreal.
+
+## 2026-10-05 decided-test-edits
+- P55: test_while_nop_issue reads x after the loop, un-ignored. P59: four array tests edited and un-ignored (own commit);
+  `x is 100 times [0]` written as the assignment `x = 100 times [0]` (assumption, `is` compares).
