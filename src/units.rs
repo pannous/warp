@@ -296,6 +296,11 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 			Ok(value)
 		}
 		Node::Key(left, Op::Neg, right) if matches!(left.as_ref(), Node::Empty) => negate(evaluate_in(right, variables)?),
+		// `6 m² as cm²` reads `(6 m² as cm)²`: the power belongs to the target unit
+		Node::Key(conversion, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) && powered_conversion(conversion, *op).is_some() => {
+			let (quantity, target) = powered_conversion(conversion, *op).expect("guarded");
+			convert(evaluate_in(quantity, variables)?, target)
+		}
 		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
 			let exponent = if *op == Op::Square { 2 } else { 3 };
 			arithmetic(evaluate_in(base, variables)?, Op::Pow, Value::Number(exponent))
@@ -321,6 +326,14 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 		},
 		_ => Err(Stop::Unsupported),
 	}
+}
+
+/// `q as cm` under a power: the quantity and the powered target units
+fn powered_conversion(conversion: &Node, op: Op) -> Option<(&Node, Vec<Factor>)> {
+	let Node::Key(quantity, Op::As, unit) = conversion.drop_meta() else { return None };
+	let exponent = if op == Op::Square { 2 } else { 3 };
+	let target = unit_expression(unit)?.into_iter().map(|factor| Factor { power: factor.power * exponent, ..factor }).collect();
+	Some((quantity, target))
 }
 
 /// A conversion target written as units: `m`, `minutes`, `cm²`, `km/h`, `kg*m/s²`

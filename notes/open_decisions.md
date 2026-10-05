@@ -306,7 +306,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   rule for unknown words (`photo`) and multi-word class names.
 - D4 constructor vs data: "Distinguish". `T{…}` with a known type constructs/validates, `k:{…}` is plain data, not equal.
 - D8 `≈` / `~` / `circa`: "Relative 1e-9 + override". Default relative tolerance 1e-9, settable via `tolerance = …`.
-- D15 auto-imports: "Later", parked. D10 return-type polymorphism: "Park", parked.
+- D15 auto-imports: "Later", parked. D10 return-type polymorphism: parked then, un-parked later as P17 ("Dispatch on return type", done: notes/dispatch.md, src/lowering/overloads.rs).
 - #25 / #36 `first [10, 5]`, `reduce [7] …`: "if by subscript you mean index then we already have a rule that space
   disabled index". So a space before `[` never indexes; reading these as an index is a bug against that rule:
   `word [..]` passes the list as an argument, only glued `a[..]` indexes.
