@@ -1,6 +1,7 @@
 === Test Results ===
 
 PASSED:
+  ✓ control::test_all_with_condition::all_with_a_comparison_filters_the_items
   ✓ control::test_atomic_arrays::atomic_is_shared
   ✓ control::test_await_go::await_of_a_start_is_the_result
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
@@ -47,6 +48,7 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_filter_loop_over_variable::a_filter_loop_over_a_variable
   ✓ control::test_filter_loops::test_a_class_name_loop_visits_only_its_instances
   ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
   ✓ control::test_filter_loops::test_a_filter_warns_once_with_its_explicit_form
@@ -92,6 +94,7 @@ PASSED:
   ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
   ✓ control::test_object_blocks::test_a_computed_entry_warns_where_it_is_written
   ✓ control::test_object_blocks::test_an_object_runs_as_code
+  ✓ control::test_object_blocks::test_charged_object_fields_are_value_now
   ✓ control::test_object_blocks::test_computed_entries_are_uncharged
   ✓ control::test_object_blocks::test_statements_in_braces_are_a_block
   ✓ control::test_raise::raise_ends_the_run_with_its_message
@@ -351,6 +354,7 @@ PASSED:
   ✓ functions::test_closures::an_item_of_a_function_list_called_directly
   ✓ functions::test_closures::closures_given_floats_take_floats
   ✓ functions::test_closures::closures_of_ints_are_called_without_boxes
+  ✓ functions::test_closures::per_site_result_kind_when_arity_mixes_function_and_int
   ✓ functions::test_closures::test_a_closure_prints_as_its_function
   ✓ functions::test_closures::test_a_lambda_without_parameters
   ✓ functions::test_closures::test_a_list_of_closures
@@ -369,6 +373,14 @@ PASSED:
   ✓ functions::test_closures::test_map_and_reduce_with_a_closure_variable
   ✓ functions::test_closures::test_not_a_function_stays_loud
   ✓ functions::test_closures::test_returned_closure
+  ✓ functions::test_constant_free_variables::a_changed_variable_stays
+  ✓ functions::test_constant_free_variables::a_condition_on_a_constant_is_decided
+  ✓ functions::test_constant_free_variables::a_constant_text_is_inlined
+  ✓ functions::test_constant_free_variables::a_global_variable_stays
+  ✓ functions::test_constant_free_variables::a_non_constant_value_stays
+  ✓ functions::test_constant_free_variables::a_parameter_or_a_key_of_the_same_name_stays
+  ✓ functions::test_constant_free_variables::a_stable_constant_is_inlined
+  ✓ functions::test_constant_free_variables::constant_arithmetic_is_computed_after_inlining
   ✓ functions::test_def_forms::a_def_function_calls_its_function_parameter
   ✓ functions::test_def_forms::a_parameter_tested_for_membership_is_no_function
   ✓ functions::test_def_forms::definition_forms_agree
@@ -392,6 +404,13 @@ PASSED:
   ✓ functions::test_folding_in_bodies::a_call_on_a_parameter_stays
   ✓ functions::test_folding_in_bodies::a_constant_call_in_a_body_is_folded
   ✓ functions::test_folding_in_bodies::a_constant_call_in_a_loop_is_folded
+  ✓ functions::test_free_var_if_arms::capped_single_and_semantics
+  ✓ functions::test_free_var_if_arms::free_var_arithmetic_without_if
+  ✓ functions::test_free_var_if_arms::free_var_only_in_condition_stays
+  ✓ functions::test_free_var_if_arms::global_capped_sum
+  ✓ functions::test_free_var_if_arms::non_foldable_capped_sum
+  ✓ functions::test_free_var_if_arms::ternary_capped_sum
+  ✓ functions::test_free_var_if_arms::then_arm_only_free_var_sum
   ✓ functions::test_function_keyword::function_defines_like_def
   ✓ functions::test_function_values::test_a_function_argument_of_a_specialised_function_is_passed_on
   ✓ functions::test_function_values::test_a_lambda_that_captures_is_passed_as_a_closure
@@ -437,9 +456,17 @@ PASSED:
   ✓ functions::test_late_binding::a_variable_bound_after_the_definition_is_read_at_call_time
   ✓ functions::test_late_binding::declaring_global_reads_the_current_value
   ✓ functions::test_late_binding::in_place_mutation_counts_as_a_change
+  ✓ functions::test_late_binding::late_binding_change_inside_function_is_an_error
+  ✓ functions::test_late_binding::late_binding_change_inside_function_with_no_later_call_is_fine
   ✓ functions::test_late_binding::loop_variables_are_captured_per_iteration
+  ✓ functions::test_late_binding::nested_def_without_shared_locals_is_callable
+  ✓ functions::test_late_binding::nonlocal_needs_a_variable_of_an_enclosing_def
+  ✓ functions::test_late_binding::nonlocal_reads_the_enclosing_functions_current_value
+  ✓ functions::test_late_binding::nonlocal_reads_the_value_at_each_call
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
+  ✓ functions::test_memoization::fib_is_memoized
+  ✓ functions::test_memoization::only_overlapping_recursion_is_memoized
   ✓ functions::test_method_syntax_calls::test_method_syntax_calls_a_libm_function
   ✓ functions::test_method_syntax_calls::test_method_syntax_calls_a_rounding_function
   ✓ functions::test_method_words::test_chars_of_text_literal_in_assignment
@@ -829,6 +856,9 @@ PASSED:
   ✓ numbers::test_angle::test_switch
   ✓ numbers::test_angle::test_switch_evaluation
   ✓ numbers::test_angle::test_truthy_and
+  ✓ numbers::test_big_ratio::test_big_ratio_readback_stays_exact
+  ✓ numbers::test_big_ratio::test_big_ratio_terminating_decimal
+  ✓ numbers::test_big_ratio::test_big_ratio_unit_amounts_stay_exact
   ✓ numbers::test_counting_units::count_unit_of_text
   ✓ numbers::test_counting_units::size_of_text_in_unit
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_accepts_exact_reals
@@ -1453,6 +1483,7 @@ PASSED:
   ✓ text::test_nested_list_text::a_count_takes_the_indexed_element
   ✓ text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal
   ✓ text::test_nested_list_text::an_index_is_an_atom_so_a_method_applies_to_the_element
+  ✓ text::test_print_all_characters::print_all_characters_prints_each
   ✓ text::test_print_arguments::print_joins_its_arguments_with_a_space
   ✓ text::test_print_arguments::print_of_a_braceless_call_is_worth_its_result
   ✓ text::test_print_arguments::print_of_a_braceless_call_prints_its_result
@@ -1729,6 +1760,7 @@ PASSED:
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_holds_compiled_programs
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_keys_on_the_engine_settings
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_recompiles_a_damaged_entry
+  ✓ wasm::test_compiled_module_cache::test_gc_engine_is_shared
   ✓ wasm::test_emitter::test_compact_empty
   ✓ wasm::test_emitter::test_compact_float
   ✓ wasm::test_emitter::test_compact_int
@@ -2147,4 +2179,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2142 passed, 0 failed, 2142 total tested
+37 ignored, 2174 passed, 0 failed, 2174 total tested
