@@ -13,7 +13,7 @@
 //! wasm_emitter `refresh_enclosing_captures`), so `nonlocal y`
 //! needs no code of its own: the declaration only lifts the check and is dropped here. Writing y from inner waits.
 
-use crate::analyzer::{captured_variables, collect_variables, declare_global, extract_user_functions, find_assignments, is_list_mutating_method, param_kind, Scope};
+use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, is_list_mutating_method, param_kind, Scope};
 use crate::context::{Context, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::effects::EffectReport;
@@ -263,8 +263,9 @@ pub(crate) fn functions_in(statement: &Node) -> Vec<UserFunctionDef> {
 	if !is_definition {
 		return vec![];
 	}
+	// names, parameters and bodies only: the kinds the full inference adds are read by no caller
 	let mut context = Context::new();
-	extract_user_functions(&mut context, statement);
+	crate::analyzer::defined_functions(&mut context, statement);
 	context.user_functions.into_values().collect()
 }
 
