@@ -4366,7 +4366,7 @@ fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 					Node::Symbol(first_sym) => {
 						if first_sym == "import" && items.len() >= 2 {
 							if items.len() == 2 {
-								let lib = items[1].name();
+								let lib = library_name(&items[1]);
 								add_ffi_lib(ctx, &lib);
 								return;
 							}
@@ -4374,19 +4374,19 @@ fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 							if items.len() >= 3 {
 								if let Node::Key(ref key, _, ref value) = items[2].drop_meta() {
 									if key.name() == "from" {
-										let lib = value.name();
+										let lib = library_name(value);
 										func_names.iter().for_each(|func_name| add_ffi_import(ctx, func_name, &lib));
 										return;
 									}
 								}
 							}
 							if items.len() >= 4 && items[2].name() == "from" {
-								let lib = items[3].name();
+								let lib = library_name(&items[3]);
 								func_names.iter().for_each(|func_name| add_ffi_import(ctx, func_name, &lib));
 								return;
 							}
 						} else if first_sym == "use" && items.len() >= 2 {
-							let lib = items[1].name();
+							let lib = library_name(&items[1]);
 							add_ffi_lib(ctx, &lib);
 							return;
 						}
@@ -4411,7 +4411,7 @@ fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 				if let Node::Key(ref from_key, _, ref lib) = value.drop_meta() {
 					if from_key.name() == "from" {
 						let func_name = key.name();
-						let lib_name = lib.name();
+						let lib_name = library_name(lib);
 						add_ffi_import(ctx, &func_name, &lib_name);
 						return;
 					}
@@ -4451,6 +4451,14 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 			extract_host_words(ctx, right);
 		}
 		_ => {}
+	}
+}
+
+/// The library an import names: `"z"` and `'m'` are one-character texts, which parse as characters
+fn library_name(library: &Node) -> String {
+	match library.drop_meta() {
+		Node::Char(letter) => letter.to_string(),
+		other => other.name(),
 	}
 }
 

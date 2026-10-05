@@ -97,6 +97,8 @@ pub fn map_c_type_to_valtype(c_type: &str) -> Option<wasm_encoder::ValType> {
 }
 
 const SDL_PREFIX: &str = "SDL_";
+/// The libc functions link_libc_functions defines by hand; any other libc import is linked from the process
+const HAND_LINKED_LIBC: [&str; 8] = ["abs", "strlen", "atoi", "atol", "atof", "strcmp", "strncmp", "rand"];
 
 /// C keywords that start a statement: a line holding one declares no function
 const C_STATEMENT_KEYWORDS: [&str; 9] = ["return", "if", "else", "while", "for", "do", "switch", "case", "goto"];
@@ -106,8 +108,9 @@ const C_STATEMENT_KEYWORDS: [&str; 9] = ["return", "if", "else", "while", "for",
 pub fn extract_function_signature(declaration: &str, library: &str) -> Option<FfiHeaderSignature> {
     let decl = declaration.trim();
 
-    // Skip empty lines, comments, preprocessor directives
-    if decl.is_empty() || decl.starts_with("//") || decl.starts_with('#') || decl.starts_with("/*") {
+    // Skip empty lines, comments (also a block comment's continued lines: `** See also: [sqlite3_libversion()]`),
+    // preprocessor directives
+    if decl.is_empty() || decl.starts_with("//") || decl.starts_with('#') || decl.starts_with("/*") || decl.starts_with('*') {
         return None;
     }
 
@@ -152,9 +155,11 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
 
     // Function name is the last part, may have pointer marker
     let mut name = parts.last()?.to_string();
-    // Handle "*func" case
+    // Handle "*func" case: the stars belong to the return type (`char *getenv(…)` returns char *)
+    let mut pointer_marks = String::new();
     while name.starts_with('*') {
         name = name[1..].to_string();
+        pointer_marks.push('*');
     }
 
     // Return type is everything before the name
@@ -163,9 +168,10 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
     } else {
         "int".to_string() // C default
     };
+    let return_type = if pointer_marks.is_empty() { return_type } else { format!("{return_type} {pointer_marks}") };
 
-    // Find closing paren
-    let close_paren = decl.rfind(')')?;
+    // Find closing paren; a line whose last `)` comes before its first `(` (sqlite3.h has such) declares nothing
+    let close_paren = decl.rfind(')').filter(|close| *close > paren_pos)?;
     let params_str = &decl[paren_pos+1..close_paren];
 
     // Parse parameters
@@ -357,6 +363,26 @@ pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, Ff
     signatures
 }
 
+/// The C functions whose result is a pointer (`char *getenv(…)`, `sqlite3 *…`): they are not imported, a call says why
+static POINTER_RESULTS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// Does a parsed header declare `name` with a pointer result (`char *getenv(const char *)`)
+pub fn returns_pointer(name: &str) -> bool {
+    POINTER_RESULTS.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).iter().any(|known| known == name)
+}
+
+/// The error of a call nothing resolves: a C function with a pointer result says why it is missing
+pub fn undefined_function_message(name: &str) -> String {
+    match returns_pointer(name) {
+        true => format!("{name} returns a C pointer (char*, a struct): texts and handles from C are not supported yet"),
+        false => format!("undefined function: {name}"),
+    }
+}
+
+fn is_pointer_type(c_type: &str) -> bool {
+    c_type.contains('*')
+}
+
 fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
     let mut sigs = HashMap::new();
     let paths = get_library_header_paths(library);
@@ -364,6 +390,11 @@ fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature>
     for path in &paths {
         let header_sigs = parse_header_file(path, library);
         for hsig in header_sigs {
+            // a pointer result would cross as a truncated i32: refused until texts and handles from C exist
+            if is_pointer_type(&hsig.return_type) {
+                POINTER_RESULTS.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(hsig.name.clone());
+                continue;
+            }
             if let Some(ffi_sig) = header_sig_to_ffi_sig(&hsig) {
                 sigs.insert(hsig.name.clone(), ffi_sig);
             }
@@ -568,6 +599,10 @@ pub fn is_ffi_function(name: &str) -> bool {
 /// Get FFI signature for a function by name
 /// Searches well-known libraries (m, c, SDL2) via dynamic header discovery
 pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
+    // a function with a pointer result is imported nowhere (returns_pointer); its libraries' headers tell
+    if implicit_header_libraries(name).iter().any(|lib| !get_signatures_from_headers(lib).is_empty() && returns_pointer(name)) {
+        return None;
+    }
     // First check cached signatures from well-known libraries
     if let Some(sig) = get_ffi_signatures().get(name).cloned() {
         return Some(sig);
@@ -592,16 +627,20 @@ pub fn implicit_header_libraries(name: &str) -> &'static [&'static str] {
 
 /// Get FFI signature from a specific library's headers
 pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignature> {
-    // First check hardcoded
-    if let Some(sig) = get_ffi_signatures().get(name).cloned() {
-        if sig.library == resolve_library_alias(library) {
-            return Some(sig);
+    let library = resolve_library_alias(library);
+    let built_in = get_ffi_signatures().get(name).filter(|sig| sig.library == library).cloned();
+    // the hand-linked libc functions and libm keep their wasm-adapted signatures (strcmp of two texts)
+    if library == "m" || (library == "c" && HAND_LINKED_LIBC.contains(&name)) {
+        if built_in.is_some() {
+            return built_in;
         }
     }
-
-    // Try headers
-    let header_sigs = get_signatures_from_headers(library);
-    header_sigs.get(name).cloned()
+    // any other function is linked from its header declaration (link_single_function), so it is imported as declared
+    let declared = get_signatures_from_headers(library).get(name).cloned();
+    if returns_pointer(name) {
+        return None;
+    }
+    declared.or(built_in)
 }
 
 /// Link FFI functions into a wasmtime linker
@@ -861,6 +900,14 @@ fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
         return Some(Arc::clone(lib));
     }
 
+    // libc is already loaded: the process itself has its symbols
+    #[cfg(unix)]
+    if lib_name == "c" {
+        let arc = Arc::new(Library::from(libloading::os::unix::Library::this()));
+        guard.insert(lib_name.to_string(), Arc::clone(&arc));
+        return Some(arc);
+    }
+
     // Try various library paths
     let paths = get_library_paths(lib_name);
     for path in paths {
@@ -978,8 +1025,11 @@ pub fn link_dynamic_library(
     linker: &mut Linker<FfiState>,
     engine: &Engine,
     lib_name: &str,
+    imported: &std::collections::HashSet<String>,
 ) -> Result<usize> {
-    // Load the dynamic library
+    // the module imports under the name the program wrote (`use zlib`), the library and its headers go by their own (z)
+    let import_name = lib_name;
+    let lib_name = resolve_library_alias(lib_name);
     let library = match get_or_load_library(lib_name) {
         Some(lib) => lib,
         None => {
@@ -998,8 +1048,9 @@ pub fn link_dynamic_library(
     for header_path in &header_paths {
         let signatures = parse_header_file(header_path, lib_name);
 
-        for sig in signatures {
-            if link_single_function(linker, engine, lib_name, &library, &sig).is_ok() {
+        // only what the module imports: libc's headers declare hundreds of functions
+        for sig in signatures.iter().filter(|sig| imported.contains(&sig.name) && !is_pointer_type(&sig.return_type)) {
+            if link_single_function(linker, engine, import_name, &library, sig).is_ok() {
                 linked_count += 1;
             }
         }
@@ -1276,19 +1327,20 @@ pub fn link_module_libraries(
     use std::collections::HashSet;
 
     // Collect unique library names from imports
-    let mut libs_to_link: HashSet<String> = HashSet::new();
+    let mut libs_to_link: HashMap<String, HashSet<String>> = HashMap::new();
 
     for import in module.imports() {
         let module_name = import.module();
-        // Skip built-in libraries that are already linked
-        if !matches!(module_name, "m" | "c" | "libm" | "libc" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY) {
-            libs_to_link.insert(module_name.to_string());
+        // Skip built-in libraries that are already linked; libc beyond its built-in functions (toupper) is linked here
+        let built_in_libc = matches!(module_name, "c" | "libc") && HAND_LINKED_LIBC.contains(&import.name());
+        if !built_in_libc && !matches!(module_name, "m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY) {
+            libs_to_link.entry(module_name.to_string()).or_default().insert(import.name().to_string());
         }
     }
 
     // Link each discovered library
-    for lib_name in libs_to_link {
-        match link_dynamic_library(linker, engine, &lib_name) {
+    for (lib_name, imported) in libs_to_link {
+        match link_dynamic_library(linker, engine, &lib_name, &imported) {
             Ok(count) if count > 0 => {
             }
             Ok(_) => {
@@ -1422,6 +1474,7 @@ pub fn resolve_library_alias(alias: &str) -> &'static str {
         "m" | "math" | "libm" => "m",
         "c" | "libc" => "c",
         "SDL2" | "sdl2" | "sdl" => "SDL2",
+        "z" | "zlib" => "z",
         _ => {
             // Strip "lib" prefix for any library (e.g., "libfoo" → "foo")
             if let Some(stripped) = alias.strip_prefix("lib") {

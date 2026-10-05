@@ -201,10 +201,9 @@ fn test_print() {
 }
 
 #[test]
-#[ignore]
 fn test_math_primitives() {
 	is!("42.1", 42.1); // todo: let Node : return(42.1) or print value to stdout
-	is!("-42.1", 42.1);
+	is!("-42.1", -42.1);
 	is!("42", 42);
 	is!("-42", -42);
 	is!("2000000000", 2000000000); // todo stupid smart pointers

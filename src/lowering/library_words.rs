@@ -734,7 +734,7 @@ impl Lowering {
 		}
 		let is_value = matches!(receiver.drop_meta(), Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _));
 		let call = Node::Key(Box::new(receiver.clone()), Op::Dot, Box::new(method.clone()));
-		(!is_known && is_value).then(|| Diagnostic::at(&call, format!("undefined function: {name}")).into_error())
+		(!is_known && is_value).then(|| Diagnostic::at(&call, crate::ffi::undefined_function_message(name)).into_error())
 	}
 
 	/// `object.name = value` is `object = field_with(object, "name", value)`; a nested path updates the objects on the way
