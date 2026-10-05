@@ -16,3 +16,4 @@ The supervisor should remove the DONE elements after a while.
 - `catch e` / `except E as e`: the caught error is no value yet (a fallback that uses e is a loud error); binding it needs the error value or the trap detail in the fallback. (fixer 2026-10-05, P60)
 - `warp --help` prints only the wiki link, not the usage list that a bare `warp` shows (found while rewriting README, 2026-10-05)
 - `square 3 + square(4)` with `square := it²` gives 361 (parsed as square(3+square(4))): silent footgun, deserves an Ask warning?
+- `a=1;b=2; x : a+b; x!` prints the symbol `x` silently: `x!` on a name falls through to the mutation marker (wasp_parser `try_parse_evaluate_bang`); charged.md §5 wants 3 (constant quote) or a loud error. (runtime-eval study, 2026-10-05, notes/runtime_eval.md)
