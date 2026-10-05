@@ -85,6 +85,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P80 exact ratios and big Ints cross to tasks: control::test_threads::an_exact_number_beyond_the_fixnums_cannot_cross_yet
   becomes is!(…, 3.5), renamed an_exact_number_crosses_to_a_task (user decision, existing-test edit). Asked by the
   Fixer warp-2d (card g-rH6E); as recommended.
+- P81 the kebab-key warning (`a=5; b=1; a-b:2; a-b`) offers "the data key": `"a-b":2` (only when nothing reads `a-b`
+  bare in that block) and "the subtraction" at each bare read: `a - b`. No renaming fix. Asked by the Fixer warp-2d
+  (card g-qU1o, was parked in Later; the user answered anyway); as recommended.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
