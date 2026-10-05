@@ -106,3 +106,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 fix-try-raise
 - `try f x else y`: the guarded part may be a braceless call (was "`try` needs an `else`" after the first word)
   (tests/control/test_try_braceless_call.rs).
+
+## 2026-10-05 fix-infinity
+- `∞` is the float infinity (Number::Inf, typed Float): `∞ > 1e300`, `-∞`, `1.0/0.0 == ∞`, `\:infinity`
+  (tests/numbers/test_infinity.rs). P56 (4) default; ω stays the hyperreal.

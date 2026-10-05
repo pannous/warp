@@ -1553,6 +1553,7 @@ impl WaspParser {
 			'<' => self.parse_bracketed('<'),
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
 			'ø' => { self.advance(); return Empty }
+			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
 			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
 			'$' if self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_' => self.parse_dollar_name(),
