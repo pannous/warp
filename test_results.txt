@@ -306,6 +306,10 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_zlib_discovery
   ✓ ffi::test_ffi::test_import_from_pattern_emit
   ✓ ffi::test_ffi::test_import_from_pattern_parse
+  ✓ ffi::test_foreign_handles::test_a_handle_goes_back_as_an_argument
+  ✓ ffi::test_foreign_handles::test_a_js_handle
+  ✓ ffi::test_foreign_handles::test_python_handles
+  ✓ ffi::test_foreign_handles::test_python_numbers_stay_numbers
   ✓ ffi::test_foreign_js::test_an_unknown_js_member_is_loud
   ✓ ffi::test_foreign_js::test_js_globals
   ✓ ffi::test_foreign_js::test_js_modules
@@ -2272,4 +2276,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2267 passed, 0 failed, 2267 total tested
+31 ignored, 2271 passed, 0 failed, 2271 total tested
