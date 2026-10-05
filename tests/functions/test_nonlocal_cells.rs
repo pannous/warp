@@ -12,12 +12,12 @@ fn test_inner_changes_the_outer_variable() {
 
 #[test]
 fn test_an_escaping_closure_keeps_its_values() {
-	is!("def make(){ inc = () => 5; inc }; a = make(); a()", 5);
-	is!("def make(k){ def add(x){ k + x }; add }; a = make(1); b = make(10); a(5) + b(5)", 21);
+	is!("def make(){ inc = () => 5; function inc }; a = make(); a()", 5);
+	is!("def make(k){ def add(x){ k + x }; function add }; a = make(1); b = make(10); a(5) + b(5)", 21);
 }
 
 #[test]
 fn test_an_escaping_closure_keeps_its_cell() {
-	is!("def make(){ n=0; def inc(){ nonlocal n; n += 1; n }; inc }; c = make(); c(); c()", 2);
-	is!("def make(){ n=0; def inc(){ nonlocal n; n += 1; n }; inc }; a = make(); b = make(); a(); a(); b()", 1);
+	is!("def make(){ n=0; def inc(){ nonlocal n; n += 1; n }; function inc }; c = make(); c(); c()", 2);
+	is!("def make(){ n=0; def inc(){ nonlocal n; n += 1; n }; function inc }; a = make(); b = make(); a(); a(); b()", 1);
 }

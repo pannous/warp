@@ -14,5 +14,5 @@ fn test_inner_changes_a_nonlocal_list() {
 
 #[test]
 fn test_an_escaping_closure_keeps_a_text_cell() {
-	is!("def make(){ log=\"\"; def add(){ nonlocal log; log = log + \"x\"; log }; add }; a = make(); b = make(); a(); b(); a()", "xx");
+	is!("def make(){ log=\"\"; def add(){ nonlocal log; log = log + \"x\"; log }; function add }; a = make(); b = make(); a(); b(); a()", "xx");
 }
