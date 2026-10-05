@@ -251,6 +251,12 @@ nothing to commit
 
 use `cargo fix --offline --allow-dirty --lib --bins` after each commit and commit again (`--lib --bins` keeps it out of tests/, `--allow-dirty` because cargo flags git-ignored non-.rs files as dirty)
 
+## To-dos
+This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
+not in todo.md: every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next); `todo list`,
+`todo move <card> <column>`, `todo done <card>` (never delete a card). Without the board, `todo add` falls back to
+todo.md "## Fallback"; `todo import` moves those entries later.
+
 Other than fixme comment you can find new tasks via tests marked #[ignore = "next"] or even #[ignore = "soon"] 
 un-ignore everything once it passes 
 
