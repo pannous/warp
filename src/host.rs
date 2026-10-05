@@ -41,6 +41,11 @@ pub const TASK_STATUS: &str = "task_status";
 /// task_poll(): where a loop starts in a program that controls tasks, a task the browser paused waits there (natively
 /// epoch interruption does it: a no-op)
 pub const TASK_POLL: &str = "task_poll";
+/// `try f(args) else Y` of a user function: guarded_call("f·node", [args]) calls f's node wrapper in the same instance
+/// through the host, which turns the engine's stack overflow into the Error "call stack exhausted" that `try` catches
+pub const GUARDED_CALL: &str = "guarded_call";
+/// The Error a caught stack overflow is (the wasmtime trap's own words)
+pub const STACK_EXHAUSTED: &str = "call stack exhausted";
 pub const TASK_FINISHED: i64 = 1;
 pub const TASK_FAILED: i64 = 2;
 pub const TASK_STOPPED: i64 = 3;
@@ -56,14 +61,14 @@ pub const MAX_TASK_ARGUMENTS: usize = 4;
 pub const SHARED_WORDS: [&str; 5] = ["shared_new", "shared_get", "shared_set", "shared_add", "shared_count"];
 /// The same for an array of floats (`shared xs = float[n]`), its cells holding the bits: get, set, add
 pub const SHARED_FLOAT_WORDS: [&str; 3] = ["shared_getf", "shared_setf", "shared_addf"];
-pub const HOST_WORDS: [&str; 21] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
+pub const HOST_WORDS: [&str; 22] = [GUARDED_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
 	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2]];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 21] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 22] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
+	[(GUARDED_CALL, vec![I32, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
 		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node]), (TASK_STATUS, vec![I64], vec![I64]), (TASK_POLL, vec![], vec![]),
@@ -90,6 +95,42 @@ fn next_random() -> u64 {
 
 fn milliseconds_since_epoch() -> i64 {
 	std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as i64)
+}
+
+/// guarded_call(name, arguments): the node wrapper `name` called with the argument list in the caller's own instance;
+/// a stack overflow inside is the Error "call stack exhausted" (what the aborted call wrote to globals and memory stays),
+/// any other failure, running out of fuel included, ends the run as before
+#[cfg(feature = "native")]
+fn guarded_call(mut caller: Caller<'_, HostState>, name: i32, arguments: Option<wasmtime::Rooted<wasmtime::AnyRef>>) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
+	let message = |failure: anyhow::Error| wasmtime::Error::msg(failure.to_string());
+	let name = crate::tasks::c_string(&mut caller, name).map_err(message)?;
+	let function = caller.get_export(&name).and_then(Extern::into_func).ok_or_else(|| wasmtime::Error::msg(format!("no exported function {name}")))?;
+	// the wrapper gives back its function's result: a Node, an Int or a Float
+	let mut result = [match function.ty(&caller).results().next() {
+		Some(wasmtime::ValType::I64) => Val::I64(0),
+		Some(wasmtime::ValType::F64) => Val::F64(0),
+		_ => Val::AnyRef(None),
+	}];
+	let value = match function.call(&mut caller, &[Val::AnyRef(arguments)], &mut result) {
+		Ok(()) => match result[0] {
+			Val::I64(n) => crate::tasks::TaskValue::Int(n),
+			Val::F64(bits) => crate::tasks::TaskValue::Float(f64::from_bits(bits)),
+			node => return Ok(node.unwrap_anyref().copied()),
+		},
+		Err(failure) if failure.downcast_ref::<wasmtime::Trap>() == Some(&wasmtime::Trap::StackOverflow) => {
+			crate::tasks::TaskValue::Text(STACK_EXHAUSTED.to_string())
+		}
+		Err(failure) => return Err(failure),
+	};
+	let builders = crate::tasks::Builders::of(&mut |export| caller.get_export(export)).map_err(message)?;
+	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(message)?;
+	if !matches!(value, crate::tasks::TaskValue::Text(_)) {
+		return Ok(built.unwrap_anyref().copied());
+	}
+	let error_of = caller.get_export(crate::wasm_emitter::text_builtins::ERROR_OF).and_then(Extern::into_func).ok_or_else(|| wasmtime::Error::msg("no exported error_of"))?;
+	let mut error = [Val::AnyRef(None)];
+	error_of.call(&mut caller, &[built], &mut error)?;
+	Ok(error[0].unwrap_anyref().copied())
 }
 
 /// How long `fetch URL` waits for the whole response; `fetch URL timeout SECONDS` overrides it
@@ -350,6 +391,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 		},
 	)?;
 
+	linker.func_wrap(HOST_LIBRARY, GUARDED_CALL, guarded_call)?;
 	linker.func_wrap(HOST_LIBRARY, SLEEP, |milliseconds: i64| std::thread::sleep(Duration::from_millis(milliseconds.max(0) as u64)))?;
 	// the top 53 bits make a uniform f64 in [0, 1)
 	linker.func_wrap(HOST_LIBRARY, RANDOM, || (next_random() >> 11) as f64 / (1u64 << 53) as f64)?;

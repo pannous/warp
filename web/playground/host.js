@@ -112,6 +112,20 @@ function programImports(holder, hooks) {
 			},
 			warn: (pointer, length) => holder.warnings.push(text(pointer, length)),
 			run: () => -1n,
+			// `try f(args) else Y` (src/host.rs guarded_call): f's node wrapper called in this instance; the engine's stack
+			// overflow (a RangeError) is the Error "call stack exhausted", any other failure (a raised error) goes on up
+			guarded_call: (name, values) => {
+				const module = program();
+				try {
+					const result = module[decode(cString(name))](values);
+					if (typeof result === "bigint") return module.new_int(result);
+					return typeof result === "number" ? module.new_float(result) : result;
+				} catch (failure) {
+					if (!(failure instanceof RangeError)) throw failure;
+					const [pointer, length] = writeBytes(module, utf8.encode("call stack exhausted"));
+					return module.error_of(module.new_text(pointer, length));
+				}
+			},
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
 			sleep: milliseconds => {
 				const until = Date.now() + Number(milliseconds);
