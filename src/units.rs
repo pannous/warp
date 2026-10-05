@@ -67,23 +67,41 @@ pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
 }
 
-/// An integer amount of a unit; a quantity equals the bare number of its own unit: `3km+10m == 3010`
+/// An integer amount of a unit to a power (m, m², m³); a quantity equals the bare number of its own unit: `3km+10m == 3010`
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Quantity {
 	pub amount: i64,
 	unit: &'static Unit,
+	power: u32,
 }
+
+const SUPERSCRIPT_DIGITS: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
 
 impl fmt::Display for Quantity {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{} {}", self.amount, self.unit.name)
+		write!(f, "{} {}", self.amount, self.unit.name)?;
+		if self.power != 1 {
+			let exponent: String = self.power.to_string().chars().filter_map(|digit| digit.to_digit(10)).map(|digit| SUPERSCRIPT_DIGITS[digit as usize]).collect();
+			write!(f, "{exponent}")?;
+		}
+		Ok(())
 	}
 }
 
 impl Quantity {
+	fn of(amount: i64, unit: &'static Unit) -> Quantity {
+		Quantity { amount, unit, power: 1 }
+	}
+
+	/// The amount counted in `target` to the same power: 1 m² is 10000 cm²
 	fn in_unit(&self, target: &'static Unit) -> Result<i64, String> {
-		let scaled = self.amount.checked_mul(self.unit.factor).ok_or_else(|| overflow(self))?;
-		Ok(scaled / target.factor)
+		let scale = |factor: i64| factor.checked_pow(self.power).ok_or_else(|| overflow(self));
+		let scaled = self.amount.checked_mul(scale(self.unit.factor)?).ok_or_else(|| overflow(self))?;
+		Ok(scaled / scale(target.factor)?)
+	}
+
+	fn unit_text(&self) -> String {
+		Quantity { amount: 0, ..*self }.to_string().trim_start_matches("0 ").to_string()
 	}
 }
 
@@ -256,7 +274,7 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 		Node::Number(Number::Int(n)) => Ok(Value::Number(*n)),
 		Node::Symbol(name) => match variables.get(name) {
 			Some(value) => Ok(value.clone()),
-			None => unit_named(name).map(|unit| Value::Quantity(Quantity { amount: 1, unit })).ok_or(Stop::Unsupported),
+			None => unit_named(name).map(|unit| Value::Quantity(Quantity::of(1, unit))).ok_or(Stop::Unsupported),
 		},
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			let Node::Symbol(name) = target.drop_meta() else { return Err(Stop::Unsupported) };
@@ -265,8 +283,22 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 			Ok(value)
 		}
 		Node::Key(left, Op::Neg, right) if matches!(left.as_ref(), Node::Empty) => negate(evaluate_in(right, variables)?),
+		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
+			let exponent = if *op == Op::Square { 2 } else { 3 };
+			arithmetic(evaluate_in(base, variables)?, Op::Pow, Value::Number(exponent))
+		}
 		Node::Key(quantity, Op::As, unit) if target_unit(unit).is_some() => convert(evaluate_in(quantity, variables)?, target_unit(unit).expect("guarded")),
+		// `2 h * 10 km/h` reads `(2 h * 10 km) / h`: a product of two dimensions is taken as `2 h * (10 km / h)`
+		Node::Key(product, Op::Div, divisor) if matches!(product.drop_meta(), Node::Key(_, Op::Mul, _)) => {
+			let Node::Key(a, _, b) = product.drop_meta() else { unreachable!("guarded") };
+			let (a, b, c) = (evaluate_in(a, variables)?, evaluate_in(b, variables)?, evaluate_in(divisor, variables)?);
+			match (&a, &b) {
+				(Value::Quantity(x), Value::Quantity(y)) if x.unit.dimension != y.unit.dimension => arithmetic(a, Op::Mul, arithmetic(b, Op::Div, c)?),
+				_ => arithmetic(arithmetic(a, Op::Mul, b)?, Op::Div, c),
+			}
+		}
 		Node::Key(left, op, right) => arithmetic(evaluate_in(left, variables)?, *op, evaluate_in(right, variables)?),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => evaluate_in(&items[0], variables),
 		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) if items.len() > 1 => {
 			items.iter().try_fold(Value::Number(0), |_, item| evaluate_in(item, variables))
 		}
@@ -276,7 +308,7 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 			// `3010 meters`, and a unit after an expression belongs to its last amount: `3km+10m == 3010 meters`
 			[amount, unit] if target_unit(unit).is_some() => match amount.drop_meta() {
 				Node::Key(..) => evaluate_in(&with_unit(amount, unit), variables),
-				_ => arithmetic(evaluate_in(amount, variables)?, Op::Mul, Value::Quantity(Quantity { amount: 1, unit: target_unit(unit).expect("guarded") })),
+				_ => arithmetic(evaluate_in(amount, variables)?, Op::Mul, Value::Quantity(Quantity::of(1, target_unit(unit).expect("guarded")))),
 			},
 			[quantity, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == IN_WORD) && target_unit(unit).is_some() => {
 				convert(evaluate_in(quantity, variables)?, target_unit(unit).expect("guarded"))
@@ -328,6 +360,14 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 		(Value::Quantity(a), Op::Add | Op::Sub, Value::Quantity(b)) => sum(a, op, b),
 		(Value::Quantity(a), Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge, Value::Quantity(b)) => compare(a, op, b),
 		(Value::Quantity(a), Op::Div, Value::Quantity(b)) => quotient(a, b),
+		(Value::Quantity(a), Op::Mul, Value::Quantity(b)) => product(a, b),
+		(Value::Quantity(q), Op::Pow, Value::Number(n)) => power(q, n),
+		(Value::Rate(rate), Op::Mul, Value::Quantity(q)) | (Value::Quantity(q), Op::Mul, Value::Rate(rate)) => rate_times(rate, q),
+		(Value::Rate(rate), Op::Mul, Value::Number(n)) | (Value::Number(n), Op::Mul, Value::Rate(rate)) => rate
+			.amount
+			.checked_mul(n)
+			.map(|amount| Value::Rate(Rate { amount, ..rate }))
+			.ok_or_else(|| Stop::Error(format!("{rate} * {n} overflows the integer range"))),
 		(Value::Number(_), Op::Add, Value::Quantity(other)) | (Value::Quantity(other), Op::Add | Op::Sub, Value::Number(_)) => {
 			fail(format!("incompatible operands: a plain number and {}", other.unit.name))
 		}
@@ -346,13 +386,16 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 /// `100 cm in m` is `1 m`, `150 cm in m` is `3/2 m`; a unit of another dimension is the DimensionError
 fn convert(value: Value, target: &'static Unit) -> Evaluated {
 	let Value::Quantity(quantity) = value else { return Err(Stop::Unsupported) };
+	if quantity.power != 1 {
+		return fail(format!("converting {quantity} to {} is not supported yet", target.name));
+	}
 	if quantity.unit.dimension != target.dimension {
 		return fail(format!("DimensionError: {quantity} cannot be converted to {}", target.name));
 	}
 	let scaled = quantity.amount.checked_mul(quantity.unit.factor).ok_or_else(|| Stop::Error(overflow(&quantity)))?;
 	let divisor = gcd(scaled, target.factor);
 	match target.factor / divisor {
-		1 => Ok(Value::Quantity(Quantity { amount: scaled / target.factor, unit: target })),
+		1 => Ok(Value::Quantity(Quantity::of(scaled / target.factor, target))),
 		denominator => Ok(Value::Ratio(Ratio { numerator: scaled / divisor, denominator, unit: target })),
 	}
 }
@@ -376,7 +419,7 @@ pub fn duration_in(duration: &crate::time::Duration, unit_word: &str) -> Option<
 		return Some(error(&format!("{duration} is no whole number of milliseconds")));
 	}
 	let milliseconds = i64::try_from(nanos / NANOS_PER_MILLISECOND).ok()?;
-	let quantity = Quantity { amount: milliseconds, unit: unit_named("ms").expect("a unit") };
+	let quantity = Quantity::of(milliseconds, unit_named("ms").expect("a unit"));
 	Some(match convert(Value::Quantity(quantity), target) {
 		Ok(Value::Quantity(quantity)) => Node::data(quantity),
 		Ok(Value::Ratio(ratio)) => Node::data(ratio),
@@ -397,9 +440,50 @@ fn finer_unit(a: &'static Unit, b: &'static Unit) -> Result<&'static Unit, Stop>
 	Ok(if a.factor <= b.factor { a } else { b })
 }
 
+/// The finer unit of two quantities of one dimension and power: `m²` and `cm²` count in cm², `m²` and `m` do not mix
+fn common_unit(left: &Quantity, right: &Quantity) -> Result<&'static Unit, Stop> {
+	if left.power != right.power && left.unit.dimension == right.unit.dimension {
+		return fail(format!("DimensionError: incompatible units: {} and {}", left.unit_text(), right.unit_text()));
+	}
+	finer_unit(left.unit, right.unit)
+}
+
+/// `3 m * 2 m` is `6 m²`: the factors count in their finer unit, the powers add; other dimensions are not supported yet
+fn product(left: Quantity, right: Quantity) -> Evaluated {
+	if left.unit.dimension != right.unit.dimension {
+		return fail(format!("{left} * {right}: a product of different dimensions is not supported yet"));
+	}
+	let finer = finer_unit(left.unit, right.unit)?;
+	let (x, y) = (left.in_unit(finer).map_err(Stop::Error)?, right.in_unit(finer).map_err(Stop::Error)?);
+	match x.checked_mul(y) {
+		Some(amount) => Ok(Value::Quantity(Quantity { amount, unit: finer, power: left.power + right.power })),
+		None => fail(format!("{left} * {right} overflows the integer range")),
+	}
+}
+
+/// `(2 km)²` is `4 km²`
+fn power(base: Quantity, exponent: i64) -> Evaluated {
+	let exponent = u32::try_from(exponent).ok().filter(|exponent| *exponent >= 1).ok_or(Stop::Unsupported)?;
+	let amount = base.amount.checked_pow(exponent).ok_or_else(|| Stop::Error(overflow(&base)))?;
+	Ok(Value::Quantity(Quantity { amount, unit: base.unit, power: base.power * exponent }))
+}
+
+/// `10 km/h * 30 min` is `5 km`: the duration counted in the rate's unit; a result that is no whole number is not supported yet
+fn rate_times(rate: Rate, quantity: Quantity) -> Evaluated {
+	if quantity.unit.dimension != rate.denominator.dimension || quantity.power != 1 {
+		return fail(format!("DimensionError: {rate} * {quantity}: {quantity} is no {}", rate.denominator.name));
+	}
+	let scaled = rate.amount.checked_mul(quantity.amount).and_then(|amount| amount.checked_mul(quantity.unit.factor));
+	let scaled = scaled.ok_or_else(|| Stop::Error(format!("{rate} * {quantity} overflows the integer range")))?;
+	if scaled % rate.denominator.factor != 0 {
+		return fail(format!("{rate} * {quantity} is not a whole number of {} yet", rate.numerator.name));
+	}
+	Ok(Value::Quantity(Quantity::of(scaled / rate.denominator.factor, rate.numerator)))
+}
+
 /// Comparison of two quantities in their finer unit: `3km == 3000m`, answered 1 or 0
 fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
-	let finer = finer_unit(left.unit, right.unit)?;
+	let finer = common_unit(&left, &right)?;
 	let (x, y) = (left.in_unit(finer).map_err(Stop::Error)?, right.in_unit(finer).map_err(Stop::Error)?);
 	let holds = match op {
 		Op::Eq => x == y,
@@ -417,13 +501,25 @@ fn quotient(dividend: Quantity, divisor: Quantity) -> Evaluated {
 	if divisor.amount == 0 {
 		return fail("division by zero");
 	}
+	if dividend.unit.dimension == divisor.unit.dimension && dividend.power > divisor.power {
+		// `6 m² / 2 m` is `3 m`
+		let finer = finer_unit(dividend.unit, divisor.unit)?;
+		let (x, y) = (dividend.in_unit(finer).map_err(Stop::Error)?, divisor.in_unit(finer).map_err(Stop::Error)?);
+		if y == 0 || x % y != 0 {
+			return fail(format!("{dividend} / {divisor} is not a whole number yet"));
+		}
+		return Ok(Value::Quantity(Quantity { amount: x / y, unit: finer, power: dividend.power - divisor.power }));
+	}
 	if dividend.unit.dimension != divisor.unit.dimension {
+		if dividend.power != 1 || divisor.power != 1 {
+			return fail(format!("{dividend} / {divisor}: a rate of powers is not supported yet"));
+		}
 		if dividend.amount % divisor.amount != 0 {
 			return fail(format!("{dividend} / {divisor} is not a whole number of {}/{} yet", dividend.unit.name, divisor.unit.name));
 		}
 		return Ok(Value::Rate(Rate { amount: dividend.amount / divisor.amount, numerator: dividend.unit, denominator: divisor.unit }));
 	}
-	let finer = finer_unit(dividend.unit, divisor.unit)?;
+	let finer = common_unit(&dividend, &divisor)?;
 	let (x, y) = (dividend.in_unit(finer).map_err(Stop::Error)?, divisor.in_unit(finer).map_err(Stop::Error)?);
 	if y == 0 || x % y != 0 {
 		return fail(format!("{dividend} / {divisor} is not a whole number yet"));
@@ -432,11 +528,11 @@ fn quotient(dividend: Quantity, divisor: Quantity) -> Evaluated {
 }
 
 fn sum(left: Quantity, op: Op, right: Quantity) -> Evaluated {
-	let finer = finer_unit(left.unit, right.unit)?;
+	let finer = common_unit(&left, &right)?;
 	let (x, y) = (left.in_unit(finer).map_err(Stop::Error)?, right.in_unit(finer).map_err(Stop::Error)?);
 	let amount = if op == Op::Add { x.checked_add(y) } else { x.checked_sub(y) };
 	match amount {
-		Some(amount) => Ok(Value::Quantity(Quantity { amount, unit: finer })),
+		Some(amount) => Ok(Value::Quantity(Quantity { amount, unit: finer, power: left.power })),
 		None => fail(format!("{left} {op} {right} overflows the integer range")),
 	}
 }

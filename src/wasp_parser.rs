@@ -3064,7 +3064,9 @@ impl WaspParser {
 		let word: String = rest[spaces..].iter().take_while(|c| is_identifier_char(**c)).collect();
 		let after_word: String = rest[spaces + word.chars().count()..].iter().skip_while(|c| **c == ' ').take(2).collect();
 		let starts_entry = after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==");
-		spaces > 0 && crate::units::is_unit(&word) && !starts_entry
+		// `2 m²`: the power is no part of the unit's name
+		let unit = word.trim_end_matches(|c: char| superscript_digit(c).is_some());
+		spaces > 0 && crate::units::is_unit(unit) && !starts_entry
 	}
 
 	fn at_ordinal_suffix(&self) -> bool {
