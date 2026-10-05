@@ -166,6 +166,8 @@ pub struct WasmGcEmitter {
 	globals: GlobalSection,
 	tags: TagSection,
 	guards_errors: bool, // the program has a `try` that catches runtime errors
+	/// Emitting data, not code: the value of an object entry or a quoted form, where unknown words stay words (P62)
+	data_context: bool,
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
 	extra_global_names: Vec<(u32, &'static str)>,
 
@@ -233,6 +235,7 @@ impl WasmGcEmitter {
 			globals: GlobalSection::new(),
 			tags: TagSection::new(),
 			guards_errors: false,
+			data_context: false,
 			error_catching: None,
 			extra_global_names: Vec::new(),
 			config: EmitterConfig::default(),
