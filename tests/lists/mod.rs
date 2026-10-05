@@ -35,3 +35,4 @@ mod test_empty_items;
 mod test_map_variables;
 mod test_nested_maps;
 mod test_hash_range_slices;
+mod test_hash_range_warning;

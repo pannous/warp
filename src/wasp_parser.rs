@@ -2306,6 +2306,12 @@ impl WaspParser {
 			} else {
 				op
 			};
+			if let Some(warning) = hash_range_warning(&lhs, op, &written, &rhs) {
+				if let Err(strict) = crate::diagnostic::report(&[warning]) {
+					lhs = strict;
+					continue;
+				}
+			}
 			lhs = match previous_comparand.take() {
 				Some(middle) if op.is_ordering() => {
 					let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs.clone()));
@@ -4027,6 +4033,19 @@ fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 		_ => return None,
 	};
 	Some((start.as_ref().clone(), end))
+}
+
+/// `xs#a..b` reads as the range from the value xs#a; P58 (user: "create a strong warning"): a warning naming the slice
+/// `xs#(a..b)` and the range `(xs#a)..b`
+fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) -> Option<Diagnostic> {
+	let Node::Key(target, Op::Hash, index) = lhs.drop_meta() else { return None };
+	if !matches!(op, Op::Range | Op::To) {
+		return None;
+	}
+	let (target, index, end) = (target.serialize(), index.serialize(), rhs.serialize());
+	let (target, index, end) = (target.trim(), index.trim(), end.trim());
+	let message = format!("{target}#{index}{written}{end} is the range from the value {target}#{index}: for the slice write {target}#({index}{written}{end}), for the range write ({target}#{index}){written}{end}");
+	Some(Diagnostic::at(lhs, message))
 }
 
 /// `xs#(a…b)`, `xs#(a..b)`: the 0-based start and exclusive end of a 1-based slice (`xs#a` is 1-based); only a range in
