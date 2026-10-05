@@ -56,7 +56,7 @@ The only session that runs the full suite and the only one that pushes code to m
 - Keeps the baseline (test_results.txt) and the "Merged" lines on the board; tells the supervisor after each merge.
 
 ## Workers
-- One task, one branch, one worktree: `git worktree add -b <name> /Users/me/dev/angles/warp.worktrees.noindex/<name>
+- One task, one branch, one worktree: `cowtree add -b <name> /Users/me/dev/angles/warp.worktrees.noindex/<name>
   origin/main`. Outside the repo, so grep/IDE/cargo of the main checkout never see it, and `.noindex` keeps Spotlight out.
   Uncommitted build tweak in it: `version = "0.1.1-<name>"` (notes/build_speed.md).
 - Test first, then implement. While developing, only targeted tests and only through the queue:
