@@ -78,6 +78,14 @@ fn test_curried_closures() {
 }
 
 #[test]
+fn per_site_result_kind_when_arity_mixes_function_and_int() {
+	// Without per-site kinds, closure_call_1 joins Function-returning (g(2)) and Int-returning (f / h(3))
+	// targets to Data; an exact Int binding then fails. Each callee's known targets keep the kind precise.
+	is!("add(a) := (b => (c => a+b+c)); g = add(1); h = g(2); f = x => x + 1; x:int = h(3) + f(4); x", 11);
+	is!("twice(x):=x*2; inc(x):=x+1; compose(f, g) := (x => f(g(x))); h = compose(twice, inc); f = x => x + 1; x:int = h(3) + f(2); x", 11);
+}
+
+#[test]
 fn test_a_closure_prints_as_its_function() {
 	assert_eq!(printed("twice(x):=x*2; pick(c) := if c then twice else twice; pick(1)"), "twice");
 }

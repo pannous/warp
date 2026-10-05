@@ -425,6 +425,7 @@ impl Lifting {
 /// The helpers `closure_call_n(f, a1…an)` the program calls, as user functions: a closure and n values of any kind (Data)
 pub fn register_closure_calls(context: &mut Context, program: &Node) {
 	context.closure_targets = closure_targets(program);
+	context.closure_variable_targets = settle_closure_variable_targets(context, program);
 	for arity in closure_call_arities(program) {
 		let function = Param { used_as: Some(Kind::Function), ..Param::untyped("function") };
 		let values = (1..=arity).map(|index| Param { used_as: Some(Kind::Data), ..Param::untyped(&format!("value{index}")) });
@@ -432,6 +433,13 @@ pub fn register_closure_calls(context: &mut Context, program: &Node) {
 		let params = std::iter::once(function).chain(values).collect();
 		context.user_functions.insert(name.clone(), UserFunctionDef { name, params, body: Box::new(Node::Empty), return_kind: Kind::Data, tuple_kinds: vec![], func_index: None });
 	}
+}
+
+/// Join return kinds; Data when they differ or the set is empty
+fn join_return_kinds(kinds: impl IntoIterator<Item = Kind>) -> Kind {
+	let mut kinds = kinds.into_iter();
+	let first = kinds.next().unwrap_or(Kind::Data);
+	if kinds.all(|kind| kind == first) { first } else { Kind::Data }
 }
 
 /// The closures a call of `arity` values may call
@@ -442,9 +450,110 @@ pub fn targets_of_arity(context: &Context, arity: usize) -> impl Iterator<Item =
 /// A closure call returns what all closures of its arity return; Data (any Node) when they differ
 pub fn closure_call_kind(name: &str, context: &Context, kinds: &HashMap<String, Kind>) -> Option<Kind> {
 	let arity = closure_call_arity(name)?;
-	let mut returned = targets_of_arity(context, arity).map(|function| kinds.get(&function.name).copied().unwrap_or(function.return_kind));
-	let first = returned.next().unwrap_or(Kind::Data);
-	Some(if returned.all(|kind| kind == first) { first } else { Kind::Data })
+	Some(join_return_kinds(targets_of_arity(context, arity).map(|function| kinds.get(&function.name).copied().unwrap_or(function.return_kind))))
+}
+
+/// Result kind of `closure_call_n(callee, …)`: join only the targets `callee` may hold when known; else arity-wide
+pub fn closure_call_site_kind(callee: Option<&str>, arity: usize, context: &Context, kinds: &HashMap<String, Kind>) -> Kind {
+	if let Some(variable) = callee {
+		if let Some(targets) = context.closure_variable_targets.get(variable) {
+			if !targets.is_empty() {
+				let returned = targets.iter().filter_map(|target| {
+					let function = context.user_functions.get(target)?;
+					Some(kinds.get(target).copied().unwrap_or(function.return_kind))
+				});
+				return join_return_kinds(returned);
+			}
+		}
+	}
+	closure_call_kind(&closure_call_name(arity), context, kinds).unwrap_or(Kind::Data)
+}
+
+/// `closure_new` target names a function value expression may evaluate to
+fn closure_targets_of_value(node: &Node, held: &HashMap<String, HashSet<String>>, returning: &HashMap<String, HashSet<String>>) -> HashSet<String> {
+	match node.drop_meta() {
+		Node::Symbol(name) => held.get(name).cloned().unwrap_or_else(|| returning.get(name).cloned().unwrap_or_default()),
+		other if as_closure_new(other).is_some() => {
+			let (target, _) = as_closure_new(other).expect("guarded");
+			HashSet::from([target.to_string()])
+		}
+		Node::Key(choice, Op::Else, otherwise) => {
+			let mut targets = closure_targets_of_value(choice, held, returning);
+			targets.extend(closure_targets_of_value(otherwise, held, returning));
+			targets
+		}
+		Node::Key(_, Op::Then, chosen) => closure_targets_of_value(chosen, held, returning),
+		Node::List(items, Bracket::Round, Separator::None) => {
+			let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else {
+				return if items.len() == 1 { closure_targets_of_value(&items[0], held, returning) } else { HashSet::new() };
+			};
+			if closure_call_arity(name).is_some() {
+				let callee = items.get(1).map(|node| closure_targets_of_value(node, held, returning)).unwrap_or_default();
+				return callee.into_iter().flat_map(|target| returning.get(&target).cloned().unwrap_or_default()).collect();
+			}
+			if name == CLOSURE_NEW {
+				return as_closure_new(node).map(|(target, _)| HashSet::from([target.to_string()])).unwrap_or_default();
+			}
+			returning.get(name).cloned().unwrap_or_default()
+		}
+		block @ Node::List(..) if !std::ptr::eq(tail(block), block) => closure_targets_of_value(tail(block), held, returning),
+		Node::Key(list, Op::Hash, _) => match list.drop_meta() {
+			Node::Symbol(name) => held.get(name).cloned().unwrap_or_default(),
+			Node::List(items, Bracket::Square, _) => items.iter().flat_map(|item| closure_targets_of_value(item, held, returning)).collect(),
+			_ => HashSet::new(),
+		},
+		Node::List(items, Bracket::Square, _) => items.iter().flat_map(|item| closure_targets_of_value(item, held, returning)).collect(),
+		_ => HashSet::new(),
+	}
+}
+
+/// Which `closure_new` targets each variable may hold (assignment / if-else / calls that return a function)
+fn settle_closure_variable_targets(context: &Context, program: &Node) -> HashMap<String, HashSet<String>> {
+	let mut returning: HashMap<String, HashSet<String>> = context.user_functions.iter()
+		.map(|(name, function)| (name.clone(), closure_targets_of_value(tail(&function.body), &HashMap::new(), &HashMap::new())))
+		.filter(|(_, targets)| !targets.is_empty())
+		.collect();
+	let mut held: HashMap<String, HashSet<String>> = HashMap::new();
+	let bodies: Vec<&Node> = std::iter::once(program).chain(context.user_functions.values().map(|function| function.body.as_ref())).collect();
+	for _ in 0..=context.user_functions.len() + bodies.len() {
+		let mut next = held.clone();
+		for body in &bodies {
+			body.visit(&mut |node| {
+				if let Node::List(items, _, _) = node {
+					if let [keyword, variable, in_word, list, _] = items.as_slice() {
+						let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
+						if is_word(keyword, FOR_WORD) && is_word(in_word, IN_WORD) {
+							if let Node::Symbol(name) = variable.drop_meta() {
+								let targets = closure_targets_of_value(list, &held, &returning);
+								if !targets.is_empty() {
+									next.entry(name.clone()).or_default().extend(targets);
+								}
+							}
+						}
+					}
+				}
+				let Node::Key(target, Op::Assign | Op::Define, value) = node else { return };
+				let Node::Symbol(name) = target.drop_meta() else { return };
+				let targets = closure_targets_of_value(value, &held, &returning);
+				if !targets.is_empty() {
+					next.entry(name.clone()).or_default().extend(targets);
+				}
+			});
+		}
+		let mut returning_now = returning.clone();
+		for (name, function) in &context.user_functions {
+			let targets = closure_targets_of_value(tail(&function.body), &next, &returning_now);
+			if !targets.is_empty() {
+				returning_now.insert(name.clone(), targets);
+			}
+		}
+		if next == held && returning_now == returning {
+			return next;
+		}
+		held = next;
+		returning = returning_now;
+	}
+	held
 }
 
 /// The fast path of closure calls: when every closure of an arity has one signature of numbers (Ints and Floats, the

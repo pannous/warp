@@ -144,7 +144,7 @@ impl WasmGcEmitter {
 
 	/// The typed lists of a function body, as compile_user_function_body will find them, its list parameters typed
 	pub(super) fn body_typed_lists(&mut self, function: &UserFunctionDef, list_params: &[bool]) -> HashMap<String, TypedList> {
-		let scope = Scope::with_function_kinds(self.user_function_kinds());
+		let scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
 		let saved_scope = std::mem::replace(&mut self.scope, scope);
 		self.scope.globals = self.ctx.declared_globals.clone();
 		for (param, is_list) in function.params.iter().zip(list_params) {
