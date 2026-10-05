@@ -754,6 +754,10 @@ PASSED:
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
   ✓ lists::test_pop::pop_gives_the_last_item
   ✓ lists::test_pop::pop_removes_the_last_item
+  ✓ lists::test_range_values::a_parenthesized_range_is_a_list
+  ✓ lists::test_range_values::a_range_is_a_list_as_an_argument
+  ✓ lists::test_range_values::a_range_of_computed_bounds_is_a_list_as_an_argument
+  ✓ lists::test_range_values::puts_writes_the_text_of_a_value
   ✓ lists::test_remove_and_index_of::a_stack_built_from_empty_pops
   ✓ lists::test_remove_and_index_of::index_of_is_the_one_based_position
   ✓ lists::test_remove_and_index_of::remove_takes_a_key_out_of_a_map_variable
@@ -1490,7 +1494,7 @@ PASSED:
   ✓ sweeps::test_panic_sweep::test_global_declaration_of_a_non_name_is_an_error
   ✓ sweeps::test_panic_sweep::test_malformed_ternary_is_an_error
   ✓ sweeps::test_panic_sweep::test_missing_argument_without_default_is_an_error
-  ✓ sweeps::test_panic_sweep::test_non_constant_range_bound_is_an_error
+  ✓ sweeps::test_panic_sweep::test_non_constant_range_bound_is_a_list
   ✓ sweeps::test_panic_sweep::test_struct_field_of_an_unknown_type_is_an_error
   ✓ sweeps::test_panic_sweep::test_update_of_a_non_variable_is_an_error
   ✓ sweeps::test_sweep_fixes::a_builtin_call_statement_runs_inside_a_loop_body
@@ -2268,4 +2272,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2263 passed, 0 failed, 2263 total tested
+31 ignored, 2267 passed, 0 failed, 2267 total tested
