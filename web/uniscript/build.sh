@@ -12,8 +12,8 @@ page="$(cd "$(dirname "$0")" && pwd)"
 repository="$(cd "$page/../.." && pwd)"
 cd "$repository"
 
-cargo build --offline --bin warp
-"${CARGO_TARGET_DIR:-target}/debug/warp" compile web/uniscript/uniscript.wasp  # → uniscript.wasm, fetches packages/uniscript
+warp="$(scripts/own-warp.sh)"
+"$warp" compile web/uniscript/uniscript.wasp  # → uniscript.wasm, fetches packages/uniscript
 
 mkdir -p "$page/packages/uniscript/data" "$page/fonts"
 cp packages/uniscript/data/entities.idx "$page/packages/uniscript/data/"  # fetched by the compile

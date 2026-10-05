@@ -4,8 +4,8 @@ Goal: every `samples/*.wasp` runs, ideally by fixing the language rather than th
 `is!("samples/x.wasp", …)` line in tests/programs/test_samples.rs.
 
 ## How to sweep
-- Build, then copy the binary at once: `cargo build --offline --bin warp && cp ~/.cargo/shared-target.noindex/debug/warp probes/samples/warp`.
-  The CLI binary is not hashed per checkout: another worktree's build overwrites it between your build and your run.
+- Build a private CLI copy: `WARP=$(scripts/own-warp.sh)` then run `"$WARP" …` (or `probes/samples/…`).
+  The shared `debug/warp` is not hashed per checkout: another worktree's build overwrites it between your build and your run.
 - Skip `raylib_*` / `sdl_*` in sweeps: they open real windows.
 - `test.wasm` in the cwd is the last emitted module, written before validation: `wasm-tools print test.wasm` shows the
   function behind an "internal error: WASM validation failed".
