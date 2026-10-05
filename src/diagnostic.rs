@@ -346,12 +346,11 @@ fn load_acknowledgements() {
 	let topics = saved.lines().filter_map(|line| line.rsplit_once(" = "))
 		.filter(|(_, value)| value.trim() == ACKNOWLEDGED)
 		.filter_map(|(key, _)| key.trim().strip_prefix(ACKNOWLEDGED_PREFIX).map(str::to_string));
-	// added to the ones of this thread: "got it" said during this run (also without a file) lasts for its later programs
-	ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow_mut().extend(topics));
+	ACKNOWLEDGED_TOPICS.with(|acknowledged| *acknowledged.borrow_mut() = topics.collect());
 }
 
-/// A new program (eval, compile) starts with no assumptions and no notes shown, plus the acknowledgements of the file:
-/// what one program assumed or showed never reaches the next one on the same thread, a "got it" does
+/// A new program (eval, compile) starts with no assumptions, no notes shown and only the acknowledgements of the
+/// file: what one program assumed or showed never reaches the next one on the same thread
 pub fn begin_program() {
 	ASSUMPTIONS.with(|assumptions| assumptions.borrow_mut().clear());
 	NOTES_SHOWN.with(|notes| notes.borrow_mut().clear());
