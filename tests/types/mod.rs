@@ -16,6 +16,7 @@ mod test_type_name_definition_forms;
 mod test_type_name_matching;
 mod test_type_of;
 mod test_type_tests;
+mod test_type_tests_anywhere;
 mod test_type_upgrading;
 mod test_type_words;
 mod test_typed_arrays;

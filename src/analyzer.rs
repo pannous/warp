@@ -3887,8 +3887,8 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if fn_name == INSERT_AT_CALL || fn_name == INSERT_EITHER_CALL {
 					ctx.required_functions.insert(INSERT_AT_CALL);
 				}
-				if let Some((test, _)) = crate::switch::PATTERN_TESTS.iter().find(|(test, _)| test == fn_name) {
-					ctx.required_functions.extend([*test, "node_count"]);
+				if fn_name == crate::type_tests::IS_TYPE {
+					ctx.required_functions.insert(crate::type_tests::NODE_KIND_IN);
 				}
 				if fn_name == crate::switch::NO_CASE_CALL {
 					ctx.missing_case_labels.extend(items.get(1).map(|label| label.name()));

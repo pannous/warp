@@ -25,7 +25,7 @@ impl WasmGcEmitter {
 		}
 		self.emit_list_cell_access();
 		self.emit_node_counting();
-		self.emit_list_of_length();
+		self.emit_node_kind_test();
 		self.emit_node_indexing();
 		self.emit_with_at_functions();
 		self.emit_typed_list_runtime();
@@ -81,25 +81,14 @@ impl WasmGcEmitter {
 	}
 
 	/// node_count and node_bytes
-	fn emit_list_of_length(&mut self) {
+	fn emit_node_kind_test(&mut self) {
 		let node_ref = self.node_ref(false);
-		// list_of_length(node, n) -> i64: 1 when node is a list of n items (ø the empty one), else 0 (structural patterns)
-		if self.should_emit_function(crate::switch::LIST_OF_LENGTH) {
-			self.runtime_function(crate::switch::LIST_OF_LENGTH, vec![Ref(node_ref), ValType::I64], vec![ValType::I64], vec![ValType::I64], |s, f| {
-				let (length, kind) = (1, 2);
+		// node_kind_in(node, mask) -> i64: 1 when bit `kind` of the mask is set (type tests of values of unknown static type)
+		if self.should_emit_function(crate::type_tests::NODE_KIND_IN) {
+			self.runtime_function(crate::type_tests::NODE_KIND_IN, vec![Ref(node_ref), ValType::I64], vec![ValType::I64], vec![], |s, f| {
+				f.instruction(&I::LocalGet(1));
 				s.emit_field(f, 0, 0);
-				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty)]);
-				Self::emit_list(f, &[I::LocalGet(length), I::I64Eqz, I::I64ExtendI32U, I::Return, I::End]);
-				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Eq, I::LocalGet(kind), I::I64Const(Kind::Block as i64), I::I64Eq, I::I32Or, I::If(BlockType::Empty), I::LocalGet(0)]);
-				s.call(f, "node_count");
-				Self::emit_list(f, &[I::LocalGet(length), I::I64Eq, I::I64ExtendI32U, I::Return, I::End, I::I64Const(0)]);
-			});
-		}
-		// is_pair(node) -> i64: 1 when node is a key: value pair (structural patterns)
-		if self.should_emit_function(crate::switch::IS_PAIR) {
-			self.runtime_function(crate::switch::IS_PAIR, vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, f| {
-				s.emit_field(f, 0, 0);
-				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Eq, I::I64ExtendI32U]);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64ShrU, I::I64Const(1), I::I64And]);
 			});
 		}
 	}

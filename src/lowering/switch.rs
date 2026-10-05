@@ -2,7 +2,7 @@
 //! subject, so only the chosen body runs; the `default` (or `_`) key catches the rest, without it a miss is the error
 //! `no case for <subject> = <value>`. A list key is a structural pattern (wiki/pattern-matching.md): `["", middle, ""]`
 //! matches a list of three whose first and last items are "", binding `middle`; `_` matches any item, lists nest, and a
-//! pair `k: v` matches a pair whose key is k.
+//! pair `k: v` matches a pair whose key is k. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
 use crate::analyzer::extract_user_functions;
 use crate::context::Context;
@@ -14,12 +14,9 @@ pub(crate) const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
 const DEFAULT_KEYS: [&str; 2] = ["default", WILDCARD];
 /// In a pattern: any item, bound to no name
 const WILDCARD: &str = "_";
-/// `list_of_length(x, n)`: 1 when x is at run time a list of n items (ø is the empty list), else 0 (list_ops.rs)
-pub const LIST_OF_LENGTH: &str = "list_of_length";
-/// `is_pair(x)`: 1 when x is at run time a `key: value` pair, else 0 (list_ops.rs)
-pub const IS_PAIR: &str = "is_pair";
-/// The runtime tests of a pattern, with their number of arguments
-pub const PATTERN_TESTS: [(&str, usize); 2] = [(LIST_OF_LENGTH, 2), (IS_PAIR, 1)];
+const LIST_SPEC: &str = "list";
+const PAIR_SPEC: &str = "pair";
+const COUNT_WORD: &str = "count";
 const TEXT_WORD: &str = "str";
 const SUBJECT_PREFIX: &str = "switch_subject_";
 /// Pseudo-call `switch_no_case(label: value)` the emitter turns into the runtime error function `no_case_<label>`,
@@ -126,14 +123,15 @@ fn item(path: &Node, position: usize) -> Node {
 fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
 	match pattern.drop_meta() {
 		Node::List(items, Bracket::Square, _) => {
-			tests.push(call(LIST_OF_LENGTH, vec![path.clone(), Node::int(items.len() as i64)]));
+			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), Node::Text(LIST_SPEC.to_string())]));
+			tests.push(key(call(COUNT_WORD, vec![path.clone()]), Op::Eq, Node::int(items.len() as i64)));
 			for (index, part) in items.iter().enumerate() {
 				pattern_tests(part, item(&path, index + 1), tests, bindings);
 			}
 		}
 		// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
 		Node::Key(name, Op::Colon, value) => {
-			tests.push(call(IS_PAIR, vec![path.clone()]));
+			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), Node::Text(PAIR_SPEC.to_string())]));
 			tests.push(key(call(TEXT_WORD, vec![item(&path, 1)]), Op::Eq, Node::Text(name.name())));
 			pattern_tests(value, item(&path, 2), tests, bindings);
 		}

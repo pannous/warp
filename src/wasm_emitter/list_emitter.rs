@@ -56,7 +56,6 @@ impl WasmGcEmitter {
 			|| BUILTIN_CALLS.contains(&name)
 			|| crate::library_words::is_runtime_word(name)
 			|| name == crate::type_tests::IS_TYPE
-			|| crate::switch::PATTERN_TESTS.iter().any(|(test, _)| *test == name)
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
 			|| super::text_builtins::is_text_builtin(name)
@@ -76,21 +75,6 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, argument);
 		}
 		self.emit_call(func, function);
-		true
-	}
-
-	/// `list_of_length(x, n)`, `is_pair(x)` of a structural pattern (switch.rs): their i64 0 or 1; returns whether it was one
-	pub(super) fn emit_pattern_test(&mut self, func: &mut Function, node: &Node) -> bool {
-		let Node::List(items, _, _) = node.drop_meta() else { return false };
-		let Some((head, arguments)) = items.split_first() else { return false };
-		let Node::Symbol(name) = head.drop_meta() else { return false };
-		let Some((test, _)) = crate::switch::PATTERN_TESTS.iter().find(|(test, count)| test == name && *count == arguments.len()) else { return false };
-		self.emit_node_instructions(func, &arguments[0]);
-		func.instruction(&I::RefAsNonNull);
-		if let Some(length) = arguments.get(1) {
-			self.emit_numeric_value(func, length);
-		}
-		self.emit_call(func, test);
 		true
 	}
 
@@ -296,11 +280,6 @@ impl WasmGcEmitter {
 			}
 		}
 
-		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
-		if self.emit_pattern_test(func, &call) {
-			self.emit_call(func, "new_int");
-			return;
-		}
 		if self.reject_unresolved_call(func, items, bracket, separator) {
 			return;
 		}
@@ -356,16 +335,45 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `is_type(x, "spec")`: 1 when the static type of x is the spec, else 0
+	/// `is_type(x, "spec")` as a Node: its 1 or 0
 	fn emit_type_test(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
+		if !self.emit_type_test_value(func, &call) {
+			return false;
+		}
+		self.emit_call(func, "new_int");
+		true
+	}
+
+	/// `is_type(x, "spec")` as an i64 1 or 0: from the static type of x when it is known, else from the run-time kind of the
+	/// value (node_kind_in) or, for a declared type, the instance's type (instance_of); true when it was one
+	pub(super) fn emit_type_test_value(&mut self, func: &mut Function, node: &Node) -> bool {
+		let Node::List(items, bracket, separator) = node.drop_meta() else { return false };
 		if call_name(items, bracket, separator) != Some(crate::type_tests::IS_TYPE) {
 			return false;
 		}
-		let [_, subject, spec] = items else { return false };
+		let [_, subject, spec] = items.as_slice() else { return false };
 		let Node::Text(spec) = spec.drop_meta() else { return false };
-		let answer = crate::type_tests::type_matches(&self.static_type_name(subject), spec);
-		func.instruction(&I::I64Const(answer as i64));
-		self.emit_call(func, "new_int");
+		let unknown = !matches!(subject.drop_meta(), Node::Number(_)) && matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data);
+		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
+		match crate::type_tests::runtime_kinds(spec).filter(|_| unknown && !declared_type) {
+			Some(kinds) => {
+				let mask = kinds.iter().fold(0i64, |mask, kind| mask | 1 << (*kind as i64));
+				self.emit_node_instructions(func, subject);
+				func.instruction(&I::RefAsNonNull);
+				func.instruction(&I::I64Const(mask));
+				self.emit_call(func, crate::type_tests::NODE_KIND_IN);
+			}
+			// an instance's static kind is no type name: its declared type is read at run time
+			None if declared_type => {
+				let instance_test = Node::List(vec![Node::Symbol(crate::traits::INSTANCE_OF.to_string()), subject.clone(), Node::Text(spec.clone())], Bracket::Round, Separator::None);
+				self.emit_numeric_value(func, &instance_test);
+			}
+			None => {
+				let answer = crate::type_tests::type_matches(&self.static_type_name(subject), spec);
+				func.instruction(&I::I64Const(answer as i64));
+			}
+		}
 		true
 	}
 
