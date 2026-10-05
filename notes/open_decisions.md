@@ -40,6 +40,11 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
+## Standing rules (user)
+- Test upgrades (2026-10-05, "allow all tests to be upgraded from a dumb thing to a better thing, from not working to
+  working"): an error/refusal/"not yet" expectation becomes the working value, ignored tests that pass are
+  un-ignored, without asking; a change of meaning (one working value into another) still needs a decision.
+
 ## Decided 2026-10-05 (user, multiple-choice interview, all as recommended unless quoted)
 - Data vs code (P51, P62, P63 (1-2), charge levels, D7 revised): specified in wiki/charged.md, the single source;
   RELEASED for implementation by the user on 2026-10-05 ("you have the green light, go ahead and implement
@@ -77,6 +82,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   test_download and test_use_modules are made to pass in the browser instead (download via fetch; temp dirs on a
   browser file system such as OPFS or the in-memory WASI fs); the directory walk of test_use_scopes uses the same
   file system if it fits. Only git, Lean and the threads case are ignored in the browser.
+- P80 exact ratios and big Ints cross to tasks: control::test_threads::an_exact_number_beyond_the_fixnums_cannot_cross_yet
+  becomes is!(…, 3.5), renamed an_exact_number_crosses_to_a_task (user decision, existing-test edit). Asked by the
+  Fixer warp-2d (card g-rH6E); as recommended.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
