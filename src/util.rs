@@ -77,13 +77,18 @@ pub fn task_engine() -> Engine {
 	Engine::new(&config).expect("Failed to create WASM engine")
 }
 
-/// Create a WASM engine with GC, function references, canonical NaNs and fuel metering.
-/// This is the standard configuration for all wasp WASM operations; create its stores with `fueled_store`.
+/// The WASM engine with GC, function references, canonical NaNs and fuel metering, one per process: every run shares
+/// it, so a module compiled once runs again without compiling (run/module_cache.rs); stores and their fuel stay per
+/// run (`fueled_store`). Programs that start tasks get an engine of their own (task_engine): their epoch ticks would
+/// reach every store of a shared engine.
 #[cfg(feature = "native")]
 pub fn gc_engine() -> Engine {
-	let mut config = deterministic_config();
-	config.consume_fuel(true);
-	Engine::new(&config).expect("Failed to create WASM engine")
+	static SHARED: std::sync::OnceLock<Engine> = std::sync::OnceLock::new();
+	SHARED.get_or_init(|| {
+		let mut config = deterministic_config();
+		config.consume_fuel(true);
+		Engine::new(&config).expect("Failed to create WASM engine")
+	}).clone()
 }
 
 

@@ -4,8 +4,9 @@
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Once;
+use std::sync::{LazyLock, Mutex, Once};
 use std::time::SystemTime;
 use wasmtime::{Engine, Module, Precompiled, Result};
 
@@ -19,7 +20,12 @@ const COMPILED_EXTENSION: &str = "cwasm";
 /// a few thousand modules of 100–200 KB)
 const MAX_CACHE_BYTES: u64 = 1 << 30;
 
+/// Modules this process holds compiled, by cache key; past this many it starts over (each holds 100–200 KB of code)
+const MAX_MODULES_IN_MEMORY: usize = 512;
+
 static PRUNE_ONCE: Once = Once::new();
+/// The modules of the shared gc_engine compiled or loaded in this process: running one again is a lookup
+static IN_MEMORY: LazyLock<Mutex<HashMap<String, Module>>> = LazyLock::new(Mutex::default);
 
 /// Where a module came from
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,22 +34,45 @@ pub enum Origin {
 	Cached,
 }
 
-/// `bytes` (a binary module or WAT text) compiled for `engine`: from the cache when it holds it, else compiled and
-/// added to the cache
+/// `bytes` (a binary module or WAT text) compiled for `engine`: from this process's modules or the cache when they
+/// hold it, else compiled and added to both
 pub fn compiled_module(engine: &Engine, bytes: &[u8]) -> Result<Module> {
 	if is_precompiled(bytes) {
 		// SAFETY: compiled code runs as it is, so a .cwasm file is trusted like a native executable: the user runs it
 		return unsafe { Module::deserialize(engine, bytes) };
 	}
-	match cache_directory() {
-		Some(directory) => compiled_module_in(&directory, engine, bytes).map(|(module, _)| module),
-		None => Module::new(engine, bytes),
+	let Some(directory) = cache_directory() else { return Module::new(engine, bytes) };
+	let key = cache_key(engine, bytes);
+	if let Some(module) = remembered(engine, &key) {
+		return Ok(module);
+	}
+	let (module, _) = load_or_compile(&directory, &key, engine, bytes)?;
+	remember(key, &module);
+	Ok(module)
+}
+
+/// compiled_module with the cache in `directory` and without this process's modules, and where the module came from
+pub fn compiled_module_in(directory: &Path, engine: &Engine, bytes: &[u8]) -> Result<(Module, Origin)> {
+	load_or_compile(directory, &cache_key(engine, bytes), engine, bytes)
+}
+
+/// The module this process compiled for the same engine (a Module belongs to the Engine that compiled it)
+fn remembered(engine: &Engine, key: &str) -> Option<Module> {
+	let modules = IN_MEMORY.lock().ok()?;
+	modules.get(key).filter(|module| Engine::same(module.engine(), engine)).cloned()
+}
+
+fn remember(key: String, module: &Module) {
+	if let Ok(mut modules) = IN_MEMORY.lock() {
+		if modules.len() >= MAX_MODULES_IN_MEMORY {
+			modules.clear();
+		}
+		modules.insert(key, module.clone());
 	}
 }
 
-/// compiled_module with the cache in `directory`, and where the module came from
-pub fn compiled_module_in(directory: &Path, engine: &Engine, bytes: &[u8]) -> Result<(Module, Origin)> {
-	let path = directory.join(format!("{}.{COMPILED_EXTENSION}", cache_key(engine, bytes)));
+fn load_or_compile(directory: &Path, key: &str, engine: &Engine, bytes: &[u8]) -> Result<(Module, Origin)> {
+	let path = directory.join(format!("{key}.{COMPILED_EXTENSION}"));
 	if let Some(module) = cached_module(engine, &path) {
 		return Ok((module, Origin::Cached));
 	}

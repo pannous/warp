@@ -30,8 +30,10 @@ fn test_compiled_module_cache_compiles_once_then_maps_the_compiled_module() {
 	let (cached, second) = compiled_module_in(&cache, &engine, ANSWER_MODULE.as_bytes()).unwrap();
 	assert_eq!(second, Origin::Cached);
 	assert_eq!(main_result(&engine, &compiled), 42);
-	// a new engine with the same settings reuses the module compiled for the first one
-	let other_engine = gc_engine();
+	// another engine with the same settings reuses the module compiled for the first one
+	let mut config = warp::util::deterministic_config();
+	config.consume_fuel(true);
+	let other_engine = wasmtime::Engine::new(&config).unwrap();
 	let (reused, origin) = compiled_module_in(&cache, &other_engine, ANSWER_MODULE.as_bytes()).unwrap();
 	assert_eq!(origin, Origin::Cached);
 	assert_eq!(main_result(&other_engine, &reused), 42);
@@ -85,4 +87,11 @@ fn test_compile_aot_writes_machine_code_that_runs() {
 	let run = crate::common::warp_command().arg(&machine_code).output().unwrap();
 	let printed = String::from_utf8_lossy(&run.stdout);
 	assert!(printed.contains("hello") && printed.contains("42"), "{printed}{}", String::from_utf8_lossy(&run.stderr));
+}
+
+/// every run shares one gc_engine, so a module compiled once in a process runs again without compiling
+#[test]
+fn test_gc_engine_is_shared() {
+	assert!(wasmtime::Engine::same(&gc_engine(), &gc_engine()));
+	assert!(!wasmtime::Engine::same(&warp::util::task_engine(), &warp::util::task_engine()));
 }
