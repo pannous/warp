@@ -28,3 +28,9 @@ fn test_js_modules() {
 fn test_values_held_from_another_runtime_compare() {
 	is!("use js Math; if Math.max(1.5, 0) > 1 {1} else {0}", 1);
 }
+
+#[test]
+fn test_untrusted_code_gets_no_js() {
+	let result = warp::pipeline::eval_untrusted("use js Math; Math.max(1, 5)");
+	assert!(result.serialize().contains("capability"), "{result:?}");
+}
