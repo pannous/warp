@@ -51,3 +51,4 @@ mod test_whole_float_to_int_parameter;
 mod test_late_binding;
 mod test_precomputed;
 mod test_folding_in_bodies;
+mod test_specialised_variants;

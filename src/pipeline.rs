@@ -182,7 +182,7 @@ pub fn lower(code: &str) -> Result<Node, Node> {
 pub fn compile(code: &str) -> Result<CompiledModule, Node> {
 	crate::diagnostic::begin_program();
 	crate::diagnostic::in_program_mode(lawful_program(code)?, |program| {
-		let node = crate::folding::fold_constant_calls(lower_for_emission(program)?);
+		let node = crate::folding::precompute(lower_for_emission(program)?);
 		warn_about_run_time_blocks(&node)?;
 		choose_module(&node)
 	})
