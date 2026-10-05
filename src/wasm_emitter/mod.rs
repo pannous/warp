@@ -379,10 +379,11 @@ impl WasmGcEmitter {
 		collect_variables(program, &mut outer);
 		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values().cloned().collect();
 		for function in functions {
-			let captured: Vec<(String, Kind)> = match self.enclosing_scope(&function.name) {
+			let enclosing = self.enclosing_scope(&function.name);
+			let captured: Vec<(String, Kind)> = match &enclosing {
 				// `outer·inner` reads outer's parameters and variables, main's where outer has none of that name
 				Some(enclosing) => {
-					let mut captured = captured_variables(&function, &enclosing);
+					let mut captured = captured_variables(&function, enclosing);
 					captured.extend(captured_variables(&function, &outer).into_iter().filter(|(name, _)| enclosing.lookup(name).is_none()));
 					captured
 				}
@@ -391,6 +392,11 @@ impl WasmGcEmitter {
 				.into_iter()
 				.filter(|(name, _)| !self.ctx.user_functions.contains_key(name))
 				.collect();
+			let bindings = captured.iter().filter_map(|(name, kind)| {
+				let binding = enclosing.as_ref().and_then(|enclosing| enclosing.lookup(name)).or_else(|| outer.lookup(name));
+				binding.map(|local| Local { kind: *kind, ..local.clone() })
+			}).collect();
+			self.ctx.capture_bindings.insert(function.name.clone(), bindings);
 			let captures: Vec<(String, (u32, Kind))> = captured.into_iter()
 				.map(|(name, kind)| (name, (self.declare_mutable_global(kind), kind)))
 				.collect();
@@ -415,6 +421,15 @@ impl WasmGcEmitter {
 			let index = self.func_index(name);
 			self.exports.export(name, ExportKind::Func, index);
 		}
+	}
+
+	/// The globals a function body sees: the declared ones and the variables it captures, with their types
+	pub(super) fn function_globals(&self, function: &str) -> HashMap<String, Local> {
+		let mut globals = self.ctx.declared_globals.clone();
+		for binding in self.ctx.capture_bindings.get(function).into_iter().flatten() {
+			globals.entry(binding.name.clone()).or_insert_with(|| binding.clone());
+		}
+		globals
 	}
 
 	/// The parameters and variables of the function whose body defines `function` (`outer` for `outer·inner`), with the
@@ -519,7 +534,7 @@ impl WasmGcEmitter {
 		let function_scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
 		let saved_scope = std::mem::replace(&mut self.scope, function_scope);
 		// declared globals are changed in place, never shadowed by a local of the same name
-		self.scope.globals = self.ctx.declared_globals.clone();
+		self.scope.globals = self.function_globals(name);
 		for (index, param) in user_fn.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(name, index) { Kind::List } else { param_kind(param) };
 			self.scope.define_param(param.name.clone(), kind);

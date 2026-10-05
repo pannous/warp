@@ -3246,8 +3246,10 @@ fn with_closure_captures(ctx: &Context, program: &Node, mut globals: HashMap<Str
 			}
 			None => captured_variables(function, &outer),
 		};
+		// the binding itself, its declared or literal type with it (`k = {a: 10}`: `k.a` is an Int there too)
 		for (name, kind) in captured {
-			globals.entry(name.clone()).or_insert_with(|| Local::new(0, name, kind));
+			let binding = outer.lookup(&name).cloned().map(|local| Local { kind, ..local });
+			globals.entry(name.clone()).or_insert_with(|| binding.unwrap_or_else(|| Local::new(0, name, kind)));
 		}
 	}
 	globals
