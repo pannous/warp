@@ -401,6 +401,14 @@ PASSED:
   ✓ functions::test_lambdas::test_map_as_a_method
   ✓ functions::test_lambdas::test_map_over_a_block_or_lambda
   ✓ functions::test_lambdas::test_named_functions_and_data_are_untouched
+  ✓ functions::test_late_binding::a_change_no_later_call_can_observe_is_fine
+  ✓ functions::test_late_binding::a_def_without_parameters_over_constants_gets_a_note
+  ✓ functions::test_late_binding::a_free_variable_changed_after_the_definition_is_an_error_at_the_change
+  ✓ functions::test_late_binding::a_free_variable_that_never_changes_needs_no_declaration
+  ✓ functions::test_late_binding::a_variable_bound_after_the_definition_is_read_at_call_time
+  ✓ functions::test_late_binding::declaring_global_reads_the_current_value
+  ✓ functions::test_late_binding::in_place_mutation_counts_as_a_change
+  ✓ functions::test_late_binding::loop_variables_are_captured_per_iteration
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
   ✓ functions::test_method_syntax_calls::test_method_syntax_calls_a_libm_function
@@ -452,6 +460,9 @@ PASSED:
   ✓ functions::test_phrase_calls::test_spaced_phrases_are_called_with_their_prepositions
   ✓ functions::test_phrase_calls::test_to_phrases_are_called_with_their_prepositions
   ✓ functions::test_picked_calls::a_function_picked_from_a_list_is_called
+  ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
+  ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
+  ✓ functions::test_precomputed::effects_shared_state_and_failures_are_never_folded
   ✓ functions::test_property_access::test_bracket_lookup_by_text_never_traps
   ✓ functions::test_property_access::test_dot_on_a_variable_and_nested
   ✓ functions::test_property_access::test_dot_on_an_object_literal
@@ -1375,6 +1386,8 @@ PASSED:
   ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ text::test_cast_to_string::an_object_literal_as_string_is_its_text
+  ✓ text::test_character_arithmetic::a_character_is_no_number_in_arithmetic
+  ✓ text::test_character_arithmetic::ord_and_comparisons_keep_code_points
   ✓ text::test_character_comparison::test_character_element_of_text_compares
   ✓ text::test_character_comparison::test_character_test_words
   ✓ text::test_character_comparison::test_character_variable_compares_with_character_literal
@@ -2076,4 +2089,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2071 passed, 0 failed, 2071 total tested
+37 ignored, 2084 passed, 0 failed, 2084 total tested
