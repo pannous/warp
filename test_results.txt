@@ -411,6 +411,8 @@ PASSED:
   ✓ functions::test_folding_in_bodies::a_call_on_a_parameter_stays
   ✓ functions::test_folding_in_bodies::a_constant_call_in_a_body_is_folded
   ✓ functions::test_folding_in_bodies::a_constant_call_in_a_loop_is_folded
+  ✓ functions::test_foreign_modifiers::test_meaningful_modifiers_keep_their_meaning
+  ✓ functions::test_foreign_modifiers::test_meaningless_modifiers_are_skipped_with_a_note
   ✓ functions::test_free_var_if_arms::capped_single_and_semantics
   ✓ functions::test_free_var_if_arms::free_var_arithmetic_without_if
   ✓ functions::test_free_var_if_arms::free_var_only_in_condition_stays
@@ -439,6 +441,7 @@ PASSED:
   ✓ functions::test_functions::test_function_declaration_parse
   ✓ functions::test_functions::test_function_definitions
   ✓ functions::test_functions::test_graph_params
+  ✓ functions::test_functions::test_modifiers
   ✓ functions::test_functions::test_params
   ✓ functions::test_functions::test_rename_wasm_function
   ✓ functions::test_functions::test_stacked_lambdas
@@ -2191,4 +2194,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-36 ignored, 2186 passed, 0 failed, 2186 total tested
+35 ignored, 2189 passed, 0 failed, 2189 total tested
