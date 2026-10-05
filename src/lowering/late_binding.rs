@@ -76,7 +76,7 @@ pub(crate) fn statements_of(program: &Node) -> Vec<Node> {
 fn map_statements(program: Node, transform: &mut dyn FnMut(Node) -> Node) -> Node {
 	match program {
 		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) =>
-			Node::List(items.into_iter().map(|item| transform(item)).collect(), Bracket::None, separator),
+			Node::List(items.into_iter().map(transform).collect(), Bracket::None, separator),
 		Node::Meta { node, data } if matches!(node.drop_meta(), Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline)) =>
 			Node::Meta { node: Box::new(map_statements(*node, transform)), data },
 		single => transform(single),
