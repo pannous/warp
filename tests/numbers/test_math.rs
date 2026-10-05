@@ -58,7 +58,6 @@ fn test_power() {
 }
 
 #[test]
-#[ignore]
 fn test_hyphen_units() {
 	//     const char *code = "1900 - 2000 AD";// (easy with units);
 	//     assert_analyze(code,"{kind=range type=AD value=(1900,2000)}");

@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 
 const SPECIALISATION_SEPARATOR: &str = "__";
 /// Words whose last argument is a function
-const ITERATION_WORDS: [&str; 5] = ["map", "filter", "each", "fold", "reduce"];
+pub(crate) const ITERATION_WORDS: [&str; 5] = ["map", "filter", "each", "fold", "reduce"];
 /// Words between two values that make a spaced list no call of its first item: `p in xs`
 const INFIX_WORDS: [&str; 6] = ["in", "is", "of", "and", "or", "as"];
 
