@@ -128,3 +128,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 decided-test-edits
 - P55: test_while_nop_issue reads x after the loop, un-ignored. P59: four array tests edited and un-ignored (own commit);
   `x is 100 times [0]` written as the assignment `x = 100 times [0]` (assumption, `is` compares).
+
+## 2026-10-05 p61-is-teaches-be
+- P61: `is` always compares; `x is v` with x unbound is the error "undefined variable: x; `is` compares, a definition is
+  written `x be v`" (v as written: the parser keeps it as meta "compared with"); the `x is number 9` declaration undone.
