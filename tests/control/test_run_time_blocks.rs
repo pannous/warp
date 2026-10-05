@@ -78,3 +78,14 @@ fn a_run_time_block_hands_back_ratios_and_big_ints() {
 	warp::is!("y = data 2^70; z = interpret y; z+1 == 2^70+1", 1);
 	warp::is!("y = data 0-2^70; z = interpret y; z == 0-2^70", 1);
 }
+
+// P73: `x!` forces; a block known only at run time runs through the host, an optional unwraps, a value is itself
+#[test]
+fn a_bang_known_only_at_run_time_runs_the_block() {
+	warp::is!("xs = [data a+1, data a*2]; a = 5; xs#2!", 10);
+	warp::is!("xs = [data a+1, data a*2]; a = 5; y = xs#2; y!", 10);
+	warp::is!("5!", 5);
+	crate::common::fails_with("xs=[1, ø]; xs#2!", "unwrapped ø");
+	warp::is!("x = 3; x!", 3);
+	crate::common::fails_with("x = ø; x!", "unwrapped ø");
+}
