@@ -711,8 +711,9 @@ fn test_shell_holes_are_whole_arguments() {
 #[test]
 fn test_running_queries_and_commands_needs_a_capability() {
 	is!("lookup(n) := execute sql \"SELECT * FROM t WHERE id = $n\"\neffects of lookup", Node::Symbol("IO".into()));
-	fails_with("c=sh \"ls -l\";exec c", "exec needs the process capability");
-	fails_with("execute sql \"SELECT 1\"", "execute needs the sql capability");
+	// P88 (user 2026-10-05): the capabilities are granted for now, but no host runs exec or execute yet: still loud
+	fails_with("c=sh \"ls -l\";exec c", "undefined: exec");
+	fails_with("execute sql \"SELECT 1\"", "undefined: execute");
 	fails_with("lookup(n) := execute sql \"SELECT * FROM t WHERE id = $n\" ! Pure\nlookup(1)", "lookup is declared ! Pure but performs IO");
 }
 
