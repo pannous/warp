@@ -86,7 +86,7 @@ fn is_print_word(node: &Node) -> bool {
 }
 
 /// `print` or the call `print(…)`: a print statement starts here
-fn starts_print(node: &Node) -> bool {
+pub(crate) fn starts_print(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, _) => items.first().is_some_and(is_print_word),
 		other => is_print_word(other),
@@ -102,7 +102,7 @@ fn one_expression(words: &[Node]) -> Node {
 }
 
 /// The call print(a, b, …): its arguments are separated by commas, like Python's
-fn print_call(arguments: impl IntoIterator<Item = Node>) -> Node {
+pub(crate) fn print_call(arguments: impl IntoIterator<Item = Node>) -> Node {
 	Node::List([Symbol(PRINT_WORD.to_string())].into_iter().chain(arguments).collect(), Bracket::Round, Separator::None)
 }
 

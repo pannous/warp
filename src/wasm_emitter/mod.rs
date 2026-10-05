@@ -130,7 +130,7 @@ use Instruction as I;
 #[cfg(feature = "validate")]
 use wasmparser::{Validator, WasmFeatures};
 use Instruction::I32Const;
-pub use crate::pipeline::{compile, eval, eval_parsed, eval_untrusted, lower, out_of_fuel, CompiledModule};
+pub use crate::pipeline::{compile, compile_printing_result, eval, eval_parsed, eval_untrusted, lower, out_of_fuel, CompiledModule};
 use crate::pipeline::returned_error_message;
 use ValType::Ref;
 

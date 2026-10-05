@@ -180,12 +180,38 @@ pub fn lower(code: &str) -> Result<Node, Node> {
 /// Compile source text to a wasm module without running it. `Err` carries the error, or the constant
 /// answer of a program that needs no module.
 pub fn compile(code: &str) -> Result<CompiledModule, Node> {
+	compile_program(code, |program| program)
+}
+
+/// compile for a standalone executable (`warp build --exe`): the program prints its value at the end, as `warp <file>`
+/// shows it, since nobody reads the result of an executable
+pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
+	compile_program(code, printing_result)
+}
+
+fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
 	crate::diagnostic::begin_program();
-	crate::diagnostic::in_program_mode(lawful_program(code)?, |program| {
+	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let node = crate::folding::precompute(lower_for_emission(program)?);
 		warn_about_run_time_blocks(&node)?;
 		choose_module(&node)
 	})
+}
+
+/// The program with its last statement `x` printed: `print(x)`; a declaration or a print stays as it is
+fn printing_result(program: Node) -> Node {
+	match program {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(printing_result(*node)), data },
+		Node::List(mut statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			if let Some(last) = statements.pop() {
+				statements.push(printing_result(last));
+			}
+			Node::List(statements, Bracket::None, separator)
+		}
+		Node::Empty => Node::Empty,
+		statement if crate::modules::is_declaration(&statement) || crate::wasp_parser::starts_print(&statement) => statement,
+		value => crate::wasp_parser::print_call([value]),
+	}
 }
 
 /// A compiled module that runs blocks at run time needs a host with a warp compiler: say so where it is made

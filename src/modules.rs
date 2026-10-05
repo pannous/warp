@@ -682,7 +682,7 @@ fn statements(module: Node) -> Vec<Node> {
 	}
 }
 
-fn is_declaration(statement: &Node) -> bool {
+pub(crate) fn is_declaration(statement: &Node) -> bool {
 	match statement.drop_meta() {
 		Node::Type { .. } => true,
 		Node::Key(_, Op::Assign | Op::Define, _) => true,
