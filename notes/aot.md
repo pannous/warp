@@ -86,5 +86,11 @@ module repeats their machine code. A shared runtime module linked to the program
 4. Later: link programs against one shared runtime module instead of emitting the runtime into each module.
 
 ## Test-suite time (./test.sh)
-test.sh now prints `TIMING: compile N s, run N s` and the 15 slowest tests (libtest `--report-time`, enabled on stable
-by RUSTC_BOOTSTRAP=1, which rebuilds nothing). Full-suite breakdown: pending the Integrator's next run.
+test.sh prints `TIMING: compile N s, run N s` and the 15 slowest tests (libtest `--report-time`, enabled on stable by
+RUSTC_BOOTSTRAP=1, which rebuilds nothing). Integrator run 2026-10-05 (main 006b141a, 2174 tests, module cache and
+optimized Cranelift in): **compile 12 s, run 35 s**. The ~7 minutes the Integrator saw before are spent outside
+test.sh's two cargo commands (queue waiting, merging, the wasm32 browser-test build).
+The run is bounded by its slowest tests, not by Cranelift any more: test_law_proved_by_lean 17.8 s,
+every_sample_runs_without_a_compiler_error 15.6 s, test_upper_and_lower 14.9 s, the uniscript tests 6–11.6 s each
+(8 of the 15 slowest), upper_and_lower_map_latin_greek_and_cyrillic 9.0 s, upper_and_lower_cover_unicode_scripts
+8.2 s, use_requires_a_version_of_a_package 8.1 s, read_loads_a_file_as_bytes 7.4 s.

@@ -3,9 +3,11 @@
 use wasmtime::{Linker, Result};
 
 pub const LIBM: &str = "m";
-const UNARY: [(&str, fn(f64) -> f64); 11] = [("fabs", f64::abs), ("floor", f64::floor), ("ceil", f64::ceil), ("round", f64::round),
+type Unary = (&'static str, fn(f64) -> f64);
+type Binary = (&'static str, fn(f64, f64) -> f64);
+const UNARY: [Unary; 11] = [("fabs", f64::abs), ("floor", f64::floor), ("ceil", f64::ceil), ("round", f64::round),
 	("sqrt", f64::sqrt), ("sin", f64::sin), ("cos", f64::cos), ("tan", f64::tan), ("exp", f64::exp), ("log", f64::ln), ("log10", f64::log10)];
-const BINARY: [(&str, fn(f64, f64) -> f64); 4] = [("fmin", f64::min), ("fmax", f64::max), ("fmod", fmod), ("pow", f64::powf)];
+const BINARY: [Binary; 4] = [("fmin", f64::min), ("fmax", f64::max), ("fmod", fmod), ("pow", f64::powf)];
 
 /// C's fmod: the remainder with the sign of the dividend, which is Rust's %
 fn fmod(dividend: f64, divisor: f64) -> f64 {
