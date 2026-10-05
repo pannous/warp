@@ -119,3 +119,6 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 fix-is-declaration
 - `x is number 9` of a name assigned nowhere (and no parameter) declares it, `x:number = 9` (wiki Features.md,
   inventions.md); of a variable it stays the type-and-value test (lowering/type_tests.rs is_declaration).
+
+## 2026-10-05 p49b-whole-float
+- P49b: a whole float (2.0, y=3.0) passed to an int parameter is refused too ("2.0 is no int: write 2.0 as int").
