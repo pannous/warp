@@ -11,3 +11,4 @@ mod test_calculator_fixes;
 mod test_json_parser_fixes;
 mod test_data_structure_fixes;
 mod test_samples_run_cleanly;
+mod test_warp_command;
