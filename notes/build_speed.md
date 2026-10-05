@@ -85,3 +85,7 @@ run is bound by total test time, not by one slow test, and only cutting what man
   one-off header parse of the first.
 - Next gains: functions_in needs only the definitions a statement makes, not the full inference (a cheaper extractor
   would remove most of late_binding's 24 ms), and whole-program analyses after passes that changed only far parts.
+- late-binding-definitions (follow-up): `late_binding::functions_in` (also folding's) uses `analyzer::defined_functions`
+  (extraction and closure registration, no parameter or return kind inference): its callers read names, parameters and
+  bodies only. Checked by computing both on 1780 tests and the uniscript program: identical names, parameters, bodies.
+  `warp lower` of the uniscript program: median 151 → 144 ms (12 runs each).

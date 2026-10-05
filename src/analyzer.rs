@@ -3251,9 +3251,15 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	crate::analysis_memo::analysed(ctx, node, analyse_user_functions);
 }
 
-fn analyse_user_functions(ctx: &mut Context, node: &Node) {
+/// The functions a program defines (nested ones lifted as `outer·inner`) and the closure helpers it calls, without the
+/// kinds the inference gives their parameters and results: what a pass that needs names, parameters and bodies reads
+pub fn defined_functions(ctx: &mut Context, node: &Node) {
 	extract_user_functions_inner(ctx, node);
 	crate::closures::register_closure_calls(ctx, node);
+}
+
+fn analyse_user_functions(ctx: &mut Context, node: &Node) {
+	defined_functions(ctx, node);
 	infer_parameters_from_calls(ctx, node);
 	infer_forwarded_parameters(ctx);
 	infer_closure_parameters(ctx, node);
