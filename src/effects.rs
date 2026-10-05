@@ -136,6 +136,8 @@ pub enum Capability {
 	Host,
 	Wasi,
 	Ffi,
+	/// The pure math functions of libm (P26), linked like Ffi but granted to every program, untrusted ones included
+	Libm,
 	/// Runs typed `sql` templates (`execute`)
 	Sql,
 	/// Runs typed `sh` commands (`exec`)
@@ -144,13 +146,16 @@ pub enum Capability {
 
 impl Capability {
 	/// Capabilities `eval` grants; running queries or programs needs a host that grants more
-	pub const GRANTED_BY_EVAL: [Capability; 3] = [Host, Wasi, Ffi];
+	pub const GRANTED_BY_EVAL: [Capability; 4] = [Host, Wasi, Ffi, Libm];
+	/// Capabilities untrusted code gets
+	pub const GRANTED_UNTRUSTED: [Capability; 1] = [Libm];
 
 	pub fn name(self) -> &'static str {
 		match self {
 			Host => "host",
 			Wasi => "wasi",
 			Ffi => "ffi",
+			Libm => "libm",
 			Sql => "sql",
 			Process => "process",
 		}
@@ -385,8 +390,12 @@ impl Resolver<'_> {
 		if self.context.user_functions.contains_key(name) {
 			return None;
 		}
-		if self.context.ffi_imports.contains_key(name) {
-			return Some(External { capability: Ffi, effects: EffectSet::of(&[FFI]) });
+		if let Some(import) = self.context.ffi_imports.get(name) {
+			// libm is pure (P26): untrusted code and `! Pure` functions may call it
+			return Some(match import.library == crate::ffi::LIBM {
+				true => External { capability: Libm, effects: EffectSet::PURE },
+				false => External { capability: Ffi, effects: EffectSet::of(&[FFI]) },
+			});
 		}
 		trusted_external(name)
 	}

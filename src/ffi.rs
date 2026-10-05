@@ -606,7 +606,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 }
 
 /// The import module of libm
-const LIBM: &str = "m";
+pub const LIBM: &str = "m";
 
 /// Where the libm functions of a run come from
 #[derive(Debug, PartialEq)]

@@ -1023,7 +1023,7 @@ impl WasmGcEmitter {
 		match capability {
 			Host => self.config.emit_host_imports,
 			Wasi => self.config.emit_wasi_imports,
-			Ffi => self.config.emit_ffi_imports,
+			Ffi | Libm => self.config.emit_ffi_imports,
 			Sql | Process => false, // never imported: eval refuses such modules before emission
 		}
 	}
