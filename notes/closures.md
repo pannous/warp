@@ -1,7 +1,10 @@
 # Closures: functions as run-time values
 
-Functions and lambdas are values: stored in variables and lists, passed, returned, called later. Capture stays BY VALUE
-(decision D7/#33): a closure copies the captured variables when it is made. Compile-time specialisation
+Functions and lambdas are values: stored in variables and lists, passed, returned, called later. The machine still
+captures BY VALUE (a closure copies the captured variables when it is made), but the meaning is Python's late binding
+(wiki/charged.md §3, revising D7/#33; src/lowering/late_binding.rs): a main-level change of a captured variable that a
+later call could see is a compile error unless the function declares `global y`, so the copy always equals the
+current value; a variable first bound after the definition is made a global. Compile-time specialisation
 (src/lowering/function_values.rs, decision #37) stays wherever the function is known; closures cover the rest.
 
 ```wasp
