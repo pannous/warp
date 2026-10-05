@@ -39,11 +39,11 @@ fn test_rates_times_durations() {
 	assert_eq!(shown("10 km/h * 30 min"), "5 km");
 	assert_eq!(shown("x = 10 km / 2 h; x * 2 h"), "10 km");
 	assert_eq!(shown("10 km/h * 3"), "30 km/h");
-	fails_with("10 km/h * 2 kg", "DimensionError");
+	assert_eq!(shown("10 km/h * 2 kg"), "20 km·kg/h"); // composite units (supervisor task units-composite)
 }
 
 #[test]
 fn test_mixed_dimensions_stay_loud() {
 	fails_with("1 km + 1 s", "DimensionError");
-	fails_with("3 m * 2 kg", "not supported");
+	assert_eq!(shown("3 m * 2 kg"), "6 m·kg"); // composite units (supervisor task units-composite)
 }
