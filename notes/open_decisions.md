@@ -54,22 +54,6 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   mode makes it an error). Asked by worker warp-90, branch unknown-word. 2026-10-05.
   User 2026-10-05, undecided: "i'm not certain probably the second one [loud error] or we need to declare data in
   the beginning of the file or I don't know let's discuss it later". Keep the warning until discussed.
-- P52 Calling a `to` phrase with its prepositions: `to add number a to number b: a+b` is called `add(1, 2)` today;
-  should `add 1 to 2` work too, and `square of 4` for `square of a number`? Today `1 to 2` is a range and `x of y` a
-  field lookup, so `add 1 to 2` is add(1..2). Proposed: when the name is a phrase-defined function, its own
-  prepositions win; everywhere else the operators keep their meaning. Asked by warp-90, branch type-name-params.
-  2026-10-05.
-- P53 test_wasm::test_custom_operators stays ignored only because its `.5³` line expects Rust's `1 / 8` (integer
-  division, 0) while the value is 0.125. Options: change that line to 0.125 and un-ignore (recommended) / leave it
-  ignored. Assumed: ignored. Asked by warp-90, branch custom-operators 28ee01c2. 2026-10-05.
-- P54 tests/operators/test_operator_declarations.rs::test_precedence_declarations_are_refused pins
-  `infix operator ⊕ := a+b; operator ⊕ has precedence above +` as "not supported yet"; the new feature makes it work
-  (X must be a declared operator; built-ins are never re-ranked). Options: replace the assertion with the positive
-  result (recommended) / keep the refusal, drop the feature. Assumed: replaced in its own commit. Asked by warp-90,
-  branch operator-precedence. 2026-10-05.
-- P55 test_while_nop_issue (ignored) expects `x=0;while x++<11: nop;` to be 11, but a while loop's value is its last
-  body value (Decided 2026-09-30). Options: rewrite the test to `…;x` (gives 11 today, recommended) / a loop whose
-  body has no value gives the condition variable. Assumed: stays ignored. Asked by the Fixer warp-2d. 2026-10-05.
 - P56 Uniscript entities (row 37, branch fix-uniscript-entities, all four assumed as recommended): (1) `\name` inside
   double-quoted texts: no, code only (`"\nat"` stays newline+"at", not ℕ); (2) `\epsilon`/`\phi` are ε U+03B5 and
   φ U+03C6 (not LaTeX's lunate ϵ/ϕ); (3) an unknown `\name` is the loud error "unknown entity \name"; (4) `∞` has no
@@ -79,6 +63,26 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   (HyperApproxInv.lean); (2) dual-number mode (ε² = 0) via `use dual`: later (recommended) / now; (3) hyperreals at
   run time (a WASM GC representation): later with exact reals at run time (recommended) / now. Asked by warp-90.
   2026-10-05.
+- P49b `f(x:int) := …; f(2.0)` passes (2.0 loses no digits); only a fractional value is the P49 error. But
+  `x:int = 2.0` is already the error "cannot assign float". Options: refuse 2.0 too, one rule for parameters and
+  declarations (recommended) / allow whole floats in both / keep the difference. Assumed: keep it. Asked by the Fixer
+  warp-2d. 2026-10-05.
+- P45b the P45 error fires only where both kinds are evident from the source (literals, list literals, number
+  arithmetic). Where a kind is only inferred (`x = 5; x = f()` with f giving a list, a loop variable reusing a list's
+  name), the Node fallback stays, because checking inferred kinds gave ~10 false errors in existing tests. Options:
+  keep this until inference is reliable (recommended) / fix the inference first and error everywhere. Assumed: the
+  first. Asked by warp-90, branch p45-kind-change a4ae4feb. 2026-10-05.
+- P58 Slices with `#`: `xs#2..4` is today the range from the value xs#2 to 4 (for loops use it). Assumed (branch
+  fix-hash-slices): `xs#(2…4)` is the 1-based slice [2 3 4], `xs#(2..4)` → [2 3], `xs[1..3]` stays the 0-based
+  bracket slice, unparenthesized `xs#a..b` stays the range. Alternative: `xs#a..b` slices, the range needs
+  `(xs#a)..b`. Asked by the Fixer warp-2d. 2026-10-05.
+- P59 Five ignored tests need an edit or a decision (Fixer warp-2d), recommended edits:
+  (1) test_array_creation: `pixel=[];pixel[1]=15` expects growth (decided: error, P43): expect "index out of range",
+  keep the `pixel:int[100]` lines, drop `pixel array;…`. (2) test_array_initialization_basics counts the parse tree:
+  use `is!("x : 100 numbers; count(x)", 100)`. (3) test_array_initialization: fix the `;[` typo; drop
+  `x is array of size 100` / `x is a 100 integer array` unless the user wants these phrases. (4)
+  test_array_type_generics expects `list<int>`: expect "list of int" (decided). (5) test_hyphen_units
+  `1900 - 2000 AD == 1950 AD ± 50` (interval equality): keep ignored as a later feature. 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -91,6 +95,13 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Decided 2026-10-05 (user, multiple choice, all as recommended)
+- P52 a phrase-defined function is called with its own prepositions (`add 1 to 2`, `square of 4`); everywhere else
+  `to` stays a range and `of` a field lookup.
+- P53 test_custom_operators: the `.5³` line becomes 0.125, the test is un-ignored (user decision).
+- P54 test_precedence_declarations_are_refused asserts the working `operator ⊕ has precedence above +` (user
+  decision); only declared operators are ranked, built-ins never re-ranked.
+- P55 test_while_nop_issue is rewritten to `x=0;while x++<11: nop;x` → 11 (user decision); a loop's value stays its
+  last body value.
 - P50 a declared scalar parameter broadcasts over a list too (`foo(x:int):=x+1; foo([1 2 3])` → [2 3 4], the wiki's
   `square number = …; square [1 2 3]`); test_argument_kinds and test_parameter_call_kinds change to a text argument
   (user decision). `print [1 2 3]` keeps printing the list (not asked; the recommended default stands).
