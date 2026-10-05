@@ -199,7 +199,10 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			let left_kind = infer_type(left, scope);
 			let right_kind = infer_type(right, scope);
-			if op.base_op() == Op::Add && crate::wasm_emitter::text_builtins::concatenates(left_kind, right_kind) {
+			// a text joined with a text, a character or a value held as a Node: as `s + x` (arithmetic_kind)
+			if op.base_op() == Op::Add && matches!(left_kind, Kind::Text | Kind::Codepoint) && arithmetic_kind(left_kind, &Op::Add, right_kind) == Kind::Text {
+				Kind::Text
+			} else if op.base_op() == Op::Add && crate::wasm_emitter::text_builtins::concatenates(left_kind, right_kind) {
 				Kind::Text
 			} else if left_kind == Kind::Float || right_kind == Kind::Float {
 				Kind::Float
