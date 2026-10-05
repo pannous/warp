@@ -413,7 +413,7 @@ impl WasmGcEmitter {
 	/// A host that hands values into the program (run_block's result, a task's value) builds an exact number beyond the
 	/// fixnums from fixnum pieces with these (tasks.rs Builders)
 	fn export_exact_builders(&mut self) {
-		let hands_values_in = [crate::host::RUN_BLOCK, crate::host::TASK_SPAWN_VALUES, crate::host::TASK_AWAIT_VALUE].iter().any(|word| self.ctx.ffi_imports.contains_key(*word));
+		let hands_values_in = [crate::host::RUN_BLOCK, crate::host::TASK_SPAWN, crate::host::TASK_AWAIT, crate::host::TASK_SPAWN_VALUES, crate::host::TASK_AWAIT_VALUE].iter().any(|word| self.ctx.ffi_imports.contains_key(*word));
 		if !hands_values_in || !self.int_runtime() {
 			return;
 		}
@@ -446,15 +446,18 @@ impl WasmGcEmitter {
 		Some(scope)
 	}
 
-	/// A call of `outer·inner` in the body of outer: inner reads outer's variables as they are now (`nonlocal y`, card
-	/// g-qUkY), so their capture globals are set anew before each call
-	fn refresh_enclosing_captures(&mut self, func: &mut Function, function: &str) {
-		if self.compiling.is_some() && self.compiling.as_ref() == self.ctx.enclosing_functions.get(function) {
-			self.emit_closure_capture(func, function);
+	/// Any call in the body of outer may reach `outer·inner` (directly, through a sibling, or passed as a value:
+	/// `apply(inner)`), and inner reads outer's variables as they are now (`nonlocal y`, cards g-qUkY, g-rQ-U): the
+	/// capture globals of all of outer's nested functions are set anew before each call
+	fn refresh_enclosing_captures(&mut self, func: &mut Function) {
+		let Some(compiling) = self.compiling.clone() else { return };
+		for inner in self.nested_functions(&compiling) {
+			self.emit_closure_capture(func, &inner);
 		}
 	}
 
-	/// At a function definition: snapshot the captured variables, so later reassignment is not seen by the function
+	/// At a function definition: snapshot the captured variables, so later reassignment is not seen by the function;
+	/// the functions nested in it get the variables of this scope too (`k=5; def outer(){ def inner(){ k } }`)
 	pub(super) fn emit_closure_capture(&mut self, func: &mut Function, function_name: &str) {
 		let captures = self.ctx.captures.get(function_name).cloned().unwrap_or_default();
 		for (name, (global, kind)) in captures {
@@ -464,6 +467,16 @@ impl WasmGcEmitter {
 				func.instruction(&I::GlobalSet(global));
 			}
 		}
+		for nested in self.nested_functions(function_name) {
+			self.emit_closure_capture(func, &nested);
+		}
+	}
+
+	/// The functions defined in the body of `function` (`outer·inner` of outer), in a stable order
+	fn nested_functions(&self, function: &str) -> Vec<String> {
+		let mut nested: Vec<String> = self.ctx.enclosing_functions.iter().filter(|(_, enclosing)| *enclosing == function).map(|(inner, _)| inner.clone()).collect();
+		nested.sort();
+		nested
 	}
 
 	fn compile_user_functions(&mut self) {
@@ -702,7 +715,7 @@ impl WasmGcEmitter {
 			self.emit_type_error(func, format!("function {} is used before it is compiled", user_fn.name));
 			return;
 		};
-		self.refresh_enclosing_captures(func, &user_fn.name);
+		self.refresh_enclosing_captures(func);
 
 		if args.len() > user_fn.params.len() {
 			let count = |n: usize| if n == 1 { "1 argument".to_string() } else { format!("{n} arguments") };

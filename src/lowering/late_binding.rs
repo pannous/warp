@@ -9,7 +9,8 @@
 //! Functions keep capturing by value at the definition (wasm_emitter `emit_closure_capture`): with this check every
 //! accepted program reads the same value either way, except a variable first bound after the definition, which is
 //! made a global so that the call reads it (`def f(x){x+k}; k=3; f(1)` → 4). A nested function `outer·inner` reads
-//! its captures as they are when the enclosing body calls it (wasm_emitter `emit_user_function_values`), so `nonlocal y`
+//! its captures as they are at each call the enclosing body makes (directly, through a sibling or passed as a value:
+//! wasm_emitter `refresh_enclosing_captures`), so `nonlocal y`
 //! needs no code of its own: the declaration only lifts the check and is dropped here. Writing y from inner waits.
 
 use crate::analyzer::{captured_variables, collect_variables, declare_global, extract_user_functions, find_assignments, is_list_mutating_method, param_kind, Scope};

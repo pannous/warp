@@ -49,6 +49,7 @@ mod test_welcome_forms;
 mod test_loop_value;
 mod test_threads;
 mod test_task_values;
+mod test_task_exact;
 mod test_many_tasks;
 mod test_for_it;
 mod test_task_closures;

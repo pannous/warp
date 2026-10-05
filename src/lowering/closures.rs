@@ -130,7 +130,7 @@ pub fn lower(program: Node) -> Node {
 	let mut values = FunctionValues { functions, returning: HashSet::new(), variables: HashSet::new(), lists: HashSet::new() };
 	values.settle(&context, &program);
 	let FunctionValues { functions, returning: returns_function, variables: function_variables, lists: function_lists } = values;
-	let mut lifting = Lifting { functions, variables, function_variables, function_lists, returns_function, lifted: vec![] };
+	let mut lifting = Lifting { functions, variables, function_variables, function_lists, returns_function, lifted: vec![], enclosing: vec![] };
 	let program = lifting.walk(program, &HashSet::new());
 	if lifting.lifted.is_empty() {
 		return program;
@@ -274,9 +274,17 @@ struct Lifting {
 	/// Variables assigned a list of function values: `(fs#2)(5)` and `fs#2(5)` call an item
 	function_lists: HashSet<String>,
 	lifted: Vec<Node>,
+	/// The functions whose bodies the walk is in, innermost last, by their full names (`outer·inner`)
+	enclosing: Vec<String>,
 }
 
 impl Lifting {
+	/// A function name as written in the current body: the nested `outer·inner` before a top-level `inner`
+	fn function_named(&self, name: &str) -> Option<String> {
+		let nested = self.enclosing.iter().rev().map(|outer| crate::analyzer::qualify_nested_name(Some(outer), name));
+		nested.chain(std::iter::once(name.to_string())).find(|candidate| self.functions.contains(candidate))
+	}
+
 	fn is_variable(&self, name: &str, bound: &HashSet<String>) -> bool {
 		bound.contains(name) || (self.variables.contains(name) && !self.functions.contains(name))
 	}
@@ -290,8 +298,15 @@ impl Lifting {
 		if let Some(params) = definition_parameters(&node, &self.functions) {
 			let Node::Key(head, op, body) = node.drop_meta().clone() else { unreachable!("a definition") };
 			let inner: HashSet<String> = bound.iter().cloned().chain(params).collect();
+			let name = match head.drop_meta() {
+				Node::List(items, _, _) => items.first().map(|name| name.drop_meta().name()).unwrap_or_default(),
+				other => other.name(),
+			};
+			let full_name = self.function_named(&name).unwrap_or(name);
+			self.enclosing.push(full_name);
 			let body = self.walk(*body, &inner);
 			let body = self.function_value(body, &inner);
+			self.enclosing.pop();
 			return Node::Key(head, op, Box::new(body));
 		}
 		if let Some(lambda) = arrow_lambda(&node) {
@@ -384,7 +399,7 @@ impl Lifting {
 	/// A function name where a value is expected is the closure of that function
 	fn function_value(&mut self, node: Node, bound: &HashSet<String>) -> Node {
 		match node {
-			Node::Symbol(ref name) if self.functions.contains(name) && !bound.contains(name) => closure_new(name, vec![]),
+			Node::Symbol(ref name) if !bound.contains(name) && self.function_named(name).is_some() => closure_new(&self.function_named(name).expect("guarded"), vec![]),
 			Node::Key(choice, op @ (Op::Then | Op::Else), chosen) => {
 				let choice = if op == Op::Else { self.function_value(*choice, bound) } else { *choice };
 				Node::Key(Box::new(choice), op, Box::new(self.function_value(*chosen, bound)))

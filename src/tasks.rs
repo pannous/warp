@@ -73,22 +73,6 @@ impl TaskValue {
 			other => return Err(anyhow!("{} cannot cross to another task yet", other.serialize())),
 		})
 	}
-
-	fn int(&self) -> Result<i64, String> {
-		match self {
-			TaskValue::Int(n) => Ok(*n),
-			other => Err(format!("the task gave {other:?}, not an Int")),
-		}
-	}
-}
-
-/// An Int of an instance as a TaskValue: a fixnum crosses as it is, a larger exact number (a big integer, a ratio) is a
-/// handle into the memory of its instance and cannot cross yet
-fn exact(n: i64) -> Result<TaskValue, String> {
-	match crate::wasm_emitter::is_fixnum(n) {
-		true => Ok(TaskValue::Int(n)),
-		false => Err("an exact number beyond the fixnum range (a ratio, a big integer) cannot cross to another task yet".to_string()),
-	}
 }
 
 /// The constructors, memory and text heap of one instance: what a TaskValue is rebuilt with
@@ -143,6 +127,35 @@ impl Builders {
 		}
 	}
 
+	/// The Int handle of an exact number in this instance: numerator / denominator
+	fn exact_handle(&self, numerator: &num_bigint::BigInt, denominator: &num_bigint::BigInt, store: &mut StoreContextMut<'_, HostState>) -> Result<i64> {
+		let numerator = self.integer_handle(numerator, store)?;
+		if denominator == &num_bigint::BigInt::from(1) {
+			return Ok(numerator);
+		}
+		let denominator = self.integer_handle(denominator, store)?;
+		self.int_operation(EXACT_BUILDERS[3], numerator, denominator, store)
+	}
+
+	/// An Int of this instance as a value of its own: a fixnum as it is, a handle (a big integer, a ratio) read
+	/// through the instance's Int node
+	fn integer(&self, n: i64, store: &mut StoreContextMut<'_, HostState>) -> Result<TaskValue> {
+		if crate::wasm_emitter::is_fixnum(n) {
+			return Ok(TaskValue::Int(n));
+		}
+		let node = self.call("new_int", &[Val::I64(n)], store)?;
+		TaskValue::of(&crate::wasm_reader::node_in(&node, store, self.memory))
+	}
+
+	/// A value as an Int of this instance: a fixnum, or the handle of an exact number
+	fn int_of(&self, value: &TaskValue, store: &mut StoreContextMut<'_, HostState>) -> Result<i64> {
+		match value {
+			TaskValue::Int(n) => Ok(*n),
+			TaskValue::Exact(numerator, denominator) => self.exact_handle(numerator, denominator, store),
+			other => Err(anyhow!("the task gave {other:?}, not an Int")),
+		}
+	}
+
 	pub(crate) fn build(&self, value: &TaskValue, store: &mut StoreContextMut<'_, HostState>) -> Result<Val> {
 		match value {
 			TaskValue::Empty => self.call("new_empty", &[], store),
@@ -163,14 +176,7 @@ impl Builders {
 				self.call("new_list", &[first, rest, Val::I64(*bracket)], store)
 			}),
 			TaskValue::Exact(numerator, denominator) => {
-				let numerator = self.integer_handle(numerator, store)?;
-				let handle = match denominator == &num_bigint::BigInt::from(1) {
-					true => numerator,
-					false => {
-						let denominator = self.integer_handle(denominator, store)?;
-						self.int_operation(EXACT_BUILDERS[3], numerator, denominator, store)?
-					}
-				};
+				let handle = self.exact_handle(numerator, denominator, store)?;
 				self.call("new_int", &[Val::I64(handle)], store)
 			}
 			TaskValue::Closure(name, captured) => {
@@ -216,7 +222,7 @@ impl Builders {
 
 	fn read(&self, value: &Val, store: &mut StoreContextMut<'_, HostState>) -> Result<TaskValue> {
 		match value {
-			Val::I64(n) => exact(*n).map_err(|message| anyhow!(message)),
+			Val::I64(n) => self.integer(*n, store),
 			Val::F64(bits) => Ok(TaskValue::Float(f64::from_bits(*bits))),
 			Val::AnyRef(_) => TaskValue::of(&crate::wasm_reader::node_in(value, store, self.memory)),
 			other => Err(anyhow!("a task gave {other:?}")),
@@ -336,7 +342,8 @@ impl TaskTable {
 		linker.func_wrap(HOST_LIBRARY, TASK_SPAWN, move |mut caller: Caller<'_, HostState>, name: i32, a0: i64, a1: i64, a2: i64, a3: i64| -> wasmtime::Result<i64> {
 			let name = c_string(&mut caller, name).map_err(host_error)?;
 			let arguments: [i64; MAX_TASK_ARGUMENTS] = [a0, a1, a2, a3];
-			let arguments = arguments.iter().map(|argument| exact(*argument)).collect::<Result<Vec<_>, _>>().map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
+			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
+			let arguments = arguments.iter().map(|argument| builders.integer(*argument, &mut caller.as_context_mut())).collect::<Result<Vec<_>>>().map_err(host_error)?;
 			let captured = spawner.captured(&mut caller).map_err(host_error)?;
 			Ok(spawner.spawn(name, arguments, captured))
 		})?;
@@ -375,8 +382,10 @@ impl TaskTable {
 		let controller = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_CONTROL, move |id: i64, operation: i64| -> i64 { controller.control(id, operation) })?;
 		let awaiter = self.clone();
-		linker.func_wrap(HOST_LIBRARY, TASK_AWAIT, move |id: i64| -> wasmtime::Result<i64> {
-			awaiter.await_task(id).and_then(|value| value.int()).map_err(|message| wasmtime::Error::new(TaskFailure(message)))
+		linker.func_wrap(HOST_LIBRARY, TASK_AWAIT, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<i64> {
+			let value = awaiter.await_task(id).map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
+			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
+			builders.int_of(&value, &mut caller.as_context_mut()).map_err(host_error)
 		})?;
 		Ok(())
 	}
@@ -442,7 +451,7 @@ impl TaskTable {
 				vec![builders.build(&TaskValue::List(arguments.to_vec(), crate::wasm_emitter::bracket_info(&Bracket::Square)), &mut store.as_context_mut())?]
 			}
 			_ => signature.params().zip(arguments).map(|(parameter, argument)| match (parameter, argument) {
-				(ValType::I64, TaskValue::Int(n)) => Ok(Val::I64(*n)),
+				(ValType::I64, TaskValue::Int(_) | TaskValue::Exact(..)) => Ok(Val::I64(builders.int_of(argument, &mut store.as_context_mut())?)),
 				(ValType::Ref(_), argument) => builders.build(argument, &mut store.as_context_mut()),
 				(parameter, argument) => Err(anyhow!("{function} takes {parameter}, got {argument:?}")),
 			}).collect::<Result<_>>()?,
