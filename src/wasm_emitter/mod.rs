@@ -2683,7 +2683,7 @@ impl WasmGcEmitter {
 		};
 		let is_node_valued = |emitter: &Self, value: &Node| {
 			let kind = branch_type(emitter, value);
-			!matches!(value.drop_meta(), Node::Empty) && (emitter.is_structured_value(value) || kind.is_ref() || kind == Kind::Codepoint)
+			emitter.is_structured_value(value) || kind.is_ref() || kind == Kind::Codepoint
 		};
 		if is_node_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_node_valued(self, value)) {
 			self.emit_condition(func, condition, Self::emit_block_value);

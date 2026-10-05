@@ -443,8 +443,9 @@ pub(crate) fn raises_error(branch: &Node) -> bool {
 
 pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 	match branch.drop_meta() {
-		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], scope),
-		other => infer_type(other, scope),
+		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => branch_kind(&statements[statements.len() - 1], scope),
+		// a branch yielding ø (`if c then 3 else ø`) is a Node, as a variable holding ø is
+		other => held_kind(other, || infer_type(other, scope)),
 	}
 }
 
