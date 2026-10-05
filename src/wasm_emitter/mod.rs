@@ -1111,12 +1111,12 @@ impl WasmGcEmitter {
 		self.emit_int_heap_globals();
 		constructors::emit_all_constructors(self);
 		self.emit_int_runtime();
+		self.emit_runtime_errors();
+		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
 		// Emit list and string operation functions
 		self.emit_list_ops();
 		self.emit_text_of();
 		self.emit_equality_ops();
-		// Emit helper functions
-		self.emit_getters();
 		self.emit_text_as_int(); // after the getters: it calls get_int_value
 		self.emit_text_as_float();
 		if self.config.emit_reflection {

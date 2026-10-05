@@ -75,3 +75,6 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 fix-ignored-2
 - Indexing ø (`x=ø; x#1`, `x[0]`) was a raw "wasm trap: cast failure" a `try` could not catch; ø is the empty list,
   so emit_list_walk fails index_out_of_range (tests/control/test_try_empty_index.rs).
+- A non-Int list element read as a number inside `try` (`x=[1,"ab"]; try -x#2 else 7`) was a cast trap: list_at reads
+  its element through get_int_value (code point of a character, else not_an_int); the runtime errors and getters are
+  emitted before the list ops now (tests/control/test_try_list_index.rs).

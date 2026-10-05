@@ -18,7 +18,6 @@ const TEXT_UNIT_USERS: [&str; 7] =
 impl WasmGcEmitter {
 	/// Emit list and string operation helper functions
 	pub(crate) fn emit_list_ops(&mut self) {
-		self.emit_runtime_errors();
 		self.emit_is_meta_entry();
 		self.emit_zero_fill();
 		if TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
@@ -53,14 +52,9 @@ impl WasmGcEmitter {
 					struct_type_index: s.type_manager.node_type,
 					field_index: 1, // data field (anyref holding ref $Node)
 				});
-				// Cast anyref to ref $Node
+				// a character element is its code point, any other non-Int element not_an_int (no cast trap)
 				func.instruction(&I::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
-				// Get the inner node's data field (which holds the i64_box)
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 1, // data field of the element node
-				});
-				s.emit_int_from_payload(func);
+				s.emit_call(func, "get_int_value");
 			});
 		}
 
@@ -809,7 +803,7 @@ impl WasmGcEmitter {
 		});
 	}
 
-	fn emit_runtime_errors(&mut self) {
+	pub(super) fn emit_runtime_errors(&mut self) {
 		let no_case_errors = self.ctx.missing_case_labels.iter().map(|label| format!("{}{label}", crate::switch::NO_CASE_PREFIX));
 		let no_case_errors: Vec<&'static str> = no_case_errors.map(|name| &*Box::leak(name.into_boxed_str())).collect();
 		let overflow_errors = crate::fixed_width::FIXED_WIDTHS.iter().map(|width| width.trap);
