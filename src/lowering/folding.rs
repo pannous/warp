@@ -1,6 +1,7 @@
 //! Constant calls are folded (wiki/charged.md §3 "Precomputed and precompiled paths"): in a compiled module, a call
 //! of a pure, terminating function with constant arguments is computed at compile time and replaced by its value
-//! (`def fib(n): …; fib(10)` compiles to 55). Only `compile` folds: `eval` would do the same work twice.
+//! (`def fib(n): …; fib(10)` compiles to 55), also inside a function body or a loop (an invariant part hoisted to
+//! compile time). Only `compile` folds: `eval` would do the same work twice.
 //! The values come from running the definitions and the calls as one small module, so they are exactly what the
 //! program computes; a call that fails or runs out of fuel stays a call.
 
@@ -15,7 +16,8 @@ pub fn fold_constant_calls(program: Node) -> Node {
 	let statements = statements_of(&program);
 	let foldable = foldable_functions(&program, &statements);
 	let mut calls: Vec<Node> = vec![];
-	for statement in statements.iter().filter(|statement| functions_in(statement).is_empty()) {
+	// main-level statements and function bodies alike: a constant call in a body is computed once, not at every call
+	for statement in &statements {
 		statement.visit(&mut |node| {
 			if is_constant_call(node, &foldable) && !calls.contains(node) {
 				calls.push(node.clone());
