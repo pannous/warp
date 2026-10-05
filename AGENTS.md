@@ -244,6 +244,11 @@ If previously passing test fail after the task as seen via git diff test_results
 try to fix failing tests and if it doesn't work roll back
 
 When fixing a problem do not modify the test itself without consulting!
+Standing permission (user, 2026-10-05: "allow all tests to be upgraded from a dumb thing to a better thing, from not
+working to working"): a test may be upgraded without asking when the code now does better than the test pinned: an
+expected error, refusal or "not supported yet" becomes the working value, an ignored test that passes is un-ignored,
+a weaker assertion becomes the stronger one. Own commit, message naming this rule. Changing one working value into
+a different working value (a change of meaning) still needs a user decision via the Interviewer.
 
 git status before and after each task should show
 Your branch is up to date with 'origin/main'.

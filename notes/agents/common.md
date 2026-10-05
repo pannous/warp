@@ -16,6 +16,8 @@ rules in notes/open_decisions.md and wiki/Footguns.md.
 - Work in a git worktree outside the repo: `cowtree add -b <branch> /Users/me/dev/angles/warp.worktrees.noindex/<branch> origin/main`,
   with the uncommitted build tweak `version = "0.1.1-<branch>"` in its Cargo.toml.
   Never edit /Users/me/dev/angles/warp itself (the user's checkout).
+- Test upgrades need no question (AGENTS.md "Standing permission"): an error/"not yet"/ignored test that now works is
+  upgraded to the working value in its own commit; a change of meaning still goes to the Interviewer.
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
   binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean,
   never pkill by pattern.

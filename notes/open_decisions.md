@@ -40,6 +40,11 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
+## Standing rules (user)
+- Test upgrades (2026-10-05, "allow all tests to be upgraded from a dumb thing to a better thing, from not working to
+  working"): an error/refusal/"not yet" expectation becomes the working value, ignored tests that pass are
+  un-ignored, without asking; a change of meaning (one working value into another) still needs a decision.
+
 ## Decided 2026-10-05 (user, multiple-choice interview, all as recommended unless quoted)
 - Data vs code (P51, P62, P63 (1-2), charge levels, D7 revised): specified in wiki/charged.md, the single source;
   RELEASED for implementation by the user on 2026-10-05 ("you have the green light, go ahead and implement
