@@ -26,3 +26,12 @@ fn counting_jobs_does_not_await_them() {
 	is!(&format!("{jobs}t0 = clock(); n = count(jobs) + #jobs + jobs.size; t1 = clock(); if t1 - t0 < 500 then n else -1"), 9);
 	is!(&format!("{jobs}count(jobs) + sum(await all jobs)"), 3003);
 }
+
+// the results of awaited jobs are Nodes of run-time kind: an `if` choosing one (as max and min do) keeps that kind
+// instead of typing it text, so arithmetic on the choice works
+#[test]
+fn the_extremes_of_job_results_are_numbers() {
+	let jobs = "f(x) := x*2; jobs = []; for i in 1 to 3 { jobs.add(go f(i)) }; results = await all jobs; ";
+	is!(&format!("{jobs}max(results) - min(results)"), 4);
+	is!(&format!("{jobs}(if count(results) == 0 then 0 else results#1) + 1"), 3);
+}
