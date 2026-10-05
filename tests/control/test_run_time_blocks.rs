@@ -43,3 +43,14 @@ fn a_run_time_block_reads_the_values_where_it_runs() {
 fn a_failing_run_time_block_names_the_block() {
 	crate::common::fails_with("y = data q+1; interpret y", "the block q+1 failed: undefined variable: q");
 }
+
+// Step 3 and 5: running a block at run time is the effect Eval, and the block itself is pure by default
+#[test]
+fn running_a_run_time_block_is_the_eval_effect() {
+	warp::is!("f(xs) := interpret(xs#1); effects of f", warp::Node::Symbol("Eval".into()));
+}
+
+#[test]
+fn a_run_time_block_gets_no_capabilities() {
+	crate::common::fails_with("y = data print(\"hi\"); interpret y", "a block run at run time is pure: print needs the wasi capability");
+}

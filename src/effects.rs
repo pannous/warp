@@ -49,10 +49,12 @@ pub enum Effect {
 	Unsafe,
 	/// May diverge: not provably terminating (Koka's `div`)
 	Div,
+	/// Runs a block known only at run time (`interpret e`, host run_block): its code is not known to the compiler
+	Eval,
 }
 
 impl Effect {
-	pub const ALL: [Effect; 7] = [State, Allocation, IO, FFI, Async, Unsafe, Div];
+	pub const ALL: [Effect; 8] = [State, Allocation, IO, FFI, Async, Unsafe, Div, Eval];
 
 	fn bit(self) -> u8 {
 		1 << self as u8
@@ -389,6 +391,9 @@ impl Resolver<'_> {
 	fn external(&self, name: &str) -> Option<External> {
 		if self.context.user_functions.contains_key(name) {
 			return None;
+		}
+		if name == crate::host::RUN_BLOCK {
+			return Some(External { capability: Host, effects: EffectSet::of(&[Eval]) });
 		}
 		if let Some(import) = self.context.ffi_imports.get(name) {
 			// libm is pure (P26): untrusted code and `! Pure` functions may call it

@@ -226,7 +226,8 @@ fn eval_program(node: Node) -> Node {
 pub(crate) const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
 
 /// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
-/// names separated by spaces) are bound to `values` first, the values the program had where it ran the block
+/// names separated by spaces) are bound to `values` first, the values the program had where it ran the block. The
+/// block gets no capability but pure libm, wherever its code came from (user decision: pure by default)
 pub fn eval_block(block: Node, names: &Node, values: &Node) -> Node {
 	let names: Vec<String> = match names.drop_meta() {
 		Node::Text(names) => names.split_whitespace().map(str::to_string).collect(),
@@ -245,7 +246,12 @@ pub fn eval_block(block: Node, names: &Node, values: &Node) -> Node {
 		.map(|(name, value)| Node::Key(Box::new(Node::Symbol(name)), Op::Assign, Box::new(as_written(value))))
 		.collect();
 	statements.push(block);
-	eval_parsed(Node::List(statements, Bracket::None, Separator::Newline), "")
+	let program = Node::List(statements, Bracket::None, Separator::Newline);
+	match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
+		Some((external, capability)) => crate::node::error(&format!(
+			"a block run at run time is pure: {external} needs the {} capability, which it does not get", capability.name())),
+		None => eval_parsed(program, ""),
+	}
 }
 
 /// The message of `error("…")`, or of `raise …`, which always fails the run
