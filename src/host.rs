@@ -197,29 +197,43 @@ fn write_bytes_to_caller(memory: &Memory, caller: &mut Caller<'_, HostState>, by
 /// (its caller) or into an instance the host made (a task, tasks.rs)
 #[cfg(feature = "native")]
 pub fn write_bytes(memory: &Memory, heap: Option<wasmtime::Global>, store: &mut wasmtime::StoreContextMut<'_, HostState>, bytes: &[u8]) -> Result<(u32, u32)> {
-	let len = bytes.len() as u32;
-	let ptr = match &heap {
-		Some(global) => {
-			let top = global.get(&mut *store).i32().unwrap_or(0) as u32;
-			let memory_end = (memory.size(&*store) as u32) << PAGE_BITS;
-			if top == 0 || top + len > memory_end {
-				memory.grow(&mut *store, ((len >> PAGE_BITS) + 1) as u64)?;
-				memory_end
-			} else {
-				top
-			}
+	match heap {
+		Some(heap) => write_to_heap(memory, heap, store, bytes),
+		None => {
+			let ptr = store.data_mut().alloc(bytes.len() as u32);
+			write_at(memory, store, ptr, bytes)
 		}
-		None => store.data_mut().alloc(len),
+	}
+}
+
+/// Copy bytes into a module's memory at its text heap, for any store (an FFI call's too, ffi.rs): fresh pages past the
+/// current memory when the heap is unset or full, the module's own emit_text_allocation rule
+#[cfg(feature = "native")]
+pub fn write_to_heap<T>(memory: &Memory, heap: wasmtime::Global, store: &mut wasmtime::StoreContextMut<'_, T>, bytes: &[u8]) -> Result<(u32, u32)> {
+	let len = bytes.len() as u32;
+	let top = heap.get(&mut *store).i32().unwrap_or(0) as u32;
+	let memory_end = (memory.size(&*store) as u32) << PAGE_BITS;
+	let ptr = if top == 0 || top + len > memory_end {
+		memory.grow(&mut *store, ((len >> PAGE_BITS) + 1) as u64)?;
+		memory_end
+	} else {
+		top
 	};
+	let written = write_at(memory, store, ptr, bytes)?;
+	heap.set(&mut *store, Val::I32((ptr + len) as i32))?;
+	Ok(written)
+}
+
+/// The bytes at `ptr`, the memory grown to hold them
+#[cfg(feature = "native")]
+fn write_at<T>(memory: &Memory, store: &mut wasmtime::StoreContextMut<'_, T>, ptr: u32, bytes: &[u8]) -> Result<(u32, u32)> {
+	let len = bytes.len() as u32;
 	let pages_needed = ((ptr + len) as usize).div_ceil(1 << PAGE_BITS);
 	let current_pages = memory.size(&*store) as usize;
 	if pages_needed > current_pages {
 		memory.grow(&mut *store, (pages_needed - current_pages) as u64)?;
 	}
 	memory.write(&mut *store, ptr as usize, bytes)?;
-	if let Some(global) = heap {
-		global.set(&mut *store, Val::I32((ptr + len) as i32))?;
-	}
 	Ok((ptr, len))
 }
 
