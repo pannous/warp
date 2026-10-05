@@ -4122,7 +4122,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			}
 		}
 		// run_block hands exact numbers back by composing them from fixnums (tasks.rs Builders)
-		Node::Symbol(name) if name == crate::host::RUN_BLOCK => ctx.required_functions.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]),
+		Node::Symbol(name) if crate::host::VALUE_GIVING_WORDS.contains(&name.as_str()) => ctx.required_functions.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]),
 		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => {
 			if op.is_arithmetic()
@@ -4201,6 +4201,10 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
 				if fn_name == ZERO_FILL_CALL {
 					ctx.required_functions.insert(ZERO_FILL_CALL);
+				}
+				// a host word that gives a value builds exact numbers from fixnums (tasks.rs Builders)
+				if crate::host::VALUE_GIVING_WORDS.contains(&fn_name.as_str()) {
+					ctx.required_functions.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]);
 				}
 				if let Some(word) = crate::wasm_emitter::cells::CELL_WORDS.iter().find(|word| **word == fn_name) {
 					ctx.required_functions.insert(word);
