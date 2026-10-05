@@ -11,6 +11,12 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   near-miss warning chosen for object values. (2) the sample `mixed = [1 "two" three 4.0]` becomes
   `mixed = quote [1 "two" three 4.0]`. (3) a comma tuple `(frobnicate, 3)` stays data (P62 named spaced brackets
   only). Related to the open data-vs-code design discussion (charge levels, 2026-10-05). 2026-10-05.
+- P64 Run-time quantities (units in functions, loops, lists, print; notes/units_runtime.md, branch
+  runtime-units-survey): (1) static units like F# units of measure, the unit part of the compile-time type, zero
+  run-time cost, mixing units a compile error, ~3.5 agent-days (recommended; work started) / (2) dynamic unit values
+  like pint (run-time amount + units), needed only for units arriving from input / both later (static, plus parsing
+  input into checked values). Assumed: (1). Asked by warp-90 via warp-7e. Asked once 2026-10-05, dismissed by the user
+  mid-discussion: ask again later. 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
