@@ -196,7 +196,8 @@ fn run_command(args: &[String]) {
             // lsp_main();
             println!("LSP not yet implemented");
         }
-    } else if arg_string.contains("help") {
+    } else if matches!(arg_string.as_str(), "help" | "--help" | "-h") {
+        usage();
         println!("detailed documentation can be found at https://github.com/pannous/warp/wiki");
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
         println!("Wasp 🐝 {}", WARP_VERSION);
