@@ -441,6 +441,7 @@ PASSED:
   ✓ functions::test_functions::test_graph_params
   ✓ functions::test_functions::test_params
   ✓ functions::test_functions::test_rename_wasm_function
+  ✓ functions::test_functions::test_stacked_lambdas
   ✓ functions::test_functions::test_variable_reassignment
   ✓ functions::test_functions::test_variables
   ✓ functions::test_functions::test2def
@@ -2190,4 +2191,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2185 passed, 0 failed, 2185 total tested
+36 ignored, 2186 passed, 0 failed, 2186 total tested
