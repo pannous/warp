@@ -11,6 +11,9 @@ use crate::node::{error, Bracket, Node, Separator};
 use std::collections::HashMap;
 use crate::operators::Op;
 use std::fmt;
+use crate::extensions::reals::Rational;
+use num_bigint::BigInt;
+use num_traits::ToPrimitive;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Dimension {
@@ -75,11 +78,12 @@ struct Factor {
 	power: i32,
 }
 
-/// An integer amount of a product of units to powers: `3 m`, `6 m²`, `6 m·kg`, `5 km/h` (km·h⁻¹), `1 kg·m/s²`.
+/// An exact amount (a whole number or a fraction: `3/2 m`, `23/18 m/s`) of a product of units to powers: `3 m`, `6 m²`,
+/// `6 m·kg`, `5 km/h` (km·h⁻¹), `1 kg·m/s²`.
 /// A quantity equals the bare number of its own unit: `3km+10m == 3010`
 #[derive(Clone, Debug, PartialEq)]
 pub struct Quantity {
-	pub amount: i64,
+	amount: Rational,
 	factors: Vec<Factor>,
 }
 
@@ -115,7 +119,16 @@ impl fmt::Display for Quantity {
 
 impl Quantity {
 	fn of(amount: i64, unit: &'static Unit) -> Quantity {
-		Quantity { amount, factors: vec![Factor { unit, power: 1 }] }
+		Quantity { amount: Rational::integer(amount), factors: vec![Factor { unit, power: 1 }] }
+	}
+
+	/// Is the amount the whole number n: a quantity equals the bare number of its own unit (`3km+10m == 3010`)
+	pub fn is_amount(&self, n: i64) -> bool {
+		self.amount == Rational::integer(n)
+	}
+
+	fn with_amount(&self, amount: Rational) -> Quantity {
+		Quantity { amount, factors: self.factors.clone() }
 	}
 
 	/// The one unit of a plain quantity (`3 m`), None for a power or a product
@@ -139,20 +152,6 @@ fn signature(factors: &[Factor]) -> Vec<(Dimension, i32)> {
 	powers.retain(|(_, power)| *power != 0);
 	powers.sort_by_key(|(dimension, _)| *dimension as u8);
 	powers
-}
-
-/// A converted quantity that is no whole number of its unit: `150 cm in m` is `3/2 m`, numerator and denominator coprime
-#[derive(Clone, Debug, PartialEq)]
-pub struct Ratio {
-	numerator: i64,
-	denominator: i64,
-	factors: Vec<Factor>,
-}
-
-impl fmt::Display for Ratio {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}/{} {}", self.numerator, self.denominator, units_text(&self.factors))
-	}
 }
 
 /// `1950 ± 50 cm`: the unit is absent for plain numbers
@@ -192,9 +191,6 @@ pub fn describe(data: &Dada) -> Option<String> {
 	if let Some(tolerance) = data.downcast_ref::<Tolerance>() {
 		return Some(tolerance.to_string());
 	}
-	if let Some(ratio) = data.downcast_ref::<Ratio>() {
-		return Some(ratio.to_string());
-	}
 	if let Some(duration) = data.downcast_ref::<crate::time::Duration>() {
 		return Some(duration.to_string());
 	}
@@ -208,7 +204,6 @@ pub fn describe(data: &Dada) -> Option<String> {
 enum Value {
 	Number(i64),
 	Quantity(Quantity),
-	Ratio(Ratio),
 	Tolerance(Tolerance),
 	Range(Range),
 }
@@ -232,8 +227,9 @@ pub fn answer(program: &Node) -> Option<Node> {
 	}
 	match evaluate(program) {
 		Ok(Value::Number(n)) => Some(Node::int(n)),
+		// a ratio of two quantities of one dimension that is no whole number: `1 m / 3 m` is 1/3
+		Ok(Value::Quantity(quantity)) if quantity.factors.is_empty() => Some(quotient_node(&quantity.amount)),
 		Ok(Value::Quantity(quantity)) => Some(Node::data(quantity)),
-		Ok(Value::Ratio(ratio)) => Some(Node::data(ratio)),
 		Ok(Value::Tolerance(tolerance)) => Some(Node::data(tolerance)),
 		Ok(Value::Range(range)) => Some(Node::data(range)),
 		Err(Stop::Error(message)) => Some(error(&message)),
@@ -370,8 +366,7 @@ fn is_unit_word(node: &Node) -> bool {
 fn negate(value: Value) -> Evaluated {
 	match value {
 		Value::Number(n) => Ok(Value::Number(-n)),
-		Value::Quantity(quantity) => Ok(Value::Quantity(Quantity { amount: -quantity.amount, ..quantity })),
-		Value::Ratio(ratio) => Ok(Value::Ratio(Ratio { numerator: -ratio.numerator, ..ratio })),
+		Value::Quantity(quantity) => Ok(Value::Quantity(quantity.with_amount(quantity.amount.neg()))),
 		Value::Tolerance(_) | Value::Range(_) => fail("cannot negate a value with tolerance or a range"),
 	}
 }
@@ -381,7 +376,6 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 		(Value::Tolerance(_) | Value::Range(_), _, _) | (_, _, Value::Tolerance(_) | Value::Range(_)) => {
 			fail(format!("arithmetic on a value with tolerance or a range is not supported: {op}"))
 		}
-		(Value::Ratio(ratio), _, _) | (_, _, Value::Ratio(ratio)) => fail(format!("arithmetic on the converted quantity {ratio} is not supported yet: {op}")),
 		(left, Op::PlusMinus, right) => tolerance(left, right),
 		(Value::Number(from), Op::Sub, Value::Quantity(end)) if end.single_unit().is_some() => range(from, end),
 		(Value::Number(a), Op::Add | Op::Sub | Op::Mul, Value::Number(b)) => {
@@ -395,24 +389,21 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 		(Value::Quantity(a), Op::Add | Op::Sub, Value::Quantity(b)) => sum(a, op, b),
 		(Value::Quantity(a), Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge, Value::Quantity(b)) => compare(a, op, b),
 		(Value::Quantity(a), Op::Mul, Value::Quantity(b)) => {
-			let what = || format!("{a} * {b}");
-			combine(a.amount as i128 * b.amount as i128, 1, [a.factors.clone(), b.factors.clone()].concat(), what)
+			combine(a.amount.mul(&b.amount), [a.factors.clone(), b.factors.clone()].concat())
 		}
-		(Value::Quantity(a), Op::Div, Value::Quantity(b)) if b.amount != 0 => {
-			let what = || format!("{a} / {b}");
-			combine(a.amount as i128, b.amount as i128, [a.factors.clone(), inverse(&b.factors)].concat(), what)
+		(Value::Quantity(a), Op::Div, Value::Quantity(b)) if !b.amount.is_zero() => {
+			combine(a.amount.mul(&b.amount.inverse().expect("not zero")), [a.factors.clone(), inverse(&b.factors)].concat())
 		}
 		(Value::Quantity(_), Op::Div, Value::Quantity(_)) => fail("division by zero"),
 		(Value::Quantity(q), Op::Pow, Value::Number(n)) => power(q, n),
 		(Value::Number(_), Op::Add, Value::Quantity(other)) | (Value::Quantity(other), Op::Add | Op::Sub, Value::Number(_)) => {
 			fail(format!("incompatible operands: a plain number and {}", units_text(&other.factors)))
 		}
-		(Value::Number(n), Op::Mul, Value::Quantity(q)) | (Value::Quantity(q), Op::Mul, Value::Number(n)) => match q.amount.checked_mul(n) {
-			Some(amount) => Ok(Value::Quantity(Quantity { amount, ..q })),
-			None => fail(format!("{q} * {n} overflows the integer range")),
-		},
-		(Value::Quantity(q), Op::Div, Value::Number(n)) if n != 0 && q.amount % n == 0 => {
-			Ok(Value::Quantity(Quantity { amount: q.amount / n, ..q }))
+		(Value::Number(n), Op::Mul, Value::Quantity(q)) | (Value::Quantity(q), Op::Mul, Value::Number(n)) => {
+			Ok(Value::Quantity(q.with_amount(q.amount.mul(&Rational::integer(n)))))
+		}
+		(Value::Quantity(q), Op::Div, Value::Number(n)) if n != 0 => {
+			Ok(Value::Quantity(q.with_amount(q.amount.mul(&Rational::new(BigInt::from(1), BigInt::from(n))))))
 		}
 		_ => Err(Stop::Unsupported),
 	}
@@ -425,12 +416,7 @@ fn convert(value: Value, target: Vec<Factor>) -> Evaluated {
 		return fail(format!("DimensionError: {quantity} cannot be converted to {}", units_text(&target)));
 	}
 	let in_target = |factor: &Factor| target.iter().find(|wanted| wanted.unit.dimension == factor.unit.dimension).map_or(factor.unit, |wanted| wanted.unit);
-	let (numerator, denominator) = rescaled(quantity.amount as i128, 1, &quantity.factors, in_target).ok_or_else(|| Stop::Error(overflow(&quantity)))?;
-	let small = |n: i128| i64::try_from(n).map_err(|_| Stop::Error(overflow(&quantity)));
-	match denominator {
-		1 => Ok(Value::Quantity(Quantity { amount: small(numerator)?, factors: target })),
-		_ => Ok(Value::Ratio(Ratio { numerator: small(numerator)?, denominator: small(denominator)?, factors: target })),
-	}
+	Ok(Value::Quantity(Quantity { amount: quantity.amount.mul(&scale(&quantity.factors, in_target)), factors: target }))
 }
 
 
@@ -456,40 +442,31 @@ pub fn duration_in(duration: &crate::time::Duration, unit_word: &str) -> Option<
 	let quantity = Quantity::of(milliseconds, unit_named("ms").expect("a unit"));
 	Some(match convert(Value::Quantity(quantity), vec![Factor { unit: target, power: 1 }]) {
 		Ok(Value::Quantity(quantity)) => Node::data(quantity),
-		Ok(Value::Ratio(ratio)) => Node::data(ratio),
 		Err(Stop::Error(message)) => error(&message),
 		_ => return None,
 	})
 }
 
-fn gcd(a: i64, b: i64) -> i64 {
-	if b == 0 { a.abs().max(1) } else { gcd(b, a % b) }
+/// The amount of a quantity in other units, as a factor: Π (unit/target)^power over its factors (1 km/h in m/s is 5/18)
+fn scale(factors: &[Factor], target: impl Fn(&Factor) -> &'static Unit) -> Rational {
+	factors.iter().fold(Rational::integer(1), |product, factor| {
+		let ratio = Rational::new(BigInt::from(factor.unit.factor), BigInt::from(target(factor).factor));
+		let ratio = if factor.power > 0 { ratio } else { ratio.inverse().expect("unit factors are positive") };
+		(0..factor.power.unsigned_abs()).fold(product, |product, _| product.mul(&ratio))
+	})
 }
 
-fn overflow(quantity: &Quantity) -> String {
-	format!("{quantity} overflows the integer range")
-}
-
-fn gcd128(a: i128, b: i128) -> i128 {
-	if b == 0 { a.abs().max(1) } else { gcd128(b, a % b) }
-}
-
-/// numerator/denominator · Π (unit/target)^power over the factors, in lowest terms (denominator > 0); None on overflow
-fn rescaled(numerator: i128, denominator: i128, factors: &[Factor], target: impl Fn(&Factor) -> &'static Unit) -> Option<(i128, i128)> {
-	let (mut numerator, mut denominator) = (numerator, denominator);
-	for factor in factors {
-		let (from, to) = (factor.unit.factor as i128, target(factor).factor as i128);
-		let (up, down) = if factor.power > 0 { (from, to) } else { (to, from) };
-		let power = factor.power.unsigned_abs();
-		numerator = numerator.checked_mul(up.checked_pow(power)?)?;
-		denominator = denominator.checked_mul(down.checked_pow(power)?)?;
-		let divisor = gcd128(numerator, denominator);
-		(numerator, denominator) = (numerator / divisor, denominator / divisor);
+/// `1 m / 3 m` is the number 1/3
+fn quotient_node(amount: &Rational) -> Node {
+	match (amount.numerator.to_i64(), amount.denominator.to_i64()) {
+		(Some(numerator), Some(1)) => Node::int(numerator),
+		(Some(numerator), Some(denominator)) => Node::Number(Number::Quotient(numerator, denominator)),
+		_ => Node::Number(Number::Float(amount.to_f64())),
 	}
-	if denominator < 0 {
-		(numerator, denominator) = (-numerator, -denominator);
-	}
-	Some((numerator, denominator))
+}
+
+fn whole(amount: &Rational) -> Option<i64> {
+	amount.is_integer().then(|| amount.numerator.to_i64()).flatten()
 }
 
 /// The finest unit of each dimension among the factors: the unit a result counts in ("unit sums use the finer unit")
@@ -509,21 +486,19 @@ fn finest_of<'a>(finest: &'a [&'static Unit]) -> impl Fn(&Factor) -> &'static Un
 	move |factor| finest.iter().find(|unit| unit.dimension == factor.unit.dimension).copied().unwrap_or(factor.unit)
 }
 
-/// numerator/denominator times the factors as one quantity: each dimension counts in its finest unit, its powers add
-/// (`3 m * 2 m` is `6 m²`, `2 m * 3 kg` is `6 m·kg`, `10 km/h * 30 min` is `5 km`); no unit left is a plain number.
-/// A result that is no whole number of its units is not supported yet
-fn combine(numerator: i128, denominator: i128, factors: Vec<Factor>, what: impl Fn() -> String) -> Evaluated {
+/// An amount times the factors as one quantity: each dimension counts in its finest unit, its powers add
+/// (`3 m * 2 m` is `6 m²`, `2 m * 3 kg` is `6 m·kg`, `10 km/h * 30 min` is `5 km`); no unit left is a plain number
+fn combine(amount: Rational, factors: Vec<Factor>) -> Evaluated {
 	let finest = finest_units(&factors);
 	let result: Vec<Factor> = signature(&factors).into_iter()
 		.map(|(dimension, power)| Factor { unit: finest.iter().find(|unit| unit.dimension == dimension).copied().expect("a unit per dimension"), power })
 		.collect();
 	let result = order_of_appearance(result, &factors);
-	let (numerator, denominator) = rescaled(numerator, denominator, &factors, finest_of(&finest)).ok_or_else(|| Stop::Error(format!("{} overflows the integer range", what())))?;
-	if denominator != 1 {
-		return fail(format!("{} is not a whole number of {} yet", what(), units_text(&result)));
-	}
-	let amount = i64::try_from(numerator).map_err(|_| Stop::Error(format!("{} overflows the integer range", what())))?;
-	Ok(if result.is_empty() { Value::Number(amount) } else { Value::Quantity(Quantity { amount, factors: result }) })
+	let amount = amount.mul(&scale(&factors, finest_of(&finest)));
+	Ok(match whole(&amount) {
+		Some(number) if result.is_empty() => Value::Number(number),
+		_ => Value::Quantity(Quantity { amount, factors: result }),
+	})
 }
 
 /// The factors in the order their dimensions were first written: `2 m * 3 kg` is `m·kg`
@@ -536,64 +511,57 @@ fn order_of_appearance(mut result: Vec<Factor>, written: &[Factor]) -> Vec<Facto
 /// `(2 km)²` is `4 km²`
 fn power(base: Quantity, exponent: i64) -> Evaluated {
 	let exponent = u32::try_from(exponent).ok().filter(|exponent| *exponent >= 1).ok_or(Stop::Unsupported)?;
-	let amount = base.amount.checked_pow(exponent).ok_or_else(|| Stop::Error(overflow(&base)))?;
+	let amount = (1..exponent).fold(base.amount.clone(), |amount, _| amount.mul(&base.amount));
 	let factors = base.factors.iter().map(|factor| Factor { power: factor.power * exponent as i32, ..*factor }).collect();
 	Ok(Value::Quantity(Quantity { amount, factors }))
 }
 
 /// Both amounts counted in the finer unit of each dimension: `m²` and `cm²` count in cm², `m²` and `m` do not mix
-fn aligned(left: &Quantity, right: &Quantity) -> Result<(i64, i64, Vec<Factor>), Stop> {
+fn aligned(left: &Quantity, right: &Quantity) -> Result<(Rational, Rational, Vec<Factor>), Stop> {
 	if signature(&left.factors) != signature(&right.factors) {
 		return fail(format!("DimensionError: incompatible units: {} and {}", units_text(&left.factors), units_text(&right.factors)));
 	}
 	let finest = finest_units(&[left.factors.clone(), right.factors.clone()].concat());
 	let target = finest_of(&finest);
 	let factors: Vec<Factor> = left.factors.iter().map(|factor| Factor { unit: target(factor), ..*factor }).collect();
-	let amount = |quantity: &Quantity| -> Result<i64, Stop> {
-		match rescaled(quantity.amount as i128, 1, &quantity.factors, &target) {
-			Some((amount, 1)) => i64::try_from(amount).map_err(|_| Stop::Error(overflow(quantity))),
-			Some(_) => fail(format!("{quantity} is not a whole number of {} yet", units_text(&factors))),
-			None => fail(overflow(quantity)),
-		}
-	};
-	Ok((amount(left)?, amount(right)?, factors.clone()))
+	let amount = |quantity: &Quantity| quantity.amount.mul(&scale(&quantity.factors, &target));
+	Ok((amount(left), amount(right), factors))
 }
 
 /// Comparison of two quantities in their finer units: `3km == 3000m`, answered 1 or 0
 fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 	let (x, y, _) = aligned(&left, &right)?;
+	let order = x.compare(&y);
 	let holds = match op {
-		Op::Eq => x == y,
-		Op::Ne => x != y,
-		Op::Lt => x < y,
-		Op::Gt => x > y,
-		Op::Le => x <= y,
-		_ => x >= y,
+		Op::Eq => order.is_eq(),
+		Op::Ne => order.is_ne(),
+		Op::Lt => order.is_lt(),
+		Op::Gt => order.is_gt(),
+		Op::Le => order.is_le(),
+		_ => order.is_ge(),
 	};
 	Ok(Value::Number(holds as i64))
 }
 
 fn sum(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 	let (x, y, factors) = aligned(&left, &right)?;
-	let amount = if op == Op::Add { x.checked_add(y) } else { x.checked_sub(y) };
-	match amount {
-		Some(amount) => Ok(Value::Quantity(Quantity { amount, factors })),
-		None => fail(format!("{left} {op} {right} overflows the integer range")),
-	}
+	let amount = if op == Op::Add { x.add(&y) } else { x.add(&y.neg()) };
+	Ok(Value::Quantity(Quantity { amount, factors }))
 }
 
 /// `1950 ± 50`, `1950 cm ± 50` and `1950 ± 50 cm` all count in the unit that is present
 fn tolerance(center: Value, spread: Value) -> Evaluated {
 	let plain = |quantity: &Quantity| quantity.single_unit().ok_or_else(|| Stop::Error(format!("a tolerance applies to numbers and plain quantities, not {quantity}")));
+	let counted = |amount: &Rational| whole(amount).ok_or_else(|| Stop::Error(format!("a tolerance counts whole numbers, not {amount}")));
 	let (value, tolerance, unit) = match (center, spread) {
 		(Value::Number(value), Value::Number(tolerance)) => (value, tolerance, None),
-		(Value::Quantity(value), Value::Number(tolerance)) => (value.amount, tolerance, Some(plain(&value)?)),
-		(Value::Number(value), Value::Quantity(tolerance)) => (value, tolerance.amount, Some(plain(&tolerance)?)),
+		(Value::Quantity(value), Value::Number(tolerance)) => (counted(&value.amount)?, tolerance, Some(plain(&value)?)),
+		(Value::Number(value), Value::Quantity(tolerance)) => (value, counted(&tolerance.amount)?, Some(plain(&tolerance)?)),
 		(Value::Quantity(value), Value::Quantity(tolerance)) => {
 			plain(&value)?;
 			plain(&tolerance)?;
 			let (value, tolerance, factors) = aligned(&value, &tolerance)?;
-			(value, tolerance, Some(factors[0].unit))
+			(counted(&value)?, counted(&tolerance)?, Some(factors[0].unit))
 		}
 		_ => return fail("a tolerance applies to numbers and quantities"),
 	};
@@ -605,8 +573,9 @@ fn tolerance(center: Value, spread: Value) -> Evaluated {
 
 /// A plain number minus a quantity is a range in that unit: `1900 - 2000 AD`
 fn range(from: i64, end: Quantity) -> Evaluated {
-	if from > end.amount {
+	let to = whole(&end.amount).ok_or_else(|| Stop::Error(format!("a range counts whole numbers, not {end}")))?;
+	if from > to {
 		return fail(format!("descending range: {from} - {end}"));
 	}
-	Ok(Value::Range(Range { from, to: end.amount, unit: end.single_unit().expect("guarded by arithmetic") }))
+	Ok(Value::Range(Range { from, to, unit: end.single_unit().expect("guarded by arithmetic") }))
 }

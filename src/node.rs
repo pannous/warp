@@ -1445,7 +1445,7 @@ impl PartialEq<i64> for Node {
 			Node::Number(Number::Real(r)) => r.to_f64() == *other as f64,
 			Key(_, _, v) => v.as_ref().eq(other), // Compare value of Key
 			Meta { node, .. } => node.as_ref().eq(other),
-			Data(data) => data.downcast_ref::<crate::units::Quantity>().is_some_and(|quantity| quantity.amount == *other),
+			Data(data) => data.downcast_ref::<crate::units::Quantity>().is_some_and(|quantity| quantity.is_amount(*other)),
 			_ => false,
 		}
 	}
