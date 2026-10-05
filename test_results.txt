@@ -1260,6 +1260,7 @@ PASSED:
   ✓ parser::test_number_glyphs::test_vulgar_fractions_are_exact
   ✓ parser::test_one_line_statements::separated_prints_still_run
   ✓ parser::test_one_line_statements::two_prints_on_one_line_need_a_separator
+  ✓ parser::test_parse_long_sources::a_long_source_parses_in_linear_time
   ✓ parser::test_parser_sugar::backslash_at_line_end_continues_the_statement
   ✓ parser::test_parser_sugar::block_comment_with_hash_is_ignored
   ✓ parser::test_parser_sugar::doc_comments_do_not_change_behaviour
@@ -1336,6 +1337,7 @@ PASSED:
   ✓ parser::test_wasp_position::test_position_in_json_output
   ✓ parser::test_wasp_position::test_position_tracking
   ✓ parser::test_wasp_position::test_position_with_comments
+  ✓ parser::test_wisp_def_params::a_wisp_def_tells_the_parameters_from_the_body
   ✓ parser::test_xml::test_boolean_attribute
   ✓ parser::test_xml::test_cdata
   ✓ parser::test_xml::test_complex_xml_document
@@ -2242,4 +2244,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-33 ignored, 2237 passed, 0 failed, 2237 total tested
+33 ignored, 2239 passed, 0 failed, 2239 total tested
