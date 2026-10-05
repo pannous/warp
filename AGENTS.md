@@ -227,7 +227,8 @@ Don't cargo clean unless absolutely necessary!
 
 The /probes/ folder is NOT a place to doublicate worktrees!
 One branch per task, in a git worktree outside the repo: /Users/me/dev/angles/warp.worktrees.noindex/<name>
-(notes/roles.md), or work on the same branch for small changes 
+(notes/roles.md), or work on the same branch for small changes.
+Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same arguments as `git worktree add`, which a hook blocks).
 
 ## Folders
 - `probes/` = hand-written probe sources only (.wasp .md .rs .py .sh .lean .html, each under 100 KB), tracked: commit them, no `git add -f` needed.
