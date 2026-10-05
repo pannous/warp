@@ -1593,6 +1593,9 @@ PASSED:
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
   ✓ types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is
   ✓ types::test_type_test_is_only::is_tests_types
+  ✓ types::test_type_tests_anywhere::test_items_of_a_mixed_list_are_tested_at_run_time
+  ✓ types::test_type_tests_anywhere::test_type_tests_in_conditions_and_chains
+  ✓ types::test_type_tests_anywhere::test_type_tests_in_function_bodies
   ✓ types::test_type_tests::test_a_variable_on_the_right_stays_equality
   ✓ types::test_type_tests::test_articles_are_optional
   ✓ types::test_type_tests::test_as_declaration
@@ -2041,4 +2044,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2036 passed, 0 failed, 2036 total tested
+37 ignored, 2039 passed, 0 failed, 2039 total tested
