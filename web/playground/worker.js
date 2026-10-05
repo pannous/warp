@@ -6,6 +6,7 @@ prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 // warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)
 const COMPILER_URL = new URL(self.location.href).searchParams.get("compiler") ?? "warp.wasm";
+self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same compiler (host.js blockCompiler)
 
 let compiler; // the compiler instance's exports
 let panicMessage; // the compiler's last panic message

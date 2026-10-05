@@ -126,6 +126,17 @@ function programImports(holder, hooks) {
 					return module.error_of(module.new_text(pointer, length));
 				}
 			},
+			// a block known only at run time (src/host.rs run_block): a compiler instance of its own compiles and runs it
+			run_block: (block, names, values) => {
+				const module = program();
+				const request = { block: readNode(module, block), names: readNode(module, names), values: readNode(module, values) };
+				const report = evalBlock(hooks, JSON.stringify(request));
+				if (report.error !== undefined) {
+					holder.blockError = report.error;
+					throw new Error(report.error);
+				}
+				return buildValue(module, report.result);
+			},
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
 			sleep: milliseconds => {
 				const until = Date.now() + Number(milliseconds);
@@ -438,10 +449,42 @@ function runProgram(bytes, hooks) {
 		joinTasks(holder.run, hooks); // the tasks nobody awaited finish before the result, as natively
 		return { result: readResult(instance.exports, result), warnings };
 	} catch (trap) {
+		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
 		const detail = instance.exports[TRAP_DETAIL_EXPORT]?.value;
 		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(instance.exports, detail) : null, warnings };
 	}
+}
+
+// The compiler that runs the blocks a program builds at run time (run_block): loaded on first use, an instance of its own,
+// so it never re-enters the compiler whose program is running. A page sets BLOCK_COMPILER_URL to its compiler's URL.
+let blockCompilerExports;
+function blockCompiler(hooks) {
+	if (!blockCompilerExports) {
+		const url = self.BLOCK_COMPILER_URL ?? "warp.wasm";
+		let bytes;
+		try {
+			bytes = getSync(url, undefined, true);
+		} catch (failure) {
+			throw new Error(`a block known only at run time needs the warp compiler ${url} (${failure.message}): build it with web/playground/build.sh`);
+		}
+		let exports;
+		exports = new WebAssembly.Instance(new WebAssembly.Module(bytes), { warp_host: warpHost(() => exports.memory, hooks) }).exports;
+		blockCompilerExports = exports;
+	}
+	return blockCompilerExports;
+}
+
+// the report of src/web.rs eval_block_report: {result: tree} or {error: message}
+function evalBlock(hooks, request) {
+	const compiler = blockCompiler(hooks);
+	const bytes = utf8.encode(request);
+	const pointer = compiler.web_alloc(bytes.length);
+	new Uint8Array(compiler.memory.buffer, pointer, bytes.length).set(bytes);
+	const length = compiler.web_eval_block(pointer, bytes.length);
+	const report = JSON.parse(readText(compiler, compiler.web_report(), length));
+	compiler.web_free(pointer, bytes.length);
+	return report;
 }
 
 // the `warp_host` imports of a compiler instance; `memory()` is its memory (known only after instantiation)

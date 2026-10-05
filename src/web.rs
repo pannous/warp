@@ -90,8 +90,43 @@ pub fn run_outcome(outcome: &Value) -> Node {
 		}
 		return crate::wasm_emitter::trap_error(&trace, engine_words(message));
 	}
+	if let Some(message) = outcome.get("error").and_then(Value::as_str) {
+		return crate::node::error(message); // a host word failed with its own message (run_block)
+	}
 	let failure = outcome.get("failure").and_then(Value::as_str).unwrap_or("the page sent no outcome");
 	crate::node::error(&format!("could not run the program: {failure}"))
+}
+
+/// The page's run_block (host.js; src/host.rs natively): the block and the values it sees as trees (`{block, names,
+/// values}`), its value as a tree back (`{"result": tree}`) or `{"error": message}`
+pub fn eval_block_report(request: &Value) -> Value {
+	let tree = |key: &str| request.get(key).map(node_from_tree).unwrap_or(Node::Empty);
+	match crate::pipeline::eval_block(tree("block"), &tree("names"), &tree("values")) {
+		Err(message) => json!({ "error": message }),
+		Ok(result) => match tree_of(&result) {
+			Some(tree) => json!({ "result": tree }),
+			None => json!({ "error": crate::pipeline::cannot_hand_back(&result) }),
+		},
+	}
+}
+
+/// A value as the tree host.js buildValue builds in a module (the inverse of node_from_tree for the values a task or a
+/// block hands back); None for what has no constructor there yet (a pair, an exact ratio, a big Int)
+fn tree_of(node: &Node) -> Option<Value> {
+	let kind = |kind: Kind| (kind as i64).to_string();
+	Some(match node.drop_meta() {
+		Node::Empty => json!({ "kind": kind(Kind::Empty), "data": null, "chain": [] }),
+		Node::Number(Number::Int(n)) => json!({ "kind": kind(Kind::Int), "data": { "int": n.to_string() }, "chain": [] }),
+		Node::Number(Number::Float(x)) if x.is_finite() => json!({ "kind": kind(Kind::Float), "data": { "float": x }, "chain": [] }),
+		Node::Text(text) => json!({ "kind": kind(Kind::Text), "data": { "text": text }, "chain": [] }),
+		Node::Symbol(text) => json!({ "kind": kind(Kind::Symbol), "data": { "text": text }, "chain": [] }),
+		Node::Char(c) => json!({ "kind": kind(Kind::Codepoint), "data": { "i31": *c as u32 }, "chain": [] }),
+		Node::List(items, bracket, _) => {
+			let list_kind = (crate::wasm_emitter::bracket_info(bracket) << KIND_BITS) | Kind::List as i64;
+			json!({ "kind": list_kind.to_string(), "items": items.iter().map(tree_of).collect::<Option<Vec<_>>>()? })
+		}
+		_ => return None,
+	})
 }
 
 /// V8's trap messages and the words wasmtime uses for them, so a runtime error reads the same in the CLI and the page
@@ -316,6 +351,18 @@ mod exports {
 		})));
 		let acknowledged = super::acknowledged_topics(text(acknowledged, acknowledged_length));
 		let report = evaluate(text(code, code_length), acknowledged).to_string().into_bytes();
+		REPORT.with(|kept| {
+			*kept.borrow_mut() = report;
+			kept.borrow().len()
+		})
+	}
+
+	/// Run a block of a running program (host.js run_block): the request JSON as eval_block_report takes it; returns the
+	/// length of the report, read at `web_report()`
+	#[no_mangle]
+	pub extern "C" fn web_eval_block(request: *const u8, request_length: usize) -> usize {
+		let request = serde_json::from_str::<Value>(text(request, request_length)).unwrap_or_default();
+		let report = eval_block_report(&request).to_string().into_bytes();
 		REPORT.with(|kept| {
 			*kept.borrow_mut() = report;
 			kept.borrow().len()
