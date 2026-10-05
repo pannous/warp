@@ -315,6 +315,10 @@ PASSED:
   ✓ ffi::test_foreign_js::test_js_modules
   ✓ ffi::test_foreign_js::test_untrusted_code_gets_no_js
   ✓ ffi::test_foreign_js::test_values_held_from_another_runtime_compare
+  ✓ ffi::test_foreign_operators::test_js_indexing_and_counting
+  ✓ ffi::test_foreign_operators::test_plain_values_keep_their_operators
+  ✓ ffi::test_foreign_operators::test_python_indexing_counting_iteration
+  ✓ ffi::test_foreign_operators::test_python_operators
   ✓ ffi::test_foreign_python::test_a_python_error_is_loud
   ✓ ffi::test_foreign_python::test_python_calls_and_reads
   ✓ ffi::test_foreign_python::test_python_values_cross_exactly
@@ -433,6 +437,8 @@ PASSED:
   ✓ functions::test_effects::test_effects_of_query
   ✓ functions::test_effects::test_effects_propagate_through_callers_and_recursion
   ✓ functions::test_effects::test_imports_follow_effects
+  ✓ functions::test_empty_call::a_name_and_a_group_stay_symbols_and_defined_calls_run
+  ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
   ✓ functions::test_float_to_int_parameter::a_float_for_an_int_parameter_is_refused
@@ -2276,4 +2282,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2271 passed, 0 failed, 2271 total tested
+31 ignored, 2277 passed, 0 failed, 2277 total tested

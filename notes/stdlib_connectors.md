@@ -105,7 +105,10 @@ step 3.
   rationals (Fraction) and Decimals are handles. JS: Dates, Maps, class instances, functions are handles.
 - Shared rules with C's handles (warp-2d, card ffi-handles, table in src/ffi.rs): ids never addresses, one table per
   runtime, freed at the end of the run, no user-visible free yet.
-- Not yet: operators on handles (`a * 2` of a numpy array is "not a number"): forwarding them is the next step.
+- Operators (branch foreign-operators): an operator with a foreign operand forwards to its runtime's `operator` module:
+  `a * 2` → operator.mul(a, 2), `-a` → neg, `a#2` → getitem(a, 1) (1-based to 0-based), `#a` / `count a` / `len(a)` →
+  len, `for x in a` iterates operator.list(a). Python: its operator module plus len and list; node and host.js: an
+  object with the same names. `(a * 2).sum()` chains through the group.
 
 ## Step 3: `use wasm` — WebAssembly components (card wit-components, branch wit-components)
 - `use wasm "lib.wasm" as lib` (alias by default the file's stem): a WebAssembly component, the general answer for Rust

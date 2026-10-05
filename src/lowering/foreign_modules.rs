@@ -68,8 +68,10 @@ struct Foreign<'a> {
 /// `foreign_call(runtime, …)`: its runtime, when its value can stay in that runtime (a component's results are plain
 /// values: a record is an object, `s.words` its field)
 fn foreign_runtime(node: &Node) -> Option<String> {
-	let Node::List(items, Bracket::Round, Separator::None) = node.drop_meta() else { return None };
+	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
 	match items.as_slice() {
+		// `(a * 2)`: the group of one
+		[grouped] => foreign_runtime(grouped),
 		[call, runtime, ..] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL) => match runtime.drop_meta() {
 			Node::Text(runtime) if runtime == COMPONENT_RUNTIME => None,
 			Node::Text(runtime) => Some(runtime.clone()),
@@ -79,7 +81,88 @@ fn foreign_runtime(node: &Node) -> Option<String> {
 	}
 }
 
+/// The module of operators every runtime offers (Python's operator plus len and list, the loops' own in JS)
+const OPERATOR_MODULE: &str = "operator";
+const COUNTING_WORDS: [&str; 4] = ["count", "len", "length", "size"];
+const FOR_WORD: &str = "for";
+
+/// The operator function an infix operator forwards to: `a * 2` of a handle is `operator.mul(a, 2)`
+fn operator_member(op: &Op) -> Option<&'static str> {
+	Some(match op {
+		Op::Add => "add",
+		Op::Sub => "sub",
+		Op::Mul => "mul",
+		Op::Div => "truediv",
+		Op::Mod => "mod",
+		Op::Pow => "pow",
+		Op::Lt => "lt",
+		Op::Gt => "gt",
+		Op::Le => "le",
+		Op::Ge => "ge",
+		Op::Eq => "eq",
+		Op::Ne => "ne",
+		_ => return None,
+	})
+}
+
+fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, arguments: Node) -> Node {
+	let text = |text: &str| Node::Text(text.to_string());
+	Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments], Bracket::Round, Separator::None)
+}
+
+/// `operator.member(arguments…)` in `runtime`
+fn operator_call(runtime: &str, member: &str, arguments: Vec<Node>) -> Node {
+	foreign_call(runtime, Node::Text(OPERATOR_MODULE.to_string()), member, true, Node::List(arguments, Bracket::Square, Separator::Space))
+}
+
 impl Foreign<'_> {
+	/// The runtime of a value of another runtime: a variable holding one, or a foreign call
+	fn foreign_value(&self, node: &Node) -> Option<String> {
+		match node.drop_meta() {
+			Node::Symbol(name) => self.values.get(name).cloned(),
+			other => foreign_runtime(other),
+		}
+	}
+
+	/// Operators, indexing, counting and iteration of a foreign value forward to its runtime
+	fn forwarded(&mut self, node: &Node) -> Option<Node> {
+		match node.drop_meta() {
+			// `-a`, `#a`
+			Node::Key(empty, op @ (Op::Neg | Op::Sub | Op::Hash), operand) if matches!(empty.drop_meta(), Node::Empty) => {
+				let operand = self.rewrite(operand.as_ref().clone());
+				let runtime = self.foreign_value(&operand)?;
+				Some(operator_call(&runtime, if *op == Op::Hash { "len" } else { "neg" }, vec![operand]))
+			}
+			// `a#2`, 1-based: the item at 0-based 1
+			Node::Key(indexed, Op::Hash, index) => {
+				let indexed = self.rewrite(indexed.as_ref().clone());
+				let runtime = self.foreign_value(&indexed)?;
+				let zero_based = Node::Key(Box::new(self.rewrite(index.as_ref().clone())), Op::Sub, Box::new(Node::int(1)));
+				Some(operator_call(&runtime, "getitem", vec![indexed, zero_based]))
+			}
+			Node::Key(left, op, right) if operator_member(op).is_some() => {
+				let (left, right) = (self.rewrite(left.as_ref().clone()), self.rewrite(right.as_ref().clone()));
+				let runtime = self.foreign_value(&left).or_else(|| self.foreign_value(&right))?;
+				Some(operator_call(&runtime, operator_member(op).expect("guarded"), vec![left, right]))
+			}
+			// `count a`, `len(a)`
+			Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(word) if COUNTING_WORDS.contains(&word.as_str()))) => {
+				let counted = self.rewrite(items[1].clone());
+				let runtime = self.foreign_value(&counted)?;
+				Some(operator_call(&runtime, "len", vec![counted]))
+			}
+			// `for x in a { … }`: over the items of a, as a list
+			Node::List(items, bracket, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == FOR_WORD) && items.len() >= 4 => {
+				let iterated = self.rewrite(items[3].clone());
+				let runtime = self.foreign_value(&iterated)?;
+				let mut items: Vec<Node> = items.iter().cloned().map(|item| self.rewrite(item)).collect();
+				items[3] = operator_call(&runtime, "list", vec![iterated]);
+				Some(Node::List(items, bracket.clone(), separator.clone()))
+			}
+			_ => None,
+		}
+	}
+
 	/// The runtime and the module (its name as text) or the handle (the value itself) a receiver names
 	fn receiver(&self, receiver: &Node) -> Option<(String, Node)> {
 		if let Node::Symbol(name) = receiver.drop_meta() {
@@ -99,6 +182,9 @@ impl Foreign<'_> {
 				return Node::Empty;
 			}
 		}
+		if let Some(forwarded) = self.forwarded(&node) {
+			return forwarded;
+		}
 		if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
 			let receiver = self.rewrite(receiver.as_ref().clone());
 			if let Some((runtime, module)) = self.receiver(&receiver) {
@@ -113,8 +199,7 @@ impl Foreign<'_> {
 					},
 					_ => return node,
 				};
-				let text = |text: &str| Node::Text(text.to_string());
-				return Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(&runtime), module, text(&member), Node::int(i64::from(is_call)), arguments], Bracket::Round, Separator::None);
+				return foreign_call(&runtime, module, &member, is_call, arguments);
 			}
 		}
 		match node {
