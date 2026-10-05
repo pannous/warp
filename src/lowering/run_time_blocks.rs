@@ -91,7 +91,7 @@ pub fn lower_interpret(program: Node) -> Node {
 /// stays mutation.rs's unwrap, which keeps `x!` of an optional pure. The host gives a value that is no code back as it is.
 pub fn lower_run_time_bangs(program: Node) -> Node {
 	let holders = data_holders(&program);
-	lower_statements(program, &|node: &Node| has_run_time_bang(node, &holders), &|site: &Site, node: Node| site.forced(node, &holders))
+	lower_statements(program, &has_bang, &|site: &Site, node: Node| site.forced(node, &holders))
 }
 
 fn lower_statements(program: Node, applies: &dyn Fn(&Node) -> bool, lower: &dyn Fn(&Site, Node) -> Node) -> Node {
@@ -102,7 +102,14 @@ fn lower_statements(program: Node, applies: &dyn Fn(&Node) -> bool, lower: &dyn 
 	if !statements.iter().any(applies) {
 		return program;
 	}
-	let mut site = Site { blocks: vec![], variables: vec![], definitions: statements.iter().filter(|statement| defines_functions(statement)).cloned().collect() };
+	let all_variables = statements.iter().filter_map(assigned_name).fold(vec![], |mut names: Vec<String>, name| {
+		if !names.contains(&name) {
+			names.push(name);
+		}
+		names
+	});
+	let definitions = statements.iter().filter(|statement| defines_functions(statement)).cloned().collect();
+	let mut site = Site { blocks: vec![], variables: vec![], all_variables, definitions };
 	let mut lowered = vec![];
 	for statement in statements {
 		lowered.push(lower(&site, statement.clone()));
@@ -121,8 +128,21 @@ struct Site {
 	blocks: Vec<String>,
 	/// the main-level variables assigned so far
 	variables: Vec<String>,
+	/// every main-level variable: a function body may run when all are bound (late binding reads their current values)
+	all_variables: Vec<String>,
 	/// the program's function definitions
 	definitions: Vec<Node>,
+}
+
+/// `x = …` as a statement: x
+fn assigned_name(statement: &Node) -> Option<String> {
+	match statement.drop_meta() {
+		Node::Key(target, Op::Assign, _) => match target.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 fn defines_functions(statement: &Node) -> bool {
@@ -131,8 +151,11 @@ fn defines_functions(statement: &Node) -> bool {
 	!context.user_functions.is_empty() && crate::blocks::uncharged(statement).is_none()
 }
 
-/// The names assigned an element of a list that holds data (`xs = [data a+1, data 2]; y = xs#2`): their `!` runs a block
+/// The names whose kind is known only at run time, so that their `!` decides there (P73): assigned an element of a list
+/// that holds data (`xs = [data a+1, data 2]; y = xs#2`), or what a function of the program gives (`y = g()`, `g()#1`)
 fn data_holders(program: &Node) -> Vec<String> {
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, program);
 	let mut lists: Vec<String> = vec![];
 	let mut holders: Vec<String> = vec![];
 	program.visit(&mut |node| {
@@ -140,11 +163,38 @@ fn data_holders(program: &Node) -> Vec<String> {
 		let Node::Symbol(name) = target.drop_meta() else { return };
 		match value.drop_meta() {
 			Node::List(items, _, _) if items.iter().any(is_data) => lists.push(name.clone()),
-			Node::Key(list, Op::Hash, _) if matches!(list.drop_meta(), Node::Symbol(list) if lists.contains(list)) => holders.push(name.clone()),
+			value if known_at_run_time(value, &lists, &context) => holders.push(name.clone()),
 			_ => {}
 		}
 	});
 	holders
+}
+
+/// An element of a list of data, or the result of a call of the program's own functions (or an element of it)
+fn known_at_run_time(value: &Node, lists: &[String], context: &crate::context::Context) -> bool {
+	match value.drop_meta() {
+		Node::Key(list, Op::Hash, _) => matches!(list.drop_meta(), Node::Symbol(list) if lists.contains(list)) || known_at_run_time(list, lists, context),
+		Node::List(items, _, Separator::None | Separator::Space) => {
+			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(function)) if context.user_functions.contains_key(function))
+		}
+		_ => false,
+	}
+}
+
+/// The parameters of a definition (only those without a declared type: anything may come in, a block too)
+fn parameters(definition: &Node, untyped_only: bool) -> Vec<String> {
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, definition);
+	context.user_functions.values().flat_map(|function| function.params.iter())
+		.filter(|param| !untyped_only || param.annotation.is_none())
+		.map(|param| param.name.clone())
+		.collect()
+}
+
+/// `upper x!`: the `!` mutates x (D2, mutation.rs), it forces nothing
+fn is_mutating_call(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, separator) if items.len() == 2 && !matches!(separator, Separator::Semicolon | Separator::Newline)
+		&& matches!(items[0].drop_meta(), Node::Symbol(_)) && crate::mutation::bang_target(&items[1]).is_some_and(|(inner, _)| matches!(inner, Node::Symbol(_))))
 }
 
 fn is_data(node: &Node) -> bool {
@@ -161,10 +211,14 @@ fn run_time_bang(node: &Node, holders: &[String]) -> Option<Node> {
 	}
 }
 
-fn has_run_time_bang(node: &Node, holders: &[String]) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= run_time_bang(part, holders).is_some());
-	found || run_time_bang(node, holders).is_some()
+/// Is there a `!` mark anywhere (Node::visit looks through the meta wrappers that carry the marks)
+fn has_bang(node: &Node) -> bool {
+	crate::mutation::bang_target(node).is_some() || match node {
+		Node::Meta { node, .. } => has_bang(node),
+		Node::Key(left, _, right) => has_bang(left) || has_bang(right),
+		Node::List(items, _, _) => items.iter().any(has_bang),
+		_ => false,
+	}
 }
 
 fn mentions_interpret(node: &Node) -> bool {
@@ -173,10 +227,13 @@ fn mentions_interpret(node: &Node) -> bool {
 	found
 }
 
-/// `interpret e` / `interpret(e)`: e
-fn interpret_argument(node: &Node) -> Option<&Node> {
+/// `interpret e` / `interpret(e)`: e; `interpret(data n+k)`: the phrase `data n+k`
+fn interpret_argument(node: &Node) -> Option<Node> {
 	match node.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == INTERPRET) => Some(&items[1]),
+		Node::List(items, _, _) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == INTERPRET) => Some(match items.len() {
+			2 => items[1].clone(),
+			_ => Node::List(items[1..].to_vec(), Bracket::None, Separator::Space),
+		}),
 		_ => None,
 	}
 }
@@ -192,12 +249,10 @@ impl Site {
 			self.blocks.push(name);
 			return;
 		}
-		if let Node::Key(target, Op::Assign, _) = statement.drop_meta() {
-			if let Node::Symbol(name) = target.drop_meta() {
-				self.blocks.retain(|block| block != name);
-				if !self.variables.contains(name) {
-					self.variables.push(name.clone());
-				}
+		if let Some(name) = assigned_name(statement) {
+			self.blocks.retain(|block| *block != name);
+			if !self.variables.contains(&name) {
+				self.variables.push(name);
 			}
 		}
 	}
@@ -212,20 +267,37 @@ impl Site {
 
 	fn interpreted(&self, node: Node) -> Node {
 		if let Some(argument) = interpret_argument(&node) {
-			let argument = self.interpreted(argument.clone());
+			let argument = self.interpreted(argument);
 			return match argument.drop_meta() {
 				Node::Symbol(name) if self.blocks.contains(name) => crate::mutation::marked_fully(argument),
 				_ => self.run_block(argument),
 			};
 		}
+		if defines_functions(&node) {
+			return self.in_body(&node).each_part(node, &|site, part| site.interpreted(part));
+		}
 		self.each_part(node, &|site, part| site.interpreted(part))
 	}
 
 	fn forced(&self, node: Node, holders: &[String]) -> Node {
+		if is_mutating_call(&node) {
+			return node;
+		}
 		if let Some(block) = run_time_bang(&node, holders) {
 			return self.run_block(self.forced(block, holders));
 		}
+		if defines_functions(&node) {
+			let with_parameters = [holders.to_vec(), parameters(&node, true)].concat();
+			return self.in_body(&node).each_part(node, &|site, part| site.forced(part, &with_parameters));
+		}
 		self.each_part(node, &|site, part| site.forced(part, holders))
+	}
+
+	/// Inside a function body its parameters and every main-level variable are visible (late binding)
+	fn in_body(&self, definition: &Node) -> Site {
+		let parameters = parameters(definition, false);
+		let variables = [parameters.clone(), self.all_variables.iter().filter(|name| !parameters.contains(name)).cloned().collect()].concat();
+		Site { blocks: self.blocks.clone(), variables, all_variables: self.all_variables.clone(), definitions: self.definitions.clone() }
 	}
 
 	fn each_part(&self, node: Node, lower: &dyn Fn(&Site, Node) -> Node) -> Node {

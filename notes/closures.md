@@ -62,10 +62,10 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
 - Typed fast path (2026-10-04): when every closure of an arity takes Ints and returns an Int, `closure_call_n` passes and
   returns i64 and the entries take them unboxed (closures::type_closure_calls, wasm_emitter/closures.rs typed_entry):
   300000 calls 3 s → 0.3 s. Other signatures (floats, Nodes, mixed) still box.
-- **Per-site result kinds**: the result kind of `closure_call_n` is joined over ALL closures of arity n in the program;
-  mixing e.g. an Int closure and a Function-returning closure of the same arity makes every call return Data (any
-  Node), which works for printing and `+` on the final Int but not every use. A flow analysis of which targets a
-  variable can hold would fix it.
+- **Per-site result kinds** (done): `closure_variable_targets` maps each variable to the `closure_new` targets it may
+  hold (assignments, if/else, calls that return a function). A `closure_call_n(f, …)` with known `f` joins only those
+  targets' return kinds (`closure_call_site_kind`); unknown callees still use the arity-wide join (Data when they
+  differ). The shared helper may stay Data; call sites unbox via the site kind. Not done: monomorphizing `apply`, full SSA.
 - A closure called with the wrong arity, or a non-function called as one, traps with `cast failure` instead of a
   wasp error message.
 - A lifted lambda prints as `closure_lambda_n`, not its source.

@@ -285,7 +285,25 @@ fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &S
 		if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
 			return infer_type(&items[1], scope); // `return x` is worth x
 		}
-		if let Some(kind) = scope.function_kind(name) {
+		if let Some(arity) = crate::closures::closure_call_arity(name) {
+			let callee = items.get(1).and_then(|argument| match argument.drop_meta() {
+				Node::Symbol(variable) => Some(variable.as_str()),
+				_ => None,
+			});
+			if let Some(variable) = callee {
+				if let Some(targets) = scope.closure_targets_of(variable) {
+					if !targets.is_empty() {
+						let mut kinds = targets.iter().map(|target| scope.function_kind(target).unwrap_or(Kind::Data));
+						let first = kinds.next().unwrap_or(Kind::Data);
+						return if kinds.all(|kind| kind == first) { first } else { Kind::Data };
+					}
+				}
+			}
+			if let Some(kind) = scope.function_kind(name) {
+				return kind;
+			}
+			let _ = arity;
+		} else if let Some(kind) = scope.function_kind(name) {
 			return kind;
 		}
 		if name == crate::closures::CLOSURE_NEW {
@@ -961,6 +979,8 @@ pub struct Scope {
 	pub locals: HashMap<String, Local>,
 	pub types: HashMap<String, Node>,  // User-defined types
 	pub function_kinds: HashMap<String, Kind>,  // Return kinds of user functions, which shadow FFI names like `pow`
+	/// Variables that hold a closure → `closure_new` targets they may contain (per-site closure_call kinds)
+	pub closure_variable_targets: HashMap<String, HashSet<String>>,
 	pub globals: HashMap<String, Local>,  // Declared `global` (kind and type, no slot): assigning them later must not create a shadowing local
 	pub parent: Option<Box<Scope>>,
 }
@@ -975,6 +995,7 @@ impl Scope {
 			locals: HashMap::new(),
 			types: HashMap::new(),
 			function_kinds: HashMap::new(),
+			closure_variable_targets: HashMap::new(),
 			globals: HashMap::new(),
 			parent: Some(Box::new(self.clone())),
 		}
@@ -982,6 +1003,16 @@ impl Scope {
 
 	pub fn with_function_kinds(function_kinds: HashMap<String, Kind>) -> Self {
 		Scope { function_kinds, ..Scope::default() }
+	}
+
+	pub fn with_closure_targets(mut self, closure_variable_targets: HashMap<String, HashSet<String>>) -> Self {
+		self.closure_variable_targets = closure_variable_targets;
+		self
+	}
+
+	/// Targets a closure variable may hold, looking through parent scopes
+	pub fn closure_targets_of(&self, name: &str) -> Option<&HashSet<String>> {
+		self.closure_variable_targets.get(name).or_else(|| self.parent.as_ref().and_then(|parent| parent.closure_targets_of(name)))
 	}
 
 	pub fn is_global(&self, name: &str) -> bool {
@@ -1439,7 +1470,7 @@ const REAL_CONSTANTS: [&str; 2] = ["π", "pi"];
 pub fn number_type_word(number: &Number) -> &'static str {
 	match number {
 		Number::Int(_) | Number::BigInt(_) => INT_WORD,
-		Number::Quotient(..) => RATIONAL_WORD,
+		Number::Quotient(..) | Number::BigQuotient(_) => RATIONAL_WORD,
 		Number::Real(_) => REAL_WORD,
 		Number::Float(value) if Number::is_exact_decimal(*value) => if value.fract() == 0.0 { INT_WORD } else { RATIONAL_WORD },
 		_ => FLOAT_WORD,
@@ -1779,6 +1810,7 @@ fn is_negative(node: &Node) -> bool {
 		Node::Number(Number::Int(n)) => *n < 0,
 		Node::Number(Number::Float(f)) => *f < 0.0,
 		Node::Number(Number::Quotient(numerator, _)) => *numerator < 0,
+		Node::Number(Number::BigQuotient(q)) => q.is_negative(),
 		Node::Number(Number::BigInt(big)) => big.sign() == num_bigint::Sign::Minus,
 		Node::Key(left, Op::Neg | Op::Sub, _) => matches!(left.drop_meta(), Node::Empty),
 		Node::List(items, _, _) if items.len() == 1 => is_negative(&items[0]),
@@ -2841,8 +2873,8 @@ pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 /// Extract user-defined functions from the AST into context
 /// Infer return type of a function body given its parameters
 /// The parameters and variables of a function body, typed
-fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Scope {
-	let mut scope = Scope::with_function_kinds(function_kinds.clone());
+fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>, closure_variable_targets: &HashMap<String, HashSet<String>>) -> Scope {
+	let mut scope = Scope::with_function_kinds(function_kinds.clone()).with_closure_targets(closure_variable_targets.clone());
 	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
 		scope.define_param(param.name.clone(), param_kind(param));
@@ -2853,9 +2885,9 @@ fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<S
 
 /// The kinds of the values `return a, b` gives back, position by position over every such return:
 /// one kind when all agree, Float for Int mixed with Float, else a Node
-fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Vec<Kind> {
+fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>, closure_variable_targets: &HashMap<String, HashSet<String>>) -> Vec<Kind> {
 	let Some(arity) = crate::tuples::tuple_arity(body) else { return vec![] };
-	let scope = function_body_scope(params, body, function_kinds, globals);
+	let scope = function_body_scope(params, body, function_kinds, globals, closure_variable_targets);
 	let mut kinds: Vec<Option<Kind>> = vec![None; arity];
 	body.visit(&mut |node| {
 		for (kind, value) in kinds.iter_mut().zip(crate::tuples::returned_values(node).unwrap_or_default()) {
@@ -2871,11 +2903,11 @@ fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<Str
 	kinds.into_iter().map(|kind| kind.unwrap_or(Kind::Data)).collect()
 }
 
-fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Kind {
+fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>, closure_variable_targets: &HashMap<String, HashSet<String>>) -> Kind {
 	if crate::tuples::tuple_arity(body).is_some() {
 		return Kind::List; // used whole, a tuple function's values are packed into a list
 	}
-	let scope = function_body_scope(params, body, function_kinds, globals);
+	let scope = function_body_scope(params, body, function_kinds, globals, closure_variable_targets);
 	// `return error("…")` is the failure path: it does not decide what the function returns
 	let is_error = |value: &Node| {
 		let value = match value.drop_meta() {
@@ -2985,7 +3017,7 @@ pub fn param_kind(param: &Param) -> Kind {
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
 fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, body);
-	let return_kind = infer_function_return_kind(&params, body, &HashMap::new(), &HashMap::new());
+	let return_kind = infer_function_return_kind(&params, body, &HashMap::new(), &HashMap::new(), &HashMap::new());
 	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, tuple_kinds: vec![], func_index: None }
 }
 
@@ -3112,11 +3144,11 @@ fn widen_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String,
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
 	function_kinds.extend(ctx.field_kinds.clone());
 	let mut passed: HashMap<(String, usize), HashSet<Kind>> = HashMap::new();
-	let mut main = Scope::with_function_kinds(function_kinds.clone());
+	let mut main = Scope::with_function_kinds(function_kinds.clone()).with_closure_targets(ctx.closure_variable_targets.clone());
 	collect_variables(program, &mut main);
 	collect_argument_kinds(program, &main, ctx, &mut passed);
 	for function in ctx.user_functions.values() {
-		let scope = function_body_scope(&function.params, &function.body, &function_kinds, globals);
+		let scope = function_body_scope(&function.params, &function.body, &function_kinds, globals, &ctx.closure_variable_targets);
 		collect_argument_kinds(&function.body, &scope, ctx, &mut passed);
 	}
 	let mut changed = false;
@@ -3182,19 +3214,36 @@ fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, passed: &mu
 	}
 }
 
-/// The kinds a closure's body sees for the variables it captures from the program (`t = "!"; shout = s => s + t`),
-/// added to the declared globals where no global of that name exists: without them `s + t` is a type error and the
-/// closure's result kind is lost
+/// Free variables a function reads from main (or an enclosing function) keep their kinds for return-kind inference:
+/// without them `if x > limit then limit else x` types `limit` as Symbol, the function as Text, and a numeric `+` of
+/// two calls traps (g-rT0c). Closures need the same (`t = "!"; shout = s => s + t`). Kinds are merged only where no
+/// declared global of that name exists.
 fn with_closure_captures(ctx: &Context, program: &Node, mut globals: HashMap<String, Local>) -> HashMap<String, Local> {
-	if ctx.closure_targets.is_empty() {
-		return globals;
-	}
 	let mut outer = Scope::new();
 	collect_variables(program, &mut outer);
-	let parameters: HashSet<&str> = ctx.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.as_str())).collect();
-	for (name, local) in outer.locals {
-		if !parameters.contains(name.as_str()) {
-			globals.entry(name).or_insert(local);
+	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
+	functions.sort_by(|a, b| a.name.cmp(&b.name));
+	for function in functions {
+		let enclosing = ctx.enclosing_functions.get(&function.name).and_then(|name| ctx.user_functions.get(name));
+		let captured: Vec<(String, Kind)> = match enclosing {
+			Some(enclosing) => {
+				let mut enclosing_scope = Scope::new();
+				for param in &enclosing.params {
+					enclosing_scope.define_param(param.name.clone(), param_kind(param));
+				}
+				collect_variables(&enclosing.body, &mut enclosing_scope);
+				let mut captured = captured_variables(function, &enclosing_scope);
+				captured.extend(
+					captured_variables(function, &outer)
+						.into_iter()
+						.filter(|(name, _)| enclosing_scope.lookup(name).is_none()),
+				);
+				captured
+			}
+			None => captured_variables(function, &outer),
+		};
+		for (name, kind) in captured {
+			globals.entry(name.clone()).or_insert_with(|| Local::new(0, name, kind));
 		}
 	}
 	globals
@@ -3423,13 +3472,13 @@ fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 		let inferred: Vec<(String, Kind)> = ctx.user_functions.values()
 			.map(|function| {
 				let kind = crate::closures::closure_call_kind(&function.name, ctx, &function_kinds)
-					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds, globals));
+					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds, globals, &ctx.closure_variable_targets));
 				// `if t == ø { return [] }; return f(t.left) + [x]`: assumed to return an Int, the recursion makes an
 				// error of the last value; assumed to return a Node of unknown kind, it settles
 				let kind = if kind == Kind::Error && function_kinds.get(&function.name) == Some(&Kind::Int) {
 					let mut unknown_recursion = function_kinds.clone();
 					unknown_recursion.insert(function.name.clone(), Kind::Empty);
-					infer_function_return_kind(&function.params, &function.body, &unknown_recursion, globals)
+					infer_function_return_kind(&function.params, &function.body, &unknown_recursion, globals, &ctx.closure_variable_targets)
 				} else {
 					kind
 				};
@@ -3438,7 +3487,7 @@ fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 			.collect();
 		let tuples: Vec<(String, Kind)> = ctx.user_functions.values()
 			.flat_map(|function| {
-				let kinds = infer_tuple_kinds(&function.params, &function.body, &function_kinds, globals);
+				let kinds = infer_tuple_kinds(&function.params, &function.body, &function_kinds, globals, &ctx.closure_variable_targets);
 				kinds.into_iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(&function.name, index), kind)).collect::<Vec<_>>()
 			})
 			.collect();
@@ -3458,6 +3507,12 @@ fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 }
 
 fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
+	extract_user_functions_in(ctx, node, None);
+}
+
+/// Nested `def` / `f() = …` inside a function body becomes a top-level UserFunctionDef named `outer·inner`, with call
+/// sites in the enclosing body rewritten to that mangled name (wiki/charged.md §3 nested defs; card g-qUkY step 1).
+fn extract_user_functions_in(ctx: &mut Context, node: &Node, enclosing: Option<&str>) {
 	let node = node.drop_meta();
 	match node {
 		// Pattern: name(param1, param2, ...) = body
@@ -3465,13 +3520,13 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			if let Node::List(items, bracket, _) = left.drop_meta() {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
-						ctx.user_functions.insert(name.clone(), user_function(name, extract_params(items, bracket), body));
+						register_user_function(ctx, name, extract_params(items, bracket), body, enclosing);
 						return;
 					}
 				}
 			}
-			extract_user_functions_inner(ctx, left);
-			extract_user_functions_inner(ctx, body);
+			extract_user_functions_in(ctx, left, enclosing);
+			extract_user_functions_in(ctx, body, enclosing);
 		}
 		// Pattern: name x := body (with explicit parameter x using $0 or `it`)
 		Node::Key(left, Op::Define, body) => {
@@ -3483,7 +3538,7 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 						let written_call = *bracket == Bracket::Round; // `f() := [1, 2]` defines f without parameters
 						if !params.is_empty() || implicit_param || written_call {
 							let params = if params.is_empty() && implicit_param { vec![Param::untyped("it")] } else { params };
-							ctx.user_functions.insert(name.clone(), user_function(name, params, body));
+							register_user_function(ctx, name, params, body, enclosing);
 							return;
 						}
 					}
@@ -3495,12 +3550,12 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 					// a block of statements takes `it` when it reads it outside its own `for 1..n {…it…}` loops
 					let takes_it = !is_statement_block(body) || uses_it_outside_loops(body) || uses_dollar_param(body);
 					let params = if takes_it { vec![Param::untyped("it")] } else { vec![] };
-					ctx.user_functions.insert(name.clone(), user_function(name, params, body));
+					register_user_function(ctx, name, params, body, enclosing);
 					return;
 				}
 			}
-			extract_user_functions_inner(ctx, left);
-			extract_user_functions_inner(ctx, body);
+			extract_user_functions_in(ctx, left, enclosing);
+			extract_user_functions_in(ctx, body, enclosing);
 		}
 		// Check for def/fun/fn syntax
 		Node::List(items, _, _) => {
@@ -3508,21 +3563,124 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 				if let Node::Symbol(s) = items[0].drop_meta() {
 					if is_function_keyword(s) {
 						if let Some(func_def) = extract_def_function(&items[1..]) {
-							ctx.user_functions.insert(func_def.name.clone(), func_def);
+							register_user_function(ctx, &func_def.name, func_def.params, &func_def.body, enclosing);
 							return;
 						}
 					}
 				}
 			}
 			for item in items {
-				extract_user_functions_inner(ctx, item);
+				extract_user_functions_in(ctx, item, enclosing);
 			}
 		}
 		Node::Key(left, _, right) => {
-			extract_user_functions_inner(ctx, left);
-			extract_user_functions_inner(ctx, right);
+			extract_user_functions_in(ctx, left, enclosing);
+			extract_user_functions_in(ctx, right, enclosing);
 		}
 		_ => {}
+	}
+}
+
+/// Between an enclosing function and a nested `def` lifted out of its body: `outer·inner`
+const NESTED_DEF_SEPARATOR: &str = "·";
+
+fn qualify_nested_name(enclosing: Option<&str>, name: &str) -> String {
+	match enclosing {
+		Some(parent) => format!("{parent}{NESTED_DEF_SEPARATOR}{name}"),
+		None => name.to_string(),
+	}
+}
+
+fn register_user_function(ctx: &mut Context, short_name: &str, params: Vec<Param>, body: &Node, enclosing: Option<&str>) {
+	let name = qualify_nested_name(enclosing, short_name);
+	let (body, renames) = lift_nested_defs_from_body(ctx, body.clone(), &name);
+	let body = rename_nested_calls(body, &renames);
+	if let Some(parent) = enclosing {
+		ctx.enclosing_functions.insert(name.clone(), parent.to_string());
+	}
+	ctx.user_functions.insert(name.clone(), user_function(&name, params, &body));
+}
+
+/// Nested function definitions in `body` become UserFunctionDefs named `parent·short`; their statements stay (emit skips
+/// them) and call sites are renamed via the returned map.
+fn lift_nested_defs_from_body(ctx: &mut Context, body: Node, parent: &str) -> (Node, HashMap<String, String>) {
+	let mut renames = HashMap::new();
+	let body = lift_nested_defs_walk(ctx, body, parent, &mut renames);
+	(body, renames)
+}
+
+fn lift_nested_defs_walk(ctx: &mut Context, node: Node, parent: &str, renames: &mut HashMap<String, String>) -> Node {
+	match node {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lift_nested_defs_walk(ctx, *node, parent, renames)), data },
+		Node::Key(left, op @ (Op::Assign | Op::Define), body) => {
+			if let Node::List(items, bracket, separator) = left.drop_meta() {
+				if let Some(Node::Symbol(short)) = items.first().map(Node::drop_meta) {
+					let mangled = qualify_nested_name(Some(parent), short);
+					renames.insert(short.clone(), mangled.clone());
+					register_user_function(ctx, short, extract_params(items, bracket), &body, Some(parent));
+					// LHS must use the mangled name so emit's defined_function_name finds it in user_functions
+					let mut items = items.clone();
+					items[0] = Node::Symbol(mangled);
+					return Node::Key(Box::new(Node::List(items, bracket.clone(), separator.clone())), op, body);
+				}
+			}
+			Node::Key(
+				Box::new(lift_nested_defs_walk(ctx, *left, parent, renames)),
+				op,
+				Box::new(lift_nested_defs_walk(ctx, *body, parent, renames)),
+			)
+		}
+		Node::Key(left, op, right) => Node::Key(
+			Box::new(lift_nested_defs_walk(ctx, *left, parent, renames)),
+			op,
+			Box::new(lift_nested_defs_walk(ctx, *right, parent, renames)),
+		),
+		Node::List(items, bracket, separator) => {
+			if items.len() >= 2 {
+				if let Node::Symbol(keyword) = items[0].drop_meta() {
+					if is_function_keyword(keyword) {
+						if let Some(func_def) = extract_def_function(&items[1..]) {
+							renames.insert(func_def.name.clone(), qualify_nested_name(Some(parent), &func_def.name));
+							register_user_function(ctx, &func_def.name, func_def.params, &func_def.body, Some(parent));
+							return Node::List(items, bracket, separator);
+						}
+					}
+				}
+			}
+			Node::List(
+				items.into_iter().map(|item| lift_nested_defs_walk(ctx, item, parent, renames)).collect(),
+				bracket,
+				separator,
+			)
+		}
+		other => other,
+	}
+}
+
+/// `inner()` / `inner()+1` inside the enclosing body: the call head becomes `outer·inner`
+fn rename_nested_calls(node: Node, renames: &HashMap<String, String>) -> Node {
+	if renames.is_empty() {
+		return node;
+	}
+	match node {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(rename_nested_calls(*node, renames)), data },
+		Node::Key(left, op, right) => Node::Key(
+			Box::new(rename_nested_calls(*left, renames)),
+			op,
+			Box::new(rename_nested_calls(*right, renames)),
+		),
+		Node::List(items, bracket, separator) => {
+			let mut items: Vec<Node> = items.into_iter().map(|item| rename_nested_calls(item, renames)).collect();
+			if bracket == Bracket::Round {
+				if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+					if let Some(mangled) = renames.get(name) {
+						items[0] = Node::Symbol(mangled.clone());
+					}
+				}
+			}
+			Node::List(items, bracket, separator)
+		}
+		other => other,
 	}
 }
 

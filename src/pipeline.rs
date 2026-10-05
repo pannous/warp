@@ -112,12 +112,12 @@ const SOURCE_PASSES: [fn(Node) -> Node; 26] = [
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
-const MEANING_PASSES: [fn(Node) -> Node; 22] = [
+const MEANING_PASSES: [fn(Node) -> Node; 23] = [
 	crate::declarations::resolve_tasks, crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
 	crate::broadcasting::lower, crate::library_words::lower_count_in, crate::lambdas::lower, crate::function_values::lower, crate::closures::lower, crate::lambdas::lower_strict, crate::real::lower,
 	crate::type_constructor::lower, crate::printable::lower, crate::overloads::lower, crate::traits::lower_conformances, crate::min_max::lower,
 	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower,
-	crate::traits::lower_dispatch,
+	crate::traits::lower_dispatch, crate::memoization::lower,
 ];
 
 fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
@@ -180,12 +180,38 @@ pub fn lower(code: &str) -> Result<Node, Node> {
 /// Compile source text to a wasm module without running it. `Err` carries the error, or the constant
 /// answer of a program that needs no module.
 pub fn compile(code: &str) -> Result<CompiledModule, Node> {
+	compile_program(code, |program| program)
+}
+
+/// compile for a standalone executable (`warp build --exe`): the program prints its value at the end, as `warp <file>`
+/// shows it, since nobody reads the result of an executable
+pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
+	compile_program(code, printing_result)
+}
+
+fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
 	crate::diagnostic::begin_program();
-	crate::diagnostic::in_program_mode(lawful_program(code)?, |program| {
-		let node = crate::folding::fold_constant_calls(lower_for_emission(program)?);
+	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
+		let node = crate::folding::precompute(lower_for_emission(program)?);
 		warn_about_run_time_blocks(&node)?;
 		choose_module(&node)
 	})
+}
+
+/// The program with its last statement `x` printed: `print(x)`; a declaration or a print stays as it is
+fn printing_result(program: Node) -> Node {
+	match program {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(printing_result(*node)), data },
+		Node::List(mut statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			if let Some(last) = statements.pop() {
+				statements.push(printing_result(last));
+			}
+			Node::List(statements, Bracket::None, separator)
+		}
+		Node::Empty => Node::Empty,
+		statement if crate::modules::is_declaration(&statement) || crate::wasp_parser::starts_print(&statement) => statement,
+		value => crate::wasp_parser::print_call([value]),
+	}
 }
 
 /// A compiled module that runs blocks at run time needs a host with a warp compiler: say so where it is made
@@ -262,6 +288,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 		single => vec![single.clone()],
 	};
 	let values = items(values);
+	let block = spaced(block);
 	let as_written = |value: Node| match value.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty => value,
 		_ => Node::List(vec![Node::Symbol(crate::blocks::DATA_WORD.to_string()), value], Bracket::None, Separator::Space),
@@ -269,7 +296,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 	let mut statements: Vec<Node> = names.into_iter().zip(values)
 		.map(|(name, value)| Node::Key(Box::new(Node::Symbol(name)), Op::Assign, Box::new(as_written(value))))
 		.collect();
-	statements.extend(items(definitions));
+	statements.extend(items(definitions).into_iter().map(spaced));
 	statements.push(block);
 	let program = Node::List(statements, Bracket::None, Separator::Newline);
 	let result = match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
@@ -283,7 +310,19 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 	}
 }
 
-/// A block's value the host has no constructor for in the running module yet (a pair)
+/// A phrase read back from a Node of the program (`data 2*3`, `print x`) has lost its spaces: an unbracketed list is a
+/// spaced phrase again, as the parser made it
+fn spaced(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::None, Separator::None) => Node::List(items.into_iter().map(spaced).collect(), Bracket::None, Separator::Space),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(spaced).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(spaced(*left)), op, Box::new(spaced(*right))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(spaced(*node)), data },
+		other => other,
+	}
+}
+
+/// A block's value the host has no constructor for in the running module yet
 pub fn cannot_hand_back(value: &Node) -> String {
 	format!("the block gave {}, a value run_block cannot hand back yet", value.serialize().trim())
 }

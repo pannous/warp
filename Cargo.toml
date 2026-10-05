@@ -4,17 +4,17 @@
 # the `vendor` branch and its refresh workflow are kept for offline cloud agents: notes/cloud_offline_build.md)
 
 
+# crates/warp-runtime: running compiled programs without the compiler; its binary is the stub of `warp build --exe`
+[workspace]
+members = ["crates/warp-runtime"]
+resolver = "2"
+
 [package]
 name = "warp"
 version = "0.1.1"
 edition = "2021"  # Cargo edition! NOT package edition!
 # One test binary: cargo would otherwise build and link every tests/*.rs as its own crate (~200 links)
 autotests = false
-
-# runtime/: running compiled programs without the compiler, and the standalone executable warp-run (notes/aot.md)
-[workspace]
-members = [".", "runtime"]
-default-members = ["."]
 
 [[test]]
 name = "tests"
@@ -81,7 +81,7 @@ libloading = { version = "0.9", optional = true }  # Dynamic library loading for
 
 wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-copying", "runtime", "wat"], optional = true }
 wasmtime-wasi = { version = "49.0.1", optional = true }
-warp-runtime = { path = "runtime", default-features = false } # without features: the names of the host words only
+warp-runtime = { path = "crates/warp-runtime", default-features = false } # without features: the names of the host words only
 sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (src/run/module_cache.rs); wasmtime uses it already
 #wasmtime-runtime = "*" # Wasmtime runtime
 #wasmtime-wasi = "*" # WASI support for Wasmtime

@@ -34,7 +34,7 @@ impl Definition {
 		Some(Definition { name: name.clone(), params: params.to_vec(), body: body.as_ref().clone() })
 	}
 
-	fn param_names(&self) -> Vec<String> {
+	pub(crate) fn param_names(&self) -> Vec<String> {
 		self.params.iter().filter_map(parameter_name).collect()
 	}
 

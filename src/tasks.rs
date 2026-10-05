@@ -63,6 +63,7 @@ impl TaskValue {
 			Node::Number(Number::Int(n)) => TaskValue::Exact((*n).into(), 1.into()),
 			Node::Number(Number::BigInt(n)) => TaskValue::Exact((*n).clone(), 1.into()),
 			Node::Number(Number::Quotient(n, d)) => TaskValue::Exact((*n).into(), (*d).into()),
+			Node::Number(Number::BigQuotient(q)) => TaskValue::Exact(q.numerator.clone(), q.denominator.clone()),
 			Node::Number(Number::Float(x)) => TaskValue::Float(*x),
 			Node::Char(c) => TaskValue::Char(*c),
 			Node::Text(text) => TaskValue::Text(text.clone()),

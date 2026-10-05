@@ -36,13 +36,27 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    `warp <file>.wasm` / `.cwasm` now link host, WASI and FFI imports (a printing program failed with an unknown
    `wasi_snapshot_preview1::fd_write` before).
    CLI, debug warp, ackermann: 41 ms without cache, 12 ms with the cache or the .cwasm.
-3. **Standalone executable** (probe): wasmtime with `runtime`, `gc`, `gc-copying`, `std` only (no Cranelift) plus the
-   .cwasm via `include_bytes!` (probes/aot/standalone_runner.rs). ackermann: **968 KB executable** (149 KB machine code),
-   loads in 0.25 ms, runs in 0.33 ms in total; the warp release binary is 7 MB. Needed: warp's engines turn off the
-   component model and its concurrency support (util::deterministic_config), otherwise the .cwasm refuses to load
-   into a runtime built without them. Missing for real programs: the host words, WASI (print) and FFI imports, and
-   printing the result Node (gc_traits); a `warp-runtime` crate holding host.rs + a small WASI fd_write would provide
-   them. wasmtime-wasi pulls tokio and would grow the binary several MB.
+3. **Standalone executable, `warp build --exe <file>`** (implemented): `<file>.exe` is a copy of the prebuilt stub
+   `warp-runtime` (crates/warp-runtime: wasmtime with `runtime`, `gc`, `gc-copying`, `std`, no Cranelift) with the
+   program's machine code appended (`[stub][cwasm][u64 le length][WRPCwasm]`); at start the stub reads its own last 16
+   bytes and runs what it carries. The stub is found through `WARP_RUNTIME_STUB`, else `warp-runtime` next to `warp`,
+   else warp itself is the stub (warp's main also runs a program it carries: tests need no extra build, the executable
+   is then warp-sized). Release stub (`cargo build --release -p warp-runtime`): **805 KB**; ackermann.exe **972 KB**
+   (167 KB machine code), starts and finishes in well under 10 ms (probe build: 0.33 ms in total).
+   - The program prints its value: build --exe compiles `print(<last statement>)` (pipeline::compile_printing_result;
+     a declaration or a print stays), so the value is formatted by warp's own print (`[10 20 30]`, texts unquoted)
+     and the stub needs no Node reader.
+   - The stub provides print (WASI fd_write), libm ("m": Rust's f64 functions) and the host words sleep, random,
+     random_below, clock. A program importing anything else (fetch, read, run_block, tasks, FFI libraries) is refused
+     at build time with the missing imports named.
+   - One copy of the run-time code: crates/warp-runtime holds the engine settings (`deterministic_config`,
+     `fueled_config`), the fuel default, the host words without compiler (`link_host_words`, which warp's host.rs
+     links too), fd_write and libm for any store state, and the trailer format. warp depends on it with the
+     `compiler` feature (Cranelift + the component model it turns off); the browser build gets only the word names.
+   - Engines turn off the component model and its concurrency support, else the .cwasm refuses to load into a
+     runtime built without them.
+   - macOS: appending keeps the ad-hoc signature valid enough to run, `codesign -v` reports "failed strict
+     validation"; a signed release would put the machine code in a Mach-O section instead (like bun --compile).
 4. **wasmtime's own CLI**: `wasmtime compile -W gc=y,function-references=y` + `wasmtime run --allow-precompiled`
    works for import-free programs (11–12 ms per process).
 
@@ -68,9 +82,7 @@ module repeats their machine code. A shared runtime module linked to the program
 ## Recommendation
 1. Done: Cranelift crates optimized in dev builds (largest win, tests 8×).
 2. Done (branch aot): the on-disk module cache for every native run, and `warp compile --aot`.
-3. Next: share one gc_engine per process (with the cache: a hit becomes a map lookup), and a `warp build --exe` that
-   writes a standalone executable from a prebuilt runtime binary + the appended .cwasm (no Rust toolchain on the
-   user's machine), once the host imports live in a runtime crate without Cranelift.
+3. Done (g-qV5Y, g-qV8Y): one shared gc_engine per process (a repeated run is a map lookup) and `warp build --exe`.
 4. Later: link programs against one shared runtime module instead of emitting the runtime into each module.
 
 ## Test-suite time (./test.sh)

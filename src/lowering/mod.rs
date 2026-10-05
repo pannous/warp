@@ -8,6 +8,7 @@ pub mod closures;
 pub mod comprehensions;
 pub mod declarations;
 pub mod folding;
+pub mod memoization;
 pub mod for_loop;
 pub mod function_values;
 pub mod inlining;

@@ -1,13 +1,18 @@
 //! Charged bodies read their free variables like Python functions (wiki/charged.md section 3, revising D7): at call
 //! time. A main-level variable a function reads and the program changes after the definition must be declared
 //! `global y` in that function; otherwise the change is a compile error where it is written, once a later call could
-//! observe it. A `def` without parameters that always gives the same value gets the "needless charging" note.
+//! observe it. A function defined in a function body reads that function's parameters and variables the same way: a
+//! change after its definition that a later call in the body could observe is an error, unless the nested function
+//! declares `nonlocal y` (card g-qUkY): then each call from the enclosing body reads its current value.
+//! A `def` without parameters that always gives the same value gets the "needless charging" note.
 //!
 //! Functions keep capturing by value at the definition (wasm_emitter `emit_closure_capture`): with this check every
 //! accepted program reads the same value either way, except a variable first bound after the definition, which is
-//! made a global so that the call reads it (`def f(x){x+k}; k=3; f(1)` → 4).
+//! made a global so that the call reads it (`def f(x){x+k}; k=3; f(1)` → 4). A nested function `outer·inner` reads
+//! its captures as they are when the enclosing body calls it (wasm_emitter `emit_user_function_values`), so `nonlocal y`
+//! needs no code of its own: the declaration only lifts the check and is dropped here. Writing y from inner waits.
 
-use crate::analyzer::{captured_variables, collect_variables, declare_global, extract_user_functions, find_assignments, is_list_mutating_method, Scope};
+use crate::analyzer::{captured_variables, collect_variables, declare_global, extract_user_functions, find_assignments, is_list_mutating_method, param_kind, Scope};
 use crate::context::{Context, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::effects::EffectReport;
@@ -16,41 +21,197 @@ use crate::operators::{is_function_keyword, Op};
 use std::collections::{HashMap, HashSet};
 
 const GLOBAL: &str = "global";
+const NONLOCAL: &str = "nonlocal";
 const NEEDLESS_CHARGING_TOPIC: &str = "needless-charging";
 
 pub fn lower(program: Node) -> Result<Node, Node> {
 	let statements = statements_of(&program);
+	if let Some(declaration) = statements.iter().find(|statement| is_nonlocal_declaration(statement)) {
+		return Err(nonlocal_at_main_level_error(declaration));
+	}
 	let mut main = Scope::new();
 	collect_variables(&program, &mut main);
 	let declared = declared_global_reads(&statements, &main);
 	let program = without_global_reads(program, &declared);
 	let statements = statements_of(&program);
-	let mut late_bound: Vec<String> = declared.clone();
 	let definitions = definitions(&statements);
-	let callers = callers(&definitions);
 	let report = EffectReport::of(&program);
 	for definition in &definitions {
 		note_needless_charging(definition, &statements, &main, &report);
-		let free = captured_variables(&definition.function, &main).into_iter().map(|(name, _)| name)
-			.filter(|name| !main.is_global(name) && !declared.contains(name) && !callers.contains_key(name));
+	}
+	let mut late_bound = check_definitions(&statements, &definitions, &main, &|_, name| declared.iter().any(|known| known == name), None)?;
+	for definition in &definitions {
+		check_function_body(&definition.function)?;
+	}
+	late_bound.extend(declared);
+	late_bound.sort();
+	late_bound.dedup();
+	Ok(declare_global(without_nonlocal_declarations(program), &late_bound))
+}
+
+/// The late-binding check of the functions defined in `statements` whose free variables `scope` binds: main's
+/// statements, or the body of the function `enclosing`. Returns the variables first bound after a definition, which
+/// main makes global so that the call reads them; in a function body the call reads its captures as they are then.
+fn check_definitions(statements: &[Node], definitions: &[Definition], scope: &Scope, skip: &dyn Fn(&Definition, &str) -> bool, enclosing: Option<&UserFunctionDef>) -> Result<Vec<String>, Node> {
+	let callers = callers(definitions, &|name| written_names(enclosing, name));
+	let mut late_bound: Vec<String> = vec![];
+	for definition in definitions {
+		let free = captured_variables(&definition.function, scope).into_iter().map(|(name, _)| name)
+			.filter(|name| !scope.is_global(name) && !skip(definition, name) && !callers.contains_key(name));
 		for variable in free {
-			let changes = changes_after(&statements, definition.index, &variable);
-			let unbound_before = !binds(&statements[..definition.index], &variable);
+			let changes = changes_after(statements, definition.index, &variable);
+			let parameter = enclosing.is_some_and(|function| function.params.iter().any(|param| param.name == variable));
+			let unbound_before = !parameter && !binds(&statements[..definition.index], &variable);
 			let checked = match (unbound_before, changes.split_first()) {
 				(true, Some((_, later))) => {
-					late_bound.push(variable.clone());
+					if enclosing.is_none() {
+						late_bound.push(variable.clone());
+					}
 					later
 				}
 				_ => changes.as_slice(),
 			};
-			if let Some(change) = checked.iter().find(|change| observed_after(&statements, change, &callers[&definition.function.name])) {
-				return Err(late_binding_error(definition, &variable, change.node));
+			if let Some(change) = checked.iter().find(|change| observed_after(statements, change, &callers[&definition.function.name])) {
+				return Err(late_binding_error(definition, &variable, change.node, enclosing));
 			}
 		}
 	}
-	late_bound.sort();
-	late_bound.dedup();
-	Ok(declare_global(program, &late_bound))
+	Ok(late_bound)
+}
+
+/// The functions defined directly in the body of `function` read its parameters and variables at call time too: a
+/// change of one after such a definition is an error once a later call in the body could observe it (card g-qUrk)
+fn check_function_body(function: &UserFunctionDef) -> Result<(), Node> {
+	let statements = body_statements(&function.body);
+	let nested = function.name.contains(NESTED_DEF_SEPARATOR); // `outer·inner`: outer checks its nonlocal declarations
+	if let Some(name) = declared_nonlocals(&function.body).first().filter(|_| !nested) {
+		return Err(nonlocal_without_enclosing_error(function, name));
+	}
+	let definitions: Vec<Definition> = definitions(&statements).into_iter()
+		.filter(|definition| !short_name_in(function, &definition.function.name).contains(NESTED_DEF_SEPARATOR))
+		.collect();
+	if definitions.is_empty() {
+		return Ok(());
+	}
+	let mut enclosing = Scope::new();
+	for param in &function.params {
+		enclosing.define(param.name.clone(), None, param_kind(param));
+	}
+	collect_variables(&Node::List(statements.clone(), Bracket::None, Separator::Newline), &mut enclosing);
+	for definition in &definitions {
+		let names = declared_nonlocals(&definition.function.body);
+		let Some(first) = names.first() else { continue };
+		if !definition.function.name.contains(NESTED_DEF_SEPARATOR) {
+			return Err(nonlocal_in_block_error(definition, first, function));
+		}
+		if let Some(name) = names.iter().find(|name| enclosing.lookup(name).is_none()) {
+			return Err(unbound_nonlocal_error(definition, name, function));
+		}
+	}
+	let declared = |definition: &Definition, name: &str| {
+		let mut found = false;
+		definition.function.body.visit(&mut |node| found |= global_read(node).is_some_and(|declared| declared == name));
+		found || declared_nonlocals(&definition.function.body).iter().any(|declared| declared == name)
+	};
+	check_definitions(&statements, &definitions, &enclosing, &declared, Some(function)).map(|_| ())
+}
+
+/// The names a function body declares `nonlocal` in its own statements (`nonlocal y`, `nonlocal a, b`), not those of
+/// the functions defined in it
+fn declared_nonlocals(body: &Node) -> Vec<String> {
+	body_statements(body).iter().flat_map(nonlocal_names).collect()
+}
+
+/// `nonlocal y` → [y]; `nonlocal a, b` → [a, b]; any other node → []
+fn nonlocal_names(node: &Node) -> Vec<String> {
+	let Node::Key(keyword, Op::Colon, names) = node.drop_meta() else { return vec![] };
+	if !matches!(keyword.drop_meta(), Node::Symbol(word) if word == NONLOCAL) {
+		return vec![];
+	}
+	match names.drop_meta() {
+		Node::Symbol(name) => vec![name.clone()],
+		Node::List(items, _, _) => items.iter().filter_map(|item| match item.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		}).collect(),
+		_ => vec![],
+	}
+}
+
+fn is_nonlocal_declaration(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(keyword, Op::Colon, _) if matches!(keyword.drop_meta(), Node::Symbol(word) if word == NONLOCAL))
+}
+
+/// The program without its `nonlocal y` declarations: once checked they have no code
+fn without_nonlocal_declarations(program: Node) -> Node {
+	let mut found = false;
+	program.visit(&mut |node| found |= is_nonlocal_declaration(node));
+	if !found {
+		return program;
+	}
+	without_statements(program, &is_nonlocal_declaration)
+}
+
+/// The statement `nonlocal name` of the body, for the position of an error
+fn declaration_of(body: &Node, name: &str) -> Node {
+	body_statements(body).into_iter().find(|statement| nonlocal_names(statement).iter().any(|declared| declared == name)).unwrap_or_else(|| body.clone())
+}
+
+/// `nonlocal y` among main's statements
+fn nonlocal_at_main_level_error(declaration: &Node) -> Node {
+	let name = nonlocal_names(declaration).into_iter().next().unwrap_or_default();
+	Diagnostic::at(declaration, format!("`nonlocal {name}` outside a function: main reads its own {name}; `nonlocal` belongs in a function defined in a function"))
+		.into_error()
+}
+
+/// `nonlocal y` in a function that no function encloses (Python: "nonlocal declaration not allowed at module level")
+fn nonlocal_without_enclosing_error(function: &UserFunctionDef, name: &str) -> Node {
+	Diagnostic::at(&declaration_of(&function.body, name), format!("`nonlocal {name}` in {}: no function encloses {}; declare `global {name}` to read main's {name}", function.name, function.name))
+		.into_error()
+}
+
+/// `inner := {nonlocal y; …}`: a block made a closure captures y when it is made; only `def inner(){…}` reads y anew
+fn nonlocal_in_block_error(definition: &Definition, name: &str, enclosing: &UserFunctionDef) -> Node {
+	let inner = short_name_in(enclosing, &definition.function.name);
+	Diagnostic::at(&declaration_of(&definition.function.body, name), format!("`nonlocal {name}` in {inner}: only a function defined with `def {inner}(){{…}}` reads the current {name} so far"))
+		.into_error()
+}
+
+/// `nonlocal y` in inner where the enclosing function has no y
+fn unbound_nonlocal_error(definition: &Definition, name: &str, enclosing: &UserFunctionDef) -> Node {
+	let inner = short_name_in(enclosing, &definition.function.name);
+	let outer = enclosing.name.rsplit(NESTED_DEF_SEPARATOR).next().unwrap_or(&enclosing.name);
+	Diagnostic::at(&declaration_of(&definition.function.body, name), format!("`nonlocal {name}` in {inner}: {outer} has no parameter or variable {name}"))
+		.into_error()
+}
+
+/// Between an enclosing function and a definition lifted out of its body: `outer·inner` (analyzer, card g-qUkY)
+const NESTED_DEF_SEPARATOR: &str = "·";
+
+/// `inner` for `outer·inner` defined in the body of `outer`
+fn short_name_in<'a>(enclosing: &UserFunctionDef, name: &'a str) -> &'a str {
+	name.strip_prefix(enclosing.name.as_str()).and_then(|rest| rest.strip_prefix(NESTED_DEF_SEPARATOR)).unwrap_or(name)
+}
+
+/// The names a call of the function `name` may be written with: in a function body both `inner` and the lifted
+/// `outer·inner`
+fn written_names(enclosing: Option<&UserFunctionDef>, name: &str) -> Vec<String> {
+	match enclosing {
+		None => vec![name.to_string()],
+		Some(outer) => {
+			let short = short_name_in(outer, name);
+			vec![short.to_string(), format!("{}{NESTED_DEF_SEPARATOR}{short}", outer.name)]
+		}
+	}
+}
+
+/// The statements of a function body: `{a; b}`, `a\nb` or the single expression
+fn body_statements(body: &Node) -> Vec<Node> {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly | Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
+		Node::List(items, Bracket::Curly, _) if items.len() == 1 => body_statements(&items[0]),
+		_ => vec![body.clone()],
+	}
 }
 
 /// A function the program defines in its statement `index`
@@ -73,7 +234,7 @@ pub(crate) fn statements_of(program: &Node) -> Vec<Node> {
 	}
 }
 
-fn map_statements(program: Node, transform: &mut dyn FnMut(Node) -> Node) -> Node {
+pub(crate) fn map_statements(program: Node, transform: &mut dyn FnMut(Node) -> Node) -> Node {
 	match program {
 		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) =>
 			Node::List(items.into_iter().map(transform).collect(), Bracket::None, separator),
@@ -130,20 +291,25 @@ fn without_global_reads(program: Node, declared: &[String]) -> Node {
 	if declared.is_empty() {
 		return program;
 	}
-	fn strip(node: Node, declared: &[String]) -> Node {
+	without_statements(program, &|item| global_read(item).is_some_and(|name| declared.contains(name)))
+}
+
+/// The function definitions among the program's statements without their statements that are `dropped`, at any depth
+fn without_statements(program: Node, dropped: &dyn Fn(&Node) -> bool) -> Node {
+	fn strip(node: Node, dropped: &dyn Fn(&Node) -> bool) -> Node {
 		match node {
 			Node::List(items, bracket, separator) => {
-				let kept = items.into_iter().filter(|item| !global_read(item).is_some_and(|name| declared.contains(name)));
-				Node::List(kept.map(|item| strip(item, declared)).collect(), bracket, separator)
+				let kept = items.into_iter().filter(|item| !dropped(item));
+				Node::List(kept.map(|item| strip(item, dropped)).collect(), bracket, separator)
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(strip(*left, declared)), op, Box::new(strip(*right, declared))),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(strip(*node, declared)), data },
+			Node::Key(left, op, right) => Node::Key(Box::new(strip(*left, dropped)), op, Box::new(strip(*right, dropped))),
+			Node::Meta { node, data } => Node::Meta { node: Box::new(strip(*node, dropped)), data },
 			other => other,
 		}
 	}
 	map_statements(program, &mut |statement| match functions_in(&statement).is_empty() {
 		true => statement,
-		false => strip(statement, declared),
+		false => strip(statement, dropped),
 	})
 }
 
@@ -171,7 +337,8 @@ fn note_needless_charging(definition: &Definition, statements: &[Node], main: &S
 	let statement = &statements[definition.index];
 	let is_def = matches!(statement.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)));
 	let pure = report.effects_of(&function.name).is_some_and(|effects| effects.is_pure());
-	if !is_def || !function.params.is_empty() || !pure || reads_any(&function.body, &|word| main.is_global(word)) {
+	let nested = function.name.contains(NESTED_DEF_SEPARATOR); // `outer·inner` may read outer's variables
+	if nested || !is_def || !function.params.is_empty() || !pure || reads_any(&function.body, &|word| main.is_global(word)) {
 		return;
 	}
 	crate::normalize::set_position_of(statement);
@@ -189,14 +356,15 @@ fn definitions(statements: &[Node]) -> Vec<Definition> {
 
 /// Each function's name with the names of the functions that call it, transitively, itself included: a use of any of
 /// them is a call that may read the variable
-fn callers(definitions: &[Definition]) -> HashMap<String, HashSet<String>> {
+fn callers(definitions: &[Definition], written: &dyn Fn(&str) -> Vec<String>) -> HashMap<String, HashSet<String>> {
 	let names: HashSet<&String> = definitions.iter().map(|definition| &definition.function.name).collect();
+	let spellings: HashMap<&String, Vec<String>> = names.iter().map(|name| (*name, written(name))).collect();
 	let mut callers: HashMap<String, HashSet<String>> = names.iter().map(|name| ((*name).clone(), HashSet::from([(*name).clone()]))).collect();
 	loop {
 		let mut changed = false;
 		for definition in definitions {
 			let caller = &definition.function.name;
-			for callee in names.iter().filter(|callee| *callee != &caller && reads_any(&definition.function.body, &|word| word == callee.as_str())) {
+			for callee in names.iter().filter(|callee| *callee != &caller && reads_any(&definition.function.body, &|word| spellings[*callee].iter().any(|name| name == word))) {
 				let known: Vec<String> = callers[caller].iter().cloned().collect();
 				let entry = callers.get_mut(*callee).expect("a defined function");
 				for name in known {
@@ -205,7 +373,7 @@ fn callers(definitions: &[Definition]) -> HashMap<String, HashSet<String>> {
 			}
 		}
 		if !changed {
-			return callers;
+			return callers.into_iter().map(|(callee, users)| (callee, users.iter().flat_map(|user| written(user)).collect())).collect();
 		}
 	}
 }
@@ -219,7 +387,7 @@ fn changes_after<'a>(statements: &'a [Node], index: usize, variable: &str) -> Ve
 }
 
 /// Assignments of `variable` (`y = …`, `y += …`, `xs#i = …`) and in-place mutations (`xs.add(v)`, `xs.pop()`)
-fn changes_in<'a>(node: &'a Node, variable: &str) -> Vec<&'a Node> {
+pub(crate) fn changes_in<'a>(node: &'a Node, variable: &str) -> Vec<&'a Node> {
 	let mut found: Vec<&Node> = find_assignments(node, &|name| name == variable).into_iter().map(|(node, _)| node).collect();
 	found.extend(mutating_calls(node, variable));
 	found
@@ -257,8 +425,14 @@ fn observed_after(statements: &[Node], change: &Change, users: &HashSet<String>)
 	statements[change.index + 1..].iter().any(used) || (!whole_statement && used(statement))
 }
 
-fn late_binding_error(definition: &Definition, variable: &str, change: &Node) -> Node {
+fn late_binding_error(definition: &Definition, variable: &str, change: &Node, enclosing: Option<&UserFunctionDef>) -> Node {
 	let function = &definition.function.name;
-	Diagnostic::at(change, format!("{function} reads {variable} (line {}): declare `global {variable}` in {function} to read its current value, or pass {variable} as a parameter", definition.line))
-		.fix(format!("global {variable}")).into_error()
+	let Some(outer) = enclosing else {
+		return Diagnostic::at(change, format!("{function} reads {variable} (line {}): declare `global {variable}` in {function} to read its current value, or pass {variable} as a parameter", definition.line))
+			.fix(format!("global {variable}")).into_error();
+	};
+	let inner = short_name_in(outer, function);
+	let outer = outer.name.rsplit(NESTED_DEF_SEPARATOR).next().unwrap_or(&outer.name);
+	Diagnostic::at(change, format!("{inner} reads {variable} of {outer} (line {}): declare `nonlocal {variable}` in {inner} to read its current value, or pass {variable} as a parameter", definition.line))
+		.fix(format!("nonlocal {variable}")).into_error()
 }

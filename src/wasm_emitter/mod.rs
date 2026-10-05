@@ -130,7 +130,7 @@ use Instruction as I;
 #[cfg(feature = "validate")]
 use wasmparser::{Validator, WasmFeatures};
 use Instruction::I32Const;
-pub use crate::pipeline::{compile, eval, eval_parsed, eval_untrusted, lower, out_of_fuel, CompiledModule};
+pub use crate::pipeline::{compile, compile_printing_result, eval, eval_parsed, eval_untrusted, lower, out_of_fuel, CompiledModule};
 use crate::pipeline::returned_error_message;
 use ValType::Ref;
 
@@ -165,6 +165,7 @@ pub struct WasmGcEmitter {
 	/// Emitting data, not code: the value of an object entry or a quoted form, where unknown words stay words (P62)
 	data_context: bool,
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
+	memo_caches: HashMap<i64, (u32, u32)>, // per memoized function id: the globals of its values and known flags (memoization.rs)
 	extra_global_names: Vec<(u32, &'static str)>,
 
 	// Configuration
@@ -211,6 +212,8 @@ pub struct WasmGcEmitter {
 	returns_list: bool,
 	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
 	closures: closures::ClosureTypes,
+	/// The user function whose body is being compiled; None in main
+	compiling: Option<String>,
 }
 
 impl Default for WasmGcEmitter {
@@ -233,6 +236,7 @@ impl WasmGcEmitter {
 			guards_errors: false,
 			data_context: false,
 			error_catching: None,
+			memo_caches: HashMap::new(),
 			extra_global_names: Vec::new(),
 			config: EmitterConfig::default(),
 			type_manager: TypeManager::new(),
@@ -263,6 +267,7 @@ impl WasmGcEmitter {
 			returns_list: false,
 			compare_witness: None,
 			closures: closures::ClosureTypes::default(),
+			compiling: None,
 		}
 	}
 
@@ -370,11 +375,19 @@ impl WasmGcEmitter {
 
 	/// Give every outer variable a function reads a global, set from the variable where the function is defined
 	fn allocate_closure_captures(&mut self, program: &Node) {
-		let mut outer = Scope::with_function_kinds(self.user_function_kinds()); // `x = g()` holds what g returns
+		let mut outer = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone()); // `x = g()` holds what g returns
 		collect_variables(program, &mut outer);
 		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values().cloned().collect();
 		for function in functions {
-			let captured: Vec<(String, Kind)> = captured_variables(&function, &outer)
+			let captured: Vec<(String, Kind)> = match self.enclosing_scope(&function.name) {
+				// `outer·inner` reads outer's parameters and variables, main's where outer has none of that name
+				Some(enclosing) => {
+					let mut captured = captured_variables(&function, &enclosing);
+					captured.extend(captured_variables(&function, &outer).into_iter().filter(|(name, _)| enclosing.lookup(name).is_none()));
+					captured
+				}
+				None => captured_variables(&function, &outer),
+			}
 				.into_iter()
 				.filter(|(name, _)| !self.ctx.user_functions.contains_key(name))
 				.collect();
@@ -401,6 +414,28 @@ impl WasmGcEmitter {
 		for name in EXACT_BUILDERS {
 			let index = self.func_index(name);
 			self.exports.export(name, ExportKind::Func, index);
+		}
+	}
+
+	/// The parameters and variables of the function whose body defines `function` (`outer` for `outer·inner`), with the
+	/// kinds its compiled body gives them (compile_user_function_body)
+	fn enclosing_scope(&self, function: &str) -> Option<Scope> {
+		let enclosing = self.ctx.enclosing_functions.get(function).and_then(|name| self.ctx.user_functions.get(name))?;
+		let mut scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
+		scope.globals = self.ctx.declared_globals.clone();
+		for (index, param) in enclosing.params.iter().enumerate() {
+			let kind = if self.takes_list_abi(&enclosing.name, index) { Kind::List } else { param_kind(param) };
+			scope.define_param(param.name.clone(), kind);
+		}
+		collect_variables(&enclosing.body, &mut scope);
+		Some(scope)
+	}
+
+	/// A call of `outer·inner` in the body of outer: inner reads outer's variables as they are now (`nonlocal y`, card
+	/// g-qUkY), so their capture globals are set anew before each call
+	fn refresh_enclosing_captures(&mut self, func: &mut Function, function: &str) {
+		if self.compiling.is_some() && self.compiling.as_ref() == self.ctx.enclosing_functions.get(function) {
+			self.emit_closure_capture(func, function);
 		}
 	}
 
@@ -478,9 +513,10 @@ impl WasmGcEmitter {
 	fn compile_user_function_body(&mut self, name: &str) {
 		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
 		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
+		let saved_compiling = self.compiling.replace(name.to_string());
 
 		// Create function scope with parameters
-		let function_scope = Scope::with_function_kinds(self.user_function_kinds());
+		let function_scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
 		let saved_scope = std::mem::replace(&mut self.scope, function_scope);
 		// declared globals are changed in place, never shadowed by a local of the same name
 		self.scope.globals = self.ctx.declared_globals.clone();
@@ -566,6 +602,7 @@ impl WasmGcEmitter {
 		self.restore_loop_labels(saved_loop_labels);
 		self.typed_lists = saved_typed_lists;
 		self.typed_maps = saved_typed_maps;
+		self.compiling = saved_compiling;
 
 		// Export the function (get func_idx from the stored function definition)
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
@@ -650,6 +687,7 @@ impl WasmGcEmitter {
 			self.emit_type_error(func, format!("function {} is used before it is compiled", user_fn.name));
 			return;
 		};
+		self.refresh_enclosing_captures(func, &user_fn.name);
 
 		if args.len() > user_fn.params.len() {
 			let count = |n: usize| if n == 1 { "1 argument".to_string() } else { format!("{n} arguments") };
@@ -730,6 +768,14 @@ impl WasmGcEmitter {
 			// Call of a user function, also braceless: `f 3`
 			Node::List(items, _, _) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(name) if self.ctx.user_functions.contains_key(name)) => {
 				let Node::Symbol(name) = items[0].drop_meta() else { unreachable!() };
+				if let Some(arity) = crate::closures::closure_call_arity(name) {
+					let callee = items.get(1).and_then(|argument| match argument.drop_meta() {
+						Node::Symbol(variable) => Some(variable.as_str()),
+						_ => None,
+					});
+					let kinds = self.user_function_kinds();
+					return crate::closures::closure_call_site_kind(callee, arity, &self.ctx, &kinds);
+				}
 				self.ctx.user_functions[name].return_kind
 			}
 			// Arithmetic: recursively check operands with our get_type
@@ -1438,7 +1484,7 @@ impl WasmGcEmitter {
 					func.instruction(&I::F64Const(Ieee64::new(f.to_bits())));
 					self.emit_call(func, "new_float");
 				}
-				Number::Float(_) | Number::Quotient(..) => {
+				Number::Float(_) | Number::Quotient(..) | Number::BigQuotient(_) => {
 					self.emit_numeric_value(func, node);
 					self.emit_call(func, "new_int");
 				}
@@ -2435,7 +2481,7 @@ impl WasmGcEmitter {
 
 	/// Every `global` of the program exists before any function is compiled, so function bodies can change it
 	fn allocate_declared_globals(&mut self, program: &Node) {
-		let mut main = Scope::with_function_kinds(self.user_function_kinds()); // `global g = vec(1, 2)` holds what vec returns
+		let mut main = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone()); // `global g = vec(1, 2)` holds what vec returns
 		collect_variables(program, &mut main);
 		let mut names: Vec<&String> = main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
 		names.sort();
@@ -2614,8 +2660,9 @@ impl WasmGcEmitter {
 		};
 		let then_value = branch_value(then_expr);
 		let else_value = else_expr.map(branch_value);
+		// get_type sees capture globals in user_globals; branch_kind(scope) alone types a free var as Symbol (g-rT0c)
 		let is_node_valued = |emitter: &Self, value: &Node| {
-			let kind = crate::analyzer::branch_kind(value, &emitter.scope);
+			let kind = emitter.get_type(value);
 			!matches!(value.drop_meta(), Node::Empty) && (emitter.is_structured_value(value) || kind.is_ref() || kind == Kind::Codepoint)
 		};
 		if is_node_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_node_valued(self, value)) {
@@ -2629,7 +2676,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		// a float branch (`if c then {x} else {0}` of a float x): both branches as floats, the value its Float node
-		let is_float_valued = |emitter: &Self, value: &Node| crate::analyzer::branch_kind(value, &emitter.scope) == Kind::Float;
+		let is_float_valued = |emitter: &Self, value: &Node| emitter.get_type(value) == Kind::Float;
 		if is_float_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_float_valued(self, value)) {
 			self.emit_if_then_else_raw(func, left, else_expr, ValType::F64, Self::emit_float_value);
 			self.emit_call(func, "new_float");
@@ -3135,6 +3182,10 @@ impl WasmGcEmitter {
 						self.emit_exact_literal(func, &(*n).into(), &(*d).into());
 						func
 					}
+					Number::BigQuotient(q) => {
+						self.emit_exact_literal(func, &q.numerator, &q.denominator);
+						func
+					}
 					Number::Complex(r, _i) => func.instruction(&I::I64Const(*r as i64)),
 					// lowered to Float before emission (real.rs), kept total for safety
 					Number::Real(r) => func.instruction(&I::I64Const(r.to_f64() as i64)),
@@ -3313,6 +3364,9 @@ impl WasmGcEmitter {
 					}
 					Number::Quotient(n, d) => {
 						func.instruction(&I::F64Const(Ieee64::new((*n as f64 / *d as f64).to_bits())));
+					}
+					Number::BigQuotient(q) => {
+						func.instruction(&I::F64Const(Ieee64::new(q.to_f64().to_bits())));
 					}
 					Number::Complex(r, _i) => {
 						func.instruction(&I::F64Const(Ieee64::new(r.to_bits())));

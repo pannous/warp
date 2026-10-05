@@ -308,6 +308,7 @@ impl Ratio {
 		match number {
 			Number::Int(value) => Some(Ratio::integer(BigInt::from(*value))),
 			Number::Quotient(numerator, denominator) => Ratio::new(BigInt::from(*numerator), BigInt::from(*denominator)),
+			Number::BigQuotient(q) => Ratio::new(q.numerator.clone(), q.denominator.clone()),
 			Number::BigInt(value) => Some(Ratio::integer((**value).clone())),
 			_ => None, // floats are not exact, NaN and infinities are not in a ring
 		}
