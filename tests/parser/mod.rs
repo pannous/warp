@@ -12,6 +12,7 @@ mod test_number_glyphs;
 mod test_one_line_statements;
 mod test_parser_sugar;
 mod test_parser;
+mod test_parse_long_sources;
 mod test_semicolon_square;
 mod test_spaced_required_fields;
 mod test_statement_sequence;
