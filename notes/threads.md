@@ -99,3 +99,9 @@ matches wasp's value semantics (index assignment already copies, aliases never c
 - Does a task see main-level variables assigned before the `go` (snapshot by copying them in) or only the module's
   initial values? Proposed: the values at `go` time, copied in, like arguments.
 - How many threads: one per task (simple, step 1) or a pool sized to the cores.
+- Job lists (P47, 2026-10-05, user: "jobs are asynchronous by definition; awaiting one must not affect the others"):
+  `jobs.add(go f(i))` keeps the started task unawaited (its id; declarations::job_lists). A read of the list is
+  `task·list` (every result, `jobs.map(awaited_job => checked await)` through task_await_value, which serves Int tasks
+  too), `jobs#i` is `task·element` (that job only); `await all xs` is xs read once (the parser groups `await all X`).
+  A list of tasks that run where they start (TaskPath::Inline) holds their values. Not yet: `count(jobs)` awaits them all
+  (it needs no value), and the browser host is untested for job lists.

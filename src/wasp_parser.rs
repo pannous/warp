@@ -65,6 +65,8 @@ const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
 const RETURN_KEYWORD: &str = "return";
 /// `await job` waits for a task; its operand binds like the operand of a unary minus (Op::Neg)
 const AWAIT_KEYWORD: &str = "await";
+/// `await all jobs`: every task of a list (P47)
+const AWAIT_ALL_WORD: &str = "all";
 const AWAIT_OPERAND_BP: u8 = 155;
 const PRINT_WORD: &str = "print";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
@@ -2124,6 +2126,14 @@ impl WaspParser {
 		if called || names_a_variable || matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0' | ')') {
 			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword;
 			return None;
+		}
+		// `await all jobs` (P47): every task of a list
+		if self.matches_keyword(AWAIT_ALL_WORD) && self.peek_char(AWAIT_ALL_WORD.len()) == ' ' && (self.is_identifier_start(AWAIT_ALL_WORD.len() + 1) || matches!(self.peek_char(AWAIT_ALL_WORD.len() + 1), '[' | '(')) {
+			self.advance_by(AWAIT_ALL_WORD.len());
+			self.skip_spaces();
+			let list = self.parse_expr(AWAIT_OPERAND_BP);
+			let all = Node::List(vec![Symbol(AWAIT_ALL_WORD.to_string()), list], Bracket::None, Separator::Space);
+			return Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), all], Bracket::None, Separator::Space));
 		}
 		let operand = self.parse_expr(AWAIT_OPERAND_BP);
 		Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), operand], Bracket::None, Separator::Space))

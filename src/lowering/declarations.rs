@@ -22,6 +22,15 @@ const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
 /// `go f(x)` of a user function and a read of its task variable, until resolve_tasks knows whether f runs on a thread
 pub(crate) const TASK_GO: &str = "task·go";
 const TASK_VALUE: &str = "task·value";
+/// A read of a job list (`jobs.add(go f(i))`, P47): `task·list(jobs, f…)` is every result, `task·element(jobs#i, f…)` one;
+/// until resolve_tasks knows whether the started functions run on threads
+const TASK_LIST: &str = "task·list";
+const TASK_ELEMENT: &str = "task·element";
+/// `await all jobs`: the results of every job of a list
+const ALL_WORD: &str = "all";
+const ADD_WORD: &str = "add";
+/// The parameter of the await map over a job list (resolve_tasks)
+const AWAITED_JOB: &str = "awaited_job";
 /// `stop job`, `job.pause()`: until resolve_tasks knows whether the task runs on a thread
 const TASK_CONTROL_MARK: &str = "task·control";
 /// `once job finishes: body`, `on job.stop: body` of a task that may run on a thread: `task·on(job, f, event, body)`
@@ -81,7 +90,8 @@ pub fn lower_tasks(node: Node) -> Node {
 		}
 	});
 	started.retain(|_, function| functions.contains(function));
-	Tasks { words, tasks, started, functions }.lower(node)
+	let job_lists = job_lists(&node, &functions);
+	Tasks { words, tasks, started, functions, job_lists }.lower(node)
 }
 
 /// `await go f(x)`: the task gets a name, `(go·job·1 = go f(x); await go·job·1)`, so it is awaited like any other
@@ -112,6 +122,43 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 	}
 }
 
+/// The list variables that collect started tasks, `jobs.add(go f(i))` (P47), with the functions they start
+fn job_lists(node: &Node, functions: &std::collections::HashSet<String>) -> std::collections::HashMap<String, Vec<String>> {
+	let mut lists: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+	node.visit(&mut |part| if let Node::Key(receiver, Op::Dot, method) = part {
+		if let (Node::Symbol(list), Some((function, _))) = (receiver.drop_meta(), added_start(method)) {
+			if functions.contains(&function) {
+				let started = lists.entry(list.clone()).or_default();
+				if !started.contains(&function) {
+					started.push(function);
+				}
+			}
+		}
+	});
+	lists
+}
+
+/// `add(go f(x))`, `add go f(x)`: the `go …` items after `add`
+fn added_task(method: &Node) -> Option<Vec<Node>> {
+	let Node::List(items, _, _) = method.drop_meta() else { return None };
+	let [add, rest @ ..] = items.as_slice() else { return None };
+	if word(add) != ADD_WORD {
+		return None;
+	}
+	let rest = match rest {
+		[single] => match single.drop_meta() {
+			Node::List(inner, _, _) => inner.clone(),
+			_ => return None,
+		},
+		several => several.to_vec(),
+	};
+	(word(rest.first()?) == TASK_WORDS[0]).then_some(rest)
+}
+
+fn added_start(method: &Node) -> Option<(String, Vec<Node>)> {
+	started_call(&added_task(method)?[1..])
+}
+
 /// `f(a, b)` or `f a b` after `go`: the function and its arguments
 fn started_call(rest: &[Node]) -> Option<(String, Vec<Node>)> {
 	match rest {
@@ -137,6 +184,8 @@ struct Tasks<'a> {
 	started: std::collections::HashMap<String, String>,
 	/// the program's functions
 	functions: std::collections::HashSet<String>,
+	/// list variables that collect started tasks → the functions they start (P47)
+	job_lists: std::collections::HashMap<String, Vec<String>>,
 }
 
 impl Tasks<'_> {
@@ -166,9 +215,30 @@ impl Tasks<'_> {
 		Some(marker(TASK_VALUE, vec![Node::Symbol(variable.to_string()), Node::Symbol(function.clone())]))
 	}
 
+	/// A read of a job list or of one of its jobs: its results once the jobs are done
+	fn job_list_read(&self, list: &str, read: Node, marker_word: &str) -> Node {
+		let functions = self.job_lists[list].iter().map(|function| Node::Symbol(function.clone()));
+		marker(marker_word, [vec![read], functions.collect()].concat())
+	}
+
 	fn lower(&self, node: Node) -> Node {
 		match node {
 			Node::Symbol(name) if self.started.contains_key(&name) => self.value_of(&name).expect("a started task"),
+			Node::Symbol(name) if self.job_lists.contains_key(&name) => self.job_list_read(&name, Node::Symbol(name.clone()), TASK_LIST),
+			// `jobs.add(go f(i))`: the list keeps the task, unawaited
+			Node::Key(receiver, Op::Dot, method) if matches!(receiver.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name)) && added_task(&method).is_some() => {
+				let started = self.task_statement(&added_task(&method).expect("guarded")).expect("a go of a user function");
+				Node::Key(receiver, Op::Dot, Box::new(Node::List(vec![Node::Symbol(ADD_WORD.to_string()), started], Bracket::Round, Separator::None)))
+			}
+			// `jobs#2`: the result of that job
+			Node::Key(list, Op::Hash, index) if matches!(list.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name)) => {
+				let name = word(&list);
+				self.job_list_read(&name, Node::Key(list, Op::Hash, Box::new(self.lower(*index))), TASK_ELEMENT)
+			}
+			// `jobs = []`: the variable itself
+			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name)) => {
+				Node::Key(target, op, Box::new(self.lower(*value)))
+			}
 			// `job = go f(x)`: the variable holds the task
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(name) if self.started.contains_key(name)) => {
 				Node::Key(target, op, Box::new(self.lower(*value)))
@@ -200,6 +270,15 @@ impl Tasks<'_> {
 				let (function, arguments) = started_call(rest).expect("guarded");
 				Some(marker(TASK_GO, [vec![Node::Symbol(function)], arguments].concat()))
 			}
+			// `await all jobs` (also read as `await (all jobs)`): every result, a job list read awaits them all
+			[head, phrase] if word(head) == TASK_WORDS[1] && self.words.contains(&TASK_WORDS[1]) && matches!(phrase.drop_meta(), Node::List(inner, Bracket::None, _) if inner.len() == 2 && word(&inner[0]) == ALL_WORD) => {
+				let Node::List(inner, _, _) = phrase.drop_meta() else { unreachable!("guarded") };
+				Some(inner[1].clone())
+			}
+			[head, all, rest @ ..] if word(head) == TASK_WORDS[1] && word(all) == ALL_WORD && !rest.is_empty() && self.words.contains(&TASK_WORDS[1]) => Some(match rest {
+				[single] => single.clone(),
+				_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
+			}),
 			[head, rest @ ..] if !rest.is_empty() && self.words.contains(&word(head).as_str()) => Some(match rest {
 				[single] => single.clone(),
 				_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
@@ -269,7 +348,7 @@ const CROSSING_KINDS: [crate::type_kinds::Kind; 8] = {
 pub fn resolve_tasks(node: Node) -> Node {
 	use crate::type_kinds::Kind;
 	let mut has_task = false;
-	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(word(items.first().unwrap_or(&Node::Empty)).as_str(), TASK_GO | TASK_VALUE | TASK_CONTROL_MARK)));
+	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(word(items.first().unwrap_or(&Node::Empty)).as_str(), TASK_GO | TASK_VALUE | TASK_CONTROL_MARK | TASK_LIST | TASK_ELEMENT)));
 	if !has_task {
 		return node;
 	}
@@ -450,6 +529,18 @@ fn checked_await(await_word: &str, job: &Node) -> Node {
 	Node::List(vec![check, marker(await_word, vec![job.clone()])], Bracket::None, Separator::Semicolon)
 }
 
+/// Every result of a job list: `jobs.map(awaited_job => <checked await of awaited_job>)`
+fn awaited_jobs(list: &Node) -> Node {
+	use crate::host::TASK_AWAIT_VALUE;
+	let template = crate::wasp_parser::parse(&format!("{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"));
+	let awaited = checked_await(TASK_AWAIT_VALUE, &Node::Symbol(AWAITED_JOB.to_string()));
+	let template = crate::library_words::substitute(template, TASK_LIST_PLACEHOLDER, list);
+	crate::library_words::substitute(template, AWAITED_PLACEHOLDER, &awaited)
+}
+
+const TASK_LIST_PLACEHOLDER: &str = "awaited_jobs_list";
+const AWAITED_PLACEHOLDER: &str = "awaited_job_result";
+
 fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
 	use crate::host::{TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_SPAWN, TASK_SPAWN_VALUES};
 	match node {
@@ -483,6 +574,14 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 					TaskPath::Values(_) => checked_await(TASK_AWAIT_VALUE, &items[1]),
 					TaskPath::Inline => items[1].clone(),
 				},
+				TASK_LIST | TASK_ELEMENT => {
+					let threaded = items[2..].iter().all(|function| path(&word(function)) != TaskPath::Inline);
+					match (threaded, word(&items[0]) == TASK_LIST) {
+						(false, _) => items[1].clone(),
+						(true, false) => checked_await(TASK_AWAIT_VALUE, &items[1]),
+						(true, true) => awaited_jobs(&items[1]),
+					}
+				}
 				TASK_CONTROL_MARK => match path(&word(&items[2])) {
 					TaskPath::Inline => nothing_to_stop(&items[1], &word(&items[3])),
 					_ => marker(TASK_CONTROL, vec![items[1].clone(), Node::Number(crate::extensions::numbers::Number::Int(control_operation(&word(&items[3]))))]),

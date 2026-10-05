@@ -54,3 +54,4 @@ mod test_try_braceless_call;
 mod test_raise;
 mod test_try_catch_except;
 mod test_task_list_literal;
+mod test_job_lists;
