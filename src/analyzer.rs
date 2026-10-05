@@ -614,8 +614,9 @@ fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 }
 
 /// The kinds a variable may hold whose values are told apart only by representation; a variable given values of two
-/// of them that do not mix (a list, then an Int; a text, then an Int) is held as a Node of run-time kind (P45). Int
-/// and Float widen to Float instead (widen_to_float), a text and a character are both texts.
+/// of them that do not mix (a list, then an Int; a text, then an Int) is a compile error when both kinds are evident
+/// from the source (P45, check_kind_changes); where the compiler only infers them it is held as a Node of run-time kind.
+/// Int and Float widen to Float instead (widen_to_float), a text and a character are both texts.
 const CONCRETE_KINDS: [Kind; 6] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::List, Kind::Symbol];
 
 fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
@@ -626,6 +627,68 @@ fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	if CONCRETE_KINDS.contains(&local.kind) && CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned) {
 		local.kind = Kind::Empty;
 		local.type_node = None;
+	}
+}
+
+/// The kind a value evidently has as written: a literal, a list literal, or arithmetic of numbers; None for anything else
+/// (a variable, a call, a loop variable), whose kind only inference knows
+fn evident_kind(value: &Node) -> Option<Kind> {
+	match value.drop_meta() {
+		Node::Number(Number::Float(_)) => Some(Kind::Float),
+		Node::Number(_) => Some(Kind::Int),
+		Node::Text(_) | Node::Char(_) => Some(Kind::Text),
+		Node::List(_, Bracket::Square, _) => Some(Kind::List),
+		Node::Key(left, op, right) if op.is_arithmetic() => match (evident_kind(left)?, evident_kind(right)?) {
+			(Kind::Int, Kind::Int) => Some(Kind::Int),
+			(Kind::Int | Kind::Float, Kind::Int | Kind::Float) => Some(Kind::Float),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// P45 (user: "compile error unless we are in script mode, which is not defined yet"): a variable given values of
+/// evidently different kinds that do not mix, `x = [1]; x = 5`, in the program or in one function body
+pub fn check_kind_changes(program: &Node) -> Option<Diagnostic> {
+	let mut bodies = vec![program];
+	program.visit(&mut |node| {
+		if let Node::Key(_, Op::Define, body) = node {
+			bodies.push(body);
+		}
+	});
+	bodies.into_iter().find_map(|body| first_kind_change(body, &mut HashMap::new()))
+}
+
+/// Walks the assignments in program order, not into function definitions or lambdas (their own scopes);
+/// `kinds` holds each variable's evident kind, None once it was given a value of no evident kind
+fn first_kind_change(node: &Node, kinds: &mut HashMap<String, Option<Kind>>) -> Option<Diagnostic> {
+	let mixes = |a: Kind, b: Kind| a == b || [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float));
+	match node.drop_meta() {
+		Node::Key(_, Op::Define | Op::Arrow | Op::FatArrow, _) => None,
+		Node::Key(target, Op::Assign, value) => {
+			if let Some(change) = first_kind_change(value, kinds) {
+				return Some(change);
+			}
+			let Node::Symbol(name) = target.drop_meta() else { return None };
+			let (earlier, given) = (kinds.get(name).copied(), evident_kind(value));
+			if let (Some(Some(was)), Some(now)) = (earlier, given) {
+				if !mixes(was, now) {
+					let message = format!("{name} was {}, is given {}: use another name", kind_with_article(was), kind_with_article(now));
+					return Some(Diagnostic::at(value, message));
+				}
+			}
+			// a first evident value fixes the kind (Int widens to Float); any value of no evident kind ends the check
+			let kind = match (earlier, given) {
+				(None, given) => given,
+				(Some(Some(was)), Some(now)) => Some(if now == Kind::Float { now } else { was }),
+				_ => None,
+			};
+			kinds.insert(name.clone(), kind);
+			None
+		}
+		Node::Key(left, _, right) => first_kind_change(left, kinds).or_else(|| first_kind_change(right, kinds)),
+		Node::List(items, _, _) => items.iter().find_map(|item| first_kind_change(item, kinds)),
+		_ => None,
 	}
 }
 

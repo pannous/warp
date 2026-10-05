@@ -104,6 +104,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P45 a variable given values of two kinds that do not mix (`x=[1]; x=5`): user: "compile error unless we are in
   script mode, which is not defined yet". The implemented Node fallback is undone outside a future script mode;
   the error names the variable and suggests another name. Int→Float widening stays. Script mode: a new open topic.
+  Done (branch p45-kind-change): analyzer::check_kind_changes on the program as written, before lowering, compares
+  the kinds evident from literals (`x = [1]; x = 5` → "x was a List, is given an Int: use another name"). Where a
+  kind is only inferred (a call's result, a loop variable reusing a list's name) the Node fallback still holds the
+  value: an error there would rest on guessed kinds (function results default to Int before inference).
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
