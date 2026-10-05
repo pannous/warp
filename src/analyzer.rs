@@ -3578,6 +3578,9 @@ fn register_user_function(ctx: &mut Context, short_name: &str, params: Vec<Param
 	let name = qualify_nested_name(enclosing, short_name);
 	let (body, renames) = lift_nested_defs_from_body(ctx, body.clone(), &name);
 	let body = rename_nested_calls(body, &renames);
+	if let Some(parent) = enclosing {
+		ctx.enclosing_functions.insert(name.clone(), parent.to_string());
+	}
 	ctx.user_functions.insert(name.clone(), user_function(&name, params, &body));
 }
 

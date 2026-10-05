@@ -58,7 +58,6 @@ fn nested_def_without_shared_locals_is_callable() {
 }
 
 #[test]
-#[ignore = "soon"] // nested function definitions are not supported yet (`def outer(){ def inner(){…} }`)
 fn nonlocal_reads_the_enclosing_functions_current_value() {
 	is!("def outer(){ y=1; def inner(){ nonlocal y; y }; y=2; inner() }; outer()", 2);
 }
@@ -93,4 +92,23 @@ fn late_binding_change_inside_function_with_no_later_call_is_fine() {
 	is!("def outer(){ y=1; inner := {a=y; a*2}; b=inner(); y=2; b }; outer()", 2);
 	is!("def outer(){ y=1; y=2; inner := {a=y; a*2}; inner() }; outer()", 4);
 	is!("def outer(n){ inner := {m=n; m*2}; inner() }; outer(3)", 6);
+}
+
+// Card g-qUkY: `nonlocal y` in a nested def reads the enclosing function's y as it is at each call
+#[test]
+fn nonlocal_reads_the_value_at_each_call() {
+	is!("def outer(){ y=1; def inner(){ nonlocal y; y*10 }; a=inner(); y=2; a+inner() }; outer()", 30);
+	is!("def outer(){ y=1; def inner(){ nonlocal y; y }; t=0; for i in 1..3 { y = i; t += inner() }; t }; outer()", 3);
+	is!("def outer(){ s=\"a\"; def inner(){ nonlocal s; s+\"!\" }; s=\"b\"; inner() }; outer()", "b!");
+	is!("def outer(n){ def inner(){ nonlocal n; n*2 }; n+=1; inner() }; outer(3)", 8);
+	is!("def outer(){ a=1; b=2; def inner(){ nonlocal a, b; a+b }; a=10; b=20; inner() }; outer()", 30);
+	is!("def outer():\n  y=1\n  def inner():\n    nonlocal y\n    y\n  y=2\n  inner()\nouter()", 2);
+}
+
+#[test]
+fn nonlocal_needs_a_variable_of_an_enclosing_def() {
+	common::fails_with("def f(){ nonlocal y; y }; f()", "no function encloses f");
+	common::fails_with("nonlocal y; 3", "`nonlocal y` outside a function");
+	common::fails_with("def outer(){ def inner(){ nonlocal q; 1 }; inner() }; outer()", "outer has no parameter or variable q");
+	common::fails_with("def outer(){ y=1; inner := {nonlocal y; a=y; a*2}; y=2; inner() }; outer()", "only a function defined with `def inner(){…}`");
 }

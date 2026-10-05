@@ -212,6 +212,8 @@ pub struct WasmGcEmitter {
 	returns_list: bool,
 	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
 	closures: closures::ClosureTypes,
+	/// The user function whose body is being compiled; None in main
+	compiling: Option<String>,
 }
 
 impl Default for WasmGcEmitter {
@@ -265,6 +267,7 @@ impl WasmGcEmitter {
 			returns_list: false,
 			compare_witness: None,
 			closures: closures::ClosureTypes::default(),
+			compiling: None,
 		}
 	}
 
@@ -376,7 +379,15 @@ impl WasmGcEmitter {
 		collect_variables(program, &mut outer);
 		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values().cloned().collect();
 		for function in functions {
-			let captured: Vec<(String, Kind)> = captured_variables(&function, &outer)
+			let captured: Vec<(String, Kind)> = match self.enclosing_scope(&function.name) {
+				// `outer·inner` reads outer's parameters and variables, main's where outer has none of that name
+				Some(enclosing) => {
+					let mut captured = captured_variables(&function, &enclosing);
+					captured.extend(captured_variables(&function, &outer).into_iter().filter(|(name, _)| enclosing.lookup(name).is_none()));
+					captured
+				}
+				None => captured_variables(&function, &outer),
+			}
 				.into_iter()
 				.filter(|(name, _)| !self.ctx.user_functions.contains_key(name))
 				.collect();
@@ -403,6 +414,28 @@ impl WasmGcEmitter {
 		for name in EXACT_BUILDERS {
 			let index = self.func_index(name);
 			self.exports.export(name, ExportKind::Func, index);
+		}
+	}
+
+	/// The parameters and variables of the function whose body defines `function` (`outer` for `outer·inner`), with the
+	/// kinds its compiled body gives them (compile_user_function_body)
+	fn enclosing_scope(&self, function: &str) -> Option<Scope> {
+		let enclosing = self.ctx.enclosing_functions.get(function).and_then(|name| self.ctx.user_functions.get(name))?;
+		let mut scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
+		scope.globals = self.ctx.declared_globals.clone();
+		for (index, param) in enclosing.params.iter().enumerate() {
+			let kind = if self.takes_list_abi(&enclosing.name, index) { Kind::List } else { param_kind(param) };
+			scope.define_param(param.name.clone(), kind);
+		}
+		collect_variables(&enclosing.body, &mut scope);
+		Some(scope)
+	}
+
+	/// A call of `outer·inner` in the body of outer: inner reads outer's variables as they are now (`nonlocal y`, card
+	/// g-qUkY), so their capture globals are set anew before each call
+	fn refresh_enclosing_captures(&mut self, func: &mut Function, function: &str) {
+		if self.compiling.is_some() && self.compiling.as_ref() == self.ctx.enclosing_functions.get(function) {
+			self.emit_closure_capture(func, function);
 		}
 	}
 
@@ -480,6 +513,7 @@ impl WasmGcEmitter {
 	fn compile_user_function_body(&mut self, name: &str) {
 		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
 		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
+		let saved_compiling = self.compiling.replace(name.to_string());
 
 		// Create function scope with parameters
 		let function_scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
@@ -568,6 +602,7 @@ impl WasmGcEmitter {
 		self.restore_loop_labels(saved_loop_labels);
 		self.typed_lists = saved_typed_lists;
 		self.typed_maps = saved_typed_maps;
+		self.compiling = saved_compiling;
 
 		// Export the function (get func_idx from the stored function definition)
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
@@ -652,6 +687,7 @@ impl WasmGcEmitter {
 			self.emit_type_error(func, format!("function {} is used before it is compiled", user_fn.name));
 			return;
 		};
+		self.refresh_enclosing_captures(func, &user_fn.name);
 
 		if args.len() > user_fn.params.len() {
 			let count = |n: usize| if n == 1 { "1 argument".to_string() } else { format!("{n} arguments") };

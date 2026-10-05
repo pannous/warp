@@ -55,6 +55,8 @@ pub struct Context {
     pub user_functions: HashMap<String, UserFunctionDef>,
     /// Per function: captured outer variable → (global holding its value at definition time, kind)
     pub captures: HashMap<String, Vec<Capture>>,
+    /// A function defined in a function body (`outer·inner`) → the function whose body defines it (`outer`)
+    pub enclosing_functions: HashMap<String, String>,
     /// Calls that disagree on the kind of an undeclared parameter, reported as type errors
     pub parameter_conflicts: Vec<String>,
     /// Functions made into closures (closures.rs): (function, number of captured values leading its parameters)
@@ -97,6 +99,7 @@ impl Context {
             declared_globals: HashMap::new(),
             field_kinds: HashMap::new(),
             captures: HashMap::new(),
+            enclosing_functions: HashMap::new(),
             user_functions: HashMap::new(),
             parameter_conflicts: Vec::new(),
             closure_targets: Vec::new(),

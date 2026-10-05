@@ -30,6 +30,8 @@ const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
+/// `nonlocal y` in a nested function: it reads the enclosing function's current y (lowering/late_binding.rs)
+const NONLOCAL_WORD: &str = "nonlocal";
 
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
@@ -1968,6 +1970,10 @@ impl WaspParser {
 			}
 		}
 
+		if symbol == NONLOCAL_WORD && self.word_starts_statement(symbol.len()) && self.name_after_blanks() {
+			return self.parse_nonlocal_declaration();
+		}
+
 		// Handle "class"/"struct"/"type" keyword: class Name { fields }
 		// But NOT type(x) which is a function call for type introspection
 		if self.options.wit_mode && self.current_char() == '<' {
@@ -2535,6 +2541,43 @@ impl WaspParser {
 			return Some(declaration);
 		}
 		Some(Node::Key(Box::new(Symbol("global".to_string())), Op::Colon, Box::new(declaration)))
+	}
+
+	/// A name follows after at least one blank: `nonlocal y`, not `nonlocal = 3` or `nonlocal(…)`
+	fn name_after_blanks(&self) -> bool {
+		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let next = self.peek_char(blanks);
+		blanks > 0 && (next.is_alphabetic() || next == '_')
+	}
+
+	/// `nonlocal y` → `nonlocal:y`, like `global y`; `nonlocal a, b` declares each name
+	fn parse_nonlocal_declaration(&mut self) -> Node {
+		let mut names = vec![];
+		loop {
+			self.skip_spaces();
+			match self.parse_symbol() {
+				Ok(name) if !name.is_empty() => names.push(Symbol(name)),
+				Ok(_) => break,
+				Err(e) => return error(&e),
+			}
+			self.skip_spaces();
+			if self.current_char() != ',' || !self.name_after_comma() {
+				break;
+			}
+			self.advance();
+		}
+		let declared = match names.len() {
+			1 => names.remove(0),
+			_ => Node::List(names, Bracket::None, Separator::Colon),
+		};
+		Node::Key(Box::new(Symbol(NONLOCAL_WORD.to_string())), Op::Colon, Box::new(declared))
+	}
+
+	/// `, b` after a declared name: another name, not the next item of a list
+	fn name_after_comma(&self) -> bool {
+		let blanks = (1..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let next = self.peek_char(1 + blanks);
+		next.is_alphabetic() || next == '_'
 	}
 
 	fn at_identifier_start(&self) -> bool {
