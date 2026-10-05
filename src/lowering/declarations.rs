@@ -1,4 +1,6 @@
 //! `enum color {red green blue}` declares the object `color={red:0 green:1 blue:2}`: a case is its index, `color.green` is 1.
+//! `flags virtues={fast, safe}` (WIT flags, a record of bools) declares `virtues={fast:false safe:false}`, and
+//! `virtues goal = fast+safe` the record `goal={fast:true safe:true}`: the flags named are true, the others false.
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use crate::node::{Bracket, Node, Separator};
@@ -9,6 +11,7 @@ use crate::operators::{is_function_keyword, Op};
 const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
 const IT_PARAMETER: &str = "it";
 const ENUM_WORD: &str = "enum";
+const FLAGS_WORD: &str = "flags";
 const FIRST_CASE_INDEX: i64 = 0;
 /// The argument left out of a partial application: `add(1, _)`
 const PLACEHOLDER: &str = "_";
@@ -42,7 +45,87 @@ const FINISH_EVENT: &str = "finishes";
 const HANDLED_PREFIX: &str = "handled·";
 
 pub fn lower(node: Node) -> Node {
-	lower_lists(node, enum_object)
+	lower_lists(lower_flags(node), enum_object)
+}
+
+/// The flags types the program declares (`flags virtues={fast, safe}`), their declarations as the empty set, and the
+/// typed declarations `virtues goal = fast+safe` as records of bools
+fn lower_flags(program: Node) -> Node {
+	let mut types: Vec<(String, Vec<String>)> = vec![];
+	program.visit(&mut |node| {
+		if let Node::List(items, _, _) = node {
+			types.extend(flags_declaration(items));
+		}
+	});
+	if types.is_empty() {
+		return program;
+	}
+	rewrite_flags(program, &types)
+}
+
+/// `flags virtues={fast, safe}`, `flags virtues {fast safe}`: the type and its flags
+fn flags_declaration(items: &[Node]) -> Option<(String, Vec<String>)> {
+	let (name, members) = match items {
+		[word, declaration] if is_flags_word(word) => match declaration.drop_meta() {
+			Node::Key(name, Op::Assign, members) => (name.as_ref(), members.as_ref()),
+			_ => return None,
+		},
+		[word, name, members] if is_flags_word(word) => (name, members),
+		_ => return None,
+	};
+	let (Node::Symbol(name), Node::List(members, Bracket::Curly, _)) = (name.drop_meta(), members.drop_meta()) else { return None };
+	let members: Option<Vec<String>> = members.iter().map(|member| match member.drop_meta() {
+		Node::Symbol(member) => Some(member.clone()),
+		_ => None,
+	}).collect();
+	Some((name.clone(), members?))
+}
+
+fn is_flags_word(word: &Node) -> bool {
+	matches!(word.drop_meta(), Node::Symbol(word) if word == FLAGS_WORD)
+}
+
+fn rewrite_flags(node: Node, types: &[(String, Vec<String>)]) -> Node {
+	let record = |name: &Node, members: &[String], set: &[String]| {
+		let entries = members.iter().map(|member| {
+			let value = if set.contains(member) { Node::True } else { Node::False };
+			Node::Key(Box::new(Node::Symbol(member.clone())), Op::Colon, Box::new(value))
+		}).collect();
+		Node::Key(Box::new(name.clone()), Op::Assign, Box::new(Node::List(entries, Bracket::Curly, Separator::Space)))
+	};
+	match node {
+		Node::List(items, bracket, separator) => {
+			if let Some((name, members)) = flags_declaration(&items) {
+				return record(&Node::Symbol(name), &members, &[]);
+			}
+			// `virtues goal = fast+safe`
+			if let [type_name, declaration] = items.as_slice() {
+				if let (Node::Symbol(type_name), Node::Key(variable, Op::Assign, value)) = (type_name.drop_meta(), declaration.drop_meta()) {
+					if let Some((_, members)) = types.iter().find(|(name, _)| name == type_name) {
+						let set = named_flags(value);
+						if let Some(unknown) = set.iter().find(|flag| !members.contains(flag)) {
+							return crate::node::error(&format!("{type_name} has no flag {unknown}; its flags: {}", members.join(", ")));
+						}
+						return record(variable, members, &set);
+					}
+				}
+			}
+			Node::List(items.into_iter().map(|item| rewrite_flags(item, types)).collect(), bracket, separator)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(rewrite_flags(*left, types)), op, Box::new(rewrite_flags(*right, types))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite_flags(*node, types)), data },
+		other => other,
+	}
+}
+
+/// `fast+safe`, `fast|safe`, `{fast, safe}`, `fast`: the flags a value names
+fn named_flags(value: &Node) -> Vec<String> {
+	match value.drop_meta() {
+		Node::Symbol(flag) => vec![flag.clone()],
+		Node::Key(left, _, right) => [named_flags(left), named_flags(right)].concat(),
+		Node::List(items, _, _) => items.iter().flat_map(named_flags).collect(),
+		_ => vec![],
+	}
 }
 
 /// `job = go f(x)` starts a task, `await job` waits for its value (wiki/async.md). A module runs on one thread, so a
