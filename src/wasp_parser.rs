@@ -1572,7 +1572,11 @@ impl WaspParser {
 			ch if ch.is_alphabetic() || ch == '_' => self.parse_symbol_with_suffix(),
 			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
 				(0..length).for_each(|_| self.advance());
-				error(&format!("unknown entity \\{name}: write the character itself, or a known name such as \\alpha or \\:infinity"))
+				error(&crate::uniscript_entities::unknown_entity(&name))
+			}
+			'\\' if let Some(name) = crate::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
+				(0..=name.len()).for_each(|_| self.advance());
+				error(&format!("a uniscript entity is written \\:{name}, not \\{name}"))
 			}
 			ch => {
 				warn!(
@@ -3045,6 +3049,12 @@ impl WaspParser {
 				let escaped = self.current_char();
 				is_template |= interpolates && escaped == '$'; // an escaped dollar is never a hole, also in sql/sh
 				match escaped {
+					':' if interpolates && self.peek_char(1).is_ascii_alphabetic() => {
+						let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos - 1) else { unreachable!("a letter follows") };
+						let Some(character) = crate::uniscript_entities::entity(&name) else { return error(&crate::uniscript_entities::unknown_entity(&name)) };
+						(0..length - 2).for_each(|_| self.advance());
+						character
+					}
 					'n' => '\n',
 					't' => '\t',
 					'r' => '\r',
