@@ -23,6 +23,9 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   Assumed until decided: today's behaviour (1); workers do not change zero-parameter `:=` semantics, and the
   "needless charging" note applies to `def` only. If (2) is chosen: the per-use getter is ~20 lines, commit 0b687e03 on
   branch late-binding (warp-29).
+- P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
+  forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
+  run-time blocks are always pure. Asked by warp-29.
 Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
 work on branch runtime-units-survey pauses.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
@@ -53,6 +56,12 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   only, not in eval/is! (worker assumption).
 - P73 `x!` has one meaning, force: a block runs, an optional unwraps (or errors), a plain value is itself; the kind
   decides, statically where known, else at run time (asked by warp-90). Spec wiki/charged.md 37ccaf7.
+- P74 user: "use the opportunity to make codepoint the default name. since this is a sub type of integer, it should
+  be castable to float", clarified: `codepoint(c)` is the preferred name in hints, fixes and docs (`ord`, `ordinal`
+  stay synonyms); it gives an Int, so `codepoint('x') as float` is 120.0; `'x' as float` stays an error whose hint and
+  fix offer `codepoint('x') as float`; P27 stands. tests/text/test_text_casts.rs may be edited for the hint text (user
+  decision). Asked by warp-ea (fixits).
+- P75 fix buttons read "I meant: <replacement>", the meaning as a tooltip (warp-ea's default).
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
