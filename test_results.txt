@@ -337,6 +337,9 @@ PASSED:
   ✓ function::tests::test_kind_to_valtype
   ✓ function::tests::test_signature_builder
   ✓ function::tests::test_signature_format
+  ✓ functions::test_anonymous_application::test_a_block_applied_to_a_juxtaposed_argument
+  ✓ functions::test_anonymous_application::test_a_data_block_is_not_applied
+  ✓ functions::test_anonymous_application::test_an_anonymous_function_broadcasts_over_a_list
   ✓ functions::test_argument_kinds::counting_a_parameter_makes_it_a_list
   ✓ functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error
   ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
@@ -1855,6 +1858,7 @@ PASSED:
   ✓ wasm::test_wasm::test_math_operators_runtime
   ✓ wasm::test_wasm::test_merge_wabt
   ✓ wasm::test_wasm::test_named_data_sections
+  ✓ wasm::test_wasm::test_node_data_binary_reconstruction
   ✓ wasm::test_wasm::test_norm
   ✓ wasm::test_wasm::test_norm2
   ✓ wasm::test_wasm::test_object_properties_wasm
@@ -2222,4 +2226,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-35 ignored, 2217 passed, 0 failed, 2217 total tested
+34 ignored, 2221 passed, 0 failed, 2221 total tested
