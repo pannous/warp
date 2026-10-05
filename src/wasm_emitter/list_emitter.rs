@@ -88,7 +88,8 @@ impl WasmGcEmitter {
 		let Some(name) = call_name(items, bracket, separator) else {
 			return false;
 		};
-		if self.resolves_call(name) {
+		// `inc()` of a bound name reads it (`inc:={x+1}; inc()`); with arguments a variable is no function (`x=2; x(3)`)
+		if self.resolves_call(name) || (items.len() == 1 && !self.is_unbound(name)) {
 			return false;
 		}
 		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
@@ -186,7 +187,8 @@ impl WasmGcEmitter {
 		}
 
 		if items.len() == 1 && *bracket != Bracket::Square {
-			if !self.emit_function_call(func, items, bracket) {
+			// `f()` of a name bound to nothing is an undefined function (P92); the group `(f)` is its item
+			if !self.emit_function_call(func, items, bracket) && !self.reject_unresolved_call(func, items, bracket, separator) {
 				self.emit_node_instructions(func, &items[0]);
 			}
 			return;
