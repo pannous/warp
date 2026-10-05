@@ -110,3 +110,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 fix-infinity
 - `∞` is the float infinity (Number::Inf, typed Float): `∞ > 1e300`, `-∞`, `1.0/0.0 == ∞`, `\:infinity`
   (tests/numbers/test_infinity.rs). P56 (4) default; ω stays the hyperreal.
+
+## 2026-10-05 p56-entities
+- P56: entities are `\:name` only, in code and inside double-quoted texts (the text parser expands them); a bare
+  `\alpha` is the error "a uniscript entity is written \:alpha"; unknown `\:name` is loud in code and texts.

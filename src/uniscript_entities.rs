@@ -1,7 +1,7 @@
-//! Uniscript entities in code (wiki/uniscript.md, unicode.md, Features.md): `\:infinity` and `\alpha` are the characters
-//! ∞ and α, as identifiers and operators alike (`\alpha = 4` assigns α). Only the simple entities of this table;
-//! the full table and the `<:fracture A>` blocks are the uniscript package (probes/uniscript, data/uniscript).
-//! Texts and comments keep their backslashes (`"\n"` is a newline, not an entity).
+//! Uniscript entities (wiki/uniscript.md, unicode.md, Features.md; user decision P56): `\:infinity` and `\:alpha` are the
+//! characters ∞ and α, as identifiers and operators alike (`\:alpha = 4` assigns α), and inside double-quoted texts
+//! (the text parser expands them there). A bare `\name` is no entity (`"\nat"` is a newline and "at"). Only the simple
+//! entities of this table; the full table and the `<:fracture A>` blocks are the uniscript package (probes/uniscript).
 
 /// Entity names: the LaTeX / unicode-math command names, plus the uniscript English names
 const ENTITIES: &[(&str, char)] = &[
@@ -32,19 +32,32 @@ pub fn entity(name: &str) -> Option<char> {
 	ENTITIES.iter().find(|(entity_name, _)| *entity_name == name).map(|(_, character)| *character)
 }
 
-/// The entity written at `chars[at..]` (`\:name` or `\name`, the name its whole run of ASCII letters):
-/// its name and the number of chars it spans
+/// The entity written at `chars[at..]`, `\:name` (the name its whole run of ASCII letters): its name and the number of
+/// chars it spans
 pub fn entity_name_at(chars: &[char], at: usize) -> Option<(String, usize)> {
+	if chars.get(at) != Some(&'\\') || chars.get(at + 1) != Some(&':') {
+		return None;
+	}
+	let name: String = chars[at + 2..].iter().take_while(|c| c.is_ascii_alphabetic()).collect();
+	(!name.is_empty()).then(|| (name.clone(), 2 + name.len()))
+}
+
+/// `\alpha` written for `\:alpha`: the name of the entity a bare backslash name would be
+pub fn bare_entity_name_at(chars: &[char], at: usize) -> Option<String> {
 	if chars.get(at) != Some(&'\\') {
 		return None;
 	}
-	let name_start = if chars.get(at + 1) == Some(&':') { at + 2 } else { at + 1 };
-	let name: String = chars[name_start.min(chars.len())..].iter().take_while(|c| c.is_ascii_alphabetic()).collect();
-	(!name.is_empty()).then(|| (name.clone(), name_start - at + name.len()))
+	let name: String = chars[at + 1..].iter().take_while(|c| c.is_ascii_alphabetic()).collect();
+	entity(&name).map(|_| name)
+}
+
+/// The loud error of `\:name` that names no entity
+pub fn unknown_entity(name: &str) -> String {
+	format!("unknown entity \\:{name}: write the character itself, or a known name such as \\:alpha or \\:infinity")
 }
 
 /// The source with every known entity outside texts and comments replaced by its character; an unknown one stays
-/// and the parser names it
+/// and the parser names it (texts expand theirs in the text parser)
 pub fn expand_entities(source: &str) -> String {
 	if !source.contains('\\') {
 		return source.to_string();
