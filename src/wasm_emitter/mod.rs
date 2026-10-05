@@ -3016,7 +3016,7 @@ impl WasmGcEmitter {
 		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
 			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Int);
 		}
-		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_numeric_value) {
+		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_numeric_value) || self.emit_pattern_test(func, node) {
 			return;
 		}
 		let located = node;

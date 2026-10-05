@@ -13,6 +13,7 @@ mod test_loop_forms;
 mod test_loops_in_functions;
 mod test_not_condition_block;
 mod test_error_branch_kind;
+mod test_structural_patterns;
 mod test_switch_match;
 mod test_unwrap;
 mod test_unwrap_message;

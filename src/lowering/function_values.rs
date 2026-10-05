@@ -81,6 +81,15 @@ fn collect_function_uses(node: &Node, names: &[String], higher_order: &HashMap<S
 		_ => None,
 	};
 	match node.drop_meta() {
+		// `switch c {cases}` parses as [switch, (c {cases})]: the subject and its cases, no call of c
+		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::switch::SWITCH_WORDS.contains(&word.as_str())) => {
+			for item in &items[1..] {
+				match item.drop_meta() {
+					Node::List(pair, _, _) if pair.len() == 2 => pair.iter().for_each(|part| collect_function_uses(part, names, higher_order, used)),
+					other => collect_function_uses(other, names, higher_order, used),
+				}
+			}
+		}
 		Node::List(items, bracket, separator) => {
 			if let Some((head, arguments)) = items.split_first() {
 				// f(x), f x
