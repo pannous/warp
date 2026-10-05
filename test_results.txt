@@ -69,6 +69,7 @@ PASSED:
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
   ✓ control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
+  ✓ control::test_if_empty_branch::an_if_with_an_empty_branch_yields_empty_or_the_number
   ✓ control::test_if_value_kind::test_if_of_characters_joins_a_text
   ✓ control::test_iteration_words::test_a_wrong_function_is_an_error
   ✓ control::test_iteration_words::test_each_runs_the_body_per_item_and_is_the_last_value
@@ -589,6 +590,7 @@ PASSED:
   ✓ functions::test_typed_returns::test_type_before_the_name_converts_the_result
   ✓ functions::test_typed_signatures::several_typed_parameters
   ✓ functions::test_typed_signatures::spaced_typed_signature
+  ✓ functions::test_undefined_calls::test_declared_type_constructs
   ✓ functions::test_undefined_calls::test_paren_data_stays_data
   ✓ functions::test_undefined_calls::test_print_returns_its_value_without_a_capability_error
   ✓ functions::test_undefined_calls::test_resolved_calls_are_unchanged
@@ -2188,4 +2190,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2183 passed, 0 failed, 2183 total tested
+37 ignored, 2185 passed, 0 failed, 2185 total tested
