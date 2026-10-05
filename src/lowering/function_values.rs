@@ -20,10 +20,10 @@ const INFIX_WORDS: [&str; 6] = ["in", "is", "of", "and", "or", "as"];
 
 /// A user function `name(params) := body` as found in the program
 #[derive(Clone)]
-struct Definition {
-	name: String,
-	params: Vec<Node>,
-	body: Node,
+pub(crate) struct Definition {
+	pub(crate) name: String,
+	pub(crate) params: Vec<Node>,
+	pub(crate) body: Node,
 }
 
 impl Definition {
@@ -53,7 +53,7 @@ fn parameter_name(param: &Node) -> Option<String> {
 	}
 }
 
-fn definitions(node: &Node, found: &mut Vec<Definition>) {
+pub(crate) fn definitions(node: &Node, found: &mut Vec<Definition>) {
 	if let Some(definition) = Definition::from(node) {
 		found.push(definition);
 	}

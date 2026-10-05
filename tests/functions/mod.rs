@@ -1,6 +1,7 @@
 mod test_argument_kinds;
 mod test_bare_function_name;
 mod test_block_function;
+mod test_broadcasting;
 mod test_closures;
 mod test_def_forms;
 mod test_effects;

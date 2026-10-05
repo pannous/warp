@@ -2,6 +2,7 @@
 //! `SOURCE_PASSES` and `MEANING_PASSES` in src/pipeline.rs). The crate root re-exports them (`crate::mutation`).
 
 pub mod ambiguous_forms;
+pub mod broadcasting;
 pub mod closures;
 pub mod comprehensions;
 pub mod declarations;
