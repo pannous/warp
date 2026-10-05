@@ -97,7 +97,7 @@ fn test_data_does_not_execute() {
 	let loaded = parse_data("secret = fetch https://evil.example/x\nsecret");
 	assert!(loaded.serialize().contains("fetch"), "{}", loaded.serialize());
 	assert!(matches!(eval_untrusted("puts('pwned')"), Node::Error(_)));
-	assert!(matches!(eval_untrusted("use m;floor(4.5)"), Node::Error(_)));
+	assert!(matches!(eval_untrusted("import strlen from \"c\"; strlen(\"ab\")"), Node::Error(_))); // libm is pure (P26), libc is not
 	assert_eq!(eval_untrusted("x:=3;x*x"), Node::int(9));
 }
 
