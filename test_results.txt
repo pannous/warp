@@ -58,6 +58,7 @@ PASSED:
   ✓ control::test_for_implicit_it::a_for_loop_without_a_variable_walks_it
   ✓ control::test_for_it::a_symbol_prints_its_name
   ✓ control::test_for_it::it_is_the_loop_variable
+  ✓ control::test_for_it::it_is_the_loop_variable_inside_an_if_block
   ✓ control::test_for_loop::test_for_classic_three_part_header
   ✓ control::test_for_loop::test_for_over_exclusive_range
   ✓ control::test_for_loop::test_for_over_inclusive_range
@@ -504,6 +505,9 @@ PASSED:
   ✓ functions::test_named_arguments::a_missing_or_unknown_argument_is_an_error
   ✓ functions::test_named_arguments::named_arguments_set_free_variables_of_the_body
   ✓ functions::test_named_arguments::named_arguments_set_parameters_in_any_order
+  ✓ functions::test_nonlocal_any_value::test_an_escaping_closure_keeps_a_text_cell
+  ✓ functions::test_nonlocal_any_value::test_inner_changes_a_nonlocal_list
+  ✓ functions::test_nonlocal_any_value::test_inner_changes_a_nonlocal_text
   ✓ functions::test_nonlocal_cells::test_an_escaping_closure_keeps_its_cell
   ✓ functions::test_nonlocal_cells::test_an_escaping_closure_keeps_its_values
   ✓ functions::test_nonlocal_cells::test_inner_changes_the_outer_variable
@@ -2209,4 +2213,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-35 ignored, 2204 passed, 0 failed, 2204 total tested
+35 ignored, 2208 passed, 0 failed, 2208 total tested
