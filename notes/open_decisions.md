@@ -23,14 +23,14 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Decided 2026-10-05 (user, multiple-choice interview, all as recommended unless quoted)
-- Data vs code spec (wiki/charged.md e193420): the type of an unevaluated expression meant to run is `block`
-  (prefixes `code x` / `block x`), `quote` is dropped, `data x` marks what never runs (`!` on it warns). Wording:
-  `=` is a value (neither), `:=` / def charged, `:` uncharged. `{}` is data by default: `:` entries uncharged, `=`
-  values, `:=` charged, statements a block (`x = {1+2}` is a block, `x!` → 3; tests relying on 3 change, user
-  decision); control flow takes block parameters.
-- Unknown words in code: a word alone is a symbol (near-miss warning), a word applied to an argument is an error,
-  brackets change nothing (`[red green]` symbols, `[cube 3]` an error). Refines P62; answers P63 (1); P63 (2): the
-  sample becomes `data [1 "two" three 4.0]` (not `quote`).
+- Data vs code (P51, P62, P63 (1-2), charge levels, D7 revised): specified in wiki/charged.md, the single source;
+  RELEASED for implementation by the user on 2026-10-05 ("you have the green light, go ahead and implement
+  everything"). Tests the spec changes may be edited, each edit in its own commit naming the release. User words on
+  the way: P51 "should obviously be an error unless we're in a clear data context"; "def == deferred"; "def should
+  behave exactly like Python … but close"; "y=3; def z(): y*y; y=4; z() gives a compiler error unless we explicitly
+  define it as global"; "with some precomputed, precompiled paths"; naming `block`/`code`, `data` for what never
+  runs, `quote` dropped. Work packages assigned by the Supervisor (blocks warp-90, late binding + precomputed paths
+  warp-29, run-time `!` later).
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
@@ -130,28 +130,6 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   function-level handlers (`catch (no food){…}`, `on error{…}`, Error.md) come later; now the classical
   `try {…} catch {…}` (with `catch e`) and Python's `try: … except: …` become synonyms of `try X else Y`.
   Asked by the Fixer warp-2d.
-
-- P51 unknown word applied to a value (`cube 3`, no cube defined): user: "should obviously be an error unless we're
-  in a clear data context, which is not currently well defined". In code it is the loud error like `cube(3)`
-  (Decided #7); the got-it warning on branch unknown-word is undone. What counts as a data context: P62.
-- P62 data contexts in a program (user, multiple choice): a `quote`/`data` prefix and the values of an object
-  literal (`{shape: cube 3}`) are data, besides data mode (`warp data`, parse_data). Explicit brackets were NOT
-  chosen: `[cube 3]` / `(cube 3)` in code are code, so an unknown word there is the error too.
-
-- RELEASED (user 2026-10-05: "you have the green light, go ahead and implement everything and remove the fragments of
-  discussion so it's pure specification"): wiki/charged.md (wiki 88979a0) is the specification; tests that the spec
-  changes may be edited (user decision), each edit in its own commit naming this release. P69a takes the spec's
-  default (a run-time block reads the site's locals as they are at `!` and assigns only declared globals).
-- Data vs code, charge levels (user discussion 2026-10-05; full spec wiki/charged.md, wiki c90efe7; DO NOT implement
-  before the user reviewed the spec): programs are code by default, data files data ("e: by default"); `x = e` now,
-  `f := e` and `def` deferred (user: "def == deferred", "def should behave exactly like Python … but close"),
-  `x : e` uncharged (a quote) until `x!`; the same operators inside objects; warnings at the definition site
-  (computed `:` values, effectful getters), a quote used as a value is a type error with the fix ("c, d very nice");
-  `quote`/`data` prefix, `block` parameters, `x!` eval. REVISES D7: free variables are read at call time (Python late
-  binding), loop variables captured per iteration, reassigning a variable a deferred definition reads gets a got-it
-  note → superseded (user 2026-10-05: "y=3; def z(): y*y; y=4; z() gives a compiler error unless we explicitly
-  define it as global"): a free variable that changes after the definition needs `global y` / `nonlocal y` in the
-  reading function, else a compile error at the change (wiki fceb4c5). The word `quote` is provisional (user: "not sure if I like the word"). P62/P63 are refined by this spec.
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
@@ -305,7 +283,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
   `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
 - Closure Int->Int fast path (P3, asked by warp-5e): user "no" (same answer, first item). Closure calls keep boxing.
-- D7 / #33 closures: "By value + educate". Blocks keep capturing by value (`x=1; inc:={x=x+1}; do inc; x` → 1); a block
+- D7 / #33 closures (SUPERSEDED 2026-10-05 by wiki/charged.md: late binding, `global` for changing variables):
+  "By value + educate". Blocks keep capturing by value (`x=1; inc:={x=x+1}; do inc; x` → 1); a block
   that assigns an outer variable gets a hint: use `global x` or return the value. The wiki's lazy `:=` examples get updated.
 - D3 `[1 2 3]+4`: "Ask". Like `[x]*n`: append or add to each element? Fallback Error. `.+` is element-wise,
   `xs + [4]` concatenates.

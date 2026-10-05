@@ -1,8 +1,8 @@
 # An unknown word next to a value: `cube 3` (P51, P62)
 
-User decisions 2026-10-05: P51 "should obviously be an error unless we're in a clear data context"; P62: the data
-contexts in a program are a `quote`/`data` prefix and the values of an object literal (`{shape: cube 3}`), plus data
-mode (`parse_data`, `warp data`). Brackets are no data context: `(cube 3)` and `[cube 3]` in code are code.
+Rule (wiki/charged.md, section 1 "Unknown words"): in code a word on its own is a symbol, a word applied to an
+argument is the error; brackets change nothing; data is marked with `data …` (the `quote` prefix is dropped) or comes
+from a data file.
 
 - `WasmGcEmitter::unknown_word_error` (src/wasm_emitter/list_emitter.rs): a list of atoms (spaced, `(…)` or `[…]`) with a
   value and a word that names nothing (no variable, function, type, unit, keyword) is the error
