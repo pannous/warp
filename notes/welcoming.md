@@ -68,6 +68,10 @@ User decisions from that round:
   `Acknowledging(topics)` for tests, the playground's page list (src/web.rs `PageAcknowledger`, report `notes`).
   Remembered as `ack:<topic> = acknowledged` in `.wasp-acknowledged` (CLI, working directory). Non-interactive runs
   just show the warning, never block; `--no-ask` never prompts.
+- Scope (user, 2026-10-05): the prompt answers `GotIt::{This, All, No}`: `[y this / a all of this kind / n]`. "This"
+  remembers one expression, `ack:<topic>@<expression> = acknowledged` (an Ask by its question, which names the
+  expression; educate_once by its written text); "all" the topic. A `// got it` comment on a line silences the
+  warnings and notes of that line (diagnostic::silenced_by_comment). The playground still acknowledges whole topics.
 - Users: `a upto b` (topic `upto`) and the for-header bound `0..n-1` (topic `kotlin-range`, Kotlin's `..` is inclusive),
   both default exclusive, fallback Warning (src/wasp_parser.rs `range_reading`); `local-or-global` (src/analyzer.rs
   `resolve_main_variable_assignments`, default a new local `let n = …`, explicit main's `global n = …`); `signed-operand`

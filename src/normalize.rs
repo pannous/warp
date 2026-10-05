@@ -69,6 +69,11 @@ pub fn set_hint_position(line: usize, column: usize) {
     });
 }
 
+/// The line of the current hint position, 0 when unknown
+pub fn hint_line() -> usize {
+    HINT_POSITION.with(|pos| pos.borrow().line)
+}
+
 /// Set the current file for hint messages
 pub fn set_hint_file(file: &str) {
     HINT_POSITION.with(|pos| {
