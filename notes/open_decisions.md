@@ -48,6 +48,11 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P70 (late binding, warp-29): (a) a change is an error only where a later call can see it; (b) `global` may stand on
   the variable at main level or in the reading function; (d) a pure getter over constants may be computed once
   (folding). All as recommended; spec wiki/charged.md 77061c2. (c) later.
+- P72 memoization: no syntax; the compiler decides alone which pure functions to memoize (asked by warp-29; the user
+  chose "Compiler decides alone" over the recommended `memo def`). Constant calls are folded in `warp compile` output
+  only, not in eval/is! (worker assumption).
+- P73 `x!` has one meaning, force: a block runs, an optional unwraps (or errors), a plain value is itself; the kind
+  decides, statically where known, else at run time (asked by warp-90). Spec wiki/charged.md 37ccaf7.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
