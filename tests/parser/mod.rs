@@ -25,3 +25,4 @@ mod test_wasp_position;
 mod test_xml;
 mod test_comment_hides_bracket;
 mod test_uniscript_entities;
+mod test_wisp_def_params;

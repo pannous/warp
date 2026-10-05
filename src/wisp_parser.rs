@@ -25,6 +25,9 @@ use crate::node::Node::*;
 use crate::node::*;
 use crate::operators::Op;
 
+/// The metadata a `def` keeps its parameter list under: `(def square (typed x int) (mul it it))`
+const PARAMS_WORD: &str = "params";
+
 pub struct WispParser {
 	chars: Vec<char>,
 	pos: usize,
@@ -329,13 +332,28 @@ impl WispParser {
 		}
 	}
 
+	/// `(def name body)` → name:=body; `(def name params body)`: the last part is the body, the parameter list before it
+	/// its metadata `(params …)`, as `(def name ((meta params …) body))` writes it
 	fn parse_defn_node(&mut self) -> Node {
 		self.skip_whitespace();
 		let name = self.parse_expr();
-		self.skip_whitespace();
-		let body = self.parse_expr();
+		let mut parts = vec![];
+		loop {
+			self.skip_whitespace();
+			if self.end() || self.current() == ')' {
+				break;
+			}
+			parts.push(self.parse_expr());
+		}
 		self.expect(')');
-		// defn name body → name:=body
+		let body = match parts.as_slice() {
+			[body] => body.clone(),
+			[params, body] => Meta {
+				node: Box::new(body.clone()),
+				data: Box::new(List(vec![Symbol(PARAMS_WORD.to_string()), params.clone()], Bracket::Round, Separator::Space)),
+			},
+			_ => Error(Box::new(Text(format!("def {} takes a body, or parameters and a body; got {} parts", name.serialize(), parts.len())))),
+		};
 		Key(Box::new(name), Op::Define, Box::new(body))
 	}
 
