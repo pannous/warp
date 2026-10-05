@@ -53,7 +53,8 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 14] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 17] = [
+	(crate::memoization::MEMO_KNOWN, 2, Kind::Int), (crate::memoization::MEMO_VALUE, 2, Kind::Int), (crate::memoization::MEMO_STORE, 3, Kind::Int),
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (RAISE, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
 	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
 	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int), (CHR, 1, Kind::Codepoint), (crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
@@ -214,7 +215,7 @@ impl WasmGcEmitter {
 				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
 				_ => self.emit_runtime_text_cast(func, value),
 			},
-			(BYTE_AT | IS_ERROR | RAN_WITHOUT_ERROR | STARTS_WITH | ENDS_WITH, _) => {
+			(BYTE_AT | IS_ERROR | RAN_WITHOUT_ERROR | STARTS_WITH | ENDS_WITH | crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE, _) => {
 				self.emit_integer_text_builtin(func, name, arguments);
 				self.emit_call(func, "new_int");
 			}
@@ -264,7 +265,62 @@ impl WasmGcEmitter {
 				self.emit_text_argument(func, part);
 				self.emit_call(func, if name == STARTS_WITH { TEXT_STARTS_WITH } else { TEXT_ENDS_WITH });
 			}
+			(crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE, [id, argument, rest @ ..]) => {
+				self.emit_memo_word(func, name, id, argument, rest.first());
+			}
 			_ => unreachable!("{name} is no integer text builtin with {} arguments", arguments.len()),
+		}
+	}
+
+	/// memo_known(id, n) (1 when the cache of function `id` holds n), memo_value(id, n), memo_store(id, n, v) (keeps v
+	/// for n when n is 0 … MEMO_SIZE-1, and is v): the caches of memoization.rs, two i64 arrays per function, made at
+	/// first use
+	fn emit_memo_word(&mut self, func: &mut Function, name: &str, id: &Node, argument: &Node, value: Option<&Node>) {
+		use crate::memoization::{MEMO_KNOWN, MEMO_SIZE, MEMO_STORE};
+		let Node::Number(crate::extensions::numbers::Number::Int(id)) = id.drop_meta() else { unreachable!("memoization passes a constant id") };
+		let array = self.type_manager.int_array_type;
+		let array_ref = ValType::Ref(RefType { nullable: true, heap_type: HeapType::Concrete(array) });
+		let new_global = |emitter: &mut Self| {
+			emitter.globals.global(GlobalType { val_type: array_ref, mutable: true, shared: false }, &ConstExpr::ref_null(HeapType::Concrete(array)));
+			emitter.next_global_idx += 1;
+			emitter.next_global_idx - 1
+		};
+		let (values, known) = match self.memo_caches.get(id) {
+			Some(globals) => *globals,
+			None => {
+				let made = (new_global(self), new_global(self));
+				self.memo_caches.insert(*id, made);
+				made
+			}
+		};
+		let (index, stored) = (self.scratch(0), self.scratch(1));
+		if let Some(value) = value {
+			self.emit_numeric_value(func, value);
+			func.instruction(&I::LocalSet(stored));
+		}
+		self.emit_numeric_value(func, argument);
+		func.instruction(&I::LocalSet(index));
+		// the arrays exist from the first word on
+		for global in [values, known] {
+			Self::emit_list(func, &[I::GlobalGet(global), I::RefIsNull, I::If(BlockType::Empty), I::I32Const(MEMO_SIZE), I::ArrayNewDefault(array), I::GlobalSet(global), I::End]);
+		}
+		let in_range = [I::LocalGet(index), I::I64Const(0), I::I64GeS, I::LocalGet(index), I::I64Const(MEMO_SIZE as i64), I::I64LtS, I::I32And];
+		let element = |global: u32| [I::GlobalGet(global), I::RefAsNonNull, I::LocalGet(index), I::I32WrapI64];
+		if name == MEMO_STORE {
+			Self::emit_list(func, &in_range);
+			func.instruction(&I::If(BlockType::Empty));
+			Self::emit_list(func, &element(values));
+			Self::emit_list(func, &[I::LocalGet(stored), I::ArraySet(array)]);
+			Self::emit_list(func, &element(known));
+			Self::emit_list(func, &[I::I64Const(1), I::ArraySet(array), I::End, I::LocalGet(stored)]);
+		} else if name == MEMO_KNOWN {
+			Self::emit_list(func, &in_range);
+			func.instruction(&I::If(BlockType::Result(ValType::I64)));
+			Self::emit_list(func, &element(known));
+			Self::emit_list(func, &[I::ArrayGet(array), I::Else, I::I64Const(0), I::End]);
+		} else {
+			Self::emit_list(func, &element(values));
+			func.instruction(&I::ArrayGet(array));
 		}
 	}
 

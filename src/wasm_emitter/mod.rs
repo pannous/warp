@@ -165,6 +165,7 @@ pub struct WasmGcEmitter {
 	/// Emitting data, not code: the value of an object entry or a quoted form, where unknown words stay words (P62)
 	data_context: bool,
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
+	memo_caches: HashMap<i64, (u32, u32)>, // per memoized function id: the globals of its values and known flags (memoization.rs)
 	extra_global_names: Vec<(u32, &'static str)>,
 
 	// Configuration
@@ -233,6 +234,7 @@ impl WasmGcEmitter {
 			guards_errors: false,
 			data_context: false,
 			error_catching: None,
+			memo_caches: HashMap::new(),
 			extra_global_names: Vec::new(),
 			config: EmitterConfig::default(),
 			type_manager: TypeManager::new(),
