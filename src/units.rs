@@ -221,6 +221,8 @@ fn children(node: &Node) -> Vec<&Node> {
 fn needs_quantities(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(name) => unit_named(name).is_some(),
+		// `3010 meters`: a long name counts after an amount
+		Node::List(items, Bracket::None, _) if matches!(items.as_slice(), [_, unit] if target_unit(unit).is_some()) => true,
 		Node::Key(_, Op::PlusMinus, _) => true,
 		other => children(other).into_iter().any(needs_quantities),
 	}
@@ -266,12 +268,25 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 		Node::List(items, Bracket::None, _) => match items.as_slice() {
 			[single] => evaluate_in(single, variables),
 			[count, unit] if is_unit_word(unit) => arithmetic(evaluate_in(count, variables)?, Op::Mul, evaluate_in(unit, variables)?),
+			// `3010 meters`, and a unit after an expression belongs to its last amount: `3km+10m == 3010 meters`
+			[amount, unit] if target_unit(unit).is_some() => match amount.drop_meta() {
+				Node::Key(..) => evaluate_in(&with_unit(amount, unit), variables),
+				_ => arithmetic(evaluate_in(amount, variables)?, Op::Mul, Value::Quantity(Quantity { amount: 1, unit: target_unit(unit).expect("guarded") })),
+			},
 			[quantity, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == IN_WORD) && target_unit(unit).is_some() => {
 				convert(evaluate_in(quantity, variables)?, target_unit(unit).expect("guarded"))
 			}
 			_ => Err(Stop::Unsupported),
 		},
 		_ => Err(Stop::Unsupported),
+	}
+}
+
+/// The unit given to the last amount of an expression: `a == 3010` with `meters` is `a == (3010 meters)`
+fn with_unit(expression: &Node, unit: &Node) -> Node {
+	match expression.drop_meta() {
+		Node::Key(left, op, right) => Node::Key(left.clone(), *op, Box::new(with_unit(right, unit))),
+		amount => Node::List(vec![amount.clone(), unit.clone()], Bracket::None, Separator::Space),
 	}
 }
 

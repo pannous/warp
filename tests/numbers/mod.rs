@@ -28,3 +28,4 @@ mod test_round_to_digits;
 mod test_log_base;
 mod test_duration_text;
 mod test_unit_conversion;
+mod test_unit_literals;
