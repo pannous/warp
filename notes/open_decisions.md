@@ -5,13 +5,6 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P51 An unknown word applied to a value, `cube 3` (no `cube` defined): today data with a got-it warning
-  ("cube is no function … fix: [cube 3]", notes/unknown_prefix_word.md). Should it be a loud error like `cube(3)`
-  (Decided #7)? Then call-shaped data in code needs brackets: `[cube 3]`, `(cube 3)`, which contradicts rule 3 of
-  notes/unresolved_call_survey.md (`print 3` as data). Proposed: keep the warning (wasp is a data notation; strict
-  mode makes it an error). Asked by worker warp-90, branch unknown-word. 2026-10-05.
-  User 2026-10-05, undecided: "i'm not certain probably the second one [loud error] or we need to declare data in
-  the beginning of the file or I don't know let's discuss it later". Keep the warning until discussed.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -110,6 +103,13 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   function-level handlers (`catch (no food){…}`, `on error{…}`, Error.md) come later; now the classical
   `try {…} catch {…}` (with `catch e`) and Python's `try: … except: …` become synonyms of `try X else Y`.
   Asked by the Fixer warp-2d.
+
+- P51 unknown word applied to a value (`cube 3`, no cube defined): user: "should obviously be an error unless we're
+  in a clear data context, which is not currently well defined". In code it is the loud error like `cube(3)`
+  (Decided #7); the got-it warning on branch unknown-word is undone. What counts as a data context: P62.
+- P62 data contexts in a program (user, multiple choice): a `quote`/`data` prefix and the values of an object
+  literal (`{shape: cube 3}`) are data, besides data mode (`warp data`, parse_data). Explicit brackets were NOT
+  chosen: `[cube 3]` / `(cube 3)` in code are code, so an unknown word there is the error too.
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
