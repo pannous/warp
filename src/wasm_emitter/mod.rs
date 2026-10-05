@@ -1133,8 +1133,8 @@ impl WasmGcEmitter {
 		// Emit basic Node constructors using macros
 		self.emit_int_heap_globals();
 		constructors::emit_all_constructors(self);
+		self.emit_runtime_errors(); // before the int runtime: exact_div fails divide_by_zero
 		self.emit_int_runtime();
-		self.emit_runtime_errors();
 		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
 		// Emit list and string operation functions
 		self.emit_list_ops();

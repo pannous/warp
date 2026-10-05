@@ -36,3 +36,4 @@ mod test_duration_text;
 mod test_unit_conversion;
 mod test_unit_literals;
 mod test_infinity;
+mod test_division_by_zero;
