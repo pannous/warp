@@ -17,15 +17,11 @@ fn the_failure_of_a_task_is_caught_by_try() {
 	crate::common::fails_with("f(i) := [1,2,3]#i; job = go f(5); await job", "task f: index out of range");
 }
 
-/// Two tasks of a second each: overlapping they take about one second (on Workers in the browser, which the test
-/// server isolates for shared memory), one after the other two
-const OVERLAPPING_LIMIT: std::time::Duration = std::time::Duration::from_millis(1800);
-
+/// Two tasks of a second each overlap: they start together (on Workers in the browser, which the test server isolates
+/// for shared memory), not one after the other a second apart (user, g-qUvY: prove the overlap, not the wall time)
 #[test]
 fn two_tasks_overlap() {
-	let started = std::time::Instant::now();
-	is!("f(ms) := { sleep(ms); ms }; a = go f(1000); b = go f(1000); a + b", 2000);
-	assert!(started.elapsed() < OVERLAPPING_LIMIT, "two one-second tasks took {:?}", started.elapsed());
+	is!("f(ms) := { started = clock(); sleep(ms); started }; a = go f(1000); b = go f(1000); if abs(await a - await b) < 1000 then 2000 else -1", 2000);
 }
 
 #[test]
