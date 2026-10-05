@@ -9,6 +9,7 @@ mod test_float_exact_context;
 mod test_float_parameters;
 mod test_float_promotion;
 mod test_float_to_int_range;
+mod test_hyperreals;
 mod test_law;
 mod test_math;
 mod test_number;
