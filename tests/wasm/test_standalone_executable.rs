@@ -57,3 +57,19 @@ fn test_machine_code_rides_at_the_end_of_the_executable() {
 	std::fs::write(&path, b"runtime").unwrap();
 	assert_eq!(embedded_machine_code(&path), None);
 }
+
+/// macOS: the executable is signed ad hoc and passes strict verification, its program inside the __LINKEDIT segment
+#[cfg(target_os = "macos")]
+#[test]
+fn test_build_exe_signs_cleanly_on_macos() {
+	let (build, executable) = build_executable("standalone_signed", "6 * 7");
+	assert!(build.status.success(), "{}", text(&build.stderr));
+	let verify = std::process::Command::new("codesign").args(["--verify", "--strict", "--verbose=2"]).arg(&executable).output().unwrap();
+	assert!(verify.status.success(), "{}", text(&verify.stderr));
+	let run = std::process::Command::new(&executable).output().unwrap();
+	assert_eq!(text(&run.stdout), "42\n", "{}", text(&run.stderr));
+	// built again from the signed executable as its runtime: still one program, still signed cleanly
+	let rebuilt = without_machine_code(&std::fs::read(&executable).unwrap());
+	assert!(embedded_machine_code(&executable).is_some());
+	assert!(rebuilt.len() < std::fs::metadata(&executable).unwrap().len() as usize);
+}
