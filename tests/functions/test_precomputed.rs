@@ -19,7 +19,7 @@ fn folded(code: &str) -> String {
 fn a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module() {
 	let fib = folded("def fib(n): n<2 ? n : fib(n-1)+fib(n-2); x = fib(20); x+1");
 	assert!(fib.contains("6765") && !fib.contains("(fib 20)"), "{fib}");
-	let module = warp::pipeline::compile("def fib(n): n<2 ? n : fib(n-1)+fib(n-2); x = fib(20); x+1").ok().expect("compiles");
+	let module = warp::pipeline::compile("def fib(n): n<2 ? n : fib(n-1)+fib(n-2); x = fib(20); x+1").expect("compiles");
 	eq!(warp::wasm_reader::read_bytes(&module.bytes).expect("runs"), 6766);
 	let texts = folded("def greet(name): \"hi \" + name; s = greet(\"ann\"); s");
 	assert!(texts.contains("hi ann"), "{texts}");
