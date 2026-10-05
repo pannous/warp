@@ -34,6 +34,15 @@ pub fn marked_fully(name: Node) -> Node {
 }
 const FULLY: i64 = 2;
 
+/// What a `!` or `!!` follows (a name or a field `o.s1`), and whether it was `!!`
+pub(crate) fn bang_target(node: &Node) -> Option<(Node, bool)> {
+	let Node::Meta { node: inner, data } = node else { return None };
+	match data.as_ref() {
+		Node::Key(key, _, value) if key.name() == MUTATED_MARK => Some((inner.drop_meta().clone(), matches!(value.drop_meta(), Node::Number(n) if *n == FULLY))),
+		_ => bang_target(inner),
+	}
+}
+
 /// The name a `!` or `!!` follows, and whether it was `!!`
 pub(crate) fn bang_of(node: &Node) -> Option<(String, bool)> {
 	let Node::Meta { node: inner, data } = node else { return None };
