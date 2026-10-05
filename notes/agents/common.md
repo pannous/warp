@@ -13,7 +13,7 @@ rules in notes/open_decisions.md and wiki/Footguns.md.
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit goes in its
   own commit, named in the message), keep working, and SendMessage the Interviewer the question.
-- Work in a git worktree outside the repo: `git worktree add -b <branch> /Users/me/dev/angles/warp.worktrees.noindex/<branch> origin/main`,
+- Work in a git worktree outside the repo: `cowtree add -b <branch> /Users/me/dev/angles/warp.worktrees.noindex/<branch> origin/main`,
   with the uncommitted build tweak `version = "0.1.1-<branch>"` in its Cargo.toml.
   Never edit /Users/me/dev/angles/warp itself (the user's checkout).
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
