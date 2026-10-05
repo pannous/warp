@@ -82,6 +82,8 @@ fn suffix_word_fixes() {
 fn braceless_call_fixes() {
 	assert_fix(&format!("{SQUARE}square 3 + square 4"), "of 3 only", "25");
 	assert_fix(&format!("{SQUARE}square 3 + square 4"), "of the whole", "361");
+	assert_fix(&format!("{SQUARE}square 3 + square(4)"), "only the first operand", "25"); // P68's got-it warning
+	assert_fix(&format!("{SQUARE}square 3 + square(4)"), "the whole expression", "361");
 }
 
 #[test]
