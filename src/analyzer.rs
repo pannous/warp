@@ -190,6 +190,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// List handling: distinguish data lists from statement sequences and function calls
 		Node::List(items, bracket, separator) if !items.is_empty() => infer_list_type(node, items, bracket, separator, scope),
+		// a range as a value is the list of its numbers (wasm_emitter emit_range), as `x = 1..5` is
+		Node::Key(_, Op::Range | Op::To, _) => Kind::List,
 		// Arithmetic: upgrade to Float if either operand is Float
 		Node::Key(left, op, right) if op.is_arithmetic() => {
 			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), right)
@@ -2458,6 +2460,12 @@ fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Node::Key(target, Op::Assign, value) if computed_range(&target, &value).is_some() => {
 			lower(Node::Key(target.clone(), Op::Assign, Box::new(computed_range(&target, &value).expect("guarded"))))
 		}
+		// a range anywhere else a value is wanted (`print 1..5`, `str(a..b)`, `(1..5)`) is the same list: the ranges of
+		// `for` headers are loops by now (for_loop above)
+		range if range_elements(&range).is_some() => range_elements(&range).expect("guarded"),
+		range if computed_range(&Node::Symbol(RANGE_VALUE.to_string()), &range).is_some() => {
+			lower(computed_range(&Node::Symbol(RANGE_VALUE.to_string()), &range).expect("guarded"))
+		}
 		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
 		Node::Key(target, Op::Assign, value) if number_type_prefix(&target).is_some() => {
@@ -4108,6 +4116,9 @@ fn range_elements(range: &Node) -> Option<Node> {
 	let last = if *op == Op::To { *end } else { end - 1 };
 	(start <= &last).then(|| Node::List((*start..=last).map(Node::int).collect(), Bracket::Square, Separator::Space))
 }
+
+/// The name a range of computed bounds collects its list under where no variable is assigned (`print a..b`)
+const RANGE_VALUE: &str = "range_value";
 
 /// `xs = a..b` of computed bounds: `(xs·range = ø; for xs·item in a..b { xs·range = xs·range + [xs·item] }; xs·range)`
 fn computed_range(target: &Node, range: &Node) -> Option<Node> {
