@@ -6,7 +6,7 @@ use warp::wasp_parser::WaspParser;
 use warp::*;
 
 fn module_directory(test: &str, modules: &[(&str, &str)]) -> PathBuf {
-	let directory = std::env::temp_dir().join(format!("warp_modules_{test}_{}", std::process::id()));
+	let directory = crate::common::scratch_directory(&format!("warp_modules_{test}"));
 	fs::create_dir_all(&directory).expect("create module directory");
 	for (file, source) in modules {
 		fs::write(directory.join(file), source).expect("write module");
