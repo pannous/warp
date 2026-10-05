@@ -1,6 +1,7 @@
-//! `use python "math"` (also `use python math`, `use python "os.path" as path`): the module of another runtime, reached
+//! `use python "math"` (also `use python math`, `use python "os.path" as path`, `use js Math`): the module of another runtime, reached
 //! through the host word foreign_call (src/foreign.rs, notes/stdlib_connectors.md). `math.sqrt(2)` is the call
-//! `foreign_call("python", "math", "sqrt", [2])`, `math.pi` the read `foreign_call("python", "math", "pi", ø)`.
+//! `foreign_call("python", "math", "sqrt", 1, [2])`, `math.pi` the read `foreign_call("python", "math", "pi", 0, ø)`
+//! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
 
 use crate::node::{Bracket, Node, Separator};
@@ -8,8 +9,8 @@ use crate::operators::Op;
 use std::collections::HashMap;
 
 const USE_WORD: &str = "use";
-/// The runtimes a `use <runtime> <module>` names
-pub const FOREIGN_RUNTIMES: [&str; 1] = ["python"];
+/// The runtimes a `use <runtime> <module>` names: Python, and JavaScript (node natively, the page in the browser)
+pub const FOREIGN_RUNTIMES: [&str; 2] = ["python", "js"];
 
 pub fn lower(program: Node) -> Node {
 	let mut modules = HashMap::new();
@@ -57,19 +58,19 @@ fn rewrite(node: Node, modules: &HashMap<String, (String, String)>) -> Node {
 	if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
 		let alias = match receiver.drop_meta() { Node::Symbol(alias) => Some(alias), _ => None };
 		if let Some((runtime, module)) = alias.and_then(|alias| modules.get(alias)) {
-			let (member, arguments) = match member.drop_meta() {
-				Node::Symbol(member) => (member.clone(), Node::Empty),
+			let (member, is_call, arguments) = match member.drop_meta() {
+				Node::Symbol(member) => (member.clone(), false, Node::Empty),
 				Node::List(items, Bracket::Round, _) => match items.split_first() {
 					Some((head, arguments)) if matches!(head.drop_meta(), Node::Symbol(_)) => {
 						let arguments = arguments.iter().cloned().map(|argument| rewrite(argument, modules)).collect();
-						(head.name(), Node::List(arguments, Bracket::Square, Separator::Space))
+						(head.name(), true, Node::List(arguments, Bracket::Square, Separator::Space))
 					}
 					_ => return node,
 				},
 				_ => return node,
 			};
 			let text = |text: &str| Node::Text(text.to_string());
-			return Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(runtime), text(module), text(&member), arguments], Bracket::Round, Separator::None);
+			return Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(runtime), text(module), text(&member), Node::int(i64::from(is_call)), arguments], Bracket::Round, Separator::None);
 		}
 	}
 	match node {
