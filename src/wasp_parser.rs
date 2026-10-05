@@ -2287,6 +2287,10 @@ impl WaspParser {
 					let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs.clone()));
 					Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
 				}
+				_ if op == Op::Hash && hash_slice_bounds(&rhs).is_some() => {
+					let (start, end) = hash_slice_bounds(&rhs).expect("guarded");
+					Node::List(vec![Symbol(SLICE_WORD.to_string()), lhs, start, end], Bracket::Round, Separator::None)
+				}
 				_ => Node::Key(Box::new(lhs), op, Box::new(rhs.clone())),
 			};
 			if op.is_ordering() {
@@ -3995,6 +3999,17 @@ fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 		_ => return None,
 	};
 	Some((start.as_ref().clone(), end))
+}
+
+/// `xs#(a…b)`, `xs#(a..b)`: the 0-based start and exclusive end of a 1-based slice (`xs#a` is 1-based); only a range in
+/// parentheses, `xs#a..b` stays the range from the value xs#a
+fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
+	let Node::List(items, Bracket::Round, _) = index.drop_meta() else { return None };
+	let [range] = items.as_slice() else { return None };
+	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else { return None };
+	let minus_one = |bound: &Node| Node::Key(Box::new(bound.clone()), Op::Sub, Box::new(Node::Number(Number::Int(1))));
+	let end = if *op == Op::To { end.as_ref().clone() } else { minus_one(end) };
+	Some((minus_one(start), end))
 }
 
 /// The written index of a subscript's 1-based index `index+1`, when it was not a number (inverse of `subscript`)

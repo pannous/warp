@@ -98,3 +98,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - P49: a fractional literal or a variable holding one passed to a declared int parameter is the compile error
   "2.2 is no int: write 2.2 as int" (analyzer infer_parameters_from_calls); 2.0 passes (no digits lost, assumption).
   test_function_argument_cast edited (approved) and un-ignored.
+
+## 2026-10-05 fix-hash-slices
+- Slices: `xs[a..b]`, `xs[a:b]`, text and variable bounds already worked; new `xs#(a…b)` / `xs#(a..b)` 1-based
+  slices (wasp_parser hash_slice_bounds). Unparenthesized `xs#a..b` stays the range from the value xs#a (it works on
+  main: `xs#1..6`), so it is no slice; queued as a question.
