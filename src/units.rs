@@ -10,6 +10,8 @@ use crate::meta::DataValue;
 use crate::node::{error, Bracket, Node, Separator};
 use std::collections::HashMap;
 use crate::operators::Op;
+pub mod static_units;
+
 use std::fmt;
 use crate::extensions::reals::Rational;
 use num_bigint::BigInt;
@@ -80,7 +82,7 @@ pub fn is_long_unit_name(name: &str) -> bool {
 
 /// A unit to a power within a quantity: km¹, h⁻¹, m²
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Factor {
+pub(crate) struct Factor {
 	unit: &'static Unit,
 	power: i32,
 }

@@ -36,3 +36,10 @@ functions for * / + compare and print: dynamic like Python's pint, also covers v
 time (parsed input), but every operation checks and rescales at run time and needs ~8 runtime functions; effort L+.
 Recommendation: static units first (sound, zero cost, errors at compile time), the dynamic struct only if input with units
 becomes a use case.
+
+## Stage 1 done (branch static-units-1): src/units/static_units.rs
+Variables, loops (`total += 5 m`), while loops and if-branches compute quantities at run time: signatures checked at
+compile time (DimensionError for `+ - ==` and branches of different units, and a variable given another signature), unit
+literals as exact SI amounts, the final value read back in the finest written unit. `compile` of a program whose result is
+a quantity still runs as an SI number (only eval reads it back): stage 3 (print/return) covers output.
+Next stages: functions (specialised per unit signature), then print/return/as.

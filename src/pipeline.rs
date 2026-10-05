@@ -311,6 +311,11 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::units::answer(&node) {
 		return Err(answer);
 	}
+	// quantities in loops and branches: SI amounts at run time, the units checked here (static units, stage 1)
+	let node = match crate::units::static_units::lower(&node) {
+		Some(lowered) => lowered?,
+		None => node,
+	};
 	if let Some(answer) = crate::real::answer(&node) {
 		return Err(answer);
 	}
@@ -423,10 +428,15 @@ fn eval_program(node: Node) -> Node {
 		}
 	}
 
-	// Fallback to standard Node encoding
-	match emit_module(&node) {
+	// Fallback to standard Node encoding; a final quantity is read back in its units (static units)
+	let units = crate::units::static_units::take_result_units();
+	let result = match emit_module(&node) {
 		Ok(module) => run_module(module),
 		Err(type_error) => type_error,
+	};
+	match units {
+		Some(units) => crate::units::static_units::quantity_of(result, &units),
+		None => result,
 	}
 }
 
