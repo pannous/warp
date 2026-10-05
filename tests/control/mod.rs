@@ -20,6 +20,7 @@ mod test_switch_match;
 mod test_block_parameters;
 mod test_charged_fields;
 mod test_object_blocks;
+mod test_object_functions;
 mod test_uncharged_blocks;
 mod test_unwrap;
 mod test_unwrap_message;
