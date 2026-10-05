@@ -42,6 +42,7 @@ pub fn fails_with(code: &str, needle: &str) {
 }
 
 /// Local HTTP stub answering every request with `status` and `body`: fetch tests need no network
+#[cfg(feature = "native")]
 pub fn serve(status: &'static str, body: &'static str) -> String {
 	use std::io::{Read, Write};
 	let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -55,6 +56,28 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 		}
 	});
 	format!("http://{address}/data")
+}
+
+/// In the browser the test server answers instead (web/playground/test_in_browser.py /__stub__, its URL in WARP_HTTP_STUB)
+#[cfg(not(feature = "native"))]
+pub fn serve(status: &'static str, body: &'static str) -> String {
+	let stub = std::env::var("WARP_HTTP_STUB").expect("the browser test page names its HTTP stub (wasi.js)");
+	format!("{stub}?status={}&body={}", percent_encoded(status), percent_encoded(body))
+}
+
+#[cfg(not(feature = "native"))]
+fn percent_encoded(text: &str) -> String {
+	text.bytes().map(|byte| if byte.is_ascii_alphanumeric() { (byte as char).to_string() } else { format!("%{byte:02X}") }).collect()
+}
+
+/// A directory for the scratch files of `name`, unique to this test process: below the system's temp dir, or below /tmp
+/// of the browser's in-memory file system (web/playground/wasi.js; every browser test is an instance of its own), where
+/// std::env::temp_dir and std::process::id panic
+pub fn scratch_directory(name: &str) -> std::path::PathBuf {
+	#[cfg(feature = "native")]
+	return std::env::temp_dir().join(format!("{name}_{}", std::process::id()));
+	#[cfg(not(feature = "native"))]
+	return std::path::PathBuf::from(std::env::var("TMPDIR").expect("the browser test page names its temp dir (wasi.js)")).join(name);
 }
 
 /// What the warp binary writes to stdout running `code` (no questions asked)

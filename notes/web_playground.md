@@ -61,13 +61,17 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   runner (test_package_tools, test_uniscript).
 - Skipped by libtest itself: the 5 `#[should_panic]` tests (test_node_operators type mismatches,
   test_newline_precedence::newline_form_is_really_evaluated): with panic=abort libtest ignores them.
-- Fail at run time, inherent to a sandbox without processes, temp dir, git or network:
-  - spawn the warp binary: test_download (2), test_ffi_warning_once, test_warning_mode::the_strict_flag_turns_warnings_into_errors
-  - std::env::temp_dir panics on WASI: test_use_modules (4)
-  - lean: test_law::test_law_proved_by_lean, test_law_overflow_promotion_proved_by_lean
-  - git clones / tags of packages: test_package_pin (4), test_packages::use_loads_the_module_of_a_package, test_versions (3)
-  - threads: test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads; a directory walk below the project
-    root: test_use_scopes::use_project_sees_every_file_below_the_project_root (2026-10-04: 1437 passed, 17 failed)
+- Ignored in the browser build only (user decision P79, `#[cfg_attr(not(feature = "native"), ignore = "browser: …")]`):
+  git clones / tags of packages (test_package_pin 3), Lean (test_law 2), threads (test_eval_state 1).
+- Made to run in the browser (P79, 2026-10-05):
+  - downloads: tests/common `serve` is test_in_browser.py's `/__stub__?status=…&body=…` there (URL in WARP_HTTP_STUB)
+  - scratch files: tests/common `scratch_directory` is below /tmp, an overlay-only preopen of wasi.js (TMPDIR), since
+    std::env::temp_dir and std::process::id panic on WASI; web.rs fetch_text reads module files through the WASI file
+    system first in the tests build, so modules a test writes are found
+  - directory walks: wasi.js asks `<dir>/?listing`, which test_in_browser.py lists even when the directory holds an
+    index.html (web/uniscript did: its page's links read as entries, `use project` failed)
+- Need packages/ cloned by a native run first (a fresh worktree has none): test_packages::a_package_is_fetched_once_into_packages,
+  test_text_bytes::read_loads_a_file_as_bytes
 - libc in the browser (host.js `c`, 2026-10-04): rand, srand, abs, labs, strlen, strcmp, strncmp, atoi, atol, atof;
   the shims follow src/ffi.rs signatures: i64 results (size_t, long) are BigInts, strcmp/strncmp get (pointer, length)
   pairs, the others C strings read up to their zero byte (tests/ffi/test_libc_results.rs); anything else of libc still

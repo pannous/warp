@@ -4,7 +4,7 @@
 `test_in_browser.py <tests.wasm> [libtest arguments]`: this serves the repository root and the binary, opens
 web/playground/tests.html with agent-browser and prints the results like libtest (exit code 101 on a failure).
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
-Besides the repository it serves /__include__/<header>: the C header of that name from the first include directory of
+Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
 src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
 import functools, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse
 
@@ -16,6 +16,8 @@ BINARY_PATH = "/__tests__.wasm"
 INCLUDE_PREFIX = "/__include__/"
 HEADER_NAME = re.compile(r"^[\w.+-]+(/[\w.+-]+)*\.h$")
 RESULTS_PATH = "/__results__"
+LISTING_QUERY = "listing"
+STUB_PATH = "/__stub__"  # answers with the status and body its query names: the fetch tests' HTTP stub (tests/common serve)
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 IGNORED_ARGUMENTS = ("--nocapture", "--quiet", "-q", "--color", "--format")
@@ -42,6 +44,26 @@ def serve(binary):
 			if path.startswith(INCLUDE_PREFIX):
 				return find_header(path[len(INCLUDE_PREFIX):]) or "/nonexistent"
 			return super().translate_path(path)
+
+		def send_head(self):
+			"""a directory asked with ?listing is listed even when it holds an index.html (wasi.js walks directories)"""
+			split = urllib.parse.urlsplit(self.path)
+			path = self.translate_path(self.path)
+			if split.query == LISTING_QUERY and os.path.isdir(path):
+				return self.list_directory(path)
+			return super().send_head()
+
+		def do_GET(self):
+			split = urllib.parse.urlsplit(self.path)
+			if split.path != STUB_PATH:
+				return super().do_GET()
+			query = urllib.parse.parse_qs(split.query, keep_blank_values=True)
+			body = query.get("body", [""])[0].encode()
+			code, _, reason = query.get("status", ["200 OK"])[0].partition(" ")
+			self.send_response(int(code), reason)
+			self.send_header("Content-Length", str(len(body)))
+			self.end_headers()
+			self.wfile.write(body)
 
 		def do_POST(self):
 			"""tests.html posts its summary here: scratch/browser_tests_<browser>.json, e.g. from a Firefox tab"""

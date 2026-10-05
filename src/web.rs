@@ -329,6 +329,14 @@ pub fn fetch_text(address: &str) -> Option<String> {
 /// A text the page fetches for the compiler (module files, packages), remembered per address: `None` when missing
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]
 pub fn fetch_text(address: &str) -> Option<String> {
+	// the browser tests (wasm32-wasip1) have a file system, the served repository plus the files a test writes
+	// (web/playground/wasi.js): read files there first, unremembered, since a test may write them later
+	#[cfg(target_os = "wasi")]
+	if !address.contains("://") {
+		if let Ok(text) = std::fs::read_to_string(address) {
+			return Some(text);
+		}
+	}
 	thread_local! {
 		static FETCHED: RefCell<std::collections::HashMap<String, Option<String>>> = RefCell::new(std::collections::HashMap::new());
 	}
