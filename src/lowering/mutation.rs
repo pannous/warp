@@ -28,6 +28,24 @@ pub fn marked(name: Node) -> Node {
 	Node::Meta { node: Box::new(name), data: Box::new(Node::key(MUTATED_MARK, Node::True)) }
 }
 
+/// `x!!`: like `x!`, and a block runs fully (blocks.rs)
+pub fn marked_fully(name: Node) -> Node {
+	Node::Meta { node: Box::new(name), data: Box::new(Node::key(MUTATED_MARK, Node::int(FULLY))) }
+}
+const FULLY: i64 = 2;
+
+/// The name a `!` or `!!` follows, and whether it was `!!`
+pub(crate) fn bang_of(node: &Node) -> Option<(String, bool)> {
+	let Node::Meta { node: inner, data } = node else { return None };
+	match data.as_ref() {
+		Node::Key(key, _, value) if key.name() == MUTATED_MARK => {
+			let Node::Symbol(name) = inner.drop_meta() else { return None };
+			Some((name.clone(), matches!(value.drop_meta(), Node::Number(n) if *n == FULLY)))
+		}
+		_ => bang_of(inner),
+	}
+}
+
 /// `upper x!` → `x = upper x`; every other marked name is just the name
 pub fn lower(node: Node) -> Node {
 	match node {

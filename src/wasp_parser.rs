@@ -2898,13 +2898,20 @@ impl WaspParser {
 		let is_evaluable = matches!(lhs.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
 		// `name! email?`: glued to its name and followed by a space, the `!` is a suffix even when an operand follows
 		// `x!+1`: glued to its name and followed by an infix operator, the `!` is a suffix too
-		let glued_suffix = !self.prev_char().is_whitespace() && (matches!(self.peek_char(1), ' ' | '\t') || INFIX_AFTER_BANG.contains(&self.peek_char(1)));
+		// `x!!`: run fully, a suffix as well
+		let glued_suffix = !self.prev_char().is_whitespace() && (matches!(self.peek_char(1), ' ' | '\t' | '!') || INFIX_AFTER_BANG.contains(&self.peek_char(1)));
 		if self.current_char() != '!' || self.peek_char(1) == '=' || (self.operand_follows(1) && !glued_suffix) || !(is_evaluable || mutated.is_some()) {
 			return None;
 		}
 		self.advance();
+		// `x!!` runs a block fully, nested blocks too (wiki/charged.md section 5)
+		let fully = self.current_char() == '!' && self.peek_char(1) != '=';
+		if fully {
+			self.advance();
+		}
 		Some(match (mutated, lhs.drop_meta()) {
 			(Some(variable), _) => Node::Key(Box::new(variable), Op::Assign, Box::new(lhs.clone())),
+			(None, Node::Symbol(_)) if fully => crate::mutation::marked_fully(lhs.clone()),
 			(None, Node::Symbol(_)) => crate::mutation::marked(lhs.clone()),
 			(None, _) => lhs.clone(),
 		})

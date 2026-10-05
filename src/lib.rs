@@ -23,7 +23,7 @@ pub mod wasm_emitter;
 pub mod pipeline;
 /// The lowering passes the pipeline runs (src/pipeline.rs), each a module of its own; re-exported at the crate root
 pub mod lowering;
-pub use lowering::{ambiguous_forms, broadcasting, closures, comprehensions, declarations, for_loop, function_values, inlining, lambdas, library_words, meta_entries, min_max, mutation, named_arguments, number_keys, shared_arrays, overloads, phrase_calls, phrase_words, picked_calls, printable, result_word, switch, traits, tuples, type_constructor, type_name_matching, type_tests, variable_signals, versions, welcome_forms};
+pub use lowering::{ambiguous_forms, blocks, broadcasting, closures, comprehensions, declarations, for_loop, function_values, inlining, lambdas, library_words, meta_entries, min_max, mutation, named_arguments, number_keys, shared_arrays, overloads, phrase_calls, phrase_words, picked_calls, printable, result_word, switch, traits, tuples, type_constructor, type_name_matching, type_tests, variable_signals, versions, welcome_forms};
 #[cfg(feature = "native")]
 pub mod wasm_reader;
 #[cfg(feature = "native")]
