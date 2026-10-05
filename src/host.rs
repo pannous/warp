@@ -484,6 +484,9 @@ mod tests {
 
 /// `download url` → `fetch url`: an alias at the head of an application or call, unless the program defines the alias itself
 pub fn lower_aliases(node: Node) -> Node {
+	if !node.mentions_any(&HOST_ALIASES.map(|(alias, _, _)| alias)) {
+		return node;
+	}
 	let mut defined = std::collections::HashSet::new();
 	crate::library_words::collect_assigned_names(&node, &mut defined);
 	let mut context = crate::context::Context::new();
