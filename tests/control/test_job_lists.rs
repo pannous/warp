@@ -3,7 +3,8 @@
 use std::time::{Duration, Instant};
 use warp::is;
 
-const OVERLAPPING_LIMIT: Duration = Duration::from_millis(1800);
+// sequential would take at least 3 s; the full suite adds load (2.0 s seen there)
+const OVERLAPPING_LIMIT: Duration = Duration::from_millis(2900);
 
 #[test]
 fn a_list_of_jobs_gives_their_results_when_used() {
