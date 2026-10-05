@@ -1639,6 +1639,11 @@ PASSED:
   ✓ types::test_declaration_without_value::reading_a_declaration_without_value_is_an_error
   ✓ types::test_declaration_zero_value::a_declaration_reads_as_the_zero_value_of_its_type
   ✓ types::test_declaration_zero_value::a_text_declaration_is_empty
+  ✓ types::test_declared_int_of_float_expression::an_int_declaration_refuses_a_float_expression
+  ✓ types::test_flags::test_an_unknown_flag_is_an_error
+  ✓ types::test_flags::test_flags_set_their_named_members
+  ✓ types::test_flags::test_the_flags_type_is_the_empty_set
+  ✓ types::test_flags::test_wit_flags_parse_like_the_declaration
   ✓ types::test_float_fields::test_captured_variable_set_by_a_call
   ✓ types::test_float_fields::test_declared_float_field_in_arithmetic
   ✓ types::test_float_fields::test_float_conditionals
@@ -2234,4 +2239,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-33 ignored, 2229 passed, 0 failed, 2229 total tested
+33 ignored, 2234 passed, 0 failed, 2234 total tested
