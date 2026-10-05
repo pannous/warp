@@ -50,3 +50,4 @@ mod test_float_to_int_parameter;
 mod test_whole_float_to_int_parameter;
 mod test_late_binding;
 mod test_precomputed;
+mod test_memoization;
