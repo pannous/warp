@@ -134,6 +134,8 @@ PASSED:
   ✓ control::test_top_level_block::test_top_level_semicolons_yield_the_last_item
   ✓ control::test_trap_messages::integer_modulo_by_zero_names_the_division
   ✓ control::test_try_braceless_call::a_braceless_call_is_guarded
+  ✓ control::test_try_catch_except::try_catch_is_try_else
+  ✓ control::test_try_catch_except::try_except_is_try_else
   ✓ control::test_try_deep::caught_errors_leave_later_errors_loud
   ✓ control::test_try_deep::nested_try_restores_the_depth_on_both_paths
   ✓ control::test_try_deep::try_catches_a_failed_cast
@@ -531,6 +533,8 @@ PASSED:
   ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
   ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
   ✓ lists::test_hash_range_slices::hash_slices_are_one_based
+  ✓ lists::test_hash_range_warning::an_unparenthesized_hash_range_warns
+  ✓ lists::test_hash_range_warning::parenthesized_forms_do_not_warn
   ✓ lists::test_index_assignment::test_index_assign_25_elements
   ✓ lists::test_index_assignment::test_index_assign_in_while_loop
   ✓ lists::test_index_assignment::test_index_assign_in_while_with_increment
@@ -2029,4 +2033,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2024 passed, 0 failed, 2024 total tested
+37 ignored, 2028 passed, 0 failed, 2028 total tested
