@@ -10,7 +10,8 @@ fn error_text(code: &str) -> String {
 
 #[test]
 fn list_argument_for_an_int_parameter_is_a_type_error() {
-	let message = error_text("foo(x:int):=x+1;foo([1 2 3])");
+	// P50: a list broadcasts now, the type error needs a text argument
+	let message = error_text("foo(x:int):=x+1;foo(\"abc\")");
 	assert!(message.contains("foo") && message.contains("x"), "{message}");
 }
 

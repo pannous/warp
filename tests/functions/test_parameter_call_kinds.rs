@@ -30,6 +30,7 @@ fn disagreeing_calls_are_a_loud_error_naming_both_kinds() {
 
 #[test]
 fn a_type_error_names_the_kind_with_its_article() {
-	let message = error_text("foo(x:int):=x+1;foo([1 2 3])");
+	// P50: a list broadcasts now, the type error needs a text argument
+	let message = error_text("foo(x:int):=x+1;foo(\"abc\")");
 	assert!(message.contains("needs an Int for parameter x"), "{message}");
 }
