@@ -26,6 +26,11 @@ Dropped as answered: code quality 7 (Node operators return Node::Error: Decided 
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
 
+## Defaults to show the user (no question, easy to restyle)
+- Error highlighting (warp-7d, card g-_ZNg): the CLI prints `  2 | pi = 4` and carets `    | ^^` under the word on
+  stderr below an error/warning; the web demo underlines errors (red wavy + tint) and warnings (amber wavy), with the
+  message on hover. Hints aren't underlined yet because their positions lag behind (card hint-positions).
+
 ## User to-dos (not questions)
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
