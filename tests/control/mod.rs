@@ -89,3 +89,4 @@ mod test_broadcast;
 mod test_signal_lists;
 mod test_listener_removal;
 mod test_cell_truth;
+mod test_braceless_call_in_branch;
