@@ -23,7 +23,8 @@ const CALL_PLACEHOLDER: &str = "loop_call";
 
 /// An iteration word over a list: the arguments between the list and the function, the arguments of the function
 /// (`reduce` and `fold` take the accumulator and the item), and the loop it lowers to. `out`, `item`, `acc`, `list`, `index`
-/// are replaced by fresh names.
+/// are replaced by fresh names. A loop appends with `out = out + [x]`, never `out.add(x)`, which a user function `add`
+/// would take.
 struct Iteration {
 	word: &'static str,
 	extra_arguments: usize,
@@ -43,8 +44,8 @@ const SORT_LABELS: [&str; 2] = ["by", "key"];
 const COMPARISONS: [Op; 4] = [Op::Lt, Op::Gt, Op::Le, Op::Ge];
 
 const ITERATIONS: [Iteration; 9] = [
-	Iteration { word: "map", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { out.add(loop_call) }; out)" },
-	Iteration { word: "filter", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { if loop_call { out.add(item) } }; out)" },
+	Iteration { word: "map", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { out = out + [loop_call] }; out)" },
+	Iteration { word: "filter", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { if loop_call { out = out + [item] } }; out)" },
 	Iteration { word: "each", extra_arguments: 0, function_arguments: 1, template: "(value=ø; for item in loop_list { value = loop_call }; value)" },
 	Iteration { word: "fold", extra_arguments: 1, function_arguments: 2, template: "(acc=loop_start; for item in loop_list { acc = loop_call }; acc)" },
 	Iteration { word: "find", extra_arguments: 0, function_arguments: 1, template: "(found=ø; searching=1; for item in loop_list { if searching and loop_call { found = item; searching = 0 } }; found)" },
@@ -61,7 +62,7 @@ const ITERATIONS: [Iteration; 9] = [
 		word: SORT_WORD,
 		extra_arguments: 0,
 		function_arguments: 2,
-		template: "(out=[]; for value in loop_list { out.add(value); index=count(out); moving=1; while moving and index > 1 { acc=out#index; item=out#(index-1); if loop_call { out#index=item; out#(index-1)=acc; index=index-1 } else { moving=0 } } }; out)",
+		template: "(out=[]; for value in loop_list { out = out + [value]; index=count(out); moving=1; while moving and index > 1 { acc=out#index; item=out#(index-1); if loop_call { out#index=item; out#(index-1)=acc; index=index-1 } else { moving=0 } } }; out)",
 	},
 ];
 

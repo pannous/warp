@@ -5,7 +5,7 @@
 //! - `NodeCells`: the generic cons-cell list (data = first, value = rest) of any elements; index walks i links
 //! - `TypedArray`: a list variable proven to hold only ints (floats) is an `$IntList` (`$FloatList`), a length and a
 //!   wasm GC `(array (mut i64))` (`f64`) with spare capacity, see `find_typed_lists`: O(1) index and count, amortised
-//!   O(1) append (`out.add(x)`, which `map` lowers to), no box per element. Wherever the program needs it as a value (a
+//!   O(1) append (`out = out + [x]`, which `map` lowers to, or `out.add(x)`), no box per element. Wherever the program needs it as a value (a
 //!   result, an argument, a print) it becomes the same Node list the literal would have built (`int_list_as_node`).
 //! - `Host`: reserved for a host-native or GPU implementation behind a host import, taking over above
 //!   `HOST_BACKEND_MIN_LENGTH` at run time; none exists yet (no wasm SIMD, user decision). notes/typed_lists.md
