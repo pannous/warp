@@ -142,6 +142,14 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   a lambda made in a loop keeps its iteration's variable (already so, pinned).
   Round 7 still open: F# `List.map (fun x -> …) [1; 2; 3]`, MATLAB `@(x)`, R `sapply(c(…), …)`, Dart
   `{required int a}`, Rust generics `fn apply<F: Fn(i32) -> i32>`.
+- Batch 25: F# `List.map f xs` (Seq., Array.) is `map f xs` with a note, `(fun x -> …)` as an argument (only `fun`
+  with plain names, Swift's `func f(x) -> Int` stays a definition); Rust type parameters `fn apply<F: …>` are skipped
+  and P157 (user) generics compile untyped with a note; Dart named parameters `{required int a, int b = 2}`; English
+  `To square a number: return it times it`, `square of x`, `square of x is 9` (P149), numeric `times` multiplies
+  (alias rule). Fix: `def add(a, b: int) -> int` lost a parameter (flat call arguments were read as a Swift label;
+  now only after `func`). P161 (user): Swift argument labels compile with the note "wasp names a parameter once"
+  (tests/functions/test_argument_labels.rs). Round 7 still open: MATLAB `@(x)`, R `sapply(c(…), function(x) …)`,
+  `func id<T>(_ x: T)`.
 
 ## Open
 - Board cards: functions-ruby-yield (warp-93); functions-sort-op,
