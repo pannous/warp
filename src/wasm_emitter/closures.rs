@@ -304,7 +304,10 @@ impl WasmGcEmitter {
 	pub(super) fn emit_direct_closure_call(&mut self, func: &mut Function, helper: &UserFunctionDef, args: &[Node]) -> bool {
 		let Some(arity) = closure_call_arity(&helper.name) else { return false };
 		let Some((callee, values)) = args.split_first() else { return false };
-		let Some((_, entry, _, _)) = self.single_closure_target(callee, arity) else { return false };
+		let Some((target, entry, captured, _)) = self.single_closure_target(callee, arity) else { return false };
+		if self.emit_hoisted_closure_call(func, helper, callee, &target, captured, values) {
+			return true;
+		}
 		let closure = self.closure_type();
 		self.emit_node_instructions(func, callee);
 		func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
@@ -319,6 +322,54 @@ impl WasmGcEmitter {
 			self.emit_node_as_kind(func, helper.return_kind);
 		}
 		true
+	}
+
+	/// `closure_call_n(h, a1…an)` after `h·capture·0 = …` (lowering/closures.rs hoist_captures): the target itself called
+	/// with the captured values read once and the arguments, as a plain call
+	fn emit_hoisted_closure_call(&mut self, func: &mut Function, helper: &UserFunctionDef, callee: &Node, target: &str, captured: usize, values: &[Node]) -> bool {
+		let Node::Symbol(variable) = callee.drop_meta() else { return false };
+		// a nested function's closure restores its capture globals in its entry (emit_nested_captures_restored)
+		if captured == 0 || self.ctx.enclosing_functions.contains_key(target) {
+			return false;
+		}
+		let Some(function) = self.ctx.user_functions.get(target).cloned() else { return false };
+		let Some(index) = function.func_index else { return false };
+		let locals: Vec<String> = (0..captured).map(|position| crate::closures::capture_local(variable, position)).collect();
+		let same_result = function.return_kind == helper.return_kind || (helper.return_kind.is_ref() && !function.return_kind.is_ref());
+		if !function.tuple_kinds.is_empty() || !same_result || !locals.iter().all(|local| self.scope.lookup(local).is_some()) {
+			return false;
+		}
+		let arguments = locals.into_iter().map(Node::Symbol).chain(values.iter().cloned());
+		for (argument, param) in arguments.zip(&function.params) {
+			self.emit_value_of_kind(func, &argument, param_kind(param));
+		}
+		func.instruction(&I::Call(index));
+		if helper.return_kind.is_ref() && !function.return_kind.is_ref() {
+			self.emit_primitive_as_node(func, function.return_kind);
+		}
+		true
+	}
+
+	/// `closure_lambda_1·captured·0(h)`: the index-th captured value of the closure h, as the kind of the target's parameter
+	pub(super) fn compile_capture_reader(&mut self, name: &str) {
+		let reader = self.ctx.user_functions[name].clone();
+		let (_, position) = crate::closures::capture_reader(name).expect("a capture reader");
+		let closure = self.closure_type();
+		let node_type = self.type_manager.node_type;
+		let mut func = Function::new(vec![]);
+		func.instruction(&I::LocalGet(0));
+		func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD });
+		func.instruction(&I::RefCastNonNull(HeapType::Concrete(closure)));
+		func.instruction(&I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD });
+		for _ in 0..position {
+			func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_VALUE_FIELD });
+		}
+		func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD });
+		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+		self.emit_node_as_kind(&mut func, reader.return_kind);
+		func.instruction(&I::End);
+		self.code.function(&func);
+		self.exports.export(name, ExportKind::Func, reader.func_index.expect("registered in pass 1"));
 	}
 
 	/// The entry a closure variable always calls: one target of that arity, and no parameter of that name anywhere

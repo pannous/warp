@@ -158,6 +158,8 @@ impl WasmGcEmitter {
 		for name in func_names {
 			if self.is_closure_call(&name) {
 				self.compile_closure_call(&name);
+			} else if crate::closures::capture_reader(&name).is_some() {
+				self.compile_capture_reader(&name);
 			} else {
 				self.compile_user_function_body(&name);
 			}

@@ -35,6 +35,9 @@ pub fn referenced_function(node: &Node) -> Option<String> {
 	}
 }
 const CLOSURE_CALL_PREFIX: &str = "closure_call_";
+/// `h·capture·0`: a captured value of the closure variable h, read once (hoist_captures); `closure_lambda_1·captured·0(h)` reads it
+const CAPTURE_LOCAL_MARK: &str = "·capture·";
+const CAPTURE_READER_MARK: &str = "·captured·";
 const LIFTED_PREFIX: &str = "closure_lambda_";
 const IMPLICIT_PARAMETER: &str = "it";
 const FOR_WORD: &str = "for";
@@ -130,6 +133,10 @@ pub fn may_be_function_value(node: &Node) -> bool {
 }
 
 pub fn lower(program: Node) -> Node {
+	hoist_captures(lift_closures(program))
+}
+
+fn lift_closures(program: Node) -> Node {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &program);
 	let mut variables = HashSet::new();
@@ -159,6 +166,75 @@ pub fn lower(program: Node) -> Node {
 		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List([lifting.lifted, statements].concat(), Bracket::None, separator),
 		program => Node::List([lifting.lifted, vec![program]].concat(), Bracket::Round, Separator::Semicolon),
 	}
+}
+
+/// `h = mk(1)`, a variable that only ever holds closures of one target, assigned once and called later: its captured
+/// values are read once, `h·capture·0 = closure_lambda_1·captured·0(h)`, typed as the target's parameters; a closure
+/// call of h passes them to the target itself (wasm_emitter/closures.rs emit_direct_closure_call), unboxed
+fn hoist_captures(program: Node) -> Node {
+	let mut context = Context::new();
+	crate::analyzer::defined_functions(&mut context, &program);
+	let parameters: HashSet<String> = context.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())).collect();
+	let mut assignments: HashMap<String, usize> = HashMap::new();
+	program.visit(&mut |node| {
+		if let Node::Key(target, Op::Assign | Op::Define, _) = node {
+			if let Node::Symbol(name) = target.drop_meta() {
+				*assignments.entry(name.clone()).or_default() += 1;
+			}
+		}
+	});
+	let made = closure_targets(&program);
+	let hoisted: HashMap<String, (String, usize)> = settle_closure_variable_targets(&context, &program)
+		.into_iter()
+		.filter_map(|(variable, held)| {
+			let [target] = held.iter().collect::<Vec<_>>()[..] else { return None };
+			let (_, captured) = made.iter().find(|(made, _)| made == target)?;
+			let single = *captured > 0 && assignments.get(&variable) == Some(&1) && !parameters.contains(&variable);
+			single.then(|| (variable, (target.clone(), *captured)))
+		})
+		.collect();
+	if hoisted.is_empty() { program } else { with_capture_readers(program, &hoisted) }
+}
+
+/// The local holding the index-th captured value of the closure variable `variable`
+pub fn capture_local(variable: &str, index: usize) -> String {
+	format!("{variable}{CAPTURE_LOCAL_MARK}{index}")
+}
+
+/// `closure_lambda_1·captured·0` → (closure_lambda_1, 0): the reader of a captured value of the target's closures
+pub fn capture_reader(name: &str) -> Option<(&str, usize)> {
+	let (target, index) = name.split_once(CAPTURE_READER_MARK)?;
+	Some((target, index.parse().ok()?))
+}
+
+fn with_capture_readers(node: Node, hoisted: &HashMap<String, (String, usize)>) -> Node {
+	match node {
+		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			let items: Vec<Node> = items.into_iter().map(|item| with_capture_readers(item, hoisted)).collect();
+			let mut statements = Vec::with_capacity(items.len());
+			for (index, item) in items.iter().enumerate() {
+				statements.push(item.clone());
+				let Node::Key(target, Op::Assign | Op::Define, _) = item.drop_meta() else { continue };
+				let Node::Symbol(variable) = target.drop_meta() else { continue };
+				let Some((closure_target, captured)) = hoisted.get(variable) else { continue };
+				if !items[index + 1..].iter().any(|later| calls_closure(later, variable)) {
+					continue;
+				}
+				for position in 0..*captured {
+					let reader = call(&format!("{closure_target}{CAPTURE_READER_MARK}{position}"), vec![Node::Symbol(variable.clone())]);
+					statements.push(Node::Key(Box::new(Node::Symbol(capture_local(variable, position))), Op::Assign, Box::new(reader)));
+				}
+			}
+			Node::List(statements, bracket, separator)
+		}
+		other => other.map_children(|child| with_capture_readers(child, hoisted)),
+	}
+}
+
+fn calls_closure(node: &Node, variable: &str) -> bool {
+	let mut found = false;
+	node.visit(&mut |inner| found |= called_closure(inner) == Some(variable));
+	found
 }
 
 /// The last statement of a body: its value
@@ -542,6 +618,15 @@ impl Lifting {
 pub fn register_closure_calls(context: &mut Context, program: &Node) {
 	context.closure_targets = closure_targets(program);
 	context.closure_variable_targets = settle_closure_variable_targets(context, program);
+	program.visit(&mut |node| {
+		let Node::List(items, Bracket::Round, Separator::None) = node else { return };
+		let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else { return };
+		if capture_reader(name).is_some() {
+			let closure = Param { used_as: Some(Kind::Function), ..Param::untyped("closure") };
+			let reader = UserFunctionDef { name: name.clone(), params: vec![closure], body: Box::new(Node::Empty), return_kind: Kind::Data, tuple_kinds: vec![], func_index: None };
+			context.user_functions.insert(name.clone(), reader);
+		}
+	});
 	for arity in closure_call_arities(program) {
 		let function = Param { used_as: Some(Kind::Function), ..Param::untyped("function") };
 		let values = (1..=arity).map(|index| Param { used_as: Some(Kind::Data), ..Param::untyped(&format!("value{index}")) });
@@ -565,6 +650,10 @@ pub fn targets_of_arity(context: &Context, arity: usize) -> impl Iterator<Item =
 
 /// A closure call returns what all closures of its arity return; Data (any Node) when they differ
 pub fn closure_call_kind(name: &str, context: &Context, kinds: &HashMap<String, Kind>) -> Option<Kind> {
+	// a capture reader gives the kind of the target's parameter it fills
+	if let Some((target, index)) = capture_reader(name) {
+		return Some(context.user_functions.get(target)?.params.get(index).map_or(Kind::Data, crate::analyzer::param_kind));
+	}
 	let arity = closure_call_arity(name)?;
 	Some(join_return_kinds(targets_of_arity(context, arity).map(|function| kinds.get(&function.name).copied().unwrap_or(function.return_kind))))
 }
