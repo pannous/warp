@@ -59,3 +59,15 @@ fn the_signals_note_example_runs() {
 	is!("price = 3; count = 2; total := price * count; whenever total > 10 { print \"big order: \" total }; count = 5; total", 15);
 	is!("price = 3\ncount = 2\ntotal := price * count\nwhenever total > 10 { print \"big order: \" total }\non change total { print \"total is now \" value }\ncount = 5\ntotal", 15);
 }
+
+// P148: `old` in `on set x` too (the value before this write), `previous`, `was`, `before` its aliases with a note;
+// a program variable of that name keeps its meaning
+#[test]
+fn old_in_set_listeners_and_its_aliases() {
+	is!("x = 1; log = 0; on set x {log = log*10 + old}; x = 2; x = 3; log", 12);
+	is!("p = {age: 1}; d = 0; on set p.age {d = value - old}; p.age = 7; d", 6);
+	is!("x = 1; d = 0; on change x {d = value - was}; x = 5; d", 4);
+	is!("x = 1; d = 0; on change x {d = value - before}; x = 5; d", 4);
+	is!("old = 9; x = 1; on change x {print old}; x = 2; old", 9);
+	is!("watch(s) := on set s {print old}\nx = 1\nwatch(x)\nx = 7\nx", 7);
+}

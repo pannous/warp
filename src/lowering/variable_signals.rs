@@ -27,8 +27,10 @@ const BEFORE_WORD: &str = "before";
 const PAST_SUFFIXES: [&str; 2] = ["ed", "d"];
 /// The written value inside an `on set` listener
 const VALUE_WORDS: [&str; 3] = ["value", "signal", "event"];
-/// `old` (or `previous`) in `on change x {…}`: x before the change (Vue's watch(x, (value, old) => …))
-const OLD_WORDS: [&str; 2] = ["old", "previous"];
+/// `old` in `on change x {…}` and `on set x {…}`: x before the write (Vue's watch(x, (value, old) => …), P148); the
+/// other words are its aliases, kept working with a note naming `old`
+const OLD_WORDS: [&str; 4] = ["old", "previous", "was", "before"];
+const OLD_REASON: &str = "`old` is the value before the write (P148)";
 /// `change_old_0`: the value an `on change` listener saw last, for its body's `old`
 const OLD_PREFIX: &str = "change_old_";
 /// `once_fired_0`: whether the first once listener ran
@@ -303,8 +305,18 @@ impl Signals {
 		if self.derived.contains_key(&name) {
 			return self.change_listener(variable, body); // a `:=` value is never written: its sets are its changes
 		}
-		let body = self.lower(with_value(&body, variable.drop_meta()), &[]);
-		Some(Listener { trigger: Trigger::Write(HashSet::from([name])), condition: None, body, fired: None, start: None })
+		let variable = variable.drop_meta().clone();
+		let (body, start) = match with_old(&body, &self.main_variables) {
+			Some(with_old) => {
+				// the value seen at the last write: every write runs this check, so it is the value before this one
+				let last = self.fresh_name(LAST_PREFIX);
+				let (remembered, body) = self.remembering_old(with_old, &last);
+				(block([remembered, vec![assign(&last, variable.clone()), body]].concat()), Some(assign(&last, variable.clone())))
+			}
+			None => (body, None),
+		};
+		let body = self.lower(with_value(&body, &variable), &[]);
+		Some(Listener { trigger: Trigger::Write(HashSet::from([name])), condition: None, body, fired: None, start })
 	}
 
 	/// `on change x {body}`: the body after every write that changed x (a variable or a `:=` value), `value` in it is x
@@ -312,14 +324,9 @@ impl Signals {
 		let variable = variable.drop_meta().clone();
 		root_variable(&variable)?;
 		let last = self.fresh_name(LAST_PREFIX);
-		let mut remembered = vec![];
-		let body = match reads_old(&body, &self.main_variables) {
-			true => {
-				let old = self.fresh_name(OLD_PREFIX);
-				remembered.push(assign(&old, Node::Symbol(last.clone())));
-				with_old(&body, &Node::Symbol(old))
-			}
-			false => body,
+		let (remembered, body) = match with_old(&body, &self.main_variables) {
+			Some(with_old) => self.remembering_old(with_old, &last),
+			None => (vec![], body),
 		};
 		let body = self.lower(with_value(&body, &variable), &[]);
 		let changed = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Symbol(last.clone())));
@@ -330,6 +337,12 @@ impl Signals {
 			fired: None,
 			start: Some(assign(&last, variable)),
 		})
+	}
+
+	/// A body reading `old` (made by with_old): `change_old_0 = last` first, the body reading it
+	fn remembering_old(&mut self, with_old: impl Fn(&Node) -> Node, last: &str) -> (Vec<Node>, Node) {
+		let old = self.fresh_name(OLD_PREFIX);
+		(vec![assign(&old, Node::Symbol(last.to_string()))], with_old(&Node::Symbol(old)))
 	}
 
 	/// `after tested: body`, `before test {body}`: test must be a function of the program
@@ -407,14 +420,16 @@ fn call_listener_word(statement: &Node) -> Option<(String, Vec<Node>)> {
 }
 
 /// Does the body read `old` or `previous`, which the program does not use as variables of its own
-pub(crate) fn reads_old(body: &Node, main_variables: &HashSet<String>) -> bool {
-	symbols(body).iter().any(|name| OLD_WORDS.contains(&name.as_str()) && !main_variables.contains(name))
-}
-
-/// The listener body with `old` (or `previous`) standing for the value before the change
-pub(crate) fn with_old(body: &Node, old: &Node) -> Node {
-	let bindings = OLD_WORDS.iter().map(|word| (word.to_string(), old.clone())).collect();
-	crate::law::substitute(body, &bindings)
+/// A body reading `old` (or an alias the program does not use as a variable of its own): the body with a given
+/// value standing for it; None when it reads none. An alias gets a note naming `old`
+pub(crate) fn with_old(body: &Node, main_variables: &HashSet<String>) -> Option<impl Fn(&Node) -> Node> {
+	let read: Vec<String> = symbols(body).into_iter().filter(|name| OLD_WORDS.contains(&name.as_str()) && !main_variables.contains(name)).collect();
+	if read.is_empty() {
+		return None;
+	}
+	read.iter().filter(|word| word.as_str() != OLD_WORDS[0]).for_each(|alias| crate::normalize::hint(alias, OLD_WORDS[0], OLD_REASON));
+	let body = body.clone();
+	Some(move |old: &Node| crate::law::substitute(&body, &read.iter().map(|word| (word.clone(), old.clone())).collect()))
 }
 
 /// The listener body with `value` (or `signal`, `event`) standing for the written value
