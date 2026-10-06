@@ -970,6 +970,7 @@ PASSED:
   ✓ lists::test_lists::test_array_size
   ✓ lists::test_lists::test_filter
   ✓ lists::test_lists::test_index
+  ✓ lists::test_lists::test_index_assignment_to_undefined_variable
   ✓ lists::test_lists::test_index_offset
   ✓ lists::test_lists::test_index_offset_advanced
   ✓ lists::test_lists::test_indexed
@@ -1183,6 +1184,7 @@ PASSED:
   ✓ normalize::tests::test_hint_position
   ✓ normalize::tests::test_style_swap
   ✓ numbers::test_angle::test_call
+  ✓ numbers::test_angle::test_function_params
   ✓ numbers::test_angle::test_if
   ✓ numbers::test_angle::test_if_call_zero
   ✓ numbers::test_angle::test_if_gt
@@ -2058,6 +2060,7 @@ PASSED:
   ✓ types::test_struct_instances::a_field_read_of_a_struct_variable_searches_no_names
   ✓ types::test_struct_instances::a_field_write_of_a_struct_variable_sets_the_field
   ✓ types::test_struct_instances::a_field_write_of_another_kind_is_a_type_error
+  ✓ types::test_struct_instances::a_method_changing_its_struct_variable_keeps_the_struct
   ✓ types::test_struct_instances::a_method_of_a_struct_variable_takes_the_struct
   ✓ types::test_struct_instances::a_struct_instance_gives_the_same_values
   ✓ types::test_struct_instances::an_int_field_holds_any_int
@@ -2223,6 +2226,8 @@ PASSED:
   ✓ wasm::test_standalone_executable::test_warp_run_leaves_no_executable
   ✓ wasm::test_standalone_needs_runtime::a_program_with_tasks_says_tasks_need_runtime
   ✓ wasm::test_standalone_needs_runtime::fetch_says_fetch_and_files_need_runtime
+  ✓ wasm::test_wasm::test_array_indices_wasm
+  ✓ wasm::test_wasm::test_assert
   ✓ wasm::test_wasm::test_auto_smarty
   ✓ wasm::test_wasm::test_comparison_math
   ✓ wasm::test_wasm::test_comparison_primitives
@@ -2633,4 +2638,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2628 passed, 0 failed, 2628 total tested
+20 ignored, 2633 passed, 0 failed, 2633 total tested
