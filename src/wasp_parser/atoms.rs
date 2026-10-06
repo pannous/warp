@@ -61,6 +61,7 @@ impl WaspParser {
 			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
 			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
+			'@' if self.peek_char(1) == '(' && !self.options.data_mode => self.parse_matlab_lambda(),
 			// `@1`: a reference to the node whose @id is 1 (wiki/reference.md, P160)
 			'@' if self.peek_char(1).is_ascii_digit() => {
 				self.advance(); // skip '@'
@@ -154,6 +155,8 @@ impl WaspParser {
 			return None;
 		};
 		let mut parameters = Vec::new();
+		// `to call person{name?, phone number} do …` (wiki/argument.md): the parameter's fields, glued to it
+		let mut shapes = Vec::new();
 		loop {
 			self.skip_spaces();
 			// `to square a number: …` or `to square a number { … }`
@@ -161,7 +164,13 @@ impl WaspParser {
 				break;
 			}
 			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
-				Some(parameter) => parameters.push(parameter),
+				Some(word) if word == DO_WORD && !parameters.is_empty() => break,
+				Some(parameter) => {
+					if self.current_char() == '{' {
+						shapes.push((parameter.clone(), self.parse_atom()));
+					}
+					parameters.push(parameter)
+				}
 				None => {
 					restore(self);
 					return None;
@@ -183,6 +192,10 @@ impl WaspParser {
 			Ok(parameters) => parameters,
 			Err(message) => return Some(error(&message)),
 		};
+		let parameters: Vec<Node> = parameters.into_iter().map(|parameter| match shapes.iter().find(|(name, _)| *name == parameter.name()) {
+			Some((_, fields)) => Node::Key(Box::new(parameter), Op::Colon, Box::new(fields.clone())),
+			None => parameter,
+		}).collect();
 		if let Some(clash) = self.phrase_redefinition(&name, &parameters) {
 			return Some(clash);
 		}
@@ -380,6 +393,15 @@ impl WaspParser {
 		let body = self.parse_expr(Op::Assign.binding_power().1);
 		let body = self.continue_expr(body, 0);
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
+	}
+
+	/// MATLAB's anonymous function `@(x) x.^2`: the lambda `x => x^2`
+	fn parse_matlab_lambda(&mut self) -> Node {
+		self.advance(); // '@'
+		let parameters = self.parse_bracketed('(');
+		self.skip_spaces();
+		let body = self.parse_expr(Op::Assign.binding_power().1);
+		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 	}
 
 	/// `<T, F: Fn(i32) -> i32>` glued to a function's name and followed by its parameters: its length

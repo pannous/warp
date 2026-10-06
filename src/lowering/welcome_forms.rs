@@ -28,12 +28,18 @@ const OCAML_FUNCTION_KEYWORD: &str = "fun";
 const ITERATION_MODULES: [&str; 3] = ["List", "Seq", "Array"];
 const MODULE_ITERATIONS: [&str; 5] = ["map", "filter", "fold", "reduce", "sum"];
 /// C# LINQ methods and the wasp words they are (the alias rule: they work, with a note naming wasp's word)
+/// R's apply functions and the wasp word they are: `sapply(xs, f)` is `map(xs, f)` (alias rule, with a note)
+const R_ITERATIONS: [&str; 3] = ["sapply", "lapply", "vapply"];
+const MAP_WORD: &str = "map";
+/// R's vector constructor: `c(1, 2, 3)` is the list `[1, 2, 3]` unless the program names something c
+const R_VECTOR_WORD: &str = "c";
 const LINQ_METHODS: [(&str, &str); 12] = [("Select", "map"), ("Where", "filter"), ("Aggregate", "reduce"), ("Sum", "sum"),
 	("Count", "count"), ("Max", "max"), ("Min", "min"), ("Any", "any"), ("All", "all"), ("First", "first"), ("Last", "last"),
 	("Contains", "contains")];
 
 pub fn lower(node: Node) -> Node {
 	let defined = defined_names(&node);
+	let node = if names_vector_word(&node) { node } else { r_vectors(node) };
 	let node = linq_calls(forms(node), &defined);
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
@@ -71,7 +77,7 @@ fn forms(node: Node) -> Node {
 			forms(without_type_parameters(Node::List(items, bracket, separator), &names))
 		}
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = module_qualified_iteration(python_lambdas(items.into_iter().map(forms).collect()));
+			let items: Vec<Node> = r_iteration(module_qualified_iteration(python_lambdas(braceless_lambdas(items.into_iter().map(forms).collect()))));
 			if let Some(lambda) = anonymous_function(&items).or_else(|| assigned_braceless_function(&items)).or_else(|| ruby_lambda(&items)).or_else(|| keyword_arrow(&items)) {
 				return lambda;
 			}
@@ -234,7 +240,91 @@ fn without_type_parameters(node: Node, names: &[String]) -> Node {
 			let Node::List(parts, _, _) = typed_body.drop_meta() else { unreachable!("guarded") };
 			Node::List(vec![without_type_parameters(*head, names), without_type_parameters(parts[1].clone(), names)], Bracket::Round, Separator::None)
 		}
+		// Swift's `_ x: T`: without its type `_ x` would read as a placeholder `_` (partial application), so the label goes too
+		Node::List(items, bracket, separator) if items.windows(2).any(|pair| is_word(&pair[0], WILDCARD) && generic_parameter(&pair[1], names)) => {
+			let mut kept: Vec<Node> = Vec::new();
+			for item in items {
+				if generic_parameter(&item, names) && kept.last().is_some_and(|label| is_word(label, WILDCARD)) {
+					kept.pop();
+					let Node::Key(name, _, _) = item.drop_meta() else { unreachable!("a generic parameter") };
+					crate::normalize::hint(&format!("{WILDCARD} {}", item.serialize()), &name.serialize(), "wasp names a parameter once, no label");
+				}
+				kept.push(item);
+			}
+			without_type_parameters(Node::List(kept, bracket, separator), names)
+		}
 		other => other.map_children(|child| without_type_parameters(child, names)),
+	}
+}
+
+/// `x: T` of a type parameter T
+fn generic_parameter(node: &Node, names: &[String]) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, Op::Colon, kind) if matches!(kind.drop_meta(), Node::Symbol(name) if names.contains(name)))
+}
+
+/// R's `function(x) x * 2` as an argument, `map(xs, function(x) x * 2)`: the keyword head and the expression after it
+fn braceless_lambdas(items: Vec<Node>) -> Vec<Node> {
+	let mut merged: Vec<Node> = Vec::new();
+	for item in items {
+		// Go's function type `f func(int) int` is no lambda: its parameters and result are type words
+		let is_body = !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _)) && !is_type_word(&item);
+		let parameters = merged.last().filter(|head| is_body && matches!(head.drop_meta(), Node::List(_, Bracket::Round, _))).and_then(function_parameters);
+		match parameters.filter(|parameters| !is_type_word(parameters)) {
+			Some(parameters) => {
+				merged.pop();
+				merged.push(lambda(parameters, item));
+			}
+			None => merged.push(item),
+		}
+	}
+	merged
+}
+
+/// R's `sapply(xs, f)`, `lapply(xs, f)`: `map(xs, f)`, with a note naming wasp's word
+fn r_iteration(mut items: Vec<Node>) -> Vec<Node> {
+	let Some(word) = items.first().and_then(|first| R_ITERATIONS.iter().find(|word| is_word(first, word))) else { return items };
+	if items.len() < 2 {
+		return items;
+	}
+	crate::normalize::hint(&format!("{word}("), &format!("{MAP_WORD}("), "wasp's word for R's apply function");
+	items[0] = Node::Symbol(MAP_WORD.to_string());
+	items
+}
+
+/// Whether the program uses `c` other than as R's call `c(…)`: a variable, parameter or function of that name
+fn names_vector_word(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(word) => word == R_VECTOR_WORD,
+		Node::List(items, Bracket::Round, _) if items.len() > 1 && is_word(&items[0], R_VECTOR_WORD) => items[1..].iter().any(names_vector_word),
+		// `def c(x){…}`, `fun c(x) …`, `c(x) {…}`: a function named c
+		Node::List(items, _, _) if items.windows(2).any(|pair| is_vector_call(&pair[1]) && is_function_keyword(&pair[0]) || is_vector_call(&pair[0]) && matches!(pair[1].drop_meta(), Node::List(_, Bracket::Curly, _))) => true,
+		Node::List(items, _, _) => items.iter().any(names_vector_word),
+		Node::Key(target, Op::Assign | Op::Define, _) if matches!(target.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|first| is_word(first, R_VECTOR_WORD))) => true,
+		Node::Key(left, _, right) => names_vector_word(left) || names_vector_word(right),
+		_ => false,
+	}
+}
+
+fn is_vector_call(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|first| is_word(first, R_VECTOR_WORD)))
+}
+
+fn is_function_keyword(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))
+}
+
+/// R's `c(1, 2, 3)`: the list `[1, 2, 3]`, with a note
+fn r_vectors(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::Round, separator) if items.len() > 1 && is_word(&items[0], R_VECTOR_WORD) => {
+			crate::normalize::hint(&format!("{R_VECTOR_WORD}("), "[", "wasp writes a list in brackets");
+			let elements = items.into_iter().skip(1).map(r_vectors).flat_map(|element| match element {
+				Node::List(group, Bracket::Round, Separator::Colon) => group, // `c(1, 2, 3)` holds its arguments as one group
+				other => vec![other],
+			});
+			Node::List(elements.collect(), Bracket::Square, if separator == Separator::None { Separator::Colon } else { separator })
+		}
+		other => other.map_children(r_vectors),
 	}
 }
 

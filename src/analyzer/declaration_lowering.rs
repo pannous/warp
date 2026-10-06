@@ -666,7 +666,7 @@ pub(super) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
 }
 
 /// The element name of the lambda an element-wise operator maps with: no wasp program writes it
-pub(super) const EACH_ELEMENT: &str = "each_element";
+pub const EACH_ELEMENT: &str = "each_element";
 
 /// `xs .+ n` (also `.-`, `.*`, `./`): the operator applied to each element, `xs.map(each_element => each_element + n)`
 pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {

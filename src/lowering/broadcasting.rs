@@ -468,3 +468,77 @@ impl Broadcast {
 		}
 	}
 }
+
+/// P166 (user): an element-wise operator on a plain number is the plain operator, `6 ./ 2` is 3. The parser wrote
+/// `x .^ 2` as `x.map(each_element => each_element ^ 2)`; where x is a number literal, or a parameter of its function
+/// or lambda used only as an operand, it becomes `x ^ 2`, which that function's broadcasting maps over a list
+/// (`sq = @(x) x.^2`: `sq(3)` is 9, `sq([1,2,3])` is [1 4 9])
+pub fn lower_scalar_element_wise(program: Node) -> Node {
+	scalar_element_wise(program, &[])
+}
+
+fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
+	if let Some((receiver, op, operand)) = element_wise_parts(&node) {
+		let is_scalar = matches!(receiver.drop_meta(), Node::Number(_)) || matches!(receiver.drop_meta(), Node::Symbol(symbol) if parameters.contains(symbol));
+		if is_scalar {
+			return Node::Key(Box::new(receiver), op, Box::new(scalar_element_wise(operand, parameters)));
+		}
+	}
+	match node {
+		// a function or lambda: its own parameters, the outer ones are out of scope
+		Node::Key(head, op @ (Op::Define | Op::Assign | Op::FatArrow | Op::Arrow), body) if is_function_head(&head, op) => {
+			let inner: Vec<String> = untyped_parameters(&head, op).into_iter().filter(|name| only_operand(&body, name)).collect();
+			Node::Key(head, op, Box::new(scalar_element_wise(*body, &inner)))
+		}
+		other => other.map_children(|child| scalar_element_wise(child, parameters)),
+	}
+}
+
+/// `x.map(each_element => each_element op operand)`: x, op, operand
+fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
+	let Node::Key(receiver, Op::Dot, call) = node.drop_meta() else { return None };
+	let Node::List(items, Bracket::Round, _) = call.drop_meta() else { return None };
+	let [word, lambda] = items.as_slice() else { return None };
+	let Node::Key(element, Op::FatArrow, body) = lambda.drop_meta() else { return None };
+	let Node::Key(left, op, operand) = body.drop_meta() else { return None };
+	let is_element = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if name == crate::analyzer::EACH_ELEMENT);
+	(word.name() == MAP_WORD && is_element(element) && is_element(left)).then(|| (receiver.as_ref().clone(), *op, operand.as_ref().clone()))
+}
+
+fn is_function_head(head: &Node, op: Op) -> bool {
+	matches!(op, Op::FatArrow | Op::Arrow) || matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() > 1)
+}
+
+/// The untyped parameters of `f(a, b) := …`, `(a, b) => …`, `x => …`
+fn untyped_parameters(head: &Node, op: Op) -> Vec<String> {
+	let flattened = |items: &[Node]| -> Vec<Node> {
+		items.iter().flat_map(|item| match item.drop_meta() {
+			Node::List(group, Bracket::Round, _) => group.clone(),
+			other => vec![other.clone()],
+		}).collect()
+	};
+	let parameters = match (head.drop_meta(), op) {
+		(Node::List(items, Bracket::Round, _), Op::Define | Op::Assign) => flattened(&items[1..]),
+		(Node::List(items, _, _), _) => flattened(items),
+		(single, _) => vec![single.clone()],
+	};
+	parameters.iter().filter_map(|parameter| match parameter.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		_ => None,
+	}).collect()
+}
+
+/// Whether `name` appears in body only as an operand of arithmetic or as an element-wise receiver
+fn only_operand(body: &Node, name: &str) -> bool {
+	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == name);
+	if let Some((receiver, _, operand)) = element_wise_parts(body) {
+		return (is_name(&receiver) || only_operand(&receiver, name)) && only_operand(&operand, name);
+	}
+	match body.drop_meta() {
+		Node::Symbol(symbol) => symbol != name,
+		Node::Key(left, op, right) if ARITHMETIC.contains(op) => [left, right].into_iter().all(|side| is_name(side) || only_operand(side, name)),
+		Node::Key(left, _, right) => only_operand(left, name) && only_operand(right, name),
+		Node::List(items, _, _) => items.iter().all(|item| only_operand(item, name)),
+		_ => true,
+	}
+}

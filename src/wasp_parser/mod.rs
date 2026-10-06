@@ -59,7 +59,7 @@ const NONLOCAL_WORD: &str = "nonlocal";
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
-const ELEMENT_WISE_OPERATORS: [(char, Op); 4] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div)];
+const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div), ('^', Op::Pow)];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
@@ -349,6 +349,8 @@ const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 const TO_SENTENCE_WORD: &str = "To";
+/// `to greet p do …`: the word between a `to` definition's parameters and its body
+const DO_WORD: &str = "do";
 const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
