@@ -54,3 +54,17 @@ fn on_change_runs_only_when_the_value_differs() {
 fn on_set_of_a_charged_value_listens_to_its_changes() {
 	is!("a=1; total := a*2; n=0; on set total : n+=1; a=2; a=2; a=3; n", 2);
 }
+
+// P111: writes through `global x` inside called functions run the listeners (notes/signals.md phase 3)
+#[test]
+fn a_global_write_inside_a_function_runs_the_listeners() {
+	is!("x=0; hits=0; once x==5 {hits+=1}; def f(){ global x; x=5 }; f(); hits", 1);
+	is!("x=0; hits=0; def f(){ global x; x=5 }; once x==5 {hits+=1}; f(); hits", 1);
+	is!("x=0; hits=0; whenever x>1 {hits+=1}; def f(v){ global x; x=v }; f(2); f(3); f(0); hits", 2);
+	is!("x=0; log=0; on change x {log=log*10+value}; def store(v){ global x; x=v }; store(1); store(1); store(2); log", 12);
+}
+
+#[test]
+fn a_global_write_before_the_listener_is_not_seen() {
+	is!("x=0; hits=0; def f(){ global x; x=5 }; f(); once x==5 {hits+=1}; x=1; hits", 0);
+}

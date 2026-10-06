@@ -17,8 +17,9 @@ const RAISE_WORD: &str = "raise";
 const VARIABLE_LISTENER_WORDS: [&str; 2] = ["set", "change"];
 const HANDLER_PREFIX: &str = "on·";
 const NAME_JOINER: &str = "·";
-/// The handler function as written, its name and globals filled in
-const HANDLER_TEMPLATE: &str = "handler(event) := {}";
+/// A generated function as written, its name and globals filled in
+const FUNCTION_TEMPLATE: &str = "handler(event) := {}";
+const PARAMETERLESS_TEMPLATE: &str = "handler() := {}";
 const TEMPLATE_NAME: &str = "handler";
 const EVENT_WORD: &str = "event";
 
@@ -43,7 +44,7 @@ pub fn lower(program: Node) -> Node {
 	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
 	let lowered = statements.into_iter().enumerate().filter_map(|(index, statement)| match first_handler.get(&index) {
-		Some(name) => Some(handler_function(name, &bodies[name], &main_variables)),
+		Some(name) => Some(function_with_globals(&handler_function_name(name), true, &bodies[name], &main_variables)),
 		None if handler_lines.contains(&index) => None,
 		None => Some(statement),
 	});
@@ -101,15 +102,16 @@ fn handler_function_name(event: &str) -> String {
 	format!("{HANDLER_PREFIX}{}", event.replace(' ', NAME_JOINER))
 }
 
-/// `on·alarm(event) := { global n; body; body2 }`
-fn handler_function(event: &str, bodies: &[Node], main_variables: &HashSet<String>) -> Node {
+/// `on·alarm(event) := { global n; body; body2 }`: the main-level variables the bodies mention are declared global
+pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Node], main_variables: &HashSet<String>) -> Node {
 	let mut mentioned: Vec<String> = bodies.iter().flat_map(symbols).filter(|name| main_variables.contains(name) && name != EVENT_WORD).collect();
 	mentioned.sort();
 	mentioned.dedup();
 	let globals = mentioned.iter().map(|name| parse(&format!("global {name}")));
 	let statements: Vec<Node> = globals.chain(bodies.iter().cloned()).collect();
-	let Node::Key(head, op, _) = parse(HANDLER_TEMPLATE).drop_meta().clone() else { unreachable!("the template is a definition") };
-	let name = Node::Symbol(handler_function_name(event));
+	let template = if takes_event { FUNCTION_TEMPLATE } else { PARAMETERLESS_TEMPLATE };
+	let Node::Key(head, op, _) = parse(template).drop_meta().clone() else { unreachable!("the template is a definition") };
+	let name = Node::Symbol(name.to_string());
 	let head = crate::law::substitute(&head, &HashMap::from([(TEMPLATE_NAME.to_string(), name)]));
 	Node::Key(Box::new(head), op, Box::new(Node::List(statements, Bracket::Curly, Separator::Semicolon)))
 }
@@ -128,7 +130,7 @@ fn raises_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>) -> Node {
 }
 
 /// The variables the main level assigns (`n = 0`, `n += 1`)
-fn main_level_variables(statements: &[Node]) -> HashSet<String> {
+pub(crate) fn main_level_variables(statements: &[Node]) -> HashSet<String> {
 	statements.iter().filter_map(|statement| match statement.drop_meta() {
 		Node::Key(target, op, _) if *op == Op::Assign || op.is_compound_assign() => match target.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
