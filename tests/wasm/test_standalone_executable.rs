@@ -90,3 +90,16 @@ fn test_build_makes_an_executable_by_default() {
 	assert!(wasm_build.status.success(), "{}", text(&wasm_build.stderr));
 	assert!(module.exists());
 }
+
+/// P103 (user): "Just giving it a file will compile it": `warp hello.warp` runs it and leaves the executable `hello`
+#[test]
+fn test_running_a_file_leaves_its_executable() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_run.warp");
+	std::fs::write(&source_path, "print \"hi\"\n6 * 7").unwrap();
+	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
+	let _ = std::fs::remove_file(&executable);
+	let run = crate::common::warp_command().env_remove("WARP_RUNTIME_STUB").arg(&source_path).output().unwrap();
+	assert_eq!(text(&run.stdout), "hi\n42\n", "{}", text(&run.stderr));
+	let carried = std::process::Command::new(&executable).output().unwrap();
+	assert_eq!(text(&carried.stdout), "hi\n42\n", "{}", text(&carried.stderr));
+}
