@@ -56,6 +56,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 #wast = "*"
 wasmparser = "0.259"
+wat = "1.259" # an imported module may be WAT text (wasm_modules.rs); tests build modules from WAT text
 wasm-encoder = { version = "0.259", features = ["wasmparser"] } # wasmparser: reencode, for dead_functions.rs
 log = "0.4.29"
 #fetch = "0.8.1"
@@ -104,7 +105,6 @@ sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (s
 #[test-dependencies] no such thing. it's :
 [dev-dependencies]
 # only compiled and included when running tests or examples
-wat = "1.259" # tests build modules from WAT text; the compiler itself parses WAT through wasmtime's "wat" feature
 
 
 [profile.dev]

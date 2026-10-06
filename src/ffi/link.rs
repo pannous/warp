@@ -748,7 +748,8 @@ pub fn link_module_libraries(
         let module_name = import.module();
         // Skip built-in libraries that are already linked; libc beyond its built-in functions (toupper) is linked here
         let built_in_libc = matches!(module_name, "c" | "libc") && HAND_LINKED_LIBC.contains(&import.name());
-        if !built_in_libc && !matches!(module_name, "m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY) {
+        let wasm_module = crate::wasm_modules::is_module_path(module_name); // linked by wasm_modules::link
+        if !built_in_libc && !wasm_module && !matches!(module_name, "m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY) {
             libs_to_link.entry(module_name.to_string()).or_default().insert(import.name().to_string());
         }
     }
