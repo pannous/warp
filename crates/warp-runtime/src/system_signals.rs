@@ -16,6 +16,7 @@ use std::time::SystemTime;
 use wasmtime::{AsContextMut, Func, Instance, Result, Store, Val};
 
 const NEW_EMPTY: &str = "new_empty";
+const NEW_INT: &str = "new_int";
 /// How often a watched file's modification time is read: polling, no file-system events yet
 const FILE_CHECK_PERIOD: Duration = Duration::from_millis(100);
 /// How often a sleeping program with listeners on shared values (on·shared) looks at them
@@ -231,29 +232,39 @@ pub fn run_due_handlers<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&
 	let shared_checks = export(store, SHARED_HANDLER).map(|_| SHARED_HANDLER.to_string());
 	for name in due_handlers(handles_interrupt).into_iter().chain(shared_checks) {
 		let Some(handler) = export(store, &name) else { continue };
-		call_handler(store, handler, &mut export)?;
+		call_handler(store, handler, None, &mut export)?;
 	}
 	Ok(())
 }
 
-fn call_handler<S: AsContextMut>(store: &mut S, handler: Func, export: &mut impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
+fn call_handler<S: AsContextMut>(store: &mut S, handler: Func, event: Option<i64>, export: &mut impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
 	let mut arguments = vec![];
-	// a handler that reads `event` gets ø
-	if handler.ty(&*store).params().len() == 1 {
-		let empty = export(store, NEW_EMPTY).ok_or_else(|| wasmtime::Error::msg("no new_empty"))?;
-		let mut built = [Val::AnyRef(None)];
-		empty.call(&mut *store, &[], &mut built)?;
-		arguments.push(built[0]);
+	// a handler that reads `event` gets it (the exit code of `on exit`, P134), as a number or a Node; else ø
+	if let Some(parameter) = handler.ty(&*store).params().next() {
+		arguments.push(match (parameter, event) {
+			(wasmtime::ValType::I64, event) => Val::I64(event.unwrap_or(0)),
+			(_, Some(event)) => node_of(store, export, NEW_INT, &[Val::I64(event)])?,
+			(_, None) => node_of(store, export, NEW_EMPTY, &[])?,
+		});
 	}
 	let mut results = vec![Val::I64(0); handler.ty(&*store).results().len()];
 	handler.call(&mut *store, &arguments, &mut results)
+}
+
+/// The Node a constructor export of the program builds (`new_empty()`, `new_int(n)`)
+fn node_of<S: AsContextMut>(store: &mut S, export: &mut impl FnMut(&mut S, &str) -> Option<Func>, constructor: &str, arguments: &[Val]) -> Result<Val> {
+	let function = export(store, constructor).ok_or_else(|| wasmtime::Error::msg(format!("no {constructor}")))?;
+	let mut built = [Val::AnyRef(None)];
+	function.call(&mut *store, arguments, &mut built)?;
+	Ok(built[0])
 }
 
 /// `on exit {…}`: the run ends (main returned, the timers stopped, or `exit(code)`), so on·exit runs once; an `exit`
 /// inside it ends it with that code (ended_by_exit keeps it)
 pub fn run_exit_handler<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
 	let Some(handler) = export(store, EXIT_HANDLER) else { return Ok(()) };
-	call_handler(store, handler, &mut export)
+	let code = EXIT_CODE.with(Cell::get).unwrap_or(0);
+	call_handler(store, handler, Some(code.into()), &mut export)
 }
 
 /// The outcome of a run and its exit handler: the handler runs after a normal end and after `exit(code)` (whose code

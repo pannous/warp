@@ -26,3 +26,11 @@ fn on_exit_runs_at_exit_and_keeps_its_code() {
 fn on_exit_runs_once() {
 	assert_eq!(lines("on exit { print \"bye\"; exit(0) }\nprint \"hello\""), ["hello", "bye"]);
 }
+
+// P134: `event` in `on exit` is the exit code, 0 when main returns
+#[test]
+fn on_exit_reads_the_exit_code() {
+	assert_eq!(lines("on exit { print \"bye \" event }\nprint \"hello\""), ["hello", "bye 0"]);
+	assert_eq!(lines("on exit { print \"code \" + event }\nexit(4)"), ["code 4"]);
+	assert_eq!(lines("n = 0; on exit { print \"bye\" }; print \"hi\""), ["hi", "bye"]);
+}
