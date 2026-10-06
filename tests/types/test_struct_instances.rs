@@ -100,3 +100,10 @@ fn a_field_of_an_instance_in_a_list_is_found_by_its_written_name() {
 	is!(program, 10);
 	is!("class P{x:int}; f() := P(4); f().x", 4);
 }
+
+/// Card class-person: a hyphenated field (P164) of a class instance reads like any other (was a stack overflow)
+#[test]
+fn a_hyphenated_field_of_an_instance() {
+	is!("class person{phone-number:text}; p = person{phone-number:\"12\"}; p.phone-number", "12");
+	is!("class person{phone-number:text}; p = person{phone-number:\"12\"}; p.phone-number = \"3\"; p.phone-number", "3");
+}
