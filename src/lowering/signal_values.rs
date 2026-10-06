@@ -240,20 +240,22 @@ fn reflections(program: Node) -> (Node, HashSet<String>) {
 	(program, reflected)
 }
 
+/// `for f in listeners of x {…}` arrives grouped `(listeners of) (x {…})`: its parts in one row
+pub(crate) fn ungrouped_reflection(items: Vec<Node>) -> Vec<Node> {
+	let grouped_reflection = |item: &Node| matches!(item.drop_meta(), Node::List(parts, Bracket::None, _) if parts.last().is_some_and(|last| word(last) == OF_WORD) && parts.iter().any(|part| word(part) == LISTENERS_WORD));
+	if !items.iter().any(grouped_reflection) {
+		return items;
+	}
+	items.into_iter().flat_map(|item| match item.drop_meta() {
+		Node::List(parts, Bracket::None, _) => parts.clone(),
+		_ => vec![item],
+	}).collect()
+}
+
 fn reflected_lists(node: Node, reflected: &mut HashSet<String>) -> Node {
 	let Node::List(items, bracket, separator) = node else { return map_children(node, &mut |child| reflected_lists(child, reflected)) };
 	let mut out: Vec<Node> = vec![];
-	// `for f in listeners of x {…}` arrives grouped `(listeners of) (x {…})`: its parts in one row
-	let grouped_reflection = |item: &Node| matches!(item.drop_meta(), Node::List(parts, Bracket::None, _) if parts.last().is_some_and(|last| word(last) == OF_WORD) && parts.iter().any(|part| word(part) == LISTENERS_WORD));
-	let items: Vec<Node> = if items.iter().any(grouped_reflection) {
-		items.into_iter().flat_map(|item| match item.drop_meta() {
-			Node::List(parts, Bracket::None, _) => parts.clone(),
-			_ => vec![item],
-		}).collect()
-	} else {
-		items
-	};
-	let items: Vec<Node> = items.into_iter().map(|item| reflected_lists(item, reflected)).collect();
+	let items: Vec<Node> = ungrouped_reflection(items).into_iter().map(|item| reflected_lists(item, reflected)).collect();
 	let mut rest = items.into_iter().peekable();
 	while let Some(item) = rest.next() {
 		if word(&item) == LISTENERS_WORD && rest.peek().is_some_and(|next| word(next) == OF_WORD) {
