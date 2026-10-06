@@ -211,6 +211,9 @@ pub struct WasmGcEmitter {
 	source_position: Option<(usize, usize)>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
+	typed_globals: HashMap<String, (u32, list_dispatch::TypedList)>, // globals held as typed arrays: their global and element type
+	typed_capture_globals: HashMap<u32, list_dispatch::TypedList>, // capture globals holding a typed list of main
+	main_typed_lists: Option<HashMap<String, list_dispatch::TypedList>>, // main's typed lists, worked out before the capture globals
 	bounded_counters: std::collections::HashSet<String>, // loop counters of the body being emitted proven to stay in 0..i32::MAX (big_int.rs)
 	typed_maps: std::collections::HashSet<String>, // map variables of the body being emitted held as hash tables (map_backend.rs)
 	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies
@@ -270,6 +273,9 @@ impl WasmGcEmitter {
 			source_position: None,
 			loop_labels: Vec::new(),
 			typed_lists: HashMap::new(),
+			typed_globals: HashMap::new(),
+			typed_capture_globals: HashMap::new(),
+			main_typed_lists: None,
 			bounded_counters: std::collections::HashSet::new(),
 			typed_maps: std::collections::HashSet::new(),
 			moved_lists: Vec::new(),
@@ -1044,7 +1050,7 @@ impl WasmGcEmitter {
 	pub fn emit_node_main(&mut self, node: &Node) {
 		// Pre-pass: collect variables first so scope is populated
 		let temp_locals = collect_variables(node, &mut self.scope);
-		self.typed_lists = self.find_typed_lists(node);
+		self.typed_lists = self.main_typed_lists.take().unwrap_or_else(|| self.find_typed_lists(node));
 		self.typed_maps = self.find_typed_maps(node);
 		self.bounded_counters = big_int::bounded_counters(node);
 

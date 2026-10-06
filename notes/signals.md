@@ -185,7 +185,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    on the output (`{x, y}`, a canvas pixel on a canvas) and keys typed there (`{key}`); the handler's prints and
    paintings appear, and the last line, when it is a name, is the output binding `page·value()` shown anew after each
    handler (else the handler's value). An unhandled raise stays the exception (P110), no CustomEvent yet. Tour
-   example `events`; tests/control/test_page_events.rs). Still open: `broadcast` / channel listeners
+   example `events`; tests/control/test_page_events.rs). `broadcast` / channel listeners: done natively (notes/system_signals.md, Channels); still open
    (stdlib, wiki/signal.md). System signals (OS, devices, page): notes/system_signals.md.
 
 ## Decisions (user, 2026-10-06, via the Interviewer)
