@@ -10,6 +10,7 @@ mod test_std_list;
 mod test_std_map;
 mod test_std_math_text;
 mod test_std_random;
+mod test_std_time;
 mod test_std_qualified;
 mod test_use_modules;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build

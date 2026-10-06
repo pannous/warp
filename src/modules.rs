@@ -463,12 +463,13 @@ impl Loader<'_> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 5] = [
+const STD_MODULES: [(&str, &str); 6] = [
 	("list", include_str!("../std/list.wasp")),
 	("math", include_str!("../std/math.wasp")),
 	("text", include_str!("../std/text.wasp")),
 	("random", include_str!("../std/random.wasp")),
 	("map", include_str!("../std/map.wasp")),
+	("time", include_str!("../std/time.wasp")),
 ];
 const STD_FOLDER: &str = "std";
 
