@@ -15,6 +15,8 @@ const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
 const WILDCARD: &str = "_";
 const DEFAULT_CASE: &str = "default";
 const LOOP_WORD: &str = "loop";
+/// Lua's, Ruby's and Julia's word closing a function body
+const END_WORD: &str = "end";
 const LAMBDA_WORD: &str = "lambda";
 const LET_WORD: &str = "let";
 const IN_WORD: &str = "in";
@@ -382,7 +384,12 @@ fn is_type_word(node: &Node) -> bool {
 fn assigned_braceless_function(items: &[Node]) -> Option<Node> {
 	let [assignment, body @ ..] = items else { return None };
 	let Node::Key(name, op @ (Op::Assign | Op::Define), head) = assignment.drop_meta() else { return None };
+	// Lua's `sq = function(x) return x * x end`: the closing word ends the body
 	let body = match without_result_type(body) {
+		[body @ .., end] if is_word(end, END_WORD) => body,
+		body => body,
+	};
+	let body = match body {
 		[] => return None,
 		[single] => single.clone(),
 		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),

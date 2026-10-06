@@ -62,6 +62,7 @@ impl WaspParser {
 			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
 			'@' if self.peek_char(1) == '(' && !self.options.data_mode => self.parse_matlab_lambda(),
+			'\\' if self.backslash_lambda_ahead() && !self.options.data_mode => self.parse_backslash_lambda(),
 			// `@1`: a reference to the node whose @id is 1 (wiki/reference.md, P160)
 			'@' if self.peek_char(1).is_ascii_digit() => {
 				self.advance(); // skip '@'
@@ -400,6 +401,38 @@ impl WaspParser {
 		self.advance(); // '@'
 		let parameters = self.parse_bracketed('(');
 		self.skip_spaces();
+		let body = self.parse_expr(Op::Assign.binding_power().1);
+		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
+	}
+
+	/// `\x ->`, `\a b ->`: names and an arrow after the backslash (`\alpha` alone is an entity)
+	fn backslash_lambda_ahead(&self) -> bool {
+		let rest: String = self.chars[self.pos + 1..].iter().take_while(|ch| **ch != '\n').collect();
+		let Some((names, _)) = rest.split_once("->") else { return false };
+		let names: Vec<&str> = names.split_whitespace().collect();
+		!names.is_empty() && names.iter().all(|name| name.starts_with(char::is_alphabetic) && name.chars().all(|ch| ch.is_alphanumeric() || ch == '_'))
+	}
+
+	/// Haskell's `\x -> x * 2`, `\a b -> a + b`: the lambda
+	fn parse_backslash_lambda(&mut self) -> Node {
+		self.advance(); // '\\'
+		let mut names = Vec::new();
+		loop {
+			self.skip_spaces();
+			if self.current_char() == '-' && self.peek_char(1) == '>' {
+				self.advance_by(2);
+				break;
+			}
+			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
+				Some(name) => names.push(Symbol(name)),
+				None => return error("a lambda `\\x -> …` needs its arrow"),
+			}
+		}
+		self.skip_spaces();
+		let parameters = match names.len() {
+			1 => names.remove(0),
+			_ => Node::List(names, Bracket::Round, Separator::Colon),
+		};
 		let body = self.parse_expr(Op::Assign.binding_power().1);
 		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 	}
