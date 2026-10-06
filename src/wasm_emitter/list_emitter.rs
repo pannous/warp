@@ -655,7 +655,10 @@ impl WasmGcEmitter {
 		let name = items.iter().find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))?;
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
 		let text = crate::diagnostic::written_text(&written);
-		let message = format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data");
+		let message = match crate::modules::std_module_defining(&name) {
+			Some(_) => crate::ffi::undefined_function_message(&name),
+			None => format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data"),
+		};
 		Some(crate::diagnostic::Diagnostic::at(&written, message).to_string())
 	}
 

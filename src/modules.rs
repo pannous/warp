@@ -50,14 +50,42 @@ pub fn resolve(program: Node) -> Node {
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let folder = file.as_deref().map(folder_of);
-	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone(), scope: None, wasm_modules: vec![] };
+	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone(), scope: None, wasm_modules: vec![], std_definitions: vec![] };
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader.resolve(program).and_then(|program| match loader.scope {
 		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 		None => Ok(program),
-	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules));
+	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
+		.map(|program| with_needed_definitions(program, loader.std_definitions));
 	resolved.unwrap_or_else(|failure| failure)
 }
+
+/// The program with the standard modules' definitions it calls, and those they call, in front: a word nobody calls
+/// is never compiled (its parameters would have no kinds)
+fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
+	if definitions.is_empty() {
+		return program;
+	}
+	let mut needed: Vec<Node> = vec![];
+	let mut mentioned: HashSet<String> = mentioned_names(std::slice::from_ref(&program)).into_iter().collect();
+	loop {
+		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name))).cloned().collect();
+		if now_needed.len() == needed.len() {
+			break;
+		}
+		mentioned.extend(mentioned_names(&now_needed));
+		needed = now_needed;
+	}
+	if needed.is_empty() {
+		return program;
+	}
+	let (statements, separator) = match program {
+		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => (statements, separator),
+		single => (vec![single], Separator::Semicolon),
+	};
+	Node::List([needed, statements].concat(), Bracket::None, separator)
+}
+
 
 thread_local! {
 	/// The file being compiled; its folder is in scope (D15). None for inline code
@@ -203,6 +231,8 @@ struct Loader<'a> {
 	scope: Option<Scope>,
 	/// the paths of the imported WebAssembly modules, whose exports the program reads (wasm_modules::rewrite_uses)
 	wasm_modules: Vec<String>,
+	/// the definitions of the standard modules used: the program gets those it calls (with_needed_definitions)
+	std_definitions: Vec<Node>,
 }
 
 impl Loader<'_> {
@@ -237,10 +267,17 @@ impl Loader<'_> {
 			self.scope = self.scope.max(Some(scope));
 			return Ok(vec![]);
 		}
+		// `use math`: the C library libm and the standard module math
 		if import == Import::Use && is_builtin_library(name) {
+			if let Some(source) = std_module(name) {
+				self.use_std_module(name, source)?;
+			}
 			return Ok(vec![as_use(statement)]);
 		}
 		let Some(path) = self.find(name) else {
+			if let Some(source) = std_module(name).filter(|_| import == Import::Use) {
+				return self.use_std_module(name, source);
+			}
 			if let Some(module) = self.find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS) {
 				return Ok(self.use_wasm_module(&module, statement, import));
 			}
@@ -274,7 +311,20 @@ impl Loader<'_> {
 		}
 	}
 
+	/// A standard module: its definitions wait aside until the program is resolved
+	fn use_std_module(&mut self, name: &str, source: &str) -> Result<Vec<Node>, Node> {
+		let definitions = self.load_source(Import::Use, std_path(name), source)?;
+		self.std_definitions.extend(definitions);
+		Ok(vec![])
+	}
+
 	fn load(&mut self, import: Import, name: &str, path: PathBuf) -> Result<Vec<Node>, Node> {
+		let source = crate::web::read_text(&path.to_string_lossy()).ok_or_else(|| error(&format!("module not readable: {name}")))?;
+		self.load_source(import, path, &source)
+	}
+
+	/// A module from its source: `path` names it (each is loaded once) and is where its own `use`s look
+	fn load_source(&mut self, import: Import, path: PathBuf, source: &str) -> Result<Vec<Node>, Node> {
 		let loaded = match import {
 			Import::Use => &mut self.loaded,
 			Import::Include => &mut self.included,
@@ -282,8 +332,7 @@ impl Loader<'_> {
 		if !loaded.insert(path.canonicalize().unwrap_or_else(|_| path.clone())) {
 			return Ok(vec![]);
 		}
-		let source = crate::web::read_text(&path.to_string_lossy()).ok_or_else(|| error(&format!("module not readable: {name}")))?;
-		let module = WaspParser::parse(&source);
+		let module = WaspParser::parse(source);
 		if let Some(failure) = module.first_error() {
 			return Err(failure.clone());
 		}
@@ -410,6 +459,30 @@ impl Loader<'_> {
 			.map(|path| if path.starts_with(['.', '/']) { path } else { format!("./{path}") }).collect();
 		error(&format!("include not found: {name}; searched {}", searched.join(", ")))
 	}
+}
+
+/// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
+const STD_MODULES: [(&str, &str); 3] = [
+	("list", include_str!("../std/list.wasp")),
+	("math", include_str!("../std/math.wasp")),
+	("text", include_str!("../std/text.wasp")),
+];
+const STD_FOLDER: &str = "std";
+
+/// The name an embedded module is loaded under, once per program
+fn std_path(name: &str) -> PathBuf {
+	PathBuf::from(format!("{STD_FOLDER}/{name}.wasp"))
+}
+
+fn std_module(name: &str) -> Option<&'static str> {
+	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
+}
+
+/// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
+pub fn std_module_defining(word: &str) -> Option<&'static str> {
+	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
+	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(WaspParser::parse(source)).iter().filter_map(declared_name).collect())).collect());
+	defined.iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
 }
 
 fn is_builtin_library(name: &str) -> bool {

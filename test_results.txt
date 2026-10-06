@@ -1246,6 +1246,11 @@ PASSED:
   ✓ modules::test_packages::module_directory_is_where_the_module_lives
   ✓ modules::test_packages::the_registry_names_repositories
   ✓ modules::test_packages::use_loads_the_module_of_a_package
+  ✓ modules::test_std_list::a_module_word_without_its_use_names_the_module
+  ✓ modules::test_std_list::a_programs_own_word_wins_over_the_module
+  ✓ modules::test_std_list::use_list_brings_its_words
+  ✓ modules::test_std_math_text::use_math_brings_libm_and_the_module
+  ✓ modules::test_std_math_text::use_text_brings_its_words
   ✓ modules::test_use_modules::test_module_statements_are_not_imported
   ✓ modules::test_use_modules::test_module_using_module_imports_transitively_and_survives_cycles
   ✓ modules::test_use_modules::test_search_order_prefers_earlier_directory
@@ -2889,4 +2894,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2884 passed, 0 failed, 2884 total tested
+19 ignored, 2889 passed, 0 failed, 2889 total tested

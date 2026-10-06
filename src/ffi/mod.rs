@@ -84,6 +84,9 @@ pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, Ff
 
 /// The error of a call nothing resolves: a libc function says how to import it
 pub fn undefined_function_message(name: &str) -> String {
+    if let Some(module) = crate::modules::std_module_defining(name) {
+        return format!("{name} is in the standard module {module}: write `use {module}`");
+    }
     match get_ffi_signature_from_lib(name, "c") {
         Some(_) => format!("{name} is a C function: write `use c` or `import {name} from \"c\"`"),
         None => format!("undefined function: {name}"),
