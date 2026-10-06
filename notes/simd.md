@@ -49,6 +49,12 @@ And warp itself today (release build, 1M floats `xs = float[1000000]`): `xs.map(
   be observed (print, text, comparison by bits, memory stores, host calls) instead of after every operation would keep
   the determinism decision and remove most of the cost: question to the Interviewer.
 
+- Tried and dropped: a map preallocating its result with the source's length (`list_capacity(xs)`, array.new_default
+  of the full size) instead of growing by push: 20 maps of 1M floats took 0.37-0.42 s against 0.31-0.33 s growing
+  (wasmtime CLI, best of 5). Zero-filling and the copying GC's work on one large array cost more than the doublings.
+  A map of 1M floats is now 14.5 ns per item (old: 19.5); the push itself (bounds, length store, growth) and GC
+  allocation are what is left besides NaN canonicalization.
+
 ## Steps
 1. (smallest, next) Typed map kernel: `xs.map(x => numeric body)` over a float array known statically as one emits
    `array.new_default(len)` + a loop of `array.get` / body / `array.set` (measured shape: 2.1 ns, 7x today).
