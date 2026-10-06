@@ -166,8 +166,11 @@ impl WaspParser {
 	}
 
 	/// Code stands before the cursor on its line (`x = 7 // note`, not a `// note` line of its own)
-	pub(super) fn follows_code_on_its_line(&self) -> bool {
-		self.chars[..self.pos].iter().rev().take_while(|&&c| c != '\n').any(|c| !c.is_whitespace())
+	/// Whether the code before on this line ends in something a `// b` could divide: a word, a number, `)` or `]`
+	/// (`len(xs) // 2`); after a text, `{` or `,` a `//` reads as nothing but the comment it is
+	pub(super) fn follows_a_dividend(&self) -> bool {
+		let before = self.chars[..self.pos].iter().rev().take_while(|&&c| c != '\n').find(|c| !c.is_whitespace());
+		before.is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -348,7 +351,7 @@ impl WaspParser {
 			}
 			// // line comment (but not :// URL scheme)
 			if c1 == '/' && c2 == '/' && self.prev_char() != ':' && !self.at_floor_division() {
-				if self.follows_code_on_its_line() {
+				if self.follows_a_dividend() {
 					self.set_hint_pos();
 					crate::diagnostic::educate_once(SLASH_COMMENT_TOPIC, "a // b", "a//b", "`// …` after code is a comment; floor division is written glued: a//b");
 				}

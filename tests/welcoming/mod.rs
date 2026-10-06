@@ -38,3 +38,4 @@ mod test_index_hint_simple;
 mod test_constant_shadowing;
 mod test_left_arrow;
 mod test_hint_positions;
+mod test_slash_comment_after_value;
