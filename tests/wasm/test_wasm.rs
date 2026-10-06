@@ -1,6 +1,5 @@
 use warp::analyzer::analyze;
 use warp::extensions::print;
-use warp::type_kinds::NodeKind;
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::parse;
 use warp::Node;
@@ -26,22 +25,6 @@ fn ints(p0: i32, p1: i32, p2: i32) -> Node {
 fn ints4(p0: i32, p1: i32, p2: i32, p3: i32) -> Node {
 	Node::ints(vec![p0, p1, p2, p3])
 }
-
-#[test]
-#[ignore = "LOST files: main_global.wasm, lib_global.wasm"]
-fn test_merge_global() {
-	// Types Module, Code, smart_pointer_64 not defined
-}
-
-#[test]
-#[ignore = "LOST files: main_memory.wasm, lib_memory.wasm"]
-fn test_merge_memory() {}
-#[test]
-#[ignore = "LOST file: main_memory.wasm"]
-fn test_merge_runtime() {}
-#[test]
-#[ignore = "Types Module, Code, int not defined"]
-fn test_merge_own() {}
 
 // #[test] fn test_wasm_stuff();
 #[test]
@@ -813,9 +796,6 @@ fn test_old_random_bugs() {
 fn test_merge_wabt() {
 }
 #[test]
-#[ignore = "WABT_MERGE types not defined"]
-fn test_merge_wabt_by_hand() {}
-#[test]
 #[ignore]
 fn test_wasm_runtime_extension() {
 
@@ -1229,9 +1209,6 @@ fn test_smart_return() {
 	is!("-1.1", -1.1);
 	is!("'OK'", "OK");
 }
-#[test]
-#[ignore = "Node constructor syntax not valid in Rust"]
-fn test_multi_value() {}
 
 #[test]
 fn test_is() {
@@ -1567,7 +1544,6 @@ fn test_all_wasm() {
 	// the following need MERGE or RUNTIME! todo : split
 	test_wasm_variables0();
 	test_logarithm();
-	test_merge_wabt_by_hand();
 	test_merge_wabt();
 	test_math_library();
 	test_wasm_logic_combined();
@@ -1594,28 +1570,6 @@ fn test_all_wasm() {
 	   );
 }
 
-#[test]
-#[ignore]
-fn test_get_element_by_id() {
-	let _result = analyze(parse("$result"));
-	// eq!(result.kind, externref);
-	let _nod = eval("$result");
-	// print(nod);
-}
-
-#[test]
-#[ignore]
-fn test_canvas() {
-	let _result = analyze(parse("$canvas"));
-	// eq!(result.kind(), externref);
-	let _nod = eval(
-		r#"    ctx = $canvas.getContext('2d');
-                       ctx.fillStyle = 'red';
-                       ctx.fillRect(10, 10, 150, 100);"#,
-	);
-	// print(nod);
-}
-
 // run in APP (or browser?);
 #[test]
 fn test_dom() {
@@ -1636,32 +1590,6 @@ fn test_dom() {
 	//	result = eval("document.getElementById('canvas');");
 	//	result = analyze(parse("$canvas"));
 	//	eq!(result.kind,  externref);
-}
-
-#[test]
-#[ignore]
-fn test_dom_property() {
-	// #[cfg(not(feature = "WEBAPP"))]{
-	//     return;
-	// }
-	let mut result = eval("getExternRefPropertyValue($canvas,'width')"); // ok!!
-	eq!(result.value(), &300); // only works because String "300" gets converted to BigInt 300
-							//	result = eval("width='width';$canvas.width");
-	result = eval("$canvas.width");
-	eq!(result.value(), &300);
-	//	return;
-	result = eval("$canvas.style");
-	eq!(result.kind(), NodeKind::Text);
-	//	eq!(result.kind, stringp);
-	// if (result.value().string);
-	// is!(*result.value().string, "dfsa");
-	//	getExternRefPropertyValue OK  [object HTMLCanvasElement] style [object CSSStyleDeclaration]
-	// ⚠️ But can't forward result as smarti or stringref:  SyntaxError: Failed to parse String to BigInt
-	// todo : how to communicate new string as RETURN type of arbitrary function from js to wasp?
-	// call Webview.getString(); ?
-
-	//	embedder.trace('canvas = document.getElementById("canvas");');
-	//	print(nod);
 }
 
 #[test]
