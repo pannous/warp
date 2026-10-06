@@ -188,8 +188,8 @@ impl WaspParser {
 		let is_known_type = |word: &str| {
 			crate::analyzer::type_word_kind(word).is_some() || crate::analyzer::plural_element_type(word).is_some() || declared_types.contains(word)
 		};
-		let parameters = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
-			Ok(parameters) => parameters,
+		let (parameters, body) = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
+			Ok(slots) => slots,
 			Err(message) => return Some(error(&message)),
 		};
 		let parameters: Vec<Node> = parameters.into_iter().map(|parameter| match shapes.iter().find(|(name, _)| *name == parameter.name()) {
