@@ -15,6 +15,8 @@ Read notes/agents/common.md, notes/roles.md ("Interviewer", "Never blocked by a 
   decision already answers, order by impact. Allow multiple selections (multiSelect) whenever options can coexist,
   e.g. synonym spellings, features to build, cases a rule covers (user 2026-10-06: "remember in multiple choice
   questions to also sometimes allow multiple selections"); single choice only for real either/or questions.
+  Pure word choices (synonym spellings of the same meaning) are not asked: the recommended word is canonical, the
+  others become aliases with a note naming it (notes/open_decisions.md "Standing rules", word choices).
 - Recording: move each answer to the Decided section with the date and the user's words, then tell the asking session
   and the Supervisor whether the assumption stands or must be undone (and which worker should do it).
 - Notes-only commits go straight to main from a temporary worktree (`cowtree add --detach <path> origin/main`,
