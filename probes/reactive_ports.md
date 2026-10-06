@@ -57,3 +57,20 @@ x = 0; out = 0; on change x {out = value * 2}; x = 21; out ||| 42
 x = 5; y := x + 1; z := y * 2; whenever z > 20 {x = 0}; x = 10; x ||| 0
 s = "a"; n = 0; on change s {n += 1}; s = s + "b"; s = s + "c"; n ||| 2
 f = 1.5; seen = 0.0; on change f {seen = value}; f = 2.5; seen ||| 2.5
+# Round 4: listeners in functions and loops, events from functions, payload kinds, handler order across definitions
+n = 0; def bump() { raise bumped{by: 2} }; on bumped {n += event.by}; bump(); bump(); n ||| 4
+name = ""; on greet {name = event.who}; raise greet{who: "Ada"}; name ||| Ada
+total = 0.0; on pay {total += event.amount}; raise pay{amount: 1.5}; raise pay{amount: 2.25}; total ||| 3.75
+xs = []; on item {xs = xs + [event]}; raise item 1; raise item 2; count xs ||| 2
+hits = 0; for i in 1 to 3 { on tick2 {hits += 1} }; raise tick2; hits ||| 3
+x = 0; log = 0; def setx(v) { global x; x = v }; on set x {log += 1}; setx(1); setx(2); log ||| 2
+x = 0; seen = 0; def setx(v) { global x; x = v }; whenever x > 1 {seen += 1}; setx(1); setx(5); seen ||| 1
+a = 1; b := a + 1; c := b + 1; last = 0; on change c {last = value}; a = 10; last ||| 12
+# Round 5: derived chains with text and lists, whenever with else-like toggles, once vs whenever ordering, listener on a loop counter
+temp = 10; state = "cold"; whenever temp > 25 {state = "hot"}; whenever temp <= 25 {state = "cold"}; temp = 30; temp = 20; state ||| cold
+n = 0; log = 0; once n == 2 {log = log*10 + 1}; whenever n == 2 {log = log*10 + 2}; n = 2; log ||| 12
+total = 0; i = 0; on set i {total += value}; while i < 3 {i += 1}; total ||| 6
+names = ["a"]; size := count names; seen = 0; on change size {seen = value}; names = names + ["b"]; seen ||| 2
+price = 2; qty = 3; total := price * qty; history = []; on change total {history = history + [value]}; price = 3; qty = 4; count history ||| 2
+ready = false; n = 0; whenever ready {n += 1}; ready = true; ready = true; n ||| 2
+ready = false; n = 0; on change ready {n += 1}; ready = true; ready = true; n ||| 1
