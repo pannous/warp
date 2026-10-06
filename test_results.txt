@@ -1066,6 +1066,9 @@ PASSED:
   ✓ numbers::test_math::test_units
   ✓ numbers::test_math::test_variable_minus
   ✓ numbers::test_math::test_while_loop
+  ✓ numbers::test_mixed_number_arithmetic::an_exact_real_stays_exact_with_a_ratio
+  ✓ numbers::test_mixed_number_arithmetic::complex_mixes_with_any_number
+  ✓ numbers::test_mixed_number_arithmetic::infinity_and_nan_follow_ieee
   ✓ numbers::test_number::test_hex
   ✓ numbers::test_number::test_number
   ✓ numbers::test_number::test_number_floats
@@ -1419,6 +1422,8 @@ PASSED:
   ✓ parser::test_wasp_position::test_position_tracking
   ✓ parser::test_wasp_position::test_position_with_comments
   ✓ parser::test_wisp_def_params::a_wisp_def_tells_the_parameters_from_the_body
+  ✓ parser::test_wisp_malformed::malformed_wisp_is_an_error_not_a_repaired_value
+  ✓ parser::test_wisp_malformed::malformed_wisp_never_panics
   ✓ parser::test_wisp_roundtrip::wisp_reads_back_what_it_writes
   ✓ parser::test_xml::test_boolean_attribute
   ✓ parser::test_xml::test_cdata
@@ -2338,4 +2343,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2333 passed, 0 failed, 2333 total tested
+23 ignored, 2338 passed, 0 failed, 2338 total tested
