@@ -837,7 +837,7 @@ PASSED:
   ✓ functions::test_property_words::test_property_word_counts_text_characters
   ✓ functions::test_python_higher_order::a_python_function_of_a_function
   ✓ functions::test_python_higher_order::python_parameter_markers_are_no_parameters
-  ✓ functions::test_python_ruby_definitions::test_closure_changing_a_captured_variable_is_an_error
+  ✓ functions::test_python_ruby_definitions::test_block_changes_the_callers_variable
   ✓ functions::test_python_ruby_definitions::test_julia_definitions
   ✓ functions::test_python_ruby_definitions::test_python_keyword_parameter
   ✓ functions::test_python_ruby_definitions::test_python_rest_parameter_with_colon_body
@@ -1168,6 +1168,7 @@ PASSED:
   ✓ modules::test_versions::version_is_a_soft_keyword
   ✓ modules::test_versions::version_literals_have_two_dots_or_more
   ✓ modules::test_versions::versions_compare_part_by_part
+  ✓ modules::test_wasm_modules::a_c_module_takes_and_gives_texts_by_its_header
   ✓ modules::test_wasm_modules::a_module_is_found_by_name_or_path
   ✓ modules::test_wasm_modules::a_module_keeps_its_state_for_the_run
   ✓ modules::test_wasm_modules::a_qualified_global_is_assigned_in_its_module
@@ -2723,4 +2724,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2718 passed, 0 failed, 2718 total tested
+19 ignored, 2719 passed, 0 failed, 2719 total tested

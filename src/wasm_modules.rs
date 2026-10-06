@@ -15,6 +15,10 @@ const SETTER_PREFIX: &str = "set ";
 /// The exports `include m` runs, the first one m has (P139)
 const ENTRY_POINTS: [&str; 2] = ["main", "_start"];
 
+/// The custom section naming the C texts the program's imports from modules cross, for a host that cannot see an
+/// import's types (web/playground/host.js): a line `module\tname\tparameters\tresult` per import, `t` a text, `n` not
+pub const TEXT_CROSSINGS_SECTION: &str = "warp.module_texts";
+
 /// What an import from a module does: call its function, read its global (a getter of no parameters) or set it
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Role {
@@ -27,8 +31,12 @@ pub enum Role {
 pub struct Export {
 	pub signature: FfiSignature,
 	pub role: Role,
-	/// a function's parameter names from the module's name section (`$from`), `$0`, `$1` … where it has none
+	/// a function's parameter names from the module's name section (`$from`), else its header's, else `$0`, `$1` …
 	pub parameters: Vec<String>,
+	/// which parameters are C texts (`char *` in the header beside the module): copied into the module's memory
+	pub text_parameters: Vec<bool>,
+	/// a `char *` result: the NUL-terminated text in the module's memory, read back as a wasp text
+	pub text_result: bool,
 }
 
 /// Does an import name a WebAssembly module file (`lib/x.wasm`, `x.wat`) rather than a C library
@@ -124,7 +132,7 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 	let mut exports = HashMap::new();
 	let mut add = |name: String, params: Vec<wasm_encoder::ValType>, results: Vec<wasm_encoder::ValType>, role: Role, parameters: Vec<String>| {
 		let import_name: &'static str = Box::leak(name.clone().into_boxed_str());
-		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role, parameters });
+		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role, parameters, text_parameters: vec![], text_result: false });
 	};
 	for (name, kind, index) in exported {
 		match kind {
@@ -147,7 +155,44 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 			_ => {}
 		}
 	}
+	with_header_types(path, &mut exports);
 	Ok(exports)
+}
+
+/// The TEXT_CROSSINGS_SECTION of these imports: the exports of modules that take or give a C text
+pub fn text_crossings<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
+	let letter = |text: bool| if text { 't' } else { 'n' };
+	let lines: std::collections::BTreeSet<String> = imports.filter(|import| is_module_path(import.library))
+		.filter_map(|import| exports(import.library).get(import.name).map(|export| (import, export)))
+		.filter(|(_, export)| export.text_result || export.text_parameters.contains(&true))
+		.map(|(import, export)| {
+			let parameters: String = export.text_parameters.iter().map(|text| letter(*text)).collect();
+			format!("{}\t{}\t{parameters}\t{}\n", import.library, import.name, letter(export.text_result))
+		}).collect();
+	lines.into_iter().collect()
+}
+
+/// A C library compiled to WebAssembly: the header beside it (`shout.h` of `shout.wasm`) gives its functions C types,
+/// `char *` parameters and results cross as texts; other pointers stay numbers
+fn with_header_types(path: &str, exports: &mut HashMap<String, Export>) {
+	use crate::ffi::{header_sig_to_ffi_sig, parse_header_file, pointer_kind, pointer_result, CPointer};
+	let header = Path::new(path).with_extension("h");
+	let Some(header) = header.to_str().filter(|_| header.is_file()) else { return };
+	for declared in parse_header_file(header, path) {
+		let Some(export) = exports.get_mut(&declared.name).filter(|export| export.role == Role::Function) else { continue };
+		let text_parameters: Vec<bool> = declared.param_types.iter().map(|c_type| pointer_kind(c_type) == Some(CPointer::Text)).collect();
+		let text_result = pointer_result(&declared) == Some(CPointer::Text);
+		let Some(signature) = header_sig_to_ffi_sig(&declared).filter(|signature| signature.params.len() == export.signature.params.len()) else {
+			eprintln!("[wasm] {header}: {} does not match the module's {} parameters", declared.raw.trim(), export.signature.params.len());
+			continue;
+		};
+		if export.parameters.iter().all(|name| name.starts_with('$')) && declared.param_names.len() == text_parameters.len() {
+			export.parameters = declared.param_names.clone();
+		}
+		export.signature = FfiSignature { name: export.signature.name, library: export.signature.library, ..signature };
+		export.text_parameters = text_parameters;
+		export.text_result = text_result;
+	}
 }
 
 fn number_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encoder::ValType>> {
@@ -333,13 +378,59 @@ pub fn link(linker: &mut wasmtime::Linker<crate::host::HostState>, module: &wasm
 				}
 				Role::Function => {
 					let function = instance.get_func(&mut caller, &name).ok_or_else(|| wasmtime::format_err!("{path} exports no function {name}"))?;
-					function.call(&mut caller, arguments, results)?;
+					match exports(&path).get(&name).filter(|export| export.text_result || export.text_parameters.contains(&true)) {
+						Some(export) => call_with_texts(&mut caller, instance, function, export, arguments, results)?,
+						None => function.call(&mut caller, arguments, results)?,
+					}
 				}
 			}
 			Ok(())
 		})?;
 	}
 	Ok(())
+}
+
+/// A call of a C function of a module whose header says it takes or gives texts: each text argument (a NUL-terminated
+/// copy in the program's memory) is copied into a block of the module's `malloc`, a `char *` result read back as a
+/// text of the program (NULL is ø)
+#[cfg(feature = "native")]
+fn call_with_texts(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, instance: wasmtime::Instance, function: wasmtime::Func,
+	export: &Export, arguments: &[wasmtime::Val], results: &mut [wasmtime::Val]) -> wasmtime::Result<()> {
+	use wasmtime::Val;
+	let name = export.signature.name;
+	let program_memory = caller.get_export("memory").and_then(|memory| memory.into_memory())
+		.ok_or_else(|| wasmtime::format_err!("{name}: the program has no memory for its text"))?;
+	let module_memory = instance.get_memory(&mut *caller, "memory").ok_or_else(|| wasmtime::format_err!("{name}: its module exports no memory for texts"))?;
+	let mut module_arguments = Vec::with_capacity(arguments.len());
+	for (argument, is_text) in arguments.iter().zip(export.text_parameters.iter().chain(std::iter::repeat(&false))) {
+		if !is_text {
+			module_arguments.push(*argument);
+			continue;
+		}
+		let mut text = c_text(program_memory.data(&*caller), argument.unwrap_i32() as usize).to_vec();
+		text.push(0);
+		let malloc = instance.get_typed_func::<i32, i32>(&mut *caller, "malloc")
+			.map_err(|_| wasmtime::format_err!("{name}: its module exports no malloc(size) to copy a text argument into"))?;
+		let block = malloc.call(&mut *caller, text.len() as i32)?;
+		module_memory.write(&mut *caller, block as usize, &text)?;
+		module_arguments.push(Val::I32(block));
+	}
+	if !export.text_result {
+		return function.call(&mut *caller, &module_arguments, results);
+	}
+	let mut pointer = [Val::I32(0)];
+	function.call(&mut *caller, &module_arguments, &mut pointer)?;
+	let address = pointer[0].unwrap_i32() as usize;
+	let text = (address != 0).then(|| c_text(module_memory.data(&*caller), address).to_vec());
+	results[0] = crate::ffi::text_node(caller, text.as_deref()).map_err(|failure| wasmtime::format_err!("{name}: {failure}"))?;
+	Ok(())
+}
+
+/// The NUL-terminated bytes at `address` of a linear memory
+#[cfg(feature = "native")]
+fn c_text(memory: &[u8], address: usize) -> &[u8] {
+	let rest = memory.get(address..).unwrap_or_default();
+	&rest[..rest.iter().position(|byte| *byte == 0).unwrap_or(rest.len())]
 }
 
 /// The run's instance of the module at `path`, one per file however it is named; its own imports (WASI, warp's host

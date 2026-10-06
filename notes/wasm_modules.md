@@ -36,5 +36,12 @@ twice(ft) + half(5.0)                   // 86.5
   `fourty_two.minus(amount: 2, from: 10)`, `minus(amount=2, from=10)`, mixed with positional ones in order; an unknown
   name or a wrong count is the error "fourty_two.minus(from, amount) has no parameter by" / "… takes 2 arguments, got 1"
   (wasm_modules ordered_arguments; a bare positional call is not checked, the module's validation catches it).
+- A C library compiled to wasm (fixture shout.c → shout.wasm, `clang --target=wasm32 -nostdlib -fno-builtin`): the header
+  beside it (shout.h) gives its exports C types (wasm_modules with_header_types, the C FFI's header parser): a `char *`
+  parameter copies the text into a block of the module's exported `malloc`, a `char *` result reads the NUL-terminated
+  text from the module's memory (NULL is ø) and is typed Text (`t = shout("ab"); letters(t)`); header parameter names
+  serve named arguments where the module has no name section. host.js cannot see an import's types, so the program
+  carries a custom section `warp.module_texts` (text_crossings: `module\tname\ttn\tt`, t a text) and callWithTexts
+  copies the same way. Plan: notes/stdlib_connectors.md "Status 2026-10-06".
 - Not yet: `help m.f` (warp has no help word yet). tests/wasm/test_wasm.rs test_import_wasm pins P139 (P144).
 - WebAssembly components (`use wasm "lib.wasm" as lib`, `lib.f(x)`) are the other road: notes/stdlib_connectors.md.
