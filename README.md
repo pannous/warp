@@ -60,6 +60,7 @@ cargo install --locked --git https://github.com/pannous/warp warp warp-runtime
 **From source:**
 ```bash
 git clone https://github.com/pannous/warp && cd warp
+CARGO_NET_OFFLINE=false cargo fetch    # once: the repository builds offline, from cargo's local cache
 cargo build --release && cargo build --release -p warp-runtime   # binaries in target/release/
 ```
 

@@ -2,6 +2,7 @@
 // the types the module declares, its exported globals read as values, and its state lives in one instance per run
 use crate::is;
 use crate::common::fails_with;
+use warp::Node;
 
 const FOURTY_TWO: &str = "import tests/fixtures/wasm/fourty_two; ";
 
@@ -90,4 +91,16 @@ fn a_c_module_takes_and_gives_texts_by_its_header() {
 	is!(&format!("{SHOUT}letters(\"hello\")"), 5);
 	is!(&format!("{SHOUT}letters(shout(\"ab\"))"), 3);
 	is!(&format!("{SHOUT}t = shout(\"ab\"); letters(t)"), 3);
+}
+
+// libc itself hijacked: wasi-libc's functions built into one module (libc_text.sh), declared by libc's own prototypes
+#[test]
+fn libc_compiled_to_wasm_is_called_like_c() {
+	const LIBC: &str = "import tests/fixtures/wasm/libc_text; ";
+	is!(&format!("{LIBC}strlen(\"hello\")"), 5);
+	is!(&format!("{LIBC}strstr(\"haystack\", \"st\")"), "stack");
+	is!(&format!("{LIBC}strrchr(\"a/b/c\", 47)"), "/c");
+	is!(&format!("{LIBC}atoi(\"42\") + abs(-8)"), 50);
+	is!(&format!("{LIBC}toupper(97)"), 65);
+	is!(&format!("{LIBC}strchr(\"abc\", 120)"), Node::Empty); // NULL is ø
 }
