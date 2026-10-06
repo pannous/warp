@@ -22,6 +22,12 @@ impl WasmGcEmitter {
 	pub(super) fn allocate_closure_captures(&mut self, program: &Node) {
 		let mut outer = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone()); // `x = g()` holds what g returns
 		collect_variables(program, &mut outer);
+		// a typed list of main captured by a function is passed in a global of its array type (a task's instance copies
+		// capture globals as Nodes, so not with tasks)
+		let tasks = self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES) || self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN);
+		let saved_scope = std::mem::replace(&mut self.scope, outer.clone());
+		let main_typed = self.find_typed_lists(program);
+		self.scope = saved_scope;
 		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values().cloned().collect();
 		for function in functions {
 			let enclosing = self.enclosing_scope(&function.name);
@@ -43,7 +49,14 @@ impl WasmGcEmitter {
 			}).collect();
 			self.ctx.capture_bindings.insert(function.name.clone(), bindings);
 			let captures: Vec<(String, (u32, Kind))> = captured.into_iter()
-				.map(|(name, kind)| (name, (self.declare_mutable_global(kind), kind)))
+				.map(|(name, kind)| match main_typed.get(&name).filter(|_| enclosing.is_none() && !tasks) {
+					Some(&list) => {
+						let global = self.declare_typed_list_global(list.element);
+						self.typed_capture_globals.insert(global, list);
+						(name, (global, kind))
+					}
+					None => (name, (self.declare_mutable_global(kind), kind)),
+				})
 				.collect();
 			// a task's instance gets the values the spawning instance captured (src/tasks.rs copies these globals)
 			if self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES) || self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN) {
@@ -53,6 +66,7 @@ impl WasmGcEmitter {
 			}
 			self.ctx.captures.insert(function.name, captures);
 		}
+		self.main_typed_lists = Some(main_typed);
 	}
 
 	/// A host that hands values into the program (run_block's result, a task's value) builds an exact number beyond the
@@ -106,6 +120,10 @@ impl WasmGcEmitter {
 	pub(super) fn emit_closure_capture(&mut self, func: &mut Function, function_name: &str) {
 		let captures = self.ctx.captures.get(function_name).cloned().unwrap_or_default();
 		for (name, (global, kind)) in captures {
+			if self.emit_typed_capture(func, &name, global) || (kind.is_ref() && self.emit_typed_list_as_node(func, &name)) {
+				func.instruction(&I::GlobalSet(global));
+				continue;
+			}
 			let stored_alike = |local: &&Local| self.storage_type(local.kind) == self.storage_type(kind);
 			if let Some(local) = self.scope.lookup(&name).filter(stored_alike) {
 				func.instruction(&I::LocalGet(local.position));
@@ -202,6 +220,16 @@ impl WasmGcEmitter {
 			self.scope.define_param(param.name.clone(), kind);
 		}
 
+		// a captured typed list of main is read from its capture global (shadowing a typed global of that name)
+		let captures = self.ctx.captures.get(name).cloned().unwrap_or_default();
+		let shadowed_typed: Vec<_> = captures.iter().map(|(variable, (global, _))| {
+			let previous = match self.typed_capture_globals.get(global) {
+				Some(&list) => self.typed_globals.insert(variable.clone(), (*global, list)),
+				None => self.typed_globals.remove(variable),
+			};
+			(variable.clone(), previous)
+		}).collect();
+
 		// Collect any additional variables in the body, and the temp locals its loops need
 		let temp_locals = collect_variables(&user_fn.body, &mut self.scope);
 		let mut typed_lists = self.find_typed_lists(&user_fn.body);
@@ -238,7 +266,6 @@ impl WasmGcEmitter {
 		self.emit_node_local_defaults(&mut func, &user_fn.body, num_params as usize);
 
 		// Captured variables read their definition-time globals
-		let captures = self.ctx.captures.get(name).cloned().unwrap_or_default();
 		let shadowed: Vec<_> = captures.iter()
 			.map(|(variable, global)| (variable.clone(), self.ctx.user_globals.insert(variable.clone(), *global)))
 			.collect();
@@ -263,6 +290,12 @@ impl WasmGcEmitter {
 			match global {
 				Some(global) => self.ctx.user_globals.insert(variable, global),
 				None => self.ctx.user_globals.remove(&variable),
+			};
+		}
+		for (variable, previous) in shadowed_typed {
+			match previous {
+				Some(previous) => self.typed_globals.insert(variable, previous),
+				None => self.typed_globals.remove(&variable),
 			};
 		}
 

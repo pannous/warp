@@ -26,5 +26,10 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
   lambda shares it (`()=>{ n+=1; n }` counts 1, 2, …), `nonlocal n` may be written; a nested def needs `nonlocal n`,
   else a loud error. nonlocal_cells.rs `lower_lambdas` hoists such a lambda into a nested def `lambda·N` + reference.
 
+- Optional parameters `x?`, `x: int?` mean `x=ø` (the type is dropped: the value is held boxed); `a ?? b` (Op::Coalesce,
+  right-assoc, just above `or`) is `if a == ø then b else a`, a computed once (library_words.rs `lower_coalesce`).
+  Asked the Interviewer, default taken.
+
 ## Open
-- Optional parameters `x?`, `x:T?` and `a ?? b` (asked the Interviewer; `??` is no operator yet).
+- Board cards `functions-*` (todo list): slices in recursion, lambda spellings (`fn`, `lambda x:`, `{|x|}`), C-style
+  and Swift-label definitions, Ruby `add 1, 2`, returning a block with `it`, bare nested function names (P82).

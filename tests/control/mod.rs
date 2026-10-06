@@ -85,3 +85,5 @@ mod test_task_signals;
 mod test_signal_values;
 mod test_shared_signals;
 mod test_signal_reflection;
+mod test_broadcast;
+mod test_signal_lists;

@@ -1247,6 +1247,7 @@ fn c_function(items: &[Node]) -> Option<Node> {
 	let Node::Symbol(_) = name.drop_meta() else { return None };
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
 		Node::List(group, Bracket::Round, Separator::Colon) => group.clone(), // `(real a, int b)`
+		Node::Empty => vec![], // `f()`
 		_ => vec![argument.clone()],
 	});
 	let parameters: Option<Vec<Node>> = parameters.map(|parameter| c_parameter(&parameter)).collect();
@@ -1254,10 +1255,10 @@ fn c_function(items: &[Node]) -> Option<Node> {
 	Some(Node::Key(Box::new(head), Op::Define, Box::new(body.clone())))
 }
 
-/// `real x` is `x:real`; a bare name stays untyped
+/// `real x` is `x:real`; a bare name stays untyped, as does a parameter the parser typed already
 fn c_parameter(parameter: &Node) -> Option<Node> {
 	match parameter.drop_meta() {
-		Node::Symbol(_) => Some(parameter.clone()),
+		Node::Symbol(_) | Node::Key(_, Op::Colon, _) => Some(parameter.clone()),
 		Node::List(words, _, Separator::Space) => match words.as_slice() {
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(Node::Key(Box::new(name.clone()), Op::Colon, Box::new(kind.clone())))

@@ -15,7 +15,8 @@ A list *variable* (a local of kind List, in main or in a function body) whose ev
 is held as an `$IntList`: `(struct (field $length (mut i32)) (field $items (mut (ref $IntArray))))` with
 `$IntArray = (array (mut i64))`. The i64 is the same Int value a local holds (fixnum or big-int/ratio handle, big_int.rs).
 
-Excluded, so they stay cons cells: parameters, globals, variables a function captures, names assigned inside a `try`,
+Excluded, so they stay cons cells: parameters, globals a function assigns, variables a nested function captures from an
+enclosing function, names assigned inside a `try`,
 names updated by an operator (`xs += …`, `xs++`), names indexed by a key (`xs["a"] = …`), and every list with a
 non-int element (`[1, "a"]`, `[ø]`, `[1.5f]`). The analysis is a greatest fixpoint over the assignment sources.
 
@@ -93,3 +94,18 @@ stack (recursive list_with_at) → 0.5 s. Parameters stay Nodes: a function inde
   functions or text parameters. Any single copy `v = p` counts when v is a Node list (a for loop's `x·items = p`), and a
   caller's Int/Float list passes through `int_list_as_node_list` (one node per element, no cons cells): 20 sums of a
   20000-element list 5.3 s → 2.5 s (debug build).
+
+## Globals and captured lists (card compiler-picks, 2026-10-06)
+A list main builds and a function reads (`xs = []; for i in 1..n { xs.add(i) }; at(i) := xs#i`) was a capture global of
+cons cells: every read walked i links and n reads ran out of fuel at n = 10^5. Now:
+- A typed list of main that a main-level function captures is passed in a capture global of its array type
+  (`(ref null $IntList)`): main's typed lists are worked out once before the capture globals are declared
+  (allocate_closure_captures, reused by emit_node_main); the capture at the definition stores the array, a copy when main
+  changes the list later (`updated`), so the function keeps the value it captured. In the function the name reads the
+  global through `Slot::Global` (list_dispatch.rs `typed_list`), so index, count, sum, `for` and stores of copies are the
+  typed operations. Not with tasks (a task's instance copies capture globals as Nodes).
+- A `global xs` that no function assigns is typed the same way (find_typed_globals; its sources are all main's).
+- A typed list captured by a nested function that takes a Node capture global is converted to its Node list there.
+- Measured (probes/numeric_lists_bench.sh, `global` row): n = 10^5 out of fuel before, 0.07 s after; n = 10^6 0.08 s.
+- The automatic choice of linear memory (the card's first idea) gains nothing yet: linear memory and GC arrays run at
+  the same speed (notes/linear_arrays.md); it pays only once a host or GPU backend takes the block.

@@ -105,6 +105,21 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   (alias `this`) too; P116 `c.inc()` updates the variable c (objects are values, like `xs.add(v)`); P117 a body
   definition without parentheses (`area := side*side`) is a getter computed at each read, and `class b extends a`
   copies a's fields and methods (b's own override) (user chose inheritance over the recommended none).
+- P124 (warp-dd, branch functions 9f208fbc3) a lambda that assigns a variable of its enclosing function shares it
+  (`def counter(){ n=0; ()=>{ n+=1; n } }` counts 1, 2, 3 like JS/Kotlin/Swift), `nonlocal n` may also be written;
+  this relaxes wiki/charged.md's rule for lambdas. Worker assumption standing: a nested `def` changing one without
+  `nonlocal` is a loud error naming `nonlocal n` (Python's rule).
+- P125 (warp-dd) optional parameters, user: "x=ø, maybe x, or x? Same as with optional types." Three equivalent
+  spellings of a parameter that may be missing (missing = ø): `x=ø`, `maybe x`, `x?`; typed like the optional types
+  (`x:int?`, `maybe int`). Such a parameter holds ø or a T, so `f()` and `f(2)` both work. Assumed (undoable, not
+  addressed by the user): `a ?? b` is a unless a is ø (only ø, not 0/false); Kotlin's `?:` is not added.
+- P126 (warp-32, follows P123) texts inside containers are quoted everywhere (print, interpolation, string()):
+  `P{x:1 name:"a"}`, `["a" "b"]`; a top-level `print "a"` still writes a.
+- P127 (warp-32, classes) class int fields are fast i64 struct fields; a write that does not fit is a loud run-time
+  error "x of Point is an int field: 2^70 does not fit in 64 bits; declare it x:bigint or x:number".
+- P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
+  of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
+  `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
 - P122 (classes, warp-8e, card g-1nug) static members take the explicit keyword (user chose this over the
   recommended "`pi = 3` in the class body is a constant"): `class circle{r:int; static pi = 3}; circle.pi` → 3, also
   `c.pi`, never stored per instance; a plain `pi = 3` stays a per-instance field with a default value. `static` no

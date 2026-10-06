@@ -28,3 +28,12 @@ fn a_range_argument_used_as_a_list_stays_one() {
 	is!("g(ys) := count ys; f(xs) := g(xs); f(1..5)", 4);
 	is!("f(xs) := count xs; [f(1..5), f([7, 8])]", list(vec![int(4), int(2)]));
 }
+
+/// a range passed on to another function that only reads it stays its bounds all the way (card transitive-range)
+#[test]
+fn a_range_passed_on_to_a_reader_stays_its_bounds() {
+	is!("h(zs) := zs.count; g(ys) := h(ys); f(xs) := g(xs); f(1..1000000000000)", 999999999999i64);
+	is!("g(ys) := sum ys; f(k, xs) := k * g(xs); f(2, 1 to 1000000)", 1000001000000i64);
+	is!("g(a, b) := a.count; f(xs) := g([1], xs) + g(xs, [1]); f(1..1000000000000)", 1000000000000i64);
+	is!("f(xs, n) := { if n == 0 then xs.count else f(xs, n - 1) }; f(1..1000, 3)", 999);
+}

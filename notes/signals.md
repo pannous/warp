@@ -158,8 +158,11 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
      x`, `(listeners of x)#1`, `for f in listeners of x {f(new, old)}`), `clear listeners of x` unsubscribes them all.
      Either makes x a $Signal, and x's main-level listeners then subscribe at run time (in declaration order), so
      the list holds every listener. A listener is a function of (new value, old value).
-   - Open: escaping into a list or an object field (`signals = [x, y]`: lists copy values, objects too, so nothing
-     there keeps the cell yet); `on change p.age` inside a function on a parameter p (only plain names subscribe);
+   - Lists of signals (branch signals-lists, tests/control/test_signal_lists.rs): a function subscribing to the loop
+     variable of `for s in xs {…}` over its parameter xs takes a list of signals; the variables of a list literal
+     passed there (`watch_all([a, b])`, or `watched = [a, b]; watch_all(watched)`) become signals and the list holds
+     the signals themselves (the one place a list keeps no copy).
+   - Open: escaping into an object field (objects copy values, so nothing there keeps the cell yet); `on change p.age` inside a function on a parameter p (only plain names subscribe);
      reflecting over listeners (g-3HmY).
 6. **Signals across tasks** (done): events raised in tasks reach `on` handlers of the starting thread (b8da08417:
    task_inside / signal_send, run at the program's next await, loop start or the end of the run;
@@ -178,7 +181,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    on the output (`{x, y}`, a canvas pixel on a canvas) and keys typed there (`{key}`); the handler's prints and
    paintings appear, and the last line, when it is a name, is the output binding `page·value()` shown anew after each
    handler (else the handler's value). An unhandled raise stays the exception (P110), no CustomEvent yet. Tour
-   example `events`; tests/control/test_page_events.rs). Still open: `broadcast` / channel listeners
+   example `events`; tests/control/test_page_events.rs). `broadcast` / channel listeners: done natively (notes/system_signals.md, Channels); still open
    (stdlib, wiki/signal.md). System signals (OS, devices, page): notes/system_signals.md.
 
 ## Decisions (user, 2026-10-06, via the Interviewer)

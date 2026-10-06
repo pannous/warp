@@ -9,6 +9,9 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
 
+/// `x?`, `int?`: optional
+const OPTIONAL_MARK: char = '?';
+
 struct Function {
 	parameters: Vec<String>,
 	/// the default of each parameter `a=1`, if any
@@ -18,7 +21,7 @@ struct Function {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = keyword_defaults(node);
+	let node = default_forms(node);
 	let mut functions = definitions(&node);
 	if functions.is_empty() {
 		return node;
@@ -35,8 +38,9 @@ pub fn lower(node: Node) -> Node {
 	Rewrite { functions }.node(node)
 }
 
-/// Ruby's keyword parameter `def f(a, b: 2)`: a literal after the colon is no type but the default, `b=2`
-fn keyword_defaults(node: Node) -> Node {
+/// Defaults written as other languages do: Ruby's keyword parameter `def f(a, b: 2)` (a literal after the colon is no
+/// type but the default, `b=2`) and the optional `x?`, `x: int?` (TypeScript, Swift, Kotlin: a missing argument is ø)
+fn default_forms(node: Node) -> Node {
 	match node {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) => {
 			let head = match head.drop_meta() {
@@ -45,15 +49,19 @@ fn keyword_defaults(node: Node) -> Node {
 				}
 				_ => *head,
 			};
-			Node::Key(Box::new(head), op, Box::new(keyword_defaults(*body)))
+			Node::Key(Box::new(head), op, Box::new(default_forms(*body)))
 		}
-		other => other.map_children(keyword_defaults),
+		other => other.map_children(default_forms),
 	}
 }
 
 fn literal_default(parameter: Node) -> Node {
+	let optional = |name: Node| Node::Key(Box::new(name), Op::Assign, Box::new(Node::Empty));
 	match parameter {
 		Node::Key(name, Op::Colon, value) if matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_)) => Node::Key(name, Op::Assign, value),
+		// the value may be ø or of the type: it is held boxed, as any value
+		Node::Key(name, Op::Colon, type_name) if type_name.drop_meta().name().ends_with(OPTIONAL_MARK) => optional(*name),
+		Node::Symbol(name) if name.len() > 1 && name.ends_with(OPTIONAL_MARK) => optional(Node::Symbol(name.trim_end_matches(OPTIONAL_MARK).to_string())),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(literal_default(*node)), data },
 		other => other,
 	}
