@@ -187,6 +187,7 @@ function programImports(holder, hooks) {
 				if (value === "dark mode" && globalThis.matchMedia) return BigInt(matchMedia("(prefers-color-scheme: dark)").matches);
 				throw new Error(`${value}: the playground cannot read it yet`);
 			},
+			clipboard_text: () => { throw new Error("clipboard: the playground cannot read it (the browser's clipboard is asynchronous)"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {
 				holder.exitCode = Number(code);

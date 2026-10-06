@@ -38,6 +38,9 @@ const SHORTHAND_MARK: char = '$';
 const MAX_SHORTHAND_ARGUMENTS: usize = 10;
 const SORT_WORD: &str = "sort";
 const REDUCE_WORD: &str = "reduce";
+/// `any(xs)`, `all(xs)` without a function test the items themselves
+const TRUTH_WORDS: [&str; 2] = ["any", "all"];
+const TRUTH_ITEM: &str = "truth_item";
 const FOLD_WORD: &str = "fold";
 const EACH_WORD: &str = "each";
 /// Iteration words as other languages spell them: sorting with a function (Python sorted, Ruby sort_by, Kotlin
@@ -464,6 +467,11 @@ impl Lowering {
 				[first, second] if iteration.extra_arguments == 0 && self.is_function_value(first) && !self.is_function_value(second) => vec![second.clone(), first.clone()],
 				_ => rest,
 			};
+			// Python's `any(xs)`, `all(xs)`: the items themselves are the conditions
+			if let ([list], true) = (rest.as_slice(), is_call && TRUTH_WORDS.contains(&iteration.word)) {
+				let item = Node::Symbol(TRUTH_ITEM.to_string());
+				return self.iterate(iteration, list.clone(), vec![], Node::Key(Box::new(item.clone()), Op::FatArrow, Box::new(item)));
+			}
 			let [list, extras @ .., function] = rest.as_slice() else { return None };
 			let iteration = with_start(iteration, extras.len());
 			if extras.len() != iteration.extra_arguments {

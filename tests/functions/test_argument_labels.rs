@@ -14,3 +14,9 @@ fn an_underscore_label_takes_the_argument_without_a_name() {
 	is!("func twice(_ x: Int) -> Int { x * 2 }; twice(4)", 8);
 	is!("func add(_ a: Int, _ b: Int) -> Int { a + b }; add(2, 3)", 5);
 }
+
+#[test]
+fn a_labeled_parameter_of_a_function_type() {
+	is!("func apply(_ f: (Int) -> Int, _ x: Int) -> Int { f(x) }; apply({ $0 + 1 }, 2)", 3);
+	is!("func apply(using f: (Int) -> Int, to x: Int) -> Int { f(x) }; apply(using: { $0 * 3 }, to: 2)", 6);
+}
