@@ -234,3 +234,10 @@ first wasp name), `constructor`, `__init__`, `initialize`, `__construct`, `New`,
 like its class (class_methods with_init_constructors, CONSTRUCTOR_ALIASES). An alias the program also calls as a
 method (`p.new(2)`, Rust's `Point::new(1, 2)`: method_calls_named) stays a method. The constructor function is
 `P·init` (it was `P·value`).
+
+Run-time dispatch (classes-27, card class-method): a library-word method (`sum`, the counting words `count`/`size`/…,
+type words) called on a variable of no known class outside the class bodies, `total(x) := x.sum()`, is
+`if x is Bag then x.method·sum() else x.sum()` (class_methods dispatched_by_class, one branch per class defining it).
+A list mutation (`xs.pop()`) on an unknown receiver stays the list's (an if around a mutation is not built); inside
+class bodies receivers are fields of declared types. Open: operators on unknown operands (`f(a, b) := a + b` of two
+instances) still take the built-in operator.

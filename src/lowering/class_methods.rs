@@ -52,6 +52,8 @@ const OPERATOR_METHODS: [(Op, [&str; 3]); 8] = [
 	(Op::Gt, ["more", "bigger", "__gt__"]),
 	(Op::Eq, ["equals", "equal", "__eq__"]),
 ];
+/// The run-time choice of a library-word method by the receiver's class (dispatched_by_class)
+const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then METHOD else OTHERWISE";
 /// Ruby's `include Walker` in a class body takes in a mixin
 const INCLUDE_WORD: &str = "include";
 /// The prefix of a method named like a type or library word: `method·double`, `method·sum` (a prefix: a name
@@ -112,13 +114,14 @@ pub fn lower(node: Node) -> Node {
 /// on what holds an instance of a class defining it (a variable assigned one, `p:Stack`, self) and called bare in a
 /// class body, so `s.items.pop()` and `xs.pop()` of lists stay list mutations
 fn renamed_type_word_methods(node: Node) -> Node {
-	let (mut names, mut classes) = (vec![], vec![]);
+	let (mut names, mut classes, mut defined_by) = (vec![], vec![], vec![]);
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
 		let clashing: Vec<String> = class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name)
 			.filter(|name| crate::analyzer::type_word_kind(name).is_some() || is_library_method(name)).collect();
 		if !clashing.is_empty() {
 			classes.push(name.drop_meta().name());
 		}
+		defined_by.extend(clashing.iter().map(|method| (method.clone(), name.drop_meta().name())));
 		names.extend(clashing);
 	});
 	if names.is_empty() {
@@ -126,7 +129,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 	}
 	let mut instances: Vec<String> = instance_classes(&node, &classes).into_keys().collect();
 	instances.extend([RECEIVER.to_string(), RECEIVER_ALIASES[0].to_string()]);
-	with_method_names(node, &MethodNames { names, instances, classes }, false)
+	with_method_names(node, &MethodNames { names, instances, classes, defined_by }, false)
 }
 
 /// The variables known to hold an instance of one of `classes`, with its class: assigned a construction, annotated
@@ -239,7 +242,7 @@ fn with_operator_calls(node: Node, methods: &[(String, Op, String)], instances: 
 /// A name the library gives lists and texts too (`pop`, `sum`, `count`): a method of that name is one only on an
 /// instance
 fn is_library_method(name: &str) -> bool {
-	crate::analyzer::is_list_mutating_method(name) || crate::library_words::is_library_word(name)
+	crate::analyzer::is_list_mutating_method(name) || crate::library_words::is_library_word(name) || crate::analyzer::is_counting_property(name)
 }
 
 /// The clashing method names, and the variables holding instances of the classes defining them
@@ -247,6 +250,21 @@ struct MethodNames {
 	names: Vec<String>,
 	instances: Vec<String>,
 	classes: Vec<String>,
+	/// (method, class) of every renamed method
+	defined_by: Vec<(String, String)>,
+}
+
+/// The receiver of no known class calls a library-word method (`x.count()`) that classes define: the class's method
+/// when x is one of them at run time, else the library word (card class-method)
+fn dispatched_by_class(receiver: &Node, member: Node, methods: &MethodNames, renamed_member: Node) -> Node {
+	let name = leading_name(&member);
+	let library_call = Node::Key(Box::new(receiver.clone()), Op::Dot, Box::new(member));
+	let method_call = Node::Key(Box::new(receiver.clone()), Op::Dot, Box::new(renamed_member));
+	methods.defined_by.iter().filter(|(method, _)| *method == name).fold(library_call, |otherwise, (_, class)| {
+		let bindings = [("RECEIVER", receiver.clone()), ("CLASS", Node::Symbol(class.clone())), ("METHOD", method_call.clone()), ("OTHERWISE", otherwise)];
+		let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
+		crate::law::substitute(&crate::wasp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
+	})
 }
 
 fn method_name(name: &str) -> String {
@@ -290,16 +308,15 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			let member = renamed(&member).or_else(|| renamed_call(&member)).unwrap_or_else(|| recurse(*member));
 			Node::Key(Box::new(recurse(*receiver)), Op::Dot, Box::new(member))
 		}
-		// `items.pop()` of a list: the member keeps its name, its arguments may call methods
-		Node::Key(receiver, Op::Dot, member) => {
-			let member = match *member {
-				Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
-					Node::List(items[..1].iter().cloned().chain(items[1..].iter().cloned().map(recurse)).collect(), Bracket::Round, separator)
-				}
-				other => other,
-			};
-			Node::Key(Box::new(recurse(*receiver)), Op::Dot, Box::new(member))
+		// `x.count()` of an x of no known class, outside the classes (whose fields have declared types); a list mutation
+		// (`xs.pop()`) stays the list's
+		Node::Key(receiver, Op::Dot, member) if !in_class && matches!(receiver.drop_meta(), Node::Symbol(variable) if !methods.instances.contains(variable)) && !crate::analyzer::is_list_mutating_method(&leading_name(&member)) && (renamed(&member).is_some() || renamed_call(&member).is_some()) => {
+			let member = with_arguments(*member, recurse);
+			let renamed_member = renamed(&member).or_else(|| renamed_call(&member)).expect("guarded");
+			dispatched_by_class(&receiver, member, methods, renamed_member)
 		}
+		// `items.pop()` of a list: the member keeps its name, its arguments may call methods
+		Node::Key(receiver, Op::Dot, member) => Node::Key(Box::new(recurse(*receiver)), Op::Dot, Box::new(with_arguments(*member, recurse))),
 		Node::List(..) if in_class && renamed_call(&node).is_some() => {
 			let Node::List(items, bracket, separator) = renamed_call(&node).expect("guarded") else { unreachable!("a call") };
 			Node::List(items.into_iter().map(recurse).collect(), bracket, separator)
@@ -310,6 +327,16 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			Node::Key(Box::new(head), Op::Define, Box::new(recurse(*body)))
 		}
 		other => other.map_children(recurse),
+	}
+}
+
+/// The call `name(args)` with each argument passed through `change`, the name kept
+fn with_arguments(member: Node, change: impl Fn(Node) -> Node) -> Node {
+	match member {
+		Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
+			Node::List(items[..1].iter().cloned().chain(items[1..].iter().cloned().map(change)).collect(), Bracket::Round, separator)
+		}
+		other => other,
 	}
 }
 
