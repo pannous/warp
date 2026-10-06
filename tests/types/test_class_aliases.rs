@@ -85,3 +85,9 @@ fn positional_braces_build_a_known_class() {
 	is!(code, 3);
 	assert_alias(code, "P{3, 4}", "P(3, 4)");
 }
+
+#[test]
+fn init_defined_with_colon_equals_is_the_constructor() {
+	is!("class S{n:int; init(k) := { n = k * 2 }}; S(4).n", 8);
+	is!("class S{items:list; init(xs) := { items = []; for x in xs { if not (x in items) { items.add(x) } } }}; count(S([1 2 2 3]).items)", 3);
+}

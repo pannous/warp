@@ -29,6 +29,7 @@ const SETTER_SUFFIX: &str = "·set";
 /// the list mutations that give one
 const VALUE_SUFFIX: &str = "·value";
 const RESULT_SUFFIX: &str = "·result";
+const ELEMENTS_SUFFIX: &str = "·elements";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
 /// The keywords of a field: Swift's `var count = 0`, `let`, Kotlin's `val`
 const FIELD_KEYWORDS: [&str; 3] = ["var", "let", "val"];
@@ -43,6 +44,28 @@ const RUBY_NEW_WORD: &str = "new";
 const GO_FUNCTION_WORD: &str = "func";
 /// Rust's block of methods of a type, `impl Point {…}`
 const IMPL_WORD: &str = "impl";
+/// `p.counts#i = v` (and `+=`) of a list in a field: the list taken out, its element set, the list stored back
+/// (`counts·elements = p.counts; counts·elements#i = v; p.counts = counts·elements`), so a method setting an element
+/// of its field changes its object like any field assignment
+fn element_assignments(node: Node) -> Node {
+	let Node::Key(target, op, value) = node else { return node.map_children(element_assignments) };
+	let is_assignment = op == Op::Assign || op.is_compound_assign();
+	let (field, name, index) = match target.drop_meta() {
+		Node::Key(field, Op::Hash, index) if is_assignment => match field.drop_meta() {
+			Node::Key(_, Op::Dot, name) if matches!(name.drop_meta(), Node::Symbol(_)) => (field.drop_meta().clone(), name.drop_meta().name(), index.clone()),
+			_ => return Node::Key(target, op, value).map_children(element_assignments),
+		},
+		_ => return Node::Key(target, op, value).map_children(element_assignments),
+	};
+	let elements = Node::Symbol(format!("{name}{ELEMENTS_SUFFIX}"));
+	let element = Node::Key(Box::new(elements.clone()), Op::Hash, index.clone());
+	Node::List(vec![
+		Node::Key(Box::new(elements.clone()), Op::Assign, Box::new(field.clone())),
+		Node::Key(Box::new(element), op, Box::new(element_assignments(*value))),
+		Node::Key(Box::new(field), Op::Assign, Box::new(elements)),
+	], Bracket::Round, Separator::Semicolon)
+}
+
 /// Kotlin's `p.copy(y = 5)`
 const COPY_WORD: &str = "copy";
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
@@ -80,7 +103,7 @@ pub fn constructor_name(class: &str) -> String {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = positional_braces(ruby_constructions(copies(with_impls(node))));
+	let node = positional_braces(ruby_constructions(copies(element_assignments(with_impls(node)))));
 	let node = with_init_constructors(node.clone(), &method_calls_named(&node));
 	let node = with_members(node);
 	let node = with_class_attributes(class_typed_declarations(node));
@@ -803,14 +826,17 @@ fn with_init_constructors(node: Node, called: &std::collections::HashSet<String>
 	match node {
 		Node::Type { name, body } => {
 			let class = name.drop_meta().name();
-			let is_alias = |item: &Node| constructor_alias(item).filter(|alias| *alias == class || (CONSTRUCTOR_ALIASES.contains(&alias.as_str()) && !called.contains(alias)));
+			let is_alias = |item: &Node| constructor_alias(item).filter(|alias| *alias == class || ([&CONSTRUCTOR_ALIASES[..], &[CONSTRUCTOR_WORD]].concat().contains(&alias.as_str()) && !called.contains(alias)));
 			let items: Vec<Node> = class_items(&body);
 			if !items.iter().any(|item| is_alias(item).is_some()) {
 				return Node::Type { name, body };
 			}
 			let items = items.into_iter().map(|item| match is_alias(&item) {
 				Some(alias) => {
-					crate::diagnostic::note_alias(&alias, CONSTRUCTOR_WORD);
+					// `init(x) := …` is the constructor already, written as a method
+					if alias != CONSTRUCTOR_WORD {
+						crate::diagnostic::note_alias(&alias, CONSTRUCTOR_WORD);
+					}
 					as_init(item)
 				}
 				None => item,
@@ -1378,7 +1404,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 	let getters: Vec<&String> = members.methods.iter().filter(|(_, getter)| *getter).map(|(name, _)| name).filter(|name| unshadowed(name)).collect();
 	let statics: Vec<&String> = members.statics.iter().filter(|name| unshadowed(name)).collect();
 	let readable = Readable { class, fields: [fields, getters].concat(), methods, statics };
-	let body = receiver_reads(body, &readable);
+	let body = element_assignments(receiver_reads(body, &readable));
 	let receiver = Node::Symbol(RECEIVER.to_string());
 	let changes = match changes_receiver(&body) {
 		false => Change::None,

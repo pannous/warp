@@ -47,3 +47,9 @@ fn a_method_changing_its_object_inside_if_gives_the_object() {
 	let either = "class Set{items:list; put(x) := { if x in items { items } else { items = items + [x] } }}; ";
 	is!(&format!("{either}s = Set([]); s.put(1); s.put(1); count(s.items)"), 1);
 }
+
+#[test]
+fn a_method_setting_an_element_of_a_list_field_changes_its_object() {
+	is!("class C{counts:list; bump(i) := { counts#i = counts#i + 1 }}; c = C([5 5]); c.bump(2); c.counts#2", 6);
+	is!("class C{counts:list; bump(i) := { counts#i += 1 }}; c = C([5 5]); c.bump(2); c.counts#2", 6);
+}
