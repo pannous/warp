@@ -131,7 +131,7 @@ impl GcObject {
 		if let Some(anyref) = data_val.unwrap_anyref() {
 			if let Ok(structref) = anyref.unwrap_struct(&*store) {
 				let field_val = structref.field(&mut *store, 0)?;
-				return Ok(field_val.unwrap_f64());
+				return Ok(warp_runtime::floats::canonical_nan(field_val.unwrap_f64()));
 			}
 		}
 		Err(anyhow!("Cannot read boxed f64"))
@@ -240,7 +240,7 @@ impl FromVal for f64 {
 		_instance: &Instance,
 		_store_rc: &Rc<RefCell<Store<()>>>,
 	) -> Result<Self> {
-		Ok(val.unwrap_f64())
+		Ok(warp_runtime::floats::canonical_nan(val.unwrap_f64()))
 	}
 }
 
@@ -429,7 +429,7 @@ fn val_to_node<T>(result: &Val, store: &mut Store<T>, instance: &Instance) -> Re
 	match result {
 		Val::I64(n) => Ok(Node::Number(Number::Int(*n))),
 		Val::I32(n) => Ok(Node::Number(Number::Int(*n as i64))),
-		Val::F64(bits) => Ok(Node::Number(Number::Float(f64::from_bits(*bits)))),
+		Val::F64(bits) => Ok(Node::Number(Number::Float(warp_runtime::floats::canonical_nan(f64::from_bits(*bits))))),
 		Val::AnyRef(_) => Ok(node_of(result, &mut store.as_context_mut(), instance)),
 		_ => Ok(Node::Empty),
 	}
@@ -521,7 +521,7 @@ fn list_in<T>(mut first: Val, mut rest: Val, bracket: crate::node::Bracket, stor
 
 fn boxed_f64<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<f64> {
 	let float_box = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
-	float_box.field(&mut *store, 0).ok().map(|value| value.unwrap_f64())
+	float_box.field(&mut *store, 0).ok().map(|value| warp_runtime::floats::canonical_nan(value.unwrap_f64()))
 }
 
 /// The letters of a `$String(ptr, len)` in linear memory
