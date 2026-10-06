@@ -28,6 +28,7 @@ def forward(input) {
 }
 
 def train(input, target, learning_rate) {
+    global hidden_weights, output_weights, hidden_bias, output_bias
     (hidden, output) = forward(input)
 
     output_error = target - output

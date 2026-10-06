@@ -13,13 +13,12 @@ raylib_sleep	module not found: raylib
 sdl_red_square	undefined function: SDL_Init at 17:10
 # errors to fix
 errors	`}` is missing: the group opened at 4:9 runs to the end of the input (deliberately malformed: input for the forgiving parser, never meant to run)
-life_kotlin_ranges	index out of range (does the loop bound `..size-1` include the end? at 23:13)
+life_kotlin_ranges	index out of range (does the loop bound `..size-1` include the end? at 23:13) (fails on purpose: tests/welcoming/test_welcoming_ask.rs checks the explanation)
 modules	`}` is missing: the group opened at 22:15 runs to the end of the input (sketches a module system: card module-manager)
-natural	`n times x` repeats a text (or a list: `n times [x]`), four is a Symbol at 6:21
+natural	`n times x` repeats a text (or a list: `n times [x]`), four is a Symbol at 6:21 (sketches English phrasing: card natural-phrases)
 netbase	undefined: query in `query "all cities with population > 100000"`
-neural_net	output_weights is a main-level variable: declare it `global output_weights` to change it from a function at 42:9
+neural_net	not an int (destructuring a returned pair in a function: cards destructure-return, destructure-exp)
 particles	Particle{…} takes fields as name:value, got  x:x, y:y (vx keeps the block (cos angle)*speed at 23:13)
-polymorphism	two parameters are named float: use one-word parameter names here
 sample	PI is a constant at 12:9; fix: another name
 types	undefined function: Ok at 29:24
 wasm_interop	Empty symbol
