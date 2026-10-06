@@ -113,9 +113,9 @@ c.increment(2)
 x=0
 for i in 1 upto 4 { x += i }
 x` },
-	"welcoming errors": { value: 'Error("square 3 == 9 is ambiguous; write (square 3) == 9 or square(3 == 9) at 3:8")', code: `// errors explain and offer the fix: click "I meant"
-square(x) := x * x
-square 3 == 9` },
+	"welcoming errors": { value: 'Error("say 3 == 3 is ambiguous; write (say 3) == 3 or say(3 == 3) at 3:5")', code: `// errors explain and offer the fix: click "I meant" (square 3 == 9 is clear: square needs a number)
+say(x) := x
+say 3 == 3` },
 	constants: { value: 'Error("pi is a constant at 2:1; fix: another name")', code: `// constants stay constant
 pi = 4
 2 * pi` },
