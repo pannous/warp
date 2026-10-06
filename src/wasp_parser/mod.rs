@@ -260,6 +260,11 @@ impl SpecialInfix {
 				if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient }
 			}
 			SpecialInfix::Pipeline => piped(lhs, operand),
+			// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
+			SpecialInfix::ElementWise(Op::Mul) if matches!(operand, Empty) => {
+				crate::normalize::hint(&format!("{}.*", lhs.serialize()), &lhs.serialize(), "wasp imports a module whole");
+				lhs
+			}
 			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
 			SpecialInfix::Membership => Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), operand], Bracket::None, Separator::Space),
 			SpecialInfix::DotCall => dot_call(lhs, operand),

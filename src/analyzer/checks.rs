@@ -690,6 +690,54 @@ pub fn resolve_data_scope(program: Node) -> Node {
 	subtract_kebab_variables(resolved, &variables)
 }
 
+/// P168 (user): `p.phone-number` of an object without that field, `number` a variable, is the subtraction
+/// `p.phone - number`; an object whose fields are unknown keeps the field read. Early, before member reads become indexes
+pub fn lower_kebab_members(program: Node) -> Node {
+	let objects = literal_object_fields(&program);
+	if objects.is_empty() {
+		return program;
+	}
+	let variables: HashSet<String> = assigned_names(&program).into_iter().map(String::from).collect();
+	subtract_kebab_members(program, &variables, &objects)
+}
+
+/// The fields of the variables assigned object literals (`p = {phone: 7}`), over every such assignment
+fn literal_object_fields(program: &Node) -> HashMap<String, HashSet<String>> {
+	let mut objects: HashMap<String, HashSet<String>> = HashMap::new();
+	program.visit(&mut |node| {
+		let Node::Key(target, Op::Assign | Op::Define, value) = node else { return };
+		let (Node::Symbol(name), Node::List(entries, Bracket::Curly, _)) = (target.drop_meta(), value.drop_meta()) else { return };
+		let keys: Option<Vec<String>> = entries.iter().map(|entry| match entry.drop_meta() {
+			Node::Key(key, Op::Colon, _) => Some(key.name()),
+			_ => None,
+		}).collect();
+		if let Some(keys) = keys.filter(|keys| !keys.is_empty()) {
+			objects.entry(name.clone()).or_default().extend(keys);
+		}
+	});
+	objects
+}
+
+fn subtract_kebab_members(node: Node, variables: &HashSet<String>, objects: &HashMap<String, HashSet<String>>) -> Node {
+	match node {
+		Node::Key(receiver, Op::Dot, member) if kebab_member(&receiver, &member, variables, objects).is_some() => {
+			let (field, rest) = kebab_member(&receiver, &member, variables, objects).expect("guarded");
+			let read = Node::Key(receiver, Op::Dot, Box::new(Node::Symbol(field)));
+			rest.into_iter().fold(read, |difference, term| Node::Key(Box::new(difference), Op::Sub, Box::new(Node::Symbol(term))))
+		}
+		other => other.map_children(|child| subtract_kebab_members(child, variables, objects)),
+	}
+}
+
+/// `p.a-b-c`: the field a and the variables b, c, when p's known fields lack `a-b-c`
+fn kebab_member(receiver: &Node, member: &Node, variables: &HashSet<String>, objects: &HashMap<String, HashSet<String>>) -> Option<(String, Vec<String>)> {
+	let (Node::Symbol(object), Node::Symbol(name)) = (receiver.drop_meta(), member.drop_meta()) else { return None };
+	let fields = objects.get(object)?;
+	let (field, rest) = name.split_once('-')?;
+	let rest: Vec<String> = rest.split('-').map(str::to_string).collect();
+	(!fields.contains(name) && rest.iter().all(|part| variables.contains(part))).then(|| (field.to_string(), rest))
+}
+
 /// A hyphenated name that is no data key and whose parts are all variables is their difference: `a=5; b=1; a-b` is 4.
 /// The names of data keys and assignment targets stay as they are.
 pub(super) fn subtract_kebab_variables(node: Node, variables: &HashSet<String>) -> Node {
