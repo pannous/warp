@@ -84,3 +84,21 @@ fn exit_gives_the_process_its_code() {
 	let ticking = run("exit_timer.wasp", "n = 0\non every 10 ms { n += 1; print n; if n == 2 { exit } }\nprint \"ready\"\n");
 	assert_eq!((String::from_utf8_lossy(&ticking.stdout).as_ref(), ticking.status.code()), ("ready\n1\n2\n", Some(0)));
 }
+
+/// `on file "x" change {…}`: a program that stays runs the handler when the file changes (or appears)
+#[test]
+fn a_file_change_runs_its_handler() {
+	let watched = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("watched.txt");
+	std::fs::write(&watched, "one").expect("write the watched file");
+	let file = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("on_file_change.wasp");
+	let program = format!("on file \"{}\" change {{ print \"changed\"; exit }}\nprint \"ready\"\n", watched.display());
+	std::fs::write(&file, program).expect("write the program");
+	let mut run = warp_command().args(["run", file.to_str().unwrap()]).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().expect("warp runs");
+	let mut lines = BufReader::new(run.stdout.take().unwrap()).lines();
+	assert_eq!(lines.next().and_then(Result::ok).as_deref(), Some("ready"));
+	std::thread::sleep(std::time::Duration::from_millis(300));
+	std::fs::write(&watched, "two").expect("change the watched file");
+	let rest: Vec<String> = lines.map_while(Result::ok).collect();
+	let status = run.wait().expect("warp ends");
+	assert_eq!((rest, status.code()), (vec!["changed".to_string()], Some(0)));
+}

@@ -145,5 +145,11 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   one ctrl-c as usual.
 - `exit`, `exit(code)` (P121): a host word whose error unwinds the run (ExitRequest); the run's value is ø, the CLI and
   executables exit with the code, the page ends the run. A bare `exit` / `exit()` statement is `exit(0)`.
-- Not yet: Windows (SetConsoleCtrlHandler), file change (`on file "x" change {…}`, notify crate 8.2 is in the
-  registry), timers in the playground (a warning says so), `stop listening`.
+- File change (2026-10-06): `on file "notes.txt" change {…}` (or `changes`) is the handler `on·file·N()` and
+  `signal_watch(N, "notes.txt")`: a timer of 100 ms that runs the handler when the file's modification time or size
+  changed since the last check (written, appeared, deleted). Polling on the existing check points instead of the
+  notify crate: no dependency, no thread, and a handler can only run at a check point anyway; notify (8.2 is in the
+  registry) can replace the stat later if many files or directories are watched. Programs stay while a watch lives.
+  The playground warns (a page has no files). Test: a_file_change_runs_its_handler.
+- Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, timers in the
+  playground (a warning says so), `stop listening`.

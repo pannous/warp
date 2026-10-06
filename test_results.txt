@@ -180,6 +180,7 @@ PASSED:
   ✓ control::test_switch_no_case_value::no_case_shows_the_runtime_value
   ✓ control::test_switch_value::a_parenthesized_switch_takes_part_in_arithmetic
   ✓ control::test_switch_value::a_switch_can_be_bound
+  ✓ control::test_system_signals::a_file_change_runs_its_handler
   ✓ control::test_system_signals::a_program_with_a_timer_stays_after_main
   ✓ control::test_system_signals::a_timer_fires_while_main_runs
   ✓ control::test_system_signals::exit_ends_the_run
@@ -2445,4 +2446,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2440 passed, 0 failed, 2440 total tested
+23 ignored, 2441 passed, 0 failed, 2441 total tested
