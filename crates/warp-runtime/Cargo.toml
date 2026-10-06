@@ -22,3 +22,6 @@ compiler = ["engine", "wasmtime/cranelift", "wasmtime/component-model"]
 
 [dependencies]
 wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "gc", "gc-copying", "runtime", "std"], optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2" # the SIGINT handler of `on interrupt` (host_words.rs signal_poll); in the tree through wasmtime already

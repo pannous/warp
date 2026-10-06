@@ -52,6 +52,8 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_event_signals::a_body_of_one_raise_stays_a_block
+  ✓ control::test_event_signals::a_page_event_handler_waits_for_the_page
   ✓ control::test_event_signals::a_raise_inside_a_function_reaches_the_handler
   ✓ control::test_event_signals::raise_runs_the_handlers_of_its_name
   ✓ control::test_event_signals::the_handled_signals_name_their_functions
@@ -173,11 +175,13 @@ PASSED:
   ✓ control::test_switch_no_case_value::no_case_shows_the_runtime_value
   ✓ control::test_switch_value::a_parenthesized_switch_takes_part_in_arithmetic
   ✓ control::test_switch_value::a_switch_can_be_bound
+  ✓ control::test_system_signals::on_interrupt_runs_at_the_next_loop_start
   ✓ control::test_task_closures::a_capturing_text_lambda_runs_in_a_task
   ✓ control::test_task_closures::a_parameter_named_like_a_unit_is_the_parameter
   ✓ control::test_task_exact::a_big_integer_crosses_to_a_task_and_back
   ✓ control::test_task_exact::a_ratio_crosses_to_a_task_and_back
   ✓ control::test_task_list_literal::a_list_of_task_values_holds_each_result
+  ✓ control::test_task_parameter_shadows::a_parameter_named_like_a_function_is_the_parameter
   ✓ control::test_task_signals::a_raise_in_a_task_runs_the_programs_handler
   ✓ control::test_task_signals::a_raise_nobody_awaits_is_handled_before_the_run_ends
   ✓ control::test_task_signals::a_raise_without_handler_fails_the_task
@@ -946,6 +950,7 @@ PASSED:
   ✓ node::node_values_test::test_values_number
   ✓ node::test_comment_meta::a_field_named_meta_stays_the_field
   ✓ node::test_comment_meta::a_missing_field_is_named_from_any_browsers_trace
+  ✓ node::test_comment_meta::comments_are_meta_information_only_under_use_comments
   ✓ node::test_comment_meta::the_comment_of_a_binding_is_its_meta
   ✓ node::test_empty_operands::a_condition_keyword_is_written_without_its_empty_left
   ✓ node::test_empty_operands::a_missing_operand_is_not_written
@@ -1775,6 +1780,12 @@ PASSED:
   ✓ types::test_cast_bugs::a_runtime_value_as_string
   ✓ types::test_cast_bugs::a_text_as_list_is_its_characters
   ✓ types::test_cast_bugs::nonsense_casts_are_loud
+  ✓ types::test_class_methods::a_method_assigning_its_receiver_says_so
+  ✓ types::test_class_methods::a_method_in_the_body_conforms_to_a_trait
+  ✓ types::test_class_methods::a_method_in_the_class_body_reads_the_fields
+  ✓ types::test_class_methods::a_method_without_parentheses_is_read_like_a_field
+  ✓ types::test_class_methods::classes_with_a_method_of_the_same_name_each_call_their_own
+  ✓ types::test_class_methods::methods_are_no_fields
   ✓ types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ types::test_constructor_vs_data::test_construction_checks_field_types
   ✓ types::test_constructor_vs_data::test_construction_fills_defaults_and_leaves_optional_fields_out
@@ -2408,4 +2419,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2403 passed, 0 failed, 2403 total tested
+23 ignored, 2414 passed, 0 failed, 2414 total tested

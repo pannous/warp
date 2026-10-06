@@ -542,6 +542,8 @@ pub struct WaspParser {
 	in_command: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
 	times_loops: usize,
+	/// A comment between two statements: it belongs to the next one (parse_value attaches it)
+	pending_comment: Option<String>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
 	after_function_keyword: bool,
 	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
@@ -788,6 +790,7 @@ impl WaspParser {
 			stops_at_end: false,
 			in_command: false,
 			times_loops: 0,
+			pending_comment: None,
 			after_function_keyword: false,
 			elvis_operands: 0,
 			functions: Default::default(),

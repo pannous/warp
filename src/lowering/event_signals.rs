@@ -3,6 +3,8 @@
 //! handlers of a name become one function `on·stop·the·machine(event)`, defined where the first of them is written and
 //! declaring `global` the main-level variables they mention, so a raise inside a function reaches them too; each raise
 //! of the name is its call. A raise whose name no handler listens to stays the exception (try catches it).
+//! Page events (`on click {…}`, phase 7) get their handler function without a raise: the playground keeps the program
+//! after main and calls the exported `on·click` when the page raises it; natively nothing does, which a warning says.
 
 use crate::declarations::{handler_parts, word};
 use crate::node::{Bracket, Node, Separator};
@@ -22,16 +24,27 @@ const FUNCTION_TEMPLATE: &str = "handler(event) := {}";
 const PARAMETERLESS_TEMPLATE: &str = "handler() := {}";
 const TEMPLATE_NAME: &str = "handler";
 const EVENT_WORD: &str = "event";
+/// The events the playground page raises (web/playground/host.js PAGE_EVENTS)
+pub const PAGE_EVENTS: [&str; 1] = ["click"];
+/// The events the system raises: the runtime calls their handlers (notes/system_signals.md)
+pub const SYSTEM_EVENTS: [&str; 1] = ["interrupt"];
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
 	let raised = raised_names(&program);
 	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
 		.filter_map(|(index, statement)| handler(statement).map(|(name, body)| (index, name, body)))
-		.filter(|(_, name, _)| raised.contains(name))
+		.filter(|(_, name, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()) || SYSTEM_EVENTS.contains(&name.as_str()))
 		.collect();
 	if handlers.is_empty() {
 		return program;
+	}
+	#[cfg(feature = "native")]
+	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| PAGE_EVENTS.contains(&name.as_str()) && !raised.contains(name)) {
+		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
+		if let Err(error) = crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning)]) {
+			return error;
+		}
 	}
 	let main_variables = main_level_variables(&statements);
 	let mut bodies: HashMap<String, Vec<Node>> = HashMap::new();
@@ -44,7 +57,11 @@ pub fn lower(program: Node) -> Node {
 	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
 	let lowered = statements.into_iter().enumerate().filter_map(|(index, statement)| match first_handler.get(&index) {
-		Some(name) => Some(function_with_globals(&handler_function_name(name), true, &bodies[name], &main_variables)),
+		Some(name) => {
+			// a page event's handler that never reads `event` takes nothing: the page calls it with ø, which it ignores
+			let takes_event = raised.contains(name) || bodies[name].iter().any(|body| symbols(body).iter().any(|word| word == EVENT_WORD));
+			Some(function_with_globals(&handler_function_name(name), takes_event, &bodies[name], &main_variables))
+		}
 		None if handler_lines.contains(&index) => None,
 		None => Some(statement),
 	});
@@ -134,7 +151,10 @@ pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Nod
 /// Each `raise name{data}` with handlers is the call `on·name(data)`
 fn raises_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>) -> Node {
 	if let Some((name, data)) = raise(&node).filter(|(name, _)| handled.contains_key(name)) {
-		return Node::List(vec![Node::Symbol(handler_function_name(&name)), data], Bracket::Round, Separator::None);
+		let call = Node::List(vec![Node::Symbol(handler_function_name(&name)), data], Bracket::Round, Separator::None);
+		// `{ raise alarm }` is a block of one statement: it stays a block
+		let braced = matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
+		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };
 	}
 	match node {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| raises_as_calls(item, handled)).collect(), bracket, separator),
