@@ -333,6 +333,8 @@ const ODD_WORD: &str = "odd";
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
+const TO_SENTENCE_WORD: &str = "To";
+const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
 const TIMES_WORD: &str = "times";

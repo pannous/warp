@@ -152,6 +152,8 @@ impl WaspParser {
 			let head = Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None);
 			// P52: the prepositions of the phrase, for phrase_calls to read calls like `add 1 to 2`
 			let pattern = crate::phrase_calls::pattern_text(&words);
+			// `To square a number: …` of one slot is called in English as `square of x` too (`square 3` stays a call)
+			let pattern = if pattern == crate::phrase_calls::SLOT { format!("{OF_WORD} {pattern}") } else { pattern };
 			if pattern.split(' ').any(|part| part != crate::phrase_calls::SLOT) {
 				Node::Meta { node: Box::new(head), data: Box::new(Node::key(crate::phrase_calls::PHRASE_MARK, Node::Text(pattern))) }
 			} else {
@@ -492,7 +494,8 @@ impl WaspParser {
 			}
 		}
 
-		if symbol == TO_WORD && !self.options.data_mode && !self.options.wit_mode && self.word_starts_statement(symbol.len()) {
+		// `To square a number: …` starts an English sentence with a capital
+		if (symbol == TO_WORD || symbol == TO_SENTENCE_WORD) && !self.options.data_mode && !self.options.wit_mode && self.word_starts_statement(symbol.len()) {
 			if let Some(definition) = self.try_parse_to_definition() {
 				return definition;
 			}
