@@ -34,6 +34,10 @@ const CLOSURE_CALL: &str = "closure_call_2";
 /// `signal·fired·0`: the cell of a once listener inside a function, whether it ran
 const FIRED_PREFIX: &str = "signal·fired·";
 const GLOBAL_WORD: &str = "global";
+/// `listeners of x`, `clear listeners of x` (card g-3HmY)
+const LISTENERS_WORD: &str = "listeners";
+const OF_WORD: &str = "of";
+const CLEAR_WORD: &str = "clear";
 
 /// A function definition: its name, parameter names and body
 struct Definition {
@@ -98,8 +102,68 @@ pub fn poll_shared(program: Node) -> Node {
 
 /// Listeners inside functions on their parameters or on main-level variables become subscriptions made at run time
 pub fn subscribe(program: Node) -> Node {
+	let (program, reflected) = reflections(program);
 	let main_variables = main_variables(&program);
-	Subscriptions { main_variables, fired: 0 }.rewrite(program)
+	let mut subscriptions = Subscriptions { main_variables, fired: 0 };
+	let program = subscriptions.rewrite(program);
+	if reflected.is_empty() {
+		return program;
+	}
+	// a reflected variable's main-level listeners subscribe too, so its list holds them
+	match program {
+		Node::List(statements, bracket, separator) if crate::variable_signals::is_statement_list(&bracket, &separator) => {
+			let statements = statements.into_iter().map(|statement| subscriptions.subscription(&statement, &reflected).unwrap_or(statement)).collect();
+			Node::List(statements, bracket, separator)
+		}
+		other => other,
+	}
+}
+
+/// `listeners of x` → `signal_listeners(x)`, `clear listeners of x` → `signal_listeners_set(x, ø)`; and the variables
+/// reflected so
+fn reflections(program: Node) -> (Node, HashSet<String>) {
+	let mut reflected = HashSet::new();
+	let program = reflected_lists(program, &mut reflected);
+	(program, reflected)
+}
+
+fn reflected_lists(node: Node, reflected: &mut HashSet<String>) -> Node {
+	let Node::List(items, bracket, separator) = node else { return map_children(node, &mut |child| reflected_lists(child, reflected)) };
+	let mut out: Vec<Node> = vec![];
+	// `for f in listeners of x {…}` arrives grouped `(listeners of) (x {…})`: its parts in one row
+	let grouped_reflection = |item: &Node| matches!(item.drop_meta(), Node::List(parts, Bracket::None, _) if parts.last().is_some_and(|last| word(last) == OF_WORD) && parts.iter().any(|part| word(part) == LISTENERS_WORD));
+	let items: Vec<Node> = if items.iter().any(grouped_reflection) {
+		items.into_iter().flat_map(|item| match item.drop_meta() {
+			Node::List(parts, Bracket::None, _) => parts.clone(),
+			_ => vec![item],
+		}).collect()
+	} else {
+		items
+	};
+	let items: Vec<Node> = items.into_iter().map(|item| reflected_lists(item, reflected)).collect();
+	let mut rest = items.into_iter().peekable();
+	while let Some(item) = rest.next() {
+		if word(&item) == LISTENERS_WORD && rest.peek().is_some_and(|next| word(next) == OF_WORD) {
+			rest.next();
+			if let Some(variable) = rest.next() {
+				reflected.insert(word(&variable));
+				let list = call(SIGNAL_LISTENERS, vec![variable.clone()]);
+				match out.last().map(word) {
+					Some(clear) if clear == CLEAR_WORD => {
+						out.pop();
+						out.push(call(SIGNAL_LISTENERS_SET, vec![variable, Node::Empty]));
+					}
+					_ => out.push(list),
+				}
+				continue;
+			}
+		}
+		out.push(item);
+	}
+	match (out.len(), &bracket) {
+		(1, Bracket::None) => out.remove(0),
+		_ => Node::List(out, bracket, separator),
+	}
 }
 
 struct Subscriptions {
@@ -259,6 +323,13 @@ impl Signals {
 fn escaping(program: &Node, definitions: &[Definition]) -> (HashSet<(String, usize)>, HashSet<String>) {
 	let mut signal_params = HashSet::new();
 	let mut escaping = HashSet::new();
+	// the main level subscribes or reflects (`listeners of x`) too
+	without_definitions(program).visit(&mut |node| {
+		let Node::List(items, _, _) = node else { return };
+		if items.len() >= 2 && [SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET].contains(&word(&items[0]).as_str()) {
+			escaping.insert(word(&items[1]));
+		}
+	});
 	for definition in definitions {
 		definition.body.visit(&mut |node| {
 			let Node::List(items, _, _) = node else { return };

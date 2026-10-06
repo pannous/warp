@@ -184,7 +184,7 @@ impl FunctionValues {
 			Node::Symbol(name) => self.functions.contains(name) || self.variables.contains(name),
 			Node::Key(choice, Op::Else, otherwise) => self.is_function_value(otherwise) || self.is_function_value(choice),
 			Node::Key(_, Op::Then, chosen) => self.is_function_value(chosen),
-			Node::Key(list, Op::Hash, _) => matches!(list.drop_meta(), Node::Symbol(name) if self.lists.contains(name)),
+			Node::Key(list, Op::Hash, _) => self.is_function_list(list),
 			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name) || self.variables.contains(name)) => true,
 			Node::List(items, _, _) if matches!(items.as_slice(), [marker, _, _, ..] if matches!(marker.drop_meta(), Node::Symbol(word) if word == crate::wasp_parser::TRY_MARKER)) => {
 				self.is_function_value(&items[1]) || self.is_function_value(&items[2])
@@ -196,12 +196,14 @@ impl FunctionValues {
 	}
 
 	/// A list of function values: a literal holding one, another such list, one with more appended (`out + [f]`, what
-	/// `xs.map(n => (x => x + n))` builds), or a block that ends in one
+	/// `xs.map(n => (x => x + n))` builds), a signal's listeners, or a block that ends in one
 	fn is_function_list(&self, node: &Node) -> bool {
 		match node.drop_meta() {
 			Node::List(items, Bracket::Square, _) => items.iter().any(|item| self.is_function_value(item)),
 			Node::Symbol(name) => self.lists.contains(name),
 			Node::Key(left, Op::Add, right) => self.is_function_list(left) || self.is_function_list(right),
+			// a signal's listeners (`listeners of x`, lowering/signal_values.rs)
+			Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::cells::SIGNAL_LISTENERS) => true,
 			block @ Node::List(..) if !std::ptr::eq(tail(block), block) => self.is_function_list(tail(block)),
 			_ => false,
 		}
@@ -212,8 +214,8 @@ impl FunctionValues {
 		let Node::List(items, _, _) = node else { return None };
 		let [keyword, variable, in_word, list, _body] = items.as_slice() else { return None };
 		let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
-		match (variable.drop_meta(), list.drop_meta()) {
-			(Node::Symbol(variable), Node::Symbol(list)) if is_word(keyword, FOR_WORD) && is_word(in_word, IN_WORD) && self.lists.contains(list) => Some(variable),
+		match variable.drop_meta() {
+			Node::Symbol(variable) if is_word(keyword, FOR_WORD) && is_word(in_word, IN_WORD) && self.is_function_list(list) => Some(variable),
 			_ => None,
 		}
 	}
