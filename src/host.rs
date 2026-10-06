@@ -74,16 +74,23 @@ pub const FOREIGN_CALL: &str = "foreign_call";
 /// paint(pixels, width, height): the pixels (a list, row after row, nonzero ink, 0 paper) drawn on the canvas of the
 /// browser playground (host.js); natively a PNG file (src/paint.rs)
 pub const PAINT: &str = "paint";
+/// Channels between programs (src/channels.rs): channel_listen(id, channel), channel_pending(id) → count,
+/// channel_next(id) → the oldest message, channel_send(channel, value)
+pub const CHANNEL_LISTEN: &str = "channel_listen";
+pub const CHANNEL_PENDING: &str = "channel_pending";
+pub const CHANNEL_NEXT: &str = "channel_next";
+pub const CHANNEL_SEND: &str = "channel_send";
 /// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
-pub const VALUE_GIVING_WORDS: [&str; 3] = [RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE];
-pub const HOST_WORDS: [&str; 32] = [GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_WATCH, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
+pub const VALUE_GIVING_WORDS: [&str; 4] = [RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE, CHANNEL_NEXT];
+pub const HOST_WORDS: [&str; 36] = [CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_WATCH, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
 	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2]];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 32] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 36] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (EXIT, vec![I64], vec![]),
+	[(CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CHANNEL_SEND, vec![node, node], vec![]),
+		(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (EXIT, vec![I64], vec![]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
 		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node]), (TASK_STATUS, vec![I64], vec![I64]), (TASK_POLL, vec![], vec![]),
@@ -415,6 +422,11 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, RUN_BLOCK, run_block)?;
 	linker.func_wrap(HOST_LIBRARY, BLOCK_VALUE, block_value)?;
 	linker.func_wrap(HOST_LIBRARY, FOREIGN_CALL, foreign_call)?;
+	crate::channels::forget_listeners(); // each run links anew, on its own thread
+	linker.func_wrap(HOST_LIBRARY, CHANNEL_LISTEN, channel_listen)?;
+	linker.func_wrap(HOST_LIBRARY, CHANNEL_PENDING, crate::channels::pending)?;
+	linker.func_wrap(HOST_LIBRARY, CHANNEL_NEXT, channel_next)?;
+	linker.func_wrap(HOST_LIBRARY, CHANNEL_SEND, channel_send)?;
 	linker.func_wrap(HOST_LIBRARY, PAINT, paint)?;
 
 	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
@@ -555,6 +567,43 @@ fn foreign_call(mut caller: Caller<'_, HostState>, runtime: Option<wasmtime::Roo
 	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
 	Ok(built.unwrap_anyref().copied())
+}
+
+#[cfg(feature = "native")]
+type HostNode = Option<wasmtime::Rooted<wasmtime::AnyRef>>;
+
+/// The node a host word was given, read out of the caller's instance
+#[cfg(feature = "native")]
+fn given_node(caller: &mut Caller<'_, HostState>, value: HostNode) -> wasmtime::Result<Node> {
+	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(wasmtime::Error::msg("the module exports no memory")) };
+	Ok(crate::wasm_reader::node_in(&Val::AnyRef(value), &mut caller.as_context_mut(), memory))
+}
+
+/// `on message from "chat" {…}` starts listening (src/channels.rs)
+#[cfg(feature = "native")]
+fn channel_listen(mut caller: Caller<'_, HostState>, id: i64, channel: HostNode) -> wasmtime::Result<()> {
+	let channel = given_node(&mut caller, channel)?;
+	crate::channels::listen(id, &channel.name()).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))
+}
+
+/// The oldest message the listener got, as the value it was sent as (ø when none waits)
+#[cfg(feature = "native")]
+fn channel_next(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<HostNode> {
+	use crate::tasks::{Builders, TaskFailure, TaskValue};
+	let failure = |problem: String| wasmtime::Error::new(TaskFailure(format!("on message: {problem}")));
+	let message = crate::channels::next(id).map(|text| crate::wasp_parser::parse(&text).drop_meta().clone()).unwrap_or(Node::Empty);
+	let value = TaskValue::of(&message).map_err(|problem| failure(problem.to_string()))?;
+	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
+	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
+	Ok(built.unwrap_anyref().copied())
+}
+
+/// `broadcast value on "chat"`: the value as wasp text to every listener of the channel
+#[cfg(feature = "native")]
+fn channel_send(mut caller: Caller<'_, HostState>, channel: HostNode, message: HostNode) -> wasmtime::Result<()> {
+	let channel = given_node(&mut caller, channel)?;
+	let message = given_node(&mut caller, message)?;
+	crate::channels::send(&channel.name(), message.serialize().trim()).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))
 }
 
 #[cfg(feature = "native")]
