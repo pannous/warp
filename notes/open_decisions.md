@@ -74,6 +74,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P105 user: "We also need `warp run` which shall do the opposite": `warp run hello.wasp` runs the program and writes
   no executable (the opposite of `build`, which writes without running). Assumed (undoable): bare `warp run` without
   a file still opens the REPL. warp-f6, branch p102-exe-naming.
+- P106 tasks share a variable with main only when it is declared `shared` (`shared done = false; go { …; done = true
+  }; after done …`), scalars like P44's shared arrays; every other variable stays an isolate copy (P33). Asked by
+  warp-d9 (branch async); as recommended. wiki/thread.md's example gets `shared`.
 - P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
   behind them go; no test edits. Asked by warp-40 (code-quality).
 - P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.
