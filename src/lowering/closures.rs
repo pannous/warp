@@ -162,10 +162,22 @@ fn tail(body: &Node) -> &Node {
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly | Bracket::Round, Separator::Semicolon | Separator::Newline) if !items.is_empty() => tail(&items[items.len() - 1]),
 		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 => tail(&items[0]),
-		// `return value`
-		Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(name) if name == "return")) => tail(&items[1]),
+		Node::List(items, _, _) if is_return(items) => tail(&items[1]),
 		other => other,
 	}
+}
+
+/// `function add` or `return function add`
+fn gives_reference(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(items, _, _) if is_return(items) => referenced_function(&items[1]).is_some(),
+		_ => referenced_function(node).is_some(),
+	}
+}
+
+/// `return value`
+fn is_return(items: &[Node]) -> bool {
+	matches!(items, [word, _] if matches!(word.drop_meta(), Node::Symbol(name) if name == "return"))
 }
 
 /// What may hold a function value, judged from the source: the functions returning one, the variables assigned one
@@ -430,9 +442,15 @@ impl Lifting {
 				Node::Key(Box::new(choice), op, Box::new(self.function_value(*chosen, bound)))
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.function_value(*node, bound)), data },
+			// `return function add`
+			Node::List(mut items, bracket, separator) if is_return(&items) && gives_reference(&items[1]) => {
+				let value = items.pop().expect("a returned value");
+				items.push(self.function_value(value, bound));
+				Node::List(items, bracket, separator)
+			}
 			// `{def add(t){…}; function add}`: a body ending in a function reference gives the function (a bare `add` there
 			// needs its arguments, P82)
-			Node::List(mut items, bracket @ (Bracket::Curly | Bracket::Round), separator) if items.last().is_some_and(|last| referenced_function(last).is_some()) => {
+			Node::List(mut items, bracket @ (Bracket::Curly | Bracket::Round), separator) if items.last().is_some_and(gives_reference) => {
 				let last = items.pop().expect("not empty");
 				items.push(self.function_value(last, bound));
 				Node::List(items, bracket, separator)
