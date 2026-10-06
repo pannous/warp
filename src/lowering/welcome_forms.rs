@@ -130,6 +130,11 @@ fn go_destructuring(mut items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 
 /// `x * 2 in double 4` → (`x * 2`, `double 4`); no `in`: the value alone
 fn split_at_in(value: &Node) -> (Node, Option<Node>) {
+	// OCaml's `let inc = fun x -> x + 1 in inc 4`: the `in` ends the lambda's body
+	if let Node::Key(head, op @ (Op::Arrow | Op::FatArrow), body) = value.drop_meta() {
+		let (body, rest) = split_at_in(body);
+		return (Node::Key(head.clone(), *op, Box::new(body)), rest);
+	}
 	let Node::List(words, Bracket::None, separator @ (Separator::Space | Separator::None)) = value.drop_meta() else { return (value.clone(), None) };
 	let Some(position) = words.iter().position(|word| is_word(word, IN_WORD)) else { return (value.clone(), None) };
 	let phrase = |part: &[Node]| match part {

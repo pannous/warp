@@ -275,9 +275,29 @@ fn c_style_parameters(head: &Node) -> Node {
 	};
 	match head.drop_meta() {
 		Node::List(words, _, _) if matches!(words.as_slice(), [keyword, _] if matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))) => c_style_parameters(&words[1]),
+		// OCaml/F# `fun a b -> …`, parsed as `(fun a) b`
+		Node::List(_, Bracket::None, Separator::Space) if keyword_and_names(head).is_some_and(|names| names.len() > 1) => {
+			Node::List(keyword_and_names(head).expect("guarded"), Bracket::Round, Separator::Colon)
+		}
 		Node::List(words, Bracket::Round, Separator::Space) if words.len() == 2 && is_type_word(&words[0]) => Node::List(vec![typed(head)], Bracket::Round, Separator::Colon),
 		Node::List(words, Bracket::Round, separator) if words.iter().any(|word| typed(word) != *word) => Node::List(words.iter().map(typed).collect(), Bracket::Round, separator.clone()),
 		_ => head.clone(),
+	}
+}
+
+/// `fun a b` (as `(fun a) b`): the names after the function keyword
+fn keyword_and_names(head: &Node) -> Option<Vec<Node>> {
+	let mut words = vec![];
+	flatten_phrase(head, &mut words);
+	let (keyword, names) = words.split_first()?;
+	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word));
+	(is_keyword && names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_)))).then(|| names.to_vec())
+}
+
+fn flatten_phrase(node: &Node, words: &mut Vec<Node>) {
+	match node.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Space) => items.iter().for_each(|item| flatten_phrase(item, words)),
+		other => words.push(other.clone()),
 	}
 }
 
