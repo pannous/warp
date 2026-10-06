@@ -798,6 +798,8 @@ PASSED:
   ✓ lists::test_key_lookup::test_object_variable_is_looked_up_by_key
   ✓ lists::test_key_lookup::test_text_value_is_looked_up
   ✓ lists::test_key_subscript_hint::a_text_key_subscript_gets_no_index_hint
+  ✓ lists::test_linear_append::an_appended_list_of_nodes_keeps_its_items
+  ✓ lists::test_linear_append::map_and_filter_of_texts_stay_linear
   ✓ lists::test_list_arithmetic::test_round_group_of_arithmetic_is_still_an_expression
   ✓ lists::test_list_arithmetic::test_square_list_keeps_all_items_that_are_arithmetic
   ✓ lists::test_list_arithmetic::test_square_list_of_one_arithmetic_item_is_a_list
@@ -828,6 +830,8 @@ PASSED:
   ✓ lists::test_lists::test_root_list_strings
   ✓ lists::test_lists::test_root_lists
   ✓ lists::test_lists::test_while_nop_issue
+  ✓ lists::test_long_list_copies::a_long_list_of_nodes_grows_without_exhausting_the_stack
+  ✓ lists::test_long_list_copies::copies_keep_the_order_and_share_nothing_they_change
   ✓ lists::test_long_list_result::a_long_list_result_reads_back
   ✓ lists::test_map_starts::a_list_given_for_map_entries_keeps_the_generic_way
   ✓ lists::test_map_starts::a_map_literal_and_a_map_parameter_are_hash_tables
@@ -1795,10 +1799,15 @@ PASSED:
   ✓ types::test_cast_bugs::a_runtime_value_as_string
   ✓ types::test_cast_bugs::a_text_as_list_is_its_characters
   ✓ types::test_cast_bugs::nonsense_casts_are_loud
+  ✓ types::test_class_extends::a_subclass_adds_fields
+  ✓ types::test_class_extends::a_subclass_has_the_fields_and_methods_of_its_parent
+  ✓ types::test_class_extends::a_subclass_instance_is_accepted_where_the_parent_is_wanted
+  ✓ types::test_class_extends::a_subclass_overrides_a_method
   ✓ types::test_class_methods::a_method_assigning_its_receiver_says_so
   ✓ types::test_class_methods::a_method_in_the_body_conforms_to_a_trait
   ✓ types::test_class_methods::a_method_in_the_class_body_reads_the_fields
   ✓ types::test_class_methods::a_method_without_parentheses_is_read_like_a_field
+  ✓ types::test_class_methods::a_shared_method_named_like_a_library_word_stays_the_classes_own
   ✓ types::test_class_methods::classes_with_a_method_of_the_same_name_each_call_their_own
   ✓ types::test_class_methods::methods_are_no_fields
   ✓ types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
@@ -2436,4 +2445,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2431 passed, 0 failed, 2431 total tested
+23 ignored, 2440 passed, 0 failed, 2440 total tested
