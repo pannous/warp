@@ -61,6 +61,11 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
 - Iteration templates append with `out = out + [x]`: `out.add(x)` was taken by a user function `add`.
 - Python `list(x)` is `x as list` (library_words EXPANDED_WORDS); a tuple result type `-> (Int, Int) {…}` is dropped,
   the body's tuple stays (declarations.rs `tuple_result`).
+- Python `list()` is `[]` (library_words `empty_list_calls`, unless the program defines list).
+- Spreading into a function parameter `def apply(f, *args){ f(*args) }`: variadic.rs keeps the spread of a call of a
+  parameter, function_values.rs runs variadic::lower again once f is known.
+- Python colon definitions with parameters become definitions in lower_c_functions (keyword_definition), so the
+  function value passes see them; without parameters they stay def forms for late_binding (a `z() := e` is a getter).
 
 ## Call efficiency (probes/call_benchmark.sh [N], 10^8 calls each)
 - Plain, default, named, overload and lambda calls compile to the same direct `call $f` with i64 arguments: equal

@@ -44,3 +44,9 @@ fn kotlin_vararg_and_csharp_params() {
 	is!("fun total(vararg xs: Int): Int = xs.sum(); total(1, 2, 3)", 6);
 	is!("int Total(params int[] xs) { return xs.sum(); }; Total(1, 2, 3)", 6);
 }
+
+#[test]
+fn spreading_into_a_function_parameter() {
+	is!("def apply(f, *args){ f(*args) }; apply((a, b) => a * b, 3, 4)", 12);
+	is!("def apply(f, *args){ f(*args) }; def add(a, b){ a + b }; apply(add, 3, 4)", 7);
+}
