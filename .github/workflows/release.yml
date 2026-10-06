@@ -1,0 +1,59 @@
+# .github/workflows/release.yml
+name: Release
+
+# A version tag (v*, matching Cargo.toml's version) publishes a GitHub release with prebuilt binaries: per platform one
+# tarball holding `warp` and `warp-runtime` (the stub `warp build --exe` needs next to warp). The Homebrew formula
+# (packaging/homebrew/Formula/warp.rb, copied to pannous/homebrew-tap) builds the tag's source; notes/packaging.md
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: existing tag to (re)build the binaries for
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: create the release (once)
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --generate-notes --title "warp $TAG"
+
+  binaries:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - { os: macos-latest, target: aarch64-apple-darwin }
+        - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+        - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.TAG }}
+    - uses: dtolnay/rust-toolchain@stable
+    - name: build
+      # two builds: built on its own, warp-runtime has no Cranelift (about 1 MB)
+      run: |
+        cargo build --release --locked
+        cargo build --release --locked -p warp-runtime
+    - name: upload
+      env:
+        GH_TOKEN: ${{ github.token }}
+        ARCHIVE: warp-${{ env.TAG }}-${{ matrix.target }}.tar.gz
+      run: |
+        tar -czf "$ARCHIVE" -C target/release warp warp-runtime
+        gh release upload "$TAG" "$ARCHIVE" --clobber
