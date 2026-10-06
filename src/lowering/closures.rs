@@ -184,6 +184,24 @@ fn is_return(items: &[Node]) -> bool {
 	matches!(items, [word, _] if matches!(word.drop_meta(), Node::Symbol(name) if name == "return"))
 }
 
+/// The variable or field a node names: `s`, `s.fs` (a field lookup `s#("fs"+1)` after mutation.rs), `s.a.fs`
+fn holder_path(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(object, Op::Dot, field) => Some(format!("{}.{}", holder_path(object)?, field_word(field)?)),
+		Node::Key(object, Op::Hash, index) => Some(format!("{}.{}", holder_path(object)?, field_word(crate::wasp_parser::subscript_key(index)?)?)),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => holder_path(&items[0]),
+		_ => None,
+	}
+}
+
+fn field_word(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Symbol(name) | Node::Text(name) => Some(name.clone()),
+		_ => None,
+	}
+}
+
 /// What may hold a function value, judged from the source: the functions returning one, the variables assigned one
 struct FunctionValues {
 	functions: HashSet<String>,
@@ -197,6 +215,7 @@ impl FunctionValues {
 	/// A lambda, a function name, a variable holding a function, a call returning one (a called closure may), or a choice between them
 	fn is_function_value(&self, node: &Node) -> bool {
 		match node.drop_meta() {
+			field if is_field(field) => holder_path(field).is_some_and(|path| self.variables.contains(&path)),
 			Node::Symbol(name) => self.functions.contains(name) || self.variables.contains(name),
 			Node::Key(choice, Op::Else, otherwise) => self.is_function_value(otherwise) || self.is_function_value(choice),
 			Node::Key(_, Op::Then, chosen) => self.is_function_value(chosen),
@@ -215,6 +234,7 @@ impl FunctionValues {
 	/// `xs.map(n => (x => x + n))` builds), a signal's listeners, or a block that ends in one
 	fn is_function_list(&self, node: &Node) -> bool {
 		match node.drop_meta() {
+			field if is_field(field) => holder_path(field).is_some_and(|path| self.lists.contains(&path)),
 			Node::List(items, Bracket::Square, _) => items.iter().any(|item| self.is_function_value(item)),
 			Node::Symbol(name) => self.lists.contains(name),
 			Node::Key(left, Op::Add, right) => self.is_function_list(left) || self.is_function_list(right),
@@ -256,15 +276,14 @@ impl FunctionValues {
 				}
 				// `fs += [f]` appends as `fs = fs + [f]` does
 				let Node::Key(target, op @ (Op::Assign | Op::Define | Op::AddAssign), value) = node else { return };
-				let Node::Symbol(name) = target.drop_meta() else { return };
-				if self.functions.contains(name) {
+				let Some(name) = holder_path(target) else { return };
+				if self.functions.contains(&name) {
 					return;
 				}
-				if *op != Op::AddAssign && self.is_function_value(value) {
-					variables.insert(name.clone());
-				}
-				if self.is_function_list(value) {
-					lists.insert(name.clone());
+				if *op != Op::AddAssign {
+					self.record_holder(&name, value, &mut variables, &mut lists);
+				} else if self.is_function_list(value) {
+					lists.insert(name);
 				}
 			});
 			if returning == self.returning && variables == self.variables && lists == self.lists {
@@ -275,6 +294,27 @@ impl FunctionValues {
 			self.lists = lists;
 		}
 	}
+}
+
+impl FunctionValues {
+	/// The variable or field `path` assigned `value`: a function value, a list of them, or an object whose fields hold them
+	/// (`s = {fs: [x => x * 2]}`: s.fs is a list of function values)
+	fn record_holder(&self, path: &str, value: &Node, variables: &mut HashSet<String>, lists: &mut HashSet<String>) {
+		if self.is_function_value(value) {
+			variables.insert(path.to_string());
+		}
+		if self.is_function_list(value) {
+			lists.insert(path.to_string());
+		}
+		for (field, value) in crate::library_words::object_entries(value).unwrap_or_default() {
+			self.record_holder(&format!("{path}.{field}"), &value, variables, lists);
+		}
+	}
+}
+
+/// A field of a variable: `s.f`, `s#("f"+1)`
+fn is_field(node: &Node) -> bool {
+	holder_path(node).is_some_and(|path| path.contains('.'))
 }
 
 /// Methods that append one value to a list variable (analyzer APPEND_METHODS)
@@ -350,6 +390,10 @@ impl Lifting {
 		if let Some(lambda) = arrow_lambda(&node) {
 			return self.lift(lambda.params, lambda.body, bound);
 		}
+		// `data e` is the code as written: an object's function entry `f: x => x * a`, whose function blocks.rs defined
+		if is_data(&node) {
+			return node;
+		}
 		match node {
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(_)) => {
 				let value = self.walk(*value, bound);
@@ -422,7 +466,7 @@ impl Lifting {
 	}
 
 	fn is_function_list(&self, list: &Node) -> bool {
-		matches!(list.drop_meta(), Node::Symbol(name) if self.function_lists.contains(name))
+		holder_path(list).is_some_and(|path| self.function_lists.contains(&path))
 	}
 
 	/// `fs#2(5)` parses as `fs#(2*(5))`: of a list of function values it is the call of item 2 with (5)
@@ -652,4 +696,9 @@ pub fn type_closure_calls(context: &mut Context) {
 pub fn is_typed_closure_call(function: &UserFunctionDef) -> bool {
 	closure_call_arity(&function.name).is_some() && function.params.len() > 1
 		&& function.params[1..].iter().all(|param| matches!(param.used_as, Some(Kind::Int | Kind::Float)))
+}
+
+/// `data e` (blocks.rs)
+fn is_data(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && items[0].drop_meta().name() == crate::blocks::DATA_WORD)
 }
