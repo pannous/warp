@@ -528,7 +528,8 @@ impl WaspParser {
 		// a capitalized word of no declared type before a block of fields is the tagged object `Person:{…}` (data, D4), as
 		// glued `Person{…}` is: the README's `Person { name: "Alice" … }` (card person-name)
 		let tagged = symbol.starts_with(|first: char| first.is_uppercase());
-		if (self.declared_types.contains(&symbol) || tagged) && self.block_after_blanks() {
+		let declared = self.declared_types.contains(&symbol);
+		if (declared || tagged) && self.block_after_blanks(declared) {
 			while matches!(self.current_char(), ' ' | '\t') {
 				self.advance();
 			}

@@ -203,5 +203,11 @@ The same class as other languages write it (parser atoms.rs, class_methods.rs cl
   with_impls; `impl Trait for Point` too), `&self` is the receiver.
 - Kotlin `p.copy(y = 5)` is `field_with(p, "y", 5)` (class_methods copies).
 Constructors of all of them are `value(params){…}` (classes-10). A method named like a library word (`sum`, `count`)
-is renamed `method·sum` and called so only on instances, like list-mutation names (classes-16). Open: C# `{ get;
-init; }` properties, a method named `norm` (the parser reads it as the operator ‖).
+is renamed `method·sum` and called so only on instances, like list-mutation names (classes-16). - classes-21: Java's typed fields `int x;`, a constructor named like the class `Point(int x, int y) {…}`, C-style
+  methods `int sum() {…}`, `Point p = new Point(3, 4);` (`p:Point = …`, the type kept for D10 dispatch);
+  TypeScript `twice(): number {…}`; C# auto-properties `int X { get; set; }` and the object initializer
+  `new Point { X = 3 }`; Python class attributes (a field with a value read as `Counter.count` is static).
+  Every class body is normalized to its members (with_members), not only those with methods. The declared-type
+  pre-scan takes the name right after `class`/`record`/`type` (`record = find(…)` declares nothing).
+Open: Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`), Go (`type P struct {…}`, `func (p P) M()`),
+operators (`__add__`, `operator +`), a method named `norm` (the parser reads it as the operator ‖).

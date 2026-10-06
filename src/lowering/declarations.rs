@@ -1773,7 +1773,7 @@ const WILDCARD_LABEL: &str = "_";
 
 /// `real f(real x) { … }`: the definition `f(x:real) := { … }` (the parser reads the type word, then the call and its
 /// block); the result kind is inferred as for any definition
-fn c_function(items: &[Node]) -> Option<Node> {
+pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 	let [result_type, definition] = items else { return None };
 	let Node::Symbol(result_type) = result_type.drop_meta() else { return None };
 	if crate::analyzer::type_word_kind(result_type).is_none() && result_type != "void" {
