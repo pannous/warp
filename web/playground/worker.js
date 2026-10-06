@@ -1,7 +1,7 @@
 // The warp compiler (warp.wasm, built by build.sh) and the programs it compiles (host.js), run off the page's thread:
 // a worker may compile any module synchronously and block on a synchronous fetch, which the host calls need.
 
-importScripts("reader.js", "host.js");
+importScripts("reader.js", "host.js", "components.js");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 // warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)
@@ -55,6 +55,7 @@ const ready = loadCompiler().then(() => post({ type: "ready" }), failure => post
 self.onmessage = async ({ data }) => {
 	await ready;
 	if (!compiler) await loadCompiler();
+	await prepareForeignRuntimes(data.code); // host.js: a runtime that loads asynchronously loads before the run
 	const started = performance.now();
 	const report = evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

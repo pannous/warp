@@ -117,3 +117,20 @@ custom operators, `x!` / failed / raise / try-catch / a caught stack overflow (g
 No gaps found. A test that reads a compiled module natively (wasm_reader) must be `#[cfg(feature = "native")]`, else
 the browser build of the tests does not compile (test_precomputed, fixed here; test_ffi_warning_once and
 the_strict_flag_turns_warnings_into_errors before).
+
+## Foreign runtimes in the page (host.js registerForeignRuntime)
+- foreign_call (src/foreign.rs natively) dispatches by runtime name to `registerForeignRuntime(name, {call, prepare})`:
+  `call(module, member, arguments, hooks)` is synchronous and gives a plain value (arguments null: a read);
+  `prepare(code)` is optional and asynchronous, awaited by worker.js (`prepareForeignRuntimes`) before a run, for a
+  runtime that must load first (Pyodide). The test worker cannot prepare (it never sees the code), so runtimes the
+  browser tests use load synchronously. Registered: `js` (the page's globals, host.js), `wasm` (components.js).
+- `use wasm "lib.wasm"` (components.js): build.sh components runs `jco transpile --instantiation sync` on every
+  tests/fixtures/components/*.wasm and wraps the result into components/<name>.js, a classic script with the core
+  modules as base64 (`registerComponent`); the first call importScripts it, found by the file's name alone (the page has
+  one flat folder of components). WASI p2 is a small shim: output goes to the program's print, no input, no environment.
+  test_in_browser.py runs build.sh components before serving; pages.yml installs jco and ships components/.
+- jco's JavaScript values are turned into the native JSON forms (camelCase ↔ the WIT's kebab-case names, `{tag, val}` →
+  `{case: payload}`, a thrown result `err` → the error, class instances → handles with ids per component). Without the
+  WIT types at run time some checks differ from wasmtime's: jco's own enum message ("\"triangle\" is not one of the cases
+  of shape"), the argument count without parameter names, and a variant argument (an object) is not converted.
+  tests/ffi/test_components_anywhere.rs runs in both hosts.

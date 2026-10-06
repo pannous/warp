@@ -137,24 +137,15 @@ function programImports(holder, hooks) {
 				}
 				return buildValue(module, report.result);
 			},
-			// a module of another runtime (src/foreign.rs): `use js Math` is the page's own globalThis.Math; Python and
-			// npm modules need the native host
+			// a module of another runtime (src/foreign.rs), run by the runtime registered under its name
 			foreign_call: (runtime, module, member, call, argumentList) => {
 				const program_ = program();
 				const [runtimeName, moduleName, memberName] = [runtime, module, member].map(node => plainOfTree(readNode(program_, node)));
-				if (runtimeName !== "js") throw new Error(`${runtimeName} ${moduleName}.${memberName}: ${runtimeName} runs only in the native host (the warp CLI)`);
-				// a module's name, or a handle: an object of the page kept behind an id (src/foreign.rs)
-				let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
-				if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
-				for (const part of memberName.split(".")) {
-					if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
-					[owner, value] = [value, value[part]];
-				}
-				if (plainOfTree(readNode(program_, call)) === 1) {
-					const given = plainOfTree(readNode(program_, argumentList));
-					value = value.apply(owner, (given === null ? [] : Array.isArray(given) ? given : [given]).map(unhandled));
-				}
-				return buildValue(program_, treeOfPlain(value));
+				const foreign = foreignRuntimes.get(runtimeName);
+				if (!foreign) throw new Error(`${runtimeName} ${moduleName}.${memberName}: ${runtimeName} runs only in the native host (the warp CLI)`);
+				const given = plainOfTree(readNode(program_, call)) === 1 ? plainOfTree(readNode(program_, argumentList)) : undefined;
+				const argumentValues = given === undefined ? null : given === null ? [] : Array.isArray(given) ? given : [given];
+				return buildValue(program_, treeOfPlain(foreign.call(moduleName, memberName, argumentValues, hooks)));
 			},
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
 			sleep: milliseconds => {
@@ -477,6 +468,15 @@ function plainOfTree(tree) {
 	}
 }
 
+// the runtimes foreign_call reaches in the page, by their name in `use <runtime> …`: call(module, member, arguments,
+// hooks) gives the member's plain value (arguments null: a read, no call); prepare(code), when given, readies the runtime
+// for a program before it runs (an asynchronous load), since a call itself is synchronous
+const foreignRuntimes = new Map();
+function registerForeignRuntime(name, runtime) {
+	foreignRuntimes.set(name, runtime);
+}
+const prepareForeignRuntimes = code => Promise.all([...foreignRuntimes.values()].map(runtime => runtime.prepare?.(code)));
+
 // what wasp's operators on a value of the page forward to (src/lowering/foreign_modules.rs), as in src/foreign.rs's loop
 const FOREIGN_OPERATORS = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
 	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
@@ -488,6 +488,20 @@ const foreignHandles = [];
 const handleOf = value => ({ $handle: foreignHandles.push(value), type: value?.constructor?.name ?? typeof value, text: String(value).slice(0, 200) });
 const unhandled = value => value !== null && typeof value === "object" && "$handle" in value ? foreignHandles[value.$handle - 1] : value;
 const isPlainObject = value => [Object.prototype, null].includes(Object.getPrototypeOf(value));
+
+// `use js Math`: the page's own globalThis.Math; npm modules need the native host
+registerForeignRuntime("js", {
+	call(moduleName, memberName, argumentValues) {
+		// a module's name, or a handle: an object of the page kept behind an id (src/foreign.rs)
+		let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
+		if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
+		for (const part of memberName.split(".")) {
+			if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
+			[owner, value] = [value, value[part]];
+		}
+		return argumentValues === null ? value : value.apply(owner, argumentValues.map(unhandled));
+	},
+});
 
 // a plain JavaScript value as a tree buildValue builds: arrays square lists, objects `{key:value …}`, booleans 1/0
 const SQUARE_LIST = String((1n << 8n) | KIND_LIST);
