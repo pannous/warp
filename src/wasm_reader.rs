@@ -398,17 +398,16 @@ pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 		}
 		Ok(())
 	});
-	if let Some(tasks) = tasks {
-		tasks.join_all();
-	}
+	let unread_failure = tasks.map_or(Ok(()), |tasks| tasks.join_all());
 	let (result, mut store, instance) = outcome?;
+	unread_failure?;
 	val_to_node(&result, &mut store, &instance)
 }
 
 pub use crate::wasm_emitter::{TRAP_DETAIL, TRAP_DETAIL_PREFIX};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
-fn with_trap_detail<T, R>(outcome: wasmtime::Result<R>, store: &mut Store<T>, instance: &Instance) -> Result<R> {
+pub(crate) fn with_trap_detail<T, R>(outcome: wasmtime::Result<R>, store: &mut Store<T>, instance: &Instance) -> Result<R> {
 	outcome.map_err(|failure| {
 		let failure = anyhow::Error::from(failure);
 		let detail = instance.get_global(&mut *store, TRAP_DETAIL).map(|global| global.get(&mut *store));
