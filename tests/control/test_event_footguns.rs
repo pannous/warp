@@ -100,3 +100,11 @@ fn a_handler_made_in_a_loop_gets_a_note() {
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval("n = 0; on tick { n += 1 }; emit tick; n"));
 	assert!(hints.iter().all(|hint| !hint.reason.contains("once per pass")), "{hints:?}");
 }
+
+// Vue's watch(() => b + c): `on change b + c {…}` watches the expression, as `total := b + c; on change total` does
+#[test]
+fn a_listener_on_an_expression_watches_its_value() {
+	is!("b = 1; c = 2; n = 0; on change b + c { n += 1 }; b = 5; c = 2; b = 7; n", 2);
+	is!("b = 1; c = 2; seen = 0; on change b * c { seen = b * c }; c = 10; seen", 10);
+	is!("b = 1; c = 2; n = 0; on set b + c { n += 1 }; b = 5; c = 3; n", 2);
+}
