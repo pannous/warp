@@ -44,7 +44,11 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
   only at the start of an expression; wiki closure.md). A block of one arrow lambda is that lambda.
 - Ruby `add 1, 2` / `x = add 1, 2`: a call short of arguments takes the items after its comma (broadcasting.rs
   `with_comma_arguments`).
+- A block with `it` given as a value inside a function of one parameter (returned, assigned, an argument) is a
+  function of its own `it`: `mk(k) := { return {it * k} }` returns `it => it * k` (declarations.rs `bind_it`);
+  elsewhere in the body `it` is the parameter (`f(x) := x + it`).
+- P82 educate: `def make(){ def inc(){ 1 }; inc }; c = make(); c()` is a compile error naming `function inc`
+  (function_values.rs `refuse_called_bare_results`); `make()` alone stays the call of inc.
 
 ## Open
-- Board cards: functions-mk (returning a block with `it`), functions-returning (bare nested function names, P82),
-  functions-swift (`{ x in … }`, `$0`), functions-sort-op (`sorted(xs, >)`), functions-key (`key=x=>…`).
+- Board cards: functions-swift (`{ x in … }`, `$0`), functions-sort-op (`sorted(xs, >)`), functions-key (`key=x=>…`).

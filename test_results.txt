@@ -590,6 +590,8 @@ PASSED:
   ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
+  ✓ functions::test_field_function_values::test_function_in_object_field
+  ✓ functions::test_field_function_values::test_function_list_in_object_field
   ✓ functions::test_float_to_int_parameter::a_float_for_an_int_parameter_is_refused
   ✓ functions::test_float_to_int_parameter::an_explicit_cast_or_an_int_passes
   ✓ functions::test_folding_in_bodies::a_call_on_a_parameter_stays
@@ -699,6 +701,7 @@ PASSED:
   ✓ functions::test_named_arguments::a_missing_or_unknown_argument_is_an_error
   ✓ functions::test_named_arguments::named_arguments_set_free_variables_of_the_body
   ✓ functions::test_named_arguments::named_arguments_set_parameters_in_any_order
+  ✓ functions::test_named_function_argument::a_function_assigned_in_a_call_is_a_named_argument
   ✓ functions::test_nested_prefix_calls::a_function_name_among_the_arguments_takes_the_ones_after_it
   ✓ functions::test_nested_prefix_calls::a_function_passed_as_a_value_stays_one
   ✓ functions::test_nonlocal_any_value::test_an_escaping_closure_keeps_a_text_cell
@@ -776,6 +779,11 @@ PASSED:
   ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_block_body
   ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_colon_body
   ✓ functions::test_return_type_forms::named_arguments_reach_a_function_with_a_result_type
+  ✓ functions::test_returned_blocks::a_block_argument_keeps_its_own_it
+  ✓ functions::test_returned_blocks::a_returned_block_keeps_its_own_it
+  ✓ functions::test_returned_blocks::it_in_the_body_is_the_parameter
+  ✓ functions::test_returned_function_names::calling_the_result_of_a_bare_name_educates
+  ✓ functions::test_returned_function_names::the_explicit_forms_work
   ✓ functions::test_runtime_kind_arithmetic::a_def_body_reads_fields_of_its_parameters
   ✓ functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
@@ -2010,8 +2018,11 @@ PASSED:
   ✓ types::test_struct_field_of_constructor::a_field_of_a_constructor_call
   ✓ types::test_struct_field_of_constructor::a_missing_field_is_an_error_value
   ✓ types::test_struct_instances::a_field_read_of_a_struct_variable_searches_no_names
+  ✓ types::test_struct_instances::a_field_write_of_a_struct_variable_sets_the_field
+  ✓ types::test_struct_instances::a_field_write_of_another_kind_is_a_type_error
   ✓ types::test_struct_instances::a_method_of_a_struct_variable_takes_the_struct
   ✓ types::test_struct_instances::a_struct_instance_gives_the_same_values
+  ✓ types::test_struct_instances::an_int_field_holds_any_int
   ✓ types::test_struct_types::test_class_definition
   ✓ types::test_struct_types::test_class_instance2
   ✓ types::test_struct_types::test_class_instance_explicit
@@ -2279,6 +2290,8 @@ PASSED:
   ✓ welcoming::test_c_style::test_c_style_definition
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
+  ✓ welcoming::test_constant_shadowing::an_assigned_constant_word_is_a_variable
+  ✓ welcoming::test_constant_shadowing::assigning_a_constant_word_says_it_shadows_the_constant
   ✓ welcoming::test_error_positions::a_rebuilt_node_reports_the_position_of_its_parts
   ✓ welcoming::test_error_positions::an_error_found_while_emitting_names_its_statement
   ✓ welcoming::test_error_positions::an_unclosed_group_names_where_it_opened
@@ -2581,4 +2594,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2576 passed, 0 failed, 2576 total tested
+23 ignored, 2589 passed, 0 failed, 2589 total tested

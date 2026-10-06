@@ -975,7 +975,7 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 			let body = lower_spaced_definitions(body);
 			let head = Node::List([vec![name], parameters].concat(), Bracket::Round, Separator::None);
 			let body = match one_parameter(&head) {
-				Some(parameter) => crate::law::substitute(&body, &[(IT_PARAMETER.to_string(), Node::Symbol(parameter))].into()),
+				Some(parameter) => bind_it(body, &parameter, false),
 				None => body,
 			};
 			let _ = (bracket, separator);
@@ -984,7 +984,7 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 		// `f(x) := x + it`: `it` is the one parameter too
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if one_parameter(&head).is_some() => {
 			let parameter = one_parameter(&head).expect("guarded");
-			let body = crate::law::substitute(&lower_spaced_definitions(*body), &[(IT_PARAMETER.to_string(), Node::Symbol(parameter))].into());
+			let body = bind_it(lower_spaced_definitions(*body), &parameter, false);
 			Node::Key(head, op, Box::new(body))
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_spaced_definitions(*left)), op, Box::new(lower_spaced_definitions(*right))),
@@ -1066,6 +1066,35 @@ fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
 }
 
 /// The one named parameter of a definition head `f(x)` (`f(x:int)`), not `it`
+/// `it` in the body of a function of one parameter is that parameter, except inside a block with `it` given as a value
+/// (returned, assigned, an argument): `mk(k) := { return {it * k} }` returns the function `it => it * k`
+fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
+	let values = |items: Vec<Node>| -> Vec<Node> {
+		let mut items = items.into_iter();
+		items.next().map(|head| bind_it(head, parameter, false)).into_iter().chain(items.map(|item| bind_it(item, parameter, true))).collect()
+	};
+	match node {
+		Node::Symbol(name) if name == IT_PARAMETER => Node::Symbol(parameter.to_string()),
+		Node::List(_, Bracket::Curly, _) if is_value && crate::wasp_parser::mentions(&node, IT_PARAMETER) => crate::lambdas::block_as_arrow(&node).unwrap_or(node),
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) => Node::Key(Box::new(bind_it(*target, parameter, false)), op, Box::new(bind_it(*value, parameter, true))),
+		// `return {…}`, `f({…})`, `f {…}`
+		Node::List(items, bracket @ (Bracket::Round | Bracket::None), separator @ (Separator::Space | Separator::None | Separator::Colon))
+			if items.len() > 1 && matches!(items[0].drop_meta(), Node::Symbol(_)) =>
+		{
+			Node::List(values(items), bracket, separator)
+		}
+		// the last statement of a body is its value
+		Node::List(items, bracket, separator) => {
+			let last = items.len().saturating_sub(1);
+			let is_body = bracket == Bracket::Curly || separator == Separator::Semicolon;
+			Node::List(items.into_iter().enumerate().map(|(index, item)| bind_it(item, parameter, is_body && index == last && !is_value)).collect(), bracket, separator)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(bind_it(*left, parameter, false)), op, Box::new(bind_it(*right, parameter, false))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_it(*node, parameter, is_value)), data },
+		other => other,
+	}
+}
+
 fn one_parameter(head: &Node) -> Option<String> {
 	let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
 	let [name, parameter] = items.as_slice() else { return None };

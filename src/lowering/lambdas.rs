@@ -226,6 +226,12 @@ fn block_lambda(node: &Node) -> Option<Lambda> {
 	Some(Lambda::new(params, body))
 }
 
+/// `{it*2}` as the arrow lambda `it => it*2`, for passes that know only arrows (closures.rs)
+pub(crate) fn block_as_arrow(node: &Node) -> Option<Node> {
+	let lambda = block_lambda(node).filter(|lambda| !lambda.params.is_empty())?;
+	Some(Node::Key(Box::new(Node::Symbol(IMPLICIT_PARAMETER.to_string())), Op::FatArrow, Box::new(lambda.body)))
+}
+
 /// The definition `name(params) := body` of a lambda, a block with `it` or an operator given as a value
 pub fn lambda_definition(name: &str, function: &Node) -> Option<Node> {
 	let lambda = arrow_lambda(function).or_else(|| block_lambda(function).filter(|lambda| !lambda.params.is_empty())).or_else(|| operator_lambda(function))?;
@@ -236,6 +242,24 @@ fn definition(name: &str, lambda: Lambda) -> Node {
 	let parameters = if lambda.typed.is_empty() { lambda.params.into_iter().map(Node::Symbol).collect() } else { lambda.typed };
 	let head = Node::List([vec![Node::Symbol(name.to_string())], parameters].concat(), Bracket::Round, Separator::None);
 	Node::Key(Box::new(head), Op::Define, Box::new(lambda.body))
+}
+
+/// Python's `sorted(xs, key=x => -x)`: in a call a function given as `name = …` is the named argument `key: x => -x`
+/// (P37), never the definition of a function `key`
+fn named_function_arguments(items: Vec<Node>, bracket: &Bracket) -> Vec<Node> {
+	let is_call = *bracket == Bracket::Round && items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(_));
+	if !is_call {
+		return items;
+	}
+	items
+		.into_iter()
+		.map(|item| match item.drop_meta() {
+			Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Node::Symbol(_)) && arrow_lambda(value).is_some() => {
+				Node::Key(name.clone(), Op::Colon, value.clone())
+			}
+			_ => item,
+		})
+		.collect()
 }
 
 fn call(name: &str, arguments: Vec<Node>) -> Node {
@@ -281,6 +305,7 @@ impl Lowering {
 			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
 			Node::List(items, bracket, separator) => {
+				let items = named_function_arguments(items, &bracket);
 				let items = flatten_prefix_application(items, &bracket, &separator);
 				let items: Vec<Node> = if separator == Separator::Space {
 					items

@@ -95,3 +95,10 @@ warning's `fix` carries the default's form. A host offers the readings as "chang
 fixes (IDE/LSP code actions); the edit replaces `written` at the position with the chosen `explicit_form`, after which
 the warning is gone because the explicit form never warns. Open: positions of multi-line `written`, several readings
 whose explicit form needs surrounding context (`global n` is a declaration elsewhere), and a CLI form (`warp fix`).
+
+## Shadowing a named constant (card footgun-pi, default pending the user's answer via the Interviewer)
+`pi = 4; pi` gave 3.14159…: the parser read `pi` as π and dropped the assignment. Now an assignment `pi = …` / `pi := …`
+makes the named number (`pi`, `tau`, `euler`, their glyphs) a variable from there on (parse order), with the got-it note
+`constant-shadowing` ("pi = … shadows the constant pi"). A field `class circle{pi = 3}` is a plain field, no note, and
+leaves `pi` the constant elsewhere. src/wasp_parser/atoms.rs `names_variable`, tests/welcoming/test_constant_shadowing.rs.
+Alternative if the user prefers: a loud error "pi is a constant; fix: another name".

@@ -152,6 +152,8 @@ impl WaspParser {
 				// Dedent - push item and exit this level
 				items_with_seps.push((item, Separator::None));
 				break;
+			} else if bracket == Bracket::Curly {
+				field_holding_lambda(item)
 			} else {
 				item
 			};
@@ -324,5 +326,31 @@ impl WaspParser {
 			}
 			other => other,
 		}
+	}
+}
+
+/// `{f: x => x * 2}`: `:` binds tighter than `=>`, so the entry parses as the lambda `(f:x) => x*2` with a parameter f of
+/// type x; in an object a lowercase word that is no type after the key is the lambda's parameter: the field f holds
+/// `x => x * 2`. A typed lambda `{x: int => x * 2}` or `{p: Person => p.name}` stays one.
+fn field_holding_lambda(item: Node) -> Node {
+	match item {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(field_holding_lambda(*node)), data },
+		Node::Key(head, Op::FatArrow, body) => match head.drop_meta() {
+			Node::Key(key, Op::Colon, parameter) if matches!(key.drop_meta(), Symbol(_)) && is_parameter_word(parameter) => {
+				let lambda = Node::Key(parameter.clone(), Op::FatArrow, body);
+				Node::Key(key.clone(), Op::Colon, Box::new(lambda))
+			}
+			_ => Node::Key(head, Op::FatArrow, body),
+		},
+		other => other,
+	}
+}
+
+/// A lowercase word that names no type, or a parameter group `(x, y)`
+fn is_parameter_word(node: &Node) -> bool {
+	match node.drop_meta() {
+		Symbol(word) => word.starts_with(char::is_lowercase) && crate::analyzer::type_word_kind(word).is_none(),
+		Node::List(_, Bracket::Round, _) => true,
+		_ => false,
 	}
 }
