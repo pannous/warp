@@ -1429,6 +1429,7 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 /// `def f(a, b) { body }`, `def f(x) := body`, `function g() { … }`: the definition `f(a, b) := body`
 pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let (keyword, definition, mut result_type) = match items {
+		[keyword, glued] if glued_curried_definition(glued).is_some() => (keyword, glued_curried_definition(glued).expect("guarded"), None),
 		[keyword, definition] => (keyword, definition.drop_meta().clone(), None),
 		// a tuple result type `-> (Int, Int) {…}` (Swift): the body's tuple as it is
 		[keyword, head, body] if tuple_result(head).is_some() => {
@@ -1627,6 +1628,24 @@ fn curried_definition(head: &Node, rest: &Node) -> Option<Node> {
 	}
 	let lambda = Node::Key(Box::new(second.clone()), Op::FatArrow, body.clone());
 	Some(Node::Key(Box::new(head.clone()), Op::Define, Box::new(lambda)))
+}
+
+/// The glued groups `add(x)(y)` arrive as one operand (the parser's curried call): `def add(x)(y) = x + y` and
+/// `def add(x: Int)(y: Int): Int = …` as curried_definition takes them
+fn glued_curried_definition(definition: &Node) -> Option<Node> {
+	let Node::Key(left, Op::Assign, body) = definition.drop_meta() else { return None };
+	let groups = |node: &Node| match node.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 => Some((items[0].clone(), items[1].clone())),
+		_ => None,
+	};
+	let (head, second) = match left.drop_meta() {
+		Node::Key(signature, Op::Colon, result_type) => {
+			let (head, second) = groups(signature)?;
+			(head, Node::Key(Box::new(second), Op::Colon, result_type.clone()))
+		}
+		other => groups(other)?,
+	};
+	curried_definition(&head, &Node::Key(Box::new(second), Op::Assign, body.clone()))
 }
 
 /// Swift's `f(k) -> (Int) -> Int { body }`, a function as the result: the definition `f(k) { body }`, the closure it

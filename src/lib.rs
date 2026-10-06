@@ -46,6 +46,8 @@ pub mod host;
 #[cfg(feature = "native")]
 pub mod foreign;
 #[cfg(feature = "native")]
+pub mod std_adapters;
+#[cfg(feature = "native")]
 pub mod components;
 pub mod ffi;
 pub mod ffi_parser;

@@ -69,7 +69,7 @@ pub fn lower(program: Node) -> Node {
 	// every handler of it gets a flag as a named one has, so any of them can be listed and removed (card event-handlers)
 	let variables = main_level_variables(&statements);
 	let listed: HashSet<String> = listed_events(&program).into_iter().filter(|event| !variables.contains(event)).collect();
-	let verbs = emit_verbs(&program, &variables);
+	let verbs = emit_verbs(&program);
 	let raised: HashSet<String> = emitted_names(&program, &verbs).into_iter().chain(listed.iter().cloned()).collect();
 	// so does an event with a named handler: the name is the handler's place among all of the event's handlers
 	let with_names = statements.iter().filter_map(named_handler).filter(|(listener, _)| listener.is_some()).map(|(_, (event, _, _))| event);
@@ -443,17 +443,9 @@ fn handler(statement: &Node) -> Option<(String, Node, bool)> {
 	Some((name, body, once))
 }
 
-/// The words that emit in this program: emit, send and the aliases it does not define or assign itself
-fn emit_verbs(program: &Node, variables: &HashSet<String>) -> Vec<String> {
-	let mut defined = variables.clone();
-	program.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
-		let name = match head.drop_meta() {
-			Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
-			other => word(other),
-		};
-		defined.insert(name);
-	});
-	EMIT_WORDS.iter().chain(EMIT_ALIASES.iter()).filter(|verb| !defined.contains(**verb)).map(|verb| verb.to_string()).collect()
+/// The words that emit in this program: emit, send and the aliases it does not name itself (soft keywords, P165)
+fn emit_verbs(program: &Node) -> Vec<String> {
+	EMIT_WORDS.iter().chain(EMIT_ALIASES.iter()).filter(|verb| !crate::soft_keywords::program_names(program, verb)).map(|verb| verb.to_string()).collect()
 }
 
 /// `emit alarm`, `emit stop the machine{reason:"…"}`, `emit item 1` (or a `verbs` word): the name and the data (ø

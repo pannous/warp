@@ -3,7 +3,8 @@
 use super::*;
 
 /// `abs x`, `norm x`: the absolute value (card g-1pvQ: norm is a synonym)
-const ABS_WORDS: [&str; 2] = ["abs", "norm"];
+/// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x`
+pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("norm", Op::Abs)];
 
 impl WaspParser {
 	/// Check if current character can start an atom (for implicit application)
@@ -346,10 +347,8 @@ impl WaspParser {
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	pub(super) fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
 		if self.matches_keyword("while") { return Some((Op::While, 5)); }
-		if self.matches_keyword("sqrt") { return Some((Op::Sqrt, 4)); }
-		if self.matches_keyword("cbrt") { return Some((Op::Cbrt, 4)); }
+		if let Some((word, op)) = PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word)) { return Some((op, word.len())); }
 		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
-		if let Some(word) = ABS_WORDS.into_iter().find(|word| self.matches_keyword(word)) { return Some((Op::Abs, word.len())); }
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 
 		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
