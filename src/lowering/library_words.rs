@@ -508,9 +508,19 @@ impl Lowering {
 		let parameters = crate::traits::untyped_parameters(head);
 		let scope = self.parameters.borrow().len();
 		self.parameters.borrow_mut().extend(parameters);
-		let right = self.expand(right);
+		let right = self.expand(self.body_statement(right));
 		self.parameters.borrow_mut().truncate(scope);
 		right
+	}
+
+	/// `def total(xs){sum xs}`: a body block that is one braceless word call is that statement, not the data `{sum xs}`
+	fn body_statement(&self, right: Node) -> Node {
+		match right {
+			Node::List(items, Bracket::Curly, Separator::Space) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if self.library_word_for(word, items.len() - 1).is_some()) => {
+				Node::List(vec![Node::List(items, Bracket::None, Separator::Space)], Bracket::Curly, Separator::Semicolon)
+			}
+			other => other,
+		}
 	}
 
 	fn is_parameter(&self, node: &Node) -> bool {
