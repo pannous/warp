@@ -43,9 +43,19 @@ fn starred(node: &Node) -> Option<String> {
 	}
 }
 
-/// `f(params) := body`: the head's items
+/// `f(params) := body`, or Python's `def f(params): body` (declarations.rs reads that one later): the head's items
 fn definition_head(node: &Node) -> Option<&[Node]> {
-	let Node::Key(head, Op::Define | Op::Assign, _) = node.drop_meta() else { return None };
+	let head = match node.drop_meta() {
+		Node::Key(head, Op::Define | Op::Assign, _) => head,
+		Node::List(items, _, _) => match items.as_slice() {
+			[keyword, definition] if crate::operators::is_function_keyword(&keyword.drop_meta().name()) => match definition.drop_meta() {
+				Node::Key(head, Op::Colon, _) => head,
+				_ => return None,
+			},
+			_ => return None,
+		},
+		_ => return None,
+	};
 	match head.drop_meta() {
 		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => Some(items),
 		_ => None,
@@ -113,9 +123,18 @@ impl Variadic {
 	fn rewrite(&self, node: Node) -> Node {
 		if let Some(head) = definition_head(&node) {
 			let starred_parameter = head[1..].iter().any(|parameter| starred(parameter).is_some() || double_starred(parameter).is_some());
-			let Node::Key(target, op, body) = node.drop_meta() else { unreachable!("a definition") };
-			let target = if starred_parameter { Box::new(self.unstarred_head(target)) } else { target.clone() };
-			return Node::Key(target, *op, Box::new(self.rewrite(body.as_ref().clone())));
+			let definition = |target: &Node, op: Op, body: &Node| {
+				let target = if starred_parameter { self.unstarred_head(target) } else { target.clone() };
+				Node::Key(Box::new(target), op, Box::new(self.rewrite(body.clone())))
+			};
+			return match node.drop_meta() {
+				Node::Key(target, op, body) => definition(target, *op, body),
+				Node::List(items, bracket, separator) => {
+					let Node::Key(target, op, body) = items[1].drop_meta() else { unreachable!("a colon definition") };
+					Node::List(vec![items[0].clone(), definition(target, *op, body)], bracket.clone(), separator.clone())
+				}
+				_ => unreachable!("a definition"),
+			};
 		}
 		match node {
 			Node::List(items, bracket, separator) if self.is_call(&items, &bracket, &separator) => self.call(items),
@@ -163,7 +182,7 @@ impl Variadic {
 			_ => return crate::node::error(&format!("{}(**a, **b): spread one object", head.name())),
 		};
 		let arguments = match (signature, &spread_object) {
-			(Some(signature), Some(object)) if !signature.keywords => [arguments.clone(), fields_for_parameters(&arguments, &signature.fixed, object)].concat(),
+			(Some(signature), Some(object)) if !signature.keywords => arguments_in_order(&arguments, &signature.fixed, object),
 			_ => arguments,
 		};
 		let (arguments, keywords) = match signature {
@@ -186,14 +205,15 @@ impl Variadic {
 	}
 }
 
-/// `g(1, **m)` of `g(a, b, c)`: the named arguments `b=m.b, c=m.c` for the parameters the arguments leave
-fn fields_for_parameters(arguments: &[Node], fixed: &[String], object: &str) -> Vec<Node> {
-	let named: Vec<String> = arguments.iter().filter_map(named_argument).map(|(name, _)| name).collect();
-	let positional = arguments.len() - named.len();
-	fixed.iter().skip(positional).filter(|parameter| !named.contains(parameter)).map(|parameter| {
-		let field = Node::Key(Box::new(Node::Symbol(object.to_string())), Op::Dot, Box::new(Node::Symbol(parameter.clone())));
-		Node::Key(Box::new(Node::Symbol(parameter.clone())), Op::Assign, Box::new(field))
-	}).collect()
+/// `g(1, c=9, **m)` of `g(a, b, c)`: the arguments in parameter order, `g(1, m.b, 9)`: given ones first, a named one
+/// where its parameter is, the field of the object for every other parameter
+fn arguments_in_order(arguments: &[Node], fixed: &[String], object: &str) -> Vec<Node> {
+	let (named, positional): (Vec<&Node>, Vec<&Node>) = arguments.iter().partition(|argument| named_argument(argument).is_some());
+	let named: Vec<(String, Node)> = named.into_iter().filter_map(named_argument).collect();
+	let field = |parameter: &String| Node::Key(Box::new(Node::Symbol(object.to_string())), Op::Dot, Box::new(Node::Symbol(parameter.clone())));
+	let filled = fixed.iter().skip(positional.len()).map(|parameter| named.iter().find(|(name, _)| name == parameter).map_or_else(|| field(parameter), |(_, value)| value.clone()));
+	let others = named.iter().filter(|(name, _)| !fixed.contains(name)).map(|(name, value)| Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(value.clone())));
+	positional.into_iter().cloned().chain(filled).chain(others).collect()
 }
 
 /// The named arguments no fixed parameter takes, as the object of a `**kw` parameter, and the other arguments
