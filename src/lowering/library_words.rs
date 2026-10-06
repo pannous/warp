@@ -157,6 +157,13 @@ pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	}
 }
 
+/// `field_with(m, key, value)` updating the variable m itself: what `m.key = value` lowers to (field_assignment)
+pub fn is_field_update_of(name: &str, value: &Node) -> bool {
+	let Node::List(items, _, _) = value.drop_meta() else { return false };
+	let [word, map, _, _] = items.as_slice() else { return false };
+	word.name() == FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name)
+}
+
 pub fn is_runtime_word(name: &str) -> bool {
 	RUNTIME_WORDS.iter().any(|(word, _)| *word == name)
 }
