@@ -181,7 +181,7 @@ fn call_with_an_expression_argument_is_name_and_key() {
 #[test]
 fn increment_suffix_and_while_condition_spacing() {
 	assert_top_operator("i++", Op::Inc);
-	assert_eq!(parse("{i++}").serialize(), "{i++ø}");
+	assert_eq!(parse("{i++}").serialize(), "{i++}");
 	assert_eq!(parse("while(1){2}"), parse("while (1) {2}"));
-	assert_eq!(parse("while(i<9){i++}").serialize(), "ø while (i<9) do {i++ø}");
+	assert_eq!(parse("while(i<9){i++}").serialize(), "while (i<9) do {i++}");
 }
