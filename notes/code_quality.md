@@ -57,7 +57,9 @@ P97 GcObject loses its five uncalled methods, gc_struct!/wasm_struct!/wasm_objec
 commented-out blocks and 27 restating comments deleted in src/; P99 renames (laste → last_item, Dada → DataValue,
 peq! → parses_to!, Strings! → texts!, wis! → wisp!, strings!/todow gone); P100 the test macros live in tests/common;
 P101 neutral comments. The crate-wide allows were already gone (no dead-code warnings).
-Still open: the file splits (#10), a shared Program context for passes (#12), the remaining panics in wisp_parser
+2026-10-06 later: #19 operator levels and UTF-8 constants named (named-tables), #12 Node::map_children for 14
+passes (map-children; the shared analysis itself is P91, notes/build_speed.md), #10 ffi.rs → src/ffi/{mod,header,link}.rs.
+Still open: the other file splits (#10), a shared Program context for passes (#12), the remaining panics in wisp_parser
 and extensions/numbers.rs (#13), the Unicode/precedence tables (#19).
 
 Left, because they need a decision, edit tests, or would collide with the sessions editing the same files now:
