@@ -30,6 +30,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - Error highlighting (warp-7d, card g-_ZNg): the CLI prints `  2 | pi = 4` and carets `    | ^^` under the word on
   stderr below an error/warning; the web demo underlines errors (red wavy + tint) and warnings (amber wavy), with the
   message on hover. Hints aren't underlined yet because their positions lag behind (card hint-positions).
+- P168 detail (warp-64, branch functions 152ddabd4): `p = {phone: 7}; number = 2; p.phone-number` → 5. When p's
+  fields aren't known at compile time, the field read `p.phone-number` stays.
 
 ## User to-dos (not questions)
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
