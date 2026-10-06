@@ -70,6 +70,7 @@ impl SharedArrays {
 		let arrays = self.clone();
 		linker.func_wrap(HOST_LIBRARY, set_float, move |id: i64, index: i64, value: f64| -> wasmtime::Result<f64> {
 			let (array, cell) = arrays.cell(id, index)?;
+			let value = warp_runtime::floats::canonical_nan(value);
 			array[cell].store(value.to_bits() as i64, Ordering::SeqCst);
 			Ok(value)
 		})?;
@@ -78,7 +79,7 @@ impl SharedArrays {
 			let (array, cell) = arrays.cell(id, index)?;
 			let mut old = array[cell].load(Ordering::SeqCst);
 			loop {
-				let sum = f64::from_bits(old as u64) + value;
+				let sum = warp_runtime::floats::canonical_nan(f64::from_bits(old as u64) + value);
 				match array[cell].compare_exchange(old, sum.to_bits() as i64, Ordering::SeqCst, Ordering::SeqCst) {
 					Ok(_) => return Ok(sum),
 					Err(current) => old = current,

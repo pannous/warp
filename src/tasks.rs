@@ -226,7 +226,7 @@ impl Builders {
 	fn read(&self, value: &Val, store: &mut StoreContextMut<'_, HostState>) -> Result<TaskValue> {
 		match value {
 			Val::I64(n) => self.integer(*n, store),
-			Val::F64(bits) => Ok(TaskValue::Float(f64::from_bits(*bits))),
+			Val::F64(bits) => Ok(TaskValue::Float(warp_runtime::floats::canonical_nan(f64::from_bits(*bits)))),
 			Val::AnyRef(_) => TaskValue::of(&crate::wasm_reader::node_in(value, store, self.memory)),
 			other => Err(anyhow!("a task gave {other:?}")),
 		}
@@ -461,7 +461,7 @@ impl TaskTable {
 			let Some(global) = caller.get_export(&name).and_then(|export| export.into_global()) else { continue };
 			let value = match global.get(&mut *caller) {
 				Val::I64(n) => Captured::Int(n),
-				Val::F64(bits) => Captured::Float(bits),
+				Val::F64(bits) => Captured::Float(warp_runtime::floats::canonical_nan(f64::from_bits(bits)).to_bits()),
 				reference => Captured::Value(builders.read_value(&reference, &mut caller.as_context_mut())?),
 			};
 			captured.push((name, value));
