@@ -95,15 +95,42 @@ pub(super) fn parameter_symbol(parameter: &Node) -> Option<String> {
 /// Does the body index (`xs#i`) or count (`#xs`) the variable in a loop, not by a text key: once is cheaper as a walk
 /// than a conversion
 pub(super) fn indexes(body: &Node, name: &str) -> bool {
+	let key_variables = key_variables(body);
 	let mut found = false;
 	let mut loops = vec![];
 	body.visit(&mut |part| if let Node::Key(_, Op::While | Op::Do, _) = part { loops.push(part) });
 	loops.into_iter().for_each(|body| body.visit(&mut |part| {
 		let Node::Key(list, Op::Hash, index) = part else { return };
 		let counted = if matches!(list.drop_meta(), Node::Empty) { index } else { list };
-		found |= !is_text_key(index) && matches!(counted.drop_meta(), Node::Symbol(symbol) if symbol == name);
+		found |= !looks_up_a_key(index, &key_variables) && matches!(counted.drop_meta(), Node::Symbol(symbol) if symbol == name);
 	}));
 	found
+}
+
+/// A text key or a variable holding one of the map's keys (`m[k]` in `for k in keys(m)`), not a position
+pub fn looks_up_a_key(index: &Node, key_variables: &HashSet<String>) -> bool {
+	is_text_key(index) || matches!(crate::wasp_parser::subscript_key(index).unwrap_or(index).drop_meta(), Node::Symbol(index) if key_variables.contains(index))
+}
+
+/// The variables that hold a map's keys: `k` of a lowered `for k in keys(m)`, `k·items = map_keys(m)` … `k = k·items#i`,
+/// and `k = keys(m)#i`
+pub fn key_variables(body: &Node) -> HashSet<String> {
+	let is_keys_call = |value: &Node| matches!(value.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.name() == crate::library_words::MAP_KEYS));
+	let mut key_lists = HashSet::new();
+	body.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
+		if let (Node::Symbol(list), true) = (target.drop_meta(), is_keys_call(value)) {
+			key_lists.insert(list.clone());
+		}
+	});
+	let mut variables = HashSet::new();
+	body.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
+		let reads_a_key = matches!(value.drop_meta(), Node::Key(list, Op::Hash, _)
+			if is_keys_call(list) || matches!(list.drop_meta(), Node::Symbol(list) if key_lists.contains(list)));
+		if let (Node::Symbol(variable), true) = (target.drop_meta(), reads_a_key) {
+			variables.insert(variable.clone());
+		}
+	});
+	variables
 }
 
 /// Is the variable assigned a call's result inside a loop (`arr = swap(arr, i, j)`, a conversion per iteration)
@@ -121,7 +148,8 @@ pub(super) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 /// Does the body set an entry of the map variable (`m[k] = v`) or look one up in a loop, by a text key
 pub(super) fn keys(body: &Node, name: &str) -> bool {
 	let is_name = |part: &Node| matches!(part.drop_meta(), Node::Symbol(symbol) if symbol == name);
-	let by_key = is_text_key;
+	let key_variables = key_variables(body);
+	let by_key = |index: &Node| looks_up_a_key(index, &key_variables);
 	let mut found = false;
 	body.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
 		found |= matches!(target.drop_meta(), Node::Key(map, Op::Hash, index) if is_name(map) && by_key(index));

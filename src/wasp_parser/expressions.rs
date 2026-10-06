@@ -404,7 +404,7 @@ impl WaspParser {
 				}
 			};
 
-			if op == Op::Hash {
+			if op == Op::Hash && !matches!(rhs.drop_meta(), Node::Symbol(index) if self.key_variables.contains(index)) {
 				crate::normalize::set_position_of(&lhs);
 				norm::index_operator(&crate::normalize::operand_text(&lhs), &crate::normalize::operand_text(&rhs), false);
 			}
