@@ -80,6 +80,8 @@ fn forms(node: Node) -> Node {
 			let call = Node::List([vec![Node::Symbol(word.to_string())], arguments.into_iter().map(forms).collect()].concat(), Bracket::Round, Separator::None);
 			Node::Key(Box::new(forms(*receiver)), Op::Dot, Box::new(call))
 		}
+		// `f = lambda *xs: …`, JS `f = (...xs) => …`: the definition `f(*xs) := …`, which variadic.rs reads
+		Node::Key(name, Op::Assign, value) if starred_lambda(&name, &value).is_some() => forms(starred_lambda(&name, &value).expect("guarded")),
 		Node::Key(left, op, right) => Node::Key(Box::new(forms(*left)), op, Box::new(forms(*right))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(forms(*node)), data },
 		other => other,
@@ -130,6 +132,11 @@ fn go_destructuring(mut items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 
 /// `x * 2 in double 4` → (`x * 2`, `double 4`); no `in`: the value alone
 fn split_at_in(value: &Node) -> (Node, Option<Node>) {
+	// OCaml's `let inc = fun x -> x + 1 in inc 4`: the `in` ends the lambda's body
+	if let Node::Key(head, op @ (Op::Arrow | Op::FatArrow), body) = value.drop_meta() {
+		let (body, rest) = split_at_in(body);
+		return (Node::Key(head.clone(), *op, Box::new(body)), rest);
+	}
 	let Node::List(words, Bracket::None, separator @ (Separator::Space | Separator::None)) = value.drop_meta() else { return (value.clone(), None) };
 	let Some(position) = words.iter().position(|word| is_word(word, IN_WORD)) else { return (value.clone(), None) };
 	let phrase = |part: &[Node]| match part {
@@ -178,24 +185,37 @@ fn lambda(parameters: Node, body: Node) -> Node {
 
 /// `[function (a, b)] {body}`: a function keyword with parameters and no name, then its body
 fn anonymous_function(items: &[Node]) -> Option<Node> {
-	let [head, body] = items else { return None };
+	let [head, rest @ ..] = items else { return None };
+	let [body] = without_result_type(rest) else { return None };
 	if !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	Some(lambda(function_parameters(head)?, forms(body.clone())))
 }
 
+/// Go's `func(x int) int { … }`: the body without the result type before it
+fn without_result_type(rest: &[Node]) -> &[Node] {
+	match rest {
+		[result_type, body] if is_type_word(result_type) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => &rest[1..],
+		_ => rest,
+	}
+}
+
+fn is_type_word(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if crate::analyzer::type_word_kind(word).is_some())
+}
+
 /// R's `f <- function(x) x * 2`, JS-ish `f = function(x) x * 2`: the assignment takes the phrase after the head as
 /// the body, `f = x => x * 2`
 fn assigned_braceless_function(items: &[Node]) -> Option<Node> {
 	let [assignment, body @ ..] = items else { return None };
-	let Node::Key(name, Op::Assign, head) = assignment.drop_meta() else { return None };
-	let body = match body {
+	let Node::Key(name, op @ (Op::Assign | Op::Define), head) = assignment.drop_meta() else { return None };
+	let body = match without_result_type(body) {
 		[] => return None,
 		[single] => single.clone(),
 		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 	};
-	Some(Node::Key(name.clone(), Op::Assign, Box::new(lambda(function_parameters(head)?, forms(body)))))
+	Some(Node::Key(name.clone(), *op, Box::new(lambda(function_parameters(head)?, forms(body)))))
 }
 
 /// JS `({a, b}, k) => …`: an object parameter taken apart, `(object·0, k) => { a = object·0.a; b = object·0.b; … }`
@@ -224,6 +244,20 @@ fn ruby_lambda(items: &[Node]) -> Option<Node> {
 	(is_lambda_word && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))).then(|| block.clone())
 }
 
+fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
+	let Node::Key(parameters, Op::FatArrow, body) = value.drop_meta() else { return None };
+	let parameters = match parameters.drop_meta() {
+		Node::List(items, Bracket::Round, _) => items.clone(),
+		single => vec![single.clone()],
+	};
+	let is_starred = |parameter: &Node| matches!(parameter.drop_meta(), Node::Symbol(word) if word.starts_with(crate::tuples::STARRED) && word.len() > 1);
+	if !matches!(name.drop_meta(), Node::Symbol(_)) || !parameters.iter().any(is_starred) {
+		return None;
+	}
+	let head = Node::List([vec![name.clone()], parameters].concat(), Bracket::Round, Separator::None);
+	Some(Node::Key(Box::new(head), Op::Define, body.clone()))
+}
+
 /// C#'s `xs.Sum()`, `xs.Select(x => x * 2)`: the LINQ name, wasp's word and the arguments (a called method only:
 /// `obj.Count` may be a field)
 fn linq_method(method: &Node) -> Option<(&'static str, &'static str, Vec<Node>)> {
@@ -243,9 +277,26 @@ fn called_arguments(call: &Node) -> Option<Vec<Node>> {
 /// `function (a, b)`: the parameters after a function keyword with no name
 fn function_parameters(head: &Node) -> Option<Node> {
 	let Node::List(head_items, _, _) = head.drop_meta() else { return None };
-	let [keyword, parameters] = head_items.as_slice() else { return None };
-	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word));
-	is_keyword.then(|| parameters.clone())
+	let [keyword, parameters @ ..] = head_items.as_slice() else { return None };
+	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
+		return None;
+	}
+	match parameters {
+		[single] => Some(single.clone()),
+		[] => None,
+		// Go's `func(x int)`, `func(a, b int)`: the names, the types after them dropped
+		several => {
+			let names: Vec<Node> = several.iter().filter_map(|parameter| match parameter.drop_meta() {
+				Node::Symbol(_) if !is_type_word(parameter) => Some(parameter.clone()),
+				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_type_word(kind) && !is_type_word(name)) => Some(words[0].clone()),
+				_ => None,
+			}).collect();
+			match names.as_slice() {
+				[single] => Some(single.clone()),
+				_ => Some(Node::List(names, Bracket::Round, Separator::Colon)),
+			}
+		}
+	}
 }
 
 /// `lambda x` (the words before Python's colon): the parameters

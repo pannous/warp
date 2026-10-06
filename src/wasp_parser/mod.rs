@@ -112,6 +112,7 @@ const IN_KEYWORD: &str = "in";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
 const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
+const PYTHON_LAMBDA_KEYWORD: &str = "lambda";
 const ELSE_KEYWORD: &str = "else";
 const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
 const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";

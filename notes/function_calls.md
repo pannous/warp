@@ -133,6 +133,15 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   (card functions-calling); Swift `-> (Int) -> Int` results and Scala's curried `def add(x)(y) = …`
   (declarations.rs `function_typed_result`, `curried_definition`); `xs.max()` was "max of an empty list" (min_max.rs);
   C# LINQ `Select`/`Where`/`Aggregate`/`Sum` … work with a note naming wasp's word (welcome_forms.rs, alias rule).
+- Batch 24: round 7 (probes/function_calls_round7.md). Regression fix: Python's one-line `def f(x): return a if c
+  else b` was "undefined function: f" since batch 21 (try_parse_return continues at binding power 0 after the
+  phrase). OCaml `let inc = fun x -> x + 1 in inc 4` printed nothing (split_at_in descends into the lambda body),
+  `fun a b -> …` (lambdas.rs `keyword_and_names`); Python lambdas `lambda a, b=2: …`, `lambda *xs: …`, `lambda: 42`
+  (parser atoms.rs `parse_python_lambda`; a lambda variable with a rest parameter is a definition, welcome_forms.rs
+  `starred_lambda`); Go function literals `func(a, b int) int { … }` and `f func(int) int` parameters. P70c (user):
+  a lambda made in a loop keeps its iteration's variable (already so, pinned).
+  Round 7 still open: F# `List.map (fun x -> …) [1; 2; 3]`, MATLAB `@(x)`, R `sapply(c(…), …)`, Dart
+  `{required int a}`, Rust generics `fn apply<F: Fn(i32) -> i32>`.
 
 ## Open
 - Board cards: functions-ruby-yield (warp-93); functions-sort-op,
