@@ -42,8 +42,8 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	{
 		// concatenation; a value held as a Node (a map value, an element of one) joining a text; `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
 		Kind::Text
-	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Error)) {
-		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness"); an error operand stays an error
+	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Error | Kind::Function)) {
+		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness"); an error operand stays an error, a function is no number
 	} else if left == Kind::Float || right == Kind::Float {
 		Kind::Float
 	} else {
