@@ -116,6 +116,9 @@ PASSED:
   ✓ control::test_listener_removal::a_named_listener_can_be_called
   ✓ control::test_listener_removal::a_named_listener_is_removed
   ✓ control::test_listener_removal::removing_one_listener_keeps_the_others
+  ✓ control::test_listener_removal_in_functions::a_listener_is_removed_inside_a_block
+  ✓ control::test_listener_removal_in_functions::a_listener_is_removed_inside_a_function
+  ✓ control::test_listener_removal_in_functions::a_listener_removed_by_a_function_stops_listening
   ✓ control::test_loop_forms::a_range_is_a_list_in_a_variable
   ✓ control::test_loop_forms::for_without_variable_binds_it
   ✓ control::test_loop_forms::ranges_in_for_headers_stay_ranges
@@ -218,7 +221,6 @@ PASSED:
   ✓ control::test_switch_value::a_switch_can_be_bound
   ✓ control::test_system_signals::a_file_change_runs_its_handler
   ✓ control::test_system_signals::a_program_with_a_timer_stays_after_main
-  ✓ control::test_system_signals::a_timer_fires_while_main_runs
   ✓ control::test_system_signals::exit_ends_the_run
   ✓ control::test_system_signals::exit_gives_the_process_its_code
   ✓ control::test_system_signals::on_interrupt_cuts_a_sleep_short
@@ -1959,6 +1961,7 @@ PASSED:
   ✓ types::test_class_methods::a_method_without_parentheses_is_read_like_a_field
   ✓ types::test_class_methods::a_shared_method_named_like_a_library_word_stays_the_classes_own
   ✓ types::test_class_methods::classes_with_a_method_of_the_same_name_each_call_their_own
+  ✓ types::test_class_methods::keyword_methods_in_a_class_body
   ✓ types::test_class_methods::methods_are_no_fields
   ✓ types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ types::test_constructor_vs_data::test_construction_checks_field_types
@@ -2601,6 +2604,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ control::test_system_signals::a_timer_fires_while_main_runs
 
 SUMMARY:
-23 ignored, 2598 passed, 0 failed, 2598 total tested
+23 ignored, 2601 passed, 1 failed, 2602 total tested
