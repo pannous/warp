@@ -216,6 +216,59 @@ impl WaspParser {
 		Node::List([vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(), Bracket::Round, Separator::None)
 	}
 
+	/// `after C return V`: the marker call `after·return(C, V)`, when a `return` follows on the statement (outside brackets);
+	/// `after tested: body` without one stays a call listener (variable_signals)
+	pub(super) fn try_parse_after_return(&mut self) -> Option<Node> {
+		if self.options.data_mode || !self.matches_keyword(AFTER_KEYWORD) || !self.return_ahead() {
+			return None;
+		}
+		self.advance_by(AFTER_KEYWORD.len());
+		let condition = self.parse_expr(0);
+		self.skip_spaces();
+		if !self.matches_keyword(RETURN_KEYWORD) {
+			return Some(error("`after` needs a `return`: `after C return V`"));
+		}
+		self.advance_by(RETURN_KEYWORD.len());
+		let value = self.parse_expr(0);
+		Some(Node::List(vec![Symbol(AFTER_MARKER.to_string()), condition, value], Bracket::Round, Separator::None))
+	}
+
+	/// Is there a `return` word later on this statement, outside brackets
+	fn return_ahead(&self) -> bool {
+		let mut depth = 0i32;
+		for offset in AFTER_KEYWORD.len().. {
+			match self.peek_char(offset) {
+				'\0' | '\n' | ';' => return false,
+				'(' | '[' | '{' => depth += 1,
+				')' | ']' | '}' if depth == 0 => return false,
+				')' | ']' | '}' => depth -= 1,
+				c if depth == 0 && c.is_whitespace() && self.word_at(offset + 1) == RETURN_KEYWORD => return true,
+				_ => {}
+			}
+		}
+		false
+	}
+
+	/// `and print "x"`: an `and` followed by a statement, a word with an argument after it
+	pub(super) fn and_starts_statement(&self) -> bool {
+		if self.options.data_mode || !self.matches_keyword(AND_KEYWORD) {
+			return false;
+		}
+		let blanks = |from: usize| (from..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
+		let word_start = AND_KEYWORD.len() + blanks(AND_KEYWORD.len());
+		let word = self.word_at(word_start);
+		if word.is_empty() || CONTINUING_WORDS.contains(&word.as_str()) || !self.peek_char(word_start).is_alphabetic() {
+			return false;
+		}
+		let word_end = word_start + word.chars().count();
+		let argument = word_end + blanks(word_end);
+		if argument == word_end {
+			return false; // `and f(3)`, `and x`: an operand
+		}
+		let next = self.peek_char(argument);
+		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !CONTINUING_WORDS.contains(&self.word_at(argument).as_str())
+	}
+
 	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),
 	/// with how many blanks (line breaks included) come before it
 	pub(super) fn fallback_word_ahead(&self) -> Option<(&'static str, usize)> {

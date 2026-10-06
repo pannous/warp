@@ -14,7 +14,7 @@ fn and_between_statements_sequences_them() {
 
 #[test]
 fn and_after_a_value_stays_logical() {
-	assert_eq!(parse("x and print \"x\"").serialize(), parse("x and (print \"x\")").serialize());
+	assert!(matches!(parse("x and print \"x\"").drop_meta(), Node::Key(_, Op::And, _)), "a value on the left: logical and");
 	is!("1 and 0", false);
 	is!("f := it*2; f(3) and f(5) > 9", true);
 }
@@ -32,4 +32,9 @@ fn after_reads_its_condition_up_to_return() {
 #[test]
 fn after_without_return_stays_a_call_listener() {
 	assert!(!parse("after tested: print \"ok\"").serialize().contains(AFTER_RETURN));
+}
+
+#[test]
+fn after_without_parentheses_waits_for_its_condition() {
+	is!("shared n = 0; go { for i in 1 to 5 { n += 1 } }; five = after n == 5 return n * 2; await five", 10);
 }

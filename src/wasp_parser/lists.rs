@@ -119,7 +119,12 @@ impl WaspParser {
 			}
 
 			let pos_before = self.pos;
+			// an argument of a braceless call at statement level (`sleep 1s`): `and print "x"` after it starts the next statement
+			let statement_start = items_with_seps.iter().rposition(|(_, separator)| *separator != Separator::Space).map_or(0, |last| last + 1);
+			let in_command = items_with_seps.get(statement_start).is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(_)));
+			let outer_command = std::mem::replace(&mut self.in_command, in_command);
 			let item = self.parse_value();
+			self.in_command = outer_command;
 
 			let consumed_input = self.pos != pos_before;
 			// `==` is loose (false equals ø): only a real ø is skipped
@@ -166,6 +171,9 @@ impl WaspParser {
 				if self.only_blanks_before_newline() { Separator::Newline } else { Separator::Semicolon }
 			} else if had_newline {
 				Separator::Newline
+			} else if (in_command || is_command(&item)) && self.and_starts_statement() {
+				self.advance_by(AND_KEYWORD.len());
+				Separator::Semicolon
 			} else {
 				Separator::Space
 			};
