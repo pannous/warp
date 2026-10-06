@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 223] = [
+const CASES: [(&str, &str); 225] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -228,6 +228,8 @@ twice 4"#, r#"8"#),
 	(r#"name = "Bo"; f"hi {name}, {1 + 1}""#, r#"hi Bo, 2"#),
 	(r#"f"{{x}}""#, r#"{x}"#),
 	(r#"def f(x){ x * 2 }; f"{f(2)}""#, r#"4"#),
+	(r#"def sq(x){ x*x }; def g(n) { return sq n }; g(3)"#, r#"9"#),
+	(r#"square x := x*x; n = 3; return square n"#, r#"9"#),
 ];
 
 /// The value as `warp eval` shows it: a text without its quotes
