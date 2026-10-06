@@ -1133,6 +1133,8 @@ PASSED:
   ✓ numbers::test_mixed_number_arithmetic::an_exact_real_stays_exact_with_a_ratio
   ✓ numbers::test_mixed_number_arithmetic::complex_mixes_with_any_number
   ✓ numbers::test_mixed_number_arithmetic::infinity_and_nan_follow_ieee
+  ✓ numbers::test_nan_observed::a_nan_leaving_the_run_is_canonical
+  ✓ numbers::test_nan_observed::a_nan_prints_as_nan
   ✓ numbers::test_norm::norm_is_abs
   ✓ numbers::test_number::test_hex
   ✓ numbers::test_number::test_number
@@ -2434,4 +2436,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2429 passed, 0 failed, 2429 total tested
+23 ignored, 2431 passed, 0 failed, 2431 total tested
