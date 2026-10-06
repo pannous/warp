@@ -657,7 +657,8 @@ pub mod hints {
     /// Bracket indexing (counts from 0) vs hash indexing (counts from 1)
     pub fn index_operator(var: &str, idx: &str, used_bracket: bool) {
         let looks_up_a_key = idx.starts_with(['"', '\'']); // `ages["alice"]` counts no position
-        if looks_up_a_key {
+        // card g-2WPo (user): only a simple index, a literal or a name; `xs[i+1]` stays as written
+        if looks_up_a_key || !is_simple_index(idx) {
             return;
         }
         let s = style();
@@ -674,6 +675,13 @@ pub mod hints {
             }
             _ => {}
         }
+    }
+
+    fn is_simple_index(idx: &str) -> bool {
+        let digits = idx.strip_prefix('-').unwrap_or(idx);
+        let is_number = !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit());
+        let is_name = idx.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') && idx.chars().all(|c| c.is_alphanumeric() || c == '_');
+        is_number || is_name
     }
 
     /// Length method vs # operator
