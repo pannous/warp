@@ -175,7 +175,8 @@ impl WasmGcEmitter {
 			return true;
 		}
 		func.instruction(&I::LocalGet(access.slot));
-		self.emit_value_of_kind(func, value, access.kind);
+		let class = self.typed_structs[&target.drop_meta().name()].clone();
+		self.emit_field_value(func, &class, access.field_index as usize, value, access.kind);
 		func.instruction(&I::StructSet { struct_type_index: access.type_index, field_index: access.field_index });
 		let key = crate::wasp_parser::subscript_key(index).expect("a field by name").clone();
 		self.emit_assigned_entry_value(func, target, &key, value);
@@ -198,11 +199,20 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalTee(slot));
 	}
 
+	/// The value of a field as its kind stores it; an int field never takes a fraction (`p.x = 0.5` traps)
+	fn emit_field_value(&mut self, func: &mut Function, class: &str, field_index: usize, value: &Node, kind: Kind) {
+		self.emit_value_of_kind(func, value, kind);
+		let field = self.ctx.type_registry.get_by_name(class).and_then(|type_def| type_def.fields.get(field_index));
+		if field.is_some_and(|field| crate::analyzer::is_whole_type(&field.type_name)) {
+			self.emit_whole_check(func);
+		}
+	}
+
 	/// A new struct of the class from the values of its fields in declared order
 	fn emit_struct_new(&mut self, func: &mut Function, class: &str, values: &[Node]) {
 		let instance = self.instance_types[class].clone();
-		for (value, (_, kind)) in values.iter().zip(&instance.fields) {
-			self.emit_value_of_kind(func, value, *kind);
+		for (field_index, (value, (_, kind))) in values.iter().zip(&instance.fields).enumerate() {
+			self.emit_field_value(func, class, field_index, value, *kind);
 		}
 		func.instruction(&I::StructNew(instance.type_index));
 	}

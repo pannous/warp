@@ -248,6 +248,12 @@ pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 	})
 }
 
+/// A whole-number type (`int`, `long`, `byte` …): never a fraction, unlike `exact`
+pub fn is_whole_type(name: &str) -> bool {
+	let name = name.trim_end_matches('?').to_lowercase();
+	canonical_type_name(&name) != "exact" && builtin_type_kind(&name) == Some(Kind::Int)
+}
+
 /// A plural type word denotes a list of that type: `ints`, `numbers` → `int`, `number`
 pub fn plural_element_type(word: &str) -> Option<&str> {
 	let singular = word.strip_suffix('s')?;
