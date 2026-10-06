@@ -143,32 +143,59 @@ pub fn runtime_stub() -> &'static std::path::Path {
 			.current_dir(env!("CARGO_MANIFEST_DIR")).status().expect("cargo runs");
 		assert!(built.success(), "cargo build -p warp-runtime failed");
 		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name("warp-runtime");
+		let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("crates").join("warp-runtime");
+		let checkouts = checkout_build(&shared, "warp_runtime-", &runtime_manifest.to_string_lossy(), None).unwrap_or(shared);
 		let own = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("warp-runtime-{}", env!("CARGO_PKG_VERSION")));
-		std::fs::copy(&shared, &own).expect("copy the warp-runtime stub");
+		std::fs::copy(&checkouts, &own).expect("copy the warp-runtime stub");
 		own
 	})
 }
 
 /// A command running this checkout's warp binary. Every checkout builds the one shared target/debug/warp, so another
 /// worktree's build can replace it while these tests run: at first use it is linked (or copied) to a file of its own,
-/// named by this checkout's version (each checkout builds `version = "0.1.1-<branch>"`), and checked by that version
+/// named by this checkout's version (each checkout builds `version = "0.1.1-<branch>"`), and checked by that version;
+/// when the shared one is another checkout's, this checkout's own build is taken from target/debug/deps (checkout_build)
 #[cfg(feature = "native")]
 pub fn warp_command() -> std::process::Command {
 	static BINARY: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
 	let binary = BINARY.get_or_init(|| {
 		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp"));
 		let own = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("warp-{}", env!("CARGO_PKG_VERSION")));
-		let _ = std::fs::remove_file(&own);
-		// a hard link keeps this build even when cargo relinks target/debug/warp to a newer one; a copy where links fail
-		if std::fs::hard_link(shared, &own).is_err() {
-			std::fs::copy(shared, &own).expect("copy the warp binary");
+		if keep_as(shared, &own) {
+			return own;
 		}
-		let version = std::process::Command::new(&own).arg("version").output().expect("warp runs");
-		let version = String::from_utf8_lossy(&version.stdout).to_string();
-		assert!(version.contains(env!("CARGO_PKG_VERSION")),
-			"{} is another checkout's build ({}), not version {}: another worktree built warp in between; run the tests again",
-			shared.display(), version.trim(), env!("CARGO_PKG_VERSION"));
+		let checkouts = checkout_build(shared, "warp-", env!("CARGO_MANIFEST_DIR"), Some(env!("CARGO_PKG_VERSION")));
+		assert!(checkouts.as_deref().is_some_and(|build| keep_as(build, &own)),
+			"{} is another checkout's build and target/debug/deps holds none of version {} built from {}",
+			shared.display(), env!("CARGO_PKG_VERSION"), env!("CARGO_MANIFEST_DIR"));
 		own
 	});
 	std::process::Command::new(binary)
+}
+
+/// Link (or copy) the warp binary to `own` and tell whether it is this checkout's version
+#[cfg(feature = "native")]
+fn keep_as(binary: &std::path::Path, own: &std::path::Path) -> bool {
+	let _ = std::fs::remove_file(own);
+	// a hard link keeps this build even when cargo relinks target/debug/warp to a newer one; a copy where links fail
+	if std::fs::hard_link(binary, own).is_err() && std::fs::copy(binary, own).is_err() {
+		return false;
+	}
+	let version = std::process::Command::new(own).arg("version").output().map(|output| String::from_utf8_lossy(&output.stdout).to_string());
+	version.is_ok_and(|version| version.contains(env!("CARGO_PKG_VERSION")))
+}
+
+/// This checkout's own build of a binary in target/debug/deps, where each package version keeps its own file
+/// (`warp-<hash>`): the newest one whose dep-info names this manifest directory (and version), no rebuild needed
+#[cfg(feature = "native")]
+fn checkout_build(uplifted: &std::path::Path, prefix: &str, manifest_dir: &str, version: Option<&str>) -> Option<std::path::PathBuf> {
+	let deps = uplifted.parent()?.join("deps");
+	let names_this_checkout = |info: &str| info.lines().any(|line| line == format!("# env-dep:CARGO_MANIFEST_DIR={manifest_dir}"))
+		&& version.is_none_or(|version| info.lines().any(|line| line == format!("# env-dep:CARGO_PKG_VERSION={version}")));
+	std::fs::read_dir(deps).ok()?.flatten().map(|entry| entry.path())
+		.filter(|path| path.extension().is_some_and(|extension| extension == "d") && path.file_name().is_some_and(|name| name.to_string_lossy().starts_with(prefix)))
+		.filter(|info| std::fs::read_to_string(info).is_ok_and(|text| names_this_checkout(&text)))
+		.map(|info| info.with_extension(""))
+		.filter(|binary| binary.is_file())
+		.max_by_key(|binary| binary.metadata().and_then(|metadata| metadata.modified()).ok())
 }

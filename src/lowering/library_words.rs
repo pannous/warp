@@ -605,8 +605,11 @@ impl Lowering {
 			Node::Symbol(name) => name,
 			_ => return None,
 		};
-		// `log(x, base)` is ln(x)/ln(base): libm's log takes one argument
+		// `log(x, base)` is ln(x)/ln(base): libm's log takes one argument (unless the program defines its own log)
 		if let (LOG_WORD, [_, value, base]) = (head.as_str(), items) {
+			if self.shadowed.contains(LOG_WORD) {
+				return None;
+			}
 			if call_name(items, bracket, separator).is_some() {
 				let log_of = |argument: &Node| Node::List(vec![items[0].clone(), argument.clone()], Bracket::Round, Separator::None);
 				return Some(Node::Key(Box::new(log_of(value)), Op::Div, Box::new(log_of(base))));
