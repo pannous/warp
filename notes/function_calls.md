@@ -36,7 +36,15 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
 - Named arguments reach functions with a result type (named_arguments.rs `untyped_head`, `with_parameters`).
 - A function returning a character boxes it as a codepoint (user_function_calls.rs), not new_int.
 - Recursion over slices `xs#1 + s(xs[1:])`: a branch of Int and run-time number is Data (inference.rs branches_kind).
+- Sorting with a function (lambdas.rs, the `sort` iteration): `sort/sorted/sort_by/sortBy/sortedBy`, a comparator of
+  two items (a comparison body is "first before second", Swift `by: >`; any other result sorts first when negative, JS
+  `(a,b) => a-b`) or a key of one item (Python `key: s => s.length`, Kotlin `sortedBy { … }`). Labels `by:`/`key:`.
+  A stable insertion sort of a copy, inlined like map. `sorted(xs)` is `sort(xs)`.
+- Lambda parameters between bars, Rust `|a, b| a*b`, Ruby `{ |x| x*x }` (parser expressions.rs `pipe_parameters`,
+  only at the start of an expression; wiki closure.md). A block of one arrow lambda is that lambda.
+- Ruby `add 1, 2` / `x = add 1, 2`: a call short of arguments takes the items after its comma (broadcasting.rs
+  `with_comma_arguments`).
 
 ## Open
-- Board cards `functions-*` (todo list): slices in recursion, lambda spellings (`fn`, `lambda x:`, `{|x|}`), C-style
-  and Swift-label definitions, Ruby `add 1, 2`, returning a block with `it`, bare nested function names (P82).
+- Board cards: functions-mk (returning a block with `it`), functions-returning (bare nested function names, P82),
+  functions-swift (`{ x in … }`, `$0`), functions-sort-op (`sorted(xs, >)`), functions-key (`key=x=>…`).
