@@ -450,6 +450,10 @@ impl WaspParser {
 					let (start, end) = hash_slice_bounds(&rhs).expect("guarded");
 					Node::List(vec![Symbol(SLICE_WORD.to_string()), lhs, start, end], Bracket::Round, Separator::None)
 				}
+				_ if op == Op::To && written.starts_with(DOWN_WORD) => {
+					let ascending = Node::Key(Box::new(rhs.clone()), Op::To, Box::new(lhs));
+					Node::List(vec![Symbol(REVERSE_WORD.to_string()), ascending], Bracket::Round, Separator::None)
+				}
 				_ => Node::Key(Box::new(lhs), op, Box::new(rhs.clone())),
 			};
 			if op.is_ordering() {

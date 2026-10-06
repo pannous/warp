@@ -91,6 +91,9 @@ const PYTHON_ROOT_CLASS: &str = "object";
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
+/// `10 down to 1` is `reverse(1 to 10)`
+const DOWN_WORD: &str = "down";
+const REVERSE_WORD: &str = "reverse";
 /// Word spellings of `≈` (wiki/operator.md): equal within the relative `tolerance`
 const SIMILARITY_WORDS: [&str; 2] = ["circa", "approximately"];
 const EXCLUSIVE_DOTS: &str = "..";
