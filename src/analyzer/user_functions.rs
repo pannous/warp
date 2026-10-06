@@ -131,7 +131,10 @@ pub(super) fn infer_function_return_kind(params: &[Param], body: &Node, function
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => &statements[statements.len() - 1],
 		other => other,
 	};
+	// `f() := {}`, a handler `{{}}`: a body doing nothing returns ø
+	let empty_block = matches!(last.drop_meta(), Node::List(items, Bracket::Curly, _) if items.is_empty());
 	let last_kind = match (is_error(last), returned.first()) {
+		(false, None) if empty_block => Kind::Empty,
 		(true, Some(_)) if returned.contains(&Kind::Float) && returned.iter().all(|kind| !kind.is_ref()) => Kind::Float,
 		(true, Some(first)) if returned.iter().all(|kind| kind == first) => *first,
 		(true, Some(_)) => Kind::Empty, // returns of different kinds: a Node of unknown kind
