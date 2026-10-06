@@ -48,6 +48,7 @@ mod test_each_colon;
 mod test_event_signals;
 mod test_page_events;
 mod test_system_signals;
+mod test_system_values;
 mod test_variable_signals;
 mod test_welcome_forms;
 mod test_loop_value;
