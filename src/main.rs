@@ -11,10 +11,16 @@ use extensions::numbers::Number;
 const DEFAULT_COMPILED_NAME: &str = "out.wasm";
 /// `warp compile --aot` also writes the machine code (wasmtime's .cwasm), which `warp <file>.cwasm` runs
 const AOT_FLAG: &str = "--aot";
-/// `warp build --exe`: a standalone executable, the warp-runtime stub with the program's machine code appended
+/// P103 (user): "Just giving it a file will compile it": `warp hello.wasp` runs the program and leaves the standalone
+/// executable `hello` next to it (`hello.exe` on Windows), the warp-runtime stub with the program's machine code appended.
+/// `warp build <file>` / `warp compile <file>` (not in the help any more) only make it; `--exe` still says so, `--wasm`
+/// (and `--aot`) write the module instead
 const EXE_FLAG: &str = "--exe";
+const WASM_FLAG: &str = "--wasm";
+const COMPILE_FLAGS: [&str; 3] = [EXE_FLAG, WASM_FLAG, AOT_FLAG];
 const MACHINE_CODE_EXTENSION: &str = "cwasm";
-const STANDALONE_EXTENSION: &str = "exe";
+/// The name of an executable built from inline code (plus the platform's extension)
+const DEFAULT_EXECUTABLE_NAME: &str = "out";
 const RUNTIME_STUB_NAME: &str = "warp-runtime";
 const RUNTIME_STUB_VARIABLE: &str = "WARP_RUNTIME_STUB";
 #[cfg(unix)]
@@ -40,7 +46,7 @@ fn node_to_i32(node: &Node) -> i32 {
 
 #[cfg(not(test))]
 fn main() {
-    // an executable made by `warp build --exe` from warp itself runs the program it carries
+    // an executable made by `warp build` from warp itself runs the program it carries
     if let Some(exit_code) = warp_runtime::standalone::run_carried_program() {
         std::process::exit(exit_code);
     }
@@ -132,19 +138,19 @@ fn run_command(args: &[String]) {
         let text = source_of(target);
         println!("{}", wasp_parser::parse_data(&text).serialize());
     } else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
-        // DONE: don't run, just compile and save binary
         let target = extract_after(&arg_string, " ");
-        let (standalone, target) = match target.strip_prefix(EXE_FLAG) {
-            Some(rest) => (true, rest.trim_start().to_string()),
-            None => (false, target),
-        };
-        let (ahead_of_time, target) = match target.strip_prefix(AOT_FLAG) {
-            Some(rest) => (true, rest.trim_start().to_string()),
-            None => (false, target),
-        };
+        let (flags, target) = leading_flags(target);
+        let ahead_of_time = flags.contains(&AOT_FLAG);
+        let standalone = flags.contains(&EXE_FLAG) || !(flags.contains(&WASM_FLAG) || ahead_of_time);
         let code = source_of(&target);
         if standalone {
-            write_standalone_executable(&code, &target);
+            match write_standalone_executable(&code, &target) {
+                Ok(report) => println!("{report}"),
+                Err(failure) => {
+                    eprintln!("warp build: {failure}");
+                    std::process::exit(1);
+                }
+            }
             return;
         }
         match wasm_emitter::compile(&code) {
@@ -165,7 +171,11 @@ fn run_command(args: &[String]) {
         if !file_exists(&arg_string) {
             eprintln!("Error: Could not read file '{}'", arg_string);
         }
-        print_and_exit(eval(&arg_string)); // a file: its folder is in scope (D15)
+        let result = eval(&arg_string); // a file: its folder is in scope (D15)
+        if !matches!(result, Node::Error(_)) {
+            leave_executable(&arg_string);
+        }
+        print_and_exit(result);
     } else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {
         // Compile WAT/WAST text format to WASM binary, then execute
         let wat_code = load_file(&arg_string);
@@ -272,47 +282,67 @@ fn write_machine_code(bytes: &[u8], wasm_path: &str) {
     }
 }
 
-/// `warp build --exe`: the program, printing its value, compiled to machine code and appended to a copy of the
-/// compiler-less `warp-runtime` stub (crates/warp-runtime, notes/aot.md); without a stub, to a copy of warp itself
-fn write_standalone_executable(code: &str, target: &str) {
-    let fail = |message: String| -> ! {
-        eprintln!("warp build --exe: {message}");
-        std::process::exit(1);
-    };
-    let program = wasm_emitter::compile_printing_result(code).unwrap_or_else(|value| fail(format!("nothing to compile: {}", value.serialize())));
+/// The compile flags `arguments` start with, in any order, and the arguments after them
+fn leading_flags(mut arguments: String) -> (Vec<&'static str>, String) {
+    let mut flags = vec![];
+    while let Some(flag) = COMPILE_FLAGS.into_iter().find(|flag| arguments.split_whitespace().next() == Some(flag)) {
+        flags.push(flag);
+        arguments = arguments[flag.len()..].trim_start().to_string();
+    }
+    (flags, arguments)
+}
+
+/// P103: the executable next to a program file that ran, unless one newer than the file is there already; a program
+/// the runtime cannot carry (it fetches, say) gets a note on stderr instead
+fn leave_executable(path: &str) {
+    let modified = |file: &std::path::Path| fs::metadata(file).and_then(|metadata| metadata.modified()).ok();
+    let executable = standalone_output_path(path);
+    if modified(&executable).zip(modified(std::path::Path::new(path))).is_some_and(|(built, written)| built >= written) {
+        return;
+    }
+    let program_file = std::path::Path::new(path);
+    if let Err(failure) = warp::modules::with_program_file(program_file, || write_standalone_executable(&load_file(path), path)) {
+        eprintln!("note: no executable {}: {failure}", executable.display());
+    }
+}
+
+/// The program, printing its value, compiled to machine code and appended to a copy of the compiler-less `warp-runtime`
+/// stub (crates/warp-runtime, notes/aot.md), without a stub to a copy of warp itself; Ok is the report of what was written
+fn write_standalone_executable(code: &str, target: &str) -> Result<String, String> {
+    let program = wasm_emitter::compile_printing_result(code).map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
     let engine = util::gc_engine();
-    let module = run::module_cache::compiled_module(&engine, &program.bytes).unwrap_or_else(|failure| fail(failure.to_string()));
+    let module = run::module_cache::compiled_module(&engine, &program.bytes).map_err(|failure| failure.to_string())?;
     let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();
     let missing: Vec<String> = module.imports().filter(|import| !provided.contains(&(import.module(), import.name()))).map(|import| format!("{}.{}", import.module(), import.name())).collect();
     if !missing.is_empty() {
-        fail(format!("a standalone executable provides print, libm, sleep, random, random_below and clock, not {}: run the program with warp", missing.join(", ")));
+        return Err(format!("a standalone executable provides print, libm, sleep, random, random_below and clock, not {}: run the program with warp", missing.join(", ")));
     }
-    let machine_code = module.serialize().unwrap_or_else(|failure| fail(failure.to_string()));
+    let machine_code = module.serialize().map_err(|failure| failure.to_string())?;
     let stub = runtime_stub_path();
-    let runtime = fs::read(&stub).unwrap_or_else(|failure| fail(format!("cannot read the runtime {}: {failure}", stub.display())));
+    let runtime = fs::read(&stub).map_err(|failure| format!("cannot read the runtime {}: {failure}", stub.display()))?;
     let output = standalone_output_path(target);
     let executable = warp_runtime::standalone::with_machine_code(&runtime, &machine_code);
-    fs::write(&output, &executable).unwrap_or_else(|failure| fail(format!("cannot write {}: {failure}", output.display())));
+    fs::write(&output, &executable).map_err(|failure| format!("cannot write {}: {failure}", output.display()))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&output, fs::Permissions::from_mode(EXECUTABLE_MODE)).unwrap_or_else(|failure| fail(failure.to_string()));
+        fs::set_permissions(&output, fs::Permissions::from_mode(EXECUTABLE_MODE)).map_err(|failure| failure.to_string())?;
     }
     // macOS starts only signed executables: an ad-hoc signature, which `codesign --verify --strict` accepts
     #[cfg(target_os = "macos")]
     match std::process::Command::new("codesign").args(["--sign", "-", "--force"]).arg(&output).output() {
         Ok(signed) if signed.status.success() => {}
-        Ok(signed) => fail(format!("codesign {} failed: {}", output.display(), String::from_utf8_lossy(&signed.stderr).trim())),
-        Err(failure) => fail(format!("cannot run codesign for {}: {failure}", output.display())),
+        Ok(signed) => return Err(format!("codesign {} failed: {}", output.display(), String::from_utf8_lossy(&signed.stderr).trim())),
+        Err(failure) => return Err(format!("cannot run codesign for {}: {failure}", output.display())),
     }
-    println!("wrote {} ({} bytes: runtime {}, machine code {})", output.display(), executable.len(), stub.display(), machine_code.len());
+    Ok(format!("wrote {} ({} bytes: runtime {}, machine code {})", output.display(), executable.len(), stub.display(), machine_code.len()))
 }
 
 fn standalone_output_path(target: &str) -> std::path::PathBuf {
     if file_exists(target) {
-        std::path::Path::new(target).with_extension(STANDALONE_EXTENSION)
+        std::path::Path::new(target).with_extension(env::consts::EXE_EXTENSION)
     } else {
-        std::path::PathBuf::from(format!("out.{STANDALONE_EXTENSION}"))
+        std::path::Path::new(DEFAULT_EXECUTABLE_NAME).with_extension(env::consts::EXE_EXTENSION)
     }
 }
 
@@ -346,7 +376,7 @@ fn structure(node: &Node) -> String {
 
 fn usage() {
     // println!("Usage: warp [options] [file]");
-    println!("  warp <file.warp>     Execute a warp file");
+    println!("  warp <file.warp>     Run a warp file and leave its standalone executable <file> next to it");
     println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
     println!("  warp eval <code>     Evaluate code");
     println!("  warp lower <code>    Show the program after the lowering passes");
@@ -357,10 +387,8 @@ fn usage() {
     println!("  warp repl            Start interactive console");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
-    println!("  warp compile <file|code>  Compile to <file>.wasm (out.wasm for inline code) without running");
-    println!("  warp compile --aot <file|code>  Also compile to machine code, <file>.cwasm, for this machine");
-    println!("  warp build --exe <file|code>    A standalone executable, <file>.exe, printing the program's value");
-    println!("  warp build --exe <file|code>    A standalone executable, <file>.exe, that prints the program's value");
+    println!("  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running");
+    println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");
     println!("  warp version         Show version");

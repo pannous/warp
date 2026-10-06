@@ -26,6 +26,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Standing rules (user)
+- Taking tickets (2026-10-06): "When picking a new task from the project, can you mark them as having an SNI
+  (asignee)? If we don't have SNI's, then just use me." (SNI = assignee.) `todo take <card> <session>` assigns
+  pannous, sets the board field Agent to the session and moves the card to Now (80bef43d8).
 - Board tickets (2026-10-06): "There should be the rule to only close or move project tickets with a commit linked in
   the description. Enforce that rule texturally and in the to-do helper." Enforced in AGENTS.md,
   notes/agents/common.md (c4db425c1) and ~/dev/bin/todo (no move to Done without a linked commit).
@@ -55,6 +58,14 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   Correction (user, same day): test_wasm's test_dom_property did assert ($canvas.width == 300); it moves into
   web/test_web.rs, replacing that file's empty namesake, still ignored for the browser host (warp-f6, branch
   p96-obsolete-ignored).
+- P102 (card g-1KS4) `warp build hello.wasp` makes the native executable by default; on macOS/Linux it is named
+  `hello` (no extension), on Windows hello.exe; `warp compile` makes the executable too (user chose this over the
+  recommended "compile stays .wasm"); the .wasm only with `--wasm`; `--exe` still accepted. Asked by warp-f6 (branch
+  build-exe-default).
+- P103 (replaces P102's command words) user: "we don't need the build and compile flags at all. Just giving it a file
+  will compile it." `warp hello.wasp` compiles once, runs the program right away (output as before) and leaves the
+  executable `hello` beside it (hello.exe on Windows); `build`/`compile` stay accepted as synonyms, not in the help.
+  Assumed (undoable): `--wasm` and `--aot` stay for the module only. warp-f6, branch build-exe-default.
 - P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
   behind them go; no test edits. Asked by warp-40 (code-quality).
 - P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.

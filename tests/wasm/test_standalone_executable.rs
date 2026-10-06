@@ -9,7 +9,7 @@ const OUTPUT_DIRECTORY: &str = env!("CARGO_TARGET_TMPDIR");
 fn build_executable(name: &str, source: &str) -> (Output, PathBuf) {
 	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join(format!("{name}.warp"));
 	std::fs::write(&source_path, source).unwrap();
-	let executable = source_path.with_extension("exe");
+	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
 	let _ = std::fs::remove_file(&executable);
 	let build = crate::common::warp_command().env_remove("WARP_RUNTIME_STUB").args(["build", "--exe"]).arg(&source_path).output().unwrap();
 	(build, executable)
@@ -72,4 +72,34 @@ fn test_build_exe_signs_cleanly_on_macos() {
 	let rebuilt = without_machine_code(&std::fs::read(&executable).unwrap());
 	assert!(embedded_machine_code(&executable).is_some());
 	assert!(rebuilt.len() < std::fs::metadata(&executable).unwrap().len() as usize);
+}
+
+/// g-1KS4 (user): `warp build <file>` makes the executable without --exe; `--wasm` keeps the module output
+#[test]
+fn test_build_makes_an_executable_by_default() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_default.warp");
+	std::fs::write(&source_path, "6 * 7").unwrap();
+	let (executable, module) = (source_path.with_extension(std::env::consts::EXE_EXTENSION), source_path.with_extension("wasm"));
+	let _ = std::fs::remove_file(&executable);
+	let _ = std::fs::remove_file(&module);
+	let build = crate::common::warp_command().env_remove("WARP_RUNTIME_STUB").arg("build").arg(&source_path).output().unwrap();
+	assert!(build.status.success(), "{}", text(&build.stderr));
+	let run = std::process::Command::new(&executable).output().unwrap();
+	assert_eq!(text(&run.stdout), "42\n", "{}", text(&run.stderr));
+	let wasm_build = crate::common::warp_command().args(["build", "--wasm"]).arg(&source_path).output().unwrap();
+	assert!(wasm_build.status.success(), "{}", text(&wasm_build.stderr));
+	assert!(module.exists());
+}
+
+/// P103 (user): "Just giving it a file will compile it": `warp hello.warp` runs it and leaves the executable `hello`
+#[test]
+fn test_running_a_file_leaves_its_executable() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_run.warp");
+	std::fs::write(&source_path, "print \"hi\"\n6 * 7").unwrap();
+	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
+	let _ = std::fs::remove_file(&executable);
+	let run = crate::common::warp_command().env_remove("WARP_RUNTIME_STUB").arg(&source_path).output().unwrap();
+	assert_eq!(text(&run.stdout), "hi\n42\n", "{}", text(&run.stderr));
+	let carried = std::process::Command::new(&executable).output().unwrap();
+	assert_eq!(text(&carried.stdout), "hi\n42\n", "{}", text(&carried.stderr));
 }

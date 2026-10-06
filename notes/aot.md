@@ -36,14 +36,16 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    `warp <file>.wasm` / `.cwasm` now link host, WASI and FFI imports (a printing program failed with an unknown
    `wasi_snapshot_preview1::fd_write` before).
    CLI, debug warp, ackermann: 41 ms without cache, 12 ms with the cache or the .cwasm.
-3. **Standalone executable, `warp build --exe <file>`** (implemented): `<file>.exe` is a copy of the prebuilt stub
+3. **Standalone executable, `warp <file>`** (implemented; P103: running a file leaves `<file>` next to it, `<file>.exe`
+   on Windows, rebuilt only when the source is newer; a program the runtime cannot carry gets a note; `warp build`/`compile`
+   only make it, `--wasm` writes only the module): the executable is a copy of the prebuilt stub
    `warp-runtime` (crates/warp-runtime: wasmtime with `runtime`, `gc`, `gc-copying`, `std`, no Cranelift) with the
    program's machine code appended (`[stub][cwasm][u64 le length][WRPCwasm]`); at start the stub reads its own last 16
    bytes and runs what it carries. The stub is found through `WARP_RUNTIME_STUB`, else `warp-runtime` next to `warp`,
    else warp itself is the stub (warp's main also runs a program it carries: tests need no extra build, the executable
    is then warp-sized). Release stub (`cargo build --release -p warp-runtime`): **805 KB**; ackermann.exe **972 KB**
    (167 KB machine code), starts and finishes in well under 10 ms (probe build: 0.33 ms in total).
-   - The program prints its value: build --exe compiles `print(<last statement>)` (pipeline::compile_printing_result;
+   - The program prints its value: build compiles `print(<last statement>)` (pipeline::compile_printing_result;
      a declaration or a print stays), so the value is formatted by warp's own print (`[10 20 30]`, texts unquoted)
      and the stub needs no Node reader.
      Decided by the user (P77): an executable shows its prints, then its value as `print` shows it (texts without
@@ -87,7 +89,7 @@ module repeats their machine code. A shared runtime module linked to the program
 ## Recommendation
 1. Done: Cranelift crates optimized in dev builds (largest win, tests 8×).
 2. Done (branch aot): the on-disk module cache for every native run, and `warp compile --aot`.
-3. Done (g-qV5Y, g-qV8Y): one shared gc_engine per process (a repeated run is a map lookup) and `warp build --exe`.
+3. Done (g-qV5Y, g-qV8Y): one shared gc_engine per process (a repeated run is a map lookup) and `warp build`.
 4. Done (2026-10-05): dead-function elimination of every emitted module (src/dead_functions.rs): functions no export,
    start, element segment or global reaches are dropped. `f(x):=x+1; f(41)`: 113 → 52 functions, 7.6 → 5.0 KB wasm,
    cwasm 131 → 92 KB, single-threaded Cranelift 17.0 → 14.7 ms; ackermann 10.9 → 8.4 KB, cwasm 149 → 128 KB;
