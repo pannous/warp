@@ -914,6 +914,9 @@ PASSED:
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
   ✓ lists::test_pop::pop_gives_the_last_item
   ✓ lists::test_pop::pop_removes_the_last_item
+  ✓ lists::test_range_arguments::a_range_argument_is_read_from_its_bounds
+  ✓ lists::test_range_arguments::a_range_argument_used_as_a_list_stays_one
+  ✓ lists::test_range_arguments::a_range_variable_passed_on_stays_its_bounds
   ✓ lists::test_range_values::a_parenthesized_range_is_a_list
   ✓ lists::test_range_values::a_range_is_a_list_as_an_argument
   ✓ lists::test_range_values::a_range_of_computed_bounds_is_a_list_as_an_argument
@@ -2513,4 +2516,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2508 passed, 0 failed, 2508 total tested
+23 ignored, 2511 passed, 0 failed, 2511 total tested
