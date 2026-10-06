@@ -1442,9 +1442,10 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let mut labeled_names = vec![];
 	let mut parameters: Vec<Node> = parameters.map(|parameter| labeled_parameter(parameter, &mut labeled_names)).collect();
 	let body = with_label_names(body, labeled_names);
-	// `func add1(x int)`: the one parameter and its type arrive as two words
+	// `func add1(x int)`: the one parameter and its type arrive as two words; `func total(s Shape)` of a declared type
 	if let [parameter, type_word] = parameters.as_slice() {
-		if matches!(parameter.drop_meta(), Node::Symbol(_)) && is_type_word(type_word) {
+		let is_type_name = matches!(type_word.drop_meta(), Node::Symbol(word) if word.starts_with(char::is_uppercase));
+		if matches!(parameter.drop_meta(), Node::Symbol(_)) && (is_type_word(type_word) || is_type_name) {
 			parameters = vec![Node::Key(Box::new(parameter.clone()), Op::Colon, Box::new(type_word.clone()))];
 		}
 	}
