@@ -15,9 +15,14 @@ const SETTER_PREFIX: &str = "set ";
 /// The exports `include m` runs, the first one m has (P139)
 const ENTRY_POINTS: [&str; 2] = ["main", "_start"];
 
-/// The custom section naming the C texts the program's imports from modules cross, for a host that cannot see an
-/// import's types (web/playground/host.js): a line `module\tname\tparameters\tresult` per import, `t` a text, `n` not
-pub const TEXT_CROSSINGS_SECTION: &str = "warp.module_texts";
+/// The custom section describing the program's C calls for a host that cannot see an import's types
+/// (web/playground/host.js, which calls libc.wasm for `c` and imported modules): a line `module\tname\tparameters\tresult`
+/// per import. Parameter letters: `t` a text (a NUL-terminated copy in the program's memory), `l` the length of the text
+/// before it (strcmp's pairs, then not NUL-terminated), `i` an i64, `n` any other number; result: `t` a text Node built
+/// by the host, `i` an i64, `n` a number or none
+pub const C_CALLS_SECTION: &str = "warp.c_calls";
+/// The C library whose calls the browser host makes through libc.wasm
+const LIBC: &str = "c";
 
 /// What an import from a module does: call its function, read its global (a getter of no parameters) or set it
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -159,16 +164,29 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 	Ok(exports)
 }
 
-/// The TEXT_CROSSINGS_SECTION of these imports: the exports of modules that take or give a C text
-pub fn text_crossings<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
-	let letter = |text: bool| if text { 't' } else { 'n' };
-	let lines: std::collections::BTreeSet<String> = imports.filter(|import| is_module_path(import.library))
-		.filter_map(|import| exports(import.library).get(import.name).map(|export| (import, export)))
-		.filter(|(_, export)| export.text_result || export.text_parameters.contains(&true))
-		.map(|(import, export)| {
-			let parameters: String = export.text_parameters.iter().map(|text| letter(*text)).collect();
-			format!("{}\t{}\t{parameters}\t{}\n", import.library, import.name, letter(export.text_result))
+/// The C_CALLS_SECTION of these imports: libc's, and the exports of modules that take or give a C text
+pub fn c_calls<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
+	let number = |value_type: &wasm_encoder::ValType| if *value_type == wasm_encoder::ValType::I64 { 'i' } else { 'n' };
+	let line = |import: &FfiSignature, texts: &[bool], text_result: bool| {
+		let pairs = crate::ffi::string_pair_count(import.name);
+		let parameters: String = import.params.iter().enumerate().map(|(index, value_type)| match index {
+			index if index < 2 * pairs => if index % 2 == 0 { 't' } else { 'l' },
+			index if texts.get(index - pairs).copied().unwrap_or(false) => 't',
+			_ => number(value_type),
 		}).collect();
+		let result = if text_result { 't' } else { import.results.first().map_or('n', number) };
+		format!("{}\t{}\t{parameters}\t{result}\n", import.library, import.name)
+	};
+	let lines: std::collections::BTreeSet<String> = imports.filter_map(|import| match import.library {
+		LIBC => {
+			let texts = crate::ffi::header_text_parameters(LIBC).get(import.name).cloned().unwrap_or_default();
+			Some(line(import, &texts, matches!(import.results.first(), Some(wasm_encoder::ValType::Ref(_)))))
+		}
+		library if is_module_path(library) => exports(library).get(import.name)
+			.filter(|export| export.text_result || export.text_parameters.contains(&true))
+			.map(|export| line(import, &export.text_parameters, export.text_result)),
+		_ => None,
+	}).collect();
 	lines.into_iter().collect()
 }
 
