@@ -22,8 +22,8 @@ const IMPLICIT_TRAIT_PREFIX: &str = "has·";
 const SUPER: &str = "super";
 const SUPER_INFIX: &str = "·super·";
 const GLOBAL_KEYWORD: &str = "global";
-/// The constructor block of a class body, `value{ id = random() }` (wiki/constructor.md)
-const VALUE_WORD: &str = "value";
+/// The constructor block of a class body, `value{ id = random() }` or `value(name){…}` (wiki/constructor.md)
+const VALUE_WORD: &str = crate::wasp_parser::CONSTRUCTOR_WORD;
 
 /// The function a class's `value{…}` block becomes, `person·value(self:person)`: every construction is passed through it
 pub fn constructor_name(class: &str) -> String {
@@ -83,7 +83,7 @@ fn class_items(body: &Node) -> Vec<Node> {
 	};
 	items.into_iter().flat_map(|item| match item.drop_meta() {
 		Node::List(words, _, _) if keyword_method(words).is_some() => keyword_method(words).into_iter().collect(),
-		Node::List(words, Bracket::None, _) if value_block(words).is_some() => value_block(words).into_iter().collect(),
+		Node::List(words, _, _) if value_block(words).is_some() => value_block(words).into_iter().collect(),
 		Node::List(group, Bracket::None, _) => group.clone(),
 		_ => vec![item],
 	}).collect()
@@ -94,24 +94,39 @@ fn keyword_method(words: &[Node]) -> Option<Node> {
 	crate::declarations::keyword_definition(words)
 }
 
-/// `value {…}` (spaced): the constructor block `value{…}`
+/// `value {…}` (spaced) and `value(name) {…}`: the constructor `value{…}`, `value(name):{…}`
 fn value_block(words: &[Node]) -> Option<Node> {
 	let [word, block] = words else { return None };
 	let is_block = matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _));
-	(is_block && is_value_word(word)).then(|| Node::Key(Box::new(word.clone()), Op::None, Box::new(block.clone())))
+	(is_block && constructor_parameters(word).is_some()).then(|| Node::Key(Box::new(word.clone()), Op::None, Box::new(block.clone())))
 }
 
-fn is_value_word(word: &Node) -> bool {
-	matches!(word.drop_meta(), Node::Symbol(name) if name == VALUE_WORD)
-}
-
-/// The statements of the constructor block `value{…}`
-fn constructor_body(item: &Node) -> Option<&Node> {
-	match item.drop_meta() {
-		// glued `value{…}` arrives as the key `value:{…}`
-		Node::Key(word, Op::None | Op::Colon, block) if is_value_word(word) && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) => Some(block),
+/// The parameters `value` or `value(name)` declares
+fn constructor_parameters(word: &Node) -> Option<Vec<Node>> {
+	match word.drop_meta() {
+		Node::Symbol(name) if name == VALUE_WORD => Some(vec![]),
+		// `value(a, b)`, `value (n)`: the parameters may come as one group
+		Node::List(call, Bracket::Round, _) if matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(name)) if name == VALUE_WORD) => {
+			Some(call[1..].iter().flat_map(|parameter| match parameter.drop_meta() {
+				Node::List(group, Bracket::Round, _) => group.clone(),
+				_ => vec![parameter.clone()],
+			}).collect())
+		}
 		_ => None,
 	}
+}
+
+/// The parameters and statements of the constructor `value{…}`, `value(name){…}`
+fn constructor_parts(item: &Node) -> Option<(Vec<Node>, &Node)> {
+	match item.drop_meta() {
+		// glued `value{…}` arrives as the key `value:{…}`
+		Node::Key(word, Op::None | Op::Colon, block) if matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) => Some((constructor_parameters(word)?, block)),
+		_ => None,
+	}
+}
+
+fn constructor_body(item: &Node) -> Option<&Node> {
+	constructor_parts(item).map(|(_, body)| body)
 }
 
 /// The fields a constructor body sets, `id = …` or `this.id = …`
@@ -373,10 +388,13 @@ fn split_class(node: &Node, changing: &mut Vec<String>) -> Option<(Node, Vec<Nod
 	}
 	let mut field_names: Vec<String> = fields.iter().filter_map(field_name).collect();
 	// a field only the constructor sets is optional: ø until it runs
-	for added in constructors.iter().filter_map(constructor_body).flat_map(fields_set) {
-		if !field_names.contains(&added) {
-			fields.push(Node::Symbol(format!("{added}{}", FIELD_MARKS[0])));
-			field_names.push(added);
+	for (parameters, body) in constructors.iter().filter_map(constructor_parts) {
+		let parameter_names: Vec<String> = parameters.iter().map(|parameter| parameter.drop_meta().name()).collect();
+		for added in fields_set(body).into_iter().filter(|name| !parameter_names.contains(name)) {
+			if !field_names.contains(&added) {
+				fields.push(Node::Symbol(format!("{added}{}", FIELD_MARKS[0])));
+				field_names.push(added);
+			}
 		}
 	}
 	let static_names: Vec<String> = statics.iter().filter_map(item_name).collect();
@@ -385,7 +403,7 @@ fn split_class(node: &Node, changing: &mut Vec<String>) -> Option<(Node, Vec<Nod
 	let mut functions: Vec<Node> = statics.iter().flat_map(|member| static_definitions(&members, member)).collect();
 	// the constructor gives the instance it was handed, its fields set
 	let gives_itself = |body: &Node| Node::List(vec![body.clone(), Node::Symbol(RECEIVER.to_string())], Bracket::None, Separator::Semicolon);
-	functions.extend(constructors.iter().filter_map(constructor_body).map(|body| function(&members, &constructor_name(&class), vec![], gives_itself(body)).0));
+	functions.extend(constructors.iter().filter_map(constructor_parts).map(|(parameters, body)| function(&members, &constructor_name(&class), parameters, gives_itself(body)).0));
 	functions.extend(methods.iter().map(|method| {
 		let (method_name, parameters, method_body) = method_parts(method).expect("partitioned");
 		let (function, changes) = function(&members, &method_name, parameters, method_body);

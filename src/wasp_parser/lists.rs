@@ -293,8 +293,9 @@ impl WaspParser {
 	/// Used for class/struct definitions to convert type names to Type nodes
 	pub(super) fn transform_fields_to_types(node: Node) -> Node {
 		match node {
-			// a keyword method in a class body (`def scaled(k) { side * k }`): its body is code, no field type
-			Node::List(items, bracket, sep) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::operators::is_function_keyword(word)) => {
+			// a keyword method (`def scaled(k) { side * k }`) or a constructor (`value(n) {…}`) in a class body: its body is
+			// code, no field types
+			Node::List(items, bracket, sep) if items.first().is_some_and(starts_code) => {
 				Node::List(items, bracket, sep)
 			}
 			Node::List(items, bracket, sep) => {
@@ -351,6 +352,15 @@ fn is_parameter_word(node: &Node) -> bool {
 	match node.drop_meta() {
 		Symbol(word) => word.starts_with(char::is_lowercase) && crate::analyzer::type_word_kind(word).is_none(),
 		Node::List(_, Bracket::Round, _) => true,
+		_ => false,
+	}
+}
+
+/// The first word of a class-body item that is code: a function keyword, or the constructor call `value(n)`
+fn starts_code(first: &Node) -> bool {
+	match first.drop_meta() {
+		Node::Symbol(word) => crate::operators::is_function_keyword(word),
+		Node::List(call, Bracket::Round, _) => matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::CONSTRUCTOR_WORD),
 		_ => false,
 	}
 }
