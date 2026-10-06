@@ -177,6 +177,7 @@ function programImports(holder, hooks) {
 				new BroadcastChannel(plainOfTree(readNode(program_, channel))).postMessage(plainOfTree(readNode(program_, message)));
 			},
 			signal_every: () => { holder.warnings.push("on every …: timers do not run in the playground yet"); },
+			signal_daily: () => { holder.warnings.push("on every day at …: timers do not run in the playground yet"); },
 			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {
@@ -692,10 +693,27 @@ function runProgram(bytes, hooks) {
 	} catch (failure) {
 		return { failure: String(failure.message ?? failure) };
 	}
-	const outcome = outcomeOf(holder, hooks, () => instance.exports.main());
+	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, instance.exports, () => instance.exports.main()));
 	const events = pageEvents(instance.exports);
 	if (events.length > 0 && outcome.result) hooks.listen?.(holder, events);
 	return outcome;
+}
+
+// `on exit {…}` (src/lowering/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
+// main returns or `exit(code)` ends it, never after a failure
+function withExitHandler(holder, exports, call) {
+	const handler = exports["on·exit"];
+	if (!handler) return call();
+	const runHandler = () => (handler.length ? handler(exports.new_empty()) : handler());
+	let result;
+	try {
+		result = call();
+	} catch (trap) {
+		if (holder.exitCode !== undefined) runHandler();
+		throw trap;
+	}
+	runHandler();
+	return result;
 }
 
 // the outcome of a call into a run's instance (main, or a page event's handler), as src/web.rs run_outcome reads it
