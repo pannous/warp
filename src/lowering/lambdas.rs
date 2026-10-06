@@ -31,6 +31,10 @@ struct Iteration {
 	template: &'static str,
 }
 
+/// Swift's `{ x in x*2 }` and its shorthand arguments `{ $0 + $1 }`
+const SWIFT_IN: &str = "in";
+const SHORTHAND_MARK: char = '$';
+const MAX_SHORTHAND_ARGUMENTS: usize = 10;
 const SORT_WORD: &str = "sort";
 /// Sorting with a function as other languages spell it: JS sort, Python sorted, Ruby sort_by, Kotlin sortedBy
 const SORT_SPELLINGS: [&str; 6] = [SORT_WORD, "sorted", "sort_by", "sortBy", "sortedBy", "sorted_by"];
@@ -207,7 +211,14 @@ pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 			let typed = if written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon, _))) { written } else { vec![] };
 			Some(Lambda { params, body, typed })
 		}
-		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 => arrow_lambda(&items[0]), // Kotlin `{ x -> x*2 }`, Ruby `{ |x| x*2 }`
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => arrow_lambda(&items[0]),
+		// Kotlin `{ x -> x*2 }`, Ruby `{ |x| x*2 }`, Swift `{ x in x*2 }` and `{ $0 * 2 }`
+		Node::List(items, Bracket::Curly, _) => match items.as_slice() {
+			[single] => arrow_lambda(single),
+			_ => None,
+		}
+		.or_else(|| swift_closure(items))
+		.or_else(|| block_lambda(node).filter(|lambda| lambda.params.first().is_some_and(|param| param.starts_with(SHORTHAND_MARK)))),
 		_ => None,
 	}
 }
@@ -222,8 +233,34 @@ fn block_lambda(node: &Node) -> Option<Lambda> {
 		[single] => single.clone(),
 		many => Node::List(many.to_vec(), Bracket::Round, separator.clone()),
 	};
-	let params = if mentions(&body, IMPLICIT_PARAMETER) { vec![IMPLICIT_PARAMETER.to_string()] } else { vec![] };
+	let params = if mentions(&body, IMPLICIT_PARAMETER) { vec![IMPLICIT_PARAMETER.to_string()] } else { shorthand_parameters(&body) };
 	Some(Lambda::new(params, body))
+}
+
+/// Swift's shorthand arguments `$0`, `$1` … up to the highest one the body uses
+fn shorthand_parameters(body: &Node) -> Vec<String> {
+	let names = |count: usize| (0..count).map(|index| format!("{SHORTHAND_MARK}{index}"));
+	let count = (0..MAX_SHORTHAND_ARGUMENTS).rev().find(|index| mentions(body, &format!("{SHORTHAND_MARK}{index}"))).map_or(0, |highest| highest + 1);
+	names(count).collect()
+}
+
+/// Swift `{ x in x*2 }`, `{ a, b in a+b }`: names, `in`, a body that uses them (`{ x in xs }` stays membership)
+fn swift_closure(items: &[Node]) -> Option<Lambda> {
+	let (last, leading) = items.split_last()?;
+	let Node::List(parts, Bracket::None, Separator::Space) = last.drop_meta() else { return None };
+	let [name, word, body @ ..] = parts.as_slice() else { return None };
+	if !matches!(word.drop_meta(), Node::Symbol(word) if word == SWIFT_IN) || body.is_empty() {
+		return None;
+	}
+	let params: Vec<String> = leading.iter().chain([name]).map(|param| match param.drop_meta() {
+		Node::Symbol(param) => Some(param.clone()),
+		_ => None,
+	}).collect::<Option<_>>()?;
+	let body = match body {
+		[single] => single.clone(),
+		many => Node::List(many.to_vec(), Bracket::None, Separator::Space),
+	};
+	params.iter().any(|param| mentions(&body, param)).then(|| Lambda::new(params, body))
 }
 
 /// `{it*2}` as the arrow lambda `it => it*2`, for passes that know only arrows (closures.rs)

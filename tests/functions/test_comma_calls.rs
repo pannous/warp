@@ -9,3 +9,9 @@ fn comma_arguments_of_a_short_call() {
 	is!("def add3(a, b, c){ a+b+c }; add3 1, 2, 3", 6);
 	is!("def add(a, b){ a+b }; add 1 2", 3);
 }
+
+#[test]
+fn an_output_word_takes_a_prefix_call() {
+	is!("def add(a, b){ a+b }; puts add 1 2", 0); // puts writes 3, returns 0
+	is!("def add(a, b){ a+b }; puts add 1, 2", 0);
+}

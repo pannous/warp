@@ -64,6 +64,8 @@ impl WasmGcEmitter {
 			}
 			// Variable definition/assignment: x:=42 or x=42 → store and return value
 			Node::Key(left, Op::Define | Op::Assign, right) => self.emit_numeric_assignment(func, located, left, right),
+			// `x as int` of an Int, what a declared result type `-> int` lowers to: x, a ratio truncated, without a box
+			Node::Key(value, Op::As, target) if self.get_type(value) == Kind::Int && is_int_type_word(target) => self.emit_int_value_truncated(func, value),
 			// Increment/decrement: i++ or i--
 			Node::Key(left, op, right) if *op == Op::Inc || *op == Op::Dec => self.emit_numeric_step(func, left, op, right),
 			// Compound assignment: x += y → x = x + y
@@ -434,4 +436,9 @@ impl WasmGcEmitter {
 		// new_list is always emitted; reaching this is a compiler bug, reported as an error value
 		self.emit_type_error(func, "internal error: new_list is not available".to_string());
 	}
+}
+
+/// `int`, `Int`, `integer`: the type `x as int` converts to
+fn is_int_type_word(target: &Node) -> bool {
+	matches!(crate::type_kinds::canonical_type_name(&target.drop_meta().name().to_lowercase()), "int" | "integer")
 }

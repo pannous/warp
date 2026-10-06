@@ -94,3 +94,5 @@ mod test_global_with_closures;
 mod test_counting_word_result;
 mod test_named_function_argument;
 mod test_operator_arguments;
+mod test_call_efficiency;
+mod test_swift_closures;
