@@ -221,6 +221,7 @@ PASSED:
   ✓ control::test_switch_value::a_switch_can_be_bound
   ✓ control::test_system_signals::a_file_change_runs_its_handler
   ✓ control::test_system_signals::a_program_with_a_timer_stays_after_main
+  ✓ control::test_system_signals::a_timer_fires_while_main_runs
   ✓ control::test_system_signals::exit_ends_the_run
   ✓ control::test_system_signals::exit_gives_the_process_its_code
   ✓ control::test_system_signals::on_interrupt_cuts_a_sleep_short
@@ -1998,6 +1999,9 @@ PASSED:
   ✓ types::test_generic_types::test_nested_type_applications
   ✓ types::test_generic_types::test_type_of_a_literal_list_stays
   ✓ types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result
+  ✓ types::test_int_declaration_stays_whole::a_declared_int_refuses_a_fraction_at_run_time
+  ✓ types::test_int_declaration_stays_whole::a_declared_int_takes_whole_results
+  ✓ types::test_int_declaration_stays_whole::an_int_field_refuses_a_fraction
   ✓ types::test_is_declaration::is_tests_an_assigned_variable
   ✓ types::test_is_declaration::is_with_a_type_and_a_value_teaches_be
   ✓ types::test_is_teaches_be::is_with_an_undefined_name_teaches_be
@@ -2153,6 +2157,7 @@ PASSED:
   ✓ types::test_types_scope::test_plural_type_word_denotes_a_list
   ✓ types::test_types_scope::test_type_of_list_names_its_element_type
   ✓ types::test_types_scope::test_type_of_mixed_list_is_plain_list
+  ✓ types::test_value_constructor::a_value_block_runs_at_every_construction
   ✓ wasm::test_compile_only::compile_command_emits_the_same_struct_module_as_eval
   ✓ wasm::test_compile_only::compile_command_writes_wasm_without_running
   ✓ wasm::test_compiled_module_cache::test_compile_aot_writes_machine_code_that_runs
@@ -2604,7 +2609,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ control::test_system_signals::a_timer_fires_while_main_runs
 
 SUMMARY:
-23 ignored, 2601 passed, 1 failed, 2602 total tested
+23 ignored, 2606 passed, 0 failed, 2606 total tested
