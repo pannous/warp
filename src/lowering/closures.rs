@@ -250,12 +250,13 @@ impl FunctionValues {
 						}
 					}
 				}
-				let Node::Key(target, Op::Assign | Op::Define, value) = node else { return };
+				// `fs += [f]` appends as `fs = fs + [f]` does
+				let Node::Key(target, op @ (Op::Assign | Op::Define | Op::AddAssign), value) = node else { return };
 				let Node::Symbol(name) = target.drop_meta() else { return };
 				if self.functions.contains(name) {
 					return;
 				}
-				if self.is_function_value(value) {
+				if *op != Op::AddAssign && self.is_function_value(value) {
 					variables.insert(name.clone());
 				}
 				if self.is_function_list(value) {

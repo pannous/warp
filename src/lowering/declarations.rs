@@ -1103,6 +1103,11 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 	if !arguments.iter().any(is_placeholder) {
 		return None;
 	}
+	// Swift's `func twice(_ x: Int)`: `_` labels a typed parameter, no placeholder
+	let typed_parameter = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::Colon, type_node) if is_type_word(type_node));
+	if arguments.windows(2).any(|pair| is_placeholder(&pair[0]) && typed_parameter(&pair[1])) {
+		return None;
+	}
 	let mut parameters = vec![];
 	let arguments = arguments.iter().map(|argument| match is_placeholder(argument) {
 		true => {
@@ -1150,13 +1155,21 @@ fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
 	let (name, arguments) = head_items.split_first()?;
 	let Node::Symbol(_) = name.drop_meta() else { return None };
+	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words
+	let arguments = match arguments {
+		[label, typed] if argument_label(label, typed).is_some() => vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)],
+		_ => arguments.to_vec(),
+	};
 	// the parameters may come as one group: `f (a, b)`, `f (m)`, `f ø`
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
+		Node::List(group, Bracket::Round, Separator::Space) if matches!(group.as_slice(), [label, typed] if argument_label(label, typed).is_some()) => vec![argument.clone()],
 		Node::List(group, Bracket::Round, _) => group.clone(),
 		Node::Empty => vec![],
 		_ => vec![argument.clone()],
 	}).map(name_then_type);
-	let mut parameters: Vec<Node> = parameters.collect();
+	let mut labeled_names = vec![];
+	let mut parameters: Vec<Node> = parameters.map(|parameter| labeled_parameter(parameter, &mut labeled_names)).collect();
+	let body = with_label_names(body, labeled_names);
 	// `func add1(x int)`: the one parameter and its type arrive as two words
 	if let [parameter, type_word] = parameters.as_slice() {
 		if matches!(parameter.drop_meta(), Node::Symbol(_)) && is_type_word(type_word) {
@@ -1184,6 +1197,39 @@ fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 		_ => return None,
 	};
 	Some((Node::Key(head.clone(), Op::Define, Box::new(body)), result_type))
+}
+
+/// Swift's `label name: T`: the label (`_` for none)
+fn argument_label<'a>(label: &'a Node, typed: &Node) -> Option<&'a str> {
+	let Node::Symbol(label) = label.drop_meta() else { return None };
+	matches!(typed.drop_meta(), Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_))).then_some(label.as_str())
+}
+
+/// `person name: String` is the parameter `person: String` whose value the body reads as name (`labeled_names` gets
+/// `name = person`); `_ name: String` is `name: String`
+fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
+	let Node::List(words, _, _) = parameter.drop_meta() else { return parameter };
+	let [label, typed] = words.as_slice() else { return parameter };
+	let Some(label) = argument_label(label, typed) else { return parameter };
+	let Node::Key(name, Op::Colon, type_node) = typed.drop_meta() else { return parameter };
+	if label == WILDCARD_LABEL {
+		return typed.clone();
+	}
+	labeled_names.push(Node::Key(name.clone(), Op::Assign, Box::new(Node::Symbol(label.to_string()))));
+	Node::Key(Box::new(Node::Symbol(label.to_string())), Op::Colon, type_node.clone())
+}
+
+/// The body with `name = label` first for every labeled parameter
+fn with_label_names(body: Node, labeled_names: Vec<Node>) -> Node {
+	if labeled_names.is_empty() {
+		return body;
+	}
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, separator) if items.len() == 1 || matches!(separator, Separator::Semicolon | Separator::Newline) => {
+			Node::List([labeled_names, items.clone()].concat(), Bracket::Curly, Separator::Semicolon)
+		}
+		_ => Node::List([labeled_names, vec![body]].concat(), Bracket::Curly, Separator::Semicolon),
+	}
 }
 
 fn is_type_word(node: &Node) -> bool {
@@ -1230,6 +1276,9 @@ fn enum_object(items: &[Node]) -> Option<Node> {
 	Some(Node::Key(Box::new(name.clone()), Op::Assign, Box::new(object)))
 }
 
+
+/// Swift's label for an argument without a label
+const WILDCARD_LABEL: &str = "_";
 
 /// `real f(real x) { … }`: the definition `f(x:real) := { … }` (the parser reads the type word, then the call and its
 /// block); the result kind is inferred as for any definition

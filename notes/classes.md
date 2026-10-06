@@ -104,8 +104,9 @@ replaces that where the static type is known, modelled on map_backend.rs (typed 
   (names_held_as_nodes, shared with typed maps). `p.x` is struct.get (boxed where a Node is wanted, the bare i64 in
   numeric code); where the instance itself is wanted it becomes the Node `P{x:… y:…}` built from the fields.
 - Struct parameters (find_struct_abi): `m(p:P)` takes `(ref null $P·instance)` when its body only reads fields of p
-  and every mention of m is a direct call passing a variable or a construction of P: a struct variable is passed as
-  it is, a construction straight into struct.new, any other variable field by field. Closures, tuple functions and
+  and every mention of m is a direct call passing a struct variable (passed as it is) or a construction of P
+  (straight into struct.new). Any other argument keeps the Node parameter: a duck-typed value may lack fields the body
+  never reads (operators::test_like, `keep(p:photo) := p.width` given `{width:3}`). Closures, tuple functions and
   `compare·T` witnesses (runtime dispatch, witness.rs) keep Node parameters (directly_called_functions).
 - probes/bench_class_instances.sh, 10^6 iterations, debug build: construct_and_read 248 → 5 ms, read_only
   (`p.x * p.y`) 141 → ~0 ms, method_call (`p.sum()`) 170 → ~0 ms; plain ints 2 ms.

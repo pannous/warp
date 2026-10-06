@@ -340,6 +340,10 @@ impl WasmGcEmitter {
 			self.emit_call(func, "node_list_as_node");
 		} else if user_fn.return_kind.is_float() {
 			self.emit_call(func, "new_float");
+		} else if user_fn.return_kind == Kind::Codepoint {
+			// a character is returned as its code point
+			func.instruction(&Instruction::I32WrapI64);
+			self.emit_call(func, "new_codepoint");
 		} else if !returns_node {
 			self.emit_call(func, "new_int");
 		}
