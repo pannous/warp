@@ -85,4 +85,9 @@ mod test_task_signals;
 mod test_signal_values;
 mod test_shared_signals;
 mod test_signal_reflection;
+<<<<<<< HEAD
 mod test_broadcast;
+||||||| 50ffc68a1
+=======
+mod test_signal_lists;
+>>>>>>> origin/main
