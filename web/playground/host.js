@@ -9,6 +9,7 @@ const SHARED_HANDLER = "on·shared";
 const SHARED_CHECK_MILLISECONDS = 10;
 const PAGE_BITS = 16;
 const STDERR = 2;
+const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 /// where host.read and the test runner's file system find files: the repository root the static server serves
 const FILE_ROOT = new URL("../../", self.location.href).href;
 /// C names of libm functions (ffi "m") that Math spells differently
@@ -160,24 +161,26 @@ function programImports(holder, hooks) {
 			clock: () => BigInt(Date.now()),
 			// a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md); shared listeners do
 			signal_poll: () => checkShared(holder),
-			// channels between programs (src/channels.rs): a page sends on a BroadcastChannel of the name; receiving needs
-			// the program to keep running after main, which the playground does not do for timers either
-			channel_listen: () => { holder.warnings.push("on message …: the playground does not receive channel messages yet"); },
-			channel_pending: () => 0n,
-			channel_next: () => buildValue(program(), treeOfPlain(null)),
+			// channels between programs (src/channels.rs): a BroadcastChannel of the name, which reaches the other tabs and
+			// workers of this page's origin; the listener's timer (lowering/system_signals.rs) takes what arrived
+			channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), plainOfTree(readNode(program(), channel))),
+			channel_pending: id => BigInt(holder.channels?.get(Number(id))?.messages.length ?? 0),
+			channel_next: id => buildValue(program(), treeOfPlain(holder.channels?.get(Number(id))?.messages.shift() ?? null)),
 			channel_send: (channel, message) => {
 				const program_ = program();
 				new BroadcastChannel(plainOfTree(readNode(program_, channel))).postMessage(plainOfTree(readNode(program_, message)));
 			},
-			signal_every: () => { holder.warnings.push("on every …: timers do not run in the playground yet"); },
-			signal_daily: () => { holder.warnings.push("on every day at …: timers do not run in the playground yet"); },
-			signal_at: () => { holder.warnings.push("at 9:00 {…}: timers do not run in the playground yet"); },
+			signal_every: (id, milliseconds) => addTimer(holder, hooks, id, { every: Number(milliseconds) }, "on every …"),
+			signal_daily: (id, minute, weekdays) => addTimer(holder, hooks, id, { minute: Number(minute), weekdays: Number(weekdays) }, "on every day at …"),
+			signal_at: (id, minute) => addTimer(holder, hooks, id, { minute: Number(minute), once: true }, "at 9:00 {…}"),
 			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
 			// system values (crates/warp-runtime/src/system_values.rs): what the browser tells, a loud error for the rest
 			system_value: name => {
 				const value = decode(cString(name));
 				if (value === "online") return BigInt(navigator.onLine);
-				if (value === "dark mode" && globalThis.matchMedia) return BigInt(matchMedia("(prefers-color-scheme: dark)").matches);
+				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
+				const known = value === "dark mode" && globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : self.pageSystemValues?.[value];
+				if (known !== undefined) return BigInt(known);
 				throw new Error(`${value}: the playground cannot read it yet`);
 			},
 			clipboard_text: () => { throw new Error("clipboard: the playground cannot read it (the browser's clipboard is asynchronous)"); },
@@ -774,6 +777,50 @@ function moduleImports(holder, hooks, path) {
 	});
 }
 
+// Timers (crates/warp-runtime/src/system_signals.rs): main records them, the page starts them after it (worker.js
+// startTimers runs the handler on·every·<id>); a host without a page that stays (test-worker.js) only warns
+const TIMER_HANDLER_PREFIX = "on·every·";
+function addTimer(holder, hooks, id, timer, written) {
+	if (!hooks.listen) return holder.warnings.push(`${written}: timers do not run here`);
+	(holder.timers ??= []).push({ id: Number(id), handler: TIMER_HANDLER_PREFIX + id, ...timer });
+}
+
+// milliseconds from now to the next local minute_of_day on a weekday of the mask (bit 0 Sunday), as seconds_until_on
+const EVERY_DAY = 0b1111111;
+const DAY_MILLISECONDS = 24 * 3600 * 1000;
+function millisecondsUntil(minuteOfDay, weekdays = EVERY_DAY, now = new Date()) {
+	const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+	for (let daysAhead = 0; daysAhead <= 7; daysAhead++) {
+		const due = new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() + daysAhead, 0, minuteOfDay);
+		if (due > now && (weekdays || EVERY_DAY) & (1 << due.getDay())) return due - now;
+	}
+	return 7 * DAY_MILLISECONDS;
+}
+
+// what a timer says in the page: "every 500 ms", "at 09:00", "every day at 09:00", or the channel its listener reads
+function timerLabel(holder, { id, every, minute, once }) {
+	const channel = holder.channels?.get(id);
+	if (channel) return `message from "${channel.name}"`;
+	if (every !== undefined) return every % 1000 ? `every ${every} ms` : `every ${every / 1000} s`;
+	const time = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+	return once ? `at ${time}` : `every day at ${time}`;
+}
+
+// `on message from "chat" {…}`: what arrives waits in the listener's queue until its timer asks
+function listenOnChannel(holder, hooks, id, name) {
+	if (!hooks.listen) return holder.warnings.push(`on message from "${name}": channels are not received here`);
+	const channel = new BroadcastChannel(name);
+	const listener = { name, channel, messages: [] };
+	channel.onmessage = ({ data }) => listener.messages.push(data);
+	(holder.channels ??= new Map()).set(id, listener);
+}
+
+// a run's timers and channels end with it (the next run, worker.js)
+function stopListening(holder) {
+	holder.channels?.forEach(({ channel }) => channel.close());
+	holder.stopTimers?.();
+}
+
 // run a compiled program: the outcome src/web.rs run_outcome reads
 function runProgram(bytes, hooks) {
 	let instance;
@@ -787,7 +834,7 @@ function runProgram(bytes, hooks) {
 	}
 	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, instance.exports, () => instance.exports.main()));
 	const events = pageEvents(instance.exports);
-	if (events.length > 0 && outcome.result) hooks.listen?.(holder, events);
+	if ((events.length > 0 || holder.timers) && outcome.result) hooks.listen?.(holder, events);
 	return outcome;
 }
 
@@ -849,6 +896,13 @@ function runPageEvent(holder, hooks, event, detail) {
 	holder.warnings = [];
 	const handler = holder.exports[`on·${event}·node`];
 	return outcomeOf(holder, hooks, () => handler(buildValue(holder.exports, treeOfPlain([detail]))));
+}
+
+// a timer's handler (on·every·<id>), given ø when it reads `event`, as natively (system_signals.rs call_handler)
+function runTimer(holder, hooks, name) {
+	holder.warnings = [];
+	const handler = holder.exports[name];
+	return outcomeOf(holder, hooks, () => handler.length ? handler(holder.exports.new_empty()) : handler());
 }
 
 // The compiler that runs the blocks a program builds at run time (run_block): loaded on first use, an instance of its own,

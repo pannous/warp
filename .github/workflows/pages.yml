@@ -51,6 +51,10 @@ jobs:
         tool: wasm-tools
     - name: Build the compiler, samples.js and the components
       run: web/playground/build.sh
+    - name: Install agent-browser (headless Chrome for the tour check)
+      run: npm install -g agent-browser && agent-browser install --with-deps
+    - name: Every tour example shows what it promises (examples.js), else no deploy
+      run: python3 web/playground/test_in_browser.py --examples
     - name: Collect the site
       run: |
         mkdir _site

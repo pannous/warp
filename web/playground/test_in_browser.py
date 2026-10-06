@@ -3,6 +3,8 @@
 `cargo browser-test [filter…]` builds tests/main.rs without the native feature for wasm32-wasip1 and calls
 `test_in_browser.py <tests.wasm> [libtest arguments]`: this serves the repository root and the binary, opens
 web/playground/tests.html with agent-browser and prints the results like libtest (exit code 101 on a failure).
+`test_in_browser.py --examples [name…]` runs the tour (examples.js) in the playground page itself, built by build.sh:
+each example's value and printed output must be the ones it names (a broken example fails CI, .github/workflows/pages.yml).
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
 Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
 src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
@@ -99,6 +101,39 @@ def browser(*arguments):
 		return ""  # a busy or crashed page: the stall check decides
 
 
+def show_example(name):
+	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds"""
+	script = f"""(async () => {{
+		const name = {json.dumps(name)};
+		await playground.chooseExample(name);
+		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
+		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
+		return JSON.stringify({{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent }});
+	}})()"""
+	shown = browser("eval", script)
+	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
+
+
+def check_examples(names):
+	"""every example of the tour shows its value and prints its text in the playground; exit code 101 on a difference"""
+	if not os.path.isfile(os.path.join(REPOSITORY, "web", "playground", "warp.wasm")):
+		sys.exit("error: web/playground/warp.wasm is missing; build it with web/playground/build.sh")
+	server = serve(None)
+	browser("open", f"http://127.0.0.1:{PORT}/web/playground/")
+	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
+	failures = []
+	for name in names or examples:
+		expected, shown = examples[name], show_example(name)
+		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed") if part in expected and shown[part] != expected[part]]
+		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
+		if wrong:
+			failures.append(name)
+	browser("close")
+	server.shutdown()
+	print(f"\nexamples: {len(examples) - len(failures)} of {len(examples)} show what they promise" + (f"; failed: {', '.join(failures)}" if failures else ""))
+	sys.exit(101 if failures else 0)
+
+
 def build_components():
 	"""the components `use wasm` tests call, transpiled for the page (components.js); a failure only warns: those tests
 	then fail naming build.sh"""
@@ -108,6 +143,8 @@ def build_components():
 
 
 def main():
+	if sys.argv[1:2] == ["--examples"]:
+		check_examples(sys.argv[2:])
 	if sys.argv[1:2] == ["--serve"]:
 		binary = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
 		serve(binary)

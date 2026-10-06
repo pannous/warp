@@ -4,6 +4,12 @@ Run it: `web/playground/build.sh && python3 -m http.server 8000` in the reposito
 http://localhost:8000/web/playground/ (`?example=<name>` picks a tour example or a samples/ file).
 Probe: `probes/web_playground.py [sample…]` (headless agent-browser; compares every sample's value with the CLI's).
 
+## The tour (examples.js)
+Ordered from basics (welcome, data, functions, lists) to wow (broadcasting, call forms, classes, lazy ranges, signals,
+events, timers, system values, channels, components, welcoming errors). Each entry is `{value, printed?, wait?, code}`,
+its first code line a `//` caption. `web/playground/test_in_browser.py --examples [name…]` (after build.sh) shows each
+in the page and compares value and printed text; pages.yml runs it before deploying.
+
 ## Architecture
 - The compiler itself runs in the browser: `cargo rustc --lib --crate-type cdylib --target wasm32-unknown-unknown
   --no-default-features --release` (build.sh, 8 MB stack, wasm-opt -Oz → ~1.7 MB). Plain C ABI, no wasm-bindgen:
