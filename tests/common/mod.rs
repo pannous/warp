@@ -159,9 +159,17 @@ pub fn warp_command() -> std::process::Command {
 	static BINARY: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
 	let binary = BINARY.get_or_init(|| {
 		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp"));
-		let build = checkout_build(shared, "warp-", env!("CARGO_MANIFEST_DIR"), Some(env!("CARGO_PKG_VERSION")));
-		let own = build.iter().chain([&shared.to_path_buf()]).filter_map(|candidate| own_copy(candidate, "warp").ok()).find(|own| is_this_version(own));
-		own.unwrap_or_else(|| panic!("neither target/debug/deps nor {} holds a warp of version {} built from {}", shared.display(), env!("CARGO_PKG_VERSION"), env!("CARGO_MANIFEST_DIR")))
+		let find = || {
+			let candidates = checkout_build(shared, "warp-", env!("CARGO_MANIFEST_DIR"), Some(env!("CARGO_PKG_VERSION"))).into_iter().chain([shared.to_path_buf()]);
+			candidates.filter_map(|candidate| own_copy(&candidate, "warp").ok()).find(|own| is_this_version(own))
+		};
+		// another checkout's build can replace the shared binary before this one was found: build this checkout's anew
+		let own = find().or_else(|| {
+			let built = std::process::Command::new(env!("CARGO")).args(["build", "--offline", "--quiet", "--bin", "warp"])
+				.current_dir(env!("CARGO_MANIFEST_DIR")).status().is_ok_and(|status| status.success());
+			built.then(find).flatten()
+		});
+		own.unwrap_or_else(|| panic!("neither target/debug/deps nor {} holds a warp of version {} built from {}, also after building it", shared.display(), env!("CARGO_PKG_VERSION"), env!("CARGO_MANIFEST_DIR")))
 	});
 	std::process::Command::new(binary)
 }
