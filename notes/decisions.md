@@ -166,8 +166,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
 - P162 (classes, warp-e0) `init(…){…}` in a class is always the constructor (user chose this over the recommended
-  "unless called explicitly"), like JS `constructor` and Python `__init__`: all become wasp's `value(…){…}` with a
-  got-it note "wasp says value".
+  "unless called explicitly"). User, correcting: `init` is THE constructor name, not `value`. `value`, JS
+  `constructor` and Python `__init__` still work as aliases with a got-it note "wasp says init" and an "I meant:
+  init" fix; docs, hints and examples use `init`.
 - P161 (functions, warp-41; the user told the worker directly) no Swift-style argument labels: "we don't do this
   here, I don't like that redundancy". Ported labels (`func greet(person name: String)`, `_ x: Int`) compile like P157,
   with a got-it note "wasp names a parameter once"; docs and examples never use labels.
