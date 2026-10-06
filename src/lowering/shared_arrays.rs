@@ -45,13 +45,20 @@ fn element_words(element: Element) -> [&'static str; 3] {
 
 pub fn lower(node: Node) -> Node {
 	let mut declared = HashMap::new();
-	node.visit(&mut |part| if let Some((name, _, shared)) = declaration(part) { declared.insert(name, shared); });
+	node.visit(&mut |part| declared.extend(declaration(part).map(|(name, _, shared)| (name, shared))));
 	if declared.is_empty() {
 		return node;
 	}
 	let functions = definitions(&node);
 	let shared_parameters = shared_parameters(&node, &functions, &declared);
 	Rewrite { declared, functions: &functions, shared_parameters: &shared_parameters }.node(node, None)
+}
+
+/// The names a program declares shared, arrays and values
+pub(crate) fn shared_names(node: &Node) -> Vec<String> {
+	let mut names = vec![];
+	node.visit(&mut |part| names.extend(declaration(part).map(|(name, _, _)| name)));
+	names
 }
 
 /// `shared xs = int[n]`, `shared xs = float[n]`: the name, the count n and what it holds; `shared n = v`: the name, the
