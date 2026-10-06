@@ -307,13 +307,13 @@ impl Signals {
 	fn change_listener(&mut self, rest: &[Node]) -> Option<Listener> {
 		let (variable, body) = subject_and_body(rest)?;
 		let variable = variable.drop_meta().clone();
-		let Node::Symbol(name) = &variable else { return None };
+		root_variable(&variable)?;
 		let last = self.fresh_name(LAST_PREFIX);
 		let bindings = VALUE_WORDS.iter().map(|value| (value.to_string(), variable.clone())).collect();
 		let body = self.lower(crate::law::substitute(&body, &bindings), &[]);
 		let changed = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Symbol(last.clone())));
 		Some(Listener {
-			trigger: Trigger::Write(self.sources(&Node::Symbol(name.clone()))),
+			trigger: Trigger::Write(self.sources(&variable)),
 			condition: Some(changed),
 			body: block(vec![assign(&last, variable.clone()), body]),
 			fired: None,
@@ -472,11 +472,16 @@ fn checks(listeners: &[Listener], written: &[String]) -> Vec<Node> {
 	listeners.iter().filter(|listener| written.iter().any(|name| listener.watches(name))).map(Listener::check).collect()
 }
 
-/// The variable `x = …`, `x += …`, `x++`, `x--` writes
+/// The variable `x = …`, `x += …`, `x++`, `x--` writes; a field or item write `p.age = 2`, `xs#1 = 9` writes p, xs
 fn written_variable(target: &Node, op: Op) -> Option<String> {
 	let writes = op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec);
+	writes.then(|| root_variable(target)).flatten()
+}
+
+fn root_variable(target: &Node) -> Option<String> {
 	match target.drop_meta() {
-		Node::Symbol(name) if writes => Some(name.clone()),
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(base, Op::Dot | Op::Hash, _) => root_variable(base),
 		_ => None,
 	}
 }
