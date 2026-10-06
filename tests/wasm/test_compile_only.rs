@@ -11,7 +11,7 @@ fn compile_source(file_name: &str, source: &str) -> Vec<u8> {
 	std::fs::write(&source_path, source).unwrap();
 	let _ = std::fs::remove_file(&binary_path);
 
-	let output = crate::common::warp_command().arg("compile").arg(&source_path).output().unwrap();
+	let output = crate::common::warp_command().args(["compile", "--wasm"]).arg(&source_path).output().unwrap();
 
 	assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 	assert!(!String::from_utf8_lossy(&output.stdout).contains("» "), "compile must not print a result");

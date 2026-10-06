@@ -9,7 +9,7 @@ const OUTPUT_DIRECTORY: &str = env!("CARGO_TARGET_TMPDIR");
 fn build_executable(name: &str, source: &str) -> (Output, PathBuf) {
 	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join(format!("{name}.warp"));
 	std::fs::write(&source_path, source).unwrap();
-	let executable = source_path.with_extension("exe");
+	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
 	let _ = std::fs::remove_file(&executable);
 	let build = crate::common::warp_command().env_remove("WARP_RUNTIME_STUB").args(["build", "--exe"]).arg(&source_path).output().unwrap();
 	(build, executable)
@@ -79,7 +79,7 @@ fn test_build_exe_signs_cleanly_on_macos() {
 fn test_build_makes_an_executable_by_default() {
 	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_default.warp");
 	std::fs::write(&source_path, "6 * 7").unwrap();
-	let (executable, module) = (source_path.with_extension("exe"), source_path.with_extension("wasm"));
+	let (executable, module) = (source_path.with_extension(std::env::consts::EXE_EXTENSION), source_path.with_extension("wasm"));
 	let _ = std::fs::remove_file(&executable);
 	let _ = std::fs::remove_file(&module);
 	let build = crate::common::warp_command().env_remove("WARP_RUNTIME_STUB").arg("build").arg(&source_path).output().unwrap();
