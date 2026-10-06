@@ -17,3 +17,4 @@ mod test_use_modules;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_versions;
 mod test_wasm_modules;
+mod test_std_aliases;
