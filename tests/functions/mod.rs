@@ -107,3 +107,4 @@ mod test_ported_calls;
 mod test_let_in;
 mod test_go_functions;
 mod test_generator_arguments;
+mod test_all_calls;

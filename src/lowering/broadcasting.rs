@@ -14,6 +14,9 @@ use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
 const MAP_WORD: &str = "map";
+const ALL_WORD: &str = "all";
+/// The item `square all xs` applies square to
+const ALL_ITEM: &str = "all_item";
 /// Declared parameter kinds that take one element of a list (P50)
 const SCALAR_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint];
 
@@ -38,6 +41,7 @@ pub fn lower_several_arguments(program: Node) -> Node {
 /// function value passes read that name as a value.
 /// A call short of arguments takes the items after its comma, as in Ruby: `add 1, 2` → `add(1, 2)`, `x = add 1, 2`
 pub fn lower_prefix_calls(program: Node) -> Node {
+	let program = all_calls(program);
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
 	let mut arities: HashMap<String, Arity> = HashMap::new();
@@ -54,6 +58,34 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 		arities.entry(word.to_string()).or_insert(Arity { fewest: 1, most: 1 });
 	}
 	nest_prefix_calls(program, &arities)
+}
+
+/// `square all xs` (wiki/all.md): `all` splices the list into its items, the function applies to each
+fn all_calls(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::None, Separator::Space) if all_call_parts(&items).is_some() => {
+			let (function, list) = all_call_parts(&items).expect("guarded");
+			let item = Node::Symbol(ALL_ITEM.to_string());
+			let call = Node::List(vec![function.clone(), item.clone()], Bracket::Round, Separator::None);
+			let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(call));
+			Node::List(vec![Node::Symbol(MAP_WORD.to_string()), all_calls(list.clone()), each], Bracket::Round, Separator::None)
+		}
+		other => other.map_children(all_calls),
+	}
+}
+
+/// The function and the list of `f all xs`, also as the parser nests a known function's argument, `f (all xs)`
+fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
+	let is_all = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == ALL_WORD);
+	match items {
+		[function, all, list] if is_all(all) => Some((function, list)),
+		[function, phrase] => match phrase.drop_meta() {
+			Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && is_all(&words[0]) => Some((function, &words[1])),
+			_ => None,
+		},
+		_ => None,
+	}
+	.filter(|(function, _)| matches!(function.drop_meta(), Node::Symbol(_)))
 }
 
 /// The fewest and the most parameters of a function's definitions
@@ -83,6 +115,13 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			let nested = Node::List(items.split_off(inner), Bracket::None, Separator::Space);
 			items.push(nest_prefix_calls(nested, arities));
 			nest_prefix_calls(Node::List(items, bracket, separator), arities)
+		}
+		// `square [1 2 3] == [1 4 9]` (wiki/all.md): the statement parses as `square ([1 2 3] == …)`; a call binds tighter
+		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && matches!(argument.drop_meta(), Node::Key(_, op, _) if op.is_comparison())) => {
+			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
+			let Node::Key(left, op, right) = argument.drop_meta().clone() else { unreachable!("guarded") };
+			let call = Node::List(vec![head, *left], Bracket::None, Separator::Space);
+			Node::Key(Box::new(nest_prefix_calls(call, arities)), op, Box::new(nest_prefix_calls(*right, arities)))
 		}
 		Node::List(items, Bracket::None, Separator::Colon) if items.len() > 1 => {
 			let mut items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
@@ -233,7 +272,7 @@ impl Broadcast {
 
 	/// `f [1 2]`, `f([1 2])`, `f xs` of a broadcasting function `f`
 	fn broadcast_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		let is_call = matches!((bracket, separator), (Bracket::Round, Separator::None) | (Bracket::None, Separator::Space));
+		let is_call = matches!((bracket, separator), (Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)); // also `(f [1 2])`
 		let [head, argument] = items else { return None };
 		let Node::Symbol(name) = head.drop_meta() else { return None };
 		if !is_call || !self.functions.contains(name) {
