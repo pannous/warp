@@ -146,5 +146,8 @@ fields; a field it sets that is no parameter becomes a field.
 
 Open (next batches): struct elements of lists (above), a `pop` method (changes the object and gives another value), a method
 named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), generics
-`class Box<T>`, mixins, a field named `pi` (card footgun-pi, P130: the class's own field), extension methods
-`fun Int.double()` (card functions-extension).
+`class Box<T>`, mixins, a field named `pi` (card footgun-pi, P130: the class's own field), a method named `double` (a type word).
+
+Extension methods (classes-11, card functions-extension, declarations.rs): Kotlin `fun Int.twice() = this * 2` and
+Swift `extension Int { func twice() -> Int { self * 2 } }` define `twice(this:Int)` (`self` when the body says self),
+so `3.twice()` calls it as a method like any function whose first parameter is the receiver.
