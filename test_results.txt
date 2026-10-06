@@ -239,6 +239,12 @@ PASSED:
   ✓ control::test_system_signals::exit_gives_the_process_its_code
   ✓ control::test_system_signals::on_interrupt_cuts_a_sleep_short
   ✓ control::test_system_signals::on_interrupt_runs_at_the_next_loop_start
+  ✓ control::test_system_values::a_listener_on_a_system_value_polls_it
+  ✓ control::test_system_values::a_program_keeps_its_own_names
+  ✓ control::test_system_values::a_system_value_is_a_host_reading
+  ✓ control::test_system_values::dark_mode_is_the_appearance_of_macos
+  ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
+  ✓ control::test_system_values::yes_no_values_read_the_machine
   ✓ control::test_task_closures::a_capturing_text_lambda_runs_in_a_task
   ✓ control::test_task_closures::a_parameter_named_like_a_unit_is_the_parameter
   ✓ control::test_task_exact::a_big_integer_crosses_to_a_task_and_back
@@ -2658,4 +2664,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2653 passed, 0 failed, 2653 total tested
+20 ignored, 2659 passed, 0 failed, 2659 total tested
