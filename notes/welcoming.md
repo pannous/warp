@@ -96,9 +96,9 @@ fixes (IDE/LSP code actions); the edit replaces `written` at the position with t
 the warning is gone because the explicit form never warns. Open: positions of multi-line `written`, several readings
 whose explicit form needs surrounding context (`global n` is a declaration elsewhere), and a CLI form (`warp fix`).
 
-## Shadowing a named constant (card footgun-pi, default pending the user's answer via the Interviewer)
-`pi = 4; pi` gave 3.14159…: the parser read `pi` as π and dropped the assignment. Now an assignment `pi = …` / `pi := …`
-makes the named number (`pi`, `tau`, `euler`, their glyphs) a variable from there on (parse order), with the got-it note
-`constant-shadowing` ("pi = … shadows the constant pi"). A field `class circle{pi = 3}` is a plain field, no note, and
-leaves `pi` the constant elsewhere. src/wasp_parser/atoms.rs `names_variable`, tests/welcoming/test_constant_shadowing.rs.
-Alternative if the user prefers: a loud error "pi is a constant; fix: another name".
+## Assigning a named constant (card footgun-pi, P130)
+`pi = 4; pi` gave 3.14159…: the parser read `pi` as π and dropped the assignment. P130 (user: "loud error, if it was
+declared constant before which it should be"): the named numbers (`pi`, `tau`, `euler`, their glyphs) are declared
+constants, so `pi = …` / `pi := …` is the compile error "pi is a constant; fix: another name". A field
+`class circle{pi = 3}` is the type's own field, no message, and leaves `pi` the constant elsewhere.
+src/wasp_parser/atoms.rs `refuse_constant_assignment`, tests/welcoming/test_constant_shadowing.rs.
