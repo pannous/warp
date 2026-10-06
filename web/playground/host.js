@@ -178,10 +178,15 @@ function programImports(holder, hooks) {
 				const program_ = program();
 				new BroadcastChannel(plainOfTree(readNode(program_, channel))).postMessage(plainOfTree(readNode(program_, message)));
 			},
-			// channels inside one run (P155, tasks.rs): a rendezvous needs Atomics.wait across the task Workers, not built yet
-			...Object.fromEntries(["channel_new", "channel_put", "channel_take", "channel_more", "channel_close"].map(word => [word, () => {
-				throw new Error("ch = channel(): channels inside a program need the native build (warp run); the playground has only channel \"name\" between tabs");
-			}])),
+			// channels inside one run (P155, src/tasks.rs Channels): Go's unbuffered channel between the task Workers
+			channel_new: () => openChannel(holder.run),
+			channel_put: (id, value) => putOnChannel(holder, id, utf8.encode(JSON.stringify(readTaskValue(program(), value)))),
+			channel_take: id => {
+				const bytes = takeFromChannel(holder, id);
+				return bytes ? buildValue(program(), JSON.parse(decode(bytes))) : null;
+			},
+			channel_more: id => moreOnChannel(holder, id),
+			channel_close: id => closeChannel(holder.run, id),
 			signal_every: (id, milliseconds) => addTimer(holder, hooks, id, { every: Number(milliseconds) }, "on every …"),
 			signal_daily: (id, minute, weekdays) => addTimer(holder, hooks, id, { minute: Number(minute), weekdays: Number(weekdays) }, "on every day at …"),
 			signal_at: (id, minute) => addTimer(holder, hooks, id, { minute: Number(minute), once: true }, "at 9:00 {…}"),
@@ -375,6 +380,144 @@ function writtenCell(run, id, index) {
 	return [array, cell];
 }
 
+// The local channels of a run (P155, src/tasks.rs Channels) in one SharedArrayBuffer every task Worker gets: a lock,
+// a change counter the waiting sides sleep on (a condition variable), the next channel id and whether the program
+// ended, then per channel [full, closed, sent, taken, length] and the bytes of the value offered (JSON of a task tree).
+// Go's unbuffered channel: a send waits until a receiver took its value
+const CHANNEL_SLOTS = 64;
+const CHANNEL_VALUE_BYTES = 1 << 16;
+const [CHANNEL_LOCK, CHANNEL_CHANGED, CHANNEL_NEXT_ID, CHANNEL_ENDED, CHANNEL_HEADER] = [0, 1, 2, 3, 4];
+const [SLOT_FULL, SLOT_CLOSED, SLOT_SENT, SLOT_TAKEN, SLOT_LENGTH, SLOT_FIELDS] = [0, 1, 2, 3, 4, 5];
+const CHANNEL_CHECK_MS = 20; // how often a waiting side looks whether it waits forever, as natively
+const CHANNEL_INTS = CHANNEL_HEADER + CHANNEL_SLOTS * SLOT_FIELDS;
+
+// a run's channel table, when its program makes channels and the page has shared memory
+function channelTable(module) {
+	if (!WebAssembly.Module.imports(module).some(entry => entry.name === "channel_new")) return null;
+	if (!hasTaskWorkers()) return null;
+	return new Int32Array(new SharedArrayBuffer(4 * CHANNEL_INTS + CHANNEL_SLOTS * CHANNEL_VALUE_BYTES));
+}
+
+function channelsOf(run) {
+	if (!run.channels) throw new Error("ch = channel(): channels need shared memory between Workers, which this page lacks (it is not cross-origin isolated); `warp run` has them");
+	return run.channels;
+}
+
+function openChannel(run) {
+	const table = channelsOf(run);
+	const id = Atomics.add(table, CHANNEL_NEXT_ID, 1) + 1;
+	if (id > CHANNEL_SLOTS) throw new Error(`channel(): the playground holds ${CHANNEL_SLOTS} channels per run`);
+	return BigInt(id);
+}
+
+// channel id's fields, and the bytes of its value
+function channelSlot(table, id) {
+	const index = Number(id);
+	if (!(index >= 1 && index <= Atomics.load(table, CHANNEL_NEXT_ID))) throw new Error(`no channel ${id}`);
+	const base = CHANNEL_HEADER + (index - 1) * SLOT_FIELDS;
+	const field = name => base + name;
+	const bytes = new Uint8Array(table.buffer, 4 * CHANNEL_INTS + (index - 1) * CHANNEL_VALUE_BYTES, CHANNEL_VALUE_BYTES);
+	return { get: name => table[field(name)], set: (name, value) => { table[field(name)] = value; }, bytes };
+}
+
+function lockChannels(table) {
+	while (Atomics.compareExchange(table, CHANNEL_LOCK, 0, 1) !== 0) Atomics.wait(table, CHANNEL_LOCK, 1);
+}
+
+function unlockChannels(table, changed) {
+	if (changed) Atomics.add(table, CHANNEL_CHANGED, 1);
+	Atomics.store(table, CHANNEL_LOCK, 0);
+	Atomics.notify(table, CHANNEL_LOCK, 1);
+	if (changed) Atomics.notify(table, CHANNEL_CHANGED);
+}
+
+// the program alone: no task of it runs any more, so nothing could answer. A task run inline (no free Worker) blocks
+// its starting program, which could never answer either
+function waitsAlone(holder) {
+	if (holder.inTask) return !holder.control;
+	return ![...holder.run.tasks.values()].some(task => task.worker && Atomics.load(new Int32Array(task.shared, 0, 1), 0) === 0);
+}
+
+// wait on channel id until `ready` answers ({value} or {error}), under the lock; it may change the channel
+function channelWait(holder, id, waiting, ready) {
+	const table = channelsOf(holder.run);
+	for (;;) {
+		lockChannels(table);
+		const seen = Atomics.load(table, CHANNEL_CHANGED);
+		let answer;
+		try {
+			answer = ready(channelSlot(table, id));
+			if (!answer && Atomics.load(table, CHANNEL_ENDED)) answer = { error: TASK_STOPPED };
+			if (!answer && waitsAlone(holder)) answer = { error: `${waiting} waits forever: no task is left to answer it` };
+		} catch (failure) {
+			unlockChannels(table, false);
+			throw failure;
+		}
+		unlockChannels(table, Boolean(answer));
+		if (answer?.error) throw new Error(answer.error);
+		if (answer) return answer.value;
+		Atomics.wait(table, CHANNEL_CHANGED, seen, CHANNEL_CHECK_MS);
+	}
+}
+
+// `ch.send(v)`: offers v once the channel is free, then waits until a receiver took it
+function putOnChannel(holder, id, bytes) {
+	if (bytes.length > CHANNEL_VALUE_BYTES) throw new Error(`ch.send: a value of ${bytes.length} bytes is more than the playground's ${CHANNEL_VALUE_BYTES} per channel`);
+	let mine;
+	channelWait(holder, id, "ch.send", slot => {
+		if (mine === undefined) {
+			if (slot.get(SLOT_CLOSED)) return { error: "send on a closed channel" };
+			if (slot.get(SLOT_FULL)) return null;
+			slot.bytes.set(bytes);
+			slot.set(SLOT_LENGTH, bytes.length);
+			slot.set(SLOT_FULL, 1);
+			mine = slot.get(SLOT_SENT);
+			slot.set(SLOT_SENT, mine + 1);
+			Atomics.add(holder.run.channels, CHANNEL_CHANGED, 1); // the offer wakes a receiver
+			Atomics.notify(holder.run.channels, CHANNEL_CHANGED);
+		}
+		return slot.get(SLOT_TAKEN) > mine ? { value: undefined } : null;
+	});
+}
+
+// `ch.receive()`: the value offered, waiting for one; null (ø) once the channel is closed and empty
+function takeFromChannel(holder, id) {
+	return channelWait(holder, id, "ch.receive()", slot => {
+		if (slot.get(SLOT_FULL)) {
+			const bytes = slot.bytes.slice(0, slot.get(SLOT_LENGTH));
+			slot.set(SLOT_FULL, 0);
+			slot.set(SLOT_TAKEN, slot.get(SLOT_TAKEN) + 1);
+			return { value: bytes };
+		}
+		return slot.get(SLOT_CLOSED) ? { value: null } : null;
+	});
+}
+
+// `for v in ch`: 1 when a value is offered, 0 once the channel is closed and empty
+function moreOnChannel(holder, id) {
+	return channelWait(holder, id, "for … in ch", slot => slot.get(SLOT_FULL) ? { value: 1n } : slot.get(SLOT_CLOSED) ? { value: 0n } : null);
+}
+
+function closeChannel(run, id) {
+	const table = channelsOf(run);
+	lockChannels(table);
+	const slot = channelSlot(table, id);
+	const closed = slot.get(SLOT_CLOSED);
+	slot.set(SLOT_CLOSED, 1);
+	unlockChannels(table, true);
+	if (closed) throw new Error("close of a closed channel");
+}
+
+// the program ended: tasks still waiting on a channel stop
+function endChannels(run) {
+	const table = run.channels;
+	if (!table || run.channelsEnded) return;
+	run.channelsEnded = true;
+	lockChannels(table);
+	Atomics.store(table, CHANNEL_ENDED, 1);
+	unlockChannels(table, true);
+}
+
 // a task of the run: f(arguments) in a fresh instance of the program (src/tasks.rs TaskTable::run), the Int arguments as
 // they are or the argument list (`values`, a tree of reader.js) rebuilt for a wrapper f·node. On a Worker of the pool
 // (shared memory needs cross-origin isolation), which writes the result into a SharedArrayBuffer; else at once, here
@@ -386,10 +529,10 @@ function startTask(holder, hooks, name, ints, values) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
 		const control = new Int32Array(new SharedArrayBuffer(4));
-		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control });
-		run.tasks.set(id, { name, worker, shared, control, inline: () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured) });
+		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels });
+		run.tasks.set(id, { name, worker, shared, control, inline: () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels) });
 	} else {
-		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured));
+		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels));
 	}
 	return id;
 }
@@ -400,8 +543,8 @@ function taskName(name) {
 }
 
 // the task here: {value} (a number or a tree) or {failure}
-function runTask(module, hooks, warnings, name, ints, values, arrays, captured = [], control = null) {
-	const taskHolder = { warnings, run: { module, tasks: new Map(), shared: arrays }, control, inTask: true };
+function runTask(module, hooks, warnings, name, ints, values, arrays, captured = [], control = null, channels = null) {
+	const taskHolder = { warnings, run: { module, tasks: new Map(), shared: arrays, channels }, control, inTask: true };
 	let instance;
 	try {
 		instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
@@ -872,7 +1015,8 @@ function runProgram(bytes, hooks) {
 	let instance;
 	const holder = { warnings: [] }; // the runtime warnings go back to the compiler, which reports them (src/web.rs)
 	try {
-		holder.run = { module: new WebAssembly.Module(bytes), tasks: new Map(), shared: [] };
+		const module = new WebAssembly.Module(bytes);
+		holder.run = { module, tasks: new Map(), shared: [], channels: channelTable(module) };
 		instance = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks));
 		holder.exports = instance.exports;
 	} catch (failure) {
@@ -916,6 +1060,7 @@ function outcomeOf(holder, hooks, call) {
 	const { warnings, exports } = holder;
 	try {
 		const result = call();
+		endChannels(holder.run); // a task still waiting on a channel stops, as natively
 		// the tasks nobody awaited finish before the result, as natively; a failure nobody read ends the run
 		const unread = joinTasks(holder.run, hooks);
 		deliverSignals(holder); // the raises of tasks nobody awaited run their handlers before the run ends
@@ -923,6 +1068,7 @@ function outcomeOf(holder, hooks, call) {
 		if (unread) return { failure: unread, warnings };
 		return { result: readResult(exports, result), warnings };
 	} catch (trap) {
+		endChannels(holder.run);
 		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, warnings };
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };

@@ -31,10 +31,12 @@ Semantics (Go's unbuffered channel): `send` waits until a receiver took the valu
   channel_pending every 5 ms, then channel_next. A program hears its own sends.
 - Tests: tests/control/test_channels.rs.
 
-## Browser
-Tasks run in Workers: a channel needs a SharedArrayBuffer slot per channel and Atomics.wait (see sharedCell and
-startTask in host.js for how shared arrays reach the workers). Until built, host.js's channel_* words throw "channels
-inside a program need the native build". `channel "name"` in the browser would need the receive loop to yield to the
-BroadcastChannel's message events, which a synchronous wasm loop cannot: not built either.
-
-Ported cases: probes/async_ports.md (the two Go channel rows).
+## Browser (built)
+host.js: one SharedArrayBuffer per run (channelTable, only when the module imports channel_new and the page is
+cross-origin isolated), handed to every task Worker with the shared arrays: a lock, a change counter the waiting sides
+Atomics.wait on (a condition variable), the next channel id, an ended flag, then per channel [full, closed, sent,
+taken, length] and a 64 KB value area (the JSON of readTaskValue's tree). Same rendezvous as natively; the program
+waiting while none of its task Workers runs is the "waits forever" error, a task run inline (no free Worker) waiting
+too; outcomeOf ends the channels before joining, so tasks still waiting stop. A page without isolation: channel() is
+a loud error. `channel "name"` (BroadcastChannel) cannot receive in a waiting loop and does not hear its own sends:
+its test is native only.
