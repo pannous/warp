@@ -1,0 +1,7 @@
+class Signal { value listeners }
+s = Signal{value: 1, listeners: []}
+s.listeners.add(x => print "got " x)
+s.listeners.add(x => print "also " x)
+s.value = 5
+for l in s.listeners { l(s.value) }
+s.value
