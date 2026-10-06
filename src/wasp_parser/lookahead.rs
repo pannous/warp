@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// `abs x`, `norm x`: the absolute value (card g-1pvQ: norm is a synonym)
+const ABS_WORDS: [&str; 2] = ["abs", "norm"];
+
 impl WaspParser {
 	/// Check if current character can start an atom (for implicit application)
 	pub(super) fn can_start_atom(&self) -> bool {
@@ -327,7 +330,7 @@ impl WaspParser {
 		if self.matches_keyword("sqrt") { return Some((Op::Sqrt, 4)); }
 		if self.matches_keyword("cbrt") { return Some((Op::Cbrt, 4)); }
 		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
-		if self.matches_keyword("abs") { return Some((Op::Abs, 3)); }
+		if let Some(word) = ABS_WORDS.into_iter().find(|word| self.matches_keyword(word)) { return Some((Op::Abs, word.len())); }
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 
 		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));

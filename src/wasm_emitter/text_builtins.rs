@@ -342,8 +342,6 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, operand);
 			return;
 		}
-		let written = crate::normalize::operand_text(operand);
-		crate::normalize::hint(&written, &format!("str({written})"), "the number joins the text in its text form");
 		self.emit_cast(func, operand, &Node::Symbol("str".to_string()));
 	}
 

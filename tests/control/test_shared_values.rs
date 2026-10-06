@@ -21,3 +21,10 @@ fn a_go_block_writes_a_shared_value() {
 fn a_function_given_a_shared_value_shares_it() {
 	is!("shared n = 0; bump(c) := { c += 1; 0 }; await go bump(n); await go bump(n); n", 2);
 }
+
+/// `n = n + 1` on a shared value is the atomic add too: no update of a task is lost
+#[test]
+fn a_self_update_of_a_shared_value_is_atomic() {
+	is!("shared n = 10; n = n - 3; n", 7);
+	is!("shared hits = 0; jobs = []; for i in 1..5 { jobs.add(go { for j in 1 to 200 { hits = hits + 1 }; 0 }) }; await all jobs; hits", 800);
+}

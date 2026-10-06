@@ -4,6 +4,7 @@
 //! (notes/go_blocks.md). declarations::lower_tasks then decides how the function runs.
 //! `after done return x` (wiki/thread.md) is the go block `go { while not done { sleep(1) }; x }`, its condition read
 //! from shared values (P106); `await job or y` is `try await job else y`.
+//! `xs.map(f) @parallel` (wiki/Purpose.md) starts f on every item as a go block and awaits them all, in order.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -11,6 +12,8 @@ use crate::operators::Op;
 const GO_WORD: &str = "go";
 const BLOCK_FUNCTION_PREFIX: &str = "go·block·";
 const FOR_WORD: &str = "for";
+/// A go block's parameter is the variable it reads with this suffix: `n` comes in as `n·in`
+const INPUT_SUFFIX: &str = "·in";
 const AFTER_WORD: &str = "after";
 const RETURN_WORD: &str = "return";
 const AWAIT_WORD: &str = "await";
@@ -18,18 +21,33 @@ const AFTER_CONDITION: &str = "after_condition_placeholder";
 const AFTER_VALUE: &str = "after_value_placeholder";
 /// How often a waiting `after` checks its condition, in milliseconds
 const AFTER_POLL_MILLISECONDS: i64 = 1;
+const PARALLEL_ATTRIBUTE: &str = "parallel";
+const MAP_WORD: &str = "map";
+const PARALLEL_JOBS: &str = "parallel_jobs_placeholder";
+const PARALLEL_ITEM: &str = "parallel_item_placeholder";
+const PARALLEL_LIST: &str = "parallel_list_placeholder";
+const PARALLEL_FUNCTION: &str = "parallel_function_placeholder";
 
 pub fn lower(node: Node) -> Node {
 	if defines_go(&node) {
 		return node;
 	}
-	let node = task_phrases(node.clone(), &Phrases { assigned: assigned_variables(&node), shared: crate::shared_arrays::shared_names(&node) });
+	let phrases = Phrases { assigned: assigned_variables(&node), shared: crate::shared_arrays::shared_names(&node), parallel_maps: Default::default() };
+	let node = task_phrases(node, &phrases);
 	if !has_go_block(&node) {
 		return node;
 	}
 	let blocks = GoBlocks::default();
 	let node = blocks.lower(node, &[]);
 	crate::declarations::with_definitions_first(node, blocks.definitions.into_inner())
+}
+
+/// A function as a message names it: `go·block·1` is `go block 1`
+pub fn written_name(function: &str) -> String {
+	match function.strip_prefix(BLOCK_FUNCTION_PREFIX) {
+		Some(number) => format!("{GO_WORD} block {number}"),
+		None => function.to_string(),
+	}
 }
 
 #[derive(Default)]
@@ -84,10 +102,14 @@ impl GoBlocks {
 	fn function_of(&self, block: Node, known: &[String]) -> Node {
 		let mut definitions = self.definitions.borrow_mut();
 		let name = Node::Symbol(format!("{BLOCK_FUNCTION_PREFIX}{}", definitions.len() + 1));
-		let parameters: Vec<Node> = read_symbols(&block).into_iter().filter(|symbol| known.contains(symbol)).map(Node::Symbol).collect();
-		let head = Node::List([vec![name.clone()], parameters.clone()].concat(), Bracket::Round, Separator::None);
-		definitions.push(Node::Key(Box::new(head.clone()), Op::Define, Box::new(block)));
-		Node::List([vec![name], parameters].concat(), Bracket::Round, Separator::None)
+		let inputs: Vec<String> = read_symbols(&block).into_iter().filter(|symbol| known.contains(symbol)).collect();
+		// each input under a name of its own: a parameter named like a function of the program (`inc = x => x + 1`)
+		// would read as that function
+		let parameter = |input: &String| Node::Symbol(format!("{input}{INPUT_SUFFIX}"));
+		let block = inputs.iter().fold(block, |block, input| crate::library_words::substitute(block, input, &parameter(input)));
+		let head = Node::List([vec![name.clone()], inputs.iter().map(parameter).collect()].concat(), Bracket::Round, Separator::None);
+		definitions.push(Node::Key(Box::new(head), Op::Define, Box::new(block)));
+		Node::List([vec![name], inputs.into_iter().map(Node::Symbol).collect()].concat(), Bracket::Round, Separator::None)
 	}
 }
 
@@ -99,10 +121,15 @@ struct Phrases {
 	/// the program's variables, and those of them that every task shares
 	assigned: Vec<String>,
 	shared: Vec<String>,
+	/// how many parallel maps got their names
+	parallel_maps: std::cell::Cell<usize>,
 }
 
 /// `after C return V` → `go { while not (C) { sleep(1) }; V }`, `await job or y` → `try await job else y`
 fn task_phrases(node: Node, phrases: &Phrases) -> Node {
+	if let Some((list, function)) = parallel_map(&node) {
+		return parallel_tasks(task_phrases(list, phrases), function, phrases);
+	}
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = items.into_iter().map(|item| task_phrases(item, phrases)).collect();
@@ -117,6 +144,23 @@ fn task_phrases(node: Node, phrases: &Phrases) -> Node {
 		}
 		other => other.map_children(|child| task_phrases(child, phrases)),
 	}
+}
+
+/// `xs.map(f) @parallel`, also `@parallel xs.map(f)` (the annotation then belongs to xs): xs and f
+fn parallel_map(node: &Node) -> Option<(Node, Node)> {
+	let Node::Key(list, Op::Dot, call) = node.drop_meta() else { return None };
+	let Node::List(items, _, _) = call.drop_meta() else { return None };
+	let [map, function] = items.as_slice() else { return None };
+	let annotated = node.attribute(PARALLEL_ATTRIBUTE).is_some() || list.attribute(PARALLEL_ATTRIBUTE).is_some();
+	(annotated && map.drop_meta().name() == MAP_WORD && matches!(function.drop_meta(), Node::Symbol(_))).then(|| (list.drop_meta().clone(), function.clone()))
+}
+
+/// `(jobs = []; for item in xs { jobs.add(go { f(item) }) }; await all jobs)`, named apart per map
+fn parallel_tasks(list: Node, function: Node, phrases: &Phrases) -> Node {
+	let number = phrases.parallel_maps.replace(phrases.parallel_maps.get() + 1);
+	let template = crate::wasp_parser::parse(&format!("({PARALLEL_JOBS} = []; for {PARALLEL_ITEM} in {PARALLEL_LIST} {{ {PARALLEL_JOBS}.add({GO_WORD} {{ {PARALLEL_FUNCTION}({PARALLEL_ITEM}) }}) }}; {AWAIT_WORD} all {PARALLEL_JOBS})"));
+	[(PARALLEL_JOBS, Node::Symbol(format!("parallel·jobs·{number}"))), (PARALLEL_ITEM, Node::Symbol(format!("parallel·item·{number}"))), (PARALLEL_LIST, list), (PARALLEL_FUNCTION, function)]
+		.iter().fold(template, |node, (placeholder, replacement)| crate::library_words::substitute(node, placeholder, replacement))
 }
 
 /// The awaited task itself may hold phrases: `await (after …) or y`

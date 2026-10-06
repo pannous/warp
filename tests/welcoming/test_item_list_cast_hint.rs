@@ -14,7 +14,9 @@ fn a_type_word_item_in_a_comma_list_is_no_cast() {
 
 #[test]
 fn a_written_constructor_call_is_still_hinted() {
+	warp::normalize::set_style(warp::normalize::Style::canonical()); // the default leaves the cast spelling open (#13)
 	assert_eq!(cast_hints("int(3)"), vec!["int(3)".to_string()]);
+	warp::normalize::set_style(warp::normalize::Style::default());
 }
 
 #[test]
