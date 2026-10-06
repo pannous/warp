@@ -66,10 +66,16 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `==`/`!=` by value: structured values, and any text (`peek() == " "` of a function returning text)
+	/// `==`/`!=` by value: structured values, any text (`peek() == " "` of a function returning text), and a value held
+	/// as a Node whose kind shows only at run time (a cell's, `cell_get(c) == 5`)
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
-		let is_text = |node: &Node| self.get_type(node) == Kind::Text;
-		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right) || is_text(left) || is_text(right))
+		let by_value = |node: &Node| self.get_type(node) == Kind::Text || self.is_held_cell_value(node);
+		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right) || by_value(left) || by_value(right))
+	}
+
+	/// `cell_get(c)`: a cell's value, a Node of any kind
+	fn is_held_cell_value(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == super::cells::CELL_GET))
 	}
 
 	/// Push i64 1/0 for `left == right` or `left != right` compared by value

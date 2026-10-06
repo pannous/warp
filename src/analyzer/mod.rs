@@ -81,7 +81,7 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		Node::List(list_items, _, _) if *bracket != Bracket::Square && matches!(list_items.as_slice(), [word, _] if is_word(word, PRINT_CALL) || is_word(word, crate::host::SLEEP)) => true,
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
 			// `cell_set(c, v)` is the assignment of a nonlocal variable (lowering/nonlocal_cells.rs)
-			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return", crate::host::TASK_CHECK, crate::wasm_emitter::cells::CELL_SET].contains(&s.as_str()))
+			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return", crate::host::TASK_CHECK, crate::wasm_emitter::cells::CELL_SET, crate::wasm_emitter::cells::SIGNAL_LISTENERS_SET].contains(&s.as_str()))
 		}
 		_ => false,
 	}
