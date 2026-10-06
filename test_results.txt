@@ -506,6 +506,7 @@ PASSED:
   ✓ functions::test_anonymous_application::test_an_anonymous_function_broadcasts_over_a_list
   ✓ functions::test_anonymous_function_forms::a_function_keyword_without_a_name_is_a_lambda
   ✓ functions::test_anonymous_function_forms::an_arrow_lambda_works_too
+  ✓ functions::test_anonymous_function_forms::an_immediately_invoked_function_without_arguments
   ✓ functions::test_anonymous_function_forms::python_lambda_is_a_lambda
   ✓ functions::test_argument_kinds::counting_a_parameter_makes_it_a_list
   ✓ functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error
@@ -677,6 +678,7 @@ PASSED:
   ✓ functions::test_functions::test_variable_reassignment
   ✓ functions::test_functions::test_variables
   ✓ functions::test_global_with_closures::global_in_a_program_with_a_lambda
+  ✓ functions::test_go_functions::several_results
   ✓ functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called
   ✓ functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged
   ✓ functions::test_inlining::an_inlined_helper_updates_the_list_handed_back
@@ -706,6 +708,8 @@ PASSED:
   ✓ functions::test_late_binding::nonlocal_needs_a_variable_of_an_enclosing_def
   ✓ functions::test_late_binding::nonlocal_reads_the_enclosing_functions_current_value
   ✓ functions::test_late_binding::nonlocal_reads_the_value_at_each_call
+  ✓ functions::test_let_in::let_function_in
+  ✓ functions::test_let_in::let_value_in
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
   ✓ functions::test_list_conversion::an_empty_list
@@ -785,6 +789,7 @@ PASSED:
   ✓ functions::test_phrase_calls::test_spaced_phrases_are_called_with_their_prepositions
   ✓ functions::test_phrase_calls::test_to_phrases_are_called_with_their_prepositions
   ✓ functions::test_picked_calls::a_function_picked_from_a_list_is_called
+  ✓ functions::test_ported_calls::every_ported_call_form_keeps_its_value
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
   ✓ functions::test_precomputed::effects_shared_state_and_failures_are_never_folded
@@ -841,6 +846,7 @@ PASSED:
   ✓ functions::test_several_arguments::test_several_arguments_are_one_list
   ✓ functions::test_shadowed_log::a_user_log_of_two_arguments_is_called
   ✓ functions::test_shadowed_log::the_library_log_to_a_base_stays
+  ✓ functions::test_sort_functions::reduce_with_a_start_is_fold
   ✓ functions::test_sort_functions::sort_is_stable
   ✓ functions::test_sort_functions::sort_with_comparator
   ✓ functions::test_sort_functions::sort_with_defined_function
@@ -1136,6 +1142,10 @@ PASSED:
   ✓ modules::test_versions::version_is_a_soft_keyword
   ✓ modules::test_versions::version_literals_have_two_dots_or_more
   ✓ modules::test_versions::versions_compare_part_by_part
+  ✓ modules::test_wasm_modules::a_module_is_found_by_name_or_path
+  ✓ modules::test_wasm_modules::a_module_keeps_its_state_for_the_run
+  ✓ modules::test_wasm_modules::an_exported_function_is_called_with_its_declared_types
+  ✓ modules::test_wasm_modules::an_exported_global_reads_as_its_value
   ✓ node::node_values_test::test_values_empty
   ✓ node::node_values_test::test_values_key
   ✓ node::node_values_test::test_values_list
@@ -2032,6 +2042,9 @@ PASSED:
   ✓ types::test_declaration_zero_value::a_text_declaration_is_empty
   ✓ types::test_declared_int_of_float_expression::an_int_declaration_refuses_a_float_expression
   ✓ types::test_declared_int_of_float_expression::an_int_declaration_refuses_a_non_whole_exact_value
+  ✓ types::test_extension_methods::a_swift_extension_block_adds_methods
+  ✓ types::test_extension_methods::an_extension_method_extends_a_builtin_type
+  ✓ types::test_extension_methods::an_extension_method_extends_a_class
   ✓ types::test_flags::test_an_unknown_flag_is_an_error
   ✓ types::test_flags::test_flags_set_their_named_members
   ✓ types::test_flags::test_the_flags_type_is_the_empty_set
@@ -2664,4 +2677,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2659 passed, 0 failed, 2659 total tested
+20 ignored, 2672 passed, 0 failed, 2672 total tested
