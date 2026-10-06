@@ -147,5 +147,5 @@ say 3 == 3` },
 pi = 4
 2 * pi` },
 	// samples/kitchensink.wasp itself (samples.js loads after this file), tested natively by test_kitchensink
-	"kitchen sink": { value: '"all 31 checks pass"', get code() { return SAMPLES.kitchensink; } },
+	"kitchen sink": { value: '"all 33 checks pass"', get code() { return SAMPLES.kitchensink; } },
 };
