@@ -556,6 +556,7 @@ fn class_items(body: &Node) -> Vec<Node> {
 		Node::List(words, _, _) if value_block(words).is_some() => value_block(words).into_iter().collect(),
 		Node::List(words, _, _) if accessors(words).is_some() => accessors(words).unwrap_or_default(),
 		Node::List(..) if included_mixin(&item).is_some() => vec![item],
+		Node::List(words, _, _) if nested_fields(words).is_some() => nested_fields(words).into_iter().collect(),
 		// Java's `int x`: the field x of type int; C#'s auto-property `int X { get; set; }` the field X
 		Node::List(words, _, _) if typed_field(words).is_some() => typed_field(words).into_iter().collect(),
 		Node::List(words, _, _) if auto_property(words).is_some() => auto_property(words).into_iter().collect(),
@@ -673,6 +674,21 @@ pub(crate) fn leading_name(member: &Node) -> String {
 		Node::List(items, _, _) => items.first().map(leading_name).unwrap_or_default(),
 		other => other.name(),
 	}
+}
+
+/// wiki/class.md's `address { street; city; zip? }`: the field address holding a block of fields, `address:{…}`
+fn nested_fields(words: &[Node]) -> Option<Node> {
+	let [name, block] = words else { return None };
+	let Node::Symbol(word) = name.drop_meta() else { return None };
+	let Node::List(fields, Bracket::Curly, _) = block.drop_meta() else { return None };
+	let is_field = |field: &Node| match field.drop_meta() {
+		Node::Symbol(_) => true,
+		Node::Key(_, Op::Colon, _) => true,
+		Node::List(group, Bracket::None, _) => group.iter().all(|field| matches!(field.drop_meta(), Node::Symbol(_) | Node::Key(_, Op::Colon, _))),
+		_ => false,
+	};
+	let is_member_word = crate::operators::is_function_keyword(word) || is_constructor_word(word) || crate::wasp_parser::ACCESSOR_WORDS.contains(&word.as_str());
+	(!is_member_word && !fields.is_empty() && fields.iter().all(is_field)).then(|| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(block.clone())))
 }
 
 /// Java's and C#'s field `int x`, Go's `x int`: the field `x:int`
