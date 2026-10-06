@@ -197,6 +197,9 @@ PASSED:
   ✓ control::test_object_blocks::test_statements_in_braces_are_a_block
   ✓ control::test_object_functions::test_fields_are_in_scope_of_function_entries
   ✓ control::test_object_functions::test_function_entries_are_callable
+  ✓ control::test_on_error_of_function::a_failing_call_has_the_handler_value
+  ✓ control::test_on_error_of_function::an_unknown_function_is_named
+  ✓ control::test_on_error_of_function::every_definition_and_handler_form
   ✓ control::test_page_events::a_handler_without_event_runs_through_its_wrapper
   ✓ control::test_page_events::a_page_event_handler_in_a_program_with_tasks_has_one_wrapper
   ✓ control::test_page_events::a_page_event_handler_is_exported_without_a_raise
@@ -670,6 +673,7 @@ PASSED:
   ✓ functions::test_closures::test_returned_closure
   ✓ functions::test_comma_calls::an_output_word_takes_a_prefix_call
   ✓ functions::test_comma_calls::comma_arguments_of_a_short_call
+  ✓ functions::test_concatenated_text_argument::concatenated_text_fills_a_counted_parameter
   ✓ functions::test_constant_free_variables::a_changed_variable_stays
   ✓ functions::test_constant_free_variables::a_condition_on_a_constant_is_decided
   ✓ functions::test_constant_free_variables::a_constant_text_is_inlined
@@ -1252,6 +1256,7 @@ PASSED:
   ✓ modules::test_std_file::use_file_lists_a_folder
   ✓ modules::test_std_file::use_file_writes_appends_and_reads_back
   ✓ modules::test_std_file::use_os_reads_the_environment
+  ✓ modules::test_std_hash::use_hash_gives_sha256_and_crc32
   ✓ modules::test_std_json::a_json_word_without_its_use_names_the_module
   ✓ modules::test_std_json::malformed_json_is_an_error_naming_it
   ✓ modules::test_std_json::use_json_parses_and_writes_json
@@ -1263,13 +1268,17 @@ PASSED:
   ✓ modules::test_std_map::use_map_brings_merge_and_map_values
   ✓ modules::test_std_math_text::use_math_brings_libm_and_the_module
   ✓ modules::test_std_math_text::use_text_brings_its_words
+  ✓ modules::test_std_math_text::use_text_formats_a_template
   ✓ modules::test_std_qualified::a_qualified_module_word_is_the_word
   ✓ modules::test_std_qualified::a_qualified_word_without_its_use_names_the_module
   ✓ modules::test_std_qualified::a_variable_of_the_modules_name_keeps_its_methods
   ✓ modules::test_std_random::use_random_brings_choice_shuffle_sample
+  ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
+  ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
   ✓ modules::test_std_time::date_arithmetic
   ✓ modules::test_std_time::dates_of_milliseconds
   ✓ modules::test_std_time::today_is_a_date_after_2025
+  ✓ modules::test_std_time::use_time_formats_dates_and_times
   ✓ modules::test_use_modules::test_module_statements_are_not_imported
   ✓ modules::test_use_modules::test_module_using_module_imports_transitively_and_survives_cycles
   ✓ modules::test_use_modules::test_search_order_prefers_earlier_directory
@@ -1395,6 +1404,8 @@ PASSED:
   ✓ numbers::test_division_by_zero::float_division_by_zero_is_infinity
   ✓ numbers::test_division_by_zero::int_division_by_zero_is_an_error
   ✓ numbers::test_duration_text::a_duration_and_a_date_have_their_text
+  ✓ numbers::test_exact_parameters::an_exact_parameter_takes_a_decimal
+  ✓ numbers::test_exact_parameters::float64_is_the_word_float
   ✓ numbers::test_fixed_width_ints::test_a_parameter_may_be_named_like_a_type
   ✓ numbers::test_fixed_width_ints::test_fixed_width_arithmetic_traps_on_overflow
   ✓ numbers::test_fixed_width_ints::test_fixed_width_assignment_traps_on_overflow
@@ -1839,14 +1850,14 @@ PASSED:
   ✓ parser::test_symbol_hyphen::test_decrement_inside_a_loop_body
   ✓ parser::test_symbol_hyphen::test_hyphen_between_words_stays_kebab_case
   ✓ parser::test_symbol_hyphen::test_trailing_decrement_is_not_part_of_the_name
+  ✓ parser::test_time_unit_keys::a_unit_word_after_a_number_is_still_a_unit
+  ✓ parser::test_time_unit_keys::a_unit_word_before_a_colon_is_a_key
   ✓ parser::test_trailing_annotation::a_leading_annotation_still_marks_what_follows
   ✓ parser::test_trailing_annotation::a_trailing_annotation_marks_the_expression_before_it
   ✓ parser::test_unary_plus::a_unary_plus_is_its_operand
   ✓ parser::test_uniscript_entities::an_unknown_entity_is_an_error
   ✓ parser::test_uniscript_entities::entities_are_their_characters
   ✓ parser::test_uniscript_entities::entities_expand_inside_double_quoted_texts
-  ✓ parser::test_unit_word_keys::a_unit_word_after_a_number_is_still_a_unit
-  ✓ parser::test_unit_word_keys::a_unit_word_before_a_colon_is_a_key
   ✓ parser::test_wasp_format::html_attributes_and_repeated_tags_in_data
   ✓ parser::test_wasp_format::test_empty_structures
   ✓ parser::test_wasp_format::test_function_syntax
@@ -1913,6 +1924,8 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
   ✓ programs::test_paint::paint_writes_a_png_natively
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
+  ✓ programs::test_playground_samples::every_excluded_sample_exists
+  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
   ✓ programs::test_samples::test_ackermann
   ✓ programs::test_samples::test_binary_tree
   ✓ programs::test_samples::test_calculator
@@ -2095,6 +2108,7 @@ PASSED:
   ✓ text::test_runtime_text_as_int::a_text_beyond_i64_parses_unbounded
   ✓ text::test_runtime_text_as_int::a_text_variable_converts_to_int
   ✓ text::test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
+  ✓ text::test_split_element_kind::split_elements_concatenate
   ✓ text::test_string::test_first_char
   ✓ text::test_string::test_interpolation
   ✓ text::test_string::test_map
@@ -2171,6 +2185,7 @@ PASSED:
   ✓ types::test_cast_bugs::a_text_as_list_is_its_characters
   ✓ types::test_cast_bugs::nonsense_casts_are_loud
   ✓ types::test_class_aliases::a_constructor_alias_called_as_a_method_stays_a_method
+  ✓ types::test_class_aliases::a_type_parameter_of_a_class_is_noted
   ✓ types::test_class_aliases::class_modifiers_say_class
   ✓ types::test_class_aliases::every_common_constructor_name_says_init
   ✓ types::test_class_aliases::foreign_operator_methods_say_the_wasp_name
@@ -2231,6 +2246,9 @@ PASSED:
   ✓ types::test_class_operators::operators_as_python_and_kotlin_write_them
   ✓ types::test_class_properties::a_getter_reads_like_a_field
   ✓ types::test_class_properties::a_setter_runs_when_the_property_is_assigned
+  ✓ types::test_class_witnesses::a_compare_method_is_how_instances_order
+  ✓ types::test_class_witnesses::a_text_method_is_how_an_instance_prints
+  ✓ types::test_class_witnesses::an_equals_method_is_how_instances_compare
   ✓ types::test_construction_checks::a_call_construction_checks_its_fields_as_the_braces_do
   ✓ types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ types::test_constructor_vs_data::test_construction_checks_field_types
@@ -2254,6 +2272,10 @@ PASSED:
   ✓ types::test_declaration_zero_value::a_text_declaration_is_empty
   ✓ types::test_declared_int_of_float_expression::an_int_declaration_refuses_a_float_expression
   ✓ types::test_declared_int_of_float_expression::an_int_declaration_refuses_a_non_whole_exact_value
+  ✓ types::test_enums_ported::a_kotlin_enum_class_matched_with_when
+  ✓ types::test_enums_ported::a_kotlin_sealed_class_matched_by_type
+  ✓ types::test_enums_ported::a_rust_enum_matched_by_path
+  ✓ types::test_enums_ported::a_swift_enum_matched_with_switch_case
   ✓ types::test_extension_methods::a_smart_scope_defines_methods_of_a_type
   ✓ types::test_extension_methods::a_swift_extension_block_adds_methods
   ✓ types::test_extension_methods::an_extension_method_extends_a_builtin_type
@@ -2774,6 +2796,8 @@ PASSED:
   ✓ welcoming::test_item_list_cast_hint::a_c_style_definition_is_no_cast
   ✓ welcoming::test_item_list_cast_hint::a_type_word_item_in_a_comma_list_is_no_cast
   ✓ welcoming::test_item_list_cast_hint::a_written_constructor_call_is_still_hinted
+  ✓ welcoming::test_keys_of_a_map_parameter::a_key_of_a_one_entry_map_parameter_looks_its_value_up
+  ✓ welcoming::test_keys_of_a_map_parameter::a_key_variable_gets_no_indexing_hint
   ✓ welcoming::test_left_arrow::a_cramped_left_arrow_is_an_error_naming_both_readings
   ✓ welcoming::test_left_arrow::a_spaced_left_arrow_assigns_with_a_note
   ✓ welcoming::test_left_arrow::a_spaced_less_than_compares
@@ -2918,4 +2942,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2913 passed, 0 failed, 2913 total tested
+19 ignored, 2937 passed, 0 failed, 2937 total tested
