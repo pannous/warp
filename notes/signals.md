@@ -36,19 +36,20 @@ Data-format-first consequence: an event signal is a **node**: `stop the machine{
 data, so it serializes across tasks, the host, the page and the network with the existing machinery (TaskValue,
 JSON, wasp text). A state signal is a **variable**: nothing new to write, `x = 3` stays `x = 3`.
 
-## What a signal is in warp (proposal)
+## What a signal is in warp
 
 1. **Every variable is observable; only observed ones cost anything.** No `signal` keyword: a variable becomes a
    signal when something listens to it, and the compiler inserts the notification at its writes. Unobserved programs
-   compile exactly as today. (Alternative: an explicit `signal x = 0` marker, as Svelte's `$state`. Question Q1.)
+   compile exactly as today (P109).
 2. **`:=` is the derived signal.** `total := a + b` already recomputes at each use (P71); listeners on `total` watch
    `a` and `b` (phase 1, done). Glitch-free by construction: a derived value has no cache, so it can never be stale.
    A cache with a dirty flag (memo) is an optimization the compiler may add later when the body is pure (effects.rs).
 3. **Listeners are the effects**: `whenever cond {…}` (each time it holds after a change), `once cond {…}`,
    `on set x {…}` (each write), `on change x {…}` (each write that changed the value, phase 1, done), `after f`/`before f`.
    Inside: `value` (alias `signal`, `event`) is the new value.
-4. **Events**: `raise name{data}` sends the event, `on name {…}` receives it (`event` is the payload node). A write
-   of x is the event `set x`, so `on set x` is one case of the general rule.
+4. **Events**: `raise name{data}` sends the event, `on name {…}` receives it (`event` is the payload node). With no
+   `on name` handler in the program, `raise` stays today's catchable exception (P110). A write of x is the event
+   `set x`, so `on set x` is one case of the general rule.
 5. **Type**: a variable keeps its value type `T`. Only a signal that *escapes* as a value (passed to a function that
    subscribes to it, kept in a list) has the type `signal T` and a runtime representation (phase 5).
 
@@ -65,7 +66,7 @@ count = 5                            // prints both
 raise stop the machine{reason:"human nearby"}
 on stop the machine { print event.reason }
 
-together { price = 4; count = 1 }    // one notification for both writes (phase 4, name: Q4)
+price, count = 4, 1                  // one notification for both writes (P112)
 ```
 
 Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did you mean `on change x`?";
@@ -82,9 +83,10 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
   (`whenever f() > 3` where f reads globals: phase 3 walks f's body statically via effects.rs' call graph).
 - **Glitch-freedom**: no cached intermediates, so no stale derived value is ever seen. Remaining glitch: two writes
   in two statements show the intermediate state (`a=1; b=2` with `whenever a+b==2`). Fix: a multi-assignment
-  `a, b = 1, 2` checks once after both, and `together { … }` defers all checks to its end, each listener once (phase 4).
-- **Listener scope** (P38, decided keep): a listener sees writes in the statements after it, loops included, not
-  before it and not inside called functions. Phase 3 asks whether writes to a watched variable inside functions count.
+  `a, b = 1, 2` checks once after both (phase 4). There is no batching block (P112: the user chose this over
+  `together { … }`).
+- **Listener scope**: a listener sees writes in the statements after it, loops included, not before it. Writes through
+  `global x` inside called functions run the listeners too (P111, revises P38; phase 3).
 - **Recursion guard**: a listener that writes the variable it watches would loop; the check inside the listener body
   is not inserted (today: bodies are lowered with no listeners, so it already holds).
 - **Interaction with `:=`**: assigning a derived value is an error (P71). `on set total` of a derived value is
@@ -124,18 +126,19 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    `on set` of a derived value means `on change`.
 3. **Program-wide listeners**: writes to a watched main-level variable inside functions (via `global x`) run the
    checks; `whenever f() > 3` follows the variables f reads; effects.rs counts listener bodies at the writes.
-4. **Batching**: multi-assignment checks once; `together { … }` block defers the checks.
+4. **Batching**: a multi-assignment `a, b = 1, 2` checks once (P112: no batching block).
 5. **Signals as values**: `$Signal` cells for escaping variables and object fields (`on change person.age`),
    subscription inside functions.
 6. **Signals across tasks**: events raised in tasks reach `on` handlers of the starting thread; listeners on `shared`
    values poll at check points (with warp-d9, card task-signals).
-7. **Browser and outside**: DOM events and output bindings in the playground, `broadcast` / channel listeners. System signals (OS, devices, page): notes/system_signals.md.
-   (stdlib, wiki/signal.md).
+7. **Browser and outside**: DOM events and output bindings in the playground, `broadcast` / channel listeners
+   (stdlib, wiki/signal.md). System signals (OS, devices, page): notes/system_signals.md.
 
-## Open questions (sent to the Interviewer warp-eb, defaults assumed)
+## Decisions (user, 2026-10-06, via the Interviewer)
 
-- Q1 implicit (every variable observable, recommended) or an explicit `signal x = 0` declaration.
-- Q2 `raise X` with an `on X` handler in the program: a signal to the handlers (recommended), else an exception as
-  today; or a separate word (`send X` / `emit X`) for signals and `raise` stays the exception.
-- Q3 revisit P38: should writes inside functions trigger main-level listeners (recommended, phase 3).
-- Q4 the batching block's name: `together { … }` (recommended), `batch { … }`, `atomically { … }`.
+- P109 implicit: any variable can be watched; the compiler adds checks only for watched ones. No `signal` keyword.
+- P110 `raise X` goes to the `on X` handlers first; with no handler it stays today's catchable exception.
+- P111 writes through `global x` inside called functions run the listeners (phase 3). Revises P38: tests pinning
+  "never fires" may be changed, each in one commit naming P111.
+- P112 no batching block (the user chose this over `together { … }`); only a multi-assignment `a, b = 1, 2`
+  notifies once.
