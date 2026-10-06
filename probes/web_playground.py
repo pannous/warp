@@ -22,6 +22,11 @@ CHECKS = {
 	# packages and module files come through the page (warp_host.fetch, host.read of a URL)
 	'use uniscript; uniscript("<:alpha>")': '"α"',
 	"include tests/fixtures/counter; counter": "11",
+	# `use python` loads Pyodide from the CDN in the worker (worker.js loadPython, host.js pythonCall)
+	"use python math; math.floor(2.5) + 1": "3",
+	"use python math; math.factorial(25)": "15511210043330985984000000",
+	# paint draws on a canvas of the page (host.js paint, playground.js showPaintings); the value is the last line
+	"paint([0, 1, 1, 0], 2, 2); 7": "7",
 }
 UPTO = "x=0; for i in 1 upto 4 {x+=i}; x"
 
@@ -128,6 +133,15 @@ def main():
 	value = browser("get", "text", "#value")
 	print(f"{'ok  ' if value == '25' else 'FAIL'} the fix of an ambiguous braceless call: {value}")
 	if value != "25": failures.append("error fix button")
+	# a fix of several edits: the kebab key renamed at the key and at its read (P81)
+	browser("eval", "playground.setCode('a=5; b=1; a-b:2; a-b')")
+	time.sleep(1.5)
+	browser("eval", "[...document.querySelectorAll('.apply-fix')].find(button => button.textContent === 'I meant: a_b').click()")
+	time.sleep(1.5)
+	renamed = (browser("get", "text", "#value"), json.loads(browser("eval", "playground.code()")))
+	ok = renamed == ("2", "a=5; b=1; a_b:2; a_b")
+	print(f"{'ok  ' if ok else 'FAIL'} a fix of several edits renames the key and its read: {renamed}")
+	if not ok: failures.append("multi-edit fix button")
 
 	# the debug build (?debug, warp.debug.wasm) compiles the same programs
 	browser("open", PAGE + "?debug")

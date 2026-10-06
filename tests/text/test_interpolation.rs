@@ -4,7 +4,7 @@
 //! `$0` arguments keep working; `$` before a digit or a space stays a dollar sign.
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 use warp::normalize::{capture_hints, set_hint_mode, HintMode};
 use warp::wasp_parser::{parse_data, WaspParser};
 use warp::Node;

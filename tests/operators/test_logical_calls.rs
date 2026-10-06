@@ -1,5 +1,5 @@
 //! `and` / `or` test a call's value at run time, and evaluate it once
-use warp::*;
+use crate::is;
 
 #[test] // samples/game_of_life.wasp: `cell(x, y) and n == 2` was always `n == 2`
 fn test_call_operand_of_and_or() {

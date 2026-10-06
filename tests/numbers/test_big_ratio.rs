@@ -3,7 +3,8 @@ use num_bigint::BigInt;
 use warp::extensions::numbers::Number;
 use warp::extensions::reals::Rational;
 use warp::wasm_emitter::eval;
-use warp::{is, Node};
+use warp::Node;
+use crate::is;
 
 fn big_ratio(numerator: &str, denominator: &str) -> Node {
 	let ratio = Rational::new(numerator.parse::<BigInt>().unwrap(), denominator.parse::<BigInt>().unwrap());

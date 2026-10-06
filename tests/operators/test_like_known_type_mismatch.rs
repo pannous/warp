@@ -1,7 +1,7 @@
 // P22 (user, 2026-10-05): `p:photo = pic{width:3}` with pic a known other type lacking a field of photo is an error that
 // teaches `pic like photo`, never a got-it warning; after `pic like photo` it is judged by its uses
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const TYPES: &str = "class photo{width:int height:int}; class pic{width:int}; ";
 

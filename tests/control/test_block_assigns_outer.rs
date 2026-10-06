@@ -1,6 +1,6 @@
 // D7 (user 2026-10-03, "By value + educate"): a block captures outer variables by value, so a block that assigns an
 // outer variable leaves it unchanged, and the compiler hints `global x` or returning the value.
-use warp::*;
+use crate::is;
 use warp::normalize::capture_hints;
 
 fn hints_of(code: &str) -> Vec<String> {

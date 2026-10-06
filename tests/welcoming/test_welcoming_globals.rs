@@ -1,8 +1,7 @@
 // A function changes a main-level variable only when it is declared `global` (wiki/effects.md: State effect);
 // without the declaration the compiler educates instead of shadowing or mutating silently. probes/globals/
-use warp::*;
+use crate::is;
 use warp::diagnostic::{with_warning_mode, WarningMode};
-
 use crate::common;
 
 #[test]

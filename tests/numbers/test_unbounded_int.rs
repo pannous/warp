@@ -1,7 +1,8 @@
 // Warp Int is a mathematical integer: i64 fast path, BigInt on overflow (wasm_emitter/big_int.rs)
 use warp::extensions::numbers::Number;
 use warp::wasm_emitter::eval;
-use warp::{is, Node};
+use warp::Node;
+use crate::is;
 
 fn int(digits: &str) -> Node {
 	Node::Number(Number::parse_integer(digits).unwrap())

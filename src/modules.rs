@@ -64,6 +64,16 @@ thread_local! {
 	static PROGRAM_FILE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
 }
 
+/// `path` as written in the program: a relative path is next to the program's file, or in the working directory for
+/// inline code
+pub fn beside_program(path: &str) -> String {
+	let folder = PROGRAM_FILE.with(|current| current.borrow().as_deref().map(folder_of));
+	match folder {
+		Some(folder) if Path::new(path).is_relative() => folder.join(path).to_string_lossy().into_owned(),
+		_ => path.to_string(),
+	}
+}
+
 /// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
 pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
 	let previous = PROGRAM_FILE.with(|current| current.replace(Some(file.to_path_buf())));

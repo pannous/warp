@@ -13,7 +13,6 @@ const BINARYEN_FEATURES: [&str; 6] = [
 ];
 use std::path::Path;
 use std::process::Command;
-use crate::strings;
 
 /// Optimization mode for WASM output
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,7 +43,7 @@ pub enum ExportMode {
 impl Default for ExportMode {
 	// fn default() -> Self { ExportMode::Library }
 	fn default() -> Self {
-		ExportMode::Executable { entry_points: strings!["main", "wasp_main","_start"] }
+		ExportMode::Executable { entry_points: ["main", "wasp_main", "_start"].map(String::from).to_vec() }
 	}
 }
 

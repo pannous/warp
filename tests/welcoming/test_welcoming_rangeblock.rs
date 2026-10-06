@@ -1,6 +1,6 @@
 //! `for i in 0..n { … }`: a variable range bound followed by a block is a loop body, not a call or definition of n
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_variable_range_end_keeps_the_block_as_loop_body() {

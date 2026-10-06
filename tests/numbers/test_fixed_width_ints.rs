@@ -2,7 +2,7 @@
 //! types for FFI that trap on overflow on assignment and arithmetic. There is no `overflow` value.
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 #[test]

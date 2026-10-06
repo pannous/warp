@@ -1,6 +1,7 @@
 // A map variable built by its own entries (`m = {}`, then `m[k] = v` with name keys) is a hash table: setting and
 // finding an entry no longer copies and walks the map, so two million keys run (map_replace_entry's recursion
 // exhausted the call stack near there) and the map still reads as the Node its entries make
+use crate::is;
 use warp::*;
 
 const MILLIONS_OF_KEYS: &str = "m = {}; for i in 0..2000000 { m[\"k\\(i)\"] = i }; s = 0; for i in 0..2000000 { s += m[\"k\\(i)\"] }; s + count(m)";

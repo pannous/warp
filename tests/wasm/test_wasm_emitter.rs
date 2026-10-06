@@ -3,7 +3,8 @@ use warp::{Bracket, Node, Op};
 use warp::run::wasmtime_runner::run;
 use warp::wasm_emitter::{eval, WasmGcEmitter};
 use warp::StringExtensions;
-use warp::{eq, is, write_wasm};
+use warp::write_wasm;
+use crate::{is, eq};
 
 fn normalize_blocks(node: &Node) -> Node {
 	let node = node.drop_meta();

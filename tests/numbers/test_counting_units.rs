@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 #[test]
 fn count_unit_of_text() {

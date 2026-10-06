@@ -1,7 +1,7 @@
 // User programs the emitter used to panic on: each one is an error value now
+use crate::is;
 use warp::wasm_emitter::eval;
 use warp::*;
-
 use crate::common;
 
 fn assert_error(code: &str) {
@@ -27,8 +27,8 @@ fn test_malformed_ternary_is_an_error() {
 }
 
 #[test]
-fn test_non_constant_range_bound_is_an_error() {
-	assert_error("n=3; 1..n");
+fn test_non_constant_range_bound_is_a_list() {
+	is!("n=3; 1..n", ints(vec![1, 2]));
 }
 
 #[test]

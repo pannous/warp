@@ -1,7 +1,7 @@
 //! P46 (user, 2026-10-05): the wiki's filtering loops (wiki/for.md) filter as written, with a got-it warning naming
 //! the filter: `for friend in xs` visits only the friend instances, `for (it>2) in xs` only the items it holds for
 use warp::diagnostic::take_warnings;
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 const PEOPLE: &str = "class friend{n:int}; class foe{n:int}; xs=[friend(1), foe(2), friend(3)]; ";

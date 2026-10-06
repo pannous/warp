@@ -13,10 +13,12 @@ pub struct Fix {
 	pub replacement: String,
 	/// Where `written` stands when that is not at the diagnostic (`n=0` of main for `global n=0`, asked in a function)
 	pub at: Option<(usize, usize)>,
+	/// Further edits the same reading needs elsewhere (a data key and its reads), each at its own place
+	pub also: Vec<Fix>,
 }
 
 pub fn fix(meaning: impl Into<String>, written: impl Into<String>, replacement: impl Into<String>) -> Fix {
-	Fix { meaning: meaning.into(), written: written.into(), replacement: replacement.into(), at: None }
+	Fix { meaning: meaning.into(), written: written.into(), replacement: replacement.into(), at: None, also: vec![] }
 }
 
 impl Fix {
@@ -27,6 +29,12 @@ impl Fix {
 
 	pub fn at(self, line: usize, column: usize) -> Self {
 		Fix { at: Some((line, column)), ..self }
+	}
+
+	/// The same reading also replaces `written` at `line`:`column` with `replacement`
+	pub fn and(mut self, written: impl Into<String>, replacement: impl Into<String>, (line, column): (usize, usize)) -> Self {
+		self.also.push(fix(self.meaning.clone(), written, replacement).at(line, column));
+		self
 	}
 
 	/// A fix that changes nothing (the reading already written) is no fix; spacing counts: `1 -1` → `1 - 1`
@@ -115,10 +123,20 @@ pub fn edit(source: &str, line: usize, column: usize, fix: &Fix) -> Option<Edit>
 	locate(source, line, column, &fix.written).map(|range| Edit { range, replacement: fix.replacement.clone() })
 }
 
+/// Every edit of `fix` (its own and those it also needs), the last in the source first so each applies to the source
+/// as the earlier ones left it; `None` when any text is not there or two edits overlap
+pub fn edits(source: &str, line: usize, column: usize, fix: &Fix) -> Option<Vec<Edit>> {
+	let mut edits = std::iter::once(fix).chain(&fix.also).map(|part| edit(source, line, column, part)).collect::<Option<Vec<_>>>()?;
+	edits.sort_by_key(|edit| std::cmp::Reverse(edit.range.start));
+	let overlapping = edits.windows(2).any(|pair| pair[1].range.end > pair[0].range.start);
+	(!overlapping).then_some(edits)
+}
+
 /// The source with `fix` of the diagnostic at `line`:`column` applied, `None` when its text is not there
 /// (a later `warp fix` and IDE quick fixes start here)
 pub fn fixed(source: &str, line: usize, column: usize, fix: &Fix) -> Option<String> {
-	edit(source, line, column, fix).map(|edit| apply(source, &edit))
+	let edits = edits(source, line, column, fix)?;
+	Some(edits.iter().fold(source.to_string(), |changed, edit| apply(&changed, edit)))
 }
 
 pub fn apply(source: &str, edit: &Edit) -> String {

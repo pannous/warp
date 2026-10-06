@@ -1,7 +1,7 @@
 //! List literals with computed elements, min/max of any expressions, and `+=` next to a function with a same-named local
 //! (Levenshtein field test, probes/listexpr/)
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_list_literal_keeps_its_computed_elements() {

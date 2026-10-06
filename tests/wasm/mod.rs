@@ -12,10 +12,11 @@ mod test_wasm_emitter;
 mod test_wasm_reader;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_compiled_module_cache;
+mod test_dead_functions;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_standalone_executable;
+mod test_runtime_stub_found;
 mod test_wasm;
-mod test_wast;
 mod test_wasm_names_order;
 mod test_wit_types;
 mod test_wit;

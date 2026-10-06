@@ -17,6 +17,36 @@ const MAP_WORD: &str = "map";
 /// Declared parameter kinds that take one element of a list (P50)
 const SCALAR_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint];
 
+/// P84 (user: "This should have already been done with broadcasting"): several juxtaposed arguments of a function of one
+/// parameter are one list, `sum 1 2 3` is `sum [1 2 3]`, and a scalar function broadcasts over it (`square 1 2 3`).
+/// After the lambda passes, which make `sum := fold +` a function of one parameter; `f(1, 2, 3)` stays an arity error.
+pub fn lower_several_arguments(program: Node) -> Node {
+	let mut found = Vec::new();
+	definitions(&program, &mut found);
+	implicit_definitions(&program, &mut found);
+	let single: HashSet<String> = found.iter().filter(|definition| definition.params.len() == 1).map(|definition| definition.name.clone()).collect();
+	if single.is_empty() {
+		return program;
+	}
+	let mut gathered = false;
+	let program = gather_arguments(program, &single, &mut gathered);
+	if gathered { lower(program) } else { program }
+}
+
+/// `f 1 2 3` → `f [1 2 3]` of the functions `single`
+fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -> Node {
+	match node {
+		Node::List(items, Bracket::None, Separator::Space) if items.len() > 2 && matches!(items[0].drop_meta(), Node::Symbol(name) if single.contains(name)) => {
+			*gathered = true;
+			let mut items: Vec<Node> = items.into_iter().map(|item| gather_arguments(item, single, gathered)).collect();
+			let arguments = items.split_off(1);
+			items.push(Node::List(arguments, Bracket::Square, Separator::Space));
+			Node::List(items, Bracket::None, Separator::Space)
+		}
+		other => other.map_children(|child| gather_arguments(child, single, gathered)),
+	}
+}
+
 pub fn lower(program: Node) -> Node {
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
@@ -92,7 +122,14 @@ impl Broadcast {
 	fn rewrite(&self, node: Node) -> Node {
 		match node {
 			Node::List(items, bracket, separator) => {
-				let items: Vec<Node> = items.into_iter().map(|item| self.rewrite(item)).collect();
+				// `map square [1 2 3]`: the iteration word applies square itself (lambdas.rs), no broadcast inside it
+				let iterates = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::function_values::ITERATION_WORDS.contains(&word.as_str()));
+				let items: Vec<Node> = items.into_iter().map(|item| match item.drop_meta() {
+					Node::List(inner, inner_bracket, inner_separator) if iterates => {
+						Node::List(inner.iter().cloned().map(|part| self.rewrite(part)).collect(), inner_bracket.clone(), inner_separator.clone())
+					}
+					_ => self.rewrite(item),
+				}).collect();
 				self.broadcast_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),

@@ -1,5 +1,5 @@
 // A text joined with a call that gives a float takes the float's text form, not the call's source text
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_float_call_joins_a_text_by_its_value() {

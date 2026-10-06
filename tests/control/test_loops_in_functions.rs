@@ -1,6 +1,6 @@
 //! Loops inside function bodies get their own temp locals: they used to reuse local 0 and 1 (parameter and first variable)
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_while_loop_in_a_function_keeps_its_variables() {

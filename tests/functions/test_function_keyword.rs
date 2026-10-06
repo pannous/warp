@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 #[test]
 fn function_defines_like_def() {

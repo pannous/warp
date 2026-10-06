@@ -1,5 +1,6 @@
 use warp::Number::{Float, Int};
-use warp::{eq, is, put, Number};
+use warp::Number;
+use crate::{is, eq, put};
 // use warp::Node::Number as Number;
 // use warp::Number::{Float, Int};
 

@@ -1,9 +1,9 @@
 //! "I don't care. Both are fine. There should not be a hint." (user, 2026-10-03): every style axis can be set to `Any`,
 //! which accepts all forms of that axis without a hint; function definitions are `Any` by default
+use crate::is;
 use warp::normalize::*;
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::WaspParser;
-use warp::*;
 
 fn hints_with(style: Style, code: &str) -> Vec<String> {
 	set_hint_mode(HintMode::Always);

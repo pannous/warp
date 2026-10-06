@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 
 const SPECIALISATION_SEPARATOR: &str = "__";
 /// Words whose last argument is a function
-const ITERATION_WORDS: [&str; 5] = ["map", "filter", "each", "fold", "reduce"];
+pub(crate) const ITERATION_WORDS: [&str; 5] = ["map", "filter", "each", "fold", "reduce"];
 /// Words between two values that make a spaced list no call of its first item: `p in xs`
 const INFIX_WORDS: [&str; 6] = ["in", "is", "of", "and", "or", "as"];
 
@@ -144,10 +144,16 @@ fn aliases(node: &Node, functions: &HashSet<String>, assigned: &mut HashMap<Stri
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			if let Node::Symbol(name) = target.drop_meta() {
 				*assigned.entry(name.clone()).or_default() += 1;
-				if let Node::Symbol(function) = value.drop_meta() {
-					let named = found.get(function).unwrap_or(function);
-					if functions.contains(named) {
-						found.insert(name.clone(), named.clone());
+				// `g = function add` / `g = &add` (P83: a bare `g = add` needs add's arguments), `h = g` of an alias
+				let function = match (crate::closures::referenced_function(value), value.drop_meta()) {
+					(Some(function), _) => Some(function),
+					(None, Node::Symbol(alias)) if found.contains_key(alias) => Some(alias.clone()),
+					_ => None,
+				};
+				if let Some(function) = function {
+					let named = found.get(&function).cloned().unwrap_or(function);
+					if functions.contains(&named) {
+						found.insert(name.clone(), named);
 					}
 				}
 			}
@@ -295,10 +301,7 @@ fn round_calls(node: Node, function_params: &[String]) -> Node {
 		Node::List(items, Bracket::None, Separator::Space) if items.len() > 1 && matches!(items[0].drop_meta(), Node::Symbol(name) if function_params.contains(name)) => {
 			Node::List(items.into_iter().map(|item| round_calls(item, function_params)).collect(), Bracket::Round, Separator::None)
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| round_calls(item, function_params)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(round_calls(*left, function_params)), op, Box::new(round_calls(*right, function_params))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(round_calls(*node, function_params)), data },
-		other => other,
+		other => other.map_children(|child| round_calls(child, function_params)),
 	}
 }
 

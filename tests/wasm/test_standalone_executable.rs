@@ -4,14 +4,14 @@ use warp_runtime::standalone::{embedded_machine_code, with_machine_code, without
 
 const OUTPUT_DIRECTORY: &str = env!("CARGO_TARGET_TMPDIR");
 
-/// `warp build --exe` of `source`, written to <name>.warp: the build's output and the executable's path. Without a
-/// warp-runtime stub next to the test's warp the executable is a copy of warp itself, which runs what it carries too.
+/// `warp build --exe` of `source`, written to <name>.warp: the build's output and the executable's path, built from the
+/// test run's warp-runtime stub
 fn build_executable(name: &str, source: &str) -> (Output, PathBuf) {
 	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join(format!("{name}.warp"));
 	std::fs::write(&source_path, source).unwrap();
-	let executable = source_path.with_extension("exe");
+	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
 	let _ = std::fs::remove_file(&executable);
-	let build = crate::common::warp_command().env_remove("WARP_RUNTIME_STUB").args(["build", "--exe"]).arg(&source_path).output().unwrap();
+	let build = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).args(["build", "--exe"]).arg(&source_path).output().unwrap();
 	(build, executable)
 }
 
@@ -56,4 +56,77 @@ fn test_machine_code_rides_at_the_end_of_the_executable() {
 	assert_eq!(embedded_machine_code(&path).as_deref(), Some(&b"other"[..]));
 	std::fs::write(&path, b"runtime").unwrap();
 	assert_eq!(embedded_machine_code(&path), None);
+}
+
+/// macOS: the executable is signed ad hoc and passes strict verification, its program inside the __LINKEDIT segment
+#[cfg(target_os = "macos")]
+#[test]
+fn test_build_exe_signs_cleanly_on_macos() {
+	let (build, executable) = build_executable("standalone_signed", "6 * 7");
+	assert!(build.status.success(), "{}", text(&build.stderr));
+	let verify = std::process::Command::new("codesign").args(["--verify", "--strict", "--verbose=2"]).arg(&executable).output().unwrap();
+	assert!(verify.status.success(), "{}", text(&verify.stderr));
+	let run = std::process::Command::new(&executable).output().unwrap();
+	assert_eq!(text(&run.stdout), "42\n", "{}", text(&run.stderr));
+	// built again from the signed executable as its runtime: still one program, still signed cleanly
+	let rebuilt = without_machine_code(&std::fs::read(&executable).unwrap());
+	assert!(embedded_machine_code(&executable).is_some());
+	assert!(rebuilt.len() < std::fs::metadata(&executable).unwrap().len() as usize);
+}
+
+/// g-1KS4 (user): `warp build <file>` makes the executable without --exe; `--wasm` keeps the module output
+#[test]
+fn test_build_makes_an_executable_by_default() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_default.warp");
+	std::fs::write(&source_path, "6 * 7").unwrap();
+	let (executable, module) = (source_path.with_extension(std::env::consts::EXE_EXTENSION), source_path.with_extension("wasm"));
+	let _ = std::fs::remove_file(&executable);
+	let _ = std::fs::remove_file(&module);
+	let build = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).arg("build").arg(&source_path).output().unwrap();
+	assert!(build.status.success(), "{}", text(&build.stderr));
+	let run = std::process::Command::new(&executable).output().unwrap();
+	assert_eq!(text(&run.stdout), "42\n", "{}", text(&run.stderr));
+	let wasm_build = crate::common::warp_command().args(["build", "--wasm"]).arg(&source_path).output().unwrap();
+	assert!(wasm_build.status.success(), "{}", text(&wasm_build.stderr));
+	assert!(module.exists());
+}
+
+/// P103 (user): "Just giving it a file will compile it": `warp hello.warp` runs it and leaves the executable `hello`
+#[test]
+fn test_running_a_file_leaves_its_executable() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_run.warp");
+	std::fs::write(&source_path, "print \"hi\"\n6 * 7").unwrap();
+	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
+	let _ = std::fs::remove_file(&executable);
+	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).arg(&source_path).output().unwrap();
+	assert_eq!(text(&run.stdout), "hi\n42\n", "{}", text(&run.stderr));
+	let carried = std::process::Command::new(&executable).output().unwrap();
+	assert_eq!(text(&carried.stdout), "hi\n42\n", "{}", text(&carried.stderr));
+}
+
+/// P104 (user): without a runtime stub a run writes no executable (never a copy of warp), with a note on stderr
+#[test]
+fn test_running_without_a_stub_leaves_no_executable() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_no_stub.warp");
+	std::fs::write(&source_path, "6 * 7").unwrap();
+	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
+	let _ = std::fs::remove_file(&executable);
+	let missing_stub = PathBuf::from(OUTPUT_DIRECTORY).join("no_such_stub");
+	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", &missing_stub).arg(&source_path).output().unwrap();
+	assert_eq!(text(&run.stdout), "42\n");
+	assert!(text(&run.stderr).contains("no executable"), "{}", text(&run.stderr));
+	assert!(!executable.exists());
+}
+
+/// P105 (user): `warp run <file>` runs the program and leaves no executable
+#[test]
+fn test_warp_run_leaves_no_executable() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_run_only.warp");
+	std::fs::write(&source_path, "print \"hi\"\n6 * 7").unwrap();
+	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
+	let _ = std::fs::remove_file(&executable);
+	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).arg("run").arg(&source_path).output().unwrap();
+	assert_eq!(text(&run.stdout), "hi\n42\n", "{}", text(&run.stderr));
+	assert!(!text(&run.stderr).contains("executable"), "{}", text(&run.stderr));
+	assert!(!executable.exists());
 }

@@ -51,3 +51,41 @@ them) and test binaries (5936 files) in the shared target dir: it reached 183 GB
 shared and small in comparison. `~/dev/bin/prune-cargo-target.sh` (cron, every 6 hours, log in
 ~/.companion/logs/prune-cargo-target.log) deletes warp's incremental caches and test/lib binaries untouched for 12
 hours; dependencies stay. After the first cleanup: 80 GB.
+
+## Test-suite wall clock (card suite-wall, 2026-10-05)
+test.sh prints `TIMING: compile N s, run N s; tests summed N s (N s per thread)` and keeps every test's seconds in
+data/test_times.txt. When the per-thread sum is close to the run's wall clock, the threads were busy to the end: the
+run is bound by total test time, not by one slow test, and only cutting what many tests pay helps.
+- 2026-10-05 before: run 36 s. After the late-binding fix: run 22 s, tests summed 273 s (17 s per thread); the 180
+  tests of 0.2 s or more were 234 s of it. web::test_uniscript alone was 64 s (every conversion compiled
+  `use uniscript` again: now one program per test), upper/lower walked all code points per module (now once).
+- Where a program's time goes (debug build, `use uniscript; uniscript("…")`, ~0.4 s): lowering 0.2 s (parse of the
+  package 40 ms, late binding 115 → 30 ms, ~23 passes of ~6 ms that each rebuild the tree), emission 70 ms, run 90 ms
+  (Cranelift on a module-cache miss). Small programs: ~5 ms lowering, ~2 ms emission, ~18 ms Cranelift on a miss.
+- Tried and dropped: Cranelift's incremental cache (Config::enable_incremental_compilation, per-function): functions::
+  + uniscript got slower, 32 → 42 s. Building warp itself at opt-level 1 for tests: the slow tests ran 1.75× faster,
+  but an incremental test build grew from 7–12 s to 16–39 s, about what the run saves and a loss for every worker's
+  targeted run.
+- Left as they are: tests that sleep or overlap tasks on purpose (control::test_threads, test_job_lists), Lean proofs,
+  the two-million-key map (runtime GC work).
+
+## P91: one analysis per program state (src/analysis_memo.rs, branch shared-analysis, 2026-10-05)
+- extract_user_functions (and every EffectReport::of, which calls it) of a fresh Context is remembered per thread by a
+  fingerprint of the whole tree, positions included (LineInfo hashed; other Rust data makes a tree unremembered), the
+  last 256 states. A hit restores exactly the fields the analysis writes (user_functions, ffi_imports, field_kinds,
+  enclosing_functions, parameter_conflicts, closure_targets, closure_variable_targets). Not remembered: an analysis
+  that changed required_functions or said something (diagnostic::said(): warnings, asks, hints, errors with fixes),
+  so a repeat says it again. `WARP_ANALYSIS_CACHE=off` for A/B.
+- Who analyses (uniscript program, 185 calls): late_binding functions_in per statement 133 calls 24 ms, law
+  function_definition 39 calls 8 ms, whole-program analyses of lambdas/effects/type_tests/analyzer 2–10 ms each (each
+  after a pass that changed the tree: those miss legitimately).
+- Measured (debug, `warp lower 'use uniscript; uniscript("<:fracture A b c >")'`, 3 runs): lowering 165 → 143 ms
+  (−13 %), analysis 78 → 56 ms; 66 of 185 analyses are hits. Typical test programs (functions:: operators::
+  welcoming::, 1 thread, A/B twice): 12.9/9.6 s off vs 12.3/9.6 s on, within noise: their analyses are ~1 ms after the
+  one-off header parse of the first.
+- Next gains: functions_in needs only the definitions a statement makes, not the full inference (a cheaper extractor
+  would remove most of late_binding's 24 ms), and whole-program analyses after passes that changed only far parts.
+- late-binding-definitions (follow-up): `late_binding::functions_in` (also folding's) uses `analyzer::defined_functions`
+  (extraction and closure registration, no parameter or return kind inference): its callers read names, parameters and
+  bodies only. Checked by computing both on 1780 tests and the uniscript program: identical names, parameters, bodies.
+  `warp lower` of the uniscript program: median 151 → 144 ms (12 runs each).

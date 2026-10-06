@@ -30,6 +30,7 @@ fn clone_like_a_fetch(test: &str, packages: &Path) -> PathBuf {
 	clone
 }
 
+#[cfg_attr(not(feature = "native"), ignore = "browser: needs git")]
 #[test]
 fn a_pinned_package_links_its_cached_version() {
 	let directory = fetch_package_into(&packages_for("empty"), "uniscript").unwrap();
@@ -39,6 +40,7 @@ fn a_pinned_package_links_its_cached_version() {
 }
 
 /// What an unpinned warp fetched into packages/ before is moved to packages/.replaced (never deleted) for the pin
+#[cfg_attr(not(feature = "native"), ignore = "browser: needs git")]
 #[test]
 fn a_clean_unpinned_clone_makes_way_for_the_pin() {
 	let packages = packages_for("clean");
@@ -50,6 +52,7 @@ fn a_clean_unpinned_clone_makes_way_for_the_pin() {
 }
 
 /// A clone with changes is someone's work: it stays and wins over the pin (with a warning)
+#[cfg_attr(not(feature = "native"), ignore = "browser: needs git")]
 #[test]
 fn a_changed_clone_stands_in_for_the_pin() {
 	let packages = packages_for("changed");

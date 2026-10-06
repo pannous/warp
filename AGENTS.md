@@ -32,7 +32,7 @@ Person {
 It is similar to JSON5 / ECMA Script but much simplified yet with a richer syntax and more precise and flexible data model.
 
 
-### Node AST (`src/node.rs`)
+### Node AST (`src/node/`, the enum in `mod.rs`)
 
 The central data structure is `Node`, an enum representing all AST node types:
 
@@ -42,7 +42,7 @@ The central data structure is `Node`, an enum representing all AST node types:
 - **Data** - Generic container using `Dada` for arbitrary Rust types with `CloneAny` trait
 - **Meta** - Node wrapper that adds `Meta` (comments, line/column positions)
 
-### Parser (`src/wasp_parser.rs`)
+### Parser (`src/wasp_parser/`)
 
 Recursive descent parser that converts text input to Node AST:
 
@@ -53,21 +53,21 @@ Recursive descent parser that converts text input to Node AST:
 ### Pipeline (`src/pipeline.rs`: `compile`, `eval`, `lower`)
 
 parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such as `mutation.rs`, `lambdas.rs`,
-`library_words.rs`, `switch.rs`, plus `analyzer.rs`) → analysis and diagnostics → WASM GC emitter → run.
+`library_words.rs`, `switch.rs`, plus `analyzer/`) → analysis and diagnostics → WASM GC emitter → run.
 
 ### Emitters
 
-0. **Text**: `Node::serialize` (`src/node.rs`), wasp notation similar to json5; `src/wisp_parser.rs` reads and writes Wisp
+0. **Text**: `Node::serialize` (`src/node/serialization.rs`), wasp notation similar to json5; `src/wisp_parser.rs` reads and writes Wisp
 1. **WASM GC Emitter** (`src/wasm_emitter/`)
     - Generates WASM GC bytecode using the `wasm-encoder` crate; `mod.rs` emits programs, the other files the runtime
       functions (texts, lists, maps, unbounded ints, exact numbers, equality, WASI, FFI)
     - `function_builder.rs`: `runtime_function` / `exported_function` emit a whole function in one call
     - Uses the `Kind` enum (`src/type_kinds.rs`) for runtime type discrimination
 
-### WASM Runtime (`src/wasm_reader.rs`, `src/run/wasmtime_runner.rs`, `src/host.rs`, `src/ffi.rs`)
+### WASM Runtime (`src/wasm_reader.rs`, `src/run/wasmtime_runner.rs`, `src/host.rs`, `src/ffi/`)
 
 - `wasm_reader::run_main` instantiates a module with the host, WASI or FFI imports and calls `main`
-- `wasm_reader` and `gc_traits.rs` read the resulting GC objects back into Nodes
+- `wasm_reader` and `gc_traits/` read the resulting GC objects back into Nodes
 
 ## Build and Test Commands
 
@@ -104,7 +104,7 @@ cargo test --test tests <file_stem>::  # Run one test file: tests/<topic>/*.rs a
 ## WASM GC Reading Patterns
 
 The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection
-(`src/gc_traits.rs`, examples in `tests/wasm/test_wasm_reader.rs` and `tests/wasm/test_gc_struct.rs`):
+(`src/gc_traits/`, examples in `tests/wasm/test_wasm_reader.rs` and `tests/wasm/test_gc_struct.rs`):
 
 - Loading WAT modules with GC types enabled
 - Reading GC struct fields by index
@@ -244,6 +244,11 @@ If previously passing test fail after the task as seen via git diff test_results
 try to fix failing tests and if it doesn't work roll back
 
 When fixing a problem do not modify the test itself without consulting!
+Standing permission (user, 2026-10-05: "allow all tests to be upgraded from a dumb thing to a better thing, from not
+working to working"): a test may be upgraded without asking when the code now does better than the test pinned: an
+expected error, refusal or "not supported yet" becomes the working value, an ignored test that passes is un-ignored,
+a weaker assertion becomes the stronger one. Own commit, message naming this rule. Changing one working value into
+a different working value (a change of meaning) still needs a user decision via the Interviewer.
 
 git status before and after each task should show
 Your branch is up to date with 'origin/main'.
@@ -255,10 +260,13 @@ use `cargo fix --offline --allow-dirty --lib --bins` after each commit and commi
 This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
 not in todo.md: every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next); `todo list`,
 `todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). `todo done` moves the card to Done and
-links the fixing commit in its body (default HEAD, so run it right after committing the fix). Without the board,
+links the fixing commit in its body (default HEAD, so run it right after committing the fix; a wiki or other-repo
+change: pass the commit URL). Rule (user, 2026-10-06, issue #7 was closed without one): a card or issue is closed
+only with a commit linked in its description. Close cards with `todo done` only; never `gh issue close` and never
+the board UI; `todo move <card> Done` refuses a card whose description links no commit. Picking a card is
+`todo take <card> <session name>` (user, 2026-10-06): the GitHub assignee is the user (agents have no accounts), the
+board field Agent names the session, the card moves to Now. Without the board,
 `todo add` falls back to todo.md "## Fallback"; `todo import` moves those entries later.
-
-**Batch board writes.** The `todo` CLI talks to GitHub Projects over GraphQL. That quota is shared and bursts run out fast when several agents call `todo list` / `todo done` / `todo move` in parallel — the board then returns "API rate limit exceeded" until the window resets (often under an hour). Prefer one writer (Supervisor): queue Done marks and column moves, apply them in one short batch, and avoid polling `todo list` from every worker. This is not a Fritz/Grok setting; fewer parallel board calls is the fix.
 
 Other than fixme comment you can find new tasks via tests marked #[ignore = "next"] or even #[ignore = "soon"] 
 un-ignore everything once it passes 

@@ -1,6 +1,6 @@
 // `result` is the value of the statement before it (wiki/result.md, evaluation.md): an expression, an assignment's
 // value, the branch an `if` took; a program defining `result` itself keeps its own
-use warp::is;
+use crate::is;
 
 #[test]
 fn result_is_the_value_of_the_statement_before() {

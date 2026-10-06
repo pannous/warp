@@ -1,8 +1,8 @@
 //! D15 (user, 2026-10-03, revised the same day): `use folder` makes all .wasp files in the folder of the compiled file
 //! visible, like a Go package (no longer the default, see test_use_scopes). A name is looked up in the siblings only
 //! when the file does not define it; two siblings defining a used name is an error naming both files.
+use crate::is;
 use crate::common::fails_with;
-use warp::*;
 
 #[test]
 fn sibling_definitions_are_visible_without_use() {

@@ -1,5 +1,5 @@
 //! A main-level object or list a function reads keeps its type there: `k.a` is the Int 10, not text
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_a_captured_object_field_keeps_its_kind() {

@@ -68,6 +68,6 @@ fn a_trap_in_the_page_names_the_runtime_error() {
 fn a_returned_value_has_its_own_kind_on_every_platform() {
 	// the browser has no C headers: `return` used to be typed by a bogus libm "function" parsed from math.h
 	assert!(!warp::ffi::is_ffi_function("return"));
-	warp::is!("fun h(){ return 5 }\nh() + 3", 8);
-	warp::is!("fun h(){ return 2.5 }\nh() * 2", 5.0);
+	crate::is!("fun h(){ return 5 }\nh() + 3", 8);
+	crate::is!("fun h(){ return 2.5 }\nh() * 2", 5.0);
 }

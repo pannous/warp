@@ -1,5 +1,5 @@
 // `count x in y`: how often x occurs in y (a character, an item, or a text in a text); `count bytes in t` counts a unit
-use warp::is;
+use crate::is;
 
 #[test]
 fn count_occurrences() {

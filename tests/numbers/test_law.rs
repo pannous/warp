@@ -3,7 +3,8 @@ use warp::law::{extract_laws, lean, property_test, separate_laws, verify, Assura
 use warp::type_kinds::Kind;
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::parse;
-use warp::{is, Node};
+use warp::Node;
+use crate::is;
 
 const SQUARE: &str = "square(x) := x*x\nlaw square(-x) == square(x)";
 const WRONG_DOUBLE: &str = "twice(x) := x+x\nlaw twice(x) == x";
@@ -72,6 +73,7 @@ fn test_law_lean_export_modulo_is_euclidean() {
 	assert!(source.contains("(Int.tmod x (3 : Int))"), "{source}");
 }
 
+#[cfg_attr(not(feature = "native"), ignore = "browser: needs the lean prover")]
 #[test]
 fn test_law_proved_by_lean() {
 	crate::requires!(crate::common::LEAN);
@@ -98,6 +100,7 @@ fn test_law_overflow_promotion_holds_in_property_tests() {
 	assert_eq!(property_test(&lawful, &lawful.laws[0], PROPERTY_TRIALS, PROMOTING), Verdict::Holds);
 }
 
+#[cfg_attr(not(feature = "native"), ignore = "browser: needs the lean prover")]
 #[test]
 fn test_law_overflow_promotion_proved_by_lean() {
 	crate::requires!(crate::common::LEAN);

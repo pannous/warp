@@ -1,4 +1,5 @@
 // A program that only defines a function has the value ø (it used to fail WASM validation or call the head)
+use crate::is;
 use warp::*;
 
 #[test]

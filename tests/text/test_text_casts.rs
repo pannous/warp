@@ -2,7 +2,7 @@
 //! `"x" as float` is a loud error with a hint, only single-quote codepoints convert to numbers.
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn an_int_list_variable_as_string_is_its_text() {

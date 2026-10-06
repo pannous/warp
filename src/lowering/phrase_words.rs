@@ -11,6 +11,9 @@ const DO_WORD: &str = "do";
 const ADD_WORD: &str = "add";
 
 pub fn lower(node: Node) -> Node {
+	if !node.mentions_any(&[DO_WORD, ADD_WORD]) {
+		return node;
+	}
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
 	let phrases = Phrases { do_is_free: !context.user_functions.contains_key(DO_WORD), add_is_free: !context.user_functions.contains_key(ADD_WORD) };

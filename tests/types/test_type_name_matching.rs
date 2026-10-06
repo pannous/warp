@@ -1,7 +1,7 @@
 //! D5 (user, 2026-10-03): matching by type name, "General rule" (wiki/matching.md, type.md; rule in notes/matching.md).
 //! Known type words in a definition head name typed parameters.
 
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 #[test]

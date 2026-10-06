@@ -1,7 +1,7 @@
 // User decision (notes/open_decisions.md, 2026-10-03): "try X else otherValueOrAction. I never invented the => Y
 // syntax." `try X else Y` has no named form: a fallback written `e => …` is the lambda it is, a function value,
 // never a binding of the caught error
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 const CAUGHT_MESSAGE: &str = "index out of range";

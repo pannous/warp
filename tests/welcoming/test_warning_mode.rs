@@ -4,7 +4,8 @@
 
 use warp::diagnostic::{take_runtime_warnings, with_warning_mode, WarningMode};
 use warp::wasm_emitter::eval;
-use warp::{error, is, Node};
+use warp::{error, Node};
+use crate::is;
 
 #[test]
 fn a_runtime_warning_is_reported_and_yields_nothing() {

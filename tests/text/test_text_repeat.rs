@@ -1,7 +1,7 @@
 // text * int repeats the text (Python), with a got-it warning naming `n times text`; `n times "ab"` is the explicit form.
 // User decision 2026-10-03 (assumption until confirmed): also a number-like text repeats, the warning names int("5")*3.
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 use warp::normalize::capture_hints;
 use warp::wasm_emitter::eval;
 

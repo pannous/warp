@@ -1,5 +1,5 @@
 use warp::wasm_emitter::eval;
-use warp::is;
+use crate::is;
 
 #[test]
 fn block_comment_with_hash_is_ignored() {

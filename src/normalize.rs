@@ -276,19 +276,33 @@ pub struct Style {
     pub prefer_string_over_str: bool,
 }
 
+impl Style {
+    /// One spelling per form, every axis decided: what a formatter writes and what the hint machinery is tested
+    /// with; the default leaves open what the user called legitimate (#11, #12, #13)
+    pub fn canonical() -> Self {
+        Self {
+            cast: CastStyle::AsOperator,
+            var_def: VarStyle::ColonEquals,
+            quotes: QuoteStyle::Double,
+            prefer_string_over_str: true,
+            ..Self::default()
+        }
+    }
+}
+
 impl Default for Style {
     fn default() -> Self {
         Self {
             list_type: ListTypeStyle::Plural,
-            cast: CastStyle::AsOperator,
+            cast: CastStyle::Any, // user #13: `str(x)` is fine
             function_def: FunctionStyle::Any, // user 2026-10-03: `f(x) := …`, `def f(x): …` … are all fine
-            var_def: VarStyle::ColonEquals,
+            var_def: VarStyle::Any, // user #12: `let t = …` and `t := …` are both legitimate
             logical: LogicalStyle::Words,
-            quotes: QuoteStyle::Double,
+            quotes: QuoteStyle::Any, // user #11: "I don't care" about 'x' or "x"
             index: IndexStyle::Hash,
             conditional: ConditionalStyle::IfThenElse,
             power: PowerStyle::Caret,
-            prefer_string_over_str: true,
+            prefer_string_over_str: false, // user #13: str(x) gets no hint
         }
     }
 }
@@ -368,23 +382,16 @@ fn emit_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
             return;
         }
 
+    crate::diagnostic::note_said();
     let pos = position_string();
     CAPTURED_HINTS.with(|captured| {
         if let Some(hints) = captured.borrow_mut().as_mut() {
             hints.push(CapturedHint { original: original.to_string(), canonical: canonical.to_string(), position: pos.clone(), reason: reason.to_string(), rewrites });
         }
     });
-    if pos.is_empty() {
-        eprintln!(
-            "\x1b[36mhint:\x1b[0m prefer `\x1b[32m{}\x1b[0m` over `\x1b[33m{}\x1b[0m`",
-            canonical, original
-        );
-    } else {
-        eprintln!(
-            "\x1b[36mhint\x1b[0m \x1b[90m{}\x1b[0m: prefer `\x1b[32m{}\x1b[0m` over `\x1b[33m{}\x1b[0m`",
-            pos, canonical, original
-        );
-    }
+    use crate::diagnostic::{paint, Color};
+    let position = if pos.is_empty() { String::new() } else { format!(" {}", paint(Color::Gray, &pos)) };
+    eprintln!("{}{position}: prefer {} over {}", paint(Color::Cyan, "hint"), paint(Color::Green, canonical), paint(Color::Yellow, original));
     eprintln!("      {}", reason);
 }
 
@@ -711,14 +718,6 @@ pub fn text_quote() -> char {
 pub fn operand_text(node: &Node) -> String {
     match node.drop_meta() {
         Node::Text(text) => format!("{0}{text}{0}", text_quote()),
-        Node::Key(left, op, right) if has_prefix_operator(node) => {
-            let gap = if op.as_str().starts_with(char::is_alphabetic) { " " } else { "" };
-            let left = match left.drop_meta() {
-                Node::Empty => String::new(),
-                written => format!("{}{gap}", operand_text(written)),
-            };
-            format!("{left}{op}{gap}{}", operand_text(right))
-        }
         other => as_written(other.clone()).serialize(),
     }
 }
@@ -737,14 +736,6 @@ fn as_written(node: Node) -> Node {
         // a witness `area·square` was written `area`
         Node::Symbol(name) if name.contains('·') => Node::Symbol(name.split('·').next().unwrap_or_default().to_string()),
         other => other,
-    }
-}
-
-/// `#a`, `-x`, `not b` parse with an empty left operand, which `serialize` shows as `ø#a`
-fn has_prefix_operator(node: &Node) -> bool {
-    match node.drop_meta() {
-        Node::Key(left, _, right) => matches!(left.drop_meta(), Node::Empty) || has_prefix_operator(left) || has_prefix_operator(right),
-        _ => false,
     }
 }
 
@@ -925,7 +916,6 @@ fn check_items(items: &[Node], positioned: &Node) {
 
 #[cfg(test)]
 mod tests {
-	use crate::is;
 	use super::*;
 
 	#[test]
@@ -942,9 +932,9 @@ mod tests {
 
 	#[test]
 	fn test_style_swap() {
-		// Default prefers 'as' operator
+		// Default leaves the cast spelling open (user #13: str(x) is fine)
 		let s = style();
-		assert_eq!(s.cast, CastStyle::AsOperator);
+		assert_eq!(s.cast, CastStyle::Any);
 
 		// Swap to constructor style
 		set_style(Style { cast: CastStyle::Constructor, ..Style::default() });
@@ -958,7 +948,7 @@ mod tests {
 
 	#[test]
 	fn test_hint_position() {
-		is!("'abc'", "abc");// hint:
+		assert_eq!(crate::wasm_emitter::eval("'abc'"), "abc");// hint:
 		// Clear position
 		clear_hint_position();
 		assert_eq!(position_string(), "");
@@ -967,7 +957,6 @@ mod tests {
 		set_hint_position(10, 5);
 		assert_eq!(position_string(), "10:5");
 
-		// Set file
 		set_hint_file("test.wasp");
 		set_hint_position(42, 13);
 		assert_eq!(position_string(), "test.wasp:42:13");

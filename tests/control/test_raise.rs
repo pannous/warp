@@ -1,7 +1,7 @@
 // `raise X` / `throw X` (wiki Error.md, Exception.md): an exception that ends the run with its message unless a `try`
 // catches it; `raise error("…")` raises that error's message
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn raise_ends_the_run_with_its_message() {

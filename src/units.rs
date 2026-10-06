@@ -6,7 +6,7 @@
 //! Anything else (floats, variables, functions) takes the normal path, where a unit word is an ordinary symbol.
 
 use crate::extensions::numbers::Number;
-use crate::meta::Dada;
+use crate::meta::DataValue;
 use crate::node::{error, Bracket, Node, Separator};
 use std::collections::HashMap;
 use crate::operators::Op;
@@ -184,7 +184,7 @@ impl fmt::Display for Range {
 }
 
 /// The text of a unit result held in a `Node::Data`, None for any other data
-pub fn describe(data: &Dada) -> Option<String> {
+pub fn describe(data: &DataValue) -> Option<String> {
 	if let Some(quantity) = data.downcast_ref::<Quantity>() {
 		return Some(quantity.to_string());
 	}
@@ -235,6 +235,58 @@ pub fn answer(program: &Node) -> Option<Node> {
 		Err(Stop::Error(message)) => Some(error(&message)),
 		Err(Stop::Unsupported) => None,
 	}
+}
+
+/// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`: a constant duration is its milliseconds, what the host word takes
+/// (async agent, 2026-10-06: quantities do not reach run time yet, notes/units_runtime.md)
+pub fn lower_sleep_durations(program: Node) -> Node {
+	fn lower(node: Node) -> Node {
+		match node {
+			Node::List(items, bracket, separator) if items.len() >= 2 && items[0].drop_meta().name() == crate::host::SLEEP => {
+				let duration = match &items[1..] {
+					[single] => single.clone(),
+					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
+				};
+				match milliseconds(&duration) {
+					Some(amount) => Node::List(vec![items[0].clone(), Node::int(amount)], Bracket::Round, Separator::None),
+					None => {
+						if let Err(error) = warn_bare_duration(&duration) {
+							return error;
+						}
+						Node::List(items.into_iter().map(lower).collect(), bracket, separator)
+					}
+				}
+			}
+			other => other.map_children(lower),
+		}
+	}
+	match defines_unit_name(&program) {
+		true => program,
+		false => lower(program),
+	}
+}
+
+/// User #17: `sleep(1)` reads as milliseconds but says nothing; a bare number gets the warning that names the units
+fn warn_bare_duration(duration: &Node) -> Result<(), Node> {
+	if !matches!(duration.drop_meta(), Node::Number(_)) {
+		return Ok(());
+	}
+	let amount = duration.serialize();
+	let message = format!("sleep needs a unit: sleep {amount} second or sleep {amount} ms (a bare number is milliseconds)");
+	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(duration, message)])
+}
+
+/// A constant duration in whole milliseconds: `1000 ms`, `2 s`, `1 min`, `2 seconds` (a duration of the time module)
+fn milliseconds(node: &Node) -> Option<i64> {
+	if let Node::Data(data) = node.drop_meta() {
+		return duration_milliseconds(data.downcast_ref::<crate::time::Duration>()?, "ms").ok().flatten();
+	}
+	let Ok(Value::Quantity(quantity)) = evaluate(node) else { return None };
+	let [factor] = quantity.factors.as_slice() else { return None };
+	if factor.unit.dimension != Dimension::Time || factor.power != 1 {
+		return None;
+	}
+	whole(&quantity.amount.mul(&Rational::integer(factor.unit.factor)))
 }
 
 fn children(node: &Node) -> Vec<&Node> {
@@ -373,6 +425,7 @@ fn negate(value: Value) -> Evaluated {
 
 fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 	match (left, op, right) {
+		(left @ (Value::Tolerance(_) | Value::Range(_)), Op::Eq | Op::Ne, right @ (Value::Tolerance(_) | Value::Range(_))) => same_span(left, op, right),
 		(Value::Tolerance(_) | Value::Range(_), _, _) | (_, _, Value::Tolerance(_) | Value::Range(_)) => {
 			fail(format!("arithmetic on a value with tolerance or a range is not supported: {op}"))
 		}
@@ -431,20 +484,29 @@ pub fn duration_in(duration: &crate::time::Duration, unit_word: &str) -> Option<
 	if target.dimension != Dimension::Time {
 		return Some(error(&format!("DimensionError: {duration} cannot be converted to {}", target.name)));
 	}
-	if duration.months != 0 {
-		return Some(error(&format!("DimensionError: {duration} has no fixed length in {}", target.name)));
-	}
-	let nanos = duration.nanos + duration.days as i128 * DAY_MILLISECONDS * NANOS_PER_MILLISECOND;
-	if nanos % NANOS_PER_MILLISECOND != 0 {
-		return Some(error(&format!("{duration} is no whole number of milliseconds")));
-	}
-	let milliseconds = i64::try_from(nanos / NANOS_PER_MILLISECOND).ok()?;
+	let milliseconds = match duration_milliseconds(duration, target.name) {
+		Ok(milliseconds) => milliseconds?,
+		Err(message) => return Some(error(&message)),
+	};
 	let quantity = Quantity::of(milliseconds, unit_named("ms").expect("a unit"));
 	Some(match convert(Value::Quantity(quantity), vec![Factor { unit: target, power: 1 }]) {
 		Ok(Value::Quantity(quantity)) => Node::data(quantity),
 		Err(Stop::Error(message)) => error(&message),
 		_ => return None,
 	})
+}
+
+/// A duration of the time module in whole milliseconds; an error for months (no fixed length in `target`) or a part of
+/// a millisecond, None beyond the 64-bit integers
+fn duration_milliseconds(duration: &crate::time::Duration, target: &str) -> Result<Option<i64>, String> {
+	if duration.months != 0 {
+		return Err(format!("DimensionError: {duration} has no fixed length in {target}"));
+	}
+	let nanos = duration.nanos + duration.days as i128 * DAY_MILLISECONDS * NANOS_PER_MILLISECOND;
+	if nanos % NANOS_PER_MILLISECOND != 0 {
+		return Err(format!("{duration} is no whole number of milliseconds"));
+	}
+	Ok(i64::try_from(nanos / NANOS_PER_MILLISECOND).ok())
 }
 
 /// The amount of a quantity in other units, as a factor: Π (unit/target)^power over its factors (1 km/h in m/s is 5/18)
@@ -537,6 +599,25 @@ fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 		_ => order.is_ge(),
 	};
 	Ok(Value::Number(holds as i64))
+}
+
+/// A range or a value with tolerance as the closed span it covers, and its unit: `1950 ± 50 AD` is 1900 to 2000 AD
+fn span(value: &Value) -> Option<(i64, i64, Option<&'static str>)> {
+	match value {
+		Value::Range(range) => Some((range.from, range.to, Some(range.unit.name))),
+		Value::Tolerance(tolerance) => Some((tolerance.value - tolerance.tolerance, tolerance.value + tolerance.tolerance, tolerance.unit.map(|unit| unit.name))),
+		_ => None,
+	}
+}
+
+/// `1900 - 2000 AD == 1950 AD ± 50`: the same span in the same unit
+fn same_span(left: Value, op: Op, right: Value) -> Evaluated {
+	let (Some((from, to, unit)), Some((other_from, other_to, other_unit))) = (span(&left), span(&right)) else { return Err(Stop::Unsupported) };
+	if unit != other_unit {
+		return fail(format!("cannot compare spans in different units: {} and {}", unit.unwrap_or("no unit"), other_unit.unwrap_or("no unit")));
+	}
+	let same = (from, to) == (other_from, other_to);
+	Ok(Value::Number((same == (op == Op::Eq)) as i64))
 }
 
 fn sum(left: Quantity, op: Op, right: Quantity) -> Evaluated {

@@ -14,8 +14,12 @@ rules in notes/open_decisions.md and wiki/Footguns.md.
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit goes in its
   own commit, named in the message), keep working, and SendMessage the Interviewer the question.
 - Work in a git worktree outside the repo: `cowtree add -b <branch> /Users/me/dev/angles/warp.worktrees.noindex/<branch> origin/main`,
-  with the uncommitted build tweak `version = "0.1.1-<branch>"` in its Cargo.toml.
+  with the uncommitted build tweak `version = "0.1.1-<branch>"` in its Cargo.toml and `version = "0.1.0-<branch>"` in
+  crates/warp-runtime/Cargo.toml (otherwise its stale warp-runtime replaces other branches' build in the shared target
+  dir).
   Never edit /Users/me/dev/angles/warp itself (the user's checkout).
+- Test upgrades need no question (AGENTS.md "Standing permission"): an error/"not yet"/ignored test that now works is
+  upgraded to the working value in its own commit; a change of meaning still goes to the Interviewer.
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
   binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean,
   never pkill by pattern.
@@ -32,6 +36,10 @@ rules in notes/open_decisions.md and wiki/Footguns.md.
 - Un-ignoring tests (user, 2026-10-05): "it's allowed to un ignore test that are suddenly passing". Dropping
   `#[ignore]` from a test that passes unedited needs no question; editing its assertions still needs a decision.
 - Use absolute paths and `git -C <worktree>` in scripts. Conventional commit messages; no Co-Authored-By, session
-  trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; it falls back to todo.md on your branch when the board is unreachable). Batch board writes through Supervisor when several agents are active — see AGENTS.md "Batch board writes" (GitHub GraphQL rate limits).
+  trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; it falls back to todo.md on your branch when the board is unreachable).
+- A card or issue is closed only with a commit linked in its description (user, 2026-10-06): `todo done <card>
+  <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
+- Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
+  the board field Agent, moves the card to Now.
 - Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub wikis can only serve `master` (notes/wiki_branch.md), so wiki
   edits go to master (`git push origin HEAD:master`); there is no `main` branch in the wiki.

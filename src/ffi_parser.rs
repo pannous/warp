@@ -16,6 +16,11 @@ const INCLUDE_DIRS: &[&str] = &[
 /// `:`-separated include directories replacing INCLUDE_DIRS (web/playground's test runner serves exactly one)
 const INCLUDE_VARIABLE: &str = "WARP_INCLUDE";
 const SDL_HEADERS: [&str; 4] = ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_timer.h"];
+/// libc's headers: strings, conversions and memory, stdio, character classes (`toupper`). macOS declares much of them
+/// in the _stdlib.h, _stdio.h and _ctype.h that stdlib.h, stdio.h and ctype.h include (`getenv`, `fopen`, `toupper`); a header missing on Linux is skipped
+const LIBC_HEADERS: [&str; 7] = ["string.h", "stdlib.h", "_stdlib.h", "stdio.h", "_stdio.h", "ctype.h", "_ctype.h"];
+/// Libraries whose header is not named after them: `use z` reads zlib.h
+const LIBRARY_HEADERS: [(&str, &str); 1] = [("z", "zlib.h")];
 
 pub(crate) fn include_dirs() -> Vec<String> {
     match std::env::var(INCLUDE_VARIABLE) {
@@ -33,9 +38,12 @@ pub fn find_header_in(header: &str, dirs: &[impl AsRef<str>]) -> Option<String> 
 pub fn find_library_headers(library: &str) -> Vec<String> {
     let headers: Vec<String> = match library {
         "m" | "math" | "libm" => vec!["math.h".into()],
-        "c" | "libc" => vec!["string.h".into(), "stdlib.h".into(), "stdio.h".into()],
+        "c" | "libc" => LIBC_HEADERS.iter().map(|header| header.to_string()).collect(),
         "SDL2" | "sdl2" | "sdl" => SDL_HEADERS.iter().map(|header| format!("SDL2/{header}")).collect(),
-        _ => vec![format!("{library}.h"), format!("{library}/{library}.h")],
+        _ => match LIBRARY_HEADERS.iter().find(|(name, _)| *name == library) {
+            Some((_, header)) => vec![header.to_string()],
+            None => vec![format!("{library}.h"), format!("{library}/{library}.h")],
+        },
     };
     let dirs = include_dirs();
     headers.iter().filter_map(|header| find_header_in(header, &dirs)).collect()
@@ -87,7 +95,6 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
         return None;
     }
 
-    // Remove trailing comment
     let decl = decl.split("//").next()?.trim();
 
     // Remove qualifiers
@@ -100,13 +107,8 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
         .replace("RLAPI ", "");
     let decl = decl.trim().trim_end_matches(';').trim();
 
-    // Find parentheses
     let paren_pos = decl.find('(')?;
-    let close_paren = decl.rfind(')')?;
-
-    if paren_pos >= close_paren {
-        return None;
-    }
+    let close_paren = crate::ffi::matching_paren(&decl, paren_pos)?;
 
     let before_paren = &decl[..paren_pos];
     let params_str = &decl[paren_pos + 1..close_paren];
@@ -118,23 +120,24 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
     }
 
     let mut name = parts.last()?.to_string();
+    // the stars of `FILE *fopen(…)` belong to the return type
+    let mut pointer_marks = String::new();
     while name.starts_with('*') {
         name = name[1..].to_string();
+        pointer_marks.push('*');
     }
 
-    if name.is_empty() || !name.chars().next()?.is_alphabetic() {
+    if name.is_empty() || !name.chars().next()?.is_alphabetic() || crate::ffi::C_TYPE_WORDS.contains(&name.as_str()) {
         return None;
     }
 
-    // Extract return type
     let return_type_str = if parts.len() > 1 {
-        parts[..parts.len() - 1].join(" ")
+        format!("{} {pointer_marks}", parts[..parts.len() - 1].join(" "))
     } else {
         "int".to_string()
     };
     let return_kind = parse_c_type(&return_type_str);
 
-    // Build signature
     let mut sig = Signature::new();
 
     // Add return type
@@ -142,7 +145,6 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
         sig.return_types.push(return_kind);
     }
 
-    // Parse parameters
     if params_str.trim() != "void" && !params_str.trim().is_empty() {
         for (i, p) in params_str.split(',').enumerate() {
             let p = p.trim();

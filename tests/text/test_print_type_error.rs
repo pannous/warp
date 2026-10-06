@@ -8,7 +8,7 @@ fn print_of_a_type_error_reports_that_error() {
 
 #[test]
 fn text_times_number_says_how_to_repeat_a_text() {
-	warp::is!("\"ab\"*2", "abab");
-	warp::is!("x=\"ab\"; x*3", "ababab");
+	crate::is!("\"ab\"*2", "abab");
+	crate::is!("x=\"ab\"; x*3", "ababab");
 	fails_with("\"ab\"*2.5", "`2.5 times \"ab\"`");
 }

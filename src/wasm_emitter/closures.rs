@@ -27,6 +27,8 @@ pub const CLOSURE_CAPTURED: &str = "closure_captured";
 pub(super) const NOT_A_FUNCTION: &str = "not_a_function";
 pub(super) const WRONG_ARGUMENT_COUNT: &str = "wrong_number_of_arguments";
 const ENTRY_FIELD: u32 = 0;
+/// The name a capture global is read by while a nested function's closure is made (nested_captures_now)
+const CAPTURE_VALUE_PREFIX: &str = "·capture·";
 const CAPTURED_FIELD: u32 = 1;
 const NODE_DATA_FIELD: u32 = 1;
 const NODE_VALUE_FIELD: u32 = 2;
@@ -161,6 +163,7 @@ impl WasmGcEmitter {
 			let function = self.ctx.user_functions[&target].clone();
 			let typed = self.typed_entry(arity);
 			let mut func = Function::new(vec![]);
+			self.emit_nested_captures_restored(&mut func, &target);
 			for (index, param) in function.params.iter().enumerate() {
 				if index < captured {
 					// the index-th value of the captured list: data of the index-th cons cell
@@ -188,6 +191,39 @@ impl WasmGcEmitter {
 			debug_assert!(arity + captured == function.params.len());
 		}
 		self.compile_closure_carriers();
+	}
+
+	/// A nested function `outer·inner` as a value carries the values it captured where the value is made (each
+	/// `make()` its own `k`): its capture globals, refreshed, as names the closure's captured list reads
+	fn nested_captures_now(&mut self, func: &mut Function, target: &str) -> Vec<Node> {
+		if !self.ctx.enclosing_functions.contains_key(target) {
+			return vec![];
+		}
+		self.refresh_enclosing_captures(func);
+		let captures = self.ctx.captures.get(target).cloned().unwrap_or_default();
+		captures.into_iter().map(|(_, (global, kind))| {
+			let name = format!("{CAPTURE_VALUE_PREFIX}{global}");
+			self.ctx.user_globals.insert(name.clone(), (global, kind));
+			Node::Symbol(name)
+		}).collect()
+	}
+
+	/// The entry of a nested function's closure: its capture globals set from the closure's captured values first
+	fn emit_nested_captures_restored(&mut self, func: &mut Function, target: &str) {
+		if !self.ctx.enclosing_functions.contains_key(target) {
+			return;
+		}
+		let captures = self.ctx.captures.get(target).cloned().unwrap_or_default();
+		for (index, (_, (global, kind))) in captures.into_iter().enumerate() {
+			func.instruction(&I::LocalGet(0));
+			for _ in 0..index {
+				func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_VALUE_FIELD });
+			}
+			func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
+			func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
+			self.emit_node_as_kind(func, kind);
+			func.instruction(&I::GlobalSet(global));
+		}
 	}
 
 	fn emit_call_user_function(&mut self, func: &mut Function, function: &UserFunctionDef) {
@@ -278,13 +314,18 @@ impl WasmGcEmitter {
 			return;
 		};
 		let closure = self.closure_type();
+		let captured = match captured.is_empty() {
+			true => self.nested_captures_now(func, target),
+			false => captured.to_vec(),
+		};
 		self.emit_kind(func, Kind::Function);
 		func.instruction(&I::RefFunc(entry_function));
 		if captured.is_empty() {
 			self.emit_node_null(func);
 		} else {
-			self.emit_node_instructions(func, &Node::List(captured.to_vec(), Bracket::Square, Separator::Space));
+			self.emit_node_instructions(func, &Node::List(captured.clone(), Bracket::Square, Separator::Space));
 		}
+		self.ctx.user_globals.retain(|name, _| !name.starts_with(CAPTURE_VALUE_PREFIX));
 		func.instruction(&I::StructNew(closure));
 		self.emit_string_call(func, target, "new_symbol");
 		func.instruction(&I::StructNew(self.type_manager.node_type));

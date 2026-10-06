@@ -1,5 +1,5 @@
 // ∞ (also `\:infinity`) is the float infinity (P56 (4) default, until the user decides; ω is the hyperreal one)
-use warp::is;
+use crate::is;
 
 #[test]
 fn infinity_is_a_float_value() {

@@ -1,7 +1,8 @@
 //! `use <name>` without a local module: registered git repositories (packages.wasp), fetched into packages/<name>
 
 use warp::modules::{fetch_package, package_repository};
-use warp::{error, is};
+use warp::error;
+use crate::is;
 
 #[test]
 fn the_registry_names_repositories() {

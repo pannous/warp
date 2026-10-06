@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 // 25 primes below 100 sum to 1060; 97 sits at index 24; 50 is absent (-1)
 #[test]

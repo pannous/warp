@@ -1,6 +1,6 @@
 //! `break` and `continue` (Crystal's `next`) leave or skip the innermost while/for loop; outside a loop they are a compile error
 
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 #[test]

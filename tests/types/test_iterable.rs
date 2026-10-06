@@ -1,6 +1,6 @@
 // Iterable (wiki/trait.md): a type defining `iterate(b:bag)` is walked by `for x in b` and searched by `x in b`, through
 // the list its iterate gives
-use warp::is;
+use crate::is;
 
 const BAG: &str = "class bag{a:int b:int}; iterate(g:bag) := [g.a, g.b]; ";
 

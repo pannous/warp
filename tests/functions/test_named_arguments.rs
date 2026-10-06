@@ -1,6 +1,6 @@
 // Named arguments (user, P37): f(name=value) and f(name:value) set a parameter or a free variable of the body; a
 // missing argument stays an error, a variable of the same name is never captured for a parameter
-use warp::is;
+use crate::is;
 
 #[test]
 fn named_arguments_set_parameters_in_any_order() {

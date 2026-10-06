@@ -1,5 +1,5 @@
 //! `prefix|suffix|infix operator ⊕ := body` declares an operator (wiki operator.md); the parser learns it from a pre-scan
-use warp::*;
+use crate::is;
 use crate::common::fails_with;
 
 #[test]

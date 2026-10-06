@@ -1,5 +1,5 @@
 // `round(x, n)` and `x.round(n)`: x rounded to n digits after the point (samples/neural_net.wasp); round(x) stays whole
-use warp::is;
+use crate::is;
 
 #[test]
 #[allow(clippy::approx_constant)] // 3.14159 is the wasp literal under test, not π

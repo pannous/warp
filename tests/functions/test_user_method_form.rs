@@ -1,6 +1,6 @@
 //! `x.f` and `x.f(y)` call the user function `f` with the receiver as its first argument
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_user_function_is_called_in_method_form() {
@@ -16,5 +16,5 @@ fn a_method_form_call_passes_the_further_arguments() {
 
 #[test]
 fn a_user_function_taking_a_function_in_method_form() {
-	warp::is!("def map(list, fn) { result = []; for item in list { result.push(fn(item)) }; return result }; square := it * it; [1, 2, 3].map(square)", warp::ints(vec![1, 4, 9]));
+	crate::is!("def map(list, fn) { result = []; for item in list { result.push(fn(item)) }; return result }; square := it * it; [1, 2, 3].map(square)", warp::ints(vec![1, 4, 9]));
 }

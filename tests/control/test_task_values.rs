@@ -1,6 +1,6 @@
 // A task runs its function in a fresh instance, values copied in and out, natively on a thread and in the browser
 // through host.js (user, P33): the same results everywhere
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_task_gives_the_result_of_its_function() {

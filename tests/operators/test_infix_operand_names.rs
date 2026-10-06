@@ -1,5 +1,5 @@
 //! P48 (user-decided): an infix operator's body names its operands `left` and `right` (`a` and `b` stay accepted)
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_infix_operands_named_left_and_right() {

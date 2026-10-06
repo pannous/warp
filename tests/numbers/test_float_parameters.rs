@@ -1,6 +1,6 @@
 // `x:float` parameters are computed as f64 and float-returning functions return f64
+use crate::is;
 use warp::wasm_emitter::eval;
-use warp::*;
 
 #[test]
 fn test_float_parameter_keeps_fraction() {

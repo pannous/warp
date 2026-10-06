@@ -1,5 +1,5 @@
 // `x in xs` and `xs.has(x)` of an instance whose type overrides equality search by its equals
-use warp::is;
+use crate::is;
 
 const WORDS: &str = "class word{text:string}; equals(a:word, b:word) := lower(a.text) == lower(b.text); ws=[word(\"Hello\"), word(\"World\")]; ";
 

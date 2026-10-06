@@ -21,6 +21,13 @@ src/wasm_emitter, src/analyzer.rs and src/wasp_parser.rs became error values (`e
 | `test.wasm` debug dump failing (read-only cwd) | logged, ignored |
 | `new_list` missing (inline list) | internal error value |
 
+## Converted (panics-remaining, 2026-10-06)
+| site | now |
+|------|-----|
+| `Number` `+ - * /` of unsupported pairs (4× `panic!("unsupported types")`), `Quotient` with a NaN/∞ Float (`to_rational` panic) | `mixed`: complex if either operand is, an exact real stays exact with a ratio (else `Real::Approx`), ∞/NaN by IEEE |
+| `f64::from(Complex)` (`unimplemented!`) | the real part without an imaginary one, else NaN |
+| wisp_parser: a missing `)`/`]`, unclosed text, a number that is none (`(int x)` was 0, a big int was 0) | `Error("wisp: expected ')', got the end")`, …; big ints parse exactly |
+
 ## Kept (genuine internal invariants)
 | site | why |
 |------|-----|
@@ -34,3 +41,5 @@ src/wasm_emitter, src/analyzer.rs and src/wasp_parser.rs became error values (`e
 | `wasp_parser` `panic!("Invalid bracket")` | `parse_bracketed` is only called with the literals `( [ { <` |
 | `wasp_parser` `body_items…next().unwrap()` / `precedences.last().unwrap()` | preceded by a `len() == 1` / `is_empty()` check |
 | `node_emitter::EmitContext::emit_call` | the type is not used by any emitter path |
+| `Number::to_bigint` / `to_rational` panics | every caller matches Int/BigInt (and Quotient/BigQuotient) first; the arithmetic arms check `is_rational` |
+| wisp_parser `panic!("expected …")` (13) | all inside its `#[cfg(test)]` module: test assertions |

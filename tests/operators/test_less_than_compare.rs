@@ -1,6 +1,6 @@
 //! `it<k` and `a<b` compare; only a type name before `<` starts a generic
+use crate::is;
 use warp::wasm_emitter::eval;
-use warp::*;
 
 #[test]
 fn test_a_less_than_after_a_variable_is_a_comparison() {

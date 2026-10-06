@@ -222,10 +222,7 @@ fn replaced(node: Node, folded: &[(Node, Node)]) -> Node {
 		return value.drop_meta().clone();
 	}
 	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| replaced(item, folded)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(replaced(*left, folded)), op, Box::new(replaced(*right, folded))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(replaced(*node, folded)), data },
-		other => other,
+		other => other.map_children(|child| replaced(child, folded)),
 	}
 }
 
@@ -269,10 +266,7 @@ impl Specialiser {
 	/// Calls with some constant arguments of a pure function replaced by calls of their variants
 	fn rewrite(&mut self, node: Node) -> Node {
 		let node = match node {
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => other.map_children(|child| self.rewrite(child)),
 		};
 		self.specialised_call(&node, 0).unwrap_or(node)
 	}
@@ -335,10 +329,7 @@ impl Specialiser {
 	/// its parameters, as long as that body calls no variant whose arguments are not plain: power·n3(y) → y*(y*(y*1))
 	fn inlined(&self, node: Node, depth: usize) -> Node {
 		let node = match node {
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.inlined(item, depth)).collect(), bracket, separator),
-			Node::Key(left, op, right) => Node::Key(Box::new(self.inlined(*left, depth)), op, Box::new(self.inlined(*right, depth))),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.inlined(*node, depth)), data },
-			other => other,
+			other => other.map_children(|child| self.inlined(child, depth)),
 		};
 		let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return node };
 		let Some((head, arguments)) = items.split_first() else { return node };

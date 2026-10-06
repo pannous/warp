@@ -1,5 +1,6 @@
 // `add(1, _)` is the lambda of the left-out arguments (samples/functions.wasp), and a zero-argument closure is called
-use warp::{ints, is};
+use warp::ints;
+use crate::is;
 
 #[test]
 fn a_placeholder_makes_a_partial_application() {

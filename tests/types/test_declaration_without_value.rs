@@ -1,5 +1,5 @@
 // `real x;` declares x without a value: P28 (user, 2026-10-05) reads it as the zero value of its type (Go)
-use warp::is;
+use crate::is;
 
 #[test]
 fn reading_a_declaration_without_value_is_an_error() {

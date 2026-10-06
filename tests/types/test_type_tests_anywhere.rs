@@ -1,6 +1,6 @@
 //! `x is T` anywhere: in conditions, and-chains, ternaries and function bodies, answered from the static type when it is
 //! known and from the value's kind at run time when it is not (an item of a mixed list, a Node)
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_type_tests_in_conditions_and_chains() {

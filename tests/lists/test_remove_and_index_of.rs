@@ -1,6 +1,6 @@
 // P35 defaults (night 2026-10-04): `m.remove(k)` removes the key from the map variable and gives its value (Python
 // dict.pop); `xs.index_of(x)` is the 1-based position like `x in xs`, 0 when absent
-use warp::is;
+use crate::is;
 
 #[test]
 fn remove_takes_a_key_out_of_a_map_variable() {

@@ -1,6 +1,6 @@
 //! Element assignment `list[i]=x`, also by a variable index and inside while loops (condensed from probe_index_loop.rs;
 //! the return-the-counter case is in test_todo.rs)
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_simple_index_assign() {

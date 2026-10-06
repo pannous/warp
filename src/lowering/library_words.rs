@@ -45,7 +45,7 @@ const FOR_WORD: &str = "for";
 const LOG_WORD: &str = "log";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 23] = [
+const SYNONYMS: [(&str, &[&str]); 24] = [
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
@@ -56,6 +56,8 @@ const SYNONYMS: [(&str, &[&str]); 23] = [
 	("chars", &[]),
 	("upper", &["uppercase"]),
 	("lower", &["lowercase"]),
+	// the text builtin trim (text_builtins.rs), Python's strip
+	("trim", &["strip"]),
 	("reverse", &[]),
 	("sort", &[]),
 	("split", &[]),
@@ -139,7 +141,7 @@ const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "word_tmp";
 
 /// Library words whose result is always a text, and those whose result is always a list
-const TEXT_RESULT_WORDS: [&str; 3] = ["upper", "lower", "join"];
+const TEXT_RESULT_WORDS: [&str; 4] = ["upper", "lower", "trim", "join"];
 const LIST_RESULT_WORDS: [&str; 7] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES, MAP_WITHOUT];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
@@ -263,7 +265,8 @@ pub fn lower_function_methods(node: Node) -> Node {
 	let arities: HashMap<String, usize> = context.user_functions.iter().map(|(name, function)| (name.clone(), function.params.len())).collect();
 	let mut defined: HashSet<String> = arities.keys().cloned().collect();
 	collect_assigned_names(&node, &mut defined);
-	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::ffi::get_ffi_signature(name).is_some();
+	// a libc function is no method: `m.remove(k)` is the map's, not stdio's remove(path)
+	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c");
 	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
 	// are specialised (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
@@ -726,6 +729,9 @@ impl Lowering {
 		};
 		let may_hold_object = match variable {
 			Node::Symbol(variable) => !self.plain.contains(variable) && !self.context.user_functions.contains_key(variable),
+			// the value of a call: `f().name`, `lib.stats_of(t).words` (foreign_call), or a parenthesized object `({a:1}).a`
+			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => true,
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => matches!(items[0].drop_meta(), Node::List(_, Bracket::Curly, _)),
 			// an element of a computed list: `users.filter(…)#1.name`
 			_ => matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
 		};
@@ -734,7 +740,7 @@ impl Lowering {
 		}
 		let is_value = matches!(receiver.drop_meta(), Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _));
 		let call = Node::Key(Box::new(receiver.clone()), Op::Dot, Box::new(method.clone()));
-		(!is_known && is_value).then(|| Diagnostic::at(&call, format!("undefined function: {name}")).into_error())
+		(!is_known && is_value).then(|| Diagnostic::at(&call, crate::ffi::undefined_function_message(name)).into_error())
 	}
 
 	/// `object.name = value` is `object = field_with(object, "name", value)`; a nested path updates the objects on the way
@@ -815,7 +821,9 @@ impl Lowering {
 			crate::normalize::hint(&format!("{}.{}()", receiver.serialize(), head.serialize()), &receiver.serialize(), "values are never shared: b = a already copies");
 			return receiver.clone();
 		}
-		if arguments.len() != wanted {
+		// a text builtin's own arity check names its values (`trim takes 1 value, got 2`)
+		let checks_itself = crate::wasm_emitter::text_builtins::is_text_builtin(word);
+		if arguments.len() != wanted && !checks_itself {
 			let plural = if wanted == 1 { "" } else { "s" };
 			let call = Node::List([vec![head.clone()], arguments.clone()].concat(), Bracket::Round, Separator::None);
 			return Diagnostic::at(&call, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();

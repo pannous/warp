@@ -188,10 +188,7 @@ fn converted_returns(node: Node, type_name: &Node) -> Node {
 			items.push(as_type(value, type_name));
 			Node::List(items, bracket, separator)
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| converted_returns(item, type_name)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(converted_returns(*left, type_name)), op, Box::new(converted_returns(*right, type_name))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(converted_returns(*node, type_name)), data },
-		other => other,
+		other => other.map_children(|child| converted_returns(child, type_name)),
 	}
 }
 

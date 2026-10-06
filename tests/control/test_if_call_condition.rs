@@ -1,6 +1,7 @@
 //! `if f(1, 2) {…}`: the call's arguments stay the arguments, the block is the body
 
-use warp::{is, parse};
+use warp::parse;
+use crate::is;
 
 #[test]
 fn a_call_with_arguments_as_condition_keeps_its_arguments() {

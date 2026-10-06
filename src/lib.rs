@@ -12,6 +12,8 @@ pub mod util; // reexported for tests
 #[cfg(feature = "native")]
 pub use util::gc_engine;
 pub mod analyzer;
+pub mod analysis_memo;
+pub mod dead_functions;
 pub mod node;
 #[cfg(feature = "native")]
 pub mod run;
@@ -23,13 +25,15 @@ pub mod wasm_emitter;
 pub mod pipeline;
 /// The lowering passes the pipeline runs (src/pipeline.rs), each a module of its own; re-exported at the crate root
 pub mod lowering;
-pub use lowering::{ambiguous_forms, blocks, broadcasting, closures, comprehensions, declarations, folding, for_loop, function_values, inlining, lambdas, late_binding, library_words, memoization, meta_entries, min_max, mutation, named_arguments, number_keys, shared_arrays, overloads, phrase_calls, phrase_words, picked_calls, printable, result_word, run_time_blocks, switch, traits, tuples, type_constructor, type_name_matching, type_tests, variable_signals, versions, welcome_forms};
+pub use lowering::{ambiguous_forms, blocks, broadcasting, closures, comprehensions, declarations, event_signals, folding, for_loop, function_values, getters, go_blocks, inlining, lambdas, late_binding, foreign_modules, library_words, nonlocal_cells, memoization, meta_entries, min_max, mutation, named_arguments, number_keys, shared_arrays, overloads, phrase_calls, phrase_words, picked_calls, pipes, printable, result_word, run_time_blocks, switch, traits, tuples, type_constructor, type_name_matching, type_tests, variable_signals, versions, welcome_forms};
 #[cfg(feature = "native")]
 pub mod wasm_reader;
 #[cfg(feature = "native")]
 pub mod tasks;
 #[cfg(feature = "native")]
 pub mod shared;
+#[cfg(feature = "native")]
+pub mod paint;
 pub mod wasm_optimizer;
 pub mod wasp_parser;
 pub mod wisp_parser;
@@ -37,6 +41,10 @@ pub mod uniscript_entities;
 pub mod operators;
 pub mod meta;
 pub mod host;
+#[cfg(feature = "native")]
+pub mod foreign;
+#[cfg(feature = "native")]
+pub mod components;
 pub mod ffi;
 pub mod ffi_parser;
 pub mod function;
@@ -72,7 +80,7 @@ pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
 pub use type_kinds::{AstKind, NodeKind, Kind, TypeRegistry, TypeDef, FieldDef, USER_TYPE_TAG_START, extract_instance_values, RawFieldValue};
 // Metadata
-pub use meta::{Dada, LineInfo, DataType};
+pub use meta::{DataValue, LineInfo, DataType};
 // WASM
 pub use wasm_emitter::{WasmGcEmitter};
 // Host functions

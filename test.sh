@@ -23,20 +23,33 @@ cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --co
 COMPILE_SECONDS=$((SECONDS - COMPILE_START))
 
 echo "Running all tests..."
+TEST_THREADS=16
 RUN_START=$SECONDS
 # --report-time appends each test's duration (<1.234s>) for the slowest list; libtest takes unstable options only on
 # nightly, which RUSTC_BOOTSTRAP=1 stands in for (it rebuilds nothing)
-RUSTC_BOOTSTRAP=1 cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" -- --test-threads=16 -Zunstable-options --report-time 2>&1 | tee "$TEMP_FILE"
+RUSTC_BOOTSTRAP=1 cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" -- --test-threads=$TEST_THREADS -Zunstable-options --report-time 2>&1 | tee "$TEMP_FILE"
 RUN_SECONDS=$((SECONDS - RUN_START))
 
 # Strip ANSI color codes so the summary greps work on the raw log
 sed -i '' $'s/\033\[[0-9;]*m//g' "$TEMP_FILE"
+# output with a newline can push a result onto the next line (`test x ... ` or `test x ... 3`, then `ok <0.003s>`):
+# a test line without its time (every result but ignored carries one) waits for the next line that ends in a time,
+# lines between (another test's output, e.g. a printed tree) pass through
+awk '
+	/test [A-Za-z0-9_:]+ \.\.\. / { if (pending != "") print pending; pending = "" }
+	/test [A-Za-z0-9_:]+ \.\.\. / && !/<[0-9.]+s>$/ && !/\.\.\. ignored/ { pending = $0; next }
+	pending != "" && /<[0-9.]+s>$/ { print pending $0; pending = ""; next }
+	{ print }
+	END { if (pending != "") print pending }' "$TEMP_FILE" > "$TEMP_FILE.joined" && mv "$TEMP_FILE.joined" "$TEMP_FILE"
 
 # Count test results
 # a test's own output (a wasm program writing to stdout) can glue onto its "test … ok" line: match the test anywhere
-results() { grep -a -o -E "test [A-Za-z0-9_:]+ \.\.\. $1( <[0-9.]+s>)?$" "$TEMP_FILE" | sed -E 's/ <[0-9.]+s>$//'; }
+# or around its result (`... ok2`, `... ok      <0.008s>`, `... ----::::ok <0.001s>`); `ignored, <reason>` lines stay uncounted
+results() { grep -a -o -E "test [A-Za-z0-9_:]+ \.\.\. (.*[^A-Za-z])?$1($|[^,])" "$TEMP_FILE" | sed -E "s/^(test [^ ]+) \.\.\. .*/\1 ... $1/"; }
 SLOWEST_COUNT=15
-slowest() { grep -a -o -E "test [A-Za-z0-9_:]+ \.\.\. [A-Za-z]+ <[0-9.]+s>$" "$TEMP_FILE" | sed -E 's/^test ([^ ]+) .* <([0-9.]+)s>$/\2 \1/' | sort -rn | head -$SLOWEST_COUNT; }
+TIMES_FILE="data/test_times.txt" # every test's seconds, slowest first (data/ is not tracked)
+durations() { grep -a -o -E "test [A-Za-z0-9_:]+ \.\.\. [A-Za-z]+ <[0-9.]+s>$" "$TEMP_FILE" | sed -E 's/^test ([^ ]+) .* <([0-9.]+)s>$/\2 \1/' | sort -rn; }
+slowest() { durations | head -$SLOWEST_COUNT; }
 TOTAL_PASSED=$(results ok | wc -l | tr -d ' ')
 TOTAL_FAILED=$(results FAILED | wc -l | tr -d ' ')
 TOTAL_IGNORED=$(results ignored | wc -l | tr -d ' ')
@@ -60,7 +73,11 @@ TOTAL_TESTED=$((TOTAL_PASSED + TOTAL_FAILED))
 	echo "${TOTAL_IGNORED} ignored, ${TOTAL_PASSED} passed, ${TOTAL_FAILED} failed, ${TOTAL_TESTED} total tested"
 } > "$OUTPUT_FILE"
 # timings differ every run: printed, not saved, so test_results.txt changes only when results do
-echo "TIMING: compile ${COMPILE_SECONDS} s, run ${RUN_SECONDS} s; slowest tests (seconds):"
+mkdir -p "$(dirname "$TIMES_FILE")"
+durations > "$TIMES_FILE"
+TEST_SECONDS=$(awk '{total += $1} END {printf "%.0f", total}' "$TIMES_FILE")
+# the run's wall clock against the tests' summed time per thread: close means the threads were busy to the end
+echo "TIMING: compile ${COMPILE_SECONDS} s, run ${RUN_SECONDS} s; tests summed ${TEST_SECONDS} s ($((TEST_SECONDS / TEST_THREADS)) s per thread, all in $TIMES_FILE); slowest tests (seconds):"
 slowest | sed 's/^/  /'
 rm "$TEMP_FILE"
 

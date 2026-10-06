@@ -1,6 +1,6 @@
 //! A zero-filled list of a large or computed size is built by a runtime loop, not expanded in the program
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_large_zero_list_has_its_size() {

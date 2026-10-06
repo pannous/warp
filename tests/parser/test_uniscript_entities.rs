@@ -1,6 +1,6 @@
 // Uniscript entities (wiki/uniscript.md, unicode.md, Features.md). P56 (user, 2026-10-05): the syntax is `\:name`, in code
 // and inside double-quoted texts; a bare `\name` is no entity (`"\nat"` stays a newline); an unknown entity is loud
-use warp::is;
+use crate::is;
 
 #[test]
 fn entities_are_their_characters() {

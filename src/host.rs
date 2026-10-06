@@ -61,14 +61,24 @@ pub const SHARED_FLOAT_WORDS: [&str; 3] = ["shared_getf", "shared_setf", "shared
 /// values, definitions) compiles the block with the names bound to the values the program had where it ran it and the
 /// program's function definitions, runs it, and gives its value
 pub const RUN_BLOCK: &str = "run_block";
-pub const HOST_WORDS: [&str; 23] = [GUARDED_CALL, RUN_BLOCK, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
+/// block·value(index): the number a block run at run time reads, of the values its run_block call passed
+/// (pipeline::eval_block): the block is compiled as a function of them, the same module for other values
+pub const BLOCK_VALUE: &str = "block·value";
+/// foreign_call(runtime, module, member, call, arguments): a module of another runtime (src/foreign.rs), Nodes in and out
+pub const FOREIGN_CALL: &str = "foreign_call";
+/// paint(pixels, width, height): the pixels (a list, row after row, nonzero ink, 0 paper) drawn on the canvas of the
+/// browser playground (host.js); natively a PNG file (src/paint.rs)
+pub const PAINT: &str = "paint";
+/// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
+pub const VALUE_GIVING_WORDS: [&str; 3] = [RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE];
+pub const HOST_WORDS: [&str; 26] = [GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
 	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2]];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 23] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 26] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(GUARDED_CALL, vec![I32, node], vec![node]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
+	[(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
 		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node]), (TASK_STATUS, vec![I64], vec![I64]), (TASK_POLL, vec![], vec![]),
@@ -137,6 +147,8 @@ pub struct HostState {
 	next_alloc: u32,
 	/// WASI preview 1 (fd_write …), writing to the process's stdout and stderr
 	pub wasi: wasmtime_wasi::p1::WasiP1Ctx,
+	/// The C pointers this run got (sqlite3 *, FILE *), handed to wasp as ids (notes/ffi_handles.md)
+	pub c_handles: crate::ffi::CHandles,
 }
 
 #[cfg(feature = "native")]
@@ -152,6 +164,7 @@ impl HostState {
 		HostState {
 			next_alloc: 65536, // Start allocation after initial memory region
 			wasi: wasmtime_wasi::WasiCtxBuilder::new().inherit_stdout().inherit_stderr().build_p1(),
+			c_handles: Default::default(),
 		}
 	}
 
@@ -193,29 +206,43 @@ fn write_bytes_to_caller(memory: &Memory, caller: &mut Caller<'_, HostState>, by
 /// (its caller) or into an instance the host made (a task, tasks.rs)
 #[cfg(feature = "native")]
 pub fn write_bytes(memory: &Memory, heap: Option<wasmtime::Global>, store: &mut wasmtime::StoreContextMut<'_, HostState>, bytes: &[u8]) -> Result<(u32, u32)> {
-	let len = bytes.len() as u32;
-	let ptr = match &heap {
-		Some(global) => {
-			let top = global.get(&mut *store).i32().unwrap_or(0) as u32;
-			let memory_end = (memory.size(&*store) as u32) << PAGE_BITS;
-			if top == 0 || top + len > memory_end {
-				memory.grow(&mut *store, ((len >> PAGE_BITS) + 1) as u64)?;
-				memory_end
-			} else {
-				top
-			}
+	match heap {
+		Some(heap) => write_to_heap(memory, heap, store, bytes),
+		None => {
+			let ptr = store.data_mut().alloc(bytes.len() as u32);
+			write_at(memory, store, ptr, bytes)
 		}
-		None => store.data_mut().alloc(len),
+	}
+}
+
+/// Copy bytes into a module's memory at its text heap, for any store (an FFI call's too, ffi.rs): fresh pages past the
+/// current memory when the heap is unset or full, the module's own emit_text_allocation rule
+#[cfg(feature = "native")]
+pub fn write_to_heap<T>(memory: &Memory, heap: wasmtime::Global, store: &mut wasmtime::StoreContextMut<'_, T>, bytes: &[u8]) -> Result<(u32, u32)> {
+	let len = bytes.len() as u32;
+	let top = heap.get(&mut *store).i32().unwrap_or(0) as u32;
+	let memory_end = (memory.size(&*store) as u32) << PAGE_BITS;
+	let ptr = if top == 0 || top + len > memory_end {
+		memory.grow(&mut *store, ((len >> PAGE_BITS) + 1) as u64)?;
+		memory_end
+	} else {
+		top
 	};
+	let written = write_at(memory, store, ptr, bytes)?;
+	heap.set(&mut *store, Val::I32((ptr + len) as i32))?;
+	Ok(written)
+}
+
+/// The bytes at `ptr`, the memory grown to hold them
+#[cfg(feature = "native")]
+fn write_at<T>(memory: &Memory, store: &mut wasmtime::StoreContextMut<'_, T>, ptr: u32, bytes: &[u8]) -> Result<(u32, u32)> {
+	let len = bytes.len() as u32;
 	let pages_needed = ((ptr + len) as usize).div_ceil(1 << PAGE_BITS);
 	let current_pages = memory.size(&*store) as usize;
 	if pages_needed > current_pages {
 		memory.grow(&mut *store, (pages_needed - current_pages) as u64)?;
 	}
 	memory.write(&mut *store, ptr as usize, bytes)?;
-	if let Some(global) = heap {
-		global.set(&mut *store, Val::I32((ptr + len) as i32))?;
-	}
 	Ok((ptr, len))
 }
 
@@ -377,6 +404,9 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, GUARDED_CALL, guarded_call)?;
 	warp_runtime::host_words::link_host_words(linker)?;
 	linker.func_wrap(HOST_LIBRARY, RUN_BLOCK, run_block)?;
+	linker.func_wrap(HOST_LIBRARY, BLOCK_VALUE, block_value)?;
+	linker.func_wrap(HOST_LIBRARY, FOREIGN_CALL, foreign_call)?;
+	linker.func_wrap(HOST_LIBRARY, PAINT, paint)?;
 
 	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
 	linker.func_wrap("host", "warn", |mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32| {
@@ -446,6 +476,19 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	Ok(())
 }
 
+/// paint(pixels, width, height) natively: the pixels as a PNG (src/paint.rs)
+#[cfg(feature = "native")]
+fn paint(mut caller: Caller<'_, HostState>, pixels: Option<wasmtime::Rooted<wasmtime::AnyRef>>, width: i64, height: i64) -> wasmtime::Result<()> {
+	let failure = |message: String| wasmtime::Error::new(crate::tasks::TaskFailure(message));
+	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("paint: the module exports no memory".into())) };
+	let pixels = crate::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory);
+	let ink: Vec<bool> = match pixels.drop_meta() {
+		crate::node::Node::List(items, _, _) => items.iter().map(|pixel| !matches!(pixel.drop_meta(), crate::node::Node::False | crate::node::Node::Empty) && pixel.drop_meta() != &crate::node::Node::int(0)).collect(),
+		other => return Err(failure(format!("paint needs a list of pixels, got {}", other.serialize()))),
+	};
+	crate::paint::paint(&ink, width.max(0) as usize, height.max(0) as usize).map(|_| ()).map_err(failure)
+}
+
 /// The host side of run_block: the block and the values it sees come in as Nodes, the block's value goes back as one
 #[cfg(feature = "native")]
 fn run_block(mut caller: Caller<'_, HostState>, block: Option<wasmtime::Rooted<wasmtime::AnyRef>>, names: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
@@ -457,6 +500,49 @@ fn run_block(mut caller: Caller<'_, HostState>, block: Option<wasmtime::Rooted<w
 	let [block, names, values, definitions] = [block, names, values, definitions].map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
 	let result = crate::pipeline::eval_block(block, &names, &values, &definitions).map_err(failure)?;
 	let value = TaskValue::of(&result).map_err(|_| failure(crate::pipeline::cannot_hand_back(&result)))?;
+	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
+	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
+	Ok(built.unwrap_anyref().copied())
+}
+
+#[cfg(feature = "native")]
+thread_local! {
+	/// The values of the blocks running on this thread, the innermost last (a block may run a block)
+	static BLOCK_VALUES: std::cell::RefCell<Vec<Vec<crate::tasks::TaskValue>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Run `body` while block·value reads `values`
+#[cfg(feature = "native")]
+pub fn with_block_values<R>(values: Vec<crate::tasks::TaskValue>, body: impl FnOnce() -> R) -> R {
+	BLOCK_VALUES.with(|stack| stack.borrow_mut().push(values));
+	let result = body();
+	BLOCK_VALUES.with(|stack| stack.borrow_mut().pop());
+	result
+}
+
+/// The host side of block·value: the value at `index`, built in the block's module
+#[cfg(feature = "native")]
+fn block_value(mut caller: Caller<'_, HostState>, index: i64) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
+	let failure = |message: String| wasmtime::Error::msg(message);
+	let value = BLOCK_VALUES.with(|stack| stack.borrow().last().and_then(|values| values.get(index as usize).cloned()))
+		.ok_or_else(|| failure(format!("{BLOCK_VALUE}({index}): no such value of the running block")))?;
+	let builders = crate::tasks::Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
+	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
+	Ok(built.unwrap_anyref().copied())
+}
+
+/// The host side of foreign_call: the runtime, module and member names and the arguments come in as Nodes, the
+/// answer goes back as one (src/foreign.rs)
+#[cfg(feature = "native")]
+fn foreign_call(mut caller: Caller<'_, HostState>, runtime: Option<wasmtime::Rooted<wasmtime::AnyRef>>, module: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
+	member: Option<wasmtime::Rooted<wasmtime::AnyRef>>, call: Option<wasmtime::Rooted<wasmtime::AnyRef>>, arguments: Option<wasmtime::Rooted<wasmtime::AnyRef>>) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
+	use crate::tasks::{Builders, TaskFailure, TaskValue};
+	let failure = |message: String| wasmtime::Error::new(TaskFailure(message));
+	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("foreign_call: the module exports no memory".into())) };
+	let mut store = caller.as_context_mut();
+	let [runtime, module, member, call, arguments] = [runtime, module, member, call, arguments].map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
+	let answer = crate::foreign::call(&runtime.name(), &module, &member.name(), call == 1, &arguments).map_err(failure)?;
+	let value = TaskValue::of(&answer).map_err(|problem| failure(problem.to_string()))?;
 	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
 	Ok(built.unwrap_anyref().copied())
@@ -484,6 +570,9 @@ mod tests {
 
 /// `download url` → `fetch url`: an alias at the head of an application or call, unless the program defines the alias itself
 pub fn lower_aliases(node: Node) -> Node {
+	if !node.mentions_any(&HOST_ALIASES.map(|(alias, _, _)| alias)) {
+		return node;
+	}
 	let mut defined = std::collections::HashSet::new();
 	crate::library_words::collect_assigned_names(&node, &mut defined);
 	let mut context = crate::context::Context::new();

@@ -1,11 +1,10 @@
 use warp::analyzer::analyze;
 use warp::extensions::print;
-use warp::type_kinds::NodeKind;
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::parse;
 use warp::Node;
 use warp::Node::{Empty, False, True};
-use warp::{eq, is, skip};
+use crate::{is, eq, skip};
 
 #[test]
 fn test_range() {
@@ -26,22 +25,6 @@ fn ints(p0: i32, p1: i32, p2: i32) -> Node {
 fn ints4(p0: i32, p1: i32, p2: i32, p3: i32) -> Node {
 	Node::ints(vec![p0, p1, p2, p3])
 }
-
-#[test]
-#[ignore = "LOST files: main_global.wasm, lib_global.wasm"]
-fn test_merge_global() {
-	// Types Module, Code, smart_pointer_64 not defined
-}
-
-#[test]
-#[ignore = "LOST files: main_memory.wasm, lib_memory.wasm"]
-fn test_merge_memory() {}
-#[test]
-#[ignore = "LOST file: main_memory.wasm"]
-fn test_merge_runtime() {}
-#[test]
-#[ignore = "Types Module, Code, int not defined"]
-fn test_merge_own() {}
 
 // #[test] fn test_wasm_stuff();
 #[test]
@@ -184,7 +167,7 @@ fn test_const_return() {
 #[test]
 fn test_print() {
 	// does wasm print? (visual control!!);
-	is!("print 42", 42);
+	is!("print 42", warp::Node::Empty); // print gives nothing (issue #18)
 	print("OK");
 	//	printf!("%llx\n", -2000000000000ll);
 	//	printf!("%llx", -4615739258092021350ll);
@@ -201,10 +184,9 @@ fn test_print() {
 }
 
 #[test]
-#[ignore]
 fn test_math_primitives() {
 	is!("42.1", 42.1); // todo: let Node : return(42.1) or print value to stdout
-	is!("-42.1", 42.1);
+	is!("-42.1", -42.1);
 	is!("42", 42);
 	is!("-42", -42);
 	is!("2000000000", 2000000000); // todo stupid smart pointers
@@ -814,9 +796,6 @@ fn test_old_random_bugs() {
 fn test_merge_wabt() {
 }
 #[test]
-#[ignore = "WABT_MERGE types not defined"]
-fn test_merge_wabt_by_hand() {}
-#[test]
 #[ignore]
 fn test_wasm_runtime_extension() {
 
@@ -864,9 +843,8 @@ fn test_wasm_runtime_extension() {
 	//	is!("puts 'hello' 'world'", "hello world");
 	//	is!("hello world", "hello world");// unresolved symbol printed as is
 
+	is!("x=123;x + 4 is 127", true);
 	skip!(
-
-		is!("x=123;x + 4 is 127", true);
 		//	is!("'123'='123'", true);// parsed as key a:b !?!? todo!
 		//	is!("'123' = '123'", true);
 	);
@@ -1063,23 +1041,16 @@ fn test_square() {
 	is!("π*1000000.", 3141592.653589793);
 	is!("i=-9;-i", 9);
 	is!("- √9", -3);
-	skip!(
-		// TODO: parser doesn't handle numbers starting with '.'
-		is!(".1 + .9", 1);
-		is!("-.1 + -.9", -1);
-	);
+	is!(".1 + .9", 1);
+	is!("-.1 + -.9", -1);
 	is!("√9", 3);
 	//	is!("√-9 is -3i", -3);// if «use complex numbers»
-	skip!(is!(".1", 0.1));
+	is!(".1", 0.1);
 	{
 		// and !LINUX // todo why
-		skip!(
-
-			is!("i=-9;√-i", 3);
+		is!("i=-9;√-i", 3);
 		is!("n=3;2ⁿ", 8);
 		is!("n=3.0;2.0ⁿ", 8);
-		//	function attempted to return an incompatible value WHAT DO YOU MEAN!?
-		);
 	}
 }
 
@@ -1088,10 +1059,7 @@ fn test_round_floor_ceiling() {
 	is!("ceil 3.7", 4);
 	is!("floor 3.7", 3);
 	is!("round 3.7", 4);
-	skip!(
-		// TODO: parser doesn't handle numbers starting with '.'
-		is!("i=3.7;.3+i", 4);
-	);
+	is!("i=3.7;.3+i", 4);
 	// lol "⌊3.7⌋" is cursed and is transformed into \n\t or something in wasm and IDE!
 	//	is!("⌊3.7", 3);// floor
 	//	is!("⌊3.7⌋", 3);// floor
@@ -1241,9 +1209,6 @@ fn test_smart_return() {
 	is!("-1.1", -1.1);
 	is!("'OK'", "OK");
 }
-#[test]
-#[ignore = "Node constructor syntax not valid in Rust"]
-fn test_multi_value() {}
 
 #[test]
 fn test_is() {
@@ -1479,7 +1444,6 @@ fn test_root_float() {
 	is!("√42*√42", 42); // round AFTER! ok with f64! f32 result 41.99999 => 41
 }
 #[test]
-#[ignore]
 fn test_node_data_binary_reconstruction() {
 	eq!(parse("y:{x:2 z:3}").serialize(), "y{x:2 z:3}"); // todo y:{} vs y{}
 	is!("y:{x:2 z:3}", parse("y:{x:2 z:3}")); // looks trivial but is epitome of binary (de)serialization!
@@ -1580,7 +1544,6 @@ fn test_all_wasm() {
 	// the following need MERGE or RUNTIME! todo : split
 	test_wasm_variables0();
 	test_logarithm();
-	test_merge_wabt_by_hand();
 	test_merge_wabt();
 	test_math_library();
 	test_wasm_logic_combined();
@@ -1607,28 +1570,6 @@ fn test_all_wasm() {
 	   );
 }
 
-#[test]
-#[ignore]
-fn test_get_element_by_id() {
-	let _result = analyze(parse("$result"));
-	// eq!(result.kind, externref);
-	let _nod = eval("$result");
-	// print(nod);
-}
-
-#[test]
-#[ignore]
-fn test_canvas() {
-	let _result = analyze(parse("$canvas"));
-	// eq!(result.kind(), externref);
-	let _nod = eval(
-		r#"    ctx = $canvas.getContext('2d');
-                       ctx.fillStyle = 'red';
-                       ctx.fillRect(10, 10, 150, 100);"#,
-	);
-	// print(nod);
-}
-
 // run in APP (or browser?);
 #[test]
 fn test_dom() {
@@ -1649,32 +1590,6 @@ fn test_dom() {
 	//	result = eval("document.getElementById('canvas');");
 	//	result = analyze(parse("$canvas"));
 	//	eq!(result.kind,  externref);
-}
-
-#[test]
-#[ignore]
-fn test_dom_property() {
-	// #[cfg(not(feature = "WEBAPP"))]{
-	//     return;
-	// }
-	let mut result = eval("getExternRefPropertyValue($canvas,'width')"); // ok!!
-	eq!(result.value(), &300); // only works because String "300" gets converted to BigInt 300
-							//	result = eval("width='width';$canvas.width");
-	result = eval("$canvas.width");
-	eq!(result.value(), &300);
-	//	return;
-	result = eval("$canvas.style");
-	eq!(result.kind(), NodeKind::Text);
-	//	eq!(result.kind, stringp);
-	// if (result.value().string);
-	// is!(*result.value().string, "dfsa");
-	//	getExternRefPropertyValue OK  [object HTMLCanvasElement] style [object CSSStyleDeclaration]
-	// ⚠️ But can't forward result as smarti or stringref:  SyntaxError: Failed to parse String to BigInt
-	// todo : how to communicate new string as RETURN type of arbitrary function from js to wasp?
-	// call Webview.getString(); ?
-
-	//	embedder.trace('canvas = document.getElementById("canvas");');
-	//	print(nod);
 }
 
 #[test]

@@ -1,0 +1,367 @@
+//! Kind inference: the kind of a node, of arithmetic, of list elements and branches
+
+use super::*;
+
+/// A statement changing a variable it reads: `x=x+1`, `x+=1`, `x++` (data like `{x=1}` reads nothing)
+pub(super) fn is_update(node: &Node) -> bool {
+	match node {
+		Node::Key(target, Op::Assign, value) => matches!(target.drop_meta(), Node::Symbol(name) if crate::wasp_parser::mentions(value, name)),
+		Node::Key(target, op, _) if matches!(op, Op::Inc | Op::Dec) || op.is_compound_assign() => matches!(target.drop_meta(), Node::Symbol(_)),
+		_ => false,
+	}
+}
+
+/// Infer the Kind for an expression
+/// Returns Int, Float, Text, etc. based on the expression's result type
+/// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
+/// The runtime function of `a op b` when an operand's kind is known only at run time (a field of a map parameter, an
+/// element of a parsed JSON value): Int or Float is decided by the values (wasm_emitter list_ops NODE_ARITHMETIC)
+pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str> {
+	let runtime_kind = |kind: &Kind| matches!(kind, Kind::Data | Kind::Empty);
+	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || runtime_kind(kind);
+	// a value of run-time kind added to a list: node_add concatenates when it is a list too
+	if *op == Op::Add && [left, right].contains(&Kind::Data) && [left, right].contains(&Kind::List) {
+		return Some(crate::wasm_emitter::list_ops::NODE_ADD);
+	}
+	if ![left, right].iter().any(runtime_kind) || ![left, right].iter().all(numeric) {
+		return None;
+	}
+	let index = [Op::Add, Op::Sub, Op::Mul, Op::Div].iter().position(|candidate| candidate == op)?;
+	Some(crate::wasm_emitter::list_ops::NODE_ARITHMETIC[index].0)
+}
+
+pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
+	if node_arithmetic(left, op, right).is_some() {
+		return Kind::Data; // Int or Float, decided at run time
+	}
+	if *op == Op::Add && [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List) {
+		Kind::List // concatenation
+	} else if *op == Op::Add && (crate::wasm_emitter::text_builtins::concatenates(left, right)
+		|| [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)))
+		|| repeats_text(left, op, right)
+	{
+		// concatenation; a value held as a Node (a map value, an element of one) joining a text; `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
+		Kind::Text
+	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Error)) {
+		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness"); an error operand stays an error
+	} else if left == Kind::Float || right == Kind::Float {
+		Kind::Float
+	} else {
+		Kind::Int
+	}
+}
+
+/// text * int or int * text: the text repeated (Python), user decision 2026-10-03
+pub fn repeats_text(left: Kind, op: &Op, right: Kind) -> bool {
+	let is_text = |kind: Kind| matches!(kind, Kind::Text | Kind::Codepoint);
+	*op == Op::Mul && ((is_text(left) && right == Kind::Int) || (left == Kind::Int && is_text(right)))
+}
+
+/// `base ^ 0.5`: an exact base with a non-integral literal exponent is no exact number, it is computed as f64
+pub fn arithmetic_kind_of_operands(left: Kind, op: &Op, right: Kind, right_operand: &Node) -> Kind {
+	let fractional_exponent = *op == Op::Pow && matches!(right_operand.drop_meta(), Node::Number(number) if f64::from(*number).fract() != 0.0);
+	match arithmetic_kind(left, op, right) {
+		Kind::Int if fractional_exponent => Kind::Float,
+		kind => kind,
+	}
+}
+
+/// Kind as written: a literal keeps its data kind (`3.14` is a float literal even though its value
+/// computes exactly), anything else is inferred
+pub fn written_kind(node: &Node, scope: &Scope) -> Kind {
+	match node.drop_meta() {
+		literal @ Node::Number(_) => literal.kind(),
+		other => infer_type(other, scope),
+	}
+}
+
+pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
+	let node = node.drop_meta();
+	match node {
+		// Decimal literals are exact numbers, see wasm_emitter/exact.rs
+		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Kind::Int,
+		Node::Number(Number::Float(_)) => Kind::Float,
+		Node::Number(Number::Complex(_, _) | Number::Real(_) | Number::Nan | Number::Inf | Number::NegInf) => Kind::Float,
+		// Integer and rational literals
+		Node::Number(_) => Kind::Int,
+		// Text and char
+		Node::Text(_) => Kind::Text,
+		Node::Char(_) => Kind::Codepoint,
+		// Symbol (identifier)
+		Node::Symbol(name) => {
+			if let Some(local) = scope.binding(name) {
+				local.kind
+			} else {
+				Kind::Symbol  // Unknown symbol defaults to Symbol
+			}
+		}
+		// List handling: distinguish data lists from statement sequences and function calls
+		Node::List(items, bracket, separator) if !items.is_empty() => infer_list_type(node, items, bracket, separator, scope),
+		// a range as a value is the list of its numbers (wasm_emitter emit_range), as `x = 1..5` is
+		Node::Key(_, Op::Range | Op::To, _) => Kind::List,
+		// Arithmetic: upgrade to Float if either operand is Float
+		Node::Key(left, op, right) if op.is_arithmetic() => {
+			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), right)
+		}
+		// Assignment/definition: type comes from value
+		Node::Key(_left, Op::Define | Op::Assign, right) => {
+			infer_type(right, scope)
+		}
+		// Compound assignment: upgrade if either side is Float
+		Node::Key(left, op, right) if op.is_compound_assign() => {
+			let left_kind = infer_type(left, scope);
+			let right_kind = infer_type(right, scope);
+			// a text joined with a text, a character or a value held as a Node: as `s + x` (arithmetic_kind)
+			let joins_text = matches!(left_kind, Kind::Text | Kind::Codepoint) && arithmetic_kind(left_kind, &Op::Add, right_kind) == Kind::Text;
+			if op.base_op() == Op::Add && (joins_text || crate::wasm_emitter::text_builtins::concatenates(left_kind, right_kind)) {
+				Kind::Text
+			} else if left_kind == Kind::Float || right_kind == Kind::Float {
+				Kind::Float
+			} else {
+				Kind::Int
+			}
+		}
+		// global:value -> type comes from value
+		Node::Key(left, Op::Colon, right) => {
+			if let Node::Symbol(kw) = left.drop_meta() {
+				if kw == "global" {
+					return infer_type(right, scope);
+				}
+			}
+			// Tag structures like html:body are Key
+			Kind::Key
+		}
+		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "char" | "character") => Kind::Codepoint,
+		Node::Key(_, Op::As, target) if target.name().to_lowercase() == "list" => Kind::List,
+		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "string" | "str" | "text") => Kind::Text,
+		// `v as float` is an f64; `as int`, `as exact` stay exact Ints
+		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Kind::Float,
+		// Comparison operators return Int (boolean as 0/1)
+		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
+		// √x is irrational in general: an f64
+		Node::Key(left, Op::Sqrt, _) if matches!(left.drop_meta(), Node::Empty) => Kind::Float,
+		// Prefix operators (neg, abs): inherit type from operand
+		Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
+			infer_type(right, scope)
+		}
+		// Ternary operator: condition ? then : else
+		Node::Key(_cond, Op::Question, then_else) => match then_else.drop_meta() {
+			Node::Key(then_expr, Op::Colon, else_expr) => branches_kind(infer_type(then_expr, scope), infer_type(else_expr, scope)),
+			_ => Kind::Int,
+		},
+		// if c {a} else {b}; an `error(…)` branch raises its error, so the other branch decides the kind (bottom kind)
+		Node::Key(if_then, Op::Else, else_expr) if matches!(if_then.drop_meta(), Node::Key(_, Op::Then, _)) => {
+			let Node::Key(_, _, then_expr) = if_then.drop_meta() else { unreachable!("guarded") };
+			match (raises_error(then_expr), raises_error(else_expr)) {
+				(true, false) => branch_kind(else_expr, scope),
+				(false, true) => branch_kind(then_expr, scope),
+				_ => branches_kind(infer_type(if_then, scope), branch_kind(else_expr, scope)),
+			}
+		}
+		Node::Key(if_condition, Op::Then, then_expr) if matches!(if_condition.drop_meta(), Node::Key(_, Op::If, _)) => {
+			branches_kind(branch_kind(then_expr, scope), Kind::Int)
+		}
+		// An element: `xs#i`, `xs[i]`, `text#i`
+		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
+		// a field read by name with a declared kind: `v.x` of `type V {x: float}`
+		Node::Key(indexed, Op::Hash, index) if crate::wasp_parser::subscript_key(index)
+			.and_then(|key| match key.drop_meta() { Node::Text(name) => scope.function_kind(&field_kind_key(name)), _ => None })
+			.is_some() && !matches!(indexed.drop_meta(), Node::Empty) => {
+			let Some(Node::Text(name)) = crate::wasp_parser::subscript_key(index).map(Node::drop_meta) else { unreachable!("guarded") };
+			scope.function_kind(&field_kind_key(name)).expect("guarded")
+		}
+		Node::Key(indexed, Op::Hash, index) if !matches!(indexed.drop_meta(), Node::Empty) => element_kind(indexed, scope).unwrap_or_else(|| {
+			let by_name = crate::wasp_parser::subscript_key(index).is_some_and(|key| matches!(key.drop_meta(), Node::Text(_) | Node::Char(_))
+				|| matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
+			if by_name { Kind::Empty } else { Kind::Int }
+		}),
+		// Default to Int for other cases
+		_ => Kind::Int,
+	}
+}
+
+/// The kind of a non-empty list: a call's result, a statement sequence's last value, or a data list
+pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &Separator, scope: &Scope) -> Kind {
+	if crate::host::fetch_call(node).is_some() {
+		return Kind::Text; // or an Error value, see check_unchecked_use
+	}
+	if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name.as_str())) {
+		return Kind::List;
+	}
+	if let Node::Symbol(name) = items[0].drop_meta() {
+		if name == crate::library_words::LIST_SUM && items.len() == 3 {
+			return infer_type(&items[2], scope); // the loop it dispatches around
+		}
+		if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
+			return infer_type(&items[1], scope); // `return x` is worth x
+		}
+		if let Some(arity) = crate::closures::closure_call_arity(name) {
+			let callee = items.get(1).and_then(|argument| match argument.drop_meta() {
+				Node::Symbol(variable) => Some(variable.as_str()),
+				_ => None,
+			});
+			if let Some(variable) = callee {
+				if let Some(targets) = scope.closure_targets_of(variable) {
+					if !targets.is_empty() {
+						let mut kinds = targets.iter().map(|target| scope.function_kind(target).unwrap_or(Kind::Data));
+						let first = kinds.next().unwrap_or(Kind::Data);
+						return if kinds.all(|kind| kind == first) { first } else { Kind::Data };
+					}
+				}
+			}
+			if let Some(kind) = scope.function_kind(name) {
+				return kind;
+			}
+			let _ = arity;
+		} else if let Some(kind) = scope.function_kind(name) {
+			return kind;
+		}
+		if name == crate::closures::CLOSURE_NEW {
+			return Kind::Function;
+		}
+		// another runtime's value: any Node, held like a map value (its kind decided at run time)
+		if name == crate::host::FOREIGN_CALL {
+			return Kind::Empty;
+		}
+		// a cell's value is held as a Node, like a map value (Empty), and joins a text or adds at run time
+		if crate::wasm_emitter::cells::CELL_WORDS.contains(&name.as_str()) {
+			return if name == crate::wasm_emitter::cells::CELL_NEW { Kind::Data } else { Kind::Empty };
+		}
+		if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
+			return kind;
+		}
+		if name == crate::wasp_parser::TEXT_TIMES {
+			return Kind::Text;
+		}
+		if name == crate::type_tests::TYPE_WORD && items.len() == 2 {
+			return Kind::Symbol; // the type's name
+		}
+		// `puti x`, `puts t`: the output words give an Int (the number written, or the write's status), with or without
+		// parentheses
+		if crate::wasm_emitter::OUTPUT_WORDS.contains(&name.as_str()) && items.len() == 2 {
+			return Kind::Int;
+		}
+		if name == PRINT_CALL && (items.len() >= 2 || *bracket == Bracket::Round) {
+			return Kind::Empty; // `print x` writes x and gives nothing (user, issue #18)
+		}
+	}
+	// Check for function calls: (funcname args...) where first item is a symbol
+	if items.len() >= 2 {
+		if let Node::Symbol(s) = items[0].drop_meta() {
+			if s == "fetch" { return Kind::Text; }
+			// FFI/builtin function calls return Int by default
+			// This handles strcmp, strlen, abs, etc.
+			if crate::ffi::is_ffi_function(s) {
+				return ffi_call_kind(s);
+			}
+		}
+	}
+	// Type constructor: int("5"), float("1.5"), str(3), double 2
+	if items.len() == 2 {
+		if let Node::Symbol(s) = items[0].drop_meta() {
+			if let Some(kind) = type_word_kind(s) {
+				return kind;
+			}
+		}
+	}
+	// Function call with parentheses: a library word has its own result, any other call is assumed Int. A comma list
+	// `(y, 4)` is a tuple, never the call y(4) (`f(a, b)` parses as `(f a b)`)
+	if *bracket == Bracket::Round && items.len() >= 2 && *separator != Separator::Colon {
+		if let Node::Symbol(name) = items[0].drop_meta() {
+			if name == crate::library_words::SLICE || name == "reverse" {
+				// a slice or reversal of a text is a text, of anything else a list
+				return if matches!(infer_type(&items[1], scope), Kind::Text | Kind::Codepoint) { Kind::Text } else { Kind::List };
+			}
+			if name == crate::library_words::FIELD_WITH {
+				// a copy of the object with one field set: a Node, whatever the object's kind is known as
+				return match infer_type(&items[1], scope) { kind if kind.is_ref() => kind, _ => Kind::Empty };
+			}
+			return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
+		}
+	}
+	// Zero-arg function call: (funcname) with no args
+	if *bracket == Bracket::Round && items.len() == 1 {
+		if let Node::Symbol(s) = items[0].drop_meta() {
+			if crate::ffi::is_ffi_function(s) {
+				return ffi_call_kind(s);
+			}
+			// Assume zero-arg user function returns Int
+			return Kind::Int;
+		}
+	}
+	// Grouping: (x) has the type of x
+	if *bracket == Bracket::Round && items.len() == 1 {
+		return infer_type(&items[0], scope);
+	}
+	// Data list: all items are pure data, or `[…]` computing its elements → Kind::List
+	let computed_elements = *bracket == Bracket::Square && !items.iter().any(|item| is_statement(item, bracket));
+	if computed_elements || (!is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node)) {
+		return Kind::List;
+	}
+	// Statement sequence: return type of last item
+	if let Some(last) = items.last() {
+		infer_type(last, scope)
+	} else {
+		Kind::Empty
+	}
+}
+
+/// Kind of an element of `indexed`: a list's common element type (`list of text` → Text), the character of a text;
+/// `None` when unknown (a mixed list, a map)
+pub(super) fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
+	if matches!(infer_type(indexed, scope), Kind::Text | Kind::Symbol) {
+		return Some(Kind::Text); // a character, held as a node like any one-character text (see binding_kind)
+	}
+	let list_type = list_type_name(indexed, scope);
+	if list_type == MAP_TYPE || list_type == NODE_LIST_TYPE || infer_type(indexed, scope) == Kind::Empty {
+		return Some(Kind::Empty); // values of different types, or of a value held as a Node: held as a Node, like an optional
+	}
+	match list_type.strip_prefix("list of ").or_else(|| list_type.strip_prefix(MAP_TYPE_PREFIX))? { // `m[k]` of a map is a value
+		word if word.starts_with("list") => Some(Kind::List),
+		RATIONAL_WORD => Some(Kind::Int),
+		REAL_WORD => Some(Kind::Float),
+		word => match type_word_kind(word) {
+			Some(Kind::Codepoint) => Some(Kind::Text),
+			Some(kind) => Some(kind),
+			None => Some(Kind::Empty), // instances, keys, symbols: held as Nodes
+		},
+	}
+}
+
+/// A branch `{a; b}` is worth its last statement
+/// A branch that is `error(…)` (or a block ending in it): the bottom kind, it never gives a value to its if
+pub(crate) fn raises_error(branch: &Node) -> bool {
+	match branch.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => raises_error(&statements[statements.len() - 1]),
+		other => crate::pipeline::returned_error_message(other).is_some(),
+	}
+}
+
+pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
+	match branch.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => branch_kind(&statements[statements.len() - 1], scope),
+		// a branch yielding ø (`if c then 3 else ø`) is a Node, as a variable holding ø is
+		other => held_kind(other, || infer_type(other, scope)),
+	}
+}
+
+/// Either branch a reference type (Text, Symbol, List…) or a character: the value is a Node, else a number
+pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
+	let kinds = [then_kind, else_kind];
+	if then_kind == Kind::Codepoint && else_kind == Kind::Codepoint {
+		Kind::Codepoint
+	} else if kinds.contains(&Kind::List) {
+		// a list and a list (or ø, the empty list) is a list; a list and anything else a Node of its run-time kind
+		if kinds.iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) { Kind::List } else { Kind::Data }
+	} else if kinds.contains(&Kind::Empty) {
+		// a Node whose kind is known only at run time (an awaited job's result, ø): the value keeps that kind, so
+		// `(if c then 0 else job_result) + 1` adds at run time instead of failing as text
+		Kind::Empty
+	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
+		Kind::Text
+	} else if then_kind == Kind::Float || else_kind == Kind::Float {
+		Kind::Float
+	} else {
+		Kind::Int
+	}
+}

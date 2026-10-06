@@ -9,7 +9,8 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 17] = [
+const BUILTIN_CALLS: [&str; 20] = [
+	super::cells::CELL_WORDS[0], super::cells::CELL_WORDS[1], super::cells::CELL_WORDS[2],
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF,
@@ -63,7 +64,9 @@ impl WasmGcEmitter {
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
 			|| super::text_builtins::is_text_builtin(name)
-			|| crate::ffi::get_ffi_signature(name).is_some()
+			// a C function resolves once imported (`use c`, `import f from "c"`, libm's implicit imports): known but not
+			// imported it is an error that says so (ffi::undefined_function_message), never data
+			|| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c")
 	}
 
 	/// `reverse(xs)`, `split(text, separator)` …: the library words with a runtime function; returns whether it was one
@@ -87,11 +90,12 @@ impl WasmGcEmitter {
 		let Some(name) = call_name(items, bracket, separator) else {
 			return false;
 		};
-		if self.resolves_call(name) {
+		// `inc()` of a bound name reads it (`inc:={x+1}; inc()`); with arguments a variable is no function (`x=2; x(3)`)
+		if self.resolves_call(name) || (items.len() == 1 && !self.is_unbound(name)) {
 			return false;
 		}
 		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
-		let diagnostic = crate::diagnostic::Diagnostic::at(&call, format!("undefined function: {name}"));
+		let diagnostic = crate::diagnostic::Diagnostic::at(&call, crate::ffi::undefined_function_message(name));
 		self.emit_type_error(func, diagnostic.to_string());
 		true
 	}
@@ -173,6 +177,15 @@ impl WasmGcEmitter {
 		true
 	}
 
+	/// `print()`: an empty line, like Python; worth the empty text, as `print ""`
+	fn emit_empty_print(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		let is_print = matches!(items, [word] if matches!(word.drop_meta(), Node::Symbol(name) if name == PRINT));
+		if is_print && self.config.emit_wasi_imports {
+			self.emit_print(func, &Node::Text(String::new()));
+		}
+		is_print && self.config.emit_wasi_imports
+	}
+
 	/// Emit instructions for List(items, bracket, separator) nodes
 	/// Dispatches based on list contents and bracket type
 	pub(super) fn emit_list_node(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
@@ -185,7 +198,8 @@ impl WasmGcEmitter {
 		}
 
 		if items.len() == 1 && *bracket != Bracket::Square {
-			if !self.emit_function_call(func, items, bracket) {
+			// `f()` of a name bound to nothing is an undefined function (P92); the group `(f)` is its item
+			if !self.emit_function_call(func, items, bracket) && !self.emit_empty_print(func, items) && !self.reject_unresolved_call(func, items, bracket, separator) {
 				self.emit_node_instructions(func, &items[0]);
 			}
 			return;
@@ -267,6 +281,9 @@ impl WasmGcEmitter {
 
 		if let Some((list, sum_loop)) = super::list_dispatch::list_sum_call(items) {
 			return self.emit_list_sum(func, list, sum_loop, super::list_dispatch::Wanted::Node);
+		}
+		if self.emit_cell_call(func, items) {
+			return;
 		}
 		if let [Node::Symbol(call), count, zero] = items {
 			if call == crate::analyzer::ZERO_FILL_CALL {
@@ -617,7 +634,7 @@ impl WasmGcEmitter {
 		}
 		let name = items.iter().find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))?;
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
-		let text = written.serialize().trim().to_string();
+		let text = crate::diagnostic::written_text(&written);
 		let message = format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data");
 		Some(crate::diagnostic::Diagnostic::at(&written, message).to_string())
 	}
@@ -690,7 +707,7 @@ impl WasmGcEmitter {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
 		} else if self.is_float_assignment(item) || self.is_float_call(item) {
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
-		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) {
+		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) || matches!(item.drop_meta(), Node::Empty) {
 			self.emit_node_instructions(func, item);
 		} else {
 			emit(self, func, item);

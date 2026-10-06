@@ -359,7 +359,6 @@ impl TypeRegistry {
 	/// Skips type references (Type nodes with empty body - just type names)
 	pub fn register_from_node(&mut self, node: &crate::node::Node) -> Option<u32> {
 		use crate::node::Node;
-		// Handle Meta wrapper - recursively unwrap
 		let node = node.drop_meta();
 		if let Node::Type { name, body } = node {
 			// Skip type references (empty body) - only register actual definitions
@@ -384,7 +383,6 @@ impl TypeRegistry {
 	fn extract_fields(body: &crate::node::Node) -> Vec<FieldDef> {
 		use crate::node::Node;
 		let mut fields = Vec::new();
-		// Unwrap any Meta wrappers
 		let body = body.drop_meta();
 		match body {
 			Node::List(items, _, _) => {

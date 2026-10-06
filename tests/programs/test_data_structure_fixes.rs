@@ -1,6 +1,6 @@
 //! What samples/data_structures.wasp needed: data keys read like variables, fields of list elements, list
 //! comprehensions, named tuples
-use warp::*;
+use crate::is;
 
 #[test] // `person: {name: "Alice"}` then `person.name`: the data is the scope
 fn test_data_key_read_as_a_variable() {

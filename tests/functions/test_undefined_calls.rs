@@ -2,7 +2,8 @@
 
 use crate::common::fails_with;
 use warp::wasm_emitter::eval;
-use warp::{is, parse_data};
+use warp::parse_data;
+use crate::is;
 
 #[test]
 fn test_unresolved_call_is_an_error() {
@@ -62,8 +63,8 @@ fn test_type_constructor_arity_is_checked() {
 }
 
 #[test]
-fn test_print_returns_its_value_without_a_capability_error() {
-	is!("print 42", 42);
-	is!("print(42)", 42);
-	is!("print 'hi'", "hi");
+fn test_print_gives_nothing_without_a_capability_error() {
+	is!("print 42", warp::Node::Empty); // print gives nothing (issue #18)
+	is!("print(42)", warp::Node::Empty);
+	is!("print 'hi'", warp::Node::Empty);
 }

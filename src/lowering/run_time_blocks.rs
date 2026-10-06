@@ -127,6 +127,7 @@ fn lower_statements(program: Node, applies: &dyn Fn(&Node) -> bool, lower: &dyn 
 }
 
 /// What a run-time block sees where it runs
+#[derive(Clone)]
 struct Site {
 	/// the constant blocks bound so far (`x : e`)
 	blocks: Vec<String>,
@@ -145,6 +146,14 @@ fn assigned_name(statement: &Node) -> Option<String> {
 			Node::Symbol(name) => Some(name.clone()),
 			_ => None,
 		},
+		_ => None,
+	}
+}
+
+/// `for i in …`: i
+fn loop_variable(items: &[Node]) -> Option<String> {
+	match items.iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice() {
+		[Node::Symbol(word), Node::Symbol(variable), Node::Symbol(within), ..] if word == "for" && within == "in" => Some(variable.clone()),
 		_ => None,
 	}
 }
@@ -256,10 +265,14 @@ impl Site {
 			return;
 		}
 		if let Some(name) = assigned_name(statement) {
-			self.blocks.retain(|block| *block != name);
-			if !self.variables.contains(&name) {
-				self.variables.push(name);
-			}
+			self.bind(name);
+		}
+	}
+
+	fn bind(&mut self, name: String) {
+		self.blocks.retain(|block| *block != name);
+		if !self.variables.contains(&name) {
+			self.variables.push(name);
 		}
 	}
 
@@ -306,12 +319,25 @@ impl Site {
 		Site { blocks: self.blocks.clone(), variables, all_variables: self.all_variables.clone(), definitions: self.definitions.clone() }
 	}
 
+	/// The parts of `node` lowered where they are: a statement of a body after the variables the statements before it
+	/// assign, the body of `for i in …` with the loop's variable
 	fn each_part(&self, node: Node, lower: &dyn Fn(&Site, Node) -> Node) -> Node {
 		match node {
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| lower(self, item)).collect(), bracket, separator),
-			Node::Key(left, op, right) => Node::Key(Box::new(lower(self, *left)), op, Box::new(lower(self, *right))),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(lower(self, *node)), data },
-			other => other,
+			Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
+				let mut site = self.clone();
+				let items = items.into_iter().map(|item| {
+					let lowered = lower(&site, item.clone());
+					site.follow(&item);
+					lowered
+				}).collect();
+				Node::List(items, bracket, separator)
+			}
+			Node::List(items, bracket, separator) if loop_variable(&items).is_some() => {
+				let mut site = self.clone();
+				site.bind(loop_variable(&items).unwrap_or_default());
+				Node::List(items.into_iter().map(|item| lower(&site, item)).collect(), bracket, separator)
+			}
+			other => other.map_children(|child| lower(self, child)),
 		}
 	}
 }

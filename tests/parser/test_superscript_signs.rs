@@ -1,6 +1,6 @@
 //! Superscript signs and digits are one power: `10⁻¹` is 1/10, `x²⁺³` is x⁵
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_negative_superscript_is_a_reciprocal_power() {

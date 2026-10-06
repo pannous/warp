@@ -1,5 +1,5 @@
 //! The value of `if c then a else b` has the kind of its branches: two characters give a character, never its code number
-use warp::*;
+use crate::is;
 
 #[test] // samples/game_of_life.wasp: line + (if alive then "█" else " ") appended 9608 and 32
 fn test_if_of_characters_joins_a_text() {

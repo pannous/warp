@@ -1,5 +1,5 @@
 // wiki/for.md: `for 1..10 : print it` names no loop variable, the items are `it`; a colon body runs to the end of the line
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_for_loop_without_a_variable_walks_it() {

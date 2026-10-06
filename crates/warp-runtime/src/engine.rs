@@ -6,7 +6,7 @@ const GC_HEAP_INITIAL_BYTES: u64 = 1 << 30;
 
 /// Engine settings every wasp run shares: GC, typed function references, and canonical NaNs so float
 /// results are bit-identical on every CPU and engine (a NaN produced by arithmetic is always 0x7ff8000000000000).
-/// Machine code compiled with these settings (`warp compile --aot`, `warp build --exe`) loads into any engine made
+/// Machine code compiled with these settings (`warp compile --aot`, `warp build`) loads into any engine made
 /// from them, with or without a compiler.
 pub fn deterministic_config() -> Config {
 	let mut config = Config::new();

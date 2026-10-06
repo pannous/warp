@@ -5,25 +5,12 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P63 (rest) a comma tuple `(frobnicate, 3)` in code: data (worker default) or code like `[cube 3]`? (1) and (2) are
-  decided (see Decided 2026-10-05, interview). Asked by warp-90. 2026-10-05.
 - P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
   as they are at `!` and assigns only declared globals. User 2026-10-05: "Later"; revisit when run-time `!` is built.
 - P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
   loop changes are captured per iteration, every other variable follows late binding (recommended) / every variable
   is captured per iteration and never checked (worker default on branch late-binding, keeps the test → 3). User
   2026-10-05: "Later". Asked by warp-29.
-- P71 What does `:=` mean without parameters? The spec (wiki/charged.md section 2) says charged (`z := y*y`
-  re-evaluated at every use); the implementation and every mainstream language (Go, Pascal, Python's walrus) read it
-  as now: `y=3; z:=y*y; y=4; z` → 9, `x := 5; x = 6` → 6; the user's own model was "like let, later = may
-  overwrite". The original wiki said "semi charged, evaluated upon normal evaluation of the parent context"; "every
-  use" came from the Interviewer's table. Options: (1) now, unless it defines a function (parameters or `it`:
-  `square := it*it` stays a function), zero-parameter charged definitions via `def` (recommended); (2) always charged,
-  `z = 6` after it an error; (3) Go-strict: `:=` declares a new variable, `=` only reassigns. User 2026-10-05: "idk".
-  Assumed until decided: today's behaviour (1); workers do not change zero-parameter `:=` semantics, and the
-  "needless charging" note applies to `def` only. If (2) is chosen: the per-use getter is ~20 lines, commit 0b687e03 on
-  branch late-binding (warp-29). Object entries follow (1) too: `o = {a: 1, s := clock()}` evaluates `s` once, like
-  `s = …` (72a856af0, g-qUmA; wiki/charged.md §4 e0cf82f); (2) would revisit them.
 - P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
   run-time blocks are always pure. Asked by warp-29.
@@ -35,10 +22,84 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
 
 ## User to-dos (not questions)
-- Branch `claude/shared-kind-constants` (only unmerged commit: the dropped cloud pilot report); the hook refuses, run
-  `git -C /Users/me/dev/angles/warp push origin --delete claude/shared-kind-constants`. From BOSS-cheeky-shannon.
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
+
+## Standing rules (user)
+- Taking tickets (2026-10-06): "When picking a new task from the project, can you mark them as having an SNI
+  (asignee)? If we don't have SNI's, then just use me." (SNI = assignee.) `todo take <card> <session>` assigns
+  pannous, sets the board field Agent to the session and moves the card to Now (80bef43d8).
+- Board tickets (2026-10-06): "There should be the rule to only close or move project tickets with a commit linked in
+  the description. Enforce that rule texturally and in the to-do helper." Enforced in AGENTS.md,
+  notes/agents/common.md (c4db425c1) and ~/dev/bin/todo (no move to Done without a linked commit).
+- Picking tasks (2026-10-06): "When picking new tasks, check if there are some fresh ones under 'Next' that are easily
+  done".
+- Cleanup (2026-10-03): "Don't ask for my confirmation to delete old stuff": merged branches, stale copies, leftover
+  stashes (so warp-90's stash goes without a question; where the hook blocks, the user gets the one-line command).
+- Test upgrades (2026-10-05, "allow all tests to be upgraded from a dumb thing to a better thing, from not working to
+  working"): an error/refusal/"not yet" expectation becomes the working value, ignored tests that pass are
+  un-ignored, without asking; a change of meaning (one working value into another) still needs a decision.
+
+## Decided 2026-10-06 (user, multiple-choice interview, as recommended unless quoted)
+- P71 `:=` without parameters is ALWAYS CHARGED (the user chose this over the recommended "now"): `y=3; z:=y*y; y=4;
+  z` → 16, re-evaluated at every use, as wiki/charged.md §2 says; `z = 6` after it is an error. The per-use getter
+  exists: commit 0b687e03 on branch late-binding (warp-29). Object entries `{s := clock()}` follow (§4 is revisited).
+  Tests pinning "now" may be edited, each in its own commit naming P71.
+- P63 (rest) a comma tuple `(frobnicate, 3)` in code is data, never called (worker default stands). Asked by warp-90.
+- P94 WIT `char` maps to wasp's Codepoint, not a one-character text. Asked by warp-d6 (branch web-components).
+- P93 the "Batch board writes" paragraph is deleted from AGENTS.md.
+- P95 tests/lists/test_map_starts.rs and its `mod` line: a worker checks it passes and commits it on a branch; the
+  user's checkout is cleaned once main has it.
+- P96 obsolete ignored tests (the Fixer warp-f6 listed 67): delete only group A, the 13 that are empty or assert
+  nothing (test_merge_global/_memory/_runtime/_own/_wabt_by_hand, test_multi_value, test_get_element_by_id,
+  test_canvas, test_dom_property, test_replace, test_extract_function_signature, test_parse, test_wast), plus
+  numbers/test_math test_primitive_types. User chose "Only A" over the recommended A–C: the id/square-builtin tests,
+  test_recent_random_bugs, test_array_constructor, test_all_wasm and the other unclear ones stay ignored.
+  Correction (user, same day): test_wasm's test_dom_property did assert ($canvas.width == 300); it moves into
+  web/test_web.rs, replacing that file's empty namesake, still ignored for the browser host (warp-f6, branch
+  p96-obsolete-ignored).
+- P102 (card g-1KS4) `warp build hello.wasp` makes the native executable by default; on macOS/Linux it is named
+  `hello` (no extension), on Windows hello.exe; `warp compile` makes the executable too (user chose this over the
+  recommended "compile stays .wasm"); the .wasm only with `--wasm`; `--exe` still accepted. Asked by warp-f6 (branch
+  build-exe-default).
+- P103 (replaces P102's command words) user: "we don't need the build and compile flags at all. Just giving it a file
+  will compile it." `warp hello.wasp` compiles once, runs the program right away (output as before) and leaves the
+  executable `hello` beside it (hello.exe on Windows); `build`/`compile` stay accepted as synonyms, not in the help.
+  Assumed (undoable): `--wasm` and `--aot` stay for the module only. warp-f6, branch build-exe-default.
+- P104 (after P103, warp-f6, branch p102-exe-naming) a plain `warp file.wasp` always writes the small stub executable
+  (1–5 MB); without a warp-runtime stub it prints a note and writes nothing, never a ~120 MB copy of warp. `build`/
+  `compile` write the executable without running (exit 1 on failure). Worker assumptions standing: rebuild only when
+  the source is newer; a program the runtime can't carry (fetch, read, run, warn) gets "note: no executable …" and
+  runs; `--wasm`/`--aot` give the module.
+- P105 user: "We also need `warp run` which shall do the opposite": `warp run hello.wasp` runs the program and writes
+  no executable (the opposite of `build`, which writes without running). Assumed (undoable): bare `warp run` without
+  a file still opens the REPL. warp-f6, branch p102-exe-naming.
+  Purpose (user): "the point is to avoid the ahead-of-time compilation because that's too slow": `warp run` must
+  never take the machine-code path; warp-f6 measures it and tries a fast compile tier (Winch / opt_level None).
+- P106 tasks share a variable with main only when it is declared `shared` (`shared done = false; go { …; done = true
+  }; after done …`), scalars like P44's shared arrays; every other variable stays an isolate copy (P33). Asked by
+  warp-d9 (branch async); as recommended. wiki/thread.md's example gets `shared`.
+- P107 (issue #16, card g-1sPM) the playground offers only the .wasm download plus a one-line `warp hello.wasp`
+  instruction, no native executable (user chose this over a static Cranelift stub with the .wasm appended in the
+  browser, and over a pannous.com build endpoint). Asked by warp-76.
+- P108 (Sublime package, pannous/wasp-sublime-text) Angle.sublime-syntax is retired; Wasp.sublime-syntax (scope
+  source.wasp) takes .wasp/.warp/.a/.angle (user chose this over the recommended split by extension). Asked by
+  warp-76 for the Sublime worker. FYI there: ⚠️ no longer starts a comment (warp reads it as an error constant).
+- Signals (warp-54, branch signals, notes/signals.md): P109 every variable can be watched (implicit), checks only
+  where a listener watches; P110 `raise X` goes to `on X` handlers as a signal, without a handler it stays the
+  catchable exception; P111 (revises P38) writes through `global x` in called functions run the listeners too;
+  P112 no batching block (user chose this over `together { }`): only a multi-assignment `a, b = 1, 2` notifies once.
+- P113 the CLI and console show nothing for a ø result (like Python's None): `warp 'print 3'` prints only "3", and
+  `x = ø; x` prints nothing. Asked by warp-d6 (after #18, print gives ø; show() in src/main.rs); as recommended.
+- P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
+  behind them go; no test edits. Asked by warp-40 (code-quality).
+- P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.
+- P99 renames incl. mechanical test-file edits: laste→last_item, Dada→DataValue, peq!→parses_to!,
+  s!/strings!/Strings!→texts! (s! stays for to_string), wis!→wisp!; unused todow/tee deleted.
+- P100 the test macros is!/eq!/skip!/check!/put! move from src/extensions.rs to tests/common/mod.rs (`use crate::is`
+  in tests, mechanical edit; web/playground's runner checked).
+- P101 the user's rough comments in Cargo.toml and src/extensions.rs are reworded neutrally; the dead wasm-ast line
+  goes.
 
 ## Decided 2026-10-05 (user, multiple-choice interview, all as recommended unless quoted)
 - Data vs code (P51, P62, P63 (1-2), charge levels, D7 revised): specified in wiki/charged.md, the single source;
@@ -65,6 +126,60 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P75 fix buttons read "I meant: <replacement>", the meaning as a tooltip (warp-ea's default).
 - P77 `warp build --exe prog.wasp`: the executable prints what the program prints, then its value as `print` shows
   it (texts without quotes); exit code 0, 1 on a trap (asked by the aot worker warp-ec; as recommended).
+- P78 modifiers from other languages before a definition (`public`, `static`, `extern C`, `inline`, `virtual`,
+  `final`, `private`, `volatile`, `native`, …): accepted and skipped with a got-it note "public has no meaning in
+  wasp"; words with a wasp meaning (`global`, `const`) keep it; a lone definition stays ø, so test_modifiers is edited
+  to call the function (user decision). Asked by warp-90; as recommended.
+- P79 the 13 inherent browser-suite failures (notes/web_playground.md: test_download, test_use_modules, test_package_pin,
+  test_law lean, test_eval_state threads, test_use_scopes) are marked `#[cfg_attr(not(feature = "native"), ignore =
+  "browser: <reason>")]`: they still run natively, the browser suite turns green (user decision, existing-test edit).
+  Asked by warp-ec; as recommended.
+  Refined (user: "but download should work on the browser and temporary folder may be through browser files"):
+  test_download and test_use_modules are made to pass in the browser instead (download via fetch; temp dirs on a
+  browser file system such as OPFS or the in-memory WASI fs); the directory walk of test_use_scopes uses the same
+  file system if it fits. Only git, Lean and the threads case are ignored in the browser.
+- P80 exact ratios and big Ints cross to tasks: control::test_threads::an_exact_number_beyond_the_fixnums_cannot_cross_yet
+  becomes is!(…, 3.5), renamed an_exact_number_crosses_to_a_task (user decision, existing-test edit). Asked by the
+  Fixer warp-2d (card g-rH6E); as recommended.
+- P81 the kebab-key warning (`a=5; b=1; a-b:2; a-b`) offers three fixes: "the data key": `"a-b":2` (only when nothing
+  reads `a-b` bare in that block); "the subtraction" at each bare read: `a - b`; and "the data key, renamed a_b": the
+  key → `a_b:2` and every bare read → `a_b` (always applicable, renames the key in the data). Asked by the Fixer
+  warp-2d (card g-qU1o, was parked in Later; the user answered anyway): option B, "also offer renaming".
+- P82 returning a function: a function reference is written `function add` or `&add` (wiki/function-pointer.md); a
+  bare name that needs arguments is the error "add needs 1 argument" everywhere, in a body's last value too, nested
+  or top-level alike, with the fix "I meant: function add". Asked by warp-90 (card returning-top). User: "function
+  references have an extra keyword … Maybe it was just function", then the recommended option.
+- P83 (after P82) an alias needs the explicit reference, `g = function add` (bare `g = add` is the P82 error with the
+  fix); an argument to a parameter that takes a function stays bare, `apply(add, 3)` (the parameter says a function is
+  expected, like wiki/function-pointer.md's `map square on xs`). Asked by warp-90; as recommended.
+- P84 `sum := fold +; sum 1 2 3` → 6 (wiki folding.md). User: "This should have already been done with broadcasting":
+  several juxtaposed arguments to a one-parameter function are taken as one list, `f 1 2 3` = `f [1 2 3]`, through
+  the broadcasting machinery (not the recommended keep-the-error). Asked by warp-90.
+- P85 ignored-test corrections: only (1) approved: test_math_primitives expects -42.1 (typo) and is un-ignored.
+  (2) test_function_params "9" vs 9, (3) test_string_operations "say 0." vs "say 0", (4) the fetch tests' trailing
+  "\n" were NOT approved: those tests stay ignored as they are. Asked by the Fixer warp-2d.
+- P86 Node::add of two values it doesn't know (Symbol + Number), user: "it depends on the context: in lazy context it
+  must be allowed, in evaluation context the types must be of the addable trait". In a lazy context (data, a block,
+  symbolic) it builds the unevaluated sum `a + b`; when evaluated, both operands must have the Addable trait, else a
+  loud type error, never a panic. Asked by the Fixer warp-2d (card node-add).
+- P87 test_wisp_defn checks `body.drop_meta().serialize() == "mul(it it)"` and is un-ignored (user decision).
+- P88 capabilities, user: "currently allow everything to everyone": for now every host (CLI, eval, the playground,
+  eval_untrusted) grants every capability, Process and Sql included; the capability checks stay in the code for
+  later. Asked by warp-90 (card hijack-stdlib).
+  Follow-up (user, multiple choice): eval_untrusted too ("Everything, untrusted too"). The five tests pinning the old
+  refusals change in commits naming P88 (run-time block, libm/strlen, test_data_does_not_execute's eval part,
+  exec/execute now "undefined: exec …", untrusted Python/JS); parse_data still never executes. The old asserts come
+  back once a host narrows the grant.
+- P89 foreign runtimes (`use python "math"`) get their own capability, not Ffi (granted to everyone for now, P88).
+  Asked by warp-90.
+- P90 the debug module ./test.wasm stays written at every compile (user chose "keep always on" over the recommended
+  WARP_DEBUG_WASM switch). Asked by warp-ec.
+- P91 one shared analysis per compile (extract_user_functions, EffectReport::of), refreshed only when a pass changed
+  the program: yes, as its own card after warp-90's and warp-2d's lowering work lands, one pass converted first to
+  show the gain. Asked by warp-ec; as recommended.
+- P92 `foo()` with explicit empty parentheses is a call: an undefined name is "undefined function: foo" (also a
+  mistyped or unlinked zero-argument C call); a bare `foo` stays a symbol. Asked by the Fixer warp-2d (card
+  unknown-zero-arg-call); as recommended.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;

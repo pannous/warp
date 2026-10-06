@@ -73,22 +73,6 @@ impl TaskValue {
 			other => return Err(anyhow!("{} cannot cross to another task yet", other.serialize())),
 		})
 	}
-
-	fn int(&self) -> Result<i64, String> {
-		match self {
-			TaskValue::Int(n) => Ok(*n),
-			other => Err(format!("the task gave {other:?}, not an Int")),
-		}
-	}
-}
-
-/// An Int of an instance as a TaskValue: a fixnum crosses as it is, a larger exact number (a big integer, a ratio) is a
-/// handle into the memory of its instance and cannot cross yet
-fn exact(n: i64) -> Result<TaskValue, String> {
-	match crate::wasm_emitter::is_fixnum(n) {
-		true => Ok(TaskValue::Int(n)),
-		false => Err("an exact number beyond the fixnum range (a ratio, a big integer) cannot cross to another task yet".to_string()),
-	}
 }
 
 /// The constructors, memory and text heap of one instance: what a TaskValue is rebuilt with
@@ -143,6 +127,35 @@ impl Builders {
 		}
 	}
 
+	/// The Int handle of an exact number in this instance: numerator / denominator
+	fn exact_handle(&self, numerator: &num_bigint::BigInt, denominator: &num_bigint::BigInt, store: &mut StoreContextMut<'_, HostState>) -> Result<i64> {
+		let numerator = self.integer_handle(numerator, store)?;
+		if denominator == &num_bigint::BigInt::from(1) {
+			return Ok(numerator);
+		}
+		let denominator = self.integer_handle(denominator, store)?;
+		self.int_operation(EXACT_BUILDERS[3], numerator, denominator, store)
+	}
+
+	/// An Int of this instance as a value of its own: a fixnum as it is, a handle (a big integer, a ratio) read
+	/// through the instance's Int node
+	fn integer(&self, n: i64, store: &mut StoreContextMut<'_, HostState>) -> Result<TaskValue> {
+		if crate::wasm_emitter::is_fixnum(n) {
+			return Ok(TaskValue::Int(n));
+		}
+		let node = self.call("new_int", &[Val::I64(n)], store)?;
+		TaskValue::of(&crate::wasm_reader::node_in(&node, store, self.memory))
+	}
+
+	/// A value as an Int of this instance: a fixnum, or the handle of an exact number
+	fn int_of(&self, value: &TaskValue, store: &mut StoreContextMut<'_, HostState>) -> Result<i64> {
+		match value {
+			TaskValue::Int(n) => Ok(*n),
+			TaskValue::Exact(numerator, denominator) => self.exact_handle(numerator, denominator, store),
+			other => Err(anyhow!("the task gave {other:?}, not an Int")),
+		}
+	}
+
 	pub(crate) fn build(&self, value: &TaskValue, store: &mut StoreContextMut<'_, HostState>) -> Result<Val> {
 		match value {
 			TaskValue::Empty => self.call("new_empty", &[], store),
@@ -158,19 +171,14 @@ impl Builders {
 				let (left, right) = (self.build(left, store)?, self.build(right, store)?);
 				self.call("new_key", &[left, right, Val::I64(*op)], store)
 			}
+			// ø, as the emitter makes `[]`: a null would not pass for a Node (a wrapper's empty argument list)
+			TaskValue::List(items, _) if items.is_empty() => self.call("new_empty", &[], store),
 			TaskValue::List(items, bracket) => items.iter().rev().try_fold(Val::AnyRef(None), |rest, item| {
 				let first = self.build(item, store)?;
 				self.call("new_list", &[first, rest, Val::I64(*bracket)], store)
 			}),
 			TaskValue::Exact(numerator, denominator) => {
-				let numerator = self.integer_handle(numerator, store)?;
-				let handle = match denominator == &num_bigint::BigInt::from(1) {
-					true => numerator,
-					false => {
-						let denominator = self.integer_handle(denominator, store)?;
-						self.int_operation(EXACT_BUILDERS[3], numerator, denominator, store)?
-					}
-				};
+				let handle = self.exact_handle(numerator, denominator, store)?;
 				self.call("new_int", &[Val::I64(handle)], store)
 			}
 			TaskValue::Closure(name, captured) => {
@@ -216,7 +224,7 @@ impl Builders {
 
 	fn read(&self, value: &Val, store: &mut StoreContextMut<'_, HostState>) -> Result<TaskValue> {
 		match value {
-			Val::I64(n) => exact(*n).map_err(|message| anyhow!(message)),
+			Val::I64(n) => self.integer(*n, store),
 			Val::F64(bits) => Ok(TaskValue::Float(f64::from_bits(*bits))),
 			Val::AnyRef(_) => TaskValue::of(&crate::wasm_reader::node_in(value, store, self.memory)),
 			other => Err(anyhow!("a task gave {other:?}")),
@@ -287,6 +295,8 @@ pub struct TaskTable {
 	module: Module,
 	imports: Imports,
 	slots: Mutex<HashMap<i64, Slot>>,
+	/// the tasks whose result or failure the program read (await, join): a failure nobody read ends the run (join_all)
+	taken: Mutex<std::collections::HashSet<i64>>,
 	controls: Mutex<HashMap<i64, Arc<TaskControl>>>,
 	next_id: AtomicI64,
 	/// the shared arrays of the run, linked into every task (shared.rs)
@@ -296,7 +306,7 @@ pub struct TaskTable {
 /// Link task_spawn and task_await for `module`, sharing one table with every task it starts
 pub fn link(linker: &mut Linker<HostState>, engine: &Engine, module: &Module, imports: Imports, shared: Option<Arc<crate::shared::SharedArrays>>) -> Result<Arc<TaskTable>> {
 	let table = Arc::new(TaskTable {
-		engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1), shared,
+		engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), taken: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1), shared,
 	});
 	table.link_into(linker)?;
 	tick_while_running(Arc::downgrade(&table));
@@ -336,7 +346,8 @@ impl TaskTable {
 		linker.func_wrap(HOST_LIBRARY, TASK_SPAWN, move |mut caller: Caller<'_, HostState>, name: i32, a0: i64, a1: i64, a2: i64, a3: i64| -> wasmtime::Result<i64> {
 			let name = c_string(&mut caller, name).map_err(host_error)?;
 			let arguments: [i64; MAX_TASK_ARGUMENTS] = [a0, a1, a2, a3];
-			let arguments = arguments.iter().map(|argument| exact(*argument)).collect::<Result<Vec<_>, _>>().map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
+			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
+			let arguments = arguments.iter().map(|argument| builders.integer(*argument, &mut caller.as_context_mut())).collect::<Result<Vec<_>>>().map_err(host_error)?;
 			let captured = spawner.captured(&mut caller).map_err(host_error)?;
 			Ok(spawner.spawn(name, arguments, captured))
 		})?;
@@ -344,7 +355,7 @@ impl TaskTable {
 		linker.func_wrap(HOST_LIBRARY, TASK_SPAWN_VALUES, move |mut caller: Caller<'_, HostState>, name: i32, arguments: Option<Rooted<AnyRef>>| -> wasmtime::Result<i64> {
 			let name = c_string(&mut caller, name).map_err(host_error)?;
 			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
-			let task_failure = |failure: anyhow::Error| wasmtime::Error::new(TaskFailure(format!("task {name}: {failure}")));
+			let task_failure = |failure: anyhow::Error| wasmtime::Error::new(TaskFailure(format!("task {}: {failure}", task_name(&name))));
 			let arguments = match builders.read_value(&Val::AnyRef(arguments), &mut caller.as_context_mut()).map_err(task_failure)? {
 				TaskValue::List(items, _) => items,
 				TaskValue::Empty => vec![],
@@ -355,16 +366,16 @@ impl TaskTable {
 		})?;
 		let value_awaiter = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_AWAIT_VALUE, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
-			let value = value_awaiter.await_task(id).map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
+			let value = value_awaiter.take(id).map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
 			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
 			let built = builders.build(&value, &mut caller.as_context_mut()).map_err(host_error)?;
 			Ok(built.unwrap_anyref().copied())
 		})?;
 		let joiner = self.clone();
-		linker.func_wrap(HOST_LIBRARY, TASK_JOIN, move |id: i64| -> i64 { joiner.await_task(id).is_err() as i64 })?;
+		linker.func_wrap(HOST_LIBRARY, TASK_JOIN, move |id: i64| -> i64 { joiner.take(id).is_err() as i64 })?;
 		let reporter = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_FAILURE, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
-			let message = reporter.await_task(id).err().unwrap_or_default();
+			let message = reporter.take(id).err().unwrap_or_default();
 			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
 			let built = builders.build(&TaskValue::Text(message), &mut caller.as_context_mut()).map_err(host_error)?;
 			Ok(built.unwrap_anyref().copied())
@@ -375,8 +386,10 @@ impl TaskTable {
 		let controller = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_CONTROL, move |id: i64, operation: i64| -> i64 { controller.control(id, operation) })?;
 		let awaiter = self.clone();
-		linker.func_wrap(HOST_LIBRARY, TASK_AWAIT, move |id: i64| -> wasmtime::Result<i64> {
-			awaiter.await_task(id).and_then(|value| value.int()).map_err(|message| wasmtime::Error::new(TaskFailure(message)))
+		linker.func_wrap(HOST_LIBRARY, TASK_AWAIT, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<i64> {
+			let value = awaiter.take(id).map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
+			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
+			builders.int_of(&value, &mut caller.as_context_mut()).map_err(host_error)
 		})?;
 		Ok(())
 	}
@@ -406,7 +419,7 @@ impl TaskTable {
 		let control = Arc::new(TaskControl { state: Mutex::new(Control::Run), changed: Condvar::new() });
 		self.controls.lock().expect("task controls").insert(id, control.clone());
 		let table = self.clone();
-		let handle = std::thread::spawn(move || table.run(&function, &arguments, &captured, control).map_err(|failure| format!("task {function}: {}", failure_message(failure))));
+		let handle = std::thread::spawn(move || table.run(&function, &arguments, &captured, control).map_err(|failure| format!("task {}: {}", task_name(&function), failure_message(failure))));
 		self.slots.lock().expect("task table").insert(id, Slot::Running(handle));
 		id
 	}
@@ -442,7 +455,7 @@ impl TaskTable {
 				vec![builders.build(&TaskValue::List(arguments.to_vec(), crate::wasm_emitter::bracket_info(&Bracket::Square)), &mut store.as_context_mut())?]
 			}
 			_ => signature.params().zip(arguments).map(|(parameter, argument)| match (parameter, argument) {
-				(ValType::I64, TaskValue::Int(n)) => Ok(Val::I64(*n)),
+				(ValType::I64, TaskValue::Int(_) | TaskValue::Exact(..)) => Ok(Val::I64(builders.int_of(argument, &mut store.as_context_mut())?)),
 				(ValType::Ref(_), argument) => builders.build(argument, &mut store.as_context_mut()),
 				(parameter, argument) => Err(anyhow!("{function} takes {parameter}, got {argument:?}")),
 			}).collect::<Result<_>>()?,
@@ -452,7 +465,8 @@ impl TaskTable {
 			ValType::F64 => Val::F64(0),
 			_ => Val::AnyRef(None),
 		}).collect();
-		callee.call(&mut store, &values, &mut results)?;
+		// a raised error leaves its message in trap_detail, as in the program
+		crate::wasm_reader::with_trap_detail(callee.call(&mut store, &values, &mut results), &mut store, &instance)?;
 		match results.first() {
 			Some(result) => builders.read(result, &mut store.as_context_mut()),
 			None => Ok(TaskValue::Empty),
@@ -497,12 +511,26 @@ impl TaskTable {
 		result
 	}
 
-	/// The program ended: tasks nobody awaited still finish (their output is part of the run)
-	pub fn join_all(&self) {
-		let ids: Vec<i64> = self.slots.lock().expect("task table").keys().copied().collect();
+	/// The result of the task, read by the program
+	fn take(&self, id: i64) -> Result<TaskValue, String> {
+		self.taken.lock().expect("taken tasks").insert(id);
+		self.await_task(id)
+	}
+
+	/// The program ended: tasks nobody awaited still finish (their output is part of the run); the first failure nobody
+	/// read is the run's error, as loud as one in the program (a stopped task was stopped on purpose)
+	pub fn join_all(&self) -> Result<(), TaskFailure> {
+		let mut ids: Vec<i64> = self.slots.lock().expect("task table").keys().copied().collect();
+		ids.sort();
+		let mut unread = None;
 		for id in ids {
-			let _ = self.await_task(id);
+			if let Err(message) = self.await_task(id) {
+				if unread.is_none() && !message.ends_with(STOPPED) && !self.taken.lock().expect("taken tasks").contains(&id) {
+					unread = Some(TaskFailure(message));
+				}
+			}
 		}
+		unread.map_or(Ok(()), Err)
 	}
 }
 
@@ -511,6 +539,11 @@ fn host_error(failure: anyhow::Error) -> wasmtime::Error {
 }
 
 /// What went wrong in a task, in the words a failure of the main program gets (wasm_emitter::failed_run)
+/// The task's function as the program wrote it: `f`, not its wrapper `f·node`; a go block as `go block 1`
+fn task_name(function: &str) -> String {
+	crate::go_blocks::written_name(function.strip_suffix(crate::declarations::NODE_WRAPPER_SUFFIX).unwrap_or(function))
+}
+
 fn failure_message(failure: anyhow::Error) -> String {
 	match crate::wasm_emitter::failed_run(failure) {
 		crate::node::Node::Error(message) => message.serialize().trim_matches('"').to_string(),

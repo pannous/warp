@@ -2,7 +2,7 @@
 //! (Sorting field test, probes/slices/). A negative index never wraps around (Footguns.md): it is an error naming last(x).
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn python_slices_of_a_list() {

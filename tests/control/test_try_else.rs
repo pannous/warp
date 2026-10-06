@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 fn error_text(code: &str) -> String {

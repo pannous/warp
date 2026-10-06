@@ -1,6 +1,7 @@
 // A list variable of any elements that is indexed, counted or iterated is held as an array ($NodeList): O(1) index and
 // count, amortised O(1) append, so loops over lists are linear (a 3000 item loop was seconds, quadratic, before)
-use warp::{ints, is};
+use warp::ints;
+use crate::is;
 
 #[test]
 fn loops_over_a_list_are_linear() {

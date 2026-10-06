@@ -105,3 +105,7 @@ matches wasp's value semantics (index assignment already copies, aliases never c
   too), `jobs#i` is `task·element` (that job only); `await all xs` is xs read once (the parser groups `await all X`).
   A list of tasks that run where they start (TaskPath::Inline) holds their values. `count(jobs)`, `#jobs`, `jobs.size`
   count without awaiting. The browser host runs job lists too (cargo browser-test test_job_lists: 3 one-second jobs ~1 s).
+- Shared values (P106, 2026-10-06): `shared done = false`, `shared n = 0`, `shared x = 0.5` (and `atomic …`) are
+  one-cell shared arrays (lowering/shared_arrays.rs): reads are `shared_get(n, 1)`, `n = v` / `n += v` the atomic set
+  and add, true/false the Ints 1/0. A go block reading one gets it as a parameter, which shares it like a shared array
+  parameter; only `shared` names cross between tasks, everything else is copied.

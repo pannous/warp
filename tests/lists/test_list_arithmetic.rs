@@ -1,5 +1,5 @@
+use crate::is;
 use warp::wasm_emitter::eval;
-use warp::*;
 
 fn printed(code: &str) -> String {
 	eval(code).serialize()

@@ -1,5 +1,6 @@
 // Small helpers are inlined (inlining.rs), so a list they update by index stays the caller's array; values stay values
-use warp::{ints, is};
+use warp::ints;
+use crate::is;
 
 const SWAP: &str = "def swap(arr, i, j) { temp = arr[i]; arr[i] = arr[j]; arr[j] = temp; return arr }; ";
 

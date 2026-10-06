@@ -1,381 +1,10 @@
-// FFI (Foreign Function Interface) support for calling native C libraries
-// Provides imports for libc and libm functions via wasmtime linker
-//
-// Architecture:
-// - ffi_parser.rs: Built-in/embedded C header definitions (portable, no dependencies)
-// - This file (ffi.rs): Runtime parsing of system headers for additional functions
-//
-// Signature lookup order (see get_ffi_signature):
-// 1. Built-in signatures from ffi_parser (libc, libm basics)
-// 2. System header parsing for extended functions (SDL2, raylib, etc.)
+//! Linking C functions into wasmtime: libm and the hand-linked libc functions, any library through its headers
+//! (libloading + one wrapper per signature shape), and the run's handle table for C pointers
 
 #[cfg(feature = "native")]
-use anyhow::Result;
-#[cfg(feature = "native")]
-use libloading::Library;
-use std::collections::HashMap;
-#[cfg(feature = "native")]
-use std::sync::Arc;
-use std::sync::OnceLock;
-#[cfg(feature = "native")]
-use wasmtime::{Engine, FuncType, Linker, Val, ValType};
+use super::*;
 
-/// libm f64 functions linked by link_ffi_functions, with their arity.
-/// Fallback when system headers declare them via macros (glibc __MATHCALL).
-pub const LIBM_F64_FUNCTIONS: [(&str, usize); 15] = [
-    ("fmin", 2), ("fmax", 2), ("fabs", 1), ("floor", 1), ("ceil", 1), ("round", 1), ("sqrt", 1),
-    ("sin", 1), ("cos", 1), ("tan", 1), ("fmod", 2), ("pow", 2), ("exp", 1), ("log", 1), ("log10", 1),
-];
-
-/// FFI function signature descriptor
-/// Uses wasm_encoder::ValType for consistency with emitter
-#[derive(Clone, Debug)]
-pub struct FfiSignature {
-    pub name: &'static str,
-    pub library: &'static str,
-    pub params: Vec<wasm_encoder::ValType>,
-    pub results: Vec<wasm_encoder::ValType>,
-}
-
-impl FfiSignature {
-    pub fn new(
-        name: &'static str,
-        library: &'static str,
-        params: Vec<wasm_encoder::ValType>,
-        results: Vec<wasm_encoder::ValType>,
-    ) -> Self {
-        FfiSignature {
-            name,
-            library,
-            params,
-            results,
-        }
-    }
-}
-
-/// FFI functions run in the program's one state, with the host functions and WASI
-#[cfg(feature = "native")]
-pub use crate::host::HostState as FfiState;
-
-// ============================================================================
-// C Header Parsing for Dynamic FFI Signature Discovery
-// ============================================================================
-
-/// Parsed C function signature from header file
-#[derive(Clone, Debug)]
-pub struct FfiHeaderSignature {
-    pub name: String,
-    pub return_type: String,
-    pub param_types: Vec<String>,
-    pub param_names: Vec<String>,
-    pub library: String,
-    pub raw: String,
-}
-
-/// Map C type string to wasm_encoder ValType
-pub fn map_c_type_to_valtype(c_type: &str) -> Option<wasm_encoder::ValType> {
-    let t = c_type.trim();
-    // Remove const qualifier
-    let t = t.strip_prefix("const ").unwrap_or(t).trim();
-
-    match t {
-        "double" => Some(wasm_encoder::ValType::F64),
-        "float" => Some(wasm_encoder::ValType::F32),
-        "int" | "int32_t" => Some(wasm_encoder::ValType::I32),
-        "unsigned int" | "uint32_t" | "Uint32" => Some(wasm_encoder::ValType::I32),
-        "long" | "int64_t" | "long long" | "size_t" | "ssize_t" => Some(wasm_encoder::ValType::I64),
-        "unsigned long" | "uint64_t" | "Uint64" => Some(wasm_encoder::ValType::I64),
-        "short" | "int16_t" => Some(wasm_encoder::ValType::I32),
-        "char" | "int8_t" | "unsigned char" | "uint8_t" => Some(wasm_encoder::ValType::I32),
-        "void" => None, // void return means no result
-        // Pointer types - all become i32 (WASM linear memory offset)
-        s if s.ends_with('*') => Some(wasm_encoder::ValType::I32),
-        s if s.contains('*') => Some(wasm_encoder::ValType::I32),
-        // Unknown types default to i32 (could be opaque handles)
-        _ => Some(wasm_encoder::ValType::I32),
-    }
-}
-
-const SDL_PREFIX: &str = "SDL_";
-
-/// C keywords that start a statement: a line holding one declares no function
-const C_STATEMENT_KEYWORDS: [&str; 9] = ["return", "if", "else", "while", "for", "do", "switch", "case", "goto"];
-
-/// Extract function signature from a C declaration string
-/// e.g., "double sqrt(double x);" -> FfiHeaderSignature
-pub fn extract_function_signature(declaration: &str, library: &str) -> Option<FfiHeaderSignature> {
-    let decl = declaration.trim();
-
-    // Skip empty lines, comments, preprocessor directives
-    if decl.is_empty() || decl.starts_with("//") || decl.starts_with('#') || decl.starts_with("/*") {
-        return None;
-    }
-
-    // Skip non-function declarations (typedef, struct, enum, etc.)
-    if decl.starts_with("typedef") || decl.starts_with("struct") ||
-       decl.starts_with("enum") || decl.starts_with("union") {
-        return None;
-    }
-
-    // Remove extern, static, inline qualifiers and API macros (RLAPI, SDL_CALL, etc.)
-    let decl = decl
-        .replace("extern ", "")
-        .replace("static ", "")
-        .replace("inline ", "")
-        .replace("RLAPI ", "")
-        .replace("RAYGUIAPI ", "")
-        .replace("RMAPI ", "")
-        .replace("PHYSACDEF ", "")
-        .replace("RL_API ", "")
-        .replace("SDL_CALL ", "")
-        .replace("SDLCALL ", "")
-        .replace("__cdecl ", "")
-        .replace("__stdcall ", "");
-    let decl = decl.trim();
-
-    // Find the opening parenthesis (marks start of params)
-    let paren_pos = decl.find('(')?;
-
-    // Everything before '(' is return_type + name
-    let before_paren = &decl[..paren_pos];
-
-    // Find function name (last word before parenthesis)
-    let parts: Vec<&str> = before_paren.split_whitespace().collect();
-    if parts.is_empty() {
-        return None;
-    }
-
-    // `return f(x);` in an inline function body of a header is a statement, not a declaration
-    if parts.iter().any(|part| C_STATEMENT_KEYWORDS.contains(part)) {
-        return None;
-    }
-
-    // Function name is the last part, may have pointer marker
-    let mut name = parts.last()?.to_string();
-    // Handle "*func" case
-    while name.starts_with('*') {
-        name = name[1..].to_string();
-    }
-
-    // Return type is everything before the name
-    let return_type = if parts.len() > 1 {
-        parts[..parts.len()-1].join(" ")
-    } else {
-        "int".to_string() // C default
-    };
-
-    // Find closing paren
-    let close_paren = decl.rfind(')')?;
-    let params_str = &decl[paren_pos+1..close_paren];
-
-    // Parse parameters
-    let mut param_types = Vec::new();
-    let mut param_names = Vec::new();
-
-    if params_str.trim() != "void" && !params_str.trim().is_empty() {
-        for param in params_str.split(',') {
-            let param = param.trim();
-            if param.is_empty() || param == "..." {
-                continue;
-            }
-
-            // Split param into type and name
-            let parts: Vec<&str> = param.split_whitespace().collect();
-            if parts.is_empty() {
-                continue;
-            }
-
-            // Handle "type *name" or "type* name" or "type name"
-            let (ptype, pname) = if parts.len() == 1 {
-                (parts[0].to_string(), String::new())
-            } else {
-                let last = parts.last().unwrap();
-                let name = last.trim_start_matches('*').to_string();
-                // Reconstruct type (everything except pure name)
-                let type_str = if last.starts_with('*') {
-                    format!("{} *", parts[..parts.len()-1].join(" "))
-                } else {
-                    parts[..parts.len()-1].join(" ")
-                };
-                (type_str, name)
-            };
-
-            param_types.push(ptype);
-            param_names.push(pname);
-        }
-    }
-
-    Some(FfiHeaderSignature {
-        name,
-        return_type,
-        param_types,
-        param_names,
-        library: library.to_string(),
-        raw: declaration.to_string(),
-    })
-}
-
-/// Convert FfiHeaderSignature to FfiSignature (using 'static lifetime via leak)
-pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> {
-    let params: Vec<wasm_encoder::ValType> = hsig.param_types.iter()
-        .filter_map(|t| map_c_type_to_valtype(t))
-        .collect();
-
-    let results: Vec<wasm_encoder::ValType> = map_c_type_to_valtype(&hsig.return_type)
-        .map(|v| vec![v])
-        .unwrap_or_default();
-
-    // Leak strings for 'static lifetime (acceptable for long-running process)
-    let name: &'static str = Box::leak(hsig.name.clone().into_boxed_str());
-    let library: &'static str = Box::leak(hsig.library.clone().into_boxed_str());
-
-    Some(FfiSignature {
-        name,
-        library,
-        params,
-        results,
-    })
-}
-
-/// Get standard header file paths for a library (delegates to ffi_parser)
-pub fn get_library_header_paths(library: &str) -> Vec<String> {
-    crate::ffi_parser::find_library_headers(resolve_library_alias(library))
-}
-
-/// glibc's math.h declares libm through the macros of this header: `__MATHCALL (sqrt,, (_Mdouble_ __x));`
-const GLIBC_MATHCALLS: &str = "bits/mathcalls.h";
-/// The glibc declaration macros: (macro, whether its first argument is the result type)
-const GLIBC_MATH_MACROS: [(&str, bool); 7] = [
-    ("__MATHCALL_VEC", false), ("__MATHCALLX", false), ("__MATHCALL", false),
-    ("__MATHDECL_VEC", true), ("__MATHDECLX", true), ("__MATHDECL_1", true), ("__MATHDECL", true),
-];
-
-/// The header text, followed by the double variants of glibc's mathcalls.h declarations when it includes that header
-fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
-    if !content.contains(GLIBC_MATHCALLS) {
-        return content;
-    }
-    let header_dir = std::path::Path::new(header_path).parent().map(|dir| dir.to_string_lossy().to_string()).unwrap_or_default();
-    let dirs: Vec<String> = std::iter::once(header_dir).chain(crate::ffi_parser::include_dirs()).collect();
-    match crate::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| std::fs::read_to_string(path).ok()) {
-        Some(mathcalls) => format!("{content}\n{}", expand_glibc_math_macros(&mathcalls)),
-        None => content,
-    }
-}
-
-/// `__MATHCALL (sqrt,, (_Mdouble_ __x));` → `double sqrt (double __x);`, `__MATHDECL (int,ilogb,, (_Mdouble_ __x));` →
-/// `int ilogb (double __x);`: plain declarations of the double variants
-pub fn expand_glibc_math_macros(source: &str) -> String {
-    let declaration = |line: &str| -> Option<String> {
-        let (macro_name, typed) = GLIBC_MATH_MACROS.iter().find(|(name, _)| line.strip_prefix(name).is_some_and(|rest| rest.trim_start().starts_with('(')))?;
-        let inner = line[macro_name.len()..].trim_start().strip_prefix('(')?;
-        let inner = &inner[..inner.rfind(')')?];
-        let mut parts = vec![String::new()];
-        let mut depth = 0;
-        for c in inner.chars() {
-            match c {
-                '(' => depth += 1,
-                ')' => depth -= 1,
-                ',' if depth == 0 => {
-                    parts.push(String::new());
-                    continue;
-                }
-                _ => {}
-            }
-            parts.last_mut()?.push(c);
-        }
-        let (result, rest) = if *typed { (parts.first()?.trim().to_string(), &parts[1..]) } else { ("double".to_string(), &parts[..]) };
-        let (name, arguments) = (rest.first()?.trim(), rest.get(2)?.trim());
-        Some(format!("{} {name} {};", result.replace("_Mdouble_", "double"), arguments.replace("_Mdouble_", "double")))
-    };
-    source.lines().filter_map(|line| declaration(line.trim())).collect::<Vec<_>>().join("\n")
-}
-
-/// Parse a header file and extract all function signatures
-pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => with_glibc_mathcalls(c, path),
-        Err(_) => return Vec::new(),
-    };
-
-    let mut signatures = Vec::new();
-    let mut current_decl = String::new();
-
-    for line in content.lines() {
-        let line = line.trim();
-
-        // Skip preprocessor and pure comment lines
-        if line.starts_with('#') || line.starts_with("//") {
-            continue;
-        }
-
-        // Skip block comments (simplified - doesn't handle multi-line)
-        if line.contains("/*") && line.contains("*/") && !line.contains('(') {
-            continue;
-        }
-
-        // Skip empty lines and typedefs/structs in the middle of accumulation
-        if line.is_empty() {
-            current_decl.clear();
-            continue;
-        }
-
-        // Strip inline comments (// ...) for processing but keep declaration
-        let line_for_check = if let Some(comment_pos) = line.find("//") {
-            line[..comment_pos].trim()
-        } else {
-            line
-        };
-
-        // Accumulate multi-line declarations (use original line content)
-        current_decl.push_str(line_for_check);
-        current_decl.push(' ');
-
-        // If we have a complete declaration (ends with ; or })
-        if line_for_check.ends_with(';') && current_decl.contains('(') {
-            if let Some(sig) = extract_function_signature(&current_decl, library) {
-                signatures.push(sig);
-            }
-            current_decl.clear();
-        } else if line_for_check.ends_with('}') || (line_for_check.ends_with(';') && !current_decl.contains('(')) {
-            current_decl.clear();
-        }
-    }
-
-    signatures
-}
-
-/// Get FFI signatures by parsing header files for a library, once per process: every name the analyzer meets is looked up here
-pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, FfiSignature> {
-    static PARSED: std::sync::Mutex<Vec<(String, &'static HashMap<String, FfiSignature>)>> = std::sync::Mutex::new(Vec::new());
-    let mut parsed = PARSED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some((_, signatures)) = parsed.iter().find(|(parsed_library, _)| parsed_library == library) {
-        return signatures;
-    }
-    let signatures: &'static HashMap<String, FfiSignature> = Box::leak(Box::new(parse_signatures_from_headers(library)));
-    parsed.push((library.to_string(), signatures));
-    signatures
-}
-
-fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
-    let mut sigs = HashMap::new();
-    let paths = get_library_header_paths(library);
-
-    for path in &paths {
-        let header_sigs = parse_header_file(path, library);
-        for hsig in header_sigs {
-            if let Some(ffi_sig) = header_sig_to_ffi_sig(&hsig) {
-                sigs.insert(hsig.name.clone(), ffi_sig);
-            }
-        }
-    }
-
-    sigs
-}
-
-// ============================================================================
 // Extern C Functions and Hardcoded Signatures (Fallback)
-// ============================================================================
 
 #[cfg(feature = "native")]
 // Extern C functions from libc/libm
@@ -416,195 +45,6 @@ const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 11] = [("fabs", fab
 #[cfg(feature = "native")]
 const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 4] = [("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow)];
 
-/// Get known FFI function signatures by parsing system header files, once per process
-/// Uses unified Kind/Signature types from ffi_parser module
-pub fn get_ffi_signatures() -> &'static HashMap<String, FfiSignature> {
-    static PARSED: OnceLock<HashMap<String, FfiSignature>> = OnceLock::new();
-    PARSED.get_or_init(parse_ffi_signatures)
-}
-
-fn parse_ffi_signatures() -> HashMap<String, FfiSignature> {
-    use crate::ffi_parser::get_all_signatures;
-    use crate::function::kind_to_valtype;
-
-    let mut sigs = HashMap::new();
-
-    // Convert from ffi_parser's FfiFunction to FfiSignature
-    for (name, func) in get_all_signatures() {
-        // Convert Kind parameters to ValType (kind_to_valtype returns wasm_encoder::ValType)
-        let params: Vec<wasm_encoder::ValType> = func.signature.parameters.iter()
-            .map(|p| kind_to_valtype(p.kind))
-            .collect();
-
-        // Convert Kind return types to ValType
-        let results: Vec<wasm_encoder::ValType> = func.signature.return_types.iter()
-            .map(|k| kind_to_valtype(*k))
-            .collect();
-
-        // Use leaked strings for 'static lifetime
-        let name_static: &'static str = Box::leak(name.clone().into_boxed_str());
-        let lib_static: &'static str = match func.library.as_str() {
-            "m" => "m",
-            "c" => "c",
-            "SDL2" => "SDL2",
-            "raylib" => "raylib",
-            _ => Box::leak(func.library.clone().into_boxed_str()),
-        };
-
-        sigs.insert(name, FfiSignature {
-            name: name_static,
-            library: lib_static,
-            params,
-            results,
-        });
-    }
-
-    // Override specific WASM-adapted signatures that differ from C conventions:
-    // strcmp/strncmp use (ptr, len, ptr, len) instead of (ptr, ptr) for WASM strings
-    use wasm_encoder::ValType;
-    sigs.insert(
-        "strcmp".to_string(),
-        FfiSignature {
-            name: "strcmp",
-            library: "c",
-            params: vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
-            results: vec![ValType::I32],
-        },
-    );
-    sigs.insert(
-        "strncmp".to_string(),
-        FfiSignature {
-            name: "strncmp",
-            library: "c",
-            params: vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32, ValType::I64],
-            results: vec![ValType::I32],
-        },
-    );
-
-    // Add common libc functions that may not be directly in parsed headers
-    // (defined in _stdlib.h which is included by stdlib.h)
-    sigs.insert(
-        "abs".to_string(),
-        FfiSignature {
-            name: "abs",
-            library: "c",
-            params: vec![ValType::I32],
-            results: vec![ValType::I32],
-        },
-    );
-    sigs.insert(
-        "labs".to_string(),
-        FfiSignature {
-            name: "labs",
-            library: "c",
-            params: vec![ValType::I64],
-            results: vec![ValType::I64],
-        },
-    );
-    // String functions from string.h
-    sigs.insert(
-        "strlen".to_string(),
-        FfiSignature {
-            name: "strlen",
-            library: "c",
-            params: vec![ValType::I32], // ptr to null-terminated string
-            results: vec![ValType::I64], // returns size_t (i64)
-        },
-    );
-    sigs.insert(
-        "atoi".to_string(),
-        FfiSignature {
-            name: "atoi",
-            library: "c",
-            params: vec![ValType::I32], // ptr to null-terminated string
-            results: vec![ValType::I32],
-        },
-    );
-    sigs.insert(
-        "atol".to_string(),
-        FfiSignature {
-            name: "atol",
-            library: "c",
-            params: vec![ValType::I32], // ptr to null-terminated string
-            results: vec![ValType::I64],
-        },
-    );
-    sigs.insert(
-        "atof".to_string(),
-        FfiSignature {
-            name: "atof",
-            library: "c",
-            params: vec![ValType::I32], // ptr to null-terminated string
-            results: vec![ValType::F64],
-        },
-    );
-    for (name, arity) in LIBM_F64_FUNCTIONS {
-        sigs.entry(name.to_string())
-            .or_insert_with(|| FfiSignature::new(name, "m", vec![ValType::F64; arity], vec![ValType::F64]));
-    }
-    // `ln(x)` is the natural logarithm: libm's log under the name the program calls
-    sigs.insert("ln".to_string(), FfiSignature::new("log", "m", vec![ValType::F64], vec![ValType::F64]));
-    sigs.insert(
-        "rand".to_string(),
-        FfiSignature {
-            name: "rand",
-            library: "c",
-            params: vec![],
-            results: vec![ValType::I32],
-        },
-    );
-    for (name, params, results) in crate::host::host_word_signatures() {
-        sigs.insert(name.to_string(), FfiSignature::new(name, crate::host::HOST_LIBRARY, params, results));
-    }
-
-    sigs
-}
-
-/// Check if a function is a known FFI function
-pub fn is_ffi_function(name: &str) -> bool {
-    get_ffi_signature(name).is_some()
-}
-
-/// Get FFI signature for a function by name
-/// Searches well-known libraries (m, c, SDL2) via dynamic header discovery
-pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
-    // First check cached signatures from well-known libraries
-    if let Some(sig) = get_ffi_signatures().get(name).cloned() {
-        return Some(sig);
-    }
-
-    // Try well-known libraries via header discovery
-    for &lib in implicit_header_libraries(name) {
-        let header_sigs = get_signatures_from_headers(lib);
-        if let Some(sig) = header_sigs.get(name).cloned() {
-            return Some(sig);
-        }
-    }
-
-    None
-}
-
-/// The libraries whose headers an undeclared call `name(…)` is looked up in: libm and libc, SDL2 only for SDL_ names,
-/// so a program that never names SDL never reads its headers
-pub fn implicit_header_libraries(name: &str) -> &'static [&'static str] {
-    if name.starts_with(SDL_PREFIX) { &["m", "c", "SDL2"] } else { &["m", "c"] }
-}
-
-/// Get FFI signature from a specific library's headers
-pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignature> {
-    // First check hardcoded
-    if let Some(sig) = get_ffi_signatures().get(name).cloned() {
-        if sig.library == resolve_library_alias(library) {
-            return Some(sig);
-        }
-    }
-
-    // Try headers
-    let header_sigs = get_signatures_from_headers(library);
-    header_sigs.get(name).cloned()
-}
-
-/// Link FFI functions into a wasmtime linker
 #[cfg(feature = "native")]
 pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
     link_libm(linker, engine, &libm_header_signatures())?;
@@ -841,11 +281,9 @@ fn link_libc_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result
     Ok(())
 }
 
-// ============================================================================
 // Dynamic FFI - Load any library through reflection (raylib, SDL2, etc.)
 // Parses C headers to discover signatures, loads dylib, creates wasm wrappers
 // Uses direct function pointer calls with signature pattern matching
-// ============================================================================
 
 /// Global cache of loaded dynamic libraries
 #[cfg(feature = "native")]
@@ -859,6 +297,14 @@ fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
 
     if let Some(lib) = guard.get(lib_name) {
         return Some(Arc::clone(lib));
+    }
+
+    // libc is already loaded: the process itself has its symbols
+    #[cfg(unix)]
+    if lib_name == "c" {
+        let arc = Arc::new(Library::from(libloading::os::unix::Library::this()));
+        guard.insert(lib_name.to_string(), Arc::clone(&arc));
+        return Some(arc);
     }
 
     // Try various library paths
@@ -905,7 +351,12 @@ enum ParamType {
     I64,
     F32,
     F64,
+    /// linear memory: a text, a buffer
     Ptr,
+    /// a handle id (CPointer::Handle)
+    Handle,
+    /// an out-pointer, filled by the call (CPointer::Out)
+    Out,
 }
 
 /// Normalized return type for signature matching
@@ -932,7 +383,11 @@ fn c_type_to_param_type(c_type: &str) -> ParamType {
         "long" | "int64_t" | "long long" | "size_t" | "ssize_t" | "unsigned long" | "uint64_t" => {
             ParamType::I64
         }
-        s if s.contains('*') => ParamType::Ptr,
+        s if s.contains('*') => match pointer_kind(s) {
+            Some(CPointer::Handle) => ParamType::Handle,
+            Some(CPointer::Out) => ParamType::Out,
+            _ => ParamType::Ptr,
+        },
         _ => ParamType::I32, // int, bool, char, short, Color, etc.
     }
 }
@@ -978,8 +433,11 @@ pub fn link_dynamic_library(
     linker: &mut Linker<FfiState>,
     engine: &Engine,
     lib_name: &str,
+    imported: &std::collections::HashSet<String>,
 ) -> Result<usize> {
-    // Load the dynamic library
+    // the module imports under the name the program wrote (`use zlib`), the library and its headers go by their own (z)
+    let import_name = lib_name;
+    let lib_name = resolve_library_alias(lib_name);
     let library = match get_or_load_library(lib_name) {
         Some(lib) => lib,
         None => {
@@ -995,13 +453,12 @@ pub fn link_dynamic_library(
 
     let mut linked_count = 0;
 
-    for header_path in &header_paths {
-        let signatures = parse_header_file(header_path, lib_name);
-
-        for sig in signatures {
-            if link_single_function(linker, engine, lib_name, &library, &sig).is_ok() {
-                linked_count += 1;
-            }
+    // all headers first: their struct types decide how pointers cross (is_struct_type)
+    let signatures: Vec<FfiHeaderSignature> = header_paths.iter().flat_map(|path| parse_header_file(path, lib_name)).collect();
+    // only what the module imports: libc's headers declare hundreds of functions
+    for sig in signatures.iter().filter(|sig| imported.contains(&sig.name)) {
+        if link_single_function(linker, engine, import_name, &library, sig).is_ok() {
+            linked_count += 1;
         }
     }
 
@@ -1019,7 +476,6 @@ fn link_single_function(
 ) -> Result<()> {
     let func_name = sig.name.clone();
 
-    // Get symbol
     let func_ptr: usize = unsafe {
         let symbol: libloading::Symbol<*const ()> = library
             .get(func_name.as_bytes())
@@ -1031,22 +487,30 @@ fn link_single_function(
         return Err(anyhow::anyhow!("Null function pointer for {}", func_name));
     }
 
-    // Build wasmtime function type
-    let wasm_params: Vec<ValType> = sig
-        .param_types
-        .iter()
+    let wasm_params: Vec<ValType> = wasp_parameters(&sig.param_types)
         .filter_map(|t| c_type_to_wasm_valtype(t))
         .collect();
+
+    let param_types: Vec<ParamType> = sig.param_types.iter().map(|t| c_type_to_param_type(t)).collect();
+    let ret_type = c_type_to_ret_type(&sig.return_type);
+    let result = pointer_result(sig);
+    if result.is_some() || param_types.contains(&ParamType::Handle) {
+        let wasm_results: Vec<ValType> = match result {
+            Some(CPointer::Text) => vec![ValType::ANYREF],
+            Some(_) => vec![ValType::I32],
+            None => c_type_to_wasm_valtype(&sig.return_type).into_iter().collect(),
+        };
+        let func_type = FuncType::new(engine, wasm_params, wasm_results);
+        let out_pointee = sig.param_types.iter().find(|t| pointer_kind(t) == Some(CPointer::Out)).map(|t| pointee(t));
+        let call = PointerCall { name: func_name.clone(), func_ptr, param_types, result, ret_type, out_pointee };
+        return create_pointer_wrapper(linker, lib_name, func_type, call);
+    }
 
     let wasm_results: Vec<ValType> = c_type_to_wasm_valtype(&sig.return_type)
         .into_iter()
         .collect();
 
     let func_type = FuncType::new(engine, wasm_params.clone(), wasm_results.clone());
-
-    // Get normalized types for dispatch
-    let param_types: Vec<ParamType> = sig.param_types.iter().map(|t| c_type_to_param_type(t)).collect();
-    let ret_type = c_type_to_ret_type(&sig.return_type);
 
     // Generate signature key for dispatch (e.g., "III_I" for 3 ints returning int)
     let sig_key = generate_signature_key(&param_types, ret_type);
@@ -1066,6 +530,8 @@ fn generate_signature_key(params: &[ParamType], ret: RetType) -> String {
             ParamType::F32 => 'F',
             ParamType::F64 => 'D',
             ParamType::Ptr => 'P',
+            ParamType::Handle => 'H',
+            ParamType::Out => 'O',
         });
     }
     key.push('_');
@@ -1276,19 +742,20 @@ pub fn link_module_libraries(
     use std::collections::HashSet;
 
     // Collect unique library names from imports
-    let mut libs_to_link: HashSet<String> = HashSet::new();
+    let mut libs_to_link: HashMap<String, HashSet<String>> = HashMap::new();
 
     for import in module.imports() {
         let module_name = import.module();
-        // Skip built-in libraries that are already linked
-        if !matches!(module_name, "m" | "c" | "libm" | "libc" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY) {
-            libs_to_link.insert(module_name.to_string());
+        // Skip built-in libraries that are already linked; libc beyond its built-in functions (toupper) is linked here
+        let built_in_libc = matches!(module_name, "c" | "libc") && HAND_LINKED_LIBC.contains(&import.name());
+        if !built_in_libc && !matches!(module_name, "m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY) {
+            libs_to_link.entry(module_name.to_string()).or_default().insert(import.name().to_string());
         }
     }
 
     // Link each discovered library
-    for lib_name in libs_to_link {
-        match link_dynamic_library(linker, engine, &lib_name) {
+    for (lib_name, imported) in libs_to_link {
+        match link_dynamic_library(linker, engine, &lib_name, &imported) {
             Ok(count) if count > 0 => {
             }
             Ok(_) => {
@@ -1319,44 +786,154 @@ fn create_generic_ffi_wrapper(
     // For generic case, we pack all args into an array and use assembly/platform-specific calling
     // This is a simplified version that handles up to 8 args (enough for most APIs)
     linker.func_new(lib_name, func_name, func_type, move |mut caller, params, results| {
-        // Convert params to raw values
-        let mut args: [u64; 8] = [0; 8];
-        for (i, (param, ptype)) in params.iter().zip(param_types.iter()).enumerate() {
-            if i >= 8 {
-                break;
-            }
-            args[i] = match ptype {
-                ParamType::I32 => param.unwrap_i32() as u64,
-                ParamType::I64 => param.unwrap_i64() as u64,
-                ParamType::F32 => (param.unwrap_f32() as f64).to_bits(),
-                ParamType::F64 => param.unwrap_f64().to_bits(),
-                ParamType::Ptr => {
-                    let offset = param.unwrap_i32() as usize;
-                    get_memory_ptr(&mut caller, offset) as u64
-                }
-            };
-        }
+        let args = native_arguments(&mut caller, "", params, &param_types, &mut 0)?;
 
         // Call using platform-specific calling convention
         // ARM64 and x86_64 use similar conventions for first 8 integer/pointer args
         let ret = unsafe { call_native_function(func_ptr, &args, params.len()) };
 
-        // Convert return value
-        if !results.is_empty() {
-            results[0] = match ret_type {
-                RetType::Void => return Ok(()),
-                RetType::I32 => Val::I32(ret as i32),
-                RetType::I64 => Val::I64(ret as i64),
-                RetType::F32 => Val::F32((ret as f32).to_bits()),
-                RetType::F64 => Val::F64(ret),
-                RetType::Bool => Val::I32(if ret != 0 { 1 } else { 0 }),
-            };
+        if let Some(result) = results.first_mut() {
+            *result = native_result(ret, ret_type);
         }
 
         Ok(())
     })?;
 
     Ok(())
+}
+
+/// The raw arguments of a native call (up to 8), one per C parameter: numbers as they are, a memory pointer as the
+/// address of its text in linear memory, a handle id as its C pointer; the first out-pointer gets `out_slot`, others NULL
+#[cfg(feature = "native")]
+fn native_arguments(caller: &mut wasmtime::Caller<'_, FfiState>, name: &str, params: &[Val], param_types: &[ParamType], out_slot: &mut usize) -> wasmtime::Result<[u64; 8]> {
+    let mut args: [u64; 8] = [0; 8];
+    let mut wasp_params = params.iter();
+    let mut out_slot = Some(out_slot);
+    for (i, ptype) in param_types.iter().enumerate().take(8) {
+        if *ptype == ParamType::Out {
+            args[i] = out_slot.take().map_or(0, |slot| slot as *mut usize as u64);
+            continue;
+        }
+        let Some(param) = wasp_params.next() else { break };
+        args[i] = match ptype {
+            ParamType::I32 => param.unwrap_i32() as u64,
+            ParamType::I64 => param.unwrap_i64() as u64,
+            ParamType::F32 => (param.unwrap_f32() as f64).to_bits(),
+            ParamType::F64 => param.unwrap_f64().to_bits(),
+            ParamType::Ptr => get_memory_ptr(caller, param.unwrap_i32() as usize) as u64,
+            ParamType::Handle => {
+                let id = param.unwrap_i32();
+                caller.data().c_handles.pointer(id).ok_or_else(|| wasmtime::Error::msg(format!("{name}: {id} is no C handle of this run")))? as u64
+            }
+            ParamType::Out => unreachable!("out-pointers are filled above"),
+        };
+    }
+    Ok(args)
+}
+
+/// The C pointers a run got, handed to wasp as ids: id n is the n-th pointer, 0 is NULL; the same pointer keeps its id.
+/// The table lives in the run's HostState and goes with it: ids are never addresses, and never outlive the run
+#[cfg(feature = "native")]
+#[derive(Default)]
+pub struct CHandles {
+    pointers: Vec<usize>,
+}
+
+#[cfg(feature = "native")]
+impl CHandles {
+    pub fn id_of(&mut self, pointer: usize) -> i32 {
+        if pointer == 0 {
+            return 0;
+        }
+        let index = self.pointers.iter().position(|known| *known == pointer).unwrap_or_else(|| {
+            self.pointers.push(pointer);
+            self.pointers.len() - 1
+        });
+        index as i32 + 1
+    }
+
+    pub fn pointer(&self, id: i32) -> Option<usize> {
+        match id {
+            0 => Some(0),
+            id if id > 0 => self.pointers.get(id as usize - 1).copied(),
+            _ => None,
+        }
+    }
+}
+
+/// A C function crossing pointers (notes/ffi_handles.md): handle parameters, an out-pointer, a text or handle result
+#[cfg(feature = "native")]
+struct PointerCall {
+    name: String,
+    func_ptr: usize,
+    param_types: Vec<ParamType>,
+    /// Text, Handle, or None for the C function's own number (ret_type)
+    result: Option<CPointer>,
+    ret_type: RetType,
+    /// what the first out-pointer points to (`sqlite3_stmt` of `sqlite3_stmt **ppStmt`), for the error of a NULL there
+    out_pointee: Option<String>,
+}
+
+/// One wrapper for every C function crossing pointers: `sqlite3_column_text(stmt, i)` takes a handle and gives a text,
+/// `sqlite3_open(name)` gives the handle its out-pointer received (NULL there is an error naming the C status), a
+/// `char *` result is copied into the module as a wasp text (NULL is ø)
+#[cfg(feature = "native")]
+fn create_pointer_wrapper(linker: &mut Linker<FfiState>, lib_name: &str, func_type: FuncType, call: PointerCall) -> Result<()> {
+    let name = call.name.clone();
+    linker.func_new(lib_name, &name, func_type, move |mut caller, params, results| {
+        let mut out_slot: usize = 0;
+        let args = native_arguments(&mut caller, &call.name, params, &call.param_types, &mut out_slot)?;
+        let returned = unsafe { call_native_function(call.func_ptr, &args, call.param_types.len()) };
+        if let Some(pointee) = &call.out_pointee {
+            if out_slot == 0 {
+                return Err(wasmtime::Error::msg(format!("{} gave no {pointee} (C status {})", call.name, returned as i32)));
+            }
+        }
+        let pointer = if call.out_pointee.is_some() { out_slot } else { returned as usize };
+        let Some(result) = results.first_mut() else { return Ok(()) };
+        *result = match call.result {
+            Some(CPointer::Text) => {
+                // copied before anything else runs: a C string from getenv may change with the next call
+                let pointer = pointer as *const std::ffi::c_char;
+                let text = (!pointer.is_null()).then(|| unsafe { std::ffi::CStr::from_ptr(pointer) }.to_bytes().to_vec());
+                text_node(&mut caller, text.as_deref()).map_err(|failure| wasmtime::Error::msg(failure.to_string()))?
+            }
+            Some(_) => Val::I32(caller.data_mut().c_handles.id_of(pointer)),
+            None => native_result(returned, call.ret_type),
+        };
+        Ok(())
+    })?;
+    Ok(())
+}
+
+/// A C function's raw return value as the wasm value of its type
+#[cfg(feature = "native")]
+fn native_result(returned: u64, ret_type: RetType) -> Val {
+    match ret_type {
+        RetType::Void | RetType::I32 => Val::I32(returned as i32),
+        RetType::I64 => Val::I64(returned as i64),
+        RetType::F32 => Val::F32((returned as f32).to_bits()),
+        RetType::F64 => Val::F64(returned),
+        RetType::Bool => Val::I32(if returned != 0 { 1 } else { 0 }),
+    }
+}
+
+/// A wasp text of `bytes` in the calling module (its memory, text heap and new_text), or ø
+#[cfg(feature = "native")]
+fn text_node(caller: &mut wasmtime::Caller<'_, FfiState>, bytes: Option<&[u8]>) -> Result<Val> {
+    let export = |caller: &mut wasmtime::Caller<'_, FfiState>, name: &str| caller.get_export(name).ok_or_else(|| anyhow::anyhow!("a C text result needs the module's {name}"));
+    let mut result = [Val::AnyRef(None)];
+    let Some(bytes) = bytes else {
+        let new_empty = export(caller, "new_empty")?.into_func().ok_or_else(|| anyhow::anyhow!("new_empty is no function"))?;
+        new_empty.call(&mut *caller, &[], &mut result)?;
+        return Ok(result[0]);
+    };
+    let memory = export(caller, "memory")?.into_memory().ok_or_else(|| anyhow::anyhow!("memory is no memory"))?;
+    let heap = export(caller, crate::host::TEXT_HEAP_EXPORT)?.into_global().ok_or_else(|| anyhow::anyhow!("the text heap is no global"))?;
+    let new_text = export(caller, "new_text")?.into_func().ok_or_else(|| anyhow::anyhow!("new_text is no function"))?;
+    let (pointer, length) = crate::host::write_to_heap(&memory, heap, &mut wasmtime::AsContextMut::as_context_mut(caller), bytes)?;
+    new_text.call(&mut *caller, &[Val::I32(pointer as i32), Val::I32(length as i32)], &mut result)?;
+    Ok(result[0])
 }
 
 /// Get pointer into WASM linear memory
@@ -1413,124 +990,5 @@ unsafe fn call_native_function(func_ptr: usize, args: &[u64; 8], arg_count: usiz
             let f: extern "C" fn(u64, u64, u64, u64, u64, u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
             f(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7])
         }
-    }
-}
-
-/// Resolve library alias to canonical name
-pub fn resolve_library_alias(alias: &str) -> &'static str {
-    match alias {
-        "m" | "math" | "libm" => "m",
-        "c" | "libc" => "c",
-        "SDL2" | "sdl2" | "sdl" => "SDL2",
-        _ => {
-            // Strip "lib" prefix for any library (e.g., "libfoo" → "foo")
-            if let Some(stripped) = alias.strip_prefix("lib") {
-                // Leak the string to get static lifetime (safe for small number of libs)
-                Box::leak(stripped.to_string().into_boxed_str())
-            } else {
-                Box::leak(alias.to_string().into_boxed_str())
-            }
-        }
-    }
-}
-
-/// Check if a library has discoverable headers
-/// Returns true for well-known libraries or any library with headers found on filesystem
-pub fn is_ffi_library(lib: &str) -> bool {
-    let canonical = resolve_library_alias(lib);
-    // Well-known libraries
-    if matches!(canonical, "m" | "c" | "SDL2") {
-        return true;
-    }
-    // Dynamic discovery - check if headers exist
-    !get_library_header_paths(canonical).is_empty()
-}
-
-// ============================================================================
-// Unit Tests
-// ============================================================================
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_extract_function_signature_simple() {
-        let sig = extract_function_signature("double sqrt(double x);", "m").unwrap();
-        assert_eq!(sig.name, "sqrt");
-        assert_eq!(sig.return_type, "double");
-        assert_eq!(sig.param_types, vec!["double"]);
-    }
-
-    #[test]
-    fn test_extract_function_signature_multi_param() {
-        let sig = extract_function_signature("double fmin(double x, double y);", "m").unwrap();
-        assert_eq!(sig.name, "fmin");
-        assert_eq!(sig.return_type, "double");
-        assert_eq!(sig.param_types.len(), 2);
-    }
-
-    #[test]
-    fn test_extract_function_signature_pointer() {
-        let sig = extract_function_signature("size_t strlen(const char *s);", "c").unwrap();
-        assert_eq!(sig.name, "strlen");
-        assert_eq!(sig.return_type, "size_t");
-        assert!(sig.param_types[0].contains("char"));
-    }
-
-    #[test]
-    fn test_extract_function_signature_void_return() {
-        let sig = extract_function_signature("void exit(int status);", "c").unwrap();
-        assert_eq!(sig.name, "exit");
-        assert_eq!(sig.return_type, "void");
-    }
-
-    #[test]
-    fn test_map_c_type_to_valtype() {
-        assert_eq!(map_c_type_to_valtype("double"), Some(wasm_encoder::ValType::F64));
-        assert_eq!(map_c_type_to_valtype("float"), Some(wasm_encoder::ValType::F32));
-        assert_eq!(map_c_type_to_valtype("int"), Some(wasm_encoder::ValType::I32));
-        assert_eq!(map_c_type_to_valtype("long"), Some(wasm_encoder::ValType::I64));
-        assert_eq!(map_c_type_to_valtype("char *"), Some(wasm_encoder::ValType::I32));
-        assert_eq!(map_c_type_to_valtype("void"), None);
-    }
-
-    #[test]
-    fn test_header_sig_to_ffi_sig() {
-        let hsig = FfiHeaderSignature {
-            name: "sqrt".to_string(),
-            return_type: "double".to_string(),
-            param_types: vec!["double".to_string()],
-            param_names: vec!["x".to_string()],
-            library: "m".to_string(),
-            raw: "double sqrt(double x);".to_string(),
-        };
-
-        let ffi_sig = header_sig_to_ffi_sig(&hsig).unwrap();
-        assert_eq!(ffi_sig.name, "sqrt");
-        assert_eq!(ffi_sig.params, vec![wasm_encoder::ValType::F64]);
-        assert_eq!(ffi_sig.results, vec![wasm_encoder::ValType::F64]);
-    }
-
-    #[test]
-    fn test_parse_header_file_math() {
-        // Try to parse math.h if it exists
-        let paths = get_library_header_paths("m");
-        for path in paths {
-            let sigs = parse_header_file(&path, "m");
-            if !sigs.is_empty() {
-                // Found some signatures, verify we can find common math functions
-                let names: Vec<&str> = sigs.iter().map(|s| s.name.as_str()).collect();
-                // At least some common functions should be found
-                let has_common = names.iter().any(|n| {
-                    ["sin", "cos", "sqrt", "floor", "ceil", "fabs", "pow", "exp", "log"]
-                        .contains(n)
-                });
-                if has_common {
-                    return; // Test passes
-                }
-            }
-        }
-        // If no header found, just pass (CI might not have headers)
     }
 }

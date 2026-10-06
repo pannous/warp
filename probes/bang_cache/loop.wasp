@@ -1,0 +1,9 @@
+// 100 run-time `!` of the same block with a changing variable (notes/runtime_eval.md "Measured")
+xs = [data a*2, data 0]
+s = 0
+a = 0
+for i in 1..100 {
+	a = i
+	s += xs#1!
+}
+s

@@ -1,7 +1,7 @@
 //! First-class functions, resolved at compile time: a named function, `&name`, an alias, an operator or a lambda that captures
 //! nothing can be passed where a function is expected; the function it is passed to is specialised for it
+use crate::is;
 use warp::wasm_emitter::eval;
-use warp::*;
 
 fn printed(code: &str) -> String {
 	eval(code).serialize()
@@ -22,7 +22,7 @@ fn test_an_explicit_reference() {
 
 #[test]
 fn test_an_alias_of_a_function() {
-	is!("double2(x):=x*2; g=double2; g 4", 8);
+	is!("double2(x):=x*2; g=function double2; g 4", 8);
 	is!("double2(x):=x*2; g=&double2; g(5)", 10);
 }
 

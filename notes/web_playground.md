@@ -49,6 +49,10 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   the same path as the playground. wasi.js: args, clocks, random, stdout/stderr, a file system whose "." is the served
   repository (directories via http.server's listing page) with an in-memory overlay for writes, per test.
 - First full run (2026-10-03, 2 workers): 1140 passed, 18 failed, 75 ignored (70 #[ignore] + 5 skipped) in ~19 s.
+- Blocks known only at run time (`!`, `interpret`, host.js run_block) compile with the test binary itself: it exports
+  web_eval_block like warp.wasm, and test-worker.js hands host.js `BLOCK_COMPILER`, which makes a compiler instance of
+  it per test. Before (2026-10-05) run_block looked for web/playground/warp.wasm, which a checkout only has after
+  build.sh, and test_run_time_blocks + test_block_parameters failed (10 tests).
 
 ### What cannot run in the browser, and why
 - Not compiled (`#[cfg(feature = "native")]` on their mod lines in tests/main.rs): wasmtime APIs (test_gc_struct,
@@ -57,13 +61,17 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   runner (test_package_tools, test_uniscript).
 - Skipped by libtest itself: the 5 `#[should_panic]` tests (test_node_operators type mismatches,
   test_newline_precedence::newline_form_is_really_evaluated): with panic=abort libtest ignores them.
-- Fail at run time, inherent to a sandbox without processes, temp dir, git or network:
-  - spawn the warp binary: test_download (2), test_ffi_warning_once, test_warning_mode::the_strict_flag_turns_warnings_into_errors
-  - std::env::temp_dir panics on WASI: test_use_modules (4)
-  - lean: test_law::test_law_proved_by_lean, test_law_overflow_promotion_proved_by_lean
-  - git clones / tags of packages: test_package_pin (4), test_packages::use_loads_the_module_of_a_package, test_versions (3)
-  - threads: test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads; a directory walk below the project
-    root: test_use_scopes::use_project_sees_every_file_below_the_project_root (2026-10-04: 1437 passed, 17 failed)
+- Ignored in the browser build only (user decision P79, `#[cfg_attr(not(feature = "native"), ignore = "browser: …")]`):
+  git clones / tags of packages (test_package_pin 3), Lean (test_law 2), threads (test_eval_state 1).
+- Made to run in the browser (P79, 2026-10-05):
+  - downloads: tests/common `serve` is test_in_browser.py's `/__stub__?status=…&body=…` there (URL in WARP_HTTP_STUB)
+  - scratch files: tests/common `scratch_directory` is below /tmp, an overlay-only preopen of wasi.js (TMPDIR), since
+    std::env::temp_dir and std::process::id panic on WASI; web.rs fetch_text reads module files through the WASI file
+    system first in the tests build, so modules a test writes are found
+  - directory walks: wasi.js asks `<dir>/?listing`, which test_in_browser.py lists even when the directory holds an
+    index.html (web/uniscript did: its page's links read as entries, `use project` failed)
+- Need packages/ cloned by a native run first (a fresh worktree has none): test_packages::a_package_is_fetched_once_into_packages,
+  test_text_bytes::read_loads_a_file_as_bytes
 - libc in the browser (host.js `c`, 2026-10-04): rand, srand, abs, labs, strlen, strcmp, strncmp, atoi, atol, atof;
   the shims follow src/ffi.rs signatures: i64 results (size_t, long) are BigInts, strcmp/strncmp get (pointer, length)
   pairs, the others C strings read up to their zero byte (tests/ffi/test_libc_results.rs); anything else of libc still
@@ -109,3 +117,29 @@ custom operators, `x!` / failed / raise / try-catch / a caught stack overflow (g
 No gaps found. A test that reads a compiled module natively (wasm_reader) must be `#[cfg(feature = "native")]`, else
 the browser build of the tests does not compile (test_precomputed, fixed here; test_ffi_warning_once and
 the_strict_flag_turns_warnings_into_errors before).
+
+## Foreign runtimes in the page (host.js registerForeignRuntime)
+- foreign_call (src/foreign.rs natively) dispatches by runtime name to `registerForeignRuntime(name, {call, prepare})`:
+  `call(module, member, arguments, hooks)` is synchronous and gives a plain value (arguments null: a read);
+  `prepare(code)` is optional and asynchronous, awaited by worker.js (`prepareForeignRuntimes`) before a run, for a
+  runtime that must load first (Pyodide). The test worker cannot prepare (it never sees the code), so runtimes the
+  browser tests use load synchronously. Registered: `js` (the page's globals, host.js), `wasm` (components.js).
+- `use wasm "lib.wasm"` (components.js): build.sh components runs `jco transpile --instantiation sync` on every
+  tests/fixtures/components/*.wasm and wraps the result into components/<name>.js, a classic script with the core
+  modules as base64 (`registerComponent`); the first call importScripts it, found by the file's name alone (the page has
+  one flat folder of components). WASI p2 is a small shim: output goes to the program's print, no input, no environment.
+  test_in_browser.py runs build.sh components before serving; pages.yml installs jco and ships components/.
+- jco's JavaScript values are turned into the native JSON forms by the WIT types, which build.sh embeds as the
+  signatures of the exports (`wasm-tools component wit --json`): camelCase ↔ the WIT's kebab-case names, `{tag, val}` →
+  `{case: payload}`, flags objects → lists of names, a char → `{$char: c}`, a Codepoint (P94, as natively), a thrown
+  result `err` → the error, class instances → handles with ids per component, the argument count with the parameter
+  names. Still jco's own: the enum check's message ("\"triangle\" is not one of the cases of shape"), and a variant
+  argument (an object) is not converted.
+  tests/ffi/test_components_anywhere.rs runs in both hosts.
+
+## paint: a canvas in the page (2026-10-06, issue #15)
+`paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the
+worker's hooks.paint, the page draws one canvas per call under the output (playground.js showPaintings: nonzero/true
+is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/paint.rs, flate2 + crc32fast), prints its path and opens it on a terminal. samples/circle.wasp is the issue's demo as
+written (one loop moving x and y together, so it paints only a short diagonal), samples/filled_circle.wasp the filled
+circle with two loops.

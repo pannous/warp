@@ -1,5 +1,5 @@
 // The value of a loop is its last body value: the step a `for` loop counts with is not part of it
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_counting_loop_gives_its_last_body_value() {

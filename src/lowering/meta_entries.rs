@@ -2,13 +2,87 @@
 //! meta entry `{x:1 @unit:"cm"}`, the form that survives emission: the runtime reads it like a field (`p.@unit`), but
 //! never counts it nor compares it (`is_meta_entry` in wasm_emitter/equality.rs).
 //! Also hints `p.source` when p has both the field `source` and the meta entry `@source`: the field wins.
+//! A comment before a binding is its meta information (wiki/comments.md, card g-1tHQ): `x.@comment` is the comment,
+//! `x.meta` the map `{comment: "…"}`, unless x is an object with a field `meta`.
 
-use crate::node::{meta_entry, Bracket, Node, ATTRIBUTE_MARK};
+use crate::node::{meta_entry, Bracket, Node, Separator, ATTRIBUTE_MARK};
 use crate::operators::Op;
 
 pub fn lower(node: Node) -> Node {
 	hint_shadowed_meta(&node);
-	as_entries(node)
+	let mut comments = vec![];
+	binding_comments(&node, &mut comments);
+	as_entries(if comments.is_empty() { node } else { comment_reads(node, &comments) })
+}
+
+const COMMENT_KEY: &str = "comment";
+const META_WORD: &str = "meta";
+
+/// The comment a Meta layer of `node` carries (the parser puts it on the first word of a statement)
+fn comment_of(node: &Node) -> Option<&str> {
+	match node {
+		Node::Meta { node, data } => match data.as_ref() {
+			Node::Key(key, _, value) if matches!(key.as_ref(), Node::Symbol(name) if name == COMMENT_KEY) => match value.drop_meta() {
+				Node::Text(comment) => Some(comment),
+				_ => comment_of(node),
+			},
+			_ => comment_of(node),
+		},
+		_ => None,
+	}
+}
+
+/// A commented binding `x: …`, `x = …`, `x := …`
+struct Commented {
+	name: String,
+	comment: String,
+	/// x is an object with a field `meta`, which `x.meta` reads
+	meta_field: bool,
+}
+
+fn binding_comments(node: &Node, bindings: &mut Vec<Commented>) {
+	let mut add = |target: &Node, comment: &str, value: &Node| bindings.push(Commented {
+		name: target.drop_meta().name(),
+		comment: comment.to_string(),
+		meta_field: matches!(value.drop_meta(), Node::List(items, Bracket::Curly, _) if items.iter().any(|item| matches!(item.drop_meta(), Node::Key(key, _, _) if key.drop_meta().name() == META_WORD))),
+	});
+	match node {
+		Node::Meta { node: inner, .. } => match (comment_of(node), inner.drop_meta()) {
+			(Some(comment), Node::Key(target, Op::Colon | Op::Assign | Op::Define, value)) if matches!(target.drop_meta(), Node::Symbol(_)) => add(target, comment, value),
+			_ => binding_comments(inner, bindings),
+		},
+		Node::Key(target, Op::Colon | Op::Assign | Op::Define, value) => match comment_of(target) {
+			Some(comment) if matches!(target.drop_meta(), Node::Symbol(_)) => add(target, comment, value),
+			_ => binding_comments(value, bindings),
+		},
+		Node::List(items, _, _) => items.iter().for_each(|item| binding_comments(item, bindings)),
+		_ => {}
+	}
+}
+
+/// `x.@comment` → the comment, `x.meta` → `{comment: "…"}` of a commented binding x (the last binding of a name)
+fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
+	let binding = |name: &str| bindings.iter().rev().find(|binding| binding.name == name);
+	match node {
+		Node::Key(left, Op::Dot, right) => {
+			let read = match (left.drop_meta(), right.drop_meta()) {
+				(Node::Symbol(name), Node::Symbol(field)) => binding(name).and_then(|binding| {
+					let comment = Node::Text(binding.comment.clone());
+					match field.as_str() {
+						_ if field.strip_prefix(ATTRIBUTE_MARK) == Some(COMMENT_KEY) => Some(comment),
+						META_WORD if !binding.meta_field => Some(Node::List(vec![Node::Key(Box::new(Node::Symbol(COMMENT_KEY.to_string())), Op::Colon, Box::new(comment))], Bracket::Curly, Separator::Space)),
+						_ => None,
+					}
+				}),
+				_ => None,
+			};
+			read.unwrap_or_else(|| Node::Key(Box::new(comment_reads(*left, bindings)), Op::Dot, Box::new(comment_reads(*right, bindings))))
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(comment_reads(*node, bindings)), data },
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| comment_reads(item, bindings)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(comment_reads(*left, bindings)), op, Box::new(comment_reads(*right, bindings))),
+		other => other,
+	}
 }
 
 fn as_entries(node: Node) -> Node {

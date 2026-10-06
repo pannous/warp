@@ -1,7 +1,7 @@
 //! P24 (user, 2026-10-05): the suffix form calls a user function, `4 doubled` like `4.double`. Every English past form
 //! of the name counts: +d, +ed, a doubled final consonant (`stop` → `stopped`) and y → ied (`copy` → `copied`).
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_suffix_form_calls_a_user_function() {

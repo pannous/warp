@@ -1,7 +1,7 @@
 //! `x!` unwraps (wiki/optional.md, Error.md, D2 by position: after a plain variable): the value, or a loud error
 //! when it is ø or an Error. Errors are values (Decided #1): unwrapping ø raises "unwrapped ø", catchable by `try`.
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_unwrap_gives_the_value() {

@@ -48,6 +48,8 @@ h1 span { color: var(--accent); font-weight: 500; }
 
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; }
 .status { color: var(--muted); font-size: 0.9em; }
+.native { color: var(--muted); font-size: 0.9em; }
+.native a { color: inherit; }
 .build { color: var(--muted); font-size: 0.9em; margin-left: auto; }
 .status.failed { color: var(--error); }
 
@@ -85,6 +87,8 @@ code { background: var(--code-ground); padding: 0 4px; border-radius: 4px; }
 .result { font-size: 1.15em; white-space: pre-wrap; word-break: break-word; }
 .prompt { color: var(--muted); }
 output.error { color: var(--error); }
+.paintings { display: flex; flex-wrap: wrap; gap: 8px; }
+.painting { margin-top: 10px; max-width: 100%; image-rendering: pixelated; border: 1px solid var(--line); }
 .printed { margin: 10px 0 0; padding: 8px 10px; background: var(--code-ground); border-radius: 6px; white-space: pre-wrap; max-height: 40vh; overflow: auto; }
 
 .diagnostics { list-style: none; padding: 0; margin: 12px 0 0; }

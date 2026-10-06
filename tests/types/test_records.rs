@@ -1,5 +1,6 @@
 //! Records of declared types as values (samples/binary_tree.wasp): optional fields, setting fields of instances, and
 //! the recursive functions over them
+use crate::is;
 use warp::*;
 
 const TREE: &str = "type T { value: int, left?, right? }

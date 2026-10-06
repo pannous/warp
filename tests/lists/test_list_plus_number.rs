@@ -1,8 +1,8 @@
 //! D3 (user, 2026-10-03): `[1 2 3]+4` asks append or add to each element, fallback Error;
 //! `.+` is element-wise, `xs + [4]` concatenates (like `[x]*n`, topic list-times)
+use crate::is;
 use crate::common::fails_with;
 use warp::node::ints;
-use warp::*;
 
 #[test]
 fn a_list_literal_plus_a_number_asks() {

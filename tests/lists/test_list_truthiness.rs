@@ -1,5 +1,5 @@
 // #38 (user 2026-10-03, "Truthy"): a non-empty list is truthy, also one holding only ø.
-use warp::*;
+use crate::is;
 
 #[test]
 fn a_list_of_nothing_is_truthy() {

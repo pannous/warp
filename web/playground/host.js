@@ -137,6 +137,16 @@ function programImports(holder, hooks) {
 				}
 				return buildValue(module, report.result);
 			},
+			// a module of another runtime (src/foreign.rs), run by the runtime registered under its name
+			foreign_call: (runtime, module, member, call, argumentList) => {
+				const program_ = program();
+				const [runtimeName, moduleName, memberName] = [runtime, module, member].map(node => plainOfTree(readNode(program_, node)));
+				const foreign = foreignRuntimes.get(runtimeName);
+				if (!foreign) throw new Error(`${runtimeName} ${moduleName}.${memberName}: ${runtimeName} runs only in the native host (the warp CLI)`);
+				const given = plainOfTree(readNode(program_, call)) === 1 ? plainOfTree(readNode(program_, argumentList)) : undefined;
+				const argumentValues = given === undefined ? null : given === null ? [] : Array.isArray(given) ? given : [given];
+				return buildValue(program_, treeOfPlain(foreign.call(moduleName, memberName, argumentValues, hooks)));
+			},
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
 			sleep: milliseconds => {
 				const until = Date.now() + Number(milliseconds);
@@ -145,18 +155,23 @@ function programImports(holder, hooks) {
 			random: () => Math.random(),
 			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
 			clock: () => BigInt(Date.now()),
+			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings)
+			paint: (pixels, width, height) => {
+				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
+				hooks.paint(plainOfTree(readNode(program(), pixels)), Number(width), Number(height));
+			},
 			// tasks (src/tasks.rs): `go f(x)` runs f in a fresh instance of the program, values copied in and out; a page
 			// without cross-origin isolation has no shared memory to wait on, so the task runs at once where it starts
 			task_spawn: (name, a0, a1, a2, a3) => startTask(holder, hooks, decode(cString(name)), [a0, a1, a2, a3]),
 			task_spawn_values: (name, values) => startTask(holder, hooks, decode(cString(name)), null, readTaskValue(program(), values)),
 			task_await: id => {
-				const task = finishedTask(holder.run, hooks, id);
+				const task = takenTask(holder.run, hooks, id);
 				if (task.failure) throw new Error(task.failure);
 				return task.value;
 			},
-			task_await_value: id => buildValue(program(), taskTree(finishedTask(holder.run, hooks, id).value)),
-			task_join: id => finishedTask(holder.run, hooks, id).failure ? 1n : 0n,
-			task_failure: id => buildValue(program(), textTree(finishedTask(holder.run, hooks, id).failure ?? "")),
+			task_await_value: id => buildValue(program(), taskTree(takenTask(holder.run, hooks, id).value)),
+			task_join: id => takenTask(holder.run, hooks, id).failure ? 1n : 0n,
+			task_failure: id => buildValue(program(), textTree(takenTask(holder.run, hooks, id).failure ?? "")),
 			task_status: id => taskStatus(holder.run, id),
 			task_control: (id, operation) => controlTask(holder.run, id, operation),
 			// where a loop starts: a task paused from its starting program waits (its control word, set by controlTask)
@@ -296,20 +311,27 @@ function startTask(holder, hooks, name, ints, values) {
 	return id;
 }
 
+// the task's function as the program wrote it (src/tasks.rs task_name): `f`, not `f·node`; `go block 1`, not `go·block·1`
+function taskName(name) {
+	return name.replace(/·node$/, "").replace(/^go·block·/, "go block ");
+}
+
 // the task here: {value} (a number or a tree) or {failure}
 function runTask(module, hooks, warnings, name, ints, values, arrays, captured = [], control = null) {
 	const taskHolder = { warnings, run: { module, tasks: new Map(), shared: arrays }, control };
+	let instance;
 	try {
-		const instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
+		instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
 		taskHolder.exports = instance.exports;
 		// what the spawning instance's closures captured, as it had it
 		for (const [global, value] of captured) instance.exports[global].value = value.tree ? buildValue(instance.exports, value.tree) : value.raw;
 		const callee = instance.exports[name];
 		const result = values ? callee(buildValue(instance.exports, values)) : callee(...ints.slice(0, callee.length));
-		joinTasks(taskHolder.run, hooks);
+		const unread = joinTasks(taskHolder.run, hooks);
+		if (unread) return { failure: `task ${taskName(name)}: ${unread}` };
 		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result };
 	} catch (trap) {
-		return { failure: `task ${name}: ${trapMessage(trap, name)}` };
+		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}` };
 	}
 }
 
@@ -328,8 +350,20 @@ function finishedTask(run, hooks, id) {
 	return record;
 }
 
+// the task's record, read by the program (await, join): a failure nobody read ends the run (joinTasks)
+function takenTask(run, hooks, id) {
+	(run.taken ??= new Set()).add(id);
+	return finishedTask(run, hooks, id);
+}
+
+// every task done; the first failure nobody read, but a stopped task's (src/tasks.rs join_all)
 function joinTasks(run, hooks) {
-	for (const id of run.tasks.keys()) finishedTask(run, hooks, id);
+	let unread;
+	for (const id of run.tasks.keys()) {
+		const { failure } = finishedTask(run, hooks, id);
+		if (failure && unread === undefined && !failure.endsWith(TASK_STOPPED) && !run.taken?.has(id)) unread = failure;
+	}
+	return unread;
 }
 
 // running, finished or failed, without waiting (src/host.rs task status codes)
@@ -353,6 +387,14 @@ function controlTask(run, id, operation) {
 	task.worker.terminate();
 	run.tasks.set(id, { failure: `task ${task.name}: ${TASK_STOPPED}` });
 	return 1n;
+}
+
+// the message a raised error left in trap_detail before trapping (src/wasm_reader.rs with_trap_detail), if any
+function raisedText(exports) {
+	const detail = exports?.[TRAP_DETAIL_EXPORT]?.value;
+	if (!detail) return null;
+	const tree = readNode(exports, detail);
+	return tree.data?.text ?? tree.data?.node?.data?.text ?? null;
 }
 
 // the runtime error a trap means: the first runtime error function on its stack (`index_out_of_range` reads "index out
@@ -434,6 +476,100 @@ function buildValue(module, tree) {
 	}
 }
 
+// a value of the program (a reader.js tree) as a plain JavaScript value, for foreign_call: lists arrays, `{a:1}` objects
+const KIND_KEY = 6n;
+function plainOfTree(tree) {
+	const kind = BigInt(tree.kind);
+	const payload = tree.data ?? {};
+	const items = () => [payload.node, ...(tree.chain ?? []).map(cell => cell.data?.node)].filter(Boolean);
+	switch (Number(kind & KIND_MASK)) {
+		case 0: return null;
+		case 1:
+			if (payload.ratio) return Number(payload.ratio[0].int) / Number(payload.ratio[1].int);
+			return payload.int === undefined ? null : Number(payload.int);
+		case 2: return Number(payload.float);
+		case 3: case 5: return payload.text;
+		case 4: return String.fromCodePoint(payload.i31);
+		case 6: return { [plainOfTree(payload.node)]: plainOfTree(tree.chain?.[0] ?? { kind: "0" }) };
+		case 7: case 8: {
+			const values = items();
+			const isObject = (kind >> 8n) === 0n && values.length > 0 && values.every(item => (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
+			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfTree);
+		}
+		default: return null;
+	}
+}
+
+// the runtimes foreign_call reaches in the page, by their name in `use <runtime> …`: call(module, member, arguments,
+// hooks) gives the member's plain value (arguments null: a read, no call); prepare(code), when given, readies the runtime
+// for a program before it runs (an asynchronous load), since a call itself is synchronous; a later registration of a
+// name adds to the earlier one (worker.js gives python its prepare)
+const foreignRuntimes = new Map();
+function registerForeignRuntime(name, runtime) {
+	foreignRuntimes.set(name, { ...foreignRuntimes.get(name), ...runtime });
+}
+const prepareForeignRuntimes = code => Promise.all([...foreignRuntimes.values()].map(runtime => runtime.prepare?.(code)));
+
+// what wasp's operators on a value of the page forward to (src/lowering/foreign_modules.rs), as in src/foreign.rs's loop
+const FOREIGN_OPERATORS = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
+	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
+	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
+
+// `use python` in the page: the bridge of src/foreign.rs (foreign_python.py) in Pyodide, which worker.js loads before
+// a program that says `use python` runs; requests and answers are the same JSON, handles stay in Pyodide
+// `use python`: Pyodide's bridge (web/playground/foreign_python.py), which the playground's worker.js loads before a run
+registerForeignRuntime("python", {
+	call(moduleName, memberName, argumentValues) {
+		if (!self.pythonAnswer) throw new Error(`python ${moduleName}.${memberName}: Python (Pyodide) is not loaded here`);
+		const reply = JSON.parse(self.pythonAnswer(JSON.stringify({ module: moduleName, member: memberName, arguments: argumentValues })));
+		if (reply.error !== undefined) throw new Error(`python ${typeof moduleName === "string" ? moduleName : "value"}.${memberName}: ${reply.error}`);
+		return reply.value;
+	},
+});
+
+// objects of the page without a plain form (a Date, a Map, an instance, a function), kept for foreign_call behind ids:
+// they cross as `{$handle: id, type, text}` and are the object again when they come back
+const foreignHandles = [];
+const handleOf = value => ({ $handle: foreignHandles.push(value), type: value?.constructor?.name ?? typeof value, text: String(value).slice(0, 200) });
+const unhandled = value => value !== null && typeof value === "object" && "$handle" in value ? foreignHandles[value.$handle - 1] : value;
+const isPlainObject = value => [Object.prototype, null].includes(Object.getPrototypeOf(value));
+
+// `use js Math`: the page's own globalThis.Math; npm modules need the native host
+registerForeignRuntime("js", {
+	call(moduleName, memberName, argumentValues) {
+		// a module's name, or a handle: an object of the page kept behind an id (src/foreign.rs)
+		let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
+		if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
+		for (const part of memberName.split(".")) {
+			if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
+			[owner, value] = [value, value[part]];
+		}
+		return argumentValues === null ? value : value.apply(owner, argumentValues.map(unhandled));
+	},
+});
+
+// a plain JavaScript value as a tree buildValue builds: arrays square lists, objects `{key:value …}`, booleans 1/0
+const SQUARE_LIST = String((1n << 8n) | KIND_LIST);
+const CURLY_LIST = String(KIND_LIST);
+const COLON_KEY = String((1n << 8n) | KIND_KEY); // src/operators.rs OP_CODES: Colon is 1
+// a codepoint (a WIT char, P94) as src/foreign.rs sends it, since JSON would make it a text: `{$char: "b"}`
+const KIND_CODEPOINT = "4";
+const isCodepoint = value => value !== null && typeof value === "object" && Object.keys(value).length === 1 && typeof value.$char === "string" && [...value.$char].length === 1;
+function treeOfPlain(value) {
+	if (value === null || value === undefined) return { kind: "0", data: null, chain: [] };
+	if (typeof value === "boolean") return { kind: KIND_INT, data: { int: value ? "1" : "0" }, chain: [] };
+	if (typeof value === "bigint") return { kind: KIND_INT, data: { int: String(value) }, chain: [] };
+	if (typeof value === "number") return Number.isSafeInteger(value) ? { kind: KIND_INT, data: { int: String(value) }, chain: [] } : { kind: KIND_FLOAT, data: { float: value }, chain: [] };
+	if (typeof value === "string") return textTree(value);
+	if (isCodepoint(value)) return { kind: KIND_CODEPOINT, data: { i31: value.$char.codePointAt(0) }, chain: [] };
+	if (Array.isArray(value)) return { kind: SQUARE_LIST, items: value.map(treeOfPlain) };
+	if (typeof value === "function" || (typeof value === "object" && !isPlainObject(value))) return treeOfPlain(handleOf(value));
+	// an integer beyond 64 bits from Python: its digits (foreign_python.py plain)
+	if (typeof value === "object" && Object.keys(value).length === 1 && typeof value.$int === "string") return { kind: KIND_INT, data: { exact: [value.$int, "1"] }, chain: [] };
+	if (typeof value === "object") return { kind: CURLY_LIST, items: Object.entries(value).map(([key, item]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: key }, chain: [] }, treeOfPlain(item)] })) };
+	return textTree(String(value));
+}
+
 // the Int handle of an exact number beyond the fixnums, composed from fixnum pieces with the module's exported Int
 // operations (src/tasks.rs EXACT_BUILDERS, integer_handle)
 const FIXNUM_MIN = -(2n ** 62n - 1n);
@@ -463,7 +599,9 @@ function runProgram(bytes, hooks) {
 	const { warnings } = holder;
 	try {
 		const result = instance.exports.main();
-		joinTasks(holder.run, hooks); // the tasks nobody awaited finish before the result, as natively
+		// the tasks nobody awaited finish before the result, as natively; a failure nobody read ends the run
+		const unread = joinTasks(holder.run, hooks);
+		if (unread) return { failure: unread, warnings };
 		return { result: readResult(instance.exports, result), warnings };
 	} catch (trap) {
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
@@ -474,22 +612,30 @@ function runProgram(bytes, hooks) {
 }
 
 // The compiler that runs the blocks a program builds at run time (run_block): loaded on first use, an instance of its own,
-// so it never re-enters the compiler whose program is running. A page sets BLOCK_COMPILER_URL to its compiler's URL.
+// so it never re-enters the compiler whose program is running. A page sets BLOCK_COMPILER_URL to its compiler's URL, or
+// BLOCK_COMPILER to a function giving the exports of a new compiler instance (test-worker.js: the test binary itself).
 let blockCompilerExports;
 function blockCompiler(hooks) {
-	if (!blockCompilerExports) {
-		const url = self.BLOCK_COMPILER_URL ?? "warp.wasm";
-		let bytes;
-		try {
-			bytes = getSync(url, undefined, true);
-		} catch (failure) {
-			throw new Error(`a block known only at run time needs the warp compiler ${url} (${failure.message}): build it with web/playground/build.sh`);
-		}
-		let exports;
-		exports = new WebAssembly.Instance(new WebAssembly.Module(bytes), { warp_host: warpHost(() => exports.memory, hooks) }).exports;
-		blockCompilerExports = exports;
-	}
+	blockCompilerExports ??= self.BLOCK_COMPILER ? self.BLOCK_COMPILER(hooks) : compilerFromUrl(hooks);
 	return blockCompilerExports;
+}
+
+// the next block gets a new compiler instance: after a trap the old one is unusable
+function forgetBlockCompiler() {
+	blockCompilerExports = undefined;
+}
+
+function compilerFromUrl(hooks) {
+	const url = self.BLOCK_COMPILER_URL ?? "warp.wasm";
+	let bytes;
+	try {
+		bytes = getSync(url, undefined, true);
+	} catch (failure) {
+		throw new Error(`a block known only at run time needs the warp compiler ${url} (${failure.message}): build it with web/playground/build.sh`);
+	}
+	let exports;
+	exports = new WebAssembly.Instance(new WebAssembly.Module(bytes), { warp_host: warpHost(() => exports.memory, hooks) }).exports;
+	return exports;
 }
 
 // the report of src/web.rs eval_block_report: {result: tree} or {error: message}
@@ -498,7 +644,13 @@ function evalBlock(hooks, request) {
 	const bytes = utf8.encode(request);
 	const pointer = compiler.web_alloc(bytes.length);
 	new Uint8Array(compiler.memory.buffer, pointer, bytes.length).set(bytes);
-	const length = compiler.web_eval_block(pointer, bytes.length);
+	let length;
+	try {
+		length = compiler.web_eval_block(pointer, bytes.length);
+	} catch (trap) {
+		forgetBlockCompiler();
+		throw trap;
+	}
 	const report = JSON.parse(readText(compiler, compiler.web_report(), length));
 	compiler.web_free(pointer, bytes.length);
 	return report;

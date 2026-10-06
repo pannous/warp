@@ -16,6 +16,52 @@ pub const MACOS_C_HEADERS: Resource = Resource { name: "the macOS C headers (lib
 /// `lean`/`lake` runs are disabled in cloud sessions (user decision): no toolchain there, and proofs are slow
 pub const LEAN: Resource = Resource { name: "the Lean toolchain (disabled in cloud sessions)", available: || std::env::var(CLOUD_SESSION_VAR).as_deref() != Ok("true") };
 
+// The test macros (user decision P100: they live with the tests, not in the library). is!(code, value) compiles and
+// runs code through the whole pipeline (parse, analyze, emit, run, read back) and compares the result
+#[macro_export]
+macro_rules! eq {
+	// Evaluate string expressions like "3+3"
+	($a:expr, $b:expr) => {{
+		assert_eq!($a, $b);
+	}};
+}
+
+#[macro_export]
+macro_rules! is {
+	// Evaluate string expressions like "3+3" and roundtrip through WASM
+	// Standard comparison for built-in types
+	($a:expr, $b:expr) => {{
+		let result = ::warp::wasm_emitter::eval($a);
+		assert_eq!(result, $b);
+	}};
+	// For wasm_struct! types: use reverse comparison (Person == Node)
+	($a:expr, $b:expr, gc) => {{
+		let result = ::warp::wasm_emitter::eval($a);
+		assert!($b == result, "is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}", $a, $b, result);
+	}};
+}
+
+#[macro_export]
+macro_rules! skip {
+	($($t:tt)*) => {};
+}
+
+#[macro_export]
+macro_rules! check {
+	($cond:expr) => {{
+		assert!($cond);
+	}};
+}
+
+#[macro_export]
+macro_rules! put {
+        // ($($arg:tt)*) => (println!($($arg)*));
+    ($($arg:expr),*) => {{
+        $(print!("{:?}", $arg);)*
+        println!(); // New line at the end
+    }};
+}
+
 /// `requires!(RESOURCE);` as the first line of a test: where the resource is missing the test ends here, saying so
 /// loudly on stderr (never silently); where it exists the test runs as before
 #[macro_export]
@@ -42,6 +88,7 @@ pub fn fails_with(code: &str, needle: &str) {
 }
 
 /// Local HTTP stub answering every request with `status` and `body`: fetch tests need no network
+#[cfg(feature = "native")]
 pub fn serve(status: &'static str, body: &'static str) -> String {
 	use std::io::{Read, Write};
 	let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -57,11 +104,49 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 	format!("http://{address}/data")
 }
 
+/// In the browser the test server answers instead (web/playground/test_in_browser.py /__stub__, its URL in WARP_HTTP_STUB)
+#[cfg(not(feature = "native"))]
+pub fn serve(status: &'static str, body: &'static str) -> String {
+	let stub = std::env::var("WARP_HTTP_STUB").expect("the browser test page names its HTTP stub (wasi.js)");
+	format!("{stub}?status={}&body={}", percent_encoded(status), percent_encoded(body))
+}
+
+#[cfg(not(feature = "native"))]
+fn percent_encoded(text: &str) -> String {
+	text.bytes().map(|byte| if byte.is_ascii_alphanumeric() { (byte as char).to_string() } else { format!("%{byte:02X}") }).collect()
+}
+
+/// A directory for the scratch files of `name`, unique to this test process: below the system's temp dir, or below /tmp
+/// of the browser's in-memory file system (web/playground/wasi.js; every browser test is an instance of its own), where
+/// std::env::temp_dir and std::process::id panic
+pub fn scratch_directory(name: &str) -> std::path::PathBuf {
+	#[cfg(feature = "native")]
+	return std::env::temp_dir().join(format!("{name}_{}", std::process::id()));
+	#[cfg(not(feature = "native"))]
+	return std::path::PathBuf::from(std::env::var("TMPDIR").expect("the browser test page names its temp dir (wasi.js)")).join(name);
+}
+
 /// What the warp binary writes to stdout running `code` (no questions asked)
 #[cfg(feature = "native")]
 pub fn printed(code: &str) -> String {
 	let output = warp_command().args(["--no-ask", code]).output().expect("warp runs");
 	String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+/// The warp-runtime stub executables are built from (P104: warp never copies itself into one): built once per test run
+/// and kept under this checkout's version, as warp_command keeps its warp
+#[cfg(feature = "native")]
+pub fn runtime_stub() -> &'static std::path::Path {
+	static STUB: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+	STUB.get_or_init(|| {
+		let built = std::process::Command::new(env!("CARGO")).args(["build", "--offline", "--quiet", "-p", "warp-runtime", "--bin", "warp-runtime"])
+			.current_dir(env!("CARGO_MANIFEST_DIR")).status().expect("cargo runs");
+		assert!(built.success(), "cargo build -p warp-runtime failed");
+		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name("warp-runtime");
+		let own = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("warp-runtime-{}", env!("CARGO_PKG_VERSION")));
+		std::fs::copy(&shared, &own).expect("copy the warp-runtime stub");
+		own
+	})
 }
 
 /// A command running this checkout's warp binary. Every checkout builds the one shared target/debug/warp, so another

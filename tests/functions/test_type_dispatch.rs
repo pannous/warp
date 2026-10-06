@@ -1,7 +1,7 @@
 //! Multiple dispatch by argument type (wiki/polymorphism.md, notes/wiki_features.md row 26): the variant a call takes
 //! is chosen by the types of its arguments, for every spelling of a typed definition. Return-type dispatch: notes/dispatch.md.
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const FOO: &str = "foo of int = it+it; foo of float = it/2.0; ";
 

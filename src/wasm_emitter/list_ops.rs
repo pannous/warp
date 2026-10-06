@@ -6,11 +6,13 @@ use Instruction::I32Const;
 use Instruction as I;
 use ValType::Ref;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND};
-use crate::wasm_emitter::layout::BYTE;
+use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::node::Node;
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
 
 
+/// An ASCII letter with this bit set is lowercase: `byte | ASCII_LOWERCASE_BIT == 'e'` takes e and E
+const ASCII_LOWERCASE_BIT: i32 = 0x20;
 /// Runtime functions that read text by one of its units (byte, code point, grapheme)
 const TEXT_UNIT_USERS: [&str; 7] =
 	["node_count", "node_bytes", "string_char_at", "node_with_at", "text_byte_count", "text_codepoint_count", "text_grapheme_count"];
@@ -325,9 +327,9 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[
 				I::LocalGet(0), I::LocalGet(0), I::I32Load8U(BYTE), I::LocalSet(next),
 				I32Const(1), I32Const(2), I32Const(3), I32Const(4),
-				I::LocalGet(next), I32Const(0xF0), I::I32LtU, I::Select,
-				I::LocalGet(next), I32Const(0xE0), I::I32LtU, I::Select,
-				I::LocalGet(next), I32Const(0x80), I::I32LtU, I::Select,
+				I::LocalGet(next), I32Const(utf8::FOUR_BYTE_LEAD), I::I32LtU, I::Select,
+				I::LocalGet(next), I32Const(utf8::THREE_BYTE_LEAD), I::I32LtU, I::Select,
+				I::LocalGet(next), I32Const(utf8::ONE_BYTE_END), I::I32LtU, I::Select,
 				I::I32Add, I::LocalTee(next),
 				I::LocalGet(1), I::LocalGet(next), I::LocalGet(1), I::I32LtU, I::Select,
 			]);
@@ -337,10 +339,10 @@ impl WasmGcEmitter {
 		self.runtime_function("utf8_decode", vec![int, int], vec![int], vec![int], |_, f| {
 			let codepoint = 2;
 			Self::emit_list(f, &[
-				I::LocalGet(0), I::I32Load8U(BYTE), I::LocalTee(codepoint), I32Const(0x80), I::I32GeU, I::If(BlockType::Empty),
-				I::LocalGet(codepoint), I32Const(0x07), I32Const(0x0F), I32Const(0x1F),
-				I::LocalGet(codepoint), I32Const(0xE0), I::I32GeU, I::Select,
-				I::LocalGet(codepoint), I32Const(0xF0), I::I32GeU, I::Select,
+				I::LocalGet(0), I::I32Load8U(BYTE), I::LocalTee(codepoint), I32Const(utf8::ONE_BYTE_END), I::I32GeU, I::If(BlockType::Empty),
+				I::LocalGet(codepoint), I32Const(utf8::FOUR_BYTE_PAYLOAD), I32Const(utf8::THREE_BYTE_PAYLOAD), I32Const(utf8::TWO_BYTE_PAYLOAD),
+				I::LocalGet(codepoint), I32Const(utf8::THREE_BYTE_LEAD), I::I32GeU, I::Select,
+				I::LocalGet(codepoint), I32Const(utf8::FOUR_BYTE_LEAD), I::I32GeU, I::Select,
 				I::I32And, I::LocalSet(codepoint),
 			]);
 			Self::emit_skip_continuation_bytes(f, 0, 1, Some(codepoint));
@@ -357,9 +359,9 @@ impl WasmGcEmitter {
 			f.instruction(&I::LocalSet(0));
 			// CR LF stays together, any other control ends the cluster
 			Self::emit_list(f, &[
-				I::LocalGet(previous), I32Const(0x0D), I::I32Eq, I::LocalGet(0), I::LocalGet(1), I::I32LtU, I::I32And,
+				I::LocalGet(previous), I32Const('\r' as i32), I::I32Eq, I::LocalGet(0), I::LocalGet(1), I::I32LtU, I::I32And,
 				I::If(BlockType::Empty),
-				I::LocalGet(0), I::I32Load8U(BYTE), I32Const(0x0A), I::I32Eq,
+				I::LocalGet(0), I::I32Load8U(BYTE), I32Const('\n' as i32), I::I32Eq,
 				I::If(BlockType::Empty), I::LocalGet(0), I32Const(1), I::I32Add, I::Return, I::End,
 				I::End,
 			]);
@@ -434,7 +436,7 @@ impl WasmGcEmitter {
 				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
 				I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1),
 				I::LocalGet(count),
-				I::LocalGet(pointer), I::I32Load8U(BYTE), I32Const(0xC0), I::I32And, I32Const(0x80), I::I32Ne,
+				I::LocalGet(pointer), I::I32Load8U(BYTE), I32Const(utf8::CONTINUATION_MASK), I::I32And, I32Const(utf8::CONTINUATION_MARK), I::I32Ne,
 				I::I64ExtendI32U, I::I64Add, I::LocalSet(count),
 				I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer),
 				I::Br(0), I::End, I::End, I::LocalGet(count),
@@ -480,18 +482,18 @@ impl WasmGcEmitter {
 		func.instruction(&I::If(BlockType::Empty));
 		func.instruction(&I::LocalGet(pointer));
 		func.instruction(&I::I32Load8U(BYTE));
-		func.instruction(&I32Const(0xC0));
+		func.instruction(&I32Const(utf8::CONTINUATION_MASK));
 		func.instruction(&I::I32And);
-		func.instruction(&I32Const(0x80));
+		func.instruction(&I32Const(utf8::CONTINUATION_MARK));
 		func.instruction(&I::I32Eq);
 		func.instruction(&I::If(BlockType::Empty));
 		if let Some(accumulator) = accumulator {
 			func.instruction(&I::LocalGet(accumulator));
-			func.instruction(&I32Const(6));
+			func.instruction(&I32Const(utf8::PAYLOAD_BITS));
 			func.instruction(&I::I32Shl);
 			func.instruction(&I::LocalGet(pointer));
 			func.instruction(&I::I32Load8U(BYTE));
-			func.instruction(&I32Const(0x3F));
+			func.instruction(&I32Const(utf8::CONTINUATION_PAYLOAD));
 			func.instruction(&I::I32And);
 			func.instruction(&I::I32Or);
 			func.instruction(&I::LocalSet(accumulator));
@@ -767,7 +769,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &at_end);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
 			Self::emit_list(f, &byte);
-			Self::emit_list(f, &[I32Const(0x20), I::I32Or, I32Const('e' as i32), I::I32Eq, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I32Const(ASCII_LOWERCASE_BIT), I::I32Or, I32Const('e' as i32), I::I32Eq, I::If(BlockType::Empty)]);
 			Self::emit_list(f, &advance);
 			Self::emit_list(f, &at_end);
 			s.emit_fail_if(f, "invalid_number");
@@ -1280,15 +1282,15 @@ impl WasmGcEmitter {
 			s.call(f, "grapheme_end");
 			Self::emit_list(f, &[
 				I::LocalSet(stop),
-				I::LocalGet(2), I::I32WrapI64, I::LocalTee(codepoint), I32Const(0x10FFFF), I::I32GtU,
+				I::LocalGet(2), I::I32WrapI64, I::LocalTee(codepoint), I32Const(utf8::MAX_CODE_POINT), I::I32GtU,
 			]);
 			s.emit_fail_if(f, "invalid_number");
 			Self::emit_list(f, &[
 				// UTF-8 width of the code point: 1 to 4 bytes
 				I32Const(1), I32Const(2), I32Const(3), I32Const(4),
-				I::LocalGet(codepoint), I32Const(0x10000), I::I32LtU, I::Select,
-				I::LocalGet(codepoint), I32Const(0x800), I::I32LtU, I::Select,
-				I::LocalGet(codepoint), I32Const(0x80), I::I32LtU, I::Select,
+				I::LocalGet(codepoint), I32Const(utf8::THREE_BYTE_END), I::I32LtU, I::Select,
+				I::LocalGet(codepoint), I32Const(utf8::TWO_BYTE_END), I::I32LtU, I::Select,
+				I::LocalGet(codepoint), I32Const(utf8::ONE_BYTE_END), I::I32LtU, I::Select,
 				I::LocalSet(width),
 				// length = bytes - replaced grapheme + width
 				I::LocalGet(end), I::LocalGet(pointer), I::I32Sub,
@@ -1305,7 +1307,7 @@ impl WasmGcEmitter {
 				I::LocalGet(width), I::I32Add,
 				I::LocalGet(stop), I::LocalGet(end), I::LocalGet(stop), I::I32Sub, copy_bytes,
 				// lead byte marker by width, stored in stop
-				I32Const(0), I32Const(0xC0), I32Const(0xE0), I32Const(0xF0),
+				I32Const(0), I32Const(utf8::TWO_BYTE_LEAD), I32Const(utf8::THREE_BYTE_LEAD), I32Const(utf8::FOUR_BYTE_LEAD),
 				I::LocalGet(width), I32Const(3), I::I32Eq, I::Select,
 				I::LocalGet(width), I32Const(2), I::I32Eq, I::Select,
 				I::LocalGet(width), I32Const(1), I::I32Eq, I::Select,
@@ -1314,8 +1316,8 @@ impl WasmGcEmitter {
 				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
 				I::LocalGet(width), I32Const(1), I::I32LeU, I::BrIf(1),
 				I::LocalGet(width), I32Const(1), I::I32Sub, I::LocalTee(width), I::LocalGet(start), I::I32Add,
-				I::LocalGet(codepoint), I32Const(0x3F), I::I32And, I32Const(0x80), I::I32Or, I::I32Store8(BYTE),
-				I::LocalGet(codepoint), I32Const(6), I::I32ShrU, I::LocalSet(codepoint),
+				I::LocalGet(codepoint), I32Const(utf8::CONTINUATION_PAYLOAD), I::I32And, I32Const(utf8::CONTINUATION_MARK), I::I32Or, I::I32Store8(BYTE),
+				I::LocalGet(codepoint), I32Const(utf8::PAYLOAD_BITS), I::I32ShrU, I::LocalSet(codepoint),
 				I::Br(0), I::End, I::End,
 				I::LocalGet(start), I::LocalGet(codepoint), I::LocalGet(stop), I::I32Or, I::I32Store8(BYTE),
 			]);

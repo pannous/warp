@@ -32,3 +32,6 @@ data/
 
 # packages fetched by `use <name>`, see packages.wasp
 /packages/
+
+# test fixtures may be prebuilt modules and components (tests/fixtures/components/*/build.sh rebuilds them)
+!tests/fixtures/**/*.wasm

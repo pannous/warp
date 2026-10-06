@@ -1,5 +1,5 @@
 # cargo install --path . --locked --offline
-# GO OFFLINE against fucking 10 sec compilation every time!
+# Offline builds: avoids the ~10 s registry update on every compile
 # --offline mode: dependencies come from the local registry cache. Vendoring is deactivated for now (no vendor/ on main;
 # the `vendor` branch and its refresh workflow are kept for offline cloud agents: notes/cloud_offline_build.md)
 
@@ -38,7 +38,7 @@ deprecated = "warn"
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
 default = ["native", "validate"]
-native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading"]
 # validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
@@ -54,10 +54,9 @@ anyhow = "1.0"
 unicode-normalization = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-#wasm-ast = { version = "0.1.0", features = ["full"] } # shitty vaporware
 #wast = "*"
 wasmparser = "0.259"
-wasm-encoder = "0.259"
+wasm-encoder = { version = "0.259", features = ["wasmparser"] } # wasmparser: reencode, for dead_functions.rs
 log = "0.4.29"
 #fetch = "0.8.1"
 num-bigint = { version = "0.4.8", features = ["serde"] }
@@ -82,6 +81,8 @@ libloading = { version = "0.9", optional = true }  # Dynamic library loading for
 wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-copying", "runtime", "wat"], optional = true }
 wasmtime-wasi = { version = "49.0.1", optional = true }
 warp-runtime = { path = "crates/warp-runtime", default-features = false } # without features: the names of the host words only
+flate2 = { version = "1.1", optional = true } # paint() writes a PNG natively (src/paint.rs); in the tree through wasmtime already
+crc32fast = { version = "1.5", optional = true } # the PNG chunk checksums
 sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (src/run/module_cache.rs); wasmtime uses it already
 #wasmtime-runtime = "*" # Wasmtime runtime
 #wasmtime-wasi = "*" # WASI support for Wasmtime

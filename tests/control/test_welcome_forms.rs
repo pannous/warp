@@ -1,7 +1,7 @@
 //! Forms from other languages, lowered to wasp's own (notes/welcoming.md): `match` cases written with `=>`, `_` the
 //! default case (Rust, Scala), and `loop { … }`, the endless loop left by `break` (Rust)
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn match_cases_may_be_written_with_fat_arrows() {

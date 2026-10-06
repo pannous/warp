@@ -136,7 +136,7 @@ impl Op {
 	/// Higher = tighter binding. Right > left means right-associative.
 	/// Suffix operators: (left_bp, 0) - only binds to left
 	/// Prefix operators: (0, right_bp) - only binds to right
-	pub fn binding_power(&self) -> (u8, u8) {
+	pub const fn binding_power(&self) -> (u8, u8) {
 		match self {
 			// Suffix operators (bind very tight to left, no right operand)
 			Op::Square | Op::Cube => (200, 0),
@@ -401,6 +401,11 @@ const OP_CODES: [Op; 57] = [
 /// Encode Op as i64 for storage in kind field
 pub fn op_to_code(op: &Op) -> i64 {
 	OP_CODES.iter().position(|known| known == op).unwrap_or(0) as i64
+}
+
+/// The operator written `text` (Op::as_str's inverse): `*` is Mul
+pub fn op_named(text: &str) -> Option<Op> {
+	OP_CODES.iter().find(|op| op.as_str() == text).copied()
 }
 
 /// Decode i64 back to Op

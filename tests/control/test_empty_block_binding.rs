@@ -1,7 +1,8 @@
 //! `b={}` binds the empty block, which evaluates like `{}` itself: ø, the empty list
 
 use warp::wasm_emitter::eval;
-use warp::{eq, Node};
+use warp::Node;
+use crate::eq;
 
 #[test]
 fn an_empty_block_can_be_bound() {

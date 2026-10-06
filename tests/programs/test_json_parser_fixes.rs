@@ -1,5 +1,5 @@
 //! What samples/json_parser.wasp needed: fields of what a function returns, nested lists as text
-use warp::*;
+use crate::is;
 
 #[test] // `result = parse_json(text); result.name` was "undefined function: name"
 fn test_field_of_a_call_result() {

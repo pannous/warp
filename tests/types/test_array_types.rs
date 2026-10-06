@@ -1,5 +1,5 @@
 //! Typed and fixed arrays: `x : 100 int`, `pixel:int[100]`, `char[3]`, `26 * char` are zero-filled lists; `[number]` is `list of number`
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_typed_array_as_a_value() {

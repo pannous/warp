@@ -1,6 +1,7 @@
 // A variable given values of two kinds (a list, then an Int) holds what it was given last: it is held as a Node and
 // computes by the kind it has at run time (P45). It kept its first kind: `x = 5; x = [1]; x` was 1, a text then an Int
 // a cast failure
+use crate::is;
 use warp::*;
 
 #[test]

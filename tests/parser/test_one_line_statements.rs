@@ -1,6 +1,6 @@
 // Two print statements on one line separated only by spaces are an error naming the separators (user decision 2026-10-03)
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const HINT: &str = "two statements on one line? separate them with `;` or a newline";
 
@@ -13,6 +13,6 @@ fn two_prints_on_one_line_need_a_separator() {
 
 #[test]
 fn separated_prints_still_run() {
-	is!("g=\"hi\"; print g;    print g", "hi");
-	is!("print \"a\"\nprint \"b\"", "b");
+	is!("g=\"hi\"; print g;    print g; g", "hi"); // print gives nothing (issue #18)
+	is!("print \"a\"\nprint \"b\"", warp::Node::Empty);
 }

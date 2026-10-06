@@ -1,6 +1,6 @@
 //! Every spelling of a type-name definition is one parse (notes/matching.md, wiki_features row 25): `=` and `:=`,
 //! a `to` phrase with a `:` or a `{…}` body. square is defined in each test (no built-in square, P39).
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_define_operator_takes_the_same_slots_as_assign() {

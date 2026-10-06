@@ -1,7 +1,7 @@
 //! P48 (user-decided, open_decisions.md): the wiki's
 //! operator declarations on superscript glyphs (wiki/operator.md) override the built-in superscript power, and the short
 //! form `suffix ⁰ := 1` (without `operator`) declares the same.
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_suffix_operator_on_a_superscript_digit() {

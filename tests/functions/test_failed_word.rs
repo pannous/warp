@@ -1,5 +1,5 @@
 //! `x failed` (wiki/optional.md, Error.md): true when x holds an Error value, unlike `missing`/`empty`, which test for ø
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_failed_tests_for_an_error_value() {

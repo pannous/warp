@@ -1,5 +1,5 @@
 // A number subscript on a variable that starts as the empty map `{}` keys it (user, P34): `d={}; d[1]="a"` is {1:"a"}
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_number_subscript_keys_an_empty_map() {

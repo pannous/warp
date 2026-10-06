@@ -1,0 +1,26 @@
+package warp:demo;
+
+interface text-tools {
+  record stats { words: u32, letters: u32 }
+  enum shape { circle, square }
+  words: func(text: string) -> list<string>;
+  stats-of: func(text: string) -> stats;
+  sides: func(of: shape) -> u32;
+  checked-sqrt: func(x: f64) -> result<f64, string>;
+  next-char: func(c: char) -> char;
+  letters: func(text: string) -> list<char>;
+
+  /// a value that stays in the component: warp holds it as a handle
+  resource counter {
+    constructor(start: s64);
+    increment: func(by: s64) -> s64;
+    value: func() -> s64;
+    merged: static func(a: borrow<counter>, b: borrow<counter>) -> counter;
+  }
+  total: func(counters: list<borrow<counter>>) -> s64;
+}
+
+world demo {
+  export fib: func(n: u32) -> u64;
+  export text-tools;
+}

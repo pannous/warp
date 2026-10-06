@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_sorting() { is!("samples/sorting.wasp", "-3,0,1,2,5,5,6,7,8,9"); }

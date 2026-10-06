@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use warp::Node;
 use warp::wasp_parser::WaspParser;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_fibonacci() { is!("samples/fibonacci.wasp", 55); }

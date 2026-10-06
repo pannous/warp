@@ -1,6 +1,6 @@
 //! Newcomer syntax from Python/JS is eaten: it compiles to its intent, and a hint names the wasp form
 //! (probes/sugar/cases.txt; decisions in notes/open_decisions.md)
-
+use crate::is;
 use crate::common::fails_with;
 use warp::*;
 use warp::node::strings;
@@ -122,6 +122,7 @@ fn a_glued_hash_name_statement_counts() {
 fn the_let_note_is_shown_until_acknowledged() {
 	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
+	warp::normalize::set_style(warp::normalize::Style::canonical()); // the default leaves let and := open (user #12)
 	let let_hints = || capture_hints(|| warp::wasm_emitter::eval("let x = 3; x")).1.iter().filter(|hint| hint.original.starts_with("let ")).count();
 	let path = "scratch/test_welcoming_sugar.acknowledged";
 	std::fs::create_dir_all("scratch").unwrap();
@@ -134,6 +135,7 @@ fn the_let_note_is_shown_until_acknowledged() {
 		use_acknowledgements_file(path);
 		assert_eq!(let_hints(), 0, "acknowledged in an earlier run");
 	});
+	warp::normalize::set_style(warp::normalize::Style::default());
 	std::fs::remove_file(path).unwrap();
 }
 

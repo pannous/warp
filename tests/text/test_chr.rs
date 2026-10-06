@@ -1,5 +1,5 @@
 // `chr(n)`, the character of a code point: the inverse of `ord(c)`
-use warp::is;
+use crate::is;
 
 #[test]
 fn chr_is_the_inverse_of_ord() {

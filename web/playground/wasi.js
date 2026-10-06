@@ -1,6 +1,7 @@
 // A small WASI preview1 for the test binary in the browser (test-worker.js): arguments, clocks, randomness, stdout and
 // stderr to a callback, and a file system whose "." is the repository root, read with synchronous GETs (FILE_ROOT;
-// directories through the static server's listing page, cached per worker) and whose /include holds the C headers warp's FFI reads (WARP_INCLUDE). Writes land in an in-memory overlay that lives as
+// directories through the static server's listing page (?listing: test_in_browser.py lists a directory even when it
+// holds an index.html), cached per worker) and whose /include holds the C headers warp's FFI reads (WARP_INCLUDE), with an empty /tmp. Writes land in an in-memory overlay that lives as
 // long as the instance (one test), so a test can write a scratch file and read it back. Unknown calls: ENOSYS.
 
 const ERRNO = { SUCCESS: 0, BADF: 8, INVAL: 28, NOENT: 44, NOSYS: 52, NOTDIR: 54 };
@@ -10,10 +11,14 @@ const FD_FLAG_APPEND = 1;
 const ROOT_FD = 3; // ".", the served repository; wasi-libc also resolves relative paths ("/" + path) here
 const INCLUDE_FD = 4; // "/include": the C headers warp reads for FFI signatures, each served by its name (test_in_browser.py)
 const INCLUDE_DIRECTORY = "/include";
-const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY]]);
+const TEMPORARY_FD = 5; // "/tmp": a directory of the overlay only, for scratch files (tests/common temp_dir)
+const TEMPORARY_DIRECTORY = "/tmp";
+const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY], [TEMPORARY_FD, TEMPORARY_DIRECTORY]]);
 const INCLUDE_URL = new URL("/__include__/", self.location.href).href;
-// WARP_INCLUDE replaces the compiler's include directories (src/ffi_parser.rs), so it looks in exactly one place
-const ENVIRONMENT = [`WARP_INCLUDE=${INCLUDE_DIRECTORY}`];
+// WARP_INCLUDE replaces the compiler's include directories (src/ffi_parser.rs), so it looks in exactly one place;
+// WARP_HTTP_STUB is test_in_browser.py's stub answering any status and body (tests/common serve); TMPDIR the scratch
+const ENVIRONMENT = [`WARP_INCLUDE=${INCLUDE_DIRECTORY}`, `WARP_HTTP_STUB=${new URL("/__stub__", self.location.href).href}`,
+	`TMPDIR=${TEMPORARY_DIRECTORY}`];
 const ALL_RIGHTS = 0xffffffffffffffffn;
 const RANDOM_CHUNK = 65536; // crypto.getRandomValues limit per call
 const DIRENT_HEADER = 24;
@@ -59,7 +64,7 @@ function listing(directory) {
 	if (listings.has(directory)) return listings.get(directory);
 	const parent = directory.includes("/") ? directory.slice(0, directory.lastIndexOf("/")) : "";
 	const exists = directory === "" || listing(parent)?.get(directory.slice(directory.lastIndexOf("/") + 1));
-	const request = exists ? requestSync("GET", `${FILE_ROOT}${directory}${directory ? "/" : ""}`) : null;
+	const request = exists ? requestSync("GET", `${FILE_ROOT}${directory}${directory ? "/" : ""}?listing`) : null;
 	const entries = request && new Map([...request.responseText.matchAll(LISTING_LINK)].map(match => {
 		const name = decodeURIComponent(match[1]);
 		return [name.replace(/\/$/, ""), name.endsWith("/")];
@@ -87,6 +92,8 @@ function served(path) {
 		if (!headers.has(url)) headers.set(url, requestSync("HEAD", url) ? lazyFile(url) : null);
 		return headers.get(url);
 	}
+	if (path === TEMPORARY_DIRECTORY) return { entries: new Set() };
+	if (path.startsWith("/")) return null; // the machine has nothing else; the overlay may
 	if (path === "") return { entries: new Set(listing("").keys()) };
 	const directory = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
 	const isDirectory = listing(directory)?.get(path.slice(path.lastIndexOf("/") + 1));

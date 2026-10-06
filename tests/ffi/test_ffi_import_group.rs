@@ -1,6 +1,6 @@
 //! `import (sin, floor, fabs) from 'm'` imports every name of the group
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_group_of_three_names_is_imported() {

@@ -1,6 +1,6 @@
 //! P52 (user, 2026-10-05): a phrase-defined function is called with its own prepositions: `add 1 to 2`, `square of 4`.
 //! Everywhere else `to` stays a range and `of` a field lookup.
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_to_phrases_are_called_with_their_prepositions() {

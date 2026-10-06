@@ -52,10 +52,28 @@ impl Diagnostic {
 	pub fn into_error(self) -> Node {
 		let error = crate::node::error(&self.to_string());
 		if !self.fixes.is_empty() {
+			note_said();
 			ERROR_DIAGNOSTICS.with(|errors| errors.borrow_mut().push(self));
 		}
 		error
 	}
+}
+
+/// The colors of terminal output (ANSI codes)
+#[derive(Clone, Copy)]
+pub enum Color {
+	Green = 32,
+	Yellow = 33,
+	Cyan = 36,
+	Gray = 90,
+}
+
+/// `text` in `color` when stderr is a terminal and NO_COLOR is unset; plain text in a file, a pipe or an editor's
+/// output panel, which would show the raw escape codes. All colored output goes through here.
+pub fn paint(color: Color, text: &str) -> String {
+	static COLORED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+	let colored = *COLORED.get_or_init(|| std::io::IsTerminal::is_terminal(&std::io::stderr()) && std::env::var_os("NO_COLOR").is_none());
+	if colored { format!("\x1b[{}m{text}\x1b[0m", color as u8) } else { text.to_string() }
 }
 
 /// Does a message end its description with a position ` at line:column`
@@ -64,6 +82,35 @@ pub fn names_position(message: &str) -> bool {
 	description.rsplit_once(" at ").is_some_and(|(_, place)| {
 		place.split_once(':').is_some_and(|(line, column)| !line.is_empty() && line.chars().all(|c| c.is_ascii_digit()) && column.chars().all(|c| c.is_ascii_digit()) && !column.is_empty())
 	})
+}
+
+/// The text of a node for a message: its serialization, or the source from its position to the end of the statement
+/// when a lowering pass rebuilt it with compiler temporaries (`range_value·item`), which the program never wrote
+pub fn written_text(node: &Node) -> String {
+	let serialized = node.serialize().trim().to_string();
+	if !serialized.contains(crate::analyzer::TEMPORARY_SEPARATOR) {
+		return serialized;
+	}
+	let source_line = |(line, column): (usize, usize)| SOURCE.with(|source| {
+		let rest: String = source.borrow().lines().nth(line.checked_sub(1)?)?.chars().skip(column.saturating_sub(1)).collect();
+		Some(statement_prefix(&rest).trim().to_string())
+	});
+	position(node).and_then(source_line).filter(|text| !text.is_empty()).unwrap_or(serialized)
+}
+
+/// The start of `text` up to the end of its statement: a `;` or a closing bracket it did not open (`[cube 1..n]`)
+fn statement_prefix(text: &str) -> &str {
+	let mut depth = 0usize;
+	for (offset, character) in text.char_indices() {
+		match character {
+			'(' | '[' | '{' => depth += 1,
+			')' | ']' | '}' if depth == 0 => return &text[..offset],
+			')' | ']' | '}' => depth -= 1,
+			';' if depth == 0 => return &text[..offset],
+			_ => {}
+		}
+	}
+	text
 }
 
 /// The line and column the parser recorded for `node`, or for the first of its parts that has them: a node a lowering
@@ -132,8 +179,25 @@ pub fn with_warning_mode<R>(mode: WarningMode, body: impl FnOnce() -> R) -> R {
 	result
 }
 
+thread_local! {
+	/// How many diagnostics this thread has said (warnings, errors with fixes, assumptions, hints): a step that says
+	/// something must run again to say it again (analysis_memo.rs remembers only silent analyses)
+	static SAID: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+pub fn said() -> u64 {
+	SAID.with(|said| said.get())
+}
+
+pub(crate) fn note_said() {
+	SAID.with(|said| said.set(said.get() + 1));
+}
+
 /// Compile-time warnings: printed in Warn mode, the first one is the error in Error mode
 pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
+	if !warnings.is_empty() {
+		note_said();
+	}
 	match (warning_mode(), warnings.first()) {
 		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
 		_ => {
@@ -156,6 +220,7 @@ pub fn take_error_diagnostics() -> Vec<Diagnostic> {
 
 /// A warning the running program reports with `warning(message)`
 pub fn report_runtime_warning(message: &str) {
+	note_said();
 	eprintln!("warning: {message}");
 	RUNTIME_WARNINGS.with(|warnings| warnings.borrow_mut().push(message.to_string()));
 }
@@ -457,6 +522,7 @@ pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 /// The reading the program gets: an error-fallback ambiguity is an error naming every explicit form; otherwise the
 /// default, with a warning shown until the user says "got it" (an error under `use strict`, acknowledged or not)
 pub fn ask(question: &Ask) -> Result<usize, Node> {
+	note_said();
 	let diagnostic = question.diagnostic();
 	if question.fallback == Fallback::Error {
 		return Err(diagnostic.into_error());

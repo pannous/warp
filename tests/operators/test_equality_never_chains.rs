@@ -1,5 +1,5 @@
 //! #39 (user, 2026-10-03): `==` and `!=` never chain with `<` `>`: `1<2==2` is `(1<2)==2`; `a<b<c` still chains
-use warp::*;
+use crate::is;
 
 #[test]
 fn equality_compares_the_result_of_an_ordering() {

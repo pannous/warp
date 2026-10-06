@@ -1,4 +1,4 @@
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_colon_body_of_while_stops_at_semicolon() {

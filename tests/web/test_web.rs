@@ -6,7 +6,8 @@ use warp::extensions::print;
 use warp::util::fetch;
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::parse;
-use warp::{eq, is, put, skip};
+use warp::type_kinds::NodeKind;
+use crate::{is, eq, skip, put};
 
 #[test]
 fn test_html_wasp() {
@@ -92,10 +93,20 @@ fn test_dom() {
 #[test]
 #[ignore = "WEBAPP feature required"]
 fn test_dom_property() {
-	// eq!(result.kind(), strings);
-	//	eq!(result.kind(), stringp);
-	// if (result.value()));
-	// is!(*result.value()), "dfsa");
+	// #[cfg(not(feature = "WEBAPP"))]{
+	//     return;
+	// }
+	let mut result = eval("getExternRefPropertyValue($canvas,'width')"); // ok!!
+	eq!(result.value(), &300); // only works because String "300" gets converted to BigInt 300
+							//	result = eval("width='width';$canvas.width");
+	result = eval("$canvas.width");
+	eq!(result.value(), &300);
+	//	return;
+	result = eval("$canvas.style");
+	eq!(result.kind(), NodeKind::Text);
+	//	eq!(result.kind, stringp);
+	// if (result.value().string);
+	// is!(*result.value().string, "dfsa");
 	//	getExternRefPropertyValue OK  [object HTMLCanvasElement] style [object CSSStyleDeclaration]
 	// ⚠️ But can't forward result as smarti or stringref:  SyntaxError: Failed to parse String to BigInt
 	// todo : how to communicate new string as RETURN type of arbitrary function from js to wasp?

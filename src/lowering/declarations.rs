@@ -1,4 +1,6 @@
 //! `enum color {red green blue}` declares the object `color={red:0 green:1 blue:2}`: a case is its index, `color.green` is 1.
+//! `flags virtues={fast, safe}` (WIT flags, a record of bools) declares `virtues={fast:false safe:false}`, and
+//! `virtues goal = fast+safe` the record `goal={fast:true safe:true}`: the flags named are true, the others false.
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use crate::node::{Bracket, Node, Separator};
@@ -9,6 +11,7 @@ use crate::operators::{is_function_keyword, Op};
 const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
 const IT_PARAMETER: &str = "it";
 const ENUM_WORD: &str = "enum";
+const FLAGS_WORD: &str = "flags";
 const FIRST_CASE_INDEX: i64 = 0;
 /// The argument left out of a partial application: `add(1, _)`
 const PLACEHOLDER: &str = "_";
@@ -42,7 +45,87 @@ const FINISH_EVENT: &str = "finishes";
 const HANDLED_PREFIX: &str = "handled·";
 
 pub fn lower(node: Node) -> Node {
-	lower_lists(node, enum_object)
+	lower_lists(lower_flags(node), enum_object)
+}
+
+/// The flags types the program declares (`flags virtues={fast, safe}`), their declarations as the empty set, and the
+/// typed declarations `virtues goal = fast+safe` as records of bools
+fn lower_flags(program: Node) -> Node {
+	let mut types: Vec<(String, Vec<String>)> = vec![];
+	program.visit(&mut |node| {
+		if let Node::List(items, _, _) = node {
+			types.extend(flags_declaration(items));
+		}
+	});
+	if types.is_empty() {
+		return program;
+	}
+	rewrite_flags(program, &types)
+}
+
+/// `flags virtues={fast, safe}`, `flags virtues {fast safe}`: the type and its flags
+fn flags_declaration(items: &[Node]) -> Option<(String, Vec<String>)> {
+	let (name, members) = match items {
+		[word, declaration] if is_flags_word(word) => match declaration.drop_meta() {
+			Node::Key(name, Op::Assign, members) => (name.as_ref(), members.as_ref()),
+			_ => return None,
+		},
+		[word, name, members] if is_flags_word(word) => (name, members),
+		_ => return None,
+	};
+	let (Node::Symbol(name), Node::List(members, Bracket::Curly, _)) = (name.drop_meta(), members.drop_meta()) else { return None };
+	let members: Option<Vec<String>> = members.iter().map(|member| match member.drop_meta() {
+		Node::Symbol(member) => Some(member.clone()),
+		_ => None,
+	}).collect();
+	Some((name.clone(), members?))
+}
+
+fn is_flags_word(word: &Node) -> bool {
+	matches!(word.drop_meta(), Node::Symbol(word) if word == FLAGS_WORD)
+}
+
+fn rewrite_flags(node: Node, types: &[(String, Vec<String>)]) -> Node {
+	let record = |name: &Node, members: &[String], set: &[String]| {
+		let entries = members.iter().map(|member| {
+			let value = if set.contains(member) { Node::True } else { Node::False };
+			Node::Key(Box::new(Node::Symbol(member.clone())), Op::Colon, Box::new(value))
+		}).collect();
+		Node::Key(Box::new(name.clone()), Op::Assign, Box::new(Node::List(entries, Bracket::Curly, Separator::Space)))
+	};
+	match node {
+		Node::List(items, bracket, separator) => {
+			if let Some((name, members)) = flags_declaration(&items) {
+				return record(&Node::Symbol(name), &members, &[]);
+			}
+			// `virtues goal = fast+safe`
+			if let [type_name, declaration] = items.as_slice() {
+				if let (Node::Symbol(type_name), Node::Key(variable, Op::Assign, value)) = (type_name.drop_meta(), declaration.drop_meta()) {
+					if let Some((_, members)) = types.iter().find(|(name, _)| name == type_name) {
+						let set = named_flags(value);
+						if let Some(unknown) = set.iter().find(|flag| !members.contains(flag)) {
+							return crate::node::error(&format!("{type_name} has no flag {unknown}; its flags: {}", members.join(", ")));
+						}
+						return record(variable, members, &set);
+					}
+				}
+			}
+			Node::List(items.into_iter().map(|item| rewrite_flags(item, types)).collect(), bracket, separator)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(rewrite_flags(*left, types)), op, Box::new(rewrite_flags(*right, types))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite_flags(*node, types)), data },
+		other => other,
+	}
+}
+
+/// `fast+safe`, `fast|safe`, `{fast, safe}`, `fast`: the flags a value names
+fn named_flags(value: &Node) -> Vec<String> {
+	match value.drop_meta() {
+		Node::Symbol(flag) => vec![flag.clone()],
+		Node::Key(left, _, right) => [named_flags(left), named_flags(right)].concat(),
+		Node::List(items, _, _) => items.iter().flat_map(named_flags).collect(),
+		_ => vec![],
+	}
 }
 
 /// `job = go f(x)` starts a task, `await job` waits for its value (wiki/async.md). A module runs on one thread, so a
@@ -79,6 +162,10 @@ pub fn lower_tasks(node: Node) -> Node {
 	if words.is_empty() {
 		return node;
 	}
+	// `def hi: {…}`, `fun f(x) {…}` too
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, &node);
+	functions.extend(context.user_functions.into_keys());
 	// the functions a `go` starts: `once the download finishes` names the task by its function
 	node.visit(&mut |part| if let Node::List(items, _, _) = part {
 		if let [word, started, ..] = items.as_slice() {
@@ -266,7 +353,12 @@ impl Tasks<'_> {
 					return if is_task_handler { handled } else { self.lower(handled) };
 				}
 				let items: Vec<Node> = items.into_iter().map(|item| self.lower(item)).collect();
-				self.task_statement(&items).unwrap_or(Node::List(items, bracket, separator))
+				match self.task_statement(&items) {
+					// `{ go f(x) }` stays a block: a body in braces is no getter
+					Some(statement) if bracket == Bracket::Curly => Node::List(vec![statement], bracket, separator),
+					Some(statement) => statement,
+					None => Node::List(items, bracket, separator),
+				}
 			}
 			// `job.stop()`, `job.pause`
 			Node::Key(subject, Op::Dot, word) if self.is_task(&subject) && TASK_CONTROLS.contains(&control_word(&word).as_str()) => {
@@ -455,10 +547,7 @@ impl TaskHandlers<'_> {
 			Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(&bracket, &separator) => {
 				Node::List(self.statements(items, active), bracket, separator)
 			}
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.lower(item, active)).collect(), bracket, separator),
-			Node::Key(left, op, right) => Node::Key(Box::new(self.lower(*left, active)), op, Box::new(self.lower(*right, active))),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node, active)), data },
-			other => other,
+			other => other.map_children(|child| self.lower(child, active)),
 		}
 	}
 
@@ -523,7 +612,7 @@ fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, u
 	if wrapped.is_empty() {
 		return node;
 	}
-	let mut items: Vec<Node> = wrapped.iter().map(|(function, count)| {
+	let items: Vec<Node> = wrapped.iter().map(|(function, count)| {
 		let arguments = Node::Symbol(WRAPPER_ARGUMENTS.to_string());
 		// declared a list: a function of no arguments leaves it unused, which would make it an Int (the host passes a Node)
 		let declared = Node::Key(Box::new(arguments.clone()), Op::Colon, Box::new(Node::Symbol("list".to_string())));
@@ -534,14 +623,22 @@ fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, u
 		let body = Node::List(vec![Node::Key(Box::new(result.clone()), Op::Assign, Box::new(call)), result], Bracket::Curly, Separator::Semicolon);
 		Node::Key(Box::new(head), Op::Define, Box::new(body))
 	}).collect();
+	with_definitions_first(node, items)
+}
+
+/// The program with `definitions` as its first statements
+pub(crate) fn with_definitions_first(node: Node, mut definitions: Vec<Node>) -> Node {
+	if definitions.is_empty() {
+		return node;
+	}
 	match node {
 		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			items.extend(statements);
-			Node::List(items, Bracket::None, separator)
+			definitions.extend(statements);
+			Node::List(definitions, Bracket::None, separator)
 		}
 		single => {
-			items.push(single);
-			Node::List(items, Bracket::None, Separator::Semicolon)
+			definitions.push(single);
+			Node::List(definitions, Bracket::None, Separator::Semicolon)
 		}
 	}
 }
@@ -577,10 +674,7 @@ fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static 
 			};
 			Node::List([vec![items[0].clone(), guarded], items[2..].to_vec()].concat(), bracket, separator)
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| guarded_calls(item, guardable, wrapped)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(guarded_calls(*left, guardable, wrapped)), op, Box::new(guarded_calls(*right, guardable, wrapped))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(guarded_calls(*node, guardable, wrapped)), data },
-		other => other,
+		other => other.map_children(|child| guarded_calls(child, guardable, wrapped)),
 	}
 }
 
@@ -755,6 +849,29 @@ fn zero_value(kind: crate::type_kinds::Kind) -> Option<Node> {
 		Kind::Text => Node::Text(String::new()),
 		Kind::List => Node::List(vec![], Bracket::Square, Separator::Space),
 		_ => return None,
+	})
+}
+
+/// `surface = height*width int` and `x : n*2 float`, which the parser reads as `(surface = height*width) int`: a
+/// zero-filled typed array of that many elements, written `surface = height*width * int` (issue #15)
+pub fn lower_sized_arrays(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::None, Separator::Space) if sized_array(&items).is_some() => sized_array(&items).expect("guarded"),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_sized_arrays).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(lower_sized_arrays(*left)), op, Box::new(lower_sized_arrays(*right))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_sized_arrays(*node)), data },
+		other => other,
+	}
+}
+
+fn sized_array(items: &[Node]) -> Option<Node> {
+	let [binding, element_type] = items else { return None };
+	let Node::Symbol(type_name) = element_type.drop_meta() else { return None };
+	let Node::Key(name, Op::Assign | Op::Colon, count) = binding.drop_meta() else { return None };
+	let is_count = !matches!(count.drop_meta(), Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square | Bracket::Curly, _));
+	(matches!(name.drop_meta(), Node::Symbol(_)) && is_count && crate::analyzer::type_word_kind(type_name).is_some()).then(|| {
+		let array = Node::Key(Box::new(Node::List(vec![count.as_ref().clone()], Bracket::Round, Separator::None)), Op::Mul, Box::new(element_type.clone()));
+		Node::Key(name.clone(), Op::Assign, Box::new(array))
 	})
 }
 

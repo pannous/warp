@@ -1,7 +1,7 @@
 # Ahead-of-time compilation (native, wasmtime 49)
 
 Every run compiled its module with Cranelift (`Module::new`). Survey and measurements from 2026-10-05; probes in
-probes/aot/ (`measure.sh`: wasmtime CLI JIT vs .cwasm; `standalone.sh`: a standalone executable).
+probes/aot/ (`measure.sh`: wasmtime CLI JIT vs .cwasm; `standalone.sh`: a standalone executable; `shared_runtime.sh`: two-Module Linker / `warp_runtime`).
 
 ## Finding 0: tests compiled with an unoptimized Cranelift (fixed, on main)
 `[profile.dev.package.wasmtime] opt-level = 3` optimized only the wasmtime crate itself; cranelift-codegen, regalloc2 and
@@ -36,14 +36,19 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    `warp <file>.wasm` / `.cwasm` now link host, WASI and FFI imports (a printing program failed with an unknown
    `wasi_snapshot_preview1::fd_write` before).
    CLI, debug warp, ackermann: 41 ms without cache, 12 ms with the cache or the .cwasm.
-3. **Standalone executable, `warp build --exe <file>`** (implemented): `<file>.exe` is a copy of the prebuilt stub
+3. **Standalone executable, `warp <file>`** (implemented; P103: running a file leaves `<file>` next to it, `<file>.exe`
+   on Windows, rebuilt only when the source is newer; a program the runtime cannot carry gets a note; `warp build`/`compile`
+   only make it, `--wasm` writes only the module): the executable is a copy of the prebuilt stub
    `warp-runtime` (crates/warp-runtime: wasmtime with `runtime`, `gc`, `gc-copying`, `std`, no Cranelift) with the
    program's machine code appended (`[stub][cwasm][u64 le length][WRPCwasm]`); at start the stub reads its own last 16
-   bytes and runs what it carries. The stub is found through `WARP_RUNTIME_STUB`, else `warp-runtime` next to `warp`,
-   else warp itself is the stub (warp's main also runs a program it carries: tests need no extra build, the executable
-   is then warp-sized). Release stub (`cargo build --release -p warp-runtime`): **805 KB**; ackermann.exe **972 KB**
+   bytes and runs what it carries. The stub is found through `WARP_RUNTIME_STUB`, else `warp-runtime` next to `warp` (or next to
+   the file a link to warp points to), else warp builds it once from its source checkout (`cargo build -p
+   warp-runtime` in warp's profile, issue #10: building an executable just works); only without that source nothing is
+   written (P104: never a ~120 MB copy of warp; a plain run notes it on stderr, build exits 1).
+   Tests build the stub once per run (tests/common runtime_stub). `warp run <file>` runs without leaving an
+   executable (P105). Release stub (`cargo build --release -p warp-runtime`): **805 KB**; ackermann.exe **972 KB**
    (167 KB machine code), starts and finishes in well under 10 ms (probe build: 0.33 ms in total).
-   - The program prints its value: build --exe compiles `print(<last statement>)` (pipeline::compile_printing_result;
+   - The program prints its value: build compiles `print(<last statement>)` (pipeline::compile_printing_result;
      a declaration or a print stays), so the value is formatted by warp's own print (`[10 20 30]`, texts unquoted)
      and the stub needs no Node reader.
      Decided by the user (P77): an executable shows its prints, then its value as `print` shows it (texts without
@@ -57,8 +62,11 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
      `compiler` feature (Cranelift + the component model it turns off); the browser build gets only the word names.
    - Engines turn off the component model and its concurrency support, else the .cwasm refuses to load into a
      runtime built without them.
-   - macOS: appending keeps the ad-hoc signature valid enough to run, `codesign -v` reports "failed strict
-     validation"; a signed release would put the machine code in a Mach-O section instead (like bun --compile).
+   - macOS (2026-10-05, crates/warp-runtime/src/macho.rs): the stub's signature is dropped, the machine code appended
+     inside the __LINKEDIT segment (its file and memory size grown to cover it), and warp signs the executable ad hoc
+     (`codesign --sign - --force`): `codesign --verify --strict` passes. Plain appending after the signature ran but
+     failed strict validation. A Developer ID signature for distribution is the same codesign call with an identity.
+     The executable finds its program before the signature (LC_CODE_SIGNATURE), elsewhere at the end of the file.
 4. **wasmtime's own CLI**: `wasmtime compile -W gc=y,function-references=y` + `wasmtime run --allow-precompiled`
    works for import-free programs (11–12 ms per process).
 
@@ -84,8 +92,17 @@ module repeats their machine code. A shared runtime module linked to the program
 ## Recommendation
 1. Done: Cranelift crates optimized in dev builds (largest win, tests 8×).
 2. Done (branch aot): the on-disk module cache for every native run, and `warp compile --aot`.
-3. Done (g-qV5Y, g-qV8Y): one shared gc_engine per process (a repeated run is a map lookup) and `warp build --exe`.
-4. Later: link programs against one shared runtime module instead of emitting the runtime into each module.
+3. Done (g-qV5Y, g-qV8Y): one shared gc_engine per process (a repeated run is a map lookup) and `warp build`.
+4. Done (2026-10-05): dead-function elimination of every emitted module (src/dead_functions.rs): functions no export,
+   start, element segment or global reaches are dropped. `f(x):=x+1; f(41)`: 113 → 52 functions, 7.6 → 5.0 KB wasm,
+   cwasm 131 → 92 KB, single-threaded Cranelift 17.0 → 14.7 ms; ackermann 10.9 → 8.4 KB, cwasm 149 → 128 KB;
+   functions:: (289 tests, one thread, cache off) 17.1 → 13.4 s.
+5. Parked (card): one shared runtime module linked to every program. Would bring f to ~7 ms and ~55 KB, about −3 s of a
+   35 s cold suite and nothing once the module cache is warm, but it changes the linking model everywhere (memory,
+   text_heap, exception tags imported from the runtime, identical GC rec groups, a runtime instance per store in
+   run_main, tasks, guarded_call, run_block, host.js, a standalone executable carrying two modules).
+   Probe (g-qV-s first slice): `probes/aot/shared_runtime.sh` proves two-Module + Linker with import
+   `"warp_runtime"` (no component model); production INT_RUNTIME / emit split is still Later.
 
 ## Test-suite time (./test.sh)
 test.sh prints `TIMING: compile N s, run N s` and the 15 slowest tests (libtest `--report-time`, enabled on stable by
@@ -96,3 +113,21 @@ The run is bounded by its slowest tests, not by Cranelift any more: test_law_pro
 every_sample_runs_without_a_compiler_error 15.6 s, test_upper_and_lower 14.9 s, the uniscript tests 6–11.6 s each
 (8 of the 15 slowest), upper_and_lower_map_latin_greek_and_cyrillic 9.0 s, upper_and_lower_cover_unicode_scripts
 8.2 s, use_requires_a_version_of_a_package 8.1 s, read_loads_a_file_as_bytes 7.4 s.
+
+## Run speed (`warp run` vs `warp <file>`, P105, 2026-10-06)
+`probes/aot/run_speed.sh <warp>`, debug build on a loaded M-series Mac, medians of 9, a small program (fib(20)):
+| | fresh program | unchanged program |
+|---|---|---|
+| `warp run <file>` | 73 ms | 28 ms |
+| `warp <file>` (runs, then builds the executable) | 159 ms | 29 ms |
+| `warp compile --wasm` (front end and emitter only) | 65 ms | |
+
+- `warp run` touches no machine-code path: no precompile_module (only `compile --aot`), no compile_printing_result, no
+  stub. It shares the JIT and the on-disk module cache with every run, which is what makes the unchanged case 28 ms.
+- The fresh case is the front end: parse and lowering ~23 ms (`warp lower`), emitting the module ~40 ms; wasmtime's
+  JIT compile and the run add only ~8 ms. Cranelift `OptLevel::None` measured no difference (73 vs 75 ms fresh, the
+  50M-iteration loop 148 vs 150 ms), so the default stays; Winch has no GC support. Speeding up `warp run` further is
+  the compiler-speed card (lowering passes, the emitted runtime).
+- A plain run of a fresh file costs ~85 ms more: the printing variant compiled once more and its machine code
+  written into the executable; unchanged files skip it (the executable is newer).
+

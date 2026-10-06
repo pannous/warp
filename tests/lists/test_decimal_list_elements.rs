@@ -1,6 +1,6 @@
 //! An element of a list of decimal literals is the exact number it is (0.5 is 1/2), usable in arithmetic
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_decimal_element_takes_part_in_arithmetic() {

@@ -1,6 +1,6 @@
 //! Welcoming C habits (samples/sin.wasp, samples/sine.wasp): `real f(real x) { … }` definitions and
 //! `if (condition) statement` without braces
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_c_style_definition() {

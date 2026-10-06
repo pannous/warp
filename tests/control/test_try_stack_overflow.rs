@@ -1,7 +1,7 @@
 // `try f(args) else Y` of a user function catches the engine's stack overflow ("call stack exhausted"): the call runs
 // through the host (guarded_call, natively and in the browser). Running out of fuel stays uncatchable (the runaway guard).
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const DEEP: &str = "down(n) := if n == 0 then 0 else 1 + down(n - 1); ";
 

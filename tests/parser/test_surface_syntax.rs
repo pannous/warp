@@ -1,7 +1,7 @@
 // User decisions 2026-10-03 (notes/open_decisions.md): #25/#36 a space before `[` never indexes,
 // #27 Unicode operators normalized to ASCII and `be` as `:=`, D8 similarity with a relative tolerance.
 use warp::wasp_parser::parse;
-use warp::{eq, is};
+use crate::{is, eq};
 
 #[test]
 fn space_before_bracket_passes_the_list() {

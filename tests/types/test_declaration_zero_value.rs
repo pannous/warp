@@ -1,5 +1,5 @@
 // P28 (user, 2026-10-05): `real x;` read before any assignment is the zero value of its type (Go)
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_declaration_reads_as_the_zero_value_of_its_type() {

@@ -25,9 +25,19 @@ use crate::node::Node::*;
 use crate::node::*;
 use crate::operators::Op;
 
+/// The metadata a `def` keeps its parameter list under: `(def square (typed x int) (mul it it))`
+const PARAMS_WORD: &str = "params";
+
+/// The forms of an unbracketed list `(group a b)` and of a parenthesized one `(round f x)`: `(f x)` alone is a call
+const GROUP: &str = "group";
+const ROUND: &str = "round";
+
 pub struct WispParser {
 	chars: Vec<char>,
 	pos: usize,
+	/// The first thing wrong with the input (a missing `)`, a number that is none): the parse is that error, never a
+	/// silently repaired value
+	problem: Option<String>,
 }
 
 impl WispParser {
@@ -35,12 +45,21 @@ impl WispParser {
 		WispParser {
 			chars: input.chars().collect(),
 			pos: 0,
+			problem: None,
 		}
 	}
 
 	pub fn parse(input: &str) -> Node {
 		let mut parser = WispParser::new(input);
-		parser.parse_expr()
+		let node = parser.parse_expr();
+		match parser.problem {
+			Some(problem) => Error(Box::new(Text(format!("wisp: {problem}")))),
+			None => node,
+		}
+	}
+
+	fn complain(&mut self, problem: String) {
+		self.problem.get_or_insert(problem);
 	}
 
 	fn end(&self) -> bool {
@@ -81,7 +100,8 @@ impl WispParser {
 		}
 		match self.current() {
 			'(' => self.parse_sexpr(),
-			'[' => self.parse_list(),
+			'[' => self.parse_list(']', Bracket::Square),
+			'{' => self.parse_list('}', Bracket::Curly),
 			'"' => self.parse_string(),
 			'\'' => self.parse_char_or_symbol(),
 			'0'..='9' | '-' => self.parse_number(),
@@ -133,6 +153,8 @@ impl WispParser {
 			"false" => self.finish_false(),
 			"nil" | "ø" | "empty" => self.finish_empty(),
 			"list" => self.parse_list_node(),
+			GROUP => self.finish_as_bracketed(Bracket::None),
+			ROUND => self.finish_as_bracketed(Bracket::Round),
 			"key" => self.parse_key_node(),
 			"pair" => self.parse_pair_node(),
 			"cons" => self.parse_cons_node(),
@@ -141,33 +163,48 @@ impl WispParser {
 			"defn" | "def" => self.parse_defn_node(),
 			"call" => self.parse_call_node(),
 			"error" | "err" => self.parse_error_node(),
-			_ => self.finish_as_call(first),
+			// `(* it it)`, as emit_wisp writes an operation
+			_ => match crate::operators::op_named(kind) {
+				Some(op) => self.finish_as_operation(op, first),
+				None => self.finish_as_call(first),
+			},
 		}
 	}
 
-	fn finish_as_list(&mut self, first: Node) -> Node {
-		let mut items = vec![first];
+	/// `(op left right)` is the operation; with another number of operands it stays a call
+	fn finish_as_operation(&mut self, op: Op, name: Node) -> Node {
+		match <[Node; 2]>::try_from(self.items_until(')')) {
+			Ok([left, right]) => Key(Box::new(left), op, Box::new(right)),
+			Err(args) => Key(Box::new(name), Op::None, Box::new(List(args, Bracket::Round, Separator::Space))),
+		}
+	}
+
+	/// The expressions up to `close`, which is consumed
+	fn items_until(&mut self, close: char) -> Vec<Node> {
+		let mut items = vec![];
 		loop {
 			self.skip_whitespace();
-			if self.current() == ')' || self.end() {
+			if self.current() == close || self.end() {
 				break;
 			}
 			items.push(self.parse_expr());
 		}
-		self.expect(')');
+		self.expect(close);
+		items
+	}
+
+	fn finish_as_list(&mut self, first: Node) -> Node {
+		let items = [vec![first], self.items_until(')')].concat();
 		List(items, Bracket::Round, Separator::Space)
 	}
 
+	/// `(group a b)`, `(round f x)`: the items of a list with that bracket
+	fn finish_as_bracketed(&mut self, bracket: Bracket) -> Node {
+		List(self.items_until(')'), bracket, Separator::Space)
+	}
+
 	fn finish_as_call(&mut self, name: Node) -> Node {
-		let mut args = vec![];
-		loop {
-			self.skip_whitespace();
-			if self.current() == ')' || self.end() {
-				break;
-			}
-			args.push(self.parse_expr());
-		}
-		self.expect(')');
+		let args = self.items_until(')');
 		// call is: name:args or key with call semantics
 		let args_node = List(args, Bracket::Round, Separator::Space);
 		Key(Box::new(name), Op::None, Box::new(args_node))
@@ -329,13 +366,28 @@ impl WispParser {
 		}
 	}
 
+	/// `(def name body)` → name:=body; `(def name params body)`: the last part is the body, the parameter list before it
+	/// its metadata `(params …)`, as `(def name ((meta params …) body))` writes it
 	fn parse_defn_node(&mut self) -> Node {
 		self.skip_whitespace();
 		let name = self.parse_expr();
-		self.skip_whitespace();
-		let body = self.parse_expr();
+		let mut parts = vec![];
+		loop {
+			self.skip_whitespace();
+			if self.end() || self.current() == ')' {
+				break;
+			}
+			parts.push(self.parse_expr());
+		}
 		self.expect(')');
-		// defn name body → name:=body
+		let body = match parts.as_slice() {
+			[body] => body.clone(),
+			[params, body] => Meta {
+				node: Box::new(body.clone()),
+				data: Box::new(List(vec![Symbol(PARAMS_WORD.to_string()), params.clone()], Bracket::Round, Separator::Space)),
+			},
+			_ => Error(Box::new(Text(format!("def {} takes a body, or parameters and a body; got {} parts", name.serialize(), parts.len())))),
+		};
 		Key(Box::new(name), Op::Define, Box::new(body))
 	}
 
@@ -368,18 +420,10 @@ impl WispParser {
 		}
 	}
 
-	fn parse_list(&mut self) -> Node {
-		self.advance(); // skip '['
-		let mut items = vec![];
-		loop {
-			self.skip_whitespace();
-			if self.current() == ']' || self.end() {
-				break;
-			}
-			items.push(self.parse_expr());
-		}
-		self.expect(']');
-		List(items, Bracket::Square, Separator::Space)
+	/// `[a b]` or `{a b}`, as emit_wisp writes a list or a block
+	fn parse_list(&mut self, close: char, bracket: Bracket) -> Node {
+		self.advance(); // skip the opening bracket
+		List(self.items_until(close), bracket, Separator::Space)
 	}
 
 	fn parse_string(&mut self) -> Node {
@@ -400,6 +444,9 @@ impl WispParser {
 				s.push(self.current());
 			}
 			self.advance();
+		}
+		if self.end() {
+			self.complain(format!("unclosed text \"{s}"));
 		}
 		self.advance(); // skip closing '"'
 		Text(s)
@@ -458,11 +505,16 @@ impl WispParser {
 				return Number(Number::Int(if s.starts_with('-') { -n } else { n }));
 			}
 		}
-		if s.contains('.') {
-			Number(Number::Float(s.replace('_', "").parse().unwrap_or(0.0)))
-		} else {
-			Number(Number::Int(s.replace('_', "").parse().unwrap_or(0)))
-		}
+		let digits = s.replace('_', "");
+		let number = match digits.contains('.') {
+			true => digits.parse::<f64>().ok().map(Number::Float),
+			false => digits.parse::<num_bigint::BigInt>().ok().map(Number::from_bigint),
+		};
+		number.map(Number).unwrap_or_else(|| {
+			let found: String = self.chars[self.pos..].iter().take_while(|c| !c.is_whitespace() && **c != ')').collect();
+			self.complain(format!("expected a number, got {}", if s.is_empty() { found } else { s }));
+			Empty
+		})
 	}
 
 	fn parse_symbol_or_shorthand(&mut self) -> Node {
@@ -524,6 +576,10 @@ impl WispParser {
 
 	fn expect(&mut self, ch: char) {
 		self.skip_whitespace();
+		if self.current() != ch {
+			let found = if self.end() { "the end".to_string() } else { format!("{:?}", self.current()) };
+			self.complain(format!("expected {ch:?}, got {found}"));
+		}
 		if self.current() == ch {
 			self.advance();
 		}
@@ -600,11 +656,18 @@ impl WispEmitter {
 			}
 			List(items, bracket, _sep) => {
 				let (open, close) = match bracket {
+					Bracket::None | Bracket::Round => {
+						out.push_str(&format!("({}", if *bracket == Bracket::None { GROUP } else { ROUND }));
+						items.iter().for_each(|item| {
+							out.push(' ');
+							Self::emit_node(item, out);
+						});
+						out.push(')');
+						return;
+					}
 					Bracket::Square => ('[', ']'),
 					Bracket::Curly => ('{', '}'),
-					Bracket::Round => ('(', ')'),
 					Bracket::Less => ('<', '>'),
-					Bracket::None => ('[', ']'),
 					Bracket::Other(o, c) => (*o, *c),
 				};
 				out.push(open);
@@ -616,6 +679,8 @@ impl WispEmitter {
 				}
 				out.push(close);
 			}
+			// a Rust value (the line positions) has no text form: the node alone
+			Meta { node, data } if matches!(data.as_ref(), Data(_)) => Self::emit_node(node, out),
 			Meta { node, data } => {
 				out.push_str("(meta ");
 				Self::emit_node(node, out);
@@ -651,7 +716,7 @@ impl WispEmitter {
 }
 
 #[macro_export]
-macro_rules! wis {
+macro_rules! wisp {
 	// Wisp roundtrip: parse wisp -> Node -> emit wisp -> parse again -> compare
 	($input:expr) => {{
 		let node = parse_wisp($input);
@@ -676,7 +741,7 @@ macro_rules! wis {
 mod tests {
 	use super::*;
 	use crate::type_kinds::Kind;
-	use crate::{expression, put};
+	use crate::expression;
 
 	#[test]
 	fn test_wisp_basic_atom_types() {
@@ -790,7 +855,6 @@ mod tests {
 
 	#[test]
 	// #[todo]
-	#[ignore]
 	fn test_wisp_defn() {
 		// todo: param list vs body!!
 		let _result = parse_wisp("(def square (mul it it))"); // how is that already legal?
@@ -800,8 +864,7 @@ mod tests {
 		match result {
 			Key(name, Op::Define, body) => {
 				assert_eq!(*name, Symbol("square".to_string()));
-				put!(body);
-				assert_eq!(body.len(), 3); // (mul it it)
+				assert_eq!(body.drop_meta().serialize(), "mul(it it)"); // (mul it it)
 			}
 			_ => panic!("expected defn"),
 		}
@@ -865,35 +928,35 @@ mod tests {
 
 	#[test]
 	fn test_wisp_emit_atoms() {
-		wis!("ø", (&Empty));
-		wis!("true", (&True));
-		wis!("false", (&False));
-		wis!("(int 42)", (&Number(Number::Int(42))));
-		wis!("(float 3.11)", (&Number(Number::Float(3.11))));
-		wis!("(char 'x')", (&Char('x')));
-		wis!("(text 'hello')", (&Text("hello".into())));
-		wis!("foo", (&Symbol("foo".into())));
+		wisp!("ø", (&Empty));
+		wisp!("true", (&True));
+		wisp!("false", (&False));
+		wisp!("(int 42)", (&Number(Number::Int(42))));
+		wisp!("(float 3.11)", (&Number(Number::Float(3.11))));
+		wisp!("(char 'x')", (&Char('x')));
+		wisp!("(text 'hello')", (&Text("hello".into())));
+		wisp!("foo", (&Symbol("foo".into())));
 	}
 
 	#[test]
 	fn test_wisp_emit_compound() {
-		// let list = Strings!["a", "b"];
+		// let list = texts!["a", "b"];
 		let list = expression!["a", "b"];
-		wis!("[a b]", list);
+		wisp!("[a b]", list);
 
 		let key = Key(
 			Box::new(Symbol("x".into())),
 			Op::Colon,
 			Box::new(Number(Number::Int(1))),
 		);
-		wis!("(key x (int 1))", &key);
+		wisp!("(key x (int 1))", &key);
 
 		let pair = Key(
 			Box::new(Symbol("y".into())),
 			Op::Assign,
 			Box::new(Number(Number::Int(2))),
 		);
-		wis!("(pair y (int 2))", &pair);
+		wisp!("(pair y (int 2))", &pair);
 	}
 
 	// ==================== Roundtrip Tests ====================

@@ -1,6 +1,6 @@
 //! ø is the empty list (Footguns.md → Null): it has no elements
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn the_count_of_an_empty_list_is_zero() {

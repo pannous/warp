@@ -1,5 +1,5 @@
 // `await go f(x)` awaits the task it starts (the await was dropped: the value was the task's number)
-use warp::*;
+use crate::is;
 
 #[test]
 fn await_of_a_start_is_the_result() {

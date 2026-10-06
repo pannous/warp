@@ -1,6 +1,6 @@
 // #30 (user 2026-10-03, "Only `is` tests types"): `3 is int` tests the type, `3 == int` compares a value with a type
 // (false) and educates toward `is`.
-use warp::*;
+use crate::is;
 use warp::normalize::capture_hints;
 
 #[test]

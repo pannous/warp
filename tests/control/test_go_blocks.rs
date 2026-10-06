@@ -1,0 +1,74 @@
+// `go { … }` starts a block as a task, and the program goes on at once; it waits for its tasks before it ends
+// (user, 2026-10-06: "def hi: {sleep(1000 ms);print('hi')} go { hi() } print('faster')")
+use crate::is;
+
+#[cfg(feature = "native")]
+const USER_PROGRAM: &str = "def hi: {sleep(1000 ms);print('hi')}\n\ngo {\n  hi()\n  }\nprint('faster')";
+
+#[test]
+#[cfg(feature = "native")]
+fn a_go_block_prints_after_the_program_goes_on() {
+	let printed = crate::common::printed(USER_PROGRAM);
+	assert!(printed.starts_with("faster\nhi\n"), "printed {printed:?}");
+}
+
+#[test]
+fn a_go_block_does_not_hold_up_the_program() {
+	is!("def hi: {sleep(1000);print('hi')}; started = clock(); go { hi() }; clock() - started < 500", true);
+	is!("hi() := { sleep(1000); print(\"hi\") }; started = clock(); go hi(); clock() - started < 500", true);
+}
+
+#[test]
+fn a_task_of_no_arguments_gives_its_value() {
+	is!("hi() := { sleep(10); \"hi\" }; await go hi()", "hi");
+	is!("def hi: { sleep(10); \"hi\" }; job = go hi(); await job", "hi");
+}
+
+#[test]
+fn a_go_block_sees_the_values_of_its_variables() {
+	is!("n = 20; job = go { n + 1 }; await job", 21);
+}
+
+/// sleep takes a constant duration in any time unit: its milliseconds
+#[test]
+fn sleep_takes_a_duration() {
+	is!("started = clock(); sleep(300 ms); clock() - started >= 300", true);
+	is!("started = clock(); sleep 1s; clock() - started >= 1000", true);
+	is!("f() := { sleep(10 ms); \"hi\" }; f()", "hi");
+}
+
+/// A go block inside a call or a loop: `jobs.add(go { … })` keeps the task, the loop variable goes in at its start
+#[test]
+fn go_blocks_fill_a_job_list() {
+	is!("jobs = []; for i in 1..4 { jobs.add(go { sleep(100); i * 10 }) }; await all jobs", warp::ints(vec![10, 20, 30]));
+	is!("f(n) := { job = go { n + 1 }; await job }; f(4)", 5);
+}
+
+/// A printed line is one write: lines of concurrent tasks never interleave within a line
+#[test]
+#[cfg(feature = "native")]
+fn lines_printed_by_tasks_stay_whole() {
+	let printed = crate::common::printed("for i in 10..30 { go { print(i) } }");
+	let lines: Vec<&str> = printed.lines().filter(|line| !line.starts_with('»')).collect();
+	assert_eq!(lines.len(), 20, "printed {printed:?}");
+	assert!(lines.iter().all(|line| line.len() == 2 && line.parse::<i64>().is_ok()), "printed {printed:?}");
+}
+
+/// `f() := { go h(2) }` is a function in braces, no getter: no warning about running at every read
+#[test]
+#[cfg(feature = "native")]
+fn a_function_starting_a_task_is_no_getter() {
+	let output = crate::common::warp_command().args(["--no-ask", "h(x) := { print(x) }; f() := { go h(2) }; f()"]).output().expect("warp runs");
+	let errors = String::from_utf8_lossy(&output.stderr);
+	assert!(!errors.contains("at every read"), "warned {errors:?}");
+}
+
+/// A task that fails while nobody awaits it ends the run with its error, as loud as a failure in the program; one
+/// that is awaited, or stopped on purpose, does not
+#[test]
+fn a_failure_nobody_awaits_ends_the_run() {
+	crate::common::fails_with("f(x) := { [1,2]#x }; go f(5); 1", "index out of range");
+	crate::common::fails_with("go { raise \"boom\" }; 1", "boom");
+	is!("f(x) := { [1,2]#x }; job = go f(5); try await job else 3", 3);
+	is!("job = go { sleep(3000); 1 }; stop job; 2", 2);
+}

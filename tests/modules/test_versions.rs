@@ -1,6 +1,7 @@
 //! Versions: `1.2.3` literals and the soft keyword `version`, compared part by part (wiki: use.md)
 
-use warp::{error, is};
+use warp::error;
+use crate::is;
 
 #[test]
 fn version_literals_have_two_dots_or_more() {

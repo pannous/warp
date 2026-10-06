@@ -2,7 +2,7 @@
 // passed for a typed parameter is duck typed, judged by its uses; a value of a known different type is an error that
 // teaches `like`; after `image like photo` an image is usable wherever a photo is expected, still judged by its uses
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const PHOTO: &str = "class photo{width:int height:int}; ";
 const IMAGE: &str = "class image{width:int height:int}; ";

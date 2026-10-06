@@ -1,7 +1,8 @@
 // WASM multi-value: runtime helpers that produce two results return both on the stack (notes/multi_value.md)
 use warp::extensions::numbers::Number;
 use warp::wasm_emitter::compile;
-use warp::{is, Node};
+use warp::Node;
+use crate::is;
 use wasmparser::{CompositeInnerType, Name, NameSectionReader, Parser, Payload, TypeRef};
 
 const BIG_DIVISION: &str = "x=123456789012345678901234567890; (x//1000000000000) + (x % 98765432109876543210)";

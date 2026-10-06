@@ -6,7 +6,7 @@
 use crate::diagnostic::{self, Acknowledger};
 use crate::extensions::numbers::Number;
 use crate::fixits::{self, Fix};
-use crate::meta::{Dada, DataType};
+use crate::meta::{DataValue, DataType};
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::{Kind, KIND_MASK};
 use num_bigint::{BigInt, Sign};
@@ -79,15 +79,20 @@ fn diagnostic_json(code: &str, diagnostic: &diagnostic::Diagnostic) -> Value {
 	})
 }
 
-/// Each fix as the page applies it: replace the UTF-16 range `start`..`end` of the editor's text with `replacement`.
-/// A fix whose text the source does not show has `start` and `end` null: the page shows it, but cannot apply it
+/// Each fix as the page applies it: replace the UTF-16 range `start`..`end` of the editor's text with `replacement`,
+/// then each of its further `edits` (the last in the text first). A fix whose text the source does not show has
+/// `start` and `end` null: the page shows it, but cannot apply it
 fn fixes_json(code: &str, line: usize, column: usize, fixes: &[Fix]) -> Vec<Value> {
 	fixes.iter().filter(|fix| fix.changes_something()).map(|fix| {
-		let range = fixits::edit(code, line, column, fix).map(|edit| edit.range);
+		let edits = fixits::edits(code, line, column, fix);
+		let range = edits.as_ref().and_then(|_| fixits::edit(code, line, column, fix)).map(|edit| edit.range);
 		let offset = |at: fn(&std::ops::Range<usize>) -> usize| range.as_ref().map(|range| fixits::utf16_offset(code, at(range)));
+		let edits: Vec<Value> = edits.unwrap_or_default().iter().map(|edit| json!({
+			"start": fixits::utf16_offset(code, edit.range.start), "end": fixits::utf16_offset(code, edit.range.end), "replacement": edit.replacement,
+		})).collect();
 		json!({
 			"label": fix.label(), "meaning": fix.meaning, "written": fix.written, "replacement": fix.replacement,
-			"start": offset(|range| range.start), "end": offset(|range| range.end),
+			"start": offset(|range| range.start), "end": offset(|range| range.end), "edits": edits,
 		})
 	}).collect()
 }
@@ -243,7 +248,7 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 		tag if tag == Kind::List as i64 => list_node(data.get("node").map(node_from_tree), value, bracket_of(info)),
 		tag if tag == Kind::Data as i64 => {
 			let type_name = text();
-			Node::Data(Dada { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: DataType::Other })
+			Node::Data(DataValue { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: DataType::Other })
 		}
 		tag if tag == Kind::Function as i64 => value_node(), // a closure reads as the name of its function
 		tag if tag == Kind::TypeDef as i64 => Node::Type { name: Box::new(data_node()), body: Box::new(value_node()) },
@@ -329,6 +334,14 @@ pub fn fetch_text(address: &str) -> Option<String> {
 /// A text the page fetches for the compiler (module files, packages), remembered per address: `None` when missing
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]
 pub fn fetch_text(address: &str) -> Option<String> {
+	// the browser tests (wasm32-wasip1) have a file system, the served repository plus the files a test writes
+	// (web/playground/wasi.js): read files there first, unremembered, since a test may write them later
+	#[cfg(target_os = "wasi")]
+	if !address.contains("://") {
+		if let Ok(text) = std::fs::read_to_string(address) {
+			return Some(text);
+		}
+	}
 	thread_local! {
 		static FETCHED: RefCell<std::collections::HashMap<String, Option<String>>> = RefCell::new(std::collections::HashMap::new());
 	}

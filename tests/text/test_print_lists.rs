@@ -1,10 +1,10 @@
-// `print xs` of a list writes the text str(xs) gives, nested lists in brackets, and is worth the list (user, P32)
-use warp::*;
+// `print xs` of a list writes the text str(xs) gives, nested lists in brackets (user, P32), and gives nothing (issue #18)
+use crate::is;
 
 #[test]
-fn print_of_a_list_is_worth_the_list() {
-	is!("xs=[1,2]; y = print xs; count(y)", 2);
-	is!("print [[1,2],[3]]", list(vec![ints(vec![1, 2]), ints(vec![3])]));
+fn print_of_a_list_gives_nothing() {
+	is!("xs=[1,2]; y = print xs; y", warp::Node::Empty);
+	is!("print [[1,2],[3]]", warp::Node::Empty);
 }
 
 #[test]
