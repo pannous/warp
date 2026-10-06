@@ -779,7 +779,17 @@ function runProgram(bytes, hooks) {
 function withExitHandler(holder, exports, call) {
 	const handler = exports["on·exit"];
 	if (!handler) return call();
-	const runHandler = () => (handler.length ? handler(exports.new_empty()) : handler());
+	// `event` is the exit code (P134), 0 when main returned: an i64 parameter takes a BigInt, a Node one a new_int
+	const withCode = () => {
+		const code = BigInt(holder.exitCode ?? 0);
+		try {
+			return handler(code);
+		} catch (failure) {
+			if (!(failure instanceof TypeError)) throw failure; // the parameter is a Node: the call never started
+			return handler(exports.new_int(code));
+		}
+	};
+	const runHandler = () => (handler.length ? withCode() : handler());
 	let result;
 	try {
 		result = call();
