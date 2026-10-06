@@ -7,17 +7,6 @@ words; this file keeps only pending and parked questions, user to-dos and standi
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-Ask first thing 2026-10-07 morning (user offline overnight: "work on problems that don't need resolution"):
-- P165b soft keywords vs two existing tests (warp-64, branch soft-keywords 40cabfe9f, held unmerged):
-  tests/functions/test_named_arguments.rs:22 `fun={x*y}; fun(x:2 y:3)` → 6, but `fun` is a hard declaration keyword;
-  tests/operators/test_root_word.rs:14-15 `root = 5; root + 1` → 6 and `root(x) := x + 1; root 4` → 5 at top level,
-  but P165 makes a top-level soft keyword an error. Options: strict P165, both tests change (rename `fun` → `g`,
-  root test expects the error) / `fun` stays soft and top-level redefinition of a soft word gets a note, not an error
-  / something narrower.
-- P168 `p.phone-number` when p has no field phone-number but `number` exists (warp-64): always the field with a
-  helpful error "p has no field phone-number; for subtraction write p.phone - number" (recommended) / fall back to
-  `p.phone - number`. The user's first answer (recommended) was withdrawn ("wrong answer, I'm tired"): ask again.
-  Code meanwhile: always the field, plain "key not found".
 (the ones below the user answered "Later"/postponed are parked; reviewed 2026-10-06 evening: P70c and P64 decided,
 P69a and P76 still wait for run-time `!` and narrowed grants (P88), #10 unchanged)
 - Parked: P150 license: warp (and wasp) have none, so package managers list no license and nobody may legally reuse the
