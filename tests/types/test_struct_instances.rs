@@ -75,3 +75,9 @@ fn an_int_field_holds_any_int() {
 	is!("class Big{n:int}; b = Big(2^70); b.n + 1 == 2^70 + 1", 1);
 	is!("class Big{n:int}; b = Big(1); b.n = 2^70; b.n * 2 == 2^71", 1);
 }
+
+#[test]
+fn a_field_write_of_another_kind_is_a_type_error() {
+	crate::common::fails_with(&format!("{POINT}p.x = \"a\"; p"), "x of Point is an int field, got");
+	crate::common::fails_with(&format!("{POINT}p.y = [1]; p"), "y of Point is an int field, got");
+}

@@ -78,7 +78,9 @@ impl WasmGcEmitter {
 			}
 		});
 		for (name, index, written) in writes {
-			let fits = classes.get(&name).and_then(|class| field_of(&self.instance_types[class], &index)).is_some_and(|(_, kind)| self.fits(&written, kind));
+			// a value that certainly does not fit keeps the struct: writing it is a type error (emit_struct_field_set)
+			let fits = classes.get(&name).and_then(|class| field_of(&self.instance_types[class], &index))
+				.is_some_and(|(_, kind)| self.fits(&written, kind) || self.misfits(&written, kind));
 			if !fits {
 				excluded.push(name);
 			}
@@ -91,6 +93,22 @@ impl WasmGcEmitter {
 	/// Does a value of this node go into a field of the kind: any into a Node field, a number only of its own kind
 	fn fits(&self, value: &Node, kind: Kind) -> bool {
 		kind.is_ref() || self.get_type(value) == kind
+	}
+
+	/// The kind of a written value; `p.y += 0.5` adds a float, so its result is one
+	fn given_kind(&self, value: &Node) -> Kind {
+		match (value.drop_meta(), self.get_type(value)) {
+			(Node::Key(_, op, right), Kind::Int) if op.is_arithmetic() && self.get_type(right) == Kind::Float => Kind::Float,
+			(_, Kind::Codepoint) => Kind::Text, // "a" is a one-letter text
+			(_, given) => given,
+		}
+	}
+
+	/// Is the value certainly no value of the number field's kind: a text, a list, a float for an int field
+	fn misfits(&self, value: &Node, kind: Kind) -> bool {
+		let given = self.given_kind(value);
+		let known = matches!(given, Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint | Kind::List);
+		!kind.is_ref() && known && given != kind && !(kind == Kind::Float && given == Kind::Int)
 	}
 
 	/// The class whose instance `value` constructs, when a struct can hold it
@@ -148,6 +166,14 @@ impl WasmGcEmitter {
 	/// (emit_assigned_entry_value); false otherwise
 	pub(super) fn emit_struct_field_set(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) -> bool {
 		let Some(access) = self.field_access(target, index) else { return false };
+		if self.misfits(value, access.kind) {
+			let class = self.typed_structs[&target.drop_meta().name()].clone();
+			let field = &self.ctx.type_registry.get_by_name(&class).expect("a declared class").fields[access.field_index as usize];
+			let given = crate::analyzer::kind_with_article(self.given_kind(value));
+			let message = format!("{} of {class} is {} field, got {} ({given})", field.name, crate::analyzer::with_article(&field.type_name), value.serialize());
+			self.emit_type_error(func, message);
+			return true;
+		}
 		func.instruction(&I::LocalGet(access.slot));
 		self.emit_value_of_kind(func, value, access.kind);
 		func.instruction(&I::StructSet { struct_type_index: access.type_index, field_index: access.field_index });
