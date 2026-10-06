@@ -20,8 +20,15 @@ use wasmtime::{AnyRef, AsContextMut, Caller, Engine, Func, Global, Linker, Memor
 const EPOCH_TICK: Duration = Duration::from_millis(5);
 /// The main program's epoch deadline: it never stops at an epoch check
 pub const MAIN_EPOCH_DEADLINE: u64 = 1 << 62;
-const TASK_WORDS: [&str; 11] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, crate::host::TASK_POLL,
-	crate::host::TASK_INSIDE, crate::host::SIGNAL_SEND];
+const TASK_WORDS: [&str; 16] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, crate::host::TASK_POLL,
+	crate::host::TASK_INSIDE, crate::host::SIGNAL_SEND, CHANNEL_NEW, CHANNEL_PUT, CHANNEL_TAKE, CHANNEL_MORE, CHANNEL_CLOSE];
+const CHANNEL_NEW: &str = crate::host::CHANNEL_WORDS[0];
+const CHANNEL_PUT: &str = crate::host::CHANNEL_WORDS[1];
+const CHANNEL_TAKE: &str = crate::host::CHANNEL_WORDS[2];
+const CHANNEL_MORE: &str = crate::host::CHANNEL_WORDS[3];
+const CHANNEL_CLOSE: &str = crate::host::CHANNEL_WORDS[4];
+/// How often a waiting send or receive looks whether it waits forever (the program alone, or ended)
+const CHANNEL_CHECK: Duration = Duration::from_millis(20);
 /// The failure a stopped task ends with (TaskControl::checkpoint), told apart by task_status
 const STOPPED: &str = "task stopped";
 /// The exported constructors a value is rebuilt with in an instance
@@ -277,6 +284,104 @@ impl std::fmt::Display for TaskFailure {
 
 impl std::error::Error for TaskFailure {}
 
+/// One local channel (P155): the values offered and not yet taken, in order; a send waits until the receives counted
+/// past its own number
+#[derive(Default)]
+struct Channel {
+	offered: std::collections::VecDeque<TaskValue>,
+	sent: u64,
+	taken: u64,
+	closed: bool,
+}
+
+/// The local channels of a run (`ch = channel()`, notes/channels.md): Go's unbuffered channels between its tasks
+#[derive(Default)]
+struct Channels {
+	channels: Mutex<HashMap<i64, Channel>>,
+	changed: Condvar,
+	next_id: AtomicI64,
+	/// the program ended: a task still waiting on a channel stops (as Go drops its goroutines)
+	ended: std::sync::atomic::AtomicBool,
+}
+
+impl Channels {
+	fn open(&self) -> i64 {
+		let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
+		self.channels.lock().expect("channels").insert(id, Channel::default());
+		id
+	}
+
+	/// Wait on channel `id` until `ready` gives an answer; `alone` says whether nothing else could ever change it
+	fn wait<T>(&self, id: i64, alone: &dyn Fn() -> bool, waiting: &str, mut ready: impl FnMut(&mut Channel) -> Option<Result<T, String>>) -> Result<T, String> {
+		let mut channels = self.channels.lock().expect("channels");
+		loop {
+			let channel = channels.get_mut(&id).ok_or_else(|| format!("no channel {id}"))?;
+			if let Some(answer) = ready(channel) {
+				self.changed.notify_all();
+				return answer;
+			}
+			if self.ended.load(Ordering::Relaxed) {
+				return Err(STOPPED.to_string());
+			}
+			if alone() {
+				return Err(format!("{waiting} waits forever: no task is left to answer it"));
+			}
+			channels = self.changed.wait_timeout(channels, CHANNEL_CHECK).expect("channels").0;
+		}
+	}
+
+	/// `ch.send(v)`: offers v, then waits until a receiver took it
+	fn put(&self, id: i64, value: TaskValue, alone: &dyn Fn() -> bool) -> Result<(), String> {
+		let mut number = None;
+		self.wait(id, alone, "ch.send", |channel| {
+			if channel.closed && number.is_none() {
+				return Some(Err("send on a closed channel".to_string()));
+			}
+			let mine = *number.get_or_insert_with(|| {
+				channel.offered.push_back(value.clone());
+				channel.sent += 1;
+				channel.sent - 1
+			});
+			(channel.taken > mine).then_some(Ok(()))
+		})
+	}
+
+	/// `ch.receive()`: the oldest value offered, waiting for one; None once the channel is closed and empty
+	fn take(&self, id: i64, alone: &dyn Fn() -> bool) -> Result<Option<TaskValue>, String> {
+		self.wait(id, alone, "ch.receive()", |channel| match channel.offered.pop_front() {
+			Some(value) => {
+				channel.taken += 1;
+				Some(Ok(Some(value)))
+			}
+			None => channel.closed.then_some(Ok(None)),
+		})
+	}
+
+	/// `for v in ch`: whether another value comes, waiting until one is offered or the channel is closed
+	fn more(&self, id: i64, alone: &dyn Fn() -> bool) -> Result<bool, String> {
+		self.wait(id, alone, "for … in ch", |channel| match (channel.offered.is_empty(), channel.closed) {
+			(false, _) => Some(Ok(true)),
+			(true, closed) => closed.then_some(Ok(false)),
+		})
+	}
+
+	fn close(&self, id: i64) -> Result<(), String> {
+		let mut channels = self.channels.lock().expect("channels");
+		let channel = channels.get_mut(&id).ok_or_else(|| format!("no channel {id}"))?;
+		if std::mem::replace(&mut channel.closed, true) {
+			return Err("close of a closed channel".to_string());
+		}
+		self.changed.notify_all();
+		Ok(())
+	}
+
+	fn end(&self) {
+		let _channels = self.channels.lock().expect("channels");
+		self.ended.store(true, Ordering::Relaxed);
+		self.changed.notify_all();
+	}
+}
+
 /// The value of a capture global (`capture·f·x`), carried from the spawning instance to the task's
 #[derive(Clone, Debug)]
 enum Captured {
@@ -304,12 +409,13 @@ pub struct TaskTable {
 	next_id: AtomicI64,
 	/// the shared arrays of the run, linked into every task (shared.rs)
 	shared: Option<Arc<crate::shared::SharedArrays>>,
+	channels: Channels,
 }
 
 /// Link task_spawn and task_await for `module`, sharing one table with every task it starts
 pub fn link(linker: &mut Linker<HostState>, engine: &Engine, module: &Module, imports: Imports, shared: Option<Arc<crate::shared::SharedArrays>>) -> Result<Arc<TaskTable>> {
 	let table = Arc::new(TaskTable {
-		engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), taken: Mutex::default(), signals: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1), shared,
+		engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), taken: Mutex::default(), signals: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1), shared, channels: Channels::default(),
 	});
 	table.link_into(linker)?;
 	tick_while_running(Arc::downgrade(&table));
@@ -410,6 +516,7 @@ impl TaskTable {
 		})?;
 		let controller = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_CONTROL, move |id: i64, operation: i64| -> i64 { controller.control(id, operation) })?;
+		self.link_channels(linker)?;
 		let awaiter = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_AWAIT, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<i64> {
 			let value = awaiter.take(id).map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
@@ -417,6 +524,43 @@ impl TaskTable {
 			builders.int_of(&value, &mut caller.as_context_mut()).map_err(host_error)
 		})?;
 		Ok(())
+	}
+
+	/// The local channel words (Channels); the program waiting on a channel while no task runs any more waits forever:
+	/// an error, as Go's "all goroutines are asleep"
+	fn link_channels(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
+		let failure = |message: String| wasmtime::Error::new(TaskFailure(message));
+		let opener = self.clone();
+		linker.func_wrap(HOST_LIBRARY, CHANNEL_NEW, move || -> i64 { opener.channels.open() })?;
+		let sender = self.clone();
+		linker.func_wrap(HOST_LIBRARY, CHANNEL_PUT, move |mut caller: Caller<'_, HostState>, id: i64, value: Option<Rooted<AnyRef>>| -> wasmtime::Result<()> {
+			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
+			let value = builders.read_value(&Val::AnyRef(value), &mut caller.as_context_mut()).map_err(host_error)?;
+			let alone = sender.alone_in(&caller);
+			sender.channels.put(id, value, &alone).map_err(failure)
+		})?;
+		let receiver = self.clone();
+		linker.func_wrap(HOST_LIBRARY, CHANNEL_TAKE, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
+			let alone = receiver.alone_in(&caller);
+			let value = receiver.channels.take(id, &alone).map_err(failure)?.unwrap_or(TaskValue::Empty);
+			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
+			Ok(builders.build(&value, &mut caller.as_context_mut()).map_err(host_error)?.unwrap_anyref().copied())
+		})?;
+		let looper = self.clone();
+		linker.func_wrap(HOST_LIBRARY, CHANNEL_MORE, move |caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<i64> {
+			let alone = looper.alone_in(&caller);
+			looper.channels.more(id, &alone).map(i64::from).map_err(failure)
+		})?;
+		let closer = self.clone();
+		linker.func_wrap(HOST_LIBRARY, CHANNEL_CLOSE, move |id: i64| -> wasmtime::Result<()> { closer.channels.close(id).map_err(failure) })?;
+		Ok(())
+	}
+
+	/// Whether the caller waits alone: the program, with every task finished (a task's waits end with the program)
+	fn alone_in(self: &Arc<Self>, caller: &Caller<'_, HostState>) -> impl Fn() -> bool + use<> {
+		let table = self.clone();
+		let in_task = caller.data().in_task;
+		move || !in_task && table.slots.lock().expect("task table").values().all(|slot| !matches!(slot, Slot::Running(handle) if !handle.is_finished()))
 	}
 
 	fn deliver_to(&self, caller: &mut Caller<'_, HostState>) -> Result<()> {
@@ -577,6 +721,7 @@ impl TaskTable {
 	/// The program ended: tasks nobody awaited still finish (their output is part of the run); the first failure nobody
 	/// read is the run's error, as loud as one in the program (a stopped task was stopped on purpose)
 	pub fn join_all(&self) -> Result<(), TaskFailure> {
+		self.channels.end();
 		let mut ids: Vec<i64> = self.slots.lock().expect("task table").keys().copied().collect();
 		ids.sort();
 		let mut unread = None;

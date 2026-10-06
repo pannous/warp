@@ -80,13 +80,18 @@ pub const CHANNEL_LISTEN: &str = "channel_listen";
 pub const CHANNEL_PENDING: &str = "channel_pending";
 pub const CHANNEL_NEXT: &str = "channel_next";
 pub const CHANNEL_SEND: &str = "channel_send";
+/// Channels inside one run (P155, notes/channels.md, tasks.rs Channels), Go's unbuffered channel: channel_new() → id,
+/// channel_put(id, value) waits until a receiver took it, channel_take(id) waits for a value (ø once closed and empty),
+/// channel_more(id) waits until a value is offered (1) or the channel is closed (0), channel_close(id)
+pub const CHANNEL_WORDS: [&str; 5] = ["channel_new", "channel_put", "channel_take", "channel_more", "channel_close"];
 /// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
-pub const VALUE_GIVING_WORDS: [&str; 5] = [RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE, CHANNEL_NEXT, CLIPBOARD_TEXT];
-pub const HOST_WORDS: [&str; 40] = [CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, CLIPBOARD_TEXT, GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
-	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2]];
+pub const VALUE_GIVING_WORDS: [&str; 6] = [RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE, CHANNEL_NEXT, CLIPBOARD_TEXT, CHANNEL_WORDS[2]];
+pub const HOST_WORDS: [&str; 45] = [CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, CLIPBOARD_TEXT, GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
+	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2],
+	CHANNEL_WORDS[0], CHANNEL_WORDS[1], CHANNEL_WORDS[2], CHANNEL_WORDS[3], CHANNEL_WORDS[4]];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 40] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 45] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 	[(CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (CHANNEL_SEND, vec![node, node], vec![]),
@@ -97,7 +102,9 @@ pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec
 		(TASK_INSIDE, vec![], vec![I64]), (SIGNAL_SEND, vec![I32, node], vec![I64]),
 		(SHARED_WORDS[0], vec![I64], vec![I64]), (SHARED_WORDS[1], vec![I64, I64], vec![I64]), (SHARED_WORDS[2], vec![I64, I64, I64], vec![I64]),
 		(SHARED_WORDS[3], vec![I64, I64, I64], vec![I64]), (SHARED_WORDS[4], vec![I64], vec![I64]),
-		(SHARED_FLOAT_WORDS[0], vec![I64, I64], vec![F64]), (SHARED_FLOAT_WORDS[1], vec![I64, I64, F64], vec![F64]), (SHARED_FLOAT_WORDS[2], vec![I64, I64, F64], vec![F64])]
+		(SHARED_FLOAT_WORDS[0], vec![I64, I64], vec![F64]), (SHARED_FLOAT_WORDS[1], vec![I64, I64, F64], vec![F64]), (SHARED_FLOAT_WORDS[2], vec![I64, I64, F64], vec![F64]),
+		(CHANNEL_WORDS[0], vec![], vec![I64]), (CHANNEL_WORDS[1], vec![I64, node], vec![]), (CHANNEL_WORDS[2], vec![I64], vec![node]),
+		(CHANNEL_WORDS[3], vec![I64], vec![I64]), (CHANNEL_WORDS[4], vec![I64], vec![])]
 }
 
 /// guarded_call(name, arguments): the node wrapper `name` called with the argument list in the caller's own instance;
