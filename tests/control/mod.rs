@@ -86,6 +86,7 @@ mod test_signal_values;
 mod test_shared_signals;
 mod test_signal_reflection;
 mod test_broadcast;
+mod test_named_broadcast;
 mod test_signal_lists;
 mod test_daily_timer;
 mod test_time_of_day;
