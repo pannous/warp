@@ -118,6 +118,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   function whose body yields and that some call passes a block (`f {…}`, `f(a) {…}`, `f(a) do |x| … end`) gets the
   block as its last parameter `yield·block`; `yield a, b` → `yield·block(a, b)`, a block without `|params|` is
   `() => block`. Functions no call passes a block keep `yield` (free for generators).
-- A closure that changes a variable it captures is a loud error naming `global` (closures.rs `changed_capture`):
-  captures are copies (wiki/charged.md §3), so `total = 0; each { |x| total += x }` would silently keep 0. A `global`
-  is never captured: the closure changes the one variable (`global total = 0; g(x => total += x)` works).
+- A lambda changes the caller's variable, never a copy (P124). Inside a function it shares a cell (nonlocal_cells.rs
+  `lower_lambdas`); at main level the variable becomes a `global` (`main_lambda_changes`, main runs once), and
+  closures never capture a global, so `total = 0; each_twice { |x| total += x }` is 3. A closure still changing a
+  captured copy after these passes is a loud error naming `global` (closures.rs `changed_capture`), never silently 0.

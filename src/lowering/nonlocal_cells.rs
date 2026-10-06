@@ -118,7 +118,41 @@ const LAMBDA_PREFIX: &str = "lambda·";
 /// reference, so it shares their cells as a nested def does. Runs before the lambda passes.
 pub fn lower_lambdas(node: Node) -> Node {
 	let mut count = 0;
-	nonlocal_lambdas(node, &mut count)
+	let node = nonlocal_lambdas(node, &mut count);
+	let shared = main_lambda_changes(&node);
+	crate::analyzer::declare_global(node, &shared)
+}
+
+/// The main-level variables a lambda outside any function changes (`total = 0; g(x => total += x)`): main runs once,
+/// so they are shared as globals, which closures never copy (P124)
+fn main_lambda_changes(program: &Node) -> Vec<String> {
+	let mut locals = vec![];
+	collect_locals(program, &mut locals);
+	let mut shared: Vec<String> = vec![];
+	main_lambdas(program, &mut |params, body| {
+		for (_, name) in undeclared_changes(body, &params, &locals) {
+			if !shared.contains(&name) {
+				shared.push(name);
+			}
+		}
+	});
+	shared
+}
+
+/// The lambdas outside function definitions, with their parameter names and bodies
+fn main_lambdas(node: &Node, action: &mut impl FnMut(Vec<String>, &Node)) {
+	if definition(node).is_some() {
+		return;
+	}
+	match node.drop_meta() {
+		Node::Key(params, Op::FatArrow, body) => action(lambda_parameters(params), body),
+		Node::Key(left, _, right) => {
+			main_lambdas(left, action);
+			main_lambdas(right, action);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| main_lambdas(item, action)),
+		_ => {}
+	}
 }
 
 fn nonlocal_lambdas(node: Node, count: &mut usize) -> Node {
