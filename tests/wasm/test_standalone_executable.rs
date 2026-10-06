@@ -73,3 +73,20 @@ fn test_build_exe_signs_cleanly_on_macos() {
 	assert!(embedded_machine_code(&executable).is_some());
 	assert!(rebuilt.len() < std::fs::metadata(&executable).unwrap().len() as usize);
 }
+
+/// g-1KS4 (user): `warp build <file>` makes the executable without --exe; `--wasm` keeps the module output
+#[test]
+fn test_build_makes_an_executable_by_default() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_default.warp");
+	std::fs::write(&source_path, "6 * 7").unwrap();
+	let (executable, module) = (source_path.with_extension("exe"), source_path.with_extension("wasm"));
+	let _ = std::fs::remove_file(&executable);
+	let _ = std::fs::remove_file(&module);
+	let build = crate::common::warp_command().env_remove("WARP_RUNTIME_STUB").arg("build").arg(&source_path).output().unwrap();
+	assert!(build.status.success(), "{}", text(&build.stderr));
+	let run = std::process::Command::new(&executable).output().unwrap();
+	assert_eq!(text(&run.stdout), "42\n", "{}", text(&run.stderr));
+	let wasm_build = crate::common::warp_command().args(["build", "--wasm"]).arg(&source_path).output().unwrap();
+	assert!(wasm_build.status.success(), "{}", text(&wasm_build.stderr));
+	assert!(module.exists());
+}
