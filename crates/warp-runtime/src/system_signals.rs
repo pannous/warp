@@ -5,7 +5,7 @@
 //! handler ran, ends the run at once (exit code 130), so a handler that ignores ctrl-c never makes a program
 //! unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_every(0, 5000)` where the handler is
 //! declared. `on file "notes.txt" change {…}` is `on·file·0`, started by `signal_watch(0, "notes.txt")`: a timer of
-//! FILE_CHECK_PERIOD that fires only when the file's modification time changed (it appeared, was written, or went).
+//! FILE_CHECK_PERIOD that fires only when the file's modification time or size changed (it appeared, was written, or went).
 //! A run that allows it (`warp run`, built executables) stays after main while a timer or watch lives.
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -23,8 +23,8 @@ struct Timer {
 	handler: String,
 	period: Duration,
 	due: Instant,
-	/// a watched file and its modification time when last read: the handler runs only when that changed
-	watched: Option<(PathBuf, Option<SystemTime>)>,
+	/// a watched file and its stamp when last read: the handler runs only when that changed
+	watched: Option<(PathBuf, Option<FileStamp>)>,
 }
 
 thread_local! {
@@ -76,13 +76,17 @@ pub fn start_timer(id: i64, milliseconds: i64) {
 /// `signal_watch(id, path)`: the handler on·file·id runs when the file changes from now on
 pub fn watch_file(id: i64, path: String) {
 	let path = PathBuf::from(path);
-	let modified = modified(&path);
-	let timer = Timer { handler: format!("{FILE_HANDLER_PREFIX}{id}"), period: FILE_CHECK_PERIOD, due: Instant::now() + FILE_CHECK_PERIOD, watched: Some((path, modified)) };
+	let seen = stamp(&path);
+	let timer = Timer { handler: format!("{FILE_HANDLER_PREFIX}{id}"), period: FILE_CHECK_PERIOD, due: Instant::now() + FILE_CHECK_PERIOD, watched: Some((path, seen)) };
 	TIMERS.with(|timers| timers.borrow_mut().push(timer));
 }
 
-fn modified(path: &PathBuf) -> Option<SystemTime> {
-	std::fs::metadata(path).and_then(|metadata| metadata.modified()).ok()
+/// Modification time and size: a rewrite within one tick of a coarse clock still changes the size, mostly
+type FileStamp = (SystemTime, u64);
+
+fn stamp(path: &PathBuf) -> Option<FileStamp> {
+	let metadata = std::fs::metadata(path).ok()?;
+	Some((metadata.modified().ok()?, metadata.len()))
 }
 
 fn next_due() -> Option<Instant> {
@@ -101,11 +105,11 @@ fn due_handlers(handles_interrupt: bool) -> Vec<String> {
 		for timer in timers.borrow_mut().iter_mut().filter(|timer| timer.due <= now) {
 			timer.due = (timer.due + timer.period).max(now);
 			if let Some((path, seen)) = &mut timer.watched {
-				let now_modified = modified(path);
-				if now_modified == *seen {
+				let current = stamp(path);
+				if current == *seen {
 					continue;
 				}
-				*seen = now_modified;
+				*seen = current;
 			}
 			due.push(timer.handler.clone());
 		}

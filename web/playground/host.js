@@ -157,6 +157,7 @@ function programImports(holder, hooks) {
 			clock: () => BigInt(Date.now()),
 			signal_poll: () => {}, // a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md)
 			signal_every: () => { holder.warnings.push("on every …: timers do not run in the playground yet"); },
+			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {
 				holder.exitCode = Number(code);
