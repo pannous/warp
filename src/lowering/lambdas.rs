@@ -31,7 +31,14 @@ struct Iteration {
 	template: &'static str,
 }
 
-const ITERATIONS: [Iteration; 8] = [
+const SORT_WORD: &str = "sort";
+/// Sorting with a function as other languages spell it: JS sort, Python sorted, Ruby sort_by, Kotlin sortedBy
+const SORT_SPELLINGS: [&str; 6] = [SORT_WORD, "sorted", "sort_by", "sortBy", "sortedBy", "sorted_by"];
+/// The label of the sorting function: Swift `sorted(by: >)`, Python `sorted(xs, key=…)`
+const SORT_LABELS: [&str; 2] = ["by", "key"];
+const COMPARISONS: [Op; 4] = [Op::Lt, Op::Gt, Op::Le, Op::Ge];
+
+const ITERATIONS: [Iteration; 9] = [
 	Iteration { word: "map", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { out.add(loop_call) }; out)" },
 	Iteration { word: "filter", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { if loop_call { out.add(item) } }; out)" },
 	Iteration { word: "each", extra_arguments: 0, function_arguments: 1, template: "(value=ø; for item in loop_list { value = loop_call }; value)" },
@@ -44,6 +51,13 @@ const ITERATIONS: [Iteration; 8] = [
 		extra_arguments: 0,
 		function_arguments: 2,
 		template: "(list=loop_list; if count(list) == 0 then empty_extremum(reduce) else (acc=list#1; index=2; while index <= count(list) { item=list#index; acc = loop_call; index=index+1 }; acc))",
+	},
+	// a stable insertion sort of a copy; loop_call is whether acc sorts before item (sort_order)
+	Iteration {
+		word: SORT_WORD,
+		extra_arguments: 0,
+		function_arguments: 2,
+		template: "(out=[]; for value in loop_list { out.add(value); index=count(out); moving=1; while moving and index > 1 { acc=out#index; item=out#(index-1); if loop_call { out#index=item; out#(index-1)=acc; index=index-1 } else { moving=0 } } }; out)",
 	},
 ];
 
@@ -91,12 +105,42 @@ fn operator_symbol(op: Op) -> Option<Node> {
 	OPERATOR_VALUES.iter().find(|(known, _)| *known == op).map(|(_, text)| Node::Symbol(text.to_string()))
 }
 
-/// `+` as the function `(a b)->a+b`
+/// `+` as the function `(a b)->a+b`; also the operator with nothing on either side, as `by: >` parses
 fn operator_lambda(node: &Node) -> Option<Lambda> {
-	let Node::Symbol(text) = node.drop_meta() else { return None };
-	let (op, _) = OPERATOR_VALUES.iter().find(|(_, known)| known == text)?;
+	let op = match node.drop_meta() {
+		Node::Symbol(text) => OPERATOR_VALUES.iter().find(|(_, known)| known == text)?.0,
+		Node::Key(left, op, right) if matches!((left.drop_meta(), right.drop_meta()), (Node::Empty, Node::Empty)) => operator_symbol(*op).map(|_| *op)?,
+		_ => return None,
+	};
 	let [left, right] = OPERATOR_PARAMETERS.map(|name| Node::Symbol(name.to_string()));
-	Some(Lambda::new(OPERATOR_PARAMETERS.map(String::from).to_vec(), Node::Key(Box::new(left), *op, Box::new(right))))
+	Some(Lambda::new(OPERATOR_PARAMETERS.map(String::from).to_vec(), Node::Key(Box::new(left), op, Box::new(right))))
+}
+
+/// A function written as a value: a lambda, a block or an operator
+fn literal_function(node: &Node) -> Option<Lambda> {
+	arrow_lambda(node).or_else(|| block_lambda(node)).or_else(|| operator_lambda(node))
+}
+
+/// `a > b`, also as the one statement of a block
+fn is_comparison(body: &Node) -> bool {
+	match body.drop_meta() {
+		Node::Key(_, op, _) => COMPARISONS.contains(op),
+		Node::List(items, _, _) if items.len() == 1 => is_comparison(&items[0]),
+		_ => false,
+	}
+}
+
+/// The sorting function without its label: `by: >`, `key: s => s.length`, `key=f`
+fn unlabeled(function: Node) -> Node {
+	let is_label = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if SORT_LABELS.contains(&word.as_str()));
+	match function.drop_meta() {
+		Node::Key(label, Op::Colon | Op::Assign, inner) if is_label(label) => inner.as_ref().clone(),
+		Node::Key(head, arrow @ (Op::Arrow | Op::FatArrow), body) => match head.drop_meta() {
+			Node::Key(label, Op::Colon, parameters) if is_label(label) => Node::Key(parameters.clone(), *arrow, body.clone()),
+			_ => function,
+		},
+		_ => function,
+	}
 }
 
 /// `x +` at the end of an operand list is the item `x` and the operator `+`: an operator as a value has nothing after it
@@ -153,7 +197,7 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 	}
 }
 
-/// `x=>body`, `(x y)->body` and the same in a group `(x=>body)`
+/// `x=>body`, `(x y)->body` and the same in a group `(x=>body)` or a block
 pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 	match node.drop_meta() {
 		Node::Key(left, Op::Arrow | Op::FatArrow, body) => {
@@ -163,7 +207,7 @@ pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 			let typed = if written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon, _))) { written } else { vec![] };
 			Some(Lambda { params, body, typed })
 		}
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => arrow_lambda(&items[0]),
+		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 => arrow_lambda(&items[0]), // Kotlin `{ x -> x*2 }`, Ruby `{ |x| x*2 }`
 		_ => None,
 	}
 }
@@ -262,7 +306,8 @@ impl Lowering {
 	/// The iteration a word names, unless the program defines a function of that name
 	fn iteration_of(&self, word: &Node) -> Option<&'static Iteration> {
 		let Node::Symbol(name) = word.drop_meta() else { return None };
-		ITERATIONS.iter().find(|iteration| iteration.word == name && !self.context.user_functions.contains_key(name))
+		let canonical = if SORT_SPELLINGS.contains(&name.as_str()) { SORT_WORD } else { name };
+		ITERATIONS.iter().find(|iteration| iteration.word == canonical && !self.context.user_functions.contains_key(name))
 	}
 
 	/// `word(extras, function)` after a dot: the iteration and its arguments, the function last
@@ -383,7 +428,7 @@ impl Lowering {
 	/// defined function; anything else cannot be inlined
 	/// `Err(None)` when the function is not known yet (a parameter of a function that is specialised later)
 	fn applied(&self, iteration: &Iteration, list: &Node, function: &Node, arguments: &[Node]) -> Result<Node, Option<Node>> {
-		match arrow_lambda(function).or_else(|| block_lambda(function)).or_else(|| operator_lambda(function)) {
+		match literal_function(function) {
 			Some(lambda) if lambda.params.len() == arguments.len() => {
 				Ok(lambda.params.iter().zip(arguments).fold(lambda.body, |body, (param, argument)| substitute(body, param, argument)))
 			}
@@ -407,12 +452,51 @@ impl Lowering {
 		}
 	}
 
+	/// Whether the first of `pair` sorts before the second: a key of one item is smaller (Python `key=len`), a comparison
+	/// holds (Swift `by: >`), any other comparator is negative (JS `(a,b) => a-b`)
+	fn sort_order(&self, iteration: &Iteration, list: &Node, function: &Node, pair: [Node; 2]) -> Result<Node, Option<Node>> {
+		let less = |left: Node, right: Node| Node::Key(Box::new(left), Op::Lt, Box::new(right));
+		if self.parameter_count(function) == Some(1) {
+			let [first, second] = pair;
+			return Ok(less(self.applied(iteration, list, function, &[first])?, self.applied(iteration, list, function, &[second])?));
+		}
+		let compared = self.applied(iteration, list, function, &pair)?;
+		Ok(if self.compares(function) { compared } else { less(compared, Node::int(0)) })
+	}
+
+	fn parameter_count(&self, function: &Node) -> Option<usize> {
+		match literal_function(function) {
+			Some(lambda) => Some(lambda.params.len()),
+			None => match function.drop_meta() {
+				Node::Symbol(name) => self.context.user_functions.get(name).map(|defined| defined.params.len()),
+				_ => None,
+			},
+		}
+	}
+
+	/// A function whose result is a comparison: `(a b) => a > b`, `>`, `def before(a,b){ a < b }`
+	fn compares(&self, function: &Node) -> bool {
+		match literal_function(function) {
+			Some(lambda) => is_comparison(&lambda.body),
+			None => match function.drop_meta() {
+				Node::Symbol(name) => self.context.user_functions.get(name).is_some_and(|defined| is_comparison(&defined.body)),
+				_ => false,
+			},
+		}
+	}
+
 	/// The loop of an iteration word with the body of a literal function inlined
 	fn iterate(&self, iteration: &Iteration, list: Node, extras: Vec<Node>, function: Node) -> Option<Node> {
-		let names: Vec<(&str, String)> = ["out", "item", "acc", "list", "index", "value"].into_iter().map(|name| (name, self.fresh(&format!("loop_{name}")))).collect();
+		let names: Vec<(&str, String)> =
+			["out", "item", "acc", "list", "index", "value", "moving"].into_iter().map(|name| (name, self.fresh(&format!("loop_{name}")))).collect();
 		let symbol = |name: &str| Node::Symbol(names.iter().find(|(prefix, _)| *prefix == name).expect("a loop name").1.clone());
 		let arguments: Vec<Node> = if iteration.function_arguments == 2 { vec![symbol("acc"), symbol("item")] } else { vec![symbol("item")] };
-		let applied = match self.applied(iteration, &list, &function, &arguments) {
+		let applied = if iteration.word == SORT_WORD {
+			self.sort_order(iteration, &list, &unlabeled(function), [symbol("acc"), symbol("item")])
+		} else {
+			self.applied(iteration, &list, &function, &arguments)
+		};
+		let applied = match applied {
 			Ok(applied) => applied,
 			Err(error) => return error,
 		};

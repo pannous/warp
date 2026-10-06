@@ -83,4 +83,7 @@ mod test_function_aliases;
 mod test_several_arguments;
 mod test_empty_call;
 mod test_analysis_memo;
+mod test_sort_functions;
+mod test_lambda_spellings;
+mod test_comma_calls;
 mod test_shadowed_log;

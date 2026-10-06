@@ -35,26 +35,39 @@ pub fn lower_several_arguments(program: Node) -> Node {
 
 /// Functions are prefix operators (wiki/function.md): when a call has more juxtaposed arguments than its function takes,
 /// the last function name among them takes the arguments after it, `square square 2` → `square (square 2)`. Before the
-/// function value passes read that name as a value
+/// function value passes read that name as a value.
+/// A call short of arguments takes the items after its comma, as in Ruby: `add 1, 2` → `add(1, 2)`, `x = add 1, 2`
 pub fn lower_prefix_calls(program: Node) -> Node {
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
-	let mut arities: HashMap<String, usize> = HashMap::new();
+	let mut arities: HashMap<String, Arity> = HashMap::new();
 	for definition in &found {
-		let most = arities.entry(definition.name.clone()).or_default();
-		*most = (*most).max(definition.params.len());
+		let count = definition.params.len();
+		let arity = arities.entry(definition.name.clone()).or_insert(Arity { fewest: count, most: count });
+		*arity = Arity { fewest: arity.fewest.min(count), most: arity.most.max(count) };
 	}
 	if arities.is_empty() { program } else { nest_prefix_calls(program, &arities) }
 }
 
-fn nest_prefix_calls(node: Node, arities: &HashMap<String, usize>) -> Node {
-	let arity = |node: &Node| match node.drop_meta() {
+/// The fewest and the most parameters of a function's definitions
+#[derive(Clone, Copy)]
+struct Arity {
+	fewest: usize,
+	most: usize,
+}
+
+fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
+	match node.drop_meta() {
 		Node::Symbol(name) => arities.get(name).copied(),
 		_ => None,
-	};
+	}
+}
+
+fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
+	let arity = |node: &Node| arity_of(node, arities);
 	match node {
 		Node::List(items, bracket @ (Bracket::None | Bracket::Round), separator @ (Separator::Space | Separator::None))
-			if items.len() > 2 && arity(&items[0]).is_some_and(|takes| items.len() - 1 > takes) =>
+			if items.len() > 2 && arity(&items[0]).is_some_and(|takes| items.len() - 1 > takes.most) =>
 		{
 			let mut items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
 			let Some(inner) = (1..items.len() - 1).rev().find(|index| arity(&items[*index]).is_some()) else {
@@ -64,7 +77,36 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, usize>) -> Node {
 			items.push(nest_prefix_calls(nested, arities));
 			nest_prefix_calls(Node::List(items, bracket, separator), arities)
 		}
+		Node::List(items, Bracket::None, Separator::Colon) if items.len() > 1 => {
+			let mut items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
+			let rest = items.split_off(1);
+			let first = items.pop().expect("split after the first");
+			match with_comma_arguments(first, &rest, arities) {
+				Ok(call) => call,
+				Err(first) => Node::List([vec![first], rest].concat(), Bracket::None, Separator::Colon),
+			}
+		}
 		other => other.map_children(|child| nest_prefix_calls(child, arities)),
+	}
+}
+
+/// `add 1` (also as the value of `x = add 1`) given the items after its comma, when it is short of arguments and they fit
+fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Arity>) -> Result<Node, Node> {
+	match node {
+		Node::Meta { node, data } => {
+			let wrapped = |inner| Node::Meta { node: Box::new(inner), data: data.clone() };
+			with_comma_arguments(*node, rest, arities).map(wrapped).map_err(wrapped)
+		}
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) => match with_comma_arguments(*value, rest, arities) {
+			Ok(call) => Ok(Node::Key(target, op, Box::new(call))),
+			Err(value) => Err(Node::Key(target, op, Box::new(value))),
+		},
+		Node::List(items, Bracket::None, Separator::Space) => {
+			let given = items.len() - 1;
+			let fits = arity_of(&items[0], arities).is_some_and(|takes| given < takes.fewest && given + rest.len() <= takes.most);
+			if fits { Ok(Node::List([items, rest.to_vec()].concat(), Bracket::None, Separator::Space)) } else { Err(Node::List(items, Bracket::None, Separator::Space)) }
+		}
+		other => Err(other),
 	}
 }
 
