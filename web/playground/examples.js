@@ -2,10 +2,13 @@
 // `printed` what it prints (test_in_browser.py --examples checks both in the page, so a broken example fails CI;
 // `wait`: milliseconds of timers and listeners before checking). samples.js (made by build.sh) adds samples/*.wasp.
 const EXAMPLES = {
-	welcome: { value: "42", printed: "Hello 🌍\n", code: `// edit me: the value of the last line is the result
-greeting = "Hello " + "🌍"
-print greeting
-6*7` },
+	welcome: { value: '[[1 4 9] 3 "reading"]', printed: "Alice turns 42\n", code: `// wasp is data and code in one notation, compiled to WebAssembly as you type: edit me
+alice = { name: "Alice" age: 30 hobbies: ["reading" "hiking" "coding"] }
+square := it * it
+age := alice.age
+whenever age > 40 { print alice.name + " turns " + age }
+alice.age = 42
+[square [1 2 3], #alice.hobbies, alice.hobbies#1]` },
 	data: { value: '"hiking"', code: `// wasp is a data notation first: this object is a value, and code reads it
 alice = { name: "Alice" age: 30 hobbies: ["reading" "hiking" "coding"] }
 alice.hobbies#2` },
