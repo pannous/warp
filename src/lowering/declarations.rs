@@ -538,10 +538,7 @@ impl TaskHandlers<'_> {
 			Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(&bracket, &separator) => {
 				Node::List(self.statements(items, active), bracket, separator)
 			}
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.lower(item, active)).collect(), bracket, separator),
-			Node::Key(left, op, right) => Node::Key(Box::new(self.lower(*left, active)), op, Box::new(self.lower(*right, active))),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node, active)), data },
-			other => other,
+			other => other.map_children(|child| self.lower(child, active)),
 		}
 	}
 
@@ -660,10 +657,7 @@ fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static 
 			};
 			Node::List([vec![items[0].clone(), guarded], items[2..].to_vec()].concat(), bracket, separator)
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| guarded_calls(item, guardable, wrapped)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(guarded_calls(*left, guardable, wrapped)), op, Box::new(guarded_calls(*right, guardable, wrapped))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(guarded_calls(*node, guardable, wrapped)), data },
-		other => other,
+		other => other.map_children(|child| guarded_calls(child, guardable, wrapped)),
 	}
 }
 

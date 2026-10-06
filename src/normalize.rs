@@ -375,17 +375,9 @@ fn emit_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
             hints.push(CapturedHint { original: original.to_string(), canonical: canonical.to_string(), position: pos.clone(), reason: reason.to_string(), rewrites });
         }
     });
-    if pos.is_empty() {
-        eprintln!(
-            "\x1b[36mhint:\x1b[0m prefer `\x1b[32m{}\x1b[0m` over `\x1b[33m{}\x1b[0m`",
-            canonical, original
-        );
-    } else {
-        eprintln!(
-            "\x1b[36mhint\x1b[0m \x1b[90m{}\x1b[0m: prefer `\x1b[32m{}\x1b[0m` over `\x1b[33m{}\x1b[0m`",
-            pos, canonical, original
-        );
-    }
+    use crate::diagnostic::{paint, Color};
+    let position = if pos.is_empty() { String::new() } else { format!(" {}", paint(Color::Gray, &pos)) };
+    eprintln!("{}{position}: prefer {} over {}", paint(Color::Cyan, "hint"), paint(Color::Green, canonical), paint(Color::Yellow, original));
     eprintln!("      {}", reason);
 }
 

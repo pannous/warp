@@ -254,10 +254,7 @@ fn item_named(node: Node, name: &str, item: &Node) -> Node {
 			let head = items.next().expect("a head");
 			Node::List(std::iter::once(head).chain(items.map(|part| item_named(part, name, item))).collect(), Bracket::Round, Separator::None)
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|part| item_named(part, name, item)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(item_named(*left, name, item)), op, Box::new(item_named(*right, name, item))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(item_named(*node, name, item)), data },
-		other => other,
+		other => other.map_children(|child| item_named(child, name, item)),
 	}
 }
 

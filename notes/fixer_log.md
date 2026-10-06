@@ -199,3 +199,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-06 p104-stub-only (P104, P105)
 - No executable is ever a copy of warp: without a warp-runtime stub a run notes it, build exits 1; warp's main no longer
   looks for a carried program. `warp run <file>` runs without leaving an executable. Tests build the stub once per run.
+
+## 2026-10-06 panics-remaining
+- extensions/numbers.rs: the four `unsupported types` panics and `unimplemented!` go (mixed: complex, exact real, IEEE);
+  wisp_parser had no reachable panics (its 13 are test assertions) but repaired malformed input silently: now errors.

@@ -256,6 +256,13 @@ PASSED:
   ✓ ffi_parser::tests::test_parse_two_params
   ✓ ffi_parser::tests::test_parse_void_params
   ✓ ffi_parser::tests::test_raylib_functions
+  ✓ ffi::header::tests::test_extract_function_signature_multi_param
+  ✓ ffi::header::tests::test_extract_function_signature_pointer
+  ✓ ffi::header::tests::test_extract_function_signature_simple
+  ✓ ffi::header::tests::test_extract_function_signature_void_return
+  ✓ ffi::header::tests::test_header_sig_to_ffi_sig
+  ✓ ffi::header::tests::test_map_c_type_to_valtype
+  ✓ ffi::header::tests::test_parse_header_file_math
   ✓ ffi::test_components_anywhere::test_a_component_is_called_in_every_host
   ✓ ffi::test_components_anywhere::test_a_wit_char_is_a_codepoint_in_every_host
   ✓ ffi::test_components_anywhere::test_component_failures_are_loud_in_every_host
@@ -364,13 +371,6 @@ PASSED:
   ✓ ffi::test_wasi::test_fd_write_raw
   ✓ ffi::test_wasi::test_wasi_putf
   ✓ ffi::test_wasi::test_wasi_puti
-  ✓ ffi::tests::test_extract_function_signature_multi_param
-  ✓ ffi::tests::test_extract_function_signature_pointer
-  ✓ ffi::tests::test_extract_function_signature_simple
-  ✓ ffi::tests::test_extract_function_signature_void_return
-  ✓ ffi::tests::test_header_sig_to_ffi_sig
-  ✓ ffi::tests::test_map_c_type_to_valtype
-  ✓ ffi::tests::test_parse_header_file_math
   ✓ function::tests::test_arg
   ✓ function::tests::test_function_builder
   ✓ function::tests::test_function_host
@@ -1066,6 +1066,9 @@ PASSED:
   ✓ numbers::test_math::test_units
   ✓ numbers::test_math::test_variable_minus
   ✓ numbers::test_math::test_while_loop
+  ✓ numbers::test_mixed_number_arithmetic::an_exact_real_stays_exact_with_a_ratio
+  ✓ numbers::test_mixed_number_arithmetic::complex_mixes_with_any_number
+  ✓ numbers::test_mixed_number_arithmetic::infinity_and_nan_follow_ieee
   ✓ numbers::test_number::test_hex
   ✓ numbers::test_number::test_number
   ✓ numbers::test_number::test_number_floats
@@ -1419,6 +1422,8 @@ PASSED:
   ✓ parser::test_wasp_position::test_position_tracking
   ✓ parser::test_wasp_position::test_position_with_comments
   ✓ parser::test_wisp_def_params::a_wisp_def_tells_the_parameters_from_the_body
+  ✓ parser::test_wisp_malformed::malformed_wisp_is_an_error_not_a_repaired_value
+  ✓ parser::test_wisp_malformed::malformed_wisp_never_panics
   ✓ parser::test_wisp_roundtrip::wisp_reads_back_what_it_writes
   ✓ parser::test_xml::test_boolean_attribute
   ✓ parser::test_xml::test_cdata
@@ -1466,6 +1471,7 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
+  ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
   ✓ programs::test_samples::test_ackermann
   ✓ programs::test_samples::test_binary_tree
@@ -2337,4 +2343,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2332 passed, 0 failed, 2332 total tested
+23 ignored, 2338 passed, 0 failed, 2338 total tested
