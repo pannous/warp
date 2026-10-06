@@ -877,6 +877,8 @@ PASSED:
   ✓ functions::test_optional_words::is_with_a_test_word
   ✓ functions::test_optional_words::test_words_read_as_not
   ✓ functions::test_optional_words::test_words_work_in_other_conditions
+  ✓ functions::test_parameter_any::a_parameter_called_with_two_kinds_names_any
+  ✓ functions::test_parameter_any::an_any_parameter_takes_every_kind
   ✓ functions::test_parameter_call_kinds::a_type_error_names_the_kind_with_its_article
   ✓ functions::test_parameter_call_kinds::disagreeing_calls_are_a_loud_error_naming_both_kinds
   ✓ functions::test_parameter_call_kinds::untyped_parameter_takes_the_kind_all_calls_agree_on
@@ -1193,6 +1195,7 @@ PASSED:
   ✓ lists::test_size_property_word::test_property_word_agrees_with_size_of
   ✓ lists::test_tuples::test_loop_over_list_with_global_tuple
   ✓ lists::test_tuples::test_tuple_of_computed_items
+  ✓ lists::test_type_word_items::a_type_word_variable_heads_a_list
   ✓ lists::test_typed_lists::test_appended_int_list_is_an_array
   ✓ lists::test_typed_lists::test_float_array_elements_are_numbers
   ✓ lists::test_typed_lists::test_float_list_is_a_float_array
@@ -1253,6 +1256,9 @@ PASSED:
   ✓ modules::test_packages::module_directory_is_where_the_module_lives
   ✓ modules::test_packages::the_registry_names_repositories
   ✓ modules::test_packages::use_loads_the_module_of_a_package
+  ✓ modules::test_std_aliases::a_foreign_name_says_the_wasp_word
+  ✓ modules::test_std_aliases::a_program_naming_the_module_keeps_it
+  ✓ modules::test_std_aliases::foreign_standard_names_are_wasp_words
   ✓ modules::test_std_file::use_file_lists_a_folder
   ✓ modules::test_std_file::use_file_writes_appends_and_reads_back
   ✓ modules::test_std_file::use_os_reads_the_environment
@@ -1269,6 +1275,7 @@ PASSED:
   ✓ modules::test_std_math_text::use_math_brings_libm_and_the_module
   ✓ modules::test_std_math_text::use_text_brings_its_words
   ✓ modules::test_std_math_text::use_text_formats_a_template
+  ✓ modules::test_std_net::use_net_posts_a_text
   ✓ modules::test_std_qualified::a_qualified_module_word_is_the_word
   ✓ modules::test_std_qualified::a_qualified_word_without_its_use_names_the_module
   ✓ modules::test_std_qualified::a_variable_of_the_modules_name_keeps_its_methods
@@ -2249,6 +2256,9 @@ PASSED:
   ✓ types::test_class_witnesses::a_compare_method_is_how_instances_order
   ✓ types::test_class_witnesses::a_text_method_is_how_an_instance_prints
   ✓ types::test_class_witnesses::an_equals_method_is_how_instances_compare
+  ✓ types::test_collection_declarations::a_collection_word_declares_a_variable
+  ✓ types::test_collection_declarations::a_program_naming_the_word_keeps_it
+  ✓ types::test_collection_declarations::dict_and_array_say_their_wasp_word
   ✓ types::test_construction_checks::a_call_construction_checks_its_fields_as_the_braces_do
   ✓ types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ types::test_constructor_vs_data::test_construction_checks_field_types
@@ -2942,4 +2952,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2937 passed, 0 failed, 2937 total tested
+19 ignored, 2947 passed, 0 failed, 2947 total tested
