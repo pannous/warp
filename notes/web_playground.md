@@ -136,3 +136,10 @@ the_strict_flag_turns_warnings_into_errors before).
   names. Still jco's own: the enum check's message ("\"triangle\" is not one of the cases of shape"), and a variant
   argument (an object) is not converted.
   tests/ffi/test_components_anywhere.rs runs in both hosts.
+
+## paint: a canvas in the page (2026-10-06, issue #15)
+`paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the
+worker's hooks.paint, the page draws one canvas per call under the output (playground.js showPaintings: nonzero/true
+is ink, 0 paper). Natively it is a loud error (no canvas yet; board card). samples/circle.wasp is the issue's demo as
+written (one loop moving x and y together, so it paints only a short diagonal), samples/filled_circle.wasp the filled
+circle with two loops.

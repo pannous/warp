@@ -167,7 +167,7 @@ fn test_const_return() {
 #[test]
 fn test_print() {
 	// does wasm print? (visual control!!);
-	is!("print 42", 42);
+	is!("print 42", warp::Node::Empty); // print gives nothing (issue #18)
 	print("OK");
 	//	printf!("%llx\n", -2000000000000ll);
 	//	printf!("%llx", -4615739258092021350ll);

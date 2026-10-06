@@ -64,25 +64,25 @@ impl WasmGcEmitter {
 		func.instruction(&I::I32Const(0));
 	}
 
-	/// `print x` / `print(x)`: writes x and a newline to stdout, the value is the printed value. A literal is written as
-	/// compiled; any other number, text or character through its runtime text form (print_value). Lists and
-	/// other values have no runtime text yet: an error value.
+	/// `print x` / `print(x)`: writes x and a newline to stdout and gives nothing, ø (user, issue #18). A literal is
+	/// written as compiled; any other value through its runtime text form (print_value); a value without one is a
+	/// type error.
 	pub(super) fn emit_print(&mut self, func: &mut Function, value: &Node) {
-		let text = match value.drop_meta() {
-			Node::Number(number) => number.to_string(),
-			Node::Text(text) => text.clone(),
-			Node::Char(character) => character.to_string(),
+		match value.drop_meta() {
+			Node::Number(number) => self.emit_print_literal(func, &number.to_string()),
+			Node::Text(text) => self.emit_print_literal(func, text),
+			Node::Char(character) => self.emit_print_literal(func, &character.to_string()),
 			_ => {
 				self.emit_written_value(func, value, PRINT_VALUE, "print");
-				return;
+				func.instruction(&I::Drop);
 			}
-		};
+		}
+		self.emit_call(func, "new_empty");
+	}
+
+	fn emit_print_literal(&mut self, func: &mut Function, text: &str) {
 		self.emit_wasi_puts(func, &Node::Text(format!("{text}{PRINT_TERMINATOR}")));
 		func.instruction(&I::Drop);
-		match value.drop_meta() {
-			Node::Char(_) => self.emit_node_instructions(func, &Node::Text(text)), // a text, as analyzer::held_kind has it
-			_ => self.emit_node_instructions(func, value),
-		}
 	}
 
 	/// Write the text of `value` at run time with `writer` (print_value or put_value) and leave the value: a list as the

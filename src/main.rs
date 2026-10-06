@@ -39,6 +39,8 @@ const ACKNOWLEDGEMENTS_FILE: &str = ".wasp-acknowledged";
 const OLD_ANSWERS_FILE: &str = ".wasp-answers";
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
+/// What the console and `warp <code>` put before a program's value
+const RESULT_MARK: &str = "» ";
 
 fn node_to_i32(node: &Node) -> i32 {
     match node {
@@ -102,8 +104,7 @@ fn run_command(args: &[String]) {
             // Read from stdin pipe
             let mut input = String::new();
             if io::stdin().read_to_string(&mut input).is_ok() && !input.is_empty() {
-                let result = eval(&input);
-                println!("{}", result.serialize());
+                show(&eval(&input), "");
                 return;
             }
         }
@@ -205,8 +206,7 @@ fn run_command(args: &[String]) {
         }
     } else if arg_string.starts_with("eval ") {
         let code = arg_string.strip_prefix("eval ").unwrap_or("");
-        let result = eval(code);
-        println!("» {}", result.serialize());
+        show(&eval(code), RESULT_MARK);
     } else if let Some(code) = arg_string.strip_prefix("lower ") {
         match wasm_emitter::lower(code) {
             Ok(lowered) => println!("{}", lowered.serialize()),
@@ -246,15 +246,22 @@ fn run_command(args: &[String]) {
         println!("Wasp 🐝 {}", WARP_VERSION);
     } else {
         // Default: eval and print
-        let result = eval(&arg_string);
-        println!("» {}", result.serialize());
+        show(&eval(&arg_string), RESULT_MARK);
     }
 }
 
 /// The program's value printed, its Int the exit status
 fn print_and_exit(result: Node) -> ! {
-    println!("{}", result.serialize());
+    show(&result, "");
     std::process::exit(node_to_i32(&result));
+}
+
+/// A program's value after what it printed, behind `mark`; nothing for ø, the value of `print` (issue #18) and of a
+/// program that only acts, as Python's console shows nothing for None
+fn show(result: &Node, mark: &str) {
+    if result.drop_meta() != &Node::Empty {
+        println!("{mark}{}", result.serialize());
+    }
 }
 
 /// The text of the file `target` names, else `target` itself as code
@@ -454,8 +461,7 @@ fn console() {
                 if input.is_empty() { continue; }
                 if input == "exit" || input == "quit" { break; }
                 let _ = rl.add_history_entry(input);
-                let result = eval(input);
-                println!("» {}", result.serialize());
+                show(&eval(input), RESULT_MARK);
             }
             Err(ReadlineError::Interrupted) => {
                 println!("^C");

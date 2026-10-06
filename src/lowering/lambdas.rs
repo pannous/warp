@@ -34,7 +34,7 @@ struct Iteration {
 const ITERATIONS: [Iteration; 8] = [
 	Iteration { word: "map", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { out.add(loop_call) }; out)" },
 	Iteration { word: "filter", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { if loop_call { out.add(item) } }; out)" },
-	Iteration { word: "each", extra_arguments: 0, function_arguments: 1, template: "(value=0; for item in loop_list { value = loop_call }; value)" },
+	Iteration { word: "each", extra_arguments: 0, function_arguments: 1, template: "(value=ø; for item in loop_list { value = loop_call }; value)" },
 	Iteration { word: "fold", extra_arguments: 1, function_arguments: 2, template: "(acc=loop_start; for item in loop_list { acc = loop_call }; acc)" },
 	Iteration { word: "find", extra_arguments: 0, function_arguments: 1, template: "(found=ø; searching=1; for item in loop_list { if searching and loop_call { found = item; searching = 0 } }; found)" },
 	Iteration { word: "any", extra_arguments: 0, function_arguments: 1, template: "(hit=0; for item in loop_list { if loop_call { hit = 1 } }; hit)" },

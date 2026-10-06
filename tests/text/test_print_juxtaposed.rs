@@ -3,8 +3,8 @@ use crate::is;
 
 #[test]
 fn a_text_next_to_values_prints_joined() {
-	is!("x=3; print \"a \" x", "a 3");
-	is!("x=10; on set x {print \"x changed to \" value}; x=3", "x changed to 3");
+	is!("x=3; print \"a \" x", warp::Node::Empty); // print gives nothing (issue #18): the_joined_text_is_written checks the text
+	is!("x=10; on set x {print \"x changed to \" value}; x=3", warp::Node::Empty);
 }
 
 #[test]
