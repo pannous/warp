@@ -377,7 +377,8 @@ fn note_charging(definition: &Definition, statements: &[Node], main: &Scope, rep
 	}
 	// a body the compiler already rewrote (a returned lambda is `closure_new(closure_lambda_1)`) is no text the user
 	// wrote: a hint never shows it
-	if reads_any(&function.body, &|word| word == crate::closures::CLOSURE_NEW || word.contains(GENERATED_NAME_MARK)) {
+	let generated = |word: &str| word == crate::closures::CLOSURE_NEW || word.contains(GENERATED_NAME_MARK) || word.contains(crate::function_values::LAMBDA_PREFIX);
+	if generated(&function.name) || reads_any(&function.body, &generated) {
 		return Ok(());
 	}
 	let value = written_text(&function.body);

@@ -124,3 +124,10 @@ fn a_one_line_function_listener_subscribes() {
 	is!("n = 0; watch(s) := once s > 5 { n += 1 }; x = 0; watch(x); x = 6; x = 3; x = 8; n", 1);
 	is!("n = 0; watch(s) := whenever s > 5 { n += 1 }; x = 0; n", 0);
 }
+
+// found by the kitchen sink: a call with a lambda argument nested the whole program in a block, so the handler's
+// write to a main-level variable was refused ("declare it global")
+#[test]
+fn a_handler_next_to_a_function_taking_a_lambda() {
+	is!("twice = f => f(1); y = twice(x => x + 3); alarms = 0; on alarm { alarms += 1 }; emit alarm; alarms", 1);
+}
