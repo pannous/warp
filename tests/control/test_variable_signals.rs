@@ -80,3 +80,11 @@ fn a_multi_assignment_notifies_once_after_all_its_writes() {
 	is!("a=1; b=2; seen=0; whenever a==b {seen+=1}; a, b = 2, 1; seen", 0);
 	is!("x=0; y=0; n=0; whenever x+y>0 {n+=1}; x, y = 1, 1; n", 1);
 }
+
+// A field or item write is a write of its variable (notes/signals.md phase 5)
+#[test]
+fn listeners_see_field_and_item_writes() {
+	is!("person = {name:\"A\", age:30}; n=0; whenever person.age > 30 {n+=1}; person.age = 31; person.age = 29; n", 1);
+	is!("p = {age:1, size:5}; log=0; on change p.age {log=log*10+value}; p.age = 2; p.age = 2; p.size = 6; p.age=3; log", 23);
+	is!("xs=[1,2,3]; hits=0; whenever xs#1 > 5 {hits+=1}; xs#1 = 9; hits", 1);
+}

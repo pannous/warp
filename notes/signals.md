@@ -132,8 +132,10 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    bodies at the writes.
 4. **Batching** (done, branch signals-events): a multi-assignment `a, b = 1, 2` checks once, after all its writes
    (P112: no batching block); tuples::destructured_names names its targets.
-5. **Signals as values**: `$Signal` cells for escaping variables and object fields (`on change person.age`),
-   subscription inside functions.
+5. **Signals as values**: static part done (branch signals-events): a field or item write `p.age = 2`, `xs#1 = 9` is
+   a write of its variable, `on change p.age` / `whenever xs#1 > 5` listen to it. Open: `$Signal` cells for
+   variables that escape (passed to a function that subscribes, kept in a list), subscription inside functions; wait
+   for a program that needs them.
 6. **Signals across tasks**: events raised in tasks reach `on` handlers of the starting thread; listeners on `shared`
    values poll at check points (with warp-d9, card task-signals).
 7. **Browser and outside**: DOM events and output bindings in the playground, `broadcast` / channel listeners
