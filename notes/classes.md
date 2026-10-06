@@ -116,8 +116,11 @@ replaces that where the static type is known, modelled on map_backend.rs (typed 
   (`p.x * p.y`) 141 → ~0 ms, method_call (`p.sum()`) 170 → ~0 ms, field_write (`p.x += i`) 16 ms; plain ints 2 ms.
 - Decisions (Interviewer warp-33, user, 2026-10-06): P127 int fields stay fast i64, a value that does not fit a loud
   run-time error. Found in step 3: nothing overflows, an i64 field carries warp's exact-int encoding like an int local
-  (fixnum or a handle to the big number), so `b.n = 2^70` keeps 2^70 (an_int_field_holds_any_int). Open (card
-  int-declaration, asked): 0.5 is an exact number of kind Int, so an int field or variable takes 4.5 silently. P126 texts inside containers print quoted everywhere (print, interpolation, string()): `P{x:1 name:"a"}`,
+  (fixnum or a handle to the big number), so `b.n = 2^70` keeps 2^70 (an_int_field_holds_any_int). Card
+  int-declaration (done): 0.5 is an exact number of kind Int; a declared int variable or a struct int field now traps
+  at run time with "an int must be a whole number" when given a fraction (`x += 0.5`, `p.x = y`), as wiki/Footguns.md
+  refuses `x:int=5; x=2.5` (big_int.rs emit_fits_declared, struct_backend.rs emit_field_value); `/=` still keeps an int
+  an int. Open: a Node instance `P(0.5)` (card int-field). P126 texts inside containers print quoted everywhere (print, interpolation, string()): `P{x:1 name:"a"}`,
   `["a" "b"]`; a top-level `print "a"` still writes a.
 Next steps: methods that change or return self, a struct result (like list_abi's returns_list), struct elements in
 typed lists.

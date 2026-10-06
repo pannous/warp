@@ -423,8 +423,27 @@ impl WasmGcEmitter {
 		crate::fixed_width::fixed_width(&type_node.name())
 	}
 
-	/// Stack [Int] → [Int] before storing to `target`: traps when the Int does not fit its declared fixed width
+	/// Is the variable `node` declared a whole-number type (`int`, `long`, `byte` …, not `exact`)
+	fn declared_whole(&self, node: &Node) -> bool {
+		let Node::Symbol(name) = node.drop_meta() else { return false };
+		let type_node = self.scope.lookup(name).and_then(|local| local.type_node.as_ref());
+		type_node.is_some_and(|type_node| crate::analyzer::is_whole_type(&type_node.name()))
+	}
+
+	/// Stack [Int] → [Int]: traps in INT_NOT_WHOLE when the Int is a ratio (`x:int = 3; x += 0.5`)
+	pub(super) fn emit_whole_check(&mut self, func: &mut Function) {
+		let value = self.scratch(2);
+		func.instruction(&I::LocalSet(value));
+		self.emit_require_whole(func, value, super::list_ops::INT_NOT_WHOLE);
+		func.instruction(&I::LocalGet(value));
+	}
+
+	/// Stack [Int] → [Int] before storing to `target`: traps when the Int is no whole number or does not fit its declared
+	/// fixed width
 	pub(super) fn emit_fits_declared(&mut self, func: &mut Function, target: &Node) {
+		if self.declared_whole(target) {
+			self.emit_whole_check(func);
+		}
 		let width = self.declared_fixed_width(target);
 		self.emit_fixed_width_check(func, width);
 	}
