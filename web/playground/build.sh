@@ -7,7 +7,7 @@
 #               feature (wasmparser's validator, a quarter of the module: the browser validates anyway), then wasm-opt
 #   debug     → warp.debug.wasm: profile web-debug (opt-level 1, line tables, the name section kept), with `validate`, so
 #               emitter bugs are named and stack traces and the browser's debugger show Rust functions and lines
-#   components → components/<name>.js for every COMPONENTS component (`use wasm "<name>.wasm"`, components.js): jco
+#   components → components/<name>.js for every COMPONENTS component (`use <name>.wasm`, components.js): jco
 #               transpiles it (npm i -g @bytecodealliance/jco), the core modules go into the script as base64, the
 #               WIT signatures of its exports as JSON (wasm-tools component wit --json; cargo install wasm-tools)
 # Measured 2026-10-03: optimized 1.30 MB (545 KB gzipped); debug 22 MB (4.8 MB gzipped; full DWARF would be 53 MB).
