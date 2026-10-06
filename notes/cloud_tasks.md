@@ -3,7 +3,7 @@
 You are one cloud session working on ONE task below (named in your prompt). A supervisor session reviews and merges.
 
 ## Rules
-- Read CLAUDE.md first (project overview; `is!` round trip). Language decisions are in notes/open_decisions.md ("Decided").
+- Read CLAUDE.md first (project overview; `is!` round trip). Language rules: wiki/Footguns.md and the tests; notes/decisions.md is history, for looking up a cited P-number only.
 - Branch `claude/<task-id>` from origin/main; commit and push after EVERY step (sessions can die mid-task, unpushed work is lost).
 - Building: first fetch the vendored crates (notes/cloud_offline_build.md), then `cargo test --offline` works in the sandbox.
   Otherwise try `cargo build --offline`. If crates are unavailable in the sandbox, push anyway: GitHub CI ("Rust CI") runs

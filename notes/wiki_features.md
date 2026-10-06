@@ -5,7 +5,7 @@ working tree of that moment (`cargo build --offline`, `./target/debug/warp 'code
 Two other lines of work were in flight and are not merged: the **sweep** session (max/min over a list, print IO,
 shifts, `use <file>`) and the **normalization** branch (rational, list-type hints). Rows that overlap them say so.
 
-Settled rules used as filter: notes/open_decisions.md ("Decided" sections), notes/Footguns.md work areas, notes/ignored_tests.md.
+Settled rules used as filter: notes/decisions.md, notes/Footguns.md work areas, notes/ignored_tests.md.
 Status vocabulary: **missing**, **partly**. Effort S = under a day, M = a few days, L = a week or more / new subsystem.
 Soundness: high = the wiki gives a complete rule that fits the Decided ones; medium = one open detail; low = the wiki itself hesitates.
 
