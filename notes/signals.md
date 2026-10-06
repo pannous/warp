@@ -53,6 +53,10 @@ JSON, wasp text). A state signal is a **variable**: nothing new to write, `x = 3
    `emitter.once`; a flag `once_fired_N`, event_signals.rs). `on set p.age` watches one field: a write of it or of p.
    `old` in `on change x {…}` and `on set x {…}` is x before the write (Vue's watch, P148); `previous`, `was` and
    `before` are its aliases with a note naming `old`; a program variable of one of these names keeps its meaning.
+   A named handler `h = on alarm {…}` runs while its flag `h_listening` holds: `remove h from listeners of alarm`
+   (or `listeners of alarm -= h`, also from inside its own body) clears it, `clear listeners of alarm` clears every
+   handler's, `count listeners of alarm` counts the listening ones. `raise item 1` carries the value 1 as `event`.
+   Not yet: handlers inside loops or blocks (card handlers-blocks).
    Ported cases of Svelte, Vue, Solid, RxJS, C#, Node, Qt and the DOM: probes/reactive_ports.md,
    tests/control/test_reactive_ports.rs.
 5. **Type**: a variable keeps its value type `T`. Only a signal that *escapes* as a value (passed to a function that
