@@ -584,6 +584,7 @@ PASSED:
   ✓ functions::test_definition_value::a_definition_alone_is_empty
   ✓ functions::test_definition_value::a_spaced_definition_names_its_parameters
   ✓ functions::test_definition_value::it_names_the_one_parameter_of_a_definition
+  ✓ functions::test_each_spellings::for_each_spellings_are_each
   ✓ functions::test_effects::test_constraint_on_non_function_is_loud
   ✓ functions::test_effects::test_declared_constraint_holds
   ✓ functions::test_effects::test_declared_constraint_violation_names_span_and_chain
@@ -1970,6 +1971,7 @@ PASSED:
   ✓ types::test_class_methods::classes_with_a_method_of_the_same_name_each_call_their_own
   ✓ types::test_class_methods::keyword_methods_in_a_class_body
   ✓ types::test_class_methods::methods_are_no_fields
+  ✓ types::test_construction_checks::a_call_construction_checks_its_fields_as_the_braces_do
   ✓ types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ types::test_constructor_vs_data::test_construction_checks_field_types
   ✓ types::test_constructor_vs_data::test_construction_fills_defaults_and_leaves_optional_fields_out
@@ -2617,4 +2619,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2612 passed, 0 failed, 2612 total tested
+23 ignored, 2614 passed, 0 failed, 2614 total tested
