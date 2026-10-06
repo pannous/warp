@@ -157,6 +157,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   export, 21 as float for the cast". No warning-and-builtin-wins.
   P144 (warp-25) the old test_import_wasm (tests/wasm/test_wasm.rs) is edited to the P139 values (import/require →
   ø, include → 42, fixture from tests/fixtures/wasm) and un-ignored, in its own commit naming P139.
+- P145 (warp-41, branch functions) R's `x <- 3` assigns with a got-it note "write x = 3"; the cramped `x<-3` is a
+  loud error naming `x = 3` and `x < -3`; `x < -3` compares. FYI (worker, no question): Haskell `twice x = x * 2;
+  twice 4` defines a function when a later statement uses the name and the body uses every parameter (e6f1cbbbe).
 - P142 (scope of P141, asked by warp-e4) the definition error applies only where the builtin would win, i.e. the
   definition could never take effect (casts like `double`, operators, type names). Library words (`add`, `map`,
   `count`) may be redefined and the user's version wins; class methods are always allowed (called as `x.add`). User:
