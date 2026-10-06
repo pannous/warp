@@ -203,6 +203,15 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   `it*it` need a number, so `def f(x){x+1}; f 1 < 5` and `square := it*it; square 3 == 9` are `(f x) op y` without
   a message, for every comparison; the ambiguity error stays only when the body accepts anything (`print x`). The
   footgun test `f := it*10; f 3-1 > 15` → true stands.
+- Async (warp-93, porting Promise/asyncio/Go/Kotlin cases):
+  P150 race: `await any [go a(), go b()]` is the first task to finish, the others keep running. The user's answer on
+  `await first [tasks]` was only "oof" (no pick); assumed (undoable, the recommended option): `first` keeps its list
+  meaning, and on a list of tasks a got-it note says "for the first to finish: await any […]".
+  P151 deadline: `await job within 100 ms or 0`; on timeout the job is stopped and the `or` value is the result,
+  without `or` the timeout is an error. User: "would the syntax 'or stop with 0' be overkill? maybe we can just give
+  it as a hint that this is the behavior": no extra `stop` word; a got-it note tells that the job is stopped.
+  P152 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
+  until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
