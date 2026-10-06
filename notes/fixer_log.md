@@ -214,3 +214,6 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-06 guillemet-strings
 - «text» ended only at another «: parse_string closes « with ».
+
+## 2026-10-06 hash-index-hint
+- g-2WPo: the xs#n hint only for a literal or a name as index (normalize is_simple_index).
