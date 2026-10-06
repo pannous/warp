@@ -58,6 +58,9 @@ impl WaspParser {
 	/// `by: >` gives
 	pub(super) fn try_parse_operator_value(&mut self) -> Option<Node> {
 		let (op, chars) = self.peek_operator()?;
+		if self.current_char().is_alphabetic() {
+			return None; // a word operator alone is a name: the parameter `to` of `hanoi(n, from, to, via)`
+		}
 		let blanks = (chars..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		if !matches!(self.peek_char(chars + blanks), ')' | ',' | ']') {
 			return None;
