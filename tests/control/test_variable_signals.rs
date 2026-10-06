@@ -97,3 +97,9 @@ fn a_condition_calling_a_function_watches_what_it_reads() {
 	is!("x=0; n=0; def inner(){ global x; x }; def outer(){ inner() * 2 }; whenever outer() > 5 {n+=1}; x=3; n", 1);
 }
 
+// The effects of a listener belong to the function whose write runs it
+#[test]
+fn a_write_has_the_effects_of_its_listeners() {
+	let effects = warp::wasm_emitter::eval("x=0; whenever x>1 {print \"big\"}; def f(v){ global x; x=v }; f(2); effects of f");
+	assert_eq!(effects.serialize().trim(), "(State IO)");
+}
