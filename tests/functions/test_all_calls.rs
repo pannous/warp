@@ -16,6 +16,14 @@ fn a_function_applied_to_all_items() {
 
 #[test]
 fn broadcasting_compares_as_a_list() {
-	assert_eq!(printed("square(x) := x*x; square [1 2 3] == [1 4 9]"), "1");
+	// P143 (user): a parameter typed as no truth value takes the call, `(square …) == …`
+	assert_eq!(printed("square number = number*number; square [1 2 3] == [1 4 9]"), "1");
+	assert_eq!(printed("def square(x: int){ x*x }; square 3 == 9"), "1");
 	assert_eq!(printed("square(x) := x*x; (square [1 2 3]) == [1 4 9]"), "1");
+}
+
+#[test]
+fn an_untyped_call_next_to_a_comparison_is_ambiguous() {
+	// P143 (user): both readings type-check, so the error names both forms
+	crate::common::fails_with("square(x) := x*x; square 3 == 9", "write (square 3) == 9 or square(3 == 9)");
 }

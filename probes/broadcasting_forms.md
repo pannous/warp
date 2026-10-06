@@ -14,4 +14,4 @@ add(a, b) := a + b; add(all [1, 2], 10) ||| [11 12]
 square(x) := x*x; square [[1, 2], [3]] ||| [[1 4] [9]]
 square(x) := x*x; square all [[1, 2], [3]] ||| [[1 4] [9]]
 square(x) := x*x; sum square [1, 2, 3] ||| 14
-square(x) := x*x; square [1 2 3] == [1 4 9] ||| 1
+square number = number*number; square [1 2 3] == [1 4 9] ||| 1

@@ -15,6 +15,8 @@ use std::collections::{HashMap, HashSet};
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
 const MAP_WORD: &str = "map";
 const ALL_WORD: &str = "all";
+/// Parameter types a comparison's result fits
+const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
 const BROADCAST_ITEM: &str = "broadcast_item";
 /// Library words of one text or number that broadcast over a list like a user function of a scalar
 const SCALAR_LIBRARY_WORDS: [&str; 6] = ["upper", "lower", "trim", "floor", "ceil", "round"];
@@ -52,15 +54,16 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	let mut arities: HashMap<String, Arity> = HashMap::new();
 	for definition in &found {
 		let count = definition.params.len();
-		let arity = arities.entry(definition.name.clone()).or_insert(Arity { fewest: count, most: count });
-		*arity = Arity { fewest: arity.fewest.min(count), most: arity.most.max(count) };
+		let typed = definition.params.first().is_some_and(rules_out_a_truth_value);
+		let arity = arities.entry(definition.name.clone()).or_insert(Arity { fewest: count, most: count, typed_first: typed });
+		*arity = Arity { fewest: arity.fewest.min(count), most: arity.most.max(count), typed_first: arity.typed_first && typed };
 	}
 	if arities.is_empty() {
 		return program;
 	}
 	// `puts add 1 2`: the output words take one value
 	for word in crate::wasm_emitter::OUTPUT_WORDS {
-		arities.entry(word.to_string()).or_insert(Arity { fewest: 1, most: 1 });
+		arities.entry(word.to_string()).or_insert(Arity { fewest: 1, most: 1, typed_first: false });
 	}
 	nest_prefix_calls(program, &arities)
 }
@@ -98,6 +101,19 @@ fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
 struct Arity {
 	fewest: usize,
 	most: usize,
+	/// Every definition's first parameter declares a type that is no truth value (`x: int`, `square number`)
+	typed_first: bool,
+}
+
+/// `x: int`, `number` (P50, the type-named parameter, as `number: number`): not `b: bool`, not untyped
+fn rules_out_a_truth_value(parameter: &Node) -> bool {
+	match parameter.drop_meta() {
+		Node::Key(_, Op::Colon, type_node) => {
+			let type_name = type_node.drop_meta().name().to_lowercase();
+			!TRUTH_TYPES.contains(&type_name.as_str()) && annotated_kind(type_node).is_some()
+		}
+		_ => false,
+	}
 }
 
 fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
@@ -121,10 +137,16 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			items.push(nest_prefix_calls(nested, arities));
 			nest_prefix_calls(Node::List(items, bracket, separator), arities)
 		}
-		// `square [1 2 3] == [1 4 9]` (wiki/all.md): the statement parses as `square ([1 2 3] == …)`; a call binds tighter
+		// `square 3 == 9` parses as `square (3 == 9)`. P143 (user): a parameter typed as no truth value takes the call,
+		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error
 		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && matches!(argument.drop_meta(), Node::Key(_, op, _) if op.is_comparison())) => {
 			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
 			let Node::Key(left, op, right) = argument.drop_meta().clone() else { unreachable!("guarded") };
+			if !arity(&head).expect("guarded").typed_first {
+				let (name, left_text, right_text) = (head.drop_meta().name(), left.serialize(), right.serialize());
+				let message = format!("{name} {left_text} {op} {right_text} is ambiguous; write ({name} {left_text}) {op} {right_text} or {name}({left_text} {op} {right_text})");
+				return crate::diagnostic::Diagnostic::at(&argument, message).into_error();
+			}
 			let call = Node::List(vec![head, *left], Bracket::None, Separator::Space);
 			Node::Key(Box::new(nest_prefix_calls(call, arities)), op, Box::new(nest_prefix_calls(*right, arities)))
 		}
