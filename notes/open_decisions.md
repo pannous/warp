@@ -26,6 +26,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Standing rules (user)
+- Board tickets (2026-10-06): "There should be the rule to only close or move project tickets with a commit linked in
+  the description. Enforce that rule texturally and in the to-do helper." Enforced in AGENTS.md,
+  notes/agents/common.md (c4db425c1) and ~/dev/bin/todo (no move to Done without a linked commit).
 - Picking tasks (2026-10-06): "When picking new tasks, check if there are some fresh ones under 'Next' that are easily
   done".
 - Cleanup (2026-10-03): "Don't ask for my confirmation to delete old stuff": merged branches, stale copies, leftover

@@ -409,6 +409,9 @@ PASSED:
   ✓ functions::test_call_result_fields::counting_words_of_a_call_result_stay_counts
   ✓ functions::test_captured_containers::test_a_captured_list_element_keeps_its_kind
   ✓ functions::test_captured_containers::test_a_captured_object_field_keeps_its_kind
+  ✓ functions::test_charged_getters::a_getter_reads_the_current_value_at_every_use
+  ✓ functions::test_charged_getters::an_object_getter_runs_at_every_read
+  ✓ functions::test_charged_getters::assigning_a_getter_is_an_error_naming_the_definition
   ✓ functions::test_closure_value_arguments::test_a_closure_in_a_list_takes_a_text
   ✓ functions::test_closure_value_arguments::test_a_returned_closure_takes_a_text
   ✓ functions::test_closure_value_arguments::test_a_returned_closure_takes_numbers_and_lists
@@ -2318,4 +2321,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2313 passed, 0 failed, 2313 total tested
+23 ignored, 2316 passed, 0 failed, 2316 total tested
