@@ -446,6 +446,11 @@ PASSED:
   ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
   ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
+  ✓ functions::test_arity_overloads::a_call_takes_the_definition_of_its_argument_count
+  ✓ functions::test_arity_overloads::a_count_no_definition_fits_or_two_fit_is_an_error
+  ✓ functions::test_arity_overloads::an_overload_may_call_another_one
+  ✓ functions::test_arity_overloads::calls_without_parentheses_pick_by_count_too
+  ✓ functions::test_arity_overloads::defaults_count_for_the_arguments_a_definition_accepts
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_only_defaults_calls_it
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_parameter_is_an_error
@@ -757,6 +762,11 @@ PASSED:
   ✓ functions::test_user_method_form::a_method_form_call_passes_the_further_arguments
   ✓ functions::test_user_method_form::a_user_function_is_called_in_method_form
   ✓ functions::test_user_method_form::a_user_function_taking_a_function_in_method_form
+  ✓ functions::test_variadic::a_list_spreads_into_a_rest_parameter
+  ✓ functions::test_variadic::a_list_spreads_into_fixed_parameters
+  ✓ functions::test_variadic::a_rest_parameter_collects_the_remaining_arguments
+  ✓ functions::test_variadic::a_rest_parameter_may_be_empty
+  ✓ functions::test_variadic::calls_without_parentheses_fill_the_rest_too
   ✓ functions::test_whole_float_to_int_parameter::a_whole_float_for_an_int_parameter_is_refused
   ✓ host::tests::test_host_state
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
@@ -810,6 +820,9 @@ PASSED:
   ✓ lists::test_lazy_range::a_small_range_variable_is_still_its_list
   ✓ lists::test_linear_append::an_appended_list_of_nodes_keeps_its_items
   ✓ lists::test_linear_append::map_and_filter_of_texts_stay_linear
+  ✓ lists::test_linear_arrays::a_linear_array_checks_its_bounds_and_stays_in_its_task
+  ✓ lists::test_linear_arrays::a_linear_array_is_a_list_as_a_whole
+  ✓ lists::test_linear_arrays::a_linear_array_reads_and_writes_its_cells
   ✓ lists::test_list_arithmetic::test_round_group_of_arithmetic_is_still_an_expression
   ✓ lists::test_list_arithmetic::test_square_list_keeps_all_items_that_are_arithmetic
   ✓ lists::test_list_arithmetic::test_square_list_of_one_arithmetic_item_is_a_list
@@ -2471,4 +2484,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2466 passed, 0 failed, 2466 total tested
+23 ignored, 2479 passed, 0 failed, 2479 total tested
