@@ -89,7 +89,7 @@ Next:
    passes (pipeline::lower_module_source; a comprehension in a module was read as a list), its getters lowered with
    the program (a second getters pass after modules::resolve); a parameter guessed a list takes text when the calls
    pass only texts (pad_right(pad_left(…))).
-   Next: more map words, time parsing.
+   map: invert pick from_pairs. Next: time parsing (parse_date "2026-10-07").
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 ## 7. Adapters (async, warp-f0)
