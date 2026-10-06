@@ -383,10 +383,10 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
-		locals.push(ValType::I64);
+		locals.extend([ValType::I64, nullable]);
 		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
-			let (bound, address, position, is_first, number) = (4, 5, 6, 7, 8);
+			let (bound, address, position, is_first, number, entry_value) = (4, 5, 6, 7, 8, 9);
 			let is_kind = |f: &mut Function, kind: Kind| {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
@@ -435,7 +435,9 @@ impl WasmGcEmitter {
 					s.call(f, "new_empty");
 					f.instruction(&I::Else);
 					s.emit_field(f, element, 2);
-					Self::emit_list(f, &[I::RefAsNonNull, I::End, I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type)]);
+					f.instruction(&I::LocalSet(entry_value));
+					s.emit_entry_in_braces(f, entry_value);
+					Self::emit_list(f, &[I::End, I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type)]);
 					// an instance `point{x:1}` (a key without operator) joins its name and fields without one (P123)
 					s.emit_field(f, element, 0);
 					Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(OP_INFO_MASK), I::I64And, I::I64Const(INSTANCE_OP_CODE), I::I64Eq]);
@@ -612,6 +614,18 @@ impl WasmGcEmitter {
 			s.call(f, "list_join");
 			Self::emit_list(f, &[I::Else, I::LocalGet(sliced), I::RefAsNonNull, I::End]);
 		});
+	}
+
+	/// Push the node in `local` (not null), a `key:value` entry as the one-entry map `{key:value}` it stands for, so its
+	/// text keeps the braces: `{a:{b:1}}` is the entry a:(b:1) at run time and would write a:b:1
+	pub(super) fn emit_entry_in_braces(&self, f: &mut Function, local: u32) {
+		let node_type = self.type_manager.node_type;
+		let entry_kind_mask = (OP_INFO_MASK << KIND_BITS) | KIND_MASK;
+		let colon_entry_kind = (crate::operators::op_to_code(&crate::operators::Op::Colon) << KIND_BITS) | KEY_KIND;
+		self.emit_field(f, local, 0);
+		Self::emit_list(f, &[I::I64Const(entry_kind_mask), I::I64And, I::I64Const(colon_entry_kind), I::I64Eq, I::If(BlockType::Result(Ref(self.node_ref(false))))]);
+		Self::emit_list(f, &[I::I64Const(CURLY_LIST_KIND), I::LocalGet(local), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
+		Self::emit_list(f, &[I::Else, I::LocalGet(local), I::RefAsNonNull, I::End]);
 	}
 
 	/// field_with(object, name, value): a copy of the object with the field `name` set to `value`, added at the end when it is
