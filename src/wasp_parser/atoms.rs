@@ -352,8 +352,8 @@ impl WaspParser {
 		}
 
 		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count())) {
-			if !self.names_variable(&symbol, &constant) {
-				return constant; // if true {} fall through :?
+			if !self.names_field(&symbol, &constant) {
+				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
 			}
 		}
 
@@ -432,25 +432,31 @@ impl WaspParser {
 		self.parse_glued_suffix(symbol)
 	}
 
-	/// A named number like `pi` the program assigns (`pi = 4`, a field `class c{pi = 3}`) is a variable from there on; the
-	/// assignment notes that it shadows the constant
-	fn names_variable(&mut self, symbol: &str, constant: &Node) -> bool {
+	/// `class circle{pi = 3}`, `class C{pi:int}`: a named number declared in a type body names the type's own field, which
+	/// shadows nothing outside; the type's methods read the field
+	fn names_field(&mut self, symbol: &str, constant: &Node) -> bool {
 		if !matches!(constant, Node::Number(_)) {
 			return false;
 		}
-		if self.shadowed_constants.contains(symbol) {
-			return true;
+		let declares = self.assignment_follows() || self.type_annotation_follows();
+		let Some(fields) = self.type_fields.as_mut() else { return false };
+		if declares {
+			fields.insert(symbol.to_string());
 		}
-		if !self.assignment_follows() {
-			return false;
-		}
-		if !self.in_type_body {
-			self.shadowed_constants.insert(symbol.to_string());
-			crate::normalize::set_hint_position(self.line_nr, self.column.saturating_sub(symbol.chars().count()));
-			let reason = format!("{symbol} = … shadows the constant {symbol}: from here on {symbol} is this variable");
-			crate::diagnostic::educate_once(CONSTANT_SHADOWING_TOPIC, &format!("{symbol} = …"), "another name", &reason);
-		}
-		true
+		fields.contains(symbol)
+	}
+
+	/// `:type` right after the name (`pi:int`, `pi: int`), not the definition `:=` nor a ternary's `c ? pi : 0`
+	fn type_annotation_follows(&self) -> bool {
+		self.current_char() == ':' && self.peek_char(1) != '='
+	}
+
+	/// `pi = 4` (P130, user: "loud error, if it was declared constant before which it should be"): a named number is a
+	/// declared constant, an assignment to it is an error
+	fn refuse_constant_assignment(&self, symbol: &str) -> Option<Node> {
+		let column = self.column.saturating_sub(symbol.chars().count());
+		let message = format!("{symbol} is a constant");
+		self.assignment_follows().then(|| Diagnostic { message, line: self.line_nr, column, ..Default::default() }.fix("another name").into_error())
 	}
 
 	/// `= …` or `:= …` after blanks, not the comparison `==`
@@ -488,9 +494,9 @@ impl WaspParser {
 
 	/// The name and the `{fields}` of a type declaration, after its keyword
 	pub(super) fn parse_type_declaration(&mut self) -> Node {
-		let outer = std::mem::replace(&mut self.in_type_body, true);
+		let outer = self.type_fields.replace(Default::default());
 		let declaration = self.parse_type_declaration_body();
-		self.in_type_body = outer;
+		self.type_fields = outer;
 		declaration
 	}
 

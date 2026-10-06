@@ -275,6 +275,8 @@ pub const TRY_MARKER: &str = "try·else";
 pub const AFTER_MARKER: &str = "after·return";
 /// `class dog extends animal {…}`: the class named on the right is the parent (P117)
 pub const EXTENDS_KEYWORD: &str = "extends";
+/// The constructor of a class body, `value{…}` or `value(name){…}` (wiki/constructor.md)
+pub const CONSTRUCTOR_WORD: &str = "value";
 /// `static k = 3` in a class body: a member of the class, not of each instance (P122); kept as the annotation `@static`
 pub const STATIC_KEYWORD: &str = "static";
 const AFTER_KEYWORD: &str = "after";
@@ -559,10 +561,9 @@ pub struct WaspParser {
 	group_start: (usize, usize),
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
 	stops_at_else: bool,
-	/// Constant words the program assigns (`pi = 4`): from the assignment on they are variables (footgun-pi)
-	shadowed_constants: std::collections::HashSet<String>,
-	/// Inside `class Name {…}`: `pi = 3` there names a field, which shadows nothing
-	in_type_body: bool,
+	/// Inside `class Name {…}`: its fields named like a constant (`pi = 3`, `pi:int`), which its methods read instead
+	/// of the constant; None outside a type body
+	type_fields: Option<std::collections::HashSet<String>>,
 	/// The binding power of the `then` or `else` branch being parsed: there it is a statement, so a braceless call takes a
 	/// variable argument (`then count xs`), as at assignment level
 	branch_bp: Option<u8>,
@@ -832,8 +833,7 @@ impl WaspParser {
 			in_for_header: false,
 			group_start: (0, 0),
 			stops_at_else: false,
-			shadowed_constants: Default::default(),
-			in_type_body: false,
+			type_fields: None,
 			branch_bp: None,
 			signed_list_element: None,
 			stops_at_end: false,
@@ -875,9 +875,6 @@ impl WaspParser {
 fn only<T>(items: Vec<T>) -> T {
 	items.into_iter().next().expect("one element")
 }
-
-/// The got-it topic of `pi = 4`, an assignment shadowing a named constant
-const CONSTANT_SHADOWING_TOPIC: &str = "constant-shadowing";
 
 /// In data only JSON's words are literals; aliases like `yes`, `no`, `none`, `pi` stay symbols.
 const DATA_WORD_LITERALS: [&str; 3] = ["true", "false", "null"];

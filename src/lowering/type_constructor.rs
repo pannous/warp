@@ -39,31 +39,51 @@ pub fn lower(node: Node) -> Node {
 	construct(node, &Classes { registry: &registry, constructors: &constructors })
 }
 
-/// The declared types and those with a `value{…}` constructor (class_methods::constructor_name)
+/// The declared types and their `value{…}` / `value(name){…}` constructors (class_methods::constructor_name), each
+/// with the number of parameters it takes besides the instance
 struct Classes<'a> {
 	registry: &'a TypeRegistry,
-	constructors: &'a [String],
+	constructors: &'a [(String, usize)],
 }
 
 impl Classes<'_> {
-	/// The instance passed through its class's constructor, when the class has one
+	fn constructor(&self, class: &str, parameters: usize) -> Option<Node> {
+		let name = crate::class_methods::constructor_name(class);
+		self.constructors.iter().any(|(defined, count)| *defined == name && *count == parameters).then_some(Node::Symbol(name))
+	}
+
+	/// The instance passed through its class's constructor without parameters, when the class has one
 	fn constructed(&self, class: &str, instance: Node) -> Node {
-		match self.constructors.iter().any(|name| *name == crate::class_methods::constructor_name(class)) {
-			true => Node::List(vec![Node::Symbol(crate::class_methods::constructor_name(class)), instance], Bracket::Round, Separator::None),
-			false => instance,
+		match self.constructor(class, 0) {
+			Some(constructor) => Node::List(vec![constructor, instance], Bracket::Round, Separator::None),
+			None => instance,
 		}
+	}
+
+	/// `P(a, b)` of a class whose constructor `value(x, y){…}` takes these arguments: the instance of the declared
+	/// defaults (ø for the others) passed through it with them
+	fn constructed_by_parameters(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		let class = call_name(items, bracket, separator)?;
+		let constructor = self.constructor(class, items.len() - 1)?;
+		let type_def = self.registry.get_by_name(class)?;
+		let fields = type_def.fields.iter().map(|field| {
+			let value = self.registry.default_of(type_def, field).cloned().unwrap_or(Node::Empty);
+			Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(value))
+		}).collect();
+		let arguments = std::iter::once(constructor).chain(std::iter::once(instance_node(class, fields))).chain(items[1..].iter().cloned());
+		Some(Node::List(arguments.collect(), Bracket::Round, Separator::None))
 	}
 }
 
-/// The constructor functions the program defines
-fn defined_constructors(node: &Node, registry: &TypeRegistry) -> Vec<String> {
+/// The constructor functions the program defines, with the number of their parameters besides the instance
+fn defined_constructors(node: &Node, registry: &TypeRegistry) -> Vec<(String, usize)> {
 	let names: Vec<String> = registry.types().iter().map(|type_def| crate::class_methods::constructor_name(&type_def.name)).collect();
 	let mut defined = vec![];
 	node.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
 		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
 			let name = items.first().map(|first| first.drop_meta().name()).unwrap_or_default();
-			if names.contains(&name) && !defined.contains(&name) {
-				defined.push(name);
+			if names.contains(&name) {
+				defined.push((name, items.len().saturating_sub(2)));
 			}
 		}
 	});
@@ -75,6 +95,9 @@ fn construct(node: Node, classes: &Classes) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = items.into_iter().map(|item| construct(item, classes)).collect();
+			if let Some(constructed) = classes.constructed_by_parameters(&items, &bracket, &separator) {
+				return constructed;
+			}
 			instance(&items, &bracket, &separator, registry).map(|instance| match call_name(&items, &bracket, &separator) {
 				Some(class) => classes.constructed(class, instance),
 				None => instance,

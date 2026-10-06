@@ -24,6 +24,13 @@ impl WasmGcEmitter {
 			}
 		}
 
+		// `k.x = 3` (k = field_with(k, "x", 3)) of a k bound nowhere, like `k#1 = 3`
+		if let Node::Symbol(name) = left.drop_meta() {
+			if *op == Op::Assign && self.is_unbound(name) && crate::library_words::is_field_update_of(name, right) {
+				return self.emit_undefined_variable(func, name);
+			}
+		}
+
 		// Handle x = fetch URL pattern: Key(Assign, x, List[fetch, URL]), optionally `… timeout SECONDS`
 		if (*op == Op::Assign || *op == Op::Define) && self.config.emit_host_imports {
 			if let Node::Symbol(var_name) = left.drop_meta() {

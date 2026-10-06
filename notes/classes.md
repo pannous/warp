@@ -140,8 +140,11 @@ Constructor block (classes-7, wiki/constructor.md): `value{ id = random() }` or 
 function `P·value(self:P)` (class_methods::constructor_name), its field names read and set on self, giving self; a
 field only it sets is an optional field (ø until it runs). type_constructor passes every construction `P(…)`, `P{…}`
 of a class that has one through it, after the given fields are matched and defaults filled.
+`value(name){…}` (classes-10) is `P·value(self:P, name)`: a call `P(a)` with as many arguments as it has parameters
+passes them to it, on an instance of the declared defaults (ø for the other fields), instead of matching them to
+fields; a field it sets that is no parameter becomes a field.
 
-Open (next batches): struct elements of lists (above), `value(name){…}` with constructor
-parameters (wiki/constructor.md), a `pop` method (changes the object and gives another value), a method
+Open (next batches): struct elements of lists (above), a `pop` method (changes the object and gives another value), a method
 named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), generics
-`class Box<T>`, mixins, a field named `pi` (card footgun-pi).
+`class Box<T>`, mixins, a field named `pi` (card footgun-pi, P130: the class's own field), extension methods
+`fun Int.double()` (card functions-extension).

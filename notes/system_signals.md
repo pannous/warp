@@ -157,10 +157,16 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   ctrl-c. warp-runtime system_signals::with_exit_handler wraps the run natively (wasm_reader, standalone executables),
   host.js withExitHandler in the page. `event` is ø for now (the exit code would need a host-built Int).
   Test: tests/control/test_exit_signal.rs.
-- `on every day at 9:00 {…}` (card g-3Gdo; syntax an assumption queued with the Interviewer): the timer handler
-  `on·every·N` started by `signal_daily(N, minute_of_day)`, first due at the next 9:00 local time (libc localtime_r;
-  UTC without it), then every 24 hours; `warp run` stays and says "listening: every day". 24-hour `H:MM` only (no
-  am/pm yet); anything else is "needs a time of day". Test: tests/control/test_daily_timer.rs.
+- Times of day (P135, user: `on every day at 9:00 {…}`, and `at 9:00 {…}` runs once; card time-day): the timer
+  handler `on·every·N` started by `signal_daily(N, minute_of_day, weekdays)` or, for `at 9:00 {…}`,
+  `signal_at(N, minute_of_day)`. `weekdays` is a mask, bit 0 Sunday … bit 6 Saturday (C's tm_wday): `day` 127,
+  `monday` (or `mondays`) 2, `weekday` Monday to Friday 62, `weekend` 65. Times are `21:30`, `9:30pm`, `9:30 pm`,
+  `9pm`, `9 pm` (12am is 0:00, 12pm noon); `at 13pm`, `25:00` are "needs a time of day", an unknown day word names the
+  day words. Each next time is computed from the local clock anew (libc localtime_r, UTC without it), so summer time
+  shifts nothing; a one-shot timer is dropped after it fired, so `warp run` ends then ("listening: at 9:00",
+  "listening: every monday at 9:00"). Tests: tests/control/test_daily_timer.rs, test_time_of_day.rs.
+  Not yet: several days (`on every monday and friday`), dates (`at 2026-12-24 18:00`), cron strings; the colon body
+  (`at 9pm: print n`) works only as a whole program (card colon-body).
 - Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, timers in the
   playground (a warning says so), `stop listening`.
 - Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the
@@ -171,4 +177,14 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   a timer handler (`on·every·N`, every 20 ms, lowering/system_signals.rs) pulling `channel_pending` / `channel_next`,
   so a listening program stays after main in `warp run` like one with a timer. The playground sends on a
   `BroadcastChannel`, but does not receive yet (no timers there); Windows has no channels yet (named pipes).
-  Open: named events across programs (`broadcast stop the machine{…}` → `on stop the machine from "chat"`).
+- `send` and named events across programs (P129, P129b, card signals-send; tests/control/test_named_broadcast.rs):
+  `send value to "chat"` is `broadcast value on "chat"` (`to` after `send` names the channel, not a range).
+  `broadcast stop the machine{reason: "heat"} on "chat"` (or `send … to "chat"`) sends the data to the sub-channel
+  `chat/stop the machine`, the directory `stop_the_machine` inside the channel's, so only `on stop the machine from
+  "chat" {…}` hears it, `event` being the data (ø without); `on message from "chat"` and other events do not. A text
+  alone after `send` is a named event without data on "warp" (interpreted, undoable): `send "file system full"` →
+  `on "file system full" {…}`. A named event is two or more plain words, or words ending in `name{data}`; one word
+  without data stays a value (`broadcast total`). `on stop the machine {…}` without `from` stays the in-program
+  handler of `raise`: listening across programs needs a `from` or a text name, so no program listens by accident.
+  Channels live in `/tmp/warp-channels-<user>` on unix: a socket path has at most 104 bytes and macOS's temp directory
+  alone takes about 50.
