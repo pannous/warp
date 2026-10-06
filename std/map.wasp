@@ -1,3 +1,9 @@
 // The standard library module map (notes/stdlib.md): `use map`
 merge(a, b) := { out = a; ks = keys(b); for k in ks { out[k] = b.get(k) }; out }
 map_values(m, f) := { out = {}; ks = keys(m); for k in ks { out[k] = f(m.get(k)) }; out }
+// {a:1 b:2} → {1:"a" 2:"b"}: the values become the keys
+invert(m) := { out = {}; ks = keys(m); for k in ks { out["" + m.get(k)] = k }; out }
+// only the entries of the given keys that m has
+pick(m, wanted) := { out = {}; for k in wanted { if m.has(k) { out[k] = m.get(k) } }; out }
+// [["a", 1] ["b", 2]] → {a:1 b:2}
+from_pairs(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
