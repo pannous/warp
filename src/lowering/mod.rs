@@ -27,6 +27,7 @@ pub mod phrase_calls;
 pub mod printable;
 pub mod phrase_words;
 pub mod picked_calls;
+pub mod pipes;
 pub mod result_word;
 pub mod run_time_blocks;
 pub mod shared_arrays;

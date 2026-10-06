@@ -177,6 +177,15 @@ impl WasmGcEmitter {
 		true
 	}
 
+	/// `print()`: an empty line, like Python; worth the empty text, as `print ""`
+	fn emit_empty_print(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		let is_print = matches!(items, [word] if matches!(word.drop_meta(), Node::Symbol(name) if name == PRINT));
+		if is_print && self.config.emit_wasi_imports {
+			self.emit_print(func, &Node::Text(String::new()));
+		}
+		is_print && self.config.emit_wasi_imports
+	}
+
 	/// Emit instructions for List(items, bracket, separator) nodes
 	/// Dispatches based on list contents and bracket type
 	pub(super) fn emit_list_node(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
@@ -190,7 +199,7 @@ impl WasmGcEmitter {
 
 		if items.len() == 1 && *bracket != Bracket::Square {
 			// `f()` of a name bound to nothing is an undefined function (P92); the group `(f)` is its item
-			if !self.emit_function_call(func, items, bracket) && !self.reject_unresolved_call(func, items, bracket, separator) {
+			if !self.emit_function_call(func, items, bracket) && !self.emit_empty_print(func, items) && !self.reject_unresolved_call(func, items, bracket, separator) {
 				self.emit_node_instructions(func, &items[0]);
 			}
 			return;

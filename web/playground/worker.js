@@ -52,9 +52,27 @@ function evaluate(code, acknowledged) {
 
 const ready = loadCompiler().then(() => post({ type: "ready" }), failure => post({ type: "failed", message: failure.message }));
 
+// `use python` runs in Pyodide (host.js foreign_call): loaded on first use, since a host call cannot wait for it
+const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.29.5/full/";
+const USES_PYTHON = /\buse\s+python\b/;
+let python; // the loading or loaded Pyodide with the bridge (web/playground/foreign_python.py)
+function loadPython() {
+	python ??= (async () => {
+		post({ type: "print", text: "loading Python (Pyodide, ~12 MB, once)…\n", stream: 2 });
+		importScripts(PYODIDE_URL + "pyodide.js");
+		const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
+		const bridge = await (await fetch("foreign_python.py")).text();
+		pyodide.globals.set("WARP_BRIDGE_LOOP", false);
+		pyodide.runPython(bridge);
+		self.pythonAnswer = pyodide.globals.get("answer");
+	})();
+	return python;
+}
+
 self.onmessage = async ({ data }) => {
 	await ready;
 	if (!compiler) await loadCompiler();
+	if (USES_PYTHON.test(data.code)) await loadPython().catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 }));
 	const started = performance.now();
 	const report = evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

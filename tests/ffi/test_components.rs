@@ -89,3 +89,13 @@ fn test_a_field_of_a_component_result_is_read() {
 	let path = rust_component();
 	is!(&format!("use wasm \"{path}\" as r; r.stats_of(\"hello big world\").letters"), 13);
 }
+
+/// a program's handles are numbered from 1 whatever other threads (parallel tests, other programs) created
+#[test]
+fn test_handles_of_another_thread_do_not_shift_the_numbering() {
+	let path = rust_component();
+	let using = move |code: &str| format!("use wasm \"{path}\" as r; {code}");
+	let other = using("a = r.counter(1); b = r.counter(2); a.value() + b.value()");
+	std::thread::spawn(move || { warp::wasm_emitter::eval(&other); }).join().unwrap();
+	fails_with(&using("c = r.counter(1); c.nope()"), "counter#1: a counter has no method nope");
+}

@@ -8,3 +8,13 @@ fn trim_drops_whitespace_at_both_ends() {
 	is!("s = \"   \"; #s.trim()", 0);
 	is!("lines = \" x , y \".split(\",\"); lines.map(l => l.trim()).join(\"|\")", "x|y");
 }
+
+/// `strip` is Python's spelling of trim; `s.trim` needs no parentheses, like `s.upper`
+#[test]
+fn strip_and_trim_without_parentheses() {
+	is!("\"  hi \".strip()", "hi");
+	is!("strip(\" a \")", "a");
+	is!("s = \" ab \"; strip s", "ab");
+	is!("s = \" ab \"; s.trim", "ab");
+	is!("s = \" ab \"; s.strip + \"!\"", "ab!");
+}
