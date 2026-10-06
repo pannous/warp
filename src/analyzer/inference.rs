@@ -181,6 +181,15 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 }
 
 /// The kind of a non-empty list: a call's result, a statement sequence's last value, or a data list
+/// The type word of a cast `int 4`, `int("5")`, `double 2`: a type word applied to one value. A list `[int, 4]`, a comma
+/// group `(int, 4)` or a variable named like a type word (`int = 3; int 4`) casts nothing (card variable-named)
+pub fn type_cast_of<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator, is_variable: &dyn Fn(&str) -> bool) -> Option<&'a str> {
+	let [word, _] = items else { return None };
+	let Node::Symbol(name) = word.drop_meta() else { return None };
+	let listed = *bracket == Bracket::Square || *separator == Separator::Colon; // Colon is the comma
+	(!listed && !is_variable(name) && type_word_kind(&name.to_lowercase()).is_some()).then_some(name.as_str())
+}
+
 pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &Separator, scope: &Scope) -> Kind {
 	if crate::host::fetch_call(node).is_some() {
 		return Kind::Text; // or an Error value, see check_unchecked_use
@@ -265,12 +274,8 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		}
 	}
 	// Type constructor: int("5"), float("1.5"), str(3), double 2
-	if items.len() == 2 {
-		if let Node::Symbol(s) = items[0].drop_meta() {
-			if let Some(kind) = type_word_kind(s) {
-				return kind;
-			}
-		}
+	if let Some(kind) = type_cast_of(items, bracket, separator, &|name| scope.lookup(name).is_some()).and_then(type_word_kind) {
+		return kind;
 	}
 	// Function call with parentheses: a library word has its own result, any other call is assumed Int. A comma list
 	// `(y, 4)` is a tuple, never the call y(4) (`f(a, b)` parses as `(f a b)`)
