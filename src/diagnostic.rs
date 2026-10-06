@@ -67,6 +67,35 @@ pub fn names_position(message: &str) -> bool {
 	})
 }
 
+/// The text of a node for a message: its serialization, or the source from its position to the end of the statement
+/// when a lowering pass rebuilt it with compiler temporaries (`range_value·item`), which the program never wrote
+pub fn written_text(node: &Node) -> String {
+	let serialized = node.serialize().trim().to_string();
+	if !serialized.contains(crate::analyzer::TEMPORARY_SEPARATOR) {
+		return serialized;
+	}
+	let source_line = |(line, column): (usize, usize)| SOURCE.with(|source| {
+		let rest: String = source.borrow().lines().nth(line.checked_sub(1)?)?.chars().skip(column.saturating_sub(1)).collect();
+		Some(statement_prefix(&rest).trim().to_string())
+	});
+	position(node).and_then(source_line).filter(|text| !text.is_empty()).unwrap_or(serialized)
+}
+
+/// The start of `text` up to the end of its statement: a `;` or a closing bracket it did not open (`[cube 1..n]`)
+fn statement_prefix(text: &str) -> &str {
+	let mut depth = 0usize;
+	for (offset, character) in text.char_indices() {
+		match character {
+			'(' | '[' | '{' => depth += 1,
+			')' | ']' | '}' if depth == 0 => return &text[..offset],
+			')' | ']' | '}' => depth -= 1,
+			';' if depth == 0 => return &text[..offset],
+			_ => {}
+		}
+	}
+	text
+}
+
 /// The line and column the parser recorded for `node`, or for the first of its parts that has them: a node a lowering
 /// pass rebuilt keeps the positions of the parts it was built from
 pub fn position(node: &Node) -> Option<(usize, usize)> {
