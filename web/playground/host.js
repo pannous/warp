@@ -142,6 +142,7 @@ function programImports(holder, hooks) {
 			foreign_call: (runtime, module, member, call, argumentList) => {
 				const program_ = program();
 				const [runtimeName, moduleName, memberName] = [runtime, module, member].map(node => plainOfTree(readNode(program_, node)));
+				if (runtimeName === "python") return pythonCall(program_, moduleName, memberName, call, argumentList);
 				if (runtimeName !== "js") throw new Error(`${runtimeName} ${moduleName}.${memberName}: ${runtimeName} runs only in the native host (the warp CLI)`);
 				// a module's name, or a handle: an object of the page kept behind an id (src/foreign.rs)
 				let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
@@ -482,6 +483,18 @@ const FOREIGN_OPERATORS = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a,
 	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
 	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
 
+// `use python` in the page: the bridge of src/foreign.rs (foreign_python.py) in Pyodide, which worker.js loads before
+// a program that says `use python` runs; requests and answers are the same JSON, handles stay in Pyodide
+function pythonCall(program, moduleName, memberName, call, argumentList) {
+	if (!self.pythonAnswer) throw new Error(`python ${moduleName}.${memberName}: Python (Pyodide) is not loaded here`);
+	const isCall = plainOfTree(readNode(program, call)) === 1;
+	const given = isCall ? plainOfTree(readNode(program, argumentList)) : null;
+	const request = { module: moduleName, member: memberName, arguments: isCall ? (given === null ? [] : Array.isArray(given) ? given : [given]) : null };
+	const reply = JSON.parse(self.pythonAnswer(JSON.stringify(request)));
+	if (reply.error !== undefined) throw new Error(`python ${typeof moduleName === "string" ? moduleName : "value"}.${memberName}: ${reply.error}`);
+	return buildValue(program, treeOfPlain(reply.value));
+}
+
 // objects of the page without a plain form (a Date, a Map, an instance, a function), kept for foreign_call behind ids:
 // they cross as `{$handle: id, type, text}` and are the object again when they come back
 const foreignHandles = [];
@@ -501,6 +514,8 @@ function treeOfPlain(value) {
 	if (typeof value === "string") return textTree(value);
 	if (Array.isArray(value)) return { kind: SQUARE_LIST, items: value.map(treeOfPlain) };
 	if (typeof value === "function" || (typeof value === "object" && !isPlainObject(value))) return treeOfPlain(handleOf(value));
+	// an integer beyond 64 bits from Python: its digits (foreign_python.py plain)
+	if (typeof value === "object" && Object.keys(value).length === 1 && typeof value.$int === "string") return { kind: KIND_INT, data: { exact: [value.$int, "1"] }, chain: [] };
 	if (typeof value === "object") return { kind: CURLY_LIST, items: Object.entries(value).map(([key, item]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: key }, chain: [] }, treeOfPlain(item)] })) };
 	return textTree(String(value));
 }
