@@ -244,6 +244,8 @@ fn calls_closure(node: &Node, variable: &str) -> bool {
 /// The last statement of a body: its value
 pub(crate) fn tail(body: &Node) -> &Node {
 	match body.drop_meta() {
+		// Swift's closure `{ $0 * $1 }` is a value, no block to look into
+		closure @ Node::List(_, Bracket::Curly, _) if arrow_lambda(closure).is_some() => closure,
 		Node::List(items, Bracket::Curly | Bracket::Round, Separator::Semicolon | Separator::Newline) if !items.is_empty() => tail(&items[items.len() - 1]),
 		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 => tail(&items[0]),
 		Node::List(items, _, _) if is_return(items) => tail(&items[1]),
@@ -397,6 +399,7 @@ fn is_field(node: &Node) -> bool {
 	holder_path(node).is_some_and(|path| path.contains('.'))
 }
 
+const GLOBAL_WORD: &str = "global";
 /// Methods that append one value to a list variable (analyzer APPEND_METHODS)
 const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 
@@ -455,6 +458,7 @@ impl Lifting {
 	fn walk(&mut self, node: Node, bound: &HashSet<String>) -> Node {
 		if let Some(params) = definition_parameters(&node, &self.functions) {
 			let Node::Key(head, op, body) = node.drop_meta().clone() else { unreachable!("a definition") };
+			let has_parameters = !params.is_empty();
 			let inner: HashSet<String> = bound.iter().cloned().chain(params).collect();
 			let name = match head.drop_meta() {
 				Node::List(items, _, _) => items.first().map(|name| name.drop_meta().name()).unwrap_or_default(),
@@ -462,7 +466,8 @@ impl Lifting {
 			};
 			let full_name = self.function_named(&name).unwrap_or(name);
 			self.enclosing.push(full_name);
-			let body = self.walk(*body, &inner);
+			// `g(a, b) := { $0 - $1 }`: with parameters the block is the body, its `$0` the first parameter, no closure
+			let body = if has_parameters { self.walk_body_block(*body, &inner) } else { self.walk(*body, &inner) };
 			let body = self.function_value(body, &inner);
 			self.enclosing.pop();
 			return Node::Key(head, op, Box::new(body));
@@ -562,6 +567,16 @@ impl Lifting {
 	}
 
 	/// A function name where a value is expected is the closure of that function
+	/// The block of a definition with parameters, its position kept: its statements are walked, the block itself is no
+	/// closure
+	fn walk_body_block(&mut self, body: Node, bound: &HashSet<String>) -> Node {
+		match body {
+			Node::Meta { node, data } => Node::Meta { node: Box::new(self.walk_body_block(*node, bound)), data },
+			Node::List(items, Bracket::Curly, separator) => Node::List(items.into_iter().map(|item| self.walk(item, bound)).collect(), Bracket::Curly, separator),
+			other => self.walk(other, bound),
+		}
+	}
+
 	fn function_value(&mut self, node: Node, bound: &HashSet<String>) -> Node {
 		if let Some(target) = referenced_function(&node).and_then(|name| self.function_named(&name)) {
 			return closure_new(&target, vec![]);
@@ -609,17 +624,29 @@ impl Lifting {
 
 	/// The variables of the enclosing scopes the body reads, in order of first use
 	fn captured(&self, body: &Node, params: &[String], bound: &HashSet<String>) -> Vec<String> {
+		let globals = declared_globals(body);
 		let mut captured: Vec<String> = vec![];
 		body.visit(&mut |node| {
 			if let Node::Symbol(name) = node {
-				// `t = k * 2` before any read of t binds the lambda's own local, no capture
-				if !params.contains(name) && self.is_variable(name, bound) && !captured.contains(name) && !crate::analyzer::starts_with_fresh_binding(body, name) {
+				// `t = k * 2` before any read of t binds the lambda's own local, no capture; `global n` shares n
+				if !params.contains(name) && !globals.contains(name) && self.is_variable(name, bound) && !captured.contains(name) && !crate::analyzer::starts_with_fresh_binding(body, name) {
 					captured.push(name.clone());
 				}
 			}
 		});
 		captured
 	}
+}
+
+/// The names a body declares `global n`: the closure reads and changes the program's own n
+fn declared_globals(body: &Node) -> HashSet<String> {
+	let mut globals = HashSet::new();
+	body.visit(&mut |node| if let Node::Key(keyword, Op::Colon, name) = node {
+		if matches!(keyword.drop_meta(), Node::Symbol(word) if word == GLOBAL_WORD) {
+			globals.insert(name.drop_meta().name());
+		}
+	});
+	globals
 }
 
 /// A closure changing a captured variable would change its own copy (wiki/charged.md §3): a loud error naming `global`

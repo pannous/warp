@@ -344,6 +344,14 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 				if crate::wasm_emitter::linear_arrays::is_linear_word(name) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY);
 				}
+				// a float map kernel (shared_arrays.rs): the address of its source block in, of the new one out
+				if name.starts_with(crate::wasm_emitter::linear_arrays::LINEAR_MAP_PREFIX) {
+					use crate::wasm_emitter::linear_arrays::{LINEAR_LIBRARY, LINEAR_NEW};
+					let kernel: &'static str = Box::leak(name.clone().into_boxed_str());
+					let signature = crate::ffi::FfiSignature::new(kernel, LINEAR_LIBRARY, vec![wasm_encoder::ValType::I64], vec![wasm_encoder::ValType::I64]);
+					ctx.ffi_imports.insert(name.clone(), signature);
+					add_ffi_import(ctx, LINEAR_NEW, LINEAR_LIBRARY);
+				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
 					// the host builds a caught stack overflow's Error with the module's own error_of

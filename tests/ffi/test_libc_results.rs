@@ -39,3 +39,12 @@ fn libc_text_and_character_functions() {
 	is!("use c\nstrcspn(\"hello world\", \" \")", 5);
 	is!("use c\nstrchr(\"abc\", 120)", warp::Node::Empty);
 }
+
+// a header's comment prose declares nothing: glibc's ctype.h says "because tolower (EOF) must be EOF" in a block
+// comment, which the cached libc table took for tolower (a text result: "wasm trap: cast failure" in Linux CI)
+#[test]
+fn comment_prose_in_a_header_declares_nothing() {
+	let declared = warp::ffi_parser::parse_header_file("tests/fixtures/c/comment_prose.h", "c");
+	assert_eq!(declared.len(), 1, "{declared:?}");
+	assert_eq!(declared[0].name, "tolower");
+}

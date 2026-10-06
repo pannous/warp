@@ -166,4 +166,5 @@ dlopen, and reads the macOS SDK's _string.h now (its `_LIBC_CSTR` annotations dr
 undefined natively). Step 2: out-pointers into a module's memory, const byte buffers, unsigned results; struct
 pointers stay the module's numbers (its addresses, sandboxed, so no handle table is needed); zlib 1.3.2 built from its
 sources (tests/fixtures/wasm/zlib.wasm, 63 KB) gives the same crc32/adler32/zlibVersion natively and in the browser
-(notes/wasm_modules.md). Open: writable output buffers with in/out lengths (zlib's compress), more libraries.
+(notes/wasm_modules.md). Then buffers with in/out lengths (zlib compress/uncompress round-trip), texts with their
+byte lengths, and a second library, xxHash; the steps to add one: notes/wasm_modules.md "How to add a C library".

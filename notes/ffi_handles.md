@@ -29,5 +29,6 @@ How a C type crosses (`ffi::pointer_kind`):
 All functions crossing pointers share one wrapper (`create_pointer_wrapper`): handle parameters, an out-pointer, a text
 or handle result. Passing 0 (NULL) where C does not accept it crashes as it would in C (`fclose(0)`).
 
-Open: Linux declares FILE in bits/types/FILE.h, which is not read, so `FILE *` stays memory there; `char **` as the
+FILE and DIR are structs everywhere (ffi STANDARD_STRUCT_TYPES): Linux declares FILE in bits/types/FILE.h, which is
+not read, and `fclose(f)` passed the handle id as a memory offset there (SIGSEGV in CI). Open: `char **` as the
 only out-pointer (asprintf) gives a handle, not a text.

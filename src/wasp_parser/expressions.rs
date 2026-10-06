@@ -27,6 +27,8 @@ impl WaspParser {
 			statement
 		} else if let Some(awaited) = self.try_parse_await() {
 			awaited
+		} else if let Some(head) = self.try_parse_operator_method_head() {
+			head
 		} else if let Some((op, chars)) = self.peek_prefix_operator().filter(|_| !self.at_member_name(0)) {
 			let (prefix_line, prefix_column) = self.get_position();
 			self.hint_operator(chars, true);
@@ -52,6 +54,45 @@ impl WaspParser {
 		};
 
 		self.continue_expr(lhs, min_bp)
+	}
+
+	/// `+(o) := …` defines the method of an operator by its glyph (a class's `plus`): the head is the call `+(o)`, no
+	/// unary plus
+	pub(super) fn try_parse_operator_method_head(&mut self) -> Option<Node> {
+		let (op, chars) = self.peek_operator()?;
+		crate::lowering::class_methods::operator_method(op)?;
+		let mut offset = chars + self.parenthesis_length(chars)?;
+		while matches!(self.peek_char(offset), ' ' | '\t') {
+			offset += 1;
+		}
+		if (self.peek_char(offset), self.peek_char(offset + 1)) != (':', '=') {
+			return None;
+		}
+		self.advance_by(chars);
+		let parameters = match self.parse_atom().drop_meta().clone() {
+			Node::List(parameters, Bracket::Round, _) => parameters,
+			Node::Empty => vec![],
+			parameter => vec![parameter],
+		};
+		Some(Node::List([vec![Symbol(op.to_string())], parameters].concat(), Bracket::Round, Separator::None))
+	}
+
+	/// The length of the balanced `(…)` at `offset`, None when none starts there or it never closes
+	fn parenthesis_length(&self, offset: usize) -> Option<usize> {
+		if self.peek_char(offset) != '(' {
+			return None;
+		}
+		let mut depth = 0;
+		for length in 0.. {
+			match self.peek_char(offset + length) {
+				'(' => depth += 1,
+				')' if depth == 1 => return Some(length + 1),
+				')' => depth -= 1,
+				'\0' => return None,
+				_ => {}
+			}
+		}
+		None
 	}
 
 	/// An infix operator alone as an argument or item, `sorted(xs, >)`, `[+, *]`: the operator as a value `(> ø ø)`, as
@@ -112,8 +153,10 @@ impl WaspParser {
 			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword; // `return := …` as a name
 			return None;
 		} else {
-			// the binding of an assigned value: `return square n` returns the braceless call, like `x = square n`
-			self.parse_expr(Op::Assign.binding_power().1)
+			// the binding of an assigned value: `return square n` returns the braceless call, like `x = square n`; then
+			// what binds looser, Python's `return a if c else b`
+			let value = self.parse_expr(Op::Assign.binding_power().1);
+			self.continue_expr(value, 0)
 		};
 		Some(Node::List(vec![Symbol(RETURN_KEYWORD.to_string()), value], Bracket::None, Separator::Space))
 	}
@@ -136,7 +179,7 @@ impl WaspParser {
 		}
 		// the pipeline `xs |> f(a)` is the call `f(xs, a)`, `xs |> f` is `f(xs)` (F#, Elixir); it binds below arithmetic
 		// and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
-		if self.current_char() == '|' && self.peek_char(1) == '>' {
+		if self.at_pipeline() {
 			return Some((SpecialInfix::Pipeline, 2, PIPELINE_BINDING_POWER));
 		}
 		// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
@@ -158,6 +201,10 @@ impl WaspParser {
 	}
 
 	/// The right operand of a special infix operator, None when it binds looser than `min_bp` (nothing consumed)
+	pub(super) fn at_pipeline(&self) -> bool {
+		self.current_char() == '|' && self.peek_char(1) == '>'
+	}
+
 	pub(super) fn special_operand(&mut self, width: usize, (left, right): (u8, u8), min_bp: u8) -> Option<Node> {
 		if left < min_bp {
 			return None;
@@ -218,6 +265,10 @@ impl WaspParser {
 				continue;
 			}
 
+			// the argument of `square xs |> sum` ends at the pipeline, which takes the whole call (lists.rs)
+			if self.pipe_takes_call && self.at_pipeline() {
+				break;
+			}
 			// Step 3a–e: the operators the infix table does not hold (`mod`, `//`, `|>`, `.+`, `in`, see SpecialInfix)
 			if let Some((infix, width, binding)) = self.special_infix(&lhs) {
 				let Some(operand) = self.special_operand(width, binding, min_bp) else { break };
@@ -260,8 +311,10 @@ impl WaspParser {
 
 			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators)
 			let ends_command = op == Op::And && (self.in_command || (min_bp == 0 && is_command(&lhs))) && self.and_starts_statement();
+			// `whenever not x {…}`, `print not done`: the word `not` after a bare name negates what follows, it is no infix
+			let prefix_not = op == Op::Not && self.matches_keyword("not") && matches!(lhs.drop_meta(), Symbol(_));
 			// Stop if operator binds less tightly than our minimum
-			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
+			if ends_command || prefix_not || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
 			if let Err(refused) = self.left_arrow_assignment(op, &lhs) {

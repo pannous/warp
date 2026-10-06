@@ -5,7 +5,7 @@ use crate::is;
 #[test]
 fn svelte_vue_solid_derivations() {
 	is!("count = 0; doubled := count * 2; count = 3; doubled", 6);
-	is!("count = 0; alerts = 0; whenever count >= 10 {alerts += 1}; count = 5; count = 10; count = 11; alerts", 2);
+	is!("count = 0; alerts = 0; whenever count >= 10 {alerts += 1}; count = 5; count = 10; count = 11; alerts", 1); // P156: when it becomes true
 	is!("first = \"Ada\"; last = \"L\"; full := first + \" \" + last; first = \"Grace\"; full", "Grace L");
 	is!("a = 2; square := a*a; sum = 0; on change square {sum += value}; a = 3; a = 3; a = 4; sum", 25);
 }

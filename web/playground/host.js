@@ -12,6 +12,7 @@ const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 /// where host.read and the test runner's file system find files: the repository root the static server serves
 const FILE_ROOT = new URL("../../", self.location.href).href;
+const PAGE_PREFIX = "page:"; // src/web.rs PAGE_PREFIX: a file of the page itself (lib/libc.h), not of the served repository
 /// C names of libm functions (ffi "m") that Math spells differently
 const LIBC_URL = new URL("lib/libc.wasm", self.location.href).href; // libc for `use c` (lib/build_libc.sh, P147)
 const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a % b, ceil: Math.ceil, floor: Math.floor };
@@ -58,10 +59,17 @@ function readFile(path) {
 	}
 }
 
-// the bytes of a file of the served repository or of a URL, failing in the words of the native read
+// the URL of a file of the served repository, of the page itself (PAGE_PREFIX) or a URL
+function fileUrl(path) {
+	if (/^https?:/.test(path)) return path;
+	if (path.startsWith(PAGE_PREFIX)) return new URL(path.slice(PAGE_PREFIX.length), self.location.href).href;
+	return FILE_ROOT + path.replace(/^\.\//, "");
+}
+
+// the bytes of a file of the served repository, of the page or of a URL, failing in the words of the native read
 function readBytes(path) {
 	try {
-		return getSync(/^https?:/.test(path) ? path : FILE_ROOT + path, 0, true);
+		return getSync(fileUrl(path), 0, true);
 	} catch (failure) {
 		throw failure.message === HTTP_NOT_FOUND ? new Error(FILE_NOT_FOUND) : failure;
 	}
@@ -685,9 +693,7 @@ function cText(memory, address) {
 	return bytes.slice(0, end < 0 ? bytes.length : end);
 }
 
-// the program's C calls (src/wasm_modules.rs c_calls) by "module\tname": per parameter t a text, l its length, n a
-// number, o an out-pointer (no value of the program); result t a text, u an unsigned number, n a number, ot / on what
-// the first out-pointer received as a text / number
+// the program's C calls (src/wasm_modules.rs c_calls, which lists the letters) by "module\tname"
 function cCalls(run) {
 	if (!run.cCalls) {
 		const lines = WebAssembly.Module.customSections(run.module, C_CALLS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
@@ -698,37 +704,55 @@ function cCalls(run) {
 }
 
 // a C function of a module, called with the program's values: each text (a NUL-terminated copy in the program's memory,
-// or a pointer and length) is copied into a block of the module's malloc, each out-pointer gets a NULL slot there, all
-// freed after the call; a char * result (or char ** out-pointer) is read back as a text of the program (NULL is ø)
+// or a pointer and length) is copied into a block of the module's malloc, each out-pointer gets a NULL slot there, each
+// buffer a block of its capacity and a length slot, all freed after the call; a char * result (or char ** out-pointer,
+// or the bytes a buffer received) is read back as a text of the program (NULL is ø)
 function callC(holder, exports, member, call, values, what) {
 	const program = holder.exports;
 	const blocks = [];
 	const outSlots = [];
+	const buffers = [];
 	const moduleArguments = [];
 	const malloc = bytes => {
-		if (!exports.malloc) throw new Error(`${what} takes a text or out-pointer, but its module exports no malloc(size)`);
+		if (!exports.malloc) throw new Error(`${what} takes a text, buffer or out-pointer, but its module exports no malloc(size)`);
 		const block = exports.malloc(bytes.length);
 		new Uint8Array(exports.memory.buffer).set(bytes, block);
 		blocks.push(block);
 		return block;
 	};
+	const u32 = count => new Uint8Array(new Uint32Array([count]).buffer);
 	const remaining = [...values];
 	(call?.parameters ?? values.map(() => "n")).forEach((letter, index) => {
-		if (letter === "o") return moduleArguments.push(outSlots[outSlots.push(malloc([0, 0, 0, 0])) - 1]);
+		if (letter === "o") return moduleArguments.push(outSlots[outSlots.push(malloc(u32(0))) - 1]);
+		if (letter === "k") return moduleArguments.push((buffers.at(-1).slot = malloc(u32(buffers.at(-1).capacity))));
 		const value = remaining.shift();
-		if (letter === "l") return; // the length of the text before it
+		if (letter === "l") return; // the length of the text before it, libc.wasm reads up to the NUL
+		if (letter === "b") return moduleArguments.push(buffers[buffers.push({ capacity: Number(value) }) - 1].block = malloc(new Uint8Array(Number(value))));
 		if (letter !== "t") return moduleArguments.push(value);
-		const text = call.parameters[index + 1] === "l" ? new Uint8Array(program.memory.buffer, value, remaining[0]).slice() : cText(program.memory, value);
+		const length = ["l", "s"].includes(call.parameters[index + 1]) ? Number(remaining[0]) : undefined;
+		const text = length === undefined ? cText(program.memory, value) : new Uint8Array(program.memory.buffer, value, length).slice();
 		moduleArguments.push(malloc([...text, 0]));
 	});
 	const returned = member(...moduleArguments);
-	const textOf = address => buildValue(program, treeOfPlain(address === 0 ? null : decode(cText(exports.memory, address))));
+	const textOf = bytes => bytes === null ? program.new_empty() : program.new_text(...writeBytes(program, bytes));
+	const memory = () => new DataView(exports.memory.buffer);
 	const received = () => {
-		const address = new DataView(exports.memory.buffer).getUint32(outSlots[0], true);
+		const address = memory().getUint32(outSlots[0], true);
 		if (address === 0) throw new Error(`${what} gave nothing through its out-pointer (C status ${returned ?? 0})`);
 		return address;
 	};
-	const value = { t: () => textOf(returned), u: () => BigInt(returned >>> 0), ot: () => textOf(received()), on: () => received() | 0 }[call?.result]?.() ?? returned;
+	const bufferBytes = () => {
+		if (returned !== 0) throw new Error(`${what} failed (C status ${returned})`);
+		const { block, slot } = buffers[0];
+		return new Uint8Array(exports.memory.buffer, block, memory().getUint32(slot, true)).slice();
+	};
+	const value = {
+		t: () => textOf(returned === 0 ? null : cText(exports.memory, returned)),
+		u: () => BigInt(returned >>> 0),
+		ot: () => textOf(cText(exports.memory, received())),
+		on: () => received() | 0,
+		b: () => textOf(bufferBytes()),
+	}[call?.result]?.() ?? returned;
 	if (exports.free) blocks.forEach(block => exports.free(block));
 	return value;
 }
@@ -970,11 +994,11 @@ function warpHost(memory, hooks) {
 		take: into => new Uint8Array(memory().buffer, into, pendingOutcome.length).set(pendingOutcome),
 		now_ms: () => Date.now(),
 		panicked: (pointer, length) => hooks.panicked(utf8Decoder.decode(new Uint8Array(memory().buffer, pointer, length))),
-		// a module file or package source for the compiler: a path of the served repository, or a URL
+		// a file for the compiler (module, package source, C header): a path of the served repository, of the page, or a URL
 		fetch: (pointer, length) => {
 			const address = utf8Decoder.decode(new Uint8Array(memory().buffer, pointer, length));
 			try {
-				pendingFetched = utf8.encode(/^https?:/.test(address) ? getSync(address) : readFile(address.replace(/^\.\//, "")));
+				pendingFetched = readBytes(address);
 				return pendingFetched.length;
 			} catch {
 				return -1;

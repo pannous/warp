@@ -2,7 +2,7 @@
 # run: probes/function_calls.sh probes/reactive_ports.md (scratch/warp of this checkout)
 # Svelte: $: derivations and stores
 count = 0; doubled := count * 2; count = 3; doubled ||| 6
-count = 0; alerts = 0; whenever count >= 10 {alerts += 1}; count = 5; count = 10; count = 11; alerts ||| 2
+count = 0; alerts = 0; whenever count >= 10 {alerts += 1}; count = 5; count = 10; count = 11; alerts ||| 1
 count = 0; log = 0; on change count {log = log*10 + value}; count = 1; count = 2; log ||| 12
 count = 1; seen = 0; on set count {seen = value}; count += 1; seen ||| 2
 count = 1; seen = 0; on set count {seen = value}; count++; seen ||| 2
@@ -11,9 +11,9 @@ first = "Ada"; last = "L"; full := first + " " + last; first = "Grace"; full |||
 x = 1; diff = 0; on change x {diff = value - old}; x = 5; diff ||| 4
 p = {age: 1}; n = 0; on change p.age {n += 1}; p.age = 2; n ||| 1
 p = {age: 1}; seen = 0; on set p.age {seen = value}; p.age = 7; seen ||| 7
-a = 1; runs = 0; whenever a > 0 {runs += 1}; a = 2; a = 3; runs ||| 2
+a = 1; runs = 0; whenever a > 0 {runs += 1}; a = 2; a = 3; runs ||| 1
 # SolidJS: createEffect, createMemo
-a = 1; b = 2; runs = 0; whenever a + b > 0 {runs += 1}; a = 5; b = 6; runs ||| 2
+a = 1; b = 2; runs = 0; whenever a + b > 0 {runs += 1}; a = 5; b = 6; runs ||| 1
 a = 2; square := a*a; sum = 0; on change square {sum += value}; a = 3; a = 3; a = 4; sum ||| 25
 a = 2; square := a*a; seen = 0; on change square {seen = value}; a = -2; seen ||| 0
 # RxJS: Subject next/subscribe, filter, unsubscribe
@@ -46,7 +46,7 @@ n = 0; taken = 0; h = on tick {taken += 1; if taken == 2 {remove h from listener
 items = []; on add {items = items + [event.x]}; raise add{x: 1}; raise add{x: 2}; count items ||| 2
 x = 0; doubled := x * 2; quad := doubled * 2; last = 0; on change quad {last = value}; x = 3; last ||| 12
 user = {name: "a"}; greeting := "hi " + user.name; seen = ""; on change greeting {seen = value}; user.name = "b"; seen ||| hi b
-count = 0; log = ""; whenever count > 2 {log = log + "!"}; for i in 1 to 5 {count = i}; log ||| !!!
+count = 0; log = ""; whenever count > 2 {log = log + "!"}; for i in 1 to 5 {count = i}; log ||| !
 # Round 3: Vue deep watch of a list, Svelte reactive statements over lists, Qt disconnect all, EventEmitter removeAllListeners, prependListener order
 xs = [1]; n = 0; on change xs {n += 1}; xs = xs + [2]; n ||| 1
 xs = [1, 2]; total := sum xs; seen = 0; on change total {seen = value}; xs = [3, 4]; seen ||| 7
@@ -72,5 +72,5 @@ n = 0; log = 0; once n == 2 {log = log*10 + 1}; whenever n == 2 {log = log*10 + 
 total = 0; i = 0; on set i {total += value}; while i < 3 {i += 1}; total ||| 6
 names = ["a"]; size := count names; seen = 0; on change size {seen = value}; names = names + ["b"]; seen ||| 2
 price = 2; qty = 3; total := price * qty; history = []; on change total {history = history + [value]}; price = 3; qty = 4; count history ||| 2
-ready = false; n = 0; whenever ready {n += 1}; ready = true; ready = true; n ||| 2
+ready = false; n = 0; whenever ready {n += 1}; ready = true; ready = true; n ||| 1
 ready = false; n = 0; on change ready {n += 1}; ready = true; ready = true; n ||| 1

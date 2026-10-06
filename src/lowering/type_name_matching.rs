@@ -15,7 +15,7 @@ const STATEMENT_WORDS: [&str; 20] = [
 	"include", "if", "while", "for", "else", "then",
 ];
 
-fn names_a_function(name: &str) -> bool {
+pub(crate) fn names_a_function(name: &str) -> bool {
 	!is_type_word(name) && !ARTICLES.contains(&name) && !PREPOSITIONS.contains(&name) && !STATEMENT_WORDS.contains(&name)
 		&& !crate::analyzer::CONSTANT_KEYWORDS.contains(&name) && !crate::operators::FUNCTION_KEYWORDS.contains(&name)
 }

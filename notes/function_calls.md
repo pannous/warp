@@ -126,6 +126,30 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   `:=` definition; lower_prefix_calls knows implicit definitions) and P149 (user): an untyped parameter used in
   arithmetic rules out a truth value, so `f x op y` is `(f x) op y`; the ambiguity stays for a body accepting
   anything (`same(x) := x`). lazy-range-power: a bound of arithmetic `1..10^12` stays a descriptor.
+- Batch 23: round 6 all pass. JS `reduce(f, start)` and Swift's trailing closure after arguments
+  `xs.reduce(0) { $0 + $1 }` (lambdas.rs `trailing_closure`); returned Swift closures `return { $0 + k }`: the enclosing
+  block no longer counts the inner `$0` (`mentions_outside_blocks`), a parameter named `$0` wins over the positional
+  `$0` (arithmetic.rs), closures.rs `tail` stops at a closure, a definition with parameters walks its block body
+  (card functions-calling); Swift `-> (Int) -> Int` results and Scala's curried `def add(x)(y) = …`
+  (declarations.rs `function_typed_result`, `curried_definition`); `xs.max()` was "max of an empty list" (min_max.rs);
+  C# LINQ `Select`/`Where`/`Aggregate`/`Sum` … work with a note naming wasp's word (welcome_forms.rs, alias rule).
+- Batch 24: round 7 (probes/function_calls_round7.md). Regression fix: Python's one-line `def f(x): return a if c
+  else b` was "undefined function: f" since batch 21 (try_parse_return continues at binding power 0 after the
+  phrase). OCaml `let inc = fun x -> x + 1 in inc 4` printed nothing (split_at_in descends into the lambda body),
+  `fun a b -> …` (lambdas.rs `keyword_and_names`); Python lambdas `lambda a, b=2: …`, `lambda *xs: …`, `lambda: 42`
+  (parser atoms.rs `parse_python_lambda`; a lambda variable with a rest parameter is a definition, welcome_forms.rs
+  `starred_lambda`); Go function literals `func(a, b int) int { … }` and `f func(int) int` parameters. P70c (user):
+  a lambda made in a loop keeps its iteration's variable (already so, pinned).
+  Round 7 still open: F# `List.map (fun x -> …) [1; 2; 3]`, MATLAB `@(x)`, R `sapply(c(…), …)`, Dart
+  `{required int a}`, Rust generics `fn apply<F: Fn(i32) -> i32>`.
+- Batch 25: F# `List.map f xs` (Seq., Array.) is `map f xs` with a note, `(fun x -> …)` as an argument (only `fun`
+  with plain names, Swift's `func f(x) -> Int` stays a definition); Rust type parameters `fn apply<F: …>` are skipped
+  and P157 (user) generics compile untyped with a note; Dart named parameters `{required int a, int b = 2}`; English
+  `To square a number: return it times it`, `square of x`, `square of x is 9` (P149), numeric `times` multiplies
+  (alias rule). Fix: `def add(a, b: int) -> int` lost a parameter (flat call arguments were read as a Swift label;
+  now only after `func`). P161 (user): Swift argument labels compile with the note "wasp names a parameter once"
+  (tests/functions/test_argument_labels.rs). Round 7 still open: MATLAB `@(x)`, R `sapply(c(…), function(x) …)`,
+  `func id<T>(_ x: T)`.
 
 ## Open
 - Board cards: functions-ruby-yield (warp-93); functions-sort-op,

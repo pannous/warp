@@ -39,7 +39,7 @@ pub fn lower(node: Node) -> Node {
 	construct(node, &Classes { registry: &registry, constructors: &constructors })
 }
 
-/// The declared types and their `value{…}` / `value(name){…}` constructors (class_methods::constructor_name), each
+/// The declared types and their `init{…}` / `init(name){…}` constructors (class_methods::constructor_name), each
 /// with the number of parameters it takes besides the instance
 struct Classes<'a> {
 	registry: &'a TypeRegistry,
@@ -60,7 +60,7 @@ impl Classes<'_> {
 		}
 	}
 
-	/// `P(a, b)` of a class whose constructor `value(x, y){…}` takes these arguments: the instance of the declared
+	/// `P(a, b)` of a class whose constructor `init(x, y){…}` takes these arguments: the instance of the declared
 	/// defaults (ø for the others) passed through it with them
 	fn constructed_by_parameters(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
 		let class = call_name(items, bracket, separator)?;
