@@ -5,6 +5,7 @@
 //!   `lambda x: …` (Python): lambdas
 //!   (`xs |> f(b)` is read by the parser, `f(1, _)` lowered in declarations.rs)
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
+//! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -16,6 +17,7 @@ const LOOP_WORD: &str = "loop";
 const LAMBDA_WORD: &str = "lambda";
 const LET_WORD: &str = "let";
 const IN_WORD: &str = "in";
+const DESTRUCTURED_OBJECT: &str = "object·";
 
 pub fn lower(node: Node) -> Node {
 	match node {
@@ -31,6 +33,10 @@ pub fn lower(node: Node) -> Node {
 			endless_loop(&items).unwrap_or_else(|| Node::List(arrow_cases(items), bracket, separator))
 		}
 		Node::Key(left, Op::Colon, body) if lambda_parameters(&left).is_some() => lambda(lambda_parameters(&left).expect("guarded"), lower(*body)),
+		Node::Key(parameters, Op::FatArrow, body) if destructured_parameters(&parameters).is_some() => {
+			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
+			lambda(parameters, Node::List([fields, vec![lower(*body)]].concat(), Bracket::Curly, Separator::Semicolon))
+		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
 		other => other,
@@ -147,6 +153,25 @@ fn assigned_braceless_function(items: &[Node]) -> Option<Node> {
 		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 	};
 	Some(Node::Key(name.clone(), Op::Assign, Box::new(lambda(function_parameters(head)?, lower(body)))))
+}
+
+/// JS `({a, b}, k) => …`: an object parameter taken apart, `(object·0, k) => { a = object·0.a; b = object·0.b; … }`
+fn destructured_parameters(parameters: &Node) -> Option<(Node, Vec<Node>)> {
+	let (items, separator) = match parameters.drop_meta() {
+		Node::List(items, Bracket::Round, separator) => (items.clone(), separator.clone()),
+		single => (vec![single.clone()], Separator::Colon),
+	};
+	let mut fields = Vec::new();
+	let parameters: Vec<Node> = items.into_iter().enumerate().map(|(index, parameter)| match parameter.drop_meta() {
+		Node::List(names, Bracket::Curly, _) if !names.is_empty() && names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) => {
+			let object = Node::Symbol(format!("{DESTRUCTURED_OBJECT}{index}"));
+			let field = |name: &Node| Node::Key(Box::new(name.clone()), Op::Assign, Box::new(Node::Key(Box::new(object.clone()), Op::Dot, Box::new(name.clone()))));
+			fields.extend(names.iter().map(field));
+			object
+		}
+		_ => parameter,
+	}).collect();
+	(!fields.is_empty()).then(|| (Node::List(parameters, Bracket::Round, separator), fields))
 }
 
 /// `function (a, b)`: the parameters after a function keyword with no name
