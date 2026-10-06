@@ -946,6 +946,7 @@ PASSED:
   ✓ node::node_values_test::test_values_number
   ✓ node::test_comment_meta::a_field_named_meta_stays_the_field
   ✓ node::test_comment_meta::a_missing_field_is_named_from_any_browsers_trace
+  ✓ node::test_comment_meta::comments_are_meta_information_only_under_use_comments
   ✓ node::test_comment_meta::the_comment_of_a_binding_is_its_meta
   ✓ node::test_empty_operands::a_condition_keyword_is_written_without_its_empty_left
   ✓ node::test_empty_operands::a_missing_operand_is_not_written
@@ -2408,4 +2409,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2403 passed, 0 failed, 2403 total tested
+23 ignored, 2404 passed, 0 failed, 2404 total tested
