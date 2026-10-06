@@ -12,23 +12,23 @@ fn printed(code: &str) -> String {
 
 #[test]
 fn whenever_a_task_sets_a_shared_value() {
-	is!("shared done = false; seen = 0; whenever done { seen = 1 }; go { sleep(30); done = true }; sleep(400); seen", 1);
+	is!("shared done = false; seen = 0; whenever done { seen = 1 }; go { sleep(30 ms); done = true }; sleep(400 ms); seen", 1);
 }
 
 #[test]
 #[cfg(feature = "native")]
 fn the_listener_runs_while_the_program_sleeps() {
-	assert_eq!(printed("shared done = false\nwhenever done { print \"done!\" }\ngo { sleep(30); done = true }\nsleep(400)\nprint \"end\""), "done!\nend\n");
+	assert_eq!(printed("shared done = false\nwhenever done { print \"done!\" }\ngo { sleep(30 ms); done = true }\nsleep(400 ms)\nprint \"end\""), "done!\nend\n");
 }
 
 #[test]
 fn on_change_of_a_shared_value_sees_the_new_value() {
-	is!("shared n = 0; seen = 0; on change n { seen = value }; go { n = 5 }; sleep(300); seen", 5);
+	is!("shared n = 0; seen = 0; on change n { seen = value }; go { n = 5 }; sleep(300 ms); seen", 5);
 }
 
 #[test]
 fn once_on_a_shared_value_runs_once() {
-	is!("shared n = 0; hits = 0; once n > 2 { hits += 1 }; go { for i in 1 to 6 { n = i; sleep(20) } }; sleep(500); hits", 1);
+	is!("shared n = 0; hits = 0; once n > 2 { hits += 1 }; go { for i in 1 to 6 { n = i; sleep(20 ms) } }; sleep(500 ms); hits", 1);
 }
 
 #[test]

@@ -83,3 +83,4 @@ mod test_implicit_await;
 mod test_task_parameter_shadows;
 mod test_task_signals;
 mod test_signal_values;
+mod test_shared_signals;

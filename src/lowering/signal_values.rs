@@ -42,10 +42,11 @@ struct Definition {
 	body: Node,
 }
 
-/// `signal·seen·0`: the value of a watched variable when the shared listeners last looked
-const SEEN_PREFIX: &str = "signal·seen·";
-/// `signal·polling·0`: whether the shared listener was declared yet
-const POLLING_PREFIX: &str = "signal·polling·";
+/// `signal_seen_0`: the value of a watched variable when the shared listeners last looked (main-level variables of
+/// on·shared are declared `global` from text, so no `·` in them)
+const SEEN_PREFIX: &str = "signal_seen_";
+/// `signal_polling_0`: whether the shared listener was declared yet
+const POLLING_PREFIX: &str = "signal_polling_";
 
 /// Main-level listeners watching a `shared` value become checks of the function `on·shared()` the runtime polls
 pub fn poll_shared(program: Node) -> Node {
@@ -72,7 +73,7 @@ pub fn poll_shared(program: Node) -> Node {
 			ListenerWord::Set | ListenerWord::Change => with_value(&body, &value),
 			ListenerWord::Whenever => if_then(subject, block(vec![body])),
 			ListenerWord::Once => {
-				let fired = format!("{POLLING_PREFIX}{}·fired", flags.len());
+				let fired = format!("{POLLING_PREFIX}{}_fired", flags.len());
 				flags.push(fired.clone());
 				let condition = Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::Not, Box::new(Node::Symbol(fired.clone())))), Op::And, Box::new(subject));
 				if_then(condition, block(vec![assign(&fired, Node::True), body]))
