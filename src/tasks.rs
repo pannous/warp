@@ -171,6 +171,8 @@ impl Builders {
 				let (left, right) = (self.build(left, store)?, self.build(right, store)?);
 				self.call("new_key", &[left, right, Val::I64(*op)], store)
 			}
+			// ø, as the emitter makes `[]`: a null would not pass for a Node (a wrapper's empty argument list)
+			TaskValue::List(items, _) if items.is_empty() => self.call("new_empty", &[], store),
 			TaskValue::List(items, bracket) => items.iter().rev().try_fold(Val::AnyRef(None), |rest, item| {
 				let first = self.build(item, store)?;
 				self.call("new_list", &[first, rest, Val::I64(*bracket)], store)
