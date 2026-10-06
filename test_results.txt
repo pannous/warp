@@ -124,9 +124,12 @@ PASSED:
   ✓ control::test_object_blocks::test_statements_in_braces_are_a_block
   ✓ control::test_object_functions::test_fields_are_in_scope_of_function_entries
   ✓ control::test_object_functions::test_function_entries_are_callable
+  ✓ control::test_parallel_map::a_parallel_loop_updating_a_copy_warns
   ✓ control::test_parallel_map::a_parallel_map_gives_the_results_in_order
   ✓ control::test_parallel_map::a_parallel_map_runs_its_items_at_once
   ✓ control::test_parallel_map::a_parallel_map_takes_a_function_value
+  ✓ control::test_parallel_map::go_for_runs_its_iterations_in_parallel
+  ✓ control::test_parallel_map::go_maps_in_parallel
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
   ✓ control::test_run_time_block_cache::a_block_in_a_loop_body_sees_the_variables_assigned_there
@@ -260,11 +263,13 @@ PASSED:
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
   ✓ control::test_unwrap::test_unwrap_gives_the_value
   ✓ control::test_unwrap::test_unwrap_of_nothing_or_an_error_is_loud
+  ✓ control::test_variable_signals::a_condition_calling_a_function_watches_what_it_reads
   ✓ control::test_variable_signals::a_condition_ending_in_a_variable_keeps_its_block
   ✓ control::test_variable_signals::a_global_write_before_the_listener_is_not_seen
   ✓ control::test_variable_signals::a_global_write_inside_a_function_runs_the_listeners
   ✓ control::test_variable_signals::a_listener_on_a_charged_value_watches_what_it_reads
   ✓ control::test_variable_signals::a_multi_assignment_notifies_once_after_all_its_writes
+  ✓ control::test_variable_signals::a_write_has_the_effects_of_its_listeners
   ✓ control::test_variable_signals::after_a_function_runs_after_each_statement_calling_it
   ✓ control::test_variable_signals::listeners_see_field_and_item_writes
   ✓ control::test_variable_signals::on_change_runs_only_when_the_value_differs
@@ -1990,6 +1995,8 @@ PASSED:
   ✓ wasm::test_standalone_executable::test_running_a_file_leaves_its_executable
   ✓ wasm::test_standalone_executable::test_running_without_a_stub_leaves_no_executable
   ✓ wasm::test_standalone_executable::test_warp_run_leaves_no_executable
+  ✓ wasm::test_standalone_needs_runtime::a_program_with_tasks_says_tasks_need_runtime
+  ✓ wasm::test_standalone_needs_runtime::fetch_says_fetch_and_files_need_runtime
   ✓ wasm::test_wasm_emitter::test_emit_for_node_tree_shaking
   ✓ wasm::test_wasm_emitter::test_emit_gc_types
   ✓ wasm::test_wasm_emitter::test_function_usage_tracking
@@ -2398,4 +2405,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2393 passed, 0 failed, 2393 total tested
+23 ignored, 2400 passed, 0 failed, 2400 total tested
