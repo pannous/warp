@@ -37,3 +37,10 @@ fn test_scalar_calls_and_list_functions_do_not_broadcast() {
 fn test_operators_do_not_broadcast() {
 	fails_with("[1 2 3]*2", "multiply each element");
 }
+
+#[test]
+fn julia_dot_call_broadcasts() {
+	assert_eq!(eval("f(x) = x^2; f.([1,2,3])").serialize(), "[1 4 9]");
+	assert_eq!(eval("f(x) = x^2; xs = [1,2]; f.(xs)").serialize(), "[1 4]");
+	assert_eq!(eval("add(a, b) = a + b; add.([1,2], 10)").serialize(), "[11 12]");
+}

@@ -138,6 +138,11 @@ impl WaspParser {
 		if self.current_char() == '|' && self.peek_char(1) == '>' {
 			return Some((SpecialInfix::Pipeline, 2, PIPELINE_BINDING_POWER));
 		}
+		// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
+		let is_name = matches!(lhs.drop_meta(), Node::Symbol(_));
+		if is_name && self.current_char() == '.' && self.peek_char(1) == '(' && !self.options.data_mode {
+			return Some((SpecialInfix::DotCall, 1, Op::Dot.binding_power()));
+		}
 		// element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
 		if let Some(op) = self.element_wise_operator() {
 			return Some((SpecialInfix::ElementWise(op), 2, op.binding_power()));

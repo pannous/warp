@@ -28,6 +28,11 @@ const URL_SCHEMES: [&str; 7] = ["http", "https", "ftp", "file", "data", "ws", "w
 const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
 const BYTES_WORD: &str = "bytes";
 const IT_WORD: &str = "it";
+/// The item of the map a Julia dot call `f.(xs)` lowers to
+const BROADCAST_ITEM: &str = "broadcast_item";
+const MAP_WORD: &str = "map";
+/// Words that make a parameter the rest parameter: Kotlin `vararg xs: Int`, C# `params int[] xs`
+const REST_MARKERS: [&str; 2] = ["vararg", "params"];
 const MAX_INTEGER_EXPONENT: i64 = 4096;
 /// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; `0.1l` (long double) → exact, the default anyway
 const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
@@ -218,6 +223,8 @@ enum SpecialInfix {
 	ElementWise(Op),
 	/// `x in xs`
 	Membership,
+	/// Julia's dot call `f.(xs)`, `add.(xs, 10)`: f mapped over the first argument
+	DotCall,
 }
 
 impl SpecialInfix {
@@ -231,8 +238,22 @@ impl SpecialInfix {
 			SpecialInfix::Pipeline => piped(lhs, operand),
 			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
 			SpecialInfix::Membership => Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), operand], Bracket::None, Separator::Space),
+			SpecialInfix::DotCall => dot_call(lhs, operand),
 		}
 	}
+}
+
+/// `f.(xs, a)` → `map(xs, broadcast_item => f(broadcast_item, a))`
+fn dot_call(function: Node, arguments: Node) -> Node {
+	let mut arguments = match arguments.drop_meta() {
+		Node::List(items, Bracket::Round, _) if !items.is_empty() => items.clone(),
+		_ => vec![arguments],
+	};
+	let list = arguments.remove(0);
+	let item = Symbol(BROADCAST_ITEM.to_string());
+	let call = Node::List([vec![function, item.clone()], arguments].concat(), Bracket::Round, Separator::None);
+	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(call));
+	Node::List(vec![Symbol(MAP_WORD.to_string()), list, each], Bracket::Round, Separator::None)
 }
 
 /// `for int in xs` as the explicit filter `for x in xs.filter(x => x is int)`, the body unchanged; None when the body
@@ -735,6 +756,12 @@ fn typed_parameter(arguments: Node) -> Node {
 	match arguments.drop_meta() {
 		Node::List(items, _, Separator::Space) => match items.as_slice() {
 			[type_word, name] if is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) => Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone())),
+			// Kotlin `vararg xs: Int`, C# `params int[] xs`: the rest parameter `*xs` (lowering/variadic.rs)
+			[marker, .., name] if matches!(marker.drop_meta(), Symbol(word) if REST_MARKERS.contains(&word.as_str())) => match name.drop_meta() {
+				Symbol(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
+				Node::Key(name, Op::Colon, _) => Symbol(format!("{}{}", crate::tuples::STARRED, name.name())),
+				_ => arguments,
+			},
 			// `int b = 2` (C#, C++): `b:int = 2`
 			[type_word, default] if is_type_word(type_word) => match default.drop_meta() {
 				Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Symbol(_)) => {

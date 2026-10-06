@@ -38,11 +38,16 @@ fn starred(node: &Node) -> Option<String> {
 	}
 }
 
-/// `f(params) := body`: the head's items
+/// `f(params) := body`, also with a result type `f(params): T = body`: the head's items
 fn definition_head(node: &Node) -> Option<&[Node]> {
 	let Node::Key(head, Op::Define | Op::Assign, _) = node.drop_meta() else { return None };
+	head_items(head)
+}
+
+fn head_items(head: &Node) -> Option<&[Node]> {
 	match head.drop_meta() {
 		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => Some(items),
+		Node::Key(head, Op::Colon | Op::Arrow, _) => head_items(head),
 		_ => None,
 	}
 }
