@@ -25,13 +25,15 @@ a GPU backend (P118: only for explicit `@gpu`) receives a descriptor instead of 
   arguments. `a to b` passes b + 1 as its end. So the range travels as its two bounds (unboxed, no descriptor struct).
 - Benchmark probes/range_argument_bench.sh (`def total(xs) = sum xs; total(1..n)`): n = 10^7 took 3.35 s before
   (collected 10^7 nodes, then summed them), 0.04 s after, flat in n.
-- Not passed as bounds: a parameter that is changed, returned, printed or passed on to another function (no
-  transitive readers yet: `f(xs) := g(xs)` collects even when g only counts), a function defined twice, a typed or
-  defaulted parameter.
+- Transitive (card transitive-range): a parameter passed on only to range readers is read as a range too, worked out
+  until nothing changes; a copy's body calls the copies of the readers it passes the range to
+  (`g(ys) := sum ys; f(xs) := g(xs); f(1..10^7)`: 0.17 s, was a collected list like above). A recursive call is no
+  reader, so `f(xs, n) := … f(xs, n - 1)` keeps its list.
+- Not passed as bounds: a parameter that is changed, returned, printed or passed to a function that does not only
+  read it, a function defined twice, a typed or defaulted parameter.
 
 ## Not yet
 - No step (`1..10 step 2` has no syntax yet); a step joins the descriptor as its third field.
 - A range printed, returned or stored in a structure is collected; a range value at run time (a descriptor struct the
   emitter knows, (start, end, step)) is what a GPU backend would receive (P118); passing to functions is solved by the
   bounds copies above without one.
-- Transitive range readers: `f(xs) := g(xs)` with g a reader (the copy's body would call g's copy).
