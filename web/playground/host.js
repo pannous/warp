@@ -165,13 +165,13 @@ function programImports(holder, hooks) {
 			task_spawn: (name, a0, a1, a2, a3) => startTask(holder, hooks, decode(cString(name)), [a0, a1, a2, a3]),
 			task_spawn_values: (name, values) => startTask(holder, hooks, decode(cString(name)), null, readTaskValue(program(), values)),
 			task_await: id => {
-				const task = finishedTask(holder.run, hooks, id);
+				const task = takenTask(holder.run, hooks, id);
 				if (task.failure) throw new Error(task.failure);
 				return task.value;
 			},
-			task_await_value: id => buildValue(program(), taskTree(finishedTask(holder.run, hooks, id).value)),
-			task_join: id => finishedTask(holder.run, hooks, id).failure ? 1n : 0n,
-			task_failure: id => buildValue(program(), textTree(finishedTask(holder.run, hooks, id).failure ?? "")),
+			task_await_value: id => buildValue(program(), taskTree(takenTask(holder.run, hooks, id).value)),
+			task_join: id => takenTask(holder.run, hooks, id).failure ? 1n : 0n,
+			task_failure: id => buildValue(program(), textTree(takenTask(holder.run, hooks, id).failure ?? "")),
 			task_status: id => taskStatus(holder.run, id),
 			task_control: (id, operation) => controlTask(holder.run, id, operation),
 			// where a loop starts: a task paused from its starting program waits (its control word, set by controlTask)
@@ -311,20 +311,27 @@ function startTask(holder, hooks, name, ints, values) {
 	return id;
 }
 
+// the task's function as the program wrote it (src/tasks.rs task_name): `f`, not `f·node`; `go block 1`, not `go·block·1`
+function taskName(name) {
+	return name.replace(/·node$/, "").replace(/^go·block·/, "go block ");
+}
+
 // the task here: {value} (a number or a tree) or {failure}
 function runTask(module, hooks, warnings, name, ints, values, arrays, captured = [], control = null) {
 	const taskHolder = { warnings, run: { module, tasks: new Map(), shared: arrays }, control };
+	let instance;
 	try {
-		const instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
+		instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
 		taskHolder.exports = instance.exports;
 		// what the spawning instance's closures captured, as it had it
 		for (const [global, value] of captured) instance.exports[global].value = value.tree ? buildValue(instance.exports, value.tree) : value.raw;
 		const callee = instance.exports[name];
 		const result = values ? callee(buildValue(instance.exports, values)) : callee(...ints.slice(0, callee.length));
-		joinTasks(taskHolder.run, hooks);
+		const unread = joinTasks(taskHolder.run, hooks);
+		if (unread) return { failure: `task ${taskName(name)}: ${unread}` };
 		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result };
 	} catch (trap) {
-		return { failure: `task ${name}: ${trapMessage(trap, name)}` };
+		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}` };
 	}
 }
 
@@ -343,8 +350,20 @@ function finishedTask(run, hooks, id) {
 	return record;
 }
 
+// the task's record, read by the program (await, join): a failure nobody read ends the run (joinTasks)
+function takenTask(run, hooks, id) {
+	(run.taken ??= new Set()).add(id);
+	return finishedTask(run, hooks, id);
+}
+
+// every task done; the first failure nobody read, but a stopped task's (src/tasks.rs join_all)
 function joinTasks(run, hooks) {
-	for (const id of run.tasks.keys()) finishedTask(run, hooks, id);
+	let unread;
+	for (const id of run.tasks.keys()) {
+		const { failure } = finishedTask(run, hooks, id);
+		if (failure && unread === undefined && !failure.endsWith(TASK_STOPPED) && !run.taken?.has(id)) unread = failure;
+	}
+	return unread;
 }
 
 // running, finished or failed, without waiting (src/host.rs task status codes)
@@ -368,6 +387,14 @@ function controlTask(run, id, operation) {
 	task.worker.terminate();
 	run.tasks.set(id, { failure: `task ${task.name}: ${TASK_STOPPED}` });
 	return 1n;
+}
+
+// the message a raised error left in trap_detail before trapping (src/wasm_reader.rs with_trap_detail), if any
+function raisedText(exports) {
+	const detail = exports?.[TRAP_DETAIL_EXPORT]?.value;
+	if (!detail) return null;
+	const tree = readNode(exports, detail);
+	return tree.data?.text ?? tree.data?.node?.data?.text ?? null;
 }
 
 // the runtime error a trap means: the first runtime error function on its stack (`index_out_of_range` reads "index out
@@ -572,7 +599,9 @@ function runProgram(bytes, hooks) {
 	const { warnings } = holder;
 	try {
 		const result = instance.exports.main();
-		joinTasks(holder.run, hooks); // the tasks nobody awaited finish before the result, as natively
+		// the tasks nobody awaited finish before the result, as natively; a failure nobody read ends the run
+		const unread = joinTasks(holder.run, hooks);
+		if (unread) return { failure: unread, warnings };
 		return { result: readResult(instance.exports, result), warnings };
 	} catch (trap) {
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };

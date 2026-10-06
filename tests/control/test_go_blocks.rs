@@ -62,3 +62,13 @@ fn a_function_starting_a_task_is_no_getter() {
 	let errors = String::from_utf8_lossy(&output.stderr);
 	assert!(!errors.contains("at every read"), "warned {errors:?}");
 }
+
+/// A task that fails while nobody awaits it ends the run with its error, as loud as a failure in the program; one
+/// that is awaited, or stopped on purpose, does not
+#[test]
+fn a_failure_nobody_awaits_ends_the_run() {
+	crate::common::fails_with("f(x) := { [1,2]#x }; go f(5); 1", "index out of range");
+	crate::common::fails_with("go { raise \"boom\" }; 1", "boom");
+	is!("f(x) := { [1,2]#x }; job = go f(5); try await job else 3", 3);
+	is!("job = go { sleep(3000); 1 }; stop job; 2", 2);
+}

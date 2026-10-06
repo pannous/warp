@@ -71,6 +71,7 @@ PASSED:
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
+  ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
   ✓ control::test_go_blocks::a_function_starting_a_task_is_no_getter
   ✓ control::test_go_blocks::a_go_block_does_not_hold_up_the_program
   ✓ control::test_go_blocks::a_go_block_prints_after_the_program_goes_on
@@ -117,6 +118,9 @@ PASSED:
   ✓ control::test_object_blocks::test_statements_in_braces_are_a_block
   ✓ control::test_object_functions::test_fields_are_in_scope_of_function_entries
   ✓ control::test_object_functions::test_function_entries_are_callable
+  ✓ control::test_parallel_map::a_parallel_map_gives_the_results_in_order
+  ✓ control::test_parallel_map::a_parallel_map_runs_its_items_at_once
+  ✓ control::test_parallel_map::a_parallel_map_takes_a_function_value
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
   ✓ control::test_run_time_block_cache::a_block_in_a_loop_body_sees_the_variables_assigned_there
@@ -250,7 +254,9 @@ PASSED:
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
   ✓ control::test_unwrap::test_unwrap_gives_the_value
   ✓ control::test_unwrap::test_unwrap_of_nothing_or_an_error_is_loud
+  ✓ control::test_variable_signals::a_listener_on_a_charged_value_watches_what_it_reads
   ✓ control::test_variable_signals::after_a_function_runs_after_each_statement_calling_it
+  ✓ control::test_variable_signals::on_change_runs_only_when_the_value_differs
   ✓ control::test_variable_signals::on_set_runs_after_each_write_with_the_value
   ✓ control::test_variable_signals::once_never_runs_when_the_condition_never_holds
   ✓ control::test_variable_signals::once_runs_the_first_time_the_condition_holds
@@ -1084,6 +1090,7 @@ PASSED:
   ✓ numbers::test_mixed_number_arithmetic::an_exact_real_stays_exact_with_a_ratio
   ✓ numbers::test_mixed_number_arithmetic::complex_mixes_with_any_number
   ✓ numbers::test_mixed_number_arithmetic::infinity_and_nan_follow_ieee
+  ✓ numbers::test_norm::norm_is_abs
   ✓ numbers::test_number::test_hex
   ✓ numbers::test_number::test_number
   ✓ numbers::test_number::test_number_floats
@@ -1944,6 +1951,7 @@ PASSED:
   ✓ wasm::test_read_bytes_plain_result::a_plain_i32_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::a_plain_i64_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
+  ✓ wasm::test_runtime_stub_found::build_finds_or_builds_the_runtime_stub_by_itself
   ✓ wasm::test_standalone_executable::test_build_exe_prints_lists_as_print_does
   ✓ wasm::test_standalone_executable::test_build_exe_refuses_imports_the_runtime_lacks
   ✓ wasm::test_standalone_executable::test_build_exe_runs_the_program_and_prints_its_value
@@ -2229,6 +2237,8 @@ PASSED:
   ✓ welcoming::test_lone_words::test_a_word_close_to_a_name_warns
   ✓ welcoming::test_lone_words::test_data_is_the_data_prefix
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
+  ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
+  ✓ welcoming::test_sleep_unit_warning::sleep_without_a_unit_warns
   ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
   ✓ welcoming::test_style_dont_care::any_axis_can_stop_caring
   ✓ welcoming::test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
@@ -2358,4 +2368,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2353 passed, 0 failed, 2353 total tested
+23 ignored, 2363 passed, 0 failed, 2363 total tested

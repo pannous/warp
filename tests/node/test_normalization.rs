@@ -9,10 +9,13 @@ use warp::wasp_parser::WaspParser;
 static GLOBAL_STYLE: Mutex<()> = Mutex::new(());
 
 /// `(original, canonical, position)` of every hint the parser emits for the code
+/// The hints under the canonical style (one spelling per form); the default leaves open what the user called legitimate
 fn hints_of(code: &str) -> Vec<(String, String, String)> {
 	let _guard = GLOBAL_STYLE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	set_hint_mode(HintMode::Always);
+	set_style(Style::canonical());
 	let (_, hints) = capture_hints(|| WaspParser::parse(code));
+	set_style(Style::default());
 	hints.into_iter().map(|hint| (hint.original, hint.canonical, hint.position)).collect()
 }
 
@@ -153,7 +156,7 @@ fn test_conditional() {
 fn test_quotes_are_symmetric() {
 	expect_hint("'hello'", "'hello'", "\"hello\"", "1:1");
 	expect_no_hint("\"hello\"");
-	let style = Style { quotes: QuoteStyle::Single, ..Style::default() };
+	let style = Style { quotes: QuoteStyle::Single, ..Style::canonical() };
 	expect_styled_hint(style.clone(), "\"hello\"", "\"hello\"", "'hello'", "1:1");
 	expect_styled_no_hint(style, "'hello'");
 }
@@ -192,7 +195,7 @@ fn test_string_type_word_is_hinted_once_with_the_cast() {
 
 #[test]
 fn test_cast_style_constructor() {
-	let style = Style { cast: CastStyle::Constructor, ..Style::default() };
+	let style = Style { cast: CastStyle::Constructor, ..Style::canonical() };
 	expect_styled_hint(style.clone(), "3 as float", "3 as float", "float(3)", "1:1");
 	expect_styled_hint(style.clone(), "5 as str", "5 as str", "string(5)", "1:1");
 	expect_styled_no_hint(style, "float(3)");
@@ -281,6 +284,7 @@ fn test_define_keyword() {
 fn test_each_form_is_hinted_once_when_evaluated() {
 	let _guard = GLOBAL_STYLE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	set_hint_mode(HintMode::Always);
+	set_style(Style::canonical());
 	for code in ["let x = 5; x", "float(3)", "2 ** 3", "5 as str", "s = \"abc\"; s[1]"] {
 		let (_, hints) = capture_hints(|| eval(code));
 		assert_eq!(hints.len(), 1, "{code}: {hints:?}");

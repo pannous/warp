@@ -48,6 +48,8 @@ h1 span { color: var(--accent); font-weight: 500; }
 
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; }
 .status { color: var(--muted); font-size: 0.9em; }
+.native { color: var(--muted); font-size: 0.9em; }
+.native a { color: inherit; }
 .build { color: var(--muted); font-size: 0.9em; margin-left: auto; }
 .status.failed { color: var(--error); }
 
