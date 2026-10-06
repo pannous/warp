@@ -29,3 +29,4 @@ mod test_uniscript_entities;
 mod test_wisp_def_params;
 mod test_wisp_roundtrip;
 mod test_unary_plus;
+mod test_wisp_malformed;
