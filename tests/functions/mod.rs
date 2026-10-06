@@ -96,3 +96,4 @@ mod test_named_function_argument;
 mod test_operator_arguments;
 mod test_call_efficiency;
 mod test_swift_closures;
+mod test_each_spellings;
