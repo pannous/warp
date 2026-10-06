@@ -195,3 +195,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   newer; a program the stub cannot carry (fetch, read, run) gets a stderr note. build/compile only make it (failure
   exits 1), `--wasm` / `--aot` give the module. The program compiles twice on a fresh run (eval, then the printing
   variant for the executable).
+
+## 2026-10-06 p104-stub-only (P104, P105)
+- No executable is ever a copy of warp: without a warp-runtime stub a run notes it, build exits 1; warp's main no longer
+  looks for a carried program. `warp run <file>` runs without leaving an executable. Tests build the stub once per run.
