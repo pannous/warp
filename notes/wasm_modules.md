@@ -32,6 +32,9 @@ twice(ft) + half(5.0)                   // 86.5
   (fetched from the served repository) once per run at the first call, its own imports linked by `programImports`; a
   global reads through its getter, `set g` sets it. WAT text needs the native build, so each fixture .wat has its
   binary .wasm next to it (found first; rebuild with the `wasm-tools parse` line at the top of the .wat).
-- Not yet: names from the module's name
-  section (parameter names for named arguments). tests/wasm/test_wasm.rs test_import_wasm pins P139 (P144).
+- Parameter names come from the module's name section (`(param $from i64)`, `$0` … without one): a call names them,
+  `fourty_two.minus(amount: 2, from: 10)`, `minus(amount=2, from=10)`, mixed with positional ones in order; an unknown
+  name or a wrong count is the error "fourty_two.minus(from, amount) has no parameter by" / "… takes 2 arguments, got 1"
+  (wasm_modules ordered_arguments; a bare positional call is not checked, the module's validation catches it).
+- Not yet: `help m.f` (warp has no help word yet). tests/wasm/test_wasm.rs test_import_wasm pins P139 (P144).
 - WebAssembly components (`use wasm "lib.wasm" as lib`, `lib.f(x)`) are the other road: notes/stdlib_connectors.md.
