@@ -1683,8 +1683,10 @@ pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 /// line; `trap` (the engine's own words) when the trace names none. Shared by wasmtime and the browser (web.rs).
 pub fn trap_error(trace: &str, trap: String) -> Node {
 	let missing_field = trace.split_once(list_ops::NO_FIELD_PREFIX).map(|(_, rest)| {
-		let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == crate::node::ATTRIBUTE_MARK).collect();
-		format!("no field {name}")
+		// a meta key starts with its mark (`no_field_@source`); a later `@` begins the url of a Firefox or Safari frame
+		let mark = rest.strip_prefix(crate::node::ATTRIBUTE_MARK).map_or("", |_| "@");
+		let name: String = rest[mark.len()..].chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+		format!("no field {mark}{name}")
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
