@@ -126,6 +126,11 @@ PASSED:
   ✓ control::test_object_blocks::test_statements_in_braces_are_a_block
   ✓ control::test_object_functions::test_fields_are_in_scope_of_function_entries
   ✓ control::test_object_functions::test_function_entries_are_callable
+  ✓ control::test_page_events::a_handler_without_event_runs_through_its_wrapper
+  ✓ control::test_page_events::a_page_event_handler_in_a_program_with_tasks_has_one_wrapper
+  ✓ control::test_page_events::a_page_event_handler_is_exported_without_a_raise
+  ✓ control::test_page_events::a_raised_page_event_runs_its_handler_as_any_event
+  ✓ control::test_page_events::the_last_name_of_a_program_with_page_events_is_its_output_binding
   ✓ control::test_parallel_map::a_parallel_loop_updating_a_copy_warns
   ✓ control::test_parallel_map::a_parallel_map_gives_the_results_in_order
   ✓ control::test_parallel_map::a_parallel_map_runs_its_items_at_once
@@ -175,6 +180,7 @@ PASSED:
   ✓ control::test_switch_no_case_value::no_case_shows_the_runtime_value
   ✓ control::test_switch_value::a_parenthesized_switch_takes_part_in_arithmetic
   ✓ control::test_switch_value::a_switch_can_be_bound
+  ✓ control::test_system_signals::on_interrupt_cuts_a_sleep_short
   ✓ control::test_system_signals::on_interrupt_runs_at_the_next_loop_start
   ✓ control::test_task_closures::a_capturing_text_lambda_runs_in_a_task
   ✓ control::test_task_closures::a_parameter_named_like_a_unit_is_the_parameter
@@ -754,6 +760,7 @@ PASSED:
   ✓ lists::test_decimal_list_elements::a_decimal_element_takes_part_in_arithmetic
   ✓ lists::test_decimal_list_elements::a_loop_walks_decimal_elements
   ✓ lists::test_decimal_list_elements::the_extremum_of_a_decimal_list
+  ✓ lists::test_deep_index_assignment::a_deep_index_assignment_keeps_the_stack
   ✓ lists::test_dynamic_range::a_list_grows_from_empty_by_adding_lists
   ✓ lists::test_dynamic_range::a_range_with_variable_bounds_is_a_list
   ✓ lists::test_dynamic_range::a_recursive_list_function_in_a_ternary
@@ -769,6 +776,8 @@ PASSED:
   ✓ lists::test_empty_list_count::the_count_of_an_empty_list_is_zero
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
   ✓ lists::test_find_any_all::find_any_and_all_test_the_elements
+  ✓ lists::test_float_array_writes::numbers_written_into_a_float_array_are_floats
+  ✓ lists::test_float_array_writes::walking_a_typed_array_reads_every_item
   ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
   ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
   ✓ lists::test_hash_range_slices::hash_slices_are_one_based
@@ -1826,6 +1835,8 @@ PASSED:
   ✓ types::test_is_teaches_be::is_with_an_undefined_name_teaches_be
   ✓ types::test_iterable::for_walks_what_iterate_gives
   ✓ types::test_iterable::in_searches_what_iterate_gives
+  ✓ types::test_mutating_methods::a_method_changing_a_field_updates_the_variable
+  ✓ types::test_mutating_methods::the_call_gives_the_changed_object
   ✓ types::test_person_struct::test_person_struct_roundtrip
   ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
   ✓ types::test_printable::print_and_interpolation_call_the_printable_operation
@@ -2419,4 +2430,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2414 passed, 0 failed, 2414 total tested
+23 ignored, 2425 passed, 0 failed, 2425 total tested

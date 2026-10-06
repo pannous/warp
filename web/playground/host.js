@@ -281,14 +281,32 @@ const TASK_STOPPED = "task stopped";
 // Workers a task runs on: made while the program's worker is idle (prepareTaskPool), since a Worker only starts once
 // its creator returns to its event loop and a running program never does (emscripten keeps a thread pool for this)
 const taskPool = [];
+const TASK_POOL_SIZE = Math.min(4, self.navigator?.hardwareConcurrency ?? 2);
+// how long a run waits for the pool's Workers to load before it starts anyway (a task then runs inline)
+const TASK_POOL_WAIT_MS = 10000;
+const TASK_POOL_POLL_MS = 10;
+const hasTaskWorkers = () => self.crossOriginIsolated && self.Worker;
+
+function addTaskWorker() {
+	const worker = new Worker(TASK_WORKER);
+	worker.onmessage = () => taskPool.push(worker); // loaded: it can take tasks
+}
 
 // the pool of task Workers, made by the workers that run programs (worker.js, test-worker.js) when they start
-function prepareTaskPool(size = Math.min(4, self.navigator?.hardwareConcurrency ?? 2)) {
-	if (!self.crossOriginIsolated || !self.Worker) return;
-	for (let index = 0; index < size; index++) {
-		const worker = new Worker(TASK_WORKER);
-		worker.onmessage = () => taskPool.push(worker); // loaded: it can take tasks
-	}
+function prepareTaskPool(size = TASK_POOL_SIZE) {
+	if (!hasTaskWorkers()) return;
+	for (let index = 0; index < size; index++) addTaskWorker();
+}
+
+// resolves once every task Worker of the pool has loaded: a run that starts before would run its tasks inline, where
+// `stop` cannot end one (samples/threads.wasp's endless spin hung the browser suite, card flaky-browser)
+function taskPoolReady() {
+	if (!hasTaskWorkers()) return Promise.resolve();
+	const deadline = performance.now() + TASK_POOL_WAIT_MS;
+	return new Promise(resolve => {
+		const check = () => (taskPool.length >= TASK_POOL_SIZE || performance.now() > deadline) ? resolve() : setTimeout(check, TASK_POOL_POLL_MS);
+		check();
+	});
 }
 
 const floatBits = new DataView(new ArrayBuffer(8));
@@ -422,6 +440,7 @@ function controlTask(run, id, operation) {
 		return 1n;
 	}
 	task.worker.terminate();
+	addTaskWorker(); // the pool's replacement, loaded once this run returns to its event loop
 	run.tasks.set(id, { failure: `task ${task.name}: ${TASK_STOPPED}` });
 	return 1n;
 }
@@ -635,20 +654,41 @@ function runProgram(bytes, hooks) {
 	} catch (failure) {
 		return { failure: String(failure.message ?? failure) };
 	}
-	const { warnings } = holder;
+	const outcome = outcomeOf(holder, hooks, () => instance.exports.main());
+	const events = pageEvents(instance.exports);
+	if (events.length > 0 && outcome.result) hooks.listen?.(holder, events);
+	return outcome;
+}
+
+// the outcome of a call into a run's instance (main, or a page event's handler), as src/web.rs run_outcome reads it
+function outcomeOf(holder, hooks, call) {
+	const { warnings, exports } = holder;
 	try {
-		const result = instance.exports.main();
+		const result = call();
 		// the tasks nobody awaited finish before the result, as natively; a failure nobody read ends the run
 		const unread = joinTasks(holder.run, hooks);
 		deliverSignals(holder); // the raises of tasks nobody awaited run their handlers before the run ends
 		if (unread) return { failure: unread, warnings };
-		return { result: readResult(instance.exports, result), warnings };
+		return { result: readResult(exports, result), warnings };
 	} catch (trap) {
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
-		const detail = instance.exports[TRAP_DETAIL_EXPORT]?.value;
-		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(instance.exports, detail) : null, warnings };
+		const detail = exports[TRAP_DETAIL_EXPORT]?.value;
+		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(exports, detail) : null, warnings };
 	}
+}
+
+// the page events a program handles (src/lowering/event_signals.rs PAGE_EVENTS): `on click {…}` exports on·click·node
+const PAGE_EVENT_HANDLER = /^on·(click|key)·node$/;
+function pageEvents(exports) {
+	return Object.keys(exports).map(name => name.match(PAGE_EVENT_HANDLER)?.[1]).filter(Boolean);
+}
+
+// a page event of a program that handles it, after its main ran: the handler with the event's data, its outcome
+function runPageEvent(holder, hooks, event, detail) {
+	holder.warnings = [];
+	const handler = holder.exports[`on·${event}·node`];
+	return outcomeOf(holder, hooks, () => handler(buildValue(holder.exports, treeOfPlain([detail]))));
 }
 
 // The compiler that runs the blocks a program builds at run time (run_block): loaded on first use, an instance of its own,

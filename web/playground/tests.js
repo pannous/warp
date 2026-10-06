@@ -3,6 +3,9 @@
 // window.testSummary for the cargo runner (test_in_browser.py). A test that runs too long is stopped and its worker replaced.
 
 const TEST_TIMEOUT_MS = 120000;
+// a worker is replaced after this many tests: the Wasm memories of its instances (the test binary's, the programs',
+// its task Workers') are freed only by a GC that may come too late, and the page ran out of Wasm memory (flaky-browser)
+const TESTS_PER_WORKER = 100;
 const DEFAULT_WORKERS = 2;
 const RESULTS_URL = "/__results__";
 
@@ -49,7 +52,7 @@ function showFailure(result) {
 // one worker running tests from the shared queue until it is empty
 function runner(queue, total) {
 	return new Promise(resolve => {
-		let worker, current, timer;
+		let worker, current, timer, testsOnWorker;
 		const record = result => {
 			clearTimeout(timer);
 			running.delete(result.name);
@@ -59,6 +62,7 @@ function runner(queue, total) {
 			next();
 		};
 		const start = () => {
+			testsOnWorker = 0;
 			worker = new Worker("test-worker.js");
 			worker.onmessage = ({ data }) => data.type === "result" && record(data);
 			worker.postMessage({ type: "compile", url: wasmUrl });
@@ -69,6 +73,11 @@ function runner(queue, total) {
 				worker.terminate();
 				return resolve();
 			}
+			if (testsOnWorker === TESTS_PER_WORKER) {
+				worker.terminate();
+				start();
+			}
+			testsOnWorker++;
 			timer = setTimeout(() => {
 				worker.terminate(); // a test that does not stop blocks its worker: replace it
 				start();

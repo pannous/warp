@@ -5,13 +5,14 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
+(none open; the three below the user answered "Later" are parked until their feature is built)
+- Parked: P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
   as they are at `!` and assigns only declared globals. User 2026-10-05: "Later"; revisit when run-time `!` is built.
-- P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
+- Parked: P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
   loop changes are captured per iteration, every other variable follows late binding (recommended) / every variable
   is captured per iteration and never checked (worker default on branch late-binding, keeps the test → 3). User
   2026-10-05: "Later". Asked by warp-29.
-- P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
+- Parked: P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
   run-time blocks are always pure. Asked by warp-29.
 Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
@@ -100,6 +101,15 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   (alias `this`) too; P116 `c.inc()` updates the variable c (objects are values, like `xs.add(v)`); P117 a body
   definition without parentheses (`area := side*side`) is a getter computed at each read, and `class b extends a`
   copies a's fields and methods (b's own override) (user chose inheritance over the recommended none).
+- P118 GPU maps (warp-d9, notes/simd.md): only after SIMD lands, only on an explicit `@gpu` map, never silent
+  offloading (f32 differs); native first via wgpu. Card in Later.
+- P119 NaN canonicalization only where a float's bits are observable (print/text, bit reads, memory stores, host/FFI
+  calls, task crossing); arithmetic in between runs free (engine flag off, emitter canonicalizes). warp-d9; float
+  loops measured 7.2 → 3.8 ns per item.
+- P120 a program whose main ends while handlers listen: the CLI (`warp file`, `warp run`, executables) keeps running
+  and prints once to stderr "listening: … (ctrl-c to stop)"; in-process eval and tests never wait. warp-54.
+- P121 `exit` / `exit(code)` end the run, not the process: the CLI exits with the code, an in-process eval returns.
+  warp-54.
 - P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
   behind them go; no test edits. Asked by warp-40 (code-quality).
 - P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.

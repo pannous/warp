@@ -40,7 +40,8 @@
 </nav>
 <main>
 	<section class="editor-pane"><textarea id="code" spellcheck="false"></textarea></section>
-	<section class="output-pane">
+	<section id="output" class="output-pane" tabindex="0">
+		<div id="listening" class="listening-note" hidden></div>
 		<div class="result"><span class="prompt">»</span> <output id="value"></output></div>
 		<pre id="printed" class="printed" hidden></pre>
 		<div id="paintings" class="paintings"></div>

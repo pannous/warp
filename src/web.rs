@@ -434,6 +434,18 @@ mod exports {
 		})
 	}
 
+	/// The value of a run outcome (as run_outcome reads it) as wasp text: what a page event handler gave (worker.js
+	/// handleEvent, notes/signals.md phase 7); returns the length of the text, read at `web_report()`
+	#[no_mangle]
+	pub extern "C" fn web_show(outcome: *const u8, outcome_length: usize) -> usize {
+		let outcome = serde_json::from_str::<Value>(text(outcome, outcome_length)).unwrap_or_default();
+		let shown = super::run_outcome(&outcome).serialize().into_bytes();
+		REPORT.with(|kept| {
+			*kept.borrow_mut() = shown;
+			kept.borrow().len()
+		})
+	}
+
 	#[no_mangle]
 	pub extern "C" fn web_report() -> *const u8 {
 		REPORT.with(|kept| kept.borrow().as_ptr())

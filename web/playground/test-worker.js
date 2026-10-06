@@ -56,6 +56,7 @@ self.onmessage = async ({ data }) => {
 		self.postMessage({ type: "listed", tests: tests.map(name => ({ name, ignored: ignored.has(name) })) });
 	}
 	if (data.type === "run") {
+		await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
 		const started = performance.now();
 		const { code, output, trapped } = runBinary([data.name, "--exact", "--nocapture", "--test-threads=1", ...(data.ignored ? ["--ignored"] : [])]);
 		// libtest skips #[should_panic] tests when panics abort, as they do in wasm
