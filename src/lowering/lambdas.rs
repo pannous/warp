@@ -302,8 +302,20 @@ fn block_lambda(node: &Node) -> Option<Lambda> {
 /// Swift's shorthand arguments `$0`, `$1` … up to the highest one the body uses
 fn shorthand_parameters(body: &Node) -> Vec<String> {
 	let names = |count: usize| (0..count).map(|index| format!("{SHORTHAND_MARK}{index}"));
-	let count = (0..MAX_SHORTHAND_ARGUMENTS).rev().find(|index| mentions(body, &format!("{SHORTHAND_MARK}{index}"))).map_or(0, |highest| highest + 1);
+	let count = (0..MAX_SHORTHAND_ARGUMENTS).rev().find(|index| mentions_outside_blocks(body, &format!("{SHORTHAND_MARK}{index}"))).map_or(0, |highest| highest + 1);
 	names(count).collect()
+}
+
+/// A mention not inside a nested block or lambda: `{ return { $0 + k } }` has no `$0` of its own, the inner closure has
+fn mentions_outside_blocks(node: &Node, name: &str) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(symbol) => symbol == name,
+		Node::Key(_, Op::FatArrow, _) => false,
+		Node::Key(left, _, right) => mentions_outside_blocks(left, name) || mentions_outside_blocks(right, name),
+		Node::List(_, Bracket::Curly, _) => false,
+		Node::List(items, _, _) => items.iter().any(|item| mentions_outside_blocks(item, name)),
+		_ => false,
+	}
 }
 
 /// Swift `{ x in x*2 }`, `{ a, b in a+b }`: names, `in`, a body that uses them (`{ x in xs }` stays membership)
@@ -325,6 +337,21 @@ fn swift_closure(items: &[Node]) -> Option<Lambda> {
 	params.iter().any(|param| mentions(&body, param)).then(|| Lambda::new(params, body))
 }
 
+/// Swift's trailing closure `xs.reduce(0) { $0 + $1 }`: the call's word and arguments, then the closure
+fn trailing_closure(items: &[Node]) -> Option<Vec<Node>> {
+	let [call, closure] = items else { return None };
+	let Node::List(call_items, _, _) = call.drop_meta() else { return None };
+	let (word, arguments) = call_items.split_first()?;
+	if !matches!(word.drop_meta(), Node::Symbol(_)) || !matches!(closure.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+		return None;
+	}
+	let arguments = match arguments {
+		[Node::List(group, Bracket::Round, _)] => group.clone(),
+		other => other.to_vec(),
+	};
+	Some([vec![word.clone()], arguments, vec![closure.clone()]].concat())
+}
+
 /// `reduce` given a start value is `fold`: Swift's `xs.reduce(0, +)`, JS's `xs.reduce(f, 0)` aside
 fn with_start(iteration: &'static Iteration, extras: usize) -> &'static Iteration {
 	match iteration.word {
@@ -336,7 +363,11 @@ fn with_start(iteration: &'static Iteration, extras: usize) -> &'static Iteratio
 /// `{it*2}` as the arrow lambda `it => it*2`, for passes that know only arrows (closures.rs)
 pub(crate) fn block_as_arrow(node: &Node) -> Option<Node> {
 	let lambda = block_lambda(node).filter(|lambda| !lambda.params.is_empty())?;
-	Some(Node::Key(Box::new(Node::Symbol(IMPLICIT_PARAMETER.to_string())), Op::FatArrow, Box::new(lambda.body)))
+	let parameters = match lambda.params.as_slice() {
+		[single] => Node::Symbol(single.clone()),
+		several => Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon),
+	};
+	Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(lambda.body)))
 }
 
 /// The definition `name(params) := body` of a lambda, a block with `it` or an operator given as a value
@@ -453,9 +484,16 @@ impl Lowering {
 	/// `word(extras, function)` after a dot: the iteration and its arguments, the function last
 	fn iteration_method(&self, method: &Node) -> Option<(&'static Iteration, Vec<Node>)> {
 		let Node::List(items, _, _) = method.drop_meta() else { return None };
+		let items = trailing_closure(items).unwrap_or_else(|| items.clone());
 		let (word, arguments) = items.split_first()?;
 		let iteration = with_start(self.iteration_of(word)?, arguments.len().checked_sub(1)?); // `xs.sort()` has no function
-		(arguments.len() == iteration.extra_arguments + 1).then(|| (iteration, arguments.to_vec()))
+		let is_function = |node: &Node| arrow_lambda(node).is_some();
+		let arguments = match arguments {
+			// JS's `xs.reduce((a, b) => a + b, 0)`: the start value after the function
+			[function, start] if iteration.word == FOLD_WORD && is_function(function) && !is_function(start) => vec![start.clone(), function.clone()],
+			_ => arguments.to_vec(),
+		};
+		(arguments.len() == iteration.extra_arguments + 1).then_some((iteration, arguments))
 	}
 
 	/// `{x*x}(x=5)`: an anonymous function called with its bindings; `{it*2} 3` and `{it^2}[1 2 3]`: with its argument,

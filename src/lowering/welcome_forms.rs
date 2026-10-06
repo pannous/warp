@@ -21,6 +21,10 @@ const IN_WORD: &str = "in";
 const DESTRUCTURED_OBJECT: &str = "object·";
 const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
 const CALL_METHOD: &str = "call";
+/// C# LINQ methods and the wasp words they are (the alias rule: they work, with a note naming wasp's word)
+const LINQ_METHODS: [(&str, &str); 12] = [("Select", "map"), ("Where", "filter"), ("Aggregate", "reduce"), ("Sum", "sum"),
+	("Count", "count"), ("Max", "max"), ("Min", "min"), ("Any", "any"), ("All", "all"), ("First", "first"), ("Last", "last"),
+	("Contains", "contains")];
 
 pub fn lower(node: Node) -> Node {
 	let node = forms(node);
@@ -69,6 +73,12 @@ fn forms(node: Node) -> Node {
 		Node::Key(parameters, Op::FatArrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
 			lambda(parameters, Node::List([fields, vec![forms(*body)]].concat(), Bracket::Curly, Separator::Semicolon))
+		}
+		Node::Key(receiver, Op::Dot, method) if linq_method(&method).is_some() => {
+			let (written, word, arguments) = linq_method(&method).expect("guarded");
+			crate::normalize::hint(&format!(".{written}("), &format!(".{word}("), "wasp's word for the LINQ method");
+			let call = Node::List([vec![Node::Symbol(word.to_string())], arguments.into_iter().map(forms).collect()].concat(), Bracket::Round, Separator::None);
+			Node::Key(Box::new(forms(*receiver)), Op::Dot, Box::new(call))
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(forms(*left)), op, Box::new(forms(*right))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(forms(*node)), data },
@@ -212,6 +222,15 @@ fn ruby_lambda(items: &[Node]) -> Option<Node> {
 	let [word, block] = items else { return None };
 	let is_lambda_word = RUBY_LAMBDA_WORDS.iter().any(|lambda_word| is_word(word, lambda_word));
 	(is_lambda_word && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))).then(|| block.clone())
+}
+
+/// C#'s `xs.Sum()`, `xs.Select(x => x * 2)`: the LINQ name, wasp's word and the arguments (a called method only:
+/// `obj.Count` may be a field)
+fn linq_method(method: &Node) -> Option<(&'static str, &'static str, Vec<Node>)> {
+	let Node::List(items, Bracket::Round, _) = method.drop_meta() else { return None };
+	let (word, arguments) = items.split_first()?;
+	let (written, wasp_word) = LINQ_METHODS.iter().find(|(linq, _)| is_word(word, linq))?;
+	Some((written, wasp_word, arguments.to_vec()))
 }
 
 /// `call(3)`, `call 3`: the arguments of Ruby's `.call`

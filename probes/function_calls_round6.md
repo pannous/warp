@@ -22,5 +22,5 @@ apply = (f, x) => f(x); apply(x => x * 3, 4) ||| 12
 xs = [3, 1, 2]; xs.sort() ||| [1 2 3]
 square x := x * x; sum square [1 2 3] ||| 14
 def greet(name: str = "you") -> str: return f"hi {name}"; greet() ||| hi you
-fun greet(name: String = "you") = "hi $name"; greet("Bo") ||| hi Bo
+fun greet(name: String = "you") = "hi \(name)"; greet("Bo") ||| hi Bo
 func greet(name: String = "you") -> String { "hi \(name)" }; greet() ||| hi you

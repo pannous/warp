@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 233] = [
+const CASES: [(&str, &str); 249] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -238,6 +238,22 @@ twice 4"#, r#"8"#),
 	(r#"def f(a, *xs: int){ a * xs.sum() }; f(2, 1, 2)"#, r#"6"#),
 	(r#"const add = (a, b = a * 2) => a + b; add(3)"#, r#"9"#),
 	(r#"def f(a, b = a * 2){ a + b }; f(3)"#, r#"9"#),
+	(r#"function add(...nums) { return nums.reduce((a, b) => a + b, 0) }; add(1, 2, 3)"#, r#"6"#),
+	(r#"[1, 2, 3].reduce((a, b) => a * b, 10)"#, r#"60"#),
+	(r#"[1,2,3].reduce(0) { $0 + $1 }"#, r#"6"#),
+	(r#"xs = [1,2,3]; xs.reduce(10) { a, b in a + b }"#, r#"16"#),
+	(r#"func makeAdder(_ k: Int) { return { $0 + k } }; makeAdder(2)(3)"#, r#"5"#),
+	(r#"def mk(k){ return { $0 + k } }; mk(2)(3)"#, r#"5"#),
+	(r#"def mk(){ return { $0 * $1 } }; mk()(3, 4)"#, r#"12"#),
+	(r#"def g(a, b){ $0 - $1 }; g(5, 2)"#, r#"3"#),
+	(r#"def twice(f, x){ f(f(x)) }; twice({ $0 + 1 }, 5)"#, r#"7"#),
+	(r#"func makeAdder(_ k: Int) -> (Int) -> Int { return { $0 + k } }; makeAdder(2)(3)"#, r#"5"#),
+	(r#"def add(x: Int)(y: Int): Int = x + y; add(1)(2)"#, r#"3"#),
+	(r#"def add(x)(y) = x + y; inc = add(1); inc(5)"#, r#"6"#),
+	(r#"xs = [1,2,3]; xs.max()"#, r#"3"#),
+	(r#"[1,2,3].min()"#, r#"1"#),
+	(r#"static int Total(params int[] xs) => xs.Sum(); Total(1, 2, 3)"#, r#"6"#),
+	(r#"xs = [1, 2, 3]; xs.Aggregate((a, b) => a * b)"#, r#"6"#),
 ];
 
 /// The value as `warp eval` shows it: a text without its quotes
@@ -253,4 +269,12 @@ fn every_ported_call_form_keeps_its_value() {
 		(got != *want).then(|| format!("{code}\n  got {got}, want {want}"))
 	}).collect();
 	assert!(failures.is_empty(), "{} of {} forms changed:\n{}", failures.len(), CASES.len(), failures.join("\n"));
+}
+
+#[test]
+fn linq_methods_work_with_a_note_naming_wasps_word() {
+	// the alias rule (user 2026-10-06): a different word for the same meaning works and the note names wasp's word
+	let (value, hints) = warp::normalize::capture_hints(|| shown("xs = [1, 2, 3]; xs.Select(x => x * 2).Where(x => x > 2)"));
+	assert_eq!(value, "[4 6]");
+	assert!(hints.iter().any(|hint| hint.canonical == ".map(" && hint.original == ".Select("), "{hints:?}");
 }

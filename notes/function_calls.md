@@ -126,6 +126,13 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   `:=` definition; lower_prefix_calls knows implicit definitions) and P149 (user): an untyped parameter used in
   arithmetic rules out a truth value, so `f x op y` is `(f x) op y`; the ambiguity stays for a body accepting
   anything (`same(x) := x`). lazy-range-power: a bound of arithmetic `1..10^12` stays a descriptor.
+- Batch 23: round 6 all pass. JS `reduce(f, start)` and Swift's trailing closure after arguments
+  `xs.reduce(0) { $0 + $1 }` (lambdas.rs `trailing_closure`); returned Swift closures `return { $0 + k }`: the enclosing
+  block no longer counts the inner `$0` (`mentions_outside_blocks`), a parameter named `$0` wins over the positional
+  `$0` (arithmetic.rs), closures.rs `tail` stops at a closure, a definition with parameters walks its block body
+  (card functions-calling); Swift `-> (Int) -> Int` results and Scala's curried `def add(x)(y) = …`
+  (declarations.rs `function_typed_result`, `curried_definition`); `xs.max()` was "max of an empty list" (min_max.rs);
+  C# LINQ `Select`/`Where`/`Aggregate`/`Sum` … work with a note naming wasp's word (welcome_forms.rs, alias rule).
 
 ## Open
 - Board cards: functions-ruby-yield (warp-93); functions-sort-op,
