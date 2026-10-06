@@ -51,3 +51,11 @@ fn a_change_listener_reads_the_old_value() {
 	is!("x = 1; log = 0; on change x {log = log*10 + previous}; x = 2; x = 3; log", 12);
 	is!("watch(s) := on change s {print old}\nx = 1\nwatch(x)\nx = 7\nx", 7);
 }
+
+
+// the example of notes/signals.md: a derived total, a whenever printing with juxtaposed words
+#[test]
+fn the_signals_note_example_runs() {
+	is!("price = 3; count = 2; total := price * count; whenever total > 10 { print \"big order: \" total }; count = 5; total", 15);
+	is!("price = 3\ncount = 2\ntotal := price * count\nwhenever total > 10 { print \"big order: \" total }\non change total { print \"total is now \" value }\ncount = 5\ntotal", 15);
+}
