@@ -180,7 +180,8 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   in `on·shared` comparing with the last reading), adds the timer `on every 1000 ms` right after the first listener
   (so `warp run` stays and wakes once a second; it says "listening: every 1 second"), then makes the marks host calls.
   `whenever battery < 20% {…}` arrives as `battery < (20 % {…})`: compared with the battery, `20%` is 20. The page
-  reads `online` (navigator.onLine) and `dark mode` where matchMedia exists, and says what it cannot read.
+  reads `online` (navigator.onLine) and `dark mode` (the page tells its worker, which has no matchMedia, and again on
+  each change), and says what it cannot read.
   The clipboard (card system-clipboard; tests/control/test_clipboard.rs): `on clipboard change {…}` is `on change`
   of the system value `clipboard count`, macOS `[[NSPasteboard generalPasteboard] changeCount]` through the
   Objective-C runtime, AppKit dlopened on first use (no new dependency, a plain run never loads it). The count reads no
@@ -189,8 +190,11 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   polled. The playground cannot read it (the browser's clipboard API is asynchronous) and says so.
   Not yet: `on dark mode {…}` (use `whenever dark mode`), percent literals
   elsewhere, event-driven connectors instead of polling, Windows.
-- Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, timers in the
-  playground (a warning says so), `stop listening`.
+- Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, `stop listening`.
+- Timers in the playground (2026-10-06, branch web-showcase): host.js records `signal_every` / `signal_daily` /
+  `signal_at` while main runs, worker.js starts them after it (setInterval, setTimeout to the next local time) until
+  the next run; each tick runs `on·every·N` and shows the output binding `page·value` (event_signals.rs makes it for
+  programs with timers too). A host without a page loop (test-worker.js) still only warns.
 - Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the
   Interviewer): `broadcast value on "chat"` sends any value (`{text: "hi"}`, `21`) as wasp text to every program on this
   machine listening with `on message from "chat" {…}`, where `event` is the value; without a name both use the channel
@@ -198,7 +202,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   sockets, one per listener, removed when its run ends; a broadcast sends to each and drops dead ones. A listener is
   a timer handler (`on·every·N`, every 20 ms, lowering/system_signals.rs) pulling `channel_pending` / `channel_next`,
   so a listening program stays after main in `warp run` like one with a timer. The playground sends on a
-  `BroadcastChannel`, but does not receive yet (no timers there); Windows has no channels yet (named pipes).
+  `BroadcastChannel` and receives on one (a queue the listener's timer empties), so programs in two tabs talk; Windows has no channels yet (named pipes).
 - `send` and named events across programs (P129, P129b, card signals-send; tests/control/test_named_broadcast.rs):
   `send value to "chat"` is `broadcast value on "chat"` (`to` after `send` names the channel, not a range).
   `broadcast stop the machine{reason: "heat"} on "chat"` (or `send … to "chat"`) sends the data to the sub-channel
