@@ -263,6 +263,7 @@ PASSED:
   ✓ control::test_variable_signals::a_listener_on_a_charged_value_watches_what_it_reads
   ✓ control::test_variable_signals::a_multi_assignment_notifies_once_after_all_its_writes
   ✓ control::test_variable_signals::after_a_function_runs_after_each_statement_calling_it
+  ✓ control::test_variable_signals::listeners_see_field_and_item_writes
   ✓ control::test_variable_signals::on_change_runs_only_when_the_value_differs
   ✓ control::test_variable_signals::on_set_of_a_charged_value_listens_to_its_changes
   ✓ control::test_variable_signals::on_set_runs_after_each_write_with_the_value
@@ -2391,4 +2392,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2386 passed, 0 failed, 2386 total tested
+23 ignored, 2387 passed, 0 failed, 2387 total tested
