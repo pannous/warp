@@ -5,6 +5,16 @@ use super::*;
 /// Collect variables defined in node and populate scope
 /// Returns count of temp locals needed (e.g., for while loops)
 pub fn collect_variables(node: &Node, scope: &mut Scope) -> u32 {
+	let before = scope.clone();
+	let temporaries = collect_variables_inner(node, scope, false, false);
+	// `b = 0; global b = 1`: a variable written before its `global` declaration is that global throughout, never a
+	// local of the same name besides it; collected again with it global from the start
+	let split: Vec<Local> = scope.globals.values().filter(|global| scope.locals.contains_key(&global.name) && !before.locals.contains_key(&global.name)).cloned().collect();
+	if split.is_empty() {
+		return temporaries;
+	}
+	*scope = before;
+	scope.globals.extend(split.into_iter().map(|global| (global.name.clone(), global)));
 	collect_variables_inner(node, scope, false, false)
 }
 

@@ -14,8 +14,12 @@ pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", "js", COMPONENT_RUNTIME];
 /// `use wasm "lib.wasm" as lib`: a WebAssembly component (src/components.rs); its module is the file, found next to the
 /// program, and named after the file by default
 pub const COMPONENT_RUNTIME: &str = "wasm";
+const COMPONENT_EXTENSION: &str = ".wasm";
+/// The version after `\0asm` in a core module's header; a component's names another layer
+const CORE_MODULE_VERSION: [u8; 4] = [1, 0, 0, 0];
 
 pub fn lower(program: Node) -> Node {
+	let program = component_uses(program);
 	let mut modules = HashMap::new();
 	program.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
@@ -26,6 +30,33 @@ pub fn lower(program: Node) -> Node {
 		return program;
 	}
 	Foreign { modules: &modules, values: HashMap::new(), component_values: Default::default() }.rewrite(program)
+}
+
+/// `use rust_demo.wasm`: the component's long form `use wasm "rust_demo.wasm"` (card g-_Xm4); a core module file stays
+/// the import of its functions (modules.rs)
+fn component_uses(node: Node) -> Node {
+	let path = match &node {
+		Node::List(items, _, _) => component_path(items),
+		_ => None,
+	};
+	match (path, node) {
+		(Some(path), Node::List(_, bracket, separator)) => Node::List(vec![Node::Symbol(USE_WORD.to_string()), Node::Symbol(COMPONENT_RUNTIME.to_string()), Node::Text(path)], bracket, separator),
+		(_, node) => node.map_children(component_uses),
+	}
+}
+
+fn component_path(items: &[Node]) -> Option<String> {
+	let [word, file] = items else { return None };
+	if !matches!(word.drop_meta(), Node::Symbol(word) if crate::modules::USE_KEYWORDS.contains(&word.as_str())) {
+		return None;
+	}
+	let path = crate::modules::path_of(file).filter(|path| path.ends_with(COMPONENT_EXTENSION))?;
+	(!is_core_module(&crate::modules::beside_program(&path))).then_some(path)
+}
+
+/// A file that is no component, else none or unreadable here (the page finds its components by name, components.js)
+fn is_core_module(path: &str) -> bool {
+	std::fs::read(path).is_ok_and(|bytes| bytes.get(4..8) == Some(CORE_MODULE_VERSION.as_slice()))
 }
 
 /// `use python "math"` → (alias math, (python, math)); `use python "os.path" as path` → (path, (python, os.path))

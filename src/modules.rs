@@ -13,7 +13,7 @@ use std::sync::Mutex;
 pub const SEARCH_DIRECTORIES: [&str; 6] = [".", "include", "lib", "src", "source", "samples"];
 pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 /// `use x`, and its aliases `require x` and `import x`: the declarations of the file x
-const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
+pub(crate) const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
 /// `include x`: the whole file, spliced in place
 const INCLUDE_KEYWORD: &str = "include";
 const USE_KEYWORD: &str = "use";
@@ -463,7 +463,10 @@ impl Loader<'_> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 6] = [
+const STD_MODULES: [(&str, &str); 9] = [
+	("file", include_str!("../std/file.wasp")),
+	("json", include_str!("../std/json.wasp")),
+	("os", include_str!("../std/os.wasp")),
 	("list", include_str!("../std/list.wasp")),
 	("math", include_str!("../std/math.wasp")),
 	("text", include_str!("../std/text.wasp")),
@@ -765,7 +768,7 @@ fn is_word(node: &Node, word: &str) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word)
 }
 
-fn path_of(node: &Node) -> Option<String> {
+pub(crate) fn path_of(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) | Node::Text(name) => Some(name.clone()),
 		Node::Key(directory, Op::Div, name) => Some(format!("{}/{}", path_of(directory)?, path_of(name)?)),

@@ -161,6 +161,7 @@ impl WasmGcEmitter {
 			return None;
 		}
 		let (count_text, repeated_text) = (count.serialize(), repeated.serialize());
+		crate::normalize::set_position_of(word);
 		crate::normalize::hint(&format!("{count_text} times {repeated_text}"), &format!("{count_text} * {repeated_text}"), "`times` of two numbers multiplies");
 		Some(Node::Key(Box::new(count.clone()), Op::Mul, Box::new(repeated.clone())))
 	}

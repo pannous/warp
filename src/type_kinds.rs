@@ -116,7 +116,7 @@ impl std::fmt::Display for Kind {
 pub fn canonical_type_name(name: &str) -> &str {
 	match name {
 		"exact" | "real" | "rational" => "exact",
-		"float" | "fast" | "f64" | "double" => "float",
+		"float" | "fast" | "f64" | "double" | "float64" => "float",
 		other => other,
 	}
 }

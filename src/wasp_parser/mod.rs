@@ -72,6 +72,12 @@ const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final
 const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
+/// Java's and TypeScript's `class Square implements Shape {…}`
+const IMPLEMENTS_WORD: &str = "implements";
+/// The got-it topic of a class naming its traits (`implements Shape`, Swift's `: Shape`)
+const CONFORMANCE_TOPIC: &str = "conformance-list";
+/// Go's `type Shape interface {…}` declares the trait Shape
+const GO_INTERFACE_WORD: &str = "interface";
 /// Go's `type Point struct {…}` declares the class Point
 const GO_STRUCT_WORD: &str = "struct";
 /// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
@@ -605,6 +611,8 @@ pub struct WaspParser {
 	equals_compares: bool,
 	/// Inside the iterable of `for x in …` a block is the loop body, never an argument: `for i in 0..n {…}`
 	in_for_header: bool,
+	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
+	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
 	group_start: (usize, usize),
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
@@ -893,6 +901,7 @@ impl WaspParser {
 			options,
 			equals_compares: false,
 			in_for_header: false,
+			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,
 			type_fields: None,

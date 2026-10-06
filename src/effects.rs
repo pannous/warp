@@ -36,6 +36,9 @@ const TRUSTED_EXTERNALS: &[(&str, Capability, &[Effect])] = &[
 	("fd_write", Wasi, &[IO, Unsafe]),
 	("execute", Sql, &[IO]),
 	("exec", Process, &[IO]),
+	// the standard library's adapters (src/std_adapters.rs): std_pure's words are pure like libm's, std_io's do IO
+	("std_pure", Libm, &[]),
+	("std_io", Host, &[IO]),
 ];
 
 /// Closed effect set; `Pure` is the empty `EffectSet`.

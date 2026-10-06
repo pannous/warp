@@ -238,7 +238,7 @@ pub(super) fn type_name_to_kind(name: &str) -> Kind {
 pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 	Some(match canonical_type_name(&name.to_lowercase()) {
 		"int" | "i32" | "i64" | "integer" | "long" | "exact" => Kind::Int,
-		"float" | "f32" | "number" => Kind::Float,
+		"float" | "f32" | "float32" | "number" => Kind::Float,
 		"string" | "str" | "text" => Kind::Text,
 		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
 		"char" | "codepoint" => Kind::Codepoint,
@@ -1068,6 +1068,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 			let assignment = node.drop_meta().serialize();
 			match constants.get(&place) {
 				Some((keyword, _)) if keyword == IMMUTABLE_LET => {
+					crate::normalize::set_position_of(node);
 					crate::diagnostic::educate_once(LET_CHANGES_TOPIC, &format!("let {place}"), &format!("var {place}"), &format!("{place} changes ({assignment}): var says so where it is declared"));
 				}
 				Some((_, bound)) if *op == Op::Assign && matches!(target.drop_meta(), Node::Symbol(_)) && value.serialize() == *bound => {
@@ -1102,7 +1103,7 @@ pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> 
 		let is_known_name = |name: &str| type_word_kind(name).is_some() || user_types.get_by_name(name).is_some() || traits.is_trait(name);
 		let known = match type_name.strip_prefix(LIST_OF_PREFIX) {
 			Some(element) => is_known_name(element) || names_list_type(element),
-			None => annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some(),
+			None => annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some() || traits.is_trait(&type_name),
 		};
 		(!known).then(|| Diagnostic::at(annotation, format!("unknown type {type_name} of parameter {}", param.name)))
 	})

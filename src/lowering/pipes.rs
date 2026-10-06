@@ -32,7 +32,7 @@ pub fn pipe_stage(stage: Node) -> Node {
 /// `sqrt`, `abs` alone: the operator
 fn operator_stage(node: &Node) -> Option<Op> {
 	match node.drop_meta() {
-		Node::Key(left, op, right) if OPERATOR_STAGES.contains(op) && matches!(left.drop_meta(), Node::Empty) && matches!(right.drop_meta(), Node::Empty) => Some(op.clone()),
+		Node::Key(left, op, right) if OPERATOR_STAGES.contains(op) && matches!(left.drop_meta(), Node::Empty) && matches!(right.drop_meta(), Node::Empty) => Some(*op),
 		_ => None,
 	}
 }
@@ -104,6 +104,7 @@ impl Pipes {
 		match self.then_call(&stage, &value) {
 			Some(_) if is_truth_value(&value) => {
 				let written = format!("{} then {}", value.serialize(), stage.serialize());
+				crate::normalize::set_position_of(&value);
 				crate::normalize::advise(&written, &format!("{} |> {}", value.serialize(), stage.serialize()), "then after a comparison is the condition; to pipe the truth value write |>");
 				if_then(value, stage)
 			}

@@ -415,7 +415,7 @@ impl WaspParser {
 		// At statement level a list `f a b` is a call with all its items; a function of the implicit `it` takes one argument,
 		// so `f 3-1 > 15` compares `f(3-1)` just like the operand `1 + f 3-1 > 15` does
 		let takes_one_argument = lhs_is_defined_function && !self.functions_with_parameters.contains(&lhs.name());
-		if (min_bp == 0 && !takes_one_argument) || min_bp > max_bp_for_application {
+		if (min_bp == 0 && !takes_one_argument) || min_bp > max_bp_for_application || self.glued_pair_bp == Some(min_bp) {
 			return None;
 		}
 		if !lhs_is_callable || !self.can_start_atom() || !should_apply || (ch == '{' && self.in_for_header) {
