@@ -112,7 +112,7 @@ impl std::fmt::Display for Kind {
 }
 
 /// Number type aliases, resolved in one place: literals are exact by default, IEEE 754 is opt-in.
-/// `exact` (alias `real`: strictly the rationals ℚ for now, √2 is not exact) and `float` (aliases `fast`, `f64`, `double`)
+/// `exact` (alias `real`: strictly the rationals ℚ for now, √2 is not exact) and `float` (aliases `fast`, `f64`, `float64`, `double`)
 pub fn canonical_type_name(name: &str) -> &str {
 	match name {
 		"exact" | "real" | "rational" => "exact",

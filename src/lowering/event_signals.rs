@@ -27,6 +27,8 @@ const REMOVE_WORD: &str = "remove";
 const FROM_WORD: &str = "from";
 const LISTENERS_WORD: &str = "listeners";
 const OF_WORD: &str = "of";
+/// `on error of f {…}` catches the errors of f's calls
+const ERROR_WORD: &str = "error";
 const COUNT_WORD: &str = "count";
 const CLEAR_WORD: &str = "clear";
 /// `alarm_handler_3`: the flag name of an unnamed handler of a cleared event
@@ -65,6 +67,11 @@ pub const SYSTEM_EVENTS: [&str; 2] = ["interrupt", "exit"];
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
+	let (statements, program) = match with_function_error_handlers(&statements) {
+		Ok(Some(guarded)) => (guarded.clone(), Node::List(guarded, bracket.clone(), separator.clone())),
+		Ok(None) => (statements, program),
+		Err(error) => return error,
+	};
 	// an event whose listeners are named is handled even when nothing raises it yet (`count listeners of tick`), and
 	// every handler of it gets a flag as a named one has, so any of them can be listed and removed (card event-handlers)
 	let variables = main_level_variables(&statements);
@@ -393,6 +400,58 @@ fn listed_inline(items: &[Node], listeners: &Listeners) -> Option<Vec<Node>> {
 	let mut items = items.to_vec();
 	items.splice(start..end, [listeners.list(&words[start + 2..end].join(" "))]);
 	Some(items)
+}
+
+/// `on error of f {handler}` (card g_ADRM, wiki/Error.md: a catch outside a block catches for its function): every call
+/// of f is `try body else handler`, its value the handler's when the body fails; the statement itself is gone
+fn with_function_error_handlers(statements: &[Node]) -> Result<Option<Vec<Node>>, Node> {
+	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
+		.filter_map(|(index, statement)| function_error_handler(statement).map(|(function, handler)| (index, function, handler)))
+		.collect();
+	if handlers.is_empty() {
+		return Ok(None);
+	}
+	let mut statements = statements.to_vec();
+	for (_, function, handler) in &handlers {
+		let definition = statements.iter().position(|statement| crate::variable_signals::defined_function_name(statement.drop_meta()) == *function);
+		let guarded = definition.and_then(|index| guarded_definition(&statements[index], handler).map(|guarded| (index, guarded)));
+		let Some((index, guarded)) = guarded else {
+			return Err(crate::node::error(&format!("on error of {function}: the program defines no function {function}")));
+		};
+		statements[index] = guarded;
+	}
+	let handler_places: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
+	Ok(Some(statements.into_iter().enumerate().filter(|(index, _)| !handler_places.contains(index)).map(|(_, statement)| statement).collect()))
+}
+
+/// `on error of f {handler}`, `on error of f: handler`: f and the handler
+fn function_error_handler(statement: &Node) -> Option<(String, Node)> {
+	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let [on, error, of, rest @ ..] = items.as_slice() else { return None };
+	if word(on) != ON_WORD || word(error) != ERROR_WORD || word(of) != OF_WORD {
+		return None;
+	}
+	let (function, handler) = crate::variable_signals::subject_and_body(rest)?;
+	Some((word(&function), handler)).filter(|(function, _)| !function.is_empty())
+}
+
+/// The definition with its body `try body else handler`: `f(x) := body`, `def f(x): body`, `fun f(x) {body}`
+fn guarded_definition(definition: &Node, handler: &Node) -> Option<Node> {
+	let guarded = |body: &Node| Node::List(vec![Node::Symbol(crate::wasp_parser::TRY_MARKER.to_string()), body.clone(), handler.clone()], Bracket::Round, Separator::Space);
+	match definition.drop_meta() {
+		Node::Key(head, op @ (Op::Define | Op::Assign | Op::Colon), body) => Some(Node::Key(head.clone(), *op, Box::new(guarded(body)))),
+		Node::List(items, bracket, separator) if items.len() >= 2 => {
+			let last = items.last()?;
+			let body = match last.drop_meta() {
+				Node::List(_, Bracket::Curly, _) => guarded(last),
+				_ => guarded_definition(last, handler)?,
+			};
+			let mut items = items.clone();
+			*items.last_mut()? = body;
+			Some(Node::List(items, bracket.clone(), separator.clone()))
+		}
+		_ => None,
+	}
 }
 
 /// The first error a lowering left in `node` (`h is no named listener of tick`)

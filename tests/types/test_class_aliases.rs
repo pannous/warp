@@ -99,3 +99,11 @@ fn a_loop_in_init_keeps_its_variables_local() {
 	is!(&format!("{counter}C([7 8 8]).last()"), 8);
 	is!(&format!("{counter}count(C([7 8 8]).keys)"), 2);
 }
+
+/// P157: a ported type parameter `class Box<T>` compiles untyped, with a note that wasp infers types
+#[test]
+fn a_type_parameter_of_a_class_is_noted() {
+	let code = "class Box<T> { item: T }\nBox(3).item";
+	is!(code, 3);
+	assert_alias(code, "Box<T>", "Box");
+}

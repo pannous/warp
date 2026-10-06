@@ -275,3 +275,19 @@ questions (`age:{date - 1996}` getters of data, setters): nothing ported from it
 
 Interfaces (classes-32): class methods satisfy traits, trait-typed parameters, foreign interface/protocol forms and
 `implements`/`: Shape` lists: notes/traits.md "Classes and foreign interfaces".
+
+Enums and sealed classes (classes-33, tests/types/test_enums_ported.rs): a wasp enum is the object of its cases
+numbered from 0 (declarations::enum_object). Ported: Swift's `enum Direction { case north, south }` and
+`switch d { case .north: 1 }` (welcome_forms arrow_cases strips `case`; declarations::enum_paths reads `.north` as
+`Direction.north` when one enum has the case), Kotlin's `enum class` (a note), `when (c) { A -> 1; 1, 2 -> …; is T -> …;
+else -> … }` (welcome_forms when_chain: an if chain, `is T` the type test; also without a subject), Rust's
+`Color::Green` (enum_paths). Kotlin's `sealed class Shape` (a class without fields: a bodiless class is `{}` now) and
+`class Circle(val r: Int) : Shape()` (the superclass with `()` is the parent, as extends). Open (a design question):
+cases with values, Rust's `Circle(f64)`, Swift's `case circle(Double)` and their destructuring patterns.
+
+Text, equality and order as methods (classes-34, tests/types/test_class_witnesses.rs): a class's `text()`,
+`equals(o)` and `compare(o)` are the witnesses text·P, equals·P, compare·P (class_methods with_witness_methods types
+the other instance `o:P`; they are no type-word methods). Aliases with a note: toString, to_s, __str__, ToString,
+String (Go) → text; Equals, __eq__, equal → equals (`==` is no operator method any more: Equatable dispatches it);
+compareTo, CompareTo, cmp → compare. `P·init(P{…}, 3)` has P's shape for the trait passes (traits::shape).
+Not ported: hashCode/__hash__ (wasp has no hash witness; they stay plain methods), Swift's `description` property.

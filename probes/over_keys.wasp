@@ -1,0 +1,2 @@
+g(m) := { for k in keys(m) { print k }; 0 }
+g({b: 2})
