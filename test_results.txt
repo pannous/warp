@@ -525,6 +525,7 @@ PASSED:
   ✓ functions::test_anonymous_function_forms::an_arrow_lambda_works_too
   ✓ functions::test_anonymous_function_forms::an_immediately_invoked_function_without_arguments
   ✓ functions::test_anonymous_function_forms::python_lambda_is_a_lambda
+  ✓ functions::test_argument_kinds::an_unknown_word_returned_or_cast_is_an_error
   ✓ functions::test_argument_kinds::counting_a_parameter_makes_it_a_list
   ✓ functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error
   ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
@@ -782,6 +783,7 @@ PASSED:
   ✓ functions::test_nonlocal_cells::test_an_escaping_closure_keeps_its_values
   ✓ functions::test_nonlocal_cells::test_inner_changes_the_outer_variable
   ✓ functions::test_nonlocal_lambdas::a_fresh_local_of_the_same_name_is_no_change
+  ✓ functions::test_nonlocal_lambdas::a_lambda_binds_its_own_locals
   ✓ functions::test_nonlocal_lambdas::a_lambda_changing_an_enclosing_variable_shares_it
   ✓ functions::test_nonlocal_lambdas::a_lambda_may_declare_nonlocal
   ✓ functions::test_nonlocal_lambdas::a_nested_def_changing_it_without_nonlocal_is_an_error
@@ -2117,7 +2119,9 @@ PASSED:
   ✓ types::test_is_teaches_be::is_with_an_undefined_name_teaches_be
   ✓ types::test_iterable::for_walks_what_iterate_gives
   ✓ types::test_iterable::in_searches_what_iterate_gives
+  ✓ types::test_mutating_methods::a_method_changes_its_object_and_gives_a_value
   ✓ types::test_mutating_methods::a_method_changing_a_field_updates_the_variable
+  ✓ types::test_mutating_methods::pop_on_a_list_field
   ✓ types::test_mutating_methods::the_call_gives_the_changed_object
   ✓ types::test_person_struct::test_person_struct_roundtrip
   ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
@@ -2730,4 +2734,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2725 passed, 0 failed, 2725 total tested
+19 ignored, 2729 passed, 0 failed, 2729 total tested

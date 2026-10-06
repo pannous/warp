@@ -465,7 +465,7 @@ pub(crate) fn declare_global(program: Node, names: &[String]) -> Node {
 
 /// Is the first mention of `name` in `body` a plain `name = value` not reading it (`primes = []`)? Then the body
 /// binds its own local, as in Python; reading or updating it first (`n += 1`, `xs#i = v`) means main's variable.
-pub(super) fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
+pub(crate) fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
 	let mut first_mention = None;
 	body.visit(&mut |node| {
 		if first_mention.is_some() {
