@@ -202,7 +202,7 @@ fn after_task(condition: Node, value: Node, phrases: &Phrases) -> Node {
 	if let Some(name) = copied.first() {
 		return crate::node::error(&format!("after {name}: a task gets a copy of {name}, which never changes there; share it: `shared {name} = …` (P106)"));
 	}
-	let template = crate::wasp_parser::parse(&format!("{GO_WORD} {{ while not ({AFTER_CONDITION}) {{ sleep({AFTER_POLL_MILLISECONDS}) }}; {AFTER_VALUE} }}"));
+	let template = crate::wasp_parser::parse(&format!("{GO_WORD} {{ while not ({AFTER_CONDITION}) {{ sleep({AFTER_POLL_MILLISECONDS} ms) }}; {AFTER_VALUE} }}"));
 	let template = crate::library_words::substitute(template, AFTER_CONDITION, &condition);
 	crate::library_words::substitute(template, AFTER_VALUE, &value)
 }
