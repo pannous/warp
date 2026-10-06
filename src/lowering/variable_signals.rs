@@ -3,18 +3,21 @@
 //! listener is its check after every later write of such a variable in the statements that follow it, loop bodies
 //! included: a write inside an expression (`while x-->0`) becomes `(x--; check; x+1)`, keeping the expression's value.
 //! `on set x {print value}` runs after every write of x; `value` (or `signal`, `event`) is the new value.
+//! `on change x {…}` runs after a write that changed the value of x. A `:=` value is a derived signal (notes/signals.md):
+//! a listener on it watches the variables its definition reads, transitively.
 //! `after tested: print "ok"` (or `after test`) runs after every later statement that calls the function test,
 //! `before test {…}` before it.
 
 use crate::declarations::{handler_parts, word};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const ONCE_WORD: &str = "once";
 const WHENEVER_WORD: &str = "whenever";
 const ON_WORD: &str = "on";
 const SET_WORD: &str = "set";
+const CHANGE_WORD: &str = "change";
 const AFTER_WORD: &str = "after";
 const BEFORE_WORD: &str = "before";
 /// `tested`, `saved`: a function named in the past tense
@@ -23,6 +26,8 @@ const PAST_SUFFIXES: [&str; 2] = ["ed", "d"];
 const VALUE_WORDS: [&str; 3] = ["value", "signal", "event"];
 /// `once_fired_0`: whether the first once listener ran
 const FIRED_PREFIX: &str = "once_fired_";
+/// `change_last_0`: the value the first change listener saw last
+const LAST_PREFIX: &str = "change_last_";
 
 #[derive(Clone)]
 enum Trigger {
@@ -40,6 +45,8 @@ struct Listener {
 	body: Node,
 	/// the flag of a once listener, None for whenever
 	fired: Option<String>,
+	/// the statement that starts the listener where it is declared
+	start: Option<Node>,
 }
 
 impl Listener {
@@ -62,14 +69,17 @@ impl Listener {
 
 pub fn lower(node: Node) -> Node {
 	let functions = defined_functions(&node);
-	Signals { count: 0, functions }.lower(node, &[])
+	let derived = derived_values(&node);
+	Signals { count: 0, functions, derived }.lower(node, &[])
 }
 
 struct Signals {
-	/// once listeners so far: each gets its own flag
+	/// once and change listeners so far: each gets its own variable
 	count: usize,
 	/// the functions the program defines, which `after` and `before` may name
 	functions: HashSet<String>,
+	/// the `:=` values and the names their definitions read
+	derived: HashMap<String, HashSet<String>>,
 }
 
 impl Signals {
@@ -113,9 +123,7 @@ impl Signals {
 		let mut out = Vec::new();
 		for item in items {
 			if let Some(listener) = self.listener(&item) {
-				if let Some(fired) = &listener.fired {
-					out.push(assign(fired, Node::False));
-				}
+				out.extend(listener.start.clone());
 				listeners.push(listener);
 				continue;
 			}
@@ -138,8 +146,12 @@ impl Signals {
 	fn listener(&mut self, statement: &Node) -> Option<Listener> {
 		let Node::List(items, _, _) = statement.drop_meta() else { return None };
 		let keyword = word(items.first()?);
-		if keyword == ON_WORD && items.get(1).map(word).as_deref() == Some(SET_WORD) {
+		let on_word = (keyword == ON_WORD).then(|| items.get(1).map(word)).flatten();
+		if on_word.as_deref() == Some(SET_WORD) {
 			return self.set_listener(&items[2..]);
+		}
+		if on_word.as_deref() == Some(CHANGE_WORD) {
+			return self.change_listener(&items[2..]);
 		}
 		if keyword == AFTER_WORD || keyword == BEFORE_WORD {
 			return self.call_listener(&items[1..], keyword == BEFORE_WORD);
@@ -148,17 +160,33 @@ impl Signals {
 			return None;
 		}
 		let (condition, body) = subject_and_body(&items[1..])?;
-		let mut watched = HashSet::new();
-		condition.visit(&mut |part| if let Node::Symbol(name) = part { watched.insert(name.clone()); });
+		let watched = self.sources(&condition);
 		if watched.is_empty() {
 			return None;
 		}
-		let fired = (keyword == ONCE_WORD).then(|| {
-			self.count += 1;
-			format!("{FIRED_PREFIX}{}", self.count - 1)
-		});
+		let fired = (keyword == ONCE_WORD).then(|| self.fresh_name(FIRED_PREFIX));
+		let start = fired.as_ref().map(|fired| assign(fired, Node::False));
 		let body = self.lower(body, &[]);
-		Some(Listener { trigger: Trigger::Write(watched), condition: Some(condition), body, fired })
+		Some(Listener { trigger: Trigger::Write(watched), condition: Some(condition), body, fired, start })
+	}
+
+	fn fresh_name(&mut self, prefix: &str) -> String {
+		self.count += 1;
+		format!("{prefix}{}", self.count - 1)
+	}
+
+	/// The variables a write of which can change the expression: the names it reads, and through each `:=` value
+	/// the names its definition reads
+	fn sources(&self, expression: &Node) -> HashSet<String> {
+		let mut sources = HashSet::new();
+		let mut pending = symbols(expression);
+		while let Some(name) = pending.pop() {
+			if let Some(read) = self.derived.get(&name).filter(|_| !sources.contains(&name)) {
+				pending.extend(read.iter().cloned());
+			}
+			sources.insert(name);
+		}
+		sources
 	}
 
 	/// `on set x {body}`: the body after every write of x, `value` in it is x
@@ -167,7 +195,25 @@ impl Signals {
 		let Node::Symbol(name) = variable.drop_meta() else { return None };
 		let bindings = VALUE_WORDS.iter().map(|value| (value.to_string(), Node::Symbol(name.clone()))).collect();
 		let body = self.lower(crate::law::substitute(&body, &bindings), &[]);
-		Some(Listener { trigger: Trigger::Write(HashSet::from([name.clone()])), condition: None, body, fired: None })
+		Some(Listener { trigger: Trigger::Write(HashSet::from([name.clone()])), condition: None, body, fired: None, start: None })
+	}
+
+	/// `on change x {body}`: the body after every write that changed x (a variable or a `:=` value), `value` in it is x
+	fn change_listener(&mut self, rest: &[Node]) -> Option<Listener> {
+		let (variable, body) = subject_and_body(rest)?;
+		let variable = variable.drop_meta().clone();
+		let Node::Symbol(name) = &variable else { return None };
+		let last = self.fresh_name(LAST_PREFIX);
+		let bindings = VALUE_WORDS.iter().map(|value| (value.to_string(), variable.clone())).collect();
+		let body = self.lower(crate::law::substitute(&body, &bindings), &[]);
+		let changed = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Symbol(last.clone())));
+		Some(Listener {
+			trigger: Trigger::Write(self.sources(&Node::Symbol(name.clone()))),
+			condition: Some(changed),
+			body: block(vec![assign(&last, variable.clone()), body]),
+			fired: None,
+			start: Some(assign(&last, variable)),
+		})
 	}
 
 	/// `after tested: body`, `before test {body}`: test must be a function of the program
@@ -175,7 +221,7 @@ impl Signals {
 		let (subject, body) = subject_and_body(rest)?;
 		let function = self.function_named(&word(&subject))?;
 		let body = self.lower(body, &[]);
-		Some(Listener { trigger: Trigger::Call { function, before }, condition: None, body, fired: None })
+		Some(Listener { trigger: Trigger::Call { function, before }, condition: None, body, fired: None, start: None })
 	}
 
 	/// `test`, `tested` (and `saved` for save, `stopped` for stop) name the defined function
@@ -211,6 +257,23 @@ fn defined_functions(node: &Node) -> HashSet<String> {
 	});
 	functions.remove("");
 	functions
+}
+
+/// Each `name := expr` value (a getter, P71) and the names expr reads
+fn derived_values(node: &Node) -> HashMap<String, HashSet<String>> {
+	let mut derived = HashMap::new();
+	node.visit(&mut |part| {
+		if let (Some(name), Node::Key(_, _, body)) = (crate::getters::getter_name(part), part.drop_meta()) {
+			derived.insert(name.to_string(), symbols(body).into_iter().collect());
+		}
+	});
+	derived
+}
+
+fn symbols(node: &Node) -> Vec<String> {
+	let mut names = vec![];
+	node.visit(&mut |part| if let Node::Symbol(name) = part { names.push(name.clone()); });
+	names
 }
 
 /// The bodies of the call listeners to run before and after the statement
