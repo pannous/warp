@@ -146,4 +146,6 @@ say 3 == 3` },
 	constants: { value: 'Error("pi is a constant at 2:1; fix: another name")', code: `// constants stay constant
 pi = 4
 2 * pi` },
+	// samples/kitchensink.wasp itself (samples.js loads after this file), tested natively by test_kitchensink
+	"kitchen sink": { value: '"all 31 checks pass"', get code() { return SAMPLES.kitchensink; } },
 };
