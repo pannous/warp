@@ -495,6 +495,7 @@ PASSED:
   ✓ functions::test_arity_overloads::an_overload_may_call_another_one
   ✓ functions::test_arity_overloads::calls_without_parentheses_pick_by_count_too
   ✓ functions::test_arity_overloads::defaults_count_for_the_arguments_a_definition_accepts
+  ✓ functions::test_arrow_defaults_and_types::an_arrow_function_takes_defaults_and_types
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_only_defaults_calls_it
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_parameter_is_an_error
@@ -2619,4 +2620,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2614 passed, 0 failed, 2614 total tested
+23 ignored, 2615 passed, 0 failed, 2615 total tested
