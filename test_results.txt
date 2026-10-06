@@ -794,6 +794,7 @@ PASSED:
   ✓ functions::test_property_words::test_property_word_agrees_with_of_and_getter
   ✓ functions::test_property_words::test_property_word_counts_text_characters
   ✓ functions::test_python_higher_order::a_python_function_of_a_function
+  ✓ functions::test_python_higher_order::python_parameter_markers_are_no_parameters
   ✓ functions::test_python_ruby_definitions::test_julia_definitions
   ✓ functions::test_python_ruby_definitions::test_python_keyword_parameter
   ✓ functions::test_python_ruby_definitions::test_python_rest_parameter_with_colon_body
@@ -976,6 +977,7 @@ PASSED:
   ✓ lists::test_lists::test_array_initialization
   ✓ lists::test_lists::test_array_initialization_basics
   ✓ lists::test_lists::test_array_size
+  ✓ lists::test_lists::test_field_assignment_to_undefined_variable
   ✓ lists::test_lists::test_filter
   ✓ lists::test_lists::test_index
   ✓ lists::test_lists::test_index_assignment_to_undefined_variable
@@ -2191,6 +2193,7 @@ PASSED:
   ✓ types::test_types_scope::test_type_of_list_names_its_element_type
   ✓ types::test_types_scope::test_type_of_mixed_list_is_plain_list
   ✓ types::test_value_constructor::a_value_block_runs_at_every_construction
+  ✓ types::test_value_constructor::a_value_constructor_takes_parameters
   ✓ wasm::test_compile_only::compile_command_emits_the_same_struct_module_as_eval
   ✓ wasm::test_compile_only::compile_command_writes_wasm_without_running
   ✓ wasm::test_compiled_module_cache::test_compile_aot_writes_machine_code_that_runs
@@ -2646,4 +2649,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2641 passed, 0 failed, 2641 total tested
+20 ignored, 2644 passed, 0 failed, 2644 total tested
