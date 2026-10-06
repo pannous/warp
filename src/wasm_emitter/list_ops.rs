@@ -17,6 +17,22 @@ const ASCII_LOWERCASE_BIT: i32 = 0x20;
 const TEXT_UNIT_USERS: [&str; 7] =
 	["node_count", "node_bytes", "string_char_at", "node_with_at", "text_byte_count", "text_codepoint_count", "text_grapheme_count"];
 
+/// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
+pub(super) struct CopyCells {
+	cell: u32,
+	cells: u32,
+	position: u32,
+	copied: u32,
+	/// what the copied cells go in front of; the copy when rebuilt
+	result: u32,
+}
+
+impl CopyCells {
+	pub(super) fn at(first: u32) -> Self {
+		CopyCells { cell: first, cells: first + 1, position: first + 2, copied: first + 3, result: first + 4 }
+	}
+}
+
 impl WasmGcEmitter {
 	/// Emit list and string operation helper functions
 	pub(crate) fn emit_list_ops(&mut self) {
@@ -261,7 +277,7 @@ impl WasmGcEmitter {
 	}
 
 	/// list_insert_at(list, position, value): copies the cells before the 0-based position, puts value there and shares
-	/// the rest; a position past the end (or negative) appends
+	/// the rest; a position past the end (or negative) appends. Iteratively (copy_cells)
 	fn emit_list_insert_at(&mut self) {
 		if !self.should_emit_function(crate::analyzer::INSERT_AT_CALL) {
 			return;
@@ -269,25 +285,16 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_ref_nullable = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
-		let list_insert_at = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
 		let params = vec![node_ref_nullable, ValType::I64, node_ref];
-		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], vec![], |s, f| {
-			s.emit_empty_as_null(f, 0);
-			Self::emit_list(f, &[
-				I::LocalGet(0), I::RefIsNull, I::LocalGet(1), I::I64Eqz, I::I32Or,
-				I::If(BlockType::Result(node_ref)),
-				I::I64Const(SQUARE_LIST_KIND), I::LocalGet(2), I::LocalGet(0), I::StructNew(node_type),
-				I::Else,
-			]);
-			s.emit_field(f, 0, 0);
-			s.emit_field(f, 0, 1);
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[
-				I::LocalGet(1), I::I64Const(1), I::I64Sub, I::LocalGet(2), I::Call(list_insert_at),
-				I::StructNew(node_type), I::End,
-			]);
+		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], self.copy_cells_locals(), |s, f| {
+			let (list, position, value) = (0, 1, 2);
+			let copy = CopyCells::at(3);
+			s.emit_empty_as_null(f, list);
+			s.emit_collect_cells(f, list, Some(position), &copy);
+			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value), I::LocalGet(copy.cell), I::StructNew(node_type), I::LocalSet(copy.result)]);
+			s.emit_rebuild_cells(f, &copy);
+			Self::emit_list(f, &[I::LocalGet(copy.result), I::RefAsNonNull]);
 		});
-		assert_eq!(self.func_index(crate::analyzer::INSERT_AT_CALL), list_insert_at, "recursive call index");
 	}
 
 	/// The grapheme at a 1-based index: a Codepoint when it is one code point (`'héllo'#2` → 'é'),
@@ -1183,33 +1190,67 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
-	/// list_concat(a, b): copies the cells of a in front of b, which is shared
+	/// list_concat(a, b): copies the cells of a in front of b, which is shared; iteratively (copy_cells)
 	fn emit_list_concat(&mut self) {
 		if !self.should_emit_function("list_concat") {
 			return;
 		}
 		let node_ref_nullable = Ref(self.node_ref(true));
-		let node_type = self.type_manager.node_type;
-		let list_concat = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
 		let params = vec![node_ref_nullable, node_ref_nullable];
-		self.runtime_function("list_concat", params, vec![node_ref_nullable], vec![], |s, f| {
-			for list in 0..2 {
+		self.runtime_function("list_concat", params, vec![node_ref_nullable], self.copy_cells_locals(), |s, f| {
+			let (first, second) = (0, 1);
+			let copy = CopyCells::at(2);
+			for list in [first, second] {
 				s.emit_empty_as_null(f, list);
 			}
-			f.instruction(&I::LocalGet(0));
-			f.instruction(&I::RefIsNull);
-			f.instruction(&I::If(BlockType::Result(node_ref_nullable)));
-			f.instruction(&I::LocalGet(1));
-			f.instruction(&I::Else);
-			s.emit_field(f, 0, 0);
-			s.emit_field(f, 0, 1);
-			s.emit_field(f, 0, 2);
-			f.instruction(&I::LocalGet(1));
-			f.instruction(&I::Call(list_concat));
-			f.instruction(&I::StructNew(node_type));
-			f.instruction(&I::End);
+			s.emit_collect_cells(f, first, None, &copy);
+			Self::emit_list(f, &[I::LocalGet(second), I::LocalSet(copy.result)]);
+			s.emit_rebuild_cells(f, &copy);
+			f.instruction(&I::LocalGet(copy.result));
 		});
-		assert_eq!(self.func_index("list_concat"), list_concat, "recursive call index");
+	}
+
+	/// The locals copy_cells needs, in CopyCells order
+	pub(super) fn copy_cells_locals(&self) -> Vec<ValType> {
+		let node_ref_nullable = Ref(self.node_ref(true));
+		let cells = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.node_array_type) });
+		vec![node_ref_nullable, cells, ValType::I32, node_ref_nullable, node_ref_nullable]
+	}
+
+	/// The first cells of `list` (all, or as many as the i64 local `limit` says; a negative limit is all) into an array,
+	/// counted, then filled: no recursion, so a long list never exhausts the call stack. `cell` ends at the first cell
+	/// not taken
+	pub(super) fn emit_collect_cells(&self, f: &mut Function, list: u32, limit: Option<u32>, copy: &CopyCells) {
+		let node_array = self.type_manager.node_array_type;
+		let reached_limit = |f: &mut Function| if let Some(limit) = limit {
+			Self::emit_list(f, &[I::LocalGet(copy.position), I::I64ExtendI32U, I::LocalGet(limit), I::I64Eq, I::BrIf(1)]);
+		};
+		let next_cell = |s: &Self, f: &mut Function| {
+			s.emit_field(f, copy.cell, 2);
+			Self::emit_list(f, &[I::LocalSet(copy.cell), I::LocalGet(copy.position), I::I32Const(1), I::I32Add, I::LocalSet(copy.position), I::Br(0), I::End, I::End]);
+		};
+		Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(copy.cell), I::I32Const(0), I::LocalSet(copy.position),
+			I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(copy.cell), I::RefIsNull, I::BrIf(1)]);
+		reached_limit(f);
+		next_cell(self, f);
+		Self::emit_list(f, &[I::LocalGet(copy.position), I::ArrayNewDefault(node_array), I::LocalSet(copy.cells),
+			I::LocalGet(list), I::LocalSet(copy.cell), I::I32Const(0), I::LocalSet(copy.position),
+			I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+			I::LocalGet(copy.position), I::LocalGet(copy.cells), I::ArrayLen, I::I32GeU, I::BrIf(1),
+			I::LocalGet(copy.cells), I::LocalGet(copy.position), I::LocalGet(copy.cell), I::ArraySet(node_array)]);
+		next_cell(self, f);
+	}
+
+	/// The collected cells, from the last back, copied in front of `result`, each sharing what follows it
+	pub(super) fn emit_rebuild_cells(&self, f: &mut Function, copy: &CopyCells) {
+		let node_array = self.type_manager.node_array_type;
+		Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+			I::LocalGet(copy.position), I::I32Eqz, I::BrIf(1),
+			I::LocalGet(copy.position), I::I32Const(1), I::I32Sub, I::LocalSet(copy.position),
+			I::LocalGet(copy.cells), I::LocalGet(copy.position), I::ArrayGet(node_array), I::LocalSet(copy.copied)]);
+		self.emit_field(f, copy.copied, 0);
+		self.emit_field(f, copy.copied, 1);
+		Self::emit_list(f, &[I::LocalGet(copy.result), I::StructNew(self.type_manager.node_type), I::LocalSet(copy.result), I::Br(0), I::End, I::End]);
 	}
 
 	/// `x#i += v` → `x#i = x#i + v`, leaving the assigned value (i64) on the stack
