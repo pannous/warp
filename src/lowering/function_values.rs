@@ -12,6 +12,8 @@ use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
 const SPECIALISATION_SEPARATOR: &str = "__";
+/// `lambda_value_1`: the function a lambda argument becomes; no text the user wrote
+pub(crate) const LAMBDA_PREFIX: &str = "lambda_value_";
 /// Words whose last argument is a function
 pub(crate) const ITERATION_WORDS: [&str; 5] = ["map", "filter", "each", "fold", "reduce"];
 /// Words between two values that make a spaced list no call of its first item: `p in xs`
@@ -288,7 +290,7 @@ impl Specialising {
 			Node::Symbol(name) if self.definitions.contains_key(name) && !self.higher_order.contains_key(name) => Some(name.clone()),
 			_ => {
 				self.counter += 1;
-				let name = format!("lambda_value_{}", self.counter);
+				let name = format!("{LAMBDA_PREFIX}{}", self.counter);
 				let definition = lambda_definition(&name, argument)?;
 				let parsed = Definition::from(&definition)?;
 				let free = free_variables(&parsed);
@@ -481,10 +483,14 @@ pub fn lower(program: Node) -> Node {
 	// calls in the code that is not the body of a function taking functions
 	let program = rewrite_outside(program, &mut specialising);
 	let assembled = assemble(program, &specialising);
-	let program = if specialising.lambda_definitions.is_empty() {
-		assembled
-	} else {
-		Node::List([specialising.lambda_definitions.clone(), vec![assembled]].concat(), Bracket::Round, Separator::Semicolon)
+	// the lambdas' definitions go first among the program's statements: nesting the program in a list of its own hid
+	// its main level from the later passes (a handler's write to a main-level variable was refused)
+	let program = match (specialising.lambda_definitions.is_empty(), assembled.drop_meta()) {
+		(true, _) => assembled,
+		(false, Node::List(statements, bracket, separator)) if crate::variable_signals::is_statement_list(bracket, separator) => {
+			Node::List([specialising.lambda_definitions.clone(), statements.clone()].concat(), bracket.clone(), separator.clone())
+		}
+		(false, _) => Node::List([specialising.lambda_definitions.clone(), vec![assembled]].concat(), Bracket::Round, Separator::Semicolon),
 	};
 	// `f(*args)` of a parameter f spreads into the function now known (variadic.rs kept the spread)
 	crate::variadic::lower(program)

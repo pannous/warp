@@ -15,6 +15,8 @@ const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
 const WILDCARD: &str = "_";
 const DEFAULT_CASE: &str = "default";
 const LOOP_WORD: &str = "loop";
+/// Lua's, Ruby's and Julia's word closing a function body
+const END_WORD: &str = "end";
 const LAMBDA_WORD: &str = "lambda";
 const LET_WORD: &str = "let";
 const IN_WORD: &str = "in";
@@ -24,8 +26,8 @@ pub const GENERIC_MARK: &str = "generic";
 const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
 const CALL_METHOD: &str = "call";
 const OCAML_FUNCTION_KEYWORD: &str = "fun";
-/// F#/OCaml modules whose iteration functions are wasp's words: `List.map f xs` is `map f xs`
-const ITERATION_MODULES: [&str; 3] = ["List", "Seq", "Array"];
+/// F#/OCaml (and Elixir's Enum) modules whose iteration functions are wasp's words: `List.map f xs` is `map f xs`
+const ITERATION_MODULES: [&str; 4] = ["List", "Seq", "Array", "Enum"];
 const MODULE_ITERATIONS: [&str; 5] = ["map", "filter", "fold", "reduce", "sum"];
 /// C# LINQ methods and the wasp words they are (the alias rule: they work, with a note naming wasp's word)
 /// R's apply functions and the wasp word they are: `sapply(xs, f)` is `map(xs, f)` (alias rule, with a note)
@@ -73,6 +75,7 @@ fn forms(node: Node) -> Node {
 	match node {
 		Node::List(items, bracket, separator) if generic_names(&items).is_some() => {
 			let (function, names) = generic_names(&items).expect("guarded");
+			crate::normalize::set_position_of(&items[0]);
 			crate::normalize::hint(&format!("{function}<{}>", names.join(", ")), &function, "wasp infers types: write the function without type parameters");
 			forms(without_type_parameters(Node::List(items, bracket, separator), &names))
 		}
@@ -91,6 +94,12 @@ fn forms(node: Node) -> Node {
 		Node::Key(parameters, Op::FatArrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
 			lambda(parameters, Node::List([fields, vec![forms(*body)]].concat(), Bracket::Curly, Separator::Semicolon))
+		}
+		// Elixir's `Enum.map(xs, f)`: the call `map(xs, f)`, with a note naming wasp's word
+		Node::Key(module, Op::Dot, call) if module_call(&module, &call).is_some() => {
+			let iteration = module_call(&module, &call).expect("guarded");
+			crate::normalize::hint(&format!("{}.{iteration}(", module.serialize()), &format!("{iteration}("), "wasp's word for the module function");
+			forms(*call)
 		}
 		// `f = lambda *xs: …`, JS `f = (...xs) => …`: the definition `f(*xs) := …`, which variadic.rs reads
 		Node::Key(name, Op::Assign, value) if starred_lambda(&name, &value).is_some() => forms(starred_lambda(&name, &value).expect("guarded")),
@@ -247,6 +256,7 @@ fn without_type_parameters(node: Node, names: &[String]) -> Node {
 				if generic_parameter(&item, names) && kept.last().is_some_and(|label| is_word(label, WILDCARD)) {
 					kept.pop();
 					let Node::Key(name, _, _) = item.drop_meta() else { unreachable!("a generic parameter") };
+					crate::normalize::set_position_of(&item);
 					crate::normalize::hint(&format!("{WILDCARD} {}", item.serialize()), &name.serialize(), "wasp names a parameter once, no label");
 				}
 				kept.push(item);
@@ -286,6 +296,7 @@ fn r_iteration(mut items: Vec<Node>) -> Vec<Node> {
 	if items.len() < 2 {
 		return items;
 	}
+	crate::normalize::set_position_of(&items[0]);
 	crate::normalize::hint(&format!("{word}("), &format!("{MAP_WORD}("), "wasp's word for R's apply function");
 	items[0] = Node::Symbol(MAP_WORD.to_string());
 	items
@@ -317,6 +328,7 @@ fn is_function_keyword(node: &Node) -> bool {
 fn r_vectors(node: Node) -> Node {
 	match node {
 		Node::List(items, Bracket::Round, separator) if items.len() > 1 && is_word(&items[0], R_VECTOR_WORD) => {
+			crate::normalize::set_position_of(&items[0]);
 			crate::normalize::hint(&format!("{R_VECTOR_WORD}("), "[", "wasp writes a list in brackets");
 			let elements = items.into_iter().skip(1).map(r_vectors).flat_map(|element| match element {
 				Node::List(group, Bracket::Round, Separator::Colon) => group, // `c(1, 2, 3)` holds its arguments as one group
@@ -328,6 +340,14 @@ fn r_vectors(node: Node) -> Node {
 	}
 }
 
+/// `Enum.map(…)`: the iteration word of a module's call
+fn module_call(module: &Node, call: &Node) -> Option<&'static str> {
+	let Node::List(items, Bracket::Round, _) = call.drop_meta() else { return None };
+	let word = items.first()?;
+	let is_module = ITERATION_MODULES.iter().any(|name| is_word(module, name));
+	(is_module && items.len() > 1).then(|| MODULE_ITERATIONS.iter().find(|name| is_word(word, name)).copied()).flatten()
+}
+
 /// F#'s `List.map f xs` (also `Seq.`, `Array.`): `map f xs`, with a note naming wasp's word (alias rule)
 fn module_qualified_iteration(mut items: Vec<Node>) -> Vec<Node> {
 	let Some(Node::Key(module, Op::Dot, word)) = items.first().map(Node::drop_meta) else { return items };
@@ -336,6 +356,7 @@ fn module_qualified_iteration(mut items: Vec<Node>) -> Vec<Node> {
 	if !is_module || items.len() < 2 {
 		return items;
 	}
+	crate::normalize::set_position_of(&items[0]);
 	crate::normalize::hint(&format!("{}.{iteration}", module.serialize()), iteration, "wasp's word for the module function");
 	items[0] = Node::Symbol(iteration.to_string());
 	items
@@ -368,7 +389,12 @@ fn is_type_word(node: &Node) -> bool {
 fn assigned_braceless_function(items: &[Node]) -> Option<Node> {
 	let [assignment, body @ ..] = items else { return None };
 	let Node::Key(name, op @ (Op::Assign | Op::Define), head) = assignment.drop_meta() else { return None };
+	// Lua's `sq = function(x) return x * x end`: the closing word ends the body
 	let body = match without_result_type(body) {
+		[body @ .., end] if is_word(end, END_WORD) => body,
+		body => body,
+	};
+	let body = match body {
 		[] => return None,
 		[single] => single.clone(),
 		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
@@ -423,6 +449,7 @@ fn linq_calls(node: Node, defined: &HashSet<String>) -> Node {
 	match node {
 		Node::Key(receiver, Op::Dot, method) if linq_method(&method).is_some_and(|(written, _, _)| !defined.contains(written)) => {
 			let (written, word, arguments) = linq_method(&method).expect("guarded");
+			crate::normalize::set_position_of(&method);
 			crate::normalize::hint(&format!(".{written}("), &format!(".{word}("), "wasp's word for the LINQ method");
 			let arguments = arguments.into_iter().map(|argument| linq_calls(argument, defined));
 			let call = Node::List([vec![Node::Symbol(word.to_string())], arguments.collect()].concat(), Bracket::Round, Separator::None);
@@ -433,7 +460,7 @@ fn linq_calls(node: Node, defined: &HashSet<String>) -> Node {
 }
 
 /// The names the program defines: `f(x) := …`, `def f`, `func f`, Go's method `func (p Point) Sum()`
-fn defined_names(node: &Node) -> HashSet<String> {
+pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
 	node.visit(&mut |part| match part {
 		Node::Key(head, Op::Define, _) => {

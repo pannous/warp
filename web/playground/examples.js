@@ -89,6 +89,29 @@ ticks = 0
 on every 1 second { ticks += 1; if ticks <= 3 { print "tick " + ticks } }
 at 9:00 { print "good morning" }
 ticks` },
+	"game of life": { value: "15", wait: 1200, code: `// Conway's Game of Life, live: a step every half second on the canvas; three gliders keep 15 cells alive
+width = 24
+height = 12
+global cells = []
+for i in 1 to width * height { cells.push(0) }
+for (x, y) in [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)] {
+  for corner in [0, 8, 16] { cells#((y + corner % 12) * width + x + corner + 1) = 1 }
+}
+alive(x, y) := cells#(((y + height) % height) * width + (x + width) % width + 1)
+step() := {
+  next = []
+  for y in 0 to height - 1 {
+    for x in 0 to width - 1 {
+      n = alive(x-1, y-1) + alive(x, y-1) + alive(x+1, y-1) + alive(x-1, y) + alive(x+1, y) + alive(x-1, y+1) + alive(x, y+1) + alive(x+1, y+1)
+      next.push(if n == 3 or (n == 2 and alive(x, y) == 1) then 1 else 0)
+    }
+  }
+  cells = next
+}
+population = 15
+paint(cells, width, height)
+on every 500 ms { step(); population = sum(cells); paint(cells, width, height) }
+population` },
 	"system values": { value: '"online"', code: `// system values are signals too: switch your system to dark mode and back
 on change dark mode { if value { print "dark mode on" } else { print "light mode on" } }
 if online then "online" else "offline"` },
@@ -108,10 +131,10 @@ on click { count += 1; print "click at " + event.x + "," + event.y }
 on key { price = 10 }
 total` },
 	"wasm components": { value: '[12586269025 ["a" "bc" "d"] 7]', code: `// a Rust crate compiled to a WebAssembly component, called like wasp: numbers, lists, objects
-use wasm "tests/fixtures/components/rust_demo.wasm" as rust
-c = rust.counter(5)
+use rust_demo.wasm
+c = rust_demo.counter(5)
 c.increment(2)
-[rust.fib(50), rust.words("a bc d"), c.value()]` },
+[rust_demo.fib(50), rust_demo.words("a bc d"), c.value()]` },
 	"C libraries": { value: '["stack" "/b/c" 3400449319 "1.3.2"]', code: `// C runs here too: wasi-libc's string functions, and zlib compiled to WebAssembly from its own sources
 use c
 import tests/fixtures/wasm/zlib
@@ -120,10 +143,12 @@ import tests/fixtures/wasm/zlib
 x=0
 for i in 1 upto 4 { x += i }
 x` },
-	"welcoming errors": { value: 'Error("say 3 == 3 is ambiguous; write (say 3) == 3 or say(3 == 3) at 3:5")', code: `// errors explain and offer the fix: click "I meant" (square 3 == 9 is clear: square needs a number)
+	"welcoming errors": { value: 'Error("say 3 == 3 is ambiguous; write (say 3) == 3 or say(3 == 3) at 3:5")', code: `// an ambiguity is an error, underlined: click "I meant" for your reading
 say(x) := x
 say 3 == 3` },
 	constants: { value: 'Error("pi is a constant at 2:1; fix: another name")', code: `// constants stay constant
 pi = 4
 2 * pi` },
+	// samples/kitchensink.wasp itself (samples.js loads after this file), tested natively by test_kitchensink
+	"kitchen sink": { value: '"all 31 checks pass"', get code() { return SAMPLES.kitchensink; } },
 };

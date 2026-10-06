@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 305] = [
+const CASES: [(&str, &str); 316] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -310,6 +310,17 @@ twice 4"#, r#"8"#),
 	(r#"add = @(a, b) a + b; add(3, 4)"#, r#"7"#),
 	(r#"[1,2,3] .^ 2"#, r#"[1 4 9]"#),
 	(r#"sq = @(x) x.^2; sq(3)"#, r#"9"#),
+	(r#"import math.*; sqrt(16)"#, r#"4"#),
+	(r#"Enum.map([1, 2, 3], fn x -> x * 2 end)"#, r#"[2 4 6]"#),
+	(r#"Enum.sum([1, 2, 3])"#, r#"6"#),
+	(r#"map (\x -> x * 2) [1, 2, 3]"#, r#"[2 4 6]"#),
+	(r#"(\x -> x + 1) 4"#, r#"5"#),
+	(r#"add = \a b -> a + b; add 2 3"#, r#"5"#),
+	(r#"sq = function(x) return x * x end; sq(3)"#, r#"9"#),
+	(r#"function f(x) { return x * 2 } f(3)"#, r#"6"#),
+	(r#"def f(x) { x * 2 } def g(x) { x + 1 } g(f(3))"#, r#"7"#),
+	(r#"func f(x int) int { return x * 2 } f(3)"#, r#"6"#),
+	(r#"function sq($x) { return $x * $x; } sq(3);"#, r#"9"#),
 ];
 
 /// The value as `warp eval` shows it: a text without its quotes
