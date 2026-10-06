@@ -131,7 +131,12 @@ declarations.rs keyword_definition (warp-dd's) before splitting methods from fie
 method (dropped when the method changes its object and so gives it back); the parser no longer reads a keyword
 method's body as field types (wasp_parser transform_fields_to_types: `k` of `side * k` was `type k`).
 
-Open (next batches): struct results and struct methods that change self (above), the `value{…}` constructor block and `value(name){…}`
-(wiki/constructor.md; today silently ignored), a `pop` method (changes the object and gives another value), a method
+Constructor block (classes-7, wiki/constructor.md): `value{ id = random() }` or `value {…}` in a class body is the
+function `P·value(self:P)` (class_methods::constructor_name), its field names read and set on self, giving self; a
+field only it sets is an optional field (ø until it runs). type_constructor passes every construction `P(…)`, `P{…}`
+of a class that has one through it, after the given fields are matched and defaults filled.
+
+Open (next batches): struct results and struct methods that change self (above), `value(name){…}` with constructor
+parameters (wiki/constructor.md), a `pop` method (changes the object and gives another value), a method
 named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), generics
 `class Box<T>`, mixins, a field named `pi` (card footgun-pi).
