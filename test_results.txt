@@ -859,6 +859,13 @@ PASSED:
   ✓ functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
   ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
+  ✓ functions::test_parameter_shapes::test_constructed_argument_is_checked
+  ✓ functions::test_parameter_shapes::test_field_type_is_checked
+  ✓ functions::test_parameter_shapes::test_hyphenated_field_with_a_type
+  ✓ functions::test_parameter_shapes::test_missing_required_field_is_a_compile_error
+  ✓ functions::test_parameter_shapes::test_shaped_parameter_reads_its_fields
+  ✓ functions::test_parameter_shapes::test_to_definition_with_a_shaped_parameter
+  ✓ functions::test_parameter_shapes::test_wiki_argument_example
   ✓ functions::test_partial_application::a_placeholder_makes_a_partial_application
   ✓ functions::test_partial_application::a_returned_zero_argument_closure_is_called
   ✓ functions::test_phrase_calls::test_prepositions_keep_their_meaning_elsewhere
@@ -867,6 +874,7 @@ PASSED:
   ✓ functions::test_picked_calls::a_function_picked_from_a_list_is_called
   ✓ functions::test_ported_calls::every_ported_call_form_keeps_its_value
   ✓ functions::test_ported_calls::linq_methods_work_with_a_note_naming_wasps_word
+  ✓ functions::test_ported_calls::r_words_work_with_a_note_naming_wasps_form
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
   ✓ functions::test_precomputed::effects_shared_state_and_failures_are_never_folded
@@ -1008,6 +1016,8 @@ PASSED:
   ✓ lists::test_dynamic_range::a_list_grows_from_empty_by_adding_lists
   ✓ lists::test_dynamic_range::a_range_with_variable_bounds_is_a_list
   ✓ lists::test_dynamic_range::a_recursive_list_function_in_a_ternary
+  ✓ lists::test_element_wise_scalar::element_wise_on_a_list_still_maps
+  ✓ lists::test_element_wise_scalar::element_wise_on_a_number_is_the_plain_operator
   ✓ lists::test_empty_items::a_list_keeps_its_empty_items
   ✓ lists::test_empty_items::an_empty_item_reads_as_empty_in_the_text_of_a_list
   ✓ lists::test_empty_list_argument::a_call_without_arguments_has_none
@@ -2111,6 +2121,7 @@ PASSED:
   ✓ types::test_class_aliases::foreign_operator_methods_say_the_wasp_name
   ✓ types::test_class_aliases::member_modifiers_and_field_keywords_are_dropped
   ✓ types::test_class_aliases::new_before_a_construction_is_superfluous
+  ✓ types::test_class_aliases::positional_braces_build_a_known_class
   ✓ types::test_class_aliases::the_wasp_words_give_no_note
   ✓ types::test_class_cases_ported::a_list_field_grows_by_add
   ✓ types::test_class_cases_ported::a_method_calls_another_method_without_self
@@ -2141,6 +2152,7 @@ PASSED:
   ✓ types::test_class_forms_ported::a_kotlin_primary_constructor_declares_the_fields
   ✓ types::test_class_forms_ported::a_python_class_attribute_is_shared
   ✓ types::test_class_forms_ported::a_python_class_with_init
+  ✓ types::test_class_forms_ported::a_ruby_class_with_initialize
   ✓ types::test_class_forms_ported::a_rust_struct_takes_the_methods_of_its_impl
   ✓ types::test_class_forms_ported::a_swift_struct_with_a_mutating_method
   ✓ types::test_class_forms_ported::a_typescript_class_with_typed_members
@@ -2244,8 +2256,10 @@ PASSED:
   ✓ types::test_struct_instances::a_field_read_of_a_struct_variable_searches_no_names
   ✓ types::test_struct_instances::a_field_write_of_a_struct_variable_sets_the_field
   ✓ types::test_struct_instances::a_field_write_of_another_kind_is_a_type_error
+  ✓ types::test_struct_instances::a_hyphenated_field_of_an_instance
   ✓ types::test_struct_instances::a_method_changing_its_struct_variable_keeps_the_struct
   ✓ types::test_struct_instances::a_method_of_a_struct_variable_takes_the_struct
+  ✓ types::test_struct_instances::a_quoted_field_of_an_instance
   ✓ types::test_struct_instances::a_struct_instance_gives_the_same_values
   ✓ types::test_struct_instances::an_int_field_holds_any_int
   ✓ types::test_struct_types::test_class_definition
@@ -2833,4 +2847,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2828 passed, 0 failed, 2828 total tested
+19 ignored, 2842 passed, 0 failed, 2842 total tested
