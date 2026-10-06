@@ -76,3 +76,4 @@ mod test_go_blocks;
 mod test_shared_values;
 mod test_after;
 mod test_parallel_map;
+mod test_implicit_await;
