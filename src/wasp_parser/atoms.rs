@@ -780,8 +780,12 @@ impl WaspParser {
 		};
 		// `class Box<T>{item:T}`: a field or parameter of a type parameter holds any value
 		let type_parameters = match self.current_char() {
+			// P157: wasp has no generic syntax, a ported `class Box<T>` compiles untyped, with a note
 			'<' => match self.parse_type_parameters() {
-				Ok(parameters) => parameters,
+				Ok(parameters) => {
+					crate::normalize::hint(&format!("{type_name}<{}>", parameters.join(", ")), &type_name, "wasp infers types: write the class without type parameters");
+					parameters
+				}
 				Err(message) => return error(&message),
 			},
 			_ => vec![],
