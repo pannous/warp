@@ -338,6 +338,11 @@ pub struct Imports {
 	pub ffi: bool,
 }
 
+impl Imports {
+	/// For a module that does not say which families it needs: a .wasm file, an imported module
+	pub const EVERY: Imports = Imports { host: true, wasi: true, ffi: true };
+}
+
 /// Link the import families a module needs: the host words, WASI, FFI (the task words come from tasks::link). `linker`
 /// is a fresh one: it becomes a copy of the linker this thread keeps for the engine and families (linking libm and
 /// the host words took most of a small program's run), plus the dynamic libraries of this module

@@ -154,6 +154,9 @@ fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, EffectReport};
 
+	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
+		return Err(clash.into_error());
+	}
 	let node = run_passes(node, &SOURCE_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());

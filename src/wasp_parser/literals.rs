@@ -2,6 +2,10 @@
 
 use super::*;
 
+const BACKTICK: char = '`';
+/// The "got it" topic of the hint on backtick texts
+const BACKTICK_TOPIC: &str = "backtick text";
+
 impl WaspParser {
 	/// Parse a complete value/expression - calls parse_expr(0) for operator chaining
 	pub(super) fn parse_value(&mut self) -> Node {
@@ -56,7 +60,12 @@ impl WaspParser {
 		let (quote_line, quote_column) = self.get_position();
 		self.advance(); // skip opening quote
 
-		let interpolates = quote == '"' && !self.options.data_mode && !self.options.xml_mode && !self.options.wit_mode;
+		// `Hello ${name}`: a JavaScript template literal is wasp's interpolated text (card text-backtick)
+		let interpolates = (quote == '"' || quote == BACKTICK) && !self.options.data_mode && !self.options.xml_mode && !self.options.wit_mode;
+		if quote == BACKTICK {
+			set_hint_position(quote_line, quote_column);
+			crate::diagnostic::educate_once(BACKTICK_TOPIC, "`…${x}…`", "\"…\\(x)…\"", "wasp writes texts in double quotes");
+		}
 		let mut s = String::new();
 		// the same literal in injection::parts syntax (holes `${expr}`, literal dollars `$$`), kept while it has a hole
 		let mut template = String::new();

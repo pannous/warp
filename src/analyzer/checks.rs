@@ -469,6 +469,36 @@ pub(super) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 	}
 }
 
+/// `sqrt(x) := …`, `def abs(x): …`: a prefix operator word reads as the operator, so the definition could never be
+/// called (P141); it arrives as `(√ ø x) := …`. Checked on the source, before a pass reads the operator
+pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
+	let operator_word = |head: &Node| match head.drop_meta() {
+		Node::Key(empty, op @ (Op::Sqrt | Op::Cbrt | Op::Abs | Op::Not), _) if empty.is_nothing() => Some(*op),
+		_ => None,
+	};
+	let mut clash = None;
+	program.visit(&mut |node| {
+		if clash.is_some() {
+			return;
+		}
+		let defined = match node {
+			Node::Key(head, Op::Define | Op::Assign, _) => operator_word(head),
+			Node::List(items, _, _) => match (items.first(), items.get(1).map(Node::drop_meta)) {
+				(Some(def), Some(Node::Key(head, Op::Colon, _))) if crate::operators::is_function_keyword(&crate::declarations::word(def)) => operator_word(head),
+				_ => None,
+			},
+			_ => None,
+		};
+		clash = defined.map(|op| (node.clone(), op));
+	});
+	let (definition, op) = clash?;
+	let word = OPERATOR_WORDS.iter().find(|(known, _)| *known == op).map_or("this word", |(_, word)| *word);
+	Some(Diagnostic::at(&definition, format!("{word} is an operator ({op}); rename your function")))
+}
+
+/// The words the parser reads as prefix operators (wasp_parser lookahead.rs peek_prefix_operator)
+const OPERATOR_WORDS: [(Op, &str); 4] = [(Op::Sqrt, "sqrt"), (Op::Cbrt, "cbrt"), (Op::Abs, "abs"), (Op::Not, "not")];
+
 /// `double := it*2` or `double(x) := …`: a type word names a type, never a function (user decision P20)
 pub(super) fn check_type_word_functions(program: &Node) -> Option<Diagnostic> {
 	let mut ctx = Context::new();

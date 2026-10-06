@@ -15,6 +15,9 @@ use std::collections::{HashMap, HashSet};
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
 const MAP_WORD: &str = "map";
 const ALL_WORD: &str = "all";
+/// Methods that append to a list variable (analyzer APPEND_METHODS)
+const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
+const EXTREMUM_WORDS: [&str; 2] = ["max", "min"];
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
 const BROADCAST_ITEM: &str = "broadcast_item";
@@ -71,8 +74,15 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 /// `square all xs` (wiki/all.md): `all` splices the list into its items, the function applies to each
 fn all_calls(node: Node) -> Node {
 	match node {
-		Node::List(items, Bracket::None, Separator::Space) if all_call_parts(&items).is_some() => {
+		// also `square(all xs)`, whose call items are `square all xs`
+		Node::List(items, Bracket::None | Bracket::Round, Separator::Space | Separator::None) if all_call_parts(&items).is_some() => {
 			let (function, list) = all_call_parts(&items).expect("guarded");
+			// a list literal spliced at compile time: `square all [[1, 2], [3]]` is `[square [1, 2], square [3]]`,
+			// each call broadcast again
+			if let Node::List(elements, Bracket::Square, element_separator) = list.drop_meta() {
+				let calls = elements.iter().map(|element| Node::List(vec![function.clone(), all_calls(element.clone())], Bracket::None, Separator::Space)).collect();
+				return Node::List(calls, Bracket::Square, element_separator.clone());
+			}
 			let item = Node::Symbol(ALL_ITEM.to_string());
 			let call = Node::List(vec![function.clone(), item.clone()], Bracket::Round, Separator::None);
 			let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(call));
@@ -82,13 +92,23 @@ fn all_calls(node: Node) -> Node {
 	}
 }
 
+/// `all xs` as an argument: xs
+fn all_marked(argument: &Node) -> Option<&Node> {
+	match argument.drop_meta() {
+		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && matches!(words[0].drop_meta(), Node::Symbol(word) if word == ALL_WORD) => Some(&words[1]),
+		_ => None,
+	}
+}
+
 /// The function and the list of `f all xs`, also as the parser nests a known function's argument, `f (all xs)`
 fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
 	let is_all = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == ALL_WORD);
 	match items {
 		[function, all, list] if is_all(all) => Some((function, list)),
-		[function, phrase] => match phrase.drop_meta() {
-			Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && is_all(&words[0]) => Some((function, &words[1])),
+		// `square (all xs)` as the parser nests a known function's argument, `(square all) xs` as a value
+		[first, second] => match (first.drop_meta(), second.drop_meta()) {
+			(_, Node::List(words, Bracket::None, Separator::Space)) if words.len() == 2 && is_all(&words[0]) => Some((first, &words[1])),
+			(Node::List(words, Bracket::None, Separator::Space), _) if words.len() == 2 && is_all(&words[1]) => Some((&words[0], second)),
 			_ => None,
 		},
 		_ => None,
@@ -116,6 +136,11 @@ fn rules_out_a_truth_value(parameter: &Node) -> bool {
 	}
 }
 
+/// `sum`, `max`, `upper` …: a library word of one value, not redefined by the program
+fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(name) if !arities.contains_key(name) && (crate::library_words::is_library_word(name) || EXTREMUM_WORDS.contains(&name.as_str())))
+}
+
 fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
 	match node.drop_meta() {
 		Node::Symbol(name) => arities.get(name).copied(),
@@ -136,6 +161,15 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			let nested = Node::List(items.split_off(inner), Bracket::None, Separator::Space);
 			items.push(nest_prefix_calls(nested, arities));
 			nest_prefix_calls(Node::List(items, bracket, separator), arities)
+		}
+		// `sum square [1 2 3]`, `sum(square xs)`: a library word of one value takes the call of a user function after it
+		Node::List(items, bracket @ (Bracket::None | Bracket::Round), separator @ (Separator::Space | Separator::None))
+			if items.len() > 2 && is_one_value_word(&items[0], arities) && arity(&items[1]).is_some_and(|takes| items.len() - 2 <= takes.most) =>
+		{
+			let mut items = items;
+			let call = Node::List(items.split_off(1), Bracket::None, Separator::Space);
+			items.push(nest_prefix_calls(call, arities));
+			Node::List(items, bracket, separator)
 		}
 		// `square 3 == 9` parses as `square (3 == 9)`. P143 (user): a parameter typed as no truth value takes the call,
 		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error
@@ -217,7 +251,8 @@ pub fn lower(program: Node) -> Node {
 	let mut assigned = HashMap::new();
 	collect_list_variables(&program, &mut assigned);
 	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
-	Broadcast { functions: broadcasting, list_variables }.rewrite(program)
+	let scalar_parameters = found.iter().map(|definition| (definition.name.clone(), definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect())).collect();
+	Broadcast { functions: broadcasting, list_variables, scalar_parameters }.rewrite(program)
 }
 
 /// `map(list, broadcast_item => applied(broadcast_item))`
@@ -230,20 +265,29 @@ fn each_item(list: Node, applied: impl Fn(Node) -> Node) -> Node {
 /// `square := it*it`: a function of the implicit parameter `it`
 fn implicit_definitions(node: &Node, found: &mut Vec<Definition>) {
 	node.visit(&mut |part| {
-		if let Node::Key(target, Op::Define, body) = part {
-			if let Node::Symbol(name) = target.drop_meta() {
-				let params = vec![Node::Symbol(IMPLICIT_PARAMETER.to_string())];
-				found.push(Definition { name: name.clone(), params, body: body.as_ref().clone() });
-			}
+		let Node::Key(target, op @ (Op::Define | Op::Assign), body) = part else { return };
+		let Node::Symbol(name) = target.drop_meta() else { return };
+		// `f = x => x + 1`: lambdas.rs makes it the definition f(x) later
+		if let Some(lambda) = crate::lambdas::arrow_lambda(body) {
+			let params = lambda.params.iter().map(|param| Node::Symbol(param.clone())).collect();
+			found.push(Definition { name: name.clone(), params, body: lambda.body });
+		} else if *op == Op::Define {
+			let params = vec![Node::Symbol(IMPLICIT_PARAMETER.to_string())];
+			found.push(Definition { name: name.clone(), params, body: body.as_ref().clone() });
 		}
 	});
 }
 
 fn needs_a_scalar(definition: &Definition) -> bool {
 	let [param] = definition.params.as_slice() else { return false };
+	takes_a_scalar(param, &definition.body)
+}
+
+/// A parameter declared with a scalar type, or undeclared and an arithmetic operand of the body
+fn takes_a_scalar(param: &Node, body: &Node) -> bool {
 	match param.drop_meta() {
 		Node::Key(_, Op::Colon, type_node) => annotated_kind(type_node).is_some_and(|kind| SCALAR_KINDS.contains(&kind)),
-		Node::Symbol(name) => is_arithmetic_operand(&definition.body, name),
+		Node::Symbol(name) => is_arithmetic_operand(body, name),
 		_ => false,
 	}
 }
@@ -261,10 +305,35 @@ fn is_arithmetic_operand(body: &Node, name: &str) -> bool {
 
 /// Variable → whether every value assigned to it is a list literal that is no object
 fn collect_list_variables(node: &Node, assigned: &mut HashMap<String, bool>) {
+	// `xs = []` (which parses as ø) is a list once the program appends to xs: `xs.add(i)`, `xs = xs + [i]`
+	let mut appended: HashSet<String> = HashSet::new();
+	node.visit(&mut |part| match part {
+		Node::Key(list, Op::Dot, call) => {
+			if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if APPEND_METHODS.contains(&method.as_str())) {
+					appended.insert(name.clone());
+				}
+			}
+		}
+		Node::Key(target, Op::Assign, value) => {
+			if let (Node::Symbol(name), Node::Key(left, Op::Add, right)) = (target.drop_meta(), value.drop_meta()) {
+				if matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)) {
+					appended.insert(name.clone());
+				}
+			}
+		}
+		_ => {}
+	});
 	node.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
 			if let Node::Symbol(name) = target.drop_meta() {
-				let is_list = matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if !items.iter().any(is_pair));
+				let is_list = match value.drop_meta() {
+					Node::List(items, Bracket::Square, _) => !items.iter().any(is_pair),
+					Node::Empty => appended.contains(name),
+					// `xs = xs + [i]`
+					Node::Key(left, Op::Add, right) => matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)),
+					_ => false,
+				};
 				*assigned.entry(name.clone()).or_insert(true) &= is_list;
 			}
 		}
@@ -282,6 +351,8 @@ fn call(name: &str, argument: Node) -> Node {
 struct Broadcast {
 	functions: HashSet<String>,
 	list_variables: HashSet<String>,
+	/// Per function of several parameters: which parameters take one value (`add(a, b) := a + b`: both)
+	scalar_parameters: HashMap<String, Vec<bool>>,
 }
 
 impl Broadcast {
@@ -296,7 +367,9 @@ impl Broadcast {
 					}
 					_ => self.rewrite(item),
 				}).collect();
-				self.broadcast_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
+				self.broadcast_call(&items, &bracket, &separator)
+					.or_else(|| self.broadcast_one_argument(&items, &bracket, &separator))
+					.unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, op, right) if matches!(left.drop_meta(), Node::Empty) && SCALAR_OPERATORS.contains(&op) => {
 				let right = self.rewrite(*right);
@@ -323,6 +396,42 @@ impl Broadcast {
 			}
 			Node::Symbol(variable) if self.list_variables.contains(variable) => Some(each_item(argument.clone(), |item| call(name, item))),
 			_ => None,
+		}
+	}
+
+	/// `add [1 2] 10`, `add(10, xs)`, `add(all xs, 10)`, `square(all xs)`: a call whose one list argument goes to a
+	/// parameter of one value (or is marked `all`, wiki/all.md) maps over that list, the other arguments as they are
+	fn broadcast_one_argument(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		let is_call = matches!((bracket, separator), (Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space));
+		let (head, arguments) = items.split_first()?;
+		let Node::Symbol(name) = head.drop_meta() else { return None };
+		if !is_call || arguments.is_empty() {
+			return None;
+		}
+		let marked: Vec<usize> = (0..arguments.len()).filter(|index| all_marked(&arguments[*index]).is_some()).collect();
+		let (index, list) = match marked.as_slice() {
+			[index] => (*index, all_marked(&arguments[*index]).expect("marked").clone()),
+			[] => {
+				let scalar = self.scalar_parameters.get(name).filter(|scalars| scalars.len() == arguments.len() && arguments.len() > 1)?;
+				let lists: Vec<usize> = (0..arguments.len()).filter(|index| scalar[*index] && self.is_list(&arguments[*index])).collect();
+				let [index] = lists.as_slice() else { return None };
+				(*index, arguments[*index].clone())
+			}
+			_ => return None,
+		};
+		Some(each_item(list, |item| {
+			let mut call = items.to_vec();
+			call[index + 1] = item;
+			Node::List(call, Bracket::Round, Separator::None)
+		}))
+	}
+
+	/// A list literal that is no object, or a variable only ever assigned one
+	fn is_list(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_pair),
+			Node::Symbol(variable) => self.list_variables.contains(variable),
+			_ => false,
 		}
 	}
 

@@ -10,6 +10,7 @@ import functools, http.server, json, os, re, subprocess, sys, threading, time, u
 
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "8733"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", "2")
+PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
 SESSION = "warp-browser-tests"
 POLL_SECONDS = 3
 BINARY_PATH = "/__tests__.wasm"
@@ -116,7 +117,7 @@ def main():
 	binary, arguments = sys.argv[1], [argument for argument in sys.argv[2:] if not argument.startswith(IGNORED_ARGUMENTS)]
 	build_components()
 	server = serve(binary)
-	query = urllib.parse.urlencode({"wasm": BINARY_PATH, "args": json.dumps(arguments), "workers": WORKERS})
+	query = urllib.parse.urlencode({"wasm": BINARY_PATH, "args": json.dumps(arguments), "workers": WORKERS, **({"perWorker": PER_WORKER} if PER_WORKER else {})})
 	browser("open", f"http://127.0.0.1:{PORT}/web/playground/tests.html?{query}")
 	summary, shown, changed = None, "", time.time()
 	while summary is None:
@@ -142,6 +143,8 @@ def main():
 		print("\nfailures:")
 		for failure in summary["failed"]:
 			print(f"    {failure['name']}")
+	if summary.get("memoryResets"):
+		print(f"\nWasm memory ran out {len(summary['memoryResets'])} times; all workers were replaced and these tests ran again: {', '.join(summary['memoryResets'])}")
 	verdict = "FAILED" if summary["failed"] else "ok"
 	print(f"\ntest result: {verdict}. {summary['passed']} passed; {len(summary['failed'])} failed; {summary['ignored']} ignored; "
 		f"finished in {summary['seconds']:.2f}s (in the browser)")
