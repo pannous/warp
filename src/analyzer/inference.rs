@@ -341,12 +341,23 @@ pub(crate) fn raises_error(branch: &Node) -> bool {
 	}
 }
 
-pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
-	match branch.drop_meta() {
-		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => branch_kind(&statements[statements.len() - 1], scope),
-		// a branch yielding ø (`if c then 3 else ø`) is a Node, as a variable holding ø is
-		other => held_kind(other, || infer_type(other, scope)),
+/// The expression a block `{a; b}` yields: its last statement; `{print b}` is one expression, the call print(b), not
+/// the statements `print` and `b`
+pub(crate) fn block_result(block: &Node) -> Option<Node> {
+	match block.drop_meta() {
+		Node::List(words, Bracket::Curly, Separator::Space) if words.len() > 1 => Some(Node::List(words.clone(), Bracket::None, Separator::Space)),
+		Node::List(statements, Bracket::Curly, _) => statements.last().cloned(),
+		_ => None,
 	}
+}
+
+pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
+	if let Some(result) = block_result(branch) {
+		return branch_kind(&result, scope);
+	}
+	// a branch yielding ø (`if c then 3 else ø`) is a Node, as a variable holding ø is
+	let branch = branch.drop_meta();
+	held_kind(branch, || infer_type(branch, scope))
 }
 
 /// Either branch a reference type (Text, Symbol, List…) or a character: the value is a Node, else a number

@@ -43,3 +43,10 @@ fn a_once_handler_runs_at_the_first_raise() {
 	is!("n = 0; def f() { raise ping }; once ping {n += 1}; f(); f(); n", 1);
 	is!("level = 0; once alarm {level = event.level}; raise alarm{level: 3}; raise alarm{level: 5}; level", 3);
 }
+
+// the example of notes/signals.md: a derived total, a whenever printing with juxtaposed words
+#[test]
+fn the_signals_note_example_runs() {
+	is!("price = 3; count = 2; total := price * count; whenever total > 10 { print \"big order: \" total }; count = 5; total", 15);
+	is!("price = 3\ncount = 2\ntotal := price * count\nwhenever total > 10 { print \"big order: \" total }\non change total { print \"total is now \" value }\ncount = 5\ntotal", 15);
+}
