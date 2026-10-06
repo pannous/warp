@@ -647,6 +647,20 @@ impl Node {
 		}
 	}
 
+	/// The node with `rewrite` applied to its direct children, in order: the items of a list, the left then the right of
+	/// a key, the node under metadata; any other node as it is. A lowering pass's recursion over the rest of the tree
+	pub fn map_children(self, mut rewrite: impl FnMut(Node) -> Node) -> Node {
+		match self {
+			List(items, bracket, separator) => List(items.into_iter().map(&mut rewrite).collect(), bracket, separator),
+			Key(left, op, right) => {
+				let left = rewrite(*left);
+				Key(Box::new(left), op, Box::new(rewrite(*right)))
+			}
+			Meta { node, data } => Meta { node: Box::new(rewrite(*node)), data },
+			other => other,
+		}
+	}
+
 	pub fn drop_meta(&self) -> &Node {
 		match self {
 			Meta { node, .. } => node.drop_meta(),

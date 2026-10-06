@@ -337,10 +337,7 @@ impl Site {
 				site.bind(loop_variable(&items).unwrap_or_default());
 				Node::List(items.into_iter().map(|item| lower(&site, item)).collect(), bracket, separator)
 			}
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| lower(self, item)).collect(), bracket, separator),
-			Node::Key(left, op, right) => Node::Key(Box::new(lower(self, *left)), op, Box::new(lower(self, *right))),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(lower(self, *node)), data },
-			other => other,
+			other => other.map_children(|child| lower(self, child)),
 		}
 	}
 }

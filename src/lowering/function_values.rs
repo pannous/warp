@@ -301,10 +301,7 @@ fn round_calls(node: Node, function_params: &[String]) -> Node {
 		Node::List(items, Bracket::None, Separator::Space) if items.len() > 1 && matches!(items[0].drop_meta(), Node::Symbol(name) if function_params.contains(name)) => {
 			Node::List(items.into_iter().map(|item| round_calls(item, function_params)).collect(), Bracket::Round, Separator::None)
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| round_calls(item, function_params)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(round_calls(*left, function_params)), op, Box::new(round_calls(*right, function_params))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(round_calls(*node, function_params)), data },
-		other => other,
+		other => other.map_children(|child| round_calls(child, function_params)),
 	}
 }
 

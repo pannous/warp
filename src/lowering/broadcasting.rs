@@ -43,10 +43,7 @@ fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -
 			items.push(Node::List(arguments, Bracket::Square, Separator::Space));
 			Node::List(items, Bracket::None, Separator::Space)
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| gather_arguments(item, single, gathered)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(gather_arguments(*left, single, gathered)), op, Box::new(gather_arguments(*right, single, gathered))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(gather_arguments(*node, single, gathered)), data },
-		other => other,
+		other => other.map_children(|child| gather_arguments(child, single, gathered)),
 	}
 }
 
