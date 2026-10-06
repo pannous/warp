@@ -39,3 +39,17 @@ fn a_change_through_a_list_method_runs_the_listeners() {
 	is!("n = 0; x = [1]; on change x { n += 1 }; x.add(2); n", 1);
 	is!("n = 0; xs = [1]; f() := { global xs; xs.add(3) }; on set xs { n += 1 }; f(); n", 1);
 }
+
+// a getter (`b := a * 2`) read in a method's argument is its value, not a function
+#[test]
+fn a_derived_value_in_a_method_argument_is_its_value() {
+	is!("a = 1; b := a * 2; log = []; on change a { log.add([b, a]) }; a = 2; log#1#1", 4);
+}
+
+// a listener made in a function changes the program's counter
+#[test]
+fn a_subscribed_listener_changes_a_main_level_variable() {
+	is!("n = 0; watch(s) := on change s { n += 1 }; x = 1; watch(x); x = 2; x = 3; n", 2);
+	is!("n = 0; watch(s) := { global n; on change s { n += 1 } }; x = 1; watch(x); x = 2; n", 1);
+	is!("n = 0; watch(s) := on change s { n += 1 }; x = 1; for i in 1 to 3 { watch(x) }; x = 2; n", 3);
+}
