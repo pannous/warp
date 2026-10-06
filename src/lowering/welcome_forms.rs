@@ -18,12 +18,14 @@ const LAMBDA_WORD: &str = "lambda";
 const LET_WORD: &str = "let";
 const IN_WORD: &str = "in";
 const DESTRUCTURED_OBJECT: &str = "object·";
+const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
+const CALL_METHOD: &str = "call";
 
 pub fn lower(node: Node) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = python_lambdas(items.into_iter().map(lower).collect());
-			if let Some(lambda) = anonymous_function(&items).or_else(|| assigned_braceless_function(&items)) {
+			if let Some(lambda) = anonymous_function(&items).or_else(|| assigned_braceless_function(&items)).or_else(|| ruby_lambda(&items)) {
 				return lambda;
 			}
 			if let Some(binding) = let_binding(&items) {
@@ -36,6 +38,10 @@ pub fn lower(node: Node) -> Node {
 		Node::Key(parameters, Op::FatArrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
 			lambda(parameters, Node::List([fields, vec![lower(*body)]].concat(), Bracket::Curly, Separator::Semicolon))
+		}
+		// Ruby's `f.call(3)`: the call `f(3)`
+		Node::Key(function, Op::Dot, call) if called_arguments(&call).is_some() && matches!(function.drop_meta(), Node::Symbol(_)) => {
+			Node::List([vec![*function], called_arguments(&call).expect("guarded")].concat(), Bracket::Round, Separator::None)
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
@@ -172,6 +178,20 @@ fn destructured_parameters(parameters: &Node) -> Option<(Node, Vec<Node>)> {
 		_ => parameter,
 	}).collect();
 	(!fields.is_empty()).then(|| (Node::List(parameters, Bracket::Round, separator), fields))
+}
+
+/// Ruby's `lambda { |x| x * x }`, `proc { |x| … }`: the block, a lambda itself
+fn ruby_lambda(items: &[Node]) -> Option<Node> {
+	let [word, block] = items else { return None };
+	let is_lambda_word = RUBY_LAMBDA_WORDS.iter().any(|lambda_word| is_word(word, lambda_word));
+	(is_lambda_word && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))).then(|| block.clone())
+}
+
+/// `call(3)`, `call 3`: the arguments of Ruby's `.call`
+fn called_arguments(call: &Node) -> Option<Vec<Node>> {
+	let Node::List(items, _, _) = call.drop_meta() else { return is_word(call, CALL_METHOD).then(Vec::new) };
+	let [word, arguments @ ..] = items.as_slice() else { return None };
+	is_word(word, CALL_METHOD).then(|| arguments.iter().cloned().map(lower).collect())
 }
 
 /// `function (a, b)`: the parameters after a function keyword with no name

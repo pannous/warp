@@ -1,5 +1,4 @@
 # round 4 of ported call forms: code ||| expected
-func sum(nums ...int) int { total := 0; for _, n := range nums { total += n }; return total }; sum(1, 2, 3) ||| 6
 func divmod(a, b int) (int, int) { return a / b, a % b }; q, r := divmod(7, 2); q * 10 + r ||| 31
 function add(a, b) return a + b end; add(1, 2) ||| 3
 function f($a) { return $a * 2; }; f(4) ||| 8

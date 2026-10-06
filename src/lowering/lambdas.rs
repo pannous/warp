@@ -203,6 +203,8 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 	match left.drop_meta() {
 		Node::Symbol(name) => Some(vec![name.clone()]),
 		Node::Empty => Some(vec![]), // `() => body`
+		// Kotlin's `{ x: Int -> … }`
+		Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_)) => Some(vec![name.name()]),
 		Node::List(items, _, _) => items
 			.iter()
 			.map(|item| match item.drop_meta() {
@@ -219,27 +221,47 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 /// `x=>body`, `(x y)->body` and the same in a group `(x=>body)` or a block
 pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 	match node.drop_meta() {
-		Node::Key(head, Op::Arrow | Op::FatArrow, body) => {
-			let (left, result_type) = match head.drop_meta() {
-				Node::Key(parameters, Op::Colon, result) if matches!(parameters.drop_meta(), Node::List(_, Bracket::Round, _)) => (parameters.as_ref(), Some(result.as_ref().clone())),
-				_ => (head.as_ref(), None),
-			};
-			let params = parameter_names(left)?;
-			let body = subtract_kebab_parameters(body.as_ref().clone(), &params);
-			let written: Vec<Node> = match left.drop_meta() { Node::List(items, _, _) => items.clone(), other => vec![other.clone()] };
-			let declares = written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon | Op::Assign, _)));
-			Some(Lambda { params, body, written: if declares { written } else { vec![] }, result_type })
-		}
+		Node::Key(head, Op::Arrow | Op::FatArrow, body) => arrow_parts(head, body),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => arrow_lambda(&items[0]),
-		// Kotlin `{ x -> x*2 }`, Ruby `{ |x| x*2 }`, Swift `{ x in x*2 }` and `{ $0 * 2 }`
+		// Kotlin `{ x -> x*2 }`, `{ a: Int, b: Int -> a + b }`, Ruby `{ |x| x*2 }`, Swift `{ x in x*2 }` and `{ $0 * 2 }`
 		Node::List(items, Bracket::Curly, _) => match items.as_slice() {
 			[single] => arrow_lambda(single),
+			[leading @ .., last] => match last.drop_meta() {
+				Node::Key(head, Op::Arrow, body) => {
+					let parameters = Node::List(leading.iter().chain([head.as_ref()]).cloned().collect(), Bracket::Round, Separator::Colon);
+					arrow_parts(&parameters, body)
+				}
+				_ => None,
+			},
 			_ => None,
 		}
 		.or_else(|| swift_closure(items))
 		.or_else(|| block_lambda(node).filter(|lambda| lambda.params.first().is_some_and(|param| param.starts_with(SHORTHAND_MARK)))),
 		_ => None,
 	}
+}
+
+/// The lambda of `head => body`: TypeScript's result type `(a: number): number => …`, Swift's `(x: Int) -> Int in body`
+fn arrow_parts(head: &Node, body: &Node) -> Option<Lambda> {
+	let (left, result_type) = match head.drop_meta() {
+		Node::Key(parameters, Op::Colon, result) if matches!(parameters.drop_meta(), Node::List(_, Bracket::Round, _)) => (parameters.as_ref(), Some(result.as_ref().clone())),
+		_ => (head, None),
+	};
+	let (body, result_type) = match body.drop_meta() {
+		Node::List(parts, Bracket::None, separator @ Separator::Space) if matches!(left.drop_meta(), Node::List(_, Bracket::Round, _)) => match parts.as_slice() {
+			[result, word, rest @ ..] if !rest.is_empty() && matches!(word.drop_meta(), Node::Symbol(word) if word == SWIFT_IN) => {
+				let body = match rest { [single] => single.clone(), many => Node::List(many.to_vec(), Bracket::None, separator.clone()) };
+				(body, Some(result.clone()))
+			}
+			_ => (body.clone(), result_type),
+		},
+		_ => (body.clone(), result_type),
+	};
+	let params = parameter_names(left)?;
+	let body = subtract_kebab_parameters(body, &params);
+	let written: Vec<Node> = match left.drop_meta() { Node::List(items, _, _) => items.clone(), other => vec![other.clone()] };
+	let declares = written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon | Op::Assign, _)));
+	Some(Lambda { params, body, written: if declares { written } else { vec![] }, result_type })
 }
 
 /// `{it*it}`: a block that is no object; its parameter is `it` when the body uses it
