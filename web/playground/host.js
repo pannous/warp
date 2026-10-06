@@ -17,6 +17,8 @@ const RAND_MAX = 2147483647;
 const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a % b, ceil: Math.ceil, floor: Math.floor };
 
 const HTTP_NOT_FOUND = "HTTP status 404";
+const MODULE_PATH = /\.(wasm|wat)$/; // src/wasm_modules.rs MODULE_EXTENSIONS
+const SETTER_PREFIX = "set "; // src/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 
 const utf8 = new TextEncoder();
@@ -292,7 +294,7 @@ function programImports(holder, hooks) {
 	// anything else (native FFI libraries) is missing in the browser: say which, when the program calls it
 	const missing = (module, name) => () => { throw new Error(`${module}.${name} is not available in the browser`); };
 	return new Proxy(known, {
-		get: (modules, module) => new Proxy(modules[module] ?? {}, {
+		get: (modules, module) => new Proxy(modules[module] ?? (MODULE_PATH.test(module) ? moduleImports(holder, hooks, module) : {}), {
 			get: (functions, name) => functions[name] ?? missing(module, String(name)),
 		}),
 	});
@@ -689,6 +691,34 @@ function exactHandle(module, numerator, denominator) {
 		return n < 0n ? module.exact_sub(0n, magnitude) : magnitude;
 	};
 	return denominator === 1n ? integer(numerator) : module.exact_div(integer(numerator), integer(denominator));
+}
+
+// the exports of a WebAssembly module the program imports by path (src/wasm_modules.rs link): instantiated once per
+// run at the first call, with its own imports linked like the program's; a global reads through a getter and is set
+// through `set g`
+function moduleImports(holder, hooks, path) {
+	const instance = () => {
+		const modules = holder.run.wasmModules ??= new Map();
+		const file = new URL(path, FILE_ROOT).href; // one instance however the path is spelled
+		if (!modules.has(file)) {
+			if (file.endsWith(".wat")) throw new Error(`${path}: a module in WAT text needs the native build`);
+			const moduleHolder = { warnings: holder.warnings, run: holder.run };
+			const module = new WebAssembly.Module(readBytes(file));
+			moduleHolder.exports = new WebAssembly.Instance(module, programImports(moduleHolder, hooks)).exports;
+			modules.set(file, moduleHolder.exports);
+		}
+		return modules.get(file);
+	};
+	return new Proxy({}, {
+		get: (_, name) => (...values) => {
+			const exports = instance();
+			if (name.startsWith(SETTER_PREFIX)) return (exports[name.slice(SETTER_PREFIX.length)].value = values[0]);
+			const member = exports[name];
+			if (member instanceof WebAssembly.Global) return member.value;
+			if (!member) throw new Error(`${path} exports no ${name}`);
+			return member(...values);
+		},
+	});
 }
 
 // run a compiled program: the outcome src/web.rs run_outcome reads

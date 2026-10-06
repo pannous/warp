@@ -145,8 +145,7 @@ passes them to it, on an instance of the declared defaults (ø for the other fie
 fields; a field it sets that is no parameter becomes a field.
 
 Open (next batches): struct elements of lists (above), a `pop` method (changes the object and gives another value), a method
-named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), mixins, a field named `pi` (card footgun-pi, P130: the class's own field), a method named `double` (a type word).
-
+named like a type word (`double()`: "double is a type"), mixins, a field named `pi` (card footgun-pi, P130: the class's own field), 
 Extension methods (classes-11, card functions-extension, declarations.rs): Kotlin `fun Int.twice() = this * 2` and
 Swift `extension Int { func twice() -> Int { self * 2 } }` define `twice(this:Int)` (`self` when the body says self),
 so `3.twice()` calls it as a method like any function whose first parameter is the receiver.
@@ -154,3 +153,11 @@ so `3.twice()` calls it as a method like any function whose first parameter is t
 Generic classes (classes-12, wasp_parser atoms.rs): `class Box<T>{item:T}`, `class Pair<A, B>{…}`: a field of a type
 parameter is `any` (a Node field), a method parameter of one is untyped; `Box<int>(3)` and `Box<int>{item:3}`
 construct a Box (the type arguments of a declared class are read past, not checked yet).
+
+Methods named like a type word (classes-13, P142: class methods are always allowed): `double() := x*2` in a class
+body is the method `double·method` (class_methods renamed_type_word_methods), its calls `c.double()`, `c.double` and
+`double()` in the class body renamed too; `double(3)` and `3.double()` stay the conversion.
+
+Properties (classes-14, wiki/property.md): `get age() {…}` is the getter `age := …` (read `p.age` like a field),
+`set age(v) {…}` the method `age·set(self, v)`; the wasp form `age:{2026 - birthday} set{birthday = 2026 - it}` both,
+`it` the new value. `p.age = v` of a variable p runs it: `p = age·set(p, v)` (class_methods setter_calls).

@@ -16,6 +16,7 @@ const includeIgnored = libtestArgs.includes("--include-ignored");
 const onlyIgnored = libtestArgs.includes("--ignored");
 const filters = libtestArgs.filter(arg => !["--include-ignored", "--ignored", "--nocapture", "--test-threads"].includes(arg) && !arg.startsWith("--test-threads="));
 const workerCount = Number(parameters.get("workers") ?? DEFAULT_WORKERS);
+const testsPerWorker = Number(parameters.get("perWorker") ?? TESTS_PER_WORKER);
 
 const $ = id => document.getElementById(id);
 const results = [];
@@ -49,12 +50,24 @@ function showFailure(result) {
 	$("failures").append(item);
 }
 
+// Chrome holds ~124 live Wasm memories per page, all its Workers together, and an isolate that runs out collects only
+// the instances it dropped itself (probes/wasm_memory_limit.html): another worker's garbage fails an instance here
+const OUT_OF_WASM_MEMORY = /Cannot allocate Wasm memory/;
+const runners = new Set(); // the busy runners, each replacing its worker on `replace`
+const memoryResets = []; // the tests that ran out of Wasm memory and ran again on fresh workers
+
 // one worker running tests from the shared queue until it is empty
 function runner(queue, total) {
 	return new Promise(resolve => {
 		let worker, current, timer, testsOnWorker;
 		const record = result => {
 			clearTimeout(timer);
+			if (OUT_OF_WASM_MEMORY.test(result.output) && !current.retried) {
+				// every worker is replaced, which frees its memories at once, and every test in flight runs again, this one too
+				current.retried = true;
+				memoryResets.push(current.name);
+				return runners.forEach(busy => busy.replace());
+			}
 			running.delete(result.name);
 			results.push(result);
 			if (!result.passed && !result.skipped) showFailure(result);
@@ -67,17 +80,9 @@ function runner(queue, total) {
 			worker.onmessage = ({ data }) => data.type === "result" && record(data);
 			worker.postMessage({ type: "compile", url: wasmUrl });
 		};
-		const next = () => {
-			current = queue.shift();
-			if (!current) {
-				worker.terminate();
-				return resolve();
-			}
-			if (testsOnWorker === TESTS_PER_WORKER) {
-				worker.terminate();
-				start();
-			}
+		const send = () => {
 			testsOnWorker++;
+			clearTimeout(timer);
 			timer = setTimeout(() => {
 				worker.terminate(); // a test that does not stop blocks its worker: replace it
 				start();
@@ -86,6 +91,28 @@ function runner(queue, total) {
 			running.add(current.name);
 			worker.postMessage({ type: "run", name: current.name, ignored: current.ignored });
 		};
+		const thisRunner = {
+			// a fresh worker, given the test in flight again
+			replace: () => {
+				worker.terminate();
+				start();
+				if (running.has(current.name)) send();
+			},
+		};
+		const next = () => {
+			current = queue.shift();
+			if (!current) {
+				runners.delete(thisRunner);
+				worker.terminate();
+				return resolve();
+			}
+			if (testsOnWorker >= testsPerWorker) {
+				worker.terminate();
+				start();
+			}
+			send();
+		};
+		runners.add(thisRunner);
 		start();
 		next();
 	});
@@ -105,6 +132,7 @@ async function main() {
 		ignored: ignored + skippedResults().length, // #[should_panic] tests are skipped when panics abort
 		total: selected.length,
 		seconds: (performance.now() - started) / 1000,
+		memoryResets,
 	};
 	$("progress").textContent += `, ${ignored} ignored, ${window.testSummary.seconds.toFixed(1)} s`;
 	report(window.testSummary);

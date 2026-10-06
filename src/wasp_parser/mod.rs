@@ -27,7 +27,7 @@ use unicode_normalization::UnicodeNormalization;
 const URL_SCHEMES: [&str; 7] = ["http", "https", "ftp", "file", "data", "ws", "wss"];
 const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
 const BYTES_WORD: &str = "bytes";
-const IT_WORD: &str = "it";
+pub const IT_WORD: &str = "it";
 /// The item of the map a Julia dot call `f.(xs)` lowers to
 const BROADCAST_ITEM: &str = "broadcast_item";
 const MAP_WORD: &str = "map";
@@ -278,6 +278,8 @@ pub const AFTER_MARKER: &str = "after·return";
 pub const EXTENDS_KEYWORD: &str = "extends";
 /// The constructor of a class body, `value{…}` or `value(name){…}` (wiki/constructor.md)
 pub const CONSTRUCTOR_WORD: &str = "value";
+/// The accessors of a class property, `get age() {…}`, `set age(v) {…}` (wiki/property.md)
+pub const ACCESSOR_WORDS: [&str; 2] = ["get", "set"];
 /// `static k = 3` in a class body: a member of the class, not of each instance (P122); kept as the annotation `@static`
 pub const STATIC_KEYWORD: &str = "static";
 const AFTER_KEYWORD: &str = "after";
