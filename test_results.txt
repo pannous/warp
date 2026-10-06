@@ -550,6 +550,9 @@ PASSED:
   ✓ functions::test_broadcasting::test_scalar_calls_and_list_functions_do_not_broadcast
   ✓ functions::test_broadcasting_declared::test_declared_list_parameters_take_the_list
   ✓ functions::test_broadcasting_declared::test_declared_scalar_parameters_broadcast
+  ✓ functions::test_builtin_clash::a_cast_cannot_name_a_function
+  ✓ functions::test_builtin_clash::an_operator_word_cannot_name_a_function
+  ✓ functions::test_builtin_clash::library_words_stay_redefinable
   ✓ functions::test_c_style_definitions::a_result_type_before_the_name_defines_a_function
   ✓ functions::test_c_style_definitions::void_defines_a_function_without_a_result
   ✓ functions::test_call_arity::a_default_reads_the_parameters_before_it
@@ -1162,6 +1165,7 @@ PASSED:
   ✓ modules::test_wasm_modules::an_export_is_qualified_by_its_module_name
   ✓ modules::test_wasm_modules::an_exported_function_is_called_with_its_declared_types
   ✓ modules::test_wasm_modules::an_exported_global_reads_as_its_value
+  ✓ modules::test_wasm_modules::an_imported_module_gets_wasi_host_words_and_other_modules
   ✓ modules::test_wasm_modules::include_runs_main_globals_are_set_and_casts_are_ambiguous
   ✓ node::node_values_test::test_values_empty
   ✓ node::node_values_test::test_values_key
@@ -1865,6 +1869,9 @@ PASSED:
   ✓ sweeps::test_todo::test_utf8_char_indexing
   ✓ text::test_add_to_text::test_add_to_a_list_still_appends
   ✓ text::test_add_to_text::test_add_to_a_text
+  ✓ text::test_backtick_templates::a_backtick_template_interpolates
+  ✓ text::test_backtick_templates::a_backtick_text_is_text
+  ✓ text::test_backtick_templates::an_unclosed_backtick_says_so
   ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ text::test_cast_to_string::an_object_literal_as_string_is_its_text
@@ -2033,6 +2040,7 @@ PASSED:
   ✓ types::test_class_methods::a_method_assigning_its_receiver_says_so
   ✓ types::test_class_methods::a_method_in_the_body_conforms_to_a_trait
   ✓ types::test_class_methods::a_method_in_the_class_body_reads_the_fields
+  ✓ types::test_class_methods::a_method_may_be_named_like_a_type_word
   ✓ types::test_class_methods::a_method_without_parentheses_is_read_like_a_field
   ✓ types::test_class_methods::a_shared_method_named_like_a_library_word_stays_the_classes_own
   ✓ types::test_class_methods::classes_with_a_method_of_the_same_name_each_call_their_own
@@ -2299,6 +2307,7 @@ PASSED:
   ✓ wasm::test_wasm::test_get_local
   ✓ wasm::test_wasm::test_globals
   ✓ wasm::test_wasm::test_implicit_multiplication
+  ✓ wasm::test_wasm::test_import_wasm
   ✓ wasm::test_wasm::test_is
   ✓ wasm::test_wasm::test_lazy_evaluation
   ✓ wasm::test_wasm::test_logarithm
@@ -2696,4 +2705,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2691 passed, 0 failed, 2691 total tested
+19 ignored, 2700 passed, 0 failed, 2700 total tested
