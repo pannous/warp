@@ -10,6 +10,7 @@ self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same comp
 
 let compiler; // the compiler instance's exports
 let live; // the run whose page events are handled (host.js runProgram), until the next run
+const PAGE_VALUE = "page·value";
 let panicMessage; // the compiler's last panic message
 
 const post = message => self.postMessage(message);
@@ -81,7 +82,10 @@ registerForeignRuntime("python", {
 // a page event (playground.js): the live run's handler, its value shown as the compiler shows a program's
 function handleEvent({ event, detail }) {
 	if (!live) return;
-	const outcome = runPageEvent(live, hooks, event, detail);
+	const handled = runPageEvent(live, hooks, event, detail);
+	// the output binding (src/lowering/event_signals.rs PAGE_VALUE): the program's last name read anew, else what the handler gave
+	const binding = live.exports[PAGE_VALUE];
+	const outcome = handled.result && binding ? outcomeOf(live, hooks, binding) : handled;
 	const outcomeText = passText(JSON.stringify(outcome));
 	const length = compiler.web_show(...outcomeText);
 	const value = compilerText(compiler.web_report(), length);

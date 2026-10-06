@@ -27,6 +27,8 @@ const TEMPLATE_NAME: &str = "handler";
 const EVENT_WORD: &str = "event";
 /// The events of the page that call their handlers from outside the program
 pub const PAGE_EVENTS: [&str; 2] = ["click", "key"];
+/// The output binding of a program with page events: its last line when that is a name, read anew after each handler
+pub const PAGE_VALUE: &str = "page·value";
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
@@ -49,12 +51,20 @@ pub fn lower(program: Node) -> Node {
 	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
 	let lowered = statements.into_iter().enumerate().filter_map(|(index, statement)| match first_handler.get(&index) {
-		Some(name) => Some(function_with_globals(&handler_function_name(name), true, &bodies[name], &main_variables)),
+		Some(name) => Some(function_with_globals(&handler_function_name(name), reads_event(&bodies[name]), &bodies[name], &main_variables)),
 		None if handler_lines.contains(&index) => None,
 		None => Some(statement),
 	});
 	let lowered: Vec<Node> = lowered.map(|statement| raises_as_calls(statement, &bodies)).collect();
-	let page_handlers = PAGE_EVENTS.iter().filter(|event| bodies.contains_key(**event)).map(|event| (handler_function_name(event), 1)).collect();
+	let page_handlers: std::collections::BTreeMap<String, usize> = PAGE_EVENTS.iter().filter(|event| bodies.contains_key(**event)).map(|event| (handler_function_name(event), usize::from(reads_event(&bodies[*event])))).collect();
+	let mut lowered = lowered;
+	if let Some(name) = lowered.last().filter(|_| !page_handlers.is_empty()).and_then(|last| match last.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		_ => None,
+	}) {
+		let binding = function_with_globals(PAGE_VALUE, false, &[Node::Symbol(name)], &main_variables);
+		lowered.insert(lowered.len() - 1, binding);
+	}
 	crate::declarations::with_node_wrappers(Node::List(lowered, bracket, separator), &page_handlers)
 }
 
@@ -138,9 +148,16 @@ pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Nod
 }
 
 /// Each `raise name{data}` with handlers is the call `on·name(data)`
+/// Handlers take `event` only when a body reads it: an unread parameter has no type a caller from outside (the page)
+/// could pass a value as
+fn reads_event(bodies: &[Node]) -> bool {
+	bodies.iter().flat_map(symbols).any(|name| name == EVENT_WORD)
+}
+
 fn raises_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>) -> Node {
 	if let Some((name, data)) = raise(&node).filter(|(name, _)| handled.contains_key(name)) {
-		return Node::List(vec![Node::Symbol(handler_function_name(&name)), data], Bracket::Round, Separator::None);
+		let arguments = if reads_event(&handled[&name]) { vec![data] } else { vec![] };
+		return Node::List([vec![Node::Symbol(handler_function_name(&name))], arguments].concat(), Bracket::Round, Separator::None);
 	}
 	match node {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| raises_as_calls(item, handled)).collect(), bracket, separator),

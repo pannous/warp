@@ -139,7 +139,13 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    for a program that needs them.
 6. **Signals across tasks**: events raised in tasks reach `on` handlers of the starting thread; listeners on `shared`
    values poll at check points (with warp-d9, card task-signals).
-7. **Browser and outside**: DOM events and output bindings in the playground, `broadcast` / channel listeners
+7. **Browser and outside**: DOM events and output bindings in the playground (done, branch signals-browser, warp-4a:
+   `on click {…}` / `on key {…}` are PAGE_EVENTS, kept without a raise and exported as `on·click·node([event])`; a
+   handler takes `event` only when it reads it. The worker keeps the run (host.js runPageEvent), the page sends clicks
+   on the output (`{x, y}`, a canvas pixel on a canvas) and keys typed there (`{key}`); the handler's prints and
+   paintings appear, and the last line, when it is a name, is the output binding `page·value()` shown anew after each
+   handler (else the handler's value). An unhandled raise stays the exception (P110), no CustomEvent yet. Tour
+   example `events`; tests/control/test_page_events.rs). Still open: `broadcast` / channel listeners
    (stdlib, wiki/signal.md). System signals (OS, devices, page): notes/system_signals.md.
 
 ## Decisions (user, 2026-10-06, via the Interviewer)
