@@ -1,0 +1,7 @@
+def twice(n)
+  yield n
+  yield n * 2
+end
+sum = 0
+twice(3) { |x| sum += x }
+sum

@@ -196,7 +196,11 @@ pub fn collect_all_types(registry: &mut crate::type_kinds::TypeRegistry, node: &
 /// The kind of an FFI call's result: a C string is a text (ffi.rs text_node), a host word's Node is known at run time
 /// only (task_await_value), a void or integer result an Int
 pub(super) fn ffi_call_kind(name: &str) -> Kind {
-	let Some(signature) = crate::ffi::get_ffi_signature(name) else { return Kind::Int };
+	crate::ffi::get_ffi_signature(name).map_or(Kind::Int, |signature| signature_kind(&signature))
+}
+
+/// The kind of a foreign function's result: a float, a text (a C string), a host word's Node, else an int
+pub(crate) fn signature_kind(signature: &crate::ffi::FfiSignature) -> Kind {
 	match signature.results.first() {
 		Some(wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32) => Kind::Float,
 		Some(wasm_encoder::ValType::Ref(_)) if signature.library != crate::host::HOST_LIBRARY => Kind::Text,

@@ -102,6 +102,8 @@ impl WaspParser {
 			('~', '~') => return Some((Op::Similar, 2)),
 			(':', ':') => return Some((Op::Scope, 2)),
 			('-', '>') => return Some((Op::Arrow, 2)),
+			// R's `x <- 3` assigns with a note, the cramped `x<-3` is an error (P145, left_arrow_assignment)
+			('<', '-') if c3.is_whitespace() || !self.prev_char().is_whitespace() => return Some((Op::Assign, 2)),
 			('=', '>') => return Some((Op::FatArrow, 2)),
 			('*', '*') => return Some((Op::Pow, 2)),
 			('+', '=') => return Some((Op::AddAssign, 2)),

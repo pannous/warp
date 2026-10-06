@@ -19,6 +19,7 @@ const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a
 const HTTP_NOT_FOUND = "HTTP status 404";
 const MODULE_PATH = /\.(wasm|wat)$/; // src/wasm_modules.rs MODULE_EXTENSIONS
 const SETTER_PREFIX = "set "; // src/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
+const TEXT_CROSSINGS_SECTION = "warp.module_texts"; // src/wasm_modules.rs TEXT_CROSSINGS_SECTION
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 
 const utf8 = new TextEncoder();
@@ -693,6 +694,40 @@ function exactHandle(module, numerator, denominator) {
 	return denominator === 1n ? integer(numerator) : module.exact_div(integer(numerator), integer(denominator));
 }
 
+// the NUL-terminated bytes at `address` of a linear memory
+function cText(memory, address) {
+	const bytes = new Uint8Array(memory.buffer, address);
+	const end = bytes.indexOf(0);
+	return bytes.slice(0, end < 0 ? bytes.length : end);
+}
+
+// the C texts the program's imports from modules cross (src/wasm_modules.rs text_crossings), by "module\tname"
+function textCrossings(run) {
+	if (!run.textCrossings) {
+		const lines = WebAssembly.Module.customSections(run.module, TEXT_CROSSINGS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
+		run.textCrossings = new Map(lines.filter(Boolean).map(line => line.split("\t")).map(([module, name, parameters, result]) =>
+			[`${module}\t${name}`, { parameters: [...parameters].map(letter => letter === "t"), result: result === "t" }]));
+	}
+	return run.textCrossings;
+}
+
+// a call of a C function of a module that takes or gives texts: a text argument (a NUL-terminated copy in the
+// program's memory) is copied into a block of the module's malloc, a char * result read back as a text (NULL is ø)
+function callWithTexts(holder, exports, member, crossing, values, path) {
+	const program = holder.exports;
+	const moduleArguments = values.map((value, index) => {
+		if (!crossing.parameters[index]) return value;
+		if (!exports.malloc) throw new Error(`${path} exports no malloc(size) to copy a text argument into`);
+		const text = cText(program.memory, value);
+		const block = exports.malloc(text.length + 1);
+		new Uint8Array(exports.memory.buffer).set([...text, 0], block);
+		return block;
+	});
+	const result = member(...moduleArguments);
+	if (!crossing.result) return result;
+	return buildValue(program, treeOfPlain(result === 0 ? null : decode(cText(exports.memory, result))));
+}
+
 // the exports of a WebAssembly module the program imports by path (src/wasm_modules.rs link): instantiated once per
 // run at the first call, with its own imports linked like the program's; a global reads through a getter and is set
 // through `set g`
@@ -716,7 +751,8 @@ function moduleImports(holder, hooks, path) {
 			const member = exports[name];
 			if (member instanceof WebAssembly.Global) return member.value;
 			if (!member) throw new Error(`${path} exports no ${name}`);
-			return member(...values);
+			const crossing = textCrossings(holder.run).get(`${path}\t${name}`);
+			return crossing ? callWithTexts(holder, exports, member, crossing, values, path) : member(...values);
 		},
 	});
 }

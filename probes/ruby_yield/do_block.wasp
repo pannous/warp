@@ -1,0 +1,4 @@
+def apply(n)
+  yield n
+end
+apply(3) do |x| x * 2 end

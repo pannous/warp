@@ -1,0 +1,4 @@
+def run
+  yield
+end
+run { 5 }
