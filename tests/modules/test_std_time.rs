@@ -19,3 +19,11 @@ fn date_arithmetic() {
 	is!("use time; d = date_of(add_days(0, 31)); [d.month, d.day]", parse("[2 1]"));
 	is!("use time; days_between(0, 951782400000)", 11016);
 }
+
+#[test]
+fn use_time_formats_dates_and_times() {
+	is!("use time; format_date(0)", "1970-01-01");
+	is!("use time; format_date(1791331509000)", "2026-10-07");
+	is!("use time; format_time(1791331509000)", "00:05:09");
+	is!("use time; two_digits(7) + two_digits(12)", "0712");
+}

@@ -85,3 +85,11 @@ fn positional_braces_build_a_known_class() {
 	is!(code, 3);
 	assert_alias(code, "P{3, 4}", "P(3, 4)");
 }
+
+/// P157: a ported type parameter `class Box<T>` compiles untyped, with a note that wasp infers types
+#[test]
+fn a_type_parameter_of_a_class_is_noted() {
+	let code = "class Box<T> { item: T }\nBox(3).item";
+	is!(code, 3);
+	assert_alias(code, "Box<T>", "Box");
+}

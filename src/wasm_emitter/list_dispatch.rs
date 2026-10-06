@@ -235,11 +235,12 @@ fn is_tuple_or_object(value: &Node) -> bool {
 
 /// The list variables a program indexes (`xs#i`, `xs#i = v`) or counts (`#xs`), as a for loop over them does
 fn indexed_lists(program: &Node) -> HashSet<String> {
+	let key_variables = crate::analyzer::key_variables(program);
 	let mut indexed = HashSet::new();
 	program.visit(&mut |part| {
 		let Node::Key(list, Op::Hash, index) = part else { return };
 		let counted = if matches!(list.drop_meta(), Node::Empty) { index } else { list };
-		let by_key = matches!(crate::wasp_parser::subscript_key(index).unwrap_or(index).drop_meta(), Node::Text(_) | Node::Char(_));
+		let by_key = crate::analyzer::looks_up_a_key(index, &key_variables);
 		if let (Node::Symbol(name), false) = (counted.drop_meta(), by_key) {
 			indexed.insert(name.clone());
 		}

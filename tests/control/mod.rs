@@ -3,6 +3,7 @@ mod test_blocks;
 mod test_condition_block;
 mod test_control_words;
 mod test_do_block;
+mod test_on_error_of_function;
 mod test_empty_block_binding;
 mod test_empty_block;
 mod test_for_loop;

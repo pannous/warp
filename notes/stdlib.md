@@ -82,7 +82,10 @@ parameter; std/map.wasp uses `ks = keys(m)` and `m.get(k)` until they are fixed.
    (tests/modules/test_std_time.rs). Fixed on the way: `{year:1970 month:1}` read `1970 month` as a duration
    (card key-unit), and the map parameter bug above (cards over-keys, inside-loop: no list copy for a map parameter).
 Next:
-7. More list words (chunk, window, median), text format; time: date arithmetic (add days, difference), formatting.
+7. Done: list chunk window median; time add_days days_between, format_date (ISO 2026-10-07), format_time (UTC
+   13:05:09), two_digits; text format("{} has {} items", ["cart", 3]). Fixed on the way: `"" + 7` passed to a counted
+   parameter made it a list; the elements of split and chars had no kind (`p[0] + 3` added numbers).
+   Next: more map words, text words (center, words, lines), time parsing.
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 ## 7. Adapters (async, warp-f0)
@@ -140,8 +143,14 @@ run natively and in the browser.
    the browser host.js keeps written files in memory while the page is open (read sees them first, then the served
    repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
    method `xs.append(v)` a program using `use file` still needs (question Q6). args waits for a CLI way to pass them.
-2. hash (B): embed zlib.wasm/xxhash.wasm and a sha256.wasm in warp, `use hash` resolves to them in both hosts.
-3. regex (A): Rust regex + JS RegExp behind matches/find/find_all/replace_all, with the common-subset check.
+2. Done as A instead of B: hash: `use hash` brings sha256 (lowercase hex) and crc32 (a number) of a text's UTF-8
+   bytes: sha2 and crc32fast natively (both already warp dependencies), a synchronous JS twin in host.js (crypto.subtle
+   is asynchronous, a host call cannot wait); same values in both hosts (tests/modules/test_std_hash.rs). B (C modules
+   compiled to wasm) stays the way for xxhash, compression and other libraries without a Rust/JS pair.
+3. Done: regex (A): `use regex` brings matches, first_match, find_all, replace_all (`$1` groups in the replacement);
+   Rust's regex natively, JS RegExp (flag u) in the browser; look-around and backreferences are the error "… is not
+   in wasp's regex (one engine lacks it)" in both (tests/modules/test_std_regex.rs). `first_match`, since `find` is
+   the list word find(xs, predicate).
 4. Later: the AOT stub linking B modules (they need no compiler), then hash and compress work in executables.
 
 ## Open questions (to warp-e9, defaults in force)
