@@ -38,6 +38,14 @@ const GLOBAL_WORD: &str = "global";
 const LISTENERS_WORD: &str = "listeners";
 const OF_WORD: &str = "of";
 const CLEAR_WORD: &str = "clear";
+/// `remove alarm from listeners of t` (P128)
+const REMOVE_WORD: &str = "remove";
+const FROM_WORD: &str = "from";
+const COUNT_WORD: &str = "count";
+/// `alarm_index_t`: the place of the named listener alarm in t's listeners
+const INDEX_JOINER: &str = "_index_";
+const WITHOUT_PLACEHOLDER: &str = "signal_without_placeholder";
+const WITHOUT_FUNCTION: &str = "signal·without";
 const FOR_WORD: &str = "for";
 const IN_WORD: &str = "in";
 
@@ -104,21 +112,107 @@ pub fn poll_shared(program: Node) -> Node {
 
 /// Listeners inside functions on their parameters or on main-level variables become subscriptions made at run time
 pub fn subscribe(program: Node) -> Node {
-	let (program, reflected) = reflections(program);
+	let (program, mut reflected) = reflections(program);
 	let main_variables = main_variables(&program);
 	let mut subscriptions = Subscriptions { main_variables, fired: 0 };
 	let program = subscriptions.rewrite(program);
+	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
+	if !crate::variable_signals::is_statement_list(&bracket, &separator) {
+		return program;
+	}
+	// P128: a named listener `alarm = whenever t > 30 {…}` can be removed, so its variables are reflected too
+	let named: Vec<(String, String)> = statements.iter().filter_map(named_listener).flat_map(|(name, listener)| {
+		let watched = listener_parts(&listener).map(|(listener_word, subject, _)| watched_names(listener_word, &subject)).unwrap_or_default();
+		watched.into_iter().map(move |variable| (name.clone(), variable))
+	}).collect();
+	reflected.extend(named.iter().map(|(_, variable)| variable.clone()));
 	if reflected.is_empty() {
 		return program;
 	}
 	// a reflected variable's main-level listeners subscribe too, so its list holds them
-	match program {
-		Node::List(statements, bracket, separator) if crate::variable_signals::is_statement_list(&bracket, &separator) => {
-			let statements = statements.into_iter().map(|statement| subscriptions.subscription(&statement, &reflected).unwrap_or(statement)).collect();
-			Node::List(statements, bracket, separator)
+	let removes = statements.iter().any(|statement| removal(statement).is_some());
+	let statements = statements.into_iter().flat_map(|statement| {
+		if let Some((name, variable)) = removal(&statement) {
+			return vec![removing(&name, &variable, &named)];
 		}
-		other => other,
+		let subscribed = match named_listener(&statement) {
+			Some((name, listener)) => subscriptions.subscription(&listener, &reflected, Some(&name)),
+			None => subscriptions.subscription(&statement, &reflected, None),
+		};
+		// the statements of a subscription stay main-level ones: a named listener's variables are the program's
+		match subscribed {
+			Some(Node::List(parts, Bracket::Curly, _)) => parts,
+			Some(subscription) => vec![subscription],
+			None => vec![statement],
+		}
+	});
+	let without = removes.then(without_function);
+	Node::List(without.into_iter().chain(statements).collect(), bracket, separator)
+}
+
+/// `alarm = on change t {…}`, `alarm = whenever t > 30 {…}` (which arrives as `(alarm = (whenever t) > 30) {…}`): the
+/// name and the listener
+fn named_listener(statement: &Node) -> Option<(String, Node)> {
+	if let Node::Key(name, Op::Assign, listener) = statement.drop_meta() {
+		let Node::Symbol(name) = name.drop_meta() else { return None };
+		return listener_parts(listener).map(|_| (name.clone(), listener.as_ref().clone()));
 	}
+	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let [head, body] = items.as_slice() else { return None };
+	let Node::Key(name, Op::Assign, condition) = head.drop_meta() else { return None };
+	let Node::Symbol(name) = name.drop_meta() else { return None };
+	let (keyword, condition) = without_leading_word(condition)?;
+	let listener = Node::List(vec![keyword, condition, body.clone()], Bracket::None, Separator::Space);
+	listener_parts(&listener).map(|_| (name.clone(), listener))
+}
+
+/// `(whenever t) > 30` → `whenever`, `t > 30`: the word the leftmost operand starts with, and the rest
+fn without_leading_word(node: &Node) -> Option<(Node, Node)> {
+	match node.drop_meta() {
+		Node::Key(left, op, right) => without_leading_word(left).map(|(keyword, left)| (keyword, Node::Key(Box::new(left), *op, right.clone()))),
+		Node::List(items, Bracket::None, separator) if items.len() >= 2 => {
+			let rest = if items.len() == 2 { items[1].clone() } else { Node::List(items[1..].to_vec(), Bracket::None, separator.clone()) };
+			Some((items[0].clone(), rest))
+		}
+		_ => None,
+	}
+}
+
+/// The variables a listener watches: `on set x` and `on change x` the one, `whenever` and `once` those of the condition
+fn watched_names(listener_word: ListenerWord, subject: &Node) -> Vec<String> {
+	match (listener_word, subject.drop_meta()) {
+		(ListenerWord::Set | ListenerWord::Change, Node::Symbol(name)) => vec![name.clone()],
+		(ListenerWord::Set | ListenerWord::Change, _) => vec![],
+		_ => unique(symbols(subject)),
+	}
+}
+
+/// `remove alarm from listeners of t` (listeners already `signal_listeners(t)`): the listener's name and the variable
+fn removal(statement: &Node) -> Option<(String, String)> {
+	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let [remove, name, from, list] = items.as_slice() else { return None };
+	let Node::List(call_items, _, _) = list.drop_meta() else { return None };
+	let [listeners, variable] = call_items.as_slice() else { return None };
+	let reads = word(remove) == REMOVE_WORD && word(from) == FROM_WORD && word(listeners) == SIGNAL_LISTENERS;
+	reads.then(|| (word(name), word(variable)))
+}
+
+/// `alarm_index_t`: where the named listener alarm sits in t's listeners, -1 once removed
+fn index_name(name: &str, variable: &str) -> String {
+	format!("{name}{INDEX_JOINER}{variable}")
+}
+
+/// The listener leaves t's list; the named listeners after it move one place up
+fn removing(name: &str, variable: &str, named: &[(String, String)]) -> Node {
+	let index = index_name(name, variable);
+	let shifts: String = named.iter().filter(|(other, watched)| other != name && watched == variable)
+		.map(|(other, _)| { let other = index_name(other, variable); format!("if {other} > {index} {{ {other} = {other} - 1 }}; ") }).collect();
+	from_template(&format!("if {index} >= 0 {{ {SIGNAL_LISTENERS_SET}({variable}, {WITHOUT_PLACEHOLDER}({variable}, {index})); {shifts}{index} = -1 }}"), &[])
+}
+
+/// `signal·without(s, skip)`: the listeners of s but the one at skip
+fn without_function() -> Node {
+	from_template(&format!("{WITHOUT_PLACEHOLDER}(s, skip) := {{ kept = []; i = 0; for f in {SIGNAL_LISTENERS}(s) {{ if i != skip {{ kept = kept + [f] }}; i += 1 }}; kept }}"), &[])
 }
 
 /// `listeners of x` → `signal_listeners(x)`, `clear listeners of x` → `signal_listeners_set(x, ø)`; and the variables
@@ -192,7 +286,7 @@ impl Subscriptions {
 		if definition(&node).is_some() {
 			return self.rewrite(node);
 		}
-		if let Some(subscription) = self.subscription(&node, subscribable) {
+		if let Some(subscription) = self.subscription(&node, subscribable, None) {
 			return subscription;
 		}
 		map_children(node, &mut |child| self.subscriptions(child, subscribable))
@@ -200,14 +294,9 @@ impl Subscriptions {
 
 	/// `on change s {body}` → `signal_listeners_set(s, signal_listeners(s) + [(value, signal·old) => {if value != signal·old {body}; 0}])`,
 	/// one per watched variable; a once listener first makes its flag cell
-	fn subscription(&mut self, statement: &Node, subscribable: &HashSet<String>) -> Option<Node> {
+	fn subscription(&mut self, statement: &Node, subscribable: &HashSet<String>, name: Option<&str>) -> Option<Node> {
 		let (listener_word, subject, body) = listener_parts(statement)?;
-		let watched: Vec<String> = match (listener_word, subject.drop_meta()) {
-			(ListenerWord::Set | ListenerWord::Change, Node::Symbol(name)) => vec![name.clone()],
-			(ListenerWord::Set | ListenerWord::Change, _) => return None,
-			_ => unique(symbols(&subject)),
-		};
-		let watched: Vec<String> = watched.into_iter().filter(|name| subscribable.contains(name)).collect();
+		let watched: Vec<String> = watched_names(listener_word, &subject).into_iter().filter(|name| subscribable.contains(name)).collect();
 		if watched.is_empty() {
 			return None;
 		}
@@ -227,7 +316,20 @@ impl Subscriptions {
 			}
 		};
 		// every listener closure of one arity returns one kind (wasm_emitter/closures.rs): 0
-		let listener = from_template(&format!("({VALUE_WORD}, {OLD_PLACEHOLDER}) => {{ {CHECK_PLACEHOLDER}; 0 }}"), &[(CHECK_PLACEHOLDER, check)]);
+		let listener = from_template(&format!("({VALUE_WORD}, {OLD_PLACEHOLDER}) => {{ {CHECK_PLACEHOLDER}; 0 }}"), &[(CHECK_PLACEHOLDER, check.clone())]);
+		// a named listener (P128) is a function of that name, and remembers where it sits in each list
+		let listener = match name {
+			Some(name) => {
+				let head = Node::List(vec![Node::Symbol(name.to_string()), Node::Symbol(VALUE_WORD.to_string()), Node::Symbol(OLD_WORD.to_string())], Bracket::Round, Separator::None);
+				statements.push(Node::Key(Box::new(head), Op::Define, Box::new(block(vec![check, crate::node::int(0)]))));
+				for variable in &watched {
+					let place = call(COUNT_WORD, vec![call(SIGNAL_LISTENERS, vec![Node::Symbol(variable.clone())])]);
+					statements.push(assign(&index_name(name, variable), place));
+				}
+				Node::Symbol(name.to_string())
+			}
+			None => listener,
+		};
 		for name in watched {
 			let signal = Node::Symbol(name);
 			let listeners = Node::Key(Box::new(call(SIGNAL_LISTENERS, vec![signal.clone()])), Op::Add, Box::new(Node::List(vec![listener.clone()], Bracket::Square, Separator::None)));
@@ -378,7 +480,7 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 		let loops = loop_variables(&definition.body);
 		definition.body.visit(&mut |node| {
 			let Node::List(items, _, _) = node else { return };
-			if items.len() == 3 && word(&items[0]) == SIGNAL_LISTENERS_SET {
+			if (items.len() == 3 && word(&items[0]) == SIGNAL_LISTENERS_SET) || (items.len() == 2 && word(&items[0]) == SIGNAL_LISTENERS) {
 				let name = word(&items[1]);
 				let over = loops.iter().find(|(variable, _)| *variable == name).map(|(_, list)| list.clone());
 				match (definition.params.iter().position(|param| *param == name), over.and_then(|list| definition.params.iter().position(|param| *param == list))) {
@@ -490,7 +592,7 @@ fn set_function() -> Node {
 
 /// The code parsed, its placeholders replaced: the generated names (`signal·old`) and the given nodes
 fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
-	let names = [(SET_PLACEHOLDER, SET_FUNCTION), (OLD_PLACEHOLDER, OLD_WORD), (LISTENER_PLACEHOLDER, LISTENER_WORD)];
+	let names = [(SET_PLACEHOLDER, SET_FUNCTION), (OLD_PLACEHOLDER, OLD_WORD), (LISTENER_PLACEHOLDER, LISTENER_WORD), (WITHOUT_PLACEHOLDER, WITHOUT_FUNCTION)];
 	let bindings = names.iter().map(|(placeholder, name)| (placeholder.to_string(), Node::Symbol(name.to_string())))
 		.chain(nodes.iter().map(|(placeholder, node)| (placeholder.to_string(), node.clone()))).collect();
 	crate::law::substitute(&crate::wasp_parser::parse(code), &bindings).drop_meta().clone()

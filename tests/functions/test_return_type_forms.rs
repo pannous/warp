@@ -20,3 +20,10 @@ fn a_colon_result_type_before_a_block_body() {
 fn an_arrow_result_type_before_a_colon_body() {
 	is!("def f(x: int) -> int: x + 1; f(1)", 2); // Python
 }
+
+#[test]
+fn named_arguments_reach_a_function_with_a_result_type() {
+	is!("def f(x: String) -> String { \"Hi \" + x }; f(x: \"Bob\")", "Hi Bob"); // was a cast failure
+	is!("def f(a, b=2) -> int { a * b }; f(3, b: 5)", 15);
+	is!("f(a, b) : int := a - b; f(b=1, a=5)", 4);
+}
