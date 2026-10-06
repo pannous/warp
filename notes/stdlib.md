@@ -132,7 +132,10 @@ run natively and in the browser.
    repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
    method `xs.append(v)` a program using `use file` still needs (question Q6). args waits for a CLI way to pass them.
 2. hash (B): embed zlib.wasm/xxhash.wasm and a sha256.wasm in warp, `use hash` resolves to them in both hosts.
-3. regex (A): Rust regex + JS RegExp behind matches/find/find_all/replace_all, with the common-subset check.
+3. Done: regex (A): `use regex` brings matches, first_match, find_all, replace_all (`$1` groups in the replacement);
+   Rust's regex natively, JS RegExp (flag u) in the browser; look-around and backreferences are the error "… is not
+   in wasp's regex (one engine lacks it)" in both (tests/modules/test_std_regex.rs). `first_match`, since `find` is
+   the list word find(xs, predicate).
 4. Later: the AOT stub linking B modules (they need no compiler), then hash and compress work in executables.
 
 ## Open questions (to warp-e9, defaults in force)

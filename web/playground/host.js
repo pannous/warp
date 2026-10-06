@@ -36,7 +36,19 @@ const STD_ADAPTERS = {
 		},
 	},
 	os: { env: () => null }, // a page has no environment
+	regex: {
+		matches: (subject, pattern) => regexOf(pattern).test(subject),
+		first: (subject, pattern) => subject.match(regexOf(pattern))?.[0] ?? null,
+		all: (subject, pattern) => [...subject.matchAll(regexOf(pattern, "g"))].map(found => found[0]),
+		replace: (subject, pattern, replacement) => subject.replace(regexOf(pattern, "g"), replacement),
+	},
 };
+// what Rust's regex lacks is refused here too, so a pattern means the same in both hosts (src/std_adapters.rs regex_of)
+function regexOf(pattern, flags = "") {
+	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
+	if (feature) throw new Error(`${feature} is not in wasp's regex (one engine lacks it): ${pattern}`);
+	return new RegExp(pattern, flags + "u");
+}
 // the files std's file module wrote, kept while the page is open: read and the file words see them before the served ones
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");
