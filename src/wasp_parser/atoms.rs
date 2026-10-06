@@ -2,6 +2,8 @@
 
 use super::*;
 
+const VOID_WORD: &str = "void";
+
 impl WaspParser {
 	/// Parse an atomic expression (no infix operators)
 	/// Handles: numbers, strings, brackets, symbols with named blocks
@@ -280,6 +282,13 @@ impl WaspParser {
 		}
 	}
 
+	/// ` name(`: blanks, a name and its parenthesis
+	fn named_call_follows(&self) -> bool {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let name = (blanks..).take_while(|&offset| is_identifier_char(self.peek_char(offset))).count();
+		blanks > 0 && name > 0 && self.is_identifier_start(blanks) && self.peek_char(blanks + name) == '('
+	}
+
 	pub(super) fn parameters_follow_after_blanks(&self) -> bool {
 		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		blanks > 0 && self.peek_char(blanks) == '('
@@ -330,6 +339,11 @@ impl WaspParser {
 
 		if self.url_follows(&symbol) {
 			return self.parse_url(symbol);
+		}
+
+		// C's `void f() { … }`: the result type of a function, not ø (src/lowering/declarations.rs c_function)
+		if symbol == VOID_WORD && self.named_call_follows() {
+			return Node::Symbol(symbol);
 		}
 
 		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count())) {
