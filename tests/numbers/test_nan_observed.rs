@@ -4,6 +4,7 @@ use crate::is;
 use warp::wasm_emitter::eval;
 use warp::{Node, Number};
 
+#[cfg(feature = "native")]
 fn shown_bits(code: &str) -> u64 {
 	match eval(code).drop_meta() {
 		Node::Number(Number::Float(x)) => x.to_bits(),
