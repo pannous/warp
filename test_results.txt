@@ -41,6 +41,12 @@ PASSED:
   ✓ control::test_catch_binding::except_as_binds_the_error
   ✓ control::test_cell_truth::a_cell_value_as_a_condition
   ✓ control::test_cell_truth::not_of_a_cell_value
+  ✓ control::test_channels::a_channel_passed_to_a_function
+  ✓ control::test_channels::a_machine_channel_has_the_same_words
+  ✓ control::test_channels::a_value_sent_in_a_task_is_received
+  ✓ control::test_channels::closed_channels_and_tasks_left_waiting
+  ✓ control::test_channels::for_over_a_channel_receives_until_it_is_closed
+  ✓ control::test_channels::receiving_with_no_task_left_is_an_error
   ✓ control::test_charged_fields::test_define_entries_are_values
   ✓ control::test_clipboard::a_clipboard_listener_watches_the_change_count
   ✓ control::test_clipboard::reading_the_clipboard_is_one_host_call
@@ -82,14 +88,21 @@ PASSED:
   ✓ control::test_event_footguns::a_handler_made_in_a_loop_keeps_its_iteration
   ✓ control::test_event_footguns::a_handler_of_an_event_nothing_raises_never_runs
   ✓ control::test_event_footguns::a_handler_reads_the_current_state
+  ✓ control::test_event_footguns::a_listener_on_an_expression_watches_its_value
   ✓ control::test_event_footguns::a_listener_writing_what_it_watches_does_not_loop
+  ✓ control::test_event_footguns::a_one_line_function_listener_subscribes
   ✓ control::test_event_footguns::a_subscribed_listener_changes_a_main_level_variable
   ✓ control::test_event_footguns::an_event_raised_before_its_handler_reaches_it
   ✓ control::test_event_footguns::each_handler_gets_the_event_as_raised
   ✓ control::test_event_footguns::emit_sends_events_and_raise_stays_an_error
   ✓ control::test_event_footguns::handlers_emitting_each_other_unconditionally_are_an_error
+  ✓ control::test_event_footguns::on_set_of_a_shared_value_sees_every_write
   ✓ control::test_event_footguns::removing_a_handler_while_dispatching_skips_no_other
   ✓ control::test_event_footguns::whenever_runs_when_the_condition_becomes_true
+  ✓ control::test_event_handler_lists::a_listener_is_removed_from_the_event_itself
+  ✓ control::test_event_handler_lists::any_handler_is_removed_by_its_place
+  ✓ control::test_event_handler_lists::removing_an_unknown_listener_is_a_compile_error
+  ✓ control::test_event_handler_lists::the_listeners_of_an_event_are_a_list
   ✓ control::test_event_signals::a_body_of_one_raise_stays_a_block
   ✓ control::test_event_signals::a_page_event_handler_waits_for_the_page
   ✓ control::test_event_signals::a_raise_inside_a_function_reaches_the_handler
@@ -419,6 +432,8 @@ PASSED:
   ✓ ffi::header::tests::test_header_sig_to_ffi_sig
   ✓ ffi::header::tests::test_map_c_type_to_valtype
   ✓ ffi::header::tests::test_parse_header_file_math
+  ✓ ffi::test_component_short_use::a_component_file_is_used_by_its_name
+  ✓ ffi::test_component_short_use::the_long_form_and_core_modules_stay
   ✓ ffi::test_components::test_a_component_written_in_wat_is_called
   ✓ ffi::test_components::test_a_field_of_a_component_result_is_read
   ✓ ffi::test_components::test_a_rust_crate_built_as_a_component_is_called
@@ -2539,12 +2554,17 @@ PASSED:
   ✓ welcoming::test_constant_shadowing::a_constant_word_still_reads_and_names_fields
   ✓ welcoming::test_constant_shadowing::a_field_named_like_a_constant_is_read_by_the_methods
   ✓ welcoming::test_constant_shadowing::an_assigned_constant_word_is_an_error
+  ✓ welcoming::test_error_excerpt::a_message_names_its_position
+  ✓ welcoming::test_error_excerpt::an_excerpt_marks_the_word_at_the_position
+  ✓ welcoming::test_error_excerpt::the_cli_prints_the_line_of_an_error_and_a_warning
+  ✓ welcoming::test_error_excerpt::the_page_learns_where_the_error_is
   ✓ welcoming::test_error_positions::a_rebuilt_node_reports_the_position_of_its_parts
   ✓ welcoming::test_error_positions::an_error_found_while_emitting_names_its_statement
   ✓ welcoming::test_error_positions::an_unclosed_group_names_where_it_opened
   ✓ welcoming::test_error_positions::an_unknown_method_names_its_line
   ✓ welcoming::test_error_positions::an_unterminated_text_names_where_it_opened
   ✓ welcoming::test_fixits::a_hint_offers_its_preferred_form
+  ✓ welcoming::test_fixits::ambiguous_call_comparison_fixes
   ✓ welcoming::test_fixits::bare_list_fixes
   ✓ welcoming::test_fixits::braceless_call_fixes
   ✓ welcoming::test_fixits::codepoint_is_the_preferred_name
@@ -2698,6 +2718,7 @@ PASSED:
   ✓ welcoming::test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
   ✓ welcoming::test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
   ✓ welcoming::test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
+  ✓ welcoming::test_hint_positions::a_lowering_hint_names_its_node
   ✓ welcoming::test_index_hint_simple::only_a_simple_index_gets_the_hash_hint
   ✓ welcoming::test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns
   ✓ welcoming::test_it_shadow_warning::a_loop_it_still_shadows_the_function_it
@@ -2847,4 +2868,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2842 passed, 0 failed, 2842 total tested
+19 ignored, 2863 passed, 0 failed, 2863 total tested
