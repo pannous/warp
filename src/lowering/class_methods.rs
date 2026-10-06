@@ -24,6 +24,8 @@ const SUPER_INFIX: &str = "·super·";
 const GLOBAL_KEYWORD: &str = "global";
 /// The constructor block of a class body, `value{ id = random() }` or `value(name){…}` (wiki/constructor.md)
 const VALUE_WORD: &str = crate::wasp_parser::CONSTRUCTOR_WORD;
+/// A property's setter `set age(v) {…}` is the method `age·set(self, v)`, run by `p.age = v`
+const SETTER_SUFFIX: &str = "·set";
 /// The suffix of a method named like a type word: `double·method`
 const METHOD_SUFFIX: &str = "·method";
 
@@ -42,7 +44,9 @@ pub fn lower(node: Node) -> Node {
 	let shared: Vec<String> = traits.iter().filter_map(trait_operation).collect();
 	let mut changing = vec![];
 	let statics = static_members(&node);
+	let setters = property_setters(&node);
 	let node = lower_classes(node, &mut changing);
+	let node = if setters.is_empty() { node } else { setter_calls(node, &setters) };
 	let node = if statics.is_empty() { node } else { static_reads(node, &statics) };
 	// `s.area`, `s.scaled(3)` of a shared method: the call `area(s)` before traits rename each class's method;
 	// `c.inc()` of a method changing its object: `c = inc(c)` (P116)
@@ -132,6 +136,7 @@ fn class_items(body: &Node) -> Vec<Node> {
 	items.into_iter().flat_map(|item| match item.drop_meta() {
 		Node::List(words, _, _) if keyword_method(words).is_some() => keyword_method(words).into_iter().collect(),
 		Node::List(words, _, _) if value_block(words).is_some() => value_block(words).into_iter().collect(),
+		Node::List(words, _, _) if accessors(words).is_some() => accessors(words).unwrap_or_default(),
 		Node::List(group, Bracket::None, _) => group.clone(),
 		_ => vec![item],
 	}).collect()
@@ -140,6 +145,78 @@ fn class_items(body: &Node) -> Vec<Node> {
 /// `def area() -> int {…}`, `fun area(): Int {…}`, `func area() {…}`: the method `area() := …` (with its result type)
 fn keyword_method(words: &[Node]) -> Option<Node> {
 	crate::declarations::keyword_definition(words)
+}
+
+/// A property's getter and setter as methods: `get age() {…}` is the getter `age := …`, `set age(v) {…}` the setter
+/// `age·set(v) := …`; the wasp form `age:{getter} set{setter}` has the new value as `it`
+fn accessors(words: &[Node]) -> Option<Vec<Node>> {
+	let [first, second] = words else { return None };
+	let method = |name: &str, parameters: Vec<Node>, body: &Node| {
+		let head = match parameters.is_empty() {
+			true => Node::Symbol(name.to_string()),
+			false => Node::List([vec![Node::Symbol(name.to_string())], parameters].concat(), Bracket::Round, Separator::None),
+		};
+		Node::Key(Box::new(head), Op::Define, Box::new(body.clone()))
+	};
+	let is_block = |node: &Node| matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
+	match (first.drop_meta(), second.drop_meta()) {
+		// `get age() {…}`, `set age(v) {…}`
+		(Node::Symbol(word), Node::List(parts, _, _)) if crate::wasp_parser::ACCESSOR_WORDS.contains(&word.as_str()) => {
+			let [call, body] = parts.as_slice() else { return None };
+			let Node::List(call, Bracket::Round, _) = call.drop_meta() else { return None };
+			let name = call.first()?.drop_meta().name();
+			let parameters: Vec<Node> = call[1..].iter().flat_map(|parameter| match parameter.drop_meta() {
+				Node::List(group, Bracket::Round, _) => group.clone(),
+				Node::Empty => vec![],
+				_ => vec![parameter.clone()],
+			}).collect();
+			match word == "get" {
+				true => Some(vec![method(&name, vec![], body)]),
+				false => Some(vec![method(&format!("{name}{SETTER_SUFFIX}"), parameters, body)]),
+			}
+		}
+		// `age:{2026 - birthday} set{birthday = 2026 - it}`
+		(Node::Key(name, Op::Colon | Op::None, getter), Node::Key(set, Op::Colon | Op::None, setter)) if set.drop_meta().name() == "set" && is_block(getter) && is_block(setter) => {
+			let name = name.drop_meta().name();
+			// `it` is the new value; named apart, so no pass reads the block as a lambda of `it`
+			let new_value = Node::Symbol(format!("{}{SETTER_SUFFIX}", crate::wasp_parser::IT_WORD));
+			let setter = renamed_symbol(setter.as_ref().clone(), crate::wasp_parser::IT_WORD, &new_value);
+			Some(vec![method(&name, vec![], getter), method(&format!("{name}{SETTER_SUFFIX}"), vec![new_value], &setter)])
+		}
+		_ => None,
+	}
+}
+
+/// The properties the classes of the program give setters
+fn property_setters(node: &Node) -> Vec<String> {
+	let mut setters = vec![];
+	node.visit(&mut |part| if let Node::Type { body, .. } = part {
+		setters.extend(class_items(body).iter().filter_map(method_parts).filter_map(|(name, _, _)| name.strip_suffix(SETTER_SUFFIX).map(str::to_string)));
+	});
+	setters
+}
+
+fn renamed_symbol(node: Node, name: &str, replacement: &Node) -> Node {
+	match node {
+		Node::Symbol(symbol) if symbol == name => replacement.clone(),
+		other => other.map_children(|child| renamed_symbol(child, name, replacement)),
+	}
+}
+
+/// `p.age = v` of a property with a setter: `p = age·set(p, v)`
+fn setter_calls(node: Node, setters: &[String]) -> Node {
+	let recurse = |child: Node| setter_calls(child, setters);
+	match node {
+		Node::Key(target, Op::Assign, value) => match target.drop_meta() {
+			Node::Key(receiver, Op::Dot, property) if matches!(receiver.drop_meta(), Node::Symbol(_)) && setters.contains(&property.drop_meta().name()) => {
+				let setter = Node::Symbol(format!("{}{SETTER_SUFFIX}", property.drop_meta().name()));
+				let call = Node::List(vec![setter, receiver.as_ref().clone(), recurse(*value)], Bracket::Round, Separator::None);
+				Node::Key(receiver.clone(), Op::Assign, Box::new(call))
+			}
+			_ => Node::Key(Box::new(recurse(*target)), Op::Assign, Box::new(recurse(*value))),
+		},
+		other => other.map_children(recurse),
+	}
 }
 
 /// `value {…}` (spaced) and `value(name) {…}`: the constructor `value{…}`, `value(name):{…}`
