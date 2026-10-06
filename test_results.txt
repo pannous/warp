@@ -1995,6 +1995,9 @@ PASSED:
   ✓ types::test_struct_field_of_constructor::a_field_of_a_constructed_struct_variable
   ✓ types::test_struct_field_of_constructor::a_field_of_a_constructor_call
   ✓ types::test_struct_field_of_constructor::a_missing_field_is_an_error_value
+  ✓ types::test_struct_instances::a_field_read_of_a_struct_variable_searches_no_names
+  ✓ types::test_struct_instances::a_method_of_a_struct_variable_takes_the_struct
+  ✓ types::test_struct_instances::a_struct_instance_gives_the_same_values
   ✓ types::test_struct_types::test_class_definition
   ✓ types::test_struct_types::test_class_instance2
   ✓ types::test_struct_types::test_class_instance_explicit
@@ -2564,4 +2567,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2559 passed, 0 failed, 2559 total tested
+23 ignored, 2562 passed, 0 failed, 2562 total tested
