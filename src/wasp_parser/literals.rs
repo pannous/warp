@@ -490,6 +490,12 @@ impl WaspParser {
 		matches!(next, ')' | ']' | '}' | ',' | ';' | '\n' | '\r' | '\0') || (next == '=' && after != '=')
 	}
 
+	/// Do blanks and then `bracket` follow (`c {`, not the glued `c{`)
+	pub(super) fn blanks_then(&self, bracket: char) -> bool {
+		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		blanks > 0 && self.peek_char(blanks) == bracket
+	}
+
 	/// Do blanks and then a block of fields follow the cursor: `{}` or `{ name: …`, never a statement block like `{ out += x }`
 	/// `assignments`: C#'s object initializer `Point { X = 3 }` of a declared class sets its fields with `=` too
 	pub(super) fn block_after_blanks(&self, assignments: bool) -> bool {

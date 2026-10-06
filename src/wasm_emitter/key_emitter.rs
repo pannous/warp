@@ -275,10 +275,17 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// The runtime counter behind the getter word in `x.size`, `x.count`, `x.bytes`
+	/// The runtime counter behind the getter word in `x.size`, `x.count`, `x.bytes`, or the call `x.count()` (`x.chars()`
+	/// is the list of characters)
 	pub(super) fn counting_getter(&self, property: &Node) -> Option<&'static str> {
-		let Node::Symbol(word) = property.drop_meta() else { return None };
-		crate::analyzer::counting_method(word, &self.ctx)
+		match property.drop_meta() {
+			Node::Symbol(word) => crate::analyzer::counting_method(word, &self.ctx),
+			Node::List(call, Bracket::Round, _) => match call.as_slice() {
+				[word] if crate::analyzer::is_counting_property(&word.drop_meta().name()) => crate::analyzer::counting_method(&word.drop_meta().name(), &self.ctx),
+				_ => None,
+			},
+			_ => None,
+		}
 	}
 
 	/// Emit dot operator: method calls and property access

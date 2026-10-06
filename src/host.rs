@@ -648,11 +648,7 @@ pub fn lower_aliases(node: Node) -> Node {
 	if !node.mentions_any(&HOST_ALIASES.map(|(alias, _, _)| alias)) {
 		return node;
 	}
-	let mut defined = std::collections::HashSet::new();
-	crate::library_words::collect_assigned_names(&node, &mut defined);
-	let mut context = crate::context::Context::new();
-	crate::analyzer::extract_user_functions(&mut context, &node);
-	defined.extend(context.user_functions.into_keys());
+	let defined = crate::library_words::defined_names(&node);
 	let aliases: Vec<_> = HOST_ALIASES.into_iter().filter(|(alias, _, _)| !defined.contains(*alias)).collect();
 	if aliases.is_empty() {
 		return node;

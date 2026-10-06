@@ -1302,10 +1302,12 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 		Node::Key(target, op @ (Op::Assign | Op::Define), value) => Node::Key(Box::new(bind_it(*target, parameter, false)), op, Box::new(bind_it(*value, parameter, true))),
 		// `return {…}`, `f({…})`, `f {…}`
 		Node::List(items, bracket @ (Bracket::Round | Bracket::None), separator @ (Separator::Space | Separator::None | Separator::Colon))
-			if items.len() > 1 && matches!(items[0].drop_meta(), Node::Symbol(_)) =>
+			if items.len() > 1 && is_callee(&items[0]) =>
 		{
 			Node::List(values(items), bracket, separator)
 		}
+		// `xs.map{ it + x }` glued: the block is the method's lambda, its `it` is its own
+		Node::Key(receiver, Op::Dot, method) if glued_block(&method).is_some() => Node::Key(Box::new(bind_it(*receiver, parameter, false)), Op::Dot, method),
 		// the last statement of a body is its value
 		Node::List(items, bracket, separator) => {
 			let last = items.len().saturating_sub(1);
@@ -1316,6 +1318,18 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_it(*node, parameter, is_value)), data },
 		other => other,
 	}
+}
+
+/// `map{ it + x }` after a dot: the method name and its block
+pub(crate) fn glued_block(method: &Node) -> Option<(Node, Node)> {
+	let Node::Key(word, Op::Colon, block) = method.drop_meta() else { return None };
+	let Node::Symbol(_) = word.drop_meta() else { return None };
+	matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)).then(|| (word.as_ref().clone(), block.as_ref().clone()))
+}
+
+/// The function of a call: a name `f`, or a method `xs.map`
+pub(crate) fn is_callee(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(_) | Node::Key(_, Op::Dot, _))
 }
 
 fn one_parameter(head: &Node) -> Option<String> {
