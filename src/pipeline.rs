@@ -117,7 +117,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 48] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 49] = [
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
@@ -136,6 +136,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 48] = [
 	crate::welcome_forms::lower, crate::analyzer::lower_kebab_members, crate::number_keys::lower,
 	crate::units::lower_sleep_durations, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::system_signals::lower, crate::event_signals::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
 	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::lower, crate::host::lower_aliases, crate::modules::resolve,
+	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
+	crate::getters::lower,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
 	crate::analyzer::lower_negated_calls,
 ];
@@ -150,6 +152,15 @@ const MEANING_PASSES: [fn(Node) -> Node; 28] = [
 	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower,
 	crate::traits::lower_dispatch, crate::memoization::lower,
 ];
+
+/// A module's source after the passes the program ran before its `use` was resolved (those before modules::resolve):
+/// its definitions join the program in the same forms (`[w for w in ws if …]` is lowered, not read as a list).
+/// Not getters::lower: a getter `answer := 42` is lowered with the program, whose reads of it become calls.
+pub(crate) fn lower_module_source(module: Node) -> Node {
+	let (resolve, getters): (fn(Node) -> Node, fn(Node) -> Node) = (crate::modules::resolve, crate::getters::lower);
+	let resolved_at = SOURCE_PASSES.iter().position(|pass| std::ptr::fn_addr_eq(*pass, resolve)).expect("modules::resolve is a source pass");
+	SOURCE_PASSES[..resolved_at].iter().filter(|pass| !std::ptr::fn_addr_eq(**pass, getters)).fold(module, |module, pass| pass(module))
+}
 
 fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
 	passes.iter().fold(node, |node, pass| pass(node))

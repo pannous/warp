@@ -338,7 +338,7 @@ impl Loader<'_> {
 			return Err(failure.clone());
 		}
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
-		let module = with_module_directory(module, &directory);
+		let module = with_module_directory(crate::pipeline::lower_module_source(module), &directory);
 		let outer_directory = self.including_directory.replace(directory);
 		let module = self.resolve(module);
 		self.including_directory = outer_directory;
