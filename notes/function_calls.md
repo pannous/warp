@@ -1,7 +1,8 @@
 # Function calls (functions worker, 2026-10-06)
 
 Ported call forms from Python, Kotlin, Swift, C#, JS/TS, Ruby and Julia; tests in tests/functions/, the quick case
-list in probes/function_calls.md (run probes/function_calls.sh after scripts/own-warp.sh).
+list in probes/function_calls*.md (run probes/function_calls.sh <file> after scripts/own-warp.sh). Every case that
+passes goes into tests/functions/test_ported_calls.rs (one table), so no ported form breaks unseen.
 
 ## Decided forms (defaults taken, Interviewer asked where marked)
 - Defaults: `f(a, b=2)`, typed `f(a, b:int=2)`, a default may read earlier parameters `f(a, b=a*2)`. Named
