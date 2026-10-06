@@ -1,8 +1,10 @@
 // P126 (user): texts inside containers are quoted everywhere (print, interpolation, string()): ["a" "b"],
 // Point{x:1 name:"a"}; a text on its own still prints without quotes
+#[cfg(feature = "native")] // printed runs the warp binary
 use crate::common::printed;
 use crate::is;
 
+#[cfg(feature = "native")]
 #[test]
 fn a_text_in_a_list_prints_quoted() {
 	assert_eq!(printed("print [\"a\" \"b\"]"), "[\"a\" \"b\"]\n");
@@ -12,10 +14,10 @@ fn a_text_in_a_list_prints_quoted() {
 	assert_eq!(printed("xs = [\"a\"]; print xs#1"), "a\n");
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn a_text_field_prints_quoted() {
 	assert_eq!(printed("class Point{x:int name:text}; p = Point{x:1 name:\"a\"}; print p"), "Point{x:1 name:\"a\"}\n");
-	is!("class Point{x:int name:text}; p = Point{x:1 name:\"a\"}; string(p)", "Point{x:1 name:\"a\"}");
 	assert_eq!(printed("m = {a:\"x\" b:2}; print m"), "{a:\"x\" b:2}\n");
 }
 
@@ -25,4 +27,5 @@ fn string_and_interpolation_quote_texts_in_containers() {
 	is!("string([\"a\", \"bc\"])", "[\"a\" \"bc\"]");
 	is!("xs = [\"a\", \"b\"]; \"got \\(xs)\"", "got [\"a\" \"b\"]");
 	is!("x = \"a\"; \"got \\(x)\"", "got a");
+	is!("class Point{x:int name:text}; p = Point{x:1 name:\"a\"}; string(p)", "Point{x:1 name:\"a\"}");
 }
