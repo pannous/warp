@@ -136,7 +136,7 @@ impl WaspParser {
 		}
 		// the pipeline `xs |> f(a)` is the call `f(xs, a)`, `xs |> f` is `f(xs)` (F#, Elixir); it binds below arithmetic
 		// and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
-		if self.current_char() == '|' && self.peek_char(1) == '>' {
+		if self.at_pipeline() {
 			return Some((SpecialInfix::Pipeline, 2, PIPELINE_BINDING_POWER));
 		}
 		// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
@@ -158,6 +158,10 @@ impl WaspParser {
 	}
 
 	/// The right operand of a special infix operator, None when it binds looser than `min_bp` (nothing consumed)
+	pub(super) fn at_pipeline(&self) -> bool {
+		self.current_char() == '|' && self.peek_char(1) == '>'
+	}
+
 	pub(super) fn special_operand(&mut self, width: usize, (left, right): (u8, u8), min_bp: u8) -> Option<Node> {
 		if left < min_bp {
 			return None;
@@ -218,6 +222,10 @@ impl WaspParser {
 				continue;
 			}
 
+			// the argument of `square xs |> sum` ends at the pipeline, which takes the whole call (lists.rs)
+			if self.pipe_takes_call && self.at_pipeline() {
+				break;
+			}
 			// Step 3a–e: the operators the infix table does not hold (`mod`, `//`, `|>`, `.+`, `in`, see SpecialInfix)
 			if let Some((infix, width, binding)) = self.special_infix(&lhs) {
 				let Some(operand) = self.special_operand(width, binding, min_bp) else { break };
@@ -260,8 +268,10 @@ impl WaspParser {
 
 			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators)
 			let ends_command = op == Op::And && (self.in_command || (min_bp == 0 && is_command(&lhs))) && self.and_starts_statement();
+			// `whenever not x {…}`, `print not done`: the word `not` after a bare name negates what follows, it is no infix
+			let prefix_not = op == Op::Not && self.matches_keyword("not") && matches!(lhs.drop_meta(), Symbol(_));
 			// Stop if operator binds less tightly than our minimum
-			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
+			if ends_command || prefix_not || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
 			if let Err(refused) = self.left_arrow_assignment(op, &lhs) {

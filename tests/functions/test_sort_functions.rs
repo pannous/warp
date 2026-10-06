@@ -29,6 +29,14 @@ fn sort_with_key() {
 	assert_eq!(printed("xs=[3,-1,2]; xs.sort_by(x => -x)"), "[3 2 -1]"); // Ruby sort_by
 }
 
+// texts compare alphabetically under a comparison comparator too (card words-sorted: ["kiwi" "fig" "banana"] looked
+// unsorted by > but is already descending)
+#[test]
+fn sort_texts_with_comparator() {
+	assert_eq!(printed("words = [\"fig\" \"kiwi\" \"apple\" \"banana\"]; words.sorted(by: >)"), "[\"kiwi\" \"fig\" \"banana\" \"apple\"]");
+	assert_eq!(printed("words = [\"fig\" \"kiwi\" \"apple\" \"banana\"]; sorted(words, by: <)"), "[\"apple\" \"banana\" \"fig\" \"kiwi\"]");
+}
+
 #[test]
 fn sort_is_stable() {
 	assert_eq!(printed("xs=[21,12,11,22]; sorted(xs, x => x % 10)"), "[21 11 12 22]");

@@ -446,8 +446,13 @@ const PIPE_GLYPH: &str = "|";
 /// `|>` binds below range and arithmetic, above `as` and comparisons
 const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
 
-/// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`
+/// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`; a braceless call is grouped, one argument:
+/// `square xs |> filter(p)` → `filter((square xs), p)`
 fn piped(value: Node, stage: Node) -> Node {
+	let value = match value.drop_meta() {
+		Node::List(_, Bracket::None, Separator::Space) => Node::List(vec![value], Bracket::Round, Separator::None),
+		_ => value,
+	};
 	match stage.drop_meta() {
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(_))) => {
 			let mut items = items.clone();
@@ -586,6 +591,8 @@ pub struct WaspParser {
 	brace_holes: bool,
 	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
 	in_command: bool,
+	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
+	pipe_takes_call: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
 	times_loops: usize,
 	/// A comment between two statements: it belongs to the next one (parse_value attaches it)
@@ -852,6 +859,7 @@ impl WaspParser {
 			stops_at_end: false,
 			brace_holes: false,
 			in_command: false,
+			pipe_takes_call: false,
 			times_loops: 0,
 			pending_comment: None,
 			after_function_keyword: false,

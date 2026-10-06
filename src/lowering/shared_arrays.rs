@@ -23,6 +23,7 @@ const SHARED_NEW: &str = crate::host::SHARED_WORDS[0];
 const SHARED_COUNT: &str = crate::host::SHARED_WORDS[4];
 const COUNTING_WORDS: [&str; 3] = ["count", "length", "size"];
 const FLOAT_WORDS: [&str; 3] = ["float", "real", "double"];
+const MAP_WORD: &str = "map";
 
 /// `linear xs = int[n]`: an array in linear memory
 const LINEAR_WORD: &str = "linear";
@@ -86,6 +87,8 @@ pub fn lower(node: Node) -> Node {
 		crate::diagnostic::educate_once(LINEAR_TOPIC, "linear xs = int[n]", "xs = int[n]",
 			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
 	}
+	let mut declared = declared;
+	declared.extend(float_map_results(&node, &declared));
 	let functions = definitions(&node);
 	let shared_parameters = shared_parameters(&node, &functions, &declared);
 	Rewrite { declared, functions: &functions, shared_parameters: &shared_parameters }.node(node, None)
@@ -246,6 +249,10 @@ impl Rewrite<'_> {
 			Node::Key(target, op, value) => {
 				let names = self.names(function);
 				match (target.drop_meta(), op) {
+					// `ys = xs.map(x => x * 0.5 + 1)` of a linear float array: its float kernel makes ys, a new linear array
+					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, kernel)) = float_map(&value, &names) => {
+						Node::Key(target, op, Box::new(builtin(&kernel, vec![array])))
+					}
 					// `n = n + v`, `n = n - v`: the atomic add, as `n += v`, so no task's update is lost
 					(name, Op::Assign) if let Some(kind) = shared_value(name, &names) && let Some((op, added)) = self_update(name, &value) => {
 						let [_, _, add] = element_words(kind);
@@ -324,6 +331,39 @@ impl Rewrite<'_> {
 			other => other,
 		}
 	}
+}
+
+/// `xs.map(x => body)` or `map(xs, x => body)` of a linear float array whose body a float kernel computes: the array and
+/// the kernel's name (wasm_emitter/linear_arrays.rs, f64x2 lanes)
+fn float_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, String)> {
+	let (array, lambda) = match value.drop_meta() {
+		Node::Key(array, Op::Dot, call) => match call.drop_meta() {
+			Node::List(items, _, _) if items.len() == 2 && items[0].name() == MAP_WORD => (array.as_ref(), &items[1]),
+			_ => return None,
+		},
+		Node::List(items, _, _) if items.len() == 3 && items[0].name() == MAP_WORD => (&items[1], &items[2]),
+		_ => return None,
+	};
+	let Node::Key(parameter, Op::FatArrow, body) = lambda.drop_meta() else { return None };
+	let Node::Symbol(parameter) = parameter.drop_meta() else { return None };
+	let kind = shared(array, names)?;
+	let linear_floats = kind.storage == Storage::Linear && kind.element == Element::Float;
+	(linear_floats && crate::wasm_emitter::linear_arrays::is_float_kernel(parameter, body))
+		.then(|| (array.clone(), crate::wasm_emitter::linear_arrays::kernel_name(parameter, body)))
+}
+
+/// The names assigned once, by a float map of a linear float array: linear float arrays too
+fn float_map_results(node: &Node, declared: &HashMap<String, Shared>) -> HashMap<String, Shared> {
+	let mut assignments: HashMap<String, (usize, bool)> = HashMap::new();
+	node.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::AddAssign | Op::SubAssign | Op::MulAssign | Op::DivAssign, value) = part {
+		if let Node::Symbol(name) = target.drop_meta() {
+			let entry = assignments.entry(name.clone()).or_insert((0, false));
+			entry.0 += 1;
+			entry.1 = float_map(value, declared).is_some();
+		}
+	});
+	let linear_floats = Shared { element: Element::Float, value: false, storage: Storage::Linear };
+	assignments.into_iter().filter(|(name, (count, maps))| *count == 1 && *maps && !declared.contains_key(name)).map(|(name, _)| (name, linear_floats)).collect()
 }
 
 /// What a shared array named by `node` holds, if it is one
