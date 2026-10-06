@@ -15,7 +15,7 @@ access to anything." Card hijack-stdlib. Survey of what exists, options per ecos
     returns the bare name.
   - `ctype.h` isn't searched, so `toupper` is unknown.
   - sqlite3 panics (a loud error is owed).
-  - Struct and out-pointer APIs (`sqlite3_open(&db)`) need handles.
+  - Struct and out-pointer APIs (`sqlite3_open(&db)`) need handles: done, C pointers are handle ids (notes/ffi_handles.md).
 - **Host words** (src/host.rs): Rust functions the module imports, Node in / Node out. `run_block` reads Nodes with
   `wasm_reader::node_in` and builds its result with `tasks::Builders` (TaskValue: ø, Int, Float, Char, Text, Symbol,
   List, Key, Closure, Exact). That is a general bridge for any value: every connector below can use it.

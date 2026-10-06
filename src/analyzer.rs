@@ -87,7 +87,7 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 }
 
 /// `{a;b;c}` as a definition body: a sequence of statements to run, unlike the value list `{1 2 3}`
-fn is_statement_block(node: &Node) -> bool {
+pub(crate) fn is_statement_block(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(_, Bracket::Curly, Separator::Semicolon | Separator::Newline) => true,
 		Node::List(items, Bracket::Curly, _) => matches!(items.as_slice(), [single] if is_update(single.drop_meta())), // `{x=x+1}`, `{n++}`
@@ -1443,7 +1443,7 @@ const MAP_TYPE_PREFIX: &str = "map of ";
 const NODE_LIST_TYPE: &str = "list of node";
 const LIST_WORD: &str = "list";
 /// Between a variable and the name of a temporary made for it (`xs·range`, `xs·item`, `m·removed`)
-const TEMPORARY_SEPARATOR: &str = "·";
+pub const TEMPORARY_SEPARATOR: &str = "·";
 /// Statements that name functions or modules instead of calling them
 const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 const LIST_OF_PREFIX: &str = "list of ";
@@ -3904,6 +3904,11 @@ fn uses_it(node: &Node) -> bool {
 		Node::List(items, _, _) => items.iter().any(uses_it),
 		_ => false,
 	}
+}
+
+/// A body of `name := body` that reads `it` or `$0`: a function of that parameter
+pub(crate) fn takes_implicit_parameter(body: &Node) -> bool {
+	uses_it(body) || uses_dollar_param(body)
 }
 
 /// Check if a node uses $n parameter references (e.g., $0, $1)

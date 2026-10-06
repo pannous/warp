@@ -182,8 +182,9 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
     };
     let return_type = if pointer_marks.is_empty() { return_type } else { format!("{return_type} {pointer_marks}") };
 
-    // Find closing paren; a line whose last `)` comes before its first `(` (sqlite3.h has such) declares nothing
-    let close_paren = decl.rfind(')').filter(|close| *close > paren_pos)?;
+    // the `)` closing the parameters: a macro may follow it (`fopen(…) __DARWIN_ALIAS(fopen);`); a line without one
+    // (sqlite3.h has such) declares nothing
+    let close_paren = matching_paren(decl, paren_pos)?;
     let params_str = &decl[paren_pos+1..close_paren];
 
     let mut param_types = Vec::new();
@@ -208,9 +209,10 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
             } else {
                 let last = parts.last().unwrap();
                 let name = last.trim_start_matches('*').to_string();
-                // Reconstruct type (everything except pure name)
-                let type_str = if last.starts_with('*') {
-                    format!("{} *", parts[..parts.len()-1].join(" "))
+                // Reconstruct type (everything except pure name); `sqlite3 **ppDb` keeps both stars
+                let stars = &last[..last.len() - name.len()];
+                let type_str = if !stars.is_empty() {
+                    format!("{} {stars}", parts[..parts.len()-1].join(" "))
                 } else {
                     parts[..parts.len()-1].join(" ")
                 };
@@ -234,15 +236,10 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
 
 /// Convert FfiHeaderSignature to FfiSignature (using 'static lifetime via leak)
 pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> {
-    let params: Vec<wasm_encoder::ValType> = hsig.param_types.iter()
+    let params: Vec<wasm_encoder::ValType> = wasp_parameters(&hsig.param_types)
         .filter_map(|t| map_c_type_to_valtype(t))
         .collect();
-
-    // a C string result is a Node the host builds (a text, or ø for NULL)
-    let results: Vec<wasm_encoder::ValType> = match is_text_type(&hsig.return_type) {
-        true => vec![wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)],
-        false => map_c_type_to_valtype(&hsig.return_type).map(|v| vec![v]).unwrap_or_default(),
-    };
+    let results: Vec<wasm_encoder::ValType> = header_result(hsig).into_iter().collect();
 
     // Leak strings for 'static lifetime (acceptable for long-running process)
     let name: &'static str = Box::leak(hsig.name.clone().into_boxed_str());
@@ -316,7 +313,7 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
         Ok(c) => with_glibc_mathcalls(c, path),
         Err(_) => return Vec::new(),
     };
-
+    let mut struct_types = StructTypes::default();
     let mut signatures = Vec::new();
     let mut current_decl = String::new();
     let mut in_block_comment = false;
@@ -331,6 +328,7 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
             continue;
         }
 
+        struct_types.read(line);
         // Skip empty lines and typedefs/structs in the middle of accumulation
         if line.is_empty() {
             current_decl.clear();
@@ -359,7 +357,58 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
         }
     }
 
+    remember_struct_types(struct_types.names);
     signatures
+}
+
+/// The struct types a header declares (`typedef struct sqlite3 sqlite3;`, `typedef struct __sFILE {…} FILE;`): a
+/// pointer to one is a handle
+#[derive(Default)]
+struct StructTypes {
+    names: std::collections::HashSet<String>,
+    /// inside `typedef struct X {`: its name follows the closing `}`
+    in_definition: bool,
+}
+
+impl StructTypes {
+    fn read(&mut self, line: &str) {
+        let words: Vec<&str> = line.trim_end_matches(';').split_whitespace().collect();
+        let is_typedef_struct = words.starts_with(&["typedef", "struct"]);
+        if is_typedef_struct && line.contains('{') && !line.contains('}') {
+            self.in_definition = true;
+        } else if is_typedef_struct && line.ends_with(';') && words.len() == 4 {
+            self.names.insert(words[3].to_string());
+        } else if self.in_definition && line.starts_with('}') && line.ends_with(';') {
+            self.in_definition = false;
+            self.names.extend(words.last().map(|name| name.trim_start_matches('}').to_string()).filter(|name| !name.is_empty()));
+        }
+    }
+}
+
+/// The struct types of every header read so far: a header may use one another declares (stdio.h's `fgetc(FILE *)`,
+/// with FILE in _stdio.h), so a library's headers are all read before its signatures are classified
+static STRUCT_TYPES: std::sync::Mutex<Option<std::collections::HashSet<String>>> = std::sync::Mutex::new(None);
+
+fn remember_struct_types(names: std::collections::HashSet<String>) {
+    STRUCT_TYPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).get_or_insert_with(Default::default).extend(names);
+}
+
+fn is_struct_type(name: &str) -> bool {
+    STRUCT_TYPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_ref().is_some_and(|names| names.contains(name))
+}
+
+/// The position of the `)` closing the `(` at `open`
+pub(crate) fn matching_paren(text: &str, open: usize) -> Option<usize> {
+    let mut depth = 0;
+    for (position, c) in text[open..].char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' if depth == 1 => return Some(open + position),
+            ')' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// An annotation macro standing alone before a declaration: `API_AVAILABLE(macos(10.10), ios(8.2))` (Apple's headers)
@@ -410,52 +459,84 @@ pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, Ff
     signatures
 }
 
-/// The C functions whose result is a pointer (`char *getenv(…)`, `sqlite3 *…`): they are not imported, a call says why
-static POINTER_RESULTS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
-
-/// Does a parsed header declare `name` with a pointer result (`char *getenv(const char *)`)
-pub fn returns_pointer(name: &str) -> bool {
-    POINTER_RESULTS.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).iter().any(|known| known == name)
-}
-
-/// The error of a call nothing resolves: a C function with a pointer result says why it is missing
+/// The error of a call nothing resolves: a libc function says how to import it
 pub fn undefined_function_message(name: &str) -> String {
-    if returns_pointer(name) {
-        return format!("{name} returns a C pointer (a struct, a handle): handles from C are not supported yet");
-    }
     match get_ffi_signature_from_lib(name, "c") {
         Some(_) => format!("{name} is a C function: write `use c` or `import {name} from \"c\"`"),
         None => format!("undefined function: {name}"),
     }
 }
 
-fn is_pointer_type(c_type: &str) -> bool {
-    c_type.contains('*')
+/// What a C pointer type crosses as (notes/ffi_handles.md)
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CPointer {
+    /// `char *`, `const unsigned char *`: a wasp text (a parameter its NUL-terminated letters in linear memory)
+    Text,
+    /// `void *`, `int *`: a parameter points into linear memory; a result is a handle
+    Memory,
+    /// `sqlite3 *`, `FILE *`: an id into the run's handle table (CHandles), 0 is NULL
+    Handle,
+    /// `sqlite3 **ppDb`: left out of the wasp call; the first one becomes the result, the others receive NULL
+    Out,
 }
 
-/// `char *` and `const char *`: a C string, which crosses as a wasp text (NULL as ø). Annotation macros around it
-/// (`char *_LIBC_CSTR`, `ZEXTERN const char * ZEXPORT`, `SQLITE_API const char *`) do not count
-fn is_text_type(c_type: &str) -> bool {
-    let is_macro = |word: &str| word.chars().any(|c| c.is_ascii_uppercase()) && word.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
-    let spaced = c_type.replace('*', " * ");
-    spaced.split_whitespace().filter(|word| *word != "const" && !is_macro(word)).collect::<String>() == "char*"
+/// C words that qualify a type without naming it
+const C_QUALIFIERS: [&str; 7] = ["const", "volatile", "struct", "enum", "union", "unsigned", "signed"];
+
+/// The type a C pointer type points to: the last word before its `*` (`char` of `SQLITE_API const unsigned char *`,
+/// `FILE` of `FILE *`), "" for none (`unsigned *`)
+fn pointee(c_type: &str) -> String {
+    let before_star = &c_type[..c_type.find('*').unwrap_or(c_type.len())];
+    before_star.split_whitespace().filter(|word| !C_QUALIFIERS.contains(word)).last().unwrap_or_default().to_string()
+}
+
+/// How the C type `c_type` crosses, None for no pointer. A handle points to a struct (`struct stat *`, or one a header
+/// declares: `sqlite3 *`, `FILE *`); a pointer to anything else (`Bytef *`, `void *`) is memory, as before handles
+pub fn pointer_kind(c_type: &str) -> Option<CPointer> {
+    let names_struct = || c_type.split_whitespace().any(|word| word == "struct") || is_struct_type(&pointee(c_type));
+    match c_type.matches('*').count() {
+        0 => None,
+        1 if pointee(c_type) == "char" => Some(CPointer::Text),
+        1 if names_struct() => Some(CPointer::Handle),
+        1 => Some(CPointer::Memory),
+        _ => Some(CPointer::Out),
+    }
+}
+
+/// The C parameters a wasp call passes: all but the out-pointers
+fn wasp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
+    param_types.iter().filter(|t| pointer_kind(t) != Some(CPointer::Out))
+}
+
+/// What a C function's result crosses as: a text, a handle (a pointer result or the first out-pointer), else None for
+/// its number
+fn pointer_result(hsig: &FfiHeaderSignature) -> Option<CPointer> {
+    let has_out_pointer = hsig.param_types.iter().any(|t| pointer_kind(t) == Some(CPointer::Out));
+    match pointer_kind(&hsig.return_type) {
+        Some(CPointer::Text) => Some(CPointer::Text),
+        Some(_) => Some(CPointer::Handle),
+        None => has_out_pointer.then_some(CPointer::Handle),
+    }
+}
+
+/// The wasm result of a C function: a text Node, a handle id, else its number
+fn header_result(hsig: &FfiHeaderSignature) -> Option<wasm_encoder::ValType> {
+    match pointer_result(hsig) {
+        Some(CPointer::Text) => Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)),
+        Some(_) => Some(wasm_encoder::ValType::I32),
+        None => map_c_type_to_valtype(&hsig.return_type),
+    }
 }
 
 fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
     let mut sigs = HashMap::new();
     let paths = get_library_header_paths(library);
 
-    for path in &paths {
-        let header_sigs = parse_header_file(path, library);
-        for hsig in header_sigs {
-            // a pointer result would cross as a truncated i32: refused until texts and handles from C exist
-            if is_pointer_type(&hsig.return_type) && !is_text_type(&hsig.return_type) {
-                POINTER_RESULTS.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(hsig.name.clone());
-                continue;
-            }
-            if let Some(ffi_sig) = header_sig_to_ffi_sig(&hsig) {
-                sigs.insert(hsig.name.clone(), ffi_sig);
-            }
+    // all headers first: their struct types decide how pointers cross (is_struct_type)
+    let header_sigs: Vec<FfiHeaderSignature> = paths.iter().flat_map(|path| parse_header_file(path, library)).collect();
+    for hsig in header_sigs {
+        if let Some(ffi_sig) = header_sig_to_ffi_sig(&hsig) {
+            sigs.insert(hsig.name.clone(), ffi_sig);
         }
     }
 
@@ -656,10 +737,6 @@ pub fn is_ffi_function(name: &str) -> bool {
 /// Get FFI signature for a function by name
 /// Searches well-known libraries (m, c, SDL2) via dynamic header discovery
 pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
-    // a function with a pointer result is imported nowhere (returns_pointer); its libraries' headers tell
-    if implicit_header_libraries(name).iter().any(|lib| !get_signatures_from_headers(lib).is_empty() && returns_pointer(name)) {
-        return None;
-    }
     let declared = |lib: &&str| get_signatures_from_headers(lib).get(name).cloned();
     // a C string result as its header declares it (getenv's text), where the cached table has it as a number
     let text_result = |sig: &FfiSignature| matches!(sig.results.first(), Some(wasm_encoder::ValType::Ref(_)));
@@ -687,11 +764,7 @@ pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignat
         }
     }
     // any other function is linked from its header declaration (link_single_function), so it is imported as declared
-    let declared = get_signatures_from_headers(library).get(name).cloned();
-    if returns_pointer(name) {
-        return None;
-    }
-    declared.or(built_in)
+    get_signatures_from_headers(library).get(name).cloned().or(built_in)
 }
 
 /// Link FFI functions into a wasmtime linker
@@ -1003,7 +1076,12 @@ enum ParamType {
     I64,
     F32,
     F64,
+    /// linear memory: a text, a buffer
     Ptr,
+    /// a handle id (CPointer::Handle)
+    Handle,
+    /// an out-pointer, filled by the call (CPointer::Out)
+    Out,
 }
 
 /// Normalized return type for signature matching
@@ -1030,7 +1108,11 @@ fn c_type_to_param_type(c_type: &str) -> ParamType {
         "long" | "int64_t" | "long long" | "size_t" | "ssize_t" | "unsigned long" | "uint64_t" => {
             ParamType::I64
         }
-        s if s.contains('*') => ParamType::Ptr,
+        s if s.contains('*') => match pointer_kind(s) {
+            Some(CPointer::Handle) => ParamType::Handle,
+            Some(CPointer::Out) => ParamType::Out,
+            _ => ParamType::Ptr,
+        },
         _ => ParamType::I32, // int, bool, char, short, Color, etc.
     }
 }
@@ -1096,14 +1178,12 @@ pub fn link_dynamic_library(
 
     let mut linked_count = 0;
 
-    for header_path in &header_paths {
-        let signatures = parse_header_file(header_path, lib_name);
-
-        // only what the module imports: libc's headers declare hundreds of functions
-        for sig in signatures.iter().filter(|sig| imported.contains(&sig.name) && (!is_pointer_type(&sig.return_type) || is_text_type(&sig.return_type))) {
-            if link_single_function(linker, engine, import_name, &library, sig).is_ok() {
-                linked_count += 1;
-            }
+    // all headers first: their struct types decide how pointers cross (is_struct_type)
+    let signatures: Vec<FfiHeaderSignature> = header_paths.iter().flat_map(|path| parse_header_file(path, lib_name)).collect();
+    // only what the module imports: libc's headers declare hundreds of functions
+    for sig in signatures.iter().filter(|sig| imported.contains(&sig.name)) {
+        if link_single_function(linker, engine, import_name, &library, sig).is_ok() {
+            linked_count += 1;
         }
     }
 
@@ -1132,16 +1212,23 @@ fn link_single_function(
         return Err(anyhow::anyhow!("Null function pointer for {}", func_name));
     }
 
-    let wasm_params: Vec<ValType> = sig
-        .param_types
-        .iter()
+    let wasm_params: Vec<ValType> = wasp_parameters(&sig.param_types)
         .filter_map(|t| c_type_to_wasm_valtype(t))
         .collect();
 
     let param_types: Vec<ParamType> = sig.param_types.iter().map(|t| c_type_to_param_type(t)).collect();
-    if is_text_type(&sig.return_type) {
-        let func_type = FuncType::new(engine, wasm_params, [ValType::ANYREF]);
-        return create_text_result_wrapper(linker, lib_name, &func_name, func_type, func_ptr, &param_types);
+    let ret_type = c_type_to_ret_type(&sig.return_type);
+    let result = pointer_result(sig);
+    if result.is_some() || param_types.contains(&ParamType::Handle) {
+        let wasm_results: Vec<ValType> = match result {
+            Some(CPointer::Text) => vec![ValType::ANYREF],
+            Some(_) => vec![ValType::I32],
+            None => c_type_to_wasm_valtype(&sig.return_type).into_iter().collect(),
+        };
+        let func_type = FuncType::new(engine, wasm_params, wasm_results);
+        let out_pointee = sig.param_types.iter().find(|t| pointer_kind(t) == Some(CPointer::Out)).map(|t| pointee(t));
+        let call = PointerCall { name: func_name.clone(), func_ptr, param_types, result, ret_type, out_pointee };
+        return create_pointer_wrapper(linker, lib_name, func_type, call);
     }
 
     let wasm_results: Vec<ValType> = c_type_to_wasm_valtype(&sig.return_type)
@@ -1149,8 +1236,6 @@ fn link_single_function(
         .collect();
 
     let func_type = FuncType::new(engine, wasm_params.clone(), wasm_results.clone());
-
-    let ret_type = c_type_to_ret_type(&sig.return_type);
 
     // Generate signature key for dispatch (e.g., "III_I" for 3 ints returning int)
     let sig_key = generate_signature_key(&param_types, ret_type);
@@ -1170,6 +1255,8 @@ fn generate_signature_key(params: &[ParamType], ret: RetType) -> String {
             ParamType::F32 => 'F',
             ParamType::F64 => 'D',
             ParamType::Ptr => 'P',
+            ParamType::Handle => 'H',
+            ParamType::Out => 'O',
         });
     }
     key.push('_');
@@ -1424,21 +1511,14 @@ fn create_generic_ffi_wrapper(
     // For generic case, we pack all args into an array and use assembly/platform-specific calling
     // This is a simplified version that handles up to 8 args (enough for most APIs)
     linker.func_new(lib_name, func_name, func_type, move |mut caller, params, results| {
-        let args = native_arguments(&mut caller, params, &param_types);
+        let args = native_arguments(&mut caller, "", params, &param_types, &mut 0)?;
 
         // Call using platform-specific calling convention
         // ARM64 and x86_64 use similar conventions for first 8 integer/pointer args
         let ret = unsafe { call_native_function(func_ptr, &args, params.len()) };
 
-        if !results.is_empty() {
-            results[0] = match ret_type {
-                RetType::Void => return Ok(()),
-                RetType::I32 => Val::I32(ret as i32),
-                RetType::I64 => Val::I64(ret as i64),
-                RetType::F32 => Val::F32((ret as f32).to_bits()),
-                RetType::F64 => Val::F64(ret),
-                RetType::Bool => Val::I32(if ret != 0 { 1 } else { 0 }),
-            };
+        if let Some(result) = results.first_mut() {
+            *result = native_result(ret, ret_type);
         }
 
         Ok(())
@@ -1447,44 +1527,120 @@ fn create_generic_ffi_wrapper(
     Ok(())
 }
 
-/// The raw arguments of a native call (up to 8): numbers as they are, a pointer parameter as the address of its
-/// text in linear memory
+/// The raw arguments of a native call (up to 8), one per C parameter: numbers as they are, a memory pointer as the
+/// address of its text in linear memory, a handle id as its C pointer; the first out-pointer gets `out_slot`, others NULL
 #[cfg(feature = "native")]
-fn native_arguments(caller: &mut wasmtime::Caller<'_, FfiState>, params: &[Val], param_types: &[ParamType]) -> [u64; 8] {
+fn native_arguments(caller: &mut wasmtime::Caller<'_, FfiState>, name: &str, params: &[Val], param_types: &[ParamType], out_slot: &mut usize) -> wasmtime::Result<[u64; 8]> {
     let mut args: [u64; 8] = [0; 8];
-    for (i, (param, ptype)) in params.iter().zip(param_types.iter()).enumerate().take(8) {
+    let mut wasp_params = params.iter();
+    let mut out_slot = Some(out_slot);
+    for (i, ptype) in param_types.iter().enumerate().take(8) {
+        if *ptype == ParamType::Out {
+            args[i] = out_slot.take().map_or(0, |slot| slot as *mut usize as u64);
+            continue;
+        }
+        let Some(param) = wasp_params.next() else { break };
         args[i] = match ptype {
             ParamType::I32 => param.unwrap_i32() as u64,
             ParamType::I64 => param.unwrap_i64() as u64,
             ParamType::F32 => (param.unwrap_f32() as f64).to_bits(),
             ParamType::F64 => param.unwrap_f64().to_bits(),
             ParamType::Ptr => get_memory_ptr(caller, param.unwrap_i32() as usize) as u64,
+            ParamType::Handle => {
+                let id = param.unwrap_i32();
+                caller.data().c_handles.pointer(id).ok_or_else(|| wasmtime::Error::msg(format!("{name}: {id} is no C handle of this run")))? as u64
+            }
+            ParamType::Out => unreachable!("out-pointers are filled above"),
         };
     }
-    args
+    Ok(args)
 }
 
-/// A C function returning `char *` (getenv, zlibVersion): its NUL-terminated string copied into the module as a wasp
-/// text, built with the module's own constructor; NULL is ø
+/// The C pointers a run got, handed to wasp as ids: id n is the n-th pointer, 0 is NULL; the same pointer keeps its id.
+/// The table lives in the run's HostState and goes with it: ids are never addresses, and never outlive the run
 #[cfg(feature = "native")]
-fn create_text_result_wrapper(
-    linker: &mut Linker<FfiState>,
-    lib_name: &str,
-    func_name: &str,
-    func_type: FuncType,
+#[derive(Default)]
+pub struct CHandles {
+    pointers: Vec<usize>,
+}
+
+#[cfg(feature = "native")]
+impl CHandles {
+    pub fn id_of(&mut self, pointer: usize) -> i32 {
+        if pointer == 0 {
+            return 0;
+        }
+        let index = self.pointers.iter().position(|known| *known == pointer).unwrap_or_else(|| {
+            self.pointers.push(pointer);
+            self.pointers.len() - 1
+        });
+        index as i32 + 1
+    }
+
+    pub fn pointer(&self, id: i32) -> Option<usize> {
+        match id {
+            0 => Some(0),
+            id if id > 0 => self.pointers.get(id as usize - 1).copied(),
+            _ => None,
+        }
+    }
+}
+
+/// A C function crossing pointers (notes/ffi_handles.md): handle parameters, an out-pointer, a text or handle result
+#[cfg(feature = "native")]
+struct PointerCall {
+    name: String,
     func_ptr: usize,
-    param_types: &[ParamType],
-) -> Result<()> {
-    let param_types = param_types.to_vec();
-    linker.func_new(lib_name, func_name, func_type, move |mut caller, params, results| {
-        let args = native_arguments(&mut caller, params, &param_types);
-        let pointer = unsafe { call_native_function(func_ptr, &args, params.len()) } as usize as *const std::ffi::c_char;
-        // copied before anything else runs: a C string from getenv may change with the next call
-        let text = (!pointer.is_null()).then(|| unsafe { std::ffi::CStr::from_ptr(pointer) }.to_bytes().to_vec());
-        results[0] = text_node(&mut caller, text.as_deref()).map_err(|failure| wasmtime::Error::msg(failure.to_string()))?;
+    param_types: Vec<ParamType>,
+    /// Text, Handle, or None for the C function's own number (ret_type)
+    result: Option<CPointer>,
+    ret_type: RetType,
+    /// what the first out-pointer points to (`sqlite3_stmt` of `sqlite3_stmt **ppStmt`), for the error of a NULL there
+    out_pointee: Option<String>,
+}
+
+/// One wrapper for every C function crossing pointers: `sqlite3_column_text(stmt, i)` takes a handle and gives a text,
+/// `sqlite3_open(name)` gives the handle its out-pointer received (NULL there is an error naming the C status), a
+/// `char *` result is copied into the module as a wasp text (NULL is ø)
+#[cfg(feature = "native")]
+fn create_pointer_wrapper(linker: &mut Linker<FfiState>, lib_name: &str, func_type: FuncType, call: PointerCall) -> Result<()> {
+    let name = call.name.clone();
+    linker.func_new(lib_name, &name, func_type, move |mut caller, params, results| {
+        let mut out_slot: usize = 0;
+        let args = native_arguments(&mut caller, &call.name, params, &call.param_types, &mut out_slot)?;
+        let returned = unsafe { call_native_function(call.func_ptr, &args, call.param_types.len()) };
+        if let Some(pointee) = &call.out_pointee {
+            if out_slot == 0 {
+                return Err(wasmtime::Error::msg(format!("{} gave no {pointee} (C status {})", call.name, returned as i32)));
+            }
+        }
+        let pointer = if call.out_pointee.is_some() { out_slot } else { returned as usize };
+        let Some(result) = results.first_mut() else { return Ok(()) };
+        *result = match call.result {
+            Some(CPointer::Text) => {
+                // copied before anything else runs: a C string from getenv may change with the next call
+                let pointer = pointer as *const std::ffi::c_char;
+                let text = (!pointer.is_null()).then(|| unsafe { std::ffi::CStr::from_ptr(pointer) }.to_bytes().to_vec());
+                text_node(&mut caller, text.as_deref()).map_err(|failure| wasmtime::Error::msg(failure.to_string()))?
+            }
+            Some(_) => Val::I32(caller.data_mut().c_handles.id_of(pointer)),
+            None => native_result(returned, call.ret_type),
+        };
         Ok(())
     })?;
     Ok(())
+}
+
+/// A C function's raw return value as the wasm value of its type
+#[cfg(feature = "native")]
+fn native_result(returned: u64, ret_type: RetType) -> Val {
+    match ret_type {
+        RetType::Void | RetType::I32 => Val::I32(returned as i32),
+        RetType::I64 => Val::I64(returned as i64),
+        RetType::F32 => Val::F32((returned as f32).to_bits()),
+        RetType::F64 => Val::F64(returned),
+        RetType::Bool => Val::I32(if returned != 0 { 1 } else { 0 }),
+    }
 }
 
 /// A wasp text of `bytes` in the calling module (its memory, text heap and new_text), or ø

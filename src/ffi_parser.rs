@@ -17,8 +17,8 @@ const INCLUDE_DIRS: &[&str] = &[
 const INCLUDE_VARIABLE: &str = "WARP_INCLUDE";
 const SDL_HEADERS: [&str; 4] = ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_timer.h"];
 /// libc's headers: strings, conversions and memory, stdio, character classes (`toupper`). macOS declares much of them
-/// in the _stdlib.h and _ctype.h that stdlib.h and ctype.h include (`getenv`, `toupper`); a header missing on Linux is skipped
-const LIBC_HEADERS: [&str; 6] = ["string.h", "stdlib.h", "_stdlib.h", "stdio.h", "ctype.h", "_ctype.h"];
+/// in the _stdlib.h, _stdio.h and _ctype.h that stdlib.h, stdio.h and ctype.h include (`getenv`, `fopen`, `toupper`); a header missing on Linux is skipped
+const LIBC_HEADERS: [&str; 7] = ["string.h", "stdlib.h", "_stdlib.h", "stdio.h", "_stdio.h", "ctype.h", "_ctype.h"];
 /// Libraries whose header is not named after them: `use z` reads zlib.h
 const LIBRARY_HEADERS: [(&str, &str); 1] = [("z", "zlib.h")];
 
@@ -108,11 +108,7 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
     let decl = decl.trim().trim_end_matches(';').trim();
 
     let paren_pos = decl.find('(')?;
-    let close_paren = decl.rfind(')')?;
-
-    if paren_pos >= close_paren {
-        return None;
-    }
+    let close_paren = crate::ffi::matching_paren(&decl, paren_pos)?;
 
     let before_paren = &decl[..paren_pos];
     let params_str = &decl[paren_pos + 1..close_paren];
@@ -124,8 +120,11 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
     }
 
     let mut name = parts.last()?.to_string();
+    // the stars of `FILE *fopen(…)` belong to the return type
+    let mut pointer_marks = String::new();
     while name.starts_with('*') {
         name = name[1..].to_string();
+        pointer_marks.push('*');
     }
 
     if name.is_empty() || !name.chars().next()?.is_alphabetic() || crate::ffi::C_TYPE_WORDS.contains(&name.as_str()) {
@@ -133,7 +132,7 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
     }
 
     let return_type_str = if parts.len() > 1 {
-        parts[..parts.len() - 1].join(" ")
+        format!("{} {pointer_marks}", parts[..parts.len() - 1].join(" "))
     } else {
         "int".to_string()
     };

@@ -17,7 +17,7 @@
   `{1 2}` stays a data list, `{"A": 1}` a map, `{it*2}` / `{x => x+1}` lambdas.
 - `o = {s1: a+b, s3 = a+b}`: a computed `:` entry is an uncharged block the object holds as data (got-it warning where
   written), `o.s1!` runs it where written (the parser marks the field as for `x.upper!`), `o.s1 + 1` is the type error;
-  `s3 = a+b` is a value entry (evaluated now); `:=` entries are untouched (P71). An object without such entries is not
+  `s3 = a+b` is a value entry (evaluated now); `s := e` entries are getters (P71, src/lowering/getters.rs). An object without such entries is not
   rebuilt (meta attributes like `@unit("cm") {x:1}` stay).
 - `help = {print: "there is help"}; help!` runs the object as code: each `key: value` is the call `key(value)`.
 Next: code/block prefixes, block parameters for if/while/for/def.
@@ -38,4 +38,4 @@ Next: code/block prefixes, block parameters for if/while/for/def.
   so `o.a = 5` is seen; reading a global object from a top-level function is unreliable (`k.a` comes back as text).
 - The parser reads `o = {f := it*2}` as `o := …` (its `it`); `object_assignment` turns it back into `=` when only
   function entries mention `it` (`inc := {x = x+1}` stays a definition).
-- `s := e` without `it` is a value entry (P71 open: now), as on main.
+- `s := e` without `it` is a getter entry (P71 decided 2026-10-06): the method `o·s() := e`, and a bare `o.s` calls it.

@@ -17,15 +17,6 @@ fn test_remove2() {
 }
 
 #[test]
-#[ignore]
-fn test_replace() {
-	let result = parse("a b c d");
-	// result.replace(1, 2, Node("x"));
-	let replaced = parse("a x d");
-	assert!(result == replaced);
-}
-
-#[test]
 fn test_mark_as_map() {
 	let mut mappy = parse("{a:1 b:2 c:3}");
 	mappy['a'] = 10.into();

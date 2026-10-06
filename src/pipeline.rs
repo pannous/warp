@@ -107,6 +107,7 @@ fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnO
 
 /// A compiled program and the host capabilities its imports need.
 #[cfg_attr(not(feature = "native"), allow(dead_code))] // the browser host links every import itself
+#[derive(Clone)]
 pub struct CompiledModule {
 	pub bytes: Vec<u8>,
 	pub(crate) needs_host: bool,
@@ -116,7 +117,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 28] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 29] = [
 	// `x | f` (pipes.rs) before any pass reads the or
 	crate::pipes::lower,
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
@@ -124,7 +125,7 @@ const SOURCE_PASSES: [fn(Node) -> Node; 28] = [
 	crate::phrase_calls::lower,
 	crate::welcome_forms::lower, crate::number_keys::lower,
 	crate::declarations::lower_tasks, crate::shared_arrays::lower, crate::variable_signals::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::result_word::lower, crate::picked_calls::lower, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
-	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::lower, crate::host::lower_aliases, crate::modules::resolve,
+	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::lower, crate::host::lower_aliases, crate::modules::resolve,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
 	crate::analyzer::lower_negated_calls,
 ];
@@ -288,8 +289,8 @@ pub(crate) const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
 
 /// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
 /// names separated by spaces) are bound to `values` first, the values the program had where it ran the block, then
-/// the program's function `definitions` follow. The
-/// block gets no capability but pure libm, wherever its code came from (user decision: pure by default)
+/// the program's function `definitions` follow. Only the names the block or the definitions mention are bound.
+/// The block gets no capability but pure libm, wherever its code came from (user decision: pure by default)
 /// `Err` is the message the run fails with, naming the block.
 pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) -> Result<Node, String> {
 	let written = block.serialize().trim().to_string();
@@ -305,27 +306,119 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
-	let values = items(values);
 	let block = spaced(block);
-	let as_written = |value: Node| match value.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty => value,
-		_ => Node::List(vec![Node::Symbol(crate::blocks::DATA_WORD.to_string()), value], Bracket::None, Separator::Space),
+	let definitions: Vec<Node> = items(definitions).into_iter().map(spaced).collect();
+	let mentioned = |name: &str| [&block].into_iter().chain(&definitions).any(|part| mentions(part, name));
+	let bound: Vec<(String, Node)> = names.into_iter().zip(items(values)).filter(|(name, _)| mentioned(name)).collect();
+	let program_of = |bindings: Vec<Node>| {
+		let statements: Vec<Node> = bindings.into_iter().chain(definitions.iter().cloned()).chain([block.clone()]).collect();
+		Node::List(statements, Bracket::None, Separator::Newline)
 	};
-	let mut statements: Vec<Node> = names.into_iter().zip(values)
-		.map(|(name, value)| Node::Key(Box::new(Node::Symbol(name)), Op::Assign, Box::new(as_written(value))))
-		.collect();
-	statements.extend(items(definitions).into_iter().map(spaced));
-	statements.push(block);
-	let program = Node::List(statements, Bracket::None, Separator::Newline);
-	let result = match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
+	let as_written = program_of(bound.iter().map(|(name, value)| assignment(name, as_written(value.clone()))).collect());
+	let result = match crate::effects::EffectReport::of(&as_written).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
 		Some((external, capability)) => crate::node::error(&format!(
 			"a block run at run time is pure: {external} needs the {} capability, which it does not get", capability.name())),
-		None => eval_parsed(program, ""),
+		None => run_block_program(bound, program_of),
 	};
 	match result.drop_meta() {
 		Node::Error(message) => Err(format!("the block {written} failed: {}", message.serialize().trim_matches('"'))),
 		_ => Ok(result),
 	}
+}
+
+fn assignment(name: &str, value: Node) -> Node {
+	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Assign, Box::new(value))
+}
+
+/// A value written into the block's program: a number, text or character as itself, anything else as data
+fn as_written(value: Node) -> Node {
+	match value.drop_meta() {
+		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty => value,
+		_ => Node::List(vec![Node::Symbol(crate::blocks::DATA_WORD.to_string()), value], Bracket::None, Separator::Space),
+	}
+}
+
+/// Does `node` mention `name`: as a word, or inside a text (an interpolation)
+fn mentions(node: &Node, name: &str) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= match part {
+		Node::Symbol(word) => word == name,
+		Node::Text(text) => text.contains(name),
+		_ => false,
+	});
+	found
+}
+
+/// Natively the block is compiled as a function of the numbers it reads: each is `block·value(i) as int` (or `float`),
+/// exact ratios and big Ints included,
+/// which the host gives from this run's values, so the same block with other numbers is the same program, compiled
+/// once per thread (BLOCK_MODULES) and machine code once per machine (run/module_cache.rs). Other values are written in
+#[cfg(feature = "native")]
+fn run_block_program(bound: Vec<(String, Node)>, program_of: impl Fn(Vec<Node>) -> Node) -> Node {
+	use crate::extensions::numbers::Number;
+	use crate::tasks::TaskValue;
+	let mut numbers = vec![];
+	let bindings = bound.into_iter().map(|(name, value)| {
+		// an exact ratio (`0.5` is 1/2) or big Int is an Int to the compiler: a handle the host composes (tasks.rs Builders)
+		let (number, type_word) = match value.drop_meta() {
+			Node::Number(Number::Float(x)) => (TaskValue::Float(*x), "float"),
+			Node::Number(Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_)) => match TaskValue::of(&value) {
+				Ok(number) => (number, "int"),
+				Err(_) => return assignment(&name, as_written(value)),
+			},
+			_ => return assignment(&name, as_written(value)),
+		};
+		let read = Node::List(vec![Node::Symbol(crate::host::BLOCK_VALUE.to_string()), Node::Number(Number::Int(numbers.len() as i64))], Bracket::Round, Separator::None);
+		numbers.push(number);
+		assignment(&name, Node::Key(Box::new(read), Op::As, Box::new(Node::Symbol(type_word.to_string()))))
+	}).collect();
+	let program = program_of(bindings);
+	crate::host::with_block_values(numbers, || crate::diagnostic::in_program_mode(program, run_cached_block))
+}
+
+#[cfg(not(feature = "native"))]
+fn run_block_program(bound: Vec<(String, Node)>, program_of: impl Fn(Vec<Node>) -> Node) -> Node {
+	eval_parsed(program_of(bound.into_iter().map(|(name, value)| assignment(&name, as_written(value))).collect()), "")
+}
+
+/// The block programs compiled on this thread, by their text; past BLOCK_MODULES_KEPT they start over
+#[cfg(feature = "native")]
+const BLOCK_MODULES_KEPT: usize = 256;
+#[cfg(feature = "native")]
+thread_local! {
+	static BLOCK_MODULES: std::cell::RefCell<std::collections::HashMap<String, CompiledModule>> = std::cell::RefCell::new(std::collections::HashMap::new());
+	static COMPILED_BLOCKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many block programs this thread compiled (the cache's misses)
+#[cfg(feature = "native")]
+pub fn compiled_blocks() -> usize {
+	COMPILED_BLOCKS.with(std::cell::Cell::get)
+}
+
+#[cfg(feature = "native")]
+fn run_cached_block(program: Node) -> Node {
+	let key = program.serialize();
+	let module = match BLOCK_MODULES.with(|modules| modules.borrow().get(&key).cloned()) {
+		Some(module) => module,
+		None => {
+			COMPILED_BLOCKS.with(|count| count.set(count.get() + 1));
+			let module = match lower_for_emission(program).map(|node| emit_module(&node)) {
+				Ok(Ok(module)) => module,
+				Ok(Err(type_error)) => return type_error,
+				Err(final_value) => return final_value,
+			};
+			BLOCK_MODULES.with(|modules| {
+				let mut modules = modules.borrow_mut();
+				if modules.len() >= BLOCK_MODULES_KEPT {
+					modules.clear();
+				}
+				modules.insert(key, module.clone());
+			});
+			module
+		}
+	};
+	run_module(module)
 }
 
 /// A phrase read back from a Node of the program (`data 2*3`, `print x`) has lost its spaces: an unbracketed list is a

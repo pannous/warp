@@ -333,23 +333,53 @@ pub struct Imports {
 	pub ffi: bool,
 }
 
-/// Link the import families a module needs: the host words, WASI, FFI (the task words come from tasks::link)
+/// Link the import families a module needs: the host words, WASI, FFI (the task words come from tasks::link). `linker`
+/// is a fresh one: it becomes a copy of the linker this thread keeps for the engine and families (linking libm and
+/// the host words took most of a small program's run), plus the dynamic libraries of this module
 pub fn link_imports(linker: &mut Linker<crate::host::HostState>, engine: &wasmtime::Engine, module: &Module, imports: Imports) -> Result<()> {
-	use crate::host::{HostState, link_host_functions};
-	use crate::ffi::{link_ffi_functions, link_module_libraries};
 	// the host words (sleep, random, clock) are imported like C functions from the host module
-	if imports.host || module.imports().any(|import| import.module() == crate::host::HOST_LIBRARY) {
-		link_host_functions(linker, engine)?;
-	}
-	if imports.wasi {
-		p1::add_to_linker_sync(linker, |state: &mut HostState| &mut state.wasi)?;
-	}
+	let host = imports.host || module.imports().any(|import| import.module() == crate::host::HOST_LIBRARY);
+	*linker = family_linker(engine, Imports { host, ..imports })?;
 	if imports.ffi {
-		// FFI functions plus the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
-		link_ffi_functions(linker, engine)?;
-		link_module_libraries(linker, engine, module)?;
+		// the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
+		crate::ffi::link_module_libraries(linker, engine, module)?;
 	}
 	Ok(())
+}
+
+/// The linkers made on this thread, by engine and import families; past FAMILY_LINKERS_KEPT they start over
+const FAMILY_LINKERS_KEPT: usize = 16;
+thread_local! {
+	static FAMILY_LINKERS: RefCell<Vec<(wasmtime::Engine, [bool; 3], Linker<crate::host::HostState>)>> = const { RefCell::new(Vec::new()) };
+}
+
+fn family_linker(engine: &wasmtime::Engine, imports: Imports) -> Result<Linker<crate::host::HostState>> {
+	use crate::host::{HostState, link_host_functions};
+	let families = [imports.host, imports.wasi, imports.ffi];
+	let kept = FAMILY_LINKERS.with(|linkers| linkers.borrow().iter()
+		.find(|(kept_engine, kept_families, _)| wasmtime::Engine::same(kept_engine, engine) && *kept_families == families)
+		.map(|(_, _, linker)| linker.clone()));
+	if let Some(linker) = kept {
+		return Ok(linker);
+	}
+	let mut linker = Linker::new(engine);
+	if imports.host {
+		link_host_functions(&mut linker, engine)?;
+	}
+	if imports.wasi {
+		p1::add_to_linker_sync(&mut linker, |state: &mut HostState| &mut state.wasi)?;
+	}
+	if imports.ffi {
+		crate::ffi::link_ffi_functions(&mut linker, engine)?;
+	}
+	FAMILY_LINKERS.with(|linkers| {
+		let mut linkers = linkers.borrow_mut();
+		if linkers.len() >= FAMILY_LINKERS_KEPT {
+			linkers.clear();
+		}
+		linkers.push((engine.clone(), families, linker.clone()));
+	});
+	Ok(linker)
 }
 
 /// Load WASM bytes with every import family it needs in one linker: a program may print, fetch and call C at once.

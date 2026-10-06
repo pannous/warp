@@ -15,7 +15,7 @@
 
 use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, is_list_mutating_method, param_kind, Scope};
 use crate::context::{Context, UserFunctionDef};
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::effects::EffectReport;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
@@ -24,6 +24,7 @@ use std::collections::{HashMap, HashSet};
 const GLOBAL: &str = "global";
 pub(crate) const NONLOCAL: &str = "nonlocal";
 const NEEDLESS_CHARGING_TOPIC: &str = "needless-charging";
+const EFFECTFUL_GETTER_TOPIC: &str = "effectful-getter";
 
 pub fn lower(program: Node) -> Result<Node, Node> {
 	let statements = statements_of(&program);
@@ -38,7 +39,7 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 	let definitions = definitions(&statements);
 	let report = EffectReport::of(&program);
 	for definition in &definitions {
-		note_needless_charging(definition, &statements, &main, &report);
+		note_charging(definition, &statements, &main, &report)?;
 	}
 	let mut late_bound = check_definitions(&statements, &definitions, &main, &|_, name| declared.iter().any(|known| known == name), None)?;
 	for definition in &definitions {
@@ -79,8 +80,13 @@ fn check_definitions(statements: &[Node], definitions: &[Definition], scope: &Sc
 				}
 				_ => changes.as_slice(),
 			};
-			if let Some(change) = checked.iter().find(|change| observed_after(statements, change, &callers[&definition.function.name])) {
-				return Err(late_binding_error(definition, &variable, change.node, enclosing));
+			let Some(change) = checked.iter().find(|change| observed_after(statements, change, &callers[&definition.function.name])) else { continue };
+			// a getter (P71) reads the value as it is at each use: main's variable becomes global, a function's
+			// captures are refreshed at each call anyway
+			match (definition.getter, enclosing) {
+				(true, None) => late_bound.push(variable.clone()),
+				(true, Some(_)) => {}
+				(false, _) => return Err(late_binding_error(definition, &variable, change.node, enclosing)),
 			}
 		}
 	}
@@ -227,6 +233,8 @@ struct Definition {
 	index: usize,
 	function: UserFunctionDef,
 	line: usize,
+	/// `z() := y*y` from `z := y*y` (getters.rs): reads its free variables as they are at each use
+	getter: bool,
 }
 
 /// A change of a variable: the statement it is in and the assignment
@@ -255,6 +263,10 @@ pub(crate) fn map_statements(program: Node, transform: &mut dyn FnMut(Node) -> N
 /// The functions a statement defines when it is a definition itself; one inside a loop or block keeps capturing the
 /// values of that iteration (loop variables need no declaration)
 pub(crate) fn functions_in(statement: &Node) -> Vec<UserFunctionDef> {
+	// `o·s() := e; o = {…}`: an object with function entries (blocks.rs) is one statement of definitions
+	if let Node::List(items, Bracket::None, Separator::Semicolon) = statement.drop_meta() {
+		return items.iter().flat_map(functions_in).collect();
+	}
 	let is_definition = match statement.drop_meta() {
 		Node::Key(_, Op::Define | Op::Assign, _) => true,
 		Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)),
@@ -350,28 +362,66 @@ fn written_text(node: &Node) -> String {
 	}
 }
 
-/// A `def` without parameters whose body is pure and reads only constants (`def area(): 3*4`) always gives the same
-/// value: educate toward `area = 3*4` (wiki/charged.md "Needless charging"). `:=` without parameters waits for P71.
-fn note_needless_charging(definition: &Definition, statements: &[Node], main: &Scope, report: &EffectReport) {
+/// A `def` or getter without parameters whose body is pure and reads only constants (`def area(): 3*4`,
+/// `area := 3*4`) always gives the same value: educate toward `area = 3*4` (wiki/charged.md "Needless charging").
+/// A getter whose body has effects (`t := clock()`) gets a got-it warning: it runs them at every read.
+fn note_charging(definition: &Definition, statements: &[Node], main: &Scope, report: &EffectReport) -> Result<(), Node> {
 	let function = &definition.function;
 	let statement = &statements[definition.index];
 	let is_def = matches!(statement.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)));
-	let pure = report.effects_of(&function.name).is_some_and(|effects| effects.is_pure());
-	let nested = function.name.contains(NESTED_DEF_SEPARATOR); // `outer·inner` may read outer's variables
-	if nested || !is_def || !function.params.is_empty() || !pure || reads_any(&function.body, &|word| main.is_global(word)) {
-		return;
+	let nested = function.name.contains(NESTED_DEF_SEPARATOR); // `outer·inner` may read outer's variables, `o·s` is an entry
+	if nested || !(is_def || definition.getter) || !function.params.is_empty() {
+		return Ok(());
 	}
-	crate::normalize::set_position_of(statement);
 	let value = written_text(&function.body);
-	crate::diagnostic::educate_once(NEEDLESS_CHARGING_TOPIC, &format!("def {}(): {value}", function.name), &format!("{} = {value}", function.name), &format!("{} never changes", function.name));
+	let name = &function.name;
+	let written = if is_def { format!("def {name}(): {value}") } else { format!("{name} := {value}") };
+	let pure = report.effects_of(name).is_some_and(|effects| effects.is_pure());
+	if !pure {
+		return match definition.getter {
+			true => warn_effectful_getter(name, &value, &written, statement),
+			false => Ok(()),
+		};
+	}
+	// a getter reading a variable reads its current value (P71); a def's free variables are constants unless global
+	let reads_variables = reads_any(&function.body, &|word| if definition.getter { main.lookup(word).is_some() } else { main.is_global(word) });
+	if !reads_variables {
+		crate::normalize::set_position_of(statement);
+		crate::diagnostic::educate_once(NEEDLESS_CHARGING_TOPIC, &written, &format!("{name} = {value}"), &format!("{name} never changes"));
+	}
+	Ok(())
+}
+
+/// `t := clock()`: the clock is read at every `t`, which may be meant, or `t = clock()` for one reading
+fn warn_effectful_getter(name: &str, value: &str, written: &str, at: &Node) -> Result<(), Node> {
+	let question = Ask::new(EFFECTFUL_GETTER_TOPIC, format!("{name} runs {value} at every read; write {name} = {value} for one value"),
+		vec![reading("at every read", written), reading("one value", &format!("{name} = {value}"))], Fallback::Warning)
+		.written(written).at_node(at);
+	ask(&question).map(|_| ())
 }
 
 /// The functions of the main-level statements, with their statement index
 fn definitions(statements: &[Node]) -> Vec<Definition> {
 	let line_of = |statement: &Node| Diagnostic::at(statement, "").line;
 	statements.iter().enumerate()
-		.flat_map(|(index, statement)| functions_in(statement).into_iter().map(move |function| Definition { index, function, line: line_of(statement) }))
+		.flat_map(|(index, statement)| functions_in(statement).into_iter().map(move |function| {
+			let getter = function.params.is_empty() && is_getter_definition(statement, &function.name);
+			Definition { index, function, line: line_of(statement), getter }
+		}))
 		.collect()
+}
+
+/// `name() := expr` with expr not in braces, in the statement: a getter, whether written so or as `name := expr` (P71);
+/// `def name(){…}` keeps its braces. An object's getter entry is one of the definitions before the object (blocks.rs)
+fn is_getter_definition(statement: &Node, name: &str) -> bool {
+	match statement.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Semicolon) => items.iter().any(|item| is_getter_definition(item, name)),
+		Node::Key(left, Op::Define, body) => !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) && match left.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.len() == 1 && matches!(items[0].drop_meta(), Node::Symbol(head) if head == name),
+			_ => false,
+		},
+		_ => false,
+	}
 }
 
 /// Each function's name with the names of the functions that call it, transitively, itself included: a use of any of

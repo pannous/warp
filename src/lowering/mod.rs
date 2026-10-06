@@ -11,6 +11,7 @@ pub mod folding;
 pub mod memoization;
 pub mod for_loop;
 pub mod function_values;
+pub mod getters;
 pub mod inlining;
 pub mod lambdas;
 pub mod late_binding;

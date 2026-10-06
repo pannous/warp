@@ -15,7 +15,7 @@ fn a_c_string_result_is_a_text() {
 
 #[test]
 fn other_pointer_results_are_refused() {
-	crate::common::fails_with("use sqlite3; sqlite3_db_handle(0)", "sqlite3_db_handle returns a C pointer");
+	is!("use sqlite3; sqlite3_db_handle(0)", 0); // a handle now (test_ffi_handles), NULL is 0
 }
 
 #[test]

@@ -747,6 +747,11 @@ impl Node {
 		}
 	}
 
+	/// An operator in front of its one operand, ø on the left in the tree (`#x`, `-x`)
+	fn is_prefix_form(&self) -> bool {
+		matches!(self.drop_meta(), Key(k, op, _) if matches!(k.drop_meta(), Empty) && writes_as_prefix(op))
+	}
+
 	pub fn serialize(&self) -> String {
 		self.serialize_recurse(false)
 	}
@@ -809,8 +814,16 @@ impl Node {
 					format!("{}{}{}", bracket, items.join(&joint), close)
 				}
 			}
+			// the operand a prefix or suffix operator lacks is ø in the tree, not in the text: `#x`, `not x`, `x++`
+			Key(_, op, v) if self.is_prefix_form() => {
+				let space = if op.as_str().starts_with(char::is_alphabetic) { " " } else { "" };
+				format!("{op}{space}{}", v.serialize_recurse(meta))
+			}
+			Key(k, op, v) if matches!(v.drop_meta(), Empty) && op.is_suffix() => format!("{k}{op}"),
 			Key(k, op, v) if op.as_str().starts_with(char::is_alphabetic) => format!("{} {} {}", k, op, v.serialize_recurse(meta)), // 0.1 as float, not 0.1asfloat
 			Key(k, Op::Colon, v) if matches!(v.drop_meta(), List(_, Bracket::Curly, _)) => format!("{}{}{}", v.attribute_prefix(), k, v.serialize_with(meta, false)), // tee{a:1}
+			// `1- -x`: a prefix operand glued to the operator would read as another operator (`1--x`)
+			Key(k, op, v) if v.is_prefix_form() => format!("{}{}{} {}", v.attribute_prefix(), k, op, v.serialize_with(meta, false)),
 			Key(k, op, v) => format!("{}{}{}{}", v.attribute_prefix(), k, op, v.serialize_with(meta, false)),
 			Error(e) => format!("Error({})", e.serialize_recurse(meta)),
 			Empty => "ø".to_string(),
@@ -2260,3 +2273,7 @@ pub fn strings(p0: Vec<&str>) -> Node {
 	)
 }
 
+/// Operators the parser reads in front of one operand, with ø as the left one (`#x`, `-x`, `not x`, `√x`, `if c`)
+fn writes_as_prefix(op: &Op) -> bool {
+	op.is_prefix() || matches!(op, Op::Hash | Op::Sub | Op::Add | Op::If | Op::While)
+}

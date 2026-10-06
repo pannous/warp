@@ -295,38 +295,6 @@ fn test_import_from_pattern_emit() {
 // ============================================================================
 
 #[test]
-#[ignore]
-fn test_extract_function_signature() {
-	let c_code1 = "double sqrt(double x);";
-	let _parsed1 = parse(c_code1);
-	// extractFunctionSignature(c_code1, sig1);
-	// eq!(sig1.name, "sqrt");
-	// eq!(sig1.return_type, "double");
-	// eq!(sig1.param_types.size(), 1);
-	// eq!(sig1.param_types[0], "double");
-
-	let c_code2 = "double fmin(double x, double y);";
-	let _parsed2 = parse(c_code2);
-	// let sig2;
-	// sig2.library = "m";
-	// extractFunctionSignature(c_code2, sig2);
-	// eq!(sig2.name, "fmin");
-	// eq!(sig2.return_type, "double");
-	// eq!(sig2.param_types.size(), 2);
-	// eq!(sig2.param_types[0], "double");
-	// eq!(sig2.param_types[1], "double");
-	//
-	// let c_code3 = "int strlen(char* str);";
-	// let parsed3 = parse(c_code3);
-	// let sig3;
-	// // extractFunctionSignature(c_code3, sig3);
-	// eq!(sig3.name, "strlen");
-	// eq!(sig3.return_type, "int");
-	// eq!(sig3.param_types.size(), 1);
-	// eq!(sig3.param_types[0], "char*");
-}
-
-#[test]
 fn test_c_type_mapping() {
 	// assert!(mapCTypeToWasp("double") == float64t);
 	//     assert!(mapCTypeToWasp("float") == float32t);
