@@ -64,6 +64,17 @@ const ELEMENT_WISE_OPERATORS: [(char, Op); 4] = [('+', Op::Add), ('-', Op::Sub),
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
 const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
+/// Words before a class declaration that change nothing in wasp: `data class` (a wasp class compares by value already),
+/// `open`, `abstract`, `sealed`, `final`, visibility
+const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"];
+/// The keywords of a field in a primary constructor `class Point(val x: Int, var y: Int)`
+const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
+/// `new Point(1, 2)`: the construction `Point(1, 2)`
+const NEW_WORD: &str = "new";
+/// Words before a member of a class body that change nothing in wasp: Swift's `mutating func`, visibility, `override`
+pub const MEMBER_MODIFIERS: [&str; 10] = ["mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async"];
+/// Python's root class `class Point(object):`, no parent of its own
+const PYTHON_ROOT_CLASS: &str = "object";
 /// `record point{x:int y:int}` declares a type like `struct`, but `record` is also an everyday variable name:
 /// it is a declaration only when a name and a field block follow
 const RECORD_WORD: &str = "record";

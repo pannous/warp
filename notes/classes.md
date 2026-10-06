@@ -188,3 +188,16 @@ line) are the data key `Person:{…}` (D4: no class, no construction). A field r
 on the node itself reads the tagged object's fields (list_ops tagged_field, between the entry and the meta entry
 `@name`), so `a:{b:1}.b` is 1 and `a:{b:1}.a` still `b:1`. Card class-ticket (a static in value{}) worked already
 after classes-10; its test is in test_tagged_objects.rs.
+
+## Ported forms (classes-19, tests/types/test_class_forms_ported.rs)
+The same class as other languages write it (parser atoms.rs, class_methods.rs class_items):
+- Kotlin: primary constructor `class Point(val x: Int, var y: Int = 0) {…}` (its parameters are the fields, the
+  declaration ends at its line without a body), `data class` / `open` / `abstract` (CLASS_MODIFIERS: a wasp class
+  compares by value already), expression bodies `fun sum() = x + y`.
+- JavaScript: `constructor(x, y) {…}` and `sum() {…}` members, `new Point(1, 2)` of a declared class.
+- Python: `class Point:` with an indented body, `class Dog(Animal):` (parents in parentheses, `object` none),
+  `def __init__(self, x, y):` the constructor, explicit `self` first parameters dropped, `@dataclass` fields.
+- Swift: `struct` with `var count = 0` fields and `mutating func` (MEMBER_MODIFIERS dropped), `init(…)`.
+Constructors of all of them are `value(params){…}` (classes-10). Open: C# `record Point(int X, int Y);` and
+`{ get; init; }` properties, Rust `struct` + `impl`, Kotlin `copy(y = 5)`, a method named `norm` (the parser reads it
+as the operator ‖).
