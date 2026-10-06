@@ -117,9 +117,11 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 43] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 44] = [
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
 	crate::go_blocks::lower,
+	// `$a` / `$1` references of data literals (references.rs) before a pass takes `{ parent=$1 }` for a Swift closure
+	crate::references::lower,
 	// `x | f` (pipes.rs) before any pass reads the or
 	crate::pipes::lower,
 	// methods in a class body become functions over the class before any pass reads the body as fields

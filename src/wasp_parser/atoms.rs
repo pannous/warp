@@ -43,6 +43,16 @@ impl WaspParser {
 			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
 			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
+			// `@1`: a reference to the node whose @id is 1 (wiki/reference.md, P160)
+			'@' if self.peek_char(1).is_ascii_digit() => {
+				self.advance(); // skip '@'
+				let mut digits = String::new();
+				while self.current_char().is_ascii_digit() {
+					digits.push(self.current_char());
+					self.advance();
+				}
+				Node::Symbol(format!("{ATTRIBUTE_MARK}{digits}"))
+			}
 			'$' if self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_' => self.parse_dollar_name(),
 			'$' if self.peek_char(1).is_numeric() => {
 				self.advance(); // skip '$'

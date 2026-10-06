@@ -318,6 +318,9 @@ impl WaspParser {
 			return None;
 		}
 		self.advance(); // skip ']'
+		if let Some(node) = self.try_attributed_body(lhs, &indices) {
+			return Some(node);
+		}
 		// `int[n]` is n zeros of the type unless int is a variable (analyzer lower_declarations): no indexing hint
 		let names_a_type = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::zero_list(Empty, word).is_some());
 		if slice_bounds(&indices[0]).is_none() && !names_a_type {
@@ -326,6 +329,27 @@ impl WaspParser {
 		}
 
 		Some(indices.into_iter().fold(lhs.clone(), subscript))
+	}
+
+	/// `a[id=1]{…}` (wiki/reference.md): attributes in brackets before a body are its meta entries, `a{@id:1 …}`
+	fn try_attributed_body(&mut self, lhs: &Node, indices: &[Node]) -> Option<Node> {
+		let attributes: Vec<Node> = indices.iter().flat_map(attribute_items).map(|item| match item.drop_meta() {
+			Node::Key(key, Op::Assign | Op::Colon, value) if matches!(key.drop_meta(), Symbol(_)) => {
+				Some(Node::Key(Box::new(Symbol(format!("{ATTRIBUTE_MARK}{}", key.name()))), Op::Colon, value.clone()))
+			}
+			_ => None,
+		}).collect::<Option<_>>()?;
+		let mut offset = 0;
+		while self.peek_char(offset) == ' ' {
+			offset += 1;
+		}
+		if !matches!(lhs.drop_meta(), Symbol(_)) || self.peek_char(offset) != '{' {
+			return None;
+		}
+		self.skip_spaces();
+		let Node::List(items, bracket, separator) = self.parse_bracketed('{') else { return None };
+		let body = Node::List([attributes, items].concat(), bracket, separator);
+		Some(Node::Key(Box::new(lhs.clone()), Op::Colon, Box::new(body)))
 	}
 
 	/// `[:end]` and `[:]`, a slice from the start: `ø:end`
@@ -395,5 +419,13 @@ impl WaspParser {
 			Bracket::None,
 			Separator::Space,
 		))
+	}
+}
+
+/// `id=1 kind="x"` in brackets: each attribute
+fn attribute_items(index: &Node) -> Vec<Node> {
+	match index.drop_meta() {
+		Node::List(items, Bracket::None, _) => items.clone(),
+		single => vec![single.clone()],
 	}
 }
