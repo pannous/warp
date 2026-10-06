@@ -339,6 +339,7 @@ impl WaspParser {
 		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
 		let variable_follows = c3.is_alphabetic() || c3 == '_';
 		match c1 {
+			'-' if c2 == '>' => None, // Ruby's stabby lambda `->(x) { … }` is an atom
 			'+' if c2 == '+' && variable_follows => Some((Op::Inc, 2)),
 			'-' if c2 == '-' && variable_follows => Some((Op::Dec, 2)),
 			// unary plus glued to its operand, `+5`, `+x`, `+(a)`: the operand itself; a spaced `+` stays the operator

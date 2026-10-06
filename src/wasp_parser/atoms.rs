@@ -34,6 +34,7 @@ impl WaspParser {
 				other => other,
 			},
 			'*' if self.is_identifier_start(1) => self.parse_starred(1),
+			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
@@ -307,6 +308,22 @@ impl WaspParser {
 			several => Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon),
 		};
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
+	}
+
+	/// Ruby's stabby lambda `->(x) { x * x }`, `-> { 42 }`: the lambda `x => {x * x}`
+	fn parse_stabby_lambda(&mut self) -> Node {
+		self.advance_by(2);
+		self.skip_spaces();
+		let parameters = match self.current_char() {
+			'(' => self.parse_bracketed('('),
+			_ => Empty,
+		};
+		self.skip_spaces();
+		if self.current_char() != '{' {
+			return error("a stabby lambda `->(x) { … }` needs its body in braces");
+		}
+		let body = self.parse_bracketed('{');
+		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 	}
 
 	/// The `end` (or, in a `then` block, the `else`) that closes the block being parsed
