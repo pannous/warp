@@ -62,12 +62,19 @@ matches format pad json parse`; `today` and `args` read as symbols; `exec sh "â€
 - Names: after `use list`, `zip(a, b)` and `list.zip(a, b)` both work; a program's own `zip` wins (as for prelude words).
 - A module word used without its `use`: the loud error naming the module, with the fix `use list`.
 
-## 6. First steps (functions)
-1. `std/` folder, the embedded loader in modules.rs, `use list` for a first wasp-only module: unique, zip, enumerate,
-   product, mean, flatten, take, drop (tests/modules/test_std_list.rs).
-2. The "word is in module X" error for words of a known module.
-3. text: pad, format; math: gcd, lcm, clamp, pi/e/tau constants.
+## 6. Steps (functions)
+Done (branch functions, 2026-10-07):
+1. `std/<name>.wasp` embedded in warp (modules.rs STD_MODULES); a local file of the same name wins. The loader keeps a
+   std module's definitions aside and gives the program only those it calls, and those they call
+   (`with_needed_definitions`): an unused word would compile with parameters of no kind.
+   `use list`: unique zip enumerate product mean take drop flatten (tests/modules/test_std_list.rs).
+2. A std word without its `use`: "zip is in the standard module list: write `use list`" (ffi::undefined_function_message,
+   also for the braceless call).
+3. `use math` = libm (as before) + std/math.wasp: gcd lcm clamp sign; `use text`: repeat pad_left pad_right
+   (tests/modules/test_std_math_text.rs). pi, e, tau already exist as exact symbols.
+Next:
 4. Host modules with async: file (write, exists, append), os (env, args), json.
+5. Qualified `list.zip(â€¦)` (Q2 default), text format (interpolation covers most of it).
 
 ## 7. Adapters (async, warp-f0)
 How a module word is backed when wasp alone cannot do it. All six mechanisms exist (notes/stdlib_connectors.md,
