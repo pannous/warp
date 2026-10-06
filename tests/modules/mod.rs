@@ -11,6 +11,7 @@ mod test_std_hash;
 mod test_std_json;
 mod test_std_list;
 mod test_std_math_text;
+mod test_std_net;
 mod test_std_regex;
 mod test_use_modules;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
