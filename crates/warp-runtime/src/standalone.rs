@@ -1,4 +1,4 @@
-//! A standalone executable is the warp-runtime stub (or warp itself) carrying a program's machine code:
+//! A standalone executable is the warp-runtime stub carrying a program's machine code:
 //! `<executable><machine code><its length, u64 little-endian><TRAILER_MAGIC><zeros to a multiple of 16>`, then, in a
 //! Mach-O executable, its code signature: the machine code lies inside the __LINKEDIT segment, so the executable signs
 //! and verifies cleanly (`codesign --verify --strict`, macho.rs). At start the executable looks for the trailer where

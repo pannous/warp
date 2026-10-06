@@ -133,6 +133,22 @@ pub fn printed(code: &str) -> String {
 	String::from_utf8_lossy(&output.stdout).to_string()
 }
 
+/// The warp-runtime stub executables are built from (P104: warp never copies itself into one): built once per test run
+/// and kept under this checkout's version, as warp_command keeps its warp
+#[cfg(feature = "native")]
+pub fn runtime_stub() -> &'static std::path::Path {
+	static STUB: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+	STUB.get_or_init(|| {
+		let built = std::process::Command::new(env!("CARGO")).args(["build", "--offline", "--quiet", "-p", "warp-runtime", "--bin", "warp-runtime"])
+			.current_dir(env!("CARGO_MANIFEST_DIR")).status().expect("cargo runs");
+		assert!(built.success(), "cargo build -p warp-runtime failed");
+		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name("warp-runtime");
+		let own = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("warp-runtime-{}", env!("CARGO_PKG_VERSION")));
+		std::fs::copy(&shared, &own).expect("copy the warp-runtime stub");
+		own
+	})
+}
+
 /// A command running this checkout's warp binary. Every checkout builds the one shared target/debug/warp, so another
 /// worktree's build can replace it while these tests run: at first use it is linked (or copied) to a file of its own,
 /// named by this checkout's version (each checkout builds `version = "0.1.1-<branch>"`), and checked by that version
