@@ -145,7 +145,7 @@ the_strict_flag_turns_warnings_into_errors before).
   `prepare(code)` is optional and asynchronous, awaited by worker.js (`prepareForeignRuntimes`) before a run, for a
   runtime that must load first (Pyodide). The test worker cannot prepare (it never sees the code), so runtimes the
   browser tests use load synchronously. Registered: `js` (the page's globals, host.js), `wasm` (components.js).
-- `use wasm "lib.wasm"` (components.js): build.sh components runs `jco transpile --instantiation sync` on every
+- `use lib.wasm` / `use wasm "lib.wasm"` (components.js): build.sh components runs `jco transpile --instantiation sync` on every
   tests/fixtures/components/*.wasm and wraps the result into components/<name>.js, a classic script with the core
   modules as base64 (`registerComponent`); the first call importScripts it, found by the file's name alone (the page has
   one flat folder of components). WASI p2 is a small shim: output goes to the program's print, no input, no environment.
