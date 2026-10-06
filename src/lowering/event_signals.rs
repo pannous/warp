@@ -146,16 +146,20 @@ fn handler_function_name(event: &str) -> String {
 
 /// `on·alarm(event) := { global n; body; body2 }`: the main-level variables the bodies mention are declared global
 pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Node], main_variables: &HashSet<String>) -> Node {
-	let mut mentioned: Vec<String> = bodies.iter().flat_map(symbols).filter(|name| main_variables.contains(name) && name != EVENT_WORD).collect();
-	mentioned.sort();
-	mentioned.dedup();
-	let globals = mentioned.iter().map(|name| parse(&format!("global {name}")));
-	let statements: Vec<Node> = globals.chain(bodies.iter().cloned()).collect();
+	let statements: Vec<Node> = global_declarations(bodies, main_variables, &[EVENT_WORD]).into_iter().chain(bodies.iter().cloned()).collect();
 	let template = if takes_event { FUNCTION_TEMPLATE } else { PARAMETERLESS_TEMPLATE };
 	let Node::Key(head, op, _) = parse(template).drop_meta().clone() else { unreachable!("the template is a definition") };
 	let name = Node::Symbol(name.to_string());
 	let head = crate::law::substitute(&head, &HashMap::from([(TEMPLATE_NAME.to_string(), name)]));
 	Node::Key(Box::new(head), op, Box::new(Node::List(statements, Bracket::Curly, Separator::Semicolon)))
+}
+
+/// `global n` for each main-level variable the bodies mention, except the `parameters` of the function they become
+pub(crate) fn global_declarations(bodies: &[Node], main_variables: &HashSet<String>, parameters: &[&str]) -> Vec<Node> {
+	let mut mentioned: Vec<String> = bodies.iter().flat_map(symbols).filter(|name| main_variables.contains(name) && !parameters.contains(&name.as_str())).collect();
+	mentioned.sort();
+	mentioned.dedup();
+	mentioned.iter().map(|name| parse(&format!("global {name}"))).collect()
 }
 
 /// Handlers take `event` only when a body reads it: an unread parameter has no type a caller from outside (the page)
