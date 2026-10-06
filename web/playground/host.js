@@ -178,6 +178,10 @@ function programImports(holder, hooks) {
 				const program_ = program();
 				new BroadcastChannel(plainOfTree(readNode(program_, channel))).postMessage(plainOfTree(readNode(program_, message)));
 			},
+			// channels inside one run (P155, tasks.rs): a rendezvous needs Atomics.wait across the task Workers, not built yet
+			...Object.fromEntries(["channel_new", "channel_put", "channel_take", "channel_more", "channel_close"].map(word => [word, () => {
+				throw new Error("ch = channel(): channels inside a program need the native build (warp run); the playground has only channel \"name\" between tabs");
+			}])),
 			signal_every: (id, milliseconds) => addTimer(holder, hooks, id, { every: Number(milliseconds) }, "on every …"),
 			signal_daily: (id, minute, weekdays) => addTimer(holder, hooks, id, { minute: Number(minute), weekdays: Number(weekdays) }, "on every day at …"),
 			signal_at: (id, minute) => addTimer(holder, hooks, id, { minute: Number(minute), once: true }, "at 9:00 {…}"),
