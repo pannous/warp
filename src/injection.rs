@@ -265,6 +265,8 @@ struct Lowering {
 	bound: HashMap<String, Language>,
 }
 
+// one Diagnostic ends the lowering of a program: its size does not matter on this path
+#[allow(clippy::result_large_err)]
 impl Lowering {
 	fn node(&mut self, node: Node) -> Result<Node, Diagnostic> {
 		Ok(match node {
@@ -346,6 +348,7 @@ impl Lowering {
 	}
 }
 
+#[allow(clippy::result_large_err)] // as for Lowering: one Diagnostic ends the lowering
 fn lowered_template(language: Language, tag: &Node, argument: &Node) -> Result<Node, Diagnostic> {
 	let source = literal_text(argument).ok_or_else(|| not_literal(language, tag, argument))?;
 	let template = template(language, &source).map_err(|error| Diagnostic::at(tag, error.0))?;

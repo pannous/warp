@@ -293,6 +293,7 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 					let racing = all_word.name() == ANY_WORD;
 					let first = all_word.name() == FIRST_WORD;
 					if first {
+						crate::normalize::set_position_of(list);
 						crate::diagnostic::educate_once(FIRST_TOPIC, "await first […]", "await any […]", "await first is the first task's result; for the first to finish: await any […]");
 					}
 					let Node::List(listed, list_bracket, list_separator) = list.drop_meta().clone() else { unreachable!("guarded") };
@@ -1345,10 +1346,12 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 		Node::Key(target, op @ (Op::Assign | Op::Define), value) => Node::Key(Box::new(bind_it(*target, parameter, false)), op, Box::new(bind_it(*value, parameter, true))),
 		// `return {…}`, `f({…})`, `f {…}`
 		Node::List(items, bracket @ (Bracket::Round | Bracket::None), separator @ (Separator::Space | Separator::None | Separator::Colon))
-			if items.len() > 1 && matches!(items[0].drop_meta(), Node::Symbol(_)) =>
+			if items.len() > 1 && is_callee(&items[0]) =>
 		{
 			Node::List(values(items), bracket, separator)
 		}
+		// `xs.map{ it + x }` glued: the block is the method's lambda, its `it` is its own
+		Node::Key(receiver, Op::Dot, method) if glued_block(&method).is_some() => Node::Key(Box::new(bind_it(*receiver, parameter, false)), Op::Dot, method),
 		// the last statement of a body is its value
 		Node::List(items, bracket, separator) => {
 			let last = items.len().saturating_sub(1);
@@ -1359,6 +1362,18 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_it(*node, parameter, is_value)), data },
 		other => other,
 	}
+}
+
+/// `map{ it + x }` after a dot: the method name and its block
+pub(crate) fn glued_block(method: &Node) -> Option<(Node, Node)> {
+	let Node::Key(word, Op::Colon, block) = method.drop_meta() else { return None };
+	let Node::Symbol(_) = word.drop_meta() else { return None };
+	matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)).then(|| (word.as_ref().clone(), block.as_ref().clone()))
+}
+
+/// The function of a call: a name `f`, or a method `xs.map`
+pub(crate) fn is_callee(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(_) | Node::Key(_, Op::Dot, _))
 }
 
 fn one_parameter(head: &Node) -> Option<String> {
@@ -1388,7 +1403,41 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 }
 
 pub fn lower_c_functions(node: Node) -> Node {
-	lower_lists(end_definitions(node), |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| extension_block(items)).or_else(|| smart_scope(items)).or_else(|| partial_application(items)))
+	lower_lists(end_definitions(node), |items| definition_then_statements(items).or_else(|| function_definition(items)).or_else(|| extension_block(items)).or_else(|| smart_scope(items)).or_else(|| partial_application(items)))
+}
+
+fn function_definition(items: &[Node]) -> Option<Node> {
+	c_function(items).or_else(|| keyword_definition(items))
+}
+
+/// `function f(x) { return x * 2 } f(3)` (JS, PHP, Go, Rust): the body's closing brace ends the definition, what
+/// follows is the next statement
+fn definition_then_statements(items: &[Node]) -> Option<Node> {
+	let [keyword, ..] = items else { return None };
+	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
+		return None;
+	}
+	let body_end = items.iter().skip(1).position(ends_in_block)? + 1;
+	if body_end + 1 >= items.len() {
+		return None;
+	}
+	let (definition, rest) = items.split_at(body_end + 1);
+	let definition = function_definition(definition).unwrap_or_else(|| Node::List(definition.to_vec(), Bracket::None, Separator::Space));
+	let rest = match rest {
+		[single] => single.clone(),
+		several => definition_then_statements(several).unwrap_or_else(|| Node::List(several.to_vec(), Bracket::None, Separator::Space)),
+	};
+	Some(Node::List(vec![definition, rest], Bracket::None, Separator::Semicolon))
+}
+
+/// A `{…}` block, or a group or arrow whose last part is one: `((f (x)) {…})`, `(f x) -> i32 {…}`
+fn ends_in_block(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => true,
+		Node::List(items, _, _) => items.last().is_some_and(ends_in_block),
+		Node::Key(_, _, right) => ends_in_block(right),
+		_ => false,
+	}
 }
 
 /// `add(1, _)`: a call with placeholders is the lambda of the missing arguments, `partial_1 => add(1, partial_1)`
@@ -1467,9 +1516,11 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
 	let (name, arguments) = head_items.split_first()?;
 	let Node::Symbol(_) = name.drop_meta() else { return None };
-	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words
+	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words; a call's arguments come flat,
+	// so only Swift's keyword reads them so: `def add(a, b: int) -> int` has two parameters
+	let is_swift = matches!(keyword.drop_meta(), Node::Symbol(word) if word == SWIFT_FUNCTION_KEYWORD);
 	let arguments = match arguments {
-		[label, typed] if argument_label(label, typed).is_some() => vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)],
+		[label, typed] if is_swift && argument_label(label, typed).is_some() => vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)],
 		_ => arguments.to_vec(),
 	};
 	// the parameters may come as one group: `f (a, b)`, `f (m)`, `f ø`
@@ -1584,7 +1635,7 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 			Some(result_type) => Node::Key(Box::new(head), Op::Colon, result_type.clone()),
 			None => head,
 		};
-		Node::Key(Box::new(head), op.clone(), body.clone())
+		Node::Key(Box::new(head), *op, body.clone())
 	};
 	Some(Node::List(definitions.iter().map(method).collect(), Bracket::None, Separator::Semicolon))
 }
@@ -1705,11 +1756,16 @@ fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
 	let [label, typed] = words.as_slice() else { return parameter };
 	let Some(label) = argument_label(label, typed) else { return parameter };
 	let name = typed_parameter_name(typed).expect("a labeled parameter has a name");
+	// user 2026-10-06: wasp names a parameter once, Swift's label and name are redundant; ported code still compiles
+	let written = format!("{label} {}", typed.serialize());
+	let preferred = if label == WILDCARD_LABEL { typed.clone() } else { renamed_parameter(typed, label) };
+	crate::normalize::set_position_of(&parameter);
+	crate::normalize::hint(&written, &preferred.serialize(), "wasp names a parameter once, no label");
 	if label == WILDCARD_LABEL {
-		return typed.clone();
+		return preferred;
 	}
 	labeled_names.push(Node::Key(Box::new(name.clone()), Op::Assign, Box::new(Node::Symbol(label.to_string()))));
-	renamed_parameter(typed, label)
+	preferred
 }
 
 /// The body reading every labeled parameter by its label: `name` → `person` (an alias `name = person` would hide that
@@ -1840,6 +1896,8 @@ fn enum_object(items: &[Node]) -> Option<Node> {
 
 /// Swift's label for an argument without a label
 const WILDCARD_LABEL: &str = "_";
+const DART_REQUIRED: &str = "required";
+const SWIFT_FUNCTION_KEYWORD: &str = "func";
 
 /// `real f(real x) { … }`: the definition `f(x:real) := { … }` (the parser reads the type word, then the call and its
 /// block); the result kind is inferred as for any definition
@@ -1863,6 +1921,7 @@ pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 	let Node::Symbol(_) = name.drop_meta() else { return None };
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
 		Node::List(group, Bracket::Round, Separator::Colon) => group.clone(), // `(real a, int b)`
+		Node::List(group, Bracket::Curly, _) => group.clone(), // Dart's named parameters `{required int a, int b = 2}`
 		Node::Empty => vec![], // `f()`
 		_ => vec![argument.clone()],
 	});
@@ -1875,9 +1934,18 @@ pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 fn c_parameter(parameter: &Node) -> Option<Node> {
 	match parameter.drop_meta() {
 		Node::Symbol(_) | Node::Key(_, Op::Colon, _) => Some(parameter.clone()),
+		// Dart's `int b = 2` among the named parameters
+		Node::Key(declared, Op::Assign, default) => Some(Node::Key(Box::new(c_parameter(declared)?), Op::Assign, default.clone())),
 		Node::List(words, _, Separator::Space) => match words.as_slice() {
+			// Dart's `required int a`: every parameter needs its value anyway
+			[required, rest @ ..] if matches!(required.drop_meta(), Node::Symbol(word) if word == DART_REQUIRED) => c_parameter(&Node::List(rest.to_vec(), Bracket::None, Separator::Space)),
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(Node::Key(Box::new(name.clone()), Op::Colon, Box::new(kind.clone())))
+			}
+			// `int b = 2` as the parser groups it, the type then the assignment
+			[kind, assignment] if matches!(assignment.drop_meta(), Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_))) && matches!(kind.drop_meta(), Node::Symbol(_)) => {
+				let Node::Key(name, _, default) = assignment.drop_meta() else { unreachable!("guarded") };
+				Some(Node::Key(Box::new(Node::Key(name.clone(), Op::Colon, Box::new(kind.clone()))), Op::Assign, default.clone()))
 			}
 			_ => None,
 		},

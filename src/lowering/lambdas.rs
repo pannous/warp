@@ -107,7 +107,23 @@ pub fn lower_strict(node: Node) -> Node {
 fn lowering(node: Node, strict: bool) -> Node {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
-	Lowering { context, counter: Cell::new(0), strict }.expand(node)
+	let first_fresh = first_fresh_number(&node);
+	Lowering { context, counter: Cell::new(first_fresh), strict }.expand(node)
+}
+
+/// The number after every `loop_out_3`, `loop_item_4·items` an earlier run left: an inner loop lowered by a later run
+/// must not reuse the outer loop's names
+fn first_fresh_number(node: &Node) -> usize {
+	let mut next = 0;
+	node.visit(&mut |part| {
+		if let Node::Symbol(name) = part {
+			let fresh = name.strip_prefix("loop_").and_then(|rest| rest.split('·').next()).and_then(|rest| rest.rsplit_once('_')).and_then(|(_, number)| number.parse::<usize>().ok());
+			if let Some(number) = fresh {
+				next = next.max(number + 1);
+			}
+		}
+	});
+	next
 }
 
 /// Binary operators that can stand alone as a value: `fold xs 0 +`
@@ -317,6 +333,8 @@ fn block_lambda(node: &Node) -> Option<Lambda> {
 	}
 	let body = match items.as_slice() {
 		[single] => single.clone(),
+		// `{ it.map { it*10 } }`: words side by side stay a juxtaposition, a call with its trailing block
+		many if *separator == Separator::Space => Node::List(many.to_vec(), Bracket::None, Separator::Space),
 		many => Node::List(many.to_vec(), Bracket::Round, separator.clone()),
 	};
 	let params = if mentions(&body, IMPLICIT_PARAMETER) { vec![IMPLICIT_PARAMETER.to_string()] } else { shorthand_parameters(&body) };
@@ -339,6 +357,25 @@ fn mentions_outside_blocks(node: &Node, name: &str) -> bool {
 		Node::List(_, Bracket::Curly, _) => false,
 		Node::List(items, _, _) => items.iter().any(|item| mentions_outside_blocks(item, name)),
 		_ => false,
+	}
+}
+
+/// The parameter `name` replaced by `argument` in a lambda body, except inside an inner lambda that binds the same name
+/// (Kotlin): in `it.map{ it*10 }` the inner `it` is the inner lambda's
+fn bind_parameter(node: Node, name: &str, argument: &Node) -> Node {
+	let binds_name = |block: &Node| block_lambda(block).is_some_and(|lambda| lambda.params.iter().any(|param| param == name));
+	match node {
+		Node::Symbol(symbol) if symbol == name => argument.clone(),
+		Node::Key(receiver, Op::Dot, method) if crate::declarations::glued_block(&method).is_some_and(|(_, block)| binds_name(&block)) => {
+			Node::Key(Box::new(bind_parameter(*receiver, name, argument)), Op::Dot, method)
+		}
+		Node::List(items, bracket, separator) if items.len() > 1 && crate::declarations::is_callee(&items[0]) => {
+			Node::List(items.into_iter().map(|item| if binds_name(&item) { item } else { bind_parameter(item, name, argument) }).collect(), bracket, separator)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(bind_parameter(*left, name, argument)), op, Box::new(bind_parameter(*right, name, argument))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| bind_parameter(item, name, argument)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_parameter(*node, name, argument)), data },
+		other => other,
 	}
 }
 
@@ -507,8 +544,14 @@ impl Lowering {
 
 	/// `word(extras, function)` after a dot: the iteration and its arguments, the function last
 	fn iteration_method(&self, method: &Node) -> Option<(&'static Iteration, Vec<Node>)> {
-		let Node::List(items, _, _) = method.drop_meta() else { return None };
-		let items = trailing_closure(items).unwrap_or_else(|| items.clone());
+		let items = match crate::declarations::glued_block(method) {
+			// `xs.map{ it*2 }`: `map{…}` after a dot is the call with its lambda, not the data `map:{…}`
+			Some((word, block)) if block_lambda(&block).is_some_and(|lambda| !lambda.params.is_empty()) => vec![word, block],
+			_ => {
+				let Node::List(items, _, _) = method.drop_meta() else { return None };
+				trailing_closure(items).unwrap_or_else(|| items.clone())
+			}
+		};
 		let (word, arguments) = items.split_first()?;
 		let iteration = with_start(self.iteration_of(word)?, arguments.len().checked_sub(1)?); // `xs.sort()` has no function
 		let is_function = |node: &Node| arrow_lambda(node).is_some();
@@ -638,7 +681,7 @@ impl Lowering {
 	fn applied(&self, iteration: &Iteration, list: &Node, function: &Node, arguments: &[Node]) -> Result<Node, Option<Node>> {
 		match literal_function(function) {
 			Some(lambda) if lambda.params.len() == arguments.len() => {
-				Ok(lambda.params.iter().zip(arguments).fold(lambda.body, |body, (param, argument)| substitute(body, param, argument)))
+				Ok(lambda.params.iter().zip(arguments).fold(lambda.body, |body, (param, argument)| bind_parameter(body, param, argument)))
 			}
 			// a block that does not use `it` takes no argument and is run for every item
 			Some(lambda) if lambda.params.is_empty() && arguments.len() == 1 => Ok(lambda.body),

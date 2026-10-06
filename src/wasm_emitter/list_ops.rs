@@ -889,6 +889,7 @@ impl WasmGcEmitter {
 	pub(super) fn emit_integral_index_check(&mut self, func: &mut Function, index: &Node) {
 		let Some((dividend, divisor)) = divided_index(index) else { return };
 		let (dividend_text, divisor_text) = (crate::normalize::operand_text(dividend), crate::normalize::operand_text(divisor));
+		crate::normalize::set_position_of(index);
 		crate::normalize::hint(&format!("{dividend_text}/{divisor_text}"), &format!("{dividend_text}//{divisor_text}"), "an index must be an integer: floor division, or `as int`");
 		let remainder = Node::Key(Box::new(dividend.clone()), crate::operators::Op::Mod, Box::new(divisor.clone()));
 		self.emit_numeric_value(func, &remainder);
@@ -1139,6 +1140,7 @@ impl WasmGcEmitter {
 		} else {
 			"got it: the text repeated".to_string()
 		};
+		crate::normalize::set_position_of(count);
 		crate::diagnostic::educate_once(TEXT_REPEAT_TOPIC, written, &format!("{count_written} times {text_written}"), &reason);
 	}
 

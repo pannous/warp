@@ -188,6 +188,9 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 			(BROADCAST_WORD, [value @ .., on, channel]) if word(on) == ON_WORD && !value.is_empty() => (value.to_vec(), Some(text(channel)?)),
 			(SEND_WORD, [value @ .., last]) => match last.drop_meta() {
 				Node::Key(left, Op::To, channel) => ([value, &[left.as_ref().clone()]].concat(), Some(text(channel)?)),
+				// `send alarm{…}` without `to` is emit, inside the program (P163, event_signals.rs); `send "disk full"`
+				// stays the named event of the machine (P129)
+				_ if !matches!(rest, [name] if text(name).is_some()) => return None,
 				_ => (rest.to_vec(), None),
 			},
 			_ => (rest.to_vec(), None),

@@ -49,7 +49,18 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 			assignment_error(&Node::Key(left.clone(), op, right), getter)
 		}
 		Node::Key(left, Op::Colon, right) if matches!(left.drop_meta(), Node::Symbol(_)) => Node::Key(left, Op::Colon, Box::new(lower_in(*right, active))),
-		Node::Key(left, Op::Dot, right) => Node::Key(Box::new(lower_in(*left, active)), Op::Dot, right),
+		// `xs.add([b, a])`: the method's arguments read getters, its name does not
+		Node::Key(left, Op::Dot, right) => {
+			let right = match right.drop_meta().clone() {
+				Node::List(items, bracket, separator) if items.len() > 1 => {
+					let mut items = items.into_iter();
+					let method = items.next().expect("a method");
+					Node::List(std::iter::once(method).chain(items.map(|item| lower_in(item, active))).collect(), bracket, separator)
+				}
+				_ => *right,
+			};
+			Node::Key(Box::new(lower_in(*left, active)), Op::Dot, Box::new(right))
+		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_in(*left, active)), op, Box::new(lower_in(*right, active))),
 		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if is_active(active, head)) => {
 			let mut items = items.into_iter();

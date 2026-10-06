@@ -5,6 +5,11 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-06 (user, multiple-choice interview, as recommended unless quoted)
+- P165b soft keywords vs tests: strict P165. tests/functions/test_named_arguments.rs:22 renames `fun` → `g`
+  (`fun` is a hard keyword); tests/operators/test_root_word.rs:14-15 top-level `root = 5` / `root(x) := …` expect the
+  error. Unblocks branch soft-keywords (warp-64, merge by warp-3f).
+- P168 `p.phone-number` when p has no field phone-number but `number` exists: FALL BACK to subtraction
+  `p.phone - number` (the user chose this over the recommended field error). Implemented by warp-64.
 - P151 crates.io name (asked by the packaging session, answered there directly): "lang is perfect": the package is
   `warp-lang` (library still `warp`, binary `warp`), its runtime `warp-runtime`; notes/packaging.md.
 - P71 `:=` without parameters is ALWAYS CHARGED (the user chose this over the recommended "now"): `y=3; z:=y*y; y=4;
@@ -165,6 +170,42 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   when the timeout happens; a timeout itself stays silent.
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P167 (classes, warp-e0) Go's positional literal `Point{1, 2}` builds `Point(1, 2)` when Point is a known class,
+  with a got-it note "wasp writes Point(1, 2)"; for an unknown name it stays tagged data.
+- P165 Kotlin-style soft keywords (user's proposal: with so many synonyms in so many situations, allow overwriting
+  keywords except the main ones). Hard keywords, never redefinable: control flow (if, then, else, while, for, in,
+  return, break, continue), declarations (def/fun/fn, class, var/let/const/val, global), literal values (true,
+  false, ø/null/nil) and modules (use, import, include). Every other word (emit, send, init, new, root, listeners,
+  every, …) is soft. User: soft keywords "should not be completely redefinable, just usable in a narrow context".
+  Interpreted (undoable): a soft keyword may name a local variable, parameter, field or method (`send = 3` inside a
+  function, `class Mail{ send(){…} }`, `{emit: 1}`), and there the user's name wins; at top level it can't be
+  redefined globally (loud error naming another name). Each use as a name gives a got-it note ("send is a keyword;
+  here it is your variable").
+- P166 (functions, warp-64) element-wise operators `.+ .- .* ./ .^` on a plain number act as the plain operator
+  (`6 ./ 2` → 3, `sq = @(x) x.^2; sq(3)` → 9), like MATLAB and NumPy; on lists they still map.
+- P163 (signals, warp-ed; from the user's remark that raise and throw mean errors) `emit alarm{level: 3}` runs the
+  `on alarm` handlers and continues; an emit nobody handles does nothing. `raise`/`throw` are always errors, so an
+  `on X` handler no longer turns `raise X` into an event (replaces P110's dual meaning). fire/trigger/signal are
+  aliases of emit with a got-it note; send/broadcast keep their machine-wide meaning (P129). User, adding: "emit and also
+  send": `send alarm{level: 3}` without `to` is a first-class synonym of emit (no note), matching P129's value-less
+  `send "file system full"`; only `send v to "chat"` / `broadcast v on "chat"` go to a channel.
+- P164 (functions, warp-64, wiki/argument.md) in a parameter shape `phone number` is the field phone of type number
+  (a type word after a name is its type everywhere); the wiki example calling it with a text changes to `phone text`.
+  User, adding: `phone-number:text` works too, a hyphenated field name with a `:` type. Assumed (undoable): in a
+  declaration context (parameter shape, class field, key before `:`) `a-b` is one name; in an expression it stays
+  subtraction, and reading such a field uses `p.phone-number` / `p["phone-number"]`.
+- P162 (classes, warp-e0) `init(…){…}` in a class is always the constructor (user chose this over the recommended
+  "unless called explicitly"). User, correcting: `init` is THE constructor name, not `value`. `value`, JS
+  `constructor` and Python `__init__` still work as aliases with a got-it note "wasp says init" and an "I meant:
+  init" fix; docs, hints and examples use `init`. User, extending: all common constructor names are aliases
+  of `init` with that note: `value` (wiki 2023), `constructor` (JS/TS), `__init__` (Python), `initialize` (Ruby),
+  `__construct` (PHP), `New` (VB.NET), `Create` (Delphi), Rust's `new` inside a class/impl, and a method named like
+  its class (C++/Java/C# `Point(x, y){…}` inside `class Point`). At the call site `new Point(1, 2)`
+  builds the same value as `Point(1, 2)`, with a got-it note that `new` is superfluous and a fix removing it; `init`
+  stays the definition name (it initializes an existing instance; Rust's `new` is a factory).
+- P161 (functions, warp-41; the user told the worker directly) no Swift-style argument labels: "we don't do this
+  here, I don't like that redundancy". Ported labels (`func greet(person name: String)`, `_ x: Int`) compile like P157,
+  with a got-it note "wasp names a parameter once"; docs and examples never use labels.
 - P160 (warp-42, wiki/reference.md; survey notes/implicit_params.md) `$0`/`$1` were overloaded three ways (lambda
   parameters, WebAssembly positional arguments, node ids). The user chose a different syntax for ids: `@1` is the
   node whose `@id` is 1 (`a[id=1]{ b c { parent=@1 } }`), `ref 1` / `ref a` say the same in words, and `$a` stays

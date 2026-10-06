@@ -200,9 +200,10 @@ fn operator_calls(node: Node) -> Node {
 		for (method, _, _) in class_items(body).iter().filter_map(method_parts) {
 			if let Some((op, names)) = OPERATOR_METHODS.iter().find(|(_, names)| names.contains(&method.as_str())) {
 				if method != names[0] {
+					crate::normalize::set_position_of(part);
 					crate::diagnostic::note_alias(&method, names[0]);
 				}
-				methods.push((name.drop_meta().name(), op.clone(), method));
+				methods.push((name.drop_meta().name(), *op, method));
 			}
 		}
 	});
@@ -657,6 +658,7 @@ fn without_modifiers(item: Node) -> Node {
 	if let Some(kept_word) = kept.first().map(leading_name).filter(|_| kept.len() < words.len()) {
 		let modifiers: Vec<String> = words[..words.len() - kept.len()].iter().map(|word| word.drop_meta().name()).collect();
 		if !modifiers.iter().any(|word| SILENT_MODIFIERS.contains(&word.as_str())) {
+			crate::normalize::set_position_of(&item);
 			crate::diagnostic::note_alias(&format!("{} {kept_word}", modifiers.join(" ")), &kept_word);
 		}
 	}
@@ -773,6 +775,7 @@ fn constructed_by_new(node: Node, classes: &[String]) -> Node {
 	match node {
 		Node::Key(class, Op::Dot, member) if classes.contains(&class.drop_meta().name()) && matches!(class.drop_meta(), Node::Symbol(_)) && leading_name(&member) == RUBY_NEW_WORD => {
 			let class_name = class.drop_meta().name();
+			crate::normalize::set_position_of(&class);
 			crate::diagnostic::note_alias(&format!("{class_name}.{RUBY_NEW_WORD}"), &class_name);
 			let arguments = match member.drop_meta().clone() {
 				Node::List(items, _, _) => items[1..].iter().cloned().map(|argument| constructed_by_new(argument, classes)).collect(),
@@ -804,6 +807,7 @@ fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 			let Node::List(items, _, _) = braces.drop_meta().clone() else { unreachable!("guarded") };
 			let class_name = class.drop_meta().name();
 			let written: Vec<String> = items.iter().map(Node::serialize).collect();
+			crate::normalize::set_position_of(&class);
 			crate::diagnostic::note_alias(&format!("{class_name}{{{}}}", written.join(", ")), &format!("{class_name}({})", written.join(", ")));
 			let arguments = items.into_iter().map(|item| constructed_from_braces(item, classes));
 			Node::List([vec![*class]].into_iter().flatten().chain(arguments).collect(), Bracket::Round, Separator::None)
@@ -826,6 +830,7 @@ fn with_init_constructors(node: Node, called: &std::collections::HashSet<String>
 			}
 			let items = items.into_iter().map(|item| match is_alias(&item) {
 				Some(alias) => {
+					crate::normalize::set_position_of(&item);
 					crate::diagnostic::note_alias(&alias, CONSTRUCTOR_WORD);
 					as_init(item)
 				}

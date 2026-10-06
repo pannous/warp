@@ -221,9 +221,7 @@ fn replaced(node: Node, folded: &[(Node, Node)]) -> Node {
 	if let Some((_, value)) = folded.iter().find(|(call, _)| *call == node) {
 		return value.drop_meta().clone();
 	}
-	match node {
-		other => other.map_children(|child| replaced(child, folded)),
-	}
+	node.map_children(|child| replaced(child, folded))
 }
 
 
@@ -265,9 +263,7 @@ struct Specialiser {
 impl Specialiser {
 	/// Calls with some constant arguments of a pure function replaced by calls of their variants
 	fn rewrite(&mut self, node: Node) -> Node {
-		let node = match node {
-			other => other.map_children(|child| self.rewrite(child)),
-		};
+		let node = node.map_children(|child| self.rewrite(child));
 		self.specialised_call(&node, 0).unwrap_or(node)
 	}
 
@@ -328,9 +324,7 @@ impl Specialiser {
 	/// Calls of variants with plain arguments (names, numbers) replaced by the variant's body, the arguments in place of
 	/// its parameters, as long as that body calls no variant whose arguments are not plain: power·n3(y) → y*(y*(y*1))
 	fn inlined(&self, node: Node, depth: usize) -> Node {
-		let node = match node {
-			other => other.map_children(|child| self.inlined(child, depth)),
-		};
+		let node = node.map_children(|child| self.inlined(child, depth));
 		let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return node };
 		let Some((head, arguments)) = items.split_first() else { return node };
 		let plain = arguments.iter().all(|argument| matches!(argument.drop_meta(), Node::Symbol(_) | Node::Number(_)));
