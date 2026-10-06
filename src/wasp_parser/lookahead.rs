@@ -1,0 +1,345 @@
+//! Looking ahead: what can start an atom, operators and control words ahead, guards, attributes
+
+use super::*;
+
+impl WaspParser {
+	/// Check if current character can start an atom (for implicit application)
+	pub(super) fn can_start_atom(&self) -> bool {
+		let ch = self.current_char();
+		ch.is_alphanumeric() || ch == '_' || ch == '"' || ch == '\'' || ch == '(' || ch == '[' || ch == '{'
+			|| self.number_starts_at(0) || self.starts_function_reference()
+	}
+
+	/// `function add` (P82): the function itself where a name and then the end of the expression follow the keyword;
+	/// `function add(x) {…}` and `function add x := …` define it
+	pub(super) fn function_reference_after(&mut self, keyword: &str) -> Option<Node> {
+		if !FUNCTION_REFERENCE_WORDS.contains(&keyword) || self.options.data_mode {
+			return None;
+		}
+		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		if blanks == 0 || !self.peek_char(blanks).is_alphabetic() {
+			return None;
+		}
+		let name: String = (blanks..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
+		let after = blanks + name.chars().count();
+		let rest = (after..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(after);
+		// `map function square on [1 2 3]`: the iteration words' `on` ends it too
+		let on_follows = (rest..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect::<String>() == crate::lambdas::ON_WORD;
+		if !matches!(self.peek_char(rest), '\0' | ';' | ',' | ')' | ']' | '}' | '\n') && !on_follows {
+			return None;
+		}
+		self.advance_by(after);
+		self.after_function_keyword = false;
+		Some(crate::closures::function_reference(name))
+	}
+
+	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
+	pub(super) fn starts_function_reference(&self) -> bool {
+		self.current_char() == '&' && self.peek_char(1).is_alphabetic() && !is_identifier_char(self.prev_char())
+	}
+
+	/// A digit, or a leading-dot decimal like `.5`
+	pub(super) fn number_starts_at(&self, offset: usize) -> bool {
+		let ch = self.peek_char(offset);
+		ch.is_ascii_digit() || (ch == '.' && self.peek_char(offset + 1).is_ascii_digit())
+	}
+
+	/// An operand may start after `offset` characters and following blanks: not a closing bracket, separator or the end
+	pub(super) fn operand_follows(&self, offset: usize) -> bool {
+		let mut position = offset;
+		while matches!(self.peek_char(position), ' ' | '\t') {
+			position += 1;
+		}
+		!matches!(self.peek_char(position), '\0' | '\n' | '\r' | '>' | ')' | ']' | '}' | ',' | ';' | '=')
+	}
+
+	/// Check if character terminates a URL
+	pub(super) fn is_url_terminator(&self, ch: char) -> bool {
+		ch == '\0' || ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
+			|| ch == ';' || ch == ')' || ch == ']' || ch == '}' || ch == '>'
+			|| ch == '"' || ch == '\'' || ch == ',' || ch == '«'
+	}
+
+	/// Peek ahead for an infix operator, returns (Op, chars_to_consume) if found
+	/// Checks longer operators first (greedy matching)
+	pub(super) fn peek_operator(&self) -> Option<(Op, usize)> {
+		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
+		if (c1, c2) == ('?', ':') {
+			return None; // the elvis `?:` is no ternary, `try_parse_elvis` takes it
+		}
+
+		if let Some(word) = SIMILARITY_WORDS.iter().find(|word| self.matches_keyword(word)) {
+			return Some((Op::Similar, word.len()));
+		}
+		// Keywords (4-char)
+		if self.matches_keyword("then") { return Some((Op::Then, 4)); }
+		if self.matches_keyword("else") { return Some((Op::Else, 4)); }
+
+		// 3-char operators
+		match (c1, c2, c3) {
+			('.', '.', '.') => return Some((Op::To, 3)),
+			('.', '.', '<') => return Some((Op::Range, 3)), // Swift-style exclusive range
+			('&', '&', '=') => return Some((Op::AndAssign, 3)),
+			('|', '|', '=') => return Some((Op::OrAssign, 3)),
+			('^', '^', '=') => return Some((Op::XorAssign, 3)),
+			('*', '*', '=') => return Some((Op::PowAssign, 3)),
+			_ => {}
+		}
+		// Keywords (3-char)
+		if self.matches_keyword("and") { return Some((Op::And, 3)); }
+		if self.matches_keyword("xor") { return Some((Op::Xor, 3)); }
+		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
+
+		// 2-char operators
+		match (c1, c2) {
+			('a', 's') if !c3.is_alphanumeric() => return Some((Op::As, 2)),
+			('?', '.') if c3.is_alphabetic() || c3 == '_' => return Some((Op::SafeDot, 2)), // `x?.name`; `x ?.5 : 1` is a ternary
+			(':', '=') => return Some((Op::Define, 2)),
+			('~', '~') => return Some((Op::Similar, 2)),
+			(':', ':') => return Some((Op::Scope, 2)),
+			('-', '>') => return Some((Op::Arrow, 2)),
+			('=', '>') => return Some((Op::FatArrow, 2)),
+			('*', '*') => return Some((Op::Pow, 2)),
+			('+', '=') => return Some((Op::AddAssign, 2)),
+			('-', '=') => return Some((Op::SubAssign, 2)),
+			('*', '=') => return Some((Op::MulAssign, 2)),
+			('/', '=') => return Some((Op::DivAssign, 2)),
+			('%', '=') => return Some((Op::ModAssign, 2)),
+			('^', '=') => return Some((Op::PowAssign, 2)),
+			('<', '<') if !self.options.wit_mode => return Some((Op::Shl, 2)),
+			// `list<list<int>>` closes two generics, a shift has an operand behind it
+			('>', '>') if !self.options.wit_mode && self.operand_follows(2) => return Some((Op::Shr, 2)),
+			('<', '=') => return Some((Op::Le, 2)),
+			('>', '=') => return Some((Op::Ge, 2)),
+			('=', '=') => return Some((Op::Eq, 2)),
+			('!', '=') => return Some((Op::Ne, 2)),
+			('+', '+') => return Some((Op::Inc, 2)),
+			('-', '-') => return Some((Op::Dec, 2)),
+			('.', '.') => return Some((Op::Range, 2)),
+			('+', '-') if c3.is_whitespace() && self.prev_char().is_whitespace() => return Some((Op::PlusMinus, 2)),
+			('&', '&') => return Some((Op::And, 2)),
+			('|', '|') => return Some((Op::Or, 2)),
+			_ => {}
+		}
+		// Keywords (2-char)
+		if self.matches_keyword("or") { return Some((Op::Or, 2)); }
+		if self.matches_keyword("is") { return Some((Op::Eq, 2)); } // wiki/equality.md: `is` compares by value like ==
+		if self.matches_keyword("be") { return Some((Op::Define, 2)); } // wiki/be.md
+		if self.matches_keyword("if") { return Some((Op::If, 2)); }
+		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
+		if self.matches_keyword("to") { return Some((Op::To, 2)); }
+		if self.matches_keyword("upto") { return Some((Op::Range, 4)); } // wiki/range.md: `1 upto 10` excludes 10
+		// Kotlin's `for i in 0 until n`; elsewhere `until` guards a statement: `i++ until c`
+		if self.in_for_header && self.matches_keyword("until") { return Some((Op::Range, 5)); }
+
+		// 1-char operators
+		match c1 {
+			':' => Some((Op::Colon, 1)),
+			'=' if self.equals_compares => Some((Op::Eq, 1)),
+			'=' => Some((Op::Assign, 1)),
+			// `a .5` is a list of two values, `a.5` a member access
+			'.' if !(self.prev_char().is_whitespace() && self.number_starts_at(0)) => Some((Op::Dot, 1)),
+			'+' => Some((Op::Add, 1)),
+			'±' => Some((Op::PlusMinus, 1)),
+			'-' => Some((Op::Sub, 1)),
+			'*' => Some((Op::Mul, 1)),
+			'/' if c2 != '/' => Some((Op::Div, 1)), // Don't treat // as division - it's a comment
+			'%' => Some((Op::Mod, 1)),
+			'^' => Some((Op::Pow, 1)),
+			'×' | '⋅' => Some((Op::Mul, 1)),
+			'÷' => Some((Op::Div, 1)),
+			'<' | '>' if self.options.wit_mode => None, // angle brackets only delimit type arguments
+			'<' => Some((Op::Lt, 1)),
+			'>' => Some((Op::Gt, 1)),
+			'≤' => Some((Op::Le, 1)),
+			'≥' => Some((Op::Ge, 1)),
+			'≠' => Some((Op::Ne, 1)),
+			'≈' | '⋍' | '~' => Some((Op::Similar, 1)),
+			'!' => Some((Op::Not, 1)),
+			'¬' => Some((Op::Not, 1)),
+			'&' if self.starts_function_reference() && self.prev_char().is_whitespace() => None, // `map &square xs`
+			'&' => Some((Op::And, 1)),
+			'|' => Some((Op::Or, 1)),
+			glyph if glyph_operator(glyph).is_some() => glyph_operator(glyph).map(|(op, _)| (op, 1)),
+			'#' => Some((Op::Hash, 1)),
+			'?' => Some((Op::Question, 1)),
+			'…' => Some((Op::To, 1)),
+			_ => None,
+		}
+	}
+
+	/// `unless`/`until` in front of a statement: the `if`/`while` it reads as, with the condition negated afterwards
+	pub(super) fn peek_negated_control_word(&self) -> Option<(Op, usize)> {
+		if self.options.data_mode {
+			return None;
+		}
+		STATEMENT_MODIFIERS.iter()
+			.find(|(word, _, negated)| *negated && self.matches_keyword(word))
+			.map(|(word, op, _)| (*op, word.len()))
+	}
+
+	/// `try` or `assert` followed by an operand: the words that guard a statement
+	pub(super) fn peek_guard_word(&self) -> Option<&'static str> {
+		if self.options.data_mode {
+			return None;
+		}
+		GUARD_MARKERS.iter().map(|(word, marker)| (*word, *marker))
+			.find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t' | '{' | ':'))
+			.map(|(_, marker)| marker)
+	}
+
+	/// `try X else Y` and `assert C else X`, as the marker call `marker(X, Y)` that `library_words` lowers.
+	/// X runs to the `else` (it may be an assignment); `assert C` alone has ø for the message.
+	pub(super) fn parse_guard(&mut self, marker: &'static str) -> Node {
+		let word_length = GUARD_MARKERS.iter().find(|(_, known)| *known == marker).map_or(0, |(word, _)| word.len());
+		self.advance_by(word_length);
+		self.skip_spaces();
+		self.skip_python_colon();
+		let outer = std::mem::replace(&mut self.stops_at_else, true);
+		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_guarded_phrase());
+		self.stops_at_else = outer;
+		self.skip_spaces();
+		let mut caught = None;
+		let fallback = if let Some((word, ahead)) = self.fallback_word_ahead() {
+			self.advance_by(ahead + word.len());
+			self.skip_spaces();
+			caught = if word == ELSE_KEYWORD { None } else { self.parse_caught_name(word) };
+			self.skip_python_colon();
+			self.parse_expr(0)
+		} else if marker == TRY_MARKER {
+			return error("`try` needs an `else`: `try X else Y`");
+		} else {
+			Empty
+		};
+		// `catch e { … }` (P67): the name the fallback reads the caught Error by, a fourth item
+		let binding = caught.filter(|name| mentions(&fallback, name)).map(Symbol);
+		Node::List([vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(), Bracket::Round, Separator::None)
+	}
+
+	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),
+	/// with how many blanks (line breaks included) come before it
+	pub(super) fn fallback_word_ahead(&self) -> Option<(&'static str, usize)> {
+		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		FALLBACK_WORDS.iter().find(|word| self.word_at(ahead) == **word).map(|word| (*word, ahead))
+	}
+
+	/// `catch e`, `except ZeroDivisionError`, `except ValueError as e`: the name the error would be bound to
+	pub(super) fn parse_caught_name(&mut self, word: &str) -> Option<String> {
+		if !self.is_identifier_start(0) {
+			return None;
+		}
+		let mut name = self.word_at(0);
+		self.advance_by(name.chars().count());
+		self.skip_spaces();
+		if self.matches_keyword("as") {
+			self.advance_by(2);
+			self.skip_spaces();
+			name = self.word_at(0);
+			self.advance_by(name.chars().count());
+			self.skip_spaces();
+			return Some(name);
+		}
+		(word == "catch").then_some(name) // `except ZeroDivisionError` names a type, `catch e` a binding
+	}
+
+	/// Python's `try:` and `except:` end with a colon; the block may start on the next line
+	pub(super) fn skip_python_colon(&mut self) {
+		if self.current_char() == ':' {
+			self.advance();
+			self.skip_whitespace();
+		}
+	}
+
+	/// The guarded part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else 3`)
+	pub(super) fn parse_guarded_phrase(&mut self) -> Node {
+		let mut items = vec![self.parse_expr(0)];
+		loop {
+			self.skip_spaces();
+			if FALLBACK_WORDS.iter().any(|word| self.matches_keyword(word)) || matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',') {
+				break;
+			}
+			let position = self.pos;
+			let item = self.parse_expr(0);
+			if self.pos == position {
+				break;
+			}
+			items.push(item);
+		}
+		if items.len() == 1 { items.remove(0) } else { Node::List(items, Bracket::None, Separator::Space) }
+	}
+
+	/// Peek for prefix operators (unary operators that bind to right operand)
+	pub(super) fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
+		if self.matches_keyword("while") { return Some((Op::While, 5)); }
+		if self.matches_keyword("sqrt") { return Some((Op::Sqrt, 4)); }
+		if self.matches_keyword("cbrt") { return Some((Op::Cbrt, 4)); }
+		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
+		if self.matches_keyword("abs") { return Some((Op::Abs, 3)); }
+		if self.matches_keyword("if") { return Some((Op::If, 2)); }
+
+		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
+		let variable_follows = c3.is_alphabetic() || c3 == '_';
+		match c1 {
+			'+' if c2 == '+' && variable_follows => Some((Op::Inc, 2)),
+			'-' if c2 == '-' && variable_follows => Some((Op::Dec, 2)),
+			// unary plus glued to its operand, `+5`, `+x`, `+(a)`: the operand itself; a spaced `+` stays the operator
+			// word (`fold + xs`)
+			'+' if c2.is_alphanumeric() || matches!(c2, '_' | '(' | '.') => Some((Op::Add, 1)),
+			'-' => Some((Op::Neg, 1)),
+			dash if matches!(glyph_operator(dash), Some((Op::Sub, _))) => Some((Op::Neg, 1)),
+			'!' | '¬' => Some((Op::Not, 1)),
+			'√' => Some((Op::Sqrt, 1)),
+			'∛' => Some((Op::Cbrt, 1)),
+			'‖' => Some((Op::Abs, 1)),
+			'#' => Some((Op::Hash, 1)), // prefix # means count/length
+			_ => None,
+		}
+	}
+
+	/// Peek for suffix operators (unary operators that bind to left operand)
+	pub(super) fn peek_suffix_operator(&self) -> Option<(Op, usize)> {
+		match (self.current_char(), self.peek_char(1)) {
+			('+', '+') => Some((Op::Inc, 2)),
+			('-', '-') => Some((Op::Dec, 2)),
+			_ => None,
+		}
+	}
+
+	/// `$main`, `$ii_i`: names keep their sigil (WAT identifiers, DOM selectors)
+	pub(super) fn parse_dollar_name(&mut self) -> Node {
+		self.advance(); // skip '$'
+		match self.parse_symbol() {
+			Ok(name) => Symbol(format!("${name}")),
+			Err(message) => error(&message),
+		}
+	}
+
+	pub(super) fn unwrap_single(group: Node) -> Node {
+		match group {
+			Node::List(mut items, _, _) if items.len() == 1 => items.remove(0),
+			other => other,
+		}
+	}
+
+	/// `@name` or `@name(value)` annotates the atom that follows: `@version(2) @draft tee{a:1}`.
+	/// `@name:value` (inside a literal: `point{x:1 @source:"gps"}`) is the meta entry `@name`, never a field;
+	/// after a dot, `p.@name` names the meta key itself.
+	pub(super) fn parse_attribute(&mut self) -> Node {
+		let after_dot = self.pos > 0 && self.chars[self.pos - 1] == '.';
+		self.advance(); // skip '@'
+		let name = match self.parse_symbol() {
+			Ok(name) => name,
+			Err(message) => return error(&message),
+		};
+		if after_dot {
+			return Symbol(format!("{ATTRIBUTE_MARK}{name}"));
+		}
+		if self.current_char() == ':' && self.peek_char(1) != '=' {
+			self.advance();
+			self.skip_spaces();
+			return Node::Key(Box::new(Symbol(format!("{ATTRIBUTE_MARK}{name}"))), Op::Colon, Box::new(self.parse_atom()));
+		}
+		let value = if self.current_char() == '(' { Self::unwrap_single(self.parse_bracketed('(')) } else { Node::True };
+		self.parse_atom().with_attribute(&name, value)
+	}
+}
