@@ -34,6 +34,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Standing rules (user)
+- Roadmap, next big features, NOT to be started yet (2026-10-06): "a standard library standard functionality in
+  different modules a solid module manager and then a packet manager for internal and external packages as well as
+  using existing packaging managers and packages to our greatest advantage". Board cards in Later, in this order:
+  stdlib-standard, module-manager, package-manager. Nobody takes them until the user releases them.
 - Word choices are not questions (2026-10-06): "we have the alias mechanism to generally tell people if they use the
   wrong word what the right word is but still keep the synonym working or replacing". When the alternatives are only
   different words for the same thing, the recommended word is canonical and the others become aliases: they work,
