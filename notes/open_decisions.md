@@ -85,6 +85,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P108 (Sublime package, pannous/wasp-sublime-text) Angle.sublime-syntax is retired; Wasp.sublime-syntax (scope
   source.wasp) takes .wasp/.warp/.a/.angle (user chose this over the recommended split by extension). Asked by
   warp-76 for the Sublime worker. FYI there: ⚠️ no longer starts a comment (warp reads it as an error constant).
+- Signals (warp-54, branch signals, notes/signals.md): P109 every variable can be watched (implicit), checks only
+  where a listener watches; P110 `raise X` goes to `on X` handlers as a signal, without a handler it stays the
+  catchable exception; P111 (revises P38) writes through `global x` in called functions run the listeners too;
+  P112 no batching block (user chose this over `together { }`): only a multi-assignment `a, b = 1, 2` notifies once.
 - P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
   behind them go; no test edits. Asked by warp-40 (code-quality).
 - P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.
