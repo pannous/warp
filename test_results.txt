@@ -173,6 +173,8 @@ PASSED:
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
   ✓ control::test_reactive_ports::a_listener_watches_one_field
+  ✓ control::test_reactive_ports::a_named_listener_is_removed_and_shares_variables
+  ✓ control::test_reactive_ports::a_once_handler_runs_at_the_first_raise
   ✓ control::test_reactive_ports::rxjs_node_qt_events
   ✓ control::test_reactive_ports::svelte_vue_solid_derivations
   ✓ control::test_run_time_block_cache::a_block_in_a_loop_body_sees_the_variables_assigned_there
@@ -1181,6 +1183,7 @@ PASSED:
   ✓ modules::test_wasm_modules::an_exported_global_reads_as_its_value
   ✓ modules::test_wasm_modules::an_imported_module_gets_wasi_host_words_and_other_modules
   ✓ modules::test_wasm_modules::include_runs_main_globals_are_set_and_casts_are_ambiguous
+  ✓ modules::test_wasm_modules::libc_compiled_to_wasm_is_called_like_c
   ✓ node::node_values_test::test_values_empty
   ✓ node::node_values_test::test_values_key
   ✓ node::node_values_test::test_values_list
@@ -2727,4 +2730,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2722 passed, 0 failed, 2722 total tested
+19 ignored, 2725 passed, 0 failed, 2725 total tested
