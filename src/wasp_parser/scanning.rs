@@ -60,10 +60,10 @@ impl WaspParser {
 		self.pos += 1;
 	}
 
-	/// The operand after a single `|`: a bare word is marked as a possible pipe stage, any other operand gets the hint
+	/// The operand after a single `|`: a bare word or word operator is marked as a possible pipe stage, any other operand gets the hint
 	/// toward `or`
 	pub(super) fn pipe_operand(&self, operand: Node, line: usize, column: usize) -> Node {
-		if matches!(operand.drop_meta(), Symbol(_)) {
+		if crate::pipes::may_be_stage(&operand) {
 			return crate::pipes::pipe_stage(operand);
 		}
 		set_hint_position(line, column);
