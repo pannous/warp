@@ -47,6 +47,7 @@ mod test_call_arity;
 mod test_definition_value;
 mod test_def_without_parameters;
 mod test_named_arguments;
+mod test_nested_prefix_calls;
 mod test_spaced_assign_definition;
 mod test_typed_lambda;
 mod test_phrase_calls;
