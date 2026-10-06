@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 249] = [
+const CASES: [(&str, &str); 262] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -254,6 +254,19 @@ twice 4"#, r#"8"#),
 	(r#"[1,2,3].min()"#, r#"1"#),
 	(r#"static int Total(params int[] xs) => xs.Sum(); Total(1, 2, 3)"#, r#"6"#),
 	(r#"xs = [1, 2, 3]; xs.Aggregate((a, b) => a * b)"#, r#"6"#),
+	(r#"f(x) = 2x + 1; f(3)"#, r#"7"#),
+	(r#"sq = x -> x^2; sq(4)"#, r#"16"#),
+	(r#"map(x -> x * 2, [1, 2, 3])"#, r#"[2 4 6]"#),
+	(r#"mk = () => ({a: 1}); mk().a"#, r#"1"#),
+	(r#"const f = x => y => x + y; f(1)(2)"#, r#"3"#),
+	(r#"(x -> x + 1)(2)"#, r#"3"#),
+	(r#"[1, 2, 3] |> map(x -> x * 10)"#, r#"[10 20 30]"#),
+	(r#"let add = |a, b| a + b; add(2, 3)"#, r#"5"#),
+	(r#"square(x) := x * x; square.([1, 2, 3])"#, r#"[1 4 9]"#),
+	(r#"function f(x) { return x > 0 ? "pos" : "neg" }; f(-1)"#, r#"neg"#),
+	(r#"fact = n -> n <= 1 ? 1 : n * fact(n - 1); fact(5)"#, r#"120"#),
+	(r#"def f(x): return "pos" if x > 0 else "neg"; f(1)"#, r#"pos"#),
+	(r#"def f(x): return "pos" if x > 0 else "neg"; f(-1)"#, r#"neg"#),
 ];
 
 /// The value as `warp eval` shows it: a text without its quotes
