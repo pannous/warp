@@ -1125,7 +1125,7 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 }
 
 /// `def f(a, b) { body }`, `def f(x) := body`, `function g() { … }`: the definition `f(a, b) := body`
-fn keyword_definition(items: &[Node]) -> Option<Node> {
+pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let (keyword, definition, mut result_type) = match items {
 		[keyword, definition] => (keyword, definition.drop_meta().clone(), None),
 		[keyword, head, body] => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), None),

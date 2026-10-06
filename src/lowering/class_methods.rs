@@ -75,9 +75,34 @@ fn class_items(body: &Node) -> Vec<Node> {
 		single => vec![single.clone()],
 	};
 	items.into_iter().flat_map(|item| match item.drop_meta() {
+		Node::List(words, _, _) if keyword_method(words).is_some() => keyword_method(words).into_iter().collect(),
 		Node::List(group, Bracket::None, _) => group.clone(),
 		_ => vec![item],
 	}).collect()
+}
+
+/// `def area() -> int {…}`, `fun area(): Int {…}`, `func area() {…}`: the method `area() := …` (with its result type)
+fn keyword_method(words: &[Node]) -> Option<Node> {
+	crate::declarations::keyword_definition(words)
+}
+
+/// The result type a method declares: `area():int := …`
+fn result_type(item: &Node) -> Option<&Node> {
+	match item.drop_meta() {
+		Node::Key(head, Op::Define, _) => match head.drop_meta() {
+			Node::Key(_, Op::Colon, result_type) => Some(result_type),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// A definition with the result type on its head
+fn with_result_type(definition: Node, result_type: Option<&Node>) -> Node {
+	match (definition, result_type) {
+		(Node::Key(head, Op::Define, body), Some(result_type)) => Node::Key(Box::new(Node::Key(head, Op::Colon, Box::new(result_type.clone()))), Op::Define, body),
+		(definition, _) => definition,
+	}
 }
 
 /// A class's items after those of its parents: a parent's field or method the class defines again is left out
@@ -137,6 +162,10 @@ fn parent_version(method: String, class: &str, called: &mut Vec<String>) -> Node
 /// A method definition under another name
 fn renamed(method: &Node, name: &str) -> Node {
 	let Node::Key(head, Op::Define, body) = method.drop_meta() else { return method.clone() };
+	if let Node::Key(untyped, Op::Colon, result_type) = head.drop_meta() {
+		let untyped = renamed(&Node::Key(untyped.clone(), Op::Define, body.clone()), name);
+		return with_result_type(untyped, Some(result_type));
+	}
 	let head = match head.drop_meta() {
 		Node::List(parts, bracket, separator) => Node::List([vec![Node::Symbol(name.to_string())], parts[1..].to_vec()].concat(), bracket.clone(), separator.clone()),
 		_ => Node::Symbol(name.to_string()),
@@ -309,8 +338,9 @@ fn split_class(node: &Node, changing: &mut Vec<String>) -> Option<(Node, Vec<Nod
 		let (function, changes) = function(&members, &method_name, parameters, method_body);
 		if changes {
 			changing.push(method_name);
+			return function; // it gives its changed object
 		}
-		function
+		with_result_type(function, result_type(method))
 	}));
 	let field_list = Node::List(fields, Bracket::Curly, Separator::Space);
 	Some((Node::Type { name: name.clone(), body: Box::new(field_list) }, functions))
@@ -339,6 +369,10 @@ fn static_definitions(members: &Members, member: &Node) -> Vec<Node> {
 /// `greet(x) := body` or `area := body` in a class body: name, parameters and body
 fn method_parts(item: &Node) -> Option<(String, Vec<Node>, Node)> {
 	let Node::Key(head, Op::Define, body) = item.drop_meta() else { return None };
+	let head = match head.drop_meta() {
+		Node::Key(untyped, Op::Colon, _) if result_type(item).is_some() => untyped,
+		_ => head,
+	};
 	match head.drop_meta() {
 		Node::Symbol(name) => Some((name.clone(), vec![], *body.clone())),
 		Node::List(parts, Bracket::Round, _) => match parts.split_first() {

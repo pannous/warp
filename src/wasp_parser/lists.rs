@@ -291,6 +291,10 @@ impl WaspParser {
 	/// Used for class/struct definitions to convert type names to Type nodes
 	pub(super) fn transform_fields_to_types(node: Node) -> Node {
 		match node {
+			// a keyword method in a class body (`def scaled(k) { side * k }`): its body is code, no field type
+			Node::List(items, bracket, sep) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::operators::is_function_keyword(word)) => {
+				Node::List(items, bracket, sep)
+			}
 			Node::List(items, bracket, sep) => {
 				let transformed: Vec<Node> = items.into_iter().map(Self::transform_fields_to_types).collect();
 				Node::List(transformed, bracket, sep)

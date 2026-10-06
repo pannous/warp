@@ -122,9 +122,13 @@ replaces that where the static type is known, modelled on map_backend.rs (typed 
 Next steps: methods that change or return self, a struct result (like list_abi's returns_list), struct elements in
 typed lists.
 
-Open (next batches): GC struct writes and struct results (above), keyword methods in a class body (`def area() -> int {…}`,
-`fun area(): Int {…}`, Python/Kotlin/Swift style: today "no field area"; class_methods method_parts sees only `:=`
-heads, reuse declarations.rs keyword_definition on the body items first, warp-dd owns that function), the `value{…}` constructor block and `value(name){…}`
+Keyword methods (classes-6, card classes-keyword): `def area() -> int {…}`, `fun area(): Int {…}`,
+`func area() -> Int {…}`, `def scaled(k) {…}` in a class body are methods: class_items feeds each item through
+declarations.rs keyword_definition (warp-dd's) before splitting methods from fields, the result type stays on the
+method (dropped when the method changes its object and so gives it back); the parser no longer reads a keyword
+method's body as field types (wasp_parser transform_fields_to_types: `k` of `side * k` was `type k`).
+
+Open (next batches): struct results and struct methods that change self (above), the `value{…}` constructor block and `value(name){…}`
 (wiki/constructor.md; today silently ignored), a `pop` method (changes the object and gives another value), a method
 named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), generics
 `class Box<T>`, mixins, a field named `pi` (card footgun-pi).

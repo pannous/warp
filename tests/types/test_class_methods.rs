@@ -42,3 +42,12 @@ fn a_method_assigning_its_receiver_says_so() {
 fn a_shared_method_named_like_a_library_word_stays_the_classes_own() {
 	is!("class a{x:int; sum() := x}; class b{y:int; sum() := y}; a(1).sum() + b(2).sum()", 3);
 }
+
+#[test]
+fn keyword_methods_in_a_class_body() {
+	is!("class Square{side:int; def area() -> int { side * side }}; Square(3).area()", 9);
+	is!("class Square{side:int; fun area(): Int { return side * side }}; Square(3).area()", 9);
+	is!("class Square{side:int; func area() -> Int { side * side }}; s = Square(4); s.area()", 16);
+	is!("class Square{side:int; def scaled(k) { side * k }}; Square(3).scaled(2)", 6);
+	is!("class Square{side:int\n  def area() -> int {\n    return side * side\n  }\n}\nSquare(3).area()", 9);
+}
