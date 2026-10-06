@@ -185,3 +185,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - `n=3; cube 1..n` said "undefined: cube in `cube (range_value·range=ø; …)`": diagnostic::written_text quotes the source
   from the node's position to the end of its statement when the serialization holds compiler temporaries (·).
   The card's own example `is in of to from` now fails earlier with "undefined variable: from".
+
+## 2026-10-06 build-exe-default
+- g-1KS4: `warp build <file>` makes the standalone executable without --exe (still accepted); `warp build --wasm`
+  and `warp compile` write the module.
