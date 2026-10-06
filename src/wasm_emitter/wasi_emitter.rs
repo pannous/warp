@@ -145,9 +145,19 @@ impl WasmGcEmitter {
 				f.instruction(&I::Call(fd_write));
 				f.instruction(&I::Drop);
 			};
+			// [x] or [x, "\n"] joined: a printed line is one write, so lines of concurrent tasks do not interleave
 			f.instruction(&I::I64Const(SQUARE_LIST_KIND));
 			f.instruction(&I::LocalGet(value));
-			f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
+			if ends_line {
+				f.instruction(&I::I64Const(SQUARE_LIST_KIND));
+				f.instruction(&I::I32Const(newline.0 as i32));
+				f.instruction(&I::I32Const(newline.1 as i32));
+				s.call(f, "new_text");
+				f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
+				f.instruction(&I::StructNew(node_type));
+			} else {
+				f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
+			}
 			f.instruction(&I::StructNew(node_type));
 			f.instruction(&I::I32Const(empty as i32));
 			f.instruction(&I::I32Const(0));
@@ -155,9 +165,6 @@ impl WasmGcEmitter {
 			s.call(f, "list_join");
 			f.instruction(&I::LocalSet(text));
 			write(f, &|f| s.emit_text_field(f, text, 0), &|f| s.emit_text_field(f, text, 1));
-			if ends_line {
-				write(f, &|f| { f.instruction(&I::I32Const(newline.0 as i32)); }, &|f| { f.instruction(&I::I32Const(newline.1 as i32)); });
-			}
 			f.instruction(&I::LocalGet(value));
 		});
 	}

@@ -43,3 +43,13 @@ fn go_blocks_fill_a_job_list() {
 	is!("jobs = []; for i in 1..4 { jobs.add(go { sleep(100); i * 10 }) }; await all jobs", warp::ints(vec![10, 20, 30]));
 	is!("f(n) := { job = go { n + 1 }; await job }; f(4)", 5);
 }
+
+/// A printed line is one write: lines of concurrent tasks never interleave within a line
+#[test]
+#[cfg(feature = "native")]
+fn lines_printed_by_tasks_stay_whole() {
+	let printed = crate::common::printed("for i in 10..30 { go { print(i) } }");
+	let lines: Vec<&str> = printed.lines().filter(|line| !line.starts_with('»')).collect();
+	assert_eq!(lines.len(), 20, "printed {printed:?}");
+	assert!(lines.iter().all(|line| line.len() == 2 && line.parse::<i64>().is_ok()), "printed {printed:?}");
+}
