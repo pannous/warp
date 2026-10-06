@@ -15,6 +15,11 @@ use std::collections::{HashMap, HashSet};
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
 const MAP_WORD: &str = "map";
 const ALL_WORD: &str = "all";
+const BROADCAST_ITEM: &str = "broadcast_item";
+/// Library words of one text or number that broadcast over a list like a user function of a scalar
+const SCALAR_LIBRARY_WORDS: [&str; 6] = ["upper", "lower", "trim", "floor", "ceil", "round"];
+/// Prefix operators of one number: `abs [-1 2]`, `sqrt xs`
+const SCALAR_OPERATORS: [Op; 3] = [Op::Abs, Op::Sqrt, Op::Cbrt];
 /// The item `square all xs` applies square to
 const ALL_ITEM: &str = "all_item";
 /// Declared parameter kinds that take one element of a list (P50)
@@ -183,14 +188,21 @@ pub fn lower(program: Node) -> Node {
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
 	implicit_definitions(&program, &mut found);
-	let broadcasting: HashSet<String> = found.iter().filter(|definition| needs_a_scalar(definition)).map(|definition| definition.name.clone()).collect();
-	if broadcasting.is_empty() {
-		return program;
-	}
+	let mut broadcasting: HashSet<String> = found.iter().filter(|definition| needs_a_scalar(definition)).map(|definition| definition.name.clone()).collect();
+	// the library words of one scalar: `upper ["ab" "cd"]`, unless the program defines the name itself
+	let defined: HashSet<&String> = found.iter().map(|definition| &definition.name).collect();
+	broadcasting.extend(SCALAR_LIBRARY_WORDS.iter().map(|word| word.to_string()).filter(|word| !defined.contains(word)));
 	let mut assigned = HashMap::new();
 	collect_list_variables(&program, &mut assigned);
 	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
 	Broadcast { functions: broadcasting, list_variables }.rewrite(program)
+}
+
+/// `map(list, broadcast_item => applied(broadcast_item))`
+fn each_item(list: Node, applied: impl Fn(Node) -> Node) -> Node {
+	let item = Node::Symbol(BROADCAST_ITEM.to_string());
+	let each = Node::Key(Box::new(item.clone()), Op::FatArrow, Box::new(applied(item)));
+	Node::List(vec![Node::Symbol(MAP_WORD.to_string()), list, each], Bracket::Round, Separator::None)
 }
 
 /// `square := it*it`: a function of the implicit parameter `it`
@@ -264,6 +276,10 @@ impl Broadcast {
 				}).collect();
 				self.broadcast_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
+			Node::Key(left, op, right) if matches!(left.drop_meta(), Node::Empty) && SCALAR_OPERATORS.contains(&op) => {
+				let right = self.rewrite(*right);
+				self.broadcast_operator(op, &right).unwrap_or(Node::Key(left, op, Box::new(right)))
+			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
 			other => other,
@@ -283,9 +299,19 @@ impl Broadcast {
 				let applied = elements.iter().map(|element| self.apply(name, element.clone())).collect();
 				Some(Node::List(applied, Bracket::Square, element_separator.clone()))
 			}
-			Node::Symbol(variable) if self.list_variables.contains(variable) => {
-				Some(Node::List(vec![Node::Symbol(MAP_WORD.to_string()), argument.clone(), head.clone()], Bracket::Round, Separator::None))
+			Node::Symbol(variable) if self.list_variables.contains(variable) => Some(each_item(argument.clone(), |item| call(name, item))),
+			_ => None,
+		}
+	}
+
+	/// `abs [-1 2]`, `sqrt xs`: a scalar prefix operator over a list literal or a list variable
+	fn broadcast_operator(&self, op: Op, argument: &Node) -> Option<Node> {
+		let applied = |element: Node| Node::Key(Box::new(Node::Empty), op, Box::new(element));
+		match argument.drop_meta() {
+			Node::List(elements, Bracket::Square, separator) if !elements.is_empty() && !elements.iter().any(is_pair) => {
+				Some(Node::List(elements.iter().cloned().map(applied).collect(), Bracket::Square, separator.clone()))
 			}
+			Node::Symbol(variable) if self.list_variables.contains(variable) => Some(each_item(argument.clone(), applied)),
 			_ => None,
 		}
 	}

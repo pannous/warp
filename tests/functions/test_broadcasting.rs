@@ -44,3 +44,11 @@ fn julia_dot_call_broadcasts() {
 	assert_eq!(eval("f(x) = x^2; xs = [1,2]; f.(xs)").serialize(), "[1 4]");
 	assert_eq!(eval("add(a, b) = a + b; add.([1,2], 10)").serialize(), "[11 12]");
 }
+
+#[test]
+fn library_words_and_math_operators_broadcast() {
+	assert_eq!(eval("upper [\"ab\", \"cd\"]").serialize(), "[\"AB\" \"CD\"]");
+	assert_eq!(eval("abs [-1, 2]").serialize(), "[1 2]"); // was 2, silently
+	assert_eq!(eval("sqrt [4, 9]").serialize(), "[2 3]");
+	assert_eq!(eval("xs = [-3, 4]; abs xs").serialize(), "[3 4]");
+}
