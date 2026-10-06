@@ -141,7 +141,7 @@ pub fn poll_shared(program: Node) -> Node {
 
 /// Listeners inside functions on their parameters or on main-level variables become subscriptions made at run time
 pub fn subscribe(program: Node) -> Node {
-	let (program, mut reflected) = reflections(program);
+	let (program, mut reflected) = reflections(with_function_listeners(program));
 	let main_variables = main_variables(&program);
 	let mut subscriptions = Subscriptions { main_variables, fired: 0 };
 	let program = subscriptions.rewrite(program);
@@ -193,6 +193,21 @@ fn named_listener(statement: &Node) -> Option<(String, Node)> {
 	let (keyword, condition) = without_leading_word(condition)?;
 	let listener = Node::List(vec![keyword, condition, body.clone()], Bracket::None, Separator::Space);
 	listener_parts(&listener).map(|_| (name.clone(), listener))
+}
+
+/// `watch(s) := whenever s > 5 {…}` arrives as `(watch(s) := (whenever s) > 5) {…}`, its block a statement of its own:
+/// the function `watch(s) := { whenever s > 5 {…} }` (card whenever-without)
+fn with_function_listeners(node: Node) -> Node {
+	let node = node.map_children(with_function_listeners);
+	let Node::List(items, Bracket::None, _) = node.drop_meta() else { return node };
+	let [head, body] = items.as_slice() else { return node };
+	let Node::Key(function, Op::Define, value) = head.drop_meta() else { return node };
+	let Some((keyword, condition)) = without_leading_word(value) else { return node };
+	let listener = Node::List(vec![keyword, condition, body.clone()], Bracket::None, Separator::Space);
+	if listener_parts(&listener).is_none() {
+		return node;
+	}
+	Node::Key(function.clone(), Op::Define, Box::new(Node::List(vec![listener], Bracket::Curly, Separator::Semicolon)))
 }
 
 /// `(whenever t) > 30` → `whenever`, `t > 30`: the word the leftmost operand starts with, and the rest
