@@ -58,6 +58,15 @@ JSON, wasp text). A state signal is a **variable**: nothing new to write, `x = 3
    A named handler `h = on alarm {…}` runs while its flag `h_listening` holds: `remove h from listeners of alarm`
    (or `listeners of alarm -= h`, also from inside its own body) clears it, `clear listeners of alarm` clears every
    handler's, `count listeners of alarm` counts the listening ones. `emit item 1` carries the value 1 as `event`.
+   `listeners of alarm` is the list of its handlers still listening, each by its place among alarm's handlers in
+   declaration order (`[1, 3]` once the second is removed); a named handler `h` is its place. Any handler is removed
+   by its place, also an unnamed one: `remove 2 from listeners of alarm`, `remove (listeners of alarm)#1 from …`,
+   `listeners of alarm -= 2`, `for l in listeners of alarm { remove l from listeners of alarm }`; a removed place
+   does nothing. Every handler of an event whose listeners are named, or that has a named handler, gets a flag
+   (`alarm_handler_N_listening`). `remove h from listeners of tick` where h is neither a handler of tick nor a
+   variable is the compile error "h is no named listener of tick" (card event-handlers,
+   tests/control/test_event_handler_lists.rs). `remove h from alarm` is short for `remove h from listeners of alarm`
+   unless alarm is also a variable (card g-_SgI). Open: the handlers a block subscribes at run time (below) are not listed.
    A handler inside a block subscribes each time the block runs (`for i in 1 to 3 { on tick {…} }` adds three):
    `tick_listeners = tick_listeners + [event => body]`, run by one main-level handler (subscribed_in_blocks).
    Ported cases of Svelte, Vue, Solid, RxJS, C#, Node, Qt and the DOM: probes/reactive_ports.md,
