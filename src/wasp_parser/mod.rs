@@ -359,6 +359,16 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 	})
 }
 
+/// `keys(m)`, `m.keys`, `m.keys()`: an iterable whose items are a map's keys
+fn iterates_keys(iterable: &Node) -> bool {
+	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::library_words::MAP_KEYS);
+	let is_keys_call = |call: &Node| is_keys_word(call) || matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_keys_word));
+	match iterable.drop_meta() {
+		Node::Key(_, Op::Dot, method) => is_keys_call(method),
+		call => is_keys_call(call),
+	}
+}
+
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
 pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
 /// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
@@ -613,6 +623,8 @@ pub struct WaspParser {
 	equals_compares: bool,
 	/// Inside the iterable of `for x in …` a block is the loop body, never an argument: `for i in 0..n {…}`
 	in_for_header: bool,
+	/// The variables of the enclosing `for k in keys(m)` loops: `m[k]` looks a key up, so no indexing hint
+	key_variables: Vec<String>,
 	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
 	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
@@ -903,6 +915,7 @@ impl WaspParser {
 			options,
 			equals_compares: false,
 			in_for_header: false,
+			key_variables: vec![],
 			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,

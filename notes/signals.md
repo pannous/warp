@@ -129,6 +129,11 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
   that runs the handlers in order; an emit with no handler is nothing (P163).
   Done: lowering/event_signals.rs. Handlers are program-wide (a raise before the `on` line reaches it too, as a
   function defined later is callable); the function declares `global` the main-level variables the bodies mention.
+- **`on error of f {handler}`** (card g_ADRM, Error.md "a catch outside a block catches for its function"): f's
+  body becomes `try body else handler` (event_signals.rs with_function_error_handlers), so every call of f, before
+  or after the line, has the handler's value when it fails; forms `{…}`, `: …`, `do …`; an f the program does not
+  define is the error "on error of g: the program defines no function g". `error` is not bound in the handler yet
+  (as in `try … else`).
 - **Escaping signals (phase 5, done: lowering/signal_values.rs)**: a $Signal is a cell (wasm_emitter/cells.rs: a
   `$Node` of Kind::Data over a `$node_array`) with a second slot, the list of listener closures: `signal_new(v)`,
   `cell_get` / `cell_set` its value, `signal_listeners(s)` / `signal_listeners_set(s, list)`. A write is the generated
