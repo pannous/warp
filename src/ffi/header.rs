@@ -351,8 +351,12 @@ fn remember_struct_types(names: std::collections::HashSet<String>) {
     STRUCT_TYPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).get_or_insert_with(Default::default).extend(names);
 }
 
+/// C's opaque standard types, structs on every platform whichever header declares them (glibc's FILE is in
+/// bits/types/FILE.h, which stdio.h's search does not read): a pointer to one is a handle, never linear memory
+const STANDARD_STRUCT_TYPES: [&str; 2] = ["FILE", "DIR"];
+
 pub(super) fn is_struct_type(name: &str) -> bool {
-    STRUCT_TYPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_ref().is_some_and(|names| names.contains(name))
+    STANDARD_STRUCT_TYPES.contains(&name) || STRUCT_TYPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_ref().is_some_and(|names| names.contains(name))
 }
 
 /// The position of the `)` closing the `(` at `open`
