@@ -305,6 +305,10 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		Node::List(items, Bracket::Round, Separator::None) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if ORDER_WORDS.contains(&word.as_str())) => {
 			list_type_name(&items[1], scope)
 		}
+		// `split(t, sep)`, `chars(t)`: texts
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if TEXT_LIST_WORDS.contains(&word.as_str())) => {
+			format!("{PLAIN} of text")
+		}
 		// the result of a call `f(x)` (no list literal of `f` and `x`): its elements are held as Nodes, of any type
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => NODE_LIST_TYPE.to_string(),
 		// a `{key:value …}` map, `map of int` when all its values are ints
@@ -352,6 +356,8 @@ const LET_CHANGES_TOPIC: &str = "let changes";
 pub(super) const MAP_TYPE: &str = "map";
 /// Library words whose list result has the elements of their list argument
 pub(super) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
+/// Library words whose result is a list of texts
+const TEXT_LIST_WORDS: [&str; 2] = ["split", "chars"];
 pub(super) const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 pub(super) const NODE_LIST_TYPE: &str = "list of node";
