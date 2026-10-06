@@ -204,11 +204,11 @@ fn object_entries(value: &Node) -> Option<&Vec<Node>> {
 }
 
 /// `{1+2}`, `{a = 1; a*2}` assigned: statements in braces (several, or one computed expression), no object, no data
-/// list (`{1 2}`) and no lambda (`{it*2}`, `{x => x+1}`)
+/// list (`{1 2}`) and no lambda (`{it*2}`, `{x => x+1}`, `{ x in x*2 }`, `{ $0 * 2 }`)
 fn statement_block(value: &Node) -> Option<Node> {
 	let Node::List(items, Bracket::Curly, separator) = value.drop_meta() else { return None };
 	let statements = matches!(separator, Separator::Semicolon | Separator::Newline) && items.len() > 1;
-	let lambda = items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Arrow | Op::FatArrow, _)));
+	let lambda = items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Arrow | Op::FatArrow, _))) || crate::lambdas::arrow_lambda(value).is_some();
 	if items.is_empty() || object_entries(value).is_some() || crate::wasp_parser::mentions(value, IT) || lambda {
 		return None;
 	}
