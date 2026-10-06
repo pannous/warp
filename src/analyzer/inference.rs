@@ -231,7 +231,11 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			return kind;
 		}
 		if name == crate::wasp_parser::TEXT_TIMES {
-			return Kind::Text;
+			// `it times it` of numbers multiplies (list_emitter.rs emit_text_times)
+			return match items.get(2).map(|repeated| infer_type(repeated, scope)) {
+				Some(kind) if kind.is_int() || kind.is_float() => arithmetic_kind(infer_type(&items[1], scope), &Op::Mul, kind),
+				_ => Kind::Text,
+			};
 		}
 		if name == crate::type_tests::TYPE_WORD && items.len() == 2 {
 			return Kind::Symbol; // the type's name

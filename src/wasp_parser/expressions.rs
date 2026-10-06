@@ -112,8 +112,10 @@ impl WaspParser {
 			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword; // `return := …` as a name
 			return None;
 		} else {
-			// the binding of an assigned value: `return square n` returns the braceless call, like `x = square n`
-			self.parse_expr(Op::Assign.binding_power().1)
+			// the binding of an assigned value: `return square n` returns the braceless call, like `x = square n`; then
+			// what binds looser, Python's `return a if c else b`
+			let value = self.parse_expr(Op::Assign.binding_power().1);
+			self.continue_expr(value, 0)
 		};
 		Some(Node::List(vec![Symbol(RETURN_KEYWORD.to_string()), value], Bracket::None, Separator::Space))
 	}

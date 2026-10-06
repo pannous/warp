@@ -282,7 +282,7 @@ impl Loader<'_> {
 		if !loaded.insert(path.canonicalize().unwrap_or_else(|_| path.clone())) {
 			return Ok(vec![]);
 		}
-		let source = module_source(&path).map_err(|failure| error(&format!("module not readable: {name}: {failure}")))?;
+		let source = crate::web::read_text(&path.to_string_lossy()).ok_or_else(|| error(&format!("module not readable: {name}")))?;
 		let module = WaspParser::parse(&source);
 		if let Some(failure) = module.first_error() {
 			return Err(failure.clone());
@@ -611,20 +611,8 @@ fn package_module(directory: &Path, name: &str) -> Option<PathBuf> {
 	MODULE_EXTENSIONS.iter().map(|extension| directory.join(format!("{name}.{extension}"))).find(|path| module_exists(path))
 }
 
-/// The text of a module file: from the file system, or in the browser fetched through the page (relative to the served
-/// repository, or a package's URL)
-fn module_source(path: &Path) -> Result<String, String> {
-	#[cfg(feature = "native")]
-	return std::fs::read_to_string(path).map_err(|failure| failure.to_string());
-	#[cfg(not(feature = "native"))]
-	return crate::web::fetch_text(&path.to_string_lossy()).ok_or_else(|| "not found".to_string());
-}
-
 fn module_exists(path: &Path) -> bool {
-	#[cfg(feature = "native")]
-	return path.is_file();
-	#[cfg(not(feature = "native"))]
-	return module_source(path).is_ok();
+	crate::web::file_exists(&path.to_string_lossy())
 }
 
 /// Where a registered package's files are: its fetched clone, or in the browser the raw files of its repository at the
@@ -643,7 +631,7 @@ fn package_directory(name: &str) -> Result<PathBuf, String> {
 
 /// The version a module file declares with a top level `version 1.2.3`
 fn module_version(path: &Path) -> Option<Version> {
-	let source = module_source(path).ok()?;
+	let source = crate::web::read_text(&path.to_string_lossy())?;
 	declared_version(&statements(WaspParser::parse(&source)))
 }
 

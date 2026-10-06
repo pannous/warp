@@ -231,7 +231,7 @@ fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
     }
     let header_dir = std::path::Path::new(header_path).parent().map(|dir| dir.to_string_lossy().to_string()).unwrap_or_default();
     let dirs: Vec<String> = std::iter::once(header_dir).chain(crate::ffi_parser::include_dirs()).collect();
-    match crate::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| std::fs::read_to_string(path).ok()) {
+    match crate::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| crate::web::read_text(&path)) {
         Some(mathcalls) => format!("{content}\n{}", expand_glibc_math_macros(&mathcalls)),
         None => content,
     }
@@ -267,10 +267,7 @@ pub fn expand_glibc_math_macros(source: &str) -> String {
 
 /// Parse a header file and extract all function signatures
 pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => with_glibc_mathcalls(c, path),
-        Err(_) => return Vec::new(),
-    };
+    let Some(content) = crate::web::read_text(path).map(|text| with_glibc_mathcalls(text, path)) else { return Vec::new() };
     let mut struct_types = StructTypes::default();
     let mut signatures = Vec::new();
     let mut current_decl = String::new();
@@ -351,8 +348,12 @@ fn remember_struct_types(names: std::collections::HashSet<String>) {
     STRUCT_TYPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).get_or_insert_with(Default::default).extend(names);
 }
 
+/// C's opaque standard types, structs on every platform whichever header declares them (glibc's FILE is in
+/// bits/types/FILE.h, which stdio.h's search does not read): a pointer to one is a handle, never linear memory
+const STANDARD_STRUCT_TYPES: [&str; 2] = ["FILE", "DIR"];
+
 pub(super) fn is_struct_type(name: &str) -> bool {
-    STRUCT_TYPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_ref().is_some_and(|names| names.contains(name))
+    STANDARD_STRUCT_TYPES.contains(&name) || STRUCT_TYPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_ref().is_some_and(|names| names.contains(name))
 }
 
 /// The position of the `)` closing the `(` at `open`
@@ -377,7 +378,7 @@ fn is_annotation_line(line: &str) -> bool {
 }
 
 /// `line` without its block-comment text; `in_comment` carries an unclosed `/*` to the next line
-fn without_block_comments(line: &str, in_comment: &mut bool) -> String {
+pub(crate) fn without_block_comments(line: &str, in_comment: &mut bool) -> String {
     let mut kept = String::new();
     let mut rest = line;
     loop {

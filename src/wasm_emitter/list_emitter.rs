@@ -139,12 +139,30 @@ impl WasmGcEmitter {
 		}
 		match self.get_type(repeated) {
 			crate::Kind::Text | crate::Kind::Codepoint => self.emit_text_repeat(func, repeated, count),
+			kind if kind.is_int() || kind.is_float() => {
+				let product = self.numeric_times(&Node::List(items.to_vec(), Bracket::Round, Separator::None)).expect("a number repeated");
+				self.emit_node_instructions(func, &product);
+			}
 			kind => {
 				let reason = format!("`n times x` repeats a text (or a list: `n times [x]`), {} is {}", repeated.serialize(), crate::analyzer::kind_with_article(kind));
 				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
 			}
 		}
 		true
+	}
+
+	/// English `it times it` of numbers: the product `it * it` (alias rule, with a note naming `*`)
+	pub(super) fn numeric_times(&self, node: &Node) -> Option<Node> {
+		let Node::List(items, _, _) = node.drop_meta() else { return None };
+		let [word, count, repeated] = items.as_slice() else { return None };
+		let is_times = matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::TEXT_TIMES);
+		let kind = self.get_type(repeated);
+		if !is_times || !(kind.is_int() || kind.is_float()) {
+			return None;
+		}
+		let (count_text, repeated_text) = (count.serialize(), repeated.serialize());
+		crate::normalize::hint(&format!("{count_text} times {repeated_text}"), &format!("{count_text} * {repeated_text}"), "`times` of two numbers multiplies");
+		Some(Node::Key(Box::new(count.clone()), Op::Mul, Box::new(repeated.clone())))
 	}
 
 	/// `print x` and the WASI calls puts, puti, putl, putf, fd_write; their i64 result is boxed like any value

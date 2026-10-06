@@ -72,7 +72,7 @@ const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
 /// Words before a member of a class body that change nothing in wasp: Swift's `mutating func`, visibility, `override`
-pub const MEMBER_MODIFIERS: [&str; 10] = ["mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async"];
+pub const MEMBER_MODIFIERS: [&str; 11] = ["mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"];
 /// Python's root class `class Point(object):`, no parent of its own
 const PYTHON_ROOT_CLASS: &str = "object";
 /// `record point{x:int y:int}` declares a type like `struct`, but `record` is also an everyday variable name:
@@ -112,6 +112,7 @@ const IN_KEYWORD: &str = "in";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
 const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
+const PYTHON_LAMBDA_KEYWORD: &str = "lambda";
 const ELSE_KEYWORD: &str = "else";
 const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
 const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
@@ -343,6 +344,8 @@ const ODD_WORD: &str = "odd";
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
+const TO_SENTENCE_WORD: &str = "To";
+const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
 const TIMES_WORD: &str = "times";
@@ -600,6 +603,8 @@ pub struct WaspParser {
 	stops_at_end: bool,
 	/// Inside Python's `f"…{x}…"`: braces are holes, `{{` and `}}` the braces themselves
 	brace_holes: bool,
+	/// The type parameters skipped after a function's name (`fn id<T>`), marked on the atom (P157)
+	generic_names: Option<(String, Vec<String>)>,
 	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
 	in_command: bool,
 	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
@@ -683,12 +688,17 @@ fn is_plain_name(word: &str) -> bool {
 /// outside comments and texts (`// the type end` declares nothing)
 fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 	let source = code_only(source);
-	let words: Vec<&str> = source.split(|c: char| !is_identifier_char(c) && c != '(').flat_map(|word| word.split_inclusive('(')).filter(|word| !word.is_empty()).collect();
+	let words: Vec<&str> = source.split_whitespace().collect();
 	words.windows(2)
 		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
-		.map(|pair| pair[1])
+		// the name right after the word: `class Point{`, `class Point(val x: Int)`, `record Point(int X)`, `class P:`;
+		// `record = find(…)` declares nothing
+		.filter_map(|pair| {
+			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch)).collect();
+			let rest = &pair[1][name.len()..];
+			(rest.is_empty() || rest.starts_with(['(', '{', '<', ':', ';'])).then_some(name)
+		})
 		.filter(|name| is_plain_name(name))
-		.map(str::to_string)
 		.collect()
 }
 
@@ -869,6 +879,7 @@ impl WaspParser {
 			signed_list_element: None,
 			stops_at_end: false,
 			brace_holes: false,
+			generic_names: None,
 			in_command: false,
 			pipe_takes_call: false,
 			times_loops: 0,

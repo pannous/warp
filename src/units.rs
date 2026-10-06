@@ -242,7 +242,8 @@ pub fn answer(program: &Node) -> Option<Node> {
 pub fn lower_sleep_durations(program: Node) -> Node {
 	fn lower(node: Node) -> Node {
 		match node {
-			Node::List(items, bracket, separator) if items.len() >= 2 && items[0].drop_meta().name() == crate::host::SLEEP => {
+			// the word itself: `(sleep 300); 1` is a statement list whose first item merely starts with sleep
+			Node::List(items, bracket, separator) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == crate::host::SLEEP) => {
 				let duration = match &items[1..] {
 					[single] => single.clone(),
 					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
