@@ -2,8 +2,9 @@
 //! the host: src/shared.rs natively, host.js in the browser), `shared xs = float[n]` n floats; `go f(xs)` passes that
 //! same array, the one exception to copying. The array is an Int naming it; its uses become host words, atomic in the
 //! host: `xs#i` → `shared_get(xs, i)`, `xs#i = v` → `shared_set(xs, i, v)`, `xs#i += v` → `shared_add(xs, i, v)`
-//! (`shared_getf` … for floats), `#xs` / `count(xs)` → `shared_count(xs)`. A parameter given a shared array (by a call
-//! or a `go`) is shared too, of the same element type.
+//! (`shared_getf` … for floats), `#xs` / `count(xs)` → `shared_count(xs)`, `for x in xs` loops over its cells and xs as a
+//! whole is the list of its cells. A parameter given a shared array (by a call or a `go`) is shared too, of the same
+//! element type.
 //! Linear arrays (notes/linear_arrays.md): `linear xs = int[n]`, `linear xs = float[n]` are rewritten the same way into
 //! the module's own words over a block of linear memory (`linear_get`, `linear_set` … in wasm_emitter/linear_arrays.rs);
 //! they stay in their task's memory, so a `go` cannot take one. Declaring one is discouraged: the compiler picks where
@@ -289,8 +290,8 @@ impl Rewrite<'_> {
 				}
 				match items.as_slice() {
 					[word, array] if COUNTING_WORDS.contains(&word.name().as_str()) && let Some(kind) = shared(array, &names) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
-					// `for x in xs {…}` over a linear array: over its indexes, x read from each cell
-					[word, item, in_word, array, body] if word.name() == "for" && in_word.name() == "in" && let Some(kind) = linear(array, &names) => {
+					// `for x in xs {…}` over an array: over its indexes, x read from each cell
+					[word, item, in_word, array, body] if word.name() == "for" && in_word.name() == "in" && let Some(kind) = shared(array, &names) => {
 						let index = Node::Symbol(format!("{}{}index", array.name(), crate::analyzer::TEMPORARY_SEPARATOR));
 						let read = Node::Key(Box::new(item.clone()), Op::Assign, Box::new(builtin(element_words(kind)[0], vec![array.clone(), index.clone()])));
 						let statements = match self.node(body.clone(), function).drop_meta().clone() {
@@ -303,14 +304,14 @@ impl Rewrite<'_> {
 						Node::List(vec![word.clone(), index, in_word.clone(), indexes, body], bracket, separator)
 					}
 					_ => Node::List(items.into_iter().enumerate().map(|(index, item)| match index.checked_sub(offset) {
-						Some(argument) if passed.contains_key(&argument) && (shared_value(&item, &names).is_some() || linear(&item, &names).is_some()) => item,
+						Some(argument) if passed.contains_key(&argument) && (shared_value(&item, &names).is_some() || shared(&item, &names).is_some()) => item,
 						_ => self.node(item, function),
 					}).collect(), bracket, separator),
 				}
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.node(*node, function)), data },
-			// a linear array as a whole: the list of its cells
-			Node::Symbol(_) if let Some(kind) = linear(&node, &self.names(function)) => collected(&node, kind),
+			// an array as a whole: the list of its cells
+			Node::Symbol(_) if let Some(kind) = shared(&node, &self.names(function)) => collected(&node, kind),
 			// a read of a shared value
 			Node::Symbol(_) if let Some(kind) = shared_value(&node, &self.names(function)) => {
 				let [get, _, _] = element_words(kind);
@@ -333,10 +334,6 @@ fn shared(node: &Node, names: &HashMap<String, Shared>) -> Option<Shared> {
 	}
 }
 
-/// What a linear array named by `node` holds, if it is one
-fn linear(node: &Node, names: &HashMap<String, Shared>) -> Option<Shared> {
-	shared(node, names).filter(|kind| kind.storage == Storage::Linear)
-}
 
 /// `(xs·list = []; for xs·index in 1 to count(xs) { xs·list = xs·list + [get(xs, xs·index)] }; xs·list)`
 fn collected(array: &Node, kind: Shared) -> Node {
