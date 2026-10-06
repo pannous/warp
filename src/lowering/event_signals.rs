@@ -15,7 +15,7 @@ const ON_WORD: &str = "on";
 const RAISE_WORD: &str = "raise";
 /// `on set x` and `on change x` are variable listeners (variable_signals.rs)
 const VARIABLE_LISTENER_WORDS: [&str; 2] = ["set", "change"];
-const HANDLER_PREFIX: &str = "on·";
+pub const HANDLER_PREFIX: &str = "on·";
 const NAME_JOINER: &str = "·";
 /// A generated function as written, its name and globals filled in
 const FUNCTION_TEMPLATE: &str = "handler(event) := {}";
@@ -96,6 +96,21 @@ fn raised_names(program: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
 	program.visit(&mut |part| if let Some((name, _)) = raise(part) { names.insert(name); });
 	names
+}
+
+/// The events the lowered program handles and their handler functions, exported under these names:
+/// `("stop the machine", "on·stop·the·machine")`. A task forwards a raise of one to the starting thread (warp-d9)
+pub fn handled_signals(lowered: &Node) -> Vec<(String, String)> {
+	let mut handled = vec![];
+	lowered.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
+		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
+			let function = items.first().map(word).unwrap_or_default();
+			if let Some(event) = function.strip_prefix(HANDLER_PREFIX) {
+				handled.push((event.replace(NAME_JOINER, " "), function.clone()));
+			}
+		}
+	});
+	handled
 }
 
 fn handler_function_name(event: &str) -> String {
