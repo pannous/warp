@@ -267,6 +267,9 @@ PASSED:
   ✓ ffi::test_ffi_gaps::sqlite3_links_without_a_panic
   ✓ ffi::test_ffi_import_group::a_group_of_three_names_is_imported
   ✓ ffi::test_ffi_import_group::a_group_with_spaces_is_imported
+  ✓ ffi::test_ffi_text_results::a_c_string_result_is_a_text
+  ✓ ffi::test_ffi_text_results::a_libc_function_without_use_c_says_how_to_import_it
+  ✓ ffi::test_ffi_text_results::other_pointer_results_are_refused
   ✓ ffi::test_ffi_warning_once::the_ffi_warning_is_printed_once
   ✓ ffi::test_ffi::test_a_lone_import_with_a_comment_is_empty
   ✓ ffi::test_ffi::test_a_program_of_imports_only_is_empty
@@ -2294,4 +2297,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2289 passed, 0 failed, 2289 total tested
+31 ignored, 2292 passed, 0 failed, 2292 total tested
