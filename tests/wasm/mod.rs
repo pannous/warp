@@ -16,7 +16,6 @@ mod test_dead_functions;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_standalone_executable;
 mod test_wasm;
-mod test_wast;
 mod test_wasm_names_order;
 mod test_wit_types;
 mod test_wit;

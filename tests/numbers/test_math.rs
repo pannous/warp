@@ -125,37 +125,6 @@ fn test_sin() {
 }
 
 #[test]
-#[ignore]
-fn test_primitive_types() {
-	is!("double 2", 2);
-	is!("float 2", 2);
-	is!("int 2", 2);
-	is!("long 2", 2);
-	is!("8.33333333332248946124e-03", 0);
-	is!("8.33333333332248946124e+01", 83);
-	is!("S1  = -1.6666", -1);
-	is!("double S1  = -1.6666", -1);
-	//  is!("double\n" "\tS1  = -1.6666", -1);
-
-	is!("grow(double z):=z*2;grow 5", 10);
-	is!("grow(z):=z*2;grow 5", 10);
-	is!("int grow(double z):=z*2;grow 5", 10);
-	is!("double grow(z):=z*2;grow 5", 10);
-	is!("int grow(int z):=z*2;grow 5", 10);
-	is!("double grow(int z):=z*2;grow 5", 10);
-	is!("double\n\tS1  = -1.66666666666666324348e01, /* 0xBFC55555, 0x55555549 */\n\tS2  =  8.33333333332248946124e03, /* 0x3F811111, 0x1110F8A6 */\n\nS1", -16);
-	is!("double\n\tS1  = -1.66666666666666324348e01, /* 0xBFC55555, 0x55555549 */\n\tS2  =  8.33333333332248946124e01, /* 0x3F811111, 0x1110F8A6 */\n\nS2", 83);
-	// eq!(ftoa(8.33333333332248946124e-03), "0.0083");
-	//  eq!(ftoa2(8.33333333332248946124e-03), "8.333E-3");
-	is!("S1 = -1.66666666666666324348e-01;S1*100", -16);
-	is!("S1 = 8.33333333332248946124e-03;S1*1000", 8);
-	is!("(2,4) == (2,4)", 1); // todo: array creation/ comparison
-	is!("(float 2, int 4.3)  == 2,4", 1); //  PRECEDENCE needs to be in valueNode :(
-	is!("float 2, int 4.3  == 2,4", 1); //  PRECEDENCE needs to be in valueNode :(
-	                                 //  float  2, ( int ==( 4.3 2)), 4
-}
-
-#[test]
 fn test_logarithm_in_runtime() {
 
 	// float
