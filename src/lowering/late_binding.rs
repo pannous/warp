@@ -35,8 +35,9 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 	}
 	let mut main = Scope::new();
 	collect_variables(&program, &mut main);
-	let declared = declared_global_reads(&statements, &main);
-	let program = without_global_reads(program, &declared);
+	let declared = declared_global_reads(&statements, &main, false);
+	// a `global y` read of a variable main declares global already goes too (a lambda's, made global by nonlocal_cells)
+	let program = without_global_reads(program, &declared_global_reads(&statements, &main, true));
 	let statements = statements_of(&program);
 	let definitions = definitions(&statements);
 	let report = EffectReport::of(&program);
@@ -294,12 +295,12 @@ fn global_read(node: &Node) -> Option<&String> {
 	}
 }
 
-/// The main-level variables some function declares `global y` for
-fn declared_global_reads(statements: &[Node], main: &Scope) -> Vec<String> {
+/// The main-level variables some function declares `global y` for (`with_globals`: also those main declares global)
+fn declared_global_reads(statements: &[Node], main: &Scope, with_globals: bool) -> Vec<String> {
 	let mut names: Vec<String> = vec![];
 	for function in statements.iter().flat_map(functions_in) {
 		function.body.visit(&mut |node| {
-			if let Some(name) = global_read(node).filter(|name| main.lookup(name).is_some() && !main.is_global(name)) {
+			if let Some(name) = global_read(node).filter(|name| if with_globals { main.lookup(name).is_some() || main.is_global(name) } else { main.lookup(name).is_some() && !main.is_global(name) }) {
 				names.push(name.clone());
 			}
 		});

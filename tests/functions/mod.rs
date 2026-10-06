@@ -20,6 +20,7 @@ mod test_function_keyword;
 mod test_function_values;
 mod test_functions;
 mod test_lambdas;
+mod test_lambda_global;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_map_phrase;
