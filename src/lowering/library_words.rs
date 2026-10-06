@@ -508,15 +508,17 @@ impl Lowering {
 		let parameters = crate::traits::untyped_parameters(head);
 		let scope = self.parameters.borrow().len();
 		self.parameters.borrow_mut().extend(parameters);
-		let right = self.expand(self.body_statement(right));
+		let right = self.expand(self.body_statement(head, right));
 		self.parameters.borrow_mut().truncate(scope);
 		right
 	}
 
-	/// `def total(xs){sum xs}`: a body block that is one braceless word call is that statement, not the data `{sum xs}`
-	fn body_statement(&self, right: Node) -> Node {
+	/// `def total(xs){sum xs}`: the body block of a function that is one braceless call is that statement, not the data
+	/// `{sum xs}`; an undefined word in it (`{square x}`) is then reported as one
+	fn body_statement(&self, head: &Node, right: Node) -> Node {
+		let defines_function = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
 		match right {
-			Node::List(items, Bracket::Curly, Separator::Space) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if self.library_word_for(word, items.len() - 1).is_some()) => {
+			Node::List(items, Bracket::Curly, Separator::Space) if defines_function && items.len() > 1 && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
 				Node::List(vec![Node::List(items, Bracket::None, Separator::Space)], Bracket::Curly, Separator::Semicolon)
 			}
 			other => other,
