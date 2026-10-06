@@ -181,3 +181,10 @@ D4) without comparing type names, and instance_field (list_ops.rs) walks the fie
 offset and length of the name the program wrote (the table deduplicates) before the general map_find, which still
 answers runtime-built instances and meta entries `@name`. The target is evaluated once. bench list_of_instances
 (10^6 points, build + two field reads each): 3098 → 151 ms.
+
+Tagged objects (classes-18, card person-name): `Person{name:"A"}` and now also spaced `Person { name: "Alice" … }`
+(a capitalized word of no declared type before a block of fields, the README example; fields may start on the next
+line) are the data key `Person:{…}` (D4: no class, no construction). A field read `p.name` that finds no entry `name`
+on the node itself reads the tagged object's fields (list_ops tagged_field, between the entry and the meta entry
+`@name`), so `a:{b:1}.b` is 1 and `a:{b:1}.a` still `b:1`. Card class-ticket (a static in value{}) worked already
+after classes-10; its test is in test_tagged_objects.rs.
