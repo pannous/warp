@@ -10,7 +10,7 @@
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use crate::host_words::{FILE_HANDLER_PREFIX, INTERRUPT_HANDLER, TIMER_HANDLER_PREFIX};
+use crate::host_words::{FILE_HANDLER_PREFIX, INTERRUPT_HANDLER, SHARED_HANDLER, TIMER_HANDLER_PREFIX};
 use std::path::PathBuf;
 use std::time::SystemTime;
 use wasmtime::{AsContextMut, Func, Instance, Result, Store, Val};
@@ -18,6 +18,8 @@ use wasmtime::{AsContextMut, Func, Instance, Result, Store, Val};
 const NEW_EMPTY: &str = "new_empty";
 /// How often a watched file's modification time is read: polling, no file-system events yet
 const FILE_CHECK_PERIOD: Duration = Duration::from_millis(100);
+/// How often a sleeping program with listeners on shared values (on·shared) looks at them
+const SHARED_CHECK_PERIOD: Duration = Duration::from_millis(10);
 
 struct Timer {
 	handler: String,
@@ -117,10 +119,12 @@ fn due_handlers(handles_interrupt: bool) -> Vec<String> {
 	due
 }
 
-/// Run the due handlers; `export` finds a function of the instance by name
+/// Run the due handlers, then the checks of the listeners on shared values (each check point looks at them);
+/// `export` finds a function of the instance by name
 pub fn run_due_handlers<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
 	let handles_interrupt = export(store, INTERRUPT_HANDLER).is_some();
-	for name in due_handlers(handles_interrupt) {
+	let shared_checks = export(store, SHARED_HANDLER).map(|_| SHARED_HANDLER.to_string());
+	for name in due_handlers(handles_interrupt).into_iter().chain(shared_checks) {
 		let Some(handler) = export(store, &name) else { continue };
 		let mut arguments = vec![];
 		// a handler that reads `event` gets ø
@@ -139,8 +143,10 @@ pub fn run_due_handlers<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&
 /// Sleep for `duration`, running the handlers that come due on the way; a ctrl-c ends the sleep early
 pub fn sleep_with_handlers<S: AsContextMut>(store: &mut S, duration: Duration, mut export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
 	let end = Instant::now() + duration;
+	let checks_shared = export(store, SHARED_HANDLER).is_some();
 	loop {
 		let wake = next_due().map_or(end, |due| due.min(end));
+		let wake = if checks_shared { wake.min(Instant::now() + SHARED_CHECK_PERIOD) } else { wake };
 		let interrupted = interrupt::wait_until(wake);
 		run_due_handlers(store, &mut export)?;
 		if interrupted || Instant::now() >= end {

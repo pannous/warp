@@ -7,6 +7,10 @@
 //! through every call the variables passed for them) and makes their first main-level write `x = signal_new(e)`, every
 //! other write `signal·set(x, e)` (store, then call each listener with the new and the old value) and every read
 //! `cell_get(x)`. A function parameter that subscribes takes the signal itself: `watch(x)` passes x's cell.
+//! Phase 6, `poll_shared` (before shared_arrays): a task writes a `shared` value in its own instance, so a main-level
+//! listener watching one cannot be a check after the write. It becomes a check in the exported function `on·shared()`,
+//! which the runtime calls at the program's check points (signal_poll at main's start and end and each loop start,
+//! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
 use crate::declarations::word;
 use crate::node::{Bracket, Node, Separator};
@@ -36,6 +40,60 @@ struct Definition {
 	name: String,
 	params: Vec<String>,
 	body: Node,
+}
+
+/// `signal_seen_0`: the value of a watched variable when the shared listeners last looked (main-level variables of
+/// on·shared are declared `global` from text, so no `·` in them)
+const SEEN_PREFIX: &str = "signal_seen_";
+/// `signal_polling_0`: whether the shared listener was declared yet
+const POLLING_PREFIX: &str = "signal_polling_";
+
+/// Main-level listeners watching a `shared` value become checks of the function `on·shared()` the runtime polls
+pub fn poll_shared(program: Node) -> Node {
+	let shared: HashSet<String> = crate::shared_arrays::shared_names(&program).into_iter().collect();
+	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
+	if shared.is_empty() || !crate::variable_signals::is_statement_list(&bracket, &separator) {
+		return program;
+	}
+	let mut main_variables = crate::event_signals::main_level_variables(&statements);
+	let (mut lowered, mut checks, mut flags, mut seen_count) = (vec![], vec![], vec![], 0);
+	for statement in statements {
+		let parts = listener_parts(&statement).filter(|(_, subject, _)| symbols(subject).iter().any(|name| shared.contains(name)));
+		let Some((listener_word, subject, body)) = parts else {
+			lowered.push(statement);
+			continue;
+		};
+		let polling = format!("{POLLING_PREFIX}{}", flags.len());
+		let watched = unique(symbols(&subject).into_iter().filter(|name| shared.contains(name) || main_variables.contains(name)).collect());
+		let seen: Vec<(String, String)> = watched.into_iter().map(|name| { seen_count += 1; (name, format!("{SEEN_PREFIX}{}", seen_count - 1)) }).collect();
+		let changed = seen.iter().map(|(name, last)| Node::Key(Box::new(Node::Symbol(name.clone())), Op::Ne, Box::new(Node::Symbol(last.clone()))))
+			.reduce(|either, next| Node::Key(Box::new(either), Op::Or, Box::new(next))).expect("a watched shared value");
+		let value = seen.first().map(|(name, _)| Node::Symbol(name.clone())).expect("a watched value");
+		let check = match listener_word {
+			ListenerWord::Set | ListenerWord::Change => with_value(&body, &value),
+			ListenerWord::Whenever => if_then(subject, block(vec![body])),
+			ListenerWord::Once => {
+				let fired = format!("{POLLING_PREFIX}{}_fired", flags.len());
+				flags.push(fired.clone());
+				let condition = Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::Not, Box::new(Node::Symbol(fired.clone())))), Op::And, Box::new(subject));
+				if_then(condition, block(vec![assign(&fired, Node::True), body]))
+			}
+		};
+		let remember = seen.iter().map(|(name, last)| assign(last, Node::Symbol(name.clone())));
+		checks.push(if_then(Node::Key(Box::new(Node::Symbol(polling.clone())), Op::And, Box::new(changed)), block(remember.clone().chain([check]).collect())));
+		lowered.extend(remember);
+		lowered.push(assign(&polling, Node::True));
+		flags.push(polling);
+		main_variables.extend(flags.iter().cloned().chain(seen.into_iter().map(|(_, last)| last)));
+	}
+	if checks.is_empty() {
+		return program;
+	}
+	// a shared value is no global of the instance: shared_arrays makes its uses host words
+	let globals: HashSet<String> = main_variables.difference(&shared).cloned().collect();
+	let handler = crate::event_signals::function_with_globals(crate::host::SHARED_HANDLER, false, &checks, &globals);
+	let starts = flags.iter().map(|flag| assign(flag, Node::False));
+	Node::List(starts.chain(std::iter::once(handler)).chain(lowered).collect(), bracket, separator)
 }
 
 /// Listeners inside functions on their parameters or on main-level variables become subscriptions made at run time

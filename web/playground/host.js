@@ -4,6 +4,9 @@
 
 const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
+// the checks of the listeners on shared values (src/lowering/signal_values.rs), run at every check point
+const SHARED_HANDLER = "on·shared";
+const SHARED_CHECK_MILLISECONDS = 10;
 const PAGE_BITS = 16;
 const STDERR = 2;
 /// where host.read and the test runner's file system find files: the repository root the static server serves
@@ -150,12 +153,20 @@ function programImports(holder, hooks) {
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
 			sleep: milliseconds => {
 				const until = Date.now() + Number(milliseconds);
-				while (Date.now() < until);
+				let check = Date.now() + SHARED_CHECK_MILLISECONDS;
+				while (Date.now() < until) {
+					if (Date.now() >= check) {
+						checkShared(holder);
+						check = Date.now() + SHARED_CHECK_MILLISECONDS;
+					}
+				}
+				checkShared(holder);
 			},
 			random: () => Math.random(),
 			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
 			clock: () => BigInt(Date.now()),
-			signal_poll: () => {}, // a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md)
+			// a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md); shared listeners do
+			signal_poll: () => checkShared(holder),
 			signal_every: () => { holder.warnings.push("on every …: timers do not run in the playground yet"); },
 			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
@@ -410,6 +421,11 @@ function deliverSignals(holder) {
 		const { handler, values } = queue.shift();
 		holder.exports[handler](buildValue(holder.exports, values));
 	}
+}
+
+// the listeners on shared values look whether a task changed them; a task leaves that to the program
+function checkShared(holder) {
+	if (!holder.inTask) holder.exports?.[SHARED_HANDLER]?.();
 }
 
 // the task's record, read by the program (await, join): a failure nobody read ends the run (joinTasks)
@@ -675,6 +691,7 @@ function outcomeOf(holder, hooks, call) {
 		// the tasks nobody awaited finish before the result, as natively; a failure nobody read ends the run
 		const unread = joinTasks(holder.run, hooks);
 		deliverSignals(holder); // the raises of tasks nobody awaited run their handlers before the run ends
+		checkShared(holder); // and the listeners on shared values see what the tasks left
 		if (unread) return { failure: unread, warnings };
 		return { result: readResult(exports, result), warnings };
 	} catch (trap) {
