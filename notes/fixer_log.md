@@ -163,3 +163,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - Redo of claude/zero-warnings-0h6ky3 on current main (its 13 commits conflicted with two days of changes; its CI half
   was already on main): crate-level allows gone, dead code deleted as that branch chose, native-only items cfg-gated;
   all six CI warning/clippy commands pass locally. The old remote is renamed archive/zero-warnings-0h6ky3.
+
+## 2026-10-06 fix-empty-operands
+- print-empty-nodes: `(#name as string)` serialized as `(ø#name as string)`; Node::serialize writes a prefix operator's
+  missing left operand (#, -, +, not, √, if, while) and a suffix operator's (x++) as nothing, `x = ø` stays.
