@@ -32,3 +32,5 @@ class Counter { keys = []; counts = []
   get(x) := { i = x in keys; if i { counts#i } else { 0 } }
   most_common() := { best = 1; for i in 1 to count(counts) { if counts#i > counts#best { best = i } }; keys#best }
 }
+// wasp maps keep insertion order: an ordered map is a map
+OrderedMap() := {}

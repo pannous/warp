@@ -36,7 +36,7 @@ needs no files on disk and works in the browser.
 | os / process | args env exit exec | host words (exit exists), Process capability |
 | regex | matches find find_all replace_all | adapter (Rust regex as host word natively, JS RegExp in the browser) |
 | hash | hash sha256 md5 crc32 | adapter (xxHash/zlib C modules exist, notes/wasm_modules.md) |
-| collections | classes Stack Queue Deque Set Counter (OrderedMap later); HashSet TreeSet frozenset ArrayDeque VecDeque deque as aliases | wasp classes over a list field (std/collections.wasp, classes side warp-41) |
+| collections | classes Stack Queue Deque Set Counter, OrderedMap; HashSet TreeSet frozenset ArrayDeque VecDeque deque as aliases | wasp classes over a list field (std/collections.wasp, classes side warp-41) |
 
 ## 3. Prelude (global without `use`)
 Everything that works today (section 4) plus the language forms (print, type, int/text/float/as, error/raise/try,
@@ -89,9 +89,11 @@ Set(xs) add has remove size, Counter(xs) add get most_common (tests/modules/test
 not prelude (prelude question queued with warp-e9). A used std module's classes go in before class_methods
 (modules::insert_std_classes, its own source pass), since modules::resolve runs after class_methods; use_std_module
 leaves them out. `new Set(xs)`, `collections.Counter(xs)` and the foreign class names (STD_CLASS_ALIASES) work with a
-note. Not yet: method aliases (Python append/appendleft/popleft, Java offer/poll/addFirst/contains), `len(s)` of an
-instance, `from collections import Counter` (no `from … import` form at all), a user module's classes (same order
-problem as std's, would need insert_std_classes for files).
+note. Other languages' method names (append appendleft popleft offer poll addFirst pollLast contains delete shift …,
+class_methods METHOD_ALIASES) are the class's methods with a note, on a class not defining that name; `len(s)`,
+`count(s)`, `s.len()` of an instance are its size method. OrderedMap() is `{}` (wasp maps keep insertion order),
+OrderedDict and LinkedHashMap its aliases (modules STD_ALIASES). Not yet: `from collections import Counter` (no
+`from … import` form at all), a user module's classes (same order problem as std's: insert_std_classes for files).
 
 ## 7. Adapters (async, warp-f0)
 How a module word is backed when wasp alone cannot do it. All six mechanisms exist (notes/stdlib_connectors.md,

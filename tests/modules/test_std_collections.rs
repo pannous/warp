@@ -71,3 +71,10 @@ fn the_size_of_an_instance_through_len_and_count() {
 	is!("use collections; s = Set([1 2 2]); len(s)", 2);
 	is!("use collections; s = Stack(); s.push(1); count(s) + s.len() + s.count()", 3);
 }
+
+#[test]
+fn an_ordered_map_is_a_map() {
+	// wasp maps keep insertion order: OrderedDict and LinkedHashMap are plain maps
+	is!("use collections; m = OrderedDict(); m[\"bb\"] = 1; m[\"aa\"] = 2; keys(m)", warp::wasp_parser::parse("[\"bb\" \"aa\"]"));
+	is!("use collections; m = LinkedHashMap(); m[\"z\"] = 1; count(keys(m))", 1);
+}

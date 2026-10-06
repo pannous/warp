@@ -67,23 +67,24 @@ pub fn insert_std_classes(program: Node) -> Node {
 	let program = crate::welcome_forms::qualified_module_calls(program);
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
-	let classes: Vec<Node> = statements(program.clone()).iter()
+	let definitions: Vec<Node> = statements(program.clone()).iter()
 		.filter_map(used_module)
 		.filter(|used| used.import == Import::Use && loader.find(&used.name).is_none())
 		.filter_map(|used| std_module(&used.name))
-		.flat_map(|source| crate::normalize::without_hints(|| statements(WaspParser::parse(source))).into_iter().filter(is_class))
+		.flat_map(|source| crate::normalize::without_hints(|| statements(WaspParser::parse(source))))
 		.collect();
-	if classes.is_empty() {
+	if definitions.is_empty() {
 		return program;
 	}
-	let class_names: Vec<String> = classes.iter().filter_map(declared_name).collect();
+	let defined: Vec<String> = definitions.iter().filter_map(declared_name).collect();
 	let own_names: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
-	let aliases: Vec<(&str, &str)> = STD_CLASS_ALIASES.into_iter().filter(|(alias, class)| class_names.iter().any(|name| name == class) && !own_names.contains(*alias)).collect();
-	with_needed_definitions(with_class_aliases(program, &aliases), classes)
+	let aliases: Vec<(&str, &str)> = STD_ALIASES.into_iter().filter(|(alias, word)| defined.iter().any(|name| name == word) && !own_names.contains(*alias)).collect();
+	let classes = definitions.into_iter().filter(is_class).collect();
+	with_needed_definitions(with_std_aliases(program, &aliases), classes)
 }
 
 /// `HashSet(xs)` as `Set(xs)`, with a note
-fn with_class_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
+fn with_std_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
 	match node {
 		Node::Symbol(name) => match aliases.iter().find(|(alias, _)| *alias == name) {
 			Some((alias, class)) => {
@@ -92,7 +93,7 @@ fn with_class_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
 			}
 			None => Node::Symbol(name),
 		},
-		other => other.map_children(|child| with_class_aliases(child, aliases)),
+		other => other.map_children(|child| with_std_aliases(child, aliases)),
 	}
 }
 
@@ -516,10 +517,12 @@ const STD_MODULES: [(&str, &str); 6] = [
 	("map", include_str!("../std/map.wasp")),
 ];
 const STD_FOLDER: &str = "std";
-/// Other languages' names of the standard classes (Java, Python, Rust, C#), each read as wasp's with a note
-const STD_CLASS_ALIASES: [(&str, &str); 7] = [
+/// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
+/// a note, when a used module defines that word
+const STD_ALIASES: [(&str, &str); 9] = [
 	("HashSet", "Set"), ("TreeSet", "Set"), ("LinkedHashSet", "Set"), ("frozenset", "Set"),
 	("ArrayDeque", "Deque"), ("VecDeque", "Deque"), ("deque", "Deque"),
+	("OrderedDict", "OrderedMap"), ("LinkedHashMap", "OrderedMap"),
 ];
 
 /// The name an embedded module is loaded under, once per program
