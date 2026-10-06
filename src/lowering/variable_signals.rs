@@ -140,7 +140,7 @@ impl Signals {
 					Some(name) => {
 						let value_after = value_after_write(&node);
 						let mut parts = vec![node];
-						parts.extend(checks(listeners, &name));
+						parts.extend(checks(listeners, &[name]));
 						parts.push(value_after);
 						Node::List(parts, Bracket::Round, Separator::Semicolon)
 					}
@@ -171,11 +171,17 @@ impl Signals {
 			}
 			let (before, after) = call_listeners(&listeners, &item);
 			out.extend(before);
+			let destructured = crate::tuples::destructured_names(&item);
 			match statement_write(&item).filter(|name| watches(&listeners, name)) {
 				Some(name) => {
 					let Node::Key(target, op, value) = item.drop_meta().clone() else { unreachable!("a write is a key") };
 					out.push(Node::Key(target, op, Box::new(self.lower(*value, &listeners))));
-					out.extend(checks(&listeners, &name));
+					out.extend(checks(&listeners, &[name]));
+				}
+				// P112: `a, b = 1, 2` notifies once, after both writes
+				None if destructured.iter().any(|name| watches(&listeners, name)) => {
+					out.push(item);
+					out.extend(checks(&listeners, &destructured));
 				}
 				None => out.push(self.lower(item, &listeners)),
 			}
@@ -253,7 +259,7 @@ impl Signals {
 		if keyword != ONCE_WORD && keyword != WHENEVER_WORD {
 			return None;
 		}
-		let (condition, body) = subject_and_body(&items[1..])?;
+		let (condition, body) = subject_and_body(&items[1..]).or_else(|| trailing_block(items.get(1)?).filter(|_| items.len() == 2))?;
 		let watched = self.sources(&condition);
 		if watched.is_empty() {
 			return None;
@@ -442,6 +448,17 @@ fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 	}
 }
 
+/// `a == b {body}` arrives as `a == (b {body})`: the condition and the body
+fn trailing_block(condition: &Node) -> Option<(Node, Node)> {
+	match condition.drop_meta() {
+		Node::Key(left, op, right) => trailing_block(right).map(|(right, body)| (Node::Key(left.clone(), *op, Box::new(right)), body)),
+		Node::List(items, Bracket::None, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			Some((items[0].clone(), items[1].clone()))
+		}
+		_ => None,
+	}
+}
+
 pub(crate) fn is_statement_list(bracket: &Bracket, separator: &Separator) -> bool {
 	*bracket == Bracket::Curly || matches!(separator, Separator::Semicolon | Separator::Newline)
 }
@@ -450,8 +467,9 @@ fn watches(listeners: &[Listener], name: &str) -> bool {
 	listeners.iter().any(|listener| listener.watches(name))
 }
 
-fn checks(listeners: &[Listener], name: &str) -> Vec<Node> {
-	listeners.iter().filter(|listener| listener.watches(name)).map(Listener::check).collect()
+/// The checks of the listeners watching any of the written names, each once
+fn checks(listeners: &[Listener], written: &[String]) -> Vec<Node> {
+	listeners.iter().filter(|listener| written.iter().any(|name| listener.watches(name))).map(Listener::check).collect()
 }
 
 /// The variable `x = …`, `x += …`, `x++`, `x--` writes
