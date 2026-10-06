@@ -474,6 +474,11 @@ fn std_path(name: &str) -> PathBuf {
 	PathBuf::from(format!("{STD_FOLDER}/{name}.wasp"))
 }
 
+/// The standard modules' names: `list`, `math`, …
+pub fn std_module_names() -> impl Iterator<Item = &'static str> {
+	STD_MODULES.iter().map(|(module, _)| *module)
+}
+
 fn std_module(name: &str) -> Option<&'static str> {
 	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
 }
