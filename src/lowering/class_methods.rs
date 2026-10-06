@@ -37,6 +37,13 @@ const SILENT_MODIFIERS: [&str; 1] = ["async"];
 /// The constructor names of other languages, aliases of `init` (P162): wasp's old `value`, JavaScript, Python, Ruby,
 /// PHP, VB.NET, Delphi, Rust; besides a method named like its class (C++, Java, C#)
 const CONSTRUCTOR_ALIASES: [&str; 8] = ["value", "constructor", "__init__", "initialize", "__construct", "New", "Create", "new"];
+/// The methods that give a class its text, equality and order (the witnesses of Printable, Equatable, Comparable),
+/// and how other languages name them
+const WITNESS_METHODS: [(&str, &[&str]); 3] = [
+	("text", &["toString", "to_s", "__str__", "ToString", "String"]),
+	(crate::traits::EQUALS, &["Equals", "__eq__", "equal"]),
+	(crate::traits::COMPARE, &["compareTo", "CompareTo", "cmp"]),
+];
 /// Ruby's construction `Point.new(1, 2)`
 const RUBY_NEW_WORD: &str = "new";
 /// Go's function keyword, also of a method `func (p Point) Sum() int {…}`
@@ -46,7 +53,7 @@ const IMPL_WORD: &str = "impl";
 /// Kotlin's `p.copy(y = 5)`
 const COPY_WORD: &str = "copy";
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
-const OPERATOR_METHODS: [(Op, [&str; 3]); 8] = [
+const OPERATOR_METHODS: [(Op, [&str; 3]); 7] = [
 	(Op::Add, ["plus", "add", "__add__"]),
 	(Op::Sub, ["minus", "subtract", "__sub__"]),
 	(Op::Mul, ["times", "multiply", "__mul__"]),
@@ -54,7 +61,6 @@ const OPERATOR_METHODS: [(Op, [&str; 3]); 8] = [
 	(Op::Mod, ["mod", "modulo", "__mod__"]),
 	(Op::Lt, ["less", "smaller", "__lt__"]),
 	(Op::Gt, ["more", "bigger", "__gt__"]),
-	(Op::Eq, ["equals", "equal", "__eq__"]),
 ];
 /// The run-time choice of a library-word method by the receiver's class (dispatched_by_class)
 const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then METHOD else OTHERWISE";
@@ -82,6 +88,7 @@ pub fn constructor_name(class: &str) -> String {
 pub fn lower(node: Node) -> Node {
 	let node = positional_braces(ruby_constructions(copies(with_impls(node))));
 	let node = with_init_constructors(node.clone(), &method_calls_named(&node));
+	let node = with_witness_methods(node);
 	let node = with_members(node);
 	let node = with_class_attributes(class_typed_declarations(node));
 	let node = operator_calls(node);
@@ -121,7 +128,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 	let (mut names, mut classes, mut defined_by) = (vec![], vec![], vec![]);
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
 		let clashing: Vec<String> = class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name)
-			.filter(|name| crate::analyzer::type_word_kind(name).is_some() || is_library_method(name)).collect();
+			.filter(|name| !is_witness_method(name) && (crate::analyzer::type_word_kind(name).is_some() || is_library_method(name))).collect();
 		if !clashing.is_empty() {
 			classes.push(name.drop_meta().name());
 		}
@@ -809,6 +816,48 @@ fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 			Node::List([vec![*class]].into_iter().flatten().chain(arguments).collect(), Bracket::Round, Separator::None)
 		}
 		other => other.map_children(|child| constructed_from_braces(child, classes)),
+	}
+}
+
+fn is_witness_method(name: &str) -> bool {
+	WITNESS_METHODS.iter().any(|(witness, _)| *witness == name)
+}
+
+/// A class's `text()`, `equals(o)` and `compare(o)` (Java's `toString()`, `compareTo(o)`, Python's `__str__`, `__eq__`…,
+/// with a note) as the witnesses of its text, equality and order: the other instance typed by the class,
+/// `equals(o:P)`, so the method is `equals(self:P, o:P)`, which traits makes equals·P
+fn with_witness_methods(node: Node) -> Node {
+	match node {
+		Node::Type { name, body } => {
+			let class = name.drop_meta().name();
+			let items: Vec<Node> = class_items(&body);
+			if !items.iter().filter_map(method_parts).any(|(method, _, _)| WITNESS_METHODS.iter().any(|(witness, aliases)| *witness == method || aliases.contains(&method.as_str()))) {
+				return Node::Type { name, body };
+			}
+			let items = items.into_iter().map(|item| witness_method(item, &class)).collect();
+			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
+		}
+		other => other.map_children(with_witness_methods),
+	}
+}
+
+fn witness_method(item: Node, class: &str) -> Node {
+	let Some((method, parameters, _)) = method_parts(&item) else { return item };
+	let Some((witness, _)) = WITNESS_METHODS.iter().find(|(witness, aliases)| *witness == method || aliases.contains(&method.as_str())) else { return item };
+	if *witness != method {
+		crate::diagnostic::note_alias(&method, witness);
+	}
+	let typed = |parameter: Node| match parameter.drop_meta() {
+		Node::Symbol(_) if *witness != "text" => Node::Key(Box::new(parameter), Op::Colon, Box::new(Node::Symbol(class.to_string()))),
+		_ => parameter,
+	};
+	let head = Node::List([vec![Node::Symbol(witness.to_string())], parameters.into_iter().map(typed).collect()].concat(), Bracket::Round, Separator::None);
+	match item.drop_meta().clone() {
+		Node::Key(old_head, Op::Define, body) => match old_head.drop_meta() {
+			Node::Key(_, Op::Colon, result) if result_type(&item).is_some() => Node::Key(Box::new(Node::Key(Box::new(head), Op::Colon, result.clone())), Op::Define, body),
+			_ => Node::Key(Box::new(head), Op::Define, body),
+		},
+		_ => item,
 	}
 }
 

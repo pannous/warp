@@ -809,6 +809,8 @@ impl InstanceTypes {
 			Node::List(items, _, separator) => match items.as_slice() {
 				// `sort xs`, `sort(xs)`
 				[word, list] if word.name() == SORT_WORD => self.shape(list).filter(|shape| matches!(shape, Shape::ListOf(_))),
+				// `P·init(P{…}, 3)`: a construction passed through its class's constructor (class_methods::constructor_name)
+				[function, instance, ..] if matches!(function.drop_meta(), Node::Symbol(name) if crate::class_methods::constructor_name(&instance_parts(instance).map(|(class, _)| class.name()).unwrap_or_default()) == *name) => self.shape(instance),
 				// `make(t)`: what the user function returns
 				[function, ..] if matches!(function.drop_meta(), Node::Symbol(name) if self.results.contains_key(name)) => self.results[&function.name()].clone(),
 				// `(x)`, and `(t = a; value)` as min_max binds its operands; another call `f(s)` is not its argument
