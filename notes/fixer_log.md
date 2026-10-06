@@ -189,3 +189,9 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-06 build-exe-default
 - g-1KS4: `warp build <file>` makes the standalone executable without --exe (still accepted); `warp build --wasm`
   and `warp compile` write the module.
+
+## 2026-10-06 p102-exe-naming (P102, P103)
+- `warp hello.warp` runs and leaves the executable `hello` (hello.exe on Windows), rebuilt only when the source is
+  newer; a program the stub cannot carry (fetch, read, run) gets a stderr note. build/compile only make it (failure
+  exits 1), `--wasm` / `--aot` give the module. The program compiles twice on a fresh run (eval, then the printing
+  variant for the executable).
