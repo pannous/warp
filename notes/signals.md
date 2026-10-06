@@ -125,8 +125,11 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    tests/control/test_variable_signals.rs.
 2. **Named event signals in one module** (done, branch signals-events): `raise name{data}` → `on name {…}` (payload
    `event`), static dispatch; `on set` of a derived value means `on change`. tests/control/test_event_signals.rs.
-3. **Program-wide listeners**: writes to a watched main-level variable inside functions (via `global x`) run the
-   checks; `whenever f() > 3` follows the variables f reads; effects.rs counts listener bodies at the writes.
+3. **Program-wide listeners** (P111 part done, branch signals-events): writes to a watched main-level variable inside
+   functions (via `global x`) run the checks: the listener's check is the function `signal·check·N()`, guarded by
+   `signal_listening_N` (set where the listener is declared), called after each such write in a function body.
+   Open (card signals-phase-3-rest): `whenever f() > 3` follows the variables f reads; effects.rs counts listener
+   bodies at the writes.
 4. **Batching**: a multi-assignment `a, b = 1, 2` checks once (P112: no batching block).
 5. **Signals as values**: `$Signal` cells for escaping variables and object fields (`on change person.age`),
    subscription inside functions.
