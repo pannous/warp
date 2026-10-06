@@ -15,6 +15,7 @@ use std::collections::{HashMap, HashSet};
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
 const MAP_WORD: &str = "map";
 const ALL_WORD: &str = "all";
+const EXTREMUM_WORDS: [&str; 2] = ["max", "min"];
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
 const BROADCAST_ITEM: &str = "broadcast_item";
@@ -116,6 +117,11 @@ fn rules_out_a_truth_value(parameter: &Node) -> bool {
 	}
 }
 
+/// `sum`, `max`, `upper` …: a library word of one value, not redefined by the program
+fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(name) if !arities.contains_key(name) && (crate::library_words::is_library_word(name) || EXTREMUM_WORDS.contains(&name.as_str())))
+}
+
 fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
 	match node.drop_meta() {
 		Node::Symbol(name) => arities.get(name).copied(),
@@ -136,6 +142,15 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			let nested = Node::List(items.split_off(inner), Bracket::None, Separator::Space);
 			items.push(nest_prefix_calls(nested, arities));
 			nest_prefix_calls(Node::List(items, bracket, separator), arities)
+		}
+		// `sum square [1 2 3]`, `sum(square xs)`: a library word of one value takes the call of a user function after it
+		Node::List(items, bracket @ (Bracket::None | Bracket::Round), separator @ (Separator::Space | Separator::None))
+			if items.len() > 2 && is_one_value_word(&items[0], arities) && arity(&items[1]).is_some_and(|takes| items.len() - 2 <= takes.most) =>
+		{
+			let mut items = items;
+			let call = Node::List(items.split_off(1), Bracket::None, Separator::Space);
+			items.push(nest_prefix_calls(call, arities));
+			Node::List(items, bracket, separator)
 		}
 		// `square 3 == 9` parses as `square (3 == 9)`. P143 (user): a parameter typed as no truth value takes the call,
 		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error
@@ -230,11 +245,15 @@ fn each_item(list: Node, applied: impl Fn(Node) -> Node) -> Node {
 /// `square := it*it`: a function of the implicit parameter `it`
 fn implicit_definitions(node: &Node, found: &mut Vec<Definition>) {
 	node.visit(&mut |part| {
-		if let Node::Key(target, Op::Define, body) = part {
-			if let Node::Symbol(name) = target.drop_meta() {
-				let params = vec![Node::Symbol(IMPLICIT_PARAMETER.to_string())];
-				found.push(Definition { name: name.clone(), params, body: body.as_ref().clone() });
-			}
+		let Node::Key(target, op @ (Op::Define | Op::Assign), body) = part else { return };
+		let Node::Symbol(name) = target.drop_meta() else { return };
+		// `f = x => x + 1`: lambdas.rs makes it the definition f(x) later
+		if let Some(lambda) = crate::lambdas::arrow_lambda(body) {
+			let params = lambda.params.iter().map(|param| Node::Symbol(param.clone())).collect();
+			found.push(Definition { name: name.clone(), params, body: lambda.body });
+		} else if *op == Op::Define {
+			let params = vec![Node::Symbol(IMPLICIT_PARAMETER.to_string())];
+			found.push(Definition { name: name.clone(), params, body: body.as_ref().clone() });
 		}
 	});
 }
