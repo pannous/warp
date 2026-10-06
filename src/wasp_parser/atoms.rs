@@ -896,6 +896,14 @@ impl WaspParser {
 			'(' => {
 				// Parse arguments as a proper Node
 				let args_node = self.parse_bracketed('(');
+				// `add(2)(5)`: each glued group calls what the call before returned (closures.rs), one operand
+				if self.current_char() == '(' && symbol != PRINT_WORD {
+					let mut chain = vec![function_call(symbol, args_node)];
+					while self.current_char() == '(' {
+						chain.push(argument_group(self.parse_bracketed('(')));
+					}
+					return Node::List(chain, Bracket::None, Separator::Space);
+				}
 				self.skip_spaces(); // Only spaces, preserve newlines as statement separators
 
 				// in a condition `if f(1, 2) {…}` the block is the body of the `if`, not of a definition of f
@@ -911,14 +919,7 @@ impl WaspParser {
 				} else if symbol == PRINT_WORD {
 					print_call(print_arguments(args_node))
 				} else {
-					// Function call: name(params) -> List([symbol, args...])
-					let mut items = vec![Symbol(symbol)];
-					match typed_parameters(args_node) {
-						Node::List(args, _, _) => items.extend(args),
-						Node::Empty => {}
-						other => items.push(other),
-					}
-					Node::List(items, Bracket::Round, Separator::None)
+					function_call(symbol, args_node)
 				}
 			}
 			_ => Node::symbol(&symbol),
@@ -930,6 +931,27 @@ impl WaspParser {
 		for _ in 0..n {
 			self.advance();
 		}
+	}
+}
+
+/// Function call: name(params) -> List([symbol, args...])
+fn function_call(symbol: String, args_node: Node) -> Node {
+	let mut items = vec![Symbol(symbol)];
+	match typed_parameters(args_node) {
+		Node::List(args, _, _) => items.extend(args),
+		Node::Empty => {}
+		other => items.push(other),
+	}
+	Node::List(items, Bracket::Round, Separator::None)
+}
+
+/// The arguments of a glued group `(5)`, `(1, 2)`, `()`, as a round list
+fn argument_group(arguments: Node) -> Node {
+	match arguments {
+		Node::List(items, Bracket::Round, separator) => Node::List(items, Bracket::Round, separator),
+		Node::List(items, _, _) => Node::List(items, Bracket::Round, Separator::None),
+		Node::Empty => Node::List(vec![], Bracket::Round, Separator::None),
+		other => Node::List(vec![other], Bracket::Round, Separator::None),
 	}
 }
 
