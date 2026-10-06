@@ -141,6 +141,8 @@ pub struct HostState {
 	next_alloc: u32,
 	/// WASI preview 1 (fd_write …), writing to the process's stdout and stderr
 	pub wasi: wasmtime_wasi::p1::WasiP1Ctx,
+	/// The C pointers this run got (sqlite3 *, FILE *), handed to wasp as ids (notes/ffi_handles.md)
+	pub c_handles: crate::ffi::CHandles,
 }
 
 #[cfg(feature = "native")]
@@ -156,6 +158,7 @@ impl HostState {
 		HostState {
 			next_alloc: 65536, // Start allocation after initial memory region
 			wasi: wasmtime_wasi::WasiCtxBuilder::new().inherit_stdout().inherit_stderr().build_p1(),
+			c_handles: Default::default(),
 		}
 	}
 
