@@ -103,6 +103,10 @@ output.error { color: var(--error); }
 .note .label { color: var(--hint); }
 .reason, .fix { display: block; color: var(--muted); padding-left: 4.5em; }
 .error .label { color: var(--error); }
+/* the editor underlines the position of an error or warning (playground.js markPositions) */
+.marked-error, .marked-warning { text-decoration: underline wavy; text-decoration-thickness: 2px; text-decoration-skip-ink: none; text-underline-offset: 3px; }
+.marked-error { text-decoration-color: var(--error); background: color-mix(in srgb, var(--error) 14%, transparent); }
+.marked-warning { text-decoration-color: var(--warning); }
 .fixes { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 0 4.5em; }
 .fixes button { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; }
 .got-it-choices { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; }

@@ -62,6 +62,7 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 		"value": result.serialize(),
 		"error": is_error,
 		"errors": errors,
+		"error_at": diagnostic::error_position(&result).map(|(line, column)| json!({"line": line, "column": column})),
 		"warnings": warnings,
 		"runtime_warnings": diagnostic::take_runtime_warnings(),
 		"hints": hints,
