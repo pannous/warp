@@ -17,7 +17,7 @@ use warp_runtime::host_words::{BATTERY, SYSTEM_VALUE, SYSTEM_VALUES};
 pub const SYSTEM_PREFIX: &str = "system·";
 const LISTENER_WORDS: [&str; 3] = ["whenever", "once", "on"];
 /// The timer that keeps a listening program and wakes it for the checks
-const KEEP_LISTENING: &str = "on every 1000 ms { 0 }"; // { 0 }: an empty body fails (card empty-timer)
+const KEEP_LISTENING: &str = "on every 1000 ms {}";
 
 pub fn name(program: Node) -> Node {
 	let bound = bound_names(&program);
