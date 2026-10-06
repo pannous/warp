@@ -256,3 +256,9 @@ fn test_iteration() {
 	}
 	eq!(count, 3);
 }
+
+#[test]
+fn test_index_assignment_to_undefined_variable() {
+	crate::common::fails_with("k#1=4", "undefined variable: k");
+	crate::common::fails_with("i=1;k[i]=4;k", "undefined variable: k");
+}

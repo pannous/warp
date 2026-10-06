@@ -161,14 +161,18 @@ pub fn prints(msg: String) {
 // e.g. #[should_panic(expected = "Expected error, but code parsed successfully.")]
 pub fn assert_throws(code: &str) {
 	use crate::analyzer::analyze;
+	use crate::wasm_emitter::eval;
 	let parsed = parse(code);
 	if let Node::Error(_) = &parsed {
 		return; // Parse error - test passes
 	}
-	// Also check for analysis errors (type mismatches, etc.)
-	match analyze(parsed) {
-		Node::Error(_) => (), // Analysis error - test passes
-		_ => panic!("Expected error, but code parsed and analyzed successfully."),
+	// Also check for analysis errors (type mismatches, etc.), then for errors at run time (failed assert, …)
+	if let Node::Error(_) = analyze(parsed) {
+		return;
 	}
+	if let Node::Error(_) = eval(code) {
+		return;
+	}
+	panic!("Expected error, but {code} parsed, analyzed and ran successfully.");
 }
 
