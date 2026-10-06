@@ -298,8 +298,8 @@ pub const EXTENDS_KEYWORD: &str = "extends";
 /// `mixin Walker{…}` declares fields and methods classes take in: `class Duck with Walker, Swimmer {…}`
 pub const MIXIN_WORD: &str = "mixin";
 pub const WITH_KEYWORD: &str = "with";
-/// The constructor of a class body, `value{…}` or `value(name){…}` (wiki/constructor.md)
-pub const CONSTRUCTOR_WORD: &str = "value";
+/// The constructor of a class body, `init{…}` or `init(name){…}` (wiki/constructor.md, P162)
+pub const CONSTRUCTOR_WORD: &str = "init";
 /// The accessors of a class property, `get age() {…}`, `set age(v) {…}` (wiki/property.md)
 pub const ACCESSOR_WORDS: [&str; 2] = ["get", "set"];
 /// `static k = 3` in a class body: a member of the class, not of each instance (P122); kept as the annotation `@static`

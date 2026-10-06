@@ -505,7 +505,10 @@ impl WaspParser {
 			while matches!(self.current_char(), ' ' | '\t') {
 				self.advance();
 			}
-			return self.parse_atom();
+			let construction = self.parse_atom();
+			let class = crate::lowering::class_methods::leading_name(&construction);
+			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
+			return construction;
 		}
 		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
 			while matches!(self.current_char(), ' ' | '\t') {
