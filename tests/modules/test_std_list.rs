@@ -18,3 +18,9 @@ fn use_list_brings_its_words() {
 fn a_programs_own_word_wins_over_the_module() {
 	is!("use list; product(a, b) := a * b; product(3, 4)", 12);
 }
+
+#[test]
+fn a_module_word_without_its_use_names_the_module() {
+	crate::common::fails_with("zip([1], [2])", "zip is in the standard module list: write `use list`");
+	crate::common::fails_with("unique [1, 1]", "unique is in the standard module list: write `use list`");
+}

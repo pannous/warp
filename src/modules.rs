@@ -428,6 +428,13 @@ fn std_module(name: &str) -> Option<&'static str> {
 	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
 }
 
+/// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
+pub fn std_module_defining(word: &str) -> Option<&'static str> {
+	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
+	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(WaspParser::parse(source)).iter().filter_map(declared_name).collect())).collect());
+	defined.iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
+}
+
 fn is_builtin_library(name: &str) -> bool {
 	matches!(crate::ffi::resolve_library_alias(name), "m" | "c")
 }
