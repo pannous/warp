@@ -36,3 +36,4 @@ mod test_wisp_malformed;
 mod test_trailing_annotation;
 mod test_spaced_children;
 mod test_unit_word_keys;
+mod test_glued_pair_value;
