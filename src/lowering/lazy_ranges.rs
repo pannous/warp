@@ -1,11 +1,16 @@
 //! A range is a descriptor, not its list (card lazy-range, notes/lazy_ranges.md): `count`, `#`, `sum` and indexing of
 //! a range of plain bounds (integer literals or variables) are worked out from the bounds, and a range variable that is
 //! never changed is replaced by its range wherever it is used, so `xs = 1..100001; xs#5` builds no list. `for`, `map`,
-//! `filter` and the other iteration words already loop over a range's bounds (for_loop.rs, lambdas.rs). Any other use
-//! (printing, passing it on, changing it) keeps the variable a list, collected once (declaration_lowering.rs).
+//! `filter` and the other iteration words already loop over a range's bounds (for_loop.rs, lambdas.rs). A range passed
+//! to a function that only reads its parameter so is passed as its bounds: `f(1..n)` calls `f·range·0(1, n)`, a copy of
+//! f whose parameter is the range of its two new parameters. Any other use (printing, returning, changing it) keeps the
+//! variable a list, collected once (declaration_lowering.rs).
 
-use crate::analyzer::{extract_user_functions, TEMPORARY_SEPARATOR};
+use crate::analyzer::{call_name, extract_user_functions, TEMPORARY_SEPARATOR};
 use crate::context::Context;
+use crate::effects::call_arguments;
+use crate::memoization::definition_parts;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -32,7 +37,9 @@ pub fn lower(node: Node) -> Node {
 	extract_user_functions(&mut context, &node);
 	let own = |word: &str| context.user_functions.contains_key(word);
 	let mut lowering = Lowering { counts: !own(COUNT), sums: !own(SUM), temporaries: 0 };
-	lowering.rewrite(replace_range_variables(node))
+	let readers = range_readers(&node);
+	let node = replace_range_variables(node, &readers);
+	lowering.rewrite(pass_ranges_as_bounds(node, &readers))
 }
 
 fn has_range(node: &Node) -> bool {
@@ -52,16 +59,23 @@ fn plain_bound(bound: &Node) -> bool {
 	matches!(bound.drop_meta(), Node::Symbol(_) | Node::Number(crate::extensions::numbers::Number::Int(_)))
 }
 
-fn range_of(node: &Node) -> Option<Range> {
+/// A range seen through parentheses, of any bounds: the range itself, its start and its end past the last number
+fn range_parts(node: &Node) -> Option<(&Node, Node, Node)> {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => range_of(&items[0]),
-		Node::Key(start, op @ (Op::Range | Op::To), end) if plain_bound(start) && plain_bound(end) => {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => range_parts(&items[0]),
+		whole @ Node::Key(start, op @ (Op::Range | Op::To), end) => {
 			// `a to b` ends after b: its end is b + 1
 			let end = if *op == Op::To { add_one(end) } else { end.drop_meta().clone() };
-			Some(Range { start: start.drop_meta().clone(), end, whole: node.drop_meta().clone() })
+			Some((whole, start.drop_meta().clone(), end))
 		}
 		_ => None,
 	}
+}
+
+fn range_of(node: &Node) -> Option<Range> {
+	let (whole, start, end) = range_parts(node)?;
+	let Node::Key(written_start, _, written_end) = whole else { return None };
+	(plain_bound(written_start) && plain_bound(written_end)).then(|| Range { start, end, whole: whole.clone() })
 }
 
 fn add_one(bound: &Node) -> Node {
@@ -154,8 +168,8 @@ fn is_position(index: &Node) -> bool {
 
 /// In every statement list: `xs = a..b` that nothing changes and that is only read (count, index, sum, `for … in xs`,
 /// xs.map …) is replaced by its range at each use, and the assignment goes
-fn replace_range_variables(node: Node) -> Node {
-	let node = node.map_children(replace_range_variables);
+fn replace_range_variables(node: Node, readers: &RangeReaders) -> Node {
+	let node = node.map_children(|child| replace_range_variables(child, readers));
 	let Node::List(statements, bracket, separator @ (Separator::Semicolon | Separator::Newline)) = node else { return node };
 	// `{a = 1..2000; b = #a}` ending in a field is an object: each of its assignments is a field it keeps
 	if bracket == Bracket::Curly && statements.last().is_some_and(|last| matches!(last.drop_meta(), Node::Key(_, Op::Assign | Op::Define | Op::Colon, _))) {
@@ -164,11 +178,11 @@ fn replace_range_variables(node: Node) -> Node {
 	let mut statements = statements;
 	let mut position = 0;
 	while position + 1 < statements.len() {
-		match replaceable(&statements, position) {
+		match replaceable(&statements, position, readers) {
 			Some((name, range)) => {
 				statements.remove(position);
 				for statement in &mut statements[position..] {
-					*statement = substitute(std::mem::replace(statement, Node::Empty), &name, &range);
+					*statement = substitute_variable(std::mem::replace(statement, Node::Empty), &name, &range);
 				}
 			}
 			None => position += 1,
@@ -178,7 +192,7 @@ fn replace_range_variables(node: Node) -> Node {
 }
 
 /// The variable and range statement `position` assigns, when every other statement only reads it as a range
-fn replaceable(statements: &[Node], position: usize) -> Option<(String, Node)> {
+fn replaceable(statements: &[Node], position: usize, readers: &RangeReaders) -> Option<(String, Node)> {
 	let Node::Key(target, Op::Assign | Op::Define, value) = statements[position].drop_meta() else { return None };
 	let Node::Symbol(name) = target.drop_meta() else { return None };
 	let range = range_of(value)?;
@@ -189,7 +203,7 @@ fn replaceable(statements: &[Node], position: usize) -> Option<(String, Node)> {
 	let (before, after) = (&statements[..position], &statements[position + 1..]);
 	let bound_names: Vec<String> = [&range.start, &range.end].into_iter().flat_map(symbols).collect();
 	let unchanged = |name: &str| !after.iter().any(|statement| changes(statement, name));
-	let read_only = before.iter().all(|statement| !statement.mentions_any(&[name])) && after.iter().all(|statement| only_read(statement, name));
+	let read_only = before.iter().all(|statement| has_parameter(statement, name) || !statement.mentions_any(&[name])) && after.iter().all(|statement| only_read(statement, name, readers));
 	(read_only && unchanged(name) && bound_names.iter().all(|bound| unchanged(bound) && !after.iter().any(|statement| is_parameter(statement, bound))))
 		.then(|| (name.clone(), Node::List(vec![range.whole.clone()], Bracket::Round, Separator::None)))
 }
@@ -223,18 +237,24 @@ fn is_parameter(node: &Node, name: &str) -> bool {
 }
 
 /// Whether every use of `name` in `node` reads it as a range: count, sum, index, the list of a `for` or of an iteration
-/// word; never inside a function definition, which would read it as a global
-fn only_read(node: &Node, name: &str) -> bool {
+/// word, an argument a range reader takes as its bounds; never inside a function definition, which would read it as a
+/// global
+fn only_read(node: &Node, name: &str, readers: &RangeReaders) -> bool {
 	let is_name = |node: &Node| is_word(node, name);
+	let reads = |node: &Node| only_read(node, name, readers);
 	match node.drop_meta() {
+		_ if has_parameter(node, name) => true,
 		Node::Symbol(symbol) => symbol != name,
 		Node::List(items, _, separator) if is_call(items, separator) && is_name(&items[1]) && (is_word(&items[0], COUNT) || is_word(&items[0], SUM)) => true,
-		Node::List(items, _, _) => items.iter().enumerate().all(|(at, item)| (is_name(item) && at > 0 && is_word(&items[at - 1], "in")) || only_read(item, name)),
+		Node::List(items, bracket, separator) if let Some(reading) = reading_parameters(items, bracket, separator, readers) => {
+			call_arguments(&items[1..]).into_iter().zip(reading).all(|(argument, reads_range)| if is_name(argument) { *reads_range } else { reads(argument) })
+		}
+		Node::List(items, _, _) => items.iter().enumerate().all(|(at, item)| (is_name(item) && at > 0 && is_word(&items[at - 1], "in")) || reads(item)),
 		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && is_name(counted) => true,
-		Node::Key(list, Op::Hash, index) if is_name(list) => is_position(index) && only_read(index, name),
-		Node::Key(list, Op::Dot, method) if is_name(list) => reading_method(method) && only_read(method, name),
+		Node::Key(list, Op::Hash, index) if is_name(list) => is_position(index) && reads(index),
+		Node::Key(list, Op::Dot, method) if is_name(list) => reading_method(method) && reads(method),
 		Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(..)) => !body.mentions_any(&[name]),
-		Node::Key(left, _, right) => only_read(left, name) && only_read(right, name),
+		Node::Key(left, _, right) => reads(left) && reads(right),
 		_ => true,
 	}
 }
@@ -246,4 +266,119 @@ fn reading_method(method: &Node) -> bool {
 		Node::List(items, _, _) => items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(word) if READING_METHODS.contains(&word.as_str()))),
 		_ => false,
 	}
+}
+
+/// Per user function defined once: whether its body only reads each parameter as a range (`only_read`, unchanged)
+type RangeReaders = HashMap<String, Vec<bool>>;
+
+/// The name and parameters of a definition's head `(f a b)`
+fn signature(head: &Node) -> Option<(String, Vec<&Node>)> {
+	let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
+	let Node::Symbol(name) = items.first()?.drop_meta() else { return None };
+	Some((name.clone(), call_arguments(&items[1..])))
+}
+
+/// A definition with a parameter `name`: its body reads that parameter, not the variable
+fn has_parameter(node: &Node, name: &str) -> bool {
+	definition_parts(node).and_then(|(head, _, _)| signature(&head).map(|(_, parameters)| parameters.iter().any(|parameter| is_word(parameter, name)))).unwrap_or(false)
+}
+
+/// `name` replaced by `range`, except in a definition with a parameter `name`
+fn substitute_variable(node: Node, name: &str, range: &Node) -> Node {
+	match node {
+		_ if has_parameter(&node, name) => node,
+		Node::Symbol(symbol) if symbol == name => range.clone(),
+		other => other.map_children(|child| substitute_variable(child, name, range)),
+	}
+}
+
+fn range_readers(program: &Node) -> RangeReaders {
+	let mut definitions: HashMap<String, Vec<Vec<bool>>> = HashMap::new();
+	program.visit(&mut |part| {
+		let Some((head, body, _)) = definition_parts(part) else { return };
+		let Some((name, parameters)) = signature(&head) else { return };
+		let reads_range = |parameter: &&Node| matches!(parameter.drop_meta(), Node::Symbol(parameter) if !changes(&body, parameter) && only_read(&body, parameter, &RangeReaders::new()));
+		definitions.entry(name).or_default().push(parameters.iter().map(reads_range).collect());
+	});
+	definitions.into_iter().filter(|(_, found)| found.len() == 1).map(|(name, mut found)| (name, found.remove(0))).collect()
+}
+
+/// Per parameter of the range reader `items` calls: whether it reads it as a range
+fn reading_parameters<'a>(items: &[Node], bracket: &Bracket, separator: &Separator, readers: &'a RangeReaders) -> Option<&'a Vec<bool>> {
+	let reading = readers.get(call_name(items, bracket, separator)?)?;
+	(call_arguments(&items[1..]).len() == reading.len() && reading.contains(&true)).then_some(reading)
+}
+
+/// The copy of `function` taking the ranges at `positions` as their start and end
+fn bounds_name(function: &str, positions: &[usize]) -> String {
+	let positions: Vec<String> = positions.iter().map(usize::to_string).collect();
+	format!("{function}{TEMPORARY_SEPARATOR}range{TEMPORARY_SEPARATOR}{}", positions.join(TEMPORARY_SEPARATOR))
+}
+
+fn bound_names(parameter: &str) -> [String; 2] {
+	[format!("{parameter}{TEMPORARY_SEPARATOR}start"), format!("{parameter}{TEMPORARY_SEPARATOR}end")]
+}
+
+/// Every call passing a range to a reader of it calls its bounds copy, which follows the reader's definition
+fn pass_ranges_as_bounds(program: Node, readers: &RangeReaders) -> Node {
+	if readers.values().all(|reading| !reading.contains(&true)) {
+		return program;
+	}
+	let mut copies = BTreeMap::new();
+	let program = call_bounds_copies(program, readers, &mut copies);
+	if copies.is_empty() { program } else { add_bounds_copies(program, &copies) }
+}
+
+fn call_bounds_copies(node: Node, readers: &RangeReaders, copies: &mut BTreeMap<String, BTreeSet<Vec<usize>>>) -> Node {
+	let node = node.map_children(|child| call_bounds_copies(child, readers, copies));
+	let Node::List(items, bracket, separator) = node.drop_meta() else { return node };
+	let Some(reading) = reading_parameters(items, bracket, separator, readers) else { return node };
+	let arguments = call_arguments(&items[1..]);
+	let ranges: Vec<Option<(Node, Node)>> = arguments.iter().zip(reading).map(|(argument, reads_range)| {
+		range_parts(argument).filter(|_| *reads_range).map(|(_, start, end)| (start, end))
+	}).collect();
+	let positions: Vec<usize> = (0..ranges.len()).filter(|at| ranges[*at].is_some()).collect();
+	if positions.is_empty() {
+		return node;
+	}
+	let function = items[0].name();
+	let name = bounds_name(&function, &positions);
+	let arguments: Vec<Node> = arguments.into_iter().zip(ranges).flat_map(|(argument, range)| match range {
+		Some((start, end)) => vec![start, end],
+		None => vec![argument.clone()],
+	}).collect();
+	copies.entry(function).or_default().insert(positions);
+	Node::List([vec![Node::Symbol(name)], arguments].concat(), Bracket::Round, Separator::None)
+}
+
+/// After each definition of a function whose copies are called: those copies
+fn add_bounds_copies(node: Node, copies: &BTreeMap<String, BTreeSet<Vec<usize>>>) -> Node {
+	let node = node.map_children(|child| add_bounds_copies(child, copies));
+	let Node::List(statements, bracket, separator @ (Separator::Semicolon | Separator::Newline)) = node else { return node };
+	let statements = statements.into_iter().flat_map(|statement| {
+		let added = bounds_copies(&statement, copies);
+		std::iter::once(statement).chain(added)
+	}).collect();
+	Node::List(statements, bracket, separator)
+}
+
+fn bounds_copies(statement: &Node, copies: &BTreeMap<String, BTreeSet<Vec<usize>>>) -> Vec<Node> {
+	let Some((head, body, make)) = definition_parts(statement) else { return vec![] };
+	let Some((function, parameters)) = signature(&head) else { return vec![] };
+	let Some(wanted) = copies.get(&function) else { return vec![] };
+	wanted.iter().map(|positions| {
+		let mut new_parameters = vec![Node::Symbol(bounds_name(&function, positions))];
+		let mut new_body = body.clone();
+		for (at, parameter) in parameters.iter().enumerate() {
+			if !positions.contains(&at) {
+				new_parameters.push(parameter.drop_meta().clone());
+				continue;
+			}
+			let [start, end] = bound_names(&parameter.name()).map(Node::Symbol);
+			let range = Node::List(vec![Node::Key(Box::new(start.clone()), Op::Range, Box::new(end.clone()))], Bracket::Round, Separator::None);
+			new_body = substitute(new_body, &parameter.name(), &range);
+			new_parameters.extend([start, end]);
+		}
+		make(Node::List(new_parameters, Bracket::Round, Separator::None), new_body)
+	}).collect()
 }

@@ -152,7 +152,12 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
      a signal parameter. A function's `global x` of an escaping x goes (it changes the cell, never x).
    - Order: subscriptions run inside the write, in the order they were made; the main level's own static listeners
      on the same variable run right after the write (test a_static_listener_and_a_subscription_on_one_variable).
-   - Writes before the subscription are not seen; a subscription is never removed (no `unsubscribe` yet).
+   - Writes before the subscription are not seen; `clear listeners of x` removes all subscriptions (no single one yet).
+   - Reflection (card g-3HmY, branch signals-reflect; tests/control/test_signal_reflection.rs; syntax an assumption
+     queued with the Interviewer): `listeners of x` is the list of the functions listening to x (`count listeners of
+     x`, `(listeners of x)#1`, `for f in listeners of x {f(new, old)}`), `clear listeners of x` unsubscribes them all.
+     Either makes x a $Signal, and x's main-level listeners then subscribe at run time (in declaration order), so
+     the list holds every listener. A listener is a function of (new value, old value).
    - Open: escaping into a list or an object field (`signals = [x, y]`: lists copy values, objects too, so nothing
      there keeps the cell yet); `on change p.age` inside a function on a parameter p (only plain names subscribe);
      reflecting over listeners (g-3HmY).
