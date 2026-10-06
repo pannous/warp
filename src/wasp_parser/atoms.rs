@@ -352,7 +352,7 @@ impl WaspParser {
 		}
 
 		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count())) {
-			if !self.names_field(&constant) {
+			if !self.names_field(&symbol, &constant) {
 				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
 			}
 		}
@@ -432,9 +432,23 @@ impl WaspParser {
 		self.parse_glued_suffix(symbol)
 	}
 
-	/// `class circle{pi = 3}`: a named number assigned in a type body names the type's own field, which shadows nothing
-	fn names_field(&self, constant: &Node) -> bool {
-		self.in_type_body && matches!(constant, Node::Number(_)) && self.assignment_follows()
+	/// `class circle{pi = 3}`, `class C{pi:int}`: a named number declared in a type body names the type's own field, which
+	/// shadows nothing outside; the type's methods read the field
+	fn names_field(&mut self, symbol: &str, constant: &Node) -> bool {
+		if !matches!(constant, Node::Number(_)) {
+			return false;
+		}
+		let declares = self.assignment_follows() || self.type_annotation_follows();
+		let Some(fields) = self.type_fields.as_mut() else { return false };
+		if declares {
+			fields.insert(symbol.to_string());
+		}
+		fields.contains(symbol)
+	}
+
+	/// `:type` right after the name (`pi:int`, `pi: int`), not the definition `:=` nor a ternary's `c ? pi : 0`
+	fn type_annotation_follows(&self) -> bool {
+		self.current_char() == ':' && self.peek_char(1) != '='
 	}
 
 	/// `pi = 4` (P130, user: "loud error, if it was declared constant before which it should be"): a named number is a
@@ -480,9 +494,9 @@ impl WaspParser {
 
 	/// The name and the `{fields}` of a type declaration, after its keyword
 	pub(super) fn parse_type_declaration(&mut self) -> Node {
-		let outer = std::mem::replace(&mut self.in_type_body, true);
+		let outer = self.type_fields.replace(Default::default());
 		let declaration = self.parse_type_declaration_body();
-		self.in_type_body = outer;
+		self.type_fields = outer;
 		declaration
 	}
 
