@@ -100,6 +100,15 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   (alias `this`) too; P116 `c.inc()` updates the variable c (objects are values, like `xs.add(v)`); P117 a body
   definition without parentheses (`area := side*side`) is a getter computed at each read, and `class b extends a`
   copies a's fields and methods (b's own override) (user chose inheritance over the recommended none).
+- P118 GPU maps (warp-d9, notes/simd.md): only after SIMD lands, only on an explicit `@gpu` map, never silent
+  offloading (f32 differs); native first via wgpu. Card in Later.
+- P119 NaN canonicalization only where a float's bits are observable (print/text, bit reads, memory stores, host/FFI
+  calls, task crossing); arithmetic in between runs free (engine flag off, emitter canonicalizes). warp-d9; float
+  loops measured 7.2 → 3.8 ns per item.
+- P120 a program whose main ends while handlers listen: the CLI (`warp file`, `warp run`, executables) keeps running
+  and prints once to stderr "listening: … (ctrl-c to stop)"; in-process eval and tests never wait. warp-54.
+- P121 `exit` / `exit(code)` end the run, not the process: the CLI exits with the code, an in-process eval returns.
+  warp-54.
 - P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
   behind them go; no test edits. Asked by warp-40 (code-quality).
 - P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.
