@@ -42,3 +42,12 @@ fn foreign_spellings_of_a_collection() {
 	is!("use collections; s = new Set([1 2 2]); s.size()", 2);
 	is!("use collections; c = collections.Counter([1 1]); c.get(1)", 2);
 }
+
+#[test]
+fn other_languages_class_names_are_the_collections() {
+	is!("use collections; s = HashSet([1 2 2]); s.size()", 2);
+	is!("use collections; d = ArrayDeque(); d.push_back(4); d.pop_front()", 4);
+	is!("use collections; d = deque(); d.push_front(5); d.size()", 1);
+	// a program's own class of that name wins
+	is!("use collections; class HashSet{n=7}; HashSet().n", 7);
+}

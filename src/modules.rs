@@ -73,7 +73,27 @@ pub fn insert_std_classes(program: Node) -> Node {
 		.filter_map(|used| std_module(&used.name))
 		.flat_map(|source| crate::normalize::without_hints(|| statements(WaspParser::parse(source))).into_iter().filter(is_class))
 		.collect();
-	with_needed_definitions(program, classes)
+	if classes.is_empty() {
+		return program;
+	}
+	let class_names: Vec<String> = classes.iter().filter_map(declared_name).collect();
+	let own_names: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
+	let aliases: Vec<(&str, &str)> = STD_CLASS_ALIASES.into_iter().filter(|(alias, class)| class_names.iter().any(|name| name == class) && !own_names.contains(*alias)).collect();
+	with_needed_definitions(with_class_aliases(program, &aliases), classes)
+}
+
+/// `HashSet(xs)` as `Set(xs)`, with a note
+fn with_class_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
+	match node {
+		Node::Symbol(name) => match aliases.iter().find(|(alias, _)| *alias == name) {
+			Some((alias, class)) => {
+				crate::diagnostic::note_alias(alias, class);
+				Node::Symbol(class.to_string())
+			}
+			None => Node::Symbol(name),
+		},
+		other => other.map_children(|child| with_class_aliases(child, aliases)),
+	}
 }
 
 fn is_class(statement: &Node) -> bool {
@@ -496,6 +516,11 @@ const STD_MODULES: [(&str, &str); 6] = [
 	("map", include_str!("../std/map.wasp")),
 ];
 const STD_FOLDER: &str = "std";
+/// Other languages' names of the standard classes (Java, Python, Rust, C#), each read as wasp's with a note
+const STD_CLASS_ALIASES: [(&str, &str); 7] = [
+	("HashSet", "Set"), ("TreeSet", "Set"), ("LinkedHashSet", "Set"), ("frozenset", "Set"),
+	("ArrayDeque", "Deque"), ("VecDeque", "Deque"), ("deque", "Deque"),
+];
 
 /// The name an embedded module is loaded under, once per program
 fn std_path(name: &str) -> PathBuf {
