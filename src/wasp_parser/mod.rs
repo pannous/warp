@@ -542,6 +542,9 @@ pub struct WaspParser {
 	shadowed_constants: std::collections::HashSet<String>,
 	/// Inside `class Name {…}`: `pi = 3` there names a field, which shadows nothing
 	in_type_body: bool,
+	/// The binding power of the `then` or `else` branch being parsed: there it is a statement, so a braceless call takes a
+	/// variable argument (`then count xs`), as at assignment level
+	branch_bp: Option<u8>,
 	/// The position of the sign in `1 -1` read as the list `[1 -1]`: no enclosing expression subtracts it either (`x=1 -1`)
 	signed_list_element: Option<usize>,
 	/// Inside `do … end`: the `end` keyword closes the statement list
@@ -796,6 +799,7 @@ impl WaspParser {
 			stops_at_else: false,
 			shadowed_constants: Default::default(),
 			in_type_body: false,
+			branch_bp: None,
 			signed_list_element: None,
 			stops_at_end: false,
 			in_command: false,

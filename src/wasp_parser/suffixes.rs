@@ -363,7 +363,7 @@ impl WaspParser {
 		};
 		let lhs_is_defined_function = matches!(lhs.drop_meta(), Node::Symbol(name) if self.functions.contains(name));
 		let ch = self.current_char();
-		let in_assignment_context = min_bp <= 60; // Assignment r_bp is 59
+		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let arg_is_non_identifier = ch.is_numeric()
 			|| self.number_starts_at(0)
 			|| ch == '"'
