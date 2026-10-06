@@ -20,7 +20,7 @@ fn an_exported_function_is_called_with_its_declared_types() {
 fn an_exported_global_reads_as_its_value() {
 	is!(&with_module("ft * 2"), 84);
 	is!(&with_module("twice(ft) + 1"), 85);
-	fails_with(&with_module("ft = 3; ft"), "ft is a global of an imported module");
+	fails_with(&with_module("ft = 3; ft"), "ft is an immutable global of an imported module");
 }
 
 #[test]
