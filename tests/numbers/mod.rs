@@ -14,6 +14,7 @@ mod test_law;
 mod test_math;
 mod test_number;
 mod test_rational_type;
+mod test_exact_parameters;
 mod test_rounding_in_functions;
 mod test_shift_operators;
 mod test_sum_of_decimals;
