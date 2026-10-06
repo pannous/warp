@@ -80,6 +80,8 @@ fn forms(node: Node) -> Node {
 			let call = Node::List([vec![Node::Symbol(word.to_string())], arguments.into_iter().map(forms).collect()].concat(), Bracket::Round, Separator::None);
 			Node::Key(Box::new(forms(*receiver)), Op::Dot, Box::new(call))
 		}
+		// `f = lambda *xs: …`, JS `f = (...xs) => …`: the definition `f(*xs) := …`, which variadic.rs reads
+		Node::Key(name, Op::Assign, value) if starred_lambda(&name, &value).is_some() => forms(starred_lambda(&name, &value).expect("guarded")),
 		Node::Key(left, op, right) => Node::Key(Box::new(forms(*left)), op, Box::new(forms(*right))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(forms(*node)), data },
 		other => other,
@@ -227,6 +229,20 @@ fn ruby_lambda(items: &[Node]) -> Option<Node> {
 	let [word, block] = items else { return None };
 	let is_lambda_word = RUBY_LAMBDA_WORDS.iter().any(|lambda_word| is_word(word, lambda_word));
 	(is_lambda_word && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))).then(|| block.clone())
+}
+
+fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
+	let Node::Key(parameters, Op::FatArrow, body) = value.drop_meta() else { return None };
+	let parameters = match parameters.drop_meta() {
+		Node::List(items, Bracket::Round, _) => items.clone(),
+		single => vec![single.clone()],
+	};
+	let is_starred = |parameter: &Node| matches!(parameter.drop_meta(), Node::Symbol(word) if word.starts_with(crate::tuples::STARRED) && word.len() > 1);
+	if !matches!(name.drop_meta(), Node::Symbol(_)) || !parameters.iter().any(is_starred) {
+		return None;
+	}
+	let head = Node::List([vec![name.clone()], parameters].concat(), Bracket::Round, Separator::None);
+	Some(Node::Key(Box::new(head), Op::Define, body.clone()))
 }
 
 /// C#'s `xs.Sum()`, `xs.Select(x => x * 2)`: the LINQ name, wasp's word and the arguments (a called method only:

@@ -56,7 +56,7 @@ impl WaspParser {
 			ch if ch.is_numeric() || self.number_starts_at(0) || (ch == '-' && self.number_starts_at(1)) => {
 				self.parse_number()
 			}
-			ch if ch.is_alphabetic() || ch == '_' => self.parse_elixir_function().or_else(|| self.parse_f_string()).unwrap_or_else(|| self.parse_symbol_with_suffix()),
+			ch if ch.is_alphabetic() || ch == '_' => self.parse_elixir_function().or_else(|| self.parse_python_lambda()).or_else(|| self.parse_f_string()).unwrap_or_else(|| self.parse_symbol_with_suffix()),
 			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
 				(0..length).for_each(|_| self.advance());
 				error(&crate::uniscript_entities::unknown_entity(&name))
@@ -307,6 +307,34 @@ impl WaspParser {
 			[single] => Node::Symbol(single.clone()),
 			several => Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon),
 		};
+		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
+	}
+
+	/// Python's `lambda a, b=2: a + b`, `lambda *xs: …`, `lambda: 42` at the cursor: the parameters as one group (the
+	/// commas would split them into list items), then the body up to the end of the expression
+	pub(super) fn parse_python_lambda(&mut self) -> Option<Node> {
+		if !self.matches_keyword(PYTHON_LAMBDA_KEYWORD) || self.options.data_mode {
+			return None;
+		}
+		let start = self.pos + PYTHON_LAMBDA_KEYWORD.len();
+		let rest = &self.chars[start..];
+		let colon = rest.iter().position(|ch| matches!(ch, ':' | '\n' | ';' | '{' | '[' | ')'))?;
+		let parameters: String = rest[..colon].iter().collect();
+		let names_a_variable = parameters.trim_start().starts_with('=');
+		if rest[colon] != ':' || names_a_variable || rest.get(colon + 1) == Some(&'=') {
+			return None;
+		}
+		let parameters = match parameters.trim() {
+			"" => Empty,
+			written => match parse(&format!("({written})")) {
+				Node::Error(_) => return None,
+				group => group,
+			},
+		};
+		self.advance_by(start + colon + 1 - self.pos);
+		self.skip_spaces();
+		let body = self.parse_expr(Op::Assign.binding_power().1);
+		let body = self.continue_expr(body, 0);
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
 	}
 
