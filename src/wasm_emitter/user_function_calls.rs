@@ -208,6 +208,8 @@ impl WasmGcEmitter {
 		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 		let typed_maps = self.find_typed_maps(&user_fn.body);
 		let saved_typed_maps = std::mem::replace(&mut self.typed_maps, typed_maps);
+		let typed_structs = self.find_typed_structs(&user_fn.body);
+		let saved_typed_structs = std::mem::replace(&mut self.typed_structs, typed_structs);
 		let saved_bounded_counters = std::mem::replace(&mut self.bounded_counters, super::big_int::bounded_counters(&user_fn.body));
 
 		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
@@ -276,6 +278,7 @@ impl WasmGcEmitter {
 		self.restore_loop_labels(saved_loop_labels);
 		self.typed_lists = saved_typed_lists;
 		self.typed_maps = saved_typed_maps;
+		self.typed_structs = saved_typed_structs;
 		self.bounded_counters = saved_bounded_counters;
 		self.compiling = saved_compiling;
 

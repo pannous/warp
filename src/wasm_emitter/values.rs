@@ -120,6 +120,9 @@ impl WasmGcEmitter {
 			}
 			// Index operator: list#index (1-based)
 			Node::Key(list, Op::Hash, index) => {
+				if self.emit_struct_field_int(func, list, index) {
+					return;
+				}
 				if self.map_is_indexed_by_key(index) {
 					self.emit_indexed_node(func, list, index);
 					self.emit_call(func, "get_int_value");
