@@ -91,10 +91,7 @@ impl WasmGcEmitter {
 		let else_value = else_expr.map(branch_value);
 		// a block yields its last statement; get_type sees capture globals in user_globals, where branch_kind(scope)
 		// alone types a free var as Symbol (g-rT0c)
-		let branch_type = |emitter: &Self, value: &Node| match value.drop_meta() {
-			Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => emitter.get_type(&statements[statements.len() - 1]),
-			other => emitter.get_type(other),
-		};
+		let branch_type = |emitter: &Self, value: &Node| emitter.get_type(&crate::analyzer::block_result(value).unwrap_or_else(|| value.clone()));
 		let is_node_valued = |emitter: &Self, value: &Node| {
 			let kind = branch_type(emitter, value);
 			emitter.is_structured_value(value) || kind.is_ref() || kind == Kind::Codepoint
