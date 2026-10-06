@@ -161,3 +161,8 @@ body is the method `double·method` (class_methods renamed_type_word_methods), i
 Properties (classes-14, wiki/property.md): `get age() {…}` is the getter `age := …` (read `p.age` like a field),
 `set age(v) {…}` the method `age·set(self, v)`; the wasp form `age:{2026 - birthday} set{birthday = 2026 - it}` both,
 `it` the new value. `p.age = v` of a variable p runs it: `p = age·set(p, v)` (class_methods setter_calls).
+
+Mixins (classes-15): `mixin Walker{steps:int=0; walk() := name + " walks"}` declares no class but items classes take
+in: `class Duck with Walker, Swimmer {…}` (Dart/Scala) or `include Walker` in the body (Ruby). class_methods
+with_mixins appends the mixin's fields and methods after the class's own (so `Duck("Don")` fills the own fields
+first), leaving out those the class defines itself; the methods read the class's fields.
