@@ -112,8 +112,13 @@ replaces that where the static type is known, modelled on map_backend.rs (typed 
   (straight into struct.new). Any other argument keeps the Node parameter: a duck-typed value may lack fields the body
   never reads (operators::test_like, `keep(p:photo) := p.width` given `{width:3}`). Closures, tuple functions and
   `compare·T` witnesses (runtime dispatch, witness.rs) keep Node parameters (directly_called_functions).
+- Struct results (classes-9, struct_results): a method that changes its object (`inc() := n += 1`, lowered
+  `inc(self:C) := (self.n += 1; self)`, called `c = inc(c)`) writes the struct's fields in place and gives it back
+  when every call is `x = f(…, x, …)` replacing the struct variable x it passes once: nobody else holds that struct,
+  so value semantics hold (`d = inc(c)` keeps the Node form). Decided by a greatest fixpoint (a variable is a struct
+  only while the functions it is assigned from give structs).
 - probes/bench_class_instances.sh, 10^6 iterations, debug build: construct_and_read 248 → 5 ms, read_only
-  (`p.x * p.y`) 141 → ~0 ms, method_call (`p.sum()`) 170 → ~0 ms, field_write (`p.x += i`) 16 ms; plain ints 2 ms.
+  (`p.x * p.y`) 141 → ~0 ms, method_call (`p.sum()`) 170 → ~0 ms, field_write (`p.x += i`) 16 ms, changing_method (`c.inc()`) 32 ms; plain ints 2 ms.
 - Decisions (Interviewer warp-33, user, 2026-10-06): P127 int fields stay fast i64, a value that does not fit a loud
   run-time error. Found in step 3: nothing overflows, an i64 field carries warp's exact-int encoding like an int local
   (fixnum or a handle to the big number), so `b.n = 2^70` keeps 2^70 (an_int_field_holds_any_int). Card
@@ -122,8 +127,8 @@ replaces that where the static type is known, modelled on map_backend.rs (typed 
   refuses `x:int=5; x=2.5` (big_int.rs emit_fits_declared, struct_backend.rs emit_field_value); `/=` still keeps an int
   an int. Open: a Node instance `P(0.5)` (card int-field). P126 texts inside containers print quoted everywhere (print, interpolation, string()): `P{x:1 name:"a"}`,
   `["a" "b"]`; a top-level `print "a"` still writes a.
-Next steps: methods that change or return self, a struct result (like list_abi's returns_list), struct elements in
-typed lists.
+Next steps: struct elements in typed lists (`for p in points`), a struct result of a construction inside a function
+(`moved(dx) := point(x + dx, y)`).
 
 Keyword methods (classes-6, card classes-keyword): `def area() -> int {…}`, `fun area(): Int {…}`,
 `func area() -> Int {…}`, `def scaled(k) {…}` in a class body are methods: class_items feeds each item through
@@ -136,7 +141,7 @@ function `P·value(self:P)` (class_methods::constructor_name), its field names r
 field only it sets is an optional field (ø until it runs). type_constructor passes every construction `P(…)`, `P{…}`
 of a class that has one through it, after the given fields are matched and defaults filled.
 
-Open (next batches): struct results and struct methods that change self (above), `value(name){…}` with constructor
+Open (next batches): struct elements of lists (above), `value(name){…}` with constructor
 parameters (wiki/constructor.md), a `pop` method (changes the object and gives another value), a method
 named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), generics
 `class Box<T>`, mixins, a field named `pi` (card footgun-pi).

@@ -81,3 +81,14 @@ fn a_field_write_of_another_kind_is_a_type_error() {
 	crate::common::fails_with(&format!("{POINT}p.x = \"a\"; p"), "x of Point is an int field, got");
 	crate::common::fails_with(&format!("{POINT}p.y = [1]; p"), "y of Point is an int field, got");
 }
+
+const COUNTER: &str = "class Counter{n:int; inc() := n += 1}; ";
+
+#[test]
+fn a_method_changing_its_struct_variable_keeps_the_struct() {
+	let calls = called_function_names(&format!("{COUNTER}c = Counter(0); c.inc(); c.n"));
+	assert!(!calls.iter().any(|name| ["map_find", "struct_body", "field_with"].contains(&name.as_str())), "{calls:?}");
+	is!(&format!("{COUNTER}c = Counter(0); i=0; while i<5 {{ c.inc(); i++ }}; c.n"), 5);
+	is!(&format!("{COUNTER}c = Counter(0); d = c; c.inc(); d.n"), 0); // d is a copy
+	is!(&format!("{COUNTER}c = Counter(1); d = inc(c); c.n * 10 + d.n"), 12); // inc gives a changed copy
+}

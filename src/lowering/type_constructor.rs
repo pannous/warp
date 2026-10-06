@@ -138,7 +138,7 @@ fn is_named(argument: &Node, type_def: &TypeDef) -> bool {
 	!instance_parts_marked(argument) && matches!(argument.drop_meta(), Node::Key(field, Op::Colon, _) if names_field(field))
 }
 
-fn entry_value(entry: &Node) -> &Node {
+pub(crate) fn entry_value(entry: &Node) -> &Node {
 	match entry.drop_meta() {
 		Node::Key(_, _, value) => value,
 		other => other,

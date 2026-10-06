@@ -179,7 +179,9 @@ impl WasmGcEmitter {
 				None => self.storage_type(param_kind(param)),
 			})
 			.collect();
-		let result_types = if self.returns_list_abi(name) {
+		let result_types = if let Some(class) = self.struct_results.get(name) {
+			vec![Ref(self.instance_ref(class))]
+		} else if self.returns_list_abi(name) {
 			vec![self.node_list_type()]
 		} else if !user_fn.tuple_kinds.is_empty() {
 			self.tuple_result_types(&user_fn.tuple_kinds)
@@ -272,7 +274,9 @@ impl WasmGcEmitter {
 
 		let saved_returned_tuple = std::mem::replace(&mut self.returned_tuple, user_fn.tuple_kinds.clone());
 		// Compile the function body - use node instructions for Node-returning functions
-		if self.returns_list {
+		if self.struct_results.contains_key(name) {
+			self.emit_struct_result_body(&mut func, &user_fn.body);
+		} else if self.returns_list {
 			self.emit_list_abi_body(&mut func, &user_fn.body);
 		} else if !user_fn.tuple_kinds.is_empty() {
 			// every path ends in `return a, b` (tuples::check_definition): the body's own value is never reached
