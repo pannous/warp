@@ -59,7 +59,9 @@ peq! → parses_to!, Strings! → texts!, wis! → wisp!, strings!/todow gone); 
 P101 neutral comments. The crate-wide allows were already gone (no dead-code warnings).
 2026-10-06 later: #19 operator levels and UTF-8 constants named (named-tables), #12 Node::map_children for 14
 passes (map-children; the shared analysis itself is P91, notes/build_speed.md), #10 ffi.rs → src/ffi/{mod,header,link}.rs.
-Still open: the other file splits (#10), a shared Program context for passes (#12), the remaining panics in wisp_parser
+#10 done 2026-10-06: analyzer.rs, wasm_emitter/mod.rs (4 119 → 1 709), gc_traits.rs, node.rs and wasp_parser.rs are
+directories of topic files (pure moves: re-exports or impl blocks of child modules, private items pub(super)).
+Still open: a shared Program context for passes (#12), the remaining panics in wisp_parser
 and extensions/numbers.rs (#13), the Unicode/precedence tables (#19).
 
 Left, because they need a decision, edit tests, or would collide with the sessions editing the same files now:
