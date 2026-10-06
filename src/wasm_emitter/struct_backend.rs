@@ -118,25 +118,121 @@ impl WasmGcEmitter {
 
 	/// `p = P{…}`: the struct of the field values in p's local, left on the stack
 	pub(super) fn emit_typed_struct_store(&mut self, func: &mut Function, slot: u32, class: &str, value: &Node) {
-		let instance = self.instance_types[class].clone();
 		let (_, fields) = instance_parts(value).expect("find_typed_structs admits only constructions");
 		let Node::List(entries, _, _) = fields.drop_meta() else { unreachable!("find_typed_structs admits only entry lists") };
-		for (entry, (_, kind)) in entries.iter().zip(&instance.fields) {
-			self.emit_value_of_kind(func, entry_value(entry), *kind);
+		let values: Vec<Node> = entries.iter().map(|entry| entry_value(entry).clone()).collect();
+		self.emit_struct_new(func, class, &values);
+		func.instruction(&I::LocalTee(slot));
+	}
+
+	/// A new struct of the class from the values of its fields in declared order
+	fn emit_struct_new(&mut self, func: &mut Function, class: &str, values: &[Node]) {
+		let instance = self.instance_types[class].clone();
+		for (value, (_, kind)) in values.iter().zip(&instance.fields) {
+			self.emit_value_of_kind(func, value, *kind);
 		}
-		Self::emit_list(func, &[I::StructNew(instance.type_index), I::LocalTee(slot)]);
+		func.instruction(&I::StructNew(instance.type_index));
 	}
 
 	/// Push a struct variable as the instance Node its construction builds
 	pub(super) fn emit_typed_struct_as_node(&mut self, func: &mut Function, name: &str) {
 		let class = self.typed_structs[name].clone();
-		let read = |field: &str| Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Hash, Box::new(Node::Key(Box::new(Node::Text(field.to_string())), Op::Add, Box::new(crate::node::int(1)))));
 		let entries = self.instance_types[&class].fields.iter()
-			.map(|(field, _)| Node::Key(Box::new(Node::Symbol(field.clone())), Op::Colon, Box::new(read(field))))
+			.map(|(field, _)| Node::Key(Box::new(Node::Symbol(field.clone())), Op::Colon, Box::new(field_read(name, field))))
 			.collect();
 		let instance = crate::type_constructor::instance_node(&class, entries);
 		self.emit_node_instructions(func, &instance);
 	}
+
+	/// Per user function: the class of each parameter it takes as a struct. A parameter `p:P` qualifies when the body
+	/// only reads fields of it and every call passes a variable or a construction of P: such an argument becomes the
+	/// struct without making an instance Node (a struct variable is passed as it is)
+	pub(super) fn find_struct_abi(&self, program: &Node) -> HashMap<String, Vec<Option<String>>> {
+		let functions = self.directly_called_functions();
+		let trees: Vec<&Node> = std::iter::once(program).chain(functions.iter().map(|function| function.body.as_ref())).collect();
+		let mut abi = HashMap::new();
+		for function in &functions {
+			let classes: Vec<Option<String>> = function.params.iter().map(|param| {
+				let class = param.annotation.as_ref().map(Node::name).filter(|class| self.instance_types.contains_key(class))?;
+				(param.default.is_none() && reads_only_fields(&function.body, &param.name, &self.instance_types[&class])).then_some(class)
+			}).collect();
+			if classes.iter().all(Option::is_none) {
+				continue;
+			}
+			let passes_structs = |call: &[Node]| call.len() == classes.len() + 1 && call[1..].iter().zip(&classes).zip(&function.params).all(|((argument, class), param)| match class {
+				None => true,
+				Some(class) => match argument.drop_meta() {
+					Node::Symbol(_) => true,
+					Node::Key(name, Op::Colon, _) if name.drop_meta().name() == param.name => true, // the definition's head
+					_ => self.constructed_class(argument).as_ref() == Some(class),
+				},
+			});
+			let (mut mentions, mut struct_calls) = (0, 0);
+			for tree in &trees {
+				tree.visit(&mut |part: &Node| match part {
+					Node::Symbol(name) if *name == function.name => mentions += 1,
+					Node::List(items, _, _) if super::list_abi::called_function(part) == Some(function.name.as_str()) && passes_structs(items) => struct_calls += 1,
+					_ => {}
+				});
+			}
+			if mentions == struct_calls {
+				abi.insert(function.name.clone(), classes);
+			}
+		}
+		abi
+	}
+
+	/// The class of the parameter `index` of `function` when it takes it as a struct
+	pub(super) fn struct_parameter(&self, function: &str, index: usize) -> Option<&String> {
+		self.struct_abi.get(function)?.get(index)?.as_ref()
+	}
+
+	/// An argument where a struct of `class` is wanted: a struct variable as it is, a construction or another
+	/// variable's fields made into one
+	pub(super) fn emit_struct_argument(&mut self, func: &mut Function, argument: &Node, class: &str) {
+		if let Some((slot, instance)) = self.typed_struct(argument) {
+			if self.instance_types[class].type_index == instance.type_index {
+				func.instruction(&I::LocalGet(slot));
+				return;
+			}
+		}
+		let values: Vec<Node> = match (instance_parts(argument), argument.drop_meta()) {
+			(Some((_, fields)), _) => match fields.drop_meta() {
+				Node::List(entries, _, _) => entries.iter().map(|entry| entry_value(entry).clone()).collect(),
+				other => unreachable!("find_struct_abi admits constructions of entry lists, not {other:?}"),
+			},
+			(None, Node::Symbol(name)) => self.instance_types[class].fields.iter().map(|(field, _)| field_read(name, field)).collect(),
+			(None, other) => unreachable!("find_struct_abi admits variables and constructions, not {other:?}"),
+		};
+		self.emit_struct_new(func, class, &values);
+	}
+}
+
+/// `name#field`, the lowered `name.field`
+fn field_read(name: &str, field: &str) -> Node {
+	let one_based = Node::Key(Box::new(Node::Text(field.to_string())), Op::Add, Box::new(crate::node::int(1)));
+	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Hash, Box::new(one_based))
+}
+
+/// Is every use of the parameter in the body a read of one of the fields
+fn reads_only_fields(body: &Node, param: &str, instance: &InstanceType) -> bool {
+	let (mut uses, mut reads, mut writes) = (0, 0, 0);
+	body.visit(&mut |part| match part {
+		Node::Symbol(name) if name == param => uses += 1,
+		Node::Key(target, op, _) if matches!(op, Op::Assign | Op::Define) || is_update(op) => {
+			if names(target, param) || matches!(target.drop_meta(), Node::Key(instance, Op::Hash, _) if names(instance, param)) {
+				writes += 1;
+			}
+		}
+		_ => {}
+	});
+	body.visit(&mut |part| if let Node::Key(target, Op::Hash, index) = part {
+		let field = crate::wasp_parser::subscript_key(index).and_then(crate::analyzer::constant_field_name);
+		if names(target, param) && field.is_some_and(|field| instance.fields.iter().any(|(name, _)| *name == field)) {
+			reads += 1;
+		}
+	});
+	writes == 0 && uses == reads
 }
 
 /// The kind a field of the declared type is stored as: int and float unboxed, anything else a Node
@@ -153,4 +249,8 @@ fn entry_value(entry: &Node) -> &Node {
 		Node::Key(_, _, value) => value,
 		other => other,
 	}
+}
+
+fn names(node: &Node, variable: &str) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(name) if name == variable)
 }

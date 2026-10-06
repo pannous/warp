@@ -155,7 +155,11 @@ impl WasmGcEmitter {
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
 		let func_type_idx = self.type_manager.types().len();
 		let param_types: Vec<ValType> = user_fn.params.iter().enumerate()
-			.map(|(index, param)| if self.takes_list_abi(name, index) { self.node_list_type() } else { self.storage_type(param_kind(param)) })
+			.map(|(index, param)| match self.struct_parameter(name, index) {
+				Some(class) => Ref(self.instance_ref(class)),
+				None if self.takes_list_abi(name, index) => self.node_list_type(),
+				None => self.storage_type(param_kind(param)),
+			})
 			.collect();
 		let result_types = if self.returns_list_abi(name) {
 			vec![self.node_list_type()]
@@ -208,7 +212,8 @@ impl WasmGcEmitter {
 		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 		let typed_maps = self.find_typed_maps(&user_fn.body);
 		let saved_typed_maps = std::mem::replace(&mut self.typed_maps, typed_maps);
-		let typed_structs = self.find_typed_structs(&user_fn.body);
+		let mut typed_structs = self.find_typed_structs(&user_fn.body);
+		typed_structs.extend(user_fn.params.iter().enumerate().filter_map(|(index, param)| Some((param.name.clone(), self.struct_parameter(name, index)?.clone()))));
 		let saved_typed_structs = std::mem::replace(&mut self.typed_structs, typed_structs);
 		let saved_bounded_counters = std::mem::replace(&mut self.bounded_counters, super::big_int::bounded_counters(&user_fn.body));
 
@@ -385,6 +390,10 @@ impl WasmGcEmitter {
 			let argument = &argument;
 			if self.takes_list_abi(&user_fn.name, i) {
 				self.emit_list_abi_value(func, argument);
+				continue;
+			}
+			if let Some(class) = self.struct_parameter(&user_fn.name, i).cloned() {
+				self.emit_struct_argument(func, argument, &class);
 				continue;
 			}
 			let expected = param_kind(param);
