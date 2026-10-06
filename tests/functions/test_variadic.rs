@@ -38,3 +38,9 @@ fn a_list_spreads_into_fixed_parameters() {
 	is!("def f(a,b,c){a*100+b*10+c}; xs=[1,2,3]; f(...xs)", 123);
 	is!("def f(a,b,c){a*100+b*10+c}; xs=[2,3]; f(1, ...xs)", 123);
 }
+
+#[test]
+fn kotlin_vararg_and_csharp_params() {
+	is!("fun total(vararg xs: Int): Int = xs.sum(); total(1, 2, 3)", 6);
+	is!("int Total(params int[] xs) { return xs.sum(); }; Total(1, 2, 3)", 6);
+}

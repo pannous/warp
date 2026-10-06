@@ -177,6 +177,7 @@ function programImports(holder, hooks) {
 				new BroadcastChannel(plainOfTree(readNode(program_, channel))).postMessage(plainOfTree(readNode(program_, message)));
 			},
 			signal_every: () => { holder.warnings.push("on every …: timers do not run in the playground yet"); },
+			signal_daily: () => { holder.warnings.push("on every day at …: timers do not run in the playground yet"); },
 			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {
@@ -366,7 +367,7 @@ function startTask(holder, hooks, name, ints, values) {
 		const worker = taskPool.pop();
 		const control = new Int32Array(new SharedArrayBuffer(4));
 		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control });
-		run.tasks.set(id, { name, worker, shared, control });
+		run.tasks.set(id, { name, worker, shared, control, inline: () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured) });
 	} else {
 		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured));
 	}
@@ -393,7 +394,8 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 		if (unread) return { failure: `task ${taskName(name)}: ${unread}`, signals: taskHolder.run.signals };
 		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result, signals: taskHolder.run.signals };
 	} catch (trap) {
-		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}`, signals: taskHolder.run.signals };
+		// no instance: the task never ran (`Out of memory: Cannot allocate Wasm memory`, see finishedTask)
+		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}`, unstarted: !instance, signals: taskHolder.run.signals };
 	}
 }
 
@@ -404,10 +406,15 @@ function finishedTask(run, hooks, id) {
 	if (!task.worker) return queuedSignals(run, task);
 	const header = new Int32Array(task.shared, 0, 2);
 	Atomics.wait(header, 0, 0);
-	const record = JSON.parse(decode(new Uint8Array(task.shared, TASK_HEADER, header[1]).slice()));
+	let record = JSON.parse(decode(new Uint8Array(task.shared, TASK_HEADER, header[1]).slice()));
 	if (record.output) hooks.print(record.output, 1);
 	taskPool.push(task.worker); // free for the next task
 	if (record.value?.kind === KIND_INT && record.ints) record.value = BigInt(record.value.data.int);
+	// a Worker that could not even instantiate the task runs it here instead: a page holds ~124 Wasm memories in all its
+	// Workers, and only the isolate that dropped an instance collects it, so the dead instances of this one (the
+	// starting program's) block the Worker until this isolate collects them, which it does when its own allocation
+	// fails (card browser-test, probes/wasm_memory_limit.html)
+	if (record.unstarted) record = task.inline();
 	run.tasks.set(id, record);
 	return queuedSignals(run, record);
 }
@@ -686,10 +693,27 @@ function runProgram(bytes, hooks) {
 	} catch (failure) {
 		return { failure: String(failure.message ?? failure) };
 	}
-	const outcome = outcomeOf(holder, hooks, () => instance.exports.main());
+	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, instance.exports, () => instance.exports.main()));
 	const events = pageEvents(instance.exports);
 	if (events.length > 0 && outcome.result) hooks.listen?.(holder, events);
 	return outcome;
+}
+
+// `on exit {…}` (src/lowering/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
+// main returns or `exit(code)` ends it, never after a failure
+function withExitHandler(holder, exports, call) {
+	const handler = exports["on·exit"];
+	if (!handler) return call();
+	const runHandler = () => (handler.length ? handler(exports.new_empty()) : handler());
+	let result;
+	try {
+		result = call();
+	} catch (trap) {
+		if (holder.exitCode !== undefined) runHandler();
+		throw trap;
+	}
+	runHandler();
+	return result;
 }
 
 // the outcome of a call into a run's instance (main, or a page event's handler), as src/web.rs run_outcome reads it

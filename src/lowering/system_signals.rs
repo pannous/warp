@@ -11,11 +11,14 @@
 
 use crate::declarations::word;
 use crate::diagnostic::Diagnostic;
+use crate::extensions::numbers::Number;
 use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::node::{Bracket, Node, Separator};
 
 const ON_WORD: &str = "on";
 const EVERY_WORD: &str = "every";
+const DAY_WORD: &str = "day";
+const AT_WORD: &str = "at";
 const FILE_WORD: &str = "file";
 const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 const MESSAGE_WORD: &str = "message";
@@ -35,7 +38,11 @@ pub fn lower(program: Node) -> Node {
 }
 
 fn lower_timers(program: Node) -> Node {
-	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
+	// a program of one statement (`on every day at 9:00 {…}`) is a list of that one
+	let (statements, bracket, separator) = match program.drop_meta() {
+		Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(bracket, separator) => (items.clone(), bracket.clone(), separator.clone()),
+		single => (vec![single.clone()], Bracket::None, Separator::Newline),
+	};
 	if !statements.iter().any(|statement| timer(statement).is_some() || file_watch(statement).is_some() || message_listener(statement).is_some()) {
 		return program;
 	}
@@ -65,6 +72,16 @@ fn lower_timers(program: Node) -> Node {
 			lowered.push(statement);
 			continue;
 		};
+		if let Some(time) = daily_time(&duration) {
+			let Some(minute_of_day) = time else {
+				return Diagnostic::at(&statement, format!("on every day at needs a time of day from 0:00 to 23:59, got {}", duration.serialize().trim())).into_error();
+			};
+			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
+			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
+			lowered.push(call(crate::host::SIGNAL_DAILY, vec![Node::int(count as i64), Node::int(minute_of_day)]));
+			count += 1;
+			continue;
+		}
 		let Some(milliseconds) = crate::units::milliseconds(&duration) else {
 			return Diagnostic::at(&statement, format!("on every needs a constant duration like `on every 5 seconds {{…}}`, got {}", duration.serialize().trim())).into_error();
 		};
@@ -146,6 +163,23 @@ fn timer(statement: &Node) -> Option<(Node, Node)> {
 		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 	};
 	Some((duration, body))
+}
+
+/// `day at 9:00` of `on every day at 9:00 {…}`: the minute of the day, None for a time that is no time of day
+fn daily_time(duration: &Node) -> Option<Option<i64>> {
+	let Node::List(words, _, _) = duration.drop_meta() else { return None };
+	let [day, at, time] = words.as_slice() else { return None };
+	if word(day) != DAY_WORD || word(at) != AT_WORD {
+		return None;
+	}
+	let minute = match time.drop_meta() {
+		Node::Key(hour, crate::operators::Op::Colon, minute) => match (hour.drop_meta(), minute.drop_meta()) {
+			(Node::Number(Number::Int(hour)), Node::Number(Number::Int(minute))) => Some((*hour, *minute)),
+			_ => None,
+		},
+		_ => None,
+	};
+	Some(minute.filter(|(hour, minute)| (0..24).contains(hour) && (0..60).contains(minute)).map(|(hour, minute)| hour * 60 + minute))
 }
 
 /// `exit` or `exit()` as a statement: `exit(0)`

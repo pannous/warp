@@ -104,12 +104,13 @@ pub fn run(machine_code: &[u8]) -> Result<()> {
 	let mut results = vec![Val::AnyRef(None); main.ty(&store).results().len()];
 	crate::system_signals::allow_staying();
 	let outcome = main.call(&mut store, &[], &mut results).and_then(|_| crate::system_signals::stay_while_listening(&mut store, &instance));
-	if crate::system_signals::ended_by_exit(&outcome) {
+	let outcome = crate::system_signals::with_exit_handler(outcome, &mut store, |store, name| instance.get_func(&mut *store, name));
+	if let Ok(None) = outcome {
 		use std::io::Write;
 		let _ = std::io::stdout().flush();
 		std::process::exit(crate::system_signals::take_exit_code().unwrap_or(0)); // `exit(code)` (P121)
 	}
-	outcome
+	outcome.map(|_| ())
 }
 
 /// The imports a standalone executable provides: (module, name)

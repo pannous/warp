@@ -87,6 +87,8 @@ mod test_shared_signals;
 mod test_signal_reflection;
 mod test_broadcast;
 mod test_signal_lists;
+mod test_daily_timer;
+mod test_exit_signal;
 mod test_listener_removal;
 mod test_listener_removal_in_functions;
 mod test_cell_truth;

@@ -1,6 +1,7 @@
 // The result type as Python, Swift, TypeScript, Kotlin and Rust write it, before a block body: `-> int { … }`,
 // `: number { … }`, `-> int: body`; the result converts to it as `def f(x) as int = …` does (test_typed_returns)
 use crate::is;
+use warp::wasm_emitter::eval;
 
 #[test]
 fn an_arrow_result_type_before_a_block_body() {
@@ -26,4 +27,10 @@ fn named_arguments_reach_a_function_with_a_result_type() {
 	is!("def f(x: String) -> String { \"Hi \" + x }; f(x: \"Bob\")", "Hi Bob"); // was a cast failure
 	is!("def f(a, b=2) -> int { a * b }; f(3, b: 5)", 15);
 	is!("f(a, b) : int := a - b; f(b=1, a=5)", 4);
+}
+
+#[test]
+fn a_tuple_result_type() {
+	assert_eq!(eval("func swapped(_ a: Int, _ b: Int) -> (Int, Int) { return (b, a) }; swapped(1, 2)").serialize(), "(2 1)");
+	assert_eq!(eval("def f(a) -> (int, int) { return (a, a) }; f(1)").serialize(), "(1 1)");
 }

@@ -143,3 +143,14 @@ worker's hooks.paint, the page draws one canvas per call under the output (playg
 is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/paint.rs, flate2 + crc32fast), prints its path and opens it on a terminal. samples/circle.wasp is the issue's demo as
 written (one loop moving x and y together, so it paints only a short diagonal), samples/filled_circle.wasp the filled
 circle with two loops.
+
+### Wasm memory limit across Workers (card browser-test, 2026-10-06)
+Chrome holds ~124 live Wasm memories per page, all its Workers together (V8's sandbox: each 32-bit memory reserves
+~8 GB of a 1 TB cage, whatever its size or declared maximum; Node without the sandbox ~16300). An isolate whose
+allocation fails collects its own dead instances and retries, never another isolate's: a task Worker failed with
+"Out of memory: Cannot allocate Wasm memory for new instance" while the test worker (or the program's worker) held
+dead instances. Measured with probes/wasm_memory_limit.html (Chrome) and probes/wasm_memory_limit.sh (Node).
+Fix: host.js finishedTask runs a task its Worker could not instantiate (`unstarted`) inline, in the starting isolate,
+whose failed allocation frees its own garbage. Still possible: the other test worker's garbage filling the page
+(TESTS_PER_WORKER recycling bounds it). Not usable: `--js-flags=--expose-gc` through agent-browser `--args` (the tab
+ends on about:blank), a declared memory maximum (still ~8 GB reserved).

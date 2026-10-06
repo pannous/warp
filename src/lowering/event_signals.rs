@@ -31,7 +31,7 @@ pub const PAGE_EVENTS: [&str; 2] = ["click", "key"];
 /// The output binding of a program with page events: its last line when that is a name, read anew after each handler
 pub const PAGE_VALUE: &str = "page·value";
 /// The events the system raises: the runtime calls their handlers (notes/system_signals.md)
-pub const SYSTEM_EVENTS: [&str; 1] = ["interrupt"];
+pub const SYSTEM_EVENTS: [&str; 2] = ["interrupt", "exit"];
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };

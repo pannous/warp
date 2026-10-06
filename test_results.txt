@@ -44,6 +44,9 @@ PASSED:
   ✓ control::test_control_words::trailing_while_and_until_repeat_the_statement
   ✓ control::test_control_words::unless_runs_its_block_when_the_condition_is_false
   ✓ control::test_control_words::until_loops_while_the_condition_is_false
+  ✓ control::test_daily_timer::a_daily_timer_needs_a_time_of_day
+  ✓ control::test_daily_timer::a_daily_timer_starts_and_main_runs_on
+  ✓ control::test_daily_timer::the_delay_until_a_time_of_day_wraps_to_tomorrow
   ✓ control::test_do_block::a_user_function_named_do_wins
   ✓ control::test_do_block::do_runs_a_block_literal
   ✓ control::test_do_block::do_runs_a_named_block
@@ -65,6 +68,9 @@ PASSED:
   ✓ control::test_event_signals::raise_runs_the_handlers_of_its_name
   ✓ control::test_event_signals::the_handled_signals_name_their_functions
   ✓ control::test_event_signals::the_handler_reads_the_event_data
+  ✓ control::test_exit_signal::on_exit_runs_at_exit_and_keeps_its_code
+  ✓ control::test_exit_signal::on_exit_runs_once
+  ✓ control::test_exit_signal::on_exit_runs_when_main_returns
   ✓ control::test_filter_loop_over_variable::a_filter_loop_over_a_variable
   ✓ control::test_filter_loops::test_a_class_name_loop_visits_only_its_instances
   ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
@@ -495,6 +501,7 @@ PASSED:
   ✓ functions::test_arity_overloads::an_overload_may_call_another_one
   ✓ functions::test_arity_overloads::calls_without_parentheses_pick_by_count_too
   ✓ functions::test_arity_overloads::defaults_count_for_the_arguments_a_definition_accepts
+  ✓ functions::test_arrow_defaults_and_types::an_arrow_function_takes_defaults_and_types
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_only_defaults_calls_it
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_parameter_is_an_error
@@ -504,6 +511,7 @@ PASSED:
   ✓ functions::test_block_function::data_blocks_stay_data
   ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
   ✓ functions::test_body_statement::an_undefined_word_in_it_is_an_error
+  ✓ functions::test_broadcasting::julia_dot_call_broadcasts
   ✓ functions::test_broadcasting::test_broadcasting_reaches_nested_lists
   ✓ functions::test_broadcasting::test_function_broadcasts_over_a_list
   ✓ functions::test_broadcasting::test_function_broadcasts_over_pairs_keeping_keys
@@ -516,6 +524,7 @@ PASSED:
   ✓ functions::test_call_arity::a_default_reads_the_parameters_before_it
   ✓ functions::test_call_arity::extra_or_missing_values_are_errors
   ✓ functions::test_call_arity::text_builtins_and_library_words_check_their_values_too
+  ✓ functions::test_call_efficiency::a_closure_of_one_known_target_is_called_directly
   ✓ functions::test_call_efficiency::a_declared_int_result_adds_no_box
   ✓ functions::test_call_result_fields::a_field_of_a_call_result_is_read_from_the_result
   ✓ functions::test_call_result_fields::a_field_of_a_parenthesized_object_is_read
@@ -568,6 +577,8 @@ PASSED:
   ✓ functions::test_constant_free_variables::a_stable_constant_is_inlined
   ✓ functions::test_constant_free_variables::constant_arithmetic_is_computed_after_inlining
   ✓ functions::test_counting_word_result::a_counting_word_gives_a_number
+  ✓ functions::test_csharp_functions::a_typed_parameter_with_a_default
+  ✓ functions::test_csharp_functions::an_expression_bodied_method
   ✓ functions::test_def_forms::a_def_function_calls_its_function_parameter
   ✓ functions::test_def_forms::a_parameter_tested_for_membership_is_no_function
   ✓ functions::test_def_forms::definition_forms_agree
@@ -583,6 +594,7 @@ PASSED:
   ✓ functions::test_definition_value::a_definition_alone_is_empty
   ✓ functions::test_definition_value::a_spaced_definition_names_its_parameters
   ✓ functions::test_definition_value::it_names_the_one_parameter_of_a_definition
+  ✓ functions::test_each_spellings::for_each_spellings_are_each
   ✓ functions::test_effects::test_constraint_on_non_function_is_loud
   ✓ functions::test_effects::test_declared_constraint_holds
   ✓ functions::test_effects::test_declared_constraint_violation_names_span_and_chain
@@ -678,6 +690,7 @@ PASSED:
   ✓ functions::test_late_binding::nonlocal_reads_the_value_at_each_call
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
+  ✓ functions::test_list_conversion::list_of_a_value
   ✓ functions::test_map_phrase::test_map_a_function_first_without_on
   ✓ functions::test_map_phrase::test_map_a_function_on_a_list
   ✓ functions::test_map_phrase::test_map_a_function_reference_on_a_list
@@ -774,6 +787,11 @@ PASSED:
   ✓ functions::test_property_words::test_property_word_after_a_name_counts
   ✓ functions::test_property_words::test_property_word_agrees_with_of_and_getter
   ✓ functions::test_property_words::test_property_word_counts_text_characters
+  ✓ functions::test_python_ruby_definitions::test_julia_definitions
+  ✓ functions::test_python_ruby_definitions::test_python_keyword_parameter
+  ✓ functions::test_python_ruby_definitions::test_python_rest_parameter_with_colon_body
+  ✓ functions::test_python_ruby_definitions::test_python_spread_object
+  ✓ functions::test_python_ruby_definitions::test_ruby_def_end
   ✓ functions::test_recursive_list_functions::a_recursive_maximum
   ✓ functions::test_recursive_list_functions::a_recursive_sum_over_slices
   ✓ functions::test_return_type_dispatch::test_a_picked_overload_warns_nothing
@@ -784,6 +802,7 @@ PASSED:
   ✓ functions::test_return_type_dispatch::test_no_expected_type_takes_the_first_overload_with_a_warning
   ✓ functions::test_return_type_dispatch::test_the_result_type_can_be_inferred_from_the_body
   ✓ functions::test_return_type_forms::a_colon_result_type_before_a_block_body
+  ✓ functions::test_return_type_forms::a_tuple_result_type
   ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_block_body
   ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_colon_body
   ✓ functions::test_return_type_forms::named_arguments_reach_a_function_with_a_result_type
@@ -854,6 +873,7 @@ PASSED:
   ✓ functions::test_undefined_calls::test_unresolved_call_inside_collections
   ✓ functions::test_undefined_calls::test_unresolved_call_is_an_error
   ✓ functions::test_undefined_calls::test_variable_is_not_callable
+  ✓ functions::test_user_add_and_map::map_and_filter_beside_a_user_add
   ✓ functions::test_user_method_form::a_method_form_call_passes_the_further_arguments
   ✓ functions::test_user_method_form::a_user_function_is_called_in_method_form
   ✓ functions::test_user_method_form::a_user_function_taking_a_function_in_method_form
@@ -862,6 +882,7 @@ PASSED:
   ✓ functions::test_variadic::a_rest_parameter_collects_the_remaining_arguments
   ✓ functions::test_variadic::a_rest_parameter_may_be_empty
   ✓ functions::test_variadic::calls_without_parentheses_fill_the_rest_too
+  ✓ functions::test_variadic::kotlin_vararg_and_csharp_params
   ✓ functions::test_whole_float_to_int_parameter::a_whole_float_for_an_int_parameter_is_refused
   ✓ host::tests::test_host_state
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
@@ -1964,6 +1985,7 @@ PASSED:
   ✓ types::test_class_methods::classes_with_a_method_of_the_same_name_each_call_their_own
   ✓ types::test_class_methods::keyword_methods_in_a_class_body
   ✓ types::test_class_methods::methods_are_no_fields
+  ✓ types::test_construction_checks::a_call_construction_checks_its_fields_as_the_braces_do
   ✓ types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ types::test_constructor_vs_data::test_construction_checks_field_types
   ✓ types::test_constructor_vs_data::test_construction_fills_defaults_and_leaves_optional_fields_out
@@ -2611,4 +2633,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2606 passed, 0 failed, 2606 total tested
+23 ignored, 2628 passed, 0 failed, 2628 total tested

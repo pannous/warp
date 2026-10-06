@@ -52,6 +52,15 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
 - Swift closures `{ x in x*2 }`, `{ a, b in a+b }` (the body must use a name, else `{ x in xs }` stays membership) and
   shorthand arguments `{ $0 + $1 }` (lambdas.rs `swift_closure`, `shorthand_parameters`; blocks.rs leaves them lambdas).
 - Output words take a prefix call: `puts add 1, 2` → `puts(add(1, 2))` (broadcasting.rs, OUTPUT_WORDS arity 1).
+- C#: `int b = 2` is `b:int = 2` (parser typed_parameter), `static int Add(int a, int b) => a + b` defines Add
+  (declarations.rs c_function).
+- Rest parameters: Kotlin `vararg xs: Int`, C# `params int[] xs` → `*xs` (parser REST_MARKERS); variadic.rs finds
+  heads under a result type too.
+- Julia's dot call `f.(xs)`, `add.(xs, 10)`: `map(xs, broadcast_item => f(broadcast_item, 10))` (parser
+  SpecialInfix::DotCall, only a name followed by `.(`).
+- Iteration templates append with `out = out + [x]`: `out.add(x)` was taken by a user function `add`.
+- Python `list(x)` is `x as list` (library_words EXPANDED_WORDS); a tuple result type `-> (Int, Int) {…}` is dropped,
+  the body's tuple stays (declarations.rs `tuple_result`).
 
 ## Call efficiency (probes/call_benchmark.sh [N], 10^8 calls each)
 - Plain, default, named, overload and lambda calls compile to the same direct `call $f` with i64 arguments: equal
@@ -59,8 +68,29 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
 - A declared result type `-> int` lowered to `body as int`, which boxed (new_int) and unboxed (get_int_value) on every
   call: 5x a plain call. Fixed: `x as int` of an Int emits the i64 (values.rs, casts.rs `emit_int_value_truncated`,
   test_call_efficiency). The ratio truncation (`exact_trunc` when the range may leave fixnums) stays.
-- A returned closure `h = mk(1); h(i)` is 4-6x a plain call: closure_call_1 tests and casts the $Closure twice, calls
-  through call_ref, and the entry unboxes each Int capture with get_int_value. Card closure-devirtualize.
+- A returned closure `h = mk(1); h(i)` was 4-6x a plain call (closure_call_1 tests and casts the $Closure twice, calls
+  through call_ref, the entry unboxes each capture per call). Now even with a plain call:
+  - a closure variable whose targets (closure_variable_targets) are one function, and no parameter of that name
+    anywhere, calls that target's entry directly (wasm_emitter/closures.rs `emit_direct_closure_call`);
+  - assigned once with captured values, lowering/closures.rs `hoist_captures` reads them once after the assignment,
+    `h·capture·0 = closure_lambda_1·captured·0(h)` (a capture reader, its kind the target's parameter kind via
+    closure_call_kind), and the call passes the locals to the target itself (`emit_hoisted_closure_call`). Nested
+    functions with capture globals keep the entry, which restores them.
 
 ## Open
-- Board cards: closure-devirtualize; functions-sort-op and functions-key went to warp-14.
+- Board cards: functions-csharp (mine); functions-julia (warp-66); functions-sort-op, functions-key, functions-foreach,
+  functions-lambda-defaults (warp-14); functions-python, functions-ruby-def (warp-66). Cases: probes/function_calls_more.md.
+
+## Python and Ruby definitions (cards functions-python, functions-ruby-def)
+- `def f(*args): body` (colon body, Python): declarations::keyword_definition reads `def head: body` as `head := body`
+  early, so variadic.rs sees the rest parameter (it ran before the later pass that knew the colon form).
+- `def f(x, **kw): …` (Python): the parser reads `**kw` as the symbol `**kw` (atoms.rs); variadic.rs passes the named
+  arguments no fixed parameter takes as one object, `f(5, a=1)` → `f(5, {a: 1})` (`{}` when none). `f(**m)` spreads an object: into `**kw` it is
+  the object itself (a fixed parameter named like one of its fields does not take it out; `f(**m, k=v)` is an error
+  for now), into fixed parameters the fields for the parameters the other arguments leave (`g(1, **m)` →
+  `g(1, b=m.b, c=m.c)`); into a function not defined in the program it is an error.
+- Julia `function f(x; y=2) … end`, `f(3; y=4)` already read as `f(x, y=2)` / `f(3, y=4)`; the `end` body is
+  end_definitions'.
+- Ruby `def f(a, b: 2) a * b end` and `def f(a)` ⏎ statements ⏎ `end`, also `def h` without parentheses:
+  declarations::end_definitions (start of lower_c_functions) gives them a `{…}` body. Nested `if … then … end` keeps
+  its own `end` (the parser takes it).

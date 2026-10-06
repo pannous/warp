@@ -13,3 +13,17 @@ fn a_declared_int_result_adds_no_box() {
 		assert_eq!(calls_to(TYPED, runtime), calls_to(UNTYPED, runtime), "{runtime}");
 	}
 }
+
+const RETURNED: &str = "def mk(k){ x => x + k }; h = mk(1); total = 0; for i in 1..3 { total = total + h(i) }; total";
+
+#[test]
+fn a_closure_of_one_known_target_is_called_directly() {
+	is!(RETURNED, 5); // 1..3 leaves 3 out
+	assert_eq!(calls_to(RETURNED, "closure_call_1"), 0);
+	// its captured k is read once before the loop, the loop calls the lambda itself: no entry unboxing k per call
+	assert_eq!(calls_to(RETURNED, "closure_entry_closure_lambda_1"), 0);
+	// a variable that may hold either of two closures still dispatches
+	is!("def mk(k){ x => x + k }; def mul(k){ x => x * k }; h = mk(1); if 1 > 2 { h = mul(3) }; h(4)", 5);
+	// a parameter is never taken for a variable of the same name
+	is!("def mk(k){ x => x + k }; h = mk(1); def twice(h, x){ h(h(x)) }; twice(y => y * 3, 2)", 18);
+}

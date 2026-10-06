@@ -158,6 +158,8 @@ impl WasmGcEmitter {
 		for name in func_names {
 			if self.is_closure_call(&name) {
 				self.compile_closure_call(&name);
+			} else if crate::closures::capture_reader(&name).is_some() {
+				self.compile_capture_reader(&name);
 			} else {
 				self.compile_user_function_body(&name);
 			}
@@ -412,6 +414,9 @@ impl WasmGcEmitter {
 			return;
 		};
 		self.refresh_enclosing_captures(func);
+		if self.emit_direct_closure_call(func, user_fn, args) {
+			return;
+		}
 
 		if args.len() > user_fn.params.len() {
 			let count = |n: usize| if n == 1 { "1 argument".to_string() } else { format!("{n} arguments") };

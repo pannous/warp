@@ -23,7 +23,8 @@ const CALL_PLACEHOLDER: &str = "loop_call";
 
 /// An iteration word over a list: the arguments between the list and the function, the arguments of the function
 /// (`reduce` and `fold` take the accumulator and the item), and the loop it lowers to. `out`, `item`, `acc`, `list`, `index`
-/// are replaced by fresh names.
+/// are replaced by fresh names. A loop appends with `out = out + [x]`, never `out.add(x)`, which a user function `add`
+/// would take.
 struct Iteration {
 	word: &'static str,
 	extra_arguments: usize,
@@ -36,16 +37,21 @@ const SWIFT_IN: &str = "in";
 const SHORTHAND_MARK: char = '$';
 const MAX_SHORTHAND_ARGUMENTS: usize = 10;
 const SORT_WORD: &str = "sort";
-/// Sorting with a function as other languages spell it: JS sort, Python sorted, Ruby sort_by, Kotlin sortedBy
-const SORT_SPELLINGS: [&str; 6] = [SORT_WORD, "sorted", "sort_by", "sortBy", "sortedBy", "sorted_by"];
+const EACH_WORD: &str = "each";
+/// Iteration words as other languages spell them: sorting with a function (Python sorted, Ruby sort_by, Kotlin
+/// sortedBy), each (JS and Kotlin forEach, Rust for_each, PHP foreach)
+const ITERATION_SPELLINGS: [(&str, &[&str]); 2] = [
+	(SORT_WORD, &["sorted", "sort_by", "sortBy", "sortedBy", "sorted_by"]),
+	(EACH_WORD, &["forEach", "for_each", "foreach"]),
+];
 /// The label of the sorting function: Swift `sorted(by: >)`, Python `sorted(xs, key=…)`
 const SORT_LABELS: [&str; 2] = ["by", "key"];
 const COMPARISONS: [Op; 4] = [Op::Lt, Op::Gt, Op::Le, Op::Ge];
 
 const ITERATIONS: [Iteration; 9] = [
-	Iteration { word: "map", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { out.add(loop_call) }; out)" },
-	Iteration { word: "filter", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { if loop_call { out.add(item) } }; out)" },
-	Iteration { word: "each", extra_arguments: 0, function_arguments: 1, template: "(value=ø; for item in loop_list { value = loop_call }; value)" },
+	Iteration { word: "map", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { out = out + [loop_call] }; out)" },
+	Iteration { word: "filter", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { if loop_call { out = out + [item] } }; out)" },
+	Iteration { word: EACH_WORD, extra_arguments: 0, function_arguments: 1, template: "(value=ø; for item in loop_list { value = loop_call }; value)" },
 	Iteration { word: "fold", extra_arguments: 1, function_arguments: 2, template: "(acc=loop_start; for item in loop_list { acc = loop_call }; acc)" },
 	Iteration { word: "find", extra_arguments: 0, function_arguments: 1, template: "(found=ø; searching=1; for item in loop_list { if searching and loop_call { found = item; searching = 0 } }; found)" },
 	Iteration { word: "any", extra_arguments: 0, function_arguments: 1, template: "(hit=0; for item in loop_list { if loop_call { hit = 1 } }; hit)" },
@@ -61,20 +67,23 @@ const ITERATIONS: [Iteration; 9] = [
 		word: SORT_WORD,
 		extra_arguments: 0,
 		function_arguments: 2,
-		template: "(out=[]; for value in loop_list { out.add(value); index=count(out); moving=1; while moving and index > 1 { acc=out#index; item=out#(index-1); if loop_call { out#index=item; out#(index-1)=acc; index=index-1 } else { moving=0 } } }; out)",
+		template: "(out=[]; for value in loop_list { out = out + [value]; index=count(out); moving=1; while moving and index > 1 { acc=out#index; item=out#(index-1); if loop_call { out#index=item; out#(index-1)=acc; index=index-1 } else { moving=0 } } }; out)",
 	},
 ];
 
 pub(crate) struct Lambda {
 	pub(crate) params: Vec<String>,
 	pub(crate) body: Node,
-	/// The parameters as written when one of them declares a type (`(x:float)=>…`): the definition keeps them
-	pub(crate) typed: Vec<Node>,
+	/// The parameters as written when one of them declares a type or a default (`(x:float, n = 2)=>…`): the definition
+	/// keeps them
+	pub(crate) written: Vec<Node>,
+	/// TypeScript's result type `(a: number): number => …`
+	pub(crate) result_type: Option<Node>,
 }
 
 impl Lambda {
 	fn new(params: Vec<String>, body: Node) -> Self {
-		Lambda { params, body, typed: vec![] }
+		Lambda { params, body, written: vec![], result_type: None }
 	}
 }
 
@@ -193,7 +202,8 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 			.iter()
 			.map(|item| match item.drop_meta() {
 				Node::Symbol(name) => Some(name.clone()),
-				Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_)) => Some(name.name()), // `x:float`
+				// `x:float`, a default `n = 2`
+				Node::Key(name, Op::Colon | Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)) => Some(name.name()),
 				_ => None,
 			})
 			.collect(),
@@ -204,12 +214,16 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 /// `x=>body`, `(x y)->body` and the same in a group `(x=>body)` or a block
 pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 	match node.drop_meta() {
-		Node::Key(left, Op::Arrow | Op::FatArrow, body) => {
+		Node::Key(head, Op::Arrow | Op::FatArrow, body) => {
+			let (left, result_type) = match head.drop_meta() {
+				Node::Key(parameters, Op::Colon, result) if matches!(parameters.drop_meta(), Node::List(_, Bracket::Round, _)) => (parameters.as_ref(), Some(result.as_ref().clone())),
+				_ => (head.as_ref(), None),
+			};
 			let params = parameter_names(left)?;
 			let body = subtract_kebab_parameters(body.as_ref().clone(), &params);
 			let written: Vec<Node> = match left.drop_meta() { Node::List(items, _, _) => items.clone(), other => vec![other.clone()] };
-			let typed = if written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon, _))) { written } else { vec![] };
-			Some(Lambda { params, body, typed })
+			let declares = written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon | Op::Assign, _)));
+			Some(Lambda { params, body, written: if declares { written } else { vec![] }, result_type })
 		}
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => arrow_lambda(&items[0]),
 		// Kotlin `{ x -> x*2 }`, Ruby `{ |x| x*2 }`, Swift `{ x in x*2 }` and `{ $0 * 2 }`
@@ -276,9 +290,17 @@ pub fn lambda_definition(name: &str, function: &Node) -> Option<Node> {
 }
 
 fn definition(name: &str, lambda: Lambda) -> Node {
-	let parameters = if lambda.typed.is_empty() { lambda.params.into_iter().map(Node::Symbol).collect() } else { lambda.typed };
+	let parameters = if lambda.written.is_empty() { lambda.params.into_iter().map(Node::Symbol).collect() } else { lambda.written };
 	let head = Node::List([vec![Node::Symbol(name.to_string())], parameters].concat(), Bracket::Round, Separator::None);
-	Node::Key(Box::new(head), Op::Define, Box::new(lambda.body))
+	// a result type converts the body, as `f(a:number):number := …` is lowered before this pass runs
+	let body = match lambda.result_type {
+		Some(result_type) => {
+			let grouped = Node::List(vec![lambda.body], Bracket::Round, Separator::None);
+			Node::Key(Box::new(grouped), Op::As, Box::new(result_type))
+		}
+		None => lambda.body,
+	};
+	Node::Key(Box::new(head), Op::Define, Box::new(body))
 }
 
 /// Python's `sorted(xs, key=x => -x)`: in a call a function given as `name = …` is the named argument `key: x => -x`
@@ -368,7 +390,7 @@ impl Lowering {
 	/// The iteration a word names, unless the program defines a function of that name
 	fn iteration_of(&self, word: &Node) -> Option<&'static Iteration> {
 		let Node::Symbol(name) = word.drop_meta() else { return None };
-		let canonical = if SORT_SPELLINGS.contains(&name.as_str()) { SORT_WORD } else { name };
+		let canonical = ITERATION_SPELLINGS.iter().find(|(_, spellings)| spellings.contains(&name.as_str())).map_or(name.as_str(), |(word, _)| word);
 		ITERATIONS.iter().find(|iteration| iteration.word == canonical && !self.context.user_functions.contains_key(name))
 	}
 
