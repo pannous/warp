@@ -50,6 +50,12 @@ impl TextTools for Demo {
 	fn checked_sqrt(x: f64) -> Result<f64, String> {
 		if x < 0.0 { Err(format!("no real square root of {x}")) } else { Ok(x.sqrt()) }
 	}
+	fn next_char(c: char) -> char {
+		char::from_u32(c as u32 + 1).unwrap_or(c)
+	}
+	fn letters(text: String) -> Vec<char> {
+		text.chars().filter(|c| c.is_alphabetic()).collect()
+	}
 }
 
 export!(Demo);
