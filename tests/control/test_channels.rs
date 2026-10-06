@@ -32,3 +32,11 @@ fn a_machine_channel_has_the_same_words() {
 	is!("chat = channel \"warp-test-p155\"; chat.send(\"hi\"); chat.receive()", "hi");
 	is!("chat = channel \"warp-test-p155-to\"; send 5 to chat; chat.receive() + 1", 6);
 }
+
+// Go panics on a send to a closed channel and on a second close; a task still sending when the program ends stops
+#[test]
+fn closed_channels_and_tasks_left_waiting() {
+	crate::common::fails_with("ch = channel(); ch.close(); ch.send(1)", "send on a closed channel");
+	crate::common::fails_with("ch = channel(); ch.close(); ch.close()", "close of a closed channel");
+	is!("ch = channel(); go { ch.send(1) }; 5", 5);
+}
