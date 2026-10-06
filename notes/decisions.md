@@ -165,6 +165,17 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   when the timeout happens; a timeout itself stays silent.
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P157 (functions, card functions-generic, warp-41) no generic syntax in wasp: untyped functions (`def id(x)`,
+  `max(a, b)`) already work for every type, with copies made per call. Ported `fn id<T>(x: T) -> T { x }` compiles as
+  the untyped form with a got-it note "wasp infers types: write def id(x)"; wasp's docs never use `<T>`.
+- P158 (warp-42) `then` pipes only when the right side is a function stage missing its argument (`… then sort`,
+  `… then filter(x => x > 5)`) and no `else` follows; otherwise it is the condition (`it<2 then 1 else …`). In the
+  collision `x > 2 then print` the condition wins, with a got-it note naming `|>`.
+- P159 (card wiki-mutable, warp-42) `const x=7; x=7` works: assigning a constant its identical value gives a warning
+  with the fix "remove the redundant assignment" (a different value stays P130's error). Changing a `let` variable
+  (`let x="hello"; x+=" world"`) works, with a got-it note teaching `var` for variables that change.
+  No question needed (word-choice rule): `root` is an alias of sqrt (`2|square|root`, wiki/pipe.md); a user
+  variable or function named root wins (P142).
 - P156 (signals, warp-ed) `whenever cond {…}` is edge-triggered: it runs each time the condition becomes true.
   `x = 0; whenever x > 5 { print "big" }; x = 6; x = 7; x = 3; x = 8` prints big twice (at 6 and 8);
   `a=0; b=0; whenever a+b==1 {…}; a=1; b=0` runs once.
