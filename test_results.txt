@@ -52,6 +52,9 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_event_signals::a_raise_inside_a_function_reaches_the_handler
+  ✓ control::test_event_signals::raise_runs_the_handlers_of_its_name
+  ✓ control::test_event_signals::the_handler_reads_the_event_data
   ✓ control::test_filter_loop_over_variable::a_filter_loop_over_a_variable
   ✓ control::test_filter_loops::test_a_class_name_loop_visits_only_its_instances
   ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
@@ -254,9 +257,14 @@ PASSED:
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
   ✓ control::test_unwrap::test_unwrap_gives_the_value
   ✓ control::test_unwrap::test_unwrap_of_nothing_or_an_error_is_loud
+  ✓ control::test_variable_signals::a_condition_ending_in_a_variable_keeps_its_block
+  ✓ control::test_variable_signals::a_global_write_before_the_listener_is_not_seen
+  ✓ control::test_variable_signals::a_global_write_inside_a_function_runs_the_listeners
   ✓ control::test_variable_signals::a_listener_on_a_charged_value_watches_what_it_reads
+  ✓ control::test_variable_signals::a_multi_assignment_notifies_once_after_all_its_writes
   ✓ control::test_variable_signals::after_a_function_runs_after_each_statement_calling_it
   ✓ control::test_variable_signals::on_change_runs_only_when_the_value_differs
+  ✓ control::test_variable_signals::on_set_of_a_charged_value_listens_to_its_changes
   ✓ control::test_variable_signals::on_set_runs_after_each_write_with_the_value
   ✓ control::test_variable_signals::once_never_runs_when_the_condition_never_holds
   ✓ control::test_variable_signals::once_runs_the_first_time_the_condition_holds
@@ -922,6 +930,9 @@ PASSED:
   ✓ node::node_values_test::test_values_meta
   ✓ node::node_values_test::test_values_nested_key
   ✓ node::node_values_test::test_values_number
+  ✓ node::test_comment_meta::a_field_named_meta_stays_the_field
+  ✓ node::test_comment_meta::a_missing_field_is_named_from_any_browsers_trace
+  ✓ node::test_comment_meta::the_comment_of_a_binding_is_its_meta
   ✓ node::test_empty_operands::a_condition_keyword_is_written_without_its_empty_left
   ✓ node::test_empty_operands::a_missing_operand_is_not_written
   ✓ node::test_empty_operands::a_prefix_form_reads_back_as_the_same_tree
@@ -1430,6 +1441,8 @@ PASSED:
   ✓ parser::test_symbol_hyphen::test_decrement_inside_a_loop_body
   ✓ parser::test_symbol_hyphen::test_hyphen_between_words_stays_kebab_case
   ✓ parser::test_symbol_hyphen::test_trailing_decrement_is_not_part_of_the_name
+  ✓ parser::test_trailing_annotation::a_leading_annotation_still_marks_what_follows
+  ✓ parser::test_trailing_annotation::a_trailing_annotation_marks_the_expression_before_it
   ✓ parser::test_unary_plus::a_unary_plus_is_its_operand
   ✓ parser::test_uniscript_entities::an_unknown_entity_is_an_error
   ✓ parser::test_uniscript_entities::entities_are_their_characters
@@ -1498,7 +1511,7 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
-  ✓ programs::test_paint::paint_without_a_canvas_is_a_loud_error
+  ✓ programs::test_paint::paint_writes_a_png_natively
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
   ✓ programs::test_samples::test_ackermann
@@ -2378,4 +2391,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2373 passed, 0 failed, 2373 total tested
+23 ignored, 2386 passed, 0 failed, 2386 total tested
