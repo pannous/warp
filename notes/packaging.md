@@ -15,6 +15,12 @@ pannous/homebrew-tap, formula built from source with cargo.
   warp (src/main.rs runtime_stub_path); without it warp tries to build it from its source checkout, gone after install.
   Built on its own (`-p warp-runtime`) it has no Cranelift.
 
+## Verified 2026-10-06 (v1.2.3; the user set the version 1.2.3)
+brew install/upgrade --build-from-source + brew test + brew style clean (~4 min build); the macOS release tarball
+runs and builds a standalone executable; the README's `cargo install --git` works (run outside the repo: inside it,
+.cargo/config.toml's `net.offline = true` applies and the git checkout is refused). That offline setting also broke
+the first formula and release build: both set CARGO_NET_OFFLINE=false.
+
 ## At a release
 1. Bump `version` in Cargo.toml, commit, push main.
 2. `git tag v<version> && git push origin v<version>`: the Release workflow publishes the binaries (and Rust CI tests the tag).
