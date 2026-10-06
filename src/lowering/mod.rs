@@ -34,6 +34,7 @@ pub mod printable;
 pub mod phrase_words;
 pub mod picked_calls;
 pub mod pipes;
+pub mod references;
 pub mod result_word;
 pub mod ruby_blocks;
 pub mod run_time_blocks;
