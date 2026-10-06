@@ -24,3 +24,11 @@ fn a_module_word_without_its_use_names_the_module() {
 	crate::common::fails_with("zip([1], [2])", "zip is in the standard module list: write `use list`");
 	crate::common::fails_with("unique [1, 1]", "unique is in the standard module list: write `use list`");
 }
+
+#[test]
+fn chunk_window_median() {
+	is!("use list; chunk([1, 2, 3, 4, 5], 2)", parse("[[1 2] [3 4] [5]]"));
+	is!("use list; window([1, 2, 3, 4], 3)", parse("[[1 2 3] [2 3 4]]"));
+	is!("use list; median([3, 1, 2])", 2);
+	is!("use list; median([4, 1, 3, 2])", 2.5);
+}
