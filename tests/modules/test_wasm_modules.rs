@@ -53,3 +53,13 @@ fn include_runs_main_globals_are_set_and_casts_are_ambiguous() {
 	is!(&with_module("level += 2; level * 10"), 30);
 	fails_with(&with_module("double(21)"), "double is ambiguous: fourty_two.double(21) for the export, 21 as float for the cast");
 }
+
+#[test]
+fn an_imported_module_gets_wasi_host_words_and_other_modules() {
+	const GREETER: &str = "import tests/fixtures/wasm/greeter; ";
+	is!(&format!("{GREETER}greet()"), 3); // WASI fd_write printed "hi\n"
+	is!(&format!("{GREETER}five()"), 5); // the host word random_below
+	is!(&format!("{GREETER}count_twice(4)"), 8); // counter.wasm, imported by greeter
+	// one instance per file: the program's counter.wasm is greeter's
+	is!(&format!("import tests/fixtures/wasm/counter.wasm; {GREETER}count_up(1); count_twice(1)"), 3);
+}

@@ -285,18 +285,21 @@ pub fn link(linker: &mut wasmtime::Linker<crate::host::HostState>, module: &wasm
 	Ok(())
 }
 
-/// The run's instance of the module at `path`; a module that imports anything is not linked yet
+/// The run's instance of the module at `path`, one per file however it is named; its own imports (WASI, warp's host
+/// words, C libraries, other modules) are linked like a program's
 #[cfg(feature = "native")]
 fn instance_of(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, path: &str) -> wasmtime::Result<wasmtime::Instance> {
-	if let Some(instance) = caller.data().wasm_modules.get(path) {
+	let file = std::fs::canonicalize(path).map_or_else(|_| path.to_string(), |file| file.to_string_lossy().into_owned());
+	if let Some(instance) = caller.data().wasm_modules.get(&file) {
 		return Ok(*instance);
 	}
 	let bytes = module_bytes(path).map_err(wasmtime::Error::msg)?;
-	let module = wasmtime::Module::new(caller.engine(), &bytes)?;
-	if let Some(import) = module.imports().next() {
-		wasmtime::bail!("{path} imports {}.{}: only modules without imports can be imported yet", import.module(), import.name());
-	}
-	let instance = wasmtime::Instance::new(&mut *caller, &module, &[])?;
-	caller.data_mut().wasm_modules.insert(path.to_string(), instance);
+	let engine = caller.engine().clone();
+	let module = wasmtime::Module::new(&engine, &bytes)?;
+	let mut linker = wasmtime::Linker::new(&engine);
+	crate::wasm_reader::link_imports(&mut linker, &engine, &module, crate::wasm_reader::Imports::EVERY)
+		.map_err(|failure| wasmtime::format_err!("{path}: {failure:#}"))?;
+	let instance = linker.instantiate(&mut *caller, &module)?;
+	caller.data_mut().wasm_modules.insert(file, instance);
 	Ok(instance)
 }
