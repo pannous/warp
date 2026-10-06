@@ -10,10 +10,21 @@ pannous/homebrew-tap, formula built from source with cargo.
 - GitHub release per tag v<Cargo version>: .github/workflows/release.yml attaches
   warp-<tag>-<target>.tar.gz (warp + warp-runtime) for aarch64-apple-darwin, x86_64/aarch64-unknown-linux-gnu.
 - `cargo install --locked --git https://github.com/pannous/warp warp warp-runtime`.
-- Not on crates.io: the name `warp` belongs to the web framework (open decision: publish as another name?).
+- crates.io, prepared, not uploaded: packages `warp-lang` (user 2026-10-06; `warp` is the web framework; the library is
+  still `warp`, the binary `warp`) and `warp-runtime` (1.2.3, same version). `cargo package --workspace` verifies both
+  (227 files, 860 KB). Blocked by the postponed license (open_decisions P150): crates.io refuses a crate without
+  `license`. Once decided: `license = "…"` in both Cargo.toml, a LICENSE file, then
+  `CARGO_NET_OFFLINE=false cargo publish --workspace`, and the README's Cargo line becomes `cargo install warp-lang`
+  (it installs warp; warp-runtime is a second `cargo install warp-runtime`).
 - Every channel ships warp-runtime too: `warp <file>` builds the standalone executable from the warp-runtime next to
   warp (src/main.rs runtime_stub_path); without it warp tries to build it from its source checkout, gone after install.
   Built on its own (`-p warp-runtime`) it has no Cranelift.
+
+## Verified 2026-10-06 (v1.2.3; the user set the version 1.2.3)
+brew install/upgrade --build-from-source + brew test + brew style clean (~4 min build); the macOS release tarball
+runs and builds a standalone executable; the README's `cargo install --git` works (run outside the repo: inside it,
+.cargo/config.toml's `net.offline = true` applies and the git checkout is refused). That offline setting also broke
+the first formula and release build: both set CARGO_NET_OFFLINE=false.
 
 ## At a release
 1. Bump `version` in Cargo.toml, commit, push main.

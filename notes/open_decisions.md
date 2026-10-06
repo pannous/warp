@@ -5,12 +5,10 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P150 license: warp (and wasp) have none, so package managers list no license and nobody may legally reuse the code.
-  MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). Assumed: none until decided.
-  Asked by the packaging session 2026-10-06 (notes/packaging.md).
-- P151 crates.io: the name `warp` is taken (the web framework). Publish as `warp-lang` (recommended) / `wasp-warp` /
-  stay off crates.io (cargo install --git works). Assumed: off crates.io.
-(the three below the user answered "Later" are parked until their feature is built)
+(the four below the user answered "Later"/postponed are parked)
+- Parked: P150 license: warp (and wasp) have none, so package managers list no license and nobody may legally reuse the
+  code. MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). User 2026-10-06: "let's
+  postpone the license". Blocks the crates.io upload of P151 (crates.io refuses a crate without license metadata).
 - Parked: P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
   as they are at `!` and assigns only declared globals. User 2026-10-05: "Later"; revisit when run-time `!` is built.
 - Parked: P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
@@ -36,6 +34,11 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Standing rules (user)
+- Word choices are not questions (2026-10-06): "we have the alias mechanism to generally tell people if they use the
+  wrong word what the right word is but still keep the synonym working or replacing". When the alternatives are only
+  different words for the same thing, the recommended word is canonical and the others become aliases: they work,
+  with a got-it note naming the right word and an "I meant: <word>" fix (normalize::advise, notes/fixits.md;
+  silent synonyms: SYNONYMS in src/lowering/library_words.rs). Only real differences in meaning go to the user.
 - Taking tickets (2026-10-06): "When picking a new task from the project, can you mark them as having an SNI
   (asignee)? If we don't have SNI's, then just use me." (SNI = assignee.) `todo take <card> <session>` assigns
   pannous, sets the board field Agent to the session and moves the card to Now (80bef43d8).
@@ -51,6 +54,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   un-ignored, without asking; a change of meaning (one working value into another) still needs a decision.
 
 ## Decided 2026-10-06 (user, multiple-choice interview, as recommended unless quoted)
+- P151 crates.io name (asked by the packaging session, answered there directly): "lang is perfect": the package is
+  `warp-lang` (library still `warp`, binary `warp`), its runtime `warp-runtime`; notes/packaging.md.
 - P71 `:=` without parameters is ALWAYS CHARGED (the user chose this over the recommended "now"): `y=3; z:=y*y; y=4;
   z` → 16, re-evaluated at every use, as wiki/charged.md §2 says; `z = 6` after it is an error. The per-use getter
   exists: commit 0b687e03 on branch late-binding (warp-29). Object entries `{s := clock()}` follow (§4 is revisited).
@@ -175,6 +180,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P147 (P146 step 4, warp-06, branch hijack-libc) the prebuilt wasi-libc module lives in this repo:
   web/playground/lib/libc.wasm + libc.h, built by a script and committed like warp.wasm; the browser host loads it
   for `use c` instead of host.js's hand-written shims; native keeps dlopen.
+- P148 (warp-93, branch change-old) in `on change x {…}`, `old` (alias `previous`) is x before the change (Vue's
+  watch); a program variable named old/previous keeps its own meaning. Assumed (undoable): `on set x` gets `old` too.
+  By the word-choice rule (Standing rules): `previous`, `was` and `before` are aliases of `old` that work with a note
+  naming `old`.
 - P142 (scope of P141, asked by warp-e4) the definition error applies only where the builtin would win, i.e. the
   definition could never take effect (casts like `double`, operators, type names). Library words (`add`, `map`,
   `count`) may be redefined and the user's version wins; class methods are always allowed (called as `x.add`). User:
@@ -190,6 +199,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   first: when the parameter type rules out the comparison's bool (`square number = …`, `f(x:int)`), `f x == y` is
   `(f x) == y` without a message; the error stays only when both readings type-check (parameter untyped/any or
   bool). So `square 3 == 9` is true and the wiki examples keep their bare form.
+  P149 (warp-41) an untyped parameter's type is inferred from the body before P143 applies: `x + 1`, `it*10`,
+  `it*it` need a number, so `def f(x){x+1}; f 1 < 5` and `square := it*it; square 3 == 9` are `(f x) op y` without
+  a message, for every comparison; the ambiguity error stays only when the body accepts anything (`print x`). The
+  footgun test `f := it*10; f 3-1 > 15` → true stands.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
