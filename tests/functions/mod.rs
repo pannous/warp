@@ -12,6 +12,7 @@ mod test_broadcasting;
 mod test_broadcasting_declared;
 mod test_closures;
 mod test_def_forms;
+mod test_field_function_values;
 mod test_default_parameters;
 mod test_effects;
 mod test_function_keyword;
