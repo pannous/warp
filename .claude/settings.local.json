@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/claudeignore-hook.sh",
+            "command": "sh ${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/local-only.sh $CLAUDE_PROJECT_DIR/.claude/hooks/claudeignore-hook.sh",
             "timeout": 500
           }
         ]
@@ -43,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/permissions_hook.js",
+            "command": "sh ${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/local-only.sh node $CLAUDE_PROJECT_DIR/.claude/hooks/permissions_hook.js",
             "timeout": 300
           }
         ]
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.py",
+            "command": "sh ${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/local-only.sh python3 $CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.py",
             "timeout": 10
           }
         ]
@@ -63,7 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/permissions_hook.js",
+            "command": "sh ${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/local-only.sh node $CLAUDE_PROJECT_DIR/.claude/hooks/permissions_hook.js",
             "timeout": 300
           }
         ]
