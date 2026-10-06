@@ -2,6 +2,7 @@ mod test_bare_list_assignment;
 mod test_decimal_list_elements;
 mod test_empty_list_argument;
 mod test_empty_list_count;
+mod test_field_count;
 mod test_index_assignment;
 mod test_key_lookup;
 mod test_key_subscript_hint;
