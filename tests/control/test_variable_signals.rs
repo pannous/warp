@@ -88,3 +88,12 @@ fn listeners_see_field_and_item_writes() {
 	is!("p = {age:1, size:5}; log=0; on change p.age {log=log*10+value}; p.age = 2; p.age = 2; p.size = 6; p.age=3; log", 23);
 	is!("xs=[1,2,3]; hits=0; whenever xs#1 > 5 {hits+=1}; xs#1 = 9; hits", 1);
 }
+
+// A condition calling a function watches the variables the function reads, transitively (notes/signals.md phase 3)
+#[test]
+fn a_condition_calling_a_function_watches_what_it_reads() {
+	is!("x=0; hits=0; def big(){ global x; x > 3 }; whenever big() {hits+=1}; x=5; x=1; x=7; hits", 2);
+	is!("x=0; hits=0; def size(){ global x; x }; whenever size() > 3 {hits+=1}; x=5; hits", 1);
+	is!("x=0; n=0; def inner(){ global x; x }; def outer(){ inner() * 2 }; whenever outer() > 5 {n+=1}; x=3; n", 1);
+}
+
