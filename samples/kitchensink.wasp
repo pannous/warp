@@ -22,9 +22,10 @@ checks.add(person.age == 30)
 checks.add(person.hobbies#2 == "hiking")
 checks.add(person.address.district == "Metro")
 
-// ---- numbers: unbounded integers, exact rationals, decimals that add up
+// ---- numbers: unbounded integers, exact rationals and roots, decimals that add up
 checks.add(2^100 % 1000 == 376)
 checks.add(1/3 + 1/6 == 1/2)
+checks.add(√2 * √2 == 2)
 checks.add(0.1 + 0.2 == 0.3)
 
 // ---- text: interpolation, graphemes, codepoints
@@ -55,6 +56,7 @@ checks.add(twice(x => x + 3, 1) == 7)
 adder(a) := b => a + b
 plus_two = adder(2)
 checks.add(plus_two(5) == 7)
+checks.add(adder(2)(5) == 7)
 
 // ---- control flow: if, while, for, switch, try
 total = 0
@@ -63,8 +65,7 @@ while i < 4 { i += 1; total += i }
 checks.add(total == 10)
 checks.add((if total > 5 then "big" else "small") == "big")
 checks.add((try { [1]#5 } else { "caught" }) == "caught")
-word = switch 3 {1: "one" 3: "three" default: "many"}
-checks.add(word == "three")
+checks.add(switch 3 {1: "one" 3: "three" default: "many"} == "three")
 checks.add(5 is int)
 
 // ---- classes and inheritance
