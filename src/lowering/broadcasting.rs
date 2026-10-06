@@ -72,7 +72,8 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 /// `square all xs` (wiki/all.md): `all` splices the list into its items, the function applies to each
 fn all_calls(node: Node) -> Node {
 	match node {
-		Node::List(items, Bracket::None, Separator::Space) if all_call_parts(&items).is_some() => {
+		// also `square(all xs)`, whose call items are `square all xs`
+		Node::List(items, Bracket::None | Bracket::Round, Separator::Space | Separator::None) if all_call_parts(&items).is_some() => {
 			let (function, list) = all_call_parts(&items).expect("guarded");
 			let item = Node::Symbol(ALL_ITEM.to_string());
 			let call = Node::List(vec![function.clone(), item.clone()], Bracket::Round, Separator::None);
@@ -80,6 +81,14 @@ fn all_calls(node: Node) -> Node {
 			Node::List(vec![Node::Symbol(MAP_WORD.to_string()), all_calls(list.clone()), each], Bracket::Round, Separator::None)
 		}
 		other => other.map_children(all_calls),
+	}
+}
+
+/// `all xs` as an argument: xs
+fn all_marked(argument: &Node) -> Option<&Node> {
+	match argument.drop_meta() {
+		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && matches!(words[0].drop_meta(), Node::Symbol(word) if word == ALL_WORD) => Some(&words[1]),
+		_ => None,
 	}
 }
 
@@ -232,7 +241,8 @@ pub fn lower(program: Node) -> Node {
 	let mut assigned = HashMap::new();
 	collect_list_variables(&program, &mut assigned);
 	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
-	Broadcast { functions: broadcasting, list_variables }.rewrite(program)
+	let scalar_parameters = found.iter().map(|definition| (definition.name.clone(), definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect())).collect();
+	Broadcast { functions: broadcasting, list_variables, scalar_parameters }.rewrite(program)
 }
 
 /// `map(list, broadcast_item => applied(broadcast_item))`
@@ -260,9 +270,14 @@ fn implicit_definitions(node: &Node, found: &mut Vec<Definition>) {
 
 fn needs_a_scalar(definition: &Definition) -> bool {
 	let [param] = definition.params.as_slice() else { return false };
+	takes_a_scalar(param, &definition.body)
+}
+
+/// A parameter declared with a scalar type, or undeclared and an arithmetic operand of the body
+fn takes_a_scalar(param: &Node, body: &Node) -> bool {
 	match param.drop_meta() {
 		Node::Key(_, Op::Colon, type_node) => annotated_kind(type_node).is_some_and(|kind| SCALAR_KINDS.contains(&kind)),
-		Node::Symbol(name) => is_arithmetic_operand(&definition.body, name),
+		Node::Symbol(name) => is_arithmetic_operand(body, name),
 		_ => false,
 	}
 }
@@ -301,6 +316,8 @@ fn call(name: &str, argument: Node) -> Node {
 struct Broadcast {
 	functions: HashSet<String>,
 	list_variables: HashSet<String>,
+	/// Per function of several parameters: which parameters take one value (`add(a, b) := a + b`: both)
+	scalar_parameters: HashMap<String, Vec<bool>>,
 }
 
 impl Broadcast {
@@ -315,7 +332,9 @@ impl Broadcast {
 					}
 					_ => self.rewrite(item),
 				}).collect();
-				self.broadcast_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
+				self.broadcast_call(&items, &bracket, &separator)
+					.or_else(|| self.broadcast_one_argument(&items, &bracket, &separator))
+					.unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, op, right) if matches!(left.drop_meta(), Node::Empty) && SCALAR_OPERATORS.contains(&op) => {
 				let right = self.rewrite(*right);
@@ -342,6 +361,42 @@ impl Broadcast {
 			}
 			Node::Symbol(variable) if self.list_variables.contains(variable) => Some(each_item(argument.clone(), |item| call(name, item))),
 			_ => None,
+		}
+	}
+
+	/// `add [1 2] 10`, `add(10, xs)`, `add(all xs, 10)`, `square(all xs)`: a call whose one list argument goes to a
+	/// parameter of one value (or is marked `all`, wiki/all.md) maps over that list, the other arguments as they are
+	fn broadcast_one_argument(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		let is_call = matches!((bracket, separator), (Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space));
+		let (head, arguments) = items.split_first()?;
+		let Node::Symbol(name) = head.drop_meta() else { return None };
+		if !is_call || arguments.is_empty() {
+			return None;
+		}
+		let marked: Vec<usize> = (0..arguments.len()).filter(|index| all_marked(&arguments[*index]).is_some()).collect();
+		let (index, list) = match marked.as_slice() {
+			[index] => (*index, all_marked(&arguments[*index]).expect("marked").clone()),
+			[] => {
+				let scalar = self.scalar_parameters.get(name).filter(|scalars| scalars.len() == arguments.len() && arguments.len() > 1)?;
+				let lists: Vec<usize> = (0..arguments.len()).filter(|index| scalar[*index] && self.is_list(&arguments[*index])).collect();
+				let [index] = lists.as_slice() else { return None };
+				(*index, arguments[*index].clone())
+			}
+			_ => return None,
+		};
+		Some(each_item(list, |item| {
+			let mut call = items.to_vec();
+			call[index + 1] = item;
+			Node::List(call, Bracket::Round, Separator::None)
+		}))
+	}
+
+	/// A list literal that is no object, or a variable only ever assigned one
+	fn is_list(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_pair),
+			Node::Symbol(variable) => self.list_variables.contains(variable),
+			_ => false,
 		}
 	}
 

@@ -66,3 +66,11 @@ fn max_and_min_without_parentheses() {
 	assert_eq!(eval("xs = [4, 2]; min xs").serialize(), "2");
 	assert_eq!(eval("square(x) := x*x; max square [1, -5]").serialize(), "25");
 }
+
+#[test]
+fn a_function_of_several_values_broadcasts_over_its_list_argument() {
+	assert_eq!(eval("add(a, b) := a + b; add [1, 2] 10").serialize(), "[11 12]");
+	assert_eq!(eval("add(a, b) := a + b; add(10, [1, 2])").serialize(), "[11 12]");
+	assert_eq!(eval("add(a, b) := a + b; add(all [1, 2], 10)").serialize(), "[11 12]");
+	assert_eq!(eval("square(x) := x*x; xs = [1, 2]; square(all xs)").serialize(), "[1 4]");
+}
