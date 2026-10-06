@@ -9,3 +9,5 @@ mod test_packages;
 mod test_use_modules;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_versions;
+#[cfg(feature = "native")] // the browser host does not link imported modules yet (notes/wasm_modules.md)
+mod test_wasm_modules;

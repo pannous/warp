@@ -349,6 +349,7 @@ pub fn link_imports(linker: &mut Linker<crate::host::HostState>, engine: &wasmti
 		// the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
 		crate::ffi::link_module_libraries(linker, engine, module)?;
 	}
+	crate::wasm_modules::link(linker, module)?;
 	Ok(())
 }
 

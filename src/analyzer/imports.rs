@@ -422,6 +422,13 @@ pub(super) fn add_ffi_lib(ctx: &mut Context, lib: &str) {
 pub(super) fn add_ffi_lib_dynamic(ctx: &mut Context, lib: &str) {
 	use crate::ffi::get_signatures_from_headers;
 
+	if crate::wasm_modules::is_module_path(lib) {
+		for (name, export) in crate::wasm_modules::exports(lib) {
+			ctx.ffi_imports.insert(name.clone(), export.signature.clone());
+		}
+		return;
+	}
+
 	let signatures = get_signatures_from_headers(lib);
 	if signatures.is_empty() {
 		// the program is analysed several times (effects, emission), the library is reported once

@@ -16,6 +16,7 @@ const EXTENSION_WORD: &str = "extension";
 /// `each xs: body`, `all xs: body`: a for loop over xs, the item is `it` (wiki/iteration.md)
 const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
 const IT_PARAMETER: &str = "it";
+const RETURN_WORD: &str = "return";
 const ENUM_WORD: &str = "enum";
 /// Ruby's `def f(x) … end`
 const END_WORD: &str = "end";
@@ -1166,10 +1167,17 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let (keyword, definition, mut result_type) = match items {
 		[keyword, definition] => (keyword, definition.drop_meta().clone(), None),
 		// a tuple result type `-> (Int, Int) {…}` (Swift): the body's tuple as it is
-		[keyword, head, body] if tuple_result(head).is_some() => (keyword, Node::List(vec![tuple_result(head).expect("guarded").clone(), body.clone()], Bracket::Round, Separator::None), None),
+		[keyword, head, body] if tuple_result(head).is_some() => {
+			let Node::Key(_, _, result_types) = head.drop_meta() else { unreachable!("guarded") };
+			(keyword, Node::List(vec![tuple_result(head).expect("guarded").clone(), typed_returns(body.clone(), result_types)], Bracket::Round, Separator::None), None)
+		}
 		[keyword, head, body] => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), None),
 		// Go's `func add1(x int) int {…}`: the result type between the head and the body
 		[keyword, head, result_type, body] if is_type_word(result_type) => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), Some(result_type.clone())),
+		// Go's `func divmod(a, b int) (int, int) {…}`: a tuple of result types, each returned value converted
+		[keyword, head, result_types, body] if is_type_tuple(result_types) => {
+			(keyword, Node::List(vec![head.clone(), typed_returns(body.clone(), result_types)], Bracket::Round, Separator::None), None)
+		}
 		_ => return None,
 	};
 	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
@@ -1306,8 +1314,39 @@ fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 /// `f(a, b) -> (Int, Int)`: the head of a function whose result type is a tuple of types
 fn tuple_result(head: &Node) -> Option<&Node> {
 	let Node::Key(head, Op::Arrow, result) = head.drop_meta() else { return None };
-	let Node::List(types, Bracket::Round, _) = result.drop_meta() else { return None };
-	(types.len() > 1 && types.iter().all(is_type_word)).then_some(head.as_ref())
+	is_type_tuple(result).then_some(head.as_ref())
+}
+
+/// `return a / b, a % b` of a function returning `(int, int)`: `return (a / b) as int, (a % b) as int`
+fn typed_returns(body: Node, result_types: &Node) -> Node {
+	let Node::List(types, _, _) = result_types.drop_meta() else { return body };
+	let converted = |values: &[Node]| -> Option<Vec<Node>> {
+		(values.len() == types.len()).then(|| values.iter().zip(types).map(|(value, kind)| {
+			let grouped = Node::List(vec![value.clone()], Bracket::Round, Separator::None);
+			Node::Key(Box::new(grouped), Op::As, Box::new(kind.clone()))
+		}).collect())
+	};
+	let is_return = |node: &Node| matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && matches!(words[0].drop_meta(), Node::Symbol(word) if word == RETURN_WORD));
+	match body {
+		// `return a, b` parses as `(return a), b`
+		Node::List(items, bracket, Separator::Colon) if items.first().is_some_and(is_return) => {
+			let Node::List(words, _, _) = items[0].drop_meta() else { unreachable!("guarded") };
+			let values: Vec<Node> = std::iter::once(words[1].clone()).chain(items[1..].iter().cloned()).collect();
+			match converted(&values) {
+				Some(mut values) => {
+					let first = Node::List(vec![words[0].clone(), values.remove(0)], Bracket::None, Separator::Space);
+					Node::List([vec![first], values].concat(), bracket, Separator::Colon)
+				}
+				None => Node::List(items, bracket, Separator::Colon),
+			}
+		}
+		other => other.map_children(|child| typed_returns(child, result_types)),
+	}
+}
+
+/// `(Int, Int)`
+fn is_type_tuple(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(types, Bracket::Round, _) if types.len() > 1 && types.iter().all(is_type_word))
 }
 
 /// Swift's `label name: T`: the label (`_` for none)

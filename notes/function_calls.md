@@ -1,7 +1,8 @@
 # Function calls (functions worker, 2026-10-06)
 
 Ported call forms from Python, Kotlin, Swift, C#, JS/TS, Ruby and Julia; tests in tests/functions/, the quick case
-list in probes/function_calls.md (run probes/function_calls.sh after scripts/own-warp.sh).
+list in probes/function_calls*.md (run probes/function_calls.sh <file> after scripts/own-warp.sh). Every case that
+passes goes into tests/functions/test_ported_calls.rs (one table), so no ported form breaks unseen.
 
 ## Decided forms (defaults taken, Interviewer asked where marked)
 - Defaults: `f(a, b=2)`, typed `f(a, b:int=2)`, a default may read earlier parameters `f(a, b=a*2)`. Named
@@ -66,6 +67,10 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
   parameter, function_values.rs runs variadic::lower again once f is known.
 - Python colon definitions with parameters become definitions in lower_c_functions (keyword_definition), so the
   function value passes see them; without parameters they stay def forms for late_binding (a `z() := e` is a getter).
+- OCaml/F# `let f x = body in rest` (welcome_forms.rs `let_binding`); JS IIFE `(() => 7)()` (parser: a glued `()`
+  after a one-item group is a call with no arguments); Go `(int, int)` results convert each returned value
+  (declarations.rs `typed_returns`) and `q, r := f()` assigns (welcome_forms.rs `go_destructuring`); `reduce` with a
+  start value is `fold` (lambdas.rs `with_start`).
 
 ## Call efficiency (probes/call_benchmark.sh [N], 10^8 calls each)
 - Plain, default, named, overload and lambda calls compile to the same direct `call $f` with i64 arguments: equal

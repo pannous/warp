@@ -16,6 +16,14 @@ pub const SIGNAL_DAILY: &str = "signal_daily";
 /// `signal_at(id, minute_of_day)`: `at 9:00 {…}`, on·every·id once at the next such local time
 pub const SIGNAL_AT: &str = "signal_at";
 pub const SIGNAL_WATCH: &str = "signal_watch";
+/// `system_value(name)`: the machine's `battery` percent, `charging`, `online`, `dark mode` (system_values.rs)
+pub const SYSTEM_VALUE: &str = "system_value";
+pub const BATTERY: &str = "battery";
+pub const CHARGING: &str = "charging";
+pub const ONLINE: &str = "online";
+pub const DARK_MODE: &str = "dark mode";
+/// The system values, and whether each is a yes/no value
+pub const SYSTEM_VALUES: [(&str, bool); 4] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true)];
 /// `on·file·0`: the handler of the first `on file "x" change {…}`
 pub const FILE_HANDLER_PREFIX: &str = "on·file·";
 /// `exit(code)` ends the run, not the process (P121, system_signals.rs ExitRequest)
@@ -29,7 +37,7 @@ pub const TIMER_HANDLER_PREFIX: &str = "on·every·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
-pub const BASIC_HOST_WORDS: [&str; 10] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, EXIT];
+pub const BASIC_HOST_WORDS: [&str; 11] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT];
 
 #[cfg(feature = "engine")]
 pub use linking::*;
@@ -59,6 +67,10 @@ mod linking {
 			let path = c_string(&mut caller, path)?;
 			system_signals::watch_file(id, path);
 			Ok(())
+		})?;
+		linker.func_wrap(HOST_LIBRARY, SYSTEM_VALUE, |mut caller: Caller<'_, T>, name: i32| -> Result<i64> {
+			let name = c_string(&mut caller, name)?;
+			crate::system_values::read(&name).map_err(wasmtime::Error::msg)
 		})?;
 		linker.func_wrap(HOST_LIBRARY, EXIT, |code: i64| -> Result<()> { Err(wasmtime::Error::new(system_signals::ExitRequest(code as i32))) })?;
 		Ok(())

@@ -37,6 +37,8 @@ const SWIFT_IN: &str = "in";
 const SHORTHAND_MARK: char = '$';
 const MAX_SHORTHAND_ARGUMENTS: usize = 10;
 const SORT_WORD: &str = "sort";
+const REDUCE_WORD: &str = "reduce";
+const FOLD_WORD: &str = "fold";
 const EACH_WORD: &str = "each";
 /// Iteration words as other languages spell them: sorting with a function (Python sorted, Ruby sort_by, Kotlin
 /// sortedBy), each (JS and Kotlin forEach, Rust for_each, PHP foreach)
@@ -277,6 +279,14 @@ fn swift_closure(items: &[Node]) -> Option<Lambda> {
 	params.iter().any(|param| mentions(&body, param)).then(|| Lambda::new(params, body))
 }
 
+/// `reduce` given a start value is `fold`: Swift's `xs.reduce(0, +)`, JS's `xs.reduce(f, 0)` aside
+fn with_start(iteration: &'static Iteration, extras: usize) -> &'static Iteration {
+	match iteration.word {
+		REDUCE_WORD if extras == 1 => ITERATIONS.iter().find(|fold| fold.word == FOLD_WORD).expect("fold is an iteration"),
+		_ => iteration,
+	}
+}
+
 /// `{it*2}` as the arrow lambda `it => it*2`, for passes that know only arrows (closures.rs)
 pub(crate) fn block_as_arrow(node: &Node) -> Option<Node> {
 	let lambda = block_lambda(node).filter(|lambda| !lambda.params.is_empty())?;
@@ -398,7 +408,7 @@ impl Lowering {
 	fn iteration_method(&self, method: &Node) -> Option<(&'static Iteration, Vec<Node>)> {
 		let Node::List(items, _, _) = method.drop_meta() else { return None };
 		let (word, arguments) = items.split_first()?;
-		let iteration = self.iteration_of(word)?;
+		let iteration = with_start(self.iteration_of(word)?, arguments.len() - 1);
 		(arguments.len() == iteration.extra_arguments + 1).then(|| (iteration, arguments.to_vec()))
 	}
 
@@ -455,13 +465,14 @@ impl Lowering {
 				_ => rest,
 			};
 			let [list, extras @ .., function] = rest.as_slice() else { return None };
+			let iteration = with_start(iteration, extras.len());
 			if extras.len() != iteration.extra_arguments {
 				return None;
 			}
 			self.iterate(iteration, list.clone(), extras.to_vec(), function.clone())
 		} else if let Node::Key(receiver, Op::Dot, word) = head.drop_meta() {
-			let iteration = self.iteration_of(word)?;
 			let [extras @ .., function] = rest else { return None };
+			let iteration = with_start(self.iteration_of(word)?, extras.len());
 			if !is_prefix || extras.len() != iteration.extra_arguments {
 				return None;
 			}

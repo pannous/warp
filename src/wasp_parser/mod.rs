@@ -561,8 +561,9 @@ pub struct WaspParser {
 	group_start: (usize, usize),
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
 	stops_at_else: bool,
-	/// Inside `class Name {…}`: `pi = 3` there names a field, which shadows nothing
-	in_type_body: bool,
+	/// Inside `class Name {…}`: its fields named like a constant (`pi = 3`, `pi:int`), which its methods read instead
+	/// of the constant; None outside a type body
+	type_fields: Option<std::collections::HashSet<String>>,
 	/// The binding power of the `then` or `else` branch being parsed: there it is a statement, so a braceless call takes a
 	/// variable argument (`then count xs`), as at assignment level
 	branch_bp: Option<u8>,
@@ -832,7 +833,7 @@ impl WaspParser {
 			in_for_header: false,
 			group_start: (0, 0),
 			stops_at_else: false,
-			in_type_body: false,
+			type_fields: None,
 			branch_bp: None,
 			signed_list_element: None,
 			stops_at_end: false,

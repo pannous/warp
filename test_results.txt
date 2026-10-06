@@ -57,6 +57,8 @@ PASSED:
   ✓ control::test_empty_block::an_empty_block_inside_a_statement_is_a_value
   ✓ control::test_empty_block_binding::a_bound_empty_block_counts_zero
   ✓ control::test_empty_block_binding::an_empty_block_can_be_bound
+  ✓ control::test_empty_bodies::an_empty_function_body_returns_nothing
+  ✓ control::test_empty_bodies::an_empty_timer_body_does_nothing
   ✓ control::test_error_branch_kind::test_an_error_branch_keeps_the_other_branch_kind
   ✓ control::test_error_branch_kind::test_an_error_value_stays_a_value
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
@@ -239,6 +241,12 @@ PASSED:
   ✓ control::test_system_signals::exit_gives_the_process_its_code
   ✓ control::test_system_signals::on_interrupt_cuts_a_sleep_short
   ✓ control::test_system_signals::on_interrupt_runs_at_the_next_loop_start
+  ✓ control::test_system_values::a_listener_on_a_system_value_polls_it
+  ✓ control::test_system_values::a_program_keeps_its_own_names
+  ✓ control::test_system_values::a_system_value_is_a_host_reading
+  ✓ control::test_system_values::dark_mode_is_the_appearance_of_macos
+  ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
+  ✓ control::test_system_values::yes_no_values_read_the_machine
   ✓ control::test_task_closures::a_capturing_text_lambda_runs_in_a_task
   ✓ control::test_task_closures::a_parameter_named_like_a_unit_is_the_parameter
   ✓ control::test_task_exact::a_big_integer_crosses_to_a_task_and_back
@@ -500,6 +508,7 @@ PASSED:
   ✓ functions::test_anonymous_application::test_an_anonymous_function_broadcasts_over_a_list
   ✓ functions::test_anonymous_function_forms::a_function_keyword_without_a_name_is_a_lambda
   ✓ functions::test_anonymous_function_forms::an_arrow_lambda_works_too
+  ✓ functions::test_anonymous_function_forms::an_immediately_invoked_function_without_arguments
   ✓ functions::test_anonymous_function_forms::python_lambda_is_a_lambda
   ✓ functions::test_argument_kinds::counting_a_parameter_makes_it_a_list
   ✓ functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error
@@ -671,6 +680,7 @@ PASSED:
   ✓ functions::test_functions::test_variable_reassignment
   ✓ functions::test_functions::test_variables
   ✓ functions::test_global_with_closures::global_in_a_program_with_a_lambda
+  ✓ functions::test_go_functions::several_results
   ✓ functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called
   ✓ functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged
   ✓ functions::test_inlining::an_inlined_helper_updates_the_list_handed_back
@@ -700,6 +710,8 @@ PASSED:
   ✓ functions::test_late_binding::nonlocal_needs_a_variable_of_an_enclosing_def
   ✓ functions::test_late_binding::nonlocal_reads_the_enclosing_functions_current_value
   ✓ functions::test_late_binding::nonlocal_reads_the_value_at_each_call
+  ✓ functions::test_let_in::let_function_in
+  ✓ functions::test_let_in::let_value_in
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
   ✓ functions::test_list_conversion::an_empty_list
@@ -779,6 +791,7 @@ PASSED:
   ✓ functions::test_phrase_calls::test_spaced_phrases_are_called_with_their_prepositions
   ✓ functions::test_phrase_calls::test_to_phrases_are_called_with_their_prepositions
   ✓ functions::test_picked_calls::a_function_picked_from_a_list_is_called
+  ✓ functions::test_ported_calls::every_ported_call_form_keeps_its_value
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
   ✓ functions::test_precomputed::effects_shared_state_and_failures_are_never_folded
@@ -835,6 +848,7 @@ PASSED:
   ✓ functions::test_several_arguments::test_several_arguments_are_one_list
   ✓ functions::test_shadowed_log::a_user_log_of_two_arguments_is_called
   ✓ functions::test_shadowed_log::the_library_log_to_a_base_stays
+  ✓ functions::test_sort_functions::reduce_with_a_start_is_fold
   ✓ functions::test_sort_functions::sort_is_stable
   ✓ functions::test_sort_functions::sort_with_comparator
   ✓ functions::test_sort_functions::sort_with_defined_function
@@ -1130,6 +1144,10 @@ PASSED:
   ✓ modules::test_versions::version_is_a_soft_keyword
   ✓ modules::test_versions::version_literals_have_two_dots_or_more
   ✓ modules::test_versions::versions_compare_part_by_part
+  ✓ modules::test_wasm_modules::a_module_is_found_by_name_or_path
+  ✓ modules::test_wasm_modules::a_module_keeps_its_state_for_the_run
+  ✓ modules::test_wasm_modules::an_exported_function_is_called_with_its_declared_types
+  ✓ modules::test_wasm_modules::an_exported_global_reads_as_its_value
   ✓ node::node_values_test::test_values_empty
   ✓ node::node_values_test::test_values_key
   ✓ node::node_values_test::test_values_list
@@ -1893,6 +1911,7 @@ PASSED:
   ✓ text::test_quote_output::test_is_macro_round_trips_text
   ✓ text::test_quote_output::test_serialized_text_parses_back
   ✓ text::test_quote_output::test_texts_inside_lists_print_with_the_canonical_quote
+  ✓ text::test_quoted_container_texts::a_quote_inside_a_text_in_a_container_is_escaped
   ✓ text::test_quoted_container_texts::a_text_field_prints_quoted
   ✓ text::test_quoted_container_texts::a_text_in_a_list_prints_quoted
   ✓ text::test_quoted_container_texts::string_and_interpolation_quote_texts_in_containers
@@ -2025,6 +2044,9 @@ PASSED:
   ✓ types::test_declaration_zero_value::a_text_declaration_is_empty
   ✓ types::test_declared_int_of_float_expression::an_int_declaration_refuses_a_float_expression
   ✓ types::test_declared_int_of_float_expression::an_int_declaration_refuses_a_non_whole_exact_value
+  ✓ types::test_extension_methods::a_swift_extension_block_adds_methods
+  ✓ types::test_extension_methods::an_extension_method_extends_a_builtin_type
+  ✓ types::test_extension_methods::an_extension_method_extends_a_class
   ✓ types::test_flags::test_an_unknown_flag_is_an_error
   ✓ types::test_flags::test_flags_set_their_named_members
   ✓ types::test_flags::test_the_flags_type_is_the_empty_set
@@ -2353,6 +2375,7 @@ PASSED:
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
   ✓ welcoming::test_constant_shadowing::a_constant_word_still_reads_and_names_fields
+  ✓ welcoming::test_constant_shadowing::a_field_named_like_a_constant_is_read_by_the_methods
   ✓ welcoming::test_constant_shadowing::an_assigned_constant_word_is_an_error
   ✓ welcoming::test_error_positions::a_rebuilt_node_reports_the_position_of_its_parts
   ✓ welcoming::test_error_positions::an_error_found_while_emitting_names_its_statement
@@ -2656,4 +2679,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2651 passed, 0 failed, 2651 total tested
+20 ignored, 2674 passed, 0 failed, 2674 total tested
