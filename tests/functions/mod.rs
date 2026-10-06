@@ -98,6 +98,7 @@ mod test_named_function_argument;
 mod test_operator_arguments;
 mod test_call_efficiency;
 mod test_swift_closures;
+mod test_dollar_body;
 mod test_csharp_functions;
 mod test_user_add_and_map;
 mod test_list_conversion;
