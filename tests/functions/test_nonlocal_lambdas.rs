@@ -28,3 +28,10 @@ fn a_nested_def_changing_it_without_nonlocal_is_an_error() {
 fn a_fresh_local_of_the_same_name_is_no_change() {
 	is!("def f(){ n=1; g = () => { n = 5; n }; g() + n }; f()", 6);
 }
+
+// a lambda's own fresh variable is no capture: assigning it changes nothing outside (no `global` asked)
+#[test]
+fn a_lambda_binds_its_own_locals() {
+	is!("def apply(f, x) { f(x) }; apply(x => { y = x * 2; y + 1 }, 3)", 7);
+	is!("def mk() { k => { t = k * 2; t } }; g = mk(); g(4)", 8);
+}
