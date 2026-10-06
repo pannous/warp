@@ -98,6 +98,6 @@ source = open(sys.argv[2], encoding="utf-8").read()
 def words(name):
 	return re.findall(r'"([^"]+)"', re.search(rf"const {name}: \[&str; \d+\] = \[(.*?)\];", source, re.S).group(1))
 with open(sys.argv[1], "w", encoding="utf-8") as script:
-	script.write("// made by build.sh from src/lowering/soft_keywords.rs\nconst KEYWORDS = " + json.dumps({"hard": words("HARD_KEYWORDS"), "soft": words("SOFT_KEYWORDS")}, ensure_ascii=False) + ";\n")
+	script.write("// made by build.sh from src/lowering/soft_keywords.rs\nconst KEYWORDS = " + json.dumps({"hard": words("HARD_KEYWORDS"), "soft": words("SOFT_KEYWORDS") + words("HIGHLIGHTED_WORDS")}, ensure_ascii=False) + ";\n")
 PYTHON
 echo "built $page/keywords.js"
