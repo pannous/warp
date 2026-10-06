@@ -804,6 +804,10 @@ PASSED:
   ✓ lists::test_key_lookup::test_object_variable_is_looked_up_by_key
   ✓ lists::test_key_lookup::test_text_value_is_looked_up
   ✓ lists::test_key_subscript_hint::a_text_key_subscript_gets_no_index_hint
+  ✓ lists::test_lazy_range::a_big_range_variable_compiles
+  ✓ lists::test_lazy_range::a_range_is_read_from_its_bounds
+  ✓ lists::test_lazy_range::a_range_variable_used_as_a_list_stays_one
+  ✓ lists::test_lazy_range::a_small_range_variable_is_still_its_list
   ✓ lists::test_linear_append::an_appended_list_of_nodes_keeps_its_items
   ✓ lists::test_linear_append::map_and_filter_of_texts_stay_linear
   ✓ lists::test_list_arithmetic::test_round_group_of_arithmetic_is_still_an_expression
@@ -2461,4 +2465,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2456 passed, 0 failed, 2456 total tested
+23 ignored, 2460 passed, 0 failed, 2460 total tested
