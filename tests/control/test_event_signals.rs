@@ -44,3 +44,11 @@ fn a_body_of_one_raise_stays_a_block() {
 	});
 	assert!(body_is_block, "check's body lost its braces: {}", lowered.serialize());
 }
+
+// Page events (notes/signals.md phase 7): `on click {…}` is a handler the playground calls; natively nothing raises it
+#[test]
+fn a_page_event_handler_waits_for_the_page() {
+	is!("n=0; on click {n+=1}; n", 0);
+	let lowered = warp::event_signals::lower(warp::wasp_parser::parse("n=0; on click {n+=1}; n"));
+	assert_eq!(warp::event_signals::handled_signals(&lowered), vec![("click".to_string(), "on·click".to_string())]);
+}
