@@ -398,8 +398,12 @@ pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 		}
 		Ok(())
 	});
-	let unread_failure = tasks.map_or(Ok(()), |tasks| tasks.join_all());
+	let unread_failure = tasks.as_ref().map_or(Ok(()), |tasks| tasks.join_all());
 	let (result, mut store, instance) = outcome?;
+	// the raises of tasks nobody awaited run their handlers before the run ends
+	if let Some(tasks) = &tasks {
+		tasks.deliver(&mut store, &mut |store, name| instance.get_export(&mut *store, name))?;
+	}
 	unread_failure?;
 	val_to_node(&result, &mut store, &instance)
 }
