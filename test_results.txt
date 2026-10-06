@@ -142,6 +142,7 @@ PASSED:
   ✓ control::test_shared_arrays::tasks_add_to_one_shared_array
   ✓ control::test_shared_values::a_function_given_a_shared_value_shares_it
   ✓ control::test_shared_values::a_go_block_writes_a_shared_value
+  ✓ control::test_shared_values::a_self_update_of_a_shared_value_is_atomic
   ✓ control::test_shared_values::a_shared_value_reads_writes_and_adds
   ✓ control::test_signal_in_loop::a_listener_checks_a_write_in_a_one_statement_loop
   ✓ control::test_structural_patterns::test_a_subject_that_is_no_list_does_not_match
@@ -2357,4 +2358,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2352 passed, 0 failed, 2352 total tested
+23 ignored, 2353 passed, 0 failed, 2353 total tested
