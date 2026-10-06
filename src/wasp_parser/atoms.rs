@@ -520,6 +520,7 @@ impl WaspParser {
 		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
 		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol.as_str()) {
 			if let Some(keyword) = self.class_keyword_after_blanks() {
+				crate::diagnostic::note_alias(&format!("{symbol} {keyword}"), keyword);
 				while matches!(self.current_char(), ' ' | '\t') {
 					self.advance();
 				}
@@ -722,7 +723,11 @@ impl WaspParser {
 		let parameters = statements(self.parse_bracketed('('));
 		parameters.into_iter().map(|parameter| match parameter.drop_meta() {
 			// `val x: Int`, `var y: Int = 0`: the field, its keyword dropped
-			Node::List(words, _, _) if words.len() == 2 && FIELD_KEYWORDS.contains(&words[0].drop_meta().name().as_str()) => words[1].clone(),
+			Node::List(words, _, _) if words.len() == 2 && FIELD_KEYWORDS.contains(&words[0].drop_meta().name().as_str()) => {
+				let field = crate::lowering::class_methods::leading_name(&words[1]);
+				crate::diagnostic::note_alias(&format!("{} {field}", words[0].drop_meta().name()), &field);
+				words[1].clone()
+			}
 			// C#'s `int X`: the field X of type int
 			Node::List(words, _, _) if words.len() == 2 && matches!(words[1].drop_meta(), Node::Symbol(_)) && crate::analyzer::type_word_kind(&words[0].drop_meta().name()).is_some() => {
 				Node::Key(Box::new(words[1].clone()), Op::Colon, Box::new(words[0].clone()))
