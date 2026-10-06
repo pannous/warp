@@ -114,8 +114,18 @@ engine has is a loud error in both, never a different result.
 | math | libm (stub "m") natively, JS Math in the browser (today) | — | gcd lcm clamp sign in wasp; no adapter needed |
 | text, list, map | wasp | wasp | no adapter |
 
+### How an adapter word is built (A)
+Two host words carry every adapter: `std_pure(module, member, arguments)` for words without effects (json, hash,
+regex: capability like libm's) and `std_io(…)` for words that touch the outside (file, os, net: Host, IO). A std module
+defines its words over them, `parse_json(text) := std_pure("json", "parse", [text])` (std/json.wasp); natively
+src/std_adapters.rs answers by (module, member), in the browser host.js STD_ADAPTERS. Values cross as for the foreign
+runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain). Their results are any Node (analyzer
+ANY_VALUE_WORDS); a parameter that takes any value is annotated `any` (`to_json(value:any)`).
+Adding a word: one match arm in std_adapters.rs, one function in STD_ADAPTERS, one line in std/<module>.wasp, a test
+run natively and in the browser.
+
 ### First adapter steps (async)
-1. json (A): parse_json and to_json host words natively and in host.js, tests in both hosts.
+1. Done: json (A): `use json` brings parse_json and to_json, native and browser (tests/modules/test_std_json.rs).
 2. hash (B): embed zlib.wasm/xxhash.wasm and a sha256.wasm in warp, `use hash` resolves to them in both hosts.
 3. regex (A): Rust regex + JS RegExp behind matches/find/find_all/replace_all, with the common-subset check.
 4. Later: the AOT stub linking B modules (they need no compiler), then hash and compress work in executables.
