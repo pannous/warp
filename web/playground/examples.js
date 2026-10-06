@@ -63,9 +63,9 @@ whenever total > 10 { print "big order: " + total }
 on change total { print "total is now " + value }
 count = 5
 total` },
-	"raise and on": { value: '"still running"', printed: "cooling down from 97\n", code: `// events carry data: raise one, handle it with on
+	"emit and on": { value: '"still running"', printed: "cooling down from 97\n", code: `// events carry data: emit one (or send it), handle it with on; raise is for errors
 on overheat { print "cooling down from " + event.degrees }
-raise overheat{degrees: 97}
+emit overheat{degrees: 97}
 "still running"` },
 	listeners: { value: "1", printed: "hot: 35\nt = 35\nt = 40\n", code: `// listeners are values: name one, list them, remove it
 t = 20

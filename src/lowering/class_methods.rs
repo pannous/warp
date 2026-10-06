@@ -37,6 +37,8 @@ const SILENT_MODIFIERS: [&str; 1] = ["async"];
 /// The constructor names of other languages, aliases of `init` (P162): wasp's old `value`, JavaScript, Python, Ruby,
 /// PHP, VB.NET, Delphi, Rust; besides a method named like its class (C++, Java, C#)
 const CONSTRUCTOR_ALIASES: [&str; 8] = ["value", "constructor", "__init__", "initialize", "__construct", "New", "Create", "new"];
+/// Ruby's construction `Point.new(1, 2)`
+const RUBY_NEW_WORD: &str = "new";
 /// Go's function keyword, also of a method `func (p Point) Sum() int {…}`
 const GO_FUNCTION_WORD: &str = "func";
 /// Rust's block of methods of a type, `impl Point {…}`
@@ -78,7 +80,7 @@ pub fn constructor_name(class: &str) -> String {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = copies(with_impls(node));
+	let node = positional_braces(ruby_constructions(copies(with_impls(node))));
 	let node = with_init_constructors(node.clone(), &method_calls_named(&node));
 	let node = with_members(node);
 	let node = with_class_attributes(class_typed_declarations(node));
@@ -734,6 +736,63 @@ fn class_attributes(node: Node, qualified: &[(String, String)]) -> Node {
 			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
 		}
 		other => other.map_children(|child| class_attributes(child, qualified)),
+	}
+}
+
+/// Ruby's `Point.new(1, 2)` of a declared class that defines no `new`: the construction `Point(1, 2)`, with a note
+fn ruby_constructions(node: Node) -> Node {
+	let mut classes = vec![];
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		if !class_items(body).iter().filter_map(method_parts).any(|(method, _, _)| method == RUBY_NEW_WORD) {
+			classes.push(name.drop_meta().name());
+		}
+	});
+	if classes.is_empty() {
+		return node;
+	}
+	constructed_by_new(node, &classes)
+}
+
+fn constructed_by_new(node: Node, classes: &[String]) -> Node {
+	match node {
+		Node::Key(class, Op::Dot, member) if classes.contains(&class.drop_meta().name()) && matches!(class.drop_meta(), Node::Symbol(_)) && leading_name(&member) == RUBY_NEW_WORD => {
+			let class_name = class.drop_meta().name();
+			crate::diagnostic::note_alias(&format!("{class_name}.{RUBY_NEW_WORD}"), &class_name);
+			let arguments = match member.drop_meta().clone() {
+				Node::List(items, _, _) => items[1..].iter().cloned().map(|argument| constructed_by_new(argument, classes)).collect(),
+				_ => vec![],
+			};
+			Node::List([vec![*class], arguments].concat(), Bracket::Round, Separator::None)
+		}
+		other => other.map_children(|child| constructed_by_new(child, classes)),
+	}
+}
+
+/// Go's positional braces `Point{1, 2}` of a declared class: the construction `Point(1, 2)`, with a note (P167); of
+/// an unknown name they stay tagged data
+fn positional_braces(node: Node) -> Node {
+	let mut classes = vec![];
+	node.visit(&mut |part| if let Node::Type { name, .. } = part {
+		classes.push(name.drop_meta().name());
+	});
+	if classes.is_empty() {
+		return node;
+	}
+	constructed_from_braces(node, &classes)
+}
+
+fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
+	let is_positional = |items: &[Node]| !items.is_empty() && items.iter().all(|item| !matches!(item.drop_meta(), Node::Key(..)));
+	match node {
+		Node::Key(class, Op::None, braces) if matches!(class.drop_meta(), Node::Symbol(name) if classes.contains(name)) && matches!(braces.drop_meta(), Node::List(items, Bracket::Curly, _) if is_positional(items)) => {
+			let Node::List(items, _, _) = braces.drop_meta().clone() else { unreachable!("guarded") };
+			let class_name = class.drop_meta().name();
+			let written: Vec<String> = items.iter().map(Node::serialize).collect();
+			crate::diagnostic::note_alias(&format!("{class_name}{{{}}}", written.join(", ")), &format!("{class_name}({})", written.join(", ")));
+			let arguments = items.into_iter().map(|item| constructed_from_braces(item, classes));
+			Node::List([vec![*class]].into_iter().flatten().chain(arguments).collect(), Bracket::Round, Separator::None)
+		}
+		other => other.map_children(|child| constructed_from_braces(child, classes)),
 	}
 }
 

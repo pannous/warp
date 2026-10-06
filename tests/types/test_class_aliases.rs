@@ -76,3 +76,12 @@ fn the_wasp_words_give_no_note() {
 	assert_eq!(alias_notes(code), vec![]);
 	is!(code, 3);
 }
+
+/// P167: positional braces `Point{1, 2}` (Go) of a known class build `Point(1, 2)`, with a note
+#[test]
+fn positional_braces_build_a_known_class() {
+	is!("type Point struct {\n    X int\n    Y int\n}\nPoint{1, 2}.Y", 2);
+	let code = "class P{x:int; y:int}; P{3, 4}.x";
+	is!(code, 3);
+	assert_alias(code, "P{3, 4}", "P(3, 4)");
+}

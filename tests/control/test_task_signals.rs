@@ -4,14 +4,14 @@ use crate::is;
 
 #[test]
 fn a_raise_in_a_task_runs_the_programs_handler() {
-	is!("n = 0; check(x) := { raise found{value: x}; 0 }; on found { n = n + 1 }; job = go check(5); await job; n", 1);
-	is!("seen = 0; check(x) := { raise found{value: x}; 0 }; on found { seen = event.value }; await go check(7); seen", 7);
+	is!("n = 0; check(x) := { emit found{value: x}; 0 }; on found { n = n + 1 }; job = go check(5); await job; n", 1);
+	is!("seen = 0; check(x) := { emit found{value: x}; 0 }; on found { seen = event.value }; await go check(7); seen", 7);
 }
 
 #[test]
 #[cfg(feature = "native")]
 fn a_raise_nobody_awaits_is_handled_before_the_run_ends() {
-	let printed = crate::common::printed("check() := { raise alarm; 0 }\non alarm { print \"alarm!\" }\ngo check()\nprint \"main\"");
+	let printed = crate::common::printed("check() := { emit alarm; 0 }\non alarm { print \"alarm!\" }\ngo check()\nprint \"main\"");
 	assert!(printed.starts_with("main\nalarm!\n"), "printed {printed:?}");
 }
 

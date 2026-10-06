@@ -33,7 +33,15 @@ const HANDLER_SUFFIX: &str = "_handler_";
 /// `tick_listeners`: the handlers of tick subscribed inside blocks, `tick_listener` one of them
 const SUBSCRIBERS_SUFFIX: &str = "_listeners";
 const SUBSCRIBER_SUFFIX: &str = "_listener";
-const RAISE_WORD: &str = "raise";
+const LOOP_WORDS: [&str; 4] = ["for", "while", "repeat", "loop"];
+const LOOP_SUBSCRIPTION_TOPIC: &str = "handler-in-loop";
+/// `emit alarm{level: 3}` runs the `on alarm` handlers and goes on; nobody listening, it does nothing (P163). `send`
+/// without `to` is the same; `raise` and `throw` are errors only
+const EMIT_WORDS: [&str; 2] = ["emit", "send"];
+/// Other systems' words for emit, working with a got-it note naming it (a program defining one of them keeps it)
+const EMIT_ALIASES: [&str; 3] = ["fire", "trigger", "signal"];
+const EMIT_TOPIC: &str = "emit-word";
+const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
 /// `on set x` and `on change x` are variable listeners (variable_signals.rs)
 const VARIABLE_LISTENER_WORDS: [&str; 2] = ["set", "change"];
 pub const HANDLER_PREFIX: &str = "on·";
@@ -56,15 +64,15 @@ pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
 	// an event whose listeners are counted is handled even when nothing raises it yet (`count listeners of tick`)
 	let variables = main_level_variables(&statements);
-	let raised: HashSet<String> = raised_names(&program).into_iter().chain(reflected_events(&program, COUNT_WORD).into_iter().filter(|event| !variables.contains(event))).collect();
+	let verbs = emit_verbs(&program, &variables);
+	let raised: HashSet<String> = emitted_names(&program, &verbs).into_iter().chain(reflected_events(&program, COUNT_WORD).into_iter().filter(|event| !variables.contains(event))).collect();
 	let statements = subscribed_in_blocks(statements, &raised);
 	// `clear listeners of alarm` stops every handler of alarm: each gets a flag as a named one has
 	let cleared: HashSet<String> = reflected_events(&program, CLEAR_WORD).into_iter().filter(|event| !variables.contains(event)).collect();
-	let kept = match without_unraised(&statements, &raised, &variables) {
+	let kept = match without_unraised(&statements, &raised, &variables, &emitted_names(&program, &RAISE_WORDS.map(String::from))) {
 		Ok(kept) => kept,
 		Err(error) => return error,
 	};
-	let program = if kept.len() < statements.len() { Node::List(kept.clone(), bracket.clone(), separator.clone()) } else { program };
 	let statements = kept;
 	let mut flags: Vec<(String, Node)> = vec![];
 	let mut named: Vec<(String, String)> = vec![];
@@ -83,8 +91,10 @@ pub fn lower(program: Node) -> Node {
 		.collect();
 	if handlers.is_empty() {
 		// a program with timers stays like one with page events (system_signals.rs, before this pass made them)
+		// an emit nobody listens to does nothing
+		let statements: Vec<Node> = statements.into_iter().map(|statement| emits_as_calls(statement, &HashMap::new(), &verbs)).collect();
 		if !statements.iter().any(defines_timer) {
-			return program;
+			return Node::List(statements, bracket, separator);
 		}
 		let main_variables = main_level_variables(&statements);
 		return Node::List(with_output_binding(statements, &main_variables), bracket, separator);
@@ -112,13 +122,19 @@ pub fn lower(program: Node) -> Node {
 		}
 		bodies.entry(name.clone()).or_default().push(body.clone());
 	}
+	if let Some(cycle) = emit_cycle(&bodies, &verbs) {
+		let (index, _) = first_handler.iter().find(|(_, name)| **name == cycle[0]).expect("a cycle runs through handlers");
+		let steps: Vec<String> = cycle.iter().zip(cycle.iter().cycle().skip(1)).map(|(from, to)| format!("on {from} emits {to}")).collect();
+		let message = format!("endless emit loop: {}; emit one of them under a condition", steps.join(", "));
+		return crate::diagnostic::Diagnostic::at(&statements[*index], message).into_error();
+	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
 	let lowered = statements.into_iter().enumerate().filter_map(|(index, statement)| match first_handler.get(&index) {
 		Some(name) => Some(function_with_globals(&handler_function_name(name), reads_event(&bodies[name]), &each_its_event(&bodies[name]), &main_variables)),
 		None if handler_lines.contains(&index) => None,
 		None => Some(statement),
 	});
-	let lowered: Vec<Node> = lowered.map(|statement| raises_as_calls(statement, &bodies)).collect();
+	let lowered: Vec<Node> = lowered.map(|statement| emits_as_calls(statement, &bodies, &verbs)).collect();
 	let page_handlers: std::collections::BTreeMap<String, usize> = PAGE_EVENTS.iter().filter(|event| bodies.contains_key(**event)).map(|event| (handler_function_name(event), usize::from(reads_event(&bodies[*event])))).collect();
 	let stays = !page_handlers.is_empty() || lowered.iter().any(defines_timer);
 	let lowered = if stays { with_output_binding(lowered, &main_variables) } else { lowered };
@@ -128,13 +144,16 @@ pub fn lower(program: Node) -> Node {
 /// `on conect {…}` where nothing raises conect never runs (Node's emitter.on("conect") is silent): a warning, naming
 /// a raised event one letter away, and the statements without it (it ran its body once, as a block). Page and system
 /// events come from outside the program
-fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &HashSet<String>) -> Result<Vec<Node>, Node> {
+fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &HashSet<String>, errors: &HashSet<String>) -> Result<Vec<Node>, Node> {
 	// `once ready {…}` of a variable is a variable listener (variable_signals.rs)
 	let from_outside = |name: &str| PAGE_EVENTS.contains(&name) || SYSTEM_EVENTS.contains(&name) || variables.contains(name);
 	let unraised = |statement: &Node| named_handler(statement).map(|(_, (name, _, _))| name).filter(|name| !raised.contains(name) && !from_outside(name));
 	let warnings: Vec<crate::diagnostic::Diagnostic> = statements.iter().filter_map(|statement| unraised(statement).map(|name| {
-		let hint = crate::extensions::strings::near_miss(&name, raised.iter().cloned()).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
-		crate::diagnostic::Diagnostic::at(statement, format!("on {name}: nothing raises {name}, so this handler never runs{hint}"))
+		let hint = match errors.contains(&name) {
+			true => format!("; `raise {name}` is an error (P163), `emit {name}` sends the event"),
+			false => crate::extensions::strings::near_miss(&name, raised.iter().cloned()).map(|near| format!("; did you mean {near}?")).unwrap_or_default(),
+		};
+		crate::diagnostic::Diagnostic::at(statement, format!("on {name}: nothing emits {name}, so this handler never runs{hint}"))
 	})).collect();
 	if !warnings.is_empty() {
 		crate::diagnostic::report(&warnings)?;
@@ -177,7 +196,7 @@ fn subscribed_in_blocks(statements: Vec<Node>, raised: &HashSet<String>) -> Vec<
 	let mut subscribed: Vec<String> = vec![];
 	let statements: Vec<Node> = statements.into_iter().map(|statement| match handler(&statement) {
 		Some(_) => statement,
-		None => statement.map_children(|child| subscriptions(child, raised, &mut subscribed)),
+		None => statement.map_children(|child| subscriptions(child, raised, &mut subscribed, false)),
 	}).collect();
 	let started = subscribed.iter().flat_map(|event| {
 		let list = subscribers_name(event);
@@ -187,9 +206,14 @@ fn subscribed_in_blocks(statements: Vec<Node>, raised: &HashSet<String>) -> Vec<
 	started.chain(statements).collect()
 }
 
-/// A raised event's handler in a block, not in a function, becomes its subscription
-fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<String>) -> Node {
+/// A raised event's handler in a block, not in a function, becomes its subscription; one in a loop subscribes at each
+/// pass (a listener leak, unless meant), which a got-it note says
+fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<String>, in_loop: bool) -> Node {
 	if let Some((event, body, false)) = handler(&node).filter(|(event, _, _)| raised.contains(event)) {
+		if in_loop {
+			let reason = format!("a handler in a loop subscribes once per pass: each emit {event} runs all of them; subscribe before the loop unless that is meant");
+			crate::diagnostic::advise_once(LOOP_SUBSCRIPTION_TOPIC, &format!("on {event} {{…}}"), "on … before the loop", &reason);
+		}
 		let list = Node::Symbol(subscribers_name(&event));
 		let listener = Node::Key(Box::new(Node::Symbol(EVENT_WORD.to_string())), Op::FatArrow, Box::new(body));
 		let added = Node::Key(Box::new(list.clone()), Op::Add, Box::new(Node::List(vec![listener], Bracket::Square, Separator::None)));
@@ -198,9 +222,19 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 		}
 		return Node::Key(Box::new(list), Op::Assign, Box::new(added));
 	}
+	let in_loop = in_loop || is_loop(&node);
 	match node.drop_meta() {
 		Node::Key(_, Op::Define, _) => node,
-		_ => node.map_children(|child| subscriptions(child, raised, subscribed)),
+		_ => node.map_children(|child| subscriptions(child, raised, subscribed, in_loop)),
+	}
+}
+
+/// `for i in xs {…}`, `while c {…}`, `repeat 3 {…}`
+fn is_loop(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(_, Op::While, _) => true,
+		Node::List(items, _, _) => items.first().is_some_and(|first| LOOP_WORDS.contains(&word(first).as_str())),
+		_ => false,
 	}
 }
 
@@ -289,17 +323,31 @@ fn handler(statement: &Node) -> Option<(String, Node, bool)> {
 	Some((name, body, once))
 }
 
-/// `raise alarm`, `raise stop the machine{reason:"…"}`, `raise item 1`: the name and the data (ø without)
-fn raise(node: &Node) -> Option<(String, Node)> {
+/// The words that emit in this program: emit, send and the aliases it does not define or assign itself
+fn emit_verbs(program: &Node, variables: &HashSet<String>) -> Vec<String> {
+	let mut defined = variables.clone();
+	program.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
+		let name = match head.drop_meta() {
+			Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
+			other => word(other),
+		};
+		defined.insert(name);
+	});
+	EMIT_WORDS.iter().chain(EMIT_ALIASES.iter()).filter(|verb| !defined.contains(**verb)).map(|verb| verb.to_string()).collect()
+}
+
+/// `emit alarm`, `emit stop the machine{reason:"…"}`, `emit item 1` (or a `verbs` word): the name and the data (ø
+/// without)
+fn emitted(node: &Node, verbs: &[String]) -> Option<(String, Node)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
-	let (raise, rest) = items.split_first()?;
+	let (verb, rest) = items.split_first()?;
 	let (last, words) = rest.split_last()?;
-	if word(raise) != RAISE_WORD {
+	if !verbs.contains(&word(verb)) {
 		return None;
 	}
 	let (last_word, data) = match last.drop_meta() {
 		Node::Key(name, Op::Colon, data) if matches!(data.drop_meta(), Node::List(_, Bracket::Curly, _)) => (name.as_ref().clone(), data.as_ref().clone()),
-		// `raise item 1`, `raise said "hi"`: a value after the words is the data (EventEmitter's emit("item", 1))
+		// `emit item 1`, `emit said "hi"`: a value after the words is the data (EventEmitter's emit("item", 1))
 		Node::Number(_) | Node::Text(_) | Node::Char(_) if !words.is_empty() => return Some((event_name(words.iter())?, last.clone())),
 		_ => (last.clone(), Node::Empty),
 	};
@@ -326,9 +374,9 @@ fn reflected_events(program: &Node, verb: &str) -> HashSet<String> {
 	events
 }
 
-fn raised_names(program: &Node) -> HashSet<String> {
+fn emitted_names(program: &Node, verbs: &[String]) -> HashSet<String> {
 	let mut names = HashSet::new();
-	program.visit(&mut |part| if let Some((name, _)) = raise(part) { names.insert(name); });
+	program.visit(&mut |part| if let Some((name, _)) = emitted(part, verbs) { names.insert(name); });
 	names
 }
 
@@ -402,19 +450,69 @@ fn reads_event(bodies: &[Node]) -> bool {
 	bodies.iter().flat_map(symbols).any(|name| name == EVENT_WORD)
 }
 
-/// Each `raise name{data}` with handlers is the call `on·name(data)`, `on·name()` when no handler reads `event`
-fn raises_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>) -> Node {
-	if let Some((name, data)) = raise(&node).filter(|(name, _)| handled.contains_key(name)) {
-		let arguments = if reads_event(&handled[&name]) { vec![data] } else { vec![] };
-		let call = Node::List([vec![Node::Symbol(handler_function_name(&name))], arguments].concat(), Bracket::Round, Separator::None);
-		// `{ raise alarm }` is a block of one statement: it stays a block
+/// `on a {emit b}; on b {emit a}` never ends (the stack overflows at run time): the first cycle of handlers that emit
+/// the next one without a condition, `[a, b]`. A once handler or a named one runs under a flag, so it breaks a cycle
+fn emit_cycle(bodies: &HashMap<String, Vec<Node>>, verbs: &[String]) -> Option<Vec<String>> {
+	let edges: HashMap<String, Vec<String>> = bodies.iter().map(|(name, handlers)| {
+		let emitted = handlers.iter().flat_map(|body| unconditional_emits(body, verbs)).filter(|next| bodies.contains_key(next));
+		(name.clone(), emitted.collect())
+	}).collect();
+	let mut names: Vec<&String> = bodies.keys().collect();
+	names.sort();
+	let mut done = HashSet::new();
+	names.into_iter().find_map(|name| cycle_from(name, &edges, &mut vec![], &mut done))
+}
+
+fn cycle_from(name: &str, edges: &HashMap<String, Vec<String>>, path: &mut Vec<String>, done: &mut HashSet<String>) -> Option<Vec<String>> {
+	if let Some(start) = path.iter().position(|visited| visited == name) {
+		return Some(path[start..].to_vec());
+	}
+	if !done.insert(name.to_string()) {
+		return None;
+	}
+	path.push(name.to_string());
+	let cycle = edges[name].iter().find_map(|next| cycle_from(next, edges, path, done));
+	path.pop();
+	cycle
+}
+
+/// The events a handler body emits at its top level, outside any condition or loop
+fn unconditional_emits(body: &Node, verbs: &[String]) -> Vec<String> {
+	if let Some((name, _)) = emitted(body, verbs) {
+		return vec![name];
+	}
+	match body.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) => statements.iter().filter_map(|statement| emitted(statement, verbs).map(|(name, _)| name)).collect(),
+		_ => vec![],
+	}
+}
+
+/// Each `emit name{data}` with handlers is the call `on·name(data)`, `on·name()` when no handler reads `event`; one
+/// nobody handles is ø, nothing
+fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[String]) -> Node {
+	if let Some((name, data)) = emitted(&node, verbs) {
+		let verb = match node.drop_meta() {
+			Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
+			_ => String::new(),
+		};
+		if EMIT_ALIASES.contains(&verb.as_str()) {
+			crate::diagnostic::educate_once(EMIT_TOPIC, &verb, "emit", &format!("`emit {name}` sends an event to its handlers (P163)"));
+		}
+		let call = match handled.get(&name) {
+			Some(bodies) => {
+				let arguments = if reads_event(bodies) { vec![data] } else { vec![] };
+				Node::List([vec![Node::Symbol(handler_function_name(&name))], arguments].concat(), Bracket::Round, Separator::None)
+			}
+			None => Node::Empty,
+		};
+		// `{ emit alarm }` is a block of one statement: it stays a block
 		let braced = matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
 		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };
 	}
 	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| raises_as_calls(item, handled)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(raises_as_calls(*left, handled)), op, Box::new(raises_as_calls(*right, handled))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(raises_as_calls(*node, handled)), data },
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| emits_as_calls(item, handled, verbs)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(emits_as_calls(*left, handled, verbs)), op, Box::new(emits_as_calls(*right, handled, verbs))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(emits_as_calls(*node, handled, verbs)), data },
 		other => other,
 	}
 }
