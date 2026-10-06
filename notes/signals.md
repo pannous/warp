@@ -56,7 +56,8 @@ JSON, wasp text). A state signal is a **variable**: nothing new to write, `x = 3
    A named handler `h = on alarm {…}` runs while its flag `h_listening` holds: `remove h from listeners of alarm`
    (or `listeners of alarm -= h`, also from inside its own body) clears it, `clear listeners of alarm` clears every
    handler's, `count listeners of alarm` counts the listening ones. `raise item 1` carries the value 1 as `event`.
-   Not yet: handlers inside loops or blocks (card handlers-blocks).
+   A handler inside a block subscribes each time the block runs (`for i in 1 to 3 { on tick {…} }` adds three):
+   `tick_listeners = tick_listeners + [event => body]`, run by one main-level handler (subscribed_in_blocks).
    Ported cases of Svelte, Vue, Solid, RxJS, C#, Node, Qt and the DOM: probes/reactive_ports.md,
    tests/control/test_reactive_ports.rs.
 5. **Type**: a variable keeps its value type `T`. Only a signal that *escapes* as a value (passed to a function that

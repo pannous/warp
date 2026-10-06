@@ -30,6 +30,9 @@ const COUNT_WORD: &str = "count";
 const CLEAR_WORD: &str = "clear";
 /// `alarm_handler_3`: the flag name of an unnamed handler of a cleared event
 const HANDLER_SUFFIX: &str = "_handler_";
+/// `tick_listeners`: the handlers of tick subscribed inside blocks, `tick_listener` one of them
+const SUBSCRIBERS_SUFFIX: &str = "_listeners";
+const SUBSCRIBER_SUFFIX: &str = "_listener";
 const RAISE_WORD: &str = "raise";
 /// `on set x` and `on change x` are variable listeners (variable_signals.rs)
 const VARIABLE_LISTENER_WORDS: [&str; 2] = ["set", "change"];
@@ -52,6 +55,7 @@ pub fn lower(program: Node) -> Node {
 	// an event whose listeners are counted is handled even when nothing raises it yet (`count listeners of tick`)
 	let variables = main_level_variables(&statements);
 	let raised: HashSet<String> = raised_names(&program).into_iter().chain(reflected_events(&program, COUNT_WORD).into_iter().filter(|event| !variables.contains(event))).collect();
+	let statements = subscribed_in_blocks(statements, &raised);
 	// `clear listeners of alarm` stops every handler of alarm: each gets a flag as a named one has
 	let cleared: HashSet<String> = reflected_events(&program, CLEAR_WORD).into_iter().filter(|event| !variables.contains(event)).collect();
 	let mut flags: Vec<(String, Node)> = vec![];
@@ -120,6 +124,44 @@ fn run_once(body: Node, flags: &mut Vec<(String, Node)>) -> Node {
 	flags.push((flag.clone(), Node::False));
 	let not_fired = Node::Key(Box::new(Node::Symbol(flag.clone())), Op::Eq, Box::new(Node::False));
 	if_then(not_fired, block(vec![assign(&flag, Node::True), body]))
+}
+
+/// `for i in 1 to 3 { on tick {…} }`: a handler inside a block subscribes each time the block runs (Node's emitter.on):
+/// `tick_listeners = tick_listeners + [event => body]`, and one main-level handler runs the subscribed ones. The
+/// statements with `tick_listeners = []` and that handler first
+fn subscribed_in_blocks(statements: Vec<Node>, raised: &HashSet<String>) -> Vec<Node> {
+	let mut subscribed: Vec<String> = vec![];
+	let statements: Vec<Node> = statements.into_iter().map(|statement| match handler(&statement) {
+		Some(_) => statement,
+		None => statement.map_children(|child| subscriptions(child, raised, &mut subscribed)),
+	}).collect();
+	let started = subscribed.iter().flat_map(|event| {
+		let list = subscribers_name(event);
+		let listener = format!("{}{SUBSCRIBER_SUFFIX}", event.replace(' ', "_"));
+		[parse(&format!("{list} = []")), parse(&format!("on {event} {{ for {listener} in {list} {{ {listener}(event) }} }}"))]
+	});
+	started.chain(statements).collect()
+}
+
+/// A raised event's handler in a block, not in a function, becomes its subscription
+fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<String>) -> Node {
+	if let Some((event, body, false)) = handler(&node).filter(|(event, _, _)| raised.contains(event)) {
+		let list = Node::Symbol(subscribers_name(&event));
+		let listener = Node::Key(Box::new(Node::Symbol(EVENT_WORD.to_string())), Op::FatArrow, Box::new(body));
+		let added = Node::Key(Box::new(list.clone()), Op::Add, Box::new(Node::List(vec![listener], Bracket::Square, Separator::None)));
+		if !subscribed.contains(&event) {
+			subscribed.push(event);
+		}
+		return Node::Key(Box::new(list), Op::Assign, Box::new(added));
+	}
+	match node.drop_meta() {
+		Node::Key(_, Op::Define, _) => node,
+		_ => node.map_children(|child| subscriptions(child, raised, subscribed)),
+	}
+}
+
+fn subscribers_name(event: &str) -> String {
+	format!("{}{SUBSCRIBERS_SUFFIX}", event.replace(' ', "_"))
 }
 
 /// `h = on alarm {body}` (Node's emitter.on returning a handle, P128): the handler and the name it can be removed by

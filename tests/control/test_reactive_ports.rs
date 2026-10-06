@@ -95,3 +95,11 @@ fn a_raise_carries_a_plain_value() {
 	is!("n = 0; on item {n += event}; raise item 5; raise item 6; n", 11);
 	is!("msg = \"\"; on said {msg = event}; raise said \"hi\"; msg", "hi");
 }
+
+// EventEmitter.on in a loop: a handler inside a block subscribes each time the block runs, with that pass's values
+#[test]
+fn a_handler_in_a_block_subscribes_each_pass() {
+	is!("hits = 0; for i in 1 to 3 { on tick2 {hits += 1} }; raise tick2; hits", 3);
+	is!("log = 0; for i in 1 to 3 { on tick {log = log*10 + i} }; raise tick; log", 123);
+	is!("n = 0; on alarm {n += 100}; if 1 { on alarm {n += event} }; raise alarm 5; n", 105);
+}
