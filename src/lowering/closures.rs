@@ -244,6 +244,8 @@ fn calls_closure(node: &Node, variable: &str) -> bool {
 /// The last statement of a body: its value
 pub(crate) fn tail(body: &Node) -> &Node {
 	match body.drop_meta() {
+		// Swift's closure `{ $0 * $1 }` is a value, no block to look into
+		closure @ Node::List(_, Bracket::Curly, _) if arrow_lambda(closure).is_some() => closure,
 		Node::List(items, Bracket::Curly | Bracket::Round, Separator::Semicolon | Separator::Newline) if !items.is_empty() => tail(&items[items.len() - 1]),
 		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 => tail(&items[0]),
 		Node::List(items, _, _) if is_return(items) => tail(&items[1]),
@@ -455,6 +457,7 @@ impl Lifting {
 	fn walk(&mut self, node: Node, bound: &HashSet<String>) -> Node {
 		if let Some(params) = definition_parameters(&node, &self.functions) {
 			let Node::Key(head, op, body) = node.drop_meta().clone() else { unreachable!("a definition") };
+			let has_parameters = !params.is_empty();
 			let inner: HashSet<String> = bound.iter().cloned().chain(params).collect();
 			let name = match head.drop_meta() {
 				Node::List(items, _, _) => items.first().map(|name| name.drop_meta().name()).unwrap_or_default(),
@@ -462,7 +465,11 @@ impl Lifting {
 			};
 			let full_name = self.function_named(&name).unwrap_or(name);
 			self.enclosing.push(full_name);
-			let body = self.walk(*body, &inner);
+			let body = match *body {
+				// `g(a, b) := { $0 - $1 }`: with parameters the block is the body, its `$0` the first parameter, no closure
+				Node::List(items, Bracket::Curly, separator) if has_parameters => Node::List(items.into_iter().map(|item| self.walk(item, &inner)).collect(), Bracket::Curly, separator),
+				body => self.walk(body, &inner),
+			};
 			let body = self.function_value(body, &inner);
 			self.enclosing.pop();
 			return Node::Key(head, op, Box::new(body));
