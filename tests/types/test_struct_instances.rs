@@ -107,3 +107,9 @@ fn a_hyphenated_field_of_an_instance() {
 	is!("class person{phone-number:text}; p = person{phone-number:\"12\"}; p.phone-number", "12");
 	is!("class person{phone-number:text}; p = person{phone-number:\"12\"}; p.phone-number = \"3\"; p.phone-number", "3");
 }
+
+/// Card struct-backend: a field of any name is a struct field, also a quoted one with a space (was a stack overflow)
+#[test]
+fn a_quoted_field_of_an_instance() {
+	is!("class P{\"my field\":int}; p = P{\"my field\":1}; p[\"my field\"]", 1);
+}
