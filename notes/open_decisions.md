@@ -105,6 +105,16 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   (alias `this`) too; P116 `c.inc()` updates the variable c (objects are values, like `xs.add(v)`); P117 a body
   definition without parentheses (`area := side*side`) is a getter computed at each read, and `class b extends a`
   copies a's fields and methods (b's own override) (user chose inheritance over the recommended none).
+- P122 (classes, warp-8e, card g-1nug) static members take the explicit keyword (user chose this over the
+  recommended "`pi = 3` in the class body is a constant"): `class circle{r:int; static pi = 3}; circle.pi` → 3, also
+  `c.pi`, never stored per instance; a plain `pi = 3` stays a per-instance field with a default value. `static` no
+  longer gets the "no meaning in wasp" note (P78).
+- P123 (classes, warp-8e) an object's text is the constructor form `point{x:1 y:2}` everywhere: as a result, from
+  `string(p)` and from `print p`; it reads back in as the same value.
+  Follow-up (user): "Maybe Point{x:1 y:2} to distinguish it from untyped data (but that's just optional convention
+  when printing.)" Assumed (undoable): the printer writes the class name as declared, so it still reads back; the
+  convention is to declare classes capitalized (`class Point`) in docs, examples and new tests, so a typed object
+  `Point{x:1 y:2}` stands apart from untyped tagged data `point{x:1 y:2}`. The printer does not capitalize on its own.
 - P118 GPU maps (warp-d9, notes/simd.md): only after SIMD lands, only on an explicit `@gpu` map, never silent
   offloading (f32 differs); native first via wgpu. Card in Later.
 - P119 NaN canonicalization only where a float's bits are observable (print/text, bit reads, memory stores, host/FFI

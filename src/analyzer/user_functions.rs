@@ -977,12 +977,10 @@ pub(super) fn extract_param(item: &Node) -> Option<Param> {
 				None
 			}
 		}
-		Node::Key(n, Op::Assign, default) => {
-			if let Node::Symbol(s) = n.drop_meta() {
-				Some(Param { name: s.clone(), annotation: None, default: Some(default.as_ref().clone()), used_as: None })
-			} else {
-				None
-			}
+		// `b=2` and the typed `b:int=2`
+		Node::Key(declared, Op::Assign, default) => {
+			let param = extract_param(declared)?;
+			Some(Param { default: Some(default.as_ref().clone()), ..param })
 		}
 		_ => None,
 	}
