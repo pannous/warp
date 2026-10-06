@@ -1261,6 +1261,8 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 			parameters = vec![Node::Key(Box::new(parameter.clone()), Op::Colon, Box::new(type_word.clone()))];
 		}
 	}
+	// Kotlin/Scala `def square(x) = x*x` defines as `:=` does, so the passes reading definitions see it (P143)
+	let op = if parameters.is_empty() { op } else { Op::Define };
 	let head = Node::List(std::iter::once(name.clone()).chain(parameters).collect(), Bracket::Round, Separator::None);
 	let target = match result_type {
 		Some(result_type) => Node::Key(Box::new(head), Op::Colon, Box::new(result_type)),

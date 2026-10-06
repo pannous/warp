@@ -54,6 +54,7 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	let program = all_calls(program);
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
+	implicit_definitions(&program, &mut found); // `square := it*it` and `f = x => …` take arguments too (P143)
 	let mut arities: HashMap<String, Arity> = HashMap::new();
 	for definition in &found {
 		let count = definition.params.len();
@@ -183,6 +184,14 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			}
 			let call = Node::List(vec![head, *left], Bracket::None, Separator::Space);
 			Node::Key(Box::new(nest_prefix_calls(call, arities)), op, Box::new(nest_prefix_calls(*right, arities)))
+		}
+		// the same phrase the parser grouped the other way, `(square 3) == 9`, when it did not know square takes a value
+		// (`square := it*it`): untyped, as ambiguous; an ordering `f 3-1 > 15` stays `(f 3-1) > 15` (test_footguns)
+		Node::Key(left, op @ (Op::Eq | Op::Ne), right) if matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first))) => {
+			let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
+			let (name, argument, right_text) = (items[0].drop_meta().name(), items[1].serialize(), right.serialize());
+			let message = format!("{name} {argument} {op} {right_text} is ambiguous; write ({name} {argument}) {op} {right_text} or {name}({argument} {op} {right_text})");
+			crate::diagnostic::Diagnostic::at(&left, message).into_error()
 		}
 		Node::List(items, Bracket::None, Separator::Colon) if items.len() > 1 => {
 			let mut items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();

@@ -38,3 +38,13 @@ fn a_list_built_by_appending_broadcasts() {
 	assert_eq!(printed("square(x) := x*x; xs = []; xs.add(2); xs.add(3); ys = square all xs; ys"), "[4 9]");
 	assert_eq!(printed("square(x) := x*x; xs = []; for i in 1..3 { xs = xs + [i] }; square xs"), "[1 4]");
 }
+
+#[test]
+fn every_definition_form_is_ambiguous_next_to_a_comparison() {
+	// card p143-misses: these gave 0 and 1 silently
+	crate::common::fails_with("def square(x) = x*x; square 3 == 9", "write (square 3) == 9 or square(3 == 9)");
+	crate::common::fails_with("square := it*it; square 3 == 9", "write (square 3) == 9 or square(3 == 9)");
+	crate::common::fails_with("square = x => x*x; square 3 == 9", "write (square 3) == 9 or square(3 == 9)");
+	assert_eq!(printed("def square(x: int) = x*x; square 3 == 9"), "1");
+	assert_eq!(printed("square := it*it; (square 3) == 9"), "1");
+}
