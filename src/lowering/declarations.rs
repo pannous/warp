@@ -508,6 +508,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 		});
 	let node = guarded_calls(node, &guardable, &wrapped);
 	let node = resolved(node, &path, &wrapped);
+	let node = forwarded_raises(node, &wrapped);
 	with_node_wrappers(node, &wrapped.into_inner())
 }
 
@@ -667,6 +668,35 @@ pub(crate) fn with_definitions_first(node: Node, mut definitions: Vec<Node>) -> 
 		}
 	}
 }
+
+/// A raise inside a task reaches the starting thread's handlers (P110, notes/signals.md phase 6): each handler
+/// `on·alarm(event) := body` (event_signals.rs) becomes `if task_inside() { signal_send("on·alarm·node", [event]) } else
+/// { body }`, so in a task's instance it forwards the event, and the program runs it through the node wrapper
+fn forwarded_raises(node: Node, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
+	let handlers: std::collections::HashSet<String> = crate::event_signals::handled_signals(&node).into_iter().map(|(_, function)| function).collect();
+	if handlers.is_empty() {
+		return node;
+	}
+	fn forward(node: Node, handlers: &std::collections::HashSet<String>, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
+		match node {
+			Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if handlers.contains(&word(&items[0]))) => {
+				let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
+				let function = word(&items[0]);
+				wrapped.borrow_mut().insert(function.clone(), items.len() - 1);
+				let arguments = Node::List(items[1..].to_vec(), Bracket::Square, Separator::Colon);
+				let send = marker(crate::host::SIGNAL_SEND, vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments]);
+				let template = crate::wasp_parser::parse(&format!("if {}() {{ {FORWARD_PLACEHOLDER} }} else {{ {BODY_PLACEHOLDER} }}", crate::host::TASK_INSIDE));
+				let body = crate::library_words::substitute(crate::library_words::substitute(template, FORWARD_PLACEHOLDER, &send), BODY_PLACEHOLDER, &body);
+				Node::Key(head, Op::Define, Box::new(body))
+			}
+			other => other.map_children(|child| forward(child, handlers, wrapped)),
+		}
+	}
+	forward(node, &handlers, wrapped)
+}
+
+const FORWARD_PLACEHOLDER: &str = "forwarded_raise_placeholder";
+const BODY_PLACEHOLDER: &str = "handler_body_placeholder";
 
 /// `task·check(task_join(job), task_failure(job)); task_await(job)`: a failed task raises its error from wasm, which
 /// `try` catches, before the result is read

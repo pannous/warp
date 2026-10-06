@@ -79,3 +79,4 @@ mod test_after;
 mod test_parallel_map;
 mod test_implicit_await;
 mod test_task_parameter_shadows;
+mod test_task_signals;

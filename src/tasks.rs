@@ -20,7 +20,8 @@ use wasmtime::{AnyRef, AsContextMut, Caller, Engine, Func, Global, Linker, Memor
 const EPOCH_TICK: Duration = Duration::from_millis(5);
 /// The main program's epoch deadline: it never stops at an epoch check
 pub const MAIN_EPOCH_DEADLINE: u64 = 1 << 62;
-const TASK_WORDS: [&str; 9] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, crate::host::TASK_POLL];
+const TASK_WORDS: [&str; 11] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, crate::host::TASK_POLL,
+	crate::host::TASK_INSIDE, crate::host::SIGNAL_SEND];
 /// The failure a stopped task ends with (TaskControl::checkpoint), told apart by task_status
 const STOPPED: &str = "task stopped";
 /// The exported constructors a value is rebuilt with in an instance
@@ -297,6 +298,8 @@ pub struct TaskTable {
 	slots: Mutex<HashMap<i64, Slot>>,
 	/// the tasks whose result or failure the program read (await, join): a failure nobody read ends the run (join_all)
 	taken: Mutex<std::collections::HashSet<i64>>,
+	/// raises inside tasks for the starting thread: the handler's node wrapper and the argument list (deliver)
+	signals: Mutex<Vec<(String, TaskValue)>>,
 	controls: Mutex<HashMap<i64, Arc<TaskControl>>>,
 	next_id: AtomicI64,
 	/// the shared arrays of the run, linked into every task (shared.rs)
@@ -306,7 +309,7 @@ pub struct TaskTable {
 /// Link task_spawn and task_await for `module`, sharing one table with every task it starts
 pub fn link(linker: &mut Linker<HostState>, engine: &Engine, module: &Module, imports: Imports, shared: Option<Arc<crate::shared::SharedArrays>>) -> Result<Arc<TaskTable>> {
 	let table = Arc::new(TaskTable {
-		engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), taken: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1), shared,
+		engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), taken: Mutex::default(), signals: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1), shared,
 	});
 	table.link_into(linker)?;
 	tick_while_running(Arc::downgrade(&table));
@@ -371,8 +374,13 @@ impl TaskTable {
 			let built = builders.build(&value, &mut caller.as_context_mut()).map_err(host_error)?;
 			Ok(built.unwrap_anyref().copied())
 		})?;
+		// every await joins first: the raises the task forwarded run here, before its value is read
 		let joiner = self.clone();
-		linker.func_wrap(HOST_LIBRARY, TASK_JOIN, move |id: i64| -> i64 { joiner.take(id).is_err() as i64 })?;
+		linker.func_wrap(HOST_LIBRARY, TASK_JOIN, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<i64> {
+			let failed = joiner.take(id).is_err() as i64;
+			joiner.deliver_to(&mut caller).map_err(host_error)?;
+			Ok(failed)
+		})?;
 		let reporter = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_FAILURE, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
 			let message = reporter.take(id).err().unwrap_or_default();
@@ -380,9 +388,26 @@ impl TaskTable {
 			let built = builders.build(&TaskValue::Text(message), &mut caller.as_context_mut()).map_err(host_error)?;
 			Ok(built.unwrap_anyref().copied())
 		})?;
-		linker.func_wrap(HOST_LIBRARY, crate::host::TASK_POLL, || {})?; // natively the epoch checks pause a task
+		// natively the epoch checks pause a task: a loop start only runs the forwarded raises
+		let poller = self.clone();
+		linker.func_wrap(HOST_LIBRARY, crate::host::TASK_POLL, move |mut caller: Caller<'_, HostState>| -> wasmtime::Result<()> {
+			poller.deliver_to(&mut caller).map_err(host_error)
+		})?;
 		let observer = self.clone();
-		linker.func_wrap(HOST_LIBRARY, TASK_STATUS, move |id: i64| -> i64 { observer.status(id) })?;
+		linker.func_wrap(HOST_LIBRARY, TASK_STATUS, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<i64> {
+			let status = observer.status(id);
+			observer.deliver_to(&mut caller).map_err(host_error)?;
+			Ok(status)
+		})?;
+		linker.func_wrap(HOST_LIBRARY, crate::host::TASK_INSIDE, |caller: Caller<'_, HostState>| -> i64 { caller.data().in_task as i64 })?;
+		let sender = self.clone();
+		linker.func_wrap(HOST_LIBRARY, crate::host::SIGNAL_SEND, move |mut caller: Caller<'_, HostState>, handler: i32, arguments: Option<Rooted<AnyRef>>| -> wasmtime::Result<i64> {
+			let handler = c_string(&mut caller, handler).map_err(host_error)?;
+			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
+			let arguments = builders.read_value(&Val::AnyRef(arguments), &mut caller.as_context_mut()).map_err(host_error)?;
+			sender.signals.lock().expect("task signals").push((handler, arguments));
+			Ok(0)
+		})?;
 		let controller = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_CONTROL, move |id: i64, operation: i64| -> i64 { controller.control(id, operation) })?;
 		let awaiter = self.clone();
@@ -392,6 +417,36 @@ impl TaskTable {
 			builders.int_of(&value, &mut caller.as_context_mut()).map_err(host_error)
 		})?;
 		Ok(())
+	}
+
+	fn deliver_to(&self, caller: &mut Caller<'_, HostState>) -> Result<()> {
+		self.deliver(caller, &mut |caller, name| caller.get_export(name))
+	}
+
+	/// The raises tasks forwarded (signal_send), run in the program's instance by their handlers' node wrappers, in the
+	/// order they came; a task's own instance leaves them to the program
+	pub fn deliver<T: AsContextMut<Data = HostState>>(&self, context: &mut T, lookup: &mut dyn FnMut(&mut T, &str) -> Option<wasmtime::Extern>) -> Result<()> {
+		if context.as_context_mut().data().in_task {
+			return Ok(());
+		}
+		loop {
+			let pending = std::mem::take(&mut *self.signals.lock().expect("task signals"));
+			if pending.is_empty() {
+				return Ok(());
+			}
+			for (handler, arguments) in pending {
+				let builders = Builders::of(&mut |name| lookup(context, name))?;
+				let function = lookup(context, &handler).and_then(wasmtime::Extern::into_func).ok_or_else(|| anyhow!("no exported handler {handler}"))?;
+				let mut store = context.as_context_mut();
+				let argument = builders.build(&arguments, &mut store)?;
+				let mut results: Vec<Val> = function.ty(&store).results().map(|result| match result {
+					ValType::I64 => Val::I64(0),
+					ValType::F64 => Val::F64(0),
+					_ => Val::AnyRef(None),
+				}).collect();
+				function.call(&mut store, &[argument], &mut results)?;
+			}
+		}
 	}
 
 	/// The capture globals of the spawning instance, as their values now
@@ -426,7 +481,9 @@ impl TaskTable {
 
 	/// f(arguments) in a fresh instance of the module, with the same imports as the program
 	fn run(self: &Arc<Self>, function: &str, arguments: &[TaskValue], captured: &[(String, Captured)], control: Arc<TaskControl>) -> Result<TaskValue> {
-		let mut store = crate::util::fueled_store(&self.engine, HostState::new());
+		let mut state = HostState::new();
+		state.in_task = true;
+		let mut store = crate::util::fueled_store(&self.engine, state);
 		store.epoch_deadline_callback(move |_| control.checkpoint());
 		store.set_epoch_deadline(1);
 		let mut linker = Linker::new(&self.engine);
