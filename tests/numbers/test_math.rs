@@ -258,9 +258,9 @@ fn test_if_block_syntax() {
 #[test]
 fn test_while_loop() {
 	// Simple countdown: while x > 0 { x = x - 1 } returns 0
-	is!("x:=3; while x>2 { x -= 1 }", 2);
+	is!("x=3; while x>2 { x -= 1 }", 2);
 	// Alternative syntax: while x > 0 do x = x - 1
-	is!("x:=3; while x>0 do x = x - 1", 0);
+	is!("x=3; while x>0 do x = x - 1", 0);
 }
 
 #[test]
