@@ -77,6 +77,10 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   `f all xs` → map with a lambda (broadcasting.rs `all_calls`); library words of one value (`upper`, `round` …) and
   `abs`/`sqrt`/`cbrt` broadcast over a list literal or list variable. P143 (user): `f x == y` is `(f x) == y` when f's
   first parameter is typed as no truth value, else a loud error naming both forms. probes/broadcasting_forms.md.
+- Broadcasting (P142) now covers: lambda variables, library words over a call (`sum square xs`), several parameters
+  (`add [1, 2] 10`, the one list argument to a scalar parameter is mapped), `all` in any argument (`add(all xs, 10)`),
+  nested literals (`square all [[1, 2], [3]]` spliced at compile time), lists built by appending; `max xs` without
+  parentheses (min_max.rs). Same speed as map (call_benchmark.sh list rows): all lower to the same loop.
 
 ## Call efficiency (probes/call_benchmark.sh [N], 10^8 calls each)
 - Plain, default, named, overload and lambda calls compile to the same direct `call $f` with i64 arguments: equal
