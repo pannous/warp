@@ -137,4 +137,13 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   main polls at its start (which installs the handler) and before it returns; a ctrl-c also ends a `sleep` early
   (it sleeps in 10 ms slices once watching) and runs the handler. Test: tests/control/test_system_signals.rs
   (a real `warp run` gets a real SIGINT). The playground's host.js has `signal_poll` as a no-op.
-- Not yet: Windows (SetConsoleCtrlHandler), resident programs, the other sources (file change, timers, …).
+- Timers (P120, 2026-10-06): `on every 50 ms {…}` (src/lowering/system_signals.rs) is the handler `on·every·N()` and
+  `signal_every(N, ms)` where it is written; the runtime (crates/warp-runtime/src/system_signals.rs) runs due handlers
+  at every check point (loop starts, sleeps, which wake for them, main's start and end). `warp run`, `warp <file>` and
+  executables stay after main while a timer lives and say so once on stderr ("listening: every 5 seconds (ctrl-c to
+  stop)"); in-process eval and tests never wait. Only a program with `on interrupt` watches ctrl-c: any other ends at
+  one ctrl-c as usual.
+- `exit`, `exit(code)` (P121): a host word whose error unwinds the run (ExitRequest); the run's value is ø, the CLI and
+  executables exit with the code, the page ends the run. A bare `exit` / `exit()` statement is `exit(0)`.
+- Not yet: Windows (SetConsoleCtrlHandler), file change (`on file "x" change {…}`, notify crate 8.2 is in the
+  registry), timers in the playground (a warning says so), `stop listening`.
