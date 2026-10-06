@@ -633,7 +633,7 @@ const WRAPPER_RESULT: &str = "r·node";
 const WRAPPER_ARGUMENTS: &str = "arguments·node";
 
 /// The program with the wrappers of the started functions (name → parameter count) defined first
-fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, usize>) -> Node {
+pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, usize>) -> Node {
 	if wrapped.is_empty() {
 		return node;
 	}

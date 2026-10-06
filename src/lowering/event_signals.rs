@@ -3,6 +3,9 @@
 //! handlers of a name become one function `on·stop·the·machine(event)`, defined where the first of them is written and
 //! declaring `global` the main-level variables they mention, so a raise inside a function reaches them too; each raise
 //! of the name is its call. A raise whose name no handler listens to stays the exception (try catches it).
+//! Page events (phase 7): `on click {…}` and `on key {…}` are kept without a raise and get the wrapper
+//! `on·click·node([event])` (declarations::with_node_wrappers): the browser playground calls it when the page sees the
+//! event (web/playground/worker.js), natively nothing does.
 
 use crate::declarations::{handler_parts, word};
 use crate::node::{Bracket, Node, Separator};
@@ -22,13 +25,15 @@ const FUNCTION_TEMPLATE: &str = "handler(event) := {}";
 const PARAMETERLESS_TEMPLATE: &str = "handler() := {}";
 const TEMPLATE_NAME: &str = "handler";
 const EVENT_WORD: &str = "event";
+/// The events of the page that call their handlers from outside the program
+pub const PAGE_EVENTS: [&str; 2] = ["click", "key"];
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
 	let raised = raised_names(&program);
 	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
 		.filter_map(|(index, statement)| handler(statement).map(|(name, body)| (index, name, body)))
-		.filter(|(_, name, _)| raised.contains(name))
+		.filter(|(_, name, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()))
 		.collect();
 	if handlers.is_empty() {
 		return program;
@@ -49,7 +54,8 @@ pub fn lower(program: Node) -> Node {
 		None => Some(statement),
 	});
 	let lowered: Vec<Node> = lowered.map(|statement| raises_as_calls(statement, &bodies)).collect();
-	Node::List(lowered, bracket, separator)
+	let page_handlers = PAGE_EVENTS.iter().filter(|event| bodies.contains_key(**event)).map(|event| (handler_function_name(event), 1)).collect();
+	crate::declarations::with_node_wrappers(Node::List(lowered, bracket, separator), &page_handlers)
 }
 
 /// `on alarm {body}`, `on stop the machine {body}`, `on alarm: body`: the event's name and the body
