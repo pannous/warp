@@ -320,6 +320,8 @@ const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
+/// `try X catch Y finally Z`: Z runs after either, the value stays X's or Y's
+const FINALLY_KEYWORD: &str = "finally";
 const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
 /// `nand` and its glyph pair, both `not (a and b)`
 /// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
@@ -632,6 +634,8 @@ pub struct WaspParser {
 	after_function_keyword: bool,
 	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
 	elvis_operands: usize,
+	/// `try … catch … finally {…}` parsed so far, numbering the variables holding their values
+	finally_blocks: usize,
 	/// Names defined with `:=` so far: a braceless call of one may take an identifier argument anywhere (`fac it-1`)
 	functions: std::collections::HashSet<String>,
 	/// Those of them declared with named parameters (`f x y := …`), the rest take the implicit `it`
@@ -902,6 +906,7 @@ impl WaspParser {
 			pending_comment: None,
 			after_function_keyword: false,
 			elvis_operands: 0,
+			finally_blocks: 0,
 			functions: Default::default(),
 			functions_with_parameters: Default::default(),
 		}

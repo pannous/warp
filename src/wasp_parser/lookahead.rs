@@ -219,7 +219,23 @@ impl WaspParser {
 		};
 		// `catch e { … }` (P67): the name the fallback reads the caught Error by, a fourth item
 		let binding = caught.filter(|name| mentions(&fallback, name)).map(Symbol);
-		Node::List([vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(), Bracket::Round, Separator::None)
+		let guard = Node::List([vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(), Bracket::Round, Separator::None);
+		self.with_finally(guard)
+	}
+
+	/// `… finally {Z}` after a guard: `(finally·N = guard; Z; finally·N)`, Z runs and the guard's value stays
+	fn with_finally(&mut self, guard: Node) -> Node {
+		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		if self.word_at(ahead) != FINALLY_KEYWORD {
+			return guard;
+		}
+		self.advance_by(ahead + FINALLY_KEYWORD.len());
+		self.skip_spaces();
+		let cleanup = if self.current_char() == ':' { self.colon_body(":") } else { self.rest_of_statement() };
+		self.finally_blocks += 1;
+		let value = Symbol(format!("{FINALLY_KEYWORD}·{}", self.finally_blocks));
+		let held = Node::Key(Box::new(value.clone()), Op::Assign, Box::new(guard));
+		Node::List(vec![held, cleanup, value], Bracket::Round, Separator::Semicolon)
 	}
 
 	/// `after C return V`: the marker call `after·return(C, V)`, when a `return` follows on the statement (outside brackets);
