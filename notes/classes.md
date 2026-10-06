@@ -114,6 +114,26 @@ Design for the switch (not started in code yet):
 - Today's `$P` (type_manager field_def_to_wasm_field) is wrong for this: `int` is i32 (type_kinds field_storage
   maps "int" to I32) and every field is immutable. Fields must be mutable; an int field i64. Open question (to the
   Interviewer): an int field overflowing i64 (warp ints are unbounded): trap, or keep that field a Node.
+- Template: wasm_emitter/map_backend.rs (typed maps) plugs into exactly the points a struct backend needs; write
+  wasm_emitter/struct_backend.rs the same way and hook it in at the same places:
+  1. `find_typed_structs(program) -> HashMap<String, class>` like `find_typed_maps` (map_backend.rs:43): every
+     assignment of the name is `P{…}` (the lowered constructor; type_constructor.rs makes `P(1, 2)` into
+     `P{x:1 y:2}` with defaults) of one class; `p.x = v` (lowered `p#…` index write) allowed; any other write, a global
+     (`ctx.user_globals`), a capture (`ctx.captures`), a `RAN_WITHOUT_ERROR` block or a parameter excludes it.
+     Called where typed_maps is: mod.rs:1048 (main) and user_function_calls.rs:209 (bodies, saved and restored).
+  2. local type: list_dispatch.rs `local_storage_type` (line ~420): `(ref null $P·instance)`.
+  3. store: list_dispatch.rs `emit_typed_list_store` (~564) → `emit_typed_struct_store`: the field values in field
+     order (missing ones: their defaults, already filled by type_constructor), `struct.new`.
+  4. read: list_ops.rs `emit_indexed_node` (~1453, and the numeric path ~1029) when `typed_struct(target)` and
+     `constant_field_name(key)` is a field: `local.get; struct.get $P·instance idx`, then box as the Node the generic
+     path gives (or leave the i64 where the caller wants a number: see the ~1029 path).
+  5. as a value: list_dispatch.rs `emit_typed_list_as_node` (~651) → build today's Node key `P{x:… y:…}` from the
+     fields (a runtime function `P·as_node` per class, emitted once).
+  6. `ctx.user_type_indices`: use a separate instance struct per class (`P·instance`, mutable fields, int i64, float
+     f64, text/other Node refs) instead of changing today's `$P` (field_storage "int"→I32 is used for FFI/WIT
+     structs; do not change it).
+  Assumption (P-question pending with the Interviewer, Supervisor said go): an int field is i64; a value that does not
+  fit is a loud run-time error naming the field (only once writes exist, step 3).
 - The 108-byte module for `class P{x:int; y:int}; print P(1, 2)` returns `struct.new $P` from `i64.const` operands
   into i32 fields: check it validates (it ran, so someone converts; find the path before relying on it).
 
