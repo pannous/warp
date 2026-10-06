@@ -38,6 +38,8 @@ const GLOBAL_WORD: &str = "global";
 const LISTENERS_WORD: &str = "listeners";
 const OF_WORD: &str = "of";
 const CLEAR_WORD: &str = "clear";
+const FOR_WORD: &str = "for";
+const IN_WORD: &str = "in";
 
 /// A function definition: its name, parameter names and body
 struct Definition {
@@ -176,7 +178,8 @@ impl Subscriptions {
 	fn rewrite(&mut self, node: Node) -> Node {
 		if let Some(definition) = definition(&node) {
 			let locals = assigned_names(&definition.body);
-			let subscribable = |name: &String| definition.params.contains(name) || (self.main_variables.contains(name) && !locals.contains(name));
+			let over_params: Vec<String> = loop_variables(&definition.body).into_iter().filter(|(_, list)| definition.params.contains(list)).map(|(variable, _)| variable).collect();
+			let subscribable = |name: &String| definition.params.contains(name) || over_params.contains(name) || (self.main_variables.contains(name) && !locals.contains(name));
 			let subscribable: HashSet<String> = symbols(&definition.body).into_iter().filter(subscribable).collect();
 			let body = self.subscriptions(definition.body.clone(), &subscribable);
 			return with_body(node, body);
@@ -238,11 +241,11 @@ impl Subscriptions {
 pub fn lower(program: Node) -> Node {
 	let mut definitions = vec![];
 	collect_definitions(&program, &mut definitions);
-	let (signal_params, escaping) = escaping(&program, &definitions);
+	let Escaping { signal_params, list_params, signal_lists, escaping } = escaping(&program, &definitions);
 	if signal_params.is_empty() && escaping.is_empty() {
 		return program;
 	}
-	let mut signals = Signals { signal_params, escaping, made: HashSet::new() };
+	let mut signals = Signals { signal_params, list_params, signal_lists, escaping, made: HashSet::new() };
 	let program = signals.rewrite(program, &signals.escaping.clone(), true);
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
 	Node::List(std::iter::once(set_function()).chain(statements).collect(), bracket, separator)
@@ -251,6 +254,10 @@ pub fn lower(program: Node) -> Node {
 struct Signals {
 	/// (function, parameter index) of each parameter that takes a signal
 	signal_params: HashSet<(String, usize)>,
+	/// (function, parameter index) of each parameter that takes a list of signals (`for s in xs {on change s …}`)
+	list_params: HashSet<(String, usize)>,
+	/// the main-level variables holding a list of signals: their list literals keep the signals themselves
+	signal_lists: HashSet<String>,
 	/// the main-level variables that are signals
 	escaping: HashSet<String>,
 	/// the escaping variables made so far, in the order of the main-level statements
@@ -264,11 +271,22 @@ impl Signals {
 			let globals = declared_globals(&definition.body);
 			let mut inner: HashSet<String> = self.escaping.iter().filter(|name| !definition.params.contains(name) && (!locals.contains(*name) || globals.contains(*name))).cloned().collect();
 			inner.extend(definition.params.iter().enumerate().filter(|(index, _)| self.signal_params.contains(&(definition.name.clone(), *index))).map(|(_, name)| name.clone()));
+			let lists: Vec<&String> = definition.params.iter().enumerate().filter(|(index, _)| self.list_params.contains(&(definition.name.clone(), *index))).map(|(_, name)| name).collect();
+			inner.extend(loop_variables(&definition.body).into_iter().filter(|(_, list)| lists.contains(&list)).map(|(variable, _)| variable));
 			let body = self.rewrite(definition.body.clone(), &inner, false);
 			return with_body(node, body);
 		}
 		match node {
 			Node::Symbol(ref name) if signals.contains(name) => call(CELL_GET, vec![node]),
+			// `for s in xs {…}` over signals: s names the signal, its uses read it
+			Node::List(items, bracket, separator) if loop_variable(&items).is_some_and(|variable| signals.contains(&variable)) => {
+				let items = items.into_iter().enumerate().map(|(index, item)| if index == 1 { item } else { self.rewrite(item, signals, main) }).collect();
+				Node::List(items, bracket, separator)
+			}
+			// `watched = [a, b]` of a list of signals keeps the signals
+			Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(name) if self.signal_lists.contains(name)) => {
+				Node::Key(target, Op::Assign, Box::new(self.signals_kept(*value, signals, main)))
+			}
 			Node::Key(target, op, value) if is_write(op) && matches!(target.drop_meta(), Node::Symbol(name) if signals.contains(name)) => {
 				let name = target.drop_meta().name();
 				let value = match op {
@@ -297,6 +315,10 @@ impl Signals {
 					_ if function == SIGNAL_LISTENERS_SET || function == SIGNAL_LISTENERS => {
 						if index == 1 { item } else { self.rewrite(item, signals, main) }
 					}
+					_ if self.list_params.contains(&(function.clone(), index - 1)) => match item.drop_meta() {
+						Node::Symbol(name) if self.signal_lists.contains(name) || signals.contains(name) => item,
+						_ => self.signals_kept(item, signals, main),
+					},
 					_ if self.signal_params.contains(&(function.clone(), index - 1)) => match item.drop_meta() {
 						Node::Symbol(name) if signals.contains(name) => item,
 						_ => call(SIGNAL_NEW, vec![self.rewrite(item, signals, main)]),
@@ -314,47 +336,96 @@ impl Signals {
 		let Some(first) = items.first() else { return false };
 		let function = word(first);
 		let subscribes = (function == SIGNAL_LISTENERS_SET || function == SIGNAL_LISTENERS) && items.get(1).is_some_and(|signal| signals.contains(&word(signal)));
-		subscribes || (items.len() > 1 && self.signal_params.iter().any(|(name, _)| *name == function))
+		let takes = |params: &HashSet<(String, usize)>| params.iter().any(|(name, _)| *name == function);
+		subscribes || (items.len() > 1 && (takes(&self.signal_params) || takes(&self.list_params)))
+	}
+
+	/// A list literal of signals: its signal names stay the signals, everything else is rewritten as usual
+	fn signals_kept(&mut self, list: Node, signals: &HashSet<String>, main: bool) -> Node {
+		match list.drop_meta().clone() {
+			Node::List(items, Bracket::Square, separator) => {
+				let items = items.into_iter().map(|item| match item.drop_meta() {
+					Node::Symbol(name) if signals.contains(name) => item,
+					_ => self.rewrite(item, signals, main),
+				}).collect();
+				Node::List(items, Bracket::Square, separator)
+			}
+			other => self.rewrite(other, signals, main),
+		}
 	}
 }
 
-/// The parameters that take a signal, and the main-level variables that escape: subscribed to inside a function, or
-/// passed for such a parameter (through further calls too)
-fn escaping(program: &Node, definitions: &[Definition]) -> (HashSet<(String, usize)>, HashSet<String>) {
-	let mut signal_params = HashSet::new();
-	let mut escaping = HashSet::new();
+/// What escapes into signals
+struct Escaping {
+	signal_params: HashSet<(String, usize)>,
+	list_params: HashSet<(String, usize)>,
+	signal_lists: HashSet<String>,
+	escaping: HashSet<String>,
+}
+
+/// The parameters that take a signal or a list of them, and the main-level variables that escape: subscribed to inside
+/// a function, passed for such a parameter (through further calls too), or kept in a list passed for one
+fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
+	let mut found = Escaping { signal_params: HashSet::new(), list_params: HashSet::new(), signal_lists: HashSet::new(), escaping: HashSet::new() };
 	// the main level subscribes or reflects (`listeners of x`) too
 	without_definitions(program).visit(&mut |node| {
 		let Node::List(items, _, _) = node else { return };
 		if items.len() >= 2 && [SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET].contains(&word(&items[0]).as_str()) {
-			escaping.insert(word(&items[1]));
+			found.escaping.insert(word(&items[1]));
 		}
 	});
 	for definition in definitions {
+		let loops = loop_variables(&definition.body);
 		definition.body.visit(&mut |node| {
 			let Node::List(items, _, _) = node else { return };
 			if items.len() == 3 && word(&items[0]) == SIGNAL_LISTENERS_SET {
 				let name = word(&items[1]);
-				match definition.params.iter().position(|param| *param == name) {
-					Some(index) => { signal_params.insert((definition.name.clone(), index)); }
-					None => { escaping.insert(name); }
+				let over = loops.iter().find(|(variable, _)| *variable == name).map(|(_, list)| list.clone());
+				match (definition.params.iter().position(|param| *param == name), over.and_then(|list| definition.params.iter().position(|param| *param == list))) {
+					(Some(index), _) => { found.signal_params.insert((definition.name.clone(), index)); }
+					(None, Some(index)) => { found.list_params.insert((definition.name.clone(), index)); }
+					(None, None) => { found.escaping.insert(name); }
 				}
 			}
 		});
 	}
+	let main_lists = main_list_literals(program);
 	loop {
-		let before = (signal_params.len(), escaping.len());
+		let before = (found.signal_params.len(), found.list_params.len(), found.signal_lists.len(), found.escaping.len());
 		let mut passed = |scope: Option<&Definition>, node: &Node| {
 			let Node::List(items, _, _) = node else { return };
 			let Some(function) = items.first().map(word) else { return };
+			let param_of_scope = |name: &str| scope.and_then(|definition| definition.params.iter().position(|param| param == name).map(|position| (definition.name.clone(), position)));
 			for (index, argument) in items.iter().skip(1).enumerate() {
-				let Node::Symbol(name) = argument.drop_meta() else { continue };
-				if !signal_params.contains(&(function.clone(), index)) {
-					continue;
+				let key = (function.clone(), index);
+				if found.signal_params.contains(&key) {
+					if let Node::Symbol(name) = argument.drop_meta() {
+						match param_of_scope(name) {
+							Some(param) => { found.signal_params.insert(param); }
+							None => { found.escaping.insert(name.clone()); }
+						}
+					}
 				}
-				match scope.and_then(|definition| definition.params.iter().position(|param| param == name).map(|position| (definition, position))) {
-					Some((definition, position)) => { signal_params.insert((definition.name.clone(), position)); }
-					None => { escaping.insert(name.clone()); }
+				if found.list_params.contains(&key) {
+					let names: Vec<String> = match argument.drop_meta() {
+						Node::Symbol(name) => match param_of_scope(name) {
+							Some(param) => {
+								found.list_params.insert(param);
+								vec![]
+							}
+							None => {
+								found.signal_lists.insert(name.clone());
+								main_lists.iter().filter(|(list, _)| list == name).flat_map(|(_, literal)| named_items(literal)).collect()
+							}
+						},
+						literal => named_items(literal),
+					};
+					for name in names {
+						match param_of_scope(&name) {
+							Some(param) => { found.signal_params.insert(param); }
+							None => { found.escaping.insert(name); }
+						}
+					}
 				}
 			}
 		};
@@ -362,10 +433,54 @@ fn escaping(program: &Node, definitions: &[Definition]) -> (HashSet<(String, usi
 		for definition in definitions {
 			definition.body.visit(&mut |node| passed(Some(definition), node));
 		}
-		if (signal_params.len(), escaping.len()) == before {
-			return (signal_params, escaping);
+		if (found.signal_params.len(), found.list_params.len(), found.signal_lists.len(), found.escaping.len()) == before {
+			return found;
 		}
 	}
+}
+
+/// The variables a list literal names as its items: `[a, b]` → a, b
+fn named_items(list: &Node) -> Vec<String> {
+	match list.drop_meta() {
+		Node::List(items, Bracket::Square, _) => items.iter().filter_map(|item| match item.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		}).collect(),
+		_ => vec![],
+	}
+}
+
+/// The main-level `xs = [a, b]` assignments: each variable and its list literal
+fn main_list_literals(program: &Node) -> Vec<(String, Node)> {
+	let mut lists = vec![];
+	without_definitions(program).visit(&mut |node| if let Node::Key(target, Op::Assign, value) = node {
+		if let (Node::Symbol(name), Node::List(_, Bracket::Square, _)) = (target.drop_meta(), value.drop_meta()) {
+			lists.push((name.clone(), value.as_ref().clone()));
+		}
+	});
+	lists
+}
+
+/// `for s in xs {…}`: the loop variable s
+fn loop_variable(items: &[Node]) -> Option<String> {
+	match items {
+		[keyword, variable, in_word, _, _] if word(keyword) == FOR_WORD && word(in_word) == IN_WORD => match variable.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// Each `for s in xs {…}` in the body: the loop variable and the name of the list
+fn loop_variables(body: &Node) -> Vec<(String, String)> {
+	let mut loops = vec![];
+	body.visit(&mut |node| if let Node::List(items, _, _) = node {
+		if let (Some(variable), Some(Node::Symbol(list))) = (loop_variable(items), items.get(3).map(Node::drop_meta)) {
+			loops.push((variable, list.clone()));
+		}
+	});
+	loops
 }
 
 /// `signal·set(s, v)`: store v, then call each listener with the new and the old value; gives the new value

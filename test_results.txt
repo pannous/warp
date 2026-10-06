@@ -171,6 +171,9 @@ PASSED:
   ✓ control::test_shared_values::a_self_update_of_a_shared_value_is_atomic
   ✓ control::test_shared_values::a_shared_value_reads_writes_and_adds
   ✓ control::test_signal_in_loop::a_listener_checks_a_write_in_a_one_statement_loop
+  ✓ control::test_signal_lists::a_function_subscribes_to_each_signal_of_a_list
+  ✓ control::test_signal_lists::a_list_of_signals_kept_in_a_variable
+  ✓ control::test_signal_lists::the_variables_of_the_list_keep_their_values
   ✓ control::test_signal_reflection::a_listener_taken_from_the_list_can_be_called
   ✓ control::test_signal_reflection::clear_listeners_unsubscribes_them_all
   ✓ control::test_signal_reflection::listeners_of_a_variable_counts_its_listeners
@@ -693,6 +696,8 @@ PASSED:
   ✓ functions::test_object_arguments::a_parameter_reads_a_field_of_a_map_argument
   ✓ functions::test_object_arguments::an_instance_of_another_class_is_a_type_error
   ✓ functions::test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
+  ✓ functions::test_optional_parameters::a_missing_optional_argument_is_empty
+  ✓ functions::test_optional_parameters::coalescing_keeps_zero_and_false
   ✓ functions::test_optional_words::is_with_a_test_word
   ✓ functions::test_optional_words::test_words_read_as_not
   ✓ functions::test_optional_words::test_words_work_in_other_conditions
@@ -923,6 +928,7 @@ PASSED:
   ✓ lists::test_pop::pop_removes_the_last_item
   ✓ lists::test_range_arguments::a_range_argument_is_read_from_its_bounds
   ✓ lists::test_range_arguments::a_range_argument_used_as_a_list_stays_one
+  ✓ lists::test_range_arguments::a_range_passed_on_to_a_reader_stays_its_bounds
   ✓ lists::test_range_arguments::a_range_variable_passed_on_stays_its_bounds
   ✓ lists::test_range_values::a_parenthesized_range_is_a_list
   ✓ lists::test_range_values::a_range_is_a_list_as_an_argument
@@ -2523,4 +2529,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2518 passed, 0 failed, 2518 total tested
+23 ignored, 2524 passed, 0 failed, 2524 total tested

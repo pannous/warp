@@ -292,12 +292,25 @@ fn substitute_variable(node: Node, name: &str, range: &Node) -> Node {
 	}
 }
 
+/// Until nothing changes: a parameter passed on only to range readers is read as a range too (`f(xs) := g(xs)`); a
+/// recursive call is no reader yet, so `f(xs) := … f(xs)` keeps its list
 fn range_readers(program: &Node) -> RangeReaders {
+	let mut readers = RangeReaders::new();
+	loop {
+		let next = readers_given(program, &readers);
+		if next == readers {
+			return readers;
+		}
+		readers = next;
+	}
+}
+
+fn readers_given(program: &Node, known: &RangeReaders) -> RangeReaders {
 	let mut definitions: HashMap<String, Vec<Vec<bool>>> = HashMap::new();
 	program.visit(&mut |part| {
 		let Some((head, body, _)) = definition_parts(part) else { return };
 		let Some((name, parameters)) = signature(&head) else { return };
-		let reads_range = |parameter: &&Node| matches!(parameter.drop_meta(), Node::Symbol(parameter) if !changes(&body, parameter) && only_read(&body, parameter, &RangeReaders::new()));
+		let reads_range = |parameter: &&Node| matches!(parameter.drop_meta(), Node::Symbol(parameter) if !changes(&body, parameter) && only_read(&body, parameter, known));
 		definitions.entry(name).or_default().push(parameters.iter().map(reads_range).collect());
 	});
 	definitions.into_iter().filter(|(_, found)| found.len() == 1).map(|(name, mut found)| (name, found.remove(0))).collect()
@@ -324,12 +337,22 @@ fn pass_ranges_as_bounds(program: Node, readers: &RangeReaders) -> Node {
 	if readers.values().all(|reading| !reading.contains(&true)) {
 		return program;
 	}
-	let mut copies = BTreeMap::new();
+	let mut copies = Copies::new();
 	let program = call_bounds_copies(program, readers, &mut copies);
-	if copies.is_empty() { program } else { add_bounds_copies(program, &copies) }
+	// a copy's body can pass its range on to another reader, which then needs its copy too
+	loop {
+		let wanted = copies.clone();
+		let with_copies = add_bounds_copies(program.clone(), readers, &mut copies);
+		if copies == wanted {
+			return with_copies;
+		}
+	}
 }
 
-fn call_bounds_copies(node: Node, readers: &RangeReaders, copies: &mut BTreeMap<String, BTreeSet<Vec<usize>>>) -> Node {
+/// Per range reader: the parameter positions of each of its copies that is called
+type Copies = BTreeMap<String, BTreeSet<Vec<usize>>>;
+
+fn call_bounds_copies(node: Node, readers: &RangeReaders, copies: &mut Copies) -> Node {
 	let node = node.map_children(|child| call_bounds_copies(child, readers, copies));
 	let Node::List(items, bracket, separator) = node.drop_meta() else { return node };
 	let Some(reading) = reading_parameters(items, bracket, separator, readers) else { return node };
@@ -352,20 +375,20 @@ fn call_bounds_copies(node: Node, readers: &RangeReaders, copies: &mut BTreeMap<
 }
 
 /// After each definition of a function whose copies are called: those copies
-fn add_bounds_copies(node: Node, copies: &BTreeMap<String, BTreeSet<Vec<usize>>>) -> Node {
-	let node = node.map_children(|child| add_bounds_copies(child, copies));
+fn add_bounds_copies(node: Node, readers: &RangeReaders, copies: &mut Copies) -> Node {
+	let node = node.map_children(|child| add_bounds_copies(child, readers, copies));
 	let Node::List(statements, bracket, separator @ (Separator::Semicolon | Separator::Newline)) = node else { return node };
 	let statements = statements.into_iter().flat_map(|statement| {
-		let added = bounds_copies(&statement, copies);
+		let added = bounds_copies(&statement, readers, copies);
 		std::iter::once(statement).chain(added)
 	}).collect();
 	Node::List(statements, bracket, separator)
 }
 
-fn bounds_copies(statement: &Node, copies: &BTreeMap<String, BTreeSet<Vec<usize>>>) -> Vec<Node> {
+fn bounds_copies(statement: &Node, readers: &RangeReaders, copies: &mut Copies) -> Vec<Node> {
 	let Some((head, body, make)) = definition_parts(statement) else { return vec![] };
 	let Some((function, parameters)) = signature(&head) else { return vec![] };
-	let Some(wanted) = copies.get(&function) else { return vec![] };
+	let Some(wanted) = copies.get(&function).cloned() else { return vec![] };
 	wanted.iter().map(|positions| {
 		let mut new_parameters = vec![Node::Symbol(bounds_name(&function, positions))];
 		let mut new_body = body.clone();
@@ -379,6 +402,6 @@ fn bounds_copies(statement: &Node, copies: &BTreeMap<String, BTreeSet<Vec<usize>
 			new_body = substitute(new_body, &parameter.name(), &range);
 			new_parameters.extend([start, end]);
 		}
-		make(Node::List(new_parameters, Bracket::Round, Separator::None), new_body)
+		make(Node::List(new_parameters, Bracket::Round, Separator::None), call_bounds_copies(new_body, readers, copies))
 	}).collect()
 }
