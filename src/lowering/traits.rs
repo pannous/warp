@@ -26,6 +26,10 @@ const IN_WORD: &str = "in";
 const LIST_OF_PREFIX: &str = "list of ";
 /// The parameter name a fix shows for an operation declared without parameters, `trait shape{area}`
 const DEFAULT_PARAMETER: &str = "x";
+/// The word after a trait in a list annotation `xs: shape list`
+const LIST_WORD: &str = "list";
+/// The receiver a foreign signature names, Rust's `fn area(&self)`
+const SELF_WORD: &str = "self";
 /// Static type names (`type(x)`) of the built-in kinds that `node_order` orders
 const BUILTIN_COMPARABLE: [&str; 6] = ["int", "rational", "real", "float", "text", "codepoint"];
 
@@ -157,6 +161,29 @@ fn missing_conformance(located: &Node, type_name: &str, required: &Trait, operat
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// A declaration stays in the program as ø carrying the trait, which every later pass reads (Traits::of)
+/// A parameter typed by a declared trait, `f(s:Shape)`, untyped before class bodies are lowered (class_methods reads
+/// typed parameters as instances of a class)
+pub fn lower_trait_parameters(node: Node) -> Node {
+	let mut names = vec![];
+	node.visit(&mut |part| names.extend(declared_trait_name(part)));
+	if names.is_empty() { node } else { without_trait_parameter_types(node, &names) }
+}
+
+/// The name a trait declaration declares, `Shape` of `trait Shape{…}` and `interface Shape {…}`
+fn declared_trait_name(node: &Node) -> Option<String> {
+	let Node::List(items, _, _) = node.drop_meta() else { return None };
+	let (keyword, name) = match items.as_slice() {
+		[keyword, body] => (keyword, match body.drop_meta() {
+			Node::Key(name, Op::Colon | Op::None, _) => name.as_ref(),
+			_ => return None,
+		}),
+		[keyword, name, block] if matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) => (keyword, name),
+		_ => return None,
+	};
+	let is_keyword = TRAIT_KEYWORDS.contains(&keyword.drop_meta().name().as_str());
+	(is_keyword && matches!(name.drop_meta(), Node::Symbol(_))).then(|| name.drop_meta().name())
+}
+
 pub fn lower_declarations(node: Node) -> Node {
 	let mut errors = vec![];
 	let node = declare(node, &mut errors);
@@ -167,7 +194,40 @@ pub fn lower_declarations(node: Node) -> Node {
 	collect_declarations(&node, &mut declared);
 	let node = with_default_methods(node, &declared);
 	let names: Vec<String> = declared.into_iter().map(|declared| declared.name).collect();
-	if names.is_empty() { node } else { with_conformance_tests(node, &names) }
+	// again for the definitions later passes made (Go's `func total(s Shape) float64 {…}` is `total(s:Shape)` now)
+	if names.is_empty() { node } else { without_trait_parameter_types(with_conformance_tests(node, &names), &names) }
+}
+
+/// `f(s:Shape) := s.area()`: a parameter typed by a trait takes any conforming value, untyped; its operations pick the
+/// witness of the value's type (a dispatcher where several types define them)
+fn without_trait_parameter_types(node: Node, names: &[String]) -> Node {
+	match node {
+		Node::Key(head, Op::Define, body) => {
+			let head = match *head {
+				Node::Key(call, Op::Colon, result) => Node::Key(Box::new(untyped_call(*call, names)), Op::Colon, result),
+				call => untyped_call(call, names),
+			};
+			Node::Key(Box::new(head), Op::Define, Box::new(without_trait_parameter_types(*body, names)))
+		}
+		other => other.map_children(|child| without_trait_parameter_types(child, names)),
+	}
+}
+
+/// The call head `f(s:Shape, n)` as `f(s, n)` when Shape is one of the trait `names`
+fn untyped_call(call: Node, names: &[String]) -> Node {
+	let untyped = |parameter: Node| match parameter.drop_meta() {
+		Node::Key(name, Op::Colon, trait_name) if matches!(trait_name.drop_meta(), Node::Symbol(word) if names.contains(word)) => name.as_ref().clone(),
+		_ => parameter,
+	};
+	match call.drop_meta().clone() {
+		Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
+			// `xs: shape list` keeps its type: the list annotation reads it (analyzer::with_list_annotation)
+			let is_list_word = |index: usize| items.get(index).is_some_and(|next| next.drop_meta().name() == LIST_WORD);
+			let parameters = items.iter().enumerate().skip(1).map(|(index, parameter)| if is_list_word(index + 1) { parameter.clone() } else { untyped(parameter.clone()) });
+			Node::List(items[..1].iter().cloned().chain(parameters).collect(), Bracket::Round, separator)
+		}
+		_ => call,
+	}
 }
 
 /// The program with the default methods of its traits defined for every type that defines the other operations of the
@@ -313,12 +373,19 @@ fn declare(node: Node, errors: &mut Vec<Node>) -> Node {
 /// `trait shape{area perimeter}`, `interface shape{area(s)}`: the trait, or the error of an operation it cannot take yet
 fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
-	let [keyword, body] = items.as_slice() else { return None };
+	let (keyword, name, requirements) = match items.as_slice() {
+		[keyword, body] => match body.drop_meta() {
+			Node::Key(name, Op::Colon | Op::None, requirements) => (keyword, name.as_ref(), requirements.as_ref()),
+			_ => return None,
+		},
+		// `trait Shape { area }` spaced
+		[keyword, name, requirements] if matches!(requirements.drop_meta(), Node::List(_, Bracket::Curly, _)) => (keyword, name, requirements),
+		_ => return None,
+	};
 	let keyword_name = keyword.drop_meta().name();
 	if !TRAIT_KEYWORDS.contains(&keyword_name.as_str()) {
 		return None;
 	}
-	let Node::Key(name, Op::Colon | Op::None, requirements) = body.drop_meta() else { return None };
 	let Node::Symbol(name) = name.drop_meta() else { return None };
 	if keyword_name != TRAIT_KEYWORDS[0] {
 		let written = format!("{keyword_name} {name}{{…}}");
@@ -333,7 +400,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
-	let operations = requirements.iter().map(|requirement| operation(requirement).or_else(|| default_method(requirement)).ok_or_else(|| {
+	let operations = requirements.iter().map(|requirement| operation(requirement).or_else(|| default_method(requirement)).or_else(|| foreign_signature(requirement)).ok_or_else(|| {
 		let message = format!("trait {name} takes operations like `area` or `area(s)`, got {}", requirement.serialize());
 		Diagnostic::at(requirement, message).fix("define the operation for each type that conforms, e.g. area(s:square) := …").into_error()
 	}));
@@ -354,6 +421,39 @@ fn operation(requirement: &Node) -> Option<Operation> {
 		_ => return None,
 	};
 	Some(Operation { name, parameters, symmetric: false, contract: None, default: None })
+}
+
+/// A method signature as other languages write it in an interface, its receiver implicit: Java's `double area()`,
+/// Kotlin's `fun area(): Int`, Swift's `func area() -> Double`, Go's `Area() float64`, TypeScript's `area(): number`,
+/// Rust's `fn area(&self) -> f64`: the operation `area(x)` (the result type and parameter types dropped)
+fn foreign_signature(requirement: &Node) -> Option<Operation> {
+	let (name, parameters) = signature_call(requirement)?;
+	let is_receiver = |parameter: &Node| matches!(parameter.drop_meta(), Node::Symbol(word) if word == SELF_WORD) || matches!(parameter.drop_meta(), Node::Key(_, _, word) if word.drop_meta().name() == SELF_WORD);
+	let names = parameters.iter().filter(|parameter| !is_receiver(parameter)).map(|parameter| match parameter.drop_meta() {
+		Node::Key(name, Op::Colon, _) => Some(name.drop_meta().name()),
+		Node::Symbol(name) => Some(name.clone()),
+		// Java's `int n`, Go's `n int`: the word that is no type
+		Node::List(words, _, _) => words.iter().map(|word| word.drop_meta().name()).find(|word| crate::analyzer::type_word_kind(word).is_none()),
+		_ => None,
+	});
+	let names: Vec<String> = std::iter::once(Some(DEFAULT_PARAMETER.to_string())).chain(names).collect::<Option<_>>()?;
+	Some(Operation { name, parameters: names, symmetric: false, contract: None, default: None })
+}
+
+/// The name and parameters of the first call in a signature, through its keyword, result type and modifiers
+fn signature_call(node: &Node) -> Option<(String, Vec<Node>)> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => match items.split_first()?.0.drop_meta() {
+			Node::Symbol(name) => Some((name.clone(), items[1..].iter().flat_map(|parameter| match parameter.drop_meta() {
+				Node::List(group, Bracket::Round, _) => group.clone(),
+				_ => vec![parameter.clone()],
+			}).collect())),
+			_ => None,
+		},
+		Node::List(items, _, _) => items.iter().find_map(signature_call),
+		Node::Key(left, Op::Colon | Op::Arrow, _) => signature_call(left),
+		_ => None,
+	}
 }
 
 /// `describe(s) := body` inside a trait: the operation with its default body
@@ -389,11 +489,28 @@ pub fn lower_conformances(node: Node) -> Node {
 		return node;
 	}
 	let traits = Traits::of(&node);
-	let node = conform(node, &registry, &traits);
+	let node = conform(operation_calls(node, &traits), &registry, &traits);
 	let witnesses = defined_functions(&node);
 	match first_unkept_claim(&node, &traits, &witnesses) {
 		Some(error) => error,
 		None => without_claims(node, &traits),
+	}
+}
+
+/// `s.area()` of a declared trait's operation: the call `area(s)`, which picks the witness of s's type like any call
+/// of the operation (a class method `area(): number {…}` is the witness area·Square)
+fn operation_calls(node: Node, traits: &Traits) -> Node {
+	match node {
+		Node::Key(receiver, Op::Dot, member) if traits.operation(&crate::lowering::class_methods::leading_name(&member)).is_some_and(|(declared, _)| !is_builtin_trait(&declared.name)) => {
+			let arguments = match member.drop_meta() {
+				Node::List(items, _, _) => items[1..].to_vec(),
+				_ => vec![],
+			};
+			let name = Node::Symbol(crate::lowering::class_methods::leading_name(&member));
+			let arguments = std::iter::once(*receiver).chain(arguments).map(|argument| operation_calls(argument, traits));
+			Node::List(std::iter::once(name).chain(arguments).collect(), Bracket::Round, Separator::None)
+		}
+		other => other.map_children(|child| operation_calls(child, traits)),
 	}
 }
 
