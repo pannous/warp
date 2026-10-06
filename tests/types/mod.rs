@@ -20,6 +20,7 @@ mod test_type_tests_anywhere;
 mod test_type_upgrading;
 mod test_type_words;
 mod test_typed_arrays;
+mod test_sized_array_values;
 mod test_types_scope;
 mod test_types;
 mod test_real_text;
