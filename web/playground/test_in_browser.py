@@ -137,7 +137,8 @@ def check_examples(names, page_url=None):
 	wait_for_isolation()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
 	failures = []
-	for name in names or examples:
+	names = names or list(examples)
+	for name in names:
 		expected, shown = examples[name], show_example(name)
 		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed") if part in expected and shown[part] != expected[part]]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
@@ -146,7 +147,7 @@ def check_examples(names, page_url=None):
 	browser("close")
 	if server:
 		server.shutdown()
-	print(f"\nexamples: {len(examples) - len(failures)} of {len(examples)} show what they promise" + (f"; failed: {', '.join(failures)}" if failures else ""))
+	print(f"\nexamples: {len(names) - len(failures)} of {len(names)} show what they promise" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 
 
