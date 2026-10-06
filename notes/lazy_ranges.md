@@ -17,7 +17,21 @@ a GPU backend (P118: only for explicit `@gpu`) receives a descriptor instead of 
   (counting.rs `range_elements`, LITERAL_RANGE_MAX_LENGTH); a longer one is collected at run time into one int array
   (list_dispatch.rs typed lists), never a literal of 100000 nodes (that overflowed the compiler's stack).
 
+## Ranges passed to functions (card range-value-run, 2026-10-06)
+- A function defined once whose body only reads a parameter as a range (the same reads as a range variable, and it
+  never changes it) is a range reader of that parameter. A call passing a range there (any bounds: `f(1..10^9)`,
+  `f(2, 1..n)`, or a range variable replaced as above, `r = 1..n; f(r)`) calls a copy `f·range·<positions>(start, end, …)`
+  whose body reads the parameter as the range `(p·start..p·end)`; the copy follows f's definition, f stays for list
+  arguments. `a to b` passes b + 1 as its end. So the range travels as its two bounds (unboxed, no descriptor struct).
+- Benchmark probes/range_argument_bench.sh (`def total(xs) = sum xs; total(1..n)`): n = 10^7 took 3.35 s before
+  (collected 10^7 nodes, then summed them), 0.04 s after, flat in n.
+- Not passed as bounds: a parameter that is changed, returned, printed or passed on to another function (no
+  transitive readers yet: `f(xs) := g(xs)` collects even when g only counts), a function defined twice, a typed or
+  defaulted parameter.
+
 ## Not yet
 - No step (`1..10 step 2` has no syntax yet); a step joins the descriptor as its third field.
-- A range passed to a function or printed is collected; a range value at run time (a descriptor struct the emitter
-  knows) would let `f(1..10^9)` stay lazy, and is what a GPU backend would receive (card linear-memory, P118).
+- A range printed, returned or stored in a structure is collected; a range value at run time (a descriptor struct the
+  emitter knows, (start, end, step)) is what a GPU backend would receive (P118); passing to functions is solved by the
+  bounds copies above without one.
+- Transitive range readers: `f(xs) := g(xs)` with g a reader (the copy's body would call g's copy).

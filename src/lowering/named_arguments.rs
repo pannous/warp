@@ -18,6 +18,7 @@ struct Function {
 }
 
 pub fn lower(node: Node) -> Node {
+	let node = keyword_defaults(node);
 	let mut functions = definitions(&node);
 	if functions.is_empty() {
 		return node;
@@ -32,6 +33,30 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	Rewrite { functions }.node(node)
+}
+
+/// Ruby's keyword parameter `def f(a, b: 2)`: a literal after the colon is no type but the default, `b=2`
+fn keyword_defaults(node: Node) -> Node {
+	match node {
+		Node::Key(head, op @ (Op::Define | Op::Assign), body) => {
+			let head = match head.drop_meta() {
+				Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+					Node::List(items.iter().cloned().map(literal_default).collect(), Bracket::Round, separator.clone())
+				}
+				_ => *head,
+			};
+			Node::Key(Box::new(head), op, Box::new(keyword_defaults(*body)))
+		}
+		other => other.map_children(keyword_defaults),
+	}
+}
+
+fn literal_default(parameter: Node) -> Node {
+	match parameter {
+		Node::Key(name, Op::Colon, value) if matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_)) => Node::Key(name, Op::Assign, value),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(literal_default(*node)), data },
+		other => other,
+	}
 }
 
 /// `f(a, b) := body` and the block value `fun = {body}`, by name: their parameters

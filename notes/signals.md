@@ -108,9 +108,11 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
   that runs the handlers in order. A raise with no handler stays today's error (exception), caught by `try`.
   Done: lowering/event_signals.rs. Handlers are program-wide (a raise before the `on` line reaches it too, as a
   function defined later is callable); the function declares `global` the main-level variables the bodies mention.
-- **Escaping signals (phase 5)**: WASM GC `(struct $Signal (field $value (mut anyref)) (field $listeners (mut (ref null
-  $ClosureList))))`; a write is `signal_set` (store, then `call_ref` each listener closure); a read is `struct.get`.
-  Only variables that escape get it; the rest stay plain locals/globals.
+- **Escaping signals (phase 5, done: lowering/signal_values.rs)**: a $Signal is a cell (wasm_emitter/cells.rs: a
+  `$Node` of Kind::Data over a `$node_array`) with a second slot, the list of listener closures: `signal_new(v)`,
+  `cell_get` / `cell_set` its value, `signal_listeners(s)` / `signal_listeners_set(s, list)`. A write is the generated
+  `signal·set(s, v)`: store, then `closure_call_2(listener, new, old)` for each listener. Only variables that escape
+  get it; the rest stay plain locals/globals.
 - **Tasks (phase 6)**: an event crossing threads is a TaskValue (already a node); host words `signal_send(name,
   value)` / handled in task_poll.
 - **Browser (phase 7)**: the playground host.js maps `raise` of an unknown-to-the-program event to a DOM
@@ -133,12 +135,43 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    check is a call inside the writing function, so `effects of f` includes its listeners' IO.
 4. **Batching** (done, branch signals-events): a multi-assignment `a, b = 1, 2` checks once, after all its writes
    (P112: no batching block); tuples::destructured_names names its targets.
-5. **Signals as values**: static part done (branch signals-events): a field or item write `p.age = 2`, `xs#1 = 9` is
-   a write of its variable, `on change p.age` / `whenever xs#1 > 5` listen to it. Open: `$Signal` cells for
-   variables that escape (passed to a function that subscribes, kept in a list), subscription inside functions; wait
-   for a program that needs them.
-6. **Signals across tasks**: events raised in tasks reach `on` handlers of the starting thread; listeners on `shared`
-   values poll at check points (with warp-d9, card task-signals).
+5. **Signals as values** (done, branch signals-values, warp-3a; tests/control/test_signal_values.rs): static part
+   (branch signals-events): a field or item write `p.age = 2`, `xs#1 = 9` is a write of its variable, `on change p.age`
+   / `whenever xs#1 > 5` listen to it. Dynamic part: **a listener inside a function subscribes when the function runs
+   and stays after it returns**: `watch(s) := on change s {print value}; x = 1; watch(x); x = 2` prints 2.
+   - What subscribes: `on set` / `on change` / `whenever` / `once` in a function body watching a parameter, or a
+     main-level variable the function does not assign (`def log() { on change count {…} }`). A listener on the
+     function's own locals stays the static check of phase 1.
+   - What escapes: the subscribed parameters, and through every call the arguments given for them (`relay(t) {
+     watch(t) }; relay(x)` makes x a signal); a main-level variable subscribed directly. A value that is no variable
+     (`watch(3)`) becomes a signal nobody writes.
+   - Lowering, two passes around variable_signals: `subscribe` turns the listener into `signal_listeners_set(s,
+     signal_listeners(s) + [(value, signal·old) => {check; 0}])` (`on change`: `value != signal·old`; `once`: a flag
+     cell `signal·fired·N`); `lower` makes the escaping variable's first main-level write `x = signal_new(e)`, every
+     other write `signal·set(x, e)` (`x += e` reads the cell), every read `cell_get(x)`, and passes the cell itself to
+     a signal parameter. A function's `global x` of an escaping x goes (it changes the cell, never x).
+   - Order: subscriptions run inside the write, in the order they were made; the main level's own static listeners
+     on the same variable run right after the write (test a_static_listener_and_a_subscription_on_one_variable).
+   - Writes before the subscription are not seen; `clear listeners of x` removes all subscriptions (no single one yet).
+   - Reflection (card g-3HmY, branch signals-reflect; tests/control/test_signal_reflection.rs; syntax an assumption
+     queued with the Interviewer): `listeners of x` is the list of the functions listening to x (`count listeners of
+     x`, `(listeners of x)#1`, `for f in listeners of x {f(new, old)}`), `clear listeners of x` unsubscribes them all.
+     Either makes x a $Signal, and x's main-level listeners then subscribe at run time (in declaration order), so
+     the list holds every listener. A listener is a function of (new value, old value).
+   - Open: escaping into a list or an object field (`signals = [x, y]`: lists copy values, objects too, so nothing
+     there keeps the cell yet); `on change p.age` inside a function on a parameter p (only plain names subscribe);
+     reflecting over listeners (g-3HmY).
+6. **Signals across tasks** (done): events raised in tasks reach `on` handlers of the starting thread (b8da08417:
+   task_inside / signal_send, run at the program's next await, loop start or the end of the run;
+   tests/control/test_task_signals.rs). Listeners on `shared` values (branch signals-shared, warp-3a;
+   tests/control/test_shared_signals.rs): a main-level `whenever` / `once` / `on change` / `on set` watching a shared
+   value becomes a check in the exported `on·shared()` (signal_values::poll_shared, before shared_arrays): it compares
+   the watched values with `signal_seen_N` and runs the listener on a change, from the line that declares it on
+   (`signal_polling_N`). The runtime calls it at every check point: signal_poll (main's start and end, loop starts),
+   every 10 ms of a sleep, and after the run's tasks ended (native system_signals.rs, playground host.js). It never
+   keeps a program alive (timers do). By polling, `on set` of a shared value is `on change` (a write of the same value
+   is invisible), several writes between two check points are one change, and the program's own write is seen at its
+   next check point, not right after it.
 7. **Browser and outside**: DOM events and output bindings in the playground (done, branch signals-browser, warp-4a:
    `on click {…}` / `on key {…}` are PAGE_EVENTS, kept without a raise and exported as `on·click·node([event])`; a
    handler takes `event` only when it reads it. The worker keeps the run (host.js runPageEvent), the page sends clicks

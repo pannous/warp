@@ -19,6 +19,8 @@ pub const EXIT: &str = "exit";
 pub const INTERRUPT_HANDLER: &str = "on·interrupt";
 /// `on·every·0`: the handler of the first `on every … {…}`
 pub const TIMER_HANDLER_PREFIX: &str = "on·every·";
+/// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
+pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
 pub const BASIC_HOST_WORDS: [&str; 8] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_WATCH, EXIT];
 

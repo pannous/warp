@@ -369,7 +369,7 @@ pub fn extract_signal_polls(ctx: &mut Context) {
 }
 
 pub fn handles_system_signals(ctx: &Context) -> bool {
-	ctx.user_functions.keys().any(|name| name == crate::host::INTERRUPT_HANDLER || name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FILE_HANDLER_PREFIX))
+	ctx.user_functions.keys().any(|name| name == crate::host::INTERRUPT_HANDLER || name == crate::host::SHARED_HANDLER || name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FILE_HANDLER_PREFIX))
 }
 
 /// The library an import names: `"z"` and `'m'` are one-character texts, which parse as characters

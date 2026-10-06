@@ -160,11 +160,33 @@ PASSED:
   ✓ control::test_shared_arrays::a_shared_array_reads_writes_and_adds
   ✓ control::test_shared_arrays::tasks_add_floats_to_one_shared_array
   ✓ control::test_shared_arrays::tasks_add_to_one_shared_array
+  ✓ control::test_shared_signals::a_write_of_the_program_itself_is_seen_at_its_next_check_point
+  ✓ control::test_shared_signals::changes_before_the_listener_are_not_seen
+  ✓ control::test_shared_signals::on_change_of_a_shared_value_sees_the_new_value
+  ✓ control::test_shared_signals::once_on_a_shared_value_runs_once
+  ✓ control::test_shared_signals::the_listener_runs_while_the_program_sleeps
+  ✓ control::test_shared_signals::whenever_a_task_sets_a_shared_value
   ✓ control::test_shared_values::a_function_given_a_shared_value_shares_it
   ✓ control::test_shared_values::a_go_block_writes_a_shared_value
   ✓ control::test_shared_values::a_self_update_of_a_shared_value_is_atomic
   ✓ control::test_shared_values::a_shared_value_reads_writes_and_adds
   ✓ control::test_signal_in_loop::a_listener_checks_a_write_in_a_one_statement_loop
+  ✓ control::test_signal_reflection::a_listener_taken_from_the_list_can_be_called
+  ✓ control::test_signal_reflection::clear_listeners_unsubscribes_them_all
+  ✓ control::test_signal_reflection::listeners_of_a_variable_counts_its_listeners
+  ✓ control::test_signal_values::a_function_subscribes_to_a_main_level_variable
+  ✓ control::test_signal_values::a_function_subscribes_to_the_signal_it_is_given
+  ✓ control::test_signal_values::a_signal_of_text
+  ✓ control::test_signal_values::a_signal_passed_on_to_a_subscribing_function
+  ✓ control::test_signal_values::a_static_listener_and_a_subscription_on_one_variable
+  ✓ control::test_signal_values::a_value_given_for_a_signal_parameter_is_a_signal_nobody_writes
+  ✓ control::test_signal_values::on_change_skips_writes_of_the_same_value
+  ✓ control::test_signal_values::on_set_runs_after_each_write
+  ✓ control::test_signal_values::once_inside_a_function_runs_the_first_time
+  ✓ control::test_signal_values::the_escaping_variable_keeps_its_value
+  ✓ control::test_signal_values::two_subscriptions_both_run_in_order
+  ✓ control::test_signal_values::writes_before_the_subscription_are_not_seen
+  ✓ control::test_signal_values::writes_in_loops_and_functions_notify
   ✓ control::test_structural_patterns::test_a_subject_that_is_no_list_does_not_match
   ✓ control::test_structural_patterns::test_list_patterns_bind_names
   ✓ control::test_structural_patterns::test_nested_lists_and_pairs
@@ -458,6 +480,8 @@ PASSED:
   ✓ functions::test_bare_function_name::test_bare_name_of_typed_function_is_an_error
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
+  ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
+  ✓ functions::test_body_statement::an_undefined_word_in_it_is_an_error
   ✓ functions::test_broadcasting::test_broadcasting_reaches_nested_lists
   ✓ functions::test_broadcasting::test_function_broadcasts_over_a_list
   ✓ functions::test_broadcasting::test_function_broadcasts_over_pairs_keeping_keys
@@ -521,7 +545,9 @@ PASSED:
   ✓ functions::test_def_forms::probe_def_block_syntax
   ✓ functions::test_def_without_parameters::a_def_without_parameters_is_a_function
   ✓ functions::test_default_parameters::a_default_may_read_earlier_parameters
+  ✓ functions::test_default_parameters::a_literal_after_a_colon_is_a_default_as_in_ruby
   ✓ functions::test_default_parameters::a_missing_argument_takes_its_default
+  ✓ functions::test_default_parameters::a_one_character_text_default_holds_any_text
   ✓ functions::test_default_parameters::a_typed_parameter_may_have_a_default
   ✓ functions::test_default_parameters::calls_without_parentheses_take_defaults_too
   ✓ functions::test_default_parameters::named_arguments_skip_defaults_and_mix_with_positional_ones
@@ -645,12 +671,18 @@ PASSED:
   ✓ functions::test_named_arguments::a_missing_or_unknown_argument_is_an_error
   ✓ functions::test_named_arguments::named_arguments_set_free_variables_of_the_body
   ✓ functions::test_named_arguments::named_arguments_set_parameters_in_any_order
+  ✓ functions::test_nested_prefix_calls::a_function_name_among_the_arguments_takes_the_ones_after_it
+  ✓ functions::test_nested_prefix_calls::a_function_passed_as_a_value_stays_one
   ✓ functions::test_nonlocal_any_value::test_an_escaping_closure_keeps_a_text_cell
   ✓ functions::test_nonlocal_any_value::test_inner_changes_a_nonlocal_list
   ✓ functions::test_nonlocal_any_value::test_inner_changes_a_nonlocal_text
   ✓ functions::test_nonlocal_cells::test_an_escaping_closure_keeps_its_cell
   ✓ functions::test_nonlocal_cells::test_an_escaping_closure_keeps_its_values
   ✓ functions::test_nonlocal_cells::test_inner_changes_the_outer_variable
+  ✓ functions::test_nonlocal_lambdas::a_fresh_local_of_the_same_name_is_no_change
+  ✓ functions::test_nonlocal_lambdas::a_lambda_changing_an_enclosing_variable_shares_it
+  ✓ functions::test_nonlocal_lambdas::a_lambda_may_declare_nonlocal
+  ✓ functions::test_nonlocal_lambdas::a_nested_def_changing_it_without_nonlocal_is_an_error
   ✓ functions::test_nonlocal_passed_around::test_a_nested_function_passed_around_reads_the_current_value
   ✓ functions::test_nonlocal_passed_around::test_a_nested_function_reads_a_main_level_variable
   ✓ functions::test_nonlocal_passed_around::test_a_sibling_calls_a_nested_function
@@ -707,6 +739,9 @@ PASSED:
   ✓ functions::test_return_type_dispatch::test_as_picks_the_overload
   ✓ functions::test_return_type_dispatch::test_no_expected_type_takes_the_first_overload_with_a_warning
   ✓ functions::test_return_type_dispatch::test_the_result_type_can_be_inferred_from_the_body
+  ✓ functions::test_return_type_forms::a_colon_result_type_before_a_block_body
+  ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_block_body
+  ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_colon_body
   ✓ functions::test_runtime_kind_arithmetic::a_def_body_reads_fields_of_its_parameters
   ✓ functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
@@ -886,6 +921,9 @@ PASSED:
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
   ✓ lists::test_pop::pop_gives_the_last_item
   ✓ lists::test_pop::pop_removes_the_last_item
+  ✓ lists::test_range_arguments::a_range_argument_is_read_from_its_bounds
+  ✓ lists::test_range_arguments::a_range_argument_used_as_a_list_stays_one
+  ✓ lists::test_range_arguments::a_range_variable_passed_on_stays_its_bounds
   ✓ lists::test_range_values::a_parenthesized_range_is_a_list
   ✓ lists::test_range_values::a_range_is_a_list_as_an_argument
   ✓ lists::test_range_values::a_range_of_computed_bounds_is_a_list_as_an_argument
@@ -2485,4 +2523,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2480 passed, 0 failed, 2480 total tested
+23 ignored, 2518 passed, 0 failed, 2518 total tested

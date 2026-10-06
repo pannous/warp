@@ -33,6 +33,41 @@ pub fn lower_several_arguments(program: Node) -> Node {
 	if gathered { lower(program) } else { program }
 }
 
+/// Functions are prefix operators (wiki/function.md): when a call has more juxtaposed arguments than its function takes,
+/// the last function name among them takes the arguments after it, `square square 2` → `square (square 2)`. Before the
+/// function value passes read that name as a value
+pub fn lower_prefix_calls(program: Node) -> Node {
+	let mut found = Vec::new();
+	definitions(&program, &mut found);
+	let mut arities: HashMap<String, usize> = HashMap::new();
+	for definition in &found {
+		let most = arities.entry(definition.name.clone()).or_default();
+		*most = (*most).max(definition.params.len());
+	}
+	if arities.is_empty() { program } else { nest_prefix_calls(program, &arities) }
+}
+
+fn nest_prefix_calls(node: Node, arities: &HashMap<String, usize>) -> Node {
+	let arity = |node: &Node| match node.drop_meta() {
+		Node::Symbol(name) => arities.get(name).copied(),
+		_ => None,
+	};
+	match node {
+		Node::List(items, bracket @ (Bracket::None | Bracket::Round), separator @ (Separator::Space | Separator::None))
+			if items.len() > 2 && arity(&items[0]).is_some_and(|takes| items.len() - 1 > takes) =>
+		{
+			let mut items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
+			let Some(inner) = (1..items.len() - 1).rev().find(|index| arity(&items[*index]).is_some()) else {
+				return Node::List(items, bracket, separator);
+			};
+			let nested = Node::List(items.split_off(inner), Bracket::None, Separator::Space);
+			items.push(nest_prefix_calls(nested, arities));
+			nest_prefix_calls(Node::List(items, bracket, separator), arities)
+		}
+		other => other.map_children(|child| nest_prefix_calls(child, arities)),
+	}
+}
+
 /// `f 1 2 3` → `f [1 2 3]` of the functions `single`
 fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -> Node {
 	match node {
