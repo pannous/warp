@@ -88,3 +88,4 @@ mod test_lambda_spellings;
 mod test_comma_calls;
 mod test_shadowed_log;
 mod test_returned_blocks;
+mod test_returned_function_names;

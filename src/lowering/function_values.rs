@@ -44,6 +44,91 @@ impl Definition {
 	}
 }
 
+/// `def make(){ def inc(){ 1 }; inc }; c = make(); c()`: make returns what inc returns (P82, a bare name is a call), so
+/// calling that result can never work: a compile error that names the reference `function inc`
+fn refuse_called_bare_results(program: &Node, found: &[Definition]) -> Result<(), Node> {
+	let returning: HashMap<String, String> = found.iter().filter_map(|definition| Some((definition.name.clone(), nested_tail(definition, found)?))).collect();
+	if returning.is_empty() {
+		return Ok(());
+	}
+	let mut results: HashMap<String, String> = HashMap::new();
+	collect_assigned_results(program, &returning, &mut results);
+	let Some(call) = called_variable(program, &results) else { return Ok(()) };
+	let variable = call_head(call);
+	let function = &results[&variable];
+	let nested = &returning[function];
+	let message = format!("{variable} holds no function: {function} ends with `{nested}`, which calls {nested} (a bare name is a call); fix: return the function with `function {nested}`");
+	Err(crate::diagnostic::Diagnostic::at(call, message).into_error())
+}
+
+fn call_head(call: &Node) -> String {
+	match call.drop_meta() {
+		Node::List(items, _, _) => items[0].drop_meta().name(),
+		other => other.name(),
+	}
+}
+
+/// The function without parameters defined in the body whose bare name ends it, and that returns no function itself:
+/// `def make(){ def inc(){ 1 }; inc }` → inc
+fn nested_tail(definition: &Definition, found: &[Definition]) -> Option<String> {
+	let Node::Symbol(name) = crate::closures::tail(&definition.body) else { return None };
+	if references(&definition.body, name) {
+		return None; // `function inc`: tail drops the Meta that marks the reference
+	}
+	let mut nested = Vec::new();
+	definitions(&definition.body, &mut nested);
+	let inner = nested.iter().find(|inner| inner.name == *name && inner.params.is_empty())?;
+	let inner_tail = crate::closures::tail(&inner.body);
+	let returns_function = crate::lambdas::arrow_lambda(inner_tail).is_some() || crate::closures::referenced_function(inner_tail).is_some()
+		|| found.iter().any(|other| matches!(inner_tail.drop_meta(), Node::Symbol(called) if *called == other.name));
+	(!returns_function).then(|| name.clone())
+}
+
+/// `function name` or `&name` somewhere in node
+fn references(node: &Node, name: &str) -> bool {
+	if crate::closures::referenced_function(node).is_some_and(|referenced| referenced == name) {
+		return true;
+	}
+	match node {
+		Node::Meta { node, .. } => references(node, name),
+		Node::Key(left, _, right) => references(left, name) || references(right, name),
+		Node::List(items, _, _) => items.iter().any(|item| references(item, name)),
+		_ => false,
+	}
+}
+
+/// `c = make()` of a function in `returning`: c → make
+fn collect_assigned_results(node: &Node, returning: &HashMap<String, String>, results: &mut HashMap<String, String>) {
+	if let Node::Key(target, Op::Assign, value) = node.drop_meta() {
+		if let (Node::Symbol(variable), Node::List(items, Bracket::Round, Separator::None)) = (target.drop_meta(), value.drop_meta()) {
+			if let [function] = items.as_slice() {
+				let function = function.drop_meta().name();
+				if returning.contains_key(&function) {
+					results.insert(variable.clone(), function);
+				}
+			}
+		}
+	}
+	match node.drop_meta() {
+		Node::Key(left, _, right) => {
+			collect_assigned_results(left, returning, results);
+			collect_assigned_results(right, returning, results);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_results(item, returning, results)),
+		_ => {}
+	}
+}
+
+/// The call of a variable of `results`: `c()`, `c(1)`
+fn called_variable<'a>(node: &'a Node, results: &HashMap<String, String>) -> Option<&'a Node> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if results.contains_key(name)) => Some(node),
+		Node::Key(left, _, right) => called_variable(left, results).or_else(|| called_variable(right, results)),
+		Node::List(items, _, _) => items.iter().find_map(|item| called_variable(item, results)),
+		_ => None,
+	}
+}
+
 fn parameter_name(param: &Node) -> Option<String> {
 	match param.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
@@ -350,6 +435,9 @@ fn assemble(node: Node, specialising: &Specialising) -> Node {
 pub fn lower(program: Node) -> Node {
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
+	if let Err(error) = refuse_called_bare_results(&program, &found) {
+		return error;
+	}
 	let functions: HashSet<String> = found.iter().map(|definition| definition.name.clone()).collect();
 	let mut assigned_count = HashMap::new();
 	let mut alias_of = HashMap::new();
