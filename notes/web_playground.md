@@ -43,6 +43,13 @@ One configuration (.cargo/config.toml): the alias builds tests/main.rs for wasm3
 and the wasm32-wasip1 runner web/playground/test_in_browser.py serves the repository root plus the binary, opens
 web/playground/tests.html in headless Chrome (agent-browser, session warp-browser-tests) and prints a libtest summary
 (exit 101 on a failure). `WARP_BROWSER_TEST_WORKERS` (default 2) and `WARP_BROWSER_TEST_PORT` (8733) tune it.
+  `WARP_BROWSER_TEST_PER_WORKER` (tests.js TESTS_PER_WORKER, 100) is how many tests a worker runs before it is replaced.
+- Wasm memory (card browser-memory, 2026-10-06): Chrome holds ~124 live Wasm memories per page, all Workers together,
+  and an isolate that runs out collects only its own dead instances (probes/wasm_memory_limit.html), so another
+  worker's garbage failed plain tests ("WebAssembly.Instance(): Out of memory"). Besides the replacement every 100
+  tests, a test that runs out makes the page replace every worker (terminating an isolate frees its memories at once),
+  re-send the tests in flight and run it once more; the runner prints "Wasm memory ran out N times …" naming them.
+  Proof: 4 workers without replacement (WARP_BROWSER_TEST_PER_WORKER=100000) failed 2 tests that way before, none after.
 - tests.js lists the tests with libtest's own `--list` (filters, `--ignored`, `--include-ignored` pass through) and runs
   every test in a fresh instance of the compiled binary on test-worker.js workers: wasm panics abort the instance.
 - The binary is the whole compiler: `is!`/`eval` compile in wasm and run the program through warp_host (host.js),
