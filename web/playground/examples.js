@@ -105,10 +105,10 @@ on click { count += 1; print "click at " + event.x + "," + event.y }
 on key { price = 10 }
 total` },
 	"wasm components": { value: '[12586269025 ["a" "bc" "d"] 7]', code: `// a Rust crate compiled to a WebAssembly component, called like wasp: numbers, lists, objects
-use wasm "tests/fixtures/components/rust_demo.wasm" as rust
-c = rust.counter(5)
+use rust_demo.wasm
+c = rust_demo.counter(5)
 c.increment(2)
-[rust.fib(50), rust.words("a bc d"), c.value()]` },
+[rust_demo.fib(50), rust_demo.words("a bc d"), c.value()]` },
 	"C libraries": { value: '["stack" "/b/c" 3400449319 "1.3.2"]', code: `// C runs here too: wasi-libc's string functions, and zlib compiled to WebAssembly from its own sources
 use c
 import tests/fixtures/wasm/zlib
