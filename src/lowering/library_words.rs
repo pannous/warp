@@ -820,7 +820,9 @@ impl Lowering {
 			crate::normalize::hint(&format!("{}.{}()", receiver.serialize(), head.serialize()), &receiver.serialize(), "values are never shared: b = a already copies");
 			return receiver.clone();
 		}
-		if arguments.len() != wanted {
+		// a text builtin's own arity check names its values (`trim takes 1 value, got 2`)
+		let checks_itself = crate::wasm_emitter::text_builtins::is_text_builtin(word);
+		if arguments.len() != wanted && !checks_itself {
 			let plural = if wanted == 1 { "" } else { "s" };
 			let call = Node::List([vec![head.clone()], arguments.clone()].concat(), Bracket::Round, Separator::None);
 			return Diagnostic::at(&call, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();
