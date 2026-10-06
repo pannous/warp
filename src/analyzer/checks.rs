@@ -432,6 +432,7 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 		.or_else(|| check_constants(program, &mut HashMap::new()))
 		.or_else(|| check_null_use(program, &mut HashMap::new()))
 		.or_else(|| check_boolean_arithmetic(program))
+		.or_else(|| check_subjectless_comparison(program))
 		.or_else(|| check_ambiguous_calls(program))
 		.or_else(|| check_call_arity(program))
 		.map(Diagnostic::into_error)
@@ -911,6 +912,19 @@ pub(super) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
 }
 
 /// Booleans are not numbers: `true + true` is rejected, not 2 (the runtime still encodes them as Int 1/0)
+/// `> 100` outside a match arm compares nothing (card leading-gt: it was dropped silently, leaving 100)
+pub(super) fn check_subjectless_comparison(node: &Node) -> Option<Diagnostic> {
+	match node.drop_meta() {
+		Node::Key(left, op, right) if op.is_ordering() && matches!(left.drop_meta(), Node::Empty) => {
+			let written = format!("{} {}", op.as_str(), right.serialize());
+			Some(Diagnostic::at(node, format!("`{written}` compares nothing: write what is compared, `x {written}` (in a match arm it compares the subject)")))
+		}
+		Node::Key(left, _, right) => check_subjectless_comparison(left).or_else(|| check_subjectless_comparison(right)),
+		Node::List(items, _, _) => items.iter().find_map(check_subjectless_comparison),
+		_ => None,
+	}
+}
+
 pub(super) fn check_boolean_arithmetic(node: &Node) -> Option<Diagnostic> {
 	fn is_boolean(operand: &Node) -> bool {
 		match operand.drop_meta() {

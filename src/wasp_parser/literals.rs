@@ -29,9 +29,10 @@ impl WaspParser {
 		let node = match ch {
 			';' => return Empty, // Semicolons handled by main parse loop
 			// a `<…>` group's closer is handled by parse_bracketed; any other lone `>` is the operator value (`sorted(xs, >)`)
+			// or a comparison without its left side (`> 100 => "big"`)
 			'>' => match self.try_parse_operator_value() {
 				Some(operator) => operator,
-				None => return Empty,
+				None => self.parse_expr(0),
 			},
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			// Everything else goes through parse_expr for operator chaining

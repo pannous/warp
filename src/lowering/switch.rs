@@ -2,7 +2,7 @@
 //! subject, so only the chosen body runs; the `default` (or `_`) key catches the rest, without it a miss is the error
 //! `no case for <subject> = <value>`. A list key is a structural pattern (wiki/pattern-matching.md): `["", middle, ""]`
 //! matches a list of three whose first and last items are "", binding `middle`; `_` matches any item, lists nest, and a
-//! pair `k: v` matches a pair whose key is k. A guard `n if n < 0 => …` binds n to the subject and tests the condition. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
+//! pair `k: v` matches a pair whose key is k. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
 use crate::analyzer::extract_user_functions;
 use crate::context::Context;
@@ -180,6 +180,11 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 /// A case as its test and its body: a list key is a structural pattern whose names are bound before the body runs; a
 /// guard `n if n < 0` binds n to the subject and holds when its condition does
 fn case_test(subject: &Node, case: Case) -> (Node, Node) {
+	if let Node::Key(empty, op, bound) = case.key.drop_meta() {
+		if matches!(empty.drop_meta(), Node::Empty) && op.is_ordering() {
+			return (key(subject.clone(), *op, bound.as_ref().clone()), case.body); // `> 100 =>` compares the subject
+		}
+	}
 	let (pattern, guard) = split_guard(&case.key);
 	if guard.is_none() && !matches!(pattern.drop_meta(), Node::List(_, Bracket::Square, _)) {
 		return (key(subject.clone(), Op::Eq, case.key), case.body);

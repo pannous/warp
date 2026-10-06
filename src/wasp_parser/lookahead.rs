@@ -377,6 +377,17 @@ impl WaspParser {
 			'∛' => Some((Op::Cbrt, 1)),
 			'‖' => Some((Op::Abs, 1)),
 			'#' => Some((Op::Hash, 1)), // prefix # means count/length
+			// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the
+			// subject; a glued `<tag` stays a bracket
+			'>' | '<' if !self.options.xml_mode && !self.options.data_mode => {
+				let (op, length) = match (c1, c2) {
+					('>', '=') => (Op::Ge, 2),
+					('<', '=') => (Op::Le, 2),
+					('>', _) => (Op::Gt, 1),
+					_ => (Op::Lt, 1),
+				};
+				matches!(self.peek_char(length), ' ' | '\t').then_some((op, length))
+			}
 			_ => None,
 		}
 	}
