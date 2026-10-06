@@ -131,7 +131,10 @@ run natively and in the browser.
    the browser host.js keeps written files in memory while the page is open (read sees them first, then the served
    repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
    method `xs.append(v)` a program using `use file` still needs (question Q6). args waits for a CLI way to pass them.
-2. hash (B): embed zlib.wasm/xxhash.wasm and a sha256.wasm in warp, `use hash` resolves to them in both hosts.
+2. Done as A instead of B: hash: `use hash` brings sha256 (lowercase hex) and crc32 (a number) of a text's UTF-8
+   bytes: sha2 and crc32fast natively (both already warp dependencies), a synchronous JS twin in host.js (crypto.subtle
+   is asynchronous, a host call cannot wait); same values in both hosts (tests/modules/test_std_hash.rs). B (C modules
+   compiled to wasm) stays the way for xxhash, compression and other libraries without a Rust/JS pair.
 3. Done: regex (A): `use regex` brings matches, first_match, find_all, replace_all (`$1` groups in the replacement);
    Rust's regex natively, JS RegExp (flag u) in the browser; look-around and backreferences are the error "… is not
    in wasp's regex (one engine lacks it)" in both (tests/modules/test_std_regex.rs). `first_match`, since `find` is

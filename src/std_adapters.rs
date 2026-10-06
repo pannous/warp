@@ -38,6 +38,11 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			names.sort();
 			Ok(texts(names))
 		}
+		("hash", "sha256", [subject]) => {
+			use sha2::Digest;
+			Ok(Node::Text(sha2::Sha256::digest(content_of(subject)?.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect()))
+		}
+		("hash", "crc32", [subject]) => Ok(Node::int(i64::from(crc32fast::hash(content_of(subject)?.as_bytes())))),
 		("regex", member, [text, pattern, rest @ ..]) => {
 			let (text, pattern) = (text_of(text)?, regex_of(&text_of(pattern)?).map_err(failure)?);
 			match (member, rest) {

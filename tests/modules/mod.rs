@@ -7,6 +7,7 @@ mod test_package_pin;
 mod test_package_tools;
 mod test_packages;
 mod test_std_file;
+mod test_std_hash;
 mod test_std_json;
 mod test_std_list;
 mod test_std_math_text;
