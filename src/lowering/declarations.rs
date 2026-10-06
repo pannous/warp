@@ -1585,6 +1585,7 @@ fn enum_object(items: &[Node]) -> Option<Node> {
 
 /// Swift's label for an argument without a label
 const WILDCARD_LABEL: &str = "_";
+const DART_REQUIRED: &str = "required";
 
 /// `real f(real x) { … }`: the definition `f(x:real) := { … }` (the parser reads the type word, then the call and its
 /// block); the result kind is inferred as for any definition
@@ -1608,6 +1609,7 @@ fn c_function(items: &[Node]) -> Option<Node> {
 	let Node::Symbol(_) = name.drop_meta() else { return None };
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
 		Node::List(group, Bracket::Round, Separator::Colon) => group.clone(), // `(real a, int b)`
+		Node::List(group, Bracket::Curly, _) => group.clone(), // Dart's named parameters `{required int a, int b = 2}`
 		Node::Empty => vec![], // `f()`
 		_ => vec![argument.clone()],
 	});
@@ -1620,9 +1622,18 @@ fn c_function(items: &[Node]) -> Option<Node> {
 fn c_parameter(parameter: &Node) -> Option<Node> {
 	match parameter.drop_meta() {
 		Node::Symbol(_) | Node::Key(_, Op::Colon, _) => Some(parameter.clone()),
+		// Dart's `int b = 2` among the named parameters
+		Node::Key(declared, Op::Assign, default) => Some(Node::Key(Box::new(c_parameter(declared)?), Op::Assign, default.clone())),
 		Node::List(words, _, Separator::Space) => match words.as_slice() {
+			// Dart's `required int a`: every parameter needs its value anyway
+			[required, rest @ ..] if matches!(required.drop_meta(), Node::Symbol(word) if word == DART_REQUIRED) => c_parameter(&Node::List(rest.to_vec(), Bracket::None, Separator::Space)),
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(Node::Key(Box::new(name.clone()), Op::Colon, Box::new(kind.clone())))
+			}
+			// `int b = 2` as the parser groups it, the type then the assignment
+			[kind, assignment] if matches!(assignment.drop_meta(), Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_))) && matches!(kind.drop_meta(), Node::Symbol(_)) => {
+				let Node::Key(name, _, default) = assignment.drop_meta() else { unreachable!("guarded") };
+				Some(Node::Key(Box::new(Node::Key(name.clone(), Op::Colon, Box::new(kind.clone()))), Op::Assign, default.clone()))
 			}
 			_ => None,
 		},
