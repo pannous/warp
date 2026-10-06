@@ -36,3 +36,10 @@ fn sleep_takes_a_duration() {
 	is!("started = clock(); sleep 1s; clock() - started >= 1000", true);
 	is!("f() := { sleep(10 ms); \"hi\" }; f()", "hi");
 }
+
+/// A go block inside a call or a loop: `jobs.add(go { … })` keeps the task, the loop variable goes in at its start
+#[test]
+fn go_blocks_fill_a_job_list() {
+	is!("jobs = []; for i in 1..4 { jobs.add(go { sleep(100); i * 10 }) }; await all jobs", warp::ints(vec![10, 20, 30]));
+	is!("f(n) := { job = go { n + 1 }; await job }; f(4)", 5);
+}

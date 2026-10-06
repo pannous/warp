@@ -8,6 +8,7 @@ use crate::operators::Op;
 
 const GO_WORD: &str = "go";
 const BLOCK_FUNCTION_PREFIX: &str = "go·block·";
+const FOR_WORD: &str = "for";
 
 pub fn lower(node: Node) -> Node {
 	if !has_go_block(&node) || defines_go(&node) {
@@ -27,6 +28,13 @@ impl GoBlocks {
 	/// `known`: the variables assigned before this point (and the parameters of the enclosing function)
 	fn lower(&self, node: Node, known: &[String]) -> Node {
 		match node {
+			// `go { … }`, also inside a call: `jobs.add(go { … })` is `add go {…}`
+			Node::List(items, bracket, separator) if !is_sequence(&separator) && starts_block_at(&items).is_some() => {
+				let at = starts_block_at(&items).expect("guarded");
+				let mut items: Vec<Node> = items.into_iter().map(|item| self.lower(item, known)).collect();
+				items[at] = self.function_of(items[at].clone(), known);
+				Node::List(items, bracket, separator)
+			}
 			Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(&bracket, &separator) => {
 				let mut known = known.to_vec();
 				let items = items.into_iter().map(|item| {
@@ -36,44 +44,53 @@ impl GoBlocks {
 				}).collect();
 				Node::List(items, bracket, separator)
 			}
-			Node::List(items, bracket, separator) if started_block(&items).is_some() => {
-				let block = self.lower(started_block(&items).expect("guarded").clone(), known);
-				self.start(block, known, bracket, separator)
+			// `for i in …`: the loop variable
+			Node::List(items, bracket, separator) if items.len() > 2 && items[0].drop_meta().name() == FOR_WORD => {
+				let known = [known.to_vec(), vec![items[1].drop_meta().name()]].concat();
+				Node::List(items.into_iter().map(|item| self.lower(item, &known)).collect(), bracket, separator)
 			}
+			// `f(x) := …`: the parameters
 			Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) => {
-				let parameters: Vec<String> = match head.drop_meta() {
-					Node::List(items, _, _) => items[1..].iter().map(parameter_name).collect(),
-					_ => unreachable!("guarded"),
-				};
+				let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
+				let parameters: Vec<String> = items[1..].iter().map(parameter_name).collect();
 				Node::Key(head, Op::Define, Box::new(self.lower(*body, &[known.to_vec(), parameters].concat())))
+			}
+			// `x => …`, `(x, y) => …`
+			Node::Key(parameters, Op::FatArrow, body) => {
+				let names: Vec<String> = match parameters.drop_meta() {
+					Node::List(items, _, _) => items.iter().map(parameter_name).collect(),
+					single => vec![parameter_name(single)],
+				};
+				Node::Key(parameters, Op::FatArrow, Box::new(self.lower(*body, &[known.to_vec(), names].concat())))
 			}
 			other => other.map_children(|child| self.lower(child, known)),
 		}
 	}
 
-	/// The block as a function of the known variables it reads, and its start
-	fn start(&self, block: Node, known: &[String], bracket: Bracket, separator: Separator) -> Node {
+	/// The block as a function of the known variables it reads: the call that starts it
+	fn function_of(&self, block: Node, known: &[String]) -> Node {
 		let mut definitions = self.definitions.borrow_mut();
 		let name = Node::Symbol(format!("{BLOCK_FUNCTION_PREFIX}{}", definitions.len() + 1));
 		let parameters: Vec<Node> = read_symbols(&block).into_iter().filter(|symbol| known.contains(symbol)).map(Node::Symbol).collect();
 		let head = Node::List([vec![name.clone()], parameters.clone()].concat(), Bracket::Round, Separator::None);
 		definitions.push(Node::Key(Box::new(head.clone()), Op::Define, Box::new(block)));
-		let call = Node::List([vec![name], parameters].concat(), Bracket::Round, Separator::None);
-		Node::List(vec![Node::Symbol(GO_WORD.to_string()), call], bracket, separator)
+		Node::List([vec![name], parameters].concat(), Bracket::Round, Separator::None)
 	}
 }
 
-/// `go { … }`: the block
-fn started_block(items: &[Node]) -> Option<&Node> {
-	match items {
-		[go, block] if go.drop_meta().name() == GO_WORD && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) => Some(block),
-		_ => None,
-	}
+fn is_sequence(separator: &Separator) -> bool {
+	matches!(separator, Separator::Semicolon | Separator::Newline)
+}
+
+/// `go { … }` among the items of a list: the index of the block
+fn starts_block_at(items: &[Node]) -> Option<usize> {
+	items.windows(2).position(|pair| pair[0].drop_meta().name() == GO_WORD && matches!(pair[1].drop_meta(), Node::List(_, Bracket::Curly, _)))
+		.map(|go| go + 1)
 }
 
 fn has_go_block(node: &Node) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::List(items, _, _) if started_block(items).is_some()));
+	node.visit(&mut |part| found |= matches!(part, Node::List(items, _, _) if starts_block_at(items).is_some()));
 	found
 }
 
