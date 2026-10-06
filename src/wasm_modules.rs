@@ -4,6 +4,7 @@
 //! each import to the module instantiated once per run (notes/wasm_modules.md).
 use crate::ffi::FfiSignature;
 use crate::node::{Bracket, Node, Separator};
+use crate::operators::Op;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -24,10 +25,13 @@ pub fn is_module_path(name: &str) -> bool {
 /// The binary of a module file; a `.wat` file is its text form
 pub fn module_bytes(path: &str) -> Result<Vec<u8>, String> {
 	let bytes = std::fs::read(path).map_err(|failure| format!("cannot read the module {path}: {failure}"))?;
-	match path.ends_with(".wat") {
-		true => wat::parse_bytes(&bytes).map(|binary| binary.into_owned()).map_err(|failure| format!("{path}: {failure}")),
-		false => Ok(bytes),
+	if !path.ends_with(".wat") {
+		return Ok(bytes);
 	}
+	#[cfg(feature = "native")]
+	return wat::parse_bytes(&bytes).map(|binary| binary.into_owned()).map_err(|failure| format!("{path}: {failure}"));
+	#[cfg(not(feature = "native"))]
+	Err(format!("{path}: a module in WAT text needs the native build"))
 }
 
 /// The exports of the module at `path` the program can use, by name; read once per path and process
@@ -117,19 +121,58 @@ fn number_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encoder::ValTy
 	}).collect()
 }
 
-/// `ft * 2` of a module exporting the global ft: each read of the global is the call `ft()`
-pub fn read_globals(program: Node, globals: &[String]) -> Node {
-	if globals.is_empty() {
+/// The name a module's exports are qualified with: its file stem (`fourty_two.twice(21)`)
+pub fn module_alias(path: &str) -> String {
+	Path::new(path).file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+/// The import of `export` qualified by its module's alias: `fourty_two.twice`, which no builtin of the same name hides
+pub fn qualified(path: &str, export: &str) -> String {
+	format!("{}.{export}", module_alias(path))
+}
+
+/// The program's uses of the imported modules' exports: `m.f(x)` is the call of the qualified import, `m.g` and a bare
+/// `g` of an exported global read its value (the getter call `g()`); assigning such a global is an error
+pub fn rewrite_uses(program: Node, modules: &[String]) -> Node {
+	if modules.is_empty() {
 		return program;
 	}
+	let globals: Vec<&String> = modules.iter().flat_map(|path| exports(path).iter().filter(|(_, export)| export.is_global).map(|(name, _)| name)).collect();
 	let mut bound = std::collections::HashSet::new();
 	crate::library_words::collect_assigned_names(&program, &mut bound);
 	// like `pi = 4` (P130): an imported global is no variable of the program
-	if let Some(assigned) = globals.iter().find(|global| bound.contains(*global)) {
+	if let Some(assigned) = globals.iter().find(|global| bound.contains(**global)) {
 		return crate::node::error(&format!("{assigned} is a global of an imported module; fix: another name"));
 	}
-	let calls: HashMap<String, Node> = globals.iter().map(|global| (global.clone(), Node::List(vec![Node::Symbol(global.clone())], Bracket::Round, Separator::None))).collect();
-	crate::law::substitute(&program, &calls)
+	let calls: HashMap<String, Node> = globals.iter().map(|global| (global.to_string(), call(global, vec![]))).collect();
+	qualify(crate::law::substitute(&program, &calls), modules)
+}
+
+fn call(name: &str, arguments: Vec<Node>) -> Node {
+	Node::List([vec![Node::Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None)
+}
+
+/// `m.f(x)`, `m.g` of an imported module m: the call of its qualified import
+fn qualify(node: Node, modules: &[String]) -> Node {
+	let module_of = |alias: &str, export: &str| modules.iter().find(|path| module_alias(path) == alias && exports(path).contains_key(export));
+	if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
+		if let Node::Symbol(alias) = receiver.drop_meta() {
+			let (export, arguments) = match member.drop_meta() {
+				Node::List(items, _, _) => match items.split_first() {
+					Some((Node::Symbol(export), arguments)) => (export.clone(), arguments.to_vec()),
+					_ => (String::new(), vec![]),
+				},
+				// `m.g` read after the global pass: `m.(g)`
+				Node::Symbol(export) => (export.clone(), vec![]),
+				_ => (String::new(), vec![]),
+			};
+			if let Some(path) = module_of(alias, &export) {
+				let arguments = arguments.into_iter().map(|argument| qualify(argument, modules)).collect();
+				return call(&qualified(path, &export), arguments);
+			}
+		}
+	}
+	node.map_children(|child| qualify(child, modules))
 }
 
 /// Link the program's imports from WebAssembly modules: each is a host function that calls the export of the module,

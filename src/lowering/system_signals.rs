@@ -244,14 +244,17 @@ fn timer(statement: &Node) -> Option<(Node, Node)> {
 /// The words before the body of `… {body}` or `…: body`, and the body
 fn words_and_body(rest: &[Node]) -> Option<(Vec<Node>, Node)> {
 	let (last, words) = rest.split_last()?;
-	let (end, body) = match last.drop_meta() {
-		Node::List(_, Bracket::Curly, _) => (None, last.clone()),
-		_ => {
-			let (end, body) = crate::declarations::handler_parts(last)?;
-			(Some(end), body)
-		}
+	if matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+		return Some((words.to_vec(), last.clone()));
+	}
+	// `on every 5 seconds: print n` arrives as `on every (5 seconds: print) n`: the words after the colon are the body's
+	let colon = rest.iter().position(|item| crate::declarations::handler_parts(item).is_some())?;
+	let (end, body) = crate::declarations::handler_parts(&rest[colon])?;
+	let body = match &rest[colon + 1..] {
+		[] => body,
+		after => Node::List([vec![body], after.to_vec()].concat(), Bracket::None, Separator::Space),
 	};
-	Some((words.iter().cloned().chain(end).collect(), body))
+	Some((rest[..colon].iter().cloned().chain([end]).collect(), body))
 }
 
 /// `at 9:00 {body}`, `at 9pm: body`: the minute of the day (None for a time that is no time of day) and the body;

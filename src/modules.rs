@@ -50,12 +50,12 @@ pub fn resolve(program: Node) -> Node {
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let folder = file.as_deref().map(folder_of);
-	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone(), scope: None, wasm_globals: vec![] };
+	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone(), scope: None, wasm_modules: vec![] };
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader.resolve(program).and_then(|program| match loader.scope {
 		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 		None => Ok(program),
-	}).map(|program| crate::wasm_modules::read_globals(program, &loader.wasm_globals));
+	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules));
 	resolved.unwrap_or_else(|failure| failure)
 }
 
@@ -201,8 +201,8 @@ struct Loader<'a> {
 	including_directory: Option<PathBuf>,
 	/// the widest `use folder|package|project` met
 	scope: Option<Scope>,
-	/// the globals the imported WebAssembly modules export, which the program reads as values (wasm_modules::read_globals)
-	wasm_globals: Vec<String>,
+	/// the paths of the imported WebAssembly modules, whose exports the program reads (wasm_modules::rewrite_uses)
+	wasm_modules: Vec<String>,
 }
 
 impl Loader<'_> {
@@ -389,11 +389,10 @@ impl Loader<'_> {
 	}
 
 	/// `import fourty_two` of `fourty_two.wasm` / `.wat`: `use "<its absolute path>"`, which the FFI imports from
-	/// (wasm_modules.rs); its exported globals read as values
+	/// (wasm_modules.rs)
 	fn use_wasm_module(&mut self, module: &Path, statement: &Node) -> Node {
 		let path = module.canonicalize().unwrap_or_else(|_| module.to_path_buf()).display().to_string();
-		let globals = crate::wasm_modules::exports(&path).iter().filter(|(_, export)| export.is_global).map(|(name, _)| name.clone());
-		self.wasm_globals.extend(globals);
+		self.wasm_modules.push(path.clone());
 		match as_use(statement) {
 			Node::List(_, bracket, separator) => Node::List(vec![Node::Symbol(USE_KEYWORD.to_string()), Node::Text(path)], bracket, separator),
 			other => other,

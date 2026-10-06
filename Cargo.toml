@@ -38,7 +38,7 @@ deprecated = "warn"
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
 default = ["native", "validate"]
-native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat"]
 # validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
@@ -56,7 +56,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 #wast = "*"
 wasmparser = "0.259"
-wat = "1.259" # an imported module may be WAT text (wasm_modules.rs); tests build modules from WAT text
+wat = { version = "1.259", optional = true } # native: an imported module may be WAT text (wasm_modules.rs)
 wasm-encoder = { version = "0.259", features = ["wasmparser"] } # wasmparser: reencode, for dead_functions.rs
 log = "0.4.29"
 #fetch = "0.8.1"
@@ -105,6 +105,7 @@ sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (s
 #[test-dependencies] no such thing. it's :
 [dev-dependencies]
 # only compiled and included when running tests or examples
+wat = "1.259" # tests build modules from WAT text
 
 
 [profile.dev]

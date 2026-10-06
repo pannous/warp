@@ -50,6 +50,7 @@ mod test_page_events;
 mod test_system_signals;
 mod test_system_values;
 mod test_empty_bodies;
+mod test_colon_handlers;
 mod test_variable_signals;
 mod test_welcome_forms;
 mod test_loop_value;

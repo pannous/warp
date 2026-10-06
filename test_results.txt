@@ -36,6 +36,8 @@ PASSED:
   ✓ control::test_cell_truth::a_cell_value_as_a_condition
   ✓ control::test_cell_truth::not_of_a_cell_value
   ✓ control::test_charged_fields::test_define_entries_are_values
+  ✓ control::test_colon_handlers::a_listener_body_after_a_colon_is_the_rest_of_the_line
+  ✓ control::test_colon_handlers::a_timer_body_after_a_colon_is_the_rest_of_the_line
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
   ✓ control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
   ✓ control::test_control_words::bang_evaluates_a_block
@@ -1146,6 +1148,7 @@ PASSED:
   ✓ modules::test_versions::versions_compare_part_by_part
   ✓ modules::test_wasm_modules::a_module_is_found_by_name_or_path
   ✓ modules::test_wasm_modules::a_module_keeps_its_state_for_the_run
+  ✓ modules::test_wasm_modules::an_export_is_qualified_by_its_module_name
   ✓ modules::test_wasm_modules::an_exported_function_is_called_with_its_declared_types
   ✓ modules::test_wasm_modules::an_exported_global_reads_as_its_value
   ✓ node::node_values_test::test_values_empty
@@ -2056,6 +2059,8 @@ PASSED:
   ✓ types::test_float_fields::test_float_conditionals
   ✓ types::test_float_fields::test_global_from_a_call
   ✓ types::test_float_fields::test_zero_argument_call_in_float_context
+  ✓ types::test_generic_classes::a_generic_class_holds_any_value
+  ✓ types::test_generic_classes::type_arguments_of_a_generic_class_construct_it
   ✓ types::test_generic_types::test_angle_and_of_forms_are_the_same_type
   ✓ types::test_generic_types::test_angle_brackets_after_a_name_are_not_a_variable_lookup
   ✓ types::test_generic_types::test_comparisons_and_shifts_are_not_type_applications
@@ -2679,4 +2684,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2674 passed, 0 failed, 2674 total tested
+20 ignored, 2679 passed, 0 failed, 2679 total tested

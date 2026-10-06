@@ -35,3 +35,10 @@ fn a_module_is_found_by_name_or_path() {
 	is!("import \"tests/fixtures/wasm/fourty_two.wat\"; ft", 42);
 	fails_with("import tests/fixtures/wasm/no_such; 1", "module not found");
 }
+
+#[test]
+fn an_export_is_qualified_by_its_module_name() {
+	is!(&with_module("fourty_two.twice(21)"), 42);
+	is!(&with_module("fourty_two.double(21)"), 42); // the export, not the float cast double(21)
+	is!(&with_module("fourty_two.twice(fourty_two.ft)"), 84);
+}
