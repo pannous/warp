@@ -24,6 +24,7 @@ PASSED:
   ✓ control::test_blocks::test_indent_as_block
   ✓ control::test_blocks::test_matrix_comma_index
   ✓ control::test_blocks::test_matrix_order
+  ✓ control::test_braceless_call_in_branch::a_braceless_call_with_a_variable_in_a_branch
   ✓ control::test_braceless_output_calls::a_braceless_output_call_is_worth_an_int
   ✓ control::test_branch_assigned_variables::a_text_assigned_in_both_branches_is_read_after_them
   ✓ control::test_broadcast::a_broadcast_is_a_statement_of_no_value
@@ -2580,4 +2581,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2575 passed, 0 failed, 2575 total tested
+23 ignored, 2576 passed, 0 failed, 2576 total tested
