@@ -32,7 +32,7 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 		// `root 4`, `root(4)`
 		Node::List(items, bracket, separator) if items.len() == 2 && alias_of(&items[0]).is_some() => {
 			let op = alias_of(&items[0]).expect("guarded");
-			let [_, argument] = <[Node; 2]>::try_from(items).ok().expect("two items");
+			let [_, argument] = <[Node; 2]>::try_from(items).expect("two items");
 			let _ = (bracket, separator);
 			Node::Key(Box::new(Node::Empty), op, Box::new(operators(argument, aliases)))
 		}

@@ -118,7 +118,7 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
     let decl = decl.trim().trim_end_matches(';').trim();
 
     let paren_pos = decl.find('(')?;
-    let close_paren = crate::ffi::matching_paren(&decl, paren_pos)?;
+    let close_paren = crate::ffi::matching_paren(decl, paren_pos)?;
 
     let before_paren = &decl[..paren_pos];
     let params_str = &decl[paren_pos + 1..close_paren];

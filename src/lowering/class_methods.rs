@@ -198,7 +198,7 @@ fn operator_calls(node: Node) -> Node {
 				if method != names[0] {
 					crate::diagnostic::note_alias(&method, names[0]);
 				}
-				methods.push((name.drop_meta().name(), op.clone(), method));
+				methods.push((name.drop_meta().name(), *op, method));
 			}
 		}
 	});

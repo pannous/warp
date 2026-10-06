@@ -353,7 +353,7 @@ impl Subscriptions {
 			Some(name) => {
 				let head = Node::List(vec![Node::Symbol(name.to_string()), Node::Symbol(VALUE_WORD.to_string()), Node::Symbol(OLD_WORD.to_string())], Bracket::Round, Separator::None);
 				// the listener's block shares the main-level variables it changes, as an unnamed one does (P124)
-				let globals = crate::event_signals::global_declarations(&[check.clone()], &self.main_variables, &[VALUE_WORD, OLD_WORD]);
+				let globals = crate::event_signals::global_declarations(std::slice::from_ref(&check), &self.main_variables, &[VALUE_WORD, OLD_WORD]);
 				let body = globals.into_iter().chain([check, crate::node::int(0)]).collect();
 				statements.push(Node::Key(Box::new(head), Op::Define, Box::new(block(body))));
 				for variable in &watched {
