@@ -5,7 +5,7 @@
 //! handler ran, ends the run at once (exit code 130), so a handler that ignores ctrl-c never makes a program
 //! unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_every(0, 5000)` where the handler is
 //! declared. A run that allows it (`warp run`, built executables) stays after main while a timer lives.
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use crate::host_words::{INTERRUPT_HANDLER, TIMER_HANDLER_PREFIX};
@@ -24,6 +24,34 @@ thread_local! {
 	static TIMERS: RefCell<Vec<Timer>> = const { RefCell::new(Vec::new()) };
 }
 static STAYING_ALLOWED: AtomicBool = AtomicBool::new(false);
+
+thread_local! {
+	/// the code of the `exit` that ended the last run on this thread
+	static EXIT_CODE: Cell<Option<i32>> = const { Cell::new(None) };
+}
+
+/// `exit(code)` (P121): the error that unwinds the run; the runner ends the run with ø and keeps the code
+#[derive(Debug)]
+pub struct ExitRequest(pub i32);
+
+impl std::fmt::Display for ExitRequest {
+	fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(formatter, "exit({})", self.0)
+	}
+}
+
+impl std::error::Error for ExitRequest {}
+
+/// Whether the run ended by `exit`: the code is kept for take_exit_code
+pub fn ended_by_exit<R>(outcome: &Result<R>) -> bool {
+	let code = outcome.as_ref().err().and_then(|error| error.downcast_ref::<ExitRequest>()).map(|request| request.0);
+	code.inspect(|code| EXIT_CODE.with(|kept| kept.set(Some(*code)))).is_some()
+}
+
+/// The code of the `exit` that ended the last run on this thread (once)
+pub fn take_exit_code() -> Option<i32> {
+	EXIT_CODE.with(Cell::take)
+}
 
 /// A new run on this thread starts without timers
 pub fn forget_timers() {

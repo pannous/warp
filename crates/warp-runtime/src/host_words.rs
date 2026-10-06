@@ -10,12 +10,14 @@ pub const RANDOM_BELOW: &str = "random_below";
 pub const CLOCK: &str = "clock";
 pub const SIGNAL_POLL: &str = "signal_poll";
 pub const SIGNAL_EVERY: &str = "signal_every";
+/// `exit(code)` ends the run, not the process (P121, system_signals.rs ExitRequest)
+pub const EXIT: &str = "exit";
 /// The exported handler of `on interrupt {…}` (src/lowering/event_signals.rs)
 pub const INTERRUPT_HANDLER: &str = "on·interrupt";
 /// `on·every·0`: the handler of the first `on every … {…}`
 pub const TIMER_HANDLER_PREFIX: &str = "on·every·";
 /// The words link_host_words provides
-pub const BASIC_HOST_WORDS: [&str; 6] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY];
+pub const BASIC_HOST_WORDS: [&str; 7] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, EXIT];
 
 #[cfg(feature = "engine")]
 pub use linking::*;
@@ -39,6 +41,7 @@ mod linking {
 		linker.func_wrap(HOST_LIBRARY, CLOCK, milliseconds_since_epoch)?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_POLL, |mut caller: Caller<'_, T>| system_signals::run_due_handlers(&mut caller, exported))?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_EVERY, system_signals::start_timer)?;
+		linker.func_wrap(HOST_LIBRARY, EXIT, |code: i64| -> Result<()> { Err(wasmtime::Error::new(system_signals::ExitRequest(code as i32))) })?;
 		Ok(())
 	}
 
