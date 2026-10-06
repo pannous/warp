@@ -39,6 +39,7 @@ pub mod tuples;
 pub mod type_constructor;
 pub mod type_name_matching;
 pub mod type_tests;
+pub mod event_signals;
 pub mod variable_signals;
 pub mod versions;
 pub mod welcome_forms;

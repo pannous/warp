@@ -137,6 +137,26 @@ fn with_trailing_return(node: &Node, more: &[Node]) -> Option<Node> {
 	}
 }
 
+/// The variables a destructuring statement assigns: `x, y = v, w`, `(x, y) = v`, `a, *rest = …`
+pub(crate) fn destructured_names(statement: &Node) -> Vec<String> {
+	let targets: Vec<Node> = match statement.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Colon) => {
+			let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)));
+			match assignment.map(|at| (at, items[at].drop_meta())) {
+				Some((at, Node::Key(last, _, _))) => items[..at].iter().chain([last.as_ref()]).cloned().collect(),
+				_ => vec![],
+			}
+		}
+		Node::Key(left, Op::Assign, _) => bracketed_targets(left).map(<[Node]>::to_vec).unwrap_or_default(),
+		_ => vec![],
+	};
+	let mut names = vec![];
+	if targets.iter().all(is_target) {
+		targets.iter().for_each(|target| target.visit(&mut |part| names.extend(symbol_name(part).map(|name| name.trim_start_matches(STARRED).to_string()))));
+	}
+	names
+}
+
 /// `x, (y = v), w` → `$destructure (x, y) v w`; `(x, y) = v, w` the same
 fn regroup_destructuring(items: &[Node]) -> Option<Node> {
 	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
