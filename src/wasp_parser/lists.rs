@@ -135,7 +135,8 @@ impl WaspParser {
 				continue;
 			}
 
-			let (had_newline, line_indent, _) = self.skip_whitespace_and_comments();
+			let (had_newline, line_indent, comment) = self.skip_whitespace_and_comments();
+			self.pending_comment = comment;
 
 			// Handle indentation-based blocks
 			let item = if had_newline && line_indent > self.base_indent && bracket == Bracket::None
@@ -185,6 +186,7 @@ impl WaspParser {
 			}
 		}
 
+		self.pending_comment = None; // a comment closing a list documents nothing after it
 		let list = self.group_by_separators(items_with_seps, bracket);
 		match list.duplicate_key() {
 			Some(key) => error(&format!("duplicate key '{}'", key)),
