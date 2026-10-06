@@ -125,9 +125,10 @@ fn definitions(node: &Node) -> HashMap<String, Function> {
 }
 
 /// `a`, `a:int`, `a=1`: the parameter's name
+/// `x`, `x: int`, `x = 1`, and a function-typed `f: (Int) -> Int`: the name
 fn parameter_name(parameter: &Node) -> String {
 	match parameter.drop_meta() {
-		Node::Key(name, _, _) => name.name(),
+		Node::Key(name, _, _) => parameter_name(name),
 		other => other.name(),
 	}
 }
@@ -189,13 +190,19 @@ fn named_argument(argument: &Node) -> Option<(String, &Node)> {
 		Node::Key(name, op @ (Op::Assign | Op::Colon), value) => match name.drop_meta() {
 			Node::Symbol(_) if *op == Op::Colon && is_type(&name.name()) => None,
 			Node::Symbol(_) if *op == Op::Colon && matches!(value.drop_meta(), Node::Symbol(type_name) if is_type(type_name)) => None,
-			// `pic{width:5}` (parsed as `pic:{…}`) is an ad-hoc instance: a named object argument is written `opts={…}`
-			Node::Symbol(_) if *op == Op::Colon && matches!(value.drop_meta(), Node::List(_, crate::node::Bracket::Curly, _)) => None,
+			// `pic{width:5}` (parsed as `pic:{…}`) is an ad-hoc instance: a named object argument is written `opts={…}`;
+			// a block that is a function is the argument (Swift `using: { $0 * 3 }`)
+			Node::Symbol(_) if *op == Op::Colon && matches!(value.drop_meta(), Node::List(_, crate::node::Bracket::Curly, _)) && !is_block_function(value) => None,
 			Node::Symbol(name) => Some((name.clone(), value)),
 			_ => None,
 		},
 		_ => None,
 	}
+}
+
+/// `{ $0 * 3 }`, `{ x in x * 3 }`, `{ it * 3 }`, `{ x -> x * 3 }`
+fn is_block_function(value: &Node) -> bool {
+	crate::lambdas::arrow_lambda(value).is_some() || crate::lambdas::block_as_arrow(value).is_some()
 }
 
 fn call_of<'a>(node: &'a Node, functions: &HashMap<String, Function>) -> Option<(String, &'a [Node])> {
