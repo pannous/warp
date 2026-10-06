@@ -155,7 +155,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	}
 	// the text of a list (list_text) is emitted with join, as the analyzer requires list_join for both
 	if required.contains("list_join") {
-		required.extend([super::float_text::FLOAT_TEXT, TEXT_CONCAT, super::library_ops::LIST_TEXT]); // a float joins as its text, a nested list as "[…]"
+		required.extend([super::float_text::FLOAT_TEXT, TEXT_CONCAT, super::library_ops::LIST_TEXT, super::library_ops::TEXT_QUOTED]); // a float joins as its text, a nested list as "[…]", a text quoted
 	}
 	// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
