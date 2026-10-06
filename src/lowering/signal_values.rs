@@ -258,6 +258,13 @@ fn reflected_lists(node: Node, reflected: &mut HashSet<String>) -> Node {
 	while let Some(item) = rest.next() {
 		if word(&item) == LISTENERS_WORD && rest.peek().is_some_and(|next| word(next) == OF_WORD) {
 			rest.next();
+			// C#'s `listeners of x -= alarm` is `remove alarm from listeners of x`
+			if let Some(Node::Key(variable, Op::SubAssign, name)) = rest.peek().map(|next| next.drop_meta().clone()) {
+				rest.next();
+				reflected.insert(word(&variable));
+				out.extend([Node::Symbol(REMOVE_WORD.into()), *name, Node::Symbol(FROM_WORD.into()), call(SIGNAL_LISTENERS, vec![*variable])]);
+				continue;
+			}
 			if let Some(variable) = rest.next() {
 				reflected.insert(word(&variable));
 				let list = call(SIGNAL_LISTENERS, vec![variable.clone()]);
@@ -338,7 +345,10 @@ impl Subscriptions {
 		let listener = match name {
 			Some(name) => {
 				let head = Node::List(vec![Node::Symbol(name.to_string()), Node::Symbol(VALUE_WORD.to_string()), Node::Symbol(OLD_WORD.to_string())], Bracket::Round, Separator::None);
-				statements.push(Node::Key(Box::new(head), Op::Define, Box::new(block(vec![check, crate::node::int(0)]))));
+				// the listener's block shares the main-level variables it changes, as an unnamed one does (P124)
+				let globals = crate::event_signals::global_declarations(&[check.clone()], &self.main_variables, &[VALUE_WORD, OLD_WORD]);
+				let body = globals.into_iter().chain([check, crate::node::int(0)]).collect();
+				statements.push(Node::Key(Box::new(head), Op::Define, Box::new(block(body))));
 				for variable in &watched {
 					let place = call(COUNT_WORD, vec![call(SIGNAL_LISTENERS, vec![Node::Symbol(variable.clone())])]);
 					statements.push(assign(&index_name(name, variable), place));

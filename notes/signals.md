@@ -49,7 +49,10 @@ JSON, wasp text). A state signal is a **variable**: nothing new to write, `x = 3
    Inside: `value` (alias `signal`, `event`) is the new value.
 4. **Events**: `raise name{data}` sends the event, `on name {…}` receives it (`event` is the payload node). With no
    `on name` handler in the program, `raise` stays today's catchable exception (P110). A write of x is the event
-   `set x`, so `on set x` is one case of the general rule.
+   `set x`, so `on set x` is one case of the general rule. `once name {…}` runs at the first raise only (Node's
+   `emitter.once`; a flag `once_fired_N`, event_signals.rs). `on set p.age` watches one field: a write of it or of p.
+   Ported cases of Svelte, Vue, Solid, RxJS, C#, Node, Qt and the DOM: probes/reactive_ports.md,
+   tests/control/test_reactive_ports.rs.
 5. **Type**: a variable keeps its value type `T`. Only a signal that *escapes* as a value (passed to a function that
    subscribes to it, kept in a list) has the type `signal T` and a runtime representation (phase 5).
 

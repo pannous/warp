@@ -34,6 +34,7 @@ impl WaspParser {
 				other => other,
 			},
 			'*' if self.is_identifier_start(1) => self.parse_starred(1),
+			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
@@ -55,7 +56,7 @@ impl WaspParser {
 			ch if ch.is_numeric() || self.number_starts_at(0) || (ch == '-' && self.number_starts_at(1)) => {
 				self.parse_number()
 			}
-			ch if ch.is_alphabetic() || ch == '_' => self.parse_symbol_with_suffix(),
+			ch if ch.is_alphabetic() || ch == '_' => self.parse_elixir_function().unwrap_or_else(|| self.parse_symbol_with_suffix()),
 			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
 				(0..length).for_each(|_| self.advance());
 				error(&crate::uniscript_entities::unknown_entity(&name))
@@ -221,8 +222,12 @@ impl WaspParser {
 	/// Ruby/Lua `do … end`, `then … end`, `else … end`: an `end` closes the statements opened here,
 	/// counting the `do`/`then` openers in between; an `end` that closes nothing leaves the one-statement body
 	pub(super) fn closing_end_follows(&self, openers: &[&str]) -> bool {
+		self.closing_end_follows_from(self.pos, openers)
+	}
+
+	fn closing_end_follows_from(&self, start: usize, openers: &[&str]) -> bool {
 		let mut open = 1;
-		let mut position = self.pos;
+		let mut position = start;
 		while position < self.chars.len() {
 			let ch = self.chars[position];
 			if ch == '"' || ch == '\'' {
@@ -271,6 +276,54 @@ impl WaspParser {
 			self.advance_by(END_KEYWORD.len());
 		}
 		curly_block(block)
+	}
+
+	/// Elixir's `fn a, b -> body end` at the cursor: the parameter names and where the body starts; Rust's
+	/// `fn(x) -> i32 { … }` names a result type, no body
+	fn elixir_function_head(&self) -> Option<(Vec<String>, usize)> {
+		if !self.matches_keyword(ELIXIR_FUNCTION_KEYWORD) {
+			return None;
+		}
+		let start = self.pos + ELIXIR_FUNCTION_KEYWORD.len();
+		let line_end = (start..self.chars.len()).find(|&at| self.chars[at] == '\n').unwrap_or(self.chars.len());
+		let arrow = (start..line_end.saturating_sub(1)).find(|&at| self.chars[at] == '-' && self.chars[at + 1] == '>')?;
+		let head: String = self.chars[start..arrow].iter().collect();
+		let is_parameter_text = head.chars().all(|ch| is_identifier_char(ch) || matches!(ch, ' ' | ',' | '(' | ')'));
+		let names: Vec<String> = head.split([',', '(', ')', ' ']).filter(|name| !name.is_empty()).map(str::to_string).collect();
+		let body_start = arrow + 2;
+		let after: String = self.chars[body_start..].iter().collect();
+		let mut words = after.trim_start().splitn(2, |ch: char| !is_identifier_char(ch));
+		let is_result_type = words.next().is_some_and(|word| !word.is_empty()) && words.next().is_some_and(|rest| rest.trim_start().starts_with('{'));
+		let is_function = is_parameter_text && !is_result_type && self.closing_end_follows_from(body_start, &[ELIXIR_FUNCTION_KEYWORD, "do"]);
+		is_function.then_some((names, body_start))
+	}
+
+	/// `fn x -> x * 2 end`: the lambda `x => {x * 2}`
+	pub(super) fn parse_elixir_function(&mut self) -> Option<Node> {
+		let (names, body_start) = self.elixir_function_head()?;
+		self.advance_by(body_start - self.pos);
+		let body = self.parse_end_block(false);
+		let parameters = match names.as_slice() {
+			[single] => Node::Symbol(single.clone()),
+			several => Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon),
+		};
+		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
+	}
+
+	/// Ruby's stabby lambda `->(x) { x * x }`, `-> { 42 }`: the lambda `x => {x * x}`
+	fn parse_stabby_lambda(&mut self) -> Node {
+		self.advance_by(2);
+		self.skip_spaces();
+		let parameters = match self.current_char() {
+			'(' => self.parse_bracketed('('),
+			_ => Empty,
+		};
+		self.skip_spaces();
+		if self.current_char() != '{' {
+			return error("a stabby lambda `->(x) { … }` needs its body in braces");
+		}
+		let body = self.parse_bracketed('{');
+		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 	}
 
 	/// The `end` (or, in a `then` block, the `else`) that closes the block being parsed
