@@ -108,6 +108,7 @@ PASSED:
   ✓ control::test_object_functions::test_function_entries_are_callable
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
+  ✓ control::test_run_time_block_cache::a_block_in_a_loop_body_sees_the_variables_assigned_there
   ✓ control::test_run_time_block_cache::a_block_run_in_a_loop_with_changing_numbers_compiles_once
   ✓ control::test_run_time_block_cache::a_cached_block_sees_the_values_of_each_run
   ✓ control::test_run_time_blocks::a_bang_known_only_at_run_time_runs_the_block
@@ -920,6 +921,10 @@ PASSED:
   ✓ node::test_node_operators::test_node_sub_basic
   ✓ node::test_node_operators::test_node_sub_booleans
   ✓ node::test_node_operators::test_operations_with_primitives_mixed
+  ✓ node::test_node_operators::test_type_mismatch_add
+  ✓ node::test_node_operators::test_type_mismatch_div
+  ✓ node::test_node_operators::test_type_mismatch_mul
+  ✓ node::test_node_operators::test_type_mismatch_sub
   ✓ node::test_node_todo::todo_is_a_loud_error_naming_the_missing_feature
   ✓ node::test_node::test_mark_as_map
   ✓ node::test_node::test_remove
@@ -1414,6 +1419,7 @@ PASSED:
   ✓ parser::test_wasp_position::test_position_tracking
   ✓ parser::test_wasp_position::test_position_with_comments
   ✓ parser::test_wisp_def_params::a_wisp_def_tells_the_parameters_from_the_body
+  ✓ parser::test_wisp_roundtrip::wisp_reads_back_what_it_writes
   ✓ parser::test_xml::test_boolean_attribute
   ✓ parser::test_xml::test_cdata
   ✓ parser::test_xml::test_complex_xml_document
@@ -2328,4 +2334,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2323 passed, 0 failed, 2323 total tested
+23 ignored, 2329 passed, 0 failed, 2329 total tested
