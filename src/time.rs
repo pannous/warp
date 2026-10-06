@@ -27,6 +27,8 @@ enum Value {
 	Symbol(String),
 	/// a duration in a unit, `2 hours in minutes` (units::duration_in)
 	Converted(Node),
+	/// `time := now` (a getter since P71, getters.rs: `(time) := now`): its body, evaluated at every read
+	Getter(Node),
 }
 
 type Scope = HashMap<String, Value>;
@@ -64,6 +66,18 @@ fn mentions_time(node: &Node) -> bool {
 	}
 }
 
+/// `(time)`, the head of a getter definition
+fn getter_name(head: &Node) -> Option<&str> {
+	match head.drop_meta() {
+		Node::List(items, crate::node::Bracket::Round, _) => match items.as_slice() {
+			[Node::Symbol(name)] => Some(name),
+			[single] => match single.drop_meta() { Node::Symbol(name) => Some(name), _ => None },
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 fn unsupported(node: &Node) -> String {
 	format!("dates and times are evaluated at compile time only; `{node}` is not supported with them yet")
 }
@@ -95,6 +109,7 @@ fn evaluate(node: &Node, scope: &mut Scope) -> Result<Value, String> {
 		Node::False => Ok(Value::Bool(false)),
 		Node::Text(text) => Ok(Value::Text(text.clone())),
 		Node::Symbol(name) => Ok(match scope.get(name) {
+			Some(Value::Getter(body)) => return evaluate(&body.clone(), scope),
 			Some(value) => value.clone(),
 			None if name == "now" => Value::Time(now()),
 			None => Value::Symbol(name.clone()),
@@ -214,6 +229,11 @@ fn zoned(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
 
 fn binary(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Result<Value, String> {
 	match op {
+		Op::Define if getter_name(left).is_some() => {
+			let getter = Value::Getter(right.clone());
+			scope.insert(getter_name(left).expect("guarded").to_string(), getter.clone());
+			Ok(getter)
+		}
 		Op::Assign | Op::Define => {
 			let Node::Symbol(name) = left.drop_meta() else {
 				return Err(unsupported(left));
@@ -304,6 +324,7 @@ impl Value {
 			Value::Text(_) => "text",
 			Value::Symbol(_) => "symbol",
 			Value::Converted(_) => "quantity",
+			Value::Getter(_) => "getter",
 		}
 	}
 
@@ -316,6 +337,7 @@ impl Value {
 			Value::Text(text) => Node::Text(text),
 			Value::Symbol(name) => Node::Symbol(name),
 			Value::Converted(node) => node,
+			Value::Getter(_) => Node::Empty, // a definition as the last statement
 		}
 	}
 }

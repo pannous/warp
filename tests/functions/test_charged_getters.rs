@@ -26,3 +26,10 @@ fn an_object_getter_runs_at_every_read() {
 	is!("i=0; o = {s := i*10}; i=5; o.s", 50);
 	is!("i=1; o = {a: 2, s := i+1}; i=7; o.s + o.a", 10);
 }
+
+#[test]
+fn a_getter_of_now_reads_the_clock_at_every_use() {
+	is!("time := now; a = time; b = time; b >= a", true);
+	is!("time := now; (time in \"UTC\").year >= 2026", true);
+	is!("t = now; later := t; later == t", true);
+}
