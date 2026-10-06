@@ -105,3 +105,4 @@ mod test_arrow_defaults_and_types;
 mod test_python_higher_order;
 mod test_ported_calls;
 mod test_let_in;
+mod test_go_functions;

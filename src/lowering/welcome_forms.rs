@@ -26,6 +26,7 @@ pub fn lower(node: Node) -> Node {
 			if let Some(binding) = let_binding(&items) {
 				return binding;
 			}
+			let items = go_destructuring(items, &separator);
 			endless_loop(&items).unwrap_or_else(|| Node::List(arrow_cases(items), bracket, separator))
 		}
 		Node::Key(left, Op::Colon, body) if lambda_parameters(&left).is_some() => lambda(lambda_parameters(&left).expect("guarded"), lower(*body)),
@@ -63,6 +64,18 @@ fn let_binding(items: &[Node]) -> Option<Node> {
 		Some(rest) => Node::List(vec![binding, lower(rest)], Bracket::Round, Separator::Semicolon),
 		None => binding,
 	})
+}
+
+/// Go's `q, r := f(x)`: names taking the values apart, `q, r = f(x)` (`r := …` alone would define a getter)
+fn go_destructuring(mut items: Vec<Node>, separator: &Separator) -> Vec<Node> {
+	let Some(position) = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Define, _))) else { return items };
+	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
+	let Node::Key(name, Op::Define, value) = items[position].drop_meta() else { return items };
+	if *separator != Separator::Colon || position == 0 || !is_name(name) || !items[..position].iter().all(is_name) {
+		return items;
+	}
+	items[position] = Node::Key(name.clone(), Op::Assign, value.clone());
+	items
 }
 
 /// `x * 2 in double 4` → (`x * 2`, `double 4`); no `in`: the value alone
