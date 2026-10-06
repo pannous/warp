@@ -100,3 +100,27 @@ fn a_handler_made_in_a_loop_gets_a_note() {
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval("n = 0; on tick { n += 1 }; emit tick; n"));
 	assert!(hints.iter().all(|hint| !hint.reason.contains("once per pass")), "{hints:?}");
 }
+
+// Vue's watch(() => b + c): `on change b + c {…}` watches the expression, as `total := b + c; on change total` does
+#[test]
+fn a_listener_on_an_expression_watches_its_value() {
+	is!("b = 1; c = 2; n = 0; on change b + c { n += 1 }; b = 5; c = 2; b = 7; n", 2);
+	is!("b = 1; c = 2; seen = 0; on change b * c { seen = b * c }; c = 10; seen", 10);
+	is!("b = 1; c = 2; n = 0; on set b + c { n += 1 }; b = 5; c = 3; n", 2);
+}
+
+// Unix coalesces two SIGCHLD into one handler call: `on set` of a shared value runs once per write, also for writes
+// a task makes between two polls
+#[test]
+fn on_set_of_a_shared_value_sees_every_write() {
+	is!("shared n = 0; count = 0; on set n { count += 1 }; job = go { for i in 1 to 5 { n += 1 } }; await job; sleep(50 ms); count", 5);
+	is!("shared n = 0; last = 0; on set n { last = n }; job = go { for i in 1 to 3 { n = i * 10 } }; await job; sleep(50 ms); last", 30);
+}
+
+// card whenever-without: a one-line function's whenever (or once) without braces around it subscribes like the braced one
+#[test]
+fn a_one_line_function_listener_subscribes() {
+	is!("n = 0; watch(s) := whenever s > 5 { n += 1 }; x = 0; watch(x); x = 6; x = 3; x = 8; n", 2);
+	is!("n = 0; watch(s) := once s > 5 { n += 1 }; x = 0; watch(x); x = 6; x = 3; x = 8; n", 1);
+	is!("n = 0; watch(s) := whenever s > 5 { n += 1 }; x = 0; n", 0);
+}
