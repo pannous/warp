@@ -1,6 +1,6 @@
-//! A parameter shaped as an object (wiki/argument.md, card wiki-argument): `to call person{name?, phone number, email?,
+//! A parameter shaped as an object (wiki/argument.md, card wiki-argument): `to call person{name?, phone text, email?,
 //! mutable status} do …` takes an object with those fields; `?` marks an optional one, a missing required field of an
-//! object written at the call is a compile error
+//! object written at the call is a compile error, as is a literal of another type than its field's (P164)
 use crate::common::fails_with;
 use crate::is;
 
@@ -18,7 +18,7 @@ fn test_to_definition_with_a_shaped_parameter() {
 
 #[test]
 fn test_wiki_argument_example() {
-	let code = "to ring person{name?, phone number, email?, mutable status} do\n  person.status = \"called \" + person.phone\n  person.status\nring {name:\"Jonathan\" phone:\"899-573-5842\" status:\"new\"}";
+	let code = "to ring person{name?, phone text, email?, mutable status} do\n  person.status = \"called \" + person.phone\n  person.status\nring {name:\"Jonathan\" phone:\"899-573-5842\" status:\"new\"}";
 	is!(code, "called 899-573-5842");
 }
 
@@ -34,4 +34,11 @@ fn test_constructed_argument_is_checked() {
 	fails_with(&format!("{call}call person{{name:\"Dick\"}}"), "missing argument field phone");
 	fails_with(&format!("{call}call person {{name:\"Dick\"}}"), "missing argument field phone");
 	is!(&format!("{call}call person{{name:\"J\" phone:\"8\"}}"), "8");
+}
+
+#[test]
+fn test_field_type_is_checked() {
+	fails_with("to call person{name?, phone number} do person.phone\ncall {phone:\"899-573-5842\"}", "type error: field phone is number");
+	is!("to call person{name?, phone number} do person.phone + 1\ncall {phone:41}", 42);
+	is!("f(p{name: text}) := p.name; f({name:\"Ann\"})", "Ann");
 }
