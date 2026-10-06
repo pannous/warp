@@ -1,11 +1,11 @@
 // P119 (user, 2026-10-06): NaNs are canonicalized where a run shows them, not after every float operation: printed
 // any NaN is `NaN`, and a NaN that leaves the run (its result, a task's value, a shared array) is 0x7ff8000000000000
 use crate::is;
-use warp::wasm_emitter::eval;
-use warp::{Node, Number};
 
+#[cfg(feature = "native")]
 fn shown_bits(code: &str) -> u64 {
-	match eval(code).drop_meta() {
+	use warp::{Node, Number};
+	match warp::wasm_emitter::eval(code).drop_meta() {
 		Node::Number(Number::Float(x)) => x.to_bits(),
 		Node::Number(Number::Nan) => warp_runtime::floats::CANONICAL_NAN,
 		other => panic!("{code} gave {other:?}"),
