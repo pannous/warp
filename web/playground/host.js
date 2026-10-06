@@ -156,6 +156,12 @@ function programImports(holder, hooks) {
 			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
 			clock: () => BigInt(Date.now()),
 			signal_poll: () => {}, // a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md)
+			signal_every: () => { holder.warnings.push("on every …: timers do not run in the playground yet"); },
+			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
+			exit: code => {
+				holder.exitCode = Number(code);
+				throw new Error(`exit(${code})`);
+			},
 			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings)
 			paint: (pixels, width, height) => {
 				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
@@ -671,6 +677,7 @@ function outcomeOf(holder, hooks, call) {
 		if (unread) return { failure: unread, warnings };
 		return { result: readResult(exports, result), warnings };
 	} catch (trap) {
+		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, warnings };
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
 		const detail = exports[TRAP_DETAIL_EXPORT]?.value;

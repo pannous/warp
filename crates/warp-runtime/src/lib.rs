@@ -12,3 +12,5 @@ pub mod macho;
 pub mod output;
 #[cfg(feature = "engine")]
 pub mod standalone;
+#[cfg(feature = "engine")]
+pub mod system_signals;

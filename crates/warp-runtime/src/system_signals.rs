@@ -1,0 +1,220 @@
+//! System signals (notes/system_signals.md): handlers of events from outside the program, exported functions the
+//! runtime calls at check points: `signal_poll()` (at the start and end of main and at each loop start of a program
+//! with such handlers) and `sleep`, which wakes for them. `on interrupt {…}` is `on·interrupt`, run after a ctrl-c:
+//! the first poll installs the SIGINT handler, which only sets a flag; a second ctrl-c within a second, or before the
+//! handler ran, ends the run at once (exit code 130), so a handler that ignores ctrl-c never makes a program
+//! unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_every(0, 5000)` where the handler is
+//! declared. A run that allows it (`warp run`, built executables) stays after main while a timer lives.
+use std::cell::{Cell, RefCell};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
+use crate::host_words::{INTERRUPT_HANDLER, TIMER_HANDLER_PREFIX};
+use wasmtime::{AsContextMut, Func, Instance, Result, Store, Val};
+
+const NEW_EMPTY: &str = "new_empty";
+
+struct Timer {
+	handler: String,
+	period: Duration,
+	due: Instant,
+}
+
+thread_local! {
+	/// the timers of the run on this thread
+	static TIMERS: RefCell<Vec<Timer>> = const { RefCell::new(Vec::new()) };
+}
+static STAYING_ALLOWED: AtomicBool = AtomicBool::new(false);
+
+thread_local! {
+	/// the code of the `exit` that ended the last run on this thread
+	static EXIT_CODE: Cell<Option<i32>> = const { Cell::new(None) };
+}
+
+/// `exit(code)` (P121): the error that unwinds the run; the runner ends the run with ø and keeps the code
+#[derive(Debug)]
+pub struct ExitRequest(pub i32);
+
+impl std::fmt::Display for ExitRequest {
+	fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(formatter, "exit({})", self.0)
+	}
+}
+
+impl std::error::Error for ExitRequest {}
+
+/// Whether the run ended by `exit`: the code is kept for take_exit_code
+pub fn ended_by_exit<R>(outcome: &Result<R>) -> bool {
+	let code = outcome.as_ref().err().and_then(|error| error.downcast_ref::<ExitRequest>()).map(|request| request.0);
+	code.inspect(|code| EXIT_CODE.with(|kept| kept.set(Some(*code)))).is_some()
+}
+
+/// The code of the `exit` that ended the last run on this thread (once)
+pub fn take_exit_code() -> Option<i32> {
+	EXIT_CODE.with(Cell::take)
+}
+
+/// A new run on this thread starts without timers
+pub fn forget_timers() {
+	TIMERS.with(|timers| timers.borrow_mut().clear());
+}
+
+/// `signal_every(id, milliseconds)`: the handler on·every·id runs every that many milliseconds from now on
+pub fn start_timer(id: i64, milliseconds: i64) {
+	let period = Duration::from_millis(milliseconds.max(1) as u64);
+	let timer = Timer { handler: format!("{TIMER_HANDLER_PREFIX}{id}"), period, due: Instant::now() + period };
+	TIMERS.with(|timers| timers.borrow_mut().push(timer));
+}
+
+fn next_due() -> Option<Instant> {
+	TIMERS.with(|timers| timers.borrow().iter().map(|timer| timer.due).min())
+}
+
+/// The handlers to run now: on·interrupt after a ctrl-c (watched only by a program with that handler: any other
+/// ends at a ctrl-c as usual), then each due timer's (rescheduled; one call however late)
+fn due_handlers(handles_interrupt: bool) -> Vec<String> {
+	let mut due = vec![];
+	if handles_interrupt && interrupt::take() {
+		due.push(INTERRUPT_HANDLER.to_string());
+	}
+	let now = Instant::now();
+	TIMERS.with(|timers| {
+		for timer in timers.borrow_mut().iter_mut().filter(|timer| timer.due <= now) {
+			timer.due = (timer.due + timer.period).max(now);
+			due.push(timer.handler.clone());
+		}
+	});
+	due
+}
+
+/// Run the due handlers; `export` finds a function of the instance by name
+pub fn run_due_handlers<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
+	let handles_interrupt = export(store, INTERRUPT_HANDLER).is_some();
+	for name in due_handlers(handles_interrupt) {
+		let Some(handler) = export(store, &name) else { continue };
+		let mut arguments = vec![];
+		// a handler that reads `event` gets ø
+		if handler.ty(&*store).params().len() == 1 {
+			let empty = export(store, NEW_EMPTY).ok_or_else(|| wasmtime::Error::msg("no new_empty"))?;
+			let mut built = [Val::AnyRef(None)];
+			empty.call(&mut *store, &[], &mut built)?;
+			arguments.push(built[0]);
+		}
+		let mut results = vec![Val::I64(0); handler.ty(&*store).results().len()];
+		handler.call(&mut *store, &arguments, &mut results)?;
+	}
+	Ok(())
+}
+
+/// Sleep for `duration`, running the handlers that come due on the way; a ctrl-c ends the sleep early
+pub fn sleep_with_handlers<S: AsContextMut>(store: &mut S, duration: Duration, mut export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
+	let end = Instant::now() + duration;
+	loop {
+		let wake = next_due().map_or(end, |due| due.min(end));
+		let interrupted = interrupt::wait_until(wake);
+		run_due_handlers(store, &mut export)?;
+		if interrupted || Instant::now() >= end {
+			return Ok(());
+		}
+	}
+}
+
+/// `warp run` and built executables: a program may stay after main while it listens
+pub fn allow_staying() {
+	STAYING_ALLOWED.store(true, Ordering::SeqCst);
+}
+
+/// `5 seconds`, `1 second`, `200 ms`
+fn spoken(period: Duration) -> String {
+	match (period.as_millis(), period.as_millis() % 1000) {
+		(1000, _) => "1 second".to_string(),
+		(milliseconds, 0) => format!("{} seconds", milliseconds / 1000),
+		(milliseconds, _) => format!("{milliseconds} ms"),
+	}
+}
+
+/// After main: while a timer lives (and the run allows it), wait for the next due handler and run it
+pub fn stay_while_listening<T>(store: &mut Store<T>, instance: &Instance) -> Result<()> {
+	if !STAYING_ALLOWED.load(Ordering::SeqCst) || next_due().is_none() {
+		return Ok(());
+	}
+	let listening: Vec<String> = TIMERS.with(|timers| timers.borrow().iter().map(|timer| format!("every {}", spoken(timer.period))).collect());
+	eprintln!("listening: {} (ctrl-c to stop)", listening.join(", "));
+	while let Some(due) = next_due() {
+		interrupt::wait_until(due);
+		run_due_handlers(store, |store, name| instance.get_func(&mut *store, name))?;
+	}
+	Ok(())
+}
+
+#[cfg(unix)]
+mod interrupt {
+	use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+	use std::sync::Once;
+	use std::time::{Duration, Instant};
+
+	const EXIT_INTERRUPTED: i32 = 130; // 128 + SIGINT, what a shell reports for a ctrl-c
+	/// a second ctrl-c this soon after the one before ends the run
+	const HARD_EXIT_WITHIN_MILLISECONDS: i64 = 1000;
+	/// How often a sleep of a watching program looks for a ctrl-c
+	const SLEEP_SLICE: Duration = Duration::from_millis(10);
+	static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+	/// when the last ctrl-c came, monotonic milliseconds (0: none yet)
+	static LAST_SIGNAL: AtomicI64 = AtomicI64::new(0);
+	static WATCHING: Once = Once::new();
+
+	/// Sleep until `wake`; a watching program wakes early at a ctrl-c: whether one came
+	pub fn wait_until(wake: Instant) -> bool {
+		if !WATCHING.is_completed() {
+			std::thread::sleep(wake.saturating_duration_since(Instant::now()));
+			return false;
+		}
+		while !INTERRUPTED.load(Ordering::SeqCst) {
+			let left = wake.saturating_duration_since(Instant::now());
+			if left.is_zero() {
+				return false;
+			}
+			std::thread::sleep(left.min(SLEEP_SLICE));
+		}
+		true
+	}
+
+	/// Whether a ctrl-c came since the last call; the first call starts watching
+	pub fn take() -> bool {
+		WATCHING.call_once(|| unsafe {
+			libc::signal(libc::SIGINT, on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t);
+		});
+		INTERRUPTED.swap(false, Ordering::SeqCst)
+	}
+
+	/// async-signal-safe (atomics, clock_gettime, _exit): a flag, or the exit of a second ctrl-c within a second or
+	/// one the program did not take yet
+	extern "C" fn on_signal(_: libc::c_int) {
+		let now = monotonic_milliseconds();
+		let last = LAST_SIGNAL.swap(now, Ordering::SeqCst);
+		let soon_after = last != 0 && now - last < HARD_EXIT_WITHIN_MILLISECONDS;
+		if INTERRUPTED.swap(true, Ordering::SeqCst) || soon_after {
+			unsafe { libc::_exit(EXIT_INTERRUPTED) }
+		}
+	}
+
+	fn monotonic_milliseconds() -> i64 {
+		let mut now = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+		unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };
+		now.tv_sec as i64 * 1000 + now.tv_nsec as i64 / 1_000_000
+	}
+}
+
+#[cfg(not(unix))]
+mod interrupt {
+	use std::time::Instant;
+
+	/// not yet on this platform (card signals-system-windows): ctrl-c ends the run as before
+	pub fn wait_until(wake: Instant) -> bool {
+		std::thread::sleep(wake.saturating_duration_since(Instant::now()));
+		false
+	}
+
+	pub fn take() -> bool {
+		false
+	}
+}

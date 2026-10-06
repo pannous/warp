@@ -741,8 +741,8 @@ impl WasmGcEmitter {
 		let effects = EffectReport::of(node);
 		// task_poll is called by the emitted loops of a program that controls tasks, not by the program itself
 		let polls = effects.calls_external(crate::host::TASK_CONTROL);
-		// signal_poll likewise, by a program with `on interrupt {…}`
-		let polls_signals = self.ctx.user_functions.contains_key(crate::host::INTERRUPT_HANDLER);
+		// signal_poll likewise, by a program with `on interrupt {…}` or `on every … {…}`
+		let polls_signals = crate::analyzer::handles_system_signals(&self.ctx);
 		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || (polls && name == crate::host::TASK_POLL) || (polls_signals && name == crate::host::SIGNAL_POLL));
 		for need in &self.discovered_needs {
 			if let Need::MathImport(key) = need {

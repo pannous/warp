@@ -314,8 +314,19 @@ fn run_main<S: 'static>(
 	}
 	// a main without a result leaves nothing to read: the null reference reads as Empty
 	let mut results = vec![Val::AnyRef(None); result_types.len()];
+	use warp_runtime::system_signals::{ended_by_exit, stay_while_listening};
+	let ended = |store, instance| Ok((Val::AnyRef(None), store, instance)); // `exit` (P121): the run's value is ø
 	let outcome = main.call(&mut store, &[], &mut results);
+	if ended_by_exit(&outcome) {
+		return ended(store, instance);
+	}
 	with_trap_detail(outcome, &mut store, &instance)?;
+	// `warp run` keeps a program with a live timer after main (notes/system_signals.md)
+	let staying = stay_while_listening(&mut store, &instance);
+	if ended_by_exit(&staying) {
+		return ended(store, instance);
+	}
+	with_trap_detail(staying, &mut store, &instance)?;
 	Ok((results.first().copied().unwrap_or(Val::AnyRef(None)), store, instance))
 }
 

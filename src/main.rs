@@ -3,7 +3,7 @@ use warp::{diagnostic, extensions, law, package_tools, run, util, wasm_emitter, 
 use warp::node;
 use std::env;
 use std::fs;
-use std::io::{self, Read, IsTerminal};
+use std::io::{self, Read, IsTerminal, Write};
 use node::Node;
 use wasm_emitter::eval;
 use extensions::numbers::Number;
@@ -177,9 +177,14 @@ fn run_command(args: &[String]) {
         if !file_exists(path) {
             eprintln!("Error: Could not read file '{}'", path);
         }
+        warp_runtime::system_signals::allow_staying(); // a program with a live timer stays after main
         let result = eval(path); // a file: its folder is in scope (D15)
         if !only_run && !matches!(result, Node::Error(_)) {
             leave_executable(path);
+        }
+        if let Some(code) = warp_runtime::system_signals::take_exit_code() {
+            let _ = io::stdout().flush();
+            std::process::exit(code); // `exit(code)` (P121)
         }
         print_and_exit(result);
     } else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {
