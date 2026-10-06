@@ -49,6 +49,7 @@ PASSED:
   ✓ control::test_control_words::trailing_while_and_until_repeat_the_statement
   ✓ control::test_control_words::unless_runs_its_block_when_the_condition_is_false
   ✓ control::test_control_words::until_loops_while_the_condition_is_false
+  ✓ control::test_ctrl_c_rule::a_ctrl_c_reaches_the_handler_unless_one_is_pending_or_just_came
   ✓ control::test_daily_timer::a_daily_timer_needs_a_time_of_day
   ✓ control::test_daily_timer::a_daily_timer_starts_and_main_runs_on
   ✓ control::test_daily_timer::the_delay_until_a_time_of_day_wraps_to_tomorrow
@@ -166,6 +167,7 @@ PASSED:
   ✓ control::test_page_events::a_page_event_handler_is_exported_without_a_raise
   ✓ control::test_page_events::a_raised_page_event_runs_its_handler_as_any_event
   ✓ control::test_page_events::the_last_name_of_a_program_with_page_events_is_its_output_binding
+  ✓ control::test_page_events::the_last_name_of_a_program_with_timers_is_its_output_binding
   ✓ control::test_parallel_map::a_parallel_loop_updating_a_copy_warns
   ✓ control::test_parallel_map::a_parallel_map_gives_the_results_in_order
   ✓ control::test_parallel_map::a_parallel_map_runs_its_items_at_once
@@ -176,6 +178,7 @@ PASSED:
   ✓ control::test_raise::try_catches_a_raise
   ✓ control::test_reactive_ports::a_change_listener_reads_the_old_value
   ✓ control::test_reactive_ports::a_listener_watches_one_field
+  ✓ control::test_reactive_ports::a_named_event_handler_is_removed_and_counted
   ✓ control::test_reactive_ports::a_named_listener_is_removed_and_shares_variables
   ✓ control::test_reactive_ports::a_once_handler_runs_at_the_first_raise
   ✓ control::test_reactive_ports::old_in_set_listeners_and_its_aliases
@@ -490,6 +493,7 @@ PASSED:
   ✓ ffi::test_host_words::test_clock_and_sleep
   ✓ ffi::test_host_words::test_random_stays_in_range
   ✓ ffi::test_libc_results::atol_returns_a_long
+  ✓ ffi::test_libc_results::libc_text_and_character_functions
   ✓ ffi::test_libc_results::strcmp_orders_texts
   ✓ ffi::test_libc_results::strlen_inside_a_program
   ✓ ffi::test_libc_results::strlen_returns_a_size
@@ -520,6 +524,7 @@ PASSED:
   ✓ functions::test_all_calls::all_over_nested_lists_broadcasts_again
   ✓ functions::test_all_calls::an_untyped_call_next_to_a_comparison_is_ambiguous
   ✓ functions::test_all_calls::broadcasting_compares_as_a_list
+  ✓ functions::test_all_calls::every_definition_form_reads_a_comparison_alike
   ✓ functions::test_analysis_memo::test_a_changed_tree_is_analysed_anew
   ✓ functions::test_analysis_memo::test_an_analysis_that_says_something_runs_again
   ✓ functions::test_analysis_memo::test_the_same_tree_is_analysed_once
@@ -582,6 +587,7 @@ PASSED:
   ✓ functions::test_captured_containers::test_a_captured_list_element_keeps_its_kind
   ✓ functions::test_captured_containers::test_a_captured_object_field_keeps_its_kind
   ✓ functions::test_character_results::a_returned_character_stays_a_character
+  ✓ functions::test_charged_getters::a_function_factory_gets_no_hint_of_lowered_code
   ✓ functions::test_charged_getters::a_getter_of_now_reads_the_clock_at_every_use
   ✓ functions::test_charged_getters::a_getter_over_constants_gets_the_needless_charging_note
   ✓ functions::test_charged_getters::a_getter_reads_the_current_value_at_every_use
@@ -1001,6 +1007,7 @@ PASSED:
   ✓ lists::test_key_lookup::test_text_value_is_looked_up
   ✓ lists::test_key_subscript_hint::a_text_key_subscript_gets_no_index_hint
   ✓ lists::test_lazy_range::a_big_range_variable_compiles
+  ✓ lists::test_lazy_range::a_range_bound_of_arithmetic_stays_a_descriptor
   ✓ lists::test_lazy_range::a_range_is_read_from_its_bounds
   ✓ lists::test_lazy_range::a_range_variable_used_as_a_list_stays_one
   ✓ lists::test_lazy_range::a_small_range_variable_is_still_its_list
@@ -1181,6 +1188,7 @@ PASSED:
   ✓ modules::test_versions::version_literals_have_two_dots_or_more
   ✓ modules::test_versions::versions_compare_part_by_part
   ✓ modules::test_wasm_modules::a_c_module_takes_and_gives_texts_by_its_header
+  ✓ modules::test_wasm_modules::a_c_modules_out_pointer_gives_the_result
   ✓ modules::test_wasm_modules::a_module_is_found_by_name_or_path
   ✓ modules::test_wasm_modules::a_module_keeps_its_state_for_the_run
   ✓ modules::test_wasm_modules::a_qualified_global_is_assigned_in_its_module
@@ -1191,6 +1199,7 @@ PASSED:
   ✓ modules::test_wasm_modules::an_imported_module_gets_wasi_host_words_and_other_modules
   ✓ modules::test_wasm_modules::include_runs_main_globals_are_set_and_casts_are_ambiguous
   ✓ modules::test_wasm_modules::libc_compiled_to_wasm_is_called_like_c
+  ✓ modules::test_wasm_modules::zlib_compiled_to_wasm
   ✓ node::node_values_test::test_values_empty
   ✓ node::node_values_test::test_values_key
   ✓ node::node_values_test::test_values_list
@@ -2170,6 +2179,8 @@ PASSED:
   ✓ types::test_struct_types::test_magic_object_roundtrip
   ✓ types::test_struct_types::test_symbol
   ✓ types::test_struct_types::test_text
+  ✓ types::test_tagged_objects::a_field_of_a_tagged_object_is_read_from_its_fields
+  ✓ types::test_tagged_objects::a_static_counts_constructions_in_the_value_block
   ✓ types::test_trait_constraints::a_constrained_list_parameter_takes_conforming_elements
   ✓ types::test_trait_constraints::a_list_annotation_reads_both_ways
   ✓ types::test_trait_constraints::elements_that_do_not_conform_are_a_compile_error
@@ -2740,4 +2751,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2735 passed, 0 failed, 2735 total tested
+19 ignored, 2746 passed, 0 failed, 2746 total tested
