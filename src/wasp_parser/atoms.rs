@@ -419,6 +419,12 @@ impl WaspParser {
 		if !self.options.wit_mode && self.declares_type(&symbol) {
 			return self.parse_type_declaration();
 		}
+		if !self.options.wit_mode && symbol == MIXIN_WORD && self.name_and_block_follow() {
+			return match self.parse_type_declaration() {
+				Node::Type { name, body } => Node::Type { name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)), body },
+				other => other,
+			};
+		}
 
 		// `point {x:1}` with blanks constructs a declared type like the glued `point{x:1}` (open decision 41)
 		if self.declared_types.contains(&symbol) && self.block_after_blanks() {
@@ -525,6 +531,24 @@ impl WaspParser {
 				Err(message) => return error(&message),
 			}
 			self.skip_whitespace();
+		}
+		// `class Duck with Walker, Swimmer {…}`: the mixins ride on the name, class_methods takes in their items
+		if self.matches_keyword(WITH_KEYWORD) {
+			self.advance_by(WITH_KEYWORD.len());
+			let mut mixins = vec![];
+			loop {
+				self.skip_whitespace();
+				match self.parse_symbol() {
+					Ok(mixin) => mixins.push(Symbol(mixin)),
+					Err(message) => return error(&message),
+				}
+				self.skip_whitespace();
+				if self.current_char() != ',' {
+					break;
+				}
+				self.advance();
+			}
+			name = name.with_attribute(WITH_KEYWORD, Node::List(mixins, Bracket::None, Separator::Space));
 		}
 		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
 		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
