@@ -8,7 +8,7 @@ use super::map_backend::{entry_update, is_update};
 use super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
-use crate::type_constructor::{entry_name, instance_parts};
+use crate::type_constructor::{entry_name, entry_value, instance_parts};
 use crate::type_kinds::{field_storage, FieldStorage, Kind, TypeDef};
 use std::collections::HashMap;
 use wasm_encoder::*;
@@ -46,14 +46,14 @@ impl WasmGcEmitter {
 	/// The variables of `program` held as GC structs, with their class: locals assigned only constructions of one class
 	/// that give every field in declared order, and field writes, all with values of the field's kind
 	pub(super) fn find_typed_structs(&self, program: &Node) -> HashMap<String, String> {
-		let mut classes = self.struct_variables(program);
+		let mut classes = self.struct_variables(program, &self.struct_results);
 		classes.retain(|name, _| self.scope.lookup(name).is_some_and(|local| !local.is_param));
 		classes
 	}
 
 	/// find_typed_structs before the scope is known: the variables a program, or a function body except its
 	/// parameters, holds as structs
-	fn struct_variables(&self, program: &Node) -> HashMap<String, String> {
+	fn struct_variables(&self, program: &Node, results: &HashMap<String, String>) -> HashMap<String, String> {
 		let (mut classes, mut excluded): (HashMap<String, String>, Vec<String>) = (HashMap::new(), vec![]);
 		// (variable, the one-based field index, the value written)
 		let mut writes: Vec<(String, Node, Node)> = vec![];
@@ -64,7 +64,7 @@ impl WasmGcEmitter {
 					let (index, written) = entry_update(name, value).expect("guarded");
 					writes.push((name.clone(), index, written));
 				}
-				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => match self.constructed_class(value) {
+				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => match self.constructed_class(value).or_else(|| struct_call_class(value, results)) {
 					Some(class) if classes.get(name).is_none_or(|known| *known == class) => { classes.insert(name.clone(), class); }
 					_ => excluded.push(name.clone()),
 				},
@@ -192,7 +192,14 @@ impl WasmGcEmitter {
 			Self::emit_list(func, &[I::Drop, I::LocalGet(slot)]);
 			return;
 		}
-		let (_, fields) = instance_parts(value).expect("find_typed_structs admits only constructions");
+		if let Some(callee) = super::list_abi::called_function(value).filter(|callee| self.struct_results.contains_key(*callee)) {
+			let Node::List(items, _, _) = value.drop_meta() else { unreachable!("a call") };
+			let user_fn = self.ctx.user_functions[callee].clone();
+			self.emit_user_function_call_inner(func, &user_fn, &items[1..]);
+			func.instruction(&I::LocalTee(slot));
+			return;
+		}
+		let (_, fields) = instance_parts(value).expect("find_typed_structs admits only constructions and struct calls");
 		let Node::List(entries, _, _) = fields.drop_meta() else { unreachable!("find_typed_structs admits only entry lists") };
 		let values: Vec<Node> = entries.iter().map(|entry| entry_value(entry).clone()).collect();
 		self.emit_struct_new(func, class, &values);
@@ -227,49 +234,76 @@ impl WasmGcEmitter {
 		self.emit_node_instructions(func, &instance);
 	}
 
-	/// Per user function: the class of each parameter it takes as a struct. A parameter `p:P` qualifies when the body
-	/// only reads fields of it and every call passes a struct variable or a construction of P. Any other value keeps
-	/// the Node parameter: a value that only looks like a P (duck typing) may lack fields the body never reads
-	pub(super) fn find_struct_abi(&self, program: &Node) -> HashMap<String, Vec<Option<String>>> {
+	/// The calling convention of structs, decided before the signatures are registered (struct_abi, struct_results).
+	/// A parameter `p:P` is a struct when the body only reads and writes fields of it (and may give p back as its
+	/// result) and every call passes a struct variable or a construction of P. Any other value keeps the Node parameter:
+	/// a value that only looks like a P (duck typing) may lack fields the body never reads. A function that changes p or
+	/// gives it back is called only as `x = f(x, …)` of a struct variable x: the struct it changes is the one replaced,
+	/// so no caller sees a change by reference, and the result is a struct (`c.inc()` of a method changing c)
+	pub(super) fn find_struct_abi(&self, program: &Node) -> (HashMap<String, Vec<Option<String>>>, HashMap<String, String>) {
 		let functions = self.directly_called_functions();
-		let struct_variables_of = |tree: &Node, params: &[crate::context::Param]| {
-			let mut variables = self.struct_variables(tree);
-			variables.retain(|name, _| params.iter().all(|param| param.name != *name));
-			variables
-		};
-		let trees: Vec<(&Node, HashMap<String, String>)> = std::iter::once((program, struct_variables_of(program, &[])))
-			.chain(functions.iter().map(|function| (function.body.as_ref(), struct_variables_of(&function.body, &function.params))))
-			.collect();
-		let mut abi = HashMap::new();
-		for function in &functions {
-			let classes: Vec<Option<String>> = function.params.iter().map(|param| {
-				let class = param.annotation.as_ref().map(Node::name).filter(|class| self.instance_types.contains_key(class))?;
-				(param.default.is_none() && reads_only_fields(&function.body, &param.name, &self.instance_types[&class])).then_some(class)
-			}).collect();
-			if classes.iter().all(Option::is_none) {
-				continue;
+		let mut candidates: Vec<StructFunction> = functions.iter().filter_map(|function| self.struct_function(function)).collect();
+		// greatest fixpoint: a function giving a struct needs callers whose variables are structs, which they are only
+		// while the functions they are assigned from give structs
+		loop {
+			let results: HashMap<String, String> = candidates.iter().filter_map(|candidate| Some((candidate.name.clone(), candidate.result.clone()?))).collect();
+			let trees: Vec<(&Node, HashMap<String, String>)> = std::iter::once((program, self.struct_variables(program, &results)))
+				.chain(functions.iter().map(|function| {
+					let mut variables = self.struct_variables(&function.body, &results);
+					variables.retain(|name, _| function.params.iter().all(|param| param.name != *name));
+					(function.body.as_ref(), variables)
+				}))
+				.collect();
+			let kept: Vec<StructFunction> = candidates.iter().filter(|candidate| candidate.called_as_such(&trees, self)).cloned().collect();
+			if kept.len() == candidates.len() {
+				break;
 			}
-			let passes_structs = |call: &[Node], variables: &HashMap<String, String>| call.len() == classes.len() + 1 && call[1..].iter().zip(&classes).zip(&function.params).all(|((argument, class), param)| match class {
-				None => true,
-				Some(class) => match argument.drop_meta() {
-					Node::Symbol(name) => variables.get(name) == Some(class),
-					Node::Key(name, Op::Colon, _) if name.drop_meta().name() == param.name => true, // the definition's head
-					_ => self.constructed_class(argument).as_ref() == Some(class),
-				},
-			});
-			let (mut mentions, mut struct_calls) = (0, 0);
-			for (tree, variables) in &trees {
-				tree.visit(&mut |part: &Node| match part {
-					Node::Symbol(name) if *name == function.name => mentions += 1,
-					Node::List(items, _, _) if super::list_abi::called_function(part) == Some(function.name.as_str()) && passes_structs(items, variables) => struct_calls += 1,
-					_ => {}
-				});
-			}
-			if mentions == struct_calls {
-				abi.insert(function.name.clone(), classes);
-			}
+			candidates = kept;
 		}
-		abi
+		let abi = candidates.iter().map(|candidate| (candidate.name.clone(), candidate.classes.clone())).collect();
+		let results = candidates.into_iter().filter_map(|candidate| Some((candidate.name, candidate.result?))).collect();
+		(abi, results)
+	}
+
+	/// The struct convention a function could take, judged by its body alone
+	fn struct_function(&self, function: &crate::context::UserFunctionDef) -> Option<StructFunction> {
+		let statements = super::list_abi::body_statements(&function.body);
+		let mut returns = false;
+		function.body.visit(&mut |part| returns |= matches!(part, Node::List(items, _, _) if items.first().is_some_and(|word| names(word, super::list_abi::RETURN))));
+		let gives = |name: &str| !returns && statements.last().is_some_and(|last| names(last, name));
+		let mut changed = None;
+		let mut result = None;
+		let classes: Vec<Option<String>> = function.params.iter().map(|param| {
+			let class = param.annotation.as_ref().map(Node::name).filter(|class| self.instance_types.contains_key(class))?;
+			let given_back = gives(&param.name);
+			let written = param.default.as_ref().map_or_else(|| field_uses(&function.body, &param.name, &self.instance_types[&class], given_back), |_| None)?;
+			if written || given_back {
+				// one changed or given back struct per function: the one its call replaces
+				if changed.is_some() {
+					return None;
+				}
+				changed = Some(param.name.clone());
+			}
+			if given_back {
+				result = Some(class.clone());
+			}
+			Some(class)
+		}).collect();
+		if classes.iter().all(Option::is_none) {
+			return None;
+		}
+		let changed = changed.and_then(|name| function.params.iter().position(|param| param.name == name).filter(|index| classes[*index].is_some()));
+		let result = result.filter(|_| changed.is_some());
+		let params = function.params.iter().map(|param| param.name.clone()).collect();
+		Some(StructFunction { name: function.name.clone(), params, classes, changed, result })
+	}
+
+	/// The body of a function giving back its struct parameter: its statements, then that struct
+	pub(super) fn emit_struct_result_body(&mut self, func: &mut Function, body: &Node) {
+		self.emit_body_then(func, body, |emitter, func, last| {
+			let (slot, _) = emitter.typed_struct(last).expect("find_struct_abi: the result is the struct parameter");
+			func.instruction(&I::LocalGet(slot));
+		});
 	}
 
 	/// The class of the parameter `index` of `function` when it takes it as a struct
@@ -296,6 +330,67 @@ impl WasmGcEmitter {
 	}
 }
 
+/// The class of the struct a call of a function giving one back gives
+fn struct_call_class(value: &Node, results: &HashMap<String, String>) -> Option<String> {
+	results.get(super::list_abi::called_function(value)?).cloned()
+}
+
+/// A function taking structs: the class of each struct parameter, the parameter it changes or gives back, and the
+/// class of the struct it gives back
+#[derive(Clone)]
+struct StructFunction {
+	name: String,
+	params: Vec<String>,
+	classes: Vec<Option<String>>,
+	changed: Option<usize>,
+	result: Option<String>,
+}
+
+impl StructFunction {
+	/// Is every mention of the function a call passing structs (`trees`: each tree with its struct variables), and, when
+	/// it changes or gives back a struct, the assignment `x = f(…, x, …)` to the struct variable x it passes there
+	fn called_as_such(&self, trees: &[(&Node, HashMap<String, String>)], emitter: &WasmGcEmitter) -> bool {
+		let passes = |call: &[Node], variables: &HashMap<String, String>| call.len() == self.classes.len() + 1
+			&& call[1..].iter().zip(&self.classes).all(|(argument, class)| match class {
+				None => true,
+				Some(class) => match argument.drop_meta() {
+					Node::Symbol(name) => variables.get(name) == Some(class),
+					_ => emitter.constructed_class(argument).as_ref() == Some(class),
+				},
+			});
+		// the definition's head `f(p:P, k)`
+		let is_head = |call: &[Node]| call.len() == self.params.len() + 1 && call[1..].iter().zip(&self.params).all(|(argument, param)| match argument.drop_meta() {
+			Node::Key(name, Op::Colon, _) => names(name, param),
+			other => names(other, param),
+		}) && call[1..].iter().any(|argument| matches!(argument.drop_meta(), Node::Key(_, Op::Colon, _)));
+		let (mut mentions, mut heads, mut calls, mut replacing) = (0, 0, 0, 0);
+		for (tree, variables) in trees {
+			tree.visit(&mut |part: &Node| match part {
+				Node::Symbol(name) if *name == self.name => mentions += 1,
+				Node::List(items, _, _) if super::list_abi::called_function(part) == Some(self.name.as_str()) => {
+					if is_head(items) {
+						heads += 1;
+					} else if passes(items, variables) {
+						calls += 1;
+					}
+				}
+				Node::Key(target, Op::Assign, value) if super::list_abi::called_function(value) == Some(self.name.as_str()) => {
+					let Some(changed) = self.changed else { return };
+					let Node::List(items, _, _) = value.drop_meta() else { return };
+					let Node::Symbol(variable) = target.drop_meta() else { return };
+					let passed_once = items[1..].iter().filter(|argument| names(argument, variable)).count() == 1;
+					if passed_once && names(&items[changed + 1], variable) && passes(items, variables) {
+						replacing += 1;
+					}
+				}
+				_ => {}
+			});
+		}
+		let replaced = if self.changed.is_some() { replacing } else { calls };
+		calls == replaced && mentions == heads + replaced
+	}
+}
+
 /// The index and stored kind of the field a one-based subscript `"x" + 1` names
 fn field_of(instance: &InstanceType, index: &Node) -> Option<(u32, Kind)> {
 	let name = crate::analyzer::constant_field_name(crate::wasp_parser::subscript_key(index)?)?;
@@ -309,25 +404,27 @@ fn field_read(name: &str, field: &str) -> Node {
 	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Hash, Box::new(one_based))
 }
 
-/// Is every use of the parameter in the body a read of one of the fields
-fn reads_only_fields(body: &Node, param: &str, instance: &InstanceType) -> bool {
-	let (mut uses, mut reads, mut writes) = (0, 0, 0);
+/// Whether the body changes the parameter, when every use of it reads or writes one of its fields (and, `given_back`,
+/// the one result that is the parameter itself); None for any other use
+fn field_uses(body: &Node, param: &str, instance: &InstanceType, given_back: bool) -> Option<bool> {
+	let (mut uses, mut fields, mut writes) = (0, 0, 0);
+	let mut replaced = false;
 	body.visit(&mut |part| match part {
 		Node::Symbol(name) if name == param => uses += 1,
 		Node::Key(target, op, _) if matches!(op, Op::Assign | Op::Define) || is_update(op) => {
-			if names(target, param) || matches!(target.drop_meta(), Node::Key(instance, Op::Hash, _) if names(instance, param)) {
+			replaced |= names(target, param);
+			if matches!(target.drop_meta(), Node::Key(instance, Op::Hash, _) if names(instance, param)) {
 				writes += 1;
 			}
 		}
 		_ => {}
 	});
 	body.visit(&mut |part| if let Node::Key(target, Op::Hash, index) = part {
-		let field = crate::wasp_parser::subscript_key(index).and_then(crate::analyzer::constant_field_name);
-		if names(target, param) && field.is_some_and(|field| instance.fields.iter().any(|(name, _)| *name == field)) {
-			reads += 1;
+		if names(target, param) && field_of(instance, index).is_some() {
+			fields += 1;
 		}
 	});
-	writes == 0 && uses == reads
+	(!replaced && uses == fields + usize::from(given_back)).then_some(writes > 0)
 }
 
 /// The kind a field of the declared type is stored as: int and float unboxed, anything else a Node
@@ -336,13 +433,6 @@ fn stored_kind(type_name: &str) -> Kind {
 		FieldStorage::I64 | FieldStorage::I32 => Kind::Int,
 		FieldStorage::F64 | FieldStorage::F32 => Kind::Float,
 		_ => Kind::Key,
-	}
-}
-
-fn entry_value(entry: &Node) -> &Node {
-	match entry.drop_meta() {
-		Node::Key(_, _, value) => value,
-		other => other,
 	}
 }
 
