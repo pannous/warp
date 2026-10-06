@@ -71,6 +71,7 @@ PASSED:
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
+  ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
   ✓ control::test_go_blocks::a_function_starting_a_task_is_no_getter
   ✓ control::test_go_blocks::a_go_block_does_not_hold_up_the_program
   ✓ control::test_go_blocks::a_go_block_prints_after_the_program_goes_on
@@ -2359,4 +2360,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2354 passed, 0 failed, 2354 total tested
+23 ignored, 2355 passed, 0 failed, 2355 total tested
