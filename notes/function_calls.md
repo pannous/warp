@@ -49,6 +49,18 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
   elsewhere in the body `it` is the parameter (`f(x) := x + it`).
 - P82 educate: `def make(){ def inc(){ 1 }; inc }; c = make(); c()` is a compile error naming `function inc`
   (function_values.rs `refuse_called_bare_results`); `make()` alone stays the call of inc.
+- Swift closures `{ x in x*2 }`, `{ a, b in a+b }` (the body must use a name, else `{ x in xs }` stays membership) and
+  shorthand arguments `{ $0 + $1 }` (lambdas.rs `swift_closure`, `shorthand_parameters`; blocks.rs leaves them lambdas).
+- Output words take a prefix call: `puts add 1, 2` → `puts(add(1, 2))` (broadcasting.rs, OUTPUT_WORDS arity 1).
+
+## Call efficiency (probes/call_benchmark.sh [N], 10^8 calls each)
+- Plain, default, named, overload and lambda calls compile to the same direct `call $f` with i64 arguments: equal
+  within noise (the machine is shared, runs vary up to 2x).
+- A declared result type `-> int` lowered to `body as int`, which boxed (new_int) and unboxed (get_int_value) on every
+  call: 5x a plain call. Fixed: `x as int` of an Int emits the i64 (values.rs, casts.rs `emit_int_value_truncated`,
+  test_call_efficiency). The ratio truncation (`exact_trunc` when the range may leave fixnums) stays.
+- A returned closure `h = mk(1); h(i)` is 4-6x a plain call: closure_call_1 tests and casts the $Closure twice, calls
+  through call_ref, and the entry unboxes each Int capture with get_int_value. Card closure-devirtualize.
 
 ## Open
-- Board cards: functions-swift (`{ x in … }`, `$0`), functions-sort-op (`sorted(xs, >)`), functions-key (`key=x=>…`).
+- Board cards: closure-devirtualize; functions-sort-op and functions-key went to warp-14.

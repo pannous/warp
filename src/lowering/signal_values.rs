@@ -130,7 +130,7 @@ pub fn subscribe(program: Node) -> Node {
 		return program;
 	}
 	// a reflected variable's main-level listeners subscribe too, so its list holds them
-	let removes = statements.iter().any(|statement| removal(statement).is_some());
+	let removes = statements.iter().any(contains_removal);
 	let statements = statements.into_iter().flat_map(|statement| {
 		if let Some((name, variable)) = removal(&statement) {
 			return vec![removing(&name, &variable, &named)];
@@ -143,7 +143,7 @@ pub fn subscribe(program: Node) -> Node {
 		match subscribed {
 			Some(Node::List(parts, Bracket::Curly, _)) => parts,
 			Some(subscription) => vec![subscription],
-			None => vec![statement],
+			None => vec![nested_removals(statement, &named)],
 		}
 	});
 	let without = removes.then(without_function);
@@ -195,6 +195,22 @@ fn removal(statement: &Node) -> Option<(String, String)> {
 	let [listeners, variable] = call_items.as_slice() else { return None };
 	let reads = word(remove) == REMOVE_WORD && word(from) == FROM_WORD && word(listeners) == SIGNAL_LISTENERS;
 	reads.then(|| (word(name), word(variable)))
+}
+
+fn contains_removal(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= removal(part).is_some());
+	found
+}
+
+/// A removal inside a function or a block (`stop() := { remove b from listeners of t }`): the places it changes are
+/// main-level variables, declared global where it runs
+fn nested_removals(node: Node, named: &[(String, String)]) -> Node {
+	if let Some((name, variable)) = removal(&node) {
+		let globals = named.iter().filter(|(_, watched)| *watched == variable).map(|(other, _)| from_template(&format!("{GLOBAL_WORD} {}", index_name(other, &variable)), &[]));
+		return block(globals.chain([removing(&name, &variable, named)]).collect());
+	}
+	map_children(node, &mut |child| nested_removals(child, named))
 }
 
 /// `alarm_index_t`: where the named listener alarm sits in t's listeners, -1 once removed

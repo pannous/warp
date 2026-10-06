@@ -93,5 +93,6 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
   The object keeps the entry as `data …`, which closures.rs does not lift (the lambda's free field names are no variables).
 - `s.fs#1(4)`: closures.rs tracks holders by path (`s.fs`, `holder_path`), so a list field of function values is called
   like a list variable; object literals record their fields recursively (`record_holder`).
-- Open: nested objects (`x.a.f(1)`, card function-entry); a function entry of an object passed around (it is data, the
+- Nested objects: `x = {a: {f: …}}` defines `x·a·f`, called by `x.a.f(1)` (blocks.rs `object_with_entries` recurses).
+- Open: a function entry of an object passed around (it is data, the
   method belongs to the variable name).

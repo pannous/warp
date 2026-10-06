@@ -214,11 +214,11 @@ fn object_entries(value: &Node) -> Option<&Vec<Node>> {
 }
 
 /// `{1+2}`, `{a = 1; a*2}` assigned: statements in braces (several, or one computed expression), no object, no data
-/// list (`{1 2}`) and no lambda (`{it*2}`, `{x => x+1}`)
+/// list (`{1 2}`) and no lambda (`{it*2}`, `{x => x+1}`, `{ x in x*2 }`, `{ $0 * 2 }`)
 fn statement_block(value: &Node) -> Option<Node> {
 	let Node::List(items, Bracket::Curly, separator) = value.drop_meta() else { return None };
 	let statements = matches!(separator, Separator::Semicolon | Separator::Newline) && items.len() > 1;
-	let lambda = items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Arrow | Op::FatArrow, _)));
+	let lambda = items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Arrow | Op::FatArrow, _))) || crate::lambdas::arrow_lambda(value).is_some();
 	if items.is_empty() || object_entries(value).is_some() || crate::wasp_parser::mentions(value, IT) || lambda {
 		return None;
 	}
@@ -229,6 +229,31 @@ fn statement_block(value: &Node) -> Option<Node> {
 		[single] => single.clone(),
 		many => Node::List(many.to_vec(), Bracket::Round, separator.clone()),
 	})
+}
+
+/// The object `o.a` of a nested function entry as a parameter name, `o·a`
+fn object_parameter(path: &str) -> String {
+	path.replace('.', METHOD_SEPARATOR)
+}
+
+/// `o.a.f` as the field reads it names
+fn path_node(path: &str) -> Node {
+	let mut parts = path.split('.').map(|part| Node::Symbol(part.to_string()));
+	let first = parts.next().unwrap_or(Node::Empty);
+	parts.fold(first, |object, field| Node::Key(Box::new(object), Op::Dot, Box::new(field)))
+}
+
+/// An entry the object lowering rewrites: a block, a function, a value entry, or a nested object holding one
+fn is_rewritten_entry(entry: &Node) -> bool {
+	uncharged(entry).is_some() || function_entry(entry).is_some() || value_entry(entry).is_some() || nested_object(entry).is_some()
+}
+
+/// `a: {f: x => x + 1}`: an entry whose value is an object with rewritten entries; its field, the object and its entries
+fn nested_object(entry: &Node) -> Option<(String, &Node, &Vec<Node>)> {
+	let Node::Key(key, Op::Colon, value) = entry.drop_meta() else { return None };
+	let Node::Symbol(field) = key.drop_meta() else { return None };
+	let entries = object_entries(value).filter(|entries| entries.iter().any(is_rewritten_entry))?;
+	Some((field.clone(), value, entries))
 }
 
 /// `o·f`: the top-level function of the function entry `f` of the object `o` (no name the parser reads)
@@ -248,8 +273,8 @@ fn with_inner(node: &Node, inner: Node) -> Node {
 fn block_key(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(object, Op::Dot, field) => match (object.drop_meta(), field.drop_meta()) {
-			(Node::Symbol(object), Node::Symbol(field)) => Some(format!("{object}.{field}")),
+		Node::Key(object, Op::Dot, field) => match field.drop_meta() {
+			Node::Symbol(field) => Some(format!("{}.{field}", block_key(object)?)),
 			_ => None,
 		},
 		_ => None,
@@ -315,8 +340,7 @@ impl Blocks {
 					return Node::Empty;
 				}
 				// a plain object stays as it is; its entries can run as code (`help!`)
-				let rewritten = |entry: &Node| uncharged(entry).is_some() || function_entry(entry).is_some() || value_entry(entry).is_some();
-				if let Some(entries) = object_entries(value).filter(|entries| !entries.iter().any(rewritten)) {
+				if let Some(entries) = object_entries(value).filter(|entries| !entries.iter().any(is_rewritten_entry)) {
 					let pairs: Vec<(Node, Node)> = entries.iter().filter_map(|entry| match entry.drop_meta() {
 						Node::Key(key, Op::Colon, value) => Some((key.as_ref().clone(), value.as_ref().clone())),
 						_ => None,
@@ -327,52 +351,14 @@ impl Blocks {
 					return lowered;
 				}
 				// `o = {s1: a+b, …}`: computed entries are blocks the object holds as data, `s3 = …` entries values
-				if let Some(entries) = object_entries(value).filter(|entries| entries.iter().any(rewritten)) {
+				if let Some(entries) = object_entries(value).filter(|entries| entries.iter().any(is_rewritten_entry)) {
 					let name = name.clone();
 					self.forget(&name);
-					let mut lowered = vec![];
-					let mut definitions = vec![];
-					for entry in entries.clone() {
-						if let Some((field, parameters, body)) = function_entry(&entry) {
-							if crate::getters::getter_name(&entry).is_some() {
-								self.getters.insert(format!("{name}.{field}"));
-							}
-							definitions.push(self.method(&name, &field, parameters, body, entries));
-							let written = match entry.drop_meta() {
-								Node::Key(head, _, value) if matches!(head.drop_meta(), Node::Symbol(_)) => value.as_ref().clone(),
-								whole => whole.clone(),
-							};
-							let written = Node::List(vec![Node::Symbol(DATA_WORD.to_string()), written], Bracket::None, Separator::Space);
-							lowered.push(Node::Key(Box::new(Node::Symbol(field)), Op::Colon, Box::new(written)));
-							continue;
-						}
-						lowered.push(match uncharged(&entry) {
-							Some((field, block)) => {
-								if let Err(error) = self.warn_uncharged(&field, &block, &entry) {
-									return error;
-								}
-								let block = self.rewrite(block);
-								self.blocks.insert(format!("{name}.{field}"), block.clone());
-								let data = Node::List(vec![Node::Symbol(DATA_WORD.to_string()), block], Bracket::None, Separator::Space);
-								Node::Key(Box::new(Node::Symbol(field)), Op::Colon, Box::new(data))
-							}
-							// `s3 = a+b`, `s3 := a+b` (P71 open: now): a value entry, evaluated now
-							None => match value_entry(&entry) {
-								Some((field, value)) => {
-									let value = self.rewrite(value.clone());
-									Node::Key(Box::new(field.clone()), Op::Colon, Box::new(Node::List(vec![value], Bracket::Round, Separator::None)))
-								}
-								None => self.rewrite(entry),
-							},
-						});
-					}
-					let pairs = lowered.iter().filter_map(|entry| match entry.drop_meta() {
-						Node::Key(key, Op::Colon, value) => Some((key.as_ref().clone(), value.as_ref().clone())),
-						_ => None,
-					}).collect();
-					self.objects.insert(name.clone(), pairs);
-					let separator = match value.drop_meta() { Node::List(_, _, separator) => separator.clone(), _ => Separator::Space };
-					let object = Node::Key(target.clone(), Op::Assign, Box::new(with_inner(value, Node::List(lowered, Bracket::Curly, separator))));
+					let (mut definitions, object) = match self.object_with_entries(&name, value, entries) {
+						Ok(lowered) => lowered,
+						Err(error) => return error,
+					};
+					let object = Node::Key(target.clone(), Op::Assign, Box::new(object));
 					if definitions.is_empty() {
 						return object;
 					}
@@ -382,6 +368,59 @@ impl Blocks {
 			}
 		}
 		self.rewrite(node)
+	}
+
+	/// The object literal `value` at `path` (`o`, or `o.a` of a nested object) with its entries lowered: the definitions of
+	/// its function entries (nested objects' too) and the object holding them as data
+	fn object_with_entries(&mut self, path: &str, value: &Node, entries: &[Node]) -> Result<(Vec<Node>, Node), Node> {
+		let mut lowered = vec![];
+		let mut definitions = vec![];
+		for entry in entries {
+			if let Some((field, parameters, body)) = function_entry(entry) {
+				if crate::getters::getter_name(entry).is_some() {
+					self.getters.insert(format!("{path}.{field}"));
+				}
+				definitions.push(self.method(path, &field, parameters, body, entries));
+				let written = match entry.drop_meta() {
+					Node::Key(head, _, value) if matches!(head.drop_meta(), Node::Symbol(_)) => value.as_ref().clone(),
+					whole => whole.clone(),
+				};
+				let written = Node::List(vec![Node::Symbol(DATA_WORD.to_string()), written], Bracket::None, Separator::Space);
+				lowered.push(Node::Key(Box::new(Node::Symbol(field)), Op::Colon, Box::new(written)));
+				continue;
+			}
+			// `x = {a: {f: x => x + 1}}`: the nested object's function entries are methods of `x.a`
+			if let Some((field, inner, inner_entries)) = nested_object(entry) {
+				let (inner_definitions, inner) = self.object_with_entries(&format!("{path}.{field}"), inner, inner_entries)?;
+				definitions.extend(inner_definitions);
+				lowered.push(Node::Key(Box::new(Node::Symbol(field)), Op::Colon, Box::new(inner)));
+				continue;
+			}
+			lowered.push(match uncharged(entry) {
+				Some((field, block)) => {
+					self.warn_uncharged(&field, &block, entry)?;
+					let block = self.rewrite(block);
+					self.blocks.insert(format!("{path}.{field}"), block.clone());
+					let data = Node::List(vec![Node::Symbol(DATA_WORD.to_string()), block], Bracket::None, Separator::Space);
+					Node::Key(Box::new(Node::Symbol(field)), Op::Colon, Box::new(data))
+				}
+				// `s3 = a+b`, `s3 := a+b` (P71 open: now): a value entry, evaluated now
+				None => match value_entry(entry) {
+					Some((field, value)) => {
+						let value = self.rewrite(value.clone());
+						Node::Key(Box::new(field.clone()), Op::Colon, Box::new(Node::List(vec![value], Bracket::Round, Separator::None)))
+					}
+					None => self.rewrite(entry.clone()),
+				},
+			});
+		}
+		let pairs = lowered.iter().filter_map(|entry| match entry.drop_meta() {
+			Node::Key(key, Op::Colon, value) => Some((key.as_ref().clone(), value.as_ref().clone())),
+			_ => None,
+		}).collect();
+		self.objects.insert(path.to_string(), pairs);
+		let separator = match value.drop_meta() { Node::List(_, _, separator) => separator.clone(), _ => Separator::Space };
+		Ok((definitions, with_inner(value, Node::List(lowered, Bracket::Curly, separator))))
 	}
 
 	/// The function entry `o.f` as the top-level definition `o·f(parameters) := body`; a body reading the object's other
@@ -394,7 +433,7 @@ impl Blocks {
 			_ => None,
 		}).filter(|other| other != field && !parameter_names.contains(other) && crate::wasp_parser::mentions(&body, other)).collect();
 		for other in &fields {
-			let read = Node::Key(Box::new(Node::Symbol(object.to_string())), Op::Dot, Box::new(Node::Symbol(other.clone())));
+			let read = Node::Key(Box::new(Node::Symbol(object_parameter(object))), Op::Dot, Box::new(Node::Symbol(other.clone())));
 			body = crate::library_words::substitute(body, other, &read);
 		}
 		let takes_object = !fields.is_empty();
@@ -402,9 +441,9 @@ impl Blocks {
 			if parameters.is_empty() && crate::wasp_parser::mentions(&body, IT) {
 				parameters.push(Node::Symbol(IT.to_string()));
 			}
-			parameters.insert(0, Node::Symbol(object.to_string()));
+			parameters.insert(0, Node::Symbol(object_parameter(object)));
 		}
-		let mut name = format!("{object}{METHOD_SEPARATOR}{field}");
+		let mut name = format!("{}{METHOD_SEPARATOR}{field}", object_parameter(object));
 		if self.methods.values().any(|taken| taken.function == name) {
 			name = format!("{name}{METHOD_SEPARATOR}{}", self.methods.len());
 		}
@@ -437,7 +476,7 @@ impl Blocks {
 
 	fn method_call_of(&self, method: &str, arguments: Vec<Node>, bracket: Bracket, separator: Separator) -> Option<Node> {
 		let Method { function, takes_object, .. } = self.methods.get(method)?;
-		let object = takes_object.then(|| Node::Symbol(method.split('.').next().unwrap_or_default().to_string()));
+		let object = takes_object.then(|| path_node(method.rsplit_once('.').map_or(method, |(object, _)| object)));
 		Some(Node::List([vec![Node::Symbol(function.clone())], object.into_iter().collect(), arguments].concat(), bracket, separator))
 	}
 

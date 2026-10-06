@@ -212,12 +212,17 @@ impl WasmGcEmitter {
 			}
 			// Already int or coercible; a ratio is truncated
 			_ => {
-				self.emit_numeric_value(func, value);
-				if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) {
-					self.emit_call(func, "exact_trunc");
-				}
+				self.emit_int_value_truncated(func, value);
 				self.emit_call(func, "new_int");
 			}
+		}
+	}
+
+	/// The i64 of an Int value; a ratio (`x/2` is exact) is truncated
+	pub(super) fn emit_int_value_truncated(&mut self, func: &mut Function, value: &Node) {
+		self.emit_numeric_value(func, value);
+		if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) {
+			self.emit_call(func, "exact_trunc");
 		}
 	}
 
