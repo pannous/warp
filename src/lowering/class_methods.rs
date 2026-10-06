@@ -3,6 +3,8 @@
 //! `self`/`this` read the receiver; `p.greet()`, `greet(p)` and, for a method without parameters, `p.area` call it.
 //! A method name that several classes define is declared as an implicit trait, so a call picks the class's own method
 //! by the static type of its receiver (traits.rs witnesses).
+//! `class dog extends animal {…}` (P117) gives dog the fields and methods of animal, its own ones override them, and
+//! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -18,7 +20,11 @@ const TRAIT_KEYWORD: &str = "trait";
 const IMPLICIT_TRAIT_PREFIX: &str = "has·";
 
 pub fn lower(node: Node) -> Node {
-	let traits = shared_method_traits(&node);
+	let (node, likenesses) = match inherit(node) {
+		Ok(inherited) => inherited,
+		Err(error) => return error,
+	};
+	let traits = [shared_method_traits(&node), likenesses].concat();
 	let shared: Vec<String> = traits.iter().filter_map(trait_operation).collect();
 	let mut changing = vec![];
 	let node = lower_classes(node, &mut changing);
@@ -32,19 +38,85 @@ pub fn lower(node: Node) -> Node {
 	}
 }
 
+/// The classes with the fields and methods of the class they extend, and the likeness `dog like animal` of each
+fn inherit(node: Node) -> Result<(Node, Vec<Node>), Node> {
+	let mut classes: Vec<(String, Option<String>, Vec<Node>)> = vec![];
+	node.visit(&mut |part| {
+		if let Node::Type { name, body } = part {
+			let parent = name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
+			classes.push((name.drop_meta().name(), parent, class_items(body)));
+		}
+	});
+	if classes.iter().all(|(_, parent, _)| parent.is_none()) {
+		return Ok((node, vec![]));
+	}
+	let mut likenesses = vec![];
+	for (class, parent, _) in &classes {
+		if let Some(parent) = parent {
+			inherited_items(class, &classes, &mut vec![])?;
+			let words = [class.as_str(), crate::traits::LIKE_WORD, parent.as_str()].map(|word| Node::Symbol(word.to_string()));
+			likenesses.push(Node::List(words.to_vec(), Bracket::None, Separator::Space));
+		}
+	}
+	Ok((with_inherited(node, &classes)?, likenesses))
+}
+
+/// The fields and methods of a class body; the groups a `;` makes (`{name age:int; greet() := …}`) flattened
+fn class_items(body: &Node) -> Vec<Node> {
+	let items = match body.drop_meta() {
+		Node::List(items, _, _) => items.clone(),
+		Node::Empty => vec![],
+		single => vec![single.clone()],
+	};
+	items.into_iter().flat_map(|item| match item.drop_meta() {
+		Node::List(group, Bracket::None, _) => group.clone(),
+		_ => vec![item],
+	}).collect()
+}
+
+/// A class's items after those of its parents: a parent's field or method the class defines again is left out
+fn inherited_items(class: &str, classes: &[(String, Option<String>, Vec<Node>)], visiting: &mut Vec<String>) -> Result<Vec<Node>, Node> {
+	if visiting.iter().any(|seen| seen == class) {
+		return Err(crate::node::error(&format!("class {class} extends itself through {}", visiting.join(", "))));
+	}
+	let Some((_, parent, own)) = classes.iter().find(|(name, _, _)| name == class) else {
+		let child = visiting.last().cloned().unwrap_or_default();
+		return Err(crate::node::error(&format!("{child} extends {class}, which is no class: declare class {class}{{…}}")));
+	};
+	let Some(parent) = parent else { return Ok(own.clone()) };
+	visiting.push(class.to_string());
+	let inherited = inherited_items(parent, classes, visiting)?;
+	visiting.pop();
+	let own_names: Vec<String> = own.iter().filter_map(item_name).collect();
+	let kept = inherited.into_iter().filter(|item| item_name(item).is_none_or(|name| !own_names.contains(&name)));
+	Ok(kept.chain(own.iter().cloned()).collect())
+}
+
+/// The name a class item defines: a field or a method
+fn item_name(item: &Node) -> Option<String> {
+	method_parts(item).map(|(name, _, _)| name).or_else(|| field_name(item))
+}
+
+/// Every class that extends another with all its items, its name without the parent
+fn with_inherited(node: Node, classes: &[(String, Option<String>, Vec<Node>)]) -> Result<Node, Node> {
+	match node {
+		Node::Type { name, body: _ } if name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).is_some() => {
+			let class = name.drop_meta().name();
+			let items = inherited_items(&class, classes, &mut vec![])?;
+			Ok(Node::Type { name: Box::new(Node::Symbol(class)), body: Box::new(Node::List(items, Bracket::Curly, Separator::Space)) })
+		}
+		Node::List(items, bracket, separator) => Ok(Node::List(items.into_iter().map(|item| with_inherited(item, classes)).collect::<Result<_, _>>()?, bracket, separator)),
+		Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(with_inherited(*node, classes)?), data }),
+		other => Ok(other),
+	}
+}
+
 /// `trait has·area{area}` for each method name that two or more classes define, taking the first one's parameters
 fn shared_method_traits(node: &Node) -> Vec<Node> {
 	let mut methods: Vec<(String, Node)> = vec![];
 	node.visit(&mut |part| {
 		let Node::Type { body, .. } = part else { return };
-		let items = match body.drop_meta() {
-			Node::List(items, _, _) => items.clone(),
-			single => vec![single.clone()],
-		};
-		for item in items.iter().flat_map(|item| match item.drop_meta() {
-			Node::List(group, Bracket::None, _) => group.clone(),
-			_ => vec![item.clone()],
-		}) {
+		for item in class_items(body) {
 			if let Some((name, parameters, _)) = method_parts(&item) {
 				let receiver = Node::Symbol(RECEIVER.to_string());
 				let requirement = match parameters.is_empty() {
@@ -122,16 +194,7 @@ fn lower_classes(node: Node, changing: &mut Vec<String>) -> Node {
 fn split_class(node: &Node, changing: &mut Vec<String>) -> Option<(Node, Vec<Node>)> {
 	let Node::Type { name, body } = node.drop_meta() else { return None };
 	let class = name.drop_meta().name();
-	let items = match body.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		single => vec![single.clone()],
-	};
-	// `{name age:int; greet() := …}`: the fields before a `;` are one group
-	let items = items.into_iter().flat_map(|item| match item.drop_meta() {
-		Node::List(group, Bracket::None, _) => group.clone(),
-		_ => vec![item],
-	});
-	let (methods, fields): (Vec<Node>, Vec<Node>) = items.partition(|item| method_parts(item).is_some());
+	let (methods, fields): (Vec<Node>, Vec<Node>) = class_items(body).into_iter().partition(|item| method_parts(item).is_some());
 	if methods.is_empty() {
 		return None;
 	}

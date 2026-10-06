@@ -180,6 +180,9 @@ pub fn lower(node: Node) -> Node {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
+	// `sum·point`, a class's own `sum` (traits.rs witness, an overload): the program defines `sum`, no library word
+	let variants: Vec<String> = shadowed.iter().filter_map(|name| name.split_once(crate::traits::WITNESS_SEPARATOR)).map(|(operation, _)| operation.to_string()).collect();
+	shadowed.extend(variants);
 	collect_assigned_names(&node, &mut shadowed);
 	let mut assigned = AssignedObjects::default();
 	collect_assigned_objects(&node, &mut assigned);

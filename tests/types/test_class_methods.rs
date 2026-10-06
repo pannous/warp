@@ -37,3 +37,8 @@ fn a_method_in_the_body_conforms_to_a_trait() {
 fn a_method_assigning_its_receiver_says_so() {
 	is!("class counter{n:int; inc() := n += 1}; c = counter(0); c.inc(); c.n", 1);
 }
+
+#[test]
+fn a_shared_method_named_like_a_library_word_stays_the_classes_own() {
+	is!("class a{x:int; sum() := x}; class b{y:int; sum() := y}; a(1).sum() + b(2).sum()", 3);
+}

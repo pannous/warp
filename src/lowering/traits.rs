@@ -18,7 +18,7 @@ use std::collections::HashMap;
 /// The words that declare a trait: `trait`, the canonical one (user, 2026-10-03: "short"), then the names other languages
 /// use, each accepted with a hint toward `trait`
 pub const TRAIT_KEYWORDS: [&str; 8] = ["trait", "interface", "protocol", "typeclass", "prototype", "capability", "aspect", "feature"];
-const WITNESS_SEPARATOR: char = '·';
+pub const WITNESS_SEPARATOR: char = '·';
 const SORT_WORD: &str = "sort";
 const FOR_WORD: &str = "for";
 const IN_WORD: &str = "in";

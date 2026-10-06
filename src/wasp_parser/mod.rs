@@ -252,6 +252,8 @@ fn is_unindexable_keyword(node: &Node) -> bool {
 pub const TRY_MARKER: &str = "try·else";
 /// `after C return V` (wiki/thread.md) as the marker call `after·return(C, V)`, lowered by go_blocks into a waiting task
 pub const AFTER_MARKER: &str = "after·return";
+/// `class dog extends animal {…}`: the class named on the right is the parent (P117)
+pub const EXTENDS_KEYWORD: &str = "extends";
 const AFTER_KEYWORD: &str = "after";
 /// `sleep 1s and print "x"`: an `and` between two statements runs them one after the other
 const AND_KEYWORD: &str = "and";

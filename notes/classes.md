@@ -50,3 +50,13 @@
 - On a variable, `c.inc()` is the update `c = inc(c)`; on any other receiver (`counter(4).inc()`) the call gives the
   changed copy. The value of `c.inc()` is the changed object.
 - Not yet: a method that changes its object and gives another value (a `pop`). Its value is the changed object.
+
+## Step 3 as built (P117 inheritance)
+- `class dog extends animal {…}`: the parser keeps the parent as the annotation `@extends(animal)` on the class name.
+- class_methods first gives each class its parents' items: animal's fields first (so `dog("Rex")` fills name), then
+  dog's own; a field or method dog defines again replaces animal's. A parent that is no class, or a cycle, is an error.
+- It declares `dog like animal` (traits.rs likeness), so a dog is accepted where an animal is wanted (`greet(a:animal)`).
+- The methods dog inherits or overrides are defined for dog itself, so a name both classes define dispatches per
+  class like any shared method.
+- library_words: a class's own `sum·point` (any `name·Type` variant) shadows the library word `sum`, so a shared
+  method named like a library word stays the class's.

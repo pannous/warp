@@ -439,8 +439,19 @@ impl WaspParser {
 			Err(message) => return error(&message),
 		};
 		self.skip_whitespace();
+		// `class dog extends animal {…}` (P117): the parent rides on the name, class_methods copies its fields and methods
+		let mut name = Symbol(type_name);
+		if self.matches_keyword(EXTENDS_KEYWORD) {
+			self.advance_by(EXTENDS_KEYWORD.len());
+			self.skip_whitespace();
+			match self.parse_symbol() {
+				Ok(parent) => name = name.with_attribute(EXTENDS_KEYWORD, Symbol(parent)),
+				Err(message) => return error(&message),
+			}
+			self.skip_whitespace();
+		}
 		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
-		Node::Type { name: Box::new(Symbol(type_name)), body: Box::new(body) }
+		Node::Type { name: Box::new(name), body: Box::new(body) }
 	}
 
 	/// What is glued to a word: `name{…}`, `List<int>`, `p@unit`, `f(args)`, `f(params) {body}`; else the word itself
