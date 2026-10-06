@@ -155,6 +155,12 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   can't be renamed, so (Interviewer's choice, as the user delegated) `import m` works, `m.double(21)` always works
   (qualified calls get built), and a bare `double(21)` is a loud error "double is ambiguous: m.double(21) for the
   export, 21 as float for the cast". No warning-and-builtin-wins.
+- P142 (scope of P141, asked by warp-e4) the definition error applies only where the builtin would win, i.e. the
+  definition could never take effect (casts like `double`, operators, type names). Library words (`add`, `map`,
+  `count`) may be redefined and the user's version wins; class methods are always allowed (called as `x.add`). User:
+  "add Not really a built-in, just an example. Also, map should not be the main thing to use. One would just use the
+  syntax square all x or maybe even just broadcasting." So docs, hints, examples and new tests prefer broadcasting
+  (`square [1 2 3]`, wiki/broadcasting.md) or `square all x` (wiki/all.md) over `map`.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
