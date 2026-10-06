@@ -2580,6 +2580,9 @@ PASSED:
   ✓ welcoming::test_item_list_cast_hint::a_c_style_definition_is_no_cast
   ✓ welcoming::test_item_list_cast_hint::a_type_word_item_in_a_comma_list_is_no_cast
   ✓ welcoming::test_item_list_cast_hint::a_written_constructor_call_is_still_hinted
+  ✓ welcoming::test_left_arrow::a_cramped_left_arrow_is_an_error_naming_both_readings
+  ✓ welcoming::test_left_arrow::a_spaced_left_arrow_assigns_with_a_note
+  ✓ welcoming::test_left_arrow::a_spaced_less_than_compares
   ✓ welcoming::test_lone_words::test_a_lone_word_is_a_symbol
   ✓ welcoming::test_lone_words::test_a_word_applied_to_an_argument_is_an_error
   ✓ welcoming::test_lone_words::test_a_word_close_to_a_name_warns
@@ -2716,4 +2719,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2711 passed, 0 failed, 2711 total tested
+19 ignored, 2714 passed, 0 failed, 2714 total tested
