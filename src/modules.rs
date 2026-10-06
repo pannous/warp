@@ -463,7 +463,9 @@ impl Loader<'_> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 9] = [
+const STD_MODULES: [(&str, &str); 11] = [
+	("hash", include_str!("../std/hash.wasp")),
+	("regex", include_str!("../std/regex.wasp")),
 	("file", include_str!("../std/file.wasp")),
 	("json", include_str!("../std/json.wasp")),
 	("os", include_str!("../std/os.wasp")),

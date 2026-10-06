@@ -36,10 +36,50 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			let entries = std::fs::read_dir(text_of(folder)?).map_err(|problem| failure(problem.to_string()))?;
 			let mut names: Vec<String> = entries.filter_map(|entry| Some(entry.ok()?.file_name().to_string_lossy().into_owned())).collect();
 			names.sort();
-			Ok(Node::List(names.into_iter().map(Node::Text).collect(), crate::node::Bracket::Square, crate::node::Separator::Space))
+			Ok(texts(names))
+		}
+		("hash", "sha256", [subject]) => {
+			use sha2::Digest;
+			Ok(Node::Text(sha2::Sha256::digest(content_of(subject)?.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect()))
+		}
+		("hash", "crc32", [subject]) => Ok(Node::int(i64::from(crc32fast::hash(content_of(subject)?.as_bytes())))),
+		("regex", member, [text, pattern, rest @ ..]) => {
+			let (text, pattern) = (text_of(text)?, regex_of(&text_of(pattern)?).map_err(failure)?);
+			match (member, rest) {
+				("matches", []) => Ok(Node::int(i64::from(pattern.is_match(&text)))),
+				("first", []) => Ok(pattern.find(&text).map_or(Node::Empty, |found| Node::Text(found.as_str().to_string()))),
+				("all", []) => Ok(texts(pattern.find_iter(&text).map(|found| found.as_str().to_string()))),
+				("replace", [replacement]) => Ok(Node::Text(pattern.replace_all(&text, text_of(replacement)?.as_str()).into_owned())),
+				_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
+			}
 		}
 		("os", "env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
 		_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
+	}
+}
+
+/// A list of texts
+fn texts(items: impl IntoIterator<Item = String>) -> Node {
+	Node::List(items.into_iter().map(Node::Text).collect(), crate::node::Bracket::Square, crate::node::Separator::Space)
+}
+
+/// The pattern, if both engines read it alike: Rust's regex has no look-around or backreferences, so JS RegExp may not
+/// use them either (host.js checks the same); every other syntax error is the regex crate's own
+fn regex_of(pattern: &str) -> Result<regex::Regex, String> {
+	if let Some(feature) = unshared_feature(pattern) {
+		return Err(format!("{feature} is not in wasp's regex (one engine lacks it): {pattern}"));
+	}
+	regex::Regex::new(pattern).map_err(|problem| problem.to_string())
+}
+
+/// look-around `(?=`, `(?!`, `(?<=`, `(?<!` or a backreference `\1`
+fn unshared_feature(pattern: &str) -> Option<&'static str> {
+	let look_around = ["(?=", "(?!", "(?<=", "(?<!"].iter().any(|opening| pattern.contains(opening));
+	let backreference = pattern.as_bytes().windows(2).any(|pair| pair[0] == b'\\' && pair[1].is_ascii_digit() && pair[1] != b'0');
+	match (look_around, backreference) {
+		(true, _) => Some("look-around"),
+		(_, true) => Some("a backreference"),
+		_ => None,
 	}
 }
 
