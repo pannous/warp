@@ -218,22 +218,24 @@ pub fn lower_tasks(node: Node) -> Node {
 	Tasks { words, tasks, started, functions, job_lists }.lower(node)
 }
 
+/// The words of a statement the parser paired, flat: `(await any) [a, b]`, `await (all [go f(1), …])`
+fn spoken_words(items: &[Node]) -> Vec<Node> {
+	let pair = |node: &Node| match node.drop_meta() {
+		Node::List(inner, Bracket::None, _) if inner.len() == 2 => Some(inner.clone()),
+		_ => None,
+	};
+	match items {
+		[first, rest @ ..] if pair(first).is_some() => [pair(first).expect("guarded"), rest.to_vec()].concat(),
+		[head, second] if head.name() == TASK_WORDS[1] && pair(second).is_some() => [vec![head.clone()], pair(second).expect("guarded")].concat(),
+		_ => items.to_vec(),
+	}
+}
+
 /// `await go f(x)`: the task gets a name, `(go·job·1 = go f(x); await go·job·1)`, so it is awaited like any other
 fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
-			let is_pair = |node: &Node| matches!(node.drop_meta(), Node::List(inner, Bracket::None, _) if inner.len() == 2);
-			let inner = |node: &Node| match node.drop_meta() {
-				Node::List(inner, _, _) => inner.clone(),
-				_ => unreachable!("guarded"),
-			};
-			let words: Vec<Node> = match items.as_slice() {
-				[pair, rest @ ..] if is_pair(pair) => [inner(pair), rest.to_vec()].concat(),
-				// `await (all [go f(1), …])`
-				[head, pair] if head.name() == TASK_WORDS[1] && is_pair(pair) => [vec![head.clone()], inner(pair)].concat(),
-				_ => items.clone(),
-			};
-			match words.as_slice() {
+			match spoken_words(&items).as_slice() {
 				[await_word, go_word, started @ ..] if !started.is_empty() && await_word.name() == TASK_WORDS[1] && go_word.name() == TASK_WORDS[0] => {
 					let job = Node::Symbol(format!("go·job·{}", counter.replace(counter.get() + 1)));
 					let start = Node::List([vec![go_word.clone()], started.to_vec()].concat(), Bracket::None, Separator::Space);
@@ -564,12 +566,11 @@ impl Tasks<'_> {
 		}
 	}
 
-	/// `await any [a, b]` (also read as `await (any [a, b])`): the first of the tasks to finish
+	/// `await any [a, b]` (also read as `(await any) [a, b]` or `await (any [a, b])`): the first of the tasks to finish
 	fn raced(&self, items: &[Node]) -> Option<Node> {
-		match items {
+		match spoken_words(items).as_slice() {
 			[head, any, list] if word(head) == TASK_WORDS[1] && word(any) == ANY_WORD => self.race(list),
 			[head, phrase] if word(head) == TASK_WORDS[1] => match phrase.drop_meta() {
-				Node::List(inner, Bracket::None, _) if inner.len() == 2 && word(&inner[0]) == ANY_WORD => self.race(&inner[1]),
 				// `any [a, b]` read as an index of any
 				Node::Key(any, _, list) if word(any) == ANY_WORD => self.race(list),
 				_ => None,
