@@ -9,6 +9,7 @@ const COMPILER_URL = new URL(self.location.href).searchParams.get("compiler") ??
 self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same compiler (host.js blockCompiler)
 
 let compiler; // the compiler instance's exports
+let live; // the run whose page events are handled (host.js runProgram), until the next run
 let panicMessage; // the compiler's last panic message
 
 const post = message => self.postMessage(message);
@@ -16,6 +17,10 @@ const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
+	listen: (holder, events) => {
+		live = holder;
+		post({ type: "listening", events });
+	},
 	panicked: message => { panicMessage = message; },
 };
 
@@ -73,8 +78,21 @@ registerForeignRuntime("python", {
 	prepare: code => USES_PYTHON.test(code) && loadPython().catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),
 });
 
+// a page event (playground.js): the live run's handler, its value shown as the compiler shows a program's
+function handleEvent({ event, detail }) {
+	if (!live) return;
+	const outcome = runPageEvent(live, hooks, event, detail);
+	const outcomeText = passText(JSON.stringify(outcome));
+	const length = compiler.web_show(...outcomeText);
+	const value = compilerText(compiler.web_report(), length);
+	compiler.web_free(...outcomeText);
+	post({ type: "handled", value, error: outcome.result === undefined });
+}
+
 self.onmessage = async ({ data }) => {
 	await ready;
+	if (data.event) return handleEvent(data);
+	live = undefined;
 	if (!compiler) await loadCompiler();
 	await prepareForeignRuntimes(data.code); // host.js: a runtime that loads asynchronously loads before the run
 	const started = performance.now();

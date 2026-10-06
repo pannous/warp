@@ -74,11 +74,12 @@ function startWorker() {
 		worker.onmessage = ({ data }) => {
 			if (data.type === "ready") return resolve();
 			if (data.type === "failed") return reject(new Error(data.message));
-			if (!pending) return;
+			if (!pending) return showEventOutput(data);
+			if (data.type === "listening") pending.listening = data.events;
 			if (data.type === "print") pending.printed.push(data);
 			if (data.type === "paint") pending.paintings.push(data);
 			if (data.type === "module") lastModule = data.bytes;
-			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, milliseconds: data.milliseconds });
+			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], milliseconds: data.milliseconds });
 		};
 	});
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
@@ -177,6 +178,7 @@ function showReport(report) {
 	$("printed").textContent = printed;
 	$("printed").hidden = printed === "";
 	showPaintings(report.paintings ?? []);
+	listenTo(report.listening ?? []);
 	const notes = report.notes ?? [];
 	const inline = new Set((report.warnings ?? []).map(warning => warning.topic).filter(topic => notes.includes(topic)));
 	const expressionOf = topic => (report.got_it ?? []).find(offer => offer.topic === topic)?.expression;
@@ -207,6 +209,42 @@ function showPaintings(paintings) {
 		canvas.getContext("2d").putImageData(image, 0, 0);
 		return canvas;
 	}));
+}
+
+// ---- page events (notes/signals.md phase 7): `on click {…}`, `on key {…}` of the program shown --------------------
+
+let listening = new Set(); // the page events the shown program handles
+
+function listenTo(events) {
+	listening = new Set(events);
+	$("output").classList.toggle("listening", listening.size > 0);
+	$("listening").hidden = listening.size === 0;
+	$("listening").textContent = `listening: ${[...listening].map(event => `on ${event}`).join(", ")}; ${listening.has("key") ? "click here, then type" : "click here"}`;
+}
+
+// a click on the output (on a canvas: its pixel), a key typed while the output has the focus
+function sendPageEvent(event, detail) {
+	if (listening.has(event)) worker.postMessage({ event, detail });
+}
+
+function clickDetail(click) {
+	const target = click.target.closest("canvas") ?? $("output");
+	const bounds = target.getBoundingClientRect();
+	const scale = target.width ? target.width / bounds.width : 1;
+	return { x: Math.floor((click.clientX - bounds.left) * scale), y: Math.floor((click.clientY - bounds.top) * scale) };
+}
+
+// what a handler printed, painted and gave, while no run is pending
+function showEventOutput(data) {
+	if (data.type === "print" && data.stream !== STDERR) {
+		$("printed").textContent += data.text;
+		$("printed").hidden = false;
+	}
+	if (data.type === "paint") showPaintings([data]);
+	if (data.type === "handled") {
+		$("value").textContent = data.value;
+		$("value").classList.toggle("error", data.error);
+	}
 }
 
 async function show(code) {
@@ -278,6 +316,8 @@ function initialize() {
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
 	$("run").onclick = runNow;
+	$("output").onclick = click => sendPageEvent("click", clickDetail(click));
+	$("output").onkeydown = key => sendPageEvent("key", { key: key.key });
 	$("download").onclick = downloadModule;
 	showBuildSwitch();
 	fillExamples();

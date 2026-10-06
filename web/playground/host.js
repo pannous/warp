@@ -596,19 +596,40 @@ function runProgram(bytes, hooks) {
 	} catch (failure) {
 		return { failure: String(failure.message ?? failure) };
 	}
-	const { warnings } = holder;
+	const outcome = outcomeOf(holder, hooks, () => instance.exports.main());
+	const events = pageEvents(instance.exports);
+	if (events.length > 0 && outcome.result) hooks.listen?.(holder, events);
+	return outcome;
+}
+
+// the outcome of a call into a run's instance (main, or a page event's handler), as src/web.rs run_outcome reads it
+function outcomeOf(holder, hooks, call) {
+	const { warnings, exports } = holder;
 	try {
-		const result = instance.exports.main();
+		const result = call();
 		// the tasks nobody awaited finish before the result, as natively; a failure nobody read ends the run
 		const unread = joinTasks(holder.run, hooks);
 		if (unread) return { failure: unread, warnings };
-		return { result: readResult(instance.exports, result), warnings };
+		return { result: readResult(exports, result), warnings };
 	} catch (trap) {
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
-		const detail = instance.exports[TRAP_DETAIL_EXPORT]?.value;
-		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(instance.exports, detail) : null, warnings };
+		const detail = exports[TRAP_DETAIL_EXPORT]?.value;
+		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(exports, detail) : null, warnings };
 	}
+}
+
+// the page events a program handles (src/lowering/event_signals.rs PAGE_EVENTS): `on click {…}` exports on·click·node
+const PAGE_EVENT_HANDLER = /^on·(click|key)·node$/;
+function pageEvents(exports) {
+	return Object.keys(exports).map(name => name.match(PAGE_EVENT_HANDLER)?.[1]).filter(Boolean);
+}
+
+// a page event of a program that handles it, after its main ran: the handler with the event's data, its outcome
+function runPageEvent(holder, hooks, event, detail) {
+	holder.warnings = [];
+	const handler = holder.exports[`on·${event}·node`];
+	return outcomeOf(holder, hooks, () => handler(buildValue(holder.exports, treeOfPlain([detail]))));
 }
 
 // The compiler that runs the blocks a program builds at run time (run_block): loaded on first use, an instance of its own,
