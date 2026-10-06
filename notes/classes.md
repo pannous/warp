@@ -90,54 +90,33 @@ Batch 3 (branch classes-3), P123 one text form `Point{x:1 y:2}`:
 - casts: `string(p)`, `"\(p)"`, `p as text` of an instance known only at run time go through list_text too (it was
   "has no runtime text yet").
 - Not yet: a text field prints unquoted at run time (`P{x:1 name:a}`, like `print ["a"]` writes `[a]`), so it does
-  not read back as the same value (question to the Interviewer).
+  not read back as the same value; decided P126 (quote texts inside containers, below), not implemented.
 
-## Representation (found in batch 3, the next big step)
-Instances are not GC structs at run time: `P(1, 2)` is a `$Node` key `P` over a cons list of `x:1`, `y:2` entries, and
-`p.x` is `struct_body` + `map_find`, a search comparing field-name symbols. A `$P` struct type and `new_P` are emitted
-but only used when main gives a struct. The efficient form: `(struct $P (field $x i64) (field $y i64))` built by
-struct.new, `p.x` a struct.get by field index wherever the static type is known, a Node made from it only where a
-Node is wanted (print, a mixed list, the result).
-Steps (Supervisor, 2026-10-06), each its own commit on classes-4: field reads, then construction, then writes and
-methods. Benchmark probes/bench_class_instances.sh, 10^6 iterations, debug build, Node instances (classes-3 tip):
-plain_ints 2 ms, construct_and_read 248 ms, read_only (`p.x * p.y`) 141 ms, method_call (`p.sum()`) 170 ms.
+## Representation: GC structs (classes-4, wasm_emitter/struct_backend.rs)
+Generic form: `P(1, 2)` is a `$Node` key `P` over a cons list of `x:1`, `y:2` entries (type_constructor.rs, the
+Instance mark), `p.x` is `struct_body` + `map_find`, a search comparing field-name symbols. The struct backend
+replaces that where the static type is known, modelled on map_backend.rs (typed maps) and list_abi.rs:
+- `P·instance`: one struct type per class (emit_instance_types), mutable fields, an int field i64, a float field f64,
+  any other a Node. Today's immutable `$P` (field_storage "int"→I32) stays for FFI/WIT.
+- Struct variables (find_typed_structs): a local whose every assignment is a construction of one class giving every
+  field in declared order with values of the field's kind (int/float fields: static kind Int/Float); any other write
+  (`p.x = v` too, until step 3), a global, a capture, a parameter or a `RAN_WITHOUT_ERROR` block keeps the Node form
+  (names_held_as_nodes, shared with typed maps). `p.x` is struct.get (boxed where a Node is wanted, the bare i64 in
+  numeric code); where the instance itself is wanted it becomes the Node `P{x:… y:…}` built from the fields.
+- Struct parameters (find_struct_abi): `m(p:P)` takes `(ref null $P·instance)` when its body only reads fields of p
+  and every mention of m is a direct call passing a variable or a construction of P: a struct variable is passed as
+  it is, a construction straight into struct.new, any other variable field by field. Closures, tuple functions and
+  `compare·T` witnesses (runtime dispatch, witness.rs) keep Node parameters (directly_called_functions).
+- probes/bench_class_instances.sh, 10^6 iterations, debug build: construct_and_read 248 → 5 ms, read_only
+  (`p.x * p.y`) 141 → ~0 ms, method_call (`p.sum()`) 170 → ~0 ms; plain ints 2 ms.
+- Decisions (Interviewer warp-33, user, 2026-10-06): P127 int fields stay fast i64; a write that does not fit is a loud
+  run-time error "x of Point is an int field: 2^70 does not fit in 64 bits; declare it x:bigint or x:number" (step 3,
+  writes). P126 texts inside containers print quoted everywhere (print, interpolation, string()): `P{x:1 name:"a"}`,
+  `["a" "b"]`; a top-level `print "a"` still writes a.
+Next steps: 3. writes `p.x = v` as struct.set (with the P127 check), 4. methods that change or return self, a struct
+result (like list_abi's returns_list), struct elements in typed lists.
 
-Design for the switch (not started in code yet):
-- Reads and construction come together: `p.x` can be a struct.get only where p holds a `$P`. Mirror the typed lists
-  (wasm_emitter/list_dispatch.rs `find_typed_lists`, notes/typed_lists.md): a `typed_structs` map of the variables
-  whose every assignment is a construction `P(…)` / `P{…}` of one class (not a global, not captured, like
-  `excluded` there), held in a `(ref null $P)` local; `p.x` is struct.get by field index, `p.x = v` struct.set.
-  Wherever the value is wanted as a Node (a result, an argument of an untyped function, print, a mixed list)
-  it becomes the same Node key the literal builds today (`struct_as_node`, like `int_list_as_node`).
-- Methods afterwards: `m(self:P)` with a `(ref $P)` parameter when every call site has a typed receiver
-  (like list_abi.rs, the array calling convention for list parameters).
-- Today's `$P` (type_manager field_def_to_wasm_field) is wrong for this: `int` is i32 (type_kinds field_storage
-  maps "int" to I32) and every field is immutable. Fields must be mutable; an int field i64. Open question (to the
-  Interviewer): an int field overflowing i64 (warp ints are unbounded): trap, or keep that field a Node.
-- Template: wasm_emitter/map_backend.rs (typed maps) plugs into exactly the points a struct backend needs; write
-  wasm_emitter/struct_backend.rs the same way and hook it in at the same places:
-  1. `find_typed_structs(program) -> HashMap<String, class>` like `find_typed_maps` (map_backend.rs:43): every
-     assignment of the name is `P{…}` (the lowered constructor; type_constructor.rs makes `P(1, 2)` into
-     `P{x:1 y:2}` with defaults) of one class; `p.x = v` (lowered `p#…` index write) allowed; any other write, a global
-     (`ctx.user_globals`), a capture (`ctx.captures`), a `RAN_WITHOUT_ERROR` block or a parameter excludes it.
-     Called where typed_maps is: mod.rs:1048 (main) and user_function_calls.rs:209 (bodies, saved and restored).
-  2. local type: list_dispatch.rs `local_storage_type` (line ~420): `(ref null $P·instance)`.
-  3. store: list_dispatch.rs `emit_typed_list_store` (~564) → `emit_typed_struct_store`: the field values in field
-     order (missing ones: their defaults, already filled by type_constructor), `struct.new`.
-  4. read: list_ops.rs `emit_indexed_node` (~1453, and the numeric path ~1029) when `typed_struct(target)` and
-     `constant_field_name(key)` is a field: `local.get; struct.get $P·instance idx`, then box as the Node the generic
-     path gives (or leave the i64 where the caller wants a number: see the ~1029 path).
-  5. as a value: list_dispatch.rs `emit_typed_list_as_node` (~651) → build today's Node key `P{x:… y:…}` from the
-     fields (a runtime function `P·as_node` per class, emitted once).
-  6. `ctx.user_type_indices`: use a separate instance struct per class (`P·instance`, mutable fields, int i64, float
-     f64, text/other Node refs) instead of changing today's `$P` (field_storage "int"→I32 is used for FFI/WIT
-     structs; do not change it).
-  Assumption (P-question pending with the Interviewer, Supervisor said go): an int field is i64; a value that does not
-  fit is a loud run-time error naming the field (only once writes exist, step 3).
-- The 108-byte module for `class P{x:int; y:int}; print P(1, 2)` returns `struct.new $P` from `i64.const` operands
-  into i32 fields: check it validates (it ran, so someone converts; find the path before relying on it).
-
-Open (next batches): GC struct instances (above), keyword methods in a class body (`def area() -> int {…}`,
+Open (next batches): GC struct writes and struct results (above), keyword methods in a class body (`def area() -> int {…}`,
 `fun area(): Int {…}`, Python/Kotlin/Swift style: today "no field area"; class_methods method_parts sees only `:=`
 heads, reuse declarations.rs keyword_definition on the body items first, warp-dd owns that function), the `value{…}` constructor block and `value(name){…}`
 (wiki/constructor.md; today silently ignored), a `pop` method (changes the object and gives another value), a method
