@@ -144,6 +144,34 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   per value (battery, network, dark mode, clipboard), built later.
 - P137 tests/numbers/test_angle.rs test_function_params expects the Int 9 for `f(x)=x*x;f(3)` (the text "9" was a
   C++-port artifact) and is un-ignored.
+- P138 (card functions-go, warp-a8) Go's `total := 0; total += n` stays a loud error ("total is charged (total := 0):
+  it runs at every use and cannot be assigned; write total = … at the definition"); P71 stays strict.
+- WebAssembly modules (warp-25, branch wasm-modules, notes/wasm_modules.md), all as recommended: P139 `import m` /
+  `use` / `require` only declare (ø); `include m` runs m's main/start export and is its value (test_import_wasm → 42).
+  P140 assigning an imported global: a mutable wasm global is set in the module, an immutable one is a loud error
+  (P130's rule). P141 REVISED (user: "if the built-in wins, then what's the point of even allowing to define it? It
+  should be an error then, no?" … "at the definition side if we don't define it, then you decide"): a wasp
+  definition named like a builtin (`def double(x)…`) is a loud error at the definition. A foreign .wasm export
+  can't be renamed, so (Interviewer's choice, as the user delegated) `import m` works, `m.double(21)` always works
+  (qualified calls get built), and a bare `double(21)` is a loud error "double is ambiguous: m.double(21) for the
+  export, 21 as float for the cast". No warning-and-builtin-wins.
+  P144 (warp-25) the old test_import_wasm (tests/wasm/test_wasm.rs) is edited to the P139 values (import/require →
+  ø, include → 42, fixture from tests/fixtures/wasm) and un-ignored, in its own commit naming P139.
+- P142 (scope of P141, asked by warp-e4) the definition error applies only where the builtin would win, i.e. the
+  definition could never take effect (casts like `double`, operators, type names). Library words (`add`, `map`,
+  `count`) may be redefined and the user's version wins; class methods are always allowed (called as `x.add`). User:
+  "add Not really a built-in, just an example. Also, map should not be the main thing to use. One would just use the
+  syntax square all x or maybe even just broadcasting." So docs, hints, examples and new tests prefer broadcasting
+  (`square [1 2 3]`, wiki/broadcasting.md) or `square all x` (wiki/all.md) over `map`.
+- P143 (warp-a8) a function called without parentheses next to a comparison, `f x == y`, is a loud error naming
+  both forms: "square 3 == 9 is ambiguous; write (square 3) == 9 or square(3 == 9)" (user chose this over the
+  recommended "(f x) == y for all functions"; warp-a8 had implemented (f x) == y for user functions only). Assumed
+  (undoable): statement words (print, return, assert) still take the whole expression (`print 3 == 3` prints true);
+  the wiki examples `square [1 2 3] == [1 4 9]` (wiki/all.md, wiki/broadcasting.md) get the parentheses.
+  Refined (user, same day): "But maybe it's not ambiguous when square takes a number and not a bool." Types decide
+  first: when the parameter type rules out the comparison's bool (`square number = …`, `f(x:int)`), `f x == y` is
+  `(f x) == y` without a message; the error stays only when both readings type-check (parameter untyped/any or
+  bool). So `square 3 == 9` is true and the wiki examples keep their bare form.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.

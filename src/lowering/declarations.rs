@@ -6,6 +6,12 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
+/// The receiver of an extension method, as Kotlin (`this`) and Swift (`self`) name it
+const THIS_WORD: &str = "this";
+const SELF_WORD: &str = "self";
+/// Swift's block of methods added to a type: `extension Int {…}`
+const EXTENSION_WORD: &str = "extension";
+
 /// The implicit parameter of a function: `double := it * 2`
 /// `each xs: body`, `all xs: body`: a for loop over xs, the item is `it` (wiki/iteration.md)
 const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
@@ -1125,7 +1131,7 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 }
 
 pub fn lower_c_functions(node: Node) -> Node {
-	lower_lists(end_definitions(node), |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| partial_application(items)))
+	lower_lists(end_definitions(node), |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| extension_block(items)).or_else(|| partial_application(items)))
 }
 
 /// `add(1, _)`: a call with placeholders is the lambda of the missing arguments, `partial_1 => add(1, partial_1)`
@@ -1177,6 +1183,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
 		return None;
 	}
+	let definition = extension_definition(definition);
 	let definition = match typed_result(&definition) {
 		Some((untyped, written_type)) => {
 			result_type = Some(written_type);
@@ -1231,6 +1238,62 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		None => head,
 	};
 	Some(Node::Key(Box::new(target), op, Box::new(body)))
+}
+
+/// Kotlin's extension method `fun Int.twice() = this * 2`: the function `twice(this:Int) := this * 2`, its receiver the
+/// first parameter, named as the body names it (`this`, or Swift's `self`), so `3.twice()` calls it as a method
+fn extension_definition(definition: Node) -> Node {
+	let Node::Key(head, op, rest) = definition else { return definition };
+	let Node::Key(receiver_type, Op::Dot, call) = head.drop_meta() else { return Node::Key(head, op, rest) };
+	let Node::List(call, Bracket::Round, separator) = call.drop_meta() else { return Node::Key(head, op, rest) };
+	if !matches!(receiver_type.drop_meta(), Node::Symbol(_)) || !matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_))) {
+		return Node::Key(head, op, rest);
+	}
+	let head = with_receiver(call, separator, receiver_type, &rest);
+	Node::Key(Box::new(head), op, rest)
+}
+
+/// The head `name(receiver:T, parameters…)` of a method on T whose call is `name(parameters…)`
+fn with_receiver(call: &[Node], separator: &Separator, receiver_type: &Node, body: &Node) -> Node {
+	let receiver = if body.mentions_any(&[SELF_WORD]) { SELF_WORD } else { THIS_WORD };
+	let receiver = Node::Key(Box::new(Node::Symbol(receiver.to_string())), Op::Colon, Box::new(receiver_type.clone()));
+	let parameters = call[1..].iter().flat_map(|parameter| match parameter.drop_meta() {
+		Node::List(group, Bracket::Round, _) => group.clone(),
+		Node::Empty => vec![],
+		_ => vec![parameter.clone()],
+	});
+	Node::List(std::iter::once(call[0].clone()).chain(std::iter::once(receiver)).chain(parameters).collect(), Bracket::Round, separator.clone())
+}
+
+/// Swift's `extension Int { func twice() -> Int { self * 2 } }`: each function of the block a method on the type, as
+/// `fun Int.twice()` defines it
+fn extension_block(items: &[Node]) -> Option<Node> {
+	let [word, receiver_type, block] = items else { return None };
+	let is_extension = matches!(word.drop_meta(), Node::Symbol(word) if word == EXTENSION_WORD) && matches!(receiver_type.drop_meta(), Node::Symbol(_));
+	// a block of one function arrives as that definition
+	let definitions = match block.drop_meta() {
+		Node::List(definitions, Bracket::Curly, _) => definitions.clone(),
+		definition @ Node::Key(_, Op::Define | Op::Assign, _) => vec![definition.clone()],
+		_ => return None,
+	};
+	if !is_extension {
+		return None;
+	}
+	let method = |definition: &Node| {
+		let Node::Key(head, op @ (Op::Define | Op::Assign), body) = definition.drop_meta() else { return definition.clone() };
+		let (call, result_type) = match head.drop_meta() {
+			Node::Key(call, Op::Colon, result_type) => (call.drop_meta(), Some(result_type)),
+			call => (call, None),
+		};
+		let Node::List(call, Bracket::Round, separator) = call else { return definition.clone() };
+		let head = with_receiver(call, separator, receiver_type, body);
+		let head = match result_type {
+			Some(result_type) => Node::Key(Box::new(head), Op::Colon, result_type.clone()),
+			None => head,
+		};
+		Node::Key(Box::new(head), op.clone(), body.clone())
+	};
+	Some(Node::List(definitions.iter().map(method).collect(), Bracket::None, Separator::Semicolon))
 }
 
 /// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`

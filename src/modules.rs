@@ -50,12 +50,12 @@ pub fn resolve(program: Node) -> Node {
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let folder = file.as_deref().map(folder_of);
-	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone(), scope: None };
+	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone(), scope: None, wasm_modules: vec![] };
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader.resolve(program).and_then(|program| match loader.scope {
 		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 		None => Ok(program),
-	});
+	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules));
 	resolved.unwrap_or_else(|failure| failure)
 }
 
@@ -201,6 +201,8 @@ struct Loader<'a> {
 	including_directory: Option<PathBuf>,
 	/// the widest `use folder|package|project` met
 	scope: Option<Scope>,
+	/// the paths of the imported WebAssembly modules, whose exports the program reads (wasm_modules::rewrite_uses)
+	wasm_modules: Vec<String>,
 }
 
 impl Loader<'_> {
@@ -239,6 +241,9 @@ impl Loader<'_> {
 			return Ok(vec![as_use(statement)]);
 		}
 		let Some(path) = self.find(name) else {
+			if let Some(module) = self.find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS) {
+				return Ok(vec![self.use_wasm_module(&module, statement)]);
+			}
 			if import == Import::Use && package_repository(name).is_some() {
 				return self.use_package(name, used.requirement.as_ref());
 			}
@@ -297,17 +302,25 @@ impl Loader<'_> {
 	/// The file of a module: every search directory below the directory of the including file, then below the working
 	/// directory; a name that already ends in an extension is tried as written
 	fn find(&self, name: &str) -> Option<PathBuf> {
-		self.candidates(name).into_iter().find(|path| module_exists(path))
+		self.find_with(name, &MODULE_EXTENSIONS)
+	}
+
+	fn find_with(&self, name: &str, extensions: &[&str]) -> Option<PathBuf> {
+		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path))
 	}
 
 	fn candidates(&self, name: &str) -> Vec<PathBuf> {
+		self.candidates_with(name, &MODULE_EXTENSIONS)
+	}
+
+	fn candidates_with(&self, name: &str, extensions: &[&str]) -> Vec<PathBuf> {
 		if !is_plain_relative_path(name) {
 			return vec![];
 		}
-		let has_extension = MODULE_EXTENSIONS.iter().any(|extension| name.ends_with(&format!(".{extension}")));
+		let has_extension = extensions.iter().any(|extension| name.ends_with(&format!(".{extension}")));
 		let file_names: Vec<String> = match has_extension {
 			true => vec![name.to_string()],
-			false => MODULE_EXTENSIONS.iter().map(|extension| format!("{name}.{extension}")).collect(),
+			false => extensions.iter().map(|extension| format!("{name}.{extension}")).collect(),
 		};
 		let bases: Vec<PathBuf> = self.including_directory.iter().cloned().chain(std::iter::once(PathBuf::new())).collect();
 		let mut candidates = Vec::new();
@@ -373,6 +386,17 @@ impl Loader<'_> {
 		let resolved = uses.into_iter().map(|statement| self.resolve(statement)).collect::<Result<Vec<Node>, Node>>();
 		self.including_directory = outer_directory;
 		Ok(resolved?.into_iter().flat_map(statements).collect())
+	}
+
+	/// `import fourty_two` of `fourty_two.wasm` / `.wat`: `use "<its absolute path>"`, which the FFI imports from
+	/// (wasm_modules.rs)
+	fn use_wasm_module(&mut self, module: &Path, statement: &Node) -> Node {
+		let path = module.canonicalize().unwrap_or_else(|_| module.to_path_buf()).display().to_string();
+		self.wasm_modules.push(path.clone());
+		match as_use(statement) {
+			Node::List(_, bracket, separator) => Node::List(vec![Node::Symbol(USE_KEYWORD.to_string()), Node::Text(path)], bracket, separator),
+			other => other,
+		}
 	}
 
 	/// A file that cannot be found: an error listing where it was looked for

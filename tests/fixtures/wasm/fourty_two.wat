@@ -1,0 +1,17 @@
+;; a WebAssembly module for `import tests/fixtures/wasm/fourty_two` (tests/modules/test_wasm_modules.rs)
+(module
+  (global $ft (export "ft") i64 (i64.const 42))
+  (global $counter (mut i32) (i32.const 0))
+  (func (export "twice") (param $x i64) (result i64)
+    (i64.mul (local.get $x) (i64.const 2)))
+  ;; named like warp's float type: reachable as fourty_two.double(x)
+  (func (export "double") (param $x i64) (result i64)
+    (i64.mul (local.get $x) (i64.const 2)))
+  (func (export "half") (param $x f64) (result f64)
+    (f64.div (local.get $x) (f64.const 2)))
+  (func (export "add32") (param $a i32) (param $b i32) (result i32)
+    (i32.add (local.get $a) (local.get $b)))
+  ;; state lives in the one instance of a run
+  (func (export "tick") (result i32)
+    (global.set $counter (i32.add (global.get $counter) (i32.const 1)))
+    (global.get $counter)))

@@ -165,8 +165,24 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   day words. Each next time is computed from the local clock anew (libc localtime_r, UTC without it), so summer time
   shifts nothing; a one-shot timer is dropped after it fired, so `warp run` ends then ("listening: at 9:00",
   "listening: every monday at 9:00"). Tests: tests/control/test_daily_timer.rs, test_time_of_day.rs.
-  Not yet: several days (`on every monday and friday`), dates (`at 2026-12-24 18:00`), cron strings; the colon body
-  (`at 9pm: print n`) works only as a whole program (card colon-body).
+  Not yet: several days (`on every monday and friday`), dates (`at 2026-12-24 18:00`), cron strings.
+- A body after a colon (`on every 5 seconds: print n`, `at 9pm: print n`) is the rest of the line: it arrives as
+  `on every (5 seconds: print) n`, the colon binding its neighbours, and words_and_body joins the words after it.
+- System values (P136, card system-values; tests/control/test_system_values.rs): `battery` (percent, an Int),
+  `charging`, `online`, `dark mode` are reads of the host word `system_value(name)` (i64; a yes/no value is
+  `system_value("online") != 0`), unless the program binds the name itself (assigns it, takes it as a parameter, or
+  uses it as a field name). Readers live in crates/warp-runtime/src/system_values.rs so built executables keep them:
+  macOS `pmset -g batt` and `defaults read -g AppleInterfaceStyle`, Linux /sys/class/power_supply and `gsettings`;
+  `online` is whether a UDP socket can connect to 1.1.1.1 (only the routing table is asked, nothing is sent). A
+  reading is kept for a second, so polling costs at most one subprocess per value per second. A value the machine
+  cannot give is a loud run-time error ("battery: this Mac has no battery"). Listening: lowering/system_values.rs
+  marks the reads (`system·battery`) before signal_values::poll_shared, which treats them like shared values (a check
+  in `on·shared` comparing with the last reading), adds the timer `on every 1000 ms` right after the first listener
+  (so `warp run` stays and wakes once a second; it says "listening: every 1 second"), then makes the marks host calls.
+  `whenever battery < 20% {…}` arrives as `battery < (20 % {…})`: compared with the battery, `20%` is 20. The page
+  reads `online` (navigator.onLine) and `dark mode` where matchMedia exists, and says what it cannot read.
+  Not yet: `on dark mode {…}` (use `whenever dark mode`), the clipboard (card system-clipboard), percent literals
+  elsewhere, event-driven connectors instead of polling, Windows.
 - Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, timers in the
   playground (a warning says so), `stop listening`.
 - Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the
