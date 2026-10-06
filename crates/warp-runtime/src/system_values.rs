@@ -4,10 +4,12 @@
 //! READING_LIFETIME: a sleeping program polls often, the platform is asked at most once a second per value.
 //! macOS asks `pmset` and `defaults`, Linux /sys and `gsettings`; `online` is whether a route to the internet exists
 //! (a UDP connect sends nothing). A value the platform cannot give is a loud error, never a made-up reading.
+//! The clipboard is watched by its change count, which reads no content: macOS asks the user before a program reads
+//! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use crate::host_words::{BATTERY, CHARGING, DARK_MODE, ONLINE, SYSTEM_VALUES};
+use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, ONLINE, SYSTEM_VALUES};
 
 const READING_LIFETIME: Duration = Duration::from_secs(1);
 /// Any public address: connecting a UDP socket only asks the routing table
@@ -34,6 +36,7 @@ fn read_now(name: &str) -> Result<i64, String> {
 		CHARGING => battery().map(|(_, charging)| charging as i64),
 		ONLINE => Ok(online() as i64),
 		DARK_MODE => dark_mode().map(|dark| dark as i64),
+		CLIPBOARD_COUNT => clipboard_count(),
 		other => Err(format!("{other} is no system value; known: {}", SYSTEM_VALUES.map(|(name, _)| name).join(", "))),
 	}
 }
@@ -86,4 +89,48 @@ fn dark_mode() -> Result<bool, String> {
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn dark_mode() -> Result<bool, String> {
 	Err("dark mode: not readable on this platform yet".to_string())
+}
+
+/// macOS: `[[NSPasteboard generalPasteboard] changeCount]`, AppKit loaded on first use (a plain run never loads it)
+#[cfg(target_os = "macos")]
+fn clipboard_count() -> Result<i64, String> {
+	use std::ffi::{c_char, c_void, CStr};
+	type Object = *mut c_void;
+	const APPKIT: &CStr = c"/System/Library/Frameworks/AppKit.framework/AppKit";
+	let symbol = |name: &CStr| -> Result<*mut c_void, String> {
+		let found = unsafe { libc::dlsym(libc::RTLD_DEFAULT, name.as_ptr()) };
+		if found.is_null() { Err(format!("clipboard: no {name:?}")) } else { Ok(found) }
+	};
+	if unsafe { libc::dlopen(APPKIT.as_ptr(), libc::RTLD_LAZY) }.is_null() {
+		return Err("clipboard: cannot load AppKit".to_string());
+	}
+	// objc_msgSend is called through the exact signature of each message
+	let class: extern "C" fn(*const c_char) -> Object = unsafe { std::mem::transmute(symbol(c"objc_getClass")?) };
+	let selector: extern "C" fn(*const c_char) -> Object = unsafe { std::mem::transmute(symbol(c"sel_registerName")?) };
+	let send = symbol(c"objc_msgSend")?;
+	let send_for_object: extern "C" fn(Object, Object) -> Object = unsafe { std::mem::transmute(send) };
+	let send_for_count: extern "C" fn(Object, Object) -> isize = unsafe { std::mem::transmute(send) };
+	let pasteboard = send_for_object(class(c"NSPasteboard".as_ptr()), selector(c"generalPasteboard".as_ptr()));
+	if pasteboard.is_null() {
+		return Err("clipboard: no pasteboard".to_string());
+	}
+	Ok(send_for_count(pasteboard, selector(c"changeCount".as_ptr())) as i64)
+}
+
+/// Elsewhere the content's hash stands for the count: no prompt guards it there
+#[cfg(not(target_os = "macos"))]
+fn clipboard_count() -> Result<i64, String> {
+	use std::hash::{Hash, Hasher};
+	let mut hasher = std::collections::hash_map::DefaultHasher::new();
+	clipboard_text()?.hash(&mut hasher);
+	Ok(hasher.finish() as i64)
+}
+
+/// The clipboard's text: macOS `pbpaste`, Linux `wl-paste` or `xclip`
+pub fn clipboard_text() -> Result<String, String> {
+	#[cfg(target_os = "macos")]
+	return output("pbpaste", &[]);
+	#[cfg(not(target_os = "macos"))]
+	output("wl-paste", &["--no-newline"]).or_else(|_| output("xclip", &["-selection", "clipboard", "-o"]))
+		.map_err(|problem| format!("clipboard: needs wl-paste or xclip ({problem})"))
 }

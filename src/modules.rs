@@ -242,7 +242,7 @@ impl Loader<'_> {
 		}
 		let Some(path) = self.find(name) else {
 			if let Some(module) = self.find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS) {
-				return Ok(vec![self.use_wasm_module(&module, statement)]);
+				return Ok(self.use_wasm_module(&module, statement, import));
 			}
 			if import == Import::Use && package_repository(name).is_some() {
 				return self.use_package(name, used.requirement.as_ref());
@@ -389,14 +389,16 @@ impl Loader<'_> {
 	}
 
 	/// `import fourty_two` of `fourty_two.wasm` / `.wat`: `use "<its absolute path>"`, which the FFI imports from
-	/// (wasm_modules.rs)
-	fn use_wasm_module(&mut self, module: &Path, statement: &Node) -> Node {
+	/// (wasm_modules.rs); `include` also runs its entry point, whose value it is (P139)
+	fn use_wasm_module(&mut self, module: &Path, statement: &Node, import: Import) -> Vec<Node> {
 		let path = module.canonicalize().unwrap_or_else(|_| module.to_path_buf()).display().to_string();
 		self.wasm_modules.push(path.clone());
-		match as_use(statement) {
-			Node::List(_, bracket, separator) => Node::List(vec![Node::Symbol(USE_KEYWORD.to_string()), Node::Text(path)], bracket, separator),
+		let used = match as_use(statement) {
+			Node::List(_, bracket, separator) => Node::List(vec![Node::Symbol(USE_KEYWORD.to_string()), Node::Text(path.clone())], bracket, separator),
 			other => other,
-		}
+		};
+		let entry = (import == Import::Include).then(|| crate::wasm_modules::entry_call(&path)).flatten();
+		std::iter::once(used).chain(entry).collect()
 	}
 
 	/// A file that cannot be found: an error listing where it was looked for

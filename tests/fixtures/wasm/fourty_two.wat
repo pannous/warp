@@ -2,6 +2,10 @@
 (module
   (global $ft (export "ft") i64 (i64.const 42))
   (global $counter (mut i32) (i32.const 0))
+  ;; a mutable global the program sets (P140)
+  (global $level (export "level") (mut i64) (i64.const 1))
+  ;; what `include fourty_two` runs (P139)
+  (func (export "main") (result i64) (global.get $ft))
   (func (export "twice") (param $x i64) (result i64)
     (i64.mul (local.get $x) (i64.const 2)))
   ;; named like warp's float type: reachable as fourty_two.double(x)
