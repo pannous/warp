@@ -15,6 +15,10 @@ const SETTER_PREFIX: &str = "set ";
 /// The exports `include m` runs, the first one m has (P139)
 const ENTRY_POINTS: [&str; 2] = ["main", "_start"];
 
+/// The custom section naming the C texts the program's imports from modules cross, for a host that cannot see an
+/// import's types (web/playground/host.js): a line `module\tname\tparameters\tresult` per import, `t` a text, `n` not
+pub const TEXT_CROSSINGS_SECTION: &str = "warp.module_texts";
+
 /// What an import from a module does: call its function, read its global (a getter of no parameters) or set it
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Role {
@@ -153,6 +157,19 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 	}
 	with_header_types(path, &mut exports);
 	Ok(exports)
+}
+
+/// The TEXT_CROSSINGS_SECTION of these imports: the exports of modules that take or give a C text
+pub fn text_crossings<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
+	let letter = |text: bool| if text { 't' } else { 'n' };
+	let lines: std::collections::BTreeSet<String> = imports.filter(|import| is_module_path(import.library))
+		.filter_map(|import| exports(import.library).get(import.name).map(|export| (import, export)))
+		.filter(|(_, export)| export.text_result || export.text_parameters.contains(&true))
+		.map(|(import, export)| {
+			let parameters: String = export.text_parameters.iter().map(|text| letter(*text)).collect();
+			format!("{}\t{}\t{parameters}\t{}\n", import.library, import.name, letter(export.text_result))
+		}).collect();
+	lines.into_iter().collect()
 }
 
 /// A C library compiled to WebAssembly: the header beside it (`shout.h` of `shout.wasm`) gives its functions C types,
