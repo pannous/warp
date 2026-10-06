@@ -27,6 +27,7 @@ mod test_c_style;
 mod test_item_list_cast_hint;
 mod test_adopted_acknowledgements;
 mod test_error_positions;
+mod test_error_excerpt;
 mod test_fixits;
 mod test_braceless_call_argument;
 mod test_got_it_scope;
