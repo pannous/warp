@@ -60,3 +60,11 @@ fn a_handler_of_an_event_nothing_raises_never_runs() {
 	is!("hits = 0; on conect { hits += 1 }; hits", 0);
 	is!("ready = false; n = 0; once ready { n += 1 }; ready = true; n", 1);
 }
+
+// P156: whenever runs each time its condition becomes true, also as a subscription and as a named listener
+#[test]
+fn whenever_runs_when_the_condition_becomes_true() {
+	is!("x = 0; n = 0; whenever x > 5 { n += 1 }; x = 6; x = 7; x = 3; x = 8; n", 2);
+	is!("n = 0; watch(s) := { whenever s > 5 { n += 1 } }; x = 0; watch(x); x = 6; x = 7; x = 3; x = 8; n", 2);
+	is!("t = 20; n = 0; alarm = whenever t > 30 { n += 1 }; t = 35; t = 36; t = 1; t = 40; n", 2);
+}

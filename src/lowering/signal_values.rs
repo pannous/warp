@@ -33,6 +33,10 @@ const CHECK_PLACEHOLDER: &str = "signal_check_placeholder";
 const CLOSURE_CALL: &str = "closure_call_2";
 /// `signal·fired·0`: the cell of a once listener inside a function, whether it ran
 const FIRED_PREFIX: &str = "signal·fired·";
+/// `signal·held·0`: the cell of a whenever listener inside a function, whether its condition held; `whenever_was` the
+/// value before the write, in the listener
+const HELD_PREFIX: &str = "signal·held·";
+const WAS_WORD: &str = "whenever_was";
 const GLOBAL_WORD: &str = "global";
 /// `listeners of x`, `clear listeners of x` (card g-3HmY)
 const LISTENERS_WORD: &str = "listeners";
@@ -86,7 +90,11 @@ pub fn poll_shared(program: Node) -> Node {
 		let value = seen.first().map(|(name, _)| Node::Symbol(name.clone())).expect("a watched value");
 		let check = match listener_word {
 			ListenerWord::Set | ListenerWord::Change => with_value(&body, &value),
-			ListenerWord::Whenever => if_then(subject, block(vec![body])),
+			ListenerWord::Whenever => {
+				let (held, was) = (format!("{POLLING_PREFIX}{}_held", flags.len()), format!("{POLLING_PREFIX}{}_was", flags.len()));
+				flags.extend([held.clone(), was.clone()]);
+				crate::variable_signals::edge_check(&held, &was, subject, body)
+			}
 			ListenerWord::Once => {
 				let fired = format!("{POLLING_PREFIX}{}_fired", flags.len());
 				flags.push(fired.clone());
@@ -336,7 +344,19 @@ impl Subscriptions {
 			ListenerWord::Change => {
 				if_then(Node::Key(Box::new(value.clone()), Op::Ne, Box::new(Node::Symbol(OLD_WORD.to_string()))), block(vec![with_value(&body, &value)]))
 			}
-			ListenerWord::Whenever => if_then(subject, block(vec![body])),
+			// P156: when the condition becomes true; the cell holds whether it held at the last write
+			ListenerWord::Whenever => {
+				let held = format!("{HELD_PREFIX}{}", self.fired);
+				self.fired += 1;
+				statements.push(assign(&held, call(CELL_NEW, vec![Node::False])));
+				let held_cell = Node::Symbol(held);
+				// cells hold nodes: compared, not read as conditions
+				let not_before = Node::Key(Box::new(Node::Symbol(WAS_WORD.to_string())), Op::Eq, Box::new(Node::False));
+				let holds = Node::Key(Box::new(call(CELL_GET, vec![held_cell.clone()])), Op::Eq, Box::new(Node::True));
+				let became_true = Node::Key(Box::new(holds), Op::And, Box::new(not_before));
+				let parts = vec![assign(WAS_WORD, call(CELL_GET, vec![held_cell.clone()])), call(CELL_SET, vec![held_cell, subject]), if_then(became_true, block(vec![body]))];
+				Node::List(parts, Bracket::Round, Separator::Semicolon)
+			}
 			ListenerWord::Once => {
 				let fired = format!("{FIRED_PREFIX}{}", self.fired);
 				self.fired += 1;
