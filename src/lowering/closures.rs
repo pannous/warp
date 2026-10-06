@@ -612,7 +612,8 @@ impl Lifting {
 		let mut captured: Vec<String> = vec![];
 		body.visit(&mut |node| {
 			if let Node::Symbol(name) = node {
-				if !params.contains(name) && self.is_variable(name, bound) && !captured.contains(name) {
+				// `t = k * 2` before any read of t binds the lambda's own local, no capture
+				if !params.contains(name) && self.is_variable(name, bound) && !captured.contains(name) && !crate::analyzer::starts_with_fresh_binding(body, name) {
 					captured.push(name.clone());
 				}
 			}
