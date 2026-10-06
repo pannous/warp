@@ -484,6 +484,8 @@ PASSED:
   ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
   ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
+  ✓ functions::test_argument_labels::a_label_names_the_argument_and_the_name_is_read_inside
+  ✓ functions::test_argument_labels::an_underscore_label_takes_the_argument_without_a_name
   ✓ functions::test_arity_overloads::a_call_takes_the_definition_of_its_argument_count
   ✓ functions::test_arity_overloads::a_count_no_definition_fits_or_two_fit_is_an_error
   ✓ functions::test_arity_overloads::an_overload_may_call_another_one
@@ -515,6 +517,7 @@ PASSED:
   ✓ functions::test_call_result_fields::counting_words_of_a_call_result_stay_counts
   ✓ functions::test_captured_containers::test_a_captured_list_element_keeps_its_kind
   ✓ functions::test_captured_containers::test_a_captured_object_field_keeps_its_kind
+  ✓ functions::test_character_results::a_returned_character_stays_a_character
   ✓ functions::test_charged_getters::a_getter_of_now_reads_the_clock_at_every_use
   ✓ functions::test_charged_getters::a_getter_over_constants_gets_the_needless_charging_note
   ✓ functions::test_charged_getters::a_getter_reads_the_current_value_at_every_use
@@ -765,6 +768,7 @@ PASSED:
   ✓ functions::test_return_type_forms::a_colon_result_type_before_a_block_body
   ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_block_body
   ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_colon_body
+  ✓ functions::test_return_type_forms::named_arguments_reach_a_function_with_a_result_type
   ✓ functions::test_runtime_kind_arithmetic::a_def_body_reads_fields_of_its_parameters
   ✓ functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
@@ -772,6 +776,8 @@ PASSED:
   ✓ functions::test_several_arguments::test_a_scalar_function_broadcasts_over_them
   ✓ functions::test_several_arguments::test_parenthesized_arguments_keep_their_count
   ✓ functions::test_several_arguments::test_several_arguments_are_one_list
+  ✓ functions::test_shadowed_log::a_user_log_of_two_arguments_is_called
+  ✓ functions::test_shadowed_log::the_library_log_to_a_base_stays
   ✓ functions::test_spaced_assign_definition::a_recursive_spaced_definition_with_equals_defines_the_function
   ✓ functions::test_specialised_variants::a_constant_argument_unrolls_the_recursion
   ✓ functions::test_specialised_variants::an_unbounded_specialisation_keeps_the_call
@@ -888,6 +894,9 @@ PASSED:
   ✓ lists::test_list_arithmetic::test_round_group_of_arithmetic_is_still_an_expression
   ✓ lists::test_list_arithmetic::test_square_list_keeps_all_items_that_are_arithmetic
   ✓ lists::test_list_arithmetic::test_square_list_of_one_arithmetic_item_is_a_list
+  ✓ lists::test_list_compound_add::a_function_is_no_number
+  ✓ lists::test_list_compound_add::a_list_plus_equals_a_list_concatenates
+  ✓ lists::test_list_compound_add::a_list_plus_equals_an_item_is_the_type_error_of_plus
   ✓ lists::test_list_number_comparison::a_list_is_not_equal_to_a_number
   ✓ lists::test_list_number_comparison::ordering_a_list_with_a_number_is_a_loud_error
   ✓ lists::test_list_of_objects::an_element_of_a_computed_list_of_objects_has_fields
@@ -2551,4 +2560,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2546 passed, 0 failed, 2546 total tested
+23 ignored, 2555 passed, 0 failed, 2555 total tested
