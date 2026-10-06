@@ -33,7 +33,7 @@ fn test_a_computed_entry_warns_where_it_is_written() {
 
 #[test]
 fn test_an_object_runs_as_code() {
-	is!("help = {print: \"there is help\"}; help!", "there is help");
+	is!("help = {print: \"there is help\"}; help!", warp::Node::Empty); // it prints; print gives nothing (issue #18)
 }
 
 #[test]

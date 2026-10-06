@@ -250,6 +250,13 @@ fn is_unindexable_keyword(node: &Node) -> bool {
 }
 /// The marker calls the parser leaves for `try X else Y` and `assert C else X`, lowered in `library_words`
 pub const TRY_MARKER: &str = "try·else";
+/// `after C return V` (wiki/thread.md) as the marker call `after·return(C, V)`, lowered by go_blocks into a waiting task
+pub const AFTER_MARKER: &str = "after·return";
+const AFTER_KEYWORD: &str = "after";
+/// `sleep 1s and print "x"`: an `and` between two statements runs them one after the other
+const AND_KEYWORD: &str = "and";
+/// Words after `and` that continue an expression rather than start a statement: `a and b or c`
+const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
@@ -531,6 +538,8 @@ pub struct WaspParser {
 	signed_list_element: Option<usize>,
 	/// Inside `do … end`: the `end` keyword closes the statement list
 	stops_at_end: bool,
+	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
+	in_command: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
 	times_loops: usize,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
@@ -777,6 +786,7 @@ impl WaspParser {
 			stops_at_else: false,
 			signed_list_element: None,
 			stops_at_end: false,
+			in_command: false,
 			times_loops: 0,
 			after_function_keyword: false,
 			elvis_operands: 0,
@@ -1028,4 +1038,9 @@ fn negate_condition(conditional: Node) -> Node {
 /// `f={it*2}` defines a function like `f:={it*2}`: a name assigned a block that uses `it`; other blocks are data
 fn is_function_block(name: &Node, block: &Node) -> bool {
 	matches!(name.drop_meta(), Node::Symbol(_)) && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) && mentions(block, "it")
+}
+
+/// A braceless call `sleep 1s`, `f 3`: a word applied to what follows it
+fn is_command(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if items.len() > 1 && matches!(items[0].drop_meta(), Symbol(_)))
 }

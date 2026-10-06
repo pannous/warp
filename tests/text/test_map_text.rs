@@ -10,7 +10,7 @@ fn a_map_has_a_text() {
 }
 
 #[test]
-fn a_map_prints_and_is_the_value_of_print() {
+fn a_map_prints() {
 	is!("p = {name:\"Joe\"}; print p; p.name", "Joe");
-	is!("x = print({a:1, b:[1, 2]}); x.a", 1);
+	is!("print({a:1, b:[1, 2]})", warp::Node::Empty); // print gives nothing (issue #18)
 }

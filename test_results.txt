@@ -706,7 +706,7 @@ PASSED:
   ✓ functions::test_typed_signatures::spaced_typed_signature
   ✓ functions::test_undefined_calls::test_declared_type_constructs
   ✓ functions::test_undefined_calls::test_paren_data_stays_data
-  ✓ functions::test_undefined_calls::test_print_returns_its_value_without_a_capability_error
+  ✓ functions::test_undefined_calls::test_print_gives_nothing_without_a_capability_error
   ✓ functions::test_undefined_calls::test_resolved_calls_are_unchanged
   ✓ functions::test_undefined_calls::test_type_constructor_arity_is_checked
   ✓ functions::test_undefined_calls::test_unresolved_call_in_function_body
@@ -1407,6 +1407,11 @@ PASSED:
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_required_fields::spaced_fields_keep_the_required_mark
+  ✓ parser::test_statement_phrases::after_reads_its_condition_up_to_return
+  ✓ parser::test_statement_phrases::after_without_parentheses_waits_for_its_condition
+  ✓ parser::test_statement_phrases::after_without_return_stays_a_call_listener
+  ✓ parser::test_statement_phrases::and_after_a_value_stays_logical
+  ✓ parser::test_statement_phrases::and_between_statements_sequences_them
   ✓ parser::test_statement_sequence::test_statement_sequence_with_grouped_list_in_the_middle
   ✓ parser::test_statement_terminators::semicolon_at_line_end_separates_statements_like_the_newline
   ✓ parser::test_statement_terminators::semicolon_inside_a_line_still_groups
@@ -1493,6 +1498,7 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
+  ✓ programs::test_paint::paint_without_a_canvas_is_a_loud_error
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
   ✓ programs::test_samples::test_ackermann
@@ -1636,19 +1642,21 @@ PASSED:
   ✓ text::test_library_unicode::sort_still_orders_ints
   ✓ text::test_library_unicode::upper_and_lower_cover_unicode_scripts
   ✓ text::test_map_text::a_map_has_a_text
-  ✓ text::test_map_text::a_map_prints_and_is_the_value_of_print
+  ✓ text::test_map_text::a_map_prints
   ✓ text::test_nested_list_text::a_count_takes_the_indexed_element
   ✓ text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal
   ✓ text::test_nested_list_text::an_index_is_an_atom_so_a_method_applies_to_the_element
   ✓ text::test_print_all_characters::print_all_characters_prints_each
   ✓ text::test_print_arguments::print_joins_its_arguments_with_a_space
-  ✓ text::test_print_arguments::print_of_a_braceless_call_is_worth_its_result
+  ✓ text::test_print_arguments::print_of_a_braceless_call_gives_nothing
   ✓ text::test_print_arguments::print_of_a_braceless_call_prints_its_result
-  ✓ text::test_print_arguments::print_of_several_arguments_is_worth_the_printed_text
+  ✓ text::test_print_arguments::print_of_several_arguments_gives_nothing
   ✓ text::test_print_arguments::print_without_arguments_writes_an_empty_line
+  ✓ text::test_print_gives_nothing::print_gives_nothing
+  ✓ text::test_print_gives_nothing::the_console_shows_no_value_after_a_print
   ✓ text::test_print_juxtaposed::a_text_next_to_values_prints_joined
   ✓ text::test_print_juxtaposed::the_joined_text_is_written
-  ✓ text::test_print_lists::print_of_a_list_is_worth_the_list
+  ✓ text::test_print_lists::print_of_a_list_gives_nothing
   ✓ text::test_print_lists::print_of_a_list_writes_its_text
   ✓ text::test_print_type_error::print_of_a_type_error_reports_that_error
   ✓ text::test_print_type_error::text_times_number_says_how_to_repeat_a_text
@@ -1795,6 +1803,7 @@ PASSED:
   ✓ types::test_records::test_parameter_passed_a_text_by_recursion
   ✓ types::test_records::test_recursive_list_function
   ✓ types::test_records::test_returns
+  ✓ types::test_sized_array_values::a_computed_count_before_a_type_word_is_a_typed_array
   ✓ types::test_spaced_construction::test_entry_named_like_a_variable_keeps_its_name
   ✓ types::test_spaced_construction::test_field_of_a_declared_type_reads_at_run_time
   ✓ types::test_spaced_construction::test_spaced_construction_of_a_declared_type
@@ -2368,4 +2377,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2363 passed, 0 failed, 2363 total tested
+23 ignored, 2372 passed, 0 failed, 2372 total tested

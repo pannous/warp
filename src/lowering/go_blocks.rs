@@ -174,8 +174,13 @@ fn task_phrases_inside(guarded: Node, phrases: &Phrases) -> Node {
 	}
 }
 
-/// `after C return V`, written flat or in spaced groups: C and V
+/// `after C return V`: C and V, from the parser's `after·return(C, V)` or written flat or in spaced groups
 fn after_parts(items: &[Node]) -> Option<(Node, Node)> {
+	if let [marker, condition, value] = items {
+		if marker.drop_meta().name() == crate::wasp_parser::AFTER_MARKER {
+			return Some((condition.clone(), value.clone()));
+		}
+	}
 	let words: Vec<Node> = items.iter().flat_map(|item| match item.drop_meta() {
 		Node::List(inner, Bracket::None, Separator::Space) => inner.clone(),
 		other => vec![other.clone()],

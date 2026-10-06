@@ -53,7 +53,7 @@ fn running_a_run_time_block_is_the_eval_effect() {
 #[test]
 fn a_run_time_block_gets_no_capabilities() {
 	// P88 (user 2026-10-05): every capability is granted for now, a block run at run time prints
-	crate::is!("y = data print(\"hi\"); interpret y", "hi");
+	crate::is!("y = data print(\"hi\"); interpret y", warp::Node::Empty); // it prints; print gives nothing (issue #18)
 }
 
 // Step 4: a compiled module that runs blocks at run time says it needs a warp host
