@@ -39,3 +39,5 @@ mod test_hash_range_slices;
 mod test_hash_range_warning;
 mod test_map_starts;
 mod test_counting_word_variables;
+mod test_float_array_writes;
+mod test_deep_index_assignment;

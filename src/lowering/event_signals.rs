@@ -3,8 +3,10 @@
 //! handlers of a name become one function `on·stop·the·machine(event)`, defined where the first of them is written and
 //! declaring `global` the main-level variables they mention, so a raise inside a function reaches them too; each raise
 //! of the name is its call. A raise whose name no handler listens to stays the exception (try catches it).
-//! Page events (`on click {…}`, phase 7) get their handler function without a raise: the playground keeps the program
-//! after main and calls the exported `on·click` when the page raises it; natively nothing does, which a warning says.
+//! Page events (phase 7): `on click {…}` and `on key {…}` are kept without a raise and get the wrapper
+//! `on·click·node([event])` (declarations::with_node_wrappers): the browser playground calls it when the page sees the
+//! event (web/playground/worker.js); natively nothing does, which a warning says. System events (`on interrupt`) are
+//! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
 use crate::declarations::{handler_parts, word};
 use crate::node::{Bracket, Node, Separator};
@@ -24,8 +26,10 @@ const FUNCTION_TEMPLATE: &str = "handler(event) := {}";
 const PARAMETERLESS_TEMPLATE: &str = "handler() := {}";
 const TEMPLATE_NAME: &str = "handler";
 const EVENT_WORD: &str = "event";
-/// The events the playground page raises (web/playground/host.js PAGE_EVENTS)
-pub const PAGE_EVENTS: [&str; 1] = ["click"];
+/// The events of the page that call their handlers from outside the program
+pub const PAGE_EVENTS: [&str; 2] = ["click", "key"];
+/// The output binding of a program with page events: its last line when that is a name, read anew after each handler
+pub const PAGE_VALUE: &str = "page·value";
 /// The events the system raises: the runtime calls their handlers (notes/system_signals.md)
 pub const SYSTEM_EVENTS: [&str; 1] = ["interrupt"];
 
@@ -57,16 +61,21 @@ pub fn lower(program: Node) -> Node {
 	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
 	let lowered = statements.into_iter().enumerate().filter_map(|(index, statement)| match first_handler.get(&index) {
-		Some(name) => {
-			// a page event's handler that never reads `event` takes nothing: the page calls it with ø, which it ignores
-			let takes_event = raised.contains(name) || bodies[name].iter().any(|body| symbols(body).iter().any(|word| word == EVENT_WORD));
-			Some(function_with_globals(&handler_function_name(name), takes_event, &bodies[name], &main_variables))
-		}
+		Some(name) => Some(function_with_globals(&handler_function_name(name), reads_event(&bodies[name]), &bodies[name], &main_variables)),
 		None if handler_lines.contains(&index) => None,
 		None => Some(statement),
 	});
 	let lowered: Vec<Node> = lowered.map(|statement| raises_as_calls(statement, &bodies)).collect();
-	Node::List(lowered, bracket, separator)
+	let page_handlers: std::collections::BTreeMap<String, usize> = PAGE_EVENTS.iter().filter(|event| bodies.contains_key(**event)).map(|event| (handler_function_name(event), usize::from(reads_event(&bodies[*event])))).collect();
+	let mut lowered = lowered;
+	if let Some(name) = lowered.last().filter(|_| !page_handlers.is_empty()).and_then(|last| match last.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		_ => None,
+	}) {
+		let binding = function_with_globals(PAGE_VALUE, false, &[Node::Symbol(name)], &main_variables);
+		lowered.insert(lowered.len() - 1, binding);
+	}
+	crate::declarations::with_node_wrappers(Node::List(lowered, bracket, separator), &page_handlers)
 }
 
 /// `on alarm {body}`, `on stop the machine {body}`, `on alarm: body`: the event's name and the body
@@ -122,7 +131,8 @@ pub fn handled_signals(lowered: &Node) -> Vec<(String, String)> {
 	lowered.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
 		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
 			let function = items.first().map(word).unwrap_or_default();
-			if let Some(event) = function.strip_prefix(HANDLER_PREFIX) {
+			// a page event's wrapper on·click·node (with_node_wrappers) is no handler of its own
+			if let Some(event) = function.strip_prefix(HANDLER_PREFIX).filter(|_| !function.ends_with(crate::declarations::NODE_WRAPPER_SUFFIX)) {
 				handled.push((event.replace(NAME_JOINER, " "), function.clone()));
 			}
 		}
@@ -148,10 +158,17 @@ pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Nod
 	Node::Key(Box::new(head), op, Box::new(Node::List(statements, Bracket::Curly, Separator::Semicolon)))
 }
 
-/// Each `raise name{data}` with handlers is the call `on·name(data)`
+/// Handlers take `event` only when a body reads it: an unread parameter has no type a caller from outside (the page)
+/// could pass a value as
+fn reads_event(bodies: &[Node]) -> bool {
+	bodies.iter().flat_map(symbols).any(|name| name == EVENT_WORD)
+}
+
+/// Each `raise name{data}` with handlers is the call `on·name(data)`, `on·name()` when no handler reads `event`
 fn raises_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>) -> Node {
 	if let Some((name, data)) = raise(&node).filter(|(name, _)| handled.contains_key(name)) {
-		let call = Node::List(vec![Node::Symbol(handler_function_name(&name)), data], Bracket::Round, Separator::None);
+		let arguments = if reads_event(&handled[&name]) { vec![data] } else { vec![] };
+		let call = Node::List([vec![Node::Symbol(handler_function_name(&name))], arguments].concat(), Bracket::Round, Separator::None);
 		// `{ raise alarm }` is a block of one statement: it stays a block
 		let braced = matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
 		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };

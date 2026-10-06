@@ -9,6 +9,8 @@ const COMPILER_URL = new URL(self.location.href).searchParams.get("compiler") ??
 self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same compiler (host.js blockCompiler)
 
 let compiler; // the compiler instance's exports
+let live; // the run whose page events are handled (host.js runProgram), until the next run
+const PAGE_VALUE = "page·value";
 let panicMessage; // the compiler's last panic message
 
 const post = message => self.postMessage(message);
@@ -16,6 +18,10 @@ const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
+	listen: (holder, events) => {
+		live = holder;
+		post({ type: "listening", events });
+	},
 	panicked: message => { panicMessage = message; },
 };
 
@@ -73,10 +79,27 @@ registerForeignRuntime("python", {
 	prepare: code => USES_PYTHON.test(code) && loadPython().catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),
 });
 
+// a page event (playground.js): the live run's handler, its value shown as the compiler shows a program's
+function handleEvent({ event, detail }) {
+	if (!live) return;
+	const handled = runPageEvent(live, hooks, event, detail);
+	// the output binding (src/lowering/event_signals.rs PAGE_VALUE): the program's last name read anew, else what the handler gave
+	const binding = live.exports[PAGE_VALUE];
+	const outcome = handled.result && binding ? outcomeOf(live, hooks, binding) : handled;
+	const outcomeText = passText(JSON.stringify(outcome));
+	const length = compiler.web_show(...outcomeText);
+	const value = compilerText(compiler.web_report(), length);
+	compiler.web_free(...outcomeText);
+	post({ type: "handled", value, error: outcome.result === undefined });
+}
+
 self.onmessage = async ({ data }) => {
 	await ready;
+	if (data.event) return handleEvent(data);
+	live = undefined;
 	if (!compiler) await loadCompiler();
 	await prepareForeignRuntimes(data.code); // host.js: a runtime that loads asynchronously loads before the run
+	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
 	const started = performance.now();
 	const report = evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

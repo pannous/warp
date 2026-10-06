@@ -634,11 +634,19 @@ const WRAPPER_RESULT: &str = "r·node";
 const WRAPPER_ARGUMENTS: &str = "arguments·node";
 
 /// The program with the wrappers of the started functions (name → parameter count) defined first
-fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, usize>) -> Node {
+pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, usize>) -> Node {
+	// a page event's handler has its wrapper already (event_signals.rs), a task may want it too
+	let mut defined = std::collections::HashSet::new();
+	node.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
+		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
+			defined.insert(word(&items[0]));
+		}
+	});
+	let wrapped: Vec<(&String, &usize)> = wrapped.iter().filter(|(function, _)| !defined.contains(&format!("{function}{NODE_WRAPPER_SUFFIX}"))).collect();
 	if wrapped.is_empty() {
 		return node;
 	}
-	let items: Vec<Node> = wrapped.iter().map(|(function, count)| {
+	let items: Vec<Node> = wrapped.into_iter().map(|(function, count)| {
 		let arguments = Node::Symbol(WRAPPER_ARGUMENTS.to_string());
 		// declared a list: a function of no arguments leaves it unused, which would make it an Int (the host passes a Node)
 		let declared = Node::Key(Box::new(arguments.clone()), Op::Colon, Box::new(Node::Symbol("list".to_string())));
