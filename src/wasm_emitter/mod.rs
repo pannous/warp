@@ -220,6 +220,7 @@ pub struct WasmGcEmitter {
 	typed_structs: HashMap<String, String>, // instance variables of the body being emitted held as GC structs, with their class (struct_backend.rs)
 	instance_types: HashMap<String, struct_backend::InstanceType>, // the `P·instance` struct type of each class
 	struct_abi: HashMap<String, Vec<Option<String>>>, // the parameters user functions take as structs, by class (struct_backend.rs)
+	struct_results: HashMap<String, String>, // the user functions giving back a struct, with its class (struct_backend.rs)
 	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies
 	moved_lists: Vec<(String, String)>,
 	/// The array calling convention of the user functions that have one (list_abi.rs)
@@ -285,6 +286,7 @@ impl WasmGcEmitter {
 			typed_structs: HashMap::new(),
 			instance_types: HashMap::new(),
 			struct_abi: HashMap::new(),
+			struct_results: HashMap::new(),
 			moved_lists: Vec::new(),
 			list_abi: HashMap::new(),
 			returns_list: false,
@@ -610,7 +612,7 @@ impl WasmGcEmitter {
 		self.collect_user_function_strings();
 		self.allocate_declared_globals(node);
 		self.allocate_closure_captures(node);
-		self.struct_abi = self.find_struct_abi(node);
+		(self.struct_abi, self.struct_results) = self.find_struct_abi(node);
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
 		self.emit_compare_dispatcher();

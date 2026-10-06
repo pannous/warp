@@ -115,8 +115,35 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   addressed by the user): `a ?? b` is a unless a is ø (only ø, not 0/false); Kotlin's `?:` is not added.
 - P126 (warp-32, follows P123) texts inside containers are quoted everywhere (print, interpolation, string()):
   `P{x:1 name:"a"}`, `["a" "b"]`; a top-level `print "a"` still writes a.
+  Follow-ups (warp-ab), settled by P126's read-back rule without a new question: a character in a container prints
+  with double quotes too (`["c"]`, since one-letter "a" parses as a character), and a `"` inside a quoted text is
+  escaped as `\"`.
 - P127 (warp-32, classes) class int fields are fast i64 struct fields; a write that does not fit is a loud run-time
   error "x of Point is an int field: 2^70 does not fit in 64 bits; declare it x:bigint or x:number".
+  Moot as implemented (warp-32): int fields are i64 slots carrying warp's exact-int encoding, so 2^70 is kept
+  exactly; no overflow, no error. The speed goal is met without a fixed width, so no follow-up question.
+- P129 (signals, branch signals-broadcast) user: "both above and also sent Signal chat or just send "file system
+  full" if there is no value". Both `broadcast value on "chat"` and `send value to "chat"` (`to` read as the target
+  after `send`, not a range) reach `on message from "chat" {…}` in every program on this machine; without a channel
+  name both use "warp". Interpreted (undoable): `send signal chat` / `send "file system full"` without a value sends a
+  named signal with no payload, received by `on "file system full" {…}`. P129b (user: "Yes, build it now"): named
+  events cross programs: `broadcast stop the machine{…}` reaches `on stop the machine from "chat" {…}`.
+- P130 (card footgun-pi) user: "loud error, if it was declared constant before which it should be": pi and the other
+  named constants are declared constants, so `pi = 4` is a compile error "pi is a constant; fix: another name".
+  Assumed (undoable): a class field named pi (`class circle{pi = 3}`) is the class's own field, not an assignment to
+  the constant, and works without a message.
+- P131 (card int-declaration) an int variable or field refuses a fraction loudly: `x:int = 3; x += 0.5` and
+  `class P{x:int}; P(0.5)` → "x of P is an int field, got 0.5 (a fraction)", a compile-time error for literals, a
+  run-time error for computed values.
+- P132 (card function-values) `{f: x => x * 2}` is the field f holding a lambda; a type word or capitalized word
+  after the colon (`{p: Person => …}`) still makes a typed lambda.
+- P133 `|x| x*2` at the start of an expression is a lambda (Rust/Ruby; `|a, b| a*b`).
+- P134 `on exit {…}` runs once when the program ends (main returns, `exit(code)`, ctrl-c), `event` = the exit code.
+- P135 `on every day at 9:00 {…}`; `at 9:00 {…}` runs once.
+- P136 "ittt" rules over system values (`whenever battery < 20% {…}`, `whenever online {…}`) are split into one card
+  per value (battery, network, dark mode, clipboard), built later.
+- P137 tests/numbers/test_angle.rs test_function_params expects the Int 9 for `f(x)=x*x;f(3)` (the text "9" was a
+  C++-port artifact) and is un-ignored.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.

@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 use wasm_encoder::*;
 use Instruction as I;
 
-const RETURN: &str = "return";
+pub(super) const RETURN: &str = "return";
 
 /// The list calling convention of one function
 #[derive(Clone, Default, Debug)]
@@ -67,6 +67,15 @@ fn results(body: &Node) -> Vec<&Node> {
 		}
 	}
 	found
+}
+
+/// The statements of a function body: those of its block, `{a; b}` or `a; b`, or the body itself
+pub(super) fn body_statements(body: &Node) -> Vec<Node> {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) => items.clone(),
+		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
+		other => vec![other.clone()],
+	}
 }
 
 /// The last value of a block `(…; x)`
@@ -214,12 +223,14 @@ impl WasmGcEmitter {
 impl WasmGcEmitter {
 	/// The body of a function returning a $NodeList: its statements, then its last value as the array
 	pub(super) fn emit_list_abi_body(&mut self, func: &mut Function, body: &Node) {
-		let statements = match body.drop_meta() {
-			Node::List(items, Bracket::Curly, _) => items.clone(),
-			other => vec![other.clone()],
-		};
+		self.emit_body_then(func, body, Self::emit_list_abi_value);
+	}
+
+	/// A function body: its statements, then its last value as `emit_last` gives it (a `return` returns)
+	pub(super) fn emit_body_then(&mut self, func: &mut Function, body: &Node, emit_last: impl FnOnce(&mut Self, &mut Function, &Node)) {
+		let statements = body_statements(body);
 		let Some((last, before)) = statements.split_last() else {
-			self.emit_list_abi_value(func, &Node::Empty);
+			emit_last(self, func, &Node::Empty);
 			return;
 		};
 		for statement in before {
@@ -235,7 +246,7 @@ impl WasmGcEmitter {
 		if is_return {
 			self.emit_node_instructions(func, last); // returns, leaving nothing reachable
 		} else {
-			self.emit_list_abi_value(func, last);
+			emit_last(self, func, last);
 		}
 	}
 }
