@@ -6,25 +6,30 @@
 //! a listener on a shared value, and adds a timer `on every 1000 ms {}` so a `warp run` stays and looks once a second.
 //! `read` (after poll_shared) makes each marked symbol the host call.
 //! `whenever battery < 20% {…}` arrives as `battery < (20 % {…})`: a percent compared with the battery is that number.
+//! The clipboard: `on clipboard change {…}` is `on change` of its change count (`clipboard count`), which reads no
+//! content; `clipboard` is its text, the host call `clipboard_text()` made where the program reads it, never polled.
 
 use crate::declarations::word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
-use warp_runtime::host_words::{BATTERY, SYSTEM_VALUE, SYSTEM_VALUES};
+use warp_runtime::host_words::{BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, SYSTEM_VALUE, SYSTEM_VALUES};
 
 /// The mark of a system value read between the two passes
 pub const SYSTEM_PREFIX: &str = "system·";
 const LISTENER_WORDS: [&str; 3] = ["whenever", "once", "on"];
+const ON_WORD: &str = "on";
+const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 /// The timer that keeps a listening program and wakes it for the checks
 const KEEP_LISTENING: &str = "on every 1000 ms {}";
 
 pub fn name(program: Node) -> Node {
 	let bound = bound_names(&program);
-	let names: Vec<(&str, bool)> = SYSTEM_VALUES.into_iter().filter(|(name, _)| !bound.contains(*name)).collect();
+	let names: Vec<(&str, bool)> = SYSTEM_VALUES.into_iter().chain([(CLIPBOARD, false)]).filter(|(name, _)| !bound.contains(*name)).collect();
 	if names.is_empty() {
 		return program;
 	}
+	let program = if bound.contains(CLIPBOARD) { program } else { clipboard_listeners(program) };
 	let marked = mark(program, &names);
 	if marked_names(&marked).is_empty() {
 		return marked;
@@ -78,7 +83,11 @@ fn bound_names(program: &Node) -> HashSet<String> {
 
 /// Each read of a system value as its mark; a field name (`{battery: 5}`, `p.battery`) is no read
 fn mark(node: Node, names: &[(&str, bool)]) -> Node {
-	let marked = |name: &str| names.iter().any(|(system, _)| *system == name).then(|| Node::Symbol(format!("{SYSTEM_PREFIX}{name}")));
+	let marked = |name: &str| match names.iter().any(|(system, _)| *system == name) {
+		false => None,
+		true if name == CLIPBOARD => Some(Node::List(vec![Node::Symbol(CLIPBOARD_TEXT.to_string())], Bracket::Round, Separator::None)),
+		true => Some(Node::Symbol(format!("{SYSTEM_PREFIX}{name}"))),
+	};
 	match node {
 		Node::Symbol(name) => marked(&name).unwrap_or(Node::Symbol(name)),
 		Node::Key(left, op @ (Op::Colon | Op::Dot), right) => {
@@ -106,6 +115,23 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 			}
 		}
 		other => other.map_children(|child| mark(child, names)),
+	}
+}
+
+/// `on clipboard change {…}`: `on change` of the clipboard's change count
+fn clipboard_listeners(node: Node) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			let listens = matches!(items.as_slice(), [on, clipboard, change, ..] if word(on) == ON_WORD && word(clipboard) == CLIPBOARD && CHANGE_WORDS.contains(&word(change).as_str()));
+			let items: Vec<Node> = items.into_iter().map(clipboard_listeners).collect();
+			if !listens {
+				return Node::List(items, bracket, separator);
+			}
+			let listener = [Node::Symbol(ON_WORD.to_string()), Node::Symbol(CHANGE_WORDS[0].to_string()), Node::Symbol(CLIPBOARD_COUNT.to_string())];
+			Node::List(listener.into_iter().chain(items.into_iter().skip(3)).collect(), bracket, separator)
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(clipboard_listeners(*node)), data },
+		other => other,
 	}
 }
 
