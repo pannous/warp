@@ -104,9 +104,16 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   P145 (user): `x <- 3` assigns with a got-it note "write x = 3", the cramped `x<-3` (and `x<- 3`) is an error naming
   `x = 3` and `x < -3`, `x < -3` and `x <-3` compare (scanning.rs `left_arrow_assignment`). `<-` stays reserved: no
   docs or new tests beyond P145's.
+- Batch 20: Elixir `fn a, b -> body end` (parser atoms.rs `parse_elixir_function`, needs `->` on the line and a
+  closing `end`; Rust's `fn(x) -> i32 { … }` stays); a dot call on a number `f.(4)` is the call (Julia/Elixir
+  broadcast a scalar as itself). Round 5 (probes/function_calls_round5.md, all pass): typed Kotlin lambdas
+  `{ a: Int, b: Int -> a + b }` and Swift closures `{ (x: Int) -> Int in x * x }` (lambdas.rs `arrow_parts`); Ruby
+  stabby `->(x) { … }` (parser atom), `lambda { |x| … }` / `proc { … }` and `f.call(args)` (welcome_forms.rs); Lua
+  `local` a foreign modifier; Crystal `def sq(x : Int) : Int; …; end` (end_definitions gives the Kotlin head shape);
+  Kotlin `listOf`/`arrayOf`/`mutableListOf` are list literals (library_words.rs `list_constructor_calls`).
 
 ## Open
-- Board cards: functions-elixir (mine, `fn x -> … end`); functions-ruby-yield (warp-93); functions-sort-op,
+- Board cards: functions-ruby-yield (warp-93); functions-sort-op,
   functions-key, functions-foreach, functions-lambda-defaults (warp-14). Cases: probes/function_calls_round4.md.
 
 ## Python and Ruby definitions (cards functions-python, functions-ruby-def)
