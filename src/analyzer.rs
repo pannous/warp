@@ -1444,7 +1444,7 @@ const MAP_TYPE_PREFIX: &str = "map of ";
 const NODE_LIST_TYPE: &str = "list of node";
 const LIST_WORD: &str = "list";
 /// Between a variable and the name of a temporary made for it (`xs·range`, `xs·item`, `m·removed`)
-const TEMPORARY_SEPARATOR: &str = "·";
+pub const TEMPORARY_SEPARATOR: &str = "·";
 /// Statements that name functions or modules instead of calling them
 const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 const LIST_OF_PREFIX: &str = "list of ";
