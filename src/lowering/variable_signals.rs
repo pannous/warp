@@ -625,8 +625,13 @@ pub(crate) fn root_variable(target: &Node) -> Option<String> {
 	}
 }
 
+/// A write statement: an assignment, or a method changing the list it is called on (`xs.add(v)` is `xs = xs + [v]`)
 fn statement_write(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
+		Node::Key(list, Op::Dot, call) => match call.drop_meta() {
+			Node::List(items, _, _) if items.first().is_some_and(|method| crate::analyzer::is_list_mutating_method(&word(method))) => written_path(list),
+			_ => None,
+		},
 		Node::Key(target, op, _) => written_variable(target, *op),
 		_ => None,
 	}
