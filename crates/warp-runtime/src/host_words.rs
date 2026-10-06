@@ -17,6 +17,8 @@ pub const FILE_HANDLER_PREFIX: &str = "on·file·";
 pub const EXIT: &str = "exit";
 /// The exported handler of `on interrupt {…}` (src/lowering/event_signals.rs)
 pub const INTERRUPT_HANDLER: &str = "on·interrupt";
+/// The exported handler of `on exit {…}`, run once as the run ends (system_signals.rs run_exit_handler)
+pub const EXIT_HANDLER: &str = "on·exit";
 /// `on·every·0`: the handler of the first `on every … {…}`
 pub const TIMER_HANDLER_PREFIX: &str = "on·every·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)

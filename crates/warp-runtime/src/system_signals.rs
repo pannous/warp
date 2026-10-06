@@ -10,7 +10,7 @@
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use crate::host_words::{FILE_HANDLER_PREFIX, INTERRUPT_HANDLER, SHARED_HANDLER, TIMER_HANDLER_PREFIX};
+use crate::host_words::{EXIT_HANDLER, FILE_HANDLER_PREFIX, INTERRUPT_HANDLER, SHARED_HANDLER, TIMER_HANDLER_PREFIX};
 use std::path::PathBuf;
 use std::time::SystemTime;
 use wasmtime::{AsContextMut, Func, Instance, Result, Store, Val};
@@ -126,18 +126,46 @@ pub fn run_due_handlers<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&
 	let shared_checks = export(store, SHARED_HANDLER).map(|_| SHARED_HANDLER.to_string());
 	for name in due_handlers(handles_interrupt).into_iter().chain(shared_checks) {
 		let Some(handler) = export(store, &name) else { continue };
-		let mut arguments = vec![];
-		// a handler that reads `event` gets ø
-		if handler.ty(&*store).params().len() == 1 {
-			let empty = export(store, NEW_EMPTY).ok_or_else(|| wasmtime::Error::msg("no new_empty"))?;
-			let mut built = [Val::AnyRef(None)];
-			empty.call(&mut *store, &[], &mut built)?;
-			arguments.push(built[0]);
-		}
-		let mut results = vec![Val::I64(0); handler.ty(&*store).results().len()];
-		handler.call(&mut *store, &arguments, &mut results)?;
+		call_handler(store, handler, &mut export)?;
 	}
 	Ok(())
+}
+
+fn call_handler<S: AsContextMut>(store: &mut S, handler: Func, export: &mut impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
+	let mut arguments = vec![];
+	// a handler that reads `event` gets ø
+	if handler.ty(&*store).params().len() == 1 {
+		let empty = export(store, NEW_EMPTY).ok_or_else(|| wasmtime::Error::msg("no new_empty"))?;
+		let mut built = [Val::AnyRef(None)];
+		empty.call(&mut *store, &[], &mut built)?;
+		arguments.push(built[0]);
+	}
+	let mut results = vec![Val::I64(0); handler.ty(&*store).results().len()];
+	handler.call(&mut *store, &arguments, &mut results)
+}
+
+/// `on exit {…}`: the run ends (main returned, the timers stopped, or `exit(code)`), so on·exit runs once; an `exit`
+/// inside it ends it with that code (ended_by_exit keeps it)
+pub fn run_exit_handler<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
+	let Some(handler) = export(store, EXIT_HANDLER) else { return Ok(()) };
+	call_handler(store, handler, &mut export)
+}
+
+/// The outcome of a run and its exit handler: the handler runs after a normal end and after `exit(code)` (whose code
+/// stays, unless the handler exits with its own), never after a failure
+pub fn with_exit_handler<S: AsContextMut, R>(outcome: Result<R>, store: &mut S, export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<Option<R>> {
+	let exited = ended_by_exit(&outcome);
+	let value = match outcome {
+		Ok(value) => Some(value),
+		Err(_) if exited => None,
+		Err(error) => return Err(error),
+	};
+	let handled = run_exit_handler(store, export);
+	if ended_by_exit(&handled) {
+		return Ok(None);
+	}
+	handled?;
+	Ok(value)
 }
 
 /// Sleep for `duration`, running the handlers that come due on the way; a ctrl-c ends the sleep early

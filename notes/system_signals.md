@@ -151,6 +151,12 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   notify crate: no dependency, no thread, and a handler can only run at a check point anyway; notify (8.2 is in the
   registry) can replace the stat later if many files or directories are watched. Programs stay while a watch lives.
   The playground warns (a page has no files). Test: a_file_change_runs_its_handler.
+- `on exit {…}` (card g-3Gdo; syntax an assumption queued with the Interviewer): the exported handler `on·exit`
+  (event_signals SYSTEM_EVENTS) runs once as the run ends: after main returns and the timers stop, or at `exit(code)`,
+  whose code stays (an `exit` inside the handler sets its own); never after a failure, and not at a hard second
+  ctrl-c. warp-runtime system_signals::with_exit_handler wraps the run natively (wasm_reader, standalone executables),
+  host.js withExitHandler in the page. `event` is ø for now (the exit code would need a host-built Int).
+  Test: tests/control/test_exit_signal.rs.
 - Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, timers in the
   playground (a warning says so), `stop listening`.
 - Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the
