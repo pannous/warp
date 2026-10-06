@@ -66,6 +66,14 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   will compile it." `warp hello.wasp` compiles once, runs the program right away (output as before) and leaves the
   executable `hello` beside it (hello.exe on Windows); `build`/`compile` stay accepted as synonyms, not in the help.
   Assumed (undoable): `--wasm` and `--aot` stay for the module only. warp-f6, branch build-exe-default.
+- P104 (after P103, warp-f6, branch p102-exe-naming) a plain `warp file.wasp` always writes the small stub executable
+  (1–5 MB); without a warp-runtime stub it prints a note and writes nothing, never a ~120 MB copy of warp. `build`/
+  `compile` write the executable without running (exit 1 on failure). Worker assumptions standing: rebuild only when
+  the source is newer; a program the runtime can't carry (fetch, read, run, warn) gets "note: no executable …" and
+  runs; `--wasm`/`--aot` give the module.
+- P105 user: "We also need `warp run` which shall do the opposite": `warp run hello.wasp` runs the program and writes
+  no executable (the opposite of `build`, which writes without running). Assumed (undoable): bare `warp run` without
+  a file still opens the REPL. warp-f6, branch p102-exe-naming.
 - P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
   behind them go; no test edits. Asked by warp-40 (code-quality).
 - P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.
