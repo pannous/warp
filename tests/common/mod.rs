@@ -199,3 +199,34 @@ fn checkout_build(uplifted: &std::path::Path, prefix: &str, manifest_dir: &str, 
 		.filter(|binary| binary.is_file())
 		.max_by_key(|binary| binary.metadata().and_then(|metadata| metadata.modified()).ok())
 }
+
+/// How many calls the module of `code` makes to the function `name` (by the wasm name section)
+pub fn calls_to(code: &str, name: &str) -> usize {
+	use wasmparser::{KnownCustom, Name, Operator, Parser, Payload};
+	let bytes = warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
+	let mut index = None;
+	let mut calls = Vec::new();
+	for payload in Parser::new(0).parse_all(&bytes) {
+		match payload.expect("valid module") {
+			Payload::CustomSection(section) => {
+				if let KnownCustom::Name(names) = section.as_known() {
+					for subsection in names {
+						if let Ok(Name::Function(map)) = subsection {
+							index = map.into_iter().flatten().find(|naming| naming.name == name).map(|naming| naming.index).or(index);
+						}
+					}
+				}
+			}
+			Payload::CodeSectionEntry(body) => {
+				let mut reader = body.get_operators_reader().expect("operators");
+				while !reader.eof() {
+					if let Operator::Call { function_index } = reader.read().expect("operator") {
+						calls.push(function_index);
+					}
+				}
+			}
+			_ => {}
+		}
+	}
+	index.map_or(0, |index| calls.iter().filter(|called| **called == index).count())
+}
