@@ -65,7 +65,8 @@ JSON, wasp text). A state signal is a **variable**: nothing new to write, `x = 3
    does nothing. Every handler of an event whose listeners are named, or that has a named handler, gets a flag
    (`alarm_handler_N_listening`). `remove h from listeners of tick` where h is neither a handler of tick nor a
    variable is the compile error "h is no named listener of tick" (card event-handlers,
-   tests/control/test_event_handler_lists.rs). Open: the handlers a block subscribes at run time (below) are not listed.
+   tests/control/test_event_handler_lists.rs). `remove h from alarm` is short for `remove h from listeners of alarm`
+   unless alarm is also a variable (card g-_SgI). Open: the handlers a block subscribes at run time (below) are not listed.
    A handler inside a block subscribes each time the block runs (`for i in 1 to 3 { on tick {…} }` adds three):
    `tick_listeners = tick_listeners + [event => body]`, run by one main-level handler (subscribed_in_blocks).
    Ported cases of Svelte, Vue, Solid, RxJS, C#, Node, Qt and the DOM: probes/reactive_ports.md,

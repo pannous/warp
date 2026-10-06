@@ -359,6 +359,8 @@ fn reflected(statement: Node, listeners: &Listeners) -> Node {
 	let named = &listeners.named;
 	match words.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
 		[REMOVE_WORD, _, FROM_WORD, LISTENERS_WORD, OF_WORD, event @ ..] if listeners.is_event(&event.join(" ")) => listeners.removal(&items[1], &event.join(" ")),
+		// `remove h from alarm`: short for the above unless alarm is also a variable (card g-_SgI)
+		[REMOVE_WORD, _, FROM_WORD, event @ ..] if listeners.is_event(&event.join(" ")) && !listeners.bound.contains(&event.join(" ")) => listeners.removal(&items[1], &event.join(" ")),
 		[LISTENERS_WORD, OF_WORD, _] => match items[2].drop_meta() {
 			Node::Key(event, Op::SubAssign, removed) if listeners.is_event(&word(event)) => listeners.removal(removed, &word(event)),
 			_ if listeners.is_event(&words[2]) => listeners.list(&words[2]),

@@ -27,3 +27,11 @@ fn removing_an_unknown_listener_is_a_compile_error() {
 	fails_with("on tick {1}; remove h from listeners of tick; emit tick", "h is no named listener of tick");
 	fails_with("h = on alarm {1}; on tick {2}; remove h from listeners of tick; emit tick", "h is no named listener of tick");
 }
+
+// card g-_SgI: `remove h from alarm` is short for `remove h from listeners of alarm`
+#[test]
+fn a_listener_is_removed_from_the_event_itself() {
+	is!("n = 0; h = on alarm {n += 1}; on alarm {n += 10}; remove h from alarm; emit alarm; n", 10);
+	is!("n = 0; on alarm {n += 1}; h = on alarm {n += 10}; remove h from alarm; count listeners of alarm", 1);
+	fails_with("h = on alarm {1}; on tick {2}; remove h from tick; emit tick", "h is no named listener of tick");
+}
