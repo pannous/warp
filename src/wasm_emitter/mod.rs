@@ -1069,7 +1069,11 @@ impl WasmGcEmitter {
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, node, 0);
 		self.emit_witness_installation(&mut func);
+		// a program with `on interrupt {…}` watches for ctrl-c from its start and takes one that came at its end
+		let signal_poll = self.ffi_func_index(crate::host::SIGNAL_POLL);
+		signal_poll.iter().for_each(|poll| { func.instruction(&I::Call(*poll)); });
 		self.emit_node_instructions(&mut func, node);
+		signal_poll.iter().for_each(|poll| { func.instruction(&I::Call(*poll)); });
 		func.instruction(&I::End);
 
 		self.code.function(&func);
