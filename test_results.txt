@@ -2255,6 +2255,7 @@ PASSED:
   ✓ welcoming::test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
   ✓ welcoming::test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
   ✓ welcoming::test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
+  ✓ welcoming::test_index_hint_simple::only_a_simple_index_gets_the_hash_hint
   ✓ welcoming::test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns
   ✓ welcoming::test_it_shadow_warning::a_loop_it_still_shadows_the_function_it
   ✓ welcoming::test_it_shadow_warning::a_loop_it_without_a_function_it_does_not_warn
@@ -2397,4 +2398,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2392 passed, 0 failed, 2392 total tested
+23 ignored, 2393 passed, 0 failed, 2393 total tested
