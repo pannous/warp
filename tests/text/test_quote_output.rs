@@ -1,9 +1,9 @@
 //! Printed and serialized strings use the canonical quote of `Style.quotes`; one-character codepoints keep their single quotes
+use crate::is;
 use std::sync::Mutex;
 use warp::normalize::*;
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::{parse, WaspParser};
-use warp::*;
 
 /// The style is global: tests that read or swap it run one at a time
 static GLOBAL_STYLE: Mutex<()> = Mutex::new(());

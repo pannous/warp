@@ -1,7 +1,8 @@
 // `x | f` is `f(x)` when f names a function (D6: `|` dispatches on its operands, wiki/pipe.md); between values it
 // stays the logical or. It binds below a braceless call: `square 2 | root` is `root(square(2))`, `fetch url | trim`
 // trims the fetched text
-use warp::{ints, is};
+use warp::ints;
+use crate::is;
 
 #[test]
 fn a_bar_before_a_function_pipes_the_value_into_it() {

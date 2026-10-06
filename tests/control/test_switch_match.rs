@@ -1,7 +1,7 @@
 //! `switch subject {key: body …}` is map indexing that executes: the chosen body runs, `default:` catches the rest
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_switch_picks_the_case_of_its_subject() {

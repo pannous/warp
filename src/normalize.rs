@@ -926,7 +926,6 @@ fn check_items(items: &[Node], positioned: &Node) {
 
 #[cfg(test)]
 mod tests {
-	use crate::is;
 	use super::*;
 
 	#[test]
@@ -959,7 +958,7 @@ mod tests {
 
 	#[test]
 	fn test_hint_position() {
-		is!("'abc'", "abc");// hint:
+		assert_eq!(crate::wasm_emitter::eval("'abc'"), "abc");// hint:
 		// Clear position
 		clear_hint_position();
 		assert_eq!(position_string(), "");

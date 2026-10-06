@@ -1,7 +1,7 @@
 //! D9 (user, 2026-10-03): every function has a suffix form (`square 2 == 2 squared`, wiki/function.md); an ungrouped mix
 //! with infix operators (`1+2 squared`) asks `1+(2 squared)` or `(1+2) squared`
+use crate::is;
 use crate::common::fails_with;
-use warp::*;
 
 const SQUARE: &str = "square:=it*it; ";
 
@@ -44,15 +44,15 @@ fn a_variable_is_no_suffix_form() {
 
 #[test]
 fn library_suffix_words() {
-	warp::is!("3 squared", 9);
-	warp::is!("2 cubed", 8);
-	warp::is!("xs=[3 1 2]; xs sorted", warp::ints(vec![1, 2, 3]));
-	warp::is!("[1 2] reversed", warp::ints(vec![2, 1]));
-	warp::is!("x = 4; x squared + 1", 17);
+	crate::is!("3 squared", 9);
+	crate::is!("2 cubed", 8);
+	crate::is!("xs=[3 1 2]; xs sorted", warp::ints(vec![1, 2, 3]));
+	crate::is!("[1 2] reversed", warp::ints(vec![2, 1]));
+	crate::is!("x = 4; x squared + 1", 17);
 }
 
 #[test]
 fn a_user_function_or_variable_takes_the_suffix_word() {
-	warp::is!("square(x):=x*x*10; 3 squared", 90);
-	warp::is!("sorted = 3; sorted", 3);
+	crate::is!("square(x):=x*x*10; 3 squared", 90);
+	crate::is!("sorted = 3; sorted", 3);
 }

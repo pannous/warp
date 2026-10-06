@@ -1,7 +1,7 @@
 // In `for x in xs`, `it` names the loop variable too (wiki/plural.md `for word in text: print it`, wiki/for.md); a block
 // or lambda inside the body keeps its own `it`. A symbol prints its name at run time (it was "print of a Symbol has no
 // runtime text yet")
-use warp::*;
+use crate::is;
 
 #[test]
 fn it_is_the_loop_variable() {

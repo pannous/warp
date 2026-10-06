@@ -2,7 +2,7 @@
 //! `T:{…}` is plain data; the two are not equal (wiki/constructor.md, data.md "Significant colon").
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const POINT: &str = "class point{x:int y:int}; ";
 

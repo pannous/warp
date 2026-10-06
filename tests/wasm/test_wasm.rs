@@ -5,7 +5,7 @@ use warp::wasm_emitter::eval;
 use warp::wasp_parser::parse;
 use warp::Node;
 use warp::Node::{Empty, False, True};
-use warp::{eq, is, skip};
+use crate::{is, eq, skip};
 
 #[test]
 fn test_range() {

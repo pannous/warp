@@ -1,6 +1,6 @@
 //! A type declaration runs nothing: the statements around it still run
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn variables_assigned_next_to_a_type_declaration_keep_their_values() {

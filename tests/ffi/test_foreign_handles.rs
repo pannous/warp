@@ -1,6 +1,6 @@
 //! A value of another runtime without a JSON form stays there behind an id, a handle `{$handle: id, type, text}`; a
 //! member of a variable holding one, or of a chained call, asks that runtime (src/foreign.rs, notes/stdlib_connectors.md)
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_a_js_handle() {

@@ -1,5 +1,5 @@
 // `try X else Y` around an index of a value that may be no list, and around a float value; an if with a float branch
-use warp::*;
+use crate::is;
 
 #[test]
 fn indexing_what_may_be_no_list_falls_back() {

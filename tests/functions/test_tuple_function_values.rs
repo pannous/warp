@@ -1,5 +1,5 @@
 // A function returning a tuple passed as a function value (closures.rs adapters) still destructures
-use warp::is;
+use crate::is;
 
 #[test]
 fn tuple_functions_as_values() {

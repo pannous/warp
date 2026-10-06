@@ -1,5 +1,5 @@
 //! Data as scope (Decided #6): a data key is a variable of its block; a hyphenated name of variables without a key subtracts
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_kebab_keys_are_read_back() {

@@ -1,7 +1,7 @@
 //! #26 (user decision 2026-10-03, "Extend all"): upper/lower map all of Unicode's simple case pairs, sort orders any
 //! comparable values (ints, floats, texts), reverse works on text by code points.
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn upper_and_lower_cover_unicode_scripts() {

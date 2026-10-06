@@ -1,4 +1,4 @@
-use warp::skip;
+use crate::skip;
 use warp::node::data;
 use warp::wasp_parser::parse;
 use warp::*;

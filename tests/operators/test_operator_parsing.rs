@@ -2,7 +2,8 @@
 //! (condensed from probe_operators.rs, probe_precedence.rs and probe_increment.rs)
 use warp::node::Node;
 use warp::wasp_parser::parse;
-use warp::{is, Op};
+use warp::Op;
+use crate::is;
 
 fn top_operator(node: &Node) -> Option<Op> {
 	match node {

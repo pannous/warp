@@ -1,5 +1,5 @@
 // A comma tuple `(y, 4)` is a value of its elements: assigned whole (not the call y(4)) and compared element by element
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_tuple_with_a_variable_is_assigned_whole() {

@@ -1,7 +1,7 @@
 //! Real closures: a lambda or function is a value (a GC struct holding a typed function reference and its captured values, captured
 //! by value) that can be stored, passed, returned and called later. Compile-time specialisation stays where the function is known.
+use crate::is;
 use warp::wasm_emitter::eval;
-use warp::*;
 use crate::common::fails_with;
 
 fn printed(code: &str) -> String {

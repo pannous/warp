@@ -1,5 +1,6 @@
 // The pipeline `xs |> f(a)` is `f(xs, a)` and `xs |> f` is `f(xs)` (F#, Elixir, wiki/Purpose.md), also across lines
-use warp::{ints, is};
+use warp::ints;
+use crate::is;
 
 #[test]
 fn a_pipeline_calls_each_stage_with_the_value() {

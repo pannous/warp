@@ -1,5 +1,5 @@
 //! Wiki row 29 (mutable.md): `add "c" to x` and `x.add("c")` of a text variable grow the text; of a list they append
-use warp::is;
+use crate::is;
 use warp::wasp_parser::parse;
 
 #[test]

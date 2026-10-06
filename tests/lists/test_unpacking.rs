@@ -3,7 +3,7 @@
 //! (was probe_destructuring.rs; promoted unchanged, no case duplicated elsewhere)
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn unpack_tuple_values() {

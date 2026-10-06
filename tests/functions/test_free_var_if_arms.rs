@@ -1,6 +1,10 @@
 // Free Int vars shared across if condition and then-arm (g-rT0c): without their kinds in return-kind inference the
 // arm is typed Symbol/Text, the function returns a Node, and a numeric `+` of two calls traps. Fold can hide this by
 // inlining a constant free var; these cases stay non-foldable (or then-only) so the typed path is what is tested.
+use crate::is;
+#[cfg(feature = "native")]
+use crate::eq;
+#[cfg(feature = "native")]
 use warp::*;
 
 #[cfg(feature = "native")]

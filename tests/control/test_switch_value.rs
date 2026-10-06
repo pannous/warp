@@ -1,6 +1,6 @@
 //! A switch is an expression: bind it, or put it in parentheses to compute with it
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_switch_can_be_bound() {

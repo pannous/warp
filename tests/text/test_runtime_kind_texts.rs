@@ -1,6 +1,6 @@
 // Two values whose kinds are known only at run time add as their kinds do: two texts concatenate (they were "not a
 // number"), two numbers add, two lists concatenate
-use warp::is;
+use crate::is;
 
 #[test]
 fn two_texts_of_run_time_kind_concatenate() {

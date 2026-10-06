@@ -1,4 +1,5 @@
 // `xs.find(f)`: the first element f holds for (ø when none); `xs.any(f)`, `xs.all(f)`: 1 or 0
+use crate::is;
 use warp::*;
 
 #[test]

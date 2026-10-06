@@ -1,5 +1,5 @@
 // P44 (user, 2026-10-05: "make shared and atomic synonyms"): `atomic xs = int[n]` is `shared xs = int[n]`
-use warp::is;
+use crate::is;
 
 #[test]
 fn atomic_is_shared() {

@@ -1,4 +1,4 @@
-use warp::eq;
+use crate::eq;
 use warp::Node::*;
 use warp::wasp_parser::parse_file;
 

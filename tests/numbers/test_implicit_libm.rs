@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 // A libm function called on a run-time value without `import … from 'm'` links libm by itself; it compiled to its
 // argument before: `def f(x:float) := exp(x); f(0.0)` was 0, sin(0.5) in a function 0.5 (samples/neural_net.wasp sigmoid)

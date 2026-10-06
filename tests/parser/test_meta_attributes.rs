@@ -3,7 +3,7 @@
 //! and `x.key` falls back to the meta key `@key` when x has no field `key`.
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::{parse, parse_data};
 

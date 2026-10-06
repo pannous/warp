@@ -1,6 +1,6 @@
 //! `{a: 1, s := clock()}`: until P71 is decided, `s := e` in an object is a value entry like `s = e` (evaluated now);
 //! `f := it*2` stays a function entry
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_define_entries_are_values() {

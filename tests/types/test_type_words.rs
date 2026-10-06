@@ -1,5 +1,5 @@
 // `double 2`, `long 2`: every builtin type name works as a constructor word, not only int and float
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_type_constructor_words() {

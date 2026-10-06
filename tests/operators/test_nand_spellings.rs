@@ -1,5 +1,5 @@
 //! `nand` (wiki/operator.md: `nand ¬&`) in every spelling, Unicode's ⊼ too (like ⊻ for xor): `not (a and b)`
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_nand_spellings() {

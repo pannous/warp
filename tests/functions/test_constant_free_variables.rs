@@ -2,6 +2,10 @@
 // definition and never changed is read as that constant in the body (`k = 3; def f(x){x+k}` → `x+3`), and Int
 // arithmetic left constant is computed. A `global` variable, a changed one or a non-constant value stays a variable.
 // Compiled modules only, like folding; the program's value is unchanged.
+use crate::is;
+#[cfg(feature = "native")]
+use crate::eq;
+#[cfg(feature = "native")]
 use warp::*;
 
 fn inlined(code: &str) -> String {

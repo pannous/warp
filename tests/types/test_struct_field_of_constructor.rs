@@ -1,6 +1,6 @@
 //! A struct built by its constructor has readable fields, also directly or through a variable
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_field_of_a_constructed_struct_variable() {

@@ -3,7 +3,8 @@
 use warp::effects::{effects_of, Effect::*, EffectReport, EffectSet};
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::WaspParser;
-use warp::{is, Node, WasmGcEmitter};
+use warp::{Node, WasmGcEmitter};
+use crate::is;
 
 fn effects(code: &str, function: &str) -> EffectSet {
 	effects_of(code, function).unwrap_or_else(|| panic!("{function} unresolved in {code}"))

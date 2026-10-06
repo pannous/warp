@@ -71,13 +71,6 @@ macro_rules! ints { // List of Int nodes   vs Data(vec![1])!
 // #[macro_use]
 // extern crate extensions;
 
-#[macro_export]
-macro_rules! eq {
-	// Evaluate string expressions like "3+3"
-	($a:expr, $b:expr) => {{
-		assert_eq!($a, $b);
-	}};
-}
 
 #[macro_export]
 macro_rules! exists {
@@ -96,51 +89,18 @@ macro_rules! parses_to { // parser eq!
 	}};
 }
 
-#[macro_export]
-macro_rules! is {
-	// Evaluate string expressions like "3+3" and roundtrip through WASM
-	// Standard comparison for built-in types
-	($a:expr, $b:expr) => {{
-		let result = $crate::wasm_emitter::eval($a);
-		assert_eq!(result, $b);
-	}};
-	// For wasm_struct! types: use reverse comparison (Person == Node)
-	($a:expr, $b:expr, gc) => {{
-		let result = $crate::wasm_emitter::eval($a);
-		assert!($b == result, "is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}", $a, $b, result);
-	}};
-}
 
 
-#[macro_export]
-macro_rules! skip {
-	($($t:tt)*) => {};
-}
-// skip arbitrary token sequence YAY also use todo!("but only for strings") !
 
 
-#[macro_export]
-macro_rules! check {
-	($cond:expr) => {{
-		assert!($cond);
-	}};
-}
 
-#[macro_export]
-macro_rules! put {
-        // ($($arg:tt)*) => (println!($($arg)*));
-    ($($arg:expr),*) => {{
-        $(print!("{:?}", $arg);)*
-        println!(); // New line at the end
-    }};
-}
 
 // PUB : PUBLIC FUNCTIONS
 // you need to explicitly mark each function with the pub keyword in the module definition.
 // Rust does NOT provide a way to globally set visibility for all items within a module;
 #[allow(dead_code)]
 pub fn public_function() {
-	put!("public function");
+	println!("public function");
 }
 
 // https://doc.rust-lang.org/std/primitive.char.html

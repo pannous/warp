@@ -1,6 +1,6 @@
 //! A function entry of an object literal (`f := it*2`, `f := x => …`, `f(x) := …`) is callable as `o.f(3)` / `o.f 3`;
 //! the object's own fields are in scope of its body, `o = …` ends it
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_function_entries_are_callable() {

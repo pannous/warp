@@ -1,6 +1,6 @@
 // `puti i` without parentheses is a call worth an Int, like `puti(i)`: as a loop's only body statement it is the loop's
 // value (it was typed as a list: the loop gave its counter, `x = puti 7; x + 1` was a type error)
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_braceless_output_call_is_worth_an_int() {

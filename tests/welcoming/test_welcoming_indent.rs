@@ -1,7 +1,7 @@
 //! Python's offside rule: the lines indented (tabs or spaces) below a line ending in `:` are its block;
 //! Ruby/Lua `do … end` and `then … else … end` enclose all their statements
 
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 #[test]

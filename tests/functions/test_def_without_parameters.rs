@@ -1,5 +1,5 @@
 // `def test: body` defines a function without parameters (wiki/signal.md), like `def test() {body}`
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_def_without_parameters_is_a_function() {

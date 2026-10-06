@@ -1,6 +1,6 @@
 // libc through FFI ("c") returns the C result types, in the browser too, where host.js stands in for libc:
 // size_t and long are i64 there (a BigInt), int is i32
-use warp::is;
+use crate::is;
 
 #[test]
 fn strlen_returns_a_size() {

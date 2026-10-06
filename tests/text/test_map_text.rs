@@ -1,6 +1,6 @@
 // The text of a map at run time: "{a:1 b:2}" like a list's "[1 2]", entries as key:value, in str, print and
 // interpolation (it was the error "not a joinable item")
-use warp::*;
+use crate::is;
 
 #[test]
 fn a_map_has_a_text() {

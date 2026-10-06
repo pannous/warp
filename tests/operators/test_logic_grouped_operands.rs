@@ -1,6 +1,6 @@
 //! `and` / `or` take the truthiness of a grouped or negated left operand at runtime, not at compile time
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_grouped_comparison_is_the_left_operand_of_and() {

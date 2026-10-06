@@ -1,5 +1,5 @@
 // A range with computed bounds is a list wherever a value is needed, as a range of literals is
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_range_with_variable_bounds_is_a_list() {

@@ -1,5 +1,5 @@
 // wiki/string.md, wiki/iteration.md: `for chars in text: print it` walks the text by that unit, the item is `it`
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_unit_word_walks_the_text_by_that_unit() {

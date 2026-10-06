@@ -717,7 +717,7 @@ macro_rules! wisp {
 mod tests {
 	use super::*;
 	use crate::type_kinds::Kind;
-	use crate::{expression, put};
+	use crate::expression;
 
 	#[test]
 	fn test_wisp_basic_atom_types() {
@@ -840,7 +840,6 @@ mod tests {
 		match result {
 			Key(name, Op::Define, body) => {
 				assert_eq!(*name, Symbol("square".to_string()));
-				put!(body);
 				assert_eq!(body.drop_meta().serialize(), "mul(it it)"); // (mul it it)
 			}
 			_ => panic!("expected defn"),

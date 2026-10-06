@@ -1,6 +1,6 @@
 // Arithmetic on values whose kind is known only at run time (fields of a map parameter, parsed JSON): Floats when
 // either is a Float, else exact Ints, decided by the values; was a "not an int" trap for floats
-use warp::is;
+use crate::is;
 
 #[test]
 fn fields_of_a_map_parameter_compute_by_their_values() {

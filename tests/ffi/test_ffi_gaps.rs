@@ -2,7 +2,7 @@
 // libc's character classes (ctype), a one-letter library in quotes ("z" parses as a character), sqlite3 without the
 // panic on its header, and a loud refusal of pointer results (a char* crossed as a truncated i32)
 #![cfg(feature = "native")]
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_library_header_named_otherwise_is_found() {

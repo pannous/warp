@@ -1,4 +1,4 @@
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_while_colon_body_with_compound_assignment() {

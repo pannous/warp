@@ -1,7 +1,7 @@
 //! An `error(…)` branch does not decide the kind of its if (it is the bottom kind): `if c then error("…") else 3` is an
 //! Int, and taking the error branch raises the error through the runtime-error path, which `try` catches.
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_an_error_branch_keeps_the_other_branch_kind() {

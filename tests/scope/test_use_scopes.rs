@@ -1,8 +1,8 @@
 //! D15 revised (user, 2026-10-03): no folder scope by default; `use folder`, `use package` and `use project` make every
 //! definition of the folder, the package (the folder holding <folder name>.wasp, and below) or the project (the folder
 //! holding .git, and below) visible, looked up lazily by name
+use crate::is;
 use crate::common::fails_with;
-use warp::*;
 
 #[test]
 fn siblings_are_invisible_without_a_scope() {

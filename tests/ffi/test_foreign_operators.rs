@@ -1,6 +1,6 @@
 //! Operators, indexing, counting and iteration of a foreign value forward to its runtime's operator module
 //! (`a * 2` → operator.mul(a, 2), `a#2` → operator.getitem(a, 1), `count a`, `for x in a`; lowering/foreign_modules.rs)
-use warp::is;
+use crate::is;
 
 #[cfg(feature = "native")] // python3
 #[test]

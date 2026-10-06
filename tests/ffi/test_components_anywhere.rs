@@ -1,7 +1,8 @@
 //! `use wasm "lib.wasm"` in both hosts: natively wasmtime runs the component (src/components.rs), in the browser the
 //! script jco transpiled from it (web/playground/components.js, build.sh components); same values, same handles
 use crate::common::fails_with;
-use warp::{ints, is};
+use warp::ints;
+use crate::is;
 
 const COMPONENT: &str = "tests/fixtures/components/rust_demo.wasm";
 

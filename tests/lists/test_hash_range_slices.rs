@@ -1,6 +1,6 @@
 // `xs#(a…b)` / `xs#(a..b)`: a 1-based slice, like `xs#i` is a 1-based index (`xs[a-1..b]`); the parentheses keep it apart
 // from `xs#a..b`, the range from the value xs#a to b
-use warp::is;
+use crate::is;
 
 #[test]
 fn hash_slices_are_one_based() {

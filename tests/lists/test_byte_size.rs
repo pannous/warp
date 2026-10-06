@@ -1,5 +1,5 @@
 // size is the element count; byte_size gives the bytes, as x.bytes does (user, P40)
-use warp::is;
+use crate::is;
 
 #[test]
 fn byte_size_counts_bytes_and_size_counts_elements() {

@@ -1,7 +1,7 @@
 // Ask: an ambiguity takes its default with a "got it" warning or is an error naming the explicit forms; it never asks
 // and never remembers a reading (user 2026-10-03: no context-sensitive execution)
 use warp::diagnostic::{ask, reading, take_warnings, use_acknowledgements_file, with_acknowledger, with_warning_mode, Acknowledging, Ask, Fallback, WarningMode};
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 fn acknowledging(topic: &str) -> Acknowledging {

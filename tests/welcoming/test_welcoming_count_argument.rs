@@ -1,6 +1,6 @@
 //! `#a` as an argument or list item counts a, like `count a`: `range(1, #a)`, `g(1, #a)`, `[#a, 1]`
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_count_inside_brackets_is_a_value_not_a_comment() {

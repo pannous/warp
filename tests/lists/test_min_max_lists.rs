@@ -1,7 +1,7 @@
 //! `max` and `min` of one list: `max([1 5 2])`, `max(xs)`; several arguments are a list as well
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_extremum_of_a_list_literal() {

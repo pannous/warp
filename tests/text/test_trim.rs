@@ -1,5 +1,5 @@
 // `trim(text)`, `text.trim()`: the text without the spaces, tabs and line breaks at either end
-use warp::is;
+use crate::is;
 
 #[test]
 fn trim_drops_whitespace_at_both_ends() {

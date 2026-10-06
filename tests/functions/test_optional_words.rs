@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_words_read_as_not() {

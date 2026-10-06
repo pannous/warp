@@ -1,7 +1,7 @@
 // P67 (user, 2026-10-05): in `catch e { … }` and `except E as e:` the name is the caught Error value (its message): a
 // raised value, an Error a call gave back, or the named runtime error
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn catch_binds_the_error() {

@@ -1,5 +1,5 @@
 // A text searched for a text: `contains`, `in` (the 1-based position), `starts_with`, `ends_with`
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_text_contains_a_text() {

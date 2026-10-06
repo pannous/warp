@@ -2,7 +2,7 @@
 //! for `square 3.1`, and `def square(x) : float = …` / `def square(x) as float = …` declare the return type after the
 //! parameters.
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_type_before_the_name_converts_the_result() {

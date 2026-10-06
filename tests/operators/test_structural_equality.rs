@@ -1,6 +1,6 @@
 //! `==` compares by value: objects are maps (any entry order), lists element by element, numbers exactly (wiki/equality.md)
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn objects_compare_by_their_entries() {

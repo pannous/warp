@@ -1,6 +1,6 @@
 //! Card nonlocal-inner: `nonlocal y` lets a nested function change y (a cell outer and inner share), and a nested
 //! function outlives its call: an escaping closure keeps its own values and its own cell
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_inner_changes_the_outer_variable() {

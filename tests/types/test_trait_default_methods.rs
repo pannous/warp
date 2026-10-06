@@ -1,6 +1,6 @@
 // A default method in a trait, `trait shape{area; describe(s) := …}`: every type that defines the other operations gets
 // it, unless it defines its own
-use warp::is;
+use crate::is;
 
 const SHAPES: &str = "trait shape{area; describe(s) := area(s) * 2}; class square{side:int}; class rect{w:int h:int}; area(s:square) := s.side*s.side; area(r:rect) := r.w*r.h; ";
 

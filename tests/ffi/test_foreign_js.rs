@@ -1,7 +1,7 @@
 //! `use js Math`: a JavaScript global through foreign_call, node natively, the page itself in the browser host
 //! (web/playground/host.js); modules (`use js "path"`) natively only (notes/stdlib_connectors.md)
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_js_globals() {

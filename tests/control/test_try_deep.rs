@@ -1,5 +1,5 @@
 // User decision #34 (2026-10-03, "Do it now"): `try X else Y` also catches a runtime error deep inside X
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 fn error_text(code: &str) -> String {

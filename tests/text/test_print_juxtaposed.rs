@@ -1,5 +1,5 @@
 // `print "x changed to " value` (wiki/signal.md): a text followed by values prints them joined without separator
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_text_next_to_values_prints_joined() {

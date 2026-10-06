@@ -1,5 +1,5 @@
 // `job = go f(x)` starts a task, `await job` waits for its value (wiki/async.md); one thread: the task ends where it starts
-use warp::is;
+use crate::is;
 
 #[test]
 fn await_gives_the_value_of_a_task() {

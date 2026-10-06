@@ -1,7 +1,7 @@
 //! Compile-time lambdas: `f = x=>x*x` defines a function at that point (capture by value), a block with bindings is called
 //! at once, `map` over a literal block or lambda is a loop. A lambda that cannot be inlined is a closure (test_closures.rs).
+use crate::is;
 use warp::wasm_emitter::eval;
-use warp::*;
 use crate::common::fails_with;
 
 fn printed(code: &str) -> String {

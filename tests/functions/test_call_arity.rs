@@ -1,6 +1,6 @@
 // A call with more values than the function takes is an error, never values dropped silently
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn extra_or_missing_values_are_errors() {

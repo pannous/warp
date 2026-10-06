@@ -1,5 +1,8 @@
 // Precomputed and precompiled paths (wiki/charged.md §3, released 2026-10-05, package 3): the compiler may compute a
 // pure part earlier; whatever reads shared state or has effects runs at every call.
+use crate::is;
+#[cfg(feature = "native")]
+use crate::eq;
 use warp::*;
 
 #[test]

@@ -1,4 +1,4 @@
-use warp::eq;
+use crate::eq;
 use warp::int;
 use warp::wasp_parser::parse;
 use warp::Kind::Key;

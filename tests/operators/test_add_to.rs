@@ -1,6 +1,6 @@
 //! `add 4 to pixel` appends to the list, like pixel.add(4)
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn add_to_appends_an_element() {

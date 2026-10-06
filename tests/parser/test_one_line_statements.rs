@@ -1,6 +1,6 @@
 // Two print statements on one line separated only by spaces are an error naming the separators (user decision 2026-10-03)
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const HINT: &str = "two statements on one line? separate them with `;` or a newline";
 

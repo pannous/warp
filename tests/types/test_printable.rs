@@ -1,6 +1,6 @@
 // The Printable operation (user, P31): `text(p:person) := …`, the one function a type word may name, gives the text of
 // a person for `as text`, str, text, print and interpolation; other values keep their own text
-use warp::is;
+use crate::is;
 
 const PERSON: &str = "class person{name:text}; text(p:person) := \"P \" + p.name; x = person{name:\"a\"}; ";
 

@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 #[test]
 fn logic_glyphs_are_and_or() {

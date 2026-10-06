@@ -1,6 +1,6 @@
 //! A text computed at run time converts to a float: `s as float`, `float(s)` (samples/calculator.wasp)
+use crate::is;
 use crate::common::fails_with;
-use warp::*;
 
 #[test]
 fn test_text_as_float() {

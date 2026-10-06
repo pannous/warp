@@ -3,7 +3,7 @@
 //! and `data e` is e as written
 use crate::common::fails_with;
 use warp::diagnostic::take_warnings;
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 #[test]

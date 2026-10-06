@@ -1,5 +1,5 @@
 // The elements of a list of object literals are objects: `xs[1].a`, `for o in xs { o.a }`, `xs.map(o => o.a)`
-use warp::is;
+use crate::is;
 
 #[test]
 fn an_element_of_a_list_of_objects_has_fields() {

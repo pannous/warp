@@ -1,6 +1,6 @@
 //! Small bugs found by the ignored-test sweep: a lone `false`, `do add x to list`, `not` of an object, a call statement in a block body
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_lone_false_is_zero() {

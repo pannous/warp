@@ -1,6 +1,7 @@
+use crate::eq;
 use warp::Node::*;
 use warp::{Bracket, Node, Separator};
-use warp::*; // TODO: Meta is not exported
+ // TODO: Meta is not exported
 
 #[test]
 fn test_node_add_basic() {

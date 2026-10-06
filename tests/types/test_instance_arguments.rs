@@ -1,5 +1,5 @@
 // A program that only passes an instance to a function runs the function: the instance is no program value of its own
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_call_with_an_instance_argument_gives_the_call_result() {

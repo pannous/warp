@@ -1,7 +1,7 @@
 //! #14e (user decision 2026-10-03): `download <url>` is an alias of `fetch`
 
 use crate::common::{fails_with, serve};
-use warp::is;
+use crate::is;
 
 #[test]
 fn download_fetches_like_fetch() {

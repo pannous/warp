@@ -2,7 +2,7 @@
 // lazily (util.rs GC_HEAP_INITIAL_BYTES); 300 of them overlapping still finish together and agree on a shared sum
 #![cfg(feature = "native")] // threads of the wasmtime runner
 use std::time::{Duration, Instant};
-use warp::is;
+use crate::is;
 
 const TASKS: i64 = 300;
 /// 300 tasks of 200 ms each: overlapping well under the minute they would take one after the other

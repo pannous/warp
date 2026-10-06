@@ -1,7 +1,7 @@
 //! P78 (user 2026-10-05): modifier words of other languages without wasp meaning (`public`, `static`, `virtual` …) are
 //! skipped with the note "public has no meaning in wasp"; `global` and `const` keep their meaning
 use warp::diagnostic::take_warnings;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_meaningless_modifiers_are_skipped_with_a_note() {

@@ -1,7 +1,7 @@
 // P60 (user, 2026-10-05): the classical `try {…} catch {…}` (also `catch e`) and Python's `try: … except: …` are
 // synonyms of `try X else Y`; function-level handlers come later
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn try_catch_is_try_else() {

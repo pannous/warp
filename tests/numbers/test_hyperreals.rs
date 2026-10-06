@@ -1,7 +1,7 @@
 //! Hyperreal numbers (wiki/hyperreals.md, notes/hyperreals.md): ε is the canonical infinitesimal, ω = 1/ε, exact
 //! Laurent polynomials in ε with exact real coefficients. Ordered by the lowest ε power first (ω terms dominate).
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 fn shown(code: &str) -> String {

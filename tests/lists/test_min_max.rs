@@ -1,7 +1,7 @@
 //! Builtins `min` and `max`.
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_min_max_of_ints() {

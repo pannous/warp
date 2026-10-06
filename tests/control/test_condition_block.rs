@@ -1,6 +1,7 @@
 //! `if a < n {…}` and `while i < n {…}`: the block is the body, not the argument of the variable n
 
-use warp::{is, parse};
+use warp::parse;
+use crate::is;
 
 #[test]
 fn the_block_after_a_comparison_with_a_variable_is_the_body() {

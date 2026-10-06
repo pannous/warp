@@ -1,5 +1,5 @@
 //! A superscript letter as an exponent is the variable of that letter: `n=3;2ⁿ` → 8 (wiki operator.md superscripts)
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_a_superscript_variable_exponent() {

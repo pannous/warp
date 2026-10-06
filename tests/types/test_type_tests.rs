@@ -1,5 +1,5 @@
 //! `x is int`, `x is a number`, `[1 2] is list of int`, `type of x`, `x as number = 9`
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_scalar_type_tests() {

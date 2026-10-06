@@ -1,6 +1,7 @@
 //! Functions that compute texts: text-valued `if`, `return` of a text or error from a statement, `error(message)`
 
-use warp::{error, is};
+use warp::error;
+use crate::is;
 
 #[test]
 fn an_if_with_text_branches_makes_a_text_function() {

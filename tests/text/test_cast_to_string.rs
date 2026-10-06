@@ -1,6 +1,6 @@
 //! `value as string` is the serialized text of a literal; an int list known only at runtime joins to "[1 2]" (user decision #35)
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_list_literal_as_string_is_its_text() {

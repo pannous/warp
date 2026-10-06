@@ -1,6 +1,6 @@
 // The text of an exact real keeps its symbolic form (user decision 2026-10-03: "√2 if we preserve that information
 // symbolically"): `"f" + sqrt(2)` is "f√2", not its source or an f64
-use warp::is;
+use crate::is;
 
 #[test]
 fn an_exact_real_joins_a_text_symbolically() {

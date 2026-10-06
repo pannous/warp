@@ -1,7 +1,7 @@
 // P65 (user, 2026-10-05): arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number, never its code
 // point; ord(c) gives the number; comparisons keep code points; + joins and * repeats as for texts
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_character_is_no_number_in_arithmetic() {

@@ -1,7 +1,7 @@
 // `x is number 9` (wiki Features.md, inventions.md). P61 (user, 2026-10-05: "Yes, teach `x be number 9`"): `is` always
 // compares; with a name defined nowhere it is an error that teaches the definition `x be number 9`
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn is_with_a_type_and_a_value_teaches_be() {

@@ -1,6 +1,6 @@
 // Indexing a list inside `try`: errors are named runtime errors the `try` catches, never cast traps
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn indexing_empty_is_out_of_range() {

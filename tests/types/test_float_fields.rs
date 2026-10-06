@@ -1,5 +1,5 @@
 //! Floats that live in declared fields, conditionals and globals (samples/raytracer.wasp)
-use warp::*;
+use crate::is;
 
 #[test] // `def dot(a, b) := a.x * b.x …` of `type V {x: float}` read the field as an Int: "not an int"
 fn test_declared_float_field_in_arithmetic() {

@@ -16,6 +16,52 @@ pub const MACOS_C_HEADERS: Resource = Resource { name: "the macOS C headers (lib
 /// `lean`/`lake` runs are disabled in cloud sessions (user decision): no toolchain there, and proofs are slow
 pub const LEAN: Resource = Resource { name: "the Lean toolchain (disabled in cloud sessions)", available: || std::env::var(CLOUD_SESSION_VAR).as_deref() != Ok("true") };
 
+// The test macros (user decision P100: they live with the tests, not in the library). is!(code, value) compiles and
+// runs code through the whole pipeline (parse, analyze, emit, run, read back) and compares the result
+#[macro_export]
+macro_rules! eq {
+	// Evaluate string expressions like "3+3"
+	($a:expr, $b:expr) => {{
+		assert_eq!($a, $b);
+	}};
+}
+
+#[macro_export]
+macro_rules! is {
+	// Evaluate string expressions like "3+3" and roundtrip through WASM
+	// Standard comparison for built-in types
+	($a:expr, $b:expr) => {{
+		let result = ::warp::wasm_emitter::eval($a);
+		assert_eq!(result, $b);
+	}};
+	// For wasm_struct! types: use reverse comparison (Person == Node)
+	($a:expr, $b:expr, gc) => {{
+		let result = ::warp::wasm_emitter::eval($a);
+		assert!($b == result, "is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}", $a, $b, result);
+	}};
+}
+
+#[macro_export]
+macro_rules! skip {
+	($($t:tt)*) => {};
+}
+
+#[macro_export]
+macro_rules! check {
+	($cond:expr) => {{
+		assert!($cond);
+	}};
+}
+
+#[macro_export]
+macro_rules! put {
+        // ($($arg:tt)*) => (println!($($arg)*));
+    ($($arg:expr),*) => {{
+        $(print!("{:?}", $arg);)*
+        println!(); // New line at the end
+    }};
+}
+
 /// `requires!(RESOURCE);` as the first line of a test: where the resource is missing the test ends here, saying so
 /// loudly on stderr (never silently); where it exists the test runs as before
 #[macro_export]

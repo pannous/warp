@@ -1,5 +1,5 @@
 // The text of a list of lists is its literal, at run time too; `#m#1` counts the first row
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_nested_list_has_the_text_of_its_literal() {

@@ -1,5 +1,5 @@
 // Superscript digits are a power operator, vulgar fractions are exact ratios
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_multi_digit_superscript_exponent() {

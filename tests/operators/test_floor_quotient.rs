@@ -1,7 +1,7 @@
 // `a // b` is the Euclidean quotient that goes with `%` (a == b*(a//b) + a%b): floor(a/b) for a positive divisor,
 // ceil(a/b) for a negative one. Each operand runs once, an exact quotient rounds exactly beyond the f64 range, and no
 // Euclidean-% warning is given for code the user never wrote
-use warp::is;
+use crate::is;
 
 #[test]
 fn floor_division_is_euclidean() {

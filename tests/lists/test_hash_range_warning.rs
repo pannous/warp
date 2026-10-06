@@ -1,6 +1,6 @@
 // P58 (user, 2026-10-05: "create a strong warning and I don't care how to interpret it"): `xs#a..b` stays the range from
 // the value xs#a, with a warning naming the slice `xs#(a..b)` and the range `(xs#a)..b`
-use warp::is;
+use crate::is;
 
 fn warnings_of(code: &str) -> (warp::Node, Vec<String>) {
 	warp::diagnostic::take_warnings();

@@ -1,5 +1,5 @@
 //! A comma list in round brackets is a tuple, whatever its items compute: `(h + 1, 2)` keeps both
-use warp::*;
+use crate::is;
 
 #[test] // samples/snake.wasp: `return (head#1 + dx, head#2 + dy)` returned only the last coordinate
 fn test_tuple_of_computed_items() {

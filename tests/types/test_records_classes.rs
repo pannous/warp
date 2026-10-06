@@ -1,7 +1,8 @@
 //! `record`, `struct` and `class` declare the same kind of type: constructor call, field access, optional fields
 
 use crate::common::fails_with;
-use warp::{eq, is, Node};
+use warp::Node;
+use crate::{is, eq};
 use warp::wasm_emitter::eval;
 
 #[test]

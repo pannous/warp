@@ -1,5 +1,5 @@
 // The text of a constant arithmetic expression is the text of its value, not its source: `str(1+2)` is "3"
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_constant_expression_converts_by_its_value() {

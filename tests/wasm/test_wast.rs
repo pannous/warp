@@ -1,4 +1,4 @@
-use warp::eq;
+use crate::eq;
 use warp::wasp_parser::parse;
 
 #[test]

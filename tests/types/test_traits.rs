@@ -2,7 +2,7 @@
 //! type that defines the operation (notes/traits.md). `sort`, `min`/`max`, `<` and `==` dispatch through them.
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const PERSON: &str = "class person{name age:int}; compare(a:person, b:person) := a.age - b.age; ";
 const DOT: &str = "class dot{x:int}; ";

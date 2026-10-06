@@ -1,4 +1,4 @@
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_property_word_after_a_name_counts_like_dot_property() {

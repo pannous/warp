@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 // samples/calculator.wasp, samples/json_parser.wasp: a character held in a variable compares by code point
 // (was "not an int": the variable was unboxed as an Int)

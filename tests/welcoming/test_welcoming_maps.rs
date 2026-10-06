@@ -1,5 +1,6 @@
 //! Maps as newcomers from Python and JavaScript use them (field test: Dijkstra): quoted and unquoted keys are the
 //! same key, keys can be variables, `{}` grows, and keys/values/has/get/in and `for k in m` work on any map.
+use crate::is;
 use crate::common::fails_with;
 use warp::*;
 

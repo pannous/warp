@@ -1,7 +1,7 @@
 // A capturing lambda passed to a task through a parameter: its result kind comes from the captured variable's kind
 // ("task apply·node: not an int" when `s + t` with a captured text was not typed); a parameter named like a unit
 // (`s`, `m`) is the parameter, not seconds or meters
-use warp::*;
+use crate::is;
 
 #[test]
 fn a_capturing_text_lambda_runs_in_a_task() {

@@ -1,7 +1,7 @@
 //! Ordering a list against a number is an error value (equality stays false)
 
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn ordering_a_list_with_a_number_is_a_loud_error() {

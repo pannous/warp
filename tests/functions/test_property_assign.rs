@@ -1,6 +1,6 @@
 //! Assignment to a field (value semantics like `x#i=v`) and safe navigation `?.`
+use crate::is;
 use warp::wasm_emitter::eval;
-use warp::*;
 use crate::common::fails_with;
 
 fn printed(code: &str) -> String {

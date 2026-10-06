@@ -1,5 +1,5 @@
 // wiki/iteration.md: `each [1,2,3]: print it` and `all [1,2,3]: print it` act like `for`, the item is `it`
-use warp::is;
+use crate::is;
 
 #[test]
 fn each_and_all_with_a_colon_walk_the_list() {

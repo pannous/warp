@@ -302,7 +302,6 @@ pub fn grapheme_clusters(text: &str) -> Vec<&str> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::eq;
 
 	#[test]
 	fn test_char_str_eq() {
@@ -314,7 +313,7 @@ mod tests {
 	#[test]
 	fn test_str_plus() {
 		// eq!("a"+"b", "ab");
-		eq!("a".s() + "b", "ab");
+		assert_eq!("a".s() + "b", "ab");
 		// eq!("a".s()+2, "a2");
 	}
 }

@@ -1,4 +1,5 @@
-use warp::{eq, is, put, skip, CharExtensions, StringExtensions};
+use warp::{CharExtensions, StringExtensions};
+use crate::{is, eq, skip, put};
 
 macro_rules! s {
 	($lit:literal) => {

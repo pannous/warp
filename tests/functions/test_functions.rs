@@ -5,7 +5,7 @@ use warp::analyzer::{analyze, collect_functions};
 use warp::type_kinds::Kind;
 use warp::wasp_parser::parse;
 use warp::Node;
-use warp::{eq, is};
+use crate::{is, eq};
 
 #[test]
 fn test2def() {
