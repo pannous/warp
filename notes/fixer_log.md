@@ -180,3 +180,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-06 fix-todo-comments
 - wasp_parser "todo edge case: leading plus": `+5`, `+x`, `3 + +2`, `[+1 -2]` gave "Unexpected character '+'"; a `+`
   glued to its operand is now the unary plus, the operand itself (a spaced `+` stays the operator word).
+
+## 2026-10-06 lowered-error-text
+- `n=3; cube 1..n` said "undefined: cube in `cube (range_value·range=ø; …)`": diagnostic::written_text quotes the source
+  from the node's position to the end of its statement when the serialization holds compiler temporaries (·).
+  The card's own example `is in of to from` now fails earlier with "undefined variable: from".
