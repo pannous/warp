@@ -1,0 +1,4 @@
+def pair
+  yield 3, 4
+end
+pair { |a, b| a * b }

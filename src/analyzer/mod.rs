@@ -103,6 +103,7 @@ mod declaration_lowering;
 mod user_functions;
 mod counting;
 mod imports;
+pub(crate) use imports::signature_kind;
 pub use inference::*;
 pub use variables::*;
 pub use checks::*;

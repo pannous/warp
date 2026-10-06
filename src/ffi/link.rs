@@ -921,7 +921,7 @@ fn native_result(returned: u64, ret_type: RetType) -> Val {
 
 /// A wasp text of `bytes` in the calling module (its memory, text heap and new_text), or ø
 #[cfg(feature = "native")]
-fn text_node(caller: &mut wasmtime::Caller<'_, FfiState>, bytes: Option<&[u8]>) -> Result<Val> {
+pub(crate) fn text_node(caller: &mut wasmtime::Caller<'_, FfiState>, bytes: Option<&[u8]>) -> Result<Val> {
     let export = |caller: &mut wasmtime::Caller<'_, FfiState>, name: &str| caller.get_export(name).ok_or_else(|| anyhow::anyhow!("a C text result needs the module's {name}"));
     let mut result = [Val::AnyRef(None)];
     let Some(bytes) = bytes else {

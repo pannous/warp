@@ -27,6 +27,12 @@ pub enum Role {
 pub struct Export {
 	pub signature: FfiSignature,
 	pub role: Role,
+	/// a function's parameter names from the module's name section (`$from`), else its header's, else `$0`, `$1` …
+	pub parameters: Vec<String>,
+	/// which parameters are C texts (`char *` in the header beside the module): copied into the module's memory
+	pub text_parameters: Vec<bool>,
+	/// a `char *` result: the NUL-terminated text in the module's memory, read back as a wasp text
+	pub text_result: bool,
 }
 
 /// Does an import name a WebAssembly module file (`lib/x.wasm`, `x.wat`) rather than a C library
@@ -70,6 +76,7 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 	let mut function_types = Vec::new(); // the type of every function, imported ones first
 	let mut global_types = Vec::new();
 	let mut exported = Vec::new();
+	let mut local_names: HashMap<u32, HashMap<u32, String>> = HashMap::new(); // by function index, by local index
 	for payload in Parser::new(0).parse_all(bytes) {
 		match payload.map_err(failure)? {
 			Payload::TypeSection(reader) => {
@@ -96,6 +103,18 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 					global_types.push(global.map_err(failure)?.ty);
 				}
 			}
+			Payload::CustomSection(section) => {
+				if let wasmparser::KnownCustom::Name(reader) = section.as_known() {
+					for entry in reader {
+						let wasmparser::Name::Local(functions) = entry.map_err(failure)? else { continue };
+						for function in functions {
+							let function = function.map_err(failure)?;
+							let names = function.names.into_iter().filter_map(Result::ok).map(|naming| (naming.index, naming.name.to_string()));
+							local_names.insert(function.index, names.collect());
+						}
+					}
+				}
+			}
 			Payload::ExportSection(reader) => {
 				for export in reader {
 					let export = export.map_err(failure)?;
@@ -107,30 +126,56 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 	}
 	let library: &'static str = Box::leak(path.to_string().into_boxed_str());
 	let mut exports = HashMap::new();
-	let mut add = |name: String, params: Vec<wasm_encoder::ValType>, results: Vec<wasm_encoder::ValType>, role: Role| {
+	let mut add = |name: String, params: Vec<wasm_encoder::ValType>, results: Vec<wasm_encoder::ValType>, role: Role, parameters: Vec<String>| {
 		let import_name: &'static str = Box::leak(name.clone().into_boxed_str());
-		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role });
+		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role, parameters, text_parameters: vec![], text_result: false });
 	};
 	for (name, kind, index) in exported {
 		match kind {
 			ExternalKind::Func => {
 				let Some(function_type) = function_types.get(index).and_then(|type_index| types.get(*type_index as usize)) else { continue };
 				if let (Some(params), Some(results)) = (number_types(function_type.params()), number_types(function_type.results())) {
-					add(name, params, results, Role::Function);
+					let names = local_names.get(&(index as u32));
+					let parameters = (0..params.len() as u32).map(|local| names.and_then(|names| names.get(&local)).cloned().unwrap_or_else(|| format!("${local}"))).collect();
+					add(name, params, results, Role::Function, parameters);
 				}
 			}
 			ExternalKind::Global => {
 				let Some(global) = global_types.get(index) else { continue };
 				let Some(value_type) = number_types(&[global.content_type]) else { continue };
 				if global.mutable {
-					add(format!("{SETTER_PREFIX}{name}"), value_type.clone(), value_type.clone(), Role::Setter);
+					add(format!("{SETTER_PREFIX}{name}"), value_type.clone(), value_type.clone(), Role::Setter, vec![name.clone()]);
 				}
-				add(name, vec![], value_type, Role::Global { mutable: global.mutable });
+				add(name, vec![], value_type, Role::Global { mutable: global.mutable }, vec![]);
 			}
 			_ => {}
 		}
 	}
+	with_header_types(path, &mut exports);
 	Ok(exports)
+}
+
+/// A C library compiled to WebAssembly: the header beside it (`shout.h` of `shout.wasm`) gives its functions C types,
+/// `char *` parameters and results cross as texts; other pointers stay numbers
+fn with_header_types(path: &str, exports: &mut HashMap<String, Export>) {
+	use crate::ffi::{header_sig_to_ffi_sig, parse_header_file, pointer_kind, pointer_result, CPointer};
+	let header = Path::new(path).with_extension("h");
+	let Some(header) = header.to_str().filter(|_| header.is_file()) else { return };
+	for declared in parse_header_file(header, path) {
+		let Some(export) = exports.get_mut(&declared.name).filter(|export| export.role == Role::Function) else { continue };
+		let text_parameters: Vec<bool> = declared.param_types.iter().map(|c_type| pointer_kind(c_type) == Some(CPointer::Text)).collect();
+		let text_result = pointer_result(&declared) == Some(CPointer::Text);
+		let Some(signature) = header_sig_to_ffi_sig(&declared).filter(|signature| signature.params.len() == export.signature.params.len()) else {
+			eprintln!("[wasm] {header}: {} does not match the module's {} parameters", declared.raw.trim(), export.signature.params.len());
+			continue;
+		};
+		if export.parameters.iter().all(|name| name.starts_with('$')) && declared.param_names.len() == text_parameters.len() {
+			export.parameters = declared.param_names.clone();
+		}
+		export.signature = FfiSignature { name: export.signature.name, library: export.signature.library, ..signature };
+		export.text_parameters = text_parameters;
+		export.text_result = text_result;
+	}
 }
 
 fn number_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encoder::ValType>> {
@@ -242,7 +287,7 @@ fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 				};
 				if let Some(path) = module_of(alias, &export) {
 					let arguments = arguments.into_iter().map(|argument| qualify(argument, modules)).collect::<Result<_, _>>()?;
-					return Ok(call(&qualified(path, &export), arguments));
+					return Ok(call(&qualified(path, &export), ordered_arguments(path, &export, arguments)?));
 				}
 			}
 		}
@@ -256,6 +301,12 @@ fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 					let message = format!("{name} is ambiguous: {}({written}) for the export, {written} as {kind} for the cast", qualified(path, name));
 					return Err(crate::node::error(&message));
 				}
+				// `minus(amount: 2, from: 10)`: an export called by its parameter names
+				let named = arguments.iter().any(|argument| crate::named_arguments::named_argument(argument).is_some());
+				if let (true, Some(path)) = (named, exporting) {
+					let arguments = arguments.iter().cloned().map(|argument| qualify(argument, modules)).collect::<Result<_, _>>()?;
+					return Ok(call(&qualified(path, name), ordered_arguments(path, name, arguments)?));
+				}
 			}
 		}
 		_ => {}
@@ -266,6 +317,27 @@ fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 		Node::Empty
 	}));
 	failure.map_or(Ok(node), Err)
+}
+
+/// The arguments of a call of the function `export` in its parameter order, a named one (`amount: 2`, `amount=2`) at its
+/// parameter of the module's name section; an unknown name or a wrong count is an error showing the parameters
+fn ordered_arguments(path: &str, export: &str, arguments: Vec<Node>) -> Result<Vec<Node>, Node> {
+	let Some(Export { role: Role::Function, parameters, .. }) = exports(path).get(export) else { return Ok(arguments) };
+	let signature = format!("{}({})", qualified(path, export), parameters.join(", "));
+	let wrong_count = || crate::node::error(&format!("{signature} takes {} arguments, got {}", parameters.len(), arguments.len()));
+	let mut slots: Vec<Option<Node>> = vec![None; parameters.len()];
+	for argument in &arguments {
+		let (slot, value) = match crate::named_arguments::named_argument(argument) {
+			Some((name, value)) => {
+				let slot = parameters.iter().position(|parameter| *parameter == name)
+					.ok_or_else(|| crate::node::error(&format!("{signature} has no parameter {name}")))?;
+				(slot, value)
+			}
+			None => (slots.iter().position(Option::is_none).ok_or_else(wrong_count)?, argument),
+		};
+		slots[slot] = Some(value.clone());
+	}
+	slots.into_iter().collect::<Option<Vec<_>>>().ok_or_else(wrong_count)
 }
 
 /// Link the program's imports from WebAssembly modules: each is a host function that calls the export of the module,
@@ -289,13 +361,59 @@ pub fn link(linker: &mut wasmtime::Linker<crate::host::HostState>, module: &wasm
 				}
 				Role::Function => {
 					let function = instance.get_func(&mut caller, &name).ok_or_else(|| wasmtime::format_err!("{path} exports no function {name}"))?;
-					function.call(&mut caller, arguments, results)?;
+					match exports(&path).get(&name).filter(|export| export.text_result || export.text_parameters.contains(&true)) {
+						Some(export) => call_with_texts(&mut caller, instance, function, export, arguments, results)?,
+						None => function.call(&mut caller, arguments, results)?,
+					}
 				}
 			}
 			Ok(())
 		})?;
 	}
 	Ok(())
+}
+
+/// A call of a C function of a module whose header says it takes or gives texts: each text argument (a NUL-terminated
+/// copy in the program's memory) is copied into a block of the module's `malloc`, a `char *` result read back as a
+/// text of the program (NULL is ø)
+#[cfg(feature = "native")]
+fn call_with_texts(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, instance: wasmtime::Instance, function: wasmtime::Func,
+	export: &Export, arguments: &[wasmtime::Val], results: &mut [wasmtime::Val]) -> wasmtime::Result<()> {
+	use wasmtime::Val;
+	let name = export.signature.name;
+	let program_memory = caller.get_export("memory").and_then(|memory| memory.into_memory())
+		.ok_or_else(|| wasmtime::format_err!("{name}: the program has no memory for its text"))?;
+	let module_memory = instance.get_memory(&mut *caller, "memory").ok_or_else(|| wasmtime::format_err!("{name}: its module exports no memory for texts"))?;
+	let mut module_arguments = Vec::with_capacity(arguments.len());
+	for (argument, is_text) in arguments.iter().zip(export.text_parameters.iter().chain(std::iter::repeat(&false))) {
+		if !is_text {
+			module_arguments.push(*argument);
+			continue;
+		}
+		let mut text = c_text(program_memory.data(&*caller), argument.unwrap_i32() as usize).to_vec();
+		text.push(0);
+		let malloc = instance.get_typed_func::<i32, i32>(&mut *caller, "malloc")
+			.map_err(|_| wasmtime::format_err!("{name}: its module exports no malloc(size) to copy a text argument into"))?;
+		let block = malloc.call(&mut *caller, text.len() as i32)?;
+		module_memory.write(&mut *caller, block as usize, &text)?;
+		module_arguments.push(Val::I32(block));
+	}
+	if !export.text_result {
+		return function.call(&mut *caller, &module_arguments, results);
+	}
+	let mut pointer = [Val::I32(0)];
+	function.call(&mut *caller, &module_arguments, &mut pointer)?;
+	let address = pointer[0].unwrap_i32() as usize;
+	let text = (address != 0).then(|| c_text(module_memory.data(&*caller), address).to_vec());
+	results[0] = crate::ffi::text_node(caller, text.as_deref()).map_err(|failure| wasmtime::format_err!("{name}: {failure}"))?;
+	Ok(())
+}
+
+/// The NUL-terminated bytes at `address` of a linear memory
+#[cfg(feature = "native")]
+fn c_text(memory: &[u8], address: usize) -> &[u8] {
+	let rest = memory.get(address..).unwrap_or_default();
+	&rest[..rest.iter().position(|byte| *byte == 0).unwrap_or(rest.len())]
 }
 
 /// The run's instance of the module at `path`, one per file however it is named; its own imports (WASI, warp's host

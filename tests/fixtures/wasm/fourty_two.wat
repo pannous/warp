@@ -16,6 +16,9 @@
     (f64.div (local.get $x) (f64.const 2)))
   (func (export "add32") (param $a i32) (param $b i32) (result i32)
     (i32.add (local.get $a) (local.get $b)))
+  ;; parameter names from the name section: fourty_two.minus(amount: 2, from: 10)
+  (func (export "minus") (param $from i64) (param $amount i64) (result i64)
+    (i64.sub (local.get $from) (local.get $amount)))
   ;; state lives in the one instance of a run
   (func (export "tick") (result i32)
     (global.set $counter (i32.add (global.get $counter) (i32.const 1)))

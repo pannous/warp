@@ -122,3 +122,11 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 - Ruby `def f(a, b: 2) a * b end` and `def f(a)` ⏎ statements ⏎ `end`, also `def h` without parentheses:
   declarations::end_definitions (start of lower_c_functions) gives them a `{…}` body. Nested `if … then … end` keeps
   its own `end` (the parser takes it).
+- Ruby blocks and `yield` (card functions-ruby-yield, src/lowering/ruby_blocks.rs, after lower_spaced_definitions): a
+  function whose body yields and that some call passes a block (`f {…}`, `f(a) {…}`, `f(a) do |x| … end`) gets the
+  block as its last parameter `yield·block`; `yield a, b` → `yield·block(a, b)`, a block without `|params|` is
+  `() => block`. Functions no call passes a block keep `yield` (free for generators).
+- A lambda changes the caller's variable, never a copy (P124). Inside a function it shares a cell (nonlocal_cells.rs
+  `lower_lambdas`); at main level the variable becomes a `global` (`main_lambda_changes`, main runs once), and
+  closures never capture a global, so `total = 0; each_twice { |x| total += x }` is 3. A closure still changing a
+  captured copy after these passes is a loud error naming `global` (closures.rs `changed_capture`), never silently 0.

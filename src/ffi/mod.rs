@@ -133,7 +133,7 @@ fn wasp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
 
 /// What a C function's result crosses as: a text, a handle (a pointer result or the first out-pointer), else None for
 /// its number
-fn pointer_result(hsig: &FfiHeaderSignature) -> Option<CPointer> {
+pub(crate) fn pointer_result(hsig: &FfiHeaderSignature) -> Option<CPointer> {
     let has_out_pointer = hsig.param_types.iter().any(|t| pointer_kind(t) == Some(CPointer::Out));
     match pointer_kind(&hsig.return_type) {
         Some(CPointer::Text) => Some(CPointer::Text),

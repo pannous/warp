@@ -26,6 +26,8 @@ const GLOBAL_KEYWORD: &str = "global";
 const VALUE_WORD: &str = crate::wasp_parser::CONSTRUCTOR_WORD;
 /// A property's setter `set age(v) {…}` is the method `age·set(self, v)`, run by `p.age = v`
 const SETTER_SUFFIX: &str = "·set";
+/// Ruby's `include Walker` in a class body takes in a mixin
+const INCLUDE_WORD: &str = "include";
 /// The suffix of a method named like a type word: `double·method`
 const METHOD_SUFFIX: &str = "·method";
 
@@ -36,6 +38,10 @@ pub fn constructor_name(class: &str) -> String {
 
 pub fn lower(node: Node) -> Node {
 	let node = renamed_type_word_methods(node);
+	let node = match with_mixins(node) {
+		Ok(node) => node,
+		Err(error) => return error,
+	};
 	let (node, likenesses) = match inherit(node) {
 		Ok(inherited) => inherited,
 		Err(error) => return error,
@@ -103,6 +109,66 @@ fn with_method_names(node: Node, names: &[String], in_class: bool) -> Node {
 	}
 }
 
+/// Every class with the items of the mixins it takes in (`class Duck with Walker {…}`, `include Walker` in its body)
+/// after its own, but those it defines itself; the mixin declarations themselves are no classes and go
+fn with_mixins(node: Node) -> Result<Node, Node> {
+	let mut mixins: Vec<(String, Vec<Node>)> = vec![];
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		if name.attribute(crate::wasp_parser::MIXIN_WORD).is_some() {
+			mixins.push((name.drop_meta().name(), class_items(body)));
+		}
+	});
+	if mixins.is_empty() {
+		return Ok(node);
+	}
+	taking_in_mixins(node, &mixins)
+}
+
+fn taking_in_mixins(node: Node, mixins: &[(String, Vec<Node>)]) -> Result<Node, Node> {
+	match node {
+		Node::Type { name, .. } if name.attribute(crate::wasp_parser::MIXIN_WORD).is_some() => Ok(Node::Empty),
+		Node::Type { name, body } => {
+			let mut taken: Vec<String> = name.attribute(crate::wasp_parser::WITH_KEYWORD).map(|names| match names.drop_meta() {
+				Node::List(names, _, _) => names.iter().map(|name| name.drop_meta().name()).collect(),
+				single => vec![single.name()],
+			}).unwrap_or_default();
+			// `include m` of no declared mixin stays (P139: it loads the module m)
+			let is_mixin = |item: &Node| included_mixin(item).is_some_and(|mixin| mixins.iter().any(|(declared, _)| *declared == mixin));
+			let (included, own): (Vec<Node>, Vec<Node>) = class_items(&body).into_iter().partition(is_mixin);
+			taken.extend(included.iter().filter_map(included_mixin));
+			if taken.is_empty() {
+				return Ok(Node::Type { name, body });
+			}
+			let own_names: Vec<String> = own.iter().filter_map(item_name).collect();
+			let mut items = own;
+			for mixin in taken {
+				let Some((_, mixin_items)) = mixins.iter().find(|(declared, _)| *declared == mixin) else {
+					return Err(crate::node::error(&format!("{} takes in {mixin}, which is no mixin: declare mixin {mixin}{{…}}", name.drop_meta().name())));
+				};
+				items.extend(mixin_items.iter().filter(|item| item_name(item).is_none_or(|item| !own_names.contains(&item))).cloned());
+			}
+			let name = match name.attribute(crate::wasp_parser::EXTENDS_KEYWORD) {
+				Some(parent) => Node::Symbol(name.drop_meta().name()).with_attribute(crate::wasp_parser::EXTENDS_KEYWORD, parent.clone()),
+				None => Node::Symbol(name.drop_meta().name()),
+			};
+			Ok(Node::Type { name: Box::new(name), body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) })
+		}
+		Node::List(items, bracket, separator) => {
+			let items = items.into_iter().map(|item| taking_in_mixins(item, mixins)).collect::<Result<Vec<_>, _>>()?;
+			Ok(Node::List(items.into_iter().filter(|item| !matches!(item, Node::Empty)).collect(), bracket, separator))
+		}
+		Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(taking_in_mixins(*node, mixins)?), data }),
+		other => Ok(other),
+	}
+}
+
+/// `include Walker` in a class body: the mixin it takes in
+fn included_mixin(item: &Node) -> Option<String> {
+	let Node::List(words, _, _) = item.drop_meta() else { return None };
+	let [word, mixin] = words.as_slice() else { return None };
+	(word.drop_meta().name() == INCLUDE_WORD && matches!(mixin.drop_meta(), Node::Symbol(_))).then(|| mixin.drop_meta().name())
+}
+
 /// The classes with the fields and methods of the class they extend, and the likeness `dog like animal` of each
 fn inherit(node: Node) -> Result<(Node, Vec<Node>), Node> {
 	let mut classes: Vec<(String, Option<String>, Vec<Node>)> = vec![];
@@ -137,6 +203,7 @@ fn class_items(body: &Node) -> Vec<Node> {
 		Node::List(words, _, _) if keyword_method(words).is_some() => keyword_method(words).into_iter().collect(),
 		Node::List(words, _, _) if value_block(words).is_some() => value_block(words).into_iter().collect(),
 		Node::List(words, _, _) if accessors(words).is_some() => accessors(words).unwrap_or_default(),
+		Node::List(..) if included_mixin(&item).is_some() => vec![item],
 		Node::List(group, Bracket::None, _) => group.clone(),
 		_ => vec![item],
 	}).collect()

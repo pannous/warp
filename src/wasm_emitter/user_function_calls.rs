@@ -355,15 +355,17 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Result kinds of the user functions, and of `floor(x)`, `round(x)`…, which build an Int (emit_introspection_fn)
-	/// unless libm's f64 version is imported
+	/// Result kinds of the user functions, of `floor(x)`, `round(x)`…, which build an Int (emit_introspection_fn)
+	/// unless libm's f64 version is imported, and of the exports of imported WebAssembly modules (`shout("hi")`, a text)
 	pub(super) fn user_function_kinds(&self) -> HashMap<String, Kind> {
 		let rounding = ROUNDING_FUNCTIONS.iter().filter(|name| !self.ctx.ffi_imports.contains_key(**name)).map(|name| (name.to_string(), Kind::Int));
 		let tuple_values = self.ctx.user_functions.iter().flat_map(|(name, function)| {
 			function.tuple_kinds.iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(name, index), *kind))
 		});
 		let fields = crate::analyzer::declared_field_kinds(&self.ctx.type_registry);
-		rounding.chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).chain(tuple_values).chain(fields).collect()
+		let module_exports = self.ctx.ffi_imports.iter().filter(|(_, import)| crate::wasm_modules::is_module_path(import.library))
+			.map(|(name, import)| (name.clone(), crate::analyzer::signature_kind(import)));
+		module_exports.chain(rounding).chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).chain(tuple_values).chain(fields).collect()
 	}
 
 	/// Emit a call to a user-defined function whose result is needed as f64
