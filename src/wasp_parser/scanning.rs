@@ -132,6 +132,30 @@ impl WaspParser {
 		Ok(is_list)
 	}
 
+	/// R's `<-` at the cursor (P145): `x <- 3` assigns with a note to write `x = 3`; the cramped `x<-3` is an error
+	/// naming `x = 3` and `x < -3`
+	pub(super) fn left_arrow_assignment(&self, op: Op, target: &Node) -> Result<(), Node> {
+		if op != Op::Assign || (self.current_char(), self.peek_char(1)) != ('<', '-') {
+			return Ok(());
+		}
+		let ends_value = |ch: &char| ch.is_whitespace() || matches!(ch, ';' | '(' | ')' | ']' | '}');
+		let rest: Vec<char> = self.chars[self.pos + 2..].iter().copied().skip_while(|ch| *ch == ' ').collect();
+		let token: String = rest.iter().take_while(|ch| !ends_value(ch)).collect();
+		let continues = rest.get(token.chars().count()).is_some_and(|ch| !matches!(ch, '\n' | ';' | ')' | ']' | '}'));
+		let value = if continues { format!("{token} …") } else { token };
+		let name = target.serialize();
+		let assignment = format!("{name} = {value}");
+		let is_spaced = self.peek_char(2).is_whitespace();
+		let (written, readings, fallback) = match is_spaced {
+			true => (format!("{name} <- {value}"), vec![reading("the assignment", &assignment)], Fallback::Warning),
+			false => (format!("{name}<-{value}"), vec![reading("the assignment", &assignment), reading("the comparison", &format!("{name} < -{value}"))], Fallback::Error),
+		};
+		let forms: Vec<String> = readings.iter().map(|reading| reading.explicit_form.clone()).collect();
+		let question = format!("`{written}`: write {}", forms.join(" or "));
+		let question = Ask::new(LEFT_ARROW_TOPIC, question, readings, fallback).written(&written).at(self.line_nr, self.column);
+		ask(&question).map(|_| ())
+	}
+
 	/// Code stands before the cursor on its line (`x = 7 // note`, not a `// note` line of its own)
 	pub(super) fn follows_code_on_its_line(&self) -> bool {
 		self.chars[..self.pos].iter().rev().take_while(|&&c| c != '\n').any(|c| !c.is_whitespace())
