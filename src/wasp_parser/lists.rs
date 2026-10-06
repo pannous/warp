@@ -192,6 +192,13 @@ impl WaspParser {
 				Separator::Space
 			};
 
+			let item = match items_with_seps.last() {
+				Some((previous, Separator::Space)) if assigned_method_call(previous) && is_block(&item) => {
+					let (previous, _) = items_with_seps.pop().expect("guarded");
+					with_trailing_block(previous, item)
+				}
+				_ => item,
+			};
 			items_with_seps.push((item, sep));
 
 			if self.pos == pos_before {
@@ -374,5 +381,30 @@ fn starts_code(first: &Node) -> bool {
 		// `value(n) {…}`, JavaScript's `sum() {…}` and `constructor(x, y) {…}`
 		Node::List(call, Bracket::Round, _) => matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_))),
 		_ => false,
+	}
+}
+
+/// `f(xs) := xs.map`, `ys = xs.filter`, `x -> x.map`: a definition or lambda whose value ends in a method name, waiting
+/// for its trailing block
+fn assigned_method_call(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(_, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, value) => {
+			matches!(value.drop_meta(), Node::Key(_, Op::Dot, method) if matches!(method.drop_meta(), Symbol(_))) || assigned_method_call(value)
+		}
+		_ => false,
+	}
+}
+
+fn is_block(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
+}
+
+/// `f(xs) := xs.map { it*10 }` is `f(xs) := (xs.map {it*10})`: the block belongs to the method call, not to the statement
+fn with_trailing_block(assignment: Node, block: Node) -> Node {
+	match assignment {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_trailing_block(*node, block)), data },
+		Node::Key(target, op, value) if assigned_method_call(&value) => Node::Key(target, op, Box::new(with_trailing_block(*value, block))),
+		Node::Key(target, op, value) => Node::Key(target, op, Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space))),
+		other => other,
 	}
 }
