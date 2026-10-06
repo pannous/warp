@@ -1808,6 +1808,7 @@ PASSED:
   ✓ text::test_print_juxtaposed::the_joined_text_is_written
   ✓ text::test_print_lists::print_of_a_list_gives_nothing
   ✓ text::test_print_lists::print_of_a_list_writes_its_text
+  ✓ text::test_print_runtime_number::a_runtime_number_prints
   ✓ text::test_print_type_error::print_of_a_type_error_reports_that_error
   ✓ text::test_print_type_error::text_times_number_says_how_to_repeat_a_text
   ✓ text::test_print_walk::print_name_in_a_text_walks_it
@@ -1818,6 +1819,9 @@ PASSED:
   ✓ text::test_quote_output::test_is_macro_round_trips_text
   ✓ text::test_quote_output::test_serialized_text_parses_back
   ✓ text::test_quote_output::test_texts_inside_lists_print_with_the_canonical_quote
+  ✓ text::test_quoted_container_texts::a_text_field_prints_quoted
+  ✓ text::test_quoted_container_texts::a_text_in_a_list_prints_quoted
+  ✓ text::test_quoted_container_texts::string_and_interpolation_quote_texts_in_containers
   ✓ text::test_runtime_kind_texts::two_texts_of_run_time_kind_concatenate
   ✓ text::test_runtime_text_as_int::a_text_beyond_i64_parses_unbounded
   ✓ text::test_runtime_text_as_int::a_text_variable_converts_to_int
@@ -1991,6 +1995,9 @@ PASSED:
   ✓ types::test_struct_field_of_constructor::a_field_of_a_constructed_struct_variable
   ✓ types::test_struct_field_of_constructor::a_field_of_a_constructor_call
   ✓ types::test_struct_field_of_constructor::a_missing_field_is_an_error_value
+  ✓ types::test_struct_instances::a_field_read_of_a_struct_variable_searches_no_names
+  ✓ types::test_struct_instances::a_method_of_a_struct_variable_takes_the_struct
+  ✓ types::test_struct_instances::a_struct_instance_gives_the_same_values
   ✓ types::test_struct_types::test_class_definition
   ✓ types::test_struct_types::test_class_instance2
   ✓ types::test_struct_types::test_class_instance_explicit
@@ -2560,4 +2567,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2555 passed, 0 failed, 2555 total tested
+23 ignored, 2562 passed, 0 failed, 2562 total tested

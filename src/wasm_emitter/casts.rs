@@ -120,11 +120,19 @@ impl WasmGcEmitter {
 		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
 		self.emit_node_instructions(func, value);
 		func.instruction(&I::LocalSet(held));
+		// a text is itself and a character its text; only texts inside a container are quoted (P126)
+		let kind_is = |kind: Kind| [I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 0 }, I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq];
+		Self::emit_list(func, &kind_is(Kind::Text));
+		Self::emit_list(func, &kind_is(Kind::Codepoint));
+		Self::emit_list(func, &[I::I32Or, I::If(BlockType::Result(Ref(self.node_ref(false)))), I::LocalGet(held), I::RefAsNonNull]);
+		self.emit_call(func, text_builtins::TEXT_OF);
+		func.instruction(&I::Else);
 		Self::emit_list(func, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(held), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
 		let (pointer, length) = self.allocate_string("");
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_text");
 		self.emit_call(func, library_ops::LIST_TEXT);
+		func.instruction(&I::End);
 		held
 	}
 
@@ -254,6 +262,8 @@ impl WasmGcEmitter {
 			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
 			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
 			Node::Text(s) => self.emit_string_call(func, s, "new_text"),
+			// a list of numbers and texts reads as it prints, its texts quoted (P126)
+			Node::List(..) if is_plain_data(value) => self.emit_runtime_text_cast(func, value),
 			// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
 			// text of its value
 			_ if !self.mentions_variable(value) && !self.mentions_call(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
@@ -334,5 +344,14 @@ impl WasmGcEmitter {
 	pub(super) fn is_output_call(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
 			if matches!(word.drop_meta(), Node::Symbol(name) if OUTPUT_CALLS.contains(&name.as_str()) && !self.ctx.user_functions.contains_key(name))))
+	}
+}
+
+/// A list whose items are numbers, texts, characters or such lists
+fn is_plain_data(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Number(_) | Node::Text(_) | Node::Char(_) => true,
+		Node::List(items, Bracket::Square, _) => items.iter().all(is_plain_data),
+		_ => false,
 	}
 }

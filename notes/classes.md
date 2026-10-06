@@ -89,8 +89,10 @@ Batch 3 (branch classes-3), P123 one text form `Point{x:1 y:2}`:
   the `:` it puts in an entry `a:1` (print wrote `P:[x:1 y:2]`).
 - casts: `string(p)`, `"\(p)"`, `p as text` of an instance known only at run time go through list_text too (it was
   "has no runtime text yet").
-- Not yet: a text field prints unquoted at run time (`P{x:1 name:a}`, like `print ["a"]` writes `[a]`), so it does
-  not read back as the same value; decided P126 (quote texts inside containers, below), not implemented.
+- P126 (user): a text inside a container prints quoted (`P{x:1 name:"a"}`, `["a" "b"]`, `{a:"x"}`) in print,
+  interpolation and string(); a text on its own still prints bare. list_text quotes text and character items;
+  emit_dynamic_text passes a lone text or character through unquoted; `string([...])` of a literal list of numbers and
+  texts takes the same runtime text. A `"` inside such a text is not escaped yet.
 
 ## Representation: GC structs (classes-4, wasm_emitter/struct_backend.rs)
 Generic form: `P(1, 2)` is a `$Node` key `P` over a cons list of `x:1`, `y:2` entries (type_constructor.rs, the
