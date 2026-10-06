@@ -2,8 +2,9 @@
 //! `sleep(ms)` pauses, `random()` is a float in [0, 1), `random_below(n)` an int in 0..n, `clock()` the milliseconds
 //! since the Unix epoch. A program that defines a word of the same name keeps its own. warp adds the words that need
 //! its compiler, the network or threads (host.rs); these need nothing.
-//! `signal_poll()`, called at each loop start of a program with `on interrupt {…}`, runs that handler (the exported
-//! `on·interrupt`) after a ctrl-c (notes/system_signals.md): the first poll installs the SIGINT handler, which only sets
+//! `signal_poll()`, called at the start and end of main and at each loop start of a program with `on interrupt {…}`,
+//! runs that handler (the exported `on·interrupt`) after a ctrl-c (notes/system_signals.md); a ctrl-c also ends a
+//! `sleep` early and runs it. The first poll installs the SIGINT handler, which only sets
 //! a flag; a second ctrl-c within a second ends the run at once (exit code 130), so a handler that ignores ctrl-c
 //! never makes a program unstoppable.
 pub const HOST_LIBRARY: &str = "host";
@@ -28,7 +29,12 @@ mod linking {
 
 	/// Link sleep, random, random_below and clock, for a store of any state
 	pub fn link_host_words<T: 'static>(linker: &mut Linker<T>) -> Result<()> {
-		linker.func_wrap(HOST_LIBRARY, SLEEP, |milliseconds: i64| std::thread::sleep(Duration::from_millis(milliseconds.max(0) as u64)))?;
+		linker.func_wrap(HOST_LIBRARY, SLEEP, |caller: Caller<'_, T>, milliseconds: i64| {
+			if interrupt::sleep_unless_interrupted(Duration::from_millis(milliseconds.max(0) as u64)) {
+				run_interrupt_handler(caller)?;
+			}
+			Ok(())
+		})?;
 		// the top 53 bits make a uniform f64 in [0, 1)
 		linker.func_wrap(HOST_LIBRARY, RANDOM, || (next_random() >> 11) as f64 / (1u64 << 53) as f64)?;
 		linker.func_wrap(HOST_LIBRARY, RANDOM_BELOW, |bound: i64| if bound <= 0 { 0 } else { (next_random() % bound as u64) as i64 })?;
@@ -67,6 +73,26 @@ mod linking {
 		static LAST_SIGNAL: AtomicI64 = AtomicI64::new(0);
 		static WATCHING: Once = Once::new();
 
+		/// How often a sleep of a watching program looks for a ctrl-c
+		const SLEEP_SLICE: std::time::Duration = std::time::Duration::from_millis(10);
+
+		/// Sleep; a watching program wakes early at a ctrl-c: whether one came
+		pub fn sleep_unless_interrupted(duration: std::time::Duration) -> bool {
+			if !WATCHING.is_completed() {
+				std::thread::sleep(duration);
+				return false;
+			}
+			let end = std::time::Instant::now() + duration;
+			while !INTERRUPTED.load(Ordering::SeqCst) {
+				let left = end.saturating_duration_since(std::time::Instant::now());
+				if left.is_zero() {
+					return false;
+				}
+				std::thread::sleep(left.min(SLEEP_SLICE));
+			}
+			true
+		}
+
 		/// Whether a ctrl-c came since the last call; the first call starts watching
 		pub fn take() -> bool {
 			WATCHING.call_once(|| unsafe {
@@ -95,6 +121,11 @@ mod linking {
 
 	#[cfg(not(unix))]
 	mod interrupt {
+		pub fn sleep_unless_interrupted(duration: std::time::Duration) -> bool {
+			std::thread::sleep(duration);
+			false
+		}
+
 		/// not yet on this platform: ctrl-c ends the run as before
 		pub fn take() -> bool {
 			false

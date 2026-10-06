@@ -1276,39 +1276,58 @@ impl WasmGcEmitter {
 		let string_type = self.type_manager.string_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 
-		// list_with_at(list, index, value): copies the cells up to index, shares the rest
+		// list_with_at(list, index, value): copies the cells up to index, shares the rest; iterative (the cells before
+		// index into an array, rebuilt backwards), so a deep index never exhausts the call stack
 		let list_with_at = next_index(self);
 		let params = vec![node_ref_nullable, ValType::I64, ValType::I64];
-		self.runtime_function("list_with_at", params, vec![node_ref], vec![], |s, f| {
-			f.instruction(&I::LocalGet(0));
-			f.instruction(&I::RefIsNull);
-			s.emit_fail_if(f, "index_out_of_range");
-			// lists do not grow by index, the empty list ø included (user, 2026-10-04)
-			s.emit_field(f, 0, 0);
-			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq]);
-			s.emit_fail_if(f, "index_out_of_range");
+		let node_array = self.type_manager.node_array_type;
+		let cells_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(node_array) });
+		let locals = vec![node_ref_nullable, ValType::I64, cells_ref, ValType::I32, node_ref_nullable];
+		self.runtime_function("list_with_at", params, vec![node_ref], locals, |s, f| {
+			let (list, index, value, cell, countdown, cells, position, result) = (0, 1, 2, 3, 4, 5, 6, 7);
+			let kind_test = |s: &Self, f: &mut Function| {
+				// a missing cell or ø: lists do not grow by index, the empty list ø included (user, 2026-10-04)
+				Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull]);
+				s.emit_fail_if(f, "index_out_of_range");
+				s.emit_field(f, cell, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq]);
+				s.emit_fail_if(f, "index_out_of_range");
+			};
 			Self::emit_index_compare(f, I::I64LtS);
 			s.emit_fail_if(f, "index_out_of_range");
-			s.emit_field(f, 0, 0);
-			Self::emit_index_compare(f, I::I64Eq);
-			f.instruction(&I::If(BlockType::Result(Ref(RefType::ANYREF))));
-			f.instruction(&I::LocalGet(2));
+			// the cell at index
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::LocalGet(index), I::LocalSet(countdown), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			kind_test(s, f);
+			Self::emit_list(f, &[I::LocalGet(countdown), I::I64Const(1), I::I64Eq, I::BrIf(1)]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::LocalGet(countdown), I::I64Const(1), I::I64Sub, I::LocalSet(countdown), I::Br(0), I::End, I::End]);
+			// it, with the value
+			s.emit_field(f, cell, 0);
+			Self::emit_list(f, &[I::LocalGet(value)]);
 			s.call(f, "new_int");
-			f.instruction(&I::Else);
-			s.emit_field(f, 0, 1);
-			f.instruction(&I::End);
-			Self::emit_index_compare(f, I::I64GtS);
-			f.instruction(&I::If(BlockType::Result(node_ref_nullable)));
-			s.emit_field(f, 0, 2);
-			Self::emit_index_compare(f, I::I64Sub);
-			f.instruction(&I::LocalGet(2));
-			f.instruction(&I::Call(list_with_at));
-			f.instruction(&I::Else);
-			s.emit_field(f, 0, 2);
-			f.instruction(&I::End);
-			f.instruction(&I::StructNew(node_type));
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::StructNew(node_type), I::LocalSet(result)]);
+			// the cells before it, in order
+			Self::emit_list(f, &[
+				I::LocalGet(index), I::I64Const(1), I::I64Sub, I::I32WrapI64, I::ArrayNewDefault(node_array), I::LocalSet(cells),
+				I::LocalGet(list), I::LocalSet(cell), I::I32Const(0), I::LocalSet(position),
+				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(position), I::LocalGet(cells), I::ArrayLen, I::I32GeU, I::BrIf(1),
+				I::LocalGet(cells), I::LocalGet(position), I::LocalGet(cell), I::ArraySet(node_array),
+			]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::LocalGet(position), I::I32Const(1), I::I32Add, I::LocalSet(position), I::Br(0), I::End, I::End]);
+			// rebuilt from the last one back, each sharing what follows
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(position), I::I32Eqz, I::BrIf(1),
+				I::LocalGet(position), I::I32Const(1), I::I32Sub, I::LocalSet(position),
+				I::LocalGet(cells), I::LocalGet(position), I::ArrayGet(node_array), I::LocalSet(cell)]);
+			s.emit_field(f, cell, 0);
+			s.emit_field(f, cell, 1);
+			Self::emit_list(f, &[I::LocalGet(result), I::StructNew(node_type), I::LocalSet(result), I::Br(0), I::End, I::End,
+				I::LocalGet(result), I::RefAsNonNull]);
 		});
-		assert_eq!(self.func_index("list_with_at"), list_with_at, "recursive call index");
+		assert_eq!(self.func_index("list_with_at"), list_with_at, "node_with_at forwards to this index");
 
 		// text_with_char_at(text, index, value): a fresh copy with the grapheme at index replaced by the UTF-8 of value
 		let text_with_char_at = next_index(self);

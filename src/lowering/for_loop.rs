@@ -16,6 +16,12 @@ const RANGE_CALL: &str = "range";
 const FIRST_INDEX: i64 = 0;
 
 /// The `while` lowering of a `for` loop, or the node itself when it is not one
+/// The counter of a loop over a list's items, `x·index`: 0, then ++ while below the item count (wasm_emitter
+/// bounded_counters proves it an i32, so its arithmetic needs no big-integer checks)
+pub const INDEX_SUFFIX: &str = "·index";
+/// The list a for loop walks, `x·items`, assigned once before the loop
+pub const ITEMS_SUFFIX: &str = "·items";
+
 pub fn lower(node: Node) -> Result<Node, Node> {
 	let lowered = match node.drop_meta() {
 		Node::List(items, Bracket::Round | Bracket::None, _) => classic_for(items),
@@ -177,7 +183,7 @@ fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body:
 
 fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
 	let name = variable.name();
-	let (items, index) = (symbol(&format!("{name}·items")), symbol(&format!("{name}·index")));
+	let (items, index) = (symbol(&format!("{name}{ITEMS_SUFFIX}")), symbol(&format!("{name}{INDEX_SUFFIX}")));
 	let element = key(items.clone(), Op::Hash, key(index.clone(), Op::Add, number(1)));
 	let mut statements = vec![key(variable.clone(), Op::Assign, element)];
 	statements.append(&mut body);
