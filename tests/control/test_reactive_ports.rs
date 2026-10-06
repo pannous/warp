@@ -81,4 +81,6 @@ fn a_named_event_handler_is_removed_and_counted() {
 	is!("on tick {1}; on tick {2}; count listeners of tick", 2);
 	is!("on tick {1}; h = on tick {2}; remove h from listeners of tick; count listeners of tick", 1);
 	is!("n = 0; h = on ready {n += 1}; remove h from listeners of ready; raise ready; n", 0);
+	// RxJS take(2): the handler removes itself
+	is!("taken = 0; h = on tick {taken += 1; if taken == 2 {remove h from listeners of tick}}; for i in 1 to 5 {raise tick}; taken", 2);
 }

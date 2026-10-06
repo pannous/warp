@@ -69,6 +69,8 @@ pub fn lower(program: Node) -> Node {
 	let unnamed = |event: &str| handlers.iter().filter(|(_, name, _)| name == event).count() - named.iter().filter(|(_, other)| other == event).count();
 	let counts: HashMap<String, usize> = handlers.iter().map(|(_, name, _)| (name.clone(), unnamed(name))).collect();
 	let statements: Vec<Node> = statements.into_iter().map(|statement| reflected(statement, &named, &counts)).collect();
+	// a handler may remove itself (`if taken == 2 {remove h from listeners of tick}`)
+	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index, name, reflected(body, &named, &counts))).collect();
 	let statements: Vec<Node> = flags.iter().map(|(flag, initial)| assign(flag, initial.clone())).chain(statements).collect();
 	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
 	#[cfg(feature = "native")]
