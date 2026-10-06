@@ -91,6 +91,15 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   P112 no batching block (user chose this over `together { }`): only a multi-assignment `a, b = 1, 2` notifies once.
 - P113 the CLI and console show nothing for a ø result (like Python's None): `warp 'print 3'` prints only "3", and
   `x = ø; x` prints nothing. Asked by warp-d6 (after #18, print gives ø; show() in src/main.rs); as recommended.
+- P114 (card g-1tHQ, warp-d6) user: "we already have a general Meta mechanism so the meta keyword or attribute should
+  persist and be filled with the comments when we activate them but usually they should be deactivated": `x.meta` /
+  `x.@key` stay; comments fill them only when activated (off by default, no compile cost); plain keys inside `.meta`
+  (`.meta.comment`), `@` for direct reads. Assumed (undoable): activation by the pragma `use comments`; bindings only
+  for now (fields/functions unanswered).
+- Classes (issue #14, card g-1nug, warp-40, notes/classes.md): P115 bare field names read the receiver, `self`
+  (alias `this`) too; P116 `c.inc()` updates the variable c (objects are values, like `xs.add(v)`); P117 a body
+  definition without parentheses (`area := side*side`) is a getter computed at each read, and `class b extends a`
+  copies a's fields and methods (b's own override) (user chose inheritance over the recommended none).
 - P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
   behind them go; no test edits. Asked by warp-40 (code-quality).
 - P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.
