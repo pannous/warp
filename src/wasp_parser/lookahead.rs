@@ -136,6 +136,7 @@ impl WaspParser {
 		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
 		if self.matches_keyword("to") { return Some((Op::To, 2)); }
 		if self.matches_keyword("upto") { return Some((Op::Range, 4)); } // wiki/range.md: `1 upto 10` excludes 10
+		if let Some(length) = self.down_to_length() { return Some((Op::To, length)); }
 		// Kotlin's `for i in 0 until n`; elsewhere `until` guards a statement: `i++ until c`
 		if self.in_for_header && self.matches_keyword("until") { return Some((Op::Range, 5)); }
 
@@ -183,6 +184,15 @@ impl WaspParser {
 		STATEMENT_MODIFIERS.iter()
 			.find(|(word, _, negated)| *negated && self.matches_keyword(word))
 			.map(|(word, op, _)| (*op, word.len()))
+	}
+
+	/// `10 down to 1`: the length of the words `down to` (Kotlin's `downTo`), the range counting down
+	fn down_to_length(&self) -> Option<usize> {
+		if !self.matches_keyword(DOWN_WORD) {
+			return None;
+		}
+		let blanks = (DOWN_WORD.len()..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		(blanks > 0 && self.word_at(DOWN_WORD.len() + blanks) == TO_WORD).then(|| DOWN_WORD.len() + blanks + TO_WORD.len())
 	}
 
 	/// `try` or `assert` followed by an operand: the words that guard a statement
@@ -367,6 +377,17 @@ impl WaspParser {
 			'∛' => Some((Op::Cbrt, 1)),
 			'‖' => Some((Op::Abs, 1)),
 			'#' => Some((Op::Hash, 1)), // prefix # means count/length
+			// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the
+			// subject; a glued `<tag` stays a bracket
+			'>' | '<' if !self.options.xml_mode && !self.options.data_mode => {
+				let (op, length) = match (c1, c2) {
+					('>', '=') => (Op::Ge, 2),
+					('<', '=') => (Op::Le, 2),
+					('>', _) => (Op::Gt, 1),
+					_ => (Op::Lt, 1),
+				};
+				matches!(self.peek_char(length), ' ' | '\t').then_some((op, length))
+			}
 			_ => None,
 		}
 	}

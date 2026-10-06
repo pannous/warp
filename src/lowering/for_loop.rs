@@ -14,6 +14,10 @@ const IN_KEYWORD: &str = "in";
 const IMPLICIT_VARIABLE: &str = "it";
 const RANGE_CALL: &str = "range";
 const FIRST_INDEX: i64 = 0;
+/// `for c in x to 'e'`: the codepoint counter `c·code`, read with ord and made a letter with chr
+const CODE_SUFFIX: &str = "·code";
+const ORD_WORD: &str = "ord";
+const CHR_WORD: &str = "chr";
 
 /// The `while` lowering of a `for` loop, or the node itself when it is not one
 /// The counter of a loop over a list's items, `x·index`: 0, then ++ while below the item count (wasm_emitter
@@ -105,7 +109,11 @@ fn for_in(items: &[Node]) -> Option<Node> {
 		return Some(destructuring_loop(&names, iterable, body));
 	}
 	Some(match counting_range(&iterable).drop_meta() {
-		Node::Key(start, op @ (Op::Range | Op::To), end) => counting_loop(variable, start, *op, end, body),
+		Node::Key(start, op @ (Op::Range | Op::To), end) => match letters(start, *op, end) {
+			Some(letters) => walking_loop(variable, letters, body),
+			None if is_letter(start) || is_letter(end) => letter_loop(variable, start, *op, end, body),
+			None => counting_loop(variable, &counted_start(start), *op, end, body),
+		},
 		_ => walking_loop(variable, iterable, body),
 	})
 }
@@ -131,6 +139,39 @@ fn branch_it_as(branch: Node, variable: &Node) -> Node {
 }
 
 /// The range an iterable spells: `(a..b)` is `a..b`, Python's `range(n)` is `0..n` and `range(a, b)` is `a..b`
+/// `'a' to 'e'` (Kotlin's `'a'..'e'`): the letters as a list, `..` without the last
+fn letters(start: &Node, op: Op, end: &Node) -> Option<Node> {
+	let (Node::Char(first), Node::Char(last)) = (start.drop_meta(), end.drop_meta()) else { return None };
+	let last = if op == Op::To { *last as u32 } else { (*last as u32).checked_sub(1)? };
+	let letters = (*first as u32..=last).filter_map(char::from_u32).map(Node::Char).collect();
+	Some(Node::List(letters, Bracket::Square, Separator::Space))
+}
+
+fn is_letter(bound: &Node) -> bool {
+	matches!(bound.drop_meta(), Node::Char(_))
+}
+
+/// `c to 'e'` of a letter held in a variable: counting the codepoints, the loop variable the letter of each
+fn letter_loop(variable: &Node, start: &Node, op: Op, end: &Node, body: Vec<Node>) -> Node {
+	let code = symbol(&format!("{}{CODE_SUFFIX}", variable.name()));
+	let codepoint = |letter: &Node| call(ORD_WORD, letter.clone());
+	let letter = key(variable.clone(), Op::Assign, call(CHR_WORD, code.clone()));
+	counting_loop(&code, &codepoint(start), op, &codepoint(end), [vec![letter], body].concat())
+}
+
+fn call(function: &str, argument: Node) -> Node {
+	Node::List(vec![symbol(function), argument], Bracket::Round, Separator::None)
+}
+
+/// A variable start counts as a number: `x to 3` of an undefined x is the error "undefined variable: x" (and a
+/// character in it the error of a character in arithmetic), not a counter of the wrong type
+fn counted_start(start: &Node) -> Node {
+	match start.drop_meta() {
+		Node::Symbol(_) => key(start.clone(), Op::Add, number(0)),
+		_ => start.clone(),
+	}
+}
+
 fn counting_range(iterable: &Node) -> Node {
 	match iterable.drop_meta() {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => counting_range(&items[0]),
