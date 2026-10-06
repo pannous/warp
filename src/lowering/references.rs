@@ -1,7 +1,7 @@
-//! wiki/reference.md: inside a data literal `$a` names the enclosing node `a`, `$1` the enclosing node that declares
-//! `@id:1` (`a[id=1]{…}`), so a literal describes a cyclic graph. The reference stays a name, so printing never loops.
-//! A path read of a variable that holds such a literal follows the references at compile time: with
-//! `x = a{ b:2 c{ parent=$a } }`, `x.c.parent.b` is `x.b`.
+//! wiki/reference.md: inside a data literal `$a` names the enclosing node `a`, `@1` the enclosing node that declares
+//! `@id:1` (`a[id=1]{…}`), in words `ref a` and `ref 1` (P160); `$1` stays a positional parameter. A literal so
+//! describes a cyclic graph; the reference stays a name, so printing never loops. A path read of a variable that holds
+//! such a literal follows the references at compile time: with `x = a{ b:2 c{ parent=$a } }`, `x.c.parent.b` is `x.b`.
 
 use crate::node::{Bracket, Node, ATTRIBUTE_MARK};
 use crate::operators::Op;
@@ -9,9 +9,11 @@ use std::collections::HashMap;
 
 const REFERENCE_MARK: char = '$';
 const ID_KEY: &str = "id";
+const REFERENCE_WORD: &str = "ref";
 
 pub fn lower(node: Node) -> Node {
-	let node = named_references(node, &mut Vec::new());
+	let word_is_free = !crate::library_words::defined_names(&node).contains(REFERENCE_WORD);
+	let node = named_references(node, &mut Vec::new(), word_is_free);
 	let literals = referencing_literals(&node);
 	if literals.is_empty() {
 		return node;
@@ -38,21 +40,39 @@ fn declared_id(items: &[Node]) -> Option<String> {
 	})
 }
 
-/// `$1` of an enclosing node declaring `@id:1` becomes the name reference `$a`, so no pass takes it for Swift's
-/// parameter `$1`; a `$n` no enclosing node declares stays the parameter
-fn named_references(node: Node, enclosing: &mut Vec<(String, Option<String>)>) -> Node {
-	if let Node::Symbol(word) = &node {
-		let id = word.strip_prefix(REFERENCE_MARK).unwrap_or_default();
-		if let Some((name, _)) = enclosing.iter().rev().find(|(_, declared)| !id.is_empty() && declared.as_deref() == Some(id)) {
-			return Node::Symbol(format!("{REFERENCE_MARK}{name}"));
+/// `@1` of an enclosing node declaring `@id:1`, `ref 1` and `ref a` become the name reference `$a`; `$1` there stays
+/// the parameter, with a note naming `@1`
+fn named_references(node: Node, enclosing: &mut Vec<(String, Option<String>)>, word_is_free: bool) -> Node {
+	let name_with_id = |id: &str, enclosing: &[(String, Option<String>)]| {
+		enclosing.iter().rev().find(|(_, declared)| declared.as_deref() == Some(id)).map(|(name, _)| Node::Symbol(format!("{REFERENCE_MARK}{name}")))
+	};
+	let digits = |text: &str| !text.is_empty() && text.chars().all(|ch| ch.is_ascii_digit());
+	match &node {
+		Node::Symbol(word) if word.strip_prefix(ATTRIBUTE_MARK).is_some_and(digits) => {
+			return name_with_id(&word[ATTRIBUTE_MARK.len_utf8()..], enclosing).unwrap_or(node);
 		}
-		return node;
+		Node::Symbol(word) if word.strip_prefix(REFERENCE_MARK).is_some_and(digits) => {
+			let id = &word[REFERENCE_MARK.len_utf8()..];
+			if name_with_id(id, enclosing).is_some() {
+				crate::normalize::advise(word, &format!("{ATTRIBUTE_MARK}{id}"), &format!("{word} is a parameter; the node with id {id} is {ATTRIBUTE_MARK}{id}"));
+			}
+			return node;
+		}
+		// `ref 1`, `ref a`
+		Node::List(items, _, _) if word_is_free && items.len() == 2 && items[0].drop_meta().name() == REFERENCE_WORD => {
+			match items[1].drop_meta() {
+				Node::Number(id) => return name_with_id(&id.to_string(), enclosing).unwrap_or(node),
+				Node::Symbol(name) => return Node::Symbol(format!("{REFERENCE_MARK}{name}")),
+				_ => {}
+			}
+		}
+		_ => {}
 	}
 	let Some((name, items)) = named_body(&node) else {
-		return node.map_children(|child| named_references(child, enclosing));
+		return node.map_children(|child| named_references(child, enclosing, word_is_free));
 	};
 	enclosing.push((name, declared_id(items)));
-	let node = node.map_children(|child| named_references(child, enclosing));
+	let node = node.map_children(|child| named_references(child, enclosing, word_is_free));
 	enclosing.pop();
 	node
 }

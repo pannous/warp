@@ -43,30 +43,26 @@ branch wiki-references (on main 7d1f05c79); "→" is what warp gives today.
 - CLASH, data literal: `x = a{ id:1 b{ up=$1 } }` → `b` becomes a closure (`a{id:1 b:closure_lambda_1}`): any
   `{…}` holding `$1` reads as a Swift closure.
 
-### `$1` / `$a`: references in data (wiki/reference.md)
-- implemented default (branch wiki-references): `a[id=1]{ b c { parent=$1 } }` is `a{@id:1 …}`; `$1` is a reference
-  only when an enclosing node of the same literal declares `@id:1`, `$a` when one is named `a`; a path follows them
-  (`x.c.parent.b` → `x.b`). Otherwise `$1` stays the parameter.
-- CLASH: `a{ id:1 b{ up=$1 } }` (id as a field, not an attribute) is still the closure above; and a reference inside
-  a lambda inside a literal (`a[id=1]{ f:{ $1 } }`) now means the node, not the closure's second parameter.
+### `$a`, `@1`, `ref`: references in data (wiki/reference.md, P160 decided 2026-10-06)
+- `a[id=1]{ b c { parent=@1 } }` is `a{@id:1 …}`; `@1` names the enclosing node whose `@id` is 1, `$a` the one named
+  `a`, in words `ref 1` / `ref a` (a variable or function named ref wins); a path follows them (`x.c.parent.b` → `x.b`).
+- `$<digits>` is only ever positional; `$1` beside an enclosing id 1 stays the closure parameter, with a note naming `@1`.
+- still open: `a{ id:1 b{ up=$1 } }` (id as a field) makes `b` a closure, as any `{…}` holding `$1`.
 
 ### `_`
 - a plain name: `_ = 5; _` → 5; Swift's argument label `func apply(_ f: …)`.
 - not a parameter: `[1,2,3].map{_*2}` → "undefined variable: _" (Scala would give [2 4 6]).
 
 ## The clashes in one line each
-1. `$n` means three things: a closure's n-th argument (Swift), the compiled function's local n (wasm), and now a
-   node with id n (references). Nested closures make the first ambiguous.
+1. `$n` means two things: a closure's n-th argument (Swift) and the compiled function's local n (wasm); nested
+   closures make the first ambiguous (ids were a third meaning until P160 gave them `@1`).
 2. `it` leaks from an enclosing function into an inner lambda, and nested `it` is undefined instead of shadowing.
 3. `name{…}` glued is data, `name {…}` spaced is a call with a block: `xs.map{it*2}` fails.
 4. A block is decided to be a closure by what it contains (`$n`, `it`), not where it stands.
 
-## Recommendation
-- References get their own sigil-free spelling or a distinct one, so `$n` keeps one meaning: a reference names the
-  node's id or name (`$a`, `$#1` or `^1`), and `$<digits>` is only ever a positional parameter. The current default
-  (reference only when an enclosing node declares the id) works, but a reader cannot tell the two apart locally.
+## Recommendation (P160 took the first point: ids are `@1`, `$<digits>` stays positional)
 - `it` and `$0` in a nested lambda: the innermost lambda wins (Kotlin's shadowing), with a got-it note when an outer
-  `it` is shadowed; a function's `it` binding stops at an inner lambda.
+  `it` is shadowed; a function's `it` binding stops at an inner lambda (cards nested-it, it-leak).
 - Glued `name{…}` after a dot (`xs.map{…}`) is a method call with a block, as in Kotlin/Swift/Ruby; `a{…}` at the start
-  of an item stays data.
+  of an item stays data (card glued-block).
 - `_` stays a name (no Scala placeholder): one more implicit form would add a fourth meaning.
