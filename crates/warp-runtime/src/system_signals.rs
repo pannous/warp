@@ -393,6 +393,8 @@ mod interrupt {
 			}
 		}
 
+		// time_t and c_long are i64 on 64-bit Linux, i32 on 32-bit targets: the casts are needed there
+		#[allow(clippy::unnecessary_cast)]
 		fn monotonic_milliseconds() -> i64 {
 			let mut now = libc::timespec { tv_sec: 0, tv_nsec: 0 };
 			unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };

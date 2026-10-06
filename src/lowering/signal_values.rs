@@ -404,7 +404,7 @@ impl Subscriptions {
 			}
 		};
 		// the listener shares the main-level variables it changes, as a named one does (P124)
-		let globals = crate::event_signals::global_declarations(&[check.clone()], &self.main_variables, &[VALUE_WORD, OLD_WORD]);
+		let globals = crate::event_signals::global_declarations(std::slice::from_ref(&check), &self.main_variables, &[VALUE_WORD, OLD_WORD]);
 		let closure_check = if globals.is_empty() { check.clone() } else { block(globals.iter().cloned().chain([check.clone()]).collect()) };
 		// every listener closure of one arity returns one kind (wasm_emitter/closures.rs): 0
 		let listener = from_template(&format!("({VALUE_WORD}, {OLD_PLACEHOLDER}) => {{ {CHECK_PLACEHOLDER}; 0 }}"), &[(CHECK_PLACEHOLDER, closure_check)]);

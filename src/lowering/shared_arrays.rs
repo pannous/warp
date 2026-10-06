@@ -87,7 +87,6 @@ pub fn lower(node: Node) -> Node {
 		crate::diagnostic::educate_once(LINEAR_TOPIC, "linear xs = int[n]", "xs = int[n]",
 			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
 	}
-	let mut declared = declared;
 	declared.extend(float_map_results(&node, &declared));
 	let functions = definitions(&node);
 	let shared_parameters = shared_parameters(&node, &functions, &declared);

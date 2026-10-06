@@ -299,25 +299,6 @@ pub fn grapheme_clusters(text: &str) -> Vec<&str> {
 	clusters
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_char_str_eq() {
-		assert!('l'.is("l"));
-		// assert!('1'.is(1));
-		// assert!("l".is('l'));
-	}
-
-	#[test]
-	fn test_str_plus() {
-		// eq!("a"+"b", "ab");
-		assert_eq!("a".s() + "b", "ab");
-		// eq!("a".s()+2, "a2");
-	}
-}
-
 /// Edit distance (insertions, deletions, substitutions, adjacent swaps) between two words
 pub fn edit_distance(a: &str, b: &str) -> usize {
 	let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
@@ -344,4 +325,23 @@ pub fn edit_distance(a: &str, b: &str) -> usize {
 pub fn near_miss(word: &str, names: impl IntoIterator<Item = String>) -> Option<String> {
 	let allowed = if word.chars().count() < 6 { 1 } else { 2 };
 	names.into_iter().filter(|name| name != word).find(|name| edit_distance(word, name) <= allowed)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_char_str_eq() {
+		assert!('l'.is("l"));
+		// assert!('1'.is(1));
+		// assert!("l".is('l'));
+	}
+
+	#[test]
+	fn test_str_plus() {
+		// eq!("a"+"b", "ab");
+		assert_eq!("a".s() + "b", "ab");
+		// eq!("a".s()+2, "a2");
+	}
 }

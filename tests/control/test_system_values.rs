@@ -50,7 +50,7 @@ fn dark_mode_is_the_appearance_of_macos() {
 #[cfg(all(feature = "native", any(target_os = "macos", target_os = "linux")))]
 fn the_battery_is_a_percent_or_a_loud_error() {
 	match warp::wasm_emitter::eval("battery") {
-		Node::Number(number) => assert!((0.0..=100.0).contains(&f64::from(number.clone())), "{number:?}"),
+		Node::Number(number) => assert!((0.0..=100.0).contains(&f64::from(number)), "{number:?}"),
 		Node::Error(message) => assert!(format!("{message}").contains("battery"), "{message}"),
 		other => panic!("battery: {other:?}"),
 	}

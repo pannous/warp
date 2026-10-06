@@ -1556,7 +1556,7 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 			Some(result_type) => Node::Key(Box::new(head), Op::Colon, result_type.clone()),
 			None => head,
 		};
-		Node::Key(Box::new(head), op.clone(), body.clone())
+		Node::Key(Box::new(head), *op, body.clone())
 	};
 	Some(Node::List(definitions.iter().map(method).collect(), Bracket::None, Separator::Semicolon))
 }

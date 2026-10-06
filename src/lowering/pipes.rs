@@ -32,7 +32,7 @@ pub fn pipe_stage(stage: Node) -> Node {
 /// `sqrt`, `abs` alone: the operator
 fn operator_stage(node: &Node) -> Option<Op> {
 	match node.drop_meta() {
-		Node::Key(left, op, right) if OPERATOR_STAGES.contains(op) && matches!(left.drop_meta(), Node::Empty) && matches!(right.drop_meta(), Node::Empty) => Some(op.clone()),
+		Node::Key(left, op, right) if OPERATOR_STAGES.contains(op) && matches!(left.drop_meta(), Node::Empty) && matches!(right.drop_meta(), Node::Empty) => Some(*op),
 		_ => None,
 	}
 }

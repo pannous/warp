@@ -109,7 +109,7 @@ fn load(path: &str) -> Result<Loaded, String> {
 		let Some(index) = index else { return };
 		match item {
 			ComponentItem::ComponentFunc(_) => functions.push((name.to_string(), index)),
-			ComponentItem::Resource(_) => kinds.extend(instance.get_resource(&mut *store, &index).map(|ty| (ty, name.to_string()))),
+			ComponentItem::Resource(_) => kinds.extend(instance.get_resource(&mut *store, index).map(|ty| (ty, name.to_string()))),
 			_ => {}
 		}
 	};

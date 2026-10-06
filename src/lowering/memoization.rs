@@ -62,9 +62,12 @@ fn is_memoizable(function: &UserFunctionDef, report: &EffectReport, main: &Scope
 		&& captured_variables(function, main).is_empty()
 }
 
+/// A constructor of a definition of the same form for another head and body
+pub(crate) type Rebuild = Box<dyn Fn(Node, Node) -> Node>;
+
 /// A definition `f(n) := body`, `def f(n) = body` (`(f n) = body`) or `def f(n): body` (the keyword form, not yet
 /// lowered here): its head, body and a constructor of the same form for another head and body
-pub(crate) fn definition_parts(node: &Node) -> Option<(Node, Node, Box<dyn Fn(Node, Node) -> Node>)> {
+pub(crate) fn definition_parts(node: &Node) -> Option<(Node, Node, Rebuild)> {
 	match node.drop_meta() {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if *op == Op::Define || is_call_head(head) => {
 			let op = *op;
@@ -96,9 +99,7 @@ fn rewritten(node: Node, memoized: &[String]) -> Node {
 	if let Some(cached) = cached(&node, memoized) {
 		return cached;
 	}
-	match node {
-		other => other.map_children(|child| rewritten(child, memoized)),
-	}
+	node.map_children(|child| rewritten(child, memoized))
 }
 
 /// The definition of a memoized function with its body behind the cache
