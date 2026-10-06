@@ -26,3 +26,11 @@ fn rxjs_node_qt_events() {
 	is!("n = 0; on pressed {raise clicked}; on clicked {n += 1}; raise pressed; n", 1);
 	is!("seen = 0; def show(v){ global seen; seen = v }; x = 0; on set x : show(value); x = 9; seen", 9);
 }
+
+// RxJS unsubscribe, C# `-=`: a named listener changes the program's variables as an unnamed one does (P124)
+#[test]
+fn a_named_listener_is_removed_and_shares_variables() {
+	is!("x = 0; n = 0; s = on set x {n += 1}; x = 1; remove s from listeners of x; x = 2; n", 1);
+	is!("x = 0; n = 0; h = on set x {n += 1}; x = 1; listeners of x -= h; x = 2; n", 1);
+	is!("x = 0; n = 0; h = on change x {n += value}; x = 4; x = 4; n", 4);
+}
