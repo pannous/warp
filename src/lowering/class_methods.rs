@@ -51,7 +51,9 @@ pub fn constructor_name(class: &str) -> String {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = copies(with_impls(node));
+	let node = with_named_constructors(copies(with_impls(node)));
+	let node = with_members(node);
+	let node = with_class_attributes(class_typed_declarations(node));
 	let node = match with_mixins(node) {
 		Ok(node) => node,
 		Err(error) => return error,
@@ -99,6 +101,12 @@ fn renamed_type_word_methods(node: Node) -> Node {
 	}
 	let mut instances = vec![RECEIVER.to_string(), RECEIVER_ALIASES[0].to_string()];
 	node.visit(&mut |part| if let Node::Key(target, op, value) = part {
+		// `p:Point = …`: the annotation says it
+		if let (Node::Key(variable, Op::Colon, class), Op::Assign) = (target.drop_meta(), op) {
+			if classes.contains(&class.drop_meta().name()) {
+				instances.push(variable.drop_meta().name());
+			}
+		}
 		let Node::Symbol(variable) = target.drop_meta() else { return };
 		let class = match (op, value.drop_meta()) {
 			(Op::Assign | Op::Define, Node::List(items, Bracket::Round, _)) => items.first().map(|first| first.drop_meta().name()),
@@ -376,7 +384,7 @@ fn inherit(node: Node) -> Result<(Node, Vec<Node>), Node> {
 fn class_items(body: &Node) -> Vec<Node> {
 	let items = match body.drop_meta() {
 		// a block of one statement `{fn sum() …}` is that statement's words
-		Node::List(words, Bracket::Curly, Separator::Space) if words.first().is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))) => {
+		Node::List(words, Bracket::Curly, Separator::Space) if words.first().is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))) || auto_property(words).is_some() || typed_field(words).is_some() => {
 			vec![Node::List(words.clone(), Bracket::None, Separator::Space)]
 		}
 		Node::List(items, _, _) => items.clone(),
@@ -389,6 +397,11 @@ fn class_items(body: &Node) -> Vec<Node> {
 		Node::List(words, _, _) if value_block(words).is_some() => value_block(words).into_iter().collect(),
 		Node::List(words, _, _) if accessors(words).is_some() => accessors(words).unwrap_or_default(),
 		Node::List(..) if included_mixin(&item).is_some() => vec![item],
+		// Java's `int x`: the field x of type int; C#'s auto-property `int X { get; set; }` the field X
+		Node::List(words, _, _) if typed_field(words).is_some() => typed_field(words).into_iter().collect(),
+		Node::List(words, _, _) if auto_property(words).is_some() => auto_property(words).into_iter().collect(),
+		// TypeScript's `twice(): number { … }`
+		Node::Key(call, Op::Colon, typed_block) if typed_method(call, typed_block).is_some() => typed_method(call, typed_block).into_iter().collect(),
 		Node::List(group, Bracket::None, _) => group.clone(),
 		_ => vec![item],
 	}).map(as_member).collect()
@@ -396,8 +409,8 @@ fn class_items(body: &Node) -> Vec<Node> {
 
 /// `def area() -> int {…}`, `fun area(): Int {…}`, `func area() {…}`: the method `area() := …` (with its result type)
 fn keyword_method(words: &[Node]) -> Option<Node> {
-	// Kotlin's expression body `fun sum() = x + y` defines as `:=` does
-	match crate::declarations::keyword_definition(words)? {
+	// Kotlin's expression body `fun sum() = x + y` defines as `:=` does; Java's `int sum() {…}` as C's
+	match crate::declarations::keyword_definition(words).or_else(|| crate::declarations::c_function(words))? {
 		Node::Key(head, Op::Assign, body) => Some(Node::Key(head, Op::Define, body)),
 		definition => Some(definition),
 	}
@@ -485,6 +498,138 @@ fn without_modifiers(item: Node) -> Node {
 		length if length == words.len() => item,
 		1 => kept.into_iter().next().expect("one"),
 		_ => Node::List(kept, bracket, separator),
+	}
+}
+
+/// Java's and C#'s field `int x`: the field `x:int`
+fn typed_field(words: &[Node]) -> Option<Node> {
+	let [field_type, name] = words else { return None };
+	let is_type = crate::analyzer::type_word_kind(&field_type.drop_meta().name()).is_some();
+	(is_type && matches!(name.drop_meta(), Node::Symbol(_))).then(|| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(field_type.clone())))
+}
+
+/// C#'s auto-property `int X { get; set; }` (or `{ get; init; }`): the field `X:int`
+fn auto_property(words: &[Node]) -> Option<Node> {
+	let [field_type, name, accessors] = words else { return None };
+	let Node::List(accessors, Bracket::Curly, _) = accessors.drop_meta() else { return None };
+	let only_accessors = !accessors.is_empty() && accessors.iter().all(|accessor| matches!(accessor.drop_meta().name().as_str(), "get" | "set" | "init"));
+	only_accessors.then(|| typed_field(&[field_type.clone(), name.clone()])).flatten()
+}
+
+/// TypeScript's method with its result type, `twice(): number { … }`: `twice():number := {…}`
+fn typed_method(call: &Node, typed_block: &Node) -> Option<Node> {
+	let is_call = matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+	let Node::List(parts, _, _) = typed_block.drop_meta() else { return None };
+	let [result_type, block] = parts.as_slice() else { return None };
+	let is_block = matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _));
+	(is_call && is_block).then(|| Node::Key(Box::new(Node::Key(Box::new(call.clone()), Op::Colon, Box::new(result_type.clone()))), Op::Define, Box::new(block.clone())))
+}
+
+/// Python's class attribute: a field `count = 0` read as `Counter.count` is the class's own, shared by its instances
+/// (the static `static count = 0`)
+fn with_class_attributes(node: Node) -> Node {
+	let mut qualified: Vec<(String, String)> = vec![];
+	node.visit(&mut |part| if let Node::Key(class, Op::Dot, member) = part {
+		if let (Node::Symbol(class), Node::Symbol(member)) = (class.drop_meta(), member.drop_meta()) {
+			qualified.push((class.clone(), member.clone()));
+		}
+	});
+	if qualified.is_empty() {
+		return node;
+	}
+	class_attributes(node, &qualified)
+}
+
+fn class_attributes(node: Node, qualified: &[(String, String)]) -> Node {
+	match node {
+		Node::Type { name, body } => {
+			let class = name.drop_meta().name();
+			// a field with its value `count = 0` (a parameter named like the class reads `photo.width` of an instance)
+			let has_value = |item: &Node| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _));
+			let is_attribute = |item: &Node| method_parts(item).is_none() && has_value(item) && field_name(item).is_some_and(|field| qualified.contains(&(class.clone(), field)));
+			let items = class_items(&body);
+			if !items.iter().any(|item| is_attribute(item) && !is_static(item)) {
+				return Node::Type { name, body };
+			}
+			let items = items.into_iter().map(|item| match is_attribute(&item) {
+				true => item.with_attribute(crate::wasp_parser::STATIC_KEYWORD, Node::True),
+				false => item,
+			}).collect();
+			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
+		}
+		other => other.map_children(|child| class_attributes(child, qualified)),
+	}
+}
+
+/// Java's and C#'s constructor named like its class, `Point(int x, int y) {…}`: the constructor `value(x, y){…}`
+fn with_named_constructors(node: Node) -> Node {
+	match node {
+		Node::Type { name, body } => {
+			let class = name.drop_meta().name();
+			let items: Vec<Node> = class_items(&body);
+			if !items.iter().any(|item| method_parts(item).is_some_and(|(method, _, _)| method == class)) {
+				return Node::Type { name, body };
+			}
+			let items = items.into_iter().map(|item| match method_parts(&item) {
+				Some((method, parameters, body)) if method == class => {
+					let word = Node::List([vec![Node::Symbol(VALUE_WORD.to_string())], parameters].concat(), Bracket::Round, Separator::None);
+					Node::Key(Box::new(word), Op::None, Box::new(curly(body)))
+				}
+				_ => item,
+			}).collect();
+			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
+		}
+		other => other.map_children(with_named_constructors),
+	}
+}
+
+/// Every class body as its members (class_items): Java's `int x` fields and C#'s auto-properties are fields also in a
+/// class without methods, which no later pass splits
+fn with_members(node: Node) -> Node {
+	match node {
+		Node::Type { name, body } if name.attribute(crate::wasp_parser::MIXIN_WORD).is_none() => {
+			let members = Node::List(class_items(&body), Bracket::Curly, Separator::Semicolon);
+			let changed = members.serialize() != Node::List(class_items_as_written(&body), Bracket::Curly, Separator::Semicolon).serialize();
+			Node::Type { name, body: Box::new(if changed { members } else { *body }) }
+		}
+		other => other.map_children(with_members),
+	}
+}
+
+/// The items of a class body as written, its `;` groups flattened, nothing read into them
+fn class_items_as_written(body: &Node) -> Vec<Node> {
+	let items = match body.drop_meta() {
+		Node::List(items, _, _) => items.clone(),
+		Node::Empty => vec![],
+		single => vec![single.clone()],
+	};
+	items.into_iter().flat_map(|item| match item.drop_meta() {
+		Node::List(group, Bracket::None, _) => group.clone(),
+		_ => vec![item],
+	}).collect()
+}
+
+/// Java's and C#'s `Point p = new Point(3, 4);`, a variable declared with a class as its type: `p:Point = Point(3, 4)`
+/// (the type stays: a call may pick its overload by it, D10)
+fn class_typed_declarations(node: Node) -> Node {
+	let mut classes = vec![];
+	node.visit(&mut |part| if let Node::Type { name, .. } = part {
+		classes.push(name.drop_meta().name());
+	});
+	if classes.is_empty() {
+		return node;
+	}
+	declared_with_classes(node, &classes)
+}
+
+fn declared_with_classes(node: Node, classes: &[String]) -> Node {
+	match node {
+		Node::List(words, _, _) if words.len() == 2 && classes.contains(&words[0].drop_meta().name()) && matches!(words[1].drop_meta(), Node::Key(variable, Op::Assign, _) if matches!(variable.drop_meta(), Node::Symbol(_))) => {
+			let Node::Key(variable, _, value) = words[1].drop_meta().clone() else { unreachable!("guarded") };
+			let typed = Node::Key(variable, Op::Colon, Box::new(words[0].clone()));
+			Node::Key(Box::new(typed), Op::Assign, Box::new(declared_with_classes(*value, classes)))
+		}
+		other => other.map_children(|child| declared_with_classes(child, classes)),
 	}
 }
 

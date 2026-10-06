@@ -676,12 +676,17 @@ fn is_plain_name(word: &str) -> bool {
 /// outside comments and texts (`// the type end` declares nothing)
 fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 	let source = code_only(source);
-	let words: Vec<&str> = source.split(|c: char| !is_identifier_char(c) && c != '(').flat_map(|word| word.split_inclusive('(')).filter(|word| !word.is_empty()).collect();
+	let words: Vec<&str> = source.split_whitespace().collect();
 	words.windows(2)
 		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
-		.map(|pair| pair[1].trim_end_matches('(')) // `class Point(val x: Int)`, `record Point(int X)`
+		// the name right after the word: `class Point{`, `class Point(val x: Int)`, `record Point(int X)`, `class P:`;
+		// `record = find(…)` declares nothing
+		.filter_map(|pair| {
+			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch)).collect();
+			let rest = &pair[1][name.len()..];
+			(rest.is_empty() || rest.starts_with(['(', '{', '<', ':', ';'])).then_some(name)
+		})
 		.filter(|name| is_plain_name(name))
-		.map(str::to_string)
 		.collect()
 }
 
