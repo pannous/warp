@@ -34,3 +34,12 @@ fn a_named_listener_is_removed_and_shares_variables() {
 	is!("x = 0; n = 0; h = on set x {n += 1}; x = 1; listeners of x -= h; x = 2; n", 1);
 	is!("x = 0; n = 0; h = on change x {n += value}; x = 4; x = 4; n", 4);
 }
+
+// Node's emitter.once, DOM addEventListener(…, {once: true}): `once alarm {…}` runs at the first raise only
+#[test]
+fn a_once_handler_runs_at_the_first_raise() {
+	is!("n = 0; once alarm {n += 1}; raise alarm; raise alarm; n", 1);
+	is!("n = 0; once alarm {n += 1}; on alarm {n += 10}; raise alarm; raise alarm; n", 21);
+	is!("n = 0; def f() { raise ping }; once ping {n += 1}; f(); f(); n", 1);
+	is!("level = 0; once alarm {level = event.level}; raise alarm{level: 3}; raise alarm{level: 5}; level", 3);
+}
