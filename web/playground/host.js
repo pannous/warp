@@ -167,6 +167,15 @@ function programImports(holder, hooks) {
 			clock: () => BigInt(Date.now()),
 			// a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md); shared listeners do
 			signal_poll: () => checkShared(holder),
+			// channels between programs (src/channels.rs): a page sends on a BroadcastChannel of the name; receiving needs
+			// the program to keep running after main, which the playground does not do for timers either
+			channel_listen: () => { holder.warnings.push("on message …: the playground does not receive channel messages yet"); },
+			channel_pending: () => 0n,
+			channel_next: () => buildValue(program(), treeOfPlain(null)),
+			channel_send: (channel, message) => {
+				const program_ = program();
+				new BroadcastChannel(plainOfTree(readNode(program_, channel))).postMessage(plainOfTree(readNode(program_, message)));
+			},
 			signal_every: () => { holder.warnings.push("on every …: timers do not run in the playground yet"); },
 			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode

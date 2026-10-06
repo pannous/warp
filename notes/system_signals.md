@@ -153,3 +153,12 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   The playground warns (a page has no files). Test: a_file_change_runs_its_handler.
 - Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, timers in the
   playground (a warning says so), `stop listening`.
+- Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the
+  Interviewer): `broadcast value on "chat"` sends any value (`{text: "hi"}`, `21`) as wasp text to every program on this
+  machine listening with `on message from "chat" {…}`, where `event` is the value; without a name both use the channel
+  "warp". Natively (unix, src/channels.rs) a channel is the directory `<temp>/warp-channels/<channel>` of Unix datagram
+  sockets, one per listener, removed when its run ends; a broadcast sends to each and drops dead ones. A listener is
+  a timer handler (`on·every·N`, every 20 ms, lowering/system_signals.rs) pulling `channel_pending` / `channel_next`,
+  so a listening program stays after main in `warp run` like one with a timer. The playground sends on a
+  `BroadcastChannel`, but does not receive yet (no timers there); Windows has no channels yet (named pipes).
+  Open: named events across programs (`broadcast stop the machine{…}` → `on stop the machine from "chat"`).
