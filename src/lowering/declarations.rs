@@ -353,7 +353,12 @@ impl Tasks<'_> {
 					return if is_task_handler { handled } else { self.lower(handled) };
 				}
 				let items: Vec<Node> = items.into_iter().map(|item| self.lower(item)).collect();
-				self.task_statement(&items).unwrap_or(Node::List(items, bracket, separator))
+				match self.task_statement(&items) {
+					// `{ go f(x) }` stays a block: a body in braces is no getter
+					Some(statement) if bracket == Bracket::Curly => Node::List(vec![statement], bracket, separator),
+					Some(statement) => statement,
+					None => Node::List(items, bracket, separator),
+				}
 			}
 			// `job.stop()`, `job.pause`
 			Node::Key(subject, Op::Dot, word) if self.is_task(&subject) && TASK_CONTROLS.contains(&control_word(&word).as_str()) => {

@@ -32,7 +32,7 @@ Person {
 It is similar to JSON5 / ECMA Script but much simplified yet with a richer syntax and more precise and flexible data model.
 
 
-### Node AST (`src/node.rs`)
+### Node AST (`src/node/`, the enum in `mod.rs`)
 
 The central data structure is `Node`, an enum representing all AST node types:
 
@@ -42,7 +42,7 @@ The central data structure is `Node`, an enum representing all AST node types:
 - **Data** - Generic container using `Dada` for arbitrary Rust types with `CloneAny` trait
 - **Meta** - Node wrapper that adds `Meta` (comments, line/column positions)
 
-### Parser (`src/wasp_parser.rs`)
+### Parser (`src/wasp_parser/`)
 
 Recursive descent parser that converts text input to Node AST:
 
@@ -53,21 +53,21 @@ Recursive descent parser that converts text input to Node AST:
 ### Pipeline (`src/pipeline.rs`: `compile`, `eval`, `lower`)
 
 parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such as `mutation.rs`, `lambdas.rs`,
-`library_words.rs`, `switch.rs`, plus `analyzer.rs`) → analysis and diagnostics → WASM GC emitter → run.
+`library_words.rs`, `switch.rs`, plus `analyzer/`) → analysis and diagnostics → WASM GC emitter → run.
 
 ### Emitters
 
-0. **Text**: `Node::serialize` (`src/node.rs`), wasp notation similar to json5; `src/wisp_parser.rs` reads and writes Wisp
+0. **Text**: `Node::serialize` (`src/node/serialization.rs`), wasp notation similar to json5; `src/wisp_parser.rs` reads and writes Wisp
 1. **WASM GC Emitter** (`src/wasm_emitter/`)
     - Generates WASM GC bytecode using the `wasm-encoder` crate; `mod.rs` emits programs, the other files the runtime
       functions (texts, lists, maps, unbounded ints, exact numbers, equality, WASI, FFI)
     - `function_builder.rs`: `runtime_function` / `exported_function` emit a whole function in one call
     - Uses the `Kind` enum (`src/type_kinds.rs`) for runtime type discrimination
 
-### WASM Runtime (`src/wasm_reader.rs`, `src/run/wasmtime_runner.rs`, `src/host.rs`, `src/ffi.rs`)
+### WASM Runtime (`src/wasm_reader.rs`, `src/run/wasmtime_runner.rs`, `src/host.rs`, `src/ffi/`)
 
 - `wasm_reader::run_main` instantiates a module with the host, WASI or FFI imports and calls `main`
-- `wasm_reader` and `gc_traits.rs` read the resulting GC objects back into Nodes
+- `wasm_reader` and `gc_traits/` read the resulting GC objects back into Nodes
 
 ## Build and Test Commands
 
@@ -104,7 +104,7 @@ cargo test --test tests <file_stem>::  # Run one test file: tests/<topic>/*.rs a
 ## WASM GC Reading Patterns
 
 The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection
-(`src/gc_traits.rs`, examples in `tests/wasm/test_wasm_reader.rs` and `tests/wasm/test_gc_struct.rs`):
+(`src/gc_traits/`, examples in `tests/wasm/test_wasm_reader.rs` and `tests/wasm/test_gc_struct.rs`):
 
 - Loading WAT modules with GC types enabled
 - Reading GC struct fields by index
