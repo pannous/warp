@@ -61,6 +61,12 @@ fn a_broadcast_inside_a_library_word_and_a_lambda_variable() {
 }
 
 #[test]
+fn broadcasting_composes_with_chaining_and_pipelines() {
+	assert_eq!(eval("square(x) := x*x; numbers = [1, 2, 3, 4, 5]; (square all numbers).filter(x => x > 5).sum()").serialize(), "50");
+	assert_eq!(eval("square(x) := x*x; numbers = [1, 2, 3, 4, 5]; (square all numbers) |> filter(x => x > 5) |> sum").serialize(), "50");
+}
+
+#[test]
 fn max_and_min_without_parentheses() {
 	assert_eq!(eval("max [1, 25]").serialize(), "25");
 	assert_eq!(eval("xs = [4, 2]; min xs").serialize(), "2");

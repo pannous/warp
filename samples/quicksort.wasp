@@ -43,7 +43,7 @@ print "Original: " + str(numbers)
 print "Sorted:   " + str(quicksort(numbers))
 
 // Benchmark
-large = (0..100).map(_ => random(1000)) // list variables are arrays: 1000 elements sort in about a second
+large = (0..100).map(_ => random(1000)) // map is needed: random(1000) ignores each item
 start = clock()
 sorted = quicksort_partitioned(large, 0, large.length - 1)
 elapsed = clock() - start

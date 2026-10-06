@@ -16,14 +16,6 @@ def factorial(n) {
 }
 
 // Higher-order functions
-def map(list, fn) {
-    result = []
-    for item in list {
-        result.push(fn(item))
-    }
-    return result
-}
-
 def filter(list, predicate) {
     result = []
     for item in list {
@@ -46,14 +38,12 @@ def reduce(list, fn, initial) {
 numbers = [1, 2, 3, 4, 5]
 
 // Method chaining style
-result = numbers
-    .map(square)
+result = (square all numbers)
     .filter(x => x > 5)
     .reduce((a, b) => a + b, 0)
 
 // Pipeline operator style
-result = numbers
-    |> map(square)
+result = (square all numbers)
     |> filter(x => x > 5)
     |> sum
 
