@@ -21,7 +21,23 @@ fn gather_nested_and_wait_group_forms() {
 // Promise.race, asyncio FIRST_COMPLETED: `await any [a, b]` is the result of the first task to finish
 #[test]
 fn await_any_gives_the_first_to_finish() {
-	const RACERS: &str = "slow() := { sleep(300 ms); 1 }; quick() := { sleep(10 ms); 2 }; ";
-	is!(&format!("{RACERS}await any [go slow(), go quick()]"), 2);
+	const RACERS: &str = "slow() := { sleep(300 ms); 10 }; quick() := { sleep(10 ms); 20 }; ";
+	is!(&format!("{RACERS}await any [go slow(), go quick()]"), 20);
 	is!(&format!("{RACERS}started = clock(); r = await any [go slow(), go quick()]; clock() - started < 250"), true);
+}
+
+// asyncio.wait_for, Kotlin withTimeout (P154): `await job within 100 ms or 0` stops a late job and gives the `or` value
+#[test]
+fn await_within_a_deadline() {
+	is!("job = go { sleep(2000 ms); 1 }; await job within 100 ms or 0", 0);
+	is!("job = go { sleep(10 ms); 7 }; await job within 1000 ms or 0", 7);
+	is!("job = go { sleep(2000 ms); 1 }; x = await job within 100 ms or 5; x * 2", 10);
+	is!("job = go { sleep(10 ms); 7 }; x = await job within 1000 ms or 5; x * 2", 14);
+	is!("job = go { sleep(2000 ms); 1 }; try await job within 50 ms else 9", 9);
+}
+
+// P153: `await first [tasks]` is the first task's result, whichever ends first (a note names `await any`)
+#[test]
+fn await_first_is_the_first_tasks_result() {
+	is!("slow() := { sleep(300 ms); 10 }; quick() := { sleep(10 ms); 20 }; await first [go slow(), go quick()]", 10);
 }

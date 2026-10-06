@@ -33,4 +33,8 @@ later; the program waits for its tasks before it ends (tasks::TaskTable::join_al
   handles [1 2] before. `await any [go a(), go b()]` (Promise.race, default queued with the Interviewer): every task
   starts, a loop polls task_status every millisecond (Tasks::race) and awaits the first finished or failed one; the
   others keep running. Ported async cases: probes/async_ports.md, tests/control/test_async_ports.rs. Not yet:
-  `await any [a, b]` of task variables (card await-any-vars), deadlines (`within`), Go channels.
+  `await any [a, b]` of task variables (card await-any-vars), Go channels (P155).
+- `await first [go a(), go b()]` (P153) is the first task's result (it gave the task handle), with a got-it note naming
+  `await any`. `await job within 100 ms or 0` (P154, asyncio.wait_for): polls the job's status until the deadline, then
+  stops it and gives the `or` value (`raise timeout` without one, which `try` catches); a got-it note says so where it
+  is written. As `x = await job within … or v` it arrives as go_blocks' try·else (Tasks::within_or).
