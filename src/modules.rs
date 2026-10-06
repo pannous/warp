@@ -64,6 +64,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 /// class_methods, which turns a class's methods into functions and its method calls into theirs, runs before `resolve`
 /// loads a module's other definitions (use_std_module leaves the classes out)
 pub fn insert_std_classes(program: Node) -> Node {
+	let program = crate::welcome_forms::qualified_module_calls(program);
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
 	let classes: Vec<Node> = statements(program.clone()).iter()

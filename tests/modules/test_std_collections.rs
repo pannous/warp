@@ -36,3 +36,9 @@ fn a_counter_counts() {
 fn a_collection_without_its_use_names_the_module() {
 	crate::common::fails_with("s = Stack(); s.push(1)", "Stack is in the standard module collections: write `use collections`");
 }
+
+#[test]
+fn foreign_spellings_of_a_collection() {
+	is!("use collections; s = new Set([1 2 2]); s.size()", 2);
+	is!("use collections; c = collections.Counter([1 1]); c.get(1)", 2);
+}

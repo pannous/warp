@@ -776,8 +776,15 @@ fn ruby_constructions(node: Node) -> Node {
 	constructed_by_new(node, &classes)
 }
 
+/// Ruby's `Point.new(1, 2)` and Java's `new Set(xs)` of a class the parser did not see (a standard module's): the
+/// construction, with a note
 fn constructed_by_new(node: Node, classes: &[String]) -> Node {
 	match node {
+		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [new, call] if new.drop_meta().name() == RUBY_NEW_WORD && classes.contains(&leading_name(call))) => {
+			let call = items[1].clone();
+			crate::diagnostic::note_alias(&format!("{RUBY_NEW_WORD} {}", leading_name(&call)), &leading_name(&call));
+			constructed_by_new(call, classes)
+		}
 		Node::Key(class, Op::Dot, member) if classes.contains(&class.drop_meta().name()) && matches!(class.drop_meta(), Node::Symbol(_)) && leading_name(&member) == RUBY_NEW_WORD => {
 			let class_name = class.drop_meta().name();
 			crate::diagnostic::note_alias(&format!("{class_name}.{RUBY_NEW_WORD}"), &class_name);
