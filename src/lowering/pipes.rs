@@ -115,6 +115,9 @@ impl Pipes {
 	/// `then sort`, `then filter(p)`: the call of the function with the value as its first argument (as `|>`), when
 	/// the stage names a function and leaves out an argument
 	fn then_call(&self, stage: &Node, value: &Node) -> Option<Node> {
+		if let Some(op) = operator_stage(stage) {
+			return Some(Node::Key(Box::new(Node::Empty), op, Box::new(grouped(value.clone()))));
+		}
 		let pipes = match stage.drop_meta() {
 			Node::Symbol(name) => self.names_function(name, 0),
 			Node::List(items, Bracket::Round, Separator::None) => match items.first().map(Node::drop_meta) {
