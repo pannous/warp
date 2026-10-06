@@ -49,8 +49,8 @@ pub fn resolve(program: Node) -> Node {
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
-	let folder = file.as_deref().map(folder_of);
-	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone(), scope: None, wasm_modules: vec![], std_definitions: vec![] };
+	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
+	let folder = loader.including_directory.clone();
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader.resolve(program).and_then(|program| match loader.scope {
 		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
@@ -58,6 +58,25 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
 		.map(|program| with_needed_definitions(program, loader.std_definitions));
 	resolved.unwrap_or_else(|failure| failure)
+}
+
+/// The classes of the standard modules the program uses and names (`use collections; s = Stack()`), in front of it.
+/// class_methods, which turns a class's methods into functions and its method calls into theirs, runs before `resolve`
+/// loads a module's other definitions (use_std_module leaves the classes out)
+pub fn insert_std_classes(program: Node) -> Node {
+	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
+	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
+	let classes: Vec<Node> = statements(program.clone()).iter()
+		.filter_map(used_module)
+		.filter(|used| used.import == Import::Use && loader.find(&used.name).is_none())
+		.filter_map(|used| std_module(&used.name))
+		.flat_map(|source| crate::normalize::without_hints(|| statements(WaspParser::parse(source))).into_iter().filter(is_class))
+		.collect();
+	with_needed_definitions(program, classes)
+}
+
+fn is_class(statement: &Node) -> bool {
+	matches!(statement.drop_meta(), Node::Type { .. })
 }
 
 /// The program with the standard modules' definitions it calls, and those they call, in front: a word nobody calls
@@ -235,7 +254,11 @@ struct Loader<'a> {
 	std_definitions: Vec<Node>,
 }
 
-impl Loader<'_> {
+impl<'a> Loader<'a> {
+	fn new(directories: &'a [&'a str], including_directory: Option<PathBuf>) -> Self {
+		Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory, scope: None, wasm_modules: vec![], std_definitions: vec![] }
+	}
+
 	fn resolve(&mut self, node: Node) -> Result<Node, Node> {
 		if let Some(used) = used_module(&node) {
 			return Ok(match self.import(&used, &node)? {
@@ -315,7 +338,7 @@ impl Loader<'_> {
 	/// no style hints
 	fn use_std_module(&mut self, name: &str, source: &str) -> Result<Vec<Node>, Node> {
 		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(name), source))?;
-		self.std_definitions.extend(definitions);
+		self.std_definitions.extend(definitions.into_iter().filter(|definition| !is_class(definition)));
 		Ok(vec![])
 	}
 
@@ -463,7 +486,8 @@ impl Loader<'_> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 5] = [
+const STD_MODULES: [(&str, &str); 6] = [
+	("collections", include_str!("../std/collections.wasp")),
 	("list", include_str!("../std/list.wasp")),
 	("math", include_str!("../std/math.wasp")),
 	("text", include_str!("../std/text.wasp")),

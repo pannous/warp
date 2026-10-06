@@ -1,0 +1,38 @@
+//! The standard library module collections (notes/stdlib.md, notes/classes.md): classes written in wasp
+use crate::is;
+
+#[test]
+fn a_stack_pushes_and_pops_the_last() {
+	is!("use collections; s = Stack(); s.push(1); s.push(2); s.pop() * 10 + s.size()", 21);
+	is!("use collections; s = Stack(); s.push(5); s.peek()", 5);
+}
+
+#[test]
+fn a_queue_gives_the_first() {
+	is!("use collections; q = Queue(); q.enqueue(4); q.enqueue(5); q.dequeue() * 10 + q.size()", 41);
+}
+
+#[test]
+fn a_deque_works_at_both_ends() {
+	is!("use collections; d = Deque(); d.push_back(2); d.push_front(1); d.push_back(3); d.pop_front() * 10 + d.pop_back()", 13);
+}
+
+#[test]
+fn a_set_keeps_each_value_once() {
+	is!("use collections; s = Set([1 2 2 3]); s.size()", 3);
+	is!("use collections; s = Set(); s.add(1); s.add(1); s.add(2); s.size()", 2);
+	is!("use collections; s = Set([1 2]); s.remove(1); s.has(1) or s.size() != 1", false);
+	is!("use collections; s = Set([\"ab\" \"cd\"]); s.has(\"cd\")", true);
+}
+
+#[test]
+fn a_counter_counts() {
+	is!("use collections; c = Counter([7 8 7]); c.get(7) * 10 + c.get(9)", 20);
+	is!("use collections; c = Counter(); c.add(\"ab\"); c.add(\"ab\"); c.get(\"ab\")", 2);
+	is!("use collections; c = Counter([7 8 8]); c.most_common()", 8);
+}
+
+#[test]
+fn a_collection_without_its_use_names_the_module() {
+	crate::common::fails_with("s = Stack(); s.push(1)", "Stack is in the standard module collections: write `use collections`");
+}

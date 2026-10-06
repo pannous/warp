@@ -6,6 +6,7 @@ mod test_package_pin;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_package_tools;
 mod test_packages;
+mod test_std_collections;
 mod test_std_list;
 mod test_std_map;
 mod test_std_math_text;

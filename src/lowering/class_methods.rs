@@ -1444,6 +1444,8 @@ fn gives_value(body: &Node) -> bool {
 		// `if c {items.add(x)}`: a branch gives what its last statement gives
 		Node::Key(_, Op::Then, branch) => gives_value(branch),
 		Node::Key(then, Op::Else, otherwise) => gives_value(then) || gives_value(otherwise),
+		// a nested sequence (element_assignments) gives what its last statement gives
+		Node::List(_, Bracket::Round, Separator::Semicolon) | Node::List(_, Bracket::Curly, _) => gives_value(&last),
 		Node::Key(_, op, _) if matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign() => false,
 		// a body giving its object back already (a constructor)
 		Node::Symbol(name) if name == RECEIVER => false,
@@ -1455,7 +1457,7 @@ fn gives_value(body: &Node) -> bool {
 /// The statements of a block `{a; b}` or sequence `a; b`, or the one statement of any other body
 fn statements_of(body: Node) -> Vec<Node> {
 	match body.drop_meta() {
-		Node::List(statements, Bracket::Curly, _) | Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements.clone(),
+		Node::List(statements, Bracket::Curly, _) | Node::List(statements, Bracket::None | Bracket::Round, Separator::Semicolon | Separator::Newline) => statements.clone(),
 		_ => vec![body],
 	}
 }
