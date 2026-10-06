@@ -65,3 +65,12 @@ fn csharp_auto_properties_and_an_object_initializer() {
 fn a_python_class_attribute_is_shared() {
 	is!("class Counter:\n    count = 0\n    def __init__(self):\n        Counter.count += 1\nCounter()\nCounter()\nCounter.count", 2);
 }
+
+#[test]
+fn a_go_struct_with_methods() {
+	let point = "type Point struct {\n    X int\n    Y int\n}\n";
+	is!(&format!("{point}p := Point{{X: 1, Y: 2}}\np.Y"), 2);
+	is!("type Point struct {\n    X, Y int\n}\nPoint{X: 1, Y: 2}.Y", 2);
+	is!(&format!("{point}func (p Point) Sum() int {{ return p.X + p.Y }}\nPoint{{X: 1, Y: 2}}.Sum()"), 3);
+	is!(&format!("{point}func (p *Point) Move(dx int) {{ p.X += dx }}\nvar p = Point{{X: 1, Y: 2}}\np.Move(3)\np.X"), 4);
+}
