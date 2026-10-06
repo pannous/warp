@@ -129,8 +129,10 @@ the_strict_flag_turns_warnings_into_errors before).
   modules as base64 (`registerComponent`); the first call importScripts it, found by the file's name alone (the page has
   one flat folder of components). WASI p2 is a small shim: output goes to the program's print, no input, no environment.
   test_in_browser.py runs build.sh components before serving; pages.yml installs jco and ships components/.
-- jco's JavaScript values are turned into the native JSON forms (camelCase ↔ the WIT's kebab-case names, `{tag, val}` →
-  `{case: payload}`, a thrown result `err` → the error, class instances → handles with ids per component). Without the
-  WIT types at run time some checks differ from wasmtime's: jco's own enum message ("\"triangle\" is not one of the cases
-  of shape"), the argument count without parameter names, and a variant argument (an object) is not converted.
+- jco's JavaScript values are turned into the native JSON forms by the WIT types, which build.sh embeds as the
+  signatures of the exports (`wasm-tools component wit --json`): camelCase ↔ the WIT's kebab-case names, `{tag, val}` →
+  `{case: payload}`, flags objects → lists of names, a char → `{$char: c}`, a Codepoint (P94, as natively), a thrown
+  result `err` → the error, class instances → handles with ids per component, the argument count with the parameter
+  names. Still jco's own: the enum check's message ("\"triangle\" is not one of the cases of shape"), and a variant
+  argument (an object) is not converted.
   tests/ffi/test_components_anywhere.rs runs in both hosts.
