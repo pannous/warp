@@ -21,6 +21,7 @@ const IMPLICIT_TRAIT_PREFIX: &str = "has·";
 /// `super.speak()` in a method of dog calls the speak dog would inherit, kept for dog as the method `speak·super·dog`
 const SUPER: &str = "super";
 const SUPER_INFIX: &str = "·super·";
+const GLOBAL_KEYWORD: &str = "global";
 
 pub fn lower(node: Node) -> Node {
 	let (node, likenesses) = match inherit(node) {
@@ -30,7 +31,9 @@ pub fn lower(node: Node) -> Node {
 	let traits = [shared_method_traits(&node), likenesses].concat();
 	let shared: Vec<String> = traits.iter().filter_map(trait_operation).collect();
 	let mut changing = vec![];
+	let statics = static_members(&node);
 	let node = lower_classes(node, &mut changing);
+	let node = if statics.is_empty() { node } else { static_reads(node, &statics) };
 	// `s.area`, `s.scaled(3)` of a shared method: the call `area(s)` before traits rename each class's method;
 	// `c.inc()` of a method changing its object: `c = inc(c)` (P116)
 	let node = if shared.is_empty() && changing.is_empty() { node } else { method_calls(node, &shared, &changing) };
@@ -166,7 +169,7 @@ fn shared_method_traits(node: &Node) -> Vec<Node> {
 	node.visit(&mut |part| {
 		let Node::Type { body, .. } = part else { return };
 		for item in class_items(body) {
-			if let Some((name, parameters, _)) = method_parts(&item) {
+			if let Some((name, parameters)) = instance_member(&item) {
 				let receiver = Node::Symbol(RECEIVER.to_string());
 				let requirement = match parameters.is_empty() {
 					true => Node::Symbol(name.clone()),
@@ -187,6 +190,54 @@ fn shared_method_traits(node: &Node) -> Vec<Node> {
 		}
 	}
 	traits
+}
+
+/// A method of the instances of a class, its name and parameters: an instance method, or the getter `k` of a static
+/// field `static k = 3`; a static method is none
+fn instance_member(item: &Node) -> Option<(String, Vec<Node>)> {
+	match (is_static(item), method_parts(item)) {
+		(false, Some((name, parameters, _))) => Some((name, parameters)),
+		(true, None) => field_name(item).map(|name| (name, vec![])),
+		_ => None,
+	}
+}
+
+/// `static k = 3`, `static make(x) := …` in a class body (P122)
+fn is_static(item: &Node) -> bool {
+	item.attribute(crate::wasp_parser::STATIC_KEYWORD).is_some()
+}
+
+/// `circle·count`: the global or function a static member of a class is
+fn static_name(class: &str, member: &str) -> String {
+	format!("{class}·{member}")
+}
+
+/// The static members of every class, as (class, member)
+fn static_members(node: &Node) -> Vec<(String, String)> {
+	let mut statics = vec![];
+	node.visit(&mut |part| {
+		let Node::Type { name, body } = part else { return };
+		let class = name.drop_meta().name();
+		statics.extend(class_items(body).iter().filter(|item| is_static(item)).filter_map(item_name).map(|member| (class.clone(), member)));
+	});
+	statics
+}
+
+/// `circle.count` and `circle.make(2)` of static members as the global `circle·count` and the call `circle·make(2)`
+fn static_reads(node: Node, statics: &[(String, String)]) -> Node {
+	let recurse = |child: Node| static_reads(child, statics);
+	let Node::Key(object, Op::Dot, member) = node else { return node.map_children(recurse) };
+	let Node::Symbol(class) = object.drop_meta() else { return Node::Key(Box::new(recurse(*object)), Op::Dot, Box::new(recurse(*member))) };
+	let is_member = |name: &str| statics.iter().any(|(owner, static_member)| owner == class && static_member == name);
+	match member.drop_meta() {
+		Node::Symbol(name) if is_member(name) => Node::Symbol(static_name(class, name)),
+		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_member(name)) => {
+			let arguments = items[1..].iter().cloned().map(recurse);
+			let function = Node::Symbol(static_name(class, &items[0].drop_meta().name()));
+			Node::List(std::iter::once(function).chain(arguments).collect(), Bracket::Round, separator.clone())
+		}
+		_ => Node::Key(object, Op::Dot, Box::new(recurse(*member))),
+	}
 }
 
 /// The operation `area` an implicit trait `trait has·area{…}` declares
@@ -243,23 +294,46 @@ fn lower_classes(node: Node, changing: &mut Vec<String>) -> Node {
 fn split_class(node: &Node, changing: &mut Vec<String>) -> Option<(Node, Vec<Node>)> {
 	let Node::Type { name, body } = node.drop_meta() else { return None };
 	let class = name.drop_meta().name();
-	let (methods, fields): (Vec<Node>, Vec<Node>) = class_items(body).into_iter().partition(|item| method_parts(item).is_some());
-	if methods.is_empty() {
+	let (statics, items): (Vec<Node>, Vec<Node>) = class_items(body).into_iter().partition(is_static);
+	let (methods, fields): (Vec<Node>, Vec<Node>) = items.into_iter().partition(|item| method_parts(item).is_some());
+	if methods.is_empty() && statics.is_empty() {
 		return None;
 	}
 	let field_names: Vec<String> = fields.iter().filter_map(field_name).collect();
+	let static_names: Vec<String> = statics.iter().filter_map(item_name).collect();
 	let siblings: Vec<(String, bool)> = methods.iter().filter_map(method_parts).map(|(name, parameters, _)| (name, parameters.is_empty())).collect();
-	let functions = methods.iter().map(|method| {
+	let members = Members { class: &class, fields: &field_names, methods: &siblings, statics: &static_names };
+	let mut functions: Vec<Node> = statics.iter().flat_map(|member| static_definitions(&members, member)).collect();
+	functions.extend(methods.iter().map(|method| {
 		let (method_name, parameters, method_body) = method_parts(method).expect("partitioned");
-		let members = Members { fields: &field_names, methods: &siblings };
-		let (function, changes) = function(&class, &members, &method_name, parameters, method_body);
+		let (function, changes) = function(&members, &method_name, parameters, method_body);
 		if changes {
 			changing.push(method_name);
 		}
 		function
-	}).collect();
+	}));
 	let field_list = Node::List(fields, Bracket::Curly, Separator::Space);
 	Some((Node::Type { name: name.clone(), body: Box::new(field_list) }, functions))
+}
+
+/// `static make(x) := body` as the function `class·make(x) := body`; `static k = 3` as the global `class·k = 3` and the
+/// getter `k(self:class) := class·k`, so an instance reads it too (`c.k`)
+fn static_definitions(members: &Members, member: &Node) -> Vec<Node> {
+	let class = members.class;
+	if let Some((name, parameters, body)) = method_parts(member) {
+		let readable = Readable { class, fields: vec![], methods: vec![], statics: members.statics.iter().collect() };
+		let head = Node::List([vec![Node::Symbol(static_name(class, &name))], parameters].concat(), Bracket::Round, Separator::None);
+		return vec![Node::Key(Box::new(head), Op::Define, Box::new(receiver_reads(body, &readable)))];
+	}
+	let Some(name) = field_name(member) else { return vec![] };
+	let Node::Key(_, Op::Assign, value) = member.drop_meta() else { return vec![] };
+	let global = Node::Symbol(static_name(class, &name));
+	let receiver = Node::Key(Box::new(Node::Symbol(RECEIVER.to_string())), Op::Colon, Box::new(Node::Symbol(class.to_string())));
+	let getter_head = Node::List(vec![Node::Symbol(name), receiver], Bracket::Round, Separator::None);
+	let declaration = Node::Key(Box::new(global.clone()), Op::Assign, value.clone());
+	// `global c·n = 0`: methods may change it (`n += 1`)
+	let declaration = Node::Key(Box::new(Node::Symbol(GLOBAL_KEYWORD.to_string())), Op::Colon, Box::new(declaration));
+	vec![declaration, Node::Key(Box::new(getter_head), Op::Define, Box::new(global))]
 }
 
 /// `greet(x) := body` or `area := body` in a class body: name, parameters and body
@@ -275,24 +349,28 @@ fn method_parts(item: &Node) -> Option<(String, Vec<Node>, Node)> {
 	}
 }
 
-/// `name`, `age:int`, `left?`: the name of a field
+/// `name`, `age:int`, `left?`, `x:int=0`, `k = 3`: the name of a field
 fn field_name(item: &Node) -> Option<String> {
 	match item.drop_meta() {
 		Node::Symbol(name) => Some(name.trim_end_matches(FIELD_MARKS).to_string()),
 		Node::Key(field, Op::Colon, _) => Some(field.drop_meta().name().trim_end_matches(FIELD_MARKS).to_string()),
+		Node::Key(field, Op::Assign, _) => field_name(field),
 		_ => None,
 	}
 }
 
 /// The fields of a class and its methods, each with whether it takes no parameters (a getter)
 struct Members<'a> {
+	class: &'a str,
 	fields: &'a [String],
 	methods: &'a [(String, bool)],
+	statics: &'a [String],
 }
 
 /// `method(self:class, parameters…) := body`, the fields and methods in the body read from self, and whether it changes
 /// a field of self: then it gives the changed object, `(body; self)`
-fn function(class: &str, members: &Members, method: &str, parameters: Vec<Node>, body: Node) -> (Node, bool) {
+fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) -> (Node, bool) {
+	let class = members.class;
 	let parameter_names: Vec<String> = parameters.iter().map(|parameter| match parameter.drop_meta() {
 		Node::Key(name, Op::Colon, _) => name.drop_meta().name(),
 		other => other.name(),
@@ -301,7 +379,8 @@ fn function(class: &str, members: &Members, method: &str, parameters: Vec<Node>,
 	let fields: Vec<&String> = members.fields.iter().filter(|field| unshadowed(field)).collect();
 	let methods: Vec<&String> = members.methods.iter().map(|(name, _)| name).filter(|name| unshadowed(name)).collect();
 	let getters: Vec<&String> = members.methods.iter().filter(|(_, getter)| *getter).map(|(name, _)| name).filter(|name| unshadowed(name)).collect();
-	let readable = Readable { fields: [fields, getters].concat(), methods };
+	let statics: Vec<&String> = members.statics.iter().filter(|name| unshadowed(name)).collect();
+	let readable = Readable { class, fields: [fields, getters].concat(), methods, statics };
 	let body = receiver_reads(body, &readable);
 	let changes = changes_receiver(&body);
 	let body = match changes {
@@ -315,18 +394,27 @@ fn function(class: &str, members: &Members, method: &str, parameters: Vec<Node>,
 
 /// The names a method body reads from its receiver: fields and getters (`area`), and methods it calls (`area()`)
 struct Readable<'a> {
+	class: &'a str,
 	fields: Vec<&'a String>,
 	methods: Vec<&'a String>,
+	statics: Vec<&'a String>,
 }
 
 /// The body with each field name and getter read from self, each call of a method of the class a call on self (as in
 /// Java), `this` as self; the member name right of a dot stays as it is
 fn receiver_reads(node: Node, readable: &Readable) -> Node {
 	let on_receiver = |member: Node| Node::Key(Box::new(Node::Symbol(RECEIVER.to_string())), Op::Dot, Box::new(member));
+	let is_call_of = |items: &[Node], names: &[&String]| matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if names.contains(&name));
 	match node {
+		Node::Symbol(name) if readable.statics.contains(&&name) => Node::Symbol(static_name(readable.class, &name)),
+		Node::List(items, Bracket::Round, separator) if is_call_of(&items, &readable.statics) => {
+			let arguments = items[1..].iter().cloned().map(|argument| receiver_reads(argument, readable));
+			let function = Node::Symbol(static_name(readable.class, &items[0].drop_meta().name()));
+			Node::List(std::iter::once(function).chain(arguments).collect(), Bracket::Round, separator)
+		}
 		Node::Symbol(name) if readable.fields.contains(&&name) => on_receiver(Node::Symbol(name)),
 		Node::Symbol(name) if RECEIVER_ALIASES.contains(&name.as_str()) => Node::Symbol(RECEIVER.to_string()),
-		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if readable.methods.contains(&name)) => {
+		Node::List(items, Bracket::Round, separator) if is_call_of(&items, &readable.methods) => {
 			let arguments = items[1..].iter().cloned().map(|argument| receiver_reads(argument, readable));
 			on_receiver(Node::List(std::iter::once(items[0].clone()).chain(arguments).collect(), Bracket::Round, separator))
 		}
@@ -335,14 +423,28 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 	}
 }
 
-/// Does the body assign a field of self (`self.n = …`, `n += 1`, `n++`)
+/// Does the body assign a field of self (`self.n = …`, `n += 1`, `n++`) or change a list in one (`items.add(x)`)
 fn changes_receiver(body: &Node) -> bool {
-	let is_receiver_field = |target: &Node| matches!(target.drop_meta(), Node::Key(object, Op::Dot, _) if object.drop_meta().name() == RECEIVER);
 	let mut changes = false;
 	body.visit(&mut |part| {
-		if let Node::Key(target, op, _) = part {
-			changes |= (*op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)) && is_receiver_field(target);
-		}
+		changes |= match part {
+			Node::Key(target, Op::Dot, call) if is_receiver_field(target) => mutating_call(call),
+			Node::Key(target, op, _) => (*op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)) && is_receiver_field(target),
+			_ => false,
+		};
 	});
 	changes
+}
+
+/// `self.items`, `self.stack.items`
+fn is_receiver_field(target: &Node) -> bool {
+	match target.drop_meta() {
+		Node::Key(object, Op::Dot, _) => matches!(object.drop_meta(), Node::Symbol(name) if name == RECEIVER) || is_receiver_field(object),
+		_ => false,
+	}
+}
+
+/// `add(x)`, `insert(x, at:1)`: a call of a method that changes the list it is called on
+fn mutating_call(call: &Node) -> bool {
+	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::analyzer::is_list_mutating_method(name)))
 }

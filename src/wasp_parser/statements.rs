@@ -90,7 +90,8 @@ impl WaspParser {
 			return None;
 		}
 		let (line, column) = (self.line_nr, self.column.saturating_sub(first.chars().count()));
-		for word in words.iter().filter(|word| FOREIGN_MODIFIERS.contains(&word.as_str())) {
+		let is_static = words.iter().any(|word| word == STATIC_KEYWORD);
+		for word in words.iter().filter(|word| FOREIGN_MODIFIERS.contains(&word.as_str()) && *word != STATIC_KEYWORD) {
 			let question = Ask::new(FOREIGN_MODIFIER_TOPIC, format!("{word} has no meaning in wasp"), vec![reading("skip it", &next)], Fallback::Warning)
 				.written(word).at(line, column);
 			if let Err(error) = ask(&question) {
@@ -99,7 +100,8 @@ impl WaspParser {
 		}
 		self.advance_by(offset - next.chars().count());
 		self.skip_spaces();
-		Some(self.parse_expr(0))
+		let statement = self.parse_expr(0);
+		Some(if is_static { statement.with_attribute(STATIC_KEYWORD, Node::True) } else { statement })
 	}
 
 	/// Modifier and type words between the keyword and the name (`global const int k=7`): the global holds the value, the words are dropped
