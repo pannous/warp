@@ -4,6 +4,24 @@ use super::*;
 
 const VOID_WORD: &str = "void";
 
+/// `T, F: Fn(i32) -> i32` → `T F`: the names before each bound
+fn type_parameter_names(written: &str) -> Vec<String> {
+	let mut depth = 0;
+	let mut parts = vec![String::new()];
+	for ch in written.chars() {
+		match ch {
+			'<' | '(' => depth += 1,
+			'>' | ')' => depth -= 1,
+			',' if depth == 0 => parts.push(String::new()),
+			_ => {}
+		}
+		if ch != ',' || depth != 0 {
+			parts.last_mut().expect("one part").push(ch);
+		}
+	}
+	parts.iter().filter_map(|part| part.split(':').next().map(str::trim).filter(|name| !name.is_empty()).map(str::to_string)).collect()
+}
+
 impl WaspParser {
 	/// Parse an atomic expression (no infix operators)
 	/// Handles: numbers, strings, brackets, symbols with named blocks
@@ -56,7 +74,21 @@ impl WaspParser {
 			ch if ch.is_numeric() || self.number_starts_at(0) || (ch == '-' && self.number_starts_at(1)) => {
 				self.parse_number()
 			}
-			ch if ch.is_alphabetic() || ch == '_' => self.parse_elixir_function().or_else(|| self.parse_python_lambda()).or_else(|| self.parse_f_string()).unwrap_or_else(|| self.parse_symbol_with_suffix()),
+			ch if ch.is_alphabetic() || ch == '_' => {
+				let atom = self.parse_elixir_function().or_else(|| self.parse_python_lambda()).or_else(|| self.parse_f_string()).unwrap_or_else(|| self.parse_symbol_with_suffix());
+				// the function's own atom takes the mark, not an atom parsed inside it (its parameters)
+				let head = match atom.drop_meta() {
+					Node::List(items, _, _) => items.first().map(Node::name),
+					other => Some(other.name()),
+				};
+				match self.generic_names.take() {
+					Some((name, names)) if head.as_ref() == Some(&name) => Node::Meta { node: Box::new(atom), data: Box::new(Node::key(crate::welcome_forms::GENERIC_MARK, Node::Text(names.join(" ")))) },
+					pending => {
+						self.generic_names = pending;
+						atom
+					}
+				}
+			}
 			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
 				(0..length).for_each(|_| self.advance());
 				error(&crate::uniscript_entities::unknown_entity(&name))
@@ -444,10 +476,12 @@ impl WaspParser {
 			self.skip_spaces();
 		}
 		// Rust's and C#'s `fn apply<F: Fn(i32) -> i32>(f: F)`, `id<T>(x: T)`: the type parameters say nothing wasp needs
-		if names_function {
-			if let Some(length) = self.generic_parameters_length() {
-				self.advance_by(length);
-			}
+		// P157 (user): no generics in wasp; the name carries the type parameters' names (GENERIC_MARK), welcome_forms.rs
+		// drops their annotations: `fn id<T>(x: T) -> T` is `def id(x)`
+		if let Some(length) = if names_function { self.generic_parameters_length() } else { None } {
+			let written: String = self.chars[self.pos + 1..self.pos + length - 1].iter().collect();
+			self.advance_by(length);
+			self.generic_names = Some((symbol.clone(), type_parameter_names(&written)));
 		}
 
 		if let Some(reference) = self.function_reference_after(&symbol) {

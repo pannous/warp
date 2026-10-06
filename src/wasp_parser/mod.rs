@@ -587,6 +587,8 @@ pub struct WaspParser {
 	stops_at_end: bool,
 	/// Inside Python's `f"…{x}…"`: braces are holes, `{{` and `}}` the braces themselves
 	brace_holes: bool,
+	/// The type parameters skipped after a function's name (`fn id<T>`), marked on the atom (P157)
+	generic_names: Option<(String, Vec<String>)>,
 	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
 	in_command: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
@@ -854,6 +856,7 @@ impl WaspParser {
 			signed_list_element: None,
 			stops_at_end: false,
 			brace_holes: false,
+			generic_names: None,
 			in_command: false,
 			times_loops: 0,
 			pending_comment: None,
