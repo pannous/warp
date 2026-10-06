@@ -75,6 +75,12 @@ fn all_calls(node: Node) -> Node {
 		// also `square(all xs)`, whose call items are `square all xs`
 		Node::List(items, Bracket::None | Bracket::Round, Separator::Space | Separator::None) if all_call_parts(&items).is_some() => {
 			let (function, list) = all_call_parts(&items).expect("guarded");
+			// a list literal spliced at compile time: `square all [[1, 2], [3]]` is `[square [1, 2], square [3]]`,
+			// each call broadcast again
+			if let Node::List(elements, Bracket::Square, element_separator) = list.drop_meta() {
+				let calls = elements.iter().map(|element| Node::List(vec![function.clone(), all_calls(element.clone())], Bracket::None, Separator::Space)).collect();
+				return Node::List(calls, Bracket::Square, element_separator.clone());
+			}
 			let item = Node::Symbol(ALL_ITEM.to_string());
 			let call = Node::List(vec![function.clone(), item.clone()], Bracket::Round, Separator::None);
 			let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(call));
