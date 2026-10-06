@@ -9,6 +9,7 @@
 	--warning: #a35f00;
 	--hint: #0b7a75;
 	--keyword: #7b3fbf;
+	--soft-keyword: #a06bd6;
 	--code-ground: #f2f0ea;
 	color-scheme: light;
 }
@@ -25,6 +26,7 @@
 		--warning: #f0a54a;
 		--hint: #4fd1c5;
 		--keyword: #c49bff;
+		--soft-keyword: #a98fd6;
 		--code-ground: #2a2a30;
 		color-scheme: dark;
 	}
@@ -77,6 +79,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap:
 .cm-s-default .cm-string { color: #2f8a3d; }
 .cm-s-default .cm-number, .cm-s-default .cm-atom { color: #b5590a; }
 .cm-s-default .cm-keyword { color: var(--keyword); }
+.cm-s-default .cm-soft-keyword { color: var(--soft-keyword); }
 .cm-s-default .cm-type { color: var(--hint); }
 @media (prefers-color-scheme: dark) { .cm-s-default .cm-string { color: #8bd17c; } .cm-s-default .cm-number, .cm-s-default .cm-atom { color: #f0a54a; } .cm-s-default .cm-variable { color: var(--ink); } }
 
