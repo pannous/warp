@@ -334,6 +334,9 @@ fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &S
 		if crate::wasm_emitter::OUTPUT_WORDS.contains(&name.as_str()) && items.len() == 2 {
 			return Kind::Int;
 		}
+		if name == PRINT_CALL && items.len() == 1 && *bracket == Bracket::Round {
+			return Kind::Text; // `print()` is worth the empty text it writes a line of
+		}
 		if name == PRINT_CALL && items.len() >= 2 {
 			return match crate::wasp_parser::print_arguments_of(items, bracket).as_slice() {
 				[printed] => held_kind(printed, || infer_type(printed, scope)), // `print x` is worth x, `print "c"` a text
