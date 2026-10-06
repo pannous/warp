@@ -74,6 +74,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P105 user: "We also need `warp run` which shall do the opposite": `warp run hello.wasp` runs the program and writes
   no executable (the opposite of `build`, which writes without running). Assumed (undoable): bare `warp run` without
   a file still opens the REPL. warp-f6, branch p102-exe-naming.
+  Purpose (user): "the point is to avoid the ahead-of-time compilation because that's too slow": `warp run` must
+  never take the machine-code path; warp-f6 measures it and tries a fast compile tier (Winch / opt_level None).
 - P106 tasks share a variable with main only when it is declared `shared` (`shared done = false; go { …; done = true
   }; after done …`), scalars like P44's shared arrays; every other variable stays an isolate copy (P33). Asked by
   warp-d9 (branch async); as recommended. wiki/thread.md's example gets `shared`.
