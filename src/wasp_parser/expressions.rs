@@ -146,6 +146,13 @@ impl WaspParser {
 		loop {
 			self.skip_spaces_and_inline_comments(); // not newlines: they are separators
 
+			// a whole statement or assigned value, never an operand inside it: `ys = xs.map(f) @parallel` marks the map call
+			let whole_expression = min_bp <= Op::Assign.binding_power().1;
+			if let Some(annotated) = whole_expression.then(|| self.try_parse_trailing_attribute(&lhs)).flatten() {
+				lhs = annotated;
+				continue;
+			}
+
 			// Step 2: Suffix (led)
 			// P48: a declared suffix operator wins over the built-in one of the same glyph (`suffix operator ³`)
 			if let Some(updated) = self.try_parse_user_suffix(&lhs, min_bp).or_else(|| self.try_parse_suffix(&lhs, min_bp)) {

@@ -342,7 +342,43 @@ impl WaspParser {
 			self.skip_spaces();
 			return Node::Key(Box::new(Symbol(format!("{ATTRIBUTE_MARK}{name}"))), Op::Colon, Box::new(self.parse_atom()));
 		}
-		let value = if self.current_char() == '(' { Self::unwrap_single(self.parse_bracketed('(')) } else { Node::True };
+		let value = self.attribute_value();
 		self.parse_atom().with_attribute(&name, value)
+	}
+
+	/// The value of `@name(value)`, true for a bare `@name`
+	fn attribute_value(&mut self) -> Node {
+		if self.current_char() == '(' { Self::unwrap_single(self.parse_bracketed('(')) } else { Node::True }
+	}
+
+	/// `ys = xs.map(f) @parallel`: an `@name` or `@name(value)` with nothing after it on the statement annotates the
+	/// expression before it (wiki/Purpose.md), where a leading one would annotate an empty atom
+	pub(super) fn try_parse_trailing_attribute(&mut self, annotated: &Node) -> Option<Node> {
+		if self.current_char() != '@' || !self.peek_char(1).is_alphabetic() {
+			return None;
+		}
+		let name = self.word_at(1);
+		let mut end = 1 + name.chars().count();
+		if self.peek_char(end) == '(' {
+			let mut depth = 0;
+			loop {
+				match self.peek_char(end) {
+					'(' => depth += 1,
+					')' if depth == 1 => break,
+					')' => depth -= 1,
+					'\0' | '\n' => return None,
+					_ => {}
+				}
+				end += 1;
+			}
+			end += 1;
+		}
+		let after = end + (end..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
+		if !matches!(self.peek_char(after), '\0' | '\n' | '\r' | ';' | ',' | ')' | ']' | '}') {
+			return None;
+		}
+		self.advance_by(1 + name.chars().count());
+		let value = self.attribute_value();
+		Some(annotated.clone().with_attribute(&name, value))
 	}
 }
