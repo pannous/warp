@@ -256,6 +256,13 @@ PASSED:
   ✓ ffi_parser::tests::test_parse_two_params
   ✓ ffi_parser::tests::test_parse_void_params
   ✓ ffi_parser::tests::test_raylib_functions
+  ✓ ffi::header::tests::test_extract_function_signature_multi_param
+  ✓ ffi::header::tests::test_extract_function_signature_pointer
+  ✓ ffi::header::tests::test_extract_function_signature_simple
+  ✓ ffi::header::tests::test_extract_function_signature_void_return
+  ✓ ffi::header::tests::test_header_sig_to_ffi_sig
+  ✓ ffi::header::tests::test_map_c_type_to_valtype
+  ✓ ffi::header::tests::test_parse_header_file_math
   ✓ ffi::test_components_anywhere::test_a_component_is_called_in_every_host
   ✓ ffi::test_components_anywhere::test_a_wit_char_is_a_codepoint_in_every_host
   ✓ ffi::test_components_anywhere::test_component_failures_are_loud_in_every_host
@@ -364,13 +371,6 @@ PASSED:
   ✓ ffi::test_wasi::test_fd_write_raw
   ✓ ffi::test_wasi::test_wasi_putf
   ✓ ffi::test_wasi::test_wasi_puti
-  ✓ ffi::tests::test_extract_function_signature_multi_param
-  ✓ ffi::tests::test_extract_function_signature_pointer
-  ✓ ffi::tests::test_extract_function_signature_simple
-  ✓ ffi::tests::test_extract_function_signature_void_return
-  ✓ ffi::tests::test_header_sig_to_ffi_sig
-  ✓ ffi::tests::test_map_c_type_to_valtype
-  ✓ ffi::tests::test_parse_header_file_math
   ✓ function::tests::test_arg
   ✓ function::tests::test_function_builder
   ✓ function::tests::test_function_host
