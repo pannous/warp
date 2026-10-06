@@ -89,10 +89,7 @@ fn rewritten(node: Node, memoized: &[String]) -> Node {
 		return cached;
 	}
 	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| rewritten(item, memoized)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(rewritten(*left, memoized)), op, Box::new(rewritten(*right, memoized))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rewritten(*node, memoized)), data },
-		other => other,
+		other => other.map_children(|child| rewritten(child, memoized)),
 	}
 }
 

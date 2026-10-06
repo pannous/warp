@@ -59,10 +59,7 @@ impl Pipes {
 				let name = self.function(&stage).expect("guarded");
 				called(name, self.rewrite(Node::List(items, Bracket::None, Separator::Space)))
 			}
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => other.map_children(|child| self.rewrite(child)),
 		}
 	}
 

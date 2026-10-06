@@ -112,10 +112,7 @@ fn it_as(node: Node, variable: &Node) -> Node {
 		// an if's branches are the loop's own statements: `if x > 2 { s += it }`
 		Node::Key(left, op @ (Op::Then | Op::Else), right) => Node::Key(Box::new(it_as(*left, variable)), op, Box::new(branch_it_as(*right, variable))),
 		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Arrow | Op::FatArrow, _) => node,
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| it_as(item, variable)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(it_as(*left, variable)), op, Box::new(it_as(*right, variable))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(it_as(*node, variable)), data },
-		other => other,
+		other => other.map_children(|child| it_as(child, variable)),
 	}
 }
 

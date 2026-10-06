@@ -22,10 +22,7 @@ impl Picking {
 				let called = self.called(&items[0], &items[1]).expect("guarded");
 				if bracket == Bracket::Curly { Node::List(vec![called], bracket, separator) } else { called }
 			}
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => other.map_children(|child| self.rewrite(child)),
 		}
 	}
 
