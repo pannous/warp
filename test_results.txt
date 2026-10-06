@@ -663,6 +663,7 @@ PASSED:
   ✓ functions::test_definition_value::a_definition_alone_is_empty
   ✓ functions::test_definition_value::a_spaced_definition_names_its_parameters
   ✓ functions::test_definition_value::it_names_the_one_parameter_of_a_definition
+  ✓ functions::test_dollar_body::dollar_parameters_in_a_body_block
   ✓ functions::test_each_spellings::for_each_spellings_are_each
   ✓ functions::test_effects::test_constraint_on_non_function_is_loud
   ✓ functions::test_effects::test_declared_constraint_holds
@@ -798,6 +799,12 @@ PASSED:
   ✓ functions::test_named_arguments::named_arguments_set_free_variables_of_the_body
   ✓ functions::test_named_arguments::named_arguments_set_parameters_in_any_order
   ✓ functions::test_named_function_argument::a_function_assigned_in_a_call_is_a_named_argument
+  ✓ functions::test_nested_it::test_function_it_stops_at_an_inner_lambda
+  ✓ functions::test_nested_it::test_glued_block_after_a_method_is_a_lambda
+  ✓ functions::test_nested_it::test_inner_dollar_zero_shadows_the_outer
+  ✓ functions::test_nested_it::test_inner_it_shadows_the_outer_it
+  ✓ functions::test_nested_it::test_trailing_block_of_a_lambda_body_method
+  ✓ functions::test_nested_it::test_trailing_block_of_an_assigned_method_call
   ✓ functions::test_nested_prefix_calls::a_function_name_among_the_arguments_takes_the_ones_after_it
   ✓ functions::test_nested_prefix_calls::a_function_passed_as_a_value_stays_one
   ✓ functions::test_nonlocal_any_value::test_an_escaping_closure_keeps_a_text_cell
@@ -2075,10 +2082,12 @@ PASSED:
   ✓ types::test_cast_bugs::a_runtime_value_as_string
   ✓ types::test_cast_bugs::a_text_as_list_is_its_characters
   ✓ types::test_cast_bugs::nonsense_casts_are_loud
+  ✓ types::test_class_aliases::a_constructor_alias_called_as_a_method_stays_a_method
   ✓ types::test_class_aliases::class_modifiers_say_class
-  ✓ types::test_class_aliases::foreign_constructor_names_say_value
+  ✓ types::test_class_aliases::every_common_constructor_name_says_init
   ✓ types::test_class_aliases::foreign_operator_methods_say_the_wasp_name
   ✓ types::test_class_aliases::member_modifiers_and_field_keywords_are_dropped
+  ✓ types::test_class_aliases::new_before_a_construction_is_superfluous
   ✓ types::test_class_aliases::the_wasp_words_give_no_note
   ✓ types::test_class_cases_ported::a_list_field_grows_by_add
   ✓ types::test_class_cases_ported::a_method_calls_another_method_without_self
@@ -2123,6 +2132,7 @@ PASSED:
   ✓ types::test_class_methods::methods_are_no_fields
   ✓ types::test_class_mixins::a_class_takes_in_a_mixin
   ✓ types::test_class_mixins::a_class_takes_in_several_mixins_and_overrides
+  ✓ types::test_class_operators::a_class_defines_an_operator_by_its_glyph
   ✓ types::test_class_operators::a_class_defines_an_operator_by_its_name
   ✓ types::test_class_operators::operators_as_python_and_kotlin_write_them
   ✓ types::test_class_properties::a_getter_reads_like_a_field
@@ -2796,4 +2806,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2791 passed, 0 failed, 2791 total tested
+19 ignored, 2801 passed, 0 failed, 2801 total tested
