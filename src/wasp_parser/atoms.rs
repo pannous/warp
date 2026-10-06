@@ -581,7 +581,19 @@ impl WaspParser {
 			while matches!(self.current_char(), ' ' | '\t') {
 				self.advance();
 			}
-			return self.parse_atom();
+			let construction = self.parse_atom();
+			let class = crate::lowering::class_methods::leading_name(&construction);
+			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
+			return construction;
+		}
+		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
+			while matches!(self.current_char(), ' ' | '\t') {
+				self.advance();
+			}
+			if let Some(head) = self.try_parse_operator_method_head() {
+				crate::diagnostic::note_alias(&format!("{OPERATOR_WORD} {}", head.first().name()), &head.first().name());
+				return head;
+			}
 		}
 		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
 		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol.as_str()) {

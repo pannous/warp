@@ -13,10 +13,41 @@ fn assert_alias(code: &str, written: &str, wasp_word: &str) {
 	assert!(notes.contains(&(written.to_string(), wasp_word.to_string())), "{written} → {wasp_word} not in {notes:?}");
 }
 
+/// P162: `init` is the constructor; every common constructor name works as its alias
 #[test]
-fn foreign_constructor_names_say_value() {
-	assert_alias("class P { x=0; constructor(x) { self.x = x } }; P(3).x", "constructor", "value");
-	assert_alias("class P:\n    def __init__(self, x):\n        self.x = x\nP(3).x", "__init__", "value");
+fn every_common_constructor_name_says_init() {
+	let aliases = [
+		("value", "class P { x=0; value(x) { self.x = x } }; P(3).x"),
+		("constructor", "class P { x=0; constructor(x) { self.x = x } }; P(3).x"),
+		("__init__", "class P:\n    def __init__(self, x):\n        self.x = x\nP(3).x"),
+		("initialize", "class P { x=0; def initialize(x) { self.x = x } }; P(3).x"),
+		("__construct", "class P { x=0; function __construct(x) { self.x = x } }; P(3).x"),
+		("New", "class P { x=0; New(x) { self.x = x } }; P(3).x"),
+		("Create", "class P { x=0; Create(x) { self.x = x } }; P(3).x"),
+		("new", "class P { x=0; fn new(x) { self.x = x } }; P(3).x"),
+		("P", "class P { int x; P(int x) { this.x = x; } }; P(3).x"),
+	];
+	for (alias, code) in aliases {
+		assert_alias(code, alias, "init");
+		is!(code, 3);
+	}
+	is!("class P { x=0; init(x) { self.x = x } }; P(3).x", 3);
+	assert_eq!(alias_notes("class P { x=0; init(x) { self.x = x } }; P(3).x"), vec![]);
+}
+
+/// A name the program also calls as a method stays a method: `p.new(2)` is no construction
+#[test]
+fn a_constructor_alias_called_as_a_method_stays_a_method() {
+	is!("class P { x=1; new(k) := P(x + k) }; p = P(1); p.new(2).x", 3);
+	is!("class P { x=1; Create(k) := P(x * k) }; P(2).Create(3).x", 6);
+}
+
+/// `new Point(1, 2)` builds what `Point(1, 2)` builds, with a note that new is superfluous
+#[test]
+fn new_before_a_construction_is_superfluous() {
+	let code = "class Point { x=0; y=0 }; p = new Point(1, 2); p.y";
+	is!(code, 2);
+	assert_alias(code, "new Point", "Point");
 }
 
 #[test]

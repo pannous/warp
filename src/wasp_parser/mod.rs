@@ -71,6 +71,8 @@ const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final
 const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
+/// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
+const OPERATOR_WORD: &str = "operator";
 /// Words before a member of a class body that change nothing in wasp: Swift's `mutating func`, visibility, `override`
 pub const MEMBER_MODIFIERS: [&str; 11] = ["mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"];
 /// Python's root class `class Point(object):`, no parent of its own
@@ -296,8 +298,8 @@ pub const EXTENDS_KEYWORD: &str = "extends";
 /// `mixin Walker{…}` declares fields and methods classes take in: `class Duck with Walker, Swimmer {…}`
 pub const MIXIN_WORD: &str = "mixin";
 pub const WITH_KEYWORD: &str = "with";
-/// The constructor of a class body, `value{…}` or `value(name){…}` (wiki/constructor.md)
-pub const CONSTRUCTOR_WORD: &str = "value";
+/// The constructor of a class body, `init{…}` or `init(name){…}` (wiki/constructor.md, P162)
+pub const CONSTRUCTOR_WORD: &str = "init";
 /// The accessors of a class property, `get age() {…}`, `set age(v) {…}` (wiki/property.md)
 pub const ACCESSOR_WORDS: [&str; 2] = ["get", "set"];
 /// `static k = 3` in a class body: a member of the class, not of each instance (P122); kept as the annotation `@static`

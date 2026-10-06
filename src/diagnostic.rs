@@ -533,7 +533,7 @@ pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 /// written with the word it stands before
 pub fn note_alias(written: &str, wasp_word: &str) {
 	let (foreign_word, reason) = match written.strip_suffix(wasp_word).map(str::trim) {
-		Some(dropped) if !dropped.is_empty() => (dropped, format!("wasp needs no {dropped}")),
+		Some(dropped) if !dropped.is_empty() => (dropped, format!("{dropped} is superfluous: write {wasp_word}")),
 		_ => (written, format!("wasp says {wasp_word}")),
 	};
 	educate_once(&format!("alias-{foreign_word}"), written, wasp_word, &reason);
