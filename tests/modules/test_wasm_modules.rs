@@ -32,6 +32,7 @@ fn a_module_keeps_its_state_for_the_run() {
 #[test]
 fn a_module_is_found_by_name_or_path() {
 	is!("use \"tests/fixtures/wasm/counter.wasm\"; count_up(5)", 5);
+	#[cfg(feature = "native")] // WAT text needs the native build
 	is!("import \"tests/fixtures/wasm/fourty_two.wat\"; ft", 42);
 	fails_with("import tests/fixtures/wasm/no_such; 1", "module not found");
 }
@@ -52,4 +53,14 @@ fn include_runs_main_globals_are_set_and_casts_are_ambiguous() {
 	is!(&with_module("level = 5; level"), 5);
 	is!(&with_module("level += 2; level * 10"), 30);
 	fails_with(&with_module("double(21)"), "double is ambiguous: fourty_two.double(21) for the export, 21 as float for the cast");
+}
+
+#[test]
+fn an_imported_module_gets_wasi_host_words_and_other_modules() {
+	const GREETER: &str = "import tests/fixtures/wasm/greeter; ";
+	is!(&format!("{GREETER}greet()"), 3); // WASI fd_write printed "hi\n"
+	is!(&format!("{GREETER}five()"), 5); // the host word random_below
+	is!(&format!("{GREETER}count_twice(4)"), 8); // counter.wasm, imported by greeter
+	// one instance per file: the program's counter.wasm is greeter's
+	is!(&format!("import tests/fixtures/wasm/counter.wasm; {GREETER}count_up(1); count_twice(1)"), 3);
 }

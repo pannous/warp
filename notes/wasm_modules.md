@@ -25,8 +25,13 @@ twice(ft) + half(5.0)                   // 86.5
 - Linking (src/wasm_modules.rs `link`, native): every import from a module path is a host function that instantiates
   the module in the run's store at its first call (HostState::wasm_modules), so its state (globals, memory) lasts for
   the run: `tick(); tick()` counts on.
-- Not yet: modules that import something themselves (refused loudly at the first call: link WASI or warp's host into
-  them), the browser host (tests/modules/test_wasm_modules.rs is native-only), `m.g = v` qualified assignment, names from the module's name
-  section (parameter names for named arguments). tests/wasm/test_wasm.rs test_import_wasm stays ignored: it expects
-  `import fourty_two` to be 42 (P139 makes that ø) and a module in the working directory.
+- A module's own imports are linked like a .wasm file's (`Imports::EVERY`): WASI (`fd_write`), warp's host words
+  (`host.random_below`), C libraries, and other modules by path (`(import "tests/fixtures/wasm/counter.wasm" "count_up" …)`,
+  relative to the working directory); one instance per file however it is named (fixture greeter.wat).
+- Browser (web/playground/host.js `moduleImports`): an import from a module path instantiates the module's binary
+  (fetched from the served repository) once per run at the first call, its own imports linked by `programImports`; a
+  global reads through its getter, `set g` sets it. WAT text needs the native build, so each fixture .wat has its
+  binary .wasm next to it (found first; rebuild with the `wasm-tools parse` line at the top of the .wat).
+- Not yet: `m.g = v` qualified assignment, names from the module's name
+  section (parameter names for named arguments). tests/wasm/test_wasm.rs test_import_wasm pins P139 (P144).
 - WebAssembly components (`use wasm "lib.wasm" as lib`, `lib.f(x)`) are the other road: notes/stdlib_connectors.md.
