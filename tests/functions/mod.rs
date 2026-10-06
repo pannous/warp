@@ -61,6 +61,7 @@ mod test_whole_float_to_int_parameter;
 mod test_late_binding;
 mod test_nonlocal_passed_around;
 mod test_nonlocal_cells;
+mod test_nonlocal_lambdas;
 mod test_nonlocal_any_value;
 mod test_precomputed;
 mod test_folding_in_bodies;
