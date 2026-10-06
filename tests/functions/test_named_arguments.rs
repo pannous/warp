@@ -19,7 +19,7 @@ fn named_arguments_follow_the_parameter_order_of_a_python_colon_def() {
 #[test]
 fn named_arguments_set_free_variables_of_the_body() {
 	is!("f y := y*y+v; f(y=2, v=3)", 7);
-	is!("fun={x*y}; fun(x:2 y:3)", 6);
+	is!("g={x*y}; g(x:2 y:3)", 6);
 	is!("v=10; f(y) := y+v; f(y=1) + f(y=1, v=2)", 14);
 }
 
