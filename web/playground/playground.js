@@ -13,6 +13,8 @@ const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
+const PAGE_EVENT = /^on (click|key)$/;
+const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // the gray levels of paint: a nonzero pixel, a zero pixel
 const PAINT_INK = 29;
 const PAINT_PAPER = 250;
@@ -83,7 +85,13 @@ function startWorker() {
 		};
 	});
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
+	tellSystemValues();
 }
+
+// the system values a Worker cannot read itself (host.js system_value), sent again when they change
+const darkMode = matchMedia(DARK_MODE_QUERY);
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches } });
+darkMode.addEventListener("change", tellSystemValues);
 
 function finish(run, report) {
 	clearTimeout(run.timer);
@@ -213,13 +221,16 @@ function showPaintings(paintings) {
 
 // ---- page events (notes/signals.md phase 7): `on click {…}`, `on key {…}` of the program shown --------------------
 
-let listening = new Set(); // the page events the shown program handles
+let listening = new Set(); // the page events the shown program handles: "click", "key"
 
-function listenTo(events) {
-	listening = new Set(events);
+// what the shown program listens to: "on click", "on key" (page events, sent from here), "every 1 s", "at 09:00",
+// "message from …" (timers and channels, run by the worker)
+function listenTo(labels) {
+	listening = new Set(labels.filter(label => PAGE_EVENT.test(label)).map(label => label.replace(PAGE_EVENT, "$1")));
 	$("output").classList.toggle("listening", listening.size > 0);
-	$("listening").hidden = listening.size === 0;
-	$("listening").textContent = `listening: ${[...listening].map(event => `on ${event}`).join(", ")}; ${listening.has("key") ? "click here, then type" : "click here"}`;
+	$("listening").hidden = labels.length === 0;
+	const hint = listening.has("key") ? "; click here, then type" : listening.size ? "; click here" : "";
+	$("listening").textContent = `listening: ${labels.join(", ")}${hint}`;
 }
 
 // a click on the output (on a canvas: its pixel), a key typed while the output has the focus
@@ -288,15 +299,19 @@ function downloadModule() {
 let editor;
 
 function runNow() {
-	show(editor.getValue());
+	return show(editor.getValue());
 }
 
+const exampleSource = name => EXAMPLES[name]?.code ?? SAMPLES[name];
+
+// shows the example or sample; resolves once its report is shown
 function chooseExample(name) {
-	const source = EXAMPLES[name] ?? SAMPLES[name];
+	const source = exampleSource(name);
 	if (source === undefined) return;
 	$("examples").value = name;
 	editor.setValue(source);
-	runNow();
+	clearTimeout(typingTimer); // the change event's run would run it twice
+	return runNow();
 }
 
 function fillExamples() {
@@ -323,10 +338,10 @@ function initialize() {
 	fillExamples();
 	startWorker();
 	const requested = new URLSearchParams(location.search).get("example");
-	chooseExample(requested && (EXAMPLES[requested] ?? SAMPLES[requested]) !== undefined ? requested : DEFAULT_EXAMPLE);
+	chooseExample(requested && exampleSource(requested) !== undefined ? requested : DEFAULT_EXAMPLE);
 }
 
-// for the headless probe (probes/web_playground.sh): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
+// for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report
+window.playground = { evaluate, applyFix, chooseExample, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
 
 initialize();
