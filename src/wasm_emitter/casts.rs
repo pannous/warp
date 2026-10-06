@@ -115,7 +115,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The text of a Node of unknown kind, as list_text writes the one item of a list: "[1 2]" for a list, "{a:1 b:2}" for
-	/// a map, "a:1" for an entry, the text itself for a text; gives the local still holding the node
+	/// a map, "{a:1}" for an entry (the one-entry map), the text itself for a text; gives the local still holding the node
 	pub(super) fn emit_dynamic_text(&mut self, func: &mut Function, value: &Node) -> u32 {
 		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
 		self.emit_node_instructions(func, value);
@@ -127,7 +127,9 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I32Or, I::If(BlockType::Result(Ref(self.node_ref(false)))), I::LocalGet(held), I::RefAsNonNull]);
 		self.emit_call(func, text_builtins::TEXT_OF);
 		func.instruction(&I::Else);
-		Self::emit_list(func, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(held), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
+		func.instruction(&I::I64Const(crate::type_kinds::SQUARE_LIST_KIND));
+		self.emit_entry_in_braces(func, held);
+		Self::emit_list(func, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
 		let (pointer, length) = self.allocate_string("");
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_text");
