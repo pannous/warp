@@ -1145,7 +1145,9 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_codepoint");
 			}
 			Node::Symbol(s) => {
-				if let Some(user_fn) = self.ctx.user_functions.get(s) {
+				// a parameter named like a function of the program (`f(inc) := inc(3)`) is the parameter
+				let parameter = self.scope.lookup(s).is_some_and(|local| local.is_param);
+				if let Some(user_fn) = self.ctx.user_functions.get(s).filter(|_| !parameter) {
 					match user_fn.params.iter().filter(|param| param.default.is_none()).count() {
 						0 => self.emit_user_function_call(func, s, &[]),
 						count => {
