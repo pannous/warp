@@ -7,7 +7,6 @@
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::type_kinds::Kind;
 use std::collections::HashMap;
 
 const OPTIONAL_MARK: char = '?';
