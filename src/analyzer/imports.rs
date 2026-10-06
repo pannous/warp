@@ -425,6 +425,7 @@ pub(super) fn add_ffi_lib_dynamic(ctx: &mut Context, lib: &str) {
 	if crate::wasm_modules::is_module_path(lib) {
 		for (name, export) in crate::wasm_modules::exports(lib) {
 			ctx.ffi_imports.insert(name.clone(), export.signature.clone());
+			ctx.ffi_imports.insert(crate::wasm_modules::qualified(lib, name), export.signature.clone());
 		}
 		return;
 	}
