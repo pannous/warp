@@ -1201,6 +1201,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 			let Node::Key(_, _, result_types) = head.drop_meta() else { unreachable!("guarded") };
 			(keyword, Node::List(vec![tuple_result(head).expect("guarded").clone(), typed_returns(body.clone(), result_types)], Bracket::Round, Separator::None), None)
 		}
+		[keyword, head, rest] if curried_definition(head, rest).is_some() => (keyword, curried_definition(head, rest).expect("guarded"), None),
 		[keyword, head, body] => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), None),
 		// Go's `func add1(x int) int {…}`: the result type between the head and the body
 		[keyword, head, result_type, body] if is_type_word(result_type) => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), Some(result_type.clone())),
@@ -1213,7 +1214,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
 		return None;
 	}
-	let definition = extension_definition(definition);
+	let definition = function_typed_result(extension_definition(definition));
 	let definition = match typed_result(&definition) {
 		Some((untyped, written_type)) => {
 			result_type = Some(written_type);
@@ -1341,6 +1342,38 @@ fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 		_ => return None,
 	};
 	Some((Node::Key(head.clone(), Op::Define, Box::new(body)), result_type))
+}
+
+/// Scala's curried `def add(x: Int)(y: Int): Int = x + y`: `add(x: Int) := (y: Int) => x + y`, so `add(1)(2)` calls the
+/// function add(1) returns
+fn curried_definition(head: &Node, rest: &Node) -> Option<Node> {
+	let Node::Key(second, Op::Assign, body) = rest.drop_meta() else { return None };
+	let second = match second.drop_meta() {
+		Node::Key(group, Op::Colon, result_type) if is_type_word(result_type) => group.as_ref(),
+		other => other,
+	};
+	let Node::List(_, Bracket::Round, _) = second.drop_meta() else { return None };
+	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
+	if !matches!(head_items.first().map(Node::drop_meta), Some(Node::Symbol(_))) {
+		return None;
+	}
+	let lambda = Node::Key(Box::new(second.clone()), Op::FatArrow, body.clone());
+	Some(Node::Key(Box::new(head.clone()), Op::Define, Box::new(lambda)))
+}
+
+/// Swift's `f(k) -> (Int) -> Int { body }`, a function as the result: the definition `f(k) { body }`, the closure it
+/// returns carries its own types
+fn function_typed_result(definition: Node) -> Node {
+	let Node::Key(head, Op::Arrow, result) = &definition else { return definition };
+	let Node::Key(parameter_types, Op::Arrow, typed_body) = result.drop_meta() else { return definition };
+	let Node::List(types, Bracket::Round, _) = parameter_types.drop_meta() else { return definition };
+	let Node::List(parts, _, Separator::Space) = typed_body.drop_meta() else { return definition };
+	match parts.as_slice() {
+		[result_type, body] if types.iter().all(is_type_word) && is_type_word(result_type) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			Node::List(vec![head.as_ref().clone(), body.clone()], Bracket::Round, Separator::None)
+		}
+		_ => definition,
+	}
 }
 
 /// `f(a, b) -> (Int, Int)`: the head of a function whose result type is a tuple of types
