@@ -149,8 +149,12 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - WebAssembly modules (warp-25, branch wasm-modules, notes/wasm_modules.md), all as recommended: P139 `import m` /
   `use` / `require` only declare (ø); `include m` runs m's main/start export and is its value (test_import_wasm → 42).
   P140 assigning an imported global: a mutable wasm global is set in the module, an immutable one is a loud error
-  (P130's rule). P141 an export named like a builtin (`double`): the builtin wins with a got-it warning naming
-  `m.double(21)`; qualified calls `m.f(x)` get built; never a silent shadow.
+  (P130's rule). P141 REVISED (user: "if the built-in wins, then what's the point of even allowing to define it? It
+  should be an error then, no?" … "at the definition side if we don't define it, then you decide"): a wasp
+  definition named like a builtin (`def double(x)…`) is a loud error at the definition. A foreign .wasm export
+  can't be renamed, so (Interviewer's choice, as the user delegated) `import m` works, `m.double(21)` always works
+  (qualified calls get built), and a bare `double(21)` is a loud error "double is ambiguous: m.double(21) for the
+  export, 21 as float for the cast". No warning-and-builtin-wins.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
