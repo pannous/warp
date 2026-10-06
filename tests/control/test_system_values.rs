@@ -2,6 +2,7 @@
 // machine's state; `whenever battery < 20% {…}`, `whenever dark mode {…}`, `on change online {…}` listen to them,
 // checked at the program's check points and once a second while a `warp run` stays
 use crate::is;
+#[cfg(feature = "native")]
 use warp::Node;
 
 fn lowered(code: &str) -> String {
