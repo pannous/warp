@@ -165,6 +165,11 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   when the timeout happens; a timeout itself stays silent.
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P156 (signals, warp-ed) `whenever cond {…}` is edge-triggered: it runs each time the condition becomes true.
+  `x = 0; whenever x > 5 { print "big" }; x = 6; x = 7; x = 3; x = 8` prints big twice (at 6 and 8);
+  `a=0; b=0; whenever a+b==1 {…}; a=1; b=0` runs once.
+  The wiki (where `whenever` is documented, and Footguns.md) shows what to write for while-like behavior instead
+  (every change while it holds: `on change x { if x > 5 {…} }`; as long as it holds), verified examples.
 - P70c (unparked; asked with a realistic example after the user found the old one "completely constructed")
   handlers and definitions created in a loop keep their own iteration's loop variable: `for i in 1 to 3 { button
   "Item {i}" on click { print "clicked {i}" } }` prints "clicked 1" for Item 1 (JS `let`, Swift, C#; not the JS
