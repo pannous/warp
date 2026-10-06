@@ -98,6 +98,14 @@ def browser(*arguments):
 		return ""  # a busy or crashed page: the stall check decides
 
 
+def build_components():
+	"""the components `use wasm` tests call, transpiled for the page (components.js); a failure only warns: those tests
+	then fail naming build.sh"""
+	built = subprocess.run([os.path.join(REPOSITORY, "web", "playground", "build.sh"), "components"], capture_output=True, text=True)
+	if built.returncode:
+		print(f"warning: build.sh components failed, `use wasm` tests will fail:\n{built.stderr.strip()}", file=sys.stderr)
+
+
 def main():
 	if sys.argv[1:2] == ["--serve"]:
 		binary = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
@@ -106,6 +114,7 @@ def main():
 		print(f"serving {REPOSITORY}\n  playground: http://127.0.0.1:{PORT}/web/playground/\n  tests:      http://127.0.0.1:{PORT}/web/playground/{tests}")
 		threading.Event().wait()
 	binary, arguments = sys.argv[1], [argument for argument in sys.argv[2:] if not argument.startswith(IGNORED_ARGUMENTS)]
+	build_components()
 	server = serve(binary)
 	query = urllib.parse.urlencode({"wasm": BINARY_PATH, "args": json.dumps(arguments), "workers": WORKERS})
 	browser("open", f"http://127.0.0.1:{PORT}/web/playground/tests.html?{query}")
