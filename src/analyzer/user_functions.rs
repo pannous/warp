@@ -163,6 +163,10 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
 		return Some(Kind::List);
 	}
+	// `v:any`, as an untyped field: any value, held as a Node (std/json.wasp's to_json takes what parse_json gives)
+	if type_name == crate::type_kinds::UNTYPED_FIELD {
+		return Some(Kind::Empty);
+	}
 	type_word_kind(&type_name)
 }
 
