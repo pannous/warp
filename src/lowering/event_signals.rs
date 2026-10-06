@@ -131,7 +131,8 @@ pub fn handled_signals(lowered: &Node) -> Vec<(String, String)> {
 	lowered.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
 		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
 			let function = items.first().map(word).unwrap_or_default();
-			if let Some(event) = function.strip_prefix(HANDLER_PREFIX) {
+			// a page event's wrapper on·click·node (with_node_wrappers) is no handler of its own
+			if let Some(event) = function.strip_prefix(HANDLER_PREFIX).filter(|_| !function.ends_with(crate::declarations::NODE_WRAPPER_SUFFIX)) {
 				handled.push((event.replace(NAME_JOINER, " "), function.clone()));
 			}
 		}
