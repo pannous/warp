@@ -706,7 +706,7 @@ PASSED:
   ✓ functions::test_typed_signatures::spaced_typed_signature
   ✓ functions::test_undefined_calls::test_declared_type_constructs
   ✓ functions::test_undefined_calls::test_paren_data_stays_data
-  ✓ functions::test_undefined_calls::test_print_returns_its_value_without_a_capability_error
+  ✓ functions::test_undefined_calls::test_print_gives_nothing_without_a_capability_error
   ✓ functions::test_undefined_calls::test_resolved_calls_are_unchanged
   ✓ functions::test_undefined_calls::test_type_constructor_arity_is_checked
   ✓ functions::test_undefined_calls::test_unresolved_call_in_function_body
@@ -1636,19 +1636,21 @@ PASSED:
   ✓ text::test_library_unicode::sort_still_orders_ints
   ✓ text::test_library_unicode::upper_and_lower_cover_unicode_scripts
   ✓ text::test_map_text::a_map_has_a_text
-  ✓ text::test_map_text::a_map_prints_and_is_the_value_of_print
+  ✓ text::test_map_text::a_map_prints
   ✓ text::test_nested_list_text::a_count_takes_the_indexed_element
   ✓ text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal
   ✓ text::test_nested_list_text::an_index_is_an_atom_so_a_method_applies_to_the_element
   ✓ text::test_print_all_characters::print_all_characters_prints_each
   ✓ text::test_print_arguments::print_joins_its_arguments_with_a_space
-  ✓ text::test_print_arguments::print_of_a_braceless_call_is_worth_its_result
+  ✓ text::test_print_arguments::print_of_a_braceless_call_gives_nothing
   ✓ text::test_print_arguments::print_of_a_braceless_call_prints_its_result
-  ✓ text::test_print_arguments::print_of_several_arguments_is_worth_the_printed_text
+  ✓ text::test_print_arguments::print_of_several_arguments_gives_nothing
   ✓ text::test_print_arguments::print_without_arguments_writes_an_empty_line
+  ✓ text::test_print_gives_nothing::print_gives_nothing
+  ✓ text::test_print_gives_nothing::the_console_shows_no_value_after_a_print
   ✓ text::test_print_juxtaposed::a_text_next_to_values_prints_joined
   ✓ text::test_print_juxtaposed::the_joined_text_is_written
-  ✓ text::test_print_lists::print_of_a_list_is_worth_the_list
+  ✓ text::test_print_lists::print_of_a_list_gives_nothing
   ✓ text::test_print_lists::print_of_a_list_writes_its_text
   ✓ text::test_print_type_error::print_of_a_type_error_reports_that_error
   ✓ text::test_print_type_error::text_times_number_says_how_to_repeat_a_text
@@ -2368,4 +2370,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2363 passed, 0 failed, 2363 total tested
+23 ignored, 2365 passed, 0 failed, 2365 total tested
