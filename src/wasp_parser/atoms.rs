@@ -352,8 +352,8 @@ impl WaspParser {
 		}
 
 		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count())) {
-			if !self.names_variable(&symbol, &constant) {
-				return constant; // if true {} fall through :?
+			if !self.names_field(&constant) {
+				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
 			}
 		}
 
@@ -432,25 +432,17 @@ impl WaspParser {
 		self.parse_glued_suffix(symbol)
 	}
 
-	/// A named number like `pi` the program assigns (`pi = 4`, a field `class c{pi = 3}`) is a variable from there on; the
-	/// assignment notes that it shadows the constant
-	fn names_variable(&mut self, symbol: &str, constant: &Node) -> bool {
-		if !matches!(constant, Node::Number(_)) {
-			return false;
-		}
-		if self.shadowed_constants.contains(symbol) {
-			return true;
-		}
-		if !self.assignment_follows() {
-			return false;
-		}
-		if !self.in_type_body {
-			self.shadowed_constants.insert(symbol.to_string());
-			crate::normalize::set_hint_position(self.line_nr, self.column.saturating_sub(symbol.chars().count()));
-			let reason = format!("{symbol} = … shadows the constant {symbol}: from here on {symbol} is this variable");
-			crate::diagnostic::educate_once(CONSTANT_SHADOWING_TOPIC, &format!("{symbol} = …"), "another name", &reason);
-		}
-		true
+	/// `class circle{pi = 3}`: a named number assigned in a type body names the type's own field, which shadows nothing
+	fn names_field(&self, constant: &Node) -> bool {
+		self.in_type_body && matches!(constant, Node::Number(_)) && self.assignment_follows()
+	}
+
+	/// `pi = 4` (P130, user: "loud error, if it was declared constant before which it should be"): a named number is a
+	/// declared constant, an assignment to it is an error
+	fn refuse_constant_assignment(&self, symbol: &str) -> Option<Node> {
+		let column = self.column.saturating_sub(symbol.chars().count());
+		let message = format!("{symbol} is a constant");
+		self.assignment_follows().then(|| Diagnostic { message, line: self.line_nr, column, ..Default::default() }.fix("another name").into_error())
 	}
 
 	/// `= …` or `:= …` after blanks, not the comparison `==`
