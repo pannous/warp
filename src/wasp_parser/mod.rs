@@ -344,6 +344,8 @@ const ODD_WORD: &str = "odd";
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
+const TO_SENTENCE_WORD: &str = "To";
+const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
 const TIMES_WORD: &str = "times";
@@ -601,6 +603,8 @@ pub struct WaspParser {
 	stops_at_end: bool,
 	/// Inside Python's `f"…{x}…"`: braces are holes, `{{` and `}}` the braces themselves
 	brace_holes: bool,
+	/// The type parameters skipped after a function's name (`fn id<T>`), marked on the atom (P157)
+	generic_names: Option<(String, Vec<String>)>,
 	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
 	in_command: bool,
 	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
@@ -875,6 +879,7 @@ impl WaspParser {
 			signed_list_element: None,
 			stops_at_end: false,
 			brace_holes: false,
+			generic_names: None,
 			in_command: false,
 			pipe_takes_call: false,
 			times_loops: 0,

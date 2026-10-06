@@ -170,7 +170,9 @@ impl WaspParser {
 		if self.options.data_mode || matches!(lhs.drop_meta(), Empty) {
 			return None;
 		}
-		if (min_bp <= TIMES_BP || self.times_fills_list()) && self.matches_keyword(TIMES_WORD) {
+		// `x = it times it`: with a value after it (no block) `times` binds like `*` anywhere
+		let value_follows = self.value_after_times();
+		if (min_bp <= TIMES_BP || self.times_fills_list() || (value_follows && min_bp <= Op::Mul.binding_power().0)) && self.matches_keyword(TIMES_WORD) {
 			self.advance_by(TIMES_WORD.len());
 			return Some(self.parse_times_loop(lhs.clone()));
 		}
@@ -257,6 +259,16 @@ impl WaspParser {
 	}
 
 	/// `N times {body}` and `N times: body` count with a hidden variable of its own, so nested loops do not meet
+	/// `times` at the cursor followed by a value (a name, a number or a text), no block
+	fn value_after_times(&self) -> bool {
+		if !self.matches_keyword(TIMES_WORD) {
+			return false;
+		}
+		let after = (TIMES_WORD.len()..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(TIMES_WORD.len());
+		let next = self.peek_char(after);
+		next.is_ascii_digit() || matches!(next, '"' | '\'') || self.is_identifier_start(after)
+	}
+
 	pub(super) fn parse_times_loop(&mut self, count: Node) -> Node {
 		self.skip_spaces();
 		let body = match self.current_char() {
@@ -270,7 +282,8 @@ impl WaspParser {
 				return crate::analyzer::filled_list(count, &list).unwrap_or_else(|| error("`n times [x]` repeats one element: `3 times [0]`"));
 			}
 			// `3 times "ab"`, `3 times greeting`: the text repeated (a non-text is an error where its kind is known)
-			quote_or_letter if matches!(quote_or_letter, '"' | '\'') || self.is_identifier_start(0) => return Node::List(vec![Symbol(TEXT_TIMES.to_string()), count, self.parse_atom()], Bracket::Round, Separator::None),
+			// `3 times 4`: numbers multiply (list_emitter.rs emit_text_times)
+			quote_or_letter if matches!(quote_or_letter, '"' | '\'') || self.is_identifier_start(0) || quote_or_letter.is_ascii_digit() => return Node::List(vec![Symbol(TEXT_TIMES.to_string()), count, self.parse_atom()], Bracket::Round, Separator::None),
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
 		self.times_loops += 1;

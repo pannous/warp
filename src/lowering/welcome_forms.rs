@@ -19,8 +19,14 @@ const LAMBDA_WORD: &str = "lambda";
 const LET_WORD: &str = "let";
 const IN_WORD: &str = "in";
 const DESTRUCTURED_OBJECT: &str = "object·";
+/// The Meta key the parser puts on the name of a function written with type parameters `fn id<T>(…)`: their names
+pub const GENERIC_MARK: &str = "generic";
 const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
 const CALL_METHOD: &str = "call";
+const OCAML_FUNCTION_KEYWORD: &str = "fun";
+/// F#/OCaml modules whose iteration functions are wasp's words: `List.map f xs` is `map f xs`
+const ITERATION_MODULES: [&str; 3] = ["List", "Seq", "Array"];
+const MODULE_ITERATIONS: [&str; 5] = ["map", "filter", "fold", "reduce", "sum"];
 /// C# LINQ methods and the wasp words they are (the alias rule: they work, with a note naming wasp's word)
 const LINQ_METHODS: [(&str, &str); 12] = [("Select", "map"), ("Where", "filter"), ("Aggregate", "reduce"), ("Sum", "sum"),
 	("Count", "count"), ("Max", "max"), ("Min", "min"), ("Any", "any"), ("All", "all"), ("First", "first"), ("Last", "last"),
@@ -58,9 +64,14 @@ fn lambda_calls(node: Node, lambda_names: &HashSet<String>) -> Node {
 
 fn forms(node: Node) -> Node {
 	match node {
+		Node::List(items, bracket, separator) if generic_names(&items).is_some() => {
+			let (function, names) = generic_names(&items).expect("guarded");
+			crate::normalize::hint(&format!("{function}<{}>", names.join(", ")), &function, "wasp infers types: write the function without type parameters");
+			forms(without_type_parameters(Node::List(items, bracket, separator), &names))
+		}
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = python_lambdas(items.into_iter().map(forms).collect());
-			if let Some(lambda) = anonymous_function(&items).or_else(|| assigned_braceless_function(&items)).or_else(|| ruby_lambda(&items)) {
+			let items: Vec<Node> = module_qualified_iteration(python_lambdas(items.into_iter().map(forms).collect()));
+			if let Some(lambda) = anonymous_function(&items).or_else(|| assigned_braceless_function(&items)).or_else(|| ruby_lambda(&items)).or_else(|| keyword_arrow(&items)) {
 				return lambda;
 			}
 			if let Some(binding) = let_binding(&items) {
@@ -191,6 +202,68 @@ fn anonymous_function(items: &[Node]) -> Option<Node> {
 		return None;
 	}
 	Some(lambda(function_parameters(head)?, forms(body.clone())))
+}
+
+/// The type parameters marked on a definition's name (`fn id<T>`), when this statement is that definition
+fn generic_names(items: &[Node]) -> Option<(String, Vec<String>)> {
+	items.iter().find_map(marked_generic_names)
+}
+
+/// The function's name and the names in a GENERIC_MARK anywhere in node (Node::visit looks through Meta, this reads it)
+fn marked_generic_names(node: &Node) -> Option<(String, Vec<String>)> {
+	match node {
+		Node::Meta { node, data } => match data.as_ref() {
+			Node::Key(mark, Op::Colon, written) if mark.name() == GENERIC_MARK => {
+				let function = match node.drop_meta() {
+					Node::List(items, _, _) => items.first().map(Node::name).unwrap_or_default(),
+					other => other.name(),
+				};
+				Some((function, written.name().split(' ').map(str::to_string).collect()))
+			}
+			_ => marked_generic_names(node),
+		},
+		Node::Key(left, _, right) => marked_generic_names(left).or_else(|| marked_generic_names(right)),
+		Node::List(items, _, _) => items.iter().find_map(marked_generic_names),
+		_ => None,
+	}
+}
+
+/// P157: the definition without its generics: the mark, `x: T` annotations and a `-> T` / `: T` result naming them
+fn without_type_parameters(node: Node, names: &[String]) -> Node {
+	let is_type_parameter = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if names.contains(name));
+	match node {
+		Node::Meta { node, data } if matches!(data.as_ref(), Node::Key(mark, _, _) if mark.name() == GENERIC_MARK) => without_type_parameters(*node, names),
+		Node::Key(name, Op::Colon, kind) if is_type_parameter(&kind) => without_type_parameters(*name, names),
+		// `head -> T { body }`, `head: T { body }`: the definition `(head { body })`
+		Node::Key(head, Op::Arrow | Op::Colon, typed_body) if matches!(typed_body.drop_meta(), Node::List(parts, Bracket::None, Separator::Space) if parts.len() == 2 && is_type_parameter(&parts[0])) => {
+			let Node::List(parts, _, _) = typed_body.drop_meta() else { unreachable!("guarded") };
+			Node::List(vec![without_type_parameters(*head, names), without_type_parameters(parts[1].clone(), names)], Bracket::Round, Separator::None)
+		}
+		other => other.map_children(|child| without_type_parameters(child, names)),
+	}
+}
+
+/// F#'s `List.map f xs` (also `Seq.`, `Array.`): `map f xs`, with a note naming wasp's word (alias rule)
+fn module_qualified_iteration(mut items: Vec<Node>) -> Vec<Node> {
+	let Some(Node::Key(module, Op::Dot, word)) = items.first().map(Node::drop_meta) else { return items };
+	let is_module = ITERATION_MODULES.iter().any(|name| is_word(module, name));
+	let Some(iteration) = MODULE_ITERATIONS.iter().find(|name| is_word(word, name)) else { return items };
+	if !is_module || items.len() < 2 {
+		return items;
+	}
+	crate::normalize::hint(&format!("{}.{iteration}", module.serialize()), iteration, "wasp's word for the module function");
+	items[0] = Node::Symbol(iteration.to_string());
+	items
+}
+
+/// OCaml/F# `(fun x -> x * 2)` as the parser groups it, the keyword then the arrow: the lambda
+fn keyword_arrow(items: &[Node]) -> Option<Node> {
+	let [keyword, arrow] = items else { return None };
+	let Node::Key(parameters, Op::Arrow, body) = arrow.drop_meta() else { return None };
+	// only names: Swift's `func f(x) -> Int { … }` names a function and its result type
+	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
+	let only_names = is_name(parameters) || matches!(parameters.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.iter().all(is_name));
+	(is_word(keyword, OCAML_FUNCTION_KEYWORD) && only_names).then(|| lambda(parameters.as_ref().clone(), forms(body.as_ref().clone())))
 }
 
 /// Go's `func(x int) int { … }`: the body without the result type before it

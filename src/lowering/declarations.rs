@@ -1424,9 +1424,11 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
 	let (name, arguments) = head_items.split_first()?;
 	let Node::Symbol(_) = name.drop_meta() else { return None };
-	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words
+	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words; a call's arguments come flat,
+	// so only Swift's keyword reads them so: `def add(a, b: int) -> int` has two parameters
+	let is_swift = matches!(keyword.drop_meta(), Node::Symbol(word) if word == SWIFT_FUNCTION_KEYWORD);
 	let arguments = match arguments {
-		[label, typed] if argument_label(label, typed).is_some() => vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)],
+		[label, typed] if is_swift && argument_label(label, typed).is_some() => vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)],
 		_ => arguments.to_vec(),
 	};
 	// the parameters may come as one group: `f (a, b)`, `f (m)`, `f ø`
@@ -1661,9 +1663,13 @@ fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
 	let [label, typed] = words.as_slice() else { return parameter };
 	let Some(label) = argument_label(label, typed) else { return parameter };
 	let name = typed_parameter_name(typed).expect("a labeled parameter has a name");
+	// user 2026-10-06: wasp names a parameter once, Swift's label and name are redundant; ported code still compiles
+	let written = format!("{label} {}", typed.serialize());
 	if label == WILDCARD_LABEL {
+		crate::normalize::hint(&written, &typed.serialize(), "wasp names a parameter once, no label");
 		return typed.clone();
 	}
+	crate::normalize::hint(&written, &renamed_parameter(typed, label).serialize(), "wasp names a parameter once, no label");
 	labeled_names.push(Node::Key(Box::new(name.clone()), Op::Assign, Box::new(Node::Symbol(label.to_string()))));
 	renamed_parameter(typed, label)
 }
@@ -1801,6 +1807,8 @@ fn enum_object(items: &[Node]) -> Option<Node> {
 
 /// Swift's label for an argument without a label
 const WILDCARD_LABEL: &str = "_";
+const DART_REQUIRED: &str = "required";
+const SWIFT_FUNCTION_KEYWORD: &str = "func";
 
 /// `real f(real x) { … }`: the definition `f(x:real) := { … }` (the parser reads the type word, then the call and its
 /// block); the result kind is inferred as for any definition
@@ -1824,6 +1832,7 @@ pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 	let Node::Symbol(_) = name.drop_meta() else { return None };
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
 		Node::List(group, Bracket::Round, Separator::Colon) => group.clone(), // `(real a, int b)`
+		Node::List(group, Bracket::Curly, _) => group.clone(), // Dart's named parameters `{required int a, int b = 2}`
 		Node::Empty => vec![], // `f()`
 		_ => vec![argument.clone()],
 	});
@@ -1836,9 +1845,18 @@ pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 fn c_parameter(parameter: &Node) -> Option<Node> {
 	match parameter.drop_meta() {
 		Node::Symbol(_) | Node::Key(_, Op::Colon, _) => Some(parameter.clone()),
+		// Dart's `int b = 2` among the named parameters
+		Node::Key(declared, Op::Assign, default) => Some(Node::Key(Box::new(c_parameter(declared)?), Op::Assign, default.clone())),
 		Node::List(words, _, Separator::Space) => match words.as_slice() {
+			// Dart's `required int a`: every parameter needs its value anyway
+			[required, rest @ ..] if matches!(required.drop_meta(), Node::Symbol(word) if word == DART_REQUIRED) => c_parameter(&Node::List(rest.to_vec(), Bracket::None, Separator::Space)),
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(Node::Key(Box::new(name.clone()), Op::Colon, Box::new(kind.clone())))
+			}
+			// `int b = 2` as the parser groups it, the type then the assignment
+			[kind, assignment] if matches!(assignment.drop_meta(), Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_))) && matches!(kind.drop_meta(), Node::Symbol(_)) => {
+				let Node::Key(name, _, default) = assignment.drop_meta() else { unreachable!("guarded") };
+				Some(Node::Key(Box::new(Node::Key(name.clone(), Op::Colon, Box::new(kind.clone()))), Op::Assign, default.clone()))
 			}
 			_ => None,
 		},
