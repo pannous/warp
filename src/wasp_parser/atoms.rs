@@ -492,6 +492,14 @@ impl WaspParser {
 			Ok(name) => name,
 			Err(message) => return error(&message),
 		};
+		// `class Box<T>{item:T}`: a field or parameter of a type parameter holds any value
+		let type_parameters = match self.current_char() {
+			'<' => match self.parse_type_parameters() {
+				Ok(parameters) => parameters,
+				Err(message) => return error(&message),
+			},
+			_ => vec![],
+		};
 		self.skip_whitespace();
 		// `class dog extends animal {…}` (P117): the parent rides on the name, class_methods copies its fields and methods
 		let mut name = Symbol(type_name);
@@ -505,7 +513,27 @@ impl WaspParser {
 			self.skip_whitespace();
 		}
 		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
+		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
 		Node::Type { name: Box::new(name), body: Box::new(body) }
+	}
+
+	/// `<T>`, `<A, B>`: the names of the type parameters of a declared type
+	fn parse_type_parameters(&mut self) -> Result<Vec<String>, String> {
+		self.advance(); // <
+		let mut names = vec![];
+		loop {
+			self.skip_whitespace();
+			names.push(self.parse_symbol()?);
+			self.skip_whitespace();
+			match self.current_char() {
+				',' => self.advance(),
+				'>' => {
+					self.advance();
+					return Ok(names);
+				}
+				other => return Err(format!("type parameters <{}…> end with >, got {other}", names.join(", "))),
+			}
+		}
 	}
 
 	/// What is glued to a word: `name{…}`, `List<int>`, `p@unit`, `f(args)`, `f(params) {body}`; else the word itself
@@ -535,6 +563,10 @@ impl WaspParser {
 					norm::list_type(ListTypeStyle::Generic, &element_words);
 				}
 				self.advance_by(length);
+				// `Box<int>(3)`, `Box<int>{item:3}` of a declared class `Box<T>`: its type parameters hold any value
+				if self.declared_types.contains(&symbol) {
+					return self.parse_glued_suffix(symbol);
+				}
 				Symbol(type_application_name(&symbol, &arguments))
 			}
 			'<' if !self.options.xml_mode && !self.peek_char(1).is_numeric() && self.peek_char(1) != '<' && names_a_type(&symbol) => {
@@ -594,5 +626,29 @@ impl WaspParser {
 		for _ in 0..n {
 			self.advance();
 		}
+	}
+}
+
+/// A class body with each type parameter used as a type read as any type: a field `item:T` holds any value, a
+/// parameter `with(x:T)` takes any
+fn any_for_type_parameters(node: Node, parameters: &[String]) -> Node {
+	let is_parameter = |node: &Node| match node.drop_meta() {
+		Node::Symbol(name) => parameters.contains(name),
+		Node::Type { name, body } => matches!(body.drop_meta(), Node::Empty) && parameters.contains(&name.drop_meta().name()),
+		_ => false,
+	};
+	match node {
+		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => Node::Key(name, Op::Colon, Box::new(Symbol(crate::type_kinds::UNTYPED_FIELD.to_string()))),
+		Node::Key(head, Op::Define, body) => Node::Key(Box::new(untyped_parameters(*head, &is_parameter)), Op::Define, body),
+		other => other.map_children(|child| any_for_type_parameters(child, parameters)),
+	}
+}
+
+/// A method head with each parameter of a type parameter untyped: `with(x:T)` is `with(x)`
+fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> bool) -> Node {
+	match head {
+		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => *name,
+		Node::Meta { node, data } => Node::Meta { node: Box::new(untyped_parameters(*node, is_parameter)), data },
+		other => other.map_children(|child| untyped_parameters(child, is_parameter)),
 	}
 }
