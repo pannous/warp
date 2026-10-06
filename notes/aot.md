@@ -111,3 +111,21 @@ The run is bounded by its slowest tests, not by Cranelift any more: test_law_pro
 every_sample_runs_without_a_compiler_error 15.6 s, test_upper_and_lower 14.9 s, the uniscript tests 6–11.6 s each
 (8 of the 15 slowest), upper_and_lower_map_latin_greek_and_cyrillic 9.0 s, upper_and_lower_cover_unicode_scripts
 8.2 s, use_requires_a_version_of_a_package 8.1 s, read_loads_a_file_as_bytes 7.4 s.
+
+## Run speed (`warp run` vs `warp <file>`, P105, 2026-10-06)
+`probes/aot/run_speed.sh <warp>`, debug build on a loaded M-series Mac, medians of 9, a small program (fib(20)):
+| | fresh program | unchanged program |
+|---|---|---|
+| `warp run <file>` | 73 ms | 28 ms |
+| `warp <file>` (runs, then builds the executable) | 159 ms | 29 ms |
+| `warp compile --wasm` (front end and emitter only) | 65 ms | |
+
+- `warp run` touches no machine-code path: no precompile_module (only `compile --aot`), no compile_printing_result, no
+  stub. It shares the JIT and the on-disk module cache with every run, which is what makes the unchanged case 28 ms.
+- The fresh case is the front end: parse and lowering ~23 ms (`warp lower`), emitting the module ~40 ms; wasmtime's
+  JIT compile and the run add only ~8 ms. Cranelift `OptLevel::None` measured no difference (73 vs 75 ms fresh, the
+  50M-iteration loop 148 vs 150 ms), so the default stays; Winch has no GC support. Speeding up `warp run` further is
+  the compiler-speed card (lowering passes, the emitted runtime).
+- A plain run of a fresh file costs ~85 ms more: the printing variant compiled once more and its machine code
+  written into the executable; unchanged files skip it (the executable is newer).
+
