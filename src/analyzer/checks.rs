@@ -347,6 +347,8 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 }
 
 /// The type name of a map literal, `map of <value type>` when its values share one
+/// The got-it topic of a `let` variable that changes (P159)
+const LET_CHANGES_TOPIC: &str = "let changes";
 pub(super) const MAP_TYPE: &str = "map";
 /// Library words whose list result has the elements of their list argument
 pub(super) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
@@ -982,8 +984,10 @@ pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Uncheck
 	}
 }
 
-/// `const x=…` binds x once; any later assignment, compound assignment, increment or element assignment is rejected
-pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, String>) -> Option<Diagnostic> {
+/// `const x=…` binds x once: a later assignment of another value, a compound assignment, an increment or an element
+/// assignment is rejected (P130); the same value again only warns (P159). `let x=…` may change, with a note that
+/// teaches `var` for a variable that changes (P159)
+pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (String, String)>) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			let statements = match items.as_slice() {
@@ -995,7 +999,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, Strin
 					if let Some(found) = check_constants(value, constants) {
 						return Some(found);
 					}
-					constants.insert(target.name(), keyword);
+					constants.insert(target.name(), (keyword, value.serialize()));
 					rest
 				}
 				_ => items.as_slice(),
@@ -1007,15 +1011,22 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, Strin
 				Node::Key(name, Op::Hash, _) => name.name(),
 				other => other.name(),
 			};
-			if let Some(keyword) = constants.get(&place) {
-				let assignment = node.drop_meta().serialize();
-				return Some(if keyword == IMMUTABLE_LET {
-					Diagnostic::at(node, format!("{place} is let (immutable), cannot assign it again: {assignment}"))
-						.fix(format!("declare it with var or plain `{place} =` if it changes"))
-				} else {
-					Diagnostic::at(node, format!("{place} is const, cannot assign it again: {assignment}"))
-						.fix(format!("use a new name instead of {place}, or declare it without const"))
-				});
+			let assignment = node.drop_meta().serialize();
+			match constants.get(&place) {
+				Some((keyword, _)) if keyword == IMMUTABLE_LET => {
+					crate::diagnostic::educate_once(LET_CHANGES_TOPIC, &format!("let {place}"), &format!("var {place}"), &format!("{place} changes ({assignment}): var says so where it is declared"));
+				}
+				Some((_, bound)) if *op == Op::Assign && matches!(target.drop_meta(), Node::Symbol(_)) && value.serialize() == *bound => {
+					let redundant = Diagnostic::at(node, format!("{place} is const and already {bound}: {assignment} changes nothing")).fix("remove the redundant assignment".to_string());
+					if crate::diagnostic::report(std::slice::from_ref(&redundant)).is_err() {
+						return Some(redundant);
+					}
+				}
+				Some(_) => {
+					return Some(Diagnostic::at(node, format!("{place} is const, cannot assign it again: {assignment}"))
+						.fix(format!("use a new name instead of {place}, or declare it without const")));
+				}
+				None => {}
 			}
 			check_constants(value, constants)
 		}
