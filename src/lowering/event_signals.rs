@@ -26,13 +26,15 @@ const TEMPLATE_NAME: &str = "handler";
 const EVENT_WORD: &str = "event";
 /// The events the playground page raises (web/playground/host.js PAGE_EVENTS)
 pub const PAGE_EVENTS: [&str; 1] = ["click"];
+/// The events the system raises: the runtime calls their handlers (notes/system_signals.md)
+pub const SYSTEM_EVENTS: [&str; 1] = ["interrupt"];
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
 	let raised = raised_names(&program);
 	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
 		.filter_map(|(index, statement)| handler(statement).map(|(name, body)| (index, name, body)))
-		.filter(|(_, name, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()))
+		.filter(|(_, name, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()) || SYSTEM_EVENTS.contains(&name.as_str()))
 		.collect();
 	if handlers.is_empty() {
 		return program;

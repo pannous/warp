@@ -571,6 +571,7 @@ impl WasmGcEmitter {
 		extract_ffi_imports(&mut self.ctx, node);
 		extract_user_functions(&mut self.ctx, node);
 		crate::analyzer::extract_host_words(&mut self.ctx, node);
+		crate::analyzer::extract_signal_polls(&mut self.ctx);
 		self.type_errors.append(&mut self.ctx.parameter_conflicts);
 		self.scope.function_kinds = self.user_function_kinds();
 		self.derive_imports_from_effects(node);
@@ -738,7 +739,9 @@ impl WasmGcEmitter {
 		let effects = EffectReport::of(node);
 		// task_poll is called by the emitted loops of a program that controls tasks, not by the program itself
 		let polls = effects.calls_external(crate::host::TASK_CONTROL);
-		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || (polls && name == crate::host::TASK_POLL));
+		// signal_poll likewise, by a program with `on interrupt {…}`
+		let polls_signals = self.ctx.user_functions.contains_key(crate::host::INTERRUPT_HANDLER);
+		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || (polls && name == crate::host::TASK_POLL) || (polls_signals && name == crate::host::SIGNAL_POLL));
 		for need in &self.discovered_needs {
 			if let Need::MathImport(key) = need {
 				let function = key.trim_start_matches("m.");
