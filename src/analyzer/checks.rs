@@ -327,11 +327,15 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				_ => MAP_TYPE.to_string(),
 			}
 		}
-		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`
-		Node::Key(map, Op::Hash, _) => match list_type_name(map, scope).strip_prefix(MAP_TYPE_PREFIX) {
-			Some(value_type) if value_type.starts_with(PLAIN) => value_type.to_string(),
-			_ => PLAIN.to_string(),
-		},
+		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`; an item of a list of lists likewise
+		// (`c#2` of a `list of list of list of int` is a `list of list of int`, card nested-index)
+		Node::Key(map, Op::Hash, _) => {
+			let outer = list_type_name(map, scope);
+			match outer.strip_prefix(MAP_TYPE_PREFIX).or_else(|| outer.strip_prefix(&format!("{PLAIN} of "))) {
+				Some(value_type) if value_type.starts_with(PLAIN) => value_type.to_string(),
+				_ => PLAIN.to_string(),
+			}
+		}
 		Node::List(items, _, separator) => {
 			let words: Vec<String> = items.iter().map(|item| element_type_word(item, scope)).collect();
 			let is_block = matches!(separator, Separator::Semicolon | Separator::Newline);
@@ -405,8 +409,13 @@ pub fn literal_number_type_word(node: &Node) -> Option<&'static str> {
 	}
 }
 
+/// A list item's word keeps its own elements: `[[1 2]]` is a `list of int` item, so `[[[1 2]]]` is a
+/// `list of list of list of int` and `c#1#1` a `list of int` (card nested-index)
 pub(super) fn element_type_word(item: &Node, scope: &Scope) -> String {
-	literal_number_type_word(item).map(str::to_string).unwrap_or_else(|| infer_type(item, scope).to_string())
+	literal_number_type_word(item).map(str::to_string).unwrap_or_else(|| match infer_type(item, scope) {
+		Kind::List if matches!(item.drop_meta(), Node::List(_, Bracket::Square, _)) => list_type_name(item, scope),
+		kind => kind.to_string(),
+	})
 }
 
 /// The one type word all element words fit: the same word, `rational` for a mix of `int` and `rational` (int is a special
