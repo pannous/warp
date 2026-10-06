@@ -180,6 +180,7 @@ PASSED:
   ✓ control::test_switch_no_case_value::no_case_shows_the_runtime_value
   ✓ control::test_switch_value::a_parenthesized_switch_takes_part_in_arithmetic
   ✓ control::test_switch_value::a_switch_can_be_bound
+  ✓ control::test_system_signals::a_file_change_runs_its_handler
   ✓ control::test_system_signals::a_program_with_a_timer_stays_after_main
   ✓ control::test_system_signals::a_timer_fires_while_main_runs
   ✓ control::test_system_signals::exit_ends_the_run
@@ -514,6 +515,11 @@ PASSED:
   ✓ functions::test_def_forms::definition_forms_agree
   ✓ functions::test_def_forms::probe_def_block_syntax
   ✓ functions::test_def_without_parameters::a_def_without_parameters_is_a_function
+  ✓ functions::test_default_parameters::a_default_may_read_earlier_parameters
+  ✓ functions::test_default_parameters::a_missing_argument_takes_its_default
+  ✓ functions::test_default_parameters::a_typed_parameter_may_have_a_default
+  ✓ functions::test_default_parameters::calls_without_parentheses_take_defaults_too
+  ✓ functions::test_default_parameters::named_arguments_skip_defaults_and_mix_with_positional_ones
   ✓ functions::test_definition_value::a_definition_alone_is_empty
   ✓ functions::test_definition_value::a_spaced_definition_names_its_parameters
   ✓ functions::test_definition_value::it_names_the_one_parameter_of_a_definition
@@ -798,6 +804,10 @@ PASSED:
   ✓ lists::test_key_lookup::test_object_variable_is_looked_up_by_key
   ✓ lists::test_key_lookup::test_text_value_is_looked_up
   ✓ lists::test_key_subscript_hint::a_text_key_subscript_gets_no_index_hint
+  ✓ lists::test_lazy_range::a_big_range_variable_compiles
+  ✓ lists::test_lazy_range::a_range_is_read_from_its_bounds
+  ✓ lists::test_lazy_range::a_range_variable_used_as_a_list_stays_one
+  ✓ lists::test_lazy_range::a_small_range_variable_is_still_its_list
   ✓ lists::test_linear_append::an_appended_list_of_nodes_keeps_its_items
   ✓ lists::test_linear_append::map_and_filter_of_texts_stay_linear
   ✓ lists::test_list_arithmetic::test_round_group_of_arithmetic_is_still_an_expression
@@ -1799,6 +1809,22 @@ PASSED:
   ✓ types::test_cast_bugs::a_runtime_value_as_string
   ✓ types::test_cast_bugs::a_text_as_list_is_its_characters
   ✓ types::test_cast_bugs::nonsense_casts_are_loud
+  ✓ types::test_class_cases_ported::a_list_field_grows_by_add
+  ✓ types::test_class_cases_ported::a_method_calls_another_method_without_self
+  ✓ types::test_class_cases_ported::a_method_reads_a_field_with_a_default
+  ✓ types::test_class_cases_ported::a_stack_class_pushes_onto_its_list
+  ✓ types::test_class_cases_ported::a_static_counter_changes_from_methods_and_outside
+  ✓ types::test_class_cases_ported::a_static_method_is_called_on_the_class
+  ✓ types::test_class_cases_ported::a_subclass_instance_is_its_parent_type
+  ✓ types::test_class_cases_ported::a_subclass_method_calls_an_inherited_method_without_self
+  ✓ types::test_class_cases_ported::an_override_calls_the_parent_method_with_super
+  ✓ types::test_class_cases_ported::each_subclass_overrides_the_shared_method
+  ✓ types::test_class_cases_ported::fields_have_defaults
+  ✓ types::test_class_cases_ported::instances_compare_by_value
+  ✓ types::test_class_cases_ported::methods_read_fields_with_or_without_self
+  ✓ types::test_class_cases_ported::objects_change_and_copy
+  ✓ types::test_class_cases_ported::objects_hold_objects
+  ✓ types::test_class_cases_ported::static_members_belong_to_the_class
   ✓ types::test_class_extends::a_subclass_adds_fields
   ✓ types::test_class_extends::a_subclass_has_the_fields_and_methods_of_its_parent
   ✓ types::test_class_extends::a_subclass_instance_is_accepted_where_the_parent_is_wanted
@@ -2445,4 +2471,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2440 passed, 0 failed, 2440 total tested
+23 ignored, 2466 passed, 0 failed, 2466 total tested

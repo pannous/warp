@@ -60,3 +60,29 @@
   class like any shared method.
 - library_words: a class's own `sum·point` (any `name·Type` variant) shadows the library word `sum`, so a shared
   method named like a library word stays the class's.
+
+## Ported cases (tests/types/test_class_cases_ported.rs, probe probes/class_cases.sh)
+Cases from Python, Java, Kotlin, Swift, C# and Ruby. Batch 1 (branch classes-1) added:
+- Implicit receiver (Java/Kotlin/C#): inside a method, `area()` calls the class's own (or inherited) method on self,
+  a bare getter name `area` reads it from self; a parameter of the same name shadows both.
+- `super.speak(…)` in dog's method: inherit gives dog the speak it would have inherited as its own method
+  `speak·super·dog` and the call is `self.speak·super·dog(…)`. Static dispatch, nothing at run time; chains work
+  (puppy's super is dog's speak, whose super is animal's). super of a method the parent lacks is an error.
+- `dog(…) is animal` is true when dog extends animal (traits.rs IS_TYPE through the likeness); `animal(…) is dog` false.
+Already worked: field defaults `x:int=0`, `self.w`, getters, methods with arguments, overriding per subclass, value
+equality `==`, mutating methods, field assignment, a method giving a changed copy, nested objects, named construction.
+Batch 2 (branch classes-2):
+- Static members (P122, user: the explicit keyword): the parser keeps `static` in front of a statement as the
+  annotation `@static` (no "no meaning" note any more; before a top-level function it still changes nothing).
+  In a class body `static k = 3` is the main-level `global c·k = 3` plus the getter `k(self:c) := c·k`, so `C.k`,
+  `c.k` and a bare `k` in methods read the one value and methods may change it (`clicks += 1`); it takes no
+  field slot. `static make(x) := …` is the function `c·make`, called `C.make(…)`. A plain `k = 3` stays a field with
+  a default.
+- A field with a default (`x:int=1`, `k = 3`) is read from self in methods too (it gave the bare symbol before).
+- `p.items.add(v)` / `.insert(…)` of a field path update the field like `xs.add(v)` updates a variable
+  (declaration_lowering is_place); a method doing it changes its object, so a Stack's `push` works.
+- Convention (P123 follow-up): new tests name classes with a capital, `Point{x:1 y:2}`.
+Open (next batches): the `value{…}` constructor block and `value(name){…}` (wiki/constructor.md; today silently
+ignored), a `pop` method (changes the object and gives another value), an object's text in one form
+`point{x:1 y:2}` (P123: result, string(p), print), a method named like a type word (`double()`: "double is a type"),
+property setters (wiki/property.md), generics `class Box<T>`, mixins, a field named `pi` (card footgun-pi).

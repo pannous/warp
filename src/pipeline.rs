@@ -135,8 +135,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 36] = [
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
-const MEANING_PASSES: [fn(Node) -> Node; 25] = [
-	crate::declarations::resolve_tasks, crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
+const MEANING_PASSES: [fn(Node) -> Node; 26] = [
+	crate::lazy_ranges::lower, crate::declarations::resolve_tasks, crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
 	// before any pass reads a call's arity: `f(a)` and `f(a, b)` become `f·1`, `f·2`
 	crate::overloads::lower_arity_overloads,
 	crate::broadcasting::lower, crate::library_words::lower_count_in, crate::lambdas::lower, crate::function_values::lower, crate::closures::lower, crate::lambdas::lower_strict, crate::broadcasting::lower_several_arguments, crate::real::lower,

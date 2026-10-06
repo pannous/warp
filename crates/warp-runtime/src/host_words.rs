@@ -10,6 +10,9 @@ pub const RANDOM_BELOW: &str = "random_below";
 pub const CLOCK: &str = "clock";
 pub const SIGNAL_POLL: &str = "signal_poll";
 pub const SIGNAL_EVERY: &str = "signal_every";
+pub const SIGNAL_WATCH: &str = "signal_watch";
+/// `on·file·0`: the handler of the first `on file "x" change {…}`
+pub const FILE_HANDLER_PREFIX: &str = "on·file·";
 /// `exit(code)` ends the run, not the process (P121, system_signals.rs ExitRequest)
 pub const EXIT: &str = "exit";
 /// The exported handler of `on interrupt {…}` (src/lowering/event_signals.rs)
@@ -17,7 +20,7 @@ pub const INTERRUPT_HANDLER: &str = "on·interrupt";
 /// `on·every·0`: the handler of the first `on every … {…}`
 pub const TIMER_HANDLER_PREFIX: &str = "on·every·";
 /// The words link_host_words provides
-pub const BASIC_HOST_WORDS: [&str; 7] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, EXIT];
+pub const BASIC_HOST_WORDS: [&str; 8] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_WATCH, EXIT];
 
 #[cfg(feature = "engine")]
 pub use linking::*;
@@ -41,8 +44,22 @@ mod linking {
 		linker.func_wrap(HOST_LIBRARY, CLOCK, milliseconds_since_epoch)?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_POLL, |mut caller: Caller<'_, T>| system_signals::run_due_handlers(&mut caller, exported))?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_EVERY, system_signals::start_timer)?;
+		linker.func_wrap(HOST_LIBRARY, SIGNAL_WATCH, |mut caller: Caller<'_, T>, id: i64, path: i32| -> Result<()> {
+			let path = c_string(&mut caller, path)?;
+			system_signals::watch_file(id, path);
+			Ok(())
+		})?;
 		linker.func_wrap(HOST_LIBRARY, EXIT, |code: i64| -> Result<()> { Err(wasmtime::Error::new(system_signals::ExitRequest(code as i32))) })?;
 		Ok(())
+	}
+
+	/// The NUL-terminated text a text literal passes as an i32 (the emitter's C strings)
+	fn c_string<T>(caller: &mut Caller<'_, T>, pointer: i32) -> Result<String> {
+		let memory = caller.get_export("memory").and_then(|export| export.into_memory()).ok_or_else(|| wasmtime::Error::msg("no memory export"))?;
+		let bytes = memory.data(&*caller);
+		let start = (pointer as usize).min(bytes.len());
+		let end = bytes[start..].iter().position(|byte| *byte == 0).map_or(bytes.len(), |length| start + length);
+		Ok(String::from_utf8_lossy(&bytes[start..end]).into_owned())
 	}
 
 	fn exported<T>(caller: &mut Caller<'_, T>, name: &str) -> Option<Func> {

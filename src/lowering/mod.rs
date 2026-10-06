@@ -17,6 +17,7 @@ pub mod function_values;
 pub mod getters;
 pub mod inlining;
 pub mod lambdas;
+pub mod lazy_ranges;
 pub mod late_binding;
 pub mod foreign_modules;
 pub mod nonlocal_cells;
