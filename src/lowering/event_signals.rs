@@ -33,6 +33,8 @@ const HANDLER_SUFFIX: &str = "_handler_";
 /// `tick_listeners`: the handlers of tick subscribed inside blocks, `tick_listener` one of them
 const SUBSCRIBERS_SUFFIX: &str = "_listeners";
 const SUBSCRIBER_SUFFIX: &str = "_listener";
+const LOOP_WORDS: [&str; 4] = ["for", "while", "repeat", "loop"];
+const LOOP_SUBSCRIPTION_TOPIC: &str = "handler-in-loop";
 /// `emit alarm{level: 3}` runs the `on alarm` handlers and goes on; nobody listening, it does nothing (P163). `send`
 /// without `to` is the same; `raise` and `throw` are errors only
 const EMIT_WORDS: [&str; 2] = ["emit", "send"];
@@ -194,7 +196,7 @@ fn subscribed_in_blocks(statements: Vec<Node>, raised: &HashSet<String>) -> Vec<
 	let mut subscribed: Vec<String> = vec![];
 	let statements: Vec<Node> = statements.into_iter().map(|statement| match handler(&statement) {
 		Some(_) => statement,
-		None => statement.map_children(|child| subscriptions(child, raised, &mut subscribed)),
+		None => statement.map_children(|child| subscriptions(child, raised, &mut subscribed, false)),
 	}).collect();
 	let started = subscribed.iter().flat_map(|event| {
 		let list = subscribers_name(event);
@@ -204,9 +206,14 @@ fn subscribed_in_blocks(statements: Vec<Node>, raised: &HashSet<String>) -> Vec<
 	started.chain(statements).collect()
 }
 
-/// A raised event's handler in a block, not in a function, becomes its subscription
-fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<String>) -> Node {
+/// A raised event's handler in a block, not in a function, becomes its subscription; one in a loop subscribes at each
+/// pass (a listener leak, unless meant), which a got-it note says
+fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<String>, in_loop: bool) -> Node {
 	if let Some((event, body, false)) = handler(&node).filter(|(event, _, _)| raised.contains(event)) {
+		if in_loop {
+			let reason = format!("a handler in a loop subscribes once per pass: each emit {event} runs all of them; subscribe before the loop unless that is meant");
+			crate::diagnostic::advise_once(LOOP_SUBSCRIPTION_TOPIC, &format!("on {event} {{…}}"), "on … before the loop", &reason);
+		}
 		let list = Node::Symbol(subscribers_name(&event));
 		let listener = Node::Key(Box::new(Node::Symbol(EVENT_WORD.to_string())), Op::FatArrow, Box::new(body));
 		let added = Node::Key(Box::new(list.clone()), Op::Add, Box::new(Node::List(vec![listener], Bracket::Square, Separator::None)));
@@ -215,9 +222,19 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 		}
 		return Node::Key(Box::new(list), Op::Assign, Box::new(added));
 	}
+	let in_loop = in_loop || is_loop(&node);
 	match node.drop_meta() {
 		Node::Key(_, Op::Define, _) => node,
-		_ => node.map_children(|child| subscriptions(child, raised, subscribed)),
+		_ => node.map_children(|child| subscriptions(child, raised, subscribed, in_loop)),
+	}
+}
+
+/// `for i in xs {…}`, `while c {…}`, `repeat 3 {…}`
+fn is_loop(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(_, Op::While, _) => true,
+		Node::List(items, _, _) => items.first().is_some_and(|first| LOOP_WORDS.contains(&word(first).as_str())),
+		_ => false,
 	}
 }
 
