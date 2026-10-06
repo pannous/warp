@@ -5,6 +5,11 @@ PASSED:
   ✓ control::test_after::after_needs_a_shared_condition
   ✓ control::test_after::after_waits_for_its_condition
   ✓ control::test_all_with_condition::all_with_a_comparison_filters_the_items
+  ✓ control::test_async_ports::await_all_of_started_tasks_gives_their_results
+  ✓ control::test_async_ports::await_any_gives_the_first_to_finish
+  ✓ control::test_async_ports::await_first_is_the_first_tasks_result
+  ✓ control::test_async_ports::await_within_a_deadline
+  ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
   ✓ control::test_await_go::await_of_a_start_is_the_result
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
@@ -2081,9 +2086,12 @@ PASSED:
   ✓ types::test_class_extends::a_subclass_has_the_fields_and_methods_of_its_parent
   ✓ types::test_class_extends::a_subclass_instance_is_accepted_where_the_parent_is_wanted
   ✓ types::test_class_extends::a_subclass_overrides_a_method
+  ✓ types::test_class_forms_ported::a_copy_with_changed_fields
+  ✓ types::test_class_forms_ported::a_csharp_record_declares_its_fields
   ✓ types::test_class_forms_ported::a_javascript_class_with_a_constructor
   ✓ types::test_class_forms_ported::a_kotlin_primary_constructor_declares_the_fields
   ✓ types::test_class_forms_ported::a_python_class_with_init
+  ✓ types::test_class_forms_ported::a_rust_struct_takes_the_methods_of_its_impl
   ✓ types::test_class_forms_ported::a_swift_struct_with_a_mutating_method
   ✓ types::test_class_methods::a_method_assigning_its_receiver_says_so
   ✓ types::test_class_methods::a_method_in_the_body_conforms_to_a_trait
@@ -2635,6 +2643,7 @@ PASSED:
   ✓ welcoming::test_lone_words::test_data_is_the_data_prefix
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
+  ✓ welcoming::test_sleep_unit_warning::a_statement_after_sleep_is_no_duration
   ✓ welcoming::test_sleep_unit_warning::sleep_without_a_unit_warns
   ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
   ✓ welcoming::test_style_dont_care::any_axis_can_stop_caring
@@ -2765,4 +2774,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2760 passed, 0 failed, 2760 total tested
+19 ignored, 2769 passed, 0 failed, 2769 total tested
