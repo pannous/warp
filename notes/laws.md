@@ -23,7 +23,7 @@ CLI: `warp verify file.wasp` (or inline code) prints the reports and exits 1 if 
 - Definitions use `def f (x : Int) : Int := …`. The Lean term covers `+ - * %`, `^n` with a literal nonnegative exponent, unary minus, `?:`, `if then else`, and comparisons (lifted to 0/1 inside terms). `%` uses `Int.tmod`, matching signed truncating remainder. Warp `/` yields a Float, so it isn't exported.
 - The law becomes `theorem f_law (vars : Int) : prop := by try simp only [defs]; all_goals first | (t; done) | …`. Every tactic is wrapped in `; done` because `simp` can rewrite a goal without closing it and still count as success.
 - Tactics are core Lean only: `rfl decide ac_rfl grind simp`, plus a small checked helper for `0 ≤ x*x`; no Mathlib is required. Unlike finite `BitVec`, arbitrary `Int` cannot be exhaustively decided. A law that generated tests do not refute and Lean cannot prove therefore remains `Tested/Unknown` rather than producing a spurious finite-word counterexample.
-- Results are cached by the hash of the Lean source in `target/lean/law_<hash>.{lean,result}`. This is the "proof result recorded" step until the semantic artifact exists.
+- Results are cached by the hash of the Lean source in `~/.cache/warp/lean/law_<hash>.{lean,result}` (shared by all checkouts). The export unfolds only the functions a law reaches (an unused simp argument is a Lean warning), and only `: error` lines fail a proof. This is the "proof result recorded" step until the semantic artifact exists.
 - Not exported, so the law stays at the Tested level: recursive functions (Lean would need termination proofs), Float parameters, `/`, and anything outside the term subset.
 
 ## Verdicts
@@ -40,7 +40,7 @@ Counterexamples come from property tests evaluated in wasm. Lean either proves t
 
 ## Next
 
-- Attach laws to `FunctionDecl` in `src/semantic/` once that IR exists. Persist the verdict in the Wasp-serialized artifact instead of `target/lean`.
+- Attach laws to `FunctionDecl` in `src/semantic/` once that IR exists. Persist the verdict in the Wasp-serialized artifact instead of `~/.cache/warp/lean`.
 - Use an SMT backend (z3 is installed) as a faster prover for linear and bitvector laws.
 - Asserted mode checks concrete call sites at compile time. It doesn't yet check values computed at runtime inside the WASM module.
 - Lawful lifting: broadcasting is allowed only where functor laws are Proved.
