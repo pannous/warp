@@ -21,6 +21,7 @@ const IN_WORD: &str = "in";
 const DESTRUCTURED_OBJECT: &str = "object·";
 const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
 const CALL_METHOD: &str = "call";
+const OCAML_FUNCTION_KEYWORD: &str = "fun";
 /// F#/OCaml modules whose iteration functions are wasp's words: `List.map f xs` is `map f xs`
 const ITERATION_MODULES: [&str; 3] = ["List", "Seq", "Array"];
 const MODULE_ITERATIONS: [&str; 5] = ["map", "filter", "fold", "reduce", "sum"];
@@ -213,8 +214,10 @@ fn module_qualified_iteration(mut items: Vec<Node>) -> Vec<Node> {
 fn keyword_arrow(items: &[Node]) -> Option<Node> {
 	let [keyword, arrow] = items else { return None };
 	let Node::Key(parameters, Op::Arrow, body) = arrow.drop_meta() else { return None };
-	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word));
-	is_keyword.then(|| lambda(parameters.as_ref().clone(), forms(body.as_ref().clone())))
+	// only names: Swift's `func f(x) -> Int { … }` names a function and its result type
+	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
+	let only_names = is_name(parameters) || matches!(parameters.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.iter().all(is_name));
+	(is_word(keyword, OCAML_FUNCTION_KEYWORD) && only_names).then(|| lambda(parameters.as_ref().clone(), forms(body.as_ref().clone())))
 }
 
 /// Go's `func(x int) int { … }`: the body without the result type before it
