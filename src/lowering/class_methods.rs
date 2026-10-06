@@ -132,7 +132,9 @@ fn taking_in_mixins(node: Node, mixins: &[(String, Vec<Node>)]) -> Result<Node, 
 				Node::List(names, _, _) => names.iter().map(|name| name.drop_meta().name()).collect(),
 				single => vec![single.name()],
 			}).unwrap_or_default();
-			let (included, own): (Vec<Node>, Vec<Node>) = class_items(&body).into_iter().partition(|item| included_mixin(item).is_some());
+			// `include m` of no declared mixin stays (P139: it loads the module m)
+			let is_mixin = |item: &Node| included_mixin(item).is_some_and(|mixin| mixins.iter().any(|(declared, _)| *declared == mixin));
+			let (included, own): (Vec<Node>, Vec<Node>) = class_items(&body).into_iter().partition(is_mixin);
 			taken.extend(included.iter().filter_map(included_mixin));
 			if taken.is_empty() {
 				return Ok(Node::Type { name, body });
