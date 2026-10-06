@@ -153,7 +153,12 @@ impl WasmGcEmitter {
 		};
 
 		let value = value.drop_meta();
-		if let Some(refusal) = self.cast_refusal(value, target_type) {
+		// `cube 3 as int`, the body of `def g() -> int { cube 3 }`: an unknown word is an error as without the cast
+		let unknown_word = match value {
+			Node::List(items, bracket, separator) => self.unknown_word_error(items, bracket, separator),
+			_ => None,
+		};
+		if let Some(refusal) = unknown_word.or_else(|| self.cast_refusal(value, target_type)) {
 			self.emit_type_error(func, refusal);
 			return;
 		}
