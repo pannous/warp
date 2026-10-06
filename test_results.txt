@@ -110,6 +110,9 @@ PASSED:
   ✓ control::test_job_lists::counting_jobs_does_not_await_them
   ✓ control::test_job_lists::jobs_in_a_list_run_at_the_same_time
   ✓ control::test_job_lists::the_extremes_of_job_results_are_numbers
+  ✓ control::test_listener_removal::a_named_listener_can_be_called
+  ✓ control::test_listener_removal::a_named_listener_is_removed
+  ✓ control::test_listener_removal::removing_one_listener_keeps_the_others
   ✓ control::test_loop_forms::a_range_is_a_list_in_a_variable
   ✓ control::test_loop_forms::for_without_variable_binds_it
   ✓ control::test_loop_forms::ranges_in_for_headers_stay_ranges
@@ -707,6 +710,7 @@ PASSED:
   ✓ functions::test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
   ✓ functions::test_optional_parameters::a_missing_optional_argument_is_empty
   ✓ functions::test_optional_parameters::coalescing_keeps_zero_and_false
+  ✓ functions::test_optional_parameters::maybe_marks_an_optional_parameter
   ✓ functions::test_optional_words::is_with_a_test_word
   ✓ functions::test_optional_words::test_words_read_as_not
   ✓ functions::test_optional_words::test_words_work_in_other_conditions
@@ -746,6 +750,8 @@ PASSED:
   ✓ functions::test_property_words::test_property_word_after_a_name_counts
   ✓ functions::test_property_words::test_property_word_agrees_with_of_and_getter
   ✓ functions::test_property_words::test_property_word_counts_text_characters
+  ✓ functions::test_recursive_list_functions::a_recursive_maximum
+  ✓ functions::test_recursive_list_functions::a_recursive_sum_over_slices
   ✓ functions::test_return_type_dispatch::test_a_picked_overload_warns_nothing
   ✓ functions::test_return_type_dispatch::test_a_single_definition_with_a_result_type
   ✓ functions::test_return_type_dispatch::test_a_typed_declaration_picks_the_overload
@@ -2541,4 +2547,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2536 passed, 0 failed, 2536 total tested
+23 ignored, 2542 passed, 0 failed, 2542 total tested
