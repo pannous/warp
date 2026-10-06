@@ -647,6 +647,7 @@ impl WaspParser {
 			_ => vec![],
 		};
 		let mut constructor_fields = if self.current_char() == '(' { self.parse_primary_constructor() } else { vec![] };
+		self.skip_conformances();
 		// Python's `class Dog(Animal):` names its parents in the parentheses, `object` the root of all
 		let python_body = self.current_char() == ':' && self.peek_char(1) != '=';
 		let python_parent = match python_body {
@@ -695,6 +696,15 @@ impl WaspParser {
 			}
 			name = name.with_attribute(WITH_KEYWORD, Node::List(mixins, Bracket::None, Separator::Space));
 		}
+		// Go's `type Shape interface {…}`: the trait Shape, as `interface Shape {…}` declares it (traits.rs)
+		if self.matches_keyword(GO_INTERFACE_WORD) {
+			self.advance_by(GO_INTERFACE_WORD.len());
+			self.skip_whitespace();
+			if self.current_char() == '{' {
+				let block = self.parse_bracketed('{');
+				return Node::List(vec![Symbol(GO_INTERFACE_WORD.to_string()), name, block], Bracket::None, Separator::Space);
+			}
+		}
 		// Go's `type Point struct {…}`
 		if self.matches_keyword(GO_STRUCT_WORD) {
 			self.advance_by(GO_STRUCT_WORD.len());
@@ -729,6 +739,28 @@ impl WaspParser {
 		};
 		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
 		Node::Type { name: Box::new(name), body: Box::new(body) }
+	}
+
+	/// The traits a class names before its body, Java's and TypeScript's `implements Shape, Named {`, Swift's
+	/// `struct Square: Shape {`, Kotlin's `class Square(…) : Shape {`: skipped with a note, since a type conforms to a
+	/// trait by defining its operations (notes/traits.md T2)
+	fn skip_conformances(&mut self) {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let start = if self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) != '=' {
+			blanks + 1
+		} else if (0..IMPLEMENTS_WORD.len()).all(|i| self.peek_char(blanks + i) == IMPLEMENTS_WORD.as_bytes()[i] as char) && !is_identifier_char(self.peek_char(blanks + IMPLEMENTS_WORD.len())) {
+			blanks + IMPLEMENTS_WORD.len()
+		} else {
+			return;
+		};
+		let names: String = (start..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '{' | '\n' | '\0')).collect();
+		let are_names = names.split(',').all(|name| !name.trim().is_empty() && name.trim().chars().all(is_identifier_char));
+		if !are_names || self.peek_char(start + names.chars().count()) != '{' {
+			return;
+		}
+		let written: String = (blanks..start).map(|offset| self.peek_char(offset)).collect::<String>() + names.trim_end();
+		crate::diagnostic::educate_once(CONFORMANCE_TOPIC, written.trim(), "", "a type conforms to a trait by defining its operations: wasp needs no list of them");
+		self.advance_by(start + names.chars().count());
 	}
 
 	/// The name of a declared type after blanks: `new Point(…)`
