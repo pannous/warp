@@ -241,6 +241,9 @@ impl Loader<'_> {
 			return Ok(vec![as_use(statement)]);
 		}
 		let Some(path) = self.find(name) else {
+			if let Some(source) = std_module(name).filter(|_| import == Import::Use) {
+				return self.load_source(import, PathBuf::from(format!("{STD_FOLDER}/{name}.wasp")), source);
+			}
 			if let Some(module) = self.find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS) {
 				return Ok(self.use_wasm_module(&module, statement, import));
 			}
@@ -275,6 +278,12 @@ impl Loader<'_> {
 	}
 
 	fn load(&mut self, import: Import, name: &str, path: PathBuf) -> Result<Vec<Node>, Node> {
+		let source = crate::web::read_text(&path.to_string_lossy()).ok_or_else(|| error(&format!("module not readable: {name}")))?;
+		self.load_source(import, path, &source)
+	}
+
+	/// A module from its source: `path` names it (each is loaded once) and is where its own `use`s look
+	fn load_source(&mut self, import: Import, path: PathBuf, source: &str) -> Result<Vec<Node>, Node> {
 		let loaded = match import {
 			Import::Use => &mut self.loaded,
 			Import::Include => &mut self.included,
@@ -282,8 +291,7 @@ impl Loader<'_> {
 		if !loaded.insert(path.canonicalize().unwrap_or_else(|_| path.clone())) {
 			return Ok(vec![]);
 		}
-		let source = crate::web::read_text(&path.to_string_lossy()).ok_or_else(|| error(&format!("module not readable: {name}")))?;
-		let module = WaspParser::parse(&source);
+		let module = WaspParser::parse(source);
 		if let Some(failure) = module.first_error() {
 			return Err(failure.clone());
 		}
@@ -410,6 +418,14 @@ impl Loader<'_> {
 			.map(|path| if path.starts_with(['.', '/']) { path } else { format!("./{path}") }).collect();
 		error(&format!("include not found: {name}; searched {}", searched.join(", ")))
 	}
+}
+
+/// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
+const STD_MODULES: [(&str, &str); 1] = [("list", include_str!("../std/list.wasp"))];
+const STD_FOLDER: &str = "std";
+
+fn std_module(name: &str) -> Option<&'static str> {
+	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
 }
 
 fn is_builtin_library(name: &str) -> bool {
