@@ -701,6 +701,7 @@ PASSED:
   ✓ functions::test_named_arguments::a_missing_or_unknown_argument_is_an_error
   ✓ functions::test_named_arguments::named_arguments_set_free_variables_of_the_body
   ✓ functions::test_named_arguments::named_arguments_set_parameters_in_any_order
+  ✓ functions::test_named_function_argument::a_function_assigned_in_a_call_is_a_named_argument
   ✓ functions::test_nested_prefix_calls::a_function_name_among_the_arguments_takes_the_ones_after_it
   ✓ functions::test_nested_prefix_calls::a_function_passed_as_a_value_stays_one
   ✓ functions::test_nonlocal_any_value::test_an_escaping_closure_keeps_a_text_cell
@@ -2017,8 +2018,11 @@ PASSED:
   ✓ types::test_struct_field_of_constructor::a_field_of_a_constructor_call
   ✓ types::test_struct_field_of_constructor::a_missing_field_is_an_error_value
   ✓ types::test_struct_instances::a_field_read_of_a_struct_variable_searches_no_names
+  ✓ types::test_struct_instances::a_field_write_of_a_struct_variable_sets_the_field
+  ✓ types::test_struct_instances::a_field_write_of_another_kind_is_a_type_error
   ✓ types::test_struct_instances::a_method_of_a_struct_variable_takes_the_struct
   ✓ types::test_struct_instances::a_struct_instance_gives_the_same_values
+  ✓ types::test_struct_instances::an_int_field_holds_any_int
   ✓ types::test_struct_types::test_class_definition
   ✓ types::test_struct_types::test_class_instance2
   ✓ types::test_struct_types::test_class_instance_explicit
@@ -2286,6 +2290,8 @@ PASSED:
   ✓ welcoming::test_c_style::test_c_style_definition
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
+  ✓ welcoming::test_constant_shadowing::an_assigned_constant_word_is_a_variable
+  ✓ welcoming::test_constant_shadowing::assigning_a_constant_word_says_it_shadows_the_constant
   ✓ welcoming::test_error_positions::a_rebuilt_node_reports_the_position_of_its_parts
   ✓ welcoming::test_error_positions::an_error_found_while_emitting_names_its_statement
   ✓ welcoming::test_error_positions::an_unclosed_group_names_where_it_opened
@@ -2588,4 +2594,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2583 passed, 0 failed, 2583 total tested
+23 ignored, 2589 passed, 0 failed, 2589 total tested
