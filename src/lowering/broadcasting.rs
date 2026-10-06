@@ -150,6 +150,17 @@ fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
 	}
 }
 
+/// `say 3 == 3` of a function that takes anything reads both ways (P143): a loud error offering each reading
+fn ambiguous_call(at: &Node, name: &str, argument: &str, op: &Op, right: &str) -> Node {
+	let written = format!("{name} {argument} {op} {right}");
+	let call_compared = format!("({name} {argument}) {op} {right}");
+	let comparison_argument = format!("{name}({argument} {op} {right})");
+	crate::diagnostic::Diagnostic::at(at, format!("{written} is ambiguous; write {call_compared} or {comparison_argument}"))
+		.offer("the call compared", &written, &call_compared)
+		.offer("the comparison as the argument", &written, &comparison_argument)
+		.into_error()
+}
+
 fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 	let arity = |node: &Node| arity_of(node, arities);
 	match node {
@@ -179,9 +190,7 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
 			let Node::Key(left, op, right) = argument.drop_meta().clone() else { unreachable!("guarded") };
 			if !arity(&head).expect("guarded").typed_first {
-				let (name, left_text, right_text) = (head.drop_meta().name(), left.serialize(), right.serialize());
-				let message = format!("{name} {left_text} {op} {right_text} is ambiguous; write ({name} {left_text}) {op} {right_text} or {name}({left_text} {op} {right_text})");
-				return crate::diagnostic::Diagnostic::at(&argument, message).into_error();
+				return ambiguous_call(&argument, &head.drop_meta().name(), &left.serialize(), &op, &right.serialize());
 			}
 			let call = Node::List(vec![head, *left], Bracket::None, Separator::Space);
 			Node::Key(Box::new(nest_prefix_calls(call, arities)), op, Box::new(nest_prefix_calls(*right, arities)))
@@ -190,9 +199,7 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 		// ambiguous when the body accepts anything (`f := print it`)
 		Node::Key(left, op, right) if op.is_comparison() && matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first))) => {
 			let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
-			let (name, argument, right_text) = (items[0].drop_meta().name(), items[1].serialize(), right.serialize());
-			let message = format!("{name} {argument} {op} {right_text} is ambiguous; write ({name} {argument}) {op} {right_text} or {name}({argument} {op} {right_text})");
-			crate::diagnostic::Diagnostic::at(&left, message).into_error()
+			ambiguous_call(&left, &items[0].drop_meta().name(), &items[1].serialize(), &op, &right.serialize())
 		}
 		Node::List(items, Bracket::None, Separator::Colon) if items.len() > 1 => {
 			let mut items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();

@@ -117,7 +117,7 @@ import tests/fixtures/wasm/zlib
 x=0
 for i in 1 upto 4 { x += i }
 x` },
-	"welcoming errors": { value: 'Error("say 3 == 3 is ambiguous; write (say 3) == 3 or say(3 == 3) at 3:5")', code: `// errors explain and offer the fix: click "I meant" (square 3 == 9 is clear: square needs a number)
+	"welcoming errors": { value: 'Error("say 3 == 3 is ambiguous; write (say 3) == 3 or say(3 == 3) at 3:5")', code: `// an ambiguity is an error, underlined: click "I meant" for your reading
 say(x) := x
 say 3 == 3` },
 	constants: { value: 'Error("pi is a constant at 2:1; fix: another name")', code: `// constants stay constant
