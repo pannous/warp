@@ -160,8 +160,10 @@ Plan (assumption until the Interviewer answers; smallest step first):
 4. Later: `use libc` in the browser from wasi-libc compiled once (replacing host.js's hand shims).
 
 Done (P146, user decision as recommended, 2026-10-06): step 1 (texts by the header, native and browser: custom section
-warp.module_texts), step 3 in-repo: tests/fixtures/wasm/libc_text.wasm is wasi-libc's text and number functions, the
+warp.c_calls), step 3 in-repo: tests/fixtures/wasm/libc_text.wasm is wasi-libc's text and number functions, the
 same program gives the same results natively and in the browser. Step 4 (P147): `use c` in the browser calls web/playground/lib/libc.wasm (notes/web_playground.md); native keeps
 dlopen, and reads the macOS SDK's _string.h now (its `_LIBC_CSTR` annotations dropped: strstr, strchr, strcspn were
-undefined natively). Open: step 2 (struct pointers as handles, out-pointers into a module's memory), zlib and other
-libraries that need a real build.
+undefined natively). Step 2: out-pointers into a module's memory, const byte buffers, unsigned results; struct
+pointers stay the module's numbers (its addresses, sandboxed, so no handle table is needed); zlib 1.3.2 built from its
+sources (tests/fixtures/wasm/zlib.wasm, 63 KB) gives the same crc32/adler32/zlibVersion natively and in the browser
+(notes/wasm_modules.md). Open: writable output buffers with in/out lengths (zlib's compress), more libraries.
