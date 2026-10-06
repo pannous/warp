@@ -21,6 +21,7 @@ mod test_pipeline;
 mod test_bar_pipe;
 mod test_pipe_stages;
 mod test_root_word;
+mod test_then_pipe;
 mod test_compound_assignment;
 mod test_tuple_comparison_warning;
 mod test_like_known_type_mismatch;
