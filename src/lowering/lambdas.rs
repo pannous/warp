@@ -302,8 +302,20 @@ fn block_lambda(node: &Node) -> Option<Lambda> {
 /// Swift's shorthand arguments `$0`, `$1` … up to the highest one the body uses
 fn shorthand_parameters(body: &Node) -> Vec<String> {
 	let names = |count: usize| (0..count).map(|index| format!("{SHORTHAND_MARK}{index}"));
-	let count = (0..MAX_SHORTHAND_ARGUMENTS).rev().find(|index| mentions(body, &format!("{SHORTHAND_MARK}{index}"))).map_or(0, |highest| highest + 1);
+	let count = (0..MAX_SHORTHAND_ARGUMENTS).rev().find(|index| mentions_outside_blocks(body, &format!("{SHORTHAND_MARK}{index}"))).map_or(0, |highest| highest + 1);
 	names(count).collect()
+}
+
+/// A mention not inside a nested block or lambda: `{ return { $0 + k } }` has no `$0` of its own, the inner closure has
+fn mentions_outside_blocks(node: &Node, name: &str) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(symbol) => symbol == name,
+		Node::Key(_, Op::FatArrow, _) => false,
+		Node::Key(left, _, right) => mentions_outside_blocks(left, name) || mentions_outside_blocks(right, name),
+		Node::List(_, Bracket::Curly, _) => false,
+		Node::List(items, _, _) => items.iter().any(|item| mentions_outside_blocks(item, name)),
+		_ => false,
+	}
 }
 
 /// Swift `{ x in x*2 }`, `{ a, b in a+b }`: names, `in`, a body that uses them (`{ x in xs }` stays membership)
@@ -351,7 +363,11 @@ fn with_start(iteration: &'static Iteration, extras: usize) -> &'static Iteratio
 /// `{it*2}` as the arrow lambda `it => it*2`, for passes that know only arrows (closures.rs)
 pub(crate) fn block_as_arrow(node: &Node) -> Option<Node> {
 	let lambda = block_lambda(node).filter(|lambda| !lambda.params.is_empty())?;
-	Some(Node::Key(Box::new(Node::Symbol(IMPLICIT_PARAMETER.to_string())), Op::FatArrow, Box::new(lambda.body)))
+	let parameters = match lambda.params.as_slice() {
+		[single] => Node::Symbol(single.clone()),
+		several => Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon),
+	};
+	Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(lambda.body)))
 }
 
 /// The definition `name(params) := body` of a lambda, a block with `it` or an operator given as a value

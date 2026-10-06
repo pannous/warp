@@ -223,8 +223,9 @@ impl WasmGcEmitter {
 
 	/// A variable where an Int is wanted: a local, a global or `$n` (the n-th parameter)
 	pub(super) fn emit_numeric_symbol(&mut self, func: &mut Function, name: &str) {
-		// Handle $n parameter reference (e.g., $0 = first param)
-		if let Some(rest) = name.strip_prefix('$') {
+		// Handle $n parameter reference (e.g., $0 = first param), unless a parameter is named so: Swift's closure
+		// `{ $0 + k }` is lifted to closure_lambda(k, $0)
+		if let Some(rest) = name.strip_prefix('$').filter(|_| self.scope.lookup(name).is_none()) {
 			if let Ok(idx) = rest.parse::<u32>() {
 				func.instruction(&I::LocalGet(idx));
 				return;

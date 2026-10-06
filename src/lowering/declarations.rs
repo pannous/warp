@@ -1112,7 +1112,8 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 	};
 	match node {
 		Node::Symbol(name) if name == IT_PARAMETER => Node::Symbol(parameter.to_string()),
-		Node::List(_, Bracket::Curly, _) if is_value && crate::wasp_parser::mentions(&node, IT_PARAMETER) => crate::lambdas::block_as_arrow(&node).unwrap_or(node),
+		// `{it * k}`, Swift's `{ $0 + k }`
+		Node::List(_, Bracket::Curly, _) if is_value && crate::lambdas::block_as_arrow(&node).is_some() => crate::lambdas::block_as_arrow(&node).unwrap_or(node),
 		Node::Key(target, op @ (Op::Assign | Op::Define), value) => Node::Key(Box::new(bind_it(*target, parameter, false)), op, Box::new(bind_it(*value, parameter, true))),
 		// `return {…}`, `f({…})`, `f {…}`
 		Node::List(items, bracket @ (Bracket::Round | Bracket::None), separator @ (Separator::Space | Separator::None | Separator::Colon))
