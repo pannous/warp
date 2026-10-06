@@ -305,10 +305,17 @@ impl WasmGcEmitter {
 		let mut excluded: HashSet<String> = HashSet::new();
 		let mut updated: HashSet<String> = HashSet::new();
 		let mut assigned_kinds: HashMap<String, Vec<Kind>> = HashMap::new();
+		// `xs = float[n]`: declared floats, so any number written into it is stored as one
+		let mut declared_floats: HashSet<String> = HashSet::new();
 		program.visit(&mut |part| {
 			let Node::Key(target, op, value) = part else { return };
 			match target.drop_meta() {
-				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => sources.entry(name.clone()).or_default().push(self.source_of(name, value)),
+				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => {
+					if zero_fill_parts(value).is_some_and(|(_, zero)| self.items_element(std::slice::from_ref(zero)) == Some(ElementType::Float)) {
+						declared_floats.insert(name.clone());
+					}
+					sources.entry(name.clone()).or_default().push(self.source_of(name, value));
+				}
 				Node::Symbol(name) if is_update(op) => { excluded.insert(name.clone()); }
 				Node::Key(list, Op::Hash, index) if matches!(op, Op::Assign | Op::Define) || is_update(op) => {
 					let Node::Symbol(name) = list.drop_meta() else { return };
@@ -341,9 +348,11 @@ impl WasmGcEmitter {
 		let appended = |name: &String| sources[name].iter().any(|source| matches!(source, Source::Append(_)));
 		let is_list_local = |name: &String| self.scope.lookup(name).is_some_and(|local| !local.is_param && (local.kind == Kind::List || (local.kind == Kind::Empty && appended(name))));
 		let has_start = |name: &String| sources[name].iter().any(|source| !matches!(source, Source::Append(_)));
-		// an index assignment stores what node_with_at would: any number into an int list, only floats into a float list
+		// an index assignment stores what node_with_at would: any number into an int list, only floats into a float list,
+		// any number into a declared float array (converted)
 		let takes_assignments = |name: &String, element: ElementType| {
-			element != ElementType::Float || assigned_kinds.get(name).is_none_or(|kinds| kinds.iter().all(|kind| *kind == Kind::Float))
+			let takes = |kind: &Kind| *kind == Kind::Float || (*kind == Kind::Int && declared_floats.contains(name));
+			element != ElementType::Float || assigned_kinds.get(name).is_none_or(|kinds| kinds.iter().all(takes))
 		};
 		let mut typed: HashMap<String, Option<ElementType>> = sources.keys()
 			.filter(|name| is_list_local(name) && has_start(name) && !excluded.contains(*name))
