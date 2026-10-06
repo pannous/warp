@@ -52,6 +52,13 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
 - Swift closures `{ x in x*2 }`, `{ a, b in a+b }` (the body must use a name, else `{ x in xs }` stays membership) and
   shorthand arguments `{ $0 + $1 }` (lambdas.rs `swift_closure`, `shorthand_parameters`; blocks.rs leaves them lambdas).
 - Output words take a prefix call: `puts add 1, 2` → `puts(add(1, 2))` (broadcasting.rs, OUTPUT_WORDS arity 1).
+- C#: `int b = 2` is `b:int = 2` (parser typed_parameter), `static int Add(int a, int b) => a + b` defines Add
+  (declarations.rs c_function).
+- Rest parameters: Kotlin `vararg xs: Int`, C# `params int[] xs` → `*xs` (parser REST_MARKERS); variadic.rs finds
+  heads under a result type too.
+- Julia's dot call `f.(xs)`, `add.(xs, 10)`: `map(xs, broadcast_item => f(broadcast_item, 10))` (parser
+  SpecialInfix::DotCall, only a name followed by `.(`).
+- Iteration templates append with `out = out + [x]`: `out.add(x)` was taken by a user function `add`.
 
 ## Call efficiency (probes/call_benchmark.sh [N], 10^8 calls each)
 - Plain, default, named, overload and lambda calls compile to the same direct `call $f` with i64 arguments: equal
