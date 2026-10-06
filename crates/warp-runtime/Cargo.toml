@@ -3,7 +3,7 @@
 # code to. Built on its own (`cargo build --release -p warp-runtime`) it is wasmtime without Cranelift, about 1 MB.
 [package]
 name = "warp-runtime"
-version = "0.1.0-signals-values"
+version = "0.1.0"
 edition = "2021"
 publish = false
 
