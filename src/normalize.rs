@@ -968,7 +968,6 @@ mod tests {
 		set_hint_position(10, 5);
 		assert_eq!(position_string(), "10:5");
 
-		// Set file
 		set_hint_file("test.wasp");
 		set_hint_position(42, 13);
 		assert_eq!(position_string(), "test.wasp:42:13");

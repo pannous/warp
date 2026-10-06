@@ -118,11 +118,6 @@ macro_rules! skip {
 }
 // skip arbitrary token sequence YAY also use todo!("but only for strings") !
 
-// #[macro_export]
-// macro_rules! skip {
-//     ($a:expr) => {{
-//     }};
-// }
 
 #[macro_export]
 macro_rules! check {

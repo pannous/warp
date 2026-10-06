@@ -197,26 +197,7 @@ pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item = T>) {
 	}
 }
 
-// only traits defined in the current crate can be implemented for types defined outside of the crate
-// use Wrapper or compare via s == *s2
-// impl PartialEq for String {
-//     fn eq(&self, other: &Self) -> bool {
-//         &self.0 == &other.0
-//     }
-// }
 
-// only traits defined in the current crate can be implemented for types defined outside of the crate
-// impl PartialEq<str> for char {
-//     fn eq(&self, other: &str) -> bool {
-//         other.len() == 1 && other.chars().next() == Some(*self)
-//     }
-// }
-//
-// impl PartialEq<char> for str {
-//     fn eq(&self, other: &char) -> bool {
-//         self.len() == 1 && self.chars().next() == Some(*other)
-//     }
-// }
 
 // use std::cmp::PartialEq;
 
@@ -235,17 +216,6 @@ impl PartialEqStr for char {
 
 // Test it see tests/string_tests.rs !!
 
-// fn assert<T: PartialEq + Debug>(x: T) {
-//     eq!(x, true);
-// }
-// fn assert(x: bool) {
-//     eq!(x, true);
-// }
-// macro_rules! assert {
-//     ($x:expr) => {
-//         eq!($x, true);
-//     };
-// }
 
 /// Code points that continue the grapheme cluster before them: combining marks, variation selectors,
 /// emoji skin tone modifiers, tags, ZWNJ and ZWJ (UAX #29 Extend, SpacingMark and ZWJ, abridged to common scripts).

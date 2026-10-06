@@ -95,7 +95,6 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
         return None;
     }
 
-    // Remove trailing comment
     let decl = decl.split("//").next()?.trim();
 
     // Remove qualifiers
@@ -108,7 +107,6 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
         .replace("RLAPI ", "");
     let decl = decl.trim().trim_end_matches(';').trim();
 
-    // Find parentheses
     let paren_pos = decl.find('(')?;
     let close_paren = decl.rfind(')')?;
 
@@ -134,7 +132,6 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
         return None;
     }
 
-    // Extract return type
     let return_type_str = if parts.len() > 1 {
         parts[..parts.len() - 1].join(" ")
     } else {
@@ -142,7 +139,6 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
     };
     let return_kind = parse_c_type(&return_type_str);
 
-    // Build signature
     let mut sig = Signature::new();
 
     // Add return type
@@ -150,7 +146,6 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
         sig.return_types.push(return_kind);
     }
 
-    // Parse parameters
     if params_str.trim() != "void" && !params_str.trim().is_empty() {
         for (i, p) in params_str.split(',').enumerate() {
             let p = p.trim();

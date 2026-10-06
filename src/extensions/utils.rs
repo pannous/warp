@@ -88,18 +88,8 @@ pub fn write_wasm(filename: &str, bytes: &[u8]) -> bool {
 			}
 	}
 
-	// Write file
 	File::create(filename)
 		.and_then(|mut f| f.write_all(bytes))
 		.is_ok()
 }
 
-//  use log.trace! macro for conditional tracing
-// macro_rules! trace {
-//     ($($arg:tt)*) => ({
-//         #[cfg(feature = "trace")]
-//         {
-//             println!($($arg)*);
-//         }
-//     })
-// }

@@ -429,18 +429,6 @@ impl PartialEq<i64> for Number {
 	}
 }
 
-// high precision
-// impl PartialEq<f64> for Number {
-//     fn eq(&self, other: &f64) -> bool {
-//         match self {
-//             Number::Int(i) => *i as f64 == *other,
-//             Number::Float(f) => *f == *other,
-//             Number::Quotient(n, d) => *n as f64 / *d as f64 == *other,
-//             Number::Complex(r, i) => *r == *other && *i == 0.0,
-//             // _ => false,
-//         }
-//     }
-// }
 
 impl PartialEq<f32> for Number {
 	fn eq(&self, other: &f32) -> bool {
@@ -460,13 +448,3 @@ impl PartialEq<f32> for Number {
 	}
 }
 
-// impl PartialEq for Number {
-//     fn eq(&self, other: &Self) -> bool {
-//         match (self, other) {
-//             (Number::Int(a), Number::Int(b)) => a == b,
-//             (Number::Float(a), Number::Float(b)) => (a - b).abs() < f64::EPSILON,
-//             (Number::Int(a), Number::Float(b)) => (*a as f64 - *b).abs() < f64::EPSILON,
-//             (Number::Float(a), Number::Int(b)) => (*a - *b as f64).abs() < f64::EPSILON,
-//         }
-//     }
-// }

@@ -223,17 +223,6 @@ impl Node {
 		}
 	}
 
-	// pub fn value(&self) -> DataValue {
-	//     match self {
-	//         Node::Number(n) => DataValue::new(n.clone()),
-	//         Node::Text(s) => DataValue::new(s.clone()),
-	//         Node::Codepoint(c) => DataValue::new(*c),
-	//         Node::Data(dada) => dada.clone(),
-	//         Node::Meta(node, _) => node.value(),
-	//         Node::Key(_, _, v) => v.value(),
-	//         _ => DataValue::new(()), // empty DataValue
-	//     }
-	// }
 
 	pub fn value(&self) -> &Node {
 		match self {
@@ -320,28 +309,6 @@ impl Node {
 		}
 	}
 }
-//
-// impl Index<Node> for Node {
-// 	type Output = Node;
-//
-// 	fn index(&self, n: Node) -> &Self::Output {
-// 		match self {
-// 			List(elements, _, _) => match n {
-// 				Number(Number::Int(i)) => elements.get(i).unwrap_or(&Empty),
-// 				_ => &Empty,
-// 			},
-// 			Key(k, _, v) => {
-// 				if **k == n {
-// 					&v /* (a:b)[a]==b */
-// 				} else {
-// 					&v[n]  // Pass through to value: person:{x y}[0] => x
-// 				}
-// 			}
-// 			Meta { node, .. } => &node[n],
-// 			_ => &Empty,
-// 		}
-// 	}
-// }
 
 impl Index<usize> for Node {
 	type Output = Node;
@@ -524,10 +491,6 @@ impl IndexMut<char> for Node {
 }
 
 impl Node {
-	// fn new() -> Self {
-	// 	// can be extended via .add a[b]=c !?! test_mark_as_map wished ;)
-	// 	Empty
-	// }
 
 	// associated 'static' functions
 	pub fn key(s: &str, v: Node) -> Self {
@@ -796,9 +759,6 @@ impl Node {
 		}
 		if let Data(dada) = self {
 			if let Some(_info) = dada.downcast_ref::<LineInfo>() {
-				// if line_info { // noone ever cares!
-				// 	format!("/* line:{} column:{} */", info.line, info.column);
-				// }
 			} else {
 				return format!("{:?}", dada);
 			}
@@ -1360,11 +1320,6 @@ impl PartialEq for Node {
 			}
 			Node::Number(n) => match other {
 				True => !n.zero(), //  2 == true ? sUrE?? hardcore todo Truthy rules
-				// Node::True => match n {
-				//     Number::Int(i) => *i == 1,
-				//     Number::Float(f) => *f == 1.0,
-				//     _ => false,
-				// }
 				False => n.zero(),
 				Node::Number(n2) => n == n2,
 				_ => false,
@@ -1841,12 +1796,10 @@ impl From<&Node> for bool {
 
 // ============ Arithmetic Operators ============
 
-// Add implementations
 impl Add<&Node> for &Node {
 	type Output = Node;
 
 	fn add(self, rhs: &Node) -> Self::Output {
-		// Handle Meta wrappers
 		let (left, left_meta) = match self {
 			Meta { node, data } => (node.as_ref(), Some(data)),
 			_ => (self, None),
@@ -1926,7 +1879,6 @@ impl Sub<&Node> for &Node {
 	type Output = Node;
 
 	fn sub(self, rhs: &Node) -> Self::Output {
-		// Handle Meta wrappers
 		let (left, left_meta) = match self {
 			Meta { node, data } => (node.as_ref(), Some(data)),
 			_ => (self, None),
@@ -2008,7 +1960,6 @@ impl Mul<&Node> for &Node {
 	type Output = Node;
 
 	fn mul(self, rhs: &Node) -> Self::Output {
-		// Handle Meta wrappers
 		let (left, left_meta) = match self {
 			Meta { node, data } => (node.as_ref(), Some(data)),
 			_ => (self, None),
@@ -2086,7 +2037,6 @@ impl Div<&Node> for &Node {
 	type Output = Node;
 
 	fn div(self, rhs: &Node) -> Self::Output {
-		// Handle Meta wrappers
 		let (left, left_meta) = match self {
 			Meta { node, data } => (node.as_ref(), Some(data)),
 			_ => (self, None),
