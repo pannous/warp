@@ -76,6 +76,8 @@ const NEW_WORD: &str = "new";
 const IMPLEMENTS_WORD: &str = "implements";
 /// The got-it topic of a class naming its traits (`implements Shape`, Swift's `: Shape`)
 const CONFORMANCE_TOPIC: &str = "conformance-list";
+/// `enum Color {red, green}` (declarations::enum_object), Kotlin's `enum class`
+const ENUM_WORD: &str = "enum";
 /// Go's `type Shape interface {…}` declares the trait Shape
 const GO_INTERFACE_WORD: &str = "interface";
 /// Go's `type Point struct {…}` declares the class Point
