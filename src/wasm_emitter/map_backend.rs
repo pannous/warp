@@ -335,7 +335,7 @@ pub(super) fn is_update(op: &Op) -> bool {
 }
 
 /// `field_with(m, key, value)` updating the variable m itself: the key (as an index, `key + 1` like `m[key]`) and value
-fn entry_update(name: &str, value: &Node) -> Option<(Node, Node)> {
+pub(super) fn entry_update(name: &str, value: &Node) -> Option<(Node, Node)> {
 	let Node::List(items, _, _) = value.drop_meta() else { return None };
 	let [word, map, key, entry_value] = items.as_slice() else { return None };
 	let updates_itself = word.name() == crate::library_words::FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name);

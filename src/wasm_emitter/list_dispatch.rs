@@ -12,6 +12,7 @@
 //!
 //! A typed list keeps value semantics: `ys = xs` copies it when either variable is updated (by index or by an append).
 
+use super::map_backend::is_update;
 use super::WasmGcEmitter;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -208,10 +209,6 @@ fn assigns(body: &Node, name: &str) -> bool {
 		found |= (matches!(op, Op::Assign | Op::Define) || is_update(op)) && matches!(target, Node::Symbol(assigned) if assigned == name);
 	});
 	found
-}
-
-fn is_update(op: &Op) -> bool {
-	op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)
 }
 
 /// `x = (t = x; …; t)`, an inlined call (inlining.rs) handing x back: the temporary t, which may share x's array; only
@@ -646,7 +643,7 @@ impl WasmGcEmitter {
 		}
 		if let Some((slot, _)) = self.typed_struct(&Node::Symbol(name.to_string())) {
 			let class = self.typed_structs[name].clone();
-			self.emit_typed_struct_store(func, slot, &class, value);
+			self.emit_typed_struct_store(func, name, slot, &class, value);
 			return true;
 		}
 		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
