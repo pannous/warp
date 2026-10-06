@@ -33,7 +33,13 @@ const HANDLER_SUFFIX: &str = "_handler_";
 /// `tick_listeners`: the handlers of tick subscribed inside blocks, `tick_listener` one of them
 const SUBSCRIBERS_SUFFIX: &str = "_listeners";
 const SUBSCRIBER_SUFFIX: &str = "_listener";
-const RAISE_WORD: &str = "raise";
+/// `emit alarm{level: 3}` runs the `on alarm` handlers and goes on; nobody listening, it does nothing (P163). `send`
+/// without `to` is the same; `raise` and `throw` are errors only
+const EMIT_WORDS: [&str; 2] = ["emit", "send"];
+/// Other systems' words for emit, working with a got-it note naming it (a program defining one of them keeps it)
+const EMIT_ALIASES: [&str; 3] = ["fire", "trigger", "signal"];
+const EMIT_TOPIC: &str = "emit-word";
+const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
 /// `on set x` and `on change x` are variable listeners (variable_signals.rs)
 const VARIABLE_LISTENER_WORDS: [&str; 2] = ["set", "change"];
 pub const HANDLER_PREFIX: &str = "on·";
@@ -56,15 +62,15 @@ pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
 	// an event whose listeners are counted is handled even when nothing raises it yet (`count listeners of tick`)
 	let variables = main_level_variables(&statements);
-	let raised: HashSet<String> = raised_names(&program).into_iter().chain(reflected_events(&program, COUNT_WORD).into_iter().filter(|event| !variables.contains(event))).collect();
+	let verbs = emit_verbs(&program, &variables);
+	let raised: HashSet<String> = emitted_names(&program, &verbs).into_iter().chain(reflected_events(&program, COUNT_WORD).into_iter().filter(|event| !variables.contains(event))).collect();
 	let statements = subscribed_in_blocks(statements, &raised);
 	// `clear listeners of alarm` stops every handler of alarm: each gets a flag as a named one has
 	let cleared: HashSet<String> = reflected_events(&program, CLEAR_WORD).into_iter().filter(|event| !variables.contains(event)).collect();
-	let kept = match without_unraised(&statements, &raised, &variables) {
+	let kept = match without_unraised(&statements, &raised, &variables, &emitted_names(&program, &RAISE_WORDS.map(String::from))) {
 		Ok(kept) => kept,
 		Err(error) => return error,
 	};
-	let program = if kept.len() < statements.len() { Node::List(kept.clone(), bracket.clone(), separator.clone()) } else { program };
 	let statements = kept;
 	let mut flags: Vec<(String, Node)> = vec![];
 	let mut named: Vec<(String, String)> = vec![];
@@ -83,8 +89,10 @@ pub fn lower(program: Node) -> Node {
 		.collect();
 	if handlers.is_empty() {
 		// a program with timers stays like one with page events (system_signals.rs, before this pass made them)
+		// an emit nobody listens to does nothing
+		let statements: Vec<Node> = statements.into_iter().map(|statement| emits_as_calls(statement, &HashMap::new(), &verbs)).collect();
 		if !statements.iter().any(defines_timer) {
-			return program;
+			return Node::List(statements, bracket, separator);
 		}
 		let main_variables = main_level_variables(&statements);
 		return Node::List(with_output_binding(statements, &main_variables), bracket, separator);
@@ -118,7 +126,7 @@ pub fn lower(program: Node) -> Node {
 		None if handler_lines.contains(&index) => None,
 		None => Some(statement),
 	});
-	let lowered: Vec<Node> = lowered.map(|statement| raises_as_calls(statement, &bodies)).collect();
+	let lowered: Vec<Node> = lowered.map(|statement| emits_as_calls(statement, &bodies, &verbs)).collect();
 	let page_handlers: std::collections::BTreeMap<String, usize> = PAGE_EVENTS.iter().filter(|event| bodies.contains_key(**event)).map(|event| (handler_function_name(event), usize::from(reads_event(&bodies[*event])))).collect();
 	let stays = !page_handlers.is_empty() || lowered.iter().any(defines_timer);
 	let lowered = if stays { with_output_binding(lowered, &main_variables) } else { lowered };
@@ -128,13 +136,16 @@ pub fn lower(program: Node) -> Node {
 /// `on conect {…}` where nothing raises conect never runs (Node's emitter.on("conect") is silent): a warning, naming
 /// a raised event one letter away, and the statements without it (it ran its body once, as a block). Page and system
 /// events come from outside the program
-fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &HashSet<String>) -> Result<Vec<Node>, Node> {
+fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &HashSet<String>, errors: &HashSet<String>) -> Result<Vec<Node>, Node> {
 	// `once ready {…}` of a variable is a variable listener (variable_signals.rs)
 	let from_outside = |name: &str| PAGE_EVENTS.contains(&name) || SYSTEM_EVENTS.contains(&name) || variables.contains(name);
 	let unraised = |statement: &Node| named_handler(statement).map(|(_, (name, _, _))| name).filter(|name| !raised.contains(name) && !from_outside(name));
 	let warnings: Vec<crate::diagnostic::Diagnostic> = statements.iter().filter_map(|statement| unraised(statement).map(|name| {
-		let hint = crate::extensions::strings::near_miss(&name, raised.iter().cloned()).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
-		crate::diagnostic::Diagnostic::at(statement, format!("on {name}: nothing raises {name}, so this handler never runs{hint}"))
+		let hint = match errors.contains(&name) {
+			true => format!("; `raise {name}` is an error (P163), `emit {name}` sends the event"),
+			false => crate::extensions::strings::near_miss(&name, raised.iter().cloned()).map(|near| format!("; did you mean {near}?")).unwrap_or_default(),
+		};
+		crate::diagnostic::Diagnostic::at(statement, format!("on {name}: nothing emits {name}, so this handler never runs{hint}"))
 	})).collect();
 	if !warnings.is_empty() {
 		crate::diagnostic::report(&warnings)?;
@@ -289,17 +300,31 @@ fn handler(statement: &Node) -> Option<(String, Node, bool)> {
 	Some((name, body, once))
 }
 
-/// `raise alarm`, `raise stop the machine{reason:"…"}`, `raise item 1`: the name and the data (ø without)
-fn raise(node: &Node) -> Option<(String, Node)> {
+/// The words that emit in this program: emit, send and the aliases it does not define or assign itself
+fn emit_verbs(program: &Node, variables: &HashSet<String>) -> Vec<String> {
+	let mut defined = variables.clone();
+	program.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
+		let name = match head.drop_meta() {
+			Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
+			other => word(other),
+		};
+		defined.insert(name);
+	});
+	EMIT_WORDS.iter().chain(EMIT_ALIASES.iter()).filter(|verb| !defined.contains(**verb)).map(|verb| verb.to_string()).collect()
+}
+
+/// `emit alarm`, `emit stop the machine{reason:"…"}`, `emit item 1` (or a `verbs` word): the name and the data (ø
+/// without)
+fn emitted(node: &Node, verbs: &[String]) -> Option<(String, Node)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
-	let (raise, rest) = items.split_first()?;
+	let (verb, rest) = items.split_first()?;
 	let (last, words) = rest.split_last()?;
-	if word(raise) != RAISE_WORD {
+	if !verbs.contains(&word(verb)) {
 		return None;
 	}
 	let (last_word, data) = match last.drop_meta() {
 		Node::Key(name, Op::Colon, data) if matches!(data.drop_meta(), Node::List(_, Bracket::Curly, _)) => (name.as_ref().clone(), data.as_ref().clone()),
-		// `raise item 1`, `raise said "hi"`: a value after the words is the data (EventEmitter's emit("item", 1))
+		// `emit item 1`, `emit said "hi"`: a value after the words is the data (EventEmitter's emit("item", 1))
 		Node::Number(_) | Node::Text(_) | Node::Char(_) if !words.is_empty() => return Some((event_name(words.iter())?, last.clone())),
 		_ => (last.clone(), Node::Empty),
 	};
@@ -326,9 +351,9 @@ fn reflected_events(program: &Node, verb: &str) -> HashSet<String> {
 	events
 }
 
-fn raised_names(program: &Node) -> HashSet<String> {
+fn emitted_names(program: &Node, verbs: &[String]) -> HashSet<String> {
 	let mut names = HashSet::new();
-	program.visit(&mut |part| if let Some((name, _)) = raise(part) { names.insert(name); });
+	program.visit(&mut |part| if let Some((name, _)) = emitted(part, verbs) { names.insert(name); });
 	names
 }
 
@@ -402,19 +427,32 @@ fn reads_event(bodies: &[Node]) -> bool {
 	bodies.iter().flat_map(symbols).any(|name| name == EVENT_WORD)
 }
 
-/// Each `raise name{data}` with handlers is the call `on·name(data)`, `on·name()` when no handler reads `event`
-fn raises_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>) -> Node {
-	if let Some((name, data)) = raise(&node).filter(|(name, _)| handled.contains_key(name)) {
-		let arguments = if reads_event(&handled[&name]) { vec![data] } else { vec![] };
-		let call = Node::List([vec![Node::Symbol(handler_function_name(&name))], arguments].concat(), Bracket::Round, Separator::None);
-		// `{ raise alarm }` is a block of one statement: it stays a block
+/// Each `emit name{data}` with handlers is the call `on·name(data)`, `on·name()` when no handler reads `event`; one
+/// nobody handles is ø, nothing
+fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[String]) -> Node {
+	if let Some((name, data)) = emitted(&node, verbs) {
+		let verb = match node.drop_meta() {
+			Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
+			_ => String::new(),
+		};
+		if EMIT_ALIASES.contains(&verb.as_str()) {
+			crate::diagnostic::educate_once(EMIT_TOPIC, &verb, "emit", &format!("`emit {name}` sends an event to its handlers (P163)"));
+		}
+		let call = match handled.get(&name) {
+			Some(bodies) => {
+				let arguments = if reads_event(bodies) { vec![data] } else { vec![] };
+				Node::List([vec![Node::Symbol(handler_function_name(&name))], arguments].concat(), Bracket::Round, Separator::None)
+			}
+			None => Node::Empty,
+		};
+		// `{ emit alarm }` is a block of one statement: it stays a block
 		let braced = matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
 		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };
 	}
 	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| raises_as_calls(item, handled)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(raises_as_calls(*left, handled)), op, Box::new(raises_as_calls(*right, handled))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(raises_as_calls(*node, handled)), data },
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| emits_as_calls(item, handled, verbs)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(emits_as_calls(*left, handled, verbs)), op, Box::new(emits_as_calls(*right, handled, verbs))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(emits_as_calls(*node, handled, verbs)), data },
 		other => other,
 	}
 }
