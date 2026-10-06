@@ -13,7 +13,8 @@ pub const HARD_KEYWORDS: [&str; 26] = [
 	"true", "false", "ø", "null", "nil", // literal values
 	"use", "import", "include", // modules
 ];
-pub const SOFT_KEYWORDS: [&str; 12] = ["emit", "send", "fire", "trigger", "signal", "broadcast", "every", "whenever", "init", "new", "root", "listeners"];
+/// emit's aliases fire, trigger and signal stay out: a program may define them (P163, test_event_footguns; asked)
+pub const SOFT_KEYWORDS: [&str; 9] = ["emit", "send", "broadcast", "every", "whenever", "init", "new", "root", "listeners"];
 const TOPIC: &str = "soft-keyword";
 
 pub fn lower(program: Node) -> Node {
