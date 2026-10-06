@@ -852,6 +852,29 @@ fn zero_value(kind: crate::type_kinds::Kind) -> Option<Node> {
 	})
 }
 
+/// `surface = height*width int` and `x : n*2 float`, which the parser reads as `(surface = height*width) int`: a
+/// zero-filled typed array of that many elements, written `surface = height*width * int` (issue #15)
+pub fn lower_sized_arrays(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::None, Separator::Space) if sized_array(&items).is_some() => sized_array(&items).expect("guarded"),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_sized_arrays).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(lower_sized_arrays(*left)), op, Box::new(lower_sized_arrays(*right))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_sized_arrays(*node)), data },
+		other => other,
+	}
+}
+
+fn sized_array(items: &[Node]) -> Option<Node> {
+	let [binding, element_type] = items else { return None };
+	let Node::Symbol(type_name) = element_type.drop_meta() else { return None };
+	let Node::Key(name, Op::Assign | Op::Colon, count) = binding.drop_meta() else { return None };
+	let is_count = !matches!(count.drop_meta(), Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square | Bracket::Curly, _));
+	(matches!(name.drop_meta(), Node::Symbol(_)) && is_count && crate::analyzer::type_word_kind(type_name).is_some()).then(|| {
+		let array = Node::Key(Box::new(Node::List(vec![count.as_ref().clone()], Bracket::Round, Separator::None)), Op::Mul, Box::new(element_type.clone()));
+		Node::Key(name.clone(), Op::Assign, Box::new(array))
+	})
+}
+
 pub fn lower_spaced_definitions(node: Node) -> Node {
 	match node {
 		Node::List(items, _, _) if colon_iteration(&items).is_some() => lower_spaced_definitions(colon_iteration(&items).expect("guarded")),

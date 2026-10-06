@@ -15,6 +15,7 @@ const post = message => self.postMessage(message);
 const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
+	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
 	panicked: message => { panicMessage = message; },
 };
 

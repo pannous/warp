@@ -16,6 +16,8 @@ impl WaspParser {
 			negate_condition(self.finish_prefix(op, rhs))
 		} else if let Some(marker) = self.peek_guard_word() {
 			self.parse_guard(marker)
+		} else if let Some(phrase) = self.try_parse_after_return() {
+			phrase
 		} else if let Some(call) = self.try_parse_user_prefix() {
 			call
 		} else if let Some(statement) = self.try_parse_return() {
@@ -212,8 +214,10 @@ impl WaspParser {
 
 			let (l_bp, r_bp) = op.binding_power();
 
+			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators)
+			let ends_command = op == Op::And && (self.in_command || (min_bp == 0 && is_command(&lhs))) && self.and_starts_statement();
 			// Stop if operator binds less tightly than our minimum
-			if l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
+			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
 			if matches!(op, Op::Add | Op::Sub) {

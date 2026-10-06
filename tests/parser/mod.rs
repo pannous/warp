@@ -16,6 +16,7 @@ mod test_parse_long_sources;
 mod test_semicolon_square;
 mod test_spaced_required_fields;
 mod test_statement_sequence;
+mod test_statement_phrases;
 mod test_statement_terminators;
 mod test_surface_syntax;
 mod test_statements_after_type;

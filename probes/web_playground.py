@@ -25,6 +25,8 @@ CHECKS = {
 	# `use python` loads Pyodide from the CDN in the worker (worker.js loadPython, host.js pythonCall)
 	"use python math; math.floor(2.5) + 1": "3",
 	"use python math; math.factorial(25)": "15511210043330985984000000",
+	# paint draws on a canvas of the page (host.js paint, playground.js showPaintings); the value is the last line
+	"paint([0, 1, 1, 0], 2, 2); 7": "7",
 }
 UPTO = "x=0; for i in 1 upto 4 {x+=i}; x"
 
