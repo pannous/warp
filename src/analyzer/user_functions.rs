@@ -474,7 +474,7 @@ pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: 
 }
 
 /// The program's `global` declarations with their kinds
-pub(super) fn declared_globals(program: &Node) -> HashMap<String, Local> {
+pub(crate) fn declared_globals(program: &Node) -> HashMap<String, Local> {
 	let mut scope = Scope::new();
 	collect_variables(program, &mut scope);
 	scope.globals

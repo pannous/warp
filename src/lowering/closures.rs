@@ -7,6 +7,7 @@
 
 use crate::analyzer::extract_user_functions;
 use crate::context::{Context, Param, UserFunctionDef};
+use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
 use crate::library_words::collect_assigned_names;
 use crate::node::{Bracket, Node, Separator};
@@ -141,6 +142,9 @@ fn lift_closures(program: Node) -> Node {
 	extract_user_functions(&mut context, &program);
 	let mut variables = HashSet::new();
 	collect_assigned_names(&program, &mut variables);
+	// a `global` is no capture: the closure reads and changes the one variable
+	let globals = crate::analyzer::declared_globals(&program);
+	variables.retain(|name| !globals.contains_key(name));
 	// a loop variable (`for n in xs`, what `xs.map(n => …)` lowers to) is captured by value like any variable
 	program.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
@@ -592,6 +596,9 @@ impl Lifting {
 		let body = self.walk(body, &inner);
 		let body = self.function_value(body, &inner);
 		let captured = self.captured(&body, &params, bound);
+		if let Some(error) = changed_capture(&body, &captured) {
+			return error;
+		}
 		let name = format!("{LIFTED_PREFIX}{}", self.lifted.len() + 1);
 		let all_params = captured.iter().chain(&params).map(|param| Node::Symbol(param.clone()));
 		let head = Node::List([vec![Node::Symbol(name.clone())], all_params.collect()].concat(), Bracket::Round, Separator::None);
@@ -612,6 +619,14 @@ impl Lifting {
 		});
 		captured
 	}
+}
+
+/// A closure changing a captured variable would change its own copy (wiki/charged.md §3): a loud error naming `global`
+fn changed_capture(body: &Node, captured: &[String]) -> Option<Node> {
+	let changes = crate::analyzer::find_assignments(body, &|name| captured.contains(name));
+	let (assignment, name) = changes.into_iter().find(|(assignment, _)| matches!(assignment.drop_meta(), Node::Key(target, _, _) if matches!(target.drop_meta(), Node::Symbol(_))))?;
+	Some(Diagnostic::at(assignment, format!("the closure changes {name}, a variable it captures: declare it `global {name}` to change it from the closure"))
+		.fix(format!("global {name}")).into_error())
 }
 
 /// The helpers `closure_call_n(f, a1…an)` the program calls, as user functions: a closure and n values of any kind (Data)

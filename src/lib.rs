@@ -25,7 +25,7 @@ pub mod wasm_emitter;
 pub mod pipeline;
 /// The lowering passes the pipeline runs (src/pipeline.rs), each a module of its own; re-exported at the crate root
 pub mod lowering;
-pub use lowering::{ambiguous_forms, blocks, broadcasting, class_methods, closures, comprehensions, declarations, event_signals, system_signals, system_values, folding, for_loop, function_values, getters, go_blocks, inlining, lambdas, lazy_ranges, late_binding, foreign_modules, library_words, nonlocal_cells, memoization, meta_entries, min_max, mutation, named_arguments, number_keys, shared_arrays, signal_values, overloads, parallel, phrase_calls, phrase_words, picked_calls, pipes, printable, result_word, run_time_blocks, switch, traits, tuples, type_constructor, type_name_matching, type_tests, variable_signals, variadic, versions, welcome_forms};
+pub use lowering::{ambiguous_forms, blocks, broadcasting, class_methods, closures, comprehensions, declarations, event_signals, system_signals, system_values, folding, for_loop, function_values, getters, go_blocks, inlining, lambdas, lazy_ranges, late_binding, foreign_modules, library_words, nonlocal_cells, memoization, meta_entries, min_max, mutation, named_arguments, number_keys, shared_arrays, signal_values, overloads, parallel, phrase_calls, phrase_words, picked_calls, pipes, printable, result_word, ruby_blocks, run_time_blocks, switch, traits, tuples, type_constructor, type_name_matching, type_tests, variable_signals, variadic, versions, welcome_forms};
 #[cfg(feature = "native")]
 pub mod wasm_reader;
 #[cfg(feature = "native")]
