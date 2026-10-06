@@ -20,6 +20,7 @@ mod float_text;
 mod import_manager;
 mod key_emitter;
 mod layout;
+pub(crate) mod linear_arrays;
 mod list_emitter;
 mod list_dispatch;
 mod library_ops;
@@ -860,6 +861,7 @@ impl WasmGcEmitter {
 		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
 		// Emit list and string operation functions
 		self.emit_list_ops();
+		self.emit_linear_arrays();
 		self.emit_cells();
 		self.emit_text_of();
 		self.emit_equality_ops();

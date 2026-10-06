@@ -409,8 +409,8 @@ impl Resolver<'_> {
 			return Some(External { capability: Foreign, effects: EffectSet::of(&[IO, FFI]) });
 		}
 		if let Some(import) = self.context.ffi_imports.get(name) {
-			// libm is pure (P26): untrusted code and `! Pure` functions may call it
-			return Some(match import.library == crate::ffi::LIBM {
+			// libm is pure (P26): untrusted code and `! Pure` functions may call it; so are the module's own linear arrays
+			return Some(match import.library == crate::ffi::LIBM || import.library == crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY {
 				true => External { capability: Libm, effects: EffectSet::PURE },
 				false => External { capability: Ffi, effects: EffectSet::of(&[FFI]) },
 			});
