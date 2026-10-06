@@ -1304,7 +1304,6 @@ fn test_for_loops() {
 //#[test] fn testDwarf();
 //#[test] fn testSourceMap();
 #[test]
-#[ignore]
 fn test_assert() {
 	is!("assert 1", 1);
 	assert_throws("assert 0"); // todo make wasm throw, !compile error?
