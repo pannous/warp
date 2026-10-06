@@ -1,7 +1,6 @@
 //! A float computed at run time has a text: print, `str(x)`, `x as text`, `"a" + x` and join show at most 15
 //! significant digits, positional from 1e-5 up to 1e15, else with an exponent
 use crate::is;
-use warp::wasm_emitter::eval;
 
 /// The float `value` computed at run time (a host random number times zero keeps the compiler from folding it)
 fn run_time(value: &str) -> String {
@@ -20,5 +19,7 @@ fn test_float_as_text() {
 fn test_float_joins_texts() {
 	is!(&format!("{}\"v: \" + x", run_time("2.5")), "v: 2.5");
 	is!(&format!("{}[x, 1, \"a\"].join(\" \")", run_time("2.5")), "2.5 1 a");
-	assert_eq!(eval(&format!("{}print x", run_time("0.25"))).serialize(), "0.25");
+	// print gives nothing (issue #18): what it writes
+	#[cfg(feature = "native")]
+	assert!(crate::common::printed(&format!("{}print x", run_time("0.25"))).starts_with("0.25\n"));
 }

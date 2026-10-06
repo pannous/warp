@@ -1,5 +1,5 @@
 // `print` with several arguments writes them separated by a space, like Python: `print(a, b)` and `print a, b`.
-// The call is worth the printed text.
+// The call gives nothing (issue #18).
 use crate::is;
 
 #[cfg(feature = "native")] // runs the warp binary
@@ -23,24 +23,24 @@ fn print_of_a_braceless_call_prints_its_result() {
 }
 
 #[test]
-fn print_of_a_braceless_call_is_worth_its_result() {
-	is!("print first [10, 5]", 10);
-	is!("print(upper \"ab\")", "AB");
-	is!("x=print upper \"ab\"; x", "AB");
+fn print_of_a_braceless_call_gives_nothing() {
+	is!("print first [10, 5]", warp::Node::Empty);
+	is!("print(upper \"ab\")", warp::Node::Empty);
+	is!("x=print upper \"ab\"; x", warp::Node::Empty);
 }
 
 #[test]
-fn print_of_several_arguments_is_worth_the_printed_text() {
-	is!("g=\"hi\"; print(g, g)", "hi hi");
-	is!("g=\"hi\"; print g, g", "hi hi");
-	is!("n=3; print(\"n\", n)", "n 3");
+fn print_of_several_arguments_gives_nothing() {
+	is!("g=\"hi\"; print(g, g)", warp::Node::Empty);
+	is!("g=\"hi\"; print g, g", warp::Node::Empty);
+	is!("n=3; print(\"n\", n)", warp::Node::Empty);
 }
 
-/// `print()` writes an empty line, like Python, and is worth the empty text, as `print ""`
+/// `print()` writes an empty line, like Python, and gives nothing (issue #18)
 #[test]
 #[cfg(feature = "native")]
 fn print_without_arguments_writes_an_empty_line() {
 	assert!(printed("print(); print 1").starts_with("\n1\n"));
-	is!("print()", "");
-	is!("x = print(); #x", 0);
+	is!("print()", warp::Node::Empty);
+	is!("x = print(); x", warp::Node::Empty);
 }

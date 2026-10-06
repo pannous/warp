@@ -5,8 +5,9 @@ use crate::is;
 
 #[test]
 fn a_range_is_a_list_as_an_argument() {
-	is!("print 1..5", ints(vec![1, 2, 3, 4]));
-	is!("print 1…3", ints(vec![1, 2, 3]));
+	// an argument of the program's own function: print gives nothing (issue #18)
+	is!("f(x) := x; f(1..5)", ints(vec![1, 2, 3, 4]));
+	is!("f(x) := x; f(1…3)", ints(vec![1, 2, 3]));
 	is!("str(1..5)", "[1 2 3 4]");
 	is!("type(1..5)", "list of int");
 	is!("count(1..5)", 4);
@@ -15,13 +16,13 @@ fn a_range_is_a_list_as_an_argument() {
 #[test]
 fn a_parenthesized_range_is_a_list() {
 	is!("y = (1..5); y", ints(vec![1, 2, 3, 4]));
-	is!("y = (1..5); print y", ints(vec![1, 2, 3, 4]));
+	is!("y = (1..5); f(x) := x; f(y)", ints(vec![1, 2, 3, 4])); // print gives nothing (issue #18)
 	is!("y = (1..5); y#2", 2);
 }
 
 #[test]
 fn a_range_of_computed_bounds_is_a_list_as_an_argument() {
-	is!("a=2; b=5; print a..b", ints(vec![2, 3, 4]));
+	is!("a=2; b=5; f(v) := v; f(a..b)", ints(vec![2, 3, 4])); // print gives nothing (issue #18)
 	is!("a=2; b=5; str(a..b)", "[2 3 4]");
 }
 
