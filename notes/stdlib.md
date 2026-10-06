@@ -85,7 +85,11 @@ Next:
 7. Done: list chunk window median; time add_days days_between, format_date (ISO 2026-10-07), format_time (UTC
    13:05:09), two_digits; text format("{} has {} items", ["cart", 3]). Fixed on the way: `"" + 7` passed to a counted
    parameter made it a list; the elements of split and chars had no kind (`p[0] + 3` added numbers).
-   Next: more map words, text words (center, words, lines), time parsing.
+   Then: text words lines capitalize center. Fixed on the way: a module's source now gets the program's early
+   passes (pipeline::lower_module_source; a comprehension in a module was read as a list), its getters lowered with
+   the program (a second getters pass after modules::resolve); a parameter guessed a list takes text when the calls
+   pass only texts (pad_right(pad_left(…))).
+   Next: more map words, time parsing.
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 ## 7. Adapters (async, warp-f0)
