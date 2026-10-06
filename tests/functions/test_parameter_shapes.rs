@@ -42,3 +42,12 @@ fn test_field_type_is_checked() {
 	is!("to call person{name?, phone number} do person.phone + 1\ncall {phone:41}", 42);
 	is!("f(p{name: text}) := p.name; f({name:\"Ann\"})", "Ann");
 }
+
+#[test]
+fn test_hyphenated_field_with_a_type() {
+	// P164 addendum (user): `phone-number:text` is one field name with its type
+	is!("f(p{phone-number:text}) := p.phone-number; f({phone-number:\"899-573-5842\"})", "899-573-5842");
+	is!("f(p{phone-number:text}) := p.phone-number; f({phone-number:\"8\"})", "8");
+	fails_with("f(p{phone-number:text}) := p.phone-number; f({phone-number:8})", "type error: field phone-number is text");
+	fails_with("f(p{phone-number:text}) := p.phone-number; f({name:\"Ann\"})", "missing argument field phone-number");
+}

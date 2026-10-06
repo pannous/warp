@@ -7,6 +7,7 @@
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::type_kinds::Kind;
 use std::collections::HashMap;
 
 const OPTIONAL_MARK: char = '?';
@@ -126,7 +127,9 @@ fn wrong_type(field: &Field, value: &Node) -> Option<String> {
 	let type_word = field.type_word.as_ref()?;
 	let wanted = crate::analyzer::type_word_kind(type_word)?;
 	let given = crate::analyzer::argument_literal_kind(value)?;
-	let fits = given == wanted || (wanted.is_int() || wanted.is_float()) && (given.is_int() || given.is_float()) && !(wanted.is_int() && given.is_float());
+	let is_number = |kind: Kind| kind.is_int() || kind.is_float();
+	// `"8"` is a one-character literal, a text all the same
+	let fits = given == wanted || is_number(wanted) && is_number(given) && !(wanted.is_int() && given.is_float()) || wanted == Kind::Text && given == Kind::Codepoint;
 	(!fits).then(|| format!("type error: field {} is {type_word}, got {}", field.name, value.serialize()))
 }
 
