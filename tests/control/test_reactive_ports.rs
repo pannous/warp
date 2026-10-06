@@ -81,6 +81,9 @@ fn a_named_event_handler_is_removed_and_counted() {
 	is!("on tick {1}; on tick {2}; count listeners of tick", 2);
 	is!("on tick {1}; h = on tick {2}; remove h from listeners of tick; count listeners of tick", 1);
 	is!("n = 0; h = on ready {n += 1}; remove h from listeners of ready; raise ready; n", 0);
+	// EventEmitter removeAllListeners, Qt disconnect(): every handler stops, the raise reaches none
+	is!("n = 0; on alarm {n += 1}; on alarm {n += 10}; raise alarm; clear listeners of alarm; raise alarm; n", 11);
+	is!("on alarm {1}; on alarm {2}; clear listeners of alarm; count listeners of alarm", 0);
 	// RxJS take(2): the handler removes itself
 	is!("taken = 0; h = on tick {taken += 1; if taken == 2 {remove h from listeners of tick}}; for i in 1 to 5 {raise tick}; taken", 2);
 }

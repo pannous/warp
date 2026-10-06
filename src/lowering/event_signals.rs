@@ -27,6 +27,9 @@ const FROM_WORD: &str = "from";
 const LISTENERS_WORD: &str = "listeners";
 const OF_WORD: &str = "of";
 const COUNT_WORD: &str = "count";
+const CLEAR_WORD: &str = "clear";
+/// `alarm_handler_3`: the flag name of an unnamed handler of a cleared event
+const HANDLER_SUFFIX: &str = "_handler_";
 const RAISE_WORD: &str = "raise";
 /// `on set x` and `on change x` are variable listeners (variable_signals.rs)
 const VARIABLE_LISTENER_WORDS: [&str; 2] = ["set", "change"];
@@ -48,7 +51,9 @@ pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
 	// an event whose listeners are counted is handled even when nothing raises it yet (`count listeners of tick`)
 	let variables = main_level_variables(&statements);
-	let raised: HashSet<String> = raised_names(&program).into_iter().chain(counted_events(&program).into_iter().filter(|event| !variables.contains(event))).collect();
+	let raised: HashSet<String> = raised_names(&program).into_iter().chain(reflected_events(&program, COUNT_WORD).into_iter().filter(|event| !variables.contains(event))).collect();
+	// `clear listeners of alarm` stops every handler of alarm: each gets a flag as a named one has
+	let cleared: HashSet<String> = reflected_events(&program, CLEAR_WORD).into_iter().filter(|event| !variables.contains(event)).collect();
 	let mut flags: Vec<(String, Node)> = vec![];
 	let mut named: Vec<(String, String)> = vec![];
 	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
@@ -56,6 +61,7 @@ pub fn lower(program: Node) -> Node {
 		.filter(|(_, _, name, _, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()) || SYSTEM_EVENTS.contains(&name.as_str()))
 		.map(|(index, listener, name, body, once)| {
 			let body = if once { run_once(body, &mut flags) } else { body };
+			let listener = listener.or_else(|| cleared.contains(&name).then(|| format!("{}{HANDLER_SUFFIX}{index}", name.replace(' ', "_"))));
 			let body = match listener {
 				Some(listener) => listening(body, &listener, &name, &mut flags, &mut named),
 				None => body,
@@ -163,6 +169,10 @@ fn reflected(statement: Node, named: &[(String, String)], counts: &HashMap<Strin
 			Node::Key(event, Op::SubAssign, listener) if is_named(&word(listener), &word(event)) => assign(&listening_flag(&word(listener)), Node::False),
 			_ => statement,
 		},
+		[CLEAR_WORD, LISTENERS_WORD, OF_WORD, event @ ..] if named.iter().any(|(_, other)| *other == event.join(" ")) => {
+			let event = event.join(" ");
+			block(named.iter().filter(|(_, other)| *other == event).map(|(listener, _)| assign(&listening_flag(listener), Node::False)).collect())
+		}
 		[COUNT_WORD, LISTENERS_WORD, OF_WORD, event @ ..] if counts.contains_key(&event.join(" ")) => {
 			let event = event.join(" ");
 			let listening = named.iter().filter(|(_, other)| *other == event).map(|(listener, _)| format!(" + (if {} then 1 else 0)", listening_flag(listener)));
@@ -214,13 +224,13 @@ fn event_name<'a>(words: impl Iterator<Item = &'a Node>) -> Option<String> {
 	(!words.is_empty() && words.iter().all(|word| !word.is_empty())).then(|| words.join(" "))
 }
 
-/// The events of `count listeners of tick`
-fn counted_events(program: &Node) -> HashSet<String> {
+/// The events of `count listeners of tick` (`verb` count) or `clear listeners of tick` (clear)
+fn reflected_events(program: &Node, verb: &str) -> HashSet<String> {
 	let mut events = HashSet::new();
 	program.visit(&mut |part| if let Node::List(items, _, _) = part {
 		let words: Vec<String> = items.iter().map(word).collect();
-		if let [count, listeners, of, event @ ..] = words.as_slice() {
-			if count == COUNT_WORD && listeners == LISTENERS_WORD && of == OF_WORD && !event.is_empty() && event.iter().all(|word| !word.is_empty()) {
+		if let [first, listeners, of, event @ ..] = words.as_slice() {
+			if first == verb && listeners == LISTENERS_WORD && of == OF_WORD && !event.is_empty() && event.iter().all(|word| !word.is_empty()) {
 				events.insert(event.join(" "));
 			}
 		}
