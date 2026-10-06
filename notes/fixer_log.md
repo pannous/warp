@@ -163,3 +163,20 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - Redo of claude/zero-warnings-0h6ky3 on current main (its 13 commits conflicted with two days of changes; its CI half
   was already on main): crate-level allows gone, dead code deleted as that branch chose, native-only items cfg-gated;
   all six CI warning/clippy commands pass locally. The old remote is renamed archive/zero-warnings-0h6ky3.
+
+## 2026-10-06 fix-text-words
+- g-0muE: `strip` is trim's synonym (Python), `s.trim` / `s.strip` need no parentheses (library_words SYNONYMS).
+- print-empty: `print()` writes an empty line and is worth "", as `print ""` (list_emitter emit_empty_print, analyzer Text).
+
+## 2026-10-06 fix-pipe
+- url-ends-at-space: `fetch url | strip` read as `fetch (url or strip)`. Now `x | f` is f(x) when f names a function
+  (D6; pipes.rs, the parser marks the word after a single `|`), a braceless call pipes its result
+  (`square 2 | root`), `|` between values stays or (its `or` hint only then).
+
+## 2026-10-06 fix-empty-operands
+- print-empty-nodes: `(#name as string)` serialized as `(ø#name as string)`; Node::serialize writes a prefix operator's
+  missing left operand (#, -, +, not, √, if, while) and a suffix operator's (x++) as nothing, `x = ø` stays.
+
+## 2026-10-06 fix-todo-comments
+- wasp_parser "todo edge case: leading plus": `+5`, `+x`, `3 + +2`, `[+1 -2]` gave "Unexpected character '+'"; a `+`
+  glued to its operand is now the unary plus, the operand itself (a spaced `+` stays the operator word).

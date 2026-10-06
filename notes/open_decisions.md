@@ -44,7 +44,23 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P93 the "Batch board writes" paragraph is deleted from AGENTS.md.
 - P95 tests/lists/test_map_starts.rs and its `mod` line: a worker checks it passes and commits it on a branch; the
   user's checkout is cleaned once main has it.
-- P96 obsolete ignored tests: a worker lists the candidates with a reason each; the user picks which go.
+- P96 obsolete ignored tests (the Fixer warp-f6 listed 67): delete only group A, the 13 that are empty or assert
+  nothing (test_merge_global/_memory/_runtime/_own/_wabt_by_hand, test_multi_value, test_get_element_by_id,
+  test_canvas, test_dom_property, test_replace, test_extract_function_signature, test_parse, test_wast), plus
+  numbers/test_math test_primitive_types. User chose "Only A" over the recommended A–C: the id/square-builtin tests,
+  test_recent_random_bugs, test_array_constructor, test_all_wasm and the other unclear ones stay ignored.
+  Correction (user, same day): test_wasm's test_dom_property did assert ($canvas.width == 300); it moves into
+  web/test_web.rs, replacing that file's empty namesake, still ignored for the browser host (warp-f6, branch
+  p96-obsolete-ignored).
+- P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
+  behind them go; no test edits. Asked by warp-40 (code-quality).
+- P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.
+- P99 renames incl. mechanical test-file edits: laste→last_item, Dada→DataValue, peq!→parses_to!,
+  s!/strings!/Strings!→texts! (s! stays for to_string), wis!→wisp!; unused todow/tee deleted.
+- P100 the test macros is!/eq!/skip!/check!/put! move from src/extensions.rs to tests/common/mod.rs (`use crate::is`
+  in tests, mechanical edit; web/playground's runner checked).
+- P101 the user's rough comments in Cargo.toml and src/extensions.rs are reworded neutrally; the dead wasm-ast line
+  goes.
 
 ## Decided 2026-10-05 (user, multiple-choice interview, all as recommended unless quoted)
 - Data vs code (P51, P62, P63 (1-2), charge levels, D7 revised): specified in wiki/charged.md, the single source;

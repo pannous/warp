@@ -45,7 +45,7 @@ const FOR_WORD: &str = "for";
 const LOG_WORD: &str = "log";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 23] = [
+const SYNONYMS: [(&str, &[&str]); 24] = [
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
@@ -56,6 +56,8 @@ const SYNONYMS: [(&str, &[&str]); 23] = [
 	("chars", &[]),
 	("upper", &["uppercase"]),
 	("lower", &["lowercase"]),
+	// the text builtin trim (text_builtins.rs), Python's strip
+	("trim", &["strip"]),
 	("reverse", &[]),
 	("sort", &[]),
 	("split", &[]),
@@ -139,7 +141,7 @@ const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "word_tmp";
 
 /// Library words whose result is always a text, and those whose result is always a list
-const TEXT_RESULT_WORDS: [&str; 3] = ["upper", "lower", "join"];
+const TEXT_RESULT_WORDS: [&str; 4] = ["upper", "lower", "trim", "join"];
 const LIST_RESULT_WORDS: [&str; 7] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES, MAP_WITHOUT];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
@@ -263,7 +265,8 @@ pub fn lower_function_methods(node: Node) -> Node {
 	let arities: HashMap<String, usize> = context.user_functions.iter().map(|(name, function)| (name.clone(), function.params.len())).collect();
 	let mut defined: HashSet<String> = arities.keys().cloned().collect();
 	collect_assigned_names(&node, &mut defined);
-	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::ffi::get_ffi_signature(name).is_some();
+	// a libc function is no method: `m.remove(k)` is the map's, not stdio's remove(path)
+	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c");
 	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
 	// are specialised (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
@@ -818,7 +821,9 @@ impl Lowering {
 			crate::normalize::hint(&format!("{}.{}()", receiver.serialize(), head.serialize()), &receiver.serialize(), "values are never shared: b = a already copies");
 			return receiver.clone();
 		}
-		if arguments.len() != wanted {
+		// a text builtin's own arity check names its values (`trim takes 1 value, got 2`)
+		let checks_itself = crate::wasm_emitter::text_builtins::is_text_builtin(word);
+		if arguments.len() != wanted && !checks_itself {
 			let plural = if wanted == 1 { "" } else { "s" };
 			let call = Node::List([vec![head.clone()], arguments.clone()].concat(), Bracket::Round, Separator::None);
 			return Diagnostic::at(&call, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();

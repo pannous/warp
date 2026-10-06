@@ -388,6 +388,8 @@ fn is_identifier_char(c: char) -> bool {
 /// once, and an exact quotient rounds exactly (wasm_emitter exact_euclid_div)
 pub const FLOOR_QUOTIENT: &str = "floor_quotient";
 
+/// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
+const PIPE_GLYPH: &str = "|";
 /// `|>` binds below range and arithmetic, above `as` and comparisons
 const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
 
@@ -951,6 +953,17 @@ impl WaspParser {
 			self.column += 1;
 		}
 		self.pos += 1;
+	}
+
+	/// The operand after a single `|`: a bare word is marked as a possible pipe stage, any other operand gets the hint
+	/// toward `or`
+	fn pipe_operand(&self, operand: Node, line: usize, column: usize) -> Node {
+		if matches!(operand.drop_meta(), Symbol(_)) {
+			return crate::pipes::pipe_stage(operand);
+		}
+		set_hint_position(line, column);
+		norm::operator(PIPE_GLYPH, false);
+		operand
 	}
 
 	fn get_position(&self) -> (usize, usize) {
@@ -1606,6 +1619,9 @@ impl WaspParser {
 		match c1 {
 			'+' if c2 == '+' && variable_follows => Some((Op::Inc, 2)),
 			'-' if c2 == '-' && variable_follows => Some((Op::Dec, 2)),
+			// unary plus glued to its operand, `+5`, `+x`, `+(a)`: the operand itself; a spaced `+` stays the operator
+			// word (`fold + xs`)
+			'+' if c2.is_alphanumeric() || matches!(c2, '_' | '(' | '.') => Some((Op::Add, 1)),
 			'-' => Some((Op::Neg, 1)),
 			dash if matches!(glyph_operator(dash), Some((Op::Sub, _))) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
@@ -2422,7 +2438,9 @@ impl WaspParser {
 			}
 
 			// Consume the operator
-			let written = self.hint_operator(chars, false);
+			// a single `|` may pipe into a function (pipes.rs): its `or` hint waits for the operand
+			let may_pipe = chars == 1 && self.current_char() == '|' && !self.options.data_mode;
+			let written = if may_pipe { PIPE_GLYPH.to_string() } else { self.hint_operator(chars, false) };
 			let (op_line, op_column) = self.get_position();
 			let bare_symbol = Some(self.current_char()).filter(|symbol| chars == 1 && matches!(symbol, '&' | '|'));
 			self.advance_by(chars);
@@ -2494,6 +2512,7 @@ impl WaspParser {
 				continue;
 			}
 
+			let rhs = if may_pipe { self.pipe_operand(rhs, op_line, op_column) } else { rhs };
 			let rhs = if op == Op::Eq && written != IS_WORD { crate::type_tests::equality_operand(rhs) } else { rhs };
 			if op == Op::Eq && written == IS_WORD {
 				lhs = crate::type_tests::with_compared_text(lhs, rhs_written.trim());
@@ -2559,6 +2578,7 @@ impl WaspParser {
 			Op::If | Op::While => self.with_equals_comparing(true, |parser| parser.parse_expr(right_bp)),
 			// `#m#1` counts `m#1`: indexing a count is never meant
 			Op::Hash => self.parse_expr(left_bp - 1),
+			Op::Add => self.parse_expr(Op::Neg.binding_power().1), // `+2^2` like `-2^2`
 			_ => self.parse_expr(right_bp),
 		}
 	}
@@ -2575,6 +2595,7 @@ impl WaspParser {
 			(Op::If, _) => self.finish_if_prefix(rhs),
 			(Op::While, _) => self.finish_while_prefix(rhs),
 			(Op::Neg, Node::Number(number)) => Node::Number(-*number),
+			(Op::Add, _) => rhs,
 			(Op::Inc | Op::Dec, _) => Node::Key(Box::new(rhs), op, Box::new(Empty)), // ++i is i++: increment is immediate
 			_ => Node::Key(Box::new(Empty), op, Box::new(rhs)),
 		}
@@ -3727,7 +3748,7 @@ impl WaspParser {
 		}
 		let mut num_str = String::new();
 
-		// todo edge case: leading plus
+		// a leading plus is the unary plus prefix (peek_prefix_operator)
 		if self.current_char() == '-' {
 			num_str.push('-');
 			self.advance();

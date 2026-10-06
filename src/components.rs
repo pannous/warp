@@ -3,7 +3,7 @@
 //! (notes/stdlib_connectors.md). Each component is compiled once per path and process and instantiated once per
 //! thread, on an engine of its own with the component model (the programs' engines run core modules only), with WASI p2 for its imports. Values cross as JSON,
 //! like the other foreign runtimes: a Node argument becomes the WIT type the function declares, its result comes back as
-//! JSON (records objects, variants `{case: payload}`, enums and chars texts, an `err` of a result an error).
+//! JSON (records objects, variants `{case: payload}`, enums texts, chars codepoints (P94), an `err` of a result an error).
 use serde_json::{Map, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -286,7 +286,7 @@ impl Handles<'_> {
 			Val::U64(number) => Value::from(*number),
 			Val::Float32(number) => Value::from(f64::from(*number)),
 			Val::Float64(number) => Value::from(*number),
-			Val::Char(character) => Value::String(character.to_string()),
+			Val::Char(character) => serde_json::json!({ crate::foreign::CODEPOINT_KEY: character.to_string() }),
 			Val::String(text) => Value::String(text.clone()),
 			Val::List(items) | Val::Tuple(items) | Val::FixedLengthList(items) => Value::Array(items.iter().map(|item| self.json_of(item)).collect::<Result<_, _>>()?),
 			Val::Record(fields) => Value::Object(fields.iter().map(|(name, value)| Ok((name.clone(), self.json_of(value)?))).collect::<Result<Map<_, _>, String>>()?),
