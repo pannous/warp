@@ -26,7 +26,30 @@ const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 // plain values (plainOfTree / treeOfPlain, as for foreign_call)
 const STD_ADAPTERS = {
 	json: { parse: text => JSON.parse(text), to_json: value => JSON.stringify(value) },
+	file: {
+		write: (path, content) => { writtenFiles.set(filePath(path), contentText(content)); return null; },
+		append: (path, content) => { writtenFiles.set(filePath(path), textOfFile(path) + contentText(content)); return null; },
+		exists: path => writtenFiles.has(filePath(path)) || servedFileExists(path),
+		list: folder => {
+			const prefix = filePath(folder).replace(/\/?$/, "/");
+			return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
+		},
+	},
+	os: { env: () => null }, // a page has no environment
 };
+// the files std's file module wrote, kept while the page is open: read and the file words see them before the served ones
+const writtenFiles = new Map();
+const filePath = path => path.replace(/^\.\//, "");
+const contentText = content => typeof content === "string" ? content : JSON.stringify(content);
+const textOfFile = path => writtenFiles.get(filePath(path)) ?? (servedFileExists(path) ? readFile(filePath(path)) : "");
+function servedFileExists(path) {
+	try {
+		readBytes(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 const utf8 = new TextEncoder();
 
@@ -73,6 +96,8 @@ function fileUrl(path) {
 
 // the bytes of a file of the served repository, of the page or of a URL, failing in the words of the native read
 function readBytes(path) {
+	const written = writtenFiles.get(filePath(path));
+	if (written !== undefined) return utf8.encode(written);
 	try {
 		return getSync(fileUrl(path), 0, true);
 	} catch (failure) {
