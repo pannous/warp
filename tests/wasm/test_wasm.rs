@@ -890,7 +890,6 @@ fn test_object_properties_wasm() {
 }
 
 #[test]
-#[ignore]
 fn test_array_indices_wasm() {
 	{
 		assert_throws("surface=(1,2,3);i=1;k#i=4;k#i") // no such k!
