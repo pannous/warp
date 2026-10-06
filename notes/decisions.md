@@ -83,8 +83,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   error "x of Point is an int field: 2^70 does not fit in 64 bits; declare it x:bigint or x:number".
   Moot as implemented (warp-32): int fields are i64 slots carrying warp's exact-int encoding, so 2^70 is kept
   exactly; no overflow, no error. The speed goal is met without a fixed width, so no follow-up question.
-- P129 (signals, branch signals-broadcast) user: "both above and also sent Signal chat or just send "file system
-  full" if there is no value". Both `broadcast value on "chat"` and `send value to "chat"` (`to` read as the target
+- P129 (signals, branch signals-broadcast) user: both forms, plus `send signal chat`, or just `send "file system full"` when there
+  is no value. Both `broadcast value on "chat"` and `send value to "chat"` (`to` read as the target
   after `send`, not a range) reach `on message from "chat" {…}` in every program on this machine; without a channel
   name both use "warp". Interpreted (undoable): `send signal chat` / `send "file system full"` without a value sends a
   named signal with no payload, received by `on "file system full" {…}`. P129b (user: "Yes, build it now"): named
@@ -137,9 +137,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   naming `old`.
 - P142 (scope of P141, asked by warp-e4) the definition error applies only where the builtin would win, i.e. the
   definition could never take effect (casts like `double`, operators, type names). Library words (`add`, `map`,
-  `count`) may be redefined and the user's version wins; class methods are always allowed (called as `x.add`). User:
-  "add Not really a built-in, just an example. Also, map should not be the main thing to use. One would just use the
-  syntax square all x or maybe even just broadcasting." So docs, hints, examples and new tests prefer broadcasting
+  `count`) may be redefined and the user's version wins; class methods are always allowed (called as `x.add`). User: `add`
+  was only an example, not a builtin; map should not be the main tool, use `square all x` or broadcasting. So docs, hints, examples and new tests prefer broadcasting
   (`square [1 2 3]`, wiki/broadcasting.md) or `square all x` (wiki/all.md) over `map`.
 - P143 (warp-a8) a function called without parentheses next to a comparison, `f x == y`, is a loud error naming
   both forms: "square 3 == 9 is ambiguous; write (square 3) == 9 or square(3 == 9)" (user chose this over the
