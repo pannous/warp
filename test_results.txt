@@ -2135,6 +2135,7 @@ PASSED:
   ✓ types::test_declaration_zero_value::a_text_declaration_is_empty
   ✓ types::test_declared_int_of_float_expression::an_int_declaration_refuses_a_float_expression
   ✓ types::test_declared_int_of_float_expression::an_int_declaration_refuses_a_non_whole_exact_value
+  ✓ types::test_extension_methods::a_smart_scope_defines_methods_of_a_type
   ✓ types::test_extension_methods::a_swift_extension_block_adds_methods
   ✓ types::test_extension_methods::an_extension_method_extends_a_builtin_type
   ✓ types::test_extension_methods::an_extension_method_extends_a_class
@@ -2782,4 +2783,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2777 passed, 0 failed, 2777 total tested
+19 ignored, 2778 passed, 0 failed, 2778 total tested
