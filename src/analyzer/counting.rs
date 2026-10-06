@@ -11,7 +11,12 @@ pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
 	if name == BYTE_SIZE {
 		return Some("node_bytes");
 	}
-	(is_counting_property(name) && !TYPE_WORDS_AMONG_COUNTING.contains(&name)).then_some("node_count")
+	is_counting_word(name).then_some("node_count")
+}
+
+/// `count`, `length`, `size`, `len`: a word counting its argument (`number x` is a cast)
+pub(super) fn is_counting_word(name: &str) -> bool {
+	is_counting_property(name) && !TYPE_WORDS_AMONG_COUNTING.contains(&name)
 }
 
 /// `x.count`, `x.length`, `x.size`, and the explicit units `x.bytes` (memory), `x.chars` (code points), `x.graphemes`

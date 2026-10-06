@@ -24,6 +24,7 @@ PASSED:
   ✓ control::test_blocks::test_indent_as_block
   ✓ control::test_blocks::test_matrix_comma_index
   ✓ control::test_blocks::test_matrix_order
+  ✓ control::test_braceless_call_in_branch::a_braceless_call_with_a_variable_in_a_branch
   ✓ control::test_braceless_output_calls::a_braceless_output_call_is_worth_an_int
   ✓ control::test_branch_assigned_variables::a_text_assigned_in_both_branches_is_read_after_them
   ✓ control::test_broadcast::a_broadcast_is_a_statement_of_no_value
@@ -552,6 +553,7 @@ PASSED:
   ✓ functions::test_closures::test_map_and_reduce_with_a_closure_variable
   ✓ functions::test_closures::test_not_a_function_stays_loud
   ✓ functions::test_closures::test_returned_closure
+  ✓ functions::test_comma_calls::comma_arguments_of_a_short_call
   ✓ functions::test_constant_free_variables::a_changed_variable_stays
   ✓ functions::test_constant_free_variables::a_condition_on_a_constant_is_decided
   ✓ functions::test_constant_free_variables::a_constant_text_is_inlined
@@ -560,6 +562,7 @@ PASSED:
   ✓ functions::test_constant_free_variables::a_parameter_or_a_key_of_the_same_name_stays
   ✓ functions::test_constant_free_variables::a_stable_constant_is_inlined
   ✓ functions::test_constant_free_variables::constant_arithmetic_is_computed_after_inlining
+  ✓ functions::test_counting_word_result::a_counting_word_gives_a_number
   ✓ functions::test_def_forms::a_def_function_calls_its_function_parameter
   ✓ functions::test_def_forms::a_parameter_tested_for_membership_is_no_function
   ✓ functions::test_def_forms::definition_forms_agree
@@ -635,11 +638,15 @@ PASSED:
   ✓ functions::test_functions::test_stacked_lambdas
   ✓ functions::test_functions::test_variable_reassignment
   ✓ functions::test_functions::test_variables
+  ✓ functions::test_global_with_closures::global_in_a_program_with_a_lambda
   ✓ functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called
   ✓ functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged
   ✓ functions::test_inlining::an_inlined_helper_updates_the_list_handed_back
   ✓ functions::test_lambda_spaced_body::a_lambda_body_may_be_a_spaced_call
   ✓ functions::test_lambda_spaced_body::a_list_of_functions_holds_each_with_its_own_capture
+  ✓ functions::test_lambda_spellings::other_lambda_keywords
+  ✓ functions::test_lambda_spellings::pipe_parameters
+  ✓ functions::test_lambda_spellings::ruby_block_parameters
   ✓ functions::test_lambdas::test_a_lambda_that_cannot_be_inlined_is_a_closure_value
   ✓ functions::test_lambdas::test_assigned_lambda_is_a_function
   ✓ functions::test_lambdas::test_block_called_with_bindings
@@ -778,6 +785,11 @@ PASSED:
   ✓ functions::test_several_arguments::test_several_arguments_are_one_list
   ✓ functions::test_shadowed_log::a_user_log_of_two_arguments_is_called
   ✓ functions::test_shadowed_log::the_library_log_to_a_base_stays
+  ✓ functions::test_sort_functions::sort_is_stable
+  ✓ functions::test_sort_functions::sort_with_comparator
+  ✓ functions::test_sort_functions::sort_with_defined_function
+  ✓ functions::test_sort_functions::sort_with_key
+  ✓ functions::test_sort_functions::sorted_without_function
   ✓ functions::test_spaced_assign_definition::a_recursive_spaced_definition_with_equals_defines_the_function
   ✓ functions::test_specialised_variants::a_constant_argument_unrolls_the_recursion
   ✓ functions::test_specialised_variants::an_unbounded_specialisation_keeps_the_call
@@ -955,6 +967,8 @@ PASSED:
   ✓ lists::test_number_keys::a_list_keeps_its_positions
   ✓ lists::test_number_keys::a_number_subscript_keys_an_empty_map
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
+  ✓ lists::test_one_entry_map_text::print_keeps_the_braces_of_a_one_entry_map
+  ✓ lists::test_one_entry_map_text::the_text_of_a_one_entry_map_keeps_its_braces
   ✓ lists::test_pop::pop_gives_the_last_item
   ✓ lists::test_pop::pop_removes_the_last_item
   ✓ lists::test_range_arguments::a_range_argument_is_read_from_its_bounds
@@ -2567,4 +2581,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2562 passed, 0 failed, 2562 total tested
+23 ignored, 2576 passed, 0 failed, 2576 total tested
