@@ -22,6 +22,9 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
 - A function body block of one braceless call `def f(x){square x}` is that call (library_words.rs `body_statement`).
 - Partial application stays `add(1, _)`; `add(1)` is a missing-argument error.
 
+- Closures changing an enclosing variable (P124 asked, default A forced by test_partial_application's counter): a
+  lambda shares it (`()=>{ n+=1; n }` counts 1, 2, …), `nonlocal n` may be written; a nested def needs `nonlocal n`,
+  else a loud error. nonlocal_cells.rs `lower_lambdas` hoists such a lambda into a nested def `lambda·N` + reference.
+
 ## Open
-- P124 (Interviewer): a closure assigning a captured variable (`()=>{ n+=1; n }`) silently restarts from the
-  captured value; `nonlocal n` inside a lambda fails.
+- Optional parameters `x?`, `x:T?` and `a ?? b` (asked the Interviewer; `??` is no operator yet).
