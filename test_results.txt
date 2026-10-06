@@ -160,6 +160,12 @@ PASSED:
   ✓ control::test_shared_arrays::a_shared_array_reads_writes_and_adds
   ✓ control::test_shared_arrays::tasks_add_floats_to_one_shared_array
   ✓ control::test_shared_arrays::tasks_add_to_one_shared_array
+  ✓ control::test_shared_signals::a_write_of_the_program_itself_is_seen_at_its_next_check_point
+  ✓ control::test_shared_signals::changes_before_the_listener_are_not_seen
+  ✓ control::test_shared_signals::on_change_of_a_shared_value_sees_the_new_value
+  ✓ control::test_shared_signals::once_on_a_shared_value_runs_once
+  ✓ control::test_shared_signals::the_listener_runs_while_the_program_sleeps
+  ✓ control::test_shared_signals::whenever_a_task_sets_a_shared_value
   ✓ control::test_shared_values::a_function_given_a_shared_value_shares_it
   ✓ control::test_shared_values::a_go_block_writes_a_shared_value
   ✓ control::test_shared_values::a_self_update_of_a_shared_value_is_atomic
@@ -471,6 +477,8 @@ PASSED:
   ✓ functions::test_bare_function_name::test_bare_name_of_typed_function_is_an_error
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
+  ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
+  ✓ functions::test_body_statement::an_undefined_word_in_it_is_an_error
   ✓ functions::test_broadcasting::test_broadcasting_reaches_nested_lists
   ✓ functions::test_broadcasting::test_function_broadcasts_over_a_list
   ✓ functions::test_broadcasting::test_function_broadcasts_over_pairs_keeping_keys
@@ -534,7 +542,9 @@ PASSED:
   ✓ functions::test_def_forms::probe_def_block_syntax
   ✓ functions::test_def_without_parameters::a_def_without_parameters_is_a_function
   ✓ functions::test_default_parameters::a_default_may_read_earlier_parameters
+  ✓ functions::test_default_parameters::a_literal_after_a_colon_is_a_default_as_in_ruby
   ✓ functions::test_default_parameters::a_missing_argument_takes_its_default
+  ✓ functions::test_default_parameters::a_one_character_text_default_holds_any_text
   ✓ functions::test_default_parameters::a_typed_parameter_may_have_a_default
   ✓ functions::test_default_parameters::calls_without_parentheses_take_defaults_too
   ✓ functions::test_default_parameters::named_arguments_skip_defaults_and_mix_with_positional_ones
@@ -658,6 +668,8 @@ PASSED:
   ✓ functions::test_named_arguments::a_missing_or_unknown_argument_is_an_error
   ✓ functions::test_named_arguments::named_arguments_set_free_variables_of_the_body
   ✓ functions::test_named_arguments::named_arguments_set_parameters_in_any_order
+  ✓ functions::test_nested_prefix_calls::a_function_name_among_the_arguments_takes_the_ones_after_it
+  ✓ functions::test_nested_prefix_calls::a_function_passed_as_a_value_stays_one
   ✓ functions::test_nonlocal_any_value::test_an_escaping_closure_keeps_a_text_cell
   ✓ functions::test_nonlocal_any_value::test_inner_changes_a_nonlocal_list
   ✓ functions::test_nonlocal_any_value::test_inner_changes_a_nonlocal_text
@@ -720,6 +732,9 @@ PASSED:
   ✓ functions::test_return_type_dispatch::test_as_picks_the_overload
   ✓ functions::test_return_type_dispatch::test_no_expected_type_takes_the_first_overload_with_a_warning
   ✓ functions::test_return_type_dispatch::test_the_result_type_can_be_inferred_from_the_body
+  ✓ functions::test_return_type_forms::a_colon_result_type_before_a_block_body
+  ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_block_body
+  ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_colon_body
   ✓ functions::test_runtime_kind_arithmetic::a_def_body_reads_fields_of_its_parameters
   ✓ functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
@@ -2498,4 +2513,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2493 passed, 0 failed, 2493 total tested
+23 ignored, 2508 passed, 0 failed, 2508 total tested
