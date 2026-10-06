@@ -47,3 +47,15 @@ fn a_field_read_of_a_struct_variable_searches_no_names() {
 	let calls = called_function_names(&format!("{POINT}p.x * p.y"));
 	assert!(!calls.iter().any(|name| name == "map_find" || name == "struct_body"), "{calls:?}");
 }
+
+const SUMMED: &str = "class Point{x:int; y:int; sum() := x + y}; ";
+
+#[test]
+fn a_method_of_a_struct_variable_takes_the_struct() {
+	let calls = called_function_names(&format!("{SUMMED}p = Point(3, 4); p.sum()"));
+	assert!(!calls.iter().any(|name| name == "map_find" || name == "struct_body"), "{calls:?}");
+	is!(&format!("{SUMMED}p = Point(3, 4); p.sum()"), 7);
+	is!(&format!("{SUMMED}Point(3, 4).sum()"), 7);
+	is!(&format!("{SUMMED}ps = [Point(1, 2), Point(3, 4)]; s = 0; for p in ps {{ s += p.sum() }}; s"), 10);
+	is!(&format!("{SUMMED}f(p:Point) := p.sum() * 2; f(Point(1, 2))"), 6);
+}
