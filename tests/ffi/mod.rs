@@ -20,3 +20,4 @@ mod test_glibc_math_header;
 mod test_libc_results;
 mod test_ffi_gaps;
 mod test_ffi_text_results;
+mod test_ffi_handles;
