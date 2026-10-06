@@ -1466,6 +1466,7 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
+  ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
   ✓ programs::test_samples::test_ackermann
   ✓ programs::test_samples::test_binary_tree
@@ -2337,4 +2338,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2332 passed, 0 failed, 2332 total tested
+23 ignored, 2333 passed, 0 failed, 2333 total tested
