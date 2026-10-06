@@ -460,7 +460,7 @@ fn linq_calls(node: Node, defined: &HashSet<String>) -> Node {
 }
 
 /// The names the program defines: `f(x) := …`, `def f`, `func f`, Go's method `func (p Point) Sum()`
-fn defined_names(node: &Node) -> HashSet<String> {
+pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
 	node.visit(&mut |part| match part {
 		Node::Key(head, Op::Define, _) => {
