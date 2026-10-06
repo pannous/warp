@@ -60,6 +60,12 @@ pub fn lower(program: Node) -> Node {
 	let statements = subscribed_in_blocks(statements, &raised);
 	// `clear listeners of alarm` stops every handler of alarm: each gets a flag as a named one has
 	let cleared: HashSet<String> = reflected_events(&program, CLEAR_WORD).into_iter().filter(|event| !variables.contains(event)).collect();
+	let kept = match without_unraised(&statements, &raised, &variables) {
+		Ok(kept) => kept,
+		Err(error) => return error,
+	};
+	let program = if kept.len() < statements.len() { Node::List(kept.clone(), bracket.clone(), separator.clone()) } else { program };
+	let statements = kept;
 	let mut flags: Vec<(String, Node)> = vec![];
 	let mut named: Vec<(String, String)> = vec![];
 	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
@@ -117,6 +123,23 @@ pub fn lower(program: Node) -> Node {
 	let stays = !page_handlers.is_empty() || lowered.iter().any(defines_timer);
 	let lowered = if stays { with_output_binding(lowered, &main_variables) } else { lowered };
 	crate::declarations::with_node_wrappers(Node::List(lowered, bracket, separator), &page_handlers)
+}
+
+/// `on conect {…}` where nothing raises conect never runs (Node's emitter.on("conect") is silent): a warning, naming
+/// a raised event one letter away, and the statements without it (it ran its body once, as a block). Page and system
+/// events come from outside the program
+fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &HashSet<String>) -> Result<Vec<Node>, Node> {
+	// `once ready {…}` of a variable is a variable listener (variable_signals.rs)
+	let from_outside = |name: &str| PAGE_EVENTS.contains(&name) || SYSTEM_EVENTS.contains(&name) || variables.contains(name);
+	let unraised = |statement: &Node| named_handler(statement).map(|(_, (name, _, _))| name).filter(|name| !raised.contains(name) && !from_outside(name));
+	let warnings: Vec<crate::diagnostic::Diagnostic> = statements.iter().filter_map(|statement| unraised(statement).map(|name| {
+		let hint = crate::extensions::strings::near_miss(&name, raised.iter().cloned()).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
+		crate::diagnostic::Diagnostic::at(statement, format!("on {name}: nothing raises {name}, so this handler never runs{hint}"))
+	})).collect();
+	if !warnings.is_empty() {
+		crate::diagnostic::report(&warnings)?;
+	}
+	Ok(statements.iter().filter(|statement| unraised(statement).is_none()).cloned().collect())
 }
 
 /// The output binding of a program the page keeps running (page events, timers): its last line, when that is a name,

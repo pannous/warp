@@ -651,11 +651,10 @@ impl WasmGcEmitter {
 		if word.chars().count() < 3 || self.is_known_word(word) {
 			return Ok(());
 		}
-		let allowed = if word.chars().count() < 6 { 1 } else { 2 };
 		let mut names: Vec<String> = self.ctx.user_functions.keys().chain(self.ctx.user_globals.keys()).cloned().collect();
 		names.extend(self.scope.local_names());
 		names.extend(KNOWN_WORDS.iter().map(|word| word.to_string()));
-		let Some(near) = names.into_iter().filter(|name| name != word).find(|name| edit_distance(word, name) <= allowed) else { return Ok(()) };
+		let Some(near) = crate::extensions::strings::near_miss(word, names) else { return Ok(()) };
 		let question = Ask::new(NEAR_MISS_TOPIC, format!("`{word}` names nothing: a symbol, or did you mean {near}?"),
 			vec![reading("the symbol", &format!("data {word}")), reading(&format!("the name {near}"), &near)], Fallback::Warning).written(word);
 		let (line, column) = self.source_position.unwrap_or((0, 0));
@@ -839,24 +838,3 @@ impl WasmGcEmitter {
 	}
 }
 
-/// Edit distance (insertions, deletions, substitutions, adjacent swaps) between two words
-fn edit_distance(a: &str, b: &str) -> usize {
-	let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
-	let mut rows = vec![vec![0usize; b.len() + 1]; a.len() + 1];
-	for (i, row) in rows.iter_mut().enumerate() {
-		row[0] = i;
-	}
-	for (j, cell) in rows[0].iter_mut().enumerate() {
-		*cell = j;
-	}
-	for i in 1..=a.len() {
-		for j in 1..=b.len() {
-			let cost = usize::from(a[i - 1] != b[j - 1]);
-			rows[i][j] = (rows[i - 1][j] + 1).min(rows[i][j - 1] + 1).min(rows[i - 1][j - 1] + cost);
-			if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
-				rows[i][j] = rows[i][j].min(rows[i - 2][j - 2] + 1);
-			}
-		}
-	}
-	rows[a.len()][b.len()]
-}

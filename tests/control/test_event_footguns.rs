@@ -53,3 +53,10 @@ fn a_subscribed_listener_changes_a_main_level_variable() {
 	is!("n = 0; watch(s) := { global n; on change s { n += 1 } }; x = 1; watch(x); x = 2; n", 1);
 	is!("n = 0; watch(s) := on change s { n += 1 }; x = 1; for i in 1 to 3 { watch(x) }; x = 2; n", 3);
 }
+
+// Node's emitter.on("conect") never fires, silently: a warning naming the near event, and the body does not run
+#[test]
+fn a_handler_of_an_event_nothing_raises_never_runs() {
+	is!("hits = 0; on conect { hits += 1 }; hits", 0);
+	is!("ready = false; n = 0; once ready { n += 1 }; ready = true; n", 1);
+}
