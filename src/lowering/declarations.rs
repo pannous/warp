@@ -1168,8 +1168,9 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 	if !arguments.iter().any(is_placeholder) {
 		return None;
 	}
-	// Swift's `func twice(_ x: Int)`: `_` labels a typed parameter, no placeholder
-	let typed_parameter = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::Colon, type_node) if is_type_word(type_node));
+	// Swift's `func twice(_ x: Int)`, `func sum(_ xs: Int...)`: `_` labels a typed parameter, no placeholder
+	let is_type = |type_node: &Node| is_type_word(type_node) || matches!(type_node.drop_meta(), Node::Key(element, Op::To, end) if is_type_word(element) && matches!(end.drop_meta(), Node::Empty));
+	let typed_parameter = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::Colon, type_node) if is_type(type_node));
 	if arguments.windows(2).any(|pair| is_placeholder(&pair[0]) && typed_parameter(&pair[1])) {
 		return None;
 	}

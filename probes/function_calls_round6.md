@@ -10,9 +10,9 @@ function add(...nums) { return nums.reduce((a, b) => a + b, 0) }; add(1, 2, 3) |
 const add = (a, b = a * 2) => a + b; add(3) ||| 9
 def f(a, *, b): return a * b; f(2, b=5) ||| 10
 def f(*args): return len(args); f(1, 2, 3) ||| 3
-fun sum(vararg xs: Int): Int = xs.sum(); sum(1, 2, 3) ||| 6
-func sum(_ xs: Int...) -> Int { xs.reduce(0, +) }; sum(1, 2, 3) ||| 6
-static int Sum(params int[] xs) => xs.Sum(); Sum(1, 2, 3) ||| 6
+fun total(vararg xs: Int): Int = xs.sum(); total(1, 2, 3) ||| 6
+func total(_ xs: Int...) -> Int { xs.reduce(0, +) }; total(1, 2, 3) ||| 6
+static int Total(params int[] xs) => xs.Sum(); Total(1, 2, 3) ||| 6
 def fact(n) = n <= 1 ? 1 : n * fact(n - 1); fact(5) ||| 120
 fact(n) = n <= 1 ? 1 : n * fact(n - 1); fact(5) ||| 120
 compose = (f, g) => x => f(g(x)); inc = x => x + 1; dbl = x => x * 2; compose(inc, dbl)(5) ||| 11
