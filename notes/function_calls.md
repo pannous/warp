@@ -67,6 +67,10 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   parameter, function_values.rs runs variadic::lower again once f is known.
 - Python colon definitions with parameters become definitions in lower_c_functions (keyword_definition), so the
   function value passes see them; without parameters they stay def forms for late_binding (a `z() := e` is a getter).
+- OCaml/F# `let f x = body in rest` (welcome_forms.rs `let_binding`); JS IIFE `(() => 7)()` (parser: a glued `()`
+  after a one-item group is a call with no arguments); Go `(int, int)` results convert each returned value
+  (declarations.rs `typed_returns`) and `q, r := f()` assigns (welcome_forms.rs `go_destructuring`); `reduce` with a
+  start value is `fold` (lambdas.rs `with_start`).
 
 ## Call efficiency (probes/call_benchmark.sh [N], 10^8 calls each)
 - Plain, default, named, overload and lambda calls compile to the same direct `call $f` with i64 arguments: equal
