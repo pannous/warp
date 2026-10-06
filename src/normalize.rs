@@ -932,9 +932,9 @@ mod tests {
 
 	#[test]
 	fn test_style_swap() {
-		// Default prefers 'as' operator
+		// Default leaves the cast spelling open (user #13: str(x) is fine)
 		let s = style();
-		assert_eq!(s.cast, CastStyle::AsOperator);
+		assert_eq!(s.cast, CastStyle::Any);
 
 		// Swap to constructor style
 		set_style(Style { cast: CastStyle::Constructor, ..Style::default() });
