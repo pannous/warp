@@ -35,6 +35,9 @@ const ROUND: &str = "round";
 pub struct WispParser {
 	chars: Vec<char>,
 	pos: usize,
+	/// The first thing wrong with the input (a missing `)`, a number that is none): the parse is that error, never a
+	/// silently repaired value
+	problem: Option<String>,
 }
 
 impl WispParser {
@@ -42,12 +45,21 @@ impl WispParser {
 		WispParser {
 			chars: input.chars().collect(),
 			pos: 0,
+			problem: None,
 		}
 	}
 
 	pub fn parse(input: &str) -> Node {
 		let mut parser = WispParser::new(input);
-		parser.parse_expr()
+		let node = parser.parse_expr();
+		match parser.problem {
+			Some(problem) => Error(Box::new(Text(format!("wisp: {problem}")))),
+			None => node,
+		}
+	}
+
+	fn complain(&mut self, problem: String) {
+		self.problem.get_or_insert(problem);
 	}
 
 	fn end(&self) -> bool {
@@ -433,6 +445,9 @@ impl WispParser {
 			}
 			self.advance();
 		}
+		if self.end() {
+			self.complain(format!("unclosed text \"{s}"));
+		}
 		self.advance(); // skip closing '"'
 		Text(s)
 	}
@@ -490,11 +505,16 @@ impl WispParser {
 				return Number(Number::Int(if s.starts_with('-') { -n } else { n }));
 			}
 		}
-		if s.contains('.') {
-			Number(Number::Float(s.replace('_', "").parse().unwrap_or(0.0)))
-		} else {
-			Number(Number::Int(s.replace('_', "").parse().unwrap_or(0)))
-		}
+		let digits = s.replace('_', "");
+		let number = match digits.contains('.') {
+			true => digits.parse::<f64>().ok().map(Number::Float),
+			false => digits.parse::<num_bigint::BigInt>().ok().map(Number::from_bigint),
+		};
+		number.map(Number).unwrap_or_else(|| {
+			let found: String = self.chars[self.pos..].iter().take_while(|c| !c.is_whitespace() && **c != ')').collect();
+			self.complain(format!("expected a number, got {}", if s.is_empty() { found } else { s }));
+			Empty
+		})
 	}
 
 	fn parse_symbol_or_shorthand(&mut self) -> Node {
@@ -556,6 +576,10 @@ impl WispParser {
 
 	fn expect(&mut self, ch: char) {
 		self.skip_whitespace();
+		if self.current() != ch {
+			let found = if self.end() { "the end".to_string() } else { format!("{:?}", self.current()) };
+			self.complain(format!("expected {ch:?}, got {found}"));
+		}
 		if self.current() == ch {
 			self.advance();
 		}
