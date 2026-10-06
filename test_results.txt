@@ -1893,6 +1893,7 @@ PASSED:
   ✓ text::test_quote_output::test_is_macro_round_trips_text
   ✓ text::test_quote_output::test_serialized_text_parses_back
   ✓ text::test_quote_output::test_texts_inside_lists_print_with_the_canonical_quote
+  ✓ text::test_quoted_container_texts::a_quote_inside_a_text_in_a_container_is_escaped
   ✓ text::test_quoted_container_texts::a_text_field_prints_quoted
   ✓ text::test_quoted_container_texts::a_text_in_a_list_prints_quoted
   ✓ text::test_quoted_container_texts::string_and_interpolation_quote_texts_in_containers
@@ -2353,6 +2354,7 @@ PASSED:
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
   ✓ welcoming::test_constant_shadowing::a_constant_word_still_reads_and_names_fields
+  ✓ welcoming::test_constant_shadowing::a_field_named_like_a_constant_is_read_by_the_methods
   ✓ welcoming::test_constant_shadowing::an_assigned_constant_word_is_an_error
   ✓ welcoming::test_error_positions::a_rebuilt_node_reports_the_position_of_its_parts
   ✓ welcoming::test_error_positions::an_error_found_while_emitting_names_its_statement
@@ -2656,4 +2658,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2651 passed, 0 failed, 2651 total tested
+20 ignored, 2653 passed, 0 failed, 2653 total tested
