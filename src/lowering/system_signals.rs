@@ -14,11 +14,16 @@ use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::node::{Bracket, Node, Separator};
+use crate::operators::Op;
 
 const ON_WORD: &str = "on";
 const EVERY_WORD: &str = "every";
 const DAY_WORD: &str = "day";
 const AT_WORD: &str = "at";
+const WEEKDAY_WORD: &str = "weekday";
+const WEEKEND_WORD: &str = "weekend";
+/// `9am`, `9pm`: the half of the day by its index
+const HALVES: [&str; 2] = ["am", "pm"];
 const FILE_WORD: &str = "file";
 const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 const MESSAGE_WORD: &str = "message";
@@ -43,7 +48,7 @@ fn lower_timers(program: Node) -> Node {
 		Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(bracket, separator) => (items.clone(), bracket.clone(), separator.clone()),
 		single => (vec![single.clone()], Bracket::None, Separator::Newline),
 	};
-	if !statements.iter().any(|statement| timer(statement).is_some() || file_watch(statement).is_some() || message_listener(statement).is_some()) {
+	if !statements.iter().any(|statement| one_shot(statement).is_some() || timer(statement).is_some() || file_watch(statement).is_some() || message_listener(statement).is_some()) {
 		return program;
 	}
 	let main_variables = main_level_variables(&statements);
@@ -68,17 +73,29 @@ fn lower_timers(program: Node) -> Node {
 			watches += 1;
 			continue;
 		}
+		if let Some((time, body)) = one_shot(&statement) {
+			let Some(minute_of_day) = time else { return no_time_of_day(&statement, AT_WORD) };
+			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
+			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
+			lowered.push(call(crate::host::SIGNAL_AT, vec![Node::int(count as i64), Node::int(minute_of_day)]));
+			count += 1;
+			continue;
+		}
 		let Some((duration, body)) = timer(&statement) else {
 			lowered.push(statement);
 			continue;
 		};
-		if let Some(time) = daily_time(&duration) {
-			let Some(minute_of_day) = time else {
-				return Diagnostic::at(&statement, format!("on every day at needs a time of day from 0:00 to 23:59, got {}", duration.serialize().trim())).into_error();
+		if let Some(schedule) = clock_schedule(&duration) {
+			let (minute_of_day, weekdays) = match schedule {
+				Ok(schedule) => schedule,
+				Err(ClockError::Days(days)) => {
+					return Diagnostic::at(&statement, format!("on every … at needs day, a weekday (monday … sunday), weekday or weekend, got {days}")).into_error();
+				}
+				Err(ClockError::Time) => return no_time_of_day(&statement, "on every day at"),
 			};
 			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
-			lowered.push(call(crate::host::SIGNAL_DAILY, vec![Node::int(count as i64), Node::int(minute_of_day)]));
+			lowered.push(call(crate::host::SIGNAL_DAILY, vec![Node::int(count as i64), Node::int(minute_of_day), Node::int(weekdays)]));
 			count += 1;
 			continue;
 		}
@@ -148,15 +165,7 @@ fn timer(statement: &Node) -> Option<(Node, Node)> {
 	if word(on) != ON_WORD || word(every) != EVERY_WORD {
 		return None;
 	}
-	let (last, duration_words) = rest.split_last()?;
-	let (duration_end, body) = match last.drop_meta() {
-		Node::List(_, Bracket::Curly, _) => (None, last.clone()),
-		_ => {
-			let (end, body) = crate::declarations::handler_parts(last)?;
-			(Some(end), body)
-		}
-	};
-	let words: Vec<Node> = duration_words.iter().cloned().chain(duration_end).collect();
+	let (words, body) = words_and_body(rest)?;
 	let duration = match words.as_slice() {
 		[] => return None,
 		[single] => single.clone(),
@@ -165,21 +174,101 @@ fn timer(statement: &Node) -> Option<(Node, Node)> {
 	Some((duration, body))
 }
 
-/// `day at 9:00` of `on every day at 9:00 {…}`: the minute of the day, None for a time that is no time of day
-fn daily_time(duration: &Node) -> Option<Option<i64>> {
-	let Node::List(words, _, _) = duration.drop_meta() else { return None };
-	let [day, at, time] = words.as_slice() else { return None };
-	if word(day) != DAY_WORD || word(at) != AT_WORD {
+/// The words before the body of `… {body}` or `…: body`, and the body
+fn words_and_body(rest: &[Node]) -> Option<(Vec<Node>, Node)> {
+	let (last, words) = rest.split_last()?;
+	let (end, body) = match last.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => (None, last.clone()),
+		_ => {
+			let (end, body) = crate::declarations::handler_parts(last)?;
+			(Some(end), body)
+		}
+	};
+	Some((words.iter().cloned().chain(end).collect(), body))
+}
+
+/// `at 9:00 {body}`, `at 9pm: body`: the minute of the day (None for a time that is no time of day) and the body;
+/// None for any other use of `at`
+fn one_shot(statement: &Node) -> Option<(Option<i64>, Node)> {
+	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let (at, rest) = items.split_first()?;
+	if word(at) != AT_WORD {
 		return None;
 	}
-	let minute = match time.drop_meta() {
-		Node::Key(hour, crate::operators::Op::Colon, minute) => match (hour.drop_meta(), minute.drop_meta()) {
-			(Node::Number(Number::Int(hour)), Node::Number(Number::Int(minute))) => Some((*hour, *minute)),
-			_ => None,
-		},
+	let (words, body) = words_and_body(rest)?;
+	Some((minute_of_day(&words)?, body))
+}
+
+fn no_time_of_day(statement: &Node, form: &str) -> Node {
+	Diagnostic::at(statement, format!("{form} needs a time of day from 0:00 to 23:59 or 12am to 11:59pm")).into_error()
+}
+
+enum ClockError {
+	Days(String),
+	Time,
+}
+
+/// `day at 9:00` of `on every day at 9:00 {…}` (`monday at 9:30pm`, `weekday at 7am`): the minute of the day and the
+/// weekdays (bit 0 Sunday); None when the duration has no `at`
+fn clock_schedule(duration: &Node) -> Option<Result<(i64, i64), ClockError>> {
+	let Node::List(words, _, _) = duration.drop_meta() else { return None };
+	let [days, at, time @ ..] = words.as_slice() else { return None };
+	if word(at) != AT_WORD {
+		return None;
+	}
+	let Some(weekdays) = weekdays(&word(days)) else { return Some(Err(ClockError::Days(days.serialize().trim().to_string()))) };
+	Some(minute_of_day(time).flatten().map(|minute| (minute, weekdays)).ok_or(ClockError::Time))
+}
+
+const WEEKDAY_NAMES: [&str; 7] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const EVERY_DAY: i64 = 0b111_1111;
+const WORKDAYS: i64 = 0b011_1110;
+const WEEKEND: i64 = 0b100_0001;
+
+/// `day`, `monday`, `mondays`, `weekday`, `weekend`: the mask of weekdays (bit 0 Sunday)
+fn weekdays(name: &str) -> Option<i64> {
+	let name = name.to_lowercase();
+	let singular = name.strip_suffix('s').unwrap_or(&name);
+	match singular {
+		DAY_WORD => Some(EVERY_DAY),
+		WEEKDAY_WORD => Some(WORKDAYS),
+		WEEKEND_WORD => Some(WEEKEND),
+		_ => WEEKDAY_NAMES.iter().position(|day| *day == singular).map(|day| 1 << day),
+	}
+}
+
+/// `9:00`, `21:30`, `9:30pm`, `9:30 pm`, `9pm`, `9 pm`: the minute of the day, Some(None) for a clock time that is
+/// no time of day (`25:00`, `13pm`), None for words that are no clock time
+fn minute_of_day(words: &[Node]) -> Option<Option<i64>> {
+	let int = |node: &Node| match node.drop_meta() {
+		Node::Number(Number::Int(value)) => Some(*value),
 		_ => None,
 	};
-	Some(minute.filter(|(hour, minute)| (0..24).contains(hour) && (0..60).contains(minute)).map(|(hour, minute)| hour * 60 + minute))
+	let half = |node: &Node| HALVES.iter().position(|half| *half == word(node).to_lowercase());
+	let with_half = |node: &Node| match node.drop_meta() {
+		Node::Key(amount, Op::Mul, unit) => Some((int(amount)?, half(unit)?)),
+		_ => None,
+	};
+	let hour_minute = |node: &Node| match node.drop_meta() {
+		Node::Key(hour, Op::Colon, minute) => {
+			let hour = int(hour)?;
+			int(minute).map(|minute| (hour, minute, None)).or_else(|| with_half(minute).map(|(minute, half)| (hour, minute, Some(half))))
+		}
+		_ => None,
+	};
+	let (hour, minute, half) = match words {
+		[time] => hour_minute(time).or_else(|| with_half(time).map(|(hour, half)| (hour, 0, Some(half))))?,
+		[time, spoken_half] => {
+			let half = Some(half(spoken_half)?);
+			hour_minute(time).filter(|(_, _, written)| written.is_none()).map(|(hour, minute, _)| (hour, minute, half)).or_else(|| Some((int(time)?, 0, half)))?
+		}
+		_ => return None,
+	};
+	let hour = match half {
+		None => Some(hour).filter(|hour| (0..24).contains(hour)),
+		Some(half) => Some(hour).filter(|hour| (1..=12).contains(hour)).map(|hour| hour % 12 + 12 * half as i64),
+	};
+	Some(hour.filter(|_| (0..60).contains(&minute)).map(|hour| hour * 60 + minute))
 }
 
 /// `exit` or `exit()` as a statement: `exit(0)`

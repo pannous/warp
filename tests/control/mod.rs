@@ -88,6 +88,7 @@ mod test_signal_reflection;
 mod test_broadcast;
 mod test_signal_lists;
 mod test_daily_timer;
+mod test_time_of_day;
 mod test_exit_signal;
 mod test_listener_removal;
 mod test_listener_removal_in_functions;
