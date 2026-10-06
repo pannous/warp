@@ -156,8 +156,17 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    - Open: escaping into a list or an object field (`signals = [x, y]`: lists copy values, objects too, so nothing
      there keeps the cell yet); `on change p.age` inside a function on a parameter p (only plain names subscribe);
      reflecting over listeners (g-3HmY).
-6. **Signals across tasks**: events raised in tasks reach `on` handlers of the starting thread; listeners on `shared`
-   values poll at check points (with warp-d9, card task-signals).
+6. **Signals across tasks** (done): events raised in tasks reach `on` handlers of the starting thread (b8da08417:
+   task_inside / signal_send, run at the program's next await, loop start or the end of the run;
+   tests/control/test_task_signals.rs). Listeners on `shared` values (branch signals-shared, warp-3a;
+   tests/control/test_shared_signals.rs): a main-level `whenever` / `once` / `on change` / `on set` watching a shared
+   value becomes a check in the exported `on·shared()` (signal_values::poll_shared, before shared_arrays): it compares
+   the watched values with `signal_seen_N` and runs the listener on a change, from the line that declares it on
+   (`signal_polling_N`). The runtime calls it at every check point: signal_poll (main's start and end, loop starts),
+   every 10 ms of a sleep, and after the run's tasks ended (native system_signals.rs, playground host.js). It never
+   keeps a program alive (timers do). By polling, `on set` of a shared value is `on change` (a write of the same value
+   is invisible), several writes between two check points are one change, and the program's own write is seen at its
+   next check point, not right after it.
 7. **Browser and outside**: DOM events and output bindings in the playground (done, branch signals-browser, warp-4a:
    `on click {…}` / `on key {…}` are PAGE_EVENTS, kept without a raise and exported as `on·click·node([event])`; a
    handler takes `event` only when it reads it. The worker keeps the run (host.js runPageEvent), the page sends clicks
