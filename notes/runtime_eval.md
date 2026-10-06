@@ -48,7 +48,21 @@ the key would change with every value: compile the block as a function of its na
 definitions and the block's text as the key, the values as arguments), keep the module (or its instance), and let
 the `aot` worker's module cache (.cwasm) hold it across runs.
 
-Not yet: that cache; sharing GC objects instead of copying.
+Done (2026-10-06, card bang-cache): the cache. pipeline::eval_block binds only the names the block or the definitions
+mention; natively each number among them (Ints, exact ratios, big Ints, floats) becomes `block·value(i) as int|float`,
+a host word reading this run's values (host.rs with_block_values), other values stay written in. So the same block
+with other numbers is the same program: compiled once per thread (BLOCK_MODULES, by its text;
+`pipeline::compiled_blocks()` counts the misses), its machine code kept by run/module_cache.rs. Profiling then showed
+the rest of each run in wasm_reader::link_imports (libm's FFI functions and the host words linked again per run): each
+thread now keeps one linker per engine and import families and clones it. The browser still writes the values in.
+
+| probes/bang_cache/loop.wasp (100 × `xs#1!`, `a` changing), debug, own module cache | cold | warm |
+|---|---|---|
+| before | 1.68 s | 0.24 s (only because the values repeat run to run) |
+| after | 0.24 s | 0.09 s |
+
+Not yet: sharing GC objects instead of copying; texts and lists as block values (written in, so a changing text
+compiles again).
 
 ## 0. State today (measured with the CLI, debug build of 2026-10-03)
 

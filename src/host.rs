@@ -61,18 +61,21 @@ pub const SHARED_FLOAT_WORDS: [&str; 3] = ["shared_getf", "shared_setf", "shared
 /// values, definitions) compiles the block with the names bound to the values the program had where it ran it and the
 /// program's function definitions, runs it, and gives its value
 pub const RUN_BLOCK: &str = "run_block";
+/// block·value(index): the number a block run at run time reads, of the values its run_block call passed
+/// (pipeline::eval_block): the block is compiled as a function of them, the same module for other values
+pub const BLOCK_VALUE: &str = "block·value";
 /// foreign_call(runtime, module, member, call, arguments): a module of another runtime (src/foreign.rs), Nodes in and out
 pub const FOREIGN_CALL: &str = "foreign_call";
 /// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
-pub const VALUE_GIVING_WORDS: [&str; 2] = [RUN_BLOCK, FOREIGN_CALL];
-pub const HOST_WORDS: [&str; 24] = [GUARDED_CALL, RUN_BLOCK, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
+pub const VALUE_GIVING_WORDS: [&str; 3] = [RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE];
+pub const HOST_WORDS: [&str; 25] = [GUARDED_CALL, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
 	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2]];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 24] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 25] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(GUARDED_CALL, vec![I32, node], vec![node]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
+	[(GUARDED_CALL, vec![I32, node], vec![node]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
 		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node]), (TASK_STATUS, vec![I64], vec![I64]), (TASK_POLL, vec![], vec![]),
@@ -398,6 +401,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, GUARDED_CALL, guarded_call)?;
 	warp_runtime::host_words::link_host_words(linker)?;
 	linker.func_wrap(HOST_LIBRARY, RUN_BLOCK, run_block)?;
+	linker.func_wrap(HOST_LIBRARY, BLOCK_VALUE, block_value)?;
 	linker.func_wrap(HOST_LIBRARY, FOREIGN_CALL, foreign_call)?;
 
 	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
@@ -480,6 +484,32 @@ fn run_block(mut caller: Caller<'_, HostState>, block: Option<wasmtime::Rooted<w
 	let result = crate::pipeline::eval_block(block, &names, &values, &definitions).map_err(failure)?;
 	let value = TaskValue::of(&result).map_err(|_| failure(crate::pipeline::cannot_hand_back(&result)))?;
 	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
+	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
+	Ok(built.unwrap_anyref().copied())
+}
+
+#[cfg(feature = "native")]
+thread_local! {
+	/// The values of the blocks running on this thread, the innermost last (a block may run a block)
+	static BLOCK_VALUES: std::cell::RefCell<Vec<Vec<crate::tasks::TaskValue>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Run `body` while block·value reads `values`
+#[cfg(feature = "native")]
+pub fn with_block_values<R>(values: Vec<crate::tasks::TaskValue>, body: impl FnOnce() -> R) -> R {
+	BLOCK_VALUES.with(|stack| stack.borrow_mut().push(values));
+	let result = body();
+	BLOCK_VALUES.with(|stack| stack.borrow_mut().pop());
+	result
+}
+
+/// The host side of block·value: the value at `index`, built in the block's module
+#[cfg(feature = "native")]
+fn block_value(mut caller: Caller<'_, HostState>, index: i64) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
+	let failure = |message: String| wasmtime::Error::msg(message);
+	let value = BLOCK_VALUES.with(|stack| stack.borrow().last().and_then(|values| values.get(index as usize).cloned()))
+		.ok_or_else(|| failure(format!("{BLOCK_VALUE}({index}): no such value of the running block")))?;
+	let builders = crate::tasks::Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
 	Ok(built.unwrap_anyref().copied())
 }
