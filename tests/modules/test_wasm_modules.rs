@@ -42,3 +42,14 @@ fn an_export_is_qualified_by_its_module_name() {
 	is!(&with_module("fourty_two.double(21)"), 42); // the export, not the float cast double(21)
 	is!(&with_module("fourty_two.twice(fourty_two.ft)"), 84);
 }
+
+// P139 include runs the entry point, P140 a mutable global is set in the module, P141 a bare call a cast would take is
+// ambiguous
+#[test]
+fn include_runs_main_globals_are_set_and_casts_are_ambiguous() {
+	is!("include tests/fixtures/wasm/fourty_two", 42);
+	is!("include tests/fixtures/wasm/fourty_two; ft * 2", 84);
+	is!(&with_module("level = 5; level"), 5);
+	is!(&with_module("level += 2; level * 10"), 30);
+	fails_with(&with_module("double(21)"), "double is ambiguous: fourty_two.double(21) for the export, 21 as float for the cast");
+}
