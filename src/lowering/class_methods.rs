@@ -20,9 +20,11 @@ const IMPLICIT_TRAIT_PREFIX: &str = "has·";
 pub fn lower(node: Node) -> Node {
 	let traits = shared_method_traits(&node);
 	let shared: Vec<String> = traits.iter().filter_map(trait_operation).collect();
-	let node = lower_classes(node);
-	// `s.area`, `s.scaled(3)` of a shared method: the call `area(s)` before traits rename each class's method
-	let node = if shared.is_empty() { node } else { method_calls(node, &shared) };
+	let mut changing = vec![];
+	let node = lower_classes(node, &mut changing);
+	// `s.area`, `s.scaled(3)` of a shared method: the call `area(s)` before traits rename each class's method;
+	// `c.inc()` of a method changing its object: `c = inc(c)` (P116)
+	let node = if shared.is_empty() && changing.is_empty() { node } else { method_calls(node, &shared, &changing) };
 	match (traits.is_empty(), node) {
 		(true, node) => node,
 		(false, Node::List(items, bracket, separator)) if separator != Separator::Space => Node::List([traits, items].concat(), bracket, separator),
@@ -72,49 +74,52 @@ fn trait_operation(declaration: &Node) -> Option<String> {
 	Some(items.get(1)?.drop_meta().name().strip_prefix(IMPLICIT_TRAIT_PREFIX)?.to_string())
 }
 
-/// `x.m` and `x.m(args)` of the methods `m` as calls `m(x)`, `m(x, args)`
-fn method_calls(node: Node, methods: &[String]) -> Node {
-	match node {
-		Node::Key(receiver, Op::Dot, member) => {
-			let receiver = method_calls(*receiver, methods);
-			match member.drop_meta() {
-				Node::Symbol(name) if methods.contains(name) => Node::List(vec![Node::Symbol(name.clone()), receiver], Bracket::Round, Separator::None),
-				Node::List(items, Bracket::Round, _) if items.first().is_some_and(|head| methods.contains(&head.drop_meta().name())) => {
-					let arguments = items[1..].iter().map(|argument| method_calls(argument.clone(), methods));
-					Node::List([items[0].clone(), receiver].into_iter().chain(arguments).collect(), Bracket::Round, Separator::None)
-				}
-				_ => Node::Key(Box::new(receiver), Op::Dot, Box::new(method_calls(*member, methods))),
-			}
-		}
-		other => other.map_children(|child| method_calls(child, methods)),
+/// `x.m` and `x.m(args)` of the methods `m` as calls `m(x)`, `m(x, args)`; of a method changing its object, on a variable,
+/// the update `x = m(x, args)`
+fn method_calls(node: Node, called: &[String], changing: &[String]) -> Node {
+	let recurse = |child: Node| method_calls(child, called, changing);
+	let Node::Key(receiver, Op::Dot, member) = node else { return node.map_children(recurse) };
+	let receiver = recurse(*receiver);
+	let (name, arguments) = match member.drop_meta() {
+		Node::Symbol(name) => (name.clone(), vec![]),
+		Node::List(items, Bracket::Round, _) if !items.is_empty() => (items[0].drop_meta().name(), items[1..].iter().cloned().map(recurse).collect()),
+		_ => return Node::Key(Box::new(receiver), Op::Dot, Box::new(recurse(*member))),
+	};
+	if !called.contains(&name) && !changing.contains(&name) {
+		return Node::Key(Box::new(receiver), Op::Dot, Box::new(recurse(*member)));
+	}
+	let call = Node::List([Node::Symbol(name.clone()), receiver.clone()].into_iter().chain(arguments).collect(), Bracket::Round, Separator::None);
+	match receiver.drop_meta() {
+		Node::Symbol(_) if changing.contains(&name) => Node::Key(Box::new(receiver), Op::Assign, Box::new(call)),
+		_ => call,
 	}
 }
 
-fn lower_classes(node: Node) -> Node {
+fn lower_classes(node: Node, changing: &mut Vec<String>) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			let mut lowered = Vec::with_capacity(items.len());
 			for item in items {
-				match split_class(&item) {
+				match split_class(&item, changing) {
 					Some((class, methods)) => {
 						lowered.push(class);
 						lowered.extend(methods);
 					}
-					None => lowered.push(lower_classes(item)),
+					None => lowered.push(lower_classes(item, changing)),
 				}
 			}
 			Node::List(lowered, bracket, separator)
 		}
-		single if split_class(&single).is_some() => {
-			let (class, methods) = split_class(&single).expect("guarded");
-			Node::List([vec![class], methods].concat(), Bracket::None, Separator::Semicolon)
-		}
-		other => other.map_children(lower_classes),
+		other => match split_class(&other, changing) {
+			Some((class, methods)) => Node::List([vec![class], methods].concat(), Bracket::None, Separator::Semicolon),
+			None => other.map_children(|child| lower_classes(child, changing)),
+		},
 	}
 }
 
-/// A class declaration with methods in its body: the class with its fields only, and the methods as functions
-fn split_class(node: &Node) -> Option<(Node, Vec<Node>)> {
+/// A class declaration with methods in its body: the class with its fields only, and the methods as functions; the
+/// names of the methods that change their object go to `changing`
+fn split_class(node: &Node, changing: &mut Vec<String>) -> Option<(Node, Vec<Node>)> {
 	let Node::Type { name, body } = node.drop_meta() else { return None };
 	let class = name.drop_meta().name();
 	let items = match body.drop_meta() {
@@ -133,7 +138,11 @@ fn split_class(node: &Node) -> Option<(Node, Vec<Node>)> {
 	let field_names: Vec<String> = fields.iter().filter_map(field_name).collect();
 	let functions = methods.iter().map(|method| {
 		let (method_name, parameters, method_body) = method_parts(method).expect("partitioned");
-		function(&class, &field_names, &method_name, parameters, method_body)
+		let (function, changes) = function(&class, &field_names, &method_name, parameters, method_body);
+		if changes {
+			changing.push(method_name);
+		}
+		function
 	}).collect();
 	let field_list = Node::List(fields, Bracket::Curly, Separator::Space);
 	Some((Node::Type { name: name.clone(), body: Box::new(field_list) }, functions))
@@ -161,21 +170,23 @@ fn field_name(item: &Node) -> Option<String> {
 	}
 }
 
-/// `method(self:class, parameters…) := body`, the fields in the body read from self; a body changing a field is an error
-fn function(class: &str, fields: &[String], method: &str, parameters: Vec<Node>, body: Node) -> Node {
+/// `method(self:class, parameters…) := body`, the fields in the body read from self, and whether it changes a field of
+/// self: then it gives the changed object, `(body; self)`
+fn function(class: &str, fields: &[String], method: &str, parameters: Vec<Node>, body: Node) -> (Node, bool) {
 	let parameter_names: Vec<String> = parameters.iter().map(|parameter| match parameter.drop_meta() {
 		Node::Key(name, Op::Colon, _) => name.drop_meta().name(),
 		other => other.name(),
 	}).collect();
 	let readable: Vec<&String> = fields.iter().filter(|field| !parameter_names.contains(field)).collect();
 	let body = receiver_reads(body, &readable);
-	let body = match changes_receiver(&body) {
-		true => crate::node::error(&format!("{method} changes a field of {class}: a method changing its object comes later (notes/classes.md); return a changed copy instead")),
+	let changes = changes_receiver(&body);
+	let body = match changes {
+		true => Node::List(vec![body, Node::Symbol(RECEIVER.to_string())], Bracket::None, Separator::Semicolon),
 		false => body,
 	};
 	let receiver = Node::Key(Box::new(Node::Symbol(RECEIVER.to_string())), Op::Colon, Box::new(Node::Symbol(class.to_string())));
 	let head = Node::List([vec![Node::Symbol(method.to_string()), receiver], parameters].concat(), Bracket::Round, Separator::None);
-	Node::Key(Box::new(head), Op::Define, Box::new(body))
+	(Node::Key(Box::new(head), Op::Define, Box::new(body)), changes)
 }
 
 /// The body with each field name read from self, `this` as self; the member name right of a dot stays as it is

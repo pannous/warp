@@ -7,6 +7,7 @@ mod test_generic_types;
 mod test_person_struct;
 mod test_records_classes;
 mod test_class_methods;
+mod test_mutating_methods;
 mod test_struct_field_of_constructor;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_struct_types;
