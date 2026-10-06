@@ -1,4 +1,5 @@
 mod test_argument_kinds;
+mod test_arity_overloads;
 mod test_bare_function_name;
 mod test_call_result_fields;
 mod test_charged_getters;
