@@ -189,3 +189,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-06 build-exe-default
 - g-1KS4: `warp build <file>` makes the standalone executable without --exe (still accepted); `warp build --wasm`
   and `warp compile` write the module.
+
+## 2026-10-06 panics-remaining
+- extensions/numbers.rs: the four `unsupported types` panics and `unimplemented!` go (mixed: complex, exact real, IEEE);
+  wisp_parser had no reachable panics (its 13 are test assertions) but repaired malformed input silently: now errors.
