@@ -156,7 +156,7 @@ const LITERAL_RANGE_MAX_LENGTH: i64 = 1000;
 
 /// The list a range of integer literals stands for: `1..4` is [1 2 3], `1…4` and `1 to 4` are [1 2 3 4]; not an empty,
 /// computed or long range
-pub(super) fn range_elements(range: &Node) -> Option<Node> {
+pub(crate) fn range_elements(range: &Node) -> Option<Node> {
 	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else { return None };
 	let (Node::Number(Number::Int(start)), Node::Number(Number::Int(end))) = (start.drop_meta(), end.drop_meta()) else { return None };
 	let last = if *op == Op::To { *end } else { end - 1 };
