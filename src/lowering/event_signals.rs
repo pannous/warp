@@ -5,7 +5,8 @@
 //! of the name is its call. A raise whose name no handler listens to stays the exception (try catches it).
 //! Page events (phase 7): `on click {…}` and `on key {…}` are kept without a raise and get the wrapper
 //! `on·click·node([event])` (declarations::with_node_wrappers): the browser playground calls it when the page sees the
-//! event (web/playground/worker.js), natively nothing does.
+//! event (web/playground/worker.js); natively nothing does, which a warning says. System events (`on interrupt`) are
+//! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
 use crate::declarations::{handler_parts, word};
 use crate::node::{Bracket, Node, Separator};
@@ -29,16 +30,25 @@ const EVENT_WORD: &str = "event";
 pub const PAGE_EVENTS: [&str; 2] = ["click", "key"];
 /// The output binding of a program with page events: its last line when that is a name, read anew after each handler
 pub const PAGE_VALUE: &str = "page·value";
+/// The events the system raises: the runtime calls their handlers (notes/system_signals.md)
+pub const SYSTEM_EVENTS: [&str; 1] = ["interrupt"];
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
 	let raised = raised_names(&program);
 	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
 		.filter_map(|(index, statement)| handler(statement).map(|(name, body)| (index, name, body)))
-		.filter(|(_, name, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()))
+		.filter(|(_, name, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()) || SYSTEM_EVENTS.contains(&name.as_str()))
 		.collect();
 	if handlers.is_empty() {
 		return program;
+	}
+	#[cfg(feature = "native")]
+	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| PAGE_EVENTS.contains(&name.as_str()) && !raised.contains(name)) {
+		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
+		if let Err(error) = crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning)]) {
+			return error;
+		}
 	}
 	let main_variables = main_level_variables(&statements);
 	let mut bodies: HashMap<String, Vec<Node>> = HashMap::new();
@@ -147,17 +157,20 @@ pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Nod
 	Node::Key(Box::new(head), op, Box::new(Node::List(statements, Bracket::Curly, Separator::Semicolon)))
 }
 
-/// Each `raise name{data}` with handlers is the call `on·name(data)`
 /// Handlers take `event` only when a body reads it: an unread parameter has no type a caller from outside (the page)
 /// could pass a value as
 fn reads_event(bodies: &[Node]) -> bool {
 	bodies.iter().flat_map(symbols).any(|name| name == EVENT_WORD)
 }
 
+/// Each `raise name{data}` with handlers is the call `on·name(data)`, `on·name()` when no handler reads `event`
 fn raises_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>) -> Node {
 	if let Some((name, data)) = raise(&node).filter(|(name, _)| handled.contains_key(name)) {
 		let arguments = if reads_event(&handled[&name]) { vec![data] } else { vec![] };
-		return Node::List([vec![Node::Symbol(handler_function_name(&name))], arguments].concat(), Bracket::Round, Separator::None);
+		let call = Node::List([vec![Node::Symbol(handler_function_name(&name))], arguments].concat(), Bracket::Round, Separator::None);
+		// `{ raise alarm }` is a block of one statement: it stays a block
+		let braced = matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
+		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };
 	}
 	match node {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| raises_as_calls(item, handled)).collect(), bracket, separator),

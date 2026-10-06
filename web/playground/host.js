@@ -155,6 +155,7 @@ function programImports(holder, hooks) {
 			random: () => Math.random(),
 			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
 			clock: () => BigInt(Date.now()),
+			signal_poll: () => {}, // a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md)
 			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings)
 			paint: (pixels, width, height) => {
 				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
