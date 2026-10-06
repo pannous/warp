@@ -18,6 +18,10 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
 work on branch runtime-units-survey pauses.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
+Dropped as answered (handover 2026-10-06 "Needs the user" list): eval_untrusted limits (P88 follow-up "Everything,
+untrusted too"), the AGENTS.md paragraph (P93), stash and obsolete tests (cleanup rule, P96), the git hook "line 240"
+fix (superseded: ~/.claude/hooks/git_destructive.py was reworked after that list, 8fc7e6b and a22714f; whoever still
+meets a hook bug files it anew with the exact command).
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
