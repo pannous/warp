@@ -123,8 +123,19 @@ impl WaspParser {
 			let statement_start = items_with_seps.iter().rposition(|(_, separator)| *separator != Separator::Space).map_or(0, |last| last + 1);
 			let in_command = items_with_seps.get(statement_start).is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(_)));
 			let outer_command = std::mem::replace(&mut self.in_command, in_command);
+			// `square xs |> sum` is `sum(square xs)`: the call of a function on its one argument is the piped value
+			let calls_function = in_command && items_with_seps.len() == statement_start + 1
+				&& matches!(items_with_seps[statement_start].0.drop_meta(), Symbol(name) if crate::type_name_matching::names_a_function(name));
+			let outer_pipe = std::mem::replace(&mut self.pipe_takes_call, calls_function);
 			let item = self.parse_value();
+			self.pipe_takes_call = outer_pipe;
 			self.in_command = outer_command;
+			let item = if calls_function && { self.skip_spaces_and_inline_comments(); self.at_pipeline() } {
+				let (function, _) = items_with_seps.pop().expect("the function before its argument");
+				self.continue_expr(Node::List(vec![function, item], Bracket::None, Separator::Space), 0)
+			} else {
+				item
+			};
 
 			let consumed_input = self.pos != pos_before;
 			// `==` is loose (false equals ø): only a real ø is skipped
@@ -359,8 +370,9 @@ fn is_parameter_word(node: &Node) -> bool {
 /// The first word of a class-body item that is code: a function keyword, or the constructor call `value(n)`
 fn starts_code(first: &Node) -> bool {
 	match first.drop_meta() {
-		Node::Symbol(word) => crate::operators::is_function_keyword(word) || super::ACCESSOR_WORDS.contains(&word.as_str()),
-		Node::List(call, Bracket::Round, _) => matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::CONSTRUCTOR_WORD),
+		Node::Symbol(word) => crate::operators::is_function_keyword(word) || super::ACCESSOR_WORDS.contains(&word.as_str()) || super::MEMBER_MODIFIERS.contains(&word.as_str()),
+		// `value(n) {…}`, JavaScript's `sum() {…}` and `constructor(x, y) {…}`
+		Node::List(call, Bracket::Round, _) => matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_))),
 		_ => false,
 	}
 }

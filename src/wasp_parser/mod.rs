@@ -64,6 +64,17 @@ const ELEMENT_WISE_OPERATORS: [(char, Op); 4] = [('+', Op::Add), ('-', Op::Sub),
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
 const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
+/// Words before a class declaration that change nothing in wasp: `data class` (a wasp class compares by value already),
+/// `open`, `abstract`, `sealed`, `final`, visibility
+const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"];
+/// The keywords of a field in a primary constructor `class Point(val x: Int, var y: Int)`
+const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
+/// `new Point(1, 2)`: the construction `Point(1, 2)`
+const NEW_WORD: &str = "new";
+/// Words before a member of a class body that change nothing in wasp: Swift's `mutating func`, visibility, `override`
+pub const MEMBER_MODIFIERS: [&str; 10] = ["mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async"];
+/// Python's root class `class Point(object):`, no parent of its own
+const PYTHON_ROOT_CLASS: &str = "object";
 /// `record point{x:int y:int}` declares a type like `struct`, but `record` is also an everyday variable name:
 /// it is a declaration only when a name and a field block follow
 const RECORD_WORD: &str = "record";
@@ -449,8 +460,13 @@ const PIPE_GLYPH: &str = "|";
 /// `|>` binds below range and arithmetic, above `as` and comparisons
 const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
 
-/// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`
+/// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`; a braceless call is grouped, one argument:
+/// `square xs |> filter(p)` → `filter((square xs), p)`
 fn piped(value: Node, stage: Node) -> Node {
+	let value = match value.drop_meta() {
+		Node::List(_, Bracket::None, Separator::Space) => Node::List(vec![value], Bracket::Round, Separator::None),
+		_ => value,
+	};
 	match stage.drop_meta() {
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(_))) => {
 			let mut items = items.clone();
@@ -591,6 +607,8 @@ pub struct WaspParser {
 	generic_names: Option<(String, Vec<String>)>,
 	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
 	in_command: bool,
+	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
+	pipe_takes_call: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
 	times_loops: usize,
 	/// A comment between two statements: it belongs to the next one (parse_value attaches it)
@@ -670,12 +688,17 @@ fn is_plain_name(word: &str) -> bool {
 /// outside comments and texts (`// the type end` declares nothing)
 fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 	let source = code_only(source);
-	let words: Vec<&str> = source.split(|c: char| !is_identifier_char(c) && c != '(').flat_map(|word| word.split_inclusive('(')).filter(|word| !word.is_empty()).collect();
+	let words: Vec<&str> = source.split_whitespace().collect();
 	words.windows(2)
 		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
-		.map(|pair| pair[1])
+		// the name right after the word: `class Point{`, `class Point(val x: Int)`, `record Point(int X)`, `class P:`;
+		// `record = find(…)` declares nothing
+		.filter_map(|pair| {
+			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch)).collect();
+			let rest = &pair[1][name.len()..];
+			(rest.is_empty() || rest.starts_with(['(', '{', '<', ':', ';'])).then_some(name)
+		})
 		.filter(|name| is_plain_name(name))
-		.map(str::to_string)
 		.collect()
 }
 
@@ -858,6 +881,7 @@ impl WaspParser {
 			brace_holes: false,
 			generic_names: None,
 			in_command: false,
+			pipe_takes_call: false,
 			times_loops: 0,
 			pending_comment: None,
 			after_function_keyword: false,

@@ -31,10 +31,19 @@ const SETTER_SUFFIX: &str = "·set";
 const VALUE_SUFFIX: &str = "·value";
 const RESULT_SUFFIX: &str = "·result";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
+/// The keywords of a field: Swift's `var count = 0`, `let`, Kotlin's `val`
+const FIELD_KEYWORDS: [&str; 3] = ["var", "let", "val"];
+/// The constructor names of other languages: JavaScript, Python, Swift
+const CONSTRUCTOR_NAMES: [&str; 3] = ["constructor", "__init__", "init"];
+/// Rust's block of methods of a type, `impl Point {…}`
+const IMPL_WORD: &str = "impl";
+/// Kotlin's `p.copy(y = 5)`
+const COPY_WORD: &str = "copy";
 /// Ruby's `include Walker` in a class body takes in a mixin
 const INCLUDE_WORD: &str = "include";
-/// The suffix of a method named like a type word: `double·method`
-const METHOD_SUFFIX: &str = "·method";
+/// The prefix of a method named like a type or library word: `method·double`, `method·sum` (a prefix: a name
+/// `sum·T` reads as the witness of sum for T and would shadow the library's sum)
+const METHOD_PREFIX: &str = "method·";
 
 /// The function a class's `value{…}` block becomes, `person·value(self:person)`: every construction is passed through it
 pub fn constructor_name(class: &str) -> String {
@@ -42,11 +51,14 @@ pub fn constructor_name(class: &str) -> String {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = renamed_type_word_methods(node);
+	let node = with_named_constructors(copies(with_impls(node)));
+	let node = with_members(node);
+	let node = with_class_attributes(class_typed_declarations(node));
 	let node = match with_mixins(node) {
 		Ok(node) => node,
 		Err(error) => return error,
 	};
+	let node = renamed_type_word_methods(node);
 	let (node, likenesses) = match inherit(node) {
 		Ok(inherited) => inherited,
 		Err(error) => return error,
@@ -70,7 +82,7 @@ pub fn lower(node: Node) -> Node {
 }
 
 /// A method named like a type word (`double() := x*2`, P142: class methods are always allowed) or like a list
-/// mutation (`pop() := items.pop()`) under the name `double·method`, so its calls never read as the conversion
+/// mutation (`pop() := items.pop()`) under the name `method·double`, so its calls never read as the conversion
 /// `double(c)` or the list's own `xs.pop()`. A type word is renamed wherever it is called as a method; a list word only
 /// on what holds an instance of a class defining it (a variable assigned one, `p:Stack`, self) and called bare in a
 /// class body, so `s.items.pop()` and `xs.pop()` of lists stay list mutations
@@ -78,7 +90,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 	let (mut names, mut classes) = (vec![], vec![]);
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
 		let clashing: Vec<String> = class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name)
-			.filter(|name| crate::analyzer::type_word_kind(name).is_some() || crate::analyzer::is_list_mutating_method(name)).collect();
+			.filter(|name| crate::analyzer::type_word_kind(name).is_some() || is_library_method(name)).collect();
 		if !clashing.is_empty() {
 			classes.push(name.drop_meta().name());
 		}
@@ -89,28 +101,58 @@ fn renamed_type_word_methods(node: Node) -> Node {
 	}
 	let mut instances = vec![RECEIVER.to_string(), RECEIVER_ALIASES[0].to_string()];
 	node.visit(&mut |part| if let Node::Key(target, op, value) = part {
+		// `p:Point = …`: the annotation says it
+		if let (Node::Key(variable, Op::Colon, class), Op::Assign) = (target.drop_meta(), op) {
+			if classes.contains(&class.drop_meta().name()) {
+				instances.push(variable.drop_meta().name());
+			}
+		}
 		let Node::Symbol(variable) = target.drop_meta() else { return };
 		let class = match (op, value.drop_meta()) {
 			(Op::Assign | Op::Define, Node::List(items, Bracket::Round, _)) => items.first().map(|first| first.drop_meta().name()),
 			(Op::Assign | Op::Define, Node::Key(class, Op::None | Op::Colon, _)) => Some(class.drop_meta().name()),
-			(Op::Colon, Node::Symbol(class)) => Some(class.clone()),
+			// `p:Point`, the annotation a symbol or a type
+			(Op::Colon, Node::Symbol(_) | Node::Type { .. }) => Some(value.drop_meta().name()),
 			_ => None,
 		};
 		if class.is_some_and(|class| classes.contains(&class)) {
 			instances.push(variable.clone());
 		}
 	});
-	with_method_names(node, &MethodNames { names, instances }, false)
+	// `for p in ps {…}` over a list of constructions `ps = [Point(1, 2), …]`: p holds instances
+	let constructs = |item: &Node| matches!(item.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|class| classes.contains(&class.drop_meta().name())));
+	let mut instance_lists = vec![];
+	node.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define, value) = part {
+		if matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if !items.is_empty() && items.iter().all(constructs)) {
+			instance_lists.push(target.drop_meta().name());
+		}
+	});
+	node.visit(&mut |part| if let Node::List(words, _, _) = part {
+		if let [for_word, item, in_word, list, ..] = words.as_slice() {
+			let over_instances = instance_lists.contains(&list.drop_meta().name()) || matches!(list.drop_meta(), Node::List(items, Bracket::Square, _) if items.iter().all(constructs));
+			if for_word.drop_meta().name() == "for" && in_word.drop_meta().name() == "in" && over_instances {
+				instances.push(item.drop_meta().name());
+			}
+		}
+	});
+	with_method_names(node, &MethodNames { names, instances, classes }, false)
+}
+
+/// A name the library gives lists and texts too (`pop`, `sum`, `count`): a method of that name is one only on an
+/// instance
+fn is_library_method(name: &str) -> bool {
+	crate::analyzer::is_list_mutating_method(name) || crate::library_words::is_library_word(name)
 }
 
 /// The clashing method names, and the variables holding instances of the classes defining them
 struct MethodNames {
 	names: Vec<String>,
 	instances: Vec<String>,
+	classes: Vec<String>,
 }
 
 fn method_name(name: &str) -> String {
-	format!("{name}{METHOD_SUFFIX}")
+	format!("{METHOD_PREFIX}{name}")
 }
 
 /// The clashing methods renamed where they are defined and called: `c.double`, `c.pop()`, and in a class body
@@ -132,8 +174,14 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			Node::List(items, Bracket::Round, _) => items.first().map(|first| first.drop_meta().name()).unwrap_or_default(),
 			other => other.name(),
 		};
-		match crate::analyzer::is_list_mutating_method(&name) {
-			true => matches!(receiver.drop_meta(), Node::Symbol(variable) if methods.instances.contains(variable)),
+		match is_library_method(&name) {
+			true => match receiver.drop_meta() {
+				Node::Symbol(variable) => methods.instances.contains(variable),
+				// `Stack([]).count()`, a construction
+				Node::List(items, Bracket::Round, _) => items.first().is_some_and(|class| methods.classes.contains(&class.drop_meta().name())),
+				Node::Key(class, Op::None | Op::Colon, _) => methods.classes.contains(&class.drop_meta().name()),
+				_ => false,
+			},
 			false => !matches!(receiver.drop_meta(), Node::Number(_)),
 		}
 	};
@@ -164,6 +212,88 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			Node::Key(Box::new(head), Op::Define, Box::new(recurse(*body)))
 		}
 		other => other.map_children(recurse),
+	}
+}
+
+/// Rust's `impl Point { fn sum(&self) -> i32 {…} }` (and `impl Trait for Point {…}`): its functions are methods of
+/// the class Point, the impl block itself goes
+fn with_impls(node: Node) -> Node {
+	let mut impls: Vec<(String, Vec<Node>)> = vec![];
+	node.visit(&mut |part| if let Some((class, items)) = impl_block(part) {
+		impls.push((class, items));
+	});
+	if impls.is_empty() {
+		return node;
+	}
+	taking_in_impls(node, &impls)
+}
+
+fn taking_in_impls(node: Node, impls: &[(String, Vec<Node>)]) -> Node {
+	match node {
+		_ if impl_block(&node).is_some() => Node::Empty,
+		Node::Type { name, body } => {
+			let class = name.drop_meta().name();
+			let added: Vec<Node> = impls.iter().filter(|(owner, _)| *owner == class).flat_map(|(_, items)| items.clone()).collect();
+			match added.is_empty() {
+				true => Node::Type { name, body },
+				false => Node::Type { name, body: Box::new(Node::List([class_items(&body), added].concat(), Bracket::Curly, Separator::Semicolon)) },
+			}
+		}
+		Node::List(items, bracket, separator) => {
+			let items: Vec<Node> = items.into_iter().map(|item| taking_in_impls(item, impls)).filter(|item| !matches!(item, Node::Empty)).collect();
+			Node::List(items, bracket, separator)
+		}
+		Node::Meta { node, data } => match taking_in_impls(*node, impls) {
+			Node::Empty => Node::Empty,
+			node => Node::Meta { node: Box::new(node), data },
+		},
+		other => other,
+	}
+}
+
+/// `impl Point {…}`, `impl Display for Point {…}`: the class and the items of the block
+fn impl_block(node: &Node) -> Option<(String, Vec<Node>)> {
+	let Node::List(words, _, _) = node.drop_meta() else { return None };
+	let (class, block) = match words.as_slice() {
+		[word, class, block] if word.drop_meta().name() == IMPL_WORD => (class, block),
+		// `impl Point {…}` of a declared Point reads like the spaced construction `Point {…}`
+		[word, construction] if word.drop_meta().name() == IMPL_WORD => match construction.drop_meta() {
+			Node::Key(class, Op::None | Op::Colon, block) => (class.as_ref(), block.as_ref()),
+			_ => return None,
+		},
+		[word, _, for_word, class, block] if word.drop_meta().name() == IMPL_WORD && for_word.drop_meta().name() == "for" => (class, block),
+		_ => return None,
+	};
+	let Node::Symbol(class) = class.drop_meta() else { return None };
+	match block.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => Some((class.clone(), class_items(block))),
+		_ => None,
+	}
+}
+
+/// Kotlin's `p.copy(y = 5)`: a copy of p with those fields changed, `field_with(p, "y", 5)`
+fn copies(node: Node) -> Node {
+	let changed = |argument: &Node| match argument.drop_meta() {
+		Node::Key(field, Op::Assign | Op::Colon, value) if matches!(field.drop_meta(), Node::Symbol(_)) => Some((field.drop_meta().name(), value.as_ref().clone())),
+		_ => None,
+	};
+	match node {
+		Node::Key(receiver, Op::Dot, member) => {
+			let receiver = copies(*receiver);
+			let member = copies(*member);
+			let changes: Option<Vec<(String, Node)>> = match member.drop_meta() {
+				Node::List(items, Bracket::Round, _) if items.len() > 1 && items[0].drop_meta().name() == COPY_WORD => items[1..].iter().map(changed).collect(),
+				_ => None,
+			};
+			match changes {
+				Some(changes) => changes.into_iter().fold(receiver, |object, (field, value)| {
+					let call = vec![Node::Symbol(crate::library_words::FIELD_WITH.to_string()), object, Node::Text(field), value];
+					Node::List(call, Bracket::Round, Separator::None)
+				}),
+				None => Node::Key(Box::new(receiver), Op::Dot, Box::new(member)),
+			}
+		}
+		other => other.map_children(copies),
 	}
 }
 
@@ -253,23 +383,37 @@ fn inherit(node: Node) -> Result<(Node, Vec<Node>), Node> {
 /// The fields and methods of a class body; the groups a `;` makes (`{name age:int; greet() := …}`) flattened
 fn class_items(body: &Node) -> Vec<Node> {
 	let items = match body.drop_meta() {
+		// a block of one statement `{fn sum() …}` is that statement's words
+		Node::List(words, Bracket::Curly, Separator::Space) if words.first().is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))) || auto_property(words).is_some() || typed_field(words).is_some() => {
+			vec![Node::List(words.clone(), Bracket::None, Separator::Space)]
+		}
 		Node::List(items, _, _) => items.clone(),
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
-	items.into_iter().flat_map(|item| match item.drop_meta() {
+	items.into_iter().map(without_modifiers).flat_map(|item| match item.drop_meta() {
 		Node::List(words, _, _) if keyword_method(words).is_some() => keyword_method(words).into_iter().collect(),
+		Node::List(words, _, _) if braced_method(words).is_some() => braced_method(words).into_iter().collect(),
 		Node::List(words, _, _) if value_block(words).is_some() => value_block(words).into_iter().collect(),
 		Node::List(words, _, _) if accessors(words).is_some() => accessors(words).unwrap_or_default(),
 		Node::List(..) if included_mixin(&item).is_some() => vec![item],
+		// Java's `int x`: the field x of type int; C#'s auto-property `int X { get; set; }` the field X
+		Node::List(words, _, _) if typed_field(words).is_some() => typed_field(words).into_iter().collect(),
+		Node::List(words, _, _) if auto_property(words).is_some() => auto_property(words).into_iter().collect(),
+		// TypeScript's `twice(): number { … }`
+		Node::Key(call, Op::Colon, typed_block) if typed_method(call, typed_block).is_some() => typed_method(call, typed_block).into_iter().collect(),
 		Node::List(group, Bracket::None, _) => group.clone(),
 		_ => vec![item],
-	}).collect()
+	}).map(as_member).collect()
 }
 
 /// `def area() -> int {…}`, `fun area(): Int {…}`, `func area() {…}`: the method `area() := …` (with its result type)
 fn keyword_method(words: &[Node]) -> Option<Node> {
-	crate::declarations::keyword_definition(words)
+	// Kotlin's expression body `fun sum() = x + y` defines as `:=` does; Java's `int sum() {…}` as C's
+	match crate::declarations::keyword_definition(words).or_else(|| crate::declarations::c_function(words))? {
+		Node::Key(head, Op::Assign, body) => Some(Node::Key(head, Op::Define, body)),
+		definition => Some(definition),
+	}
 }
 
 /// A property's getter and setter as methods: `get age() {…}` is the getter `age := …`, `set age(v) {…}` the setter
@@ -341,6 +485,209 @@ fn setter_calls(node: Node, setters: &[String]) -> Node {
 			_ => Node::Key(Box::new(recurse(*target)), Op::Assign, Box::new(recurse(*value))),
 		},
 		other => other.map_children(recurse),
+	}
+}
+
+/// A member without the words that change nothing in wasp: `mutating func f() {…}` is `func f() {…}`, Swift's
+/// `var count = 0` the field `count = 0`
+fn without_modifiers(item: Node) -> Node {
+	let Node::List(words, bracket, separator) = item.drop_meta().clone() else { return item };
+	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::wasp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || FIELD_KEYWORDS.contains(&word.as_str()));
+	let kept: Vec<Node> = words.iter().skip_while(|word| is_modifier(word)).cloned().collect();
+	match kept.len() {
+		length if length == words.len() => item,
+		1 => kept.into_iter().next().expect("one"),
+		_ => Node::List(kept, bracket, separator),
+	}
+}
+
+/// Java's and C#'s field `int x`: the field `x:int`
+fn typed_field(words: &[Node]) -> Option<Node> {
+	let [field_type, name] = words else { return None };
+	let is_type = crate::analyzer::type_word_kind(&field_type.drop_meta().name()).is_some();
+	(is_type && matches!(name.drop_meta(), Node::Symbol(_))).then(|| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(field_type.clone())))
+}
+
+/// C#'s auto-property `int X { get; set; }` (or `{ get; init; }`): the field `X:int`
+fn auto_property(words: &[Node]) -> Option<Node> {
+	let [field_type, name, accessors] = words else { return None };
+	let Node::List(accessors, Bracket::Curly, _) = accessors.drop_meta() else { return None };
+	let only_accessors = !accessors.is_empty() && accessors.iter().all(|accessor| matches!(accessor.drop_meta().name().as_str(), "get" | "set" | "init"));
+	only_accessors.then(|| typed_field(&[field_type.clone(), name.clone()])).flatten()
+}
+
+/// TypeScript's method with its result type, `twice(): number { … }`: `twice():number := {…}`
+fn typed_method(call: &Node, typed_block: &Node) -> Option<Node> {
+	let is_call = matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+	let Node::List(parts, _, _) = typed_block.drop_meta() else { return None };
+	let [result_type, block] = parts.as_slice() else { return None };
+	let is_block = matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _));
+	(is_call && is_block).then(|| Node::Key(Box::new(Node::Key(Box::new(call.clone()), Op::Colon, Box::new(result_type.clone()))), Op::Define, Box::new(block.clone())))
+}
+
+/// Python's class attribute: a field `count = 0` read as `Counter.count` is the class's own, shared by its instances
+/// (the static `static count = 0`)
+fn with_class_attributes(node: Node) -> Node {
+	let mut qualified: Vec<(String, String)> = vec![];
+	node.visit(&mut |part| if let Node::Key(class, Op::Dot, member) = part {
+		if let (Node::Symbol(class), Node::Symbol(member)) = (class.drop_meta(), member.drop_meta()) {
+			qualified.push((class.clone(), member.clone()));
+		}
+	});
+	if qualified.is_empty() {
+		return node;
+	}
+	class_attributes(node, &qualified)
+}
+
+fn class_attributes(node: Node, qualified: &[(String, String)]) -> Node {
+	match node {
+		Node::Type { name, body } => {
+			let class = name.drop_meta().name();
+			// a field with its value `count = 0` (a parameter named like the class reads `photo.width` of an instance)
+			let has_value = |item: &Node| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _));
+			let is_attribute = |item: &Node| method_parts(item).is_none() && has_value(item) && field_name(item).is_some_and(|field| qualified.contains(&(class.clone(), field)));
+			let items = class_items(&body);
+			if !items.iter().any(|item| is_attribute(item) && !is_static(item)) {
+				return Node::Type { name, body };
+			}
+			let items = items.into_iter().map(|item| match is_attribute(&item) {
+				true => item.with_attribute(crate::wasp_parser::STATIC_KEYWORD, Node::True),
+				false => item,
+			}).collect();
+			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
+		}
+		other => other.map_children(|child| class_attributes(child, qualified)),
+	}
+}
+
+/// Java's and C#'s constructor named like its class, `Point(int x, int y) {…}`: the constructor `value(x, y){…}`
+fn with_named_constructors(node: Node) -> Node {
+	match node {
+		Node::Type { name, body } => {
+			let class = name.drop_meta().name();
+			let items: Vec<Node> = class_items(&body);
+			if !items.iter().any(|item| method_parts(item).is_some_and(|(method, _, _)| method == class)) {
+				return Node::Type { name, body };
+			}
+			let items = items.into_iter().map(|item| match method_parts(&item) {
+				Some((method, parameters, body)) if method == class => {
+					let word = Node::List([vec![Node::Symbol(VALUE_WORD.to_string())], parameters].concat(), Bracket::Round, Separator::None);
+					Node::Key(Box::new(word), Op::None, Box::new(curly(body)))
+				}
+				_ => item,
+			}).collect();
+			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
+		}
+		other => other.map_children(with_named_constructors),
+	}
+}
+
+/// Every class body as its members (class_items): Java's `int x` fields and C#'s auto-properties are fields also in a
+/// class without methods, which no later pass splits
+fn with_members(node: Node) -> Node {
+	match node {
+		Node::Type { name, body } if name.attribute(crate::wasp_parser::MIXIN_WORD).is_none() => {
+			let members = Node::List(class_items(&body), Bracket::Curly, Separator::Semicolon);
+			let changed = members.serialize() != Node::List(class_items_as_written(&body), Bracket::Curly, Separator::Semicolon).serialize();
+			Node::Type { name, body: Box::new(if changed { members } else { *body }) }
+		}
+		other => other.map_children(with_members),
+	}
+}
+
+/// The items of a class body as written, its `;` groups flattened, nothing read into them
+fn class_items_as_written(body: &Node) -> Vec<Node> {
+	let items = match body.drop_meta() {
+		Node::List(items, _, _) => items.clone(),
+		Node::Empty => vec![],
+		single => vec![single.clone()],
+	};
+	items.into_iter().flat_map(|item| match item.drop_meta() {
+		Node::List(group, Bracket::None, _) => group.clone(),
+		_ => vec![item],
+	}).collect()
+}
+
+/// Java's and C#'s `Point p = new Point(3, 4);`, a variable declared with a class as its type: `p:Point = Point(3, 4)`
+/// (the type stays: a call may pick its overload by it, D10)
+fn class_typed_declarations(node: Node) -> Node {
+	let mut classes = vec![];
+	node.visit(&mut |part| if let Node::Type { name, .. } = part {
+		classes.push(name.drop_meta().name());
+	});
+	if classes.is_empty() {
+		return node;
+	}
+	declared_with_classes(node, &classes)
+}
+
+fn declared_with_classes(node: Node, classes: &[String]) -> Node {
+	match node {
+		Node::List(words, _, _) if words.len() == 2 && classes.contains(&words[0].drop_meta().name()) && matches!(words[1].drop_meta(), Node::Key(variable, Op::Assign, _) if matches!(variable.drop_meta(), Node::Symbol(_))) => {
+			let Node::Key(variable, _, value) = words[1].drop_meta().clone() else { unreachable!("guarded") };
+			let typed = Node::Key(variable, Op::Colon, Box::new(words[0].clone()));
+			Node::Key(Box::new(typed), Op::Assign, Box::new(declared_with_classes(*value, classes)))
+		}
+		other => other.map_children(|child| declared_with_classes(child, classes)),
+	}
+}
+
+/// JavaScript's `sum() { return … }`: the method `sum() := {…}`
+fn braced_method(words: &[Node]) -> Option<Node> {
+	let [call, block] = words else { return None };
+	let is_call = matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if name != VALUE_WORD));
+	let is_block = matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _));
+	(is_call && is_block).then(|| Node::Key(Box::new(call.clone()), Op::Define, Box::new(block.clone())))
+}
+
+/// A method as other languages write it, as a class member: Python's explicit `self` first parameter dropped (the
+/// method gets its receiver anyway), and the constructor `constructor(x, y)` (JavaScript), `__init__(self, x, y)`
+/// (Python), `init(x: Int)` (Swift) the constructor `value(x, y){…}`
+fn as_member(definition: Node) -> Node {
+	let Node::Key(head, Op::Define, body) = definition.drop_meta().clone() else { return definition };
+	// `sum(self):i32 := …`: the head under its result type
+	if let Node::Key(call, Op::Colon, result_type) = head.drop_meta().clone() {
+		if matches!(call.drop_meta(), Node::List(_, Bracket::Round, _)) {
+			return match as_member(Node::Key(call, Op::Define, body)) {
+				Node::Key(call, Op::Define, body) => Node::Key(Box::new(Node::Key(call, Op::Colon, result_type)), Op::Define, body),
+				constructor => constructor,
+			};
+		}
+	}
+	let Node::List(call, Bracket::Round, separator) = head.drop_meta().clone() else { return definition };
+	let Some((name, parameters)) = call.split_first() else { return definition };
+	let parameters: Vec<Node> = parameters.iter().flat_map(|parameter| match parameter.drop_meta() {
+		Node::List(group, Bracket::Round, _) => group.clone(),
+		Node::Empty => vec![],
+		_ => vec![parameter.clone()],
+	}).collect();
+	// `self`, `self: Self`, Rust's `&self`
+	let is_self = |parameter: &Node| match parameter.drop_meta() {
+		Node::Symbol(word) => word == RECEIVER,
+		Node::Key(word, Op::Colon, _) => word.drop_meta().name() == RECEIVER,
+		Node::Key(empty, _, word) => matches!(empty.drop_meta(), Node::Empty) && word.drop_meta().name() == RECEIVER,
+		_ => false,
+	};
+	let parameters = match parameters.first() {
+		Some(first) if is_self(first) => parameters[1..].to_vec(),
+		_ => parameters,
+	};
+	match CONSTRUCTOR_NAMES.contains(&name.drop_meta().name().as_str()) {
+		true => {
+			let word = Node::List([vec![Node::Symbol(VALUE_WORD.to_string())], parameters].concat(), Bracket::Round, separator);
+			Node::Key(Box::new(word), Op::None, Box::new(curly(*body)))
+		}
+		false => Node::Key(Box::new(Node::List([vec![name.clone()], parameters].concat(), Bracket::Round, separator)), Op::Define, body),
+	}
+}
+
+/// A body as the block `{…}` a constructor has
+fn curly(body: Node) -> Node {
+	match body {
+		Node::List(items, Bracket::Curly, separator) => Node::List(items, Bracket::Curly, separator),
+		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List(items, Bracket::Curly, separator),
+		other => Node::List(vec![other], Bracket::Curly, Separator::Semicolon),
 	}
 }
 

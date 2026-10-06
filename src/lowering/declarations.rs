@@ -43,6 +43,29 @@ const IMPLICIT_WAIT_TOPIC: &str = "implicit-await";
 const TASK_ELEMENT: &str = "task·element";
 /// `await all jobs`: the results of every job of a list
 const ALL_WORD: &str = "all";
+/// `await any [a, b]`: the result of the first task to finish (Promise.race)
+const ANY_WORD: &str = "any";
+/// `race·0`: which task of an `await any` finished first (1-based, 0 while none)
+const RACE_PREFIX: &str = "race·";
+/// how often an `await any` looks at its tasks
+const RACE_POLL_MILLISECONDS: i64 = 1;
+const SLEEP_WORD: &str = "sleep";
+/// `await job within 100 ms or 0` (P154)
+const WITHIN_WORD: &str = "within";
+const WITHIN_TOPIC: &str = "await-within";
+const FIRST_WORD: &str = "first";
+const FIRST_TOPIC: &str = "await-first";
+/// `started·0`: when an `await … within` began waiting
+const STARTED_PREFIX: &str = "started·";
+/// task_status of a task still running (tasks.rs: finished 1, failed 2, stopped 3, paused 4)
+const TASK_RUNNING: i64 = 0;
+const RAISE_WORD: &str = "raise";
+/// the event an `await … within` without `or` raises at its deadline: try catches it
+const TIMEOUT_EVENT: &str = "timeout";
+thread_local! {
+	/// `await any` races so far, each with its own winner variable
+	static RACES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 const ADD_WORD: &str = "add";
 /// The words that count a list: counting a job list waits for no job
 const JOB_COUNTERS: [&str; 4] = ["count", "size", "length", "len"];
@@ -195,24 +218,57 @@ pub fn lower_tasks(node: Node) -> Node {
 	Tasks { words, tasks, started, functions, job_lists }.lower(node)
 }
 
+/// The words of a statement the parser paired, flat: `(await any) [a, b]`, `await (all [go f(1), …])`
+fn spoken_words(items: &[Node]) -> Vec<Node> {
+	let pair = |node: &Node| match node.drop_meta() {
+		Node::List(inner, Bracket::None, _) if inner.len() == 2 => Some(inner.clone()),
+		_ => None,
+	};
+	match items {
+		[first, rest @ ..] if pair(first).is_some() => [pair(first).expect("guarded"), rest.to_vec()].concat(),
+		[head, second] if head.name() == TASK_WORDS[1] && pair(second).is_some() => [vec![head.clone()], pair(second).expect("guarded")].concat(),
+		_ => items.to_vec(),
+	}
+}
+
 /// `await go f(x)`: the task gets a name, `(go·job·1 = go f(x); await go·job·1)`, so it is awaited like any other
 fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
-			let words: Vec<Node> = match items.as_slice() {
-				[pair, rest @ ..] if matches!(pair.drop_meta(), Node::List(inner, Bracket::None, _) if inner.len() == 2) => {
-					let Node::List(inner, _, _) = pair.drop_meta() else { unreachable!("guarded") };
-					[inner.clone(), rest.to_vec()].concat()
-				}
-				_ => items.clone(),
-			};
-			match words.as_slice() {
+			match spoken_words(&items).as_slice() {
 				[await_word, go_word, started @ ..] if !started.is_empty() && await_word.name() == TASK_WORDS[1] && go_word.name() == TASK_WORDS[0] => {
 					let job = Node::Symbol(format!("go·job·{}", counter.replace(counter.get() + 1)));
 					let start = Node::List([vec![go_word.clone()], started.to_vec()].concat(), Bracket::None, Separator::Space);
 					let assignment = Node::Key(Box::new(job.clone()), Op::Assign, Box::new(start));
 					let awaited = Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space);
 					Node::List(vec![assignment, awaited], Bracket::Round, Separator::Semicolon)
+				}
+				// `await all [go f(1), go f(2)]` (Promise.all, asyncio.gather): every task starts, then each is awaited;
+				// `await any [go f(1), go f(2)]` (Promise.race): every task starts, then the first to finish is awaited
+				// `await first [go a(), go b()]`: the first task's result, whichever ends first (P153, with a note naming the race)
+				[await_word, all_word, list] if await_word.name() == TASK_WORDS[1] && [ALL_WORD, ANY_WORD, FIRST_WORD].contains(&all_word.name().as_str()) && matches!(list.drop_meta(), Node::List(listed, Bracket::Square, _) if listed.iter().any(is_start)) => {
+					let racing = all_word.name() == ANY_WORD;
+					let first = all_word.name() == FIRST_WORD;
+					if first {
+						crate::diagnostic::educate_once(FIRST_TOPIC, "await first […]", "await any […]", "await first is the first task's result; for the first to finish: await any […]");
+					}
+					let Node::List(listed, list_bracket, list_separator) = list.drop_meta().clone() else { unreachable!("guarded") };
+					let mut starts = vec![];
+					let results: Vec<Node> = listed.into_iter().map(|item| match is_start(&item) {
+						true => {
+							let job = Node::Symbol(format!("go·job·{}", counter.replace(counter.get() + 1)));
+							starts.push(Node::Key(Box::new(job.clone()), Op::Assign, Box::new(item)));
+							if racing { job } else { Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space) }
+						}
+						false => item,
+					}).collect();
+					if first {
+						let first_result = results.into_iter().next().expect("a started task");
+						return Node::List([starts, vec![first_result]].concat(), Bracket::Round, Separator::Semicolon);
+					}
+					let results = Node::List(results, list_bracket, list_separator);
+					let value = if racing { Node::List(vec![await_word.clone(), all_word.clone(), results], Bracket::None, Separator::Space) } else { results };
+					Node::List([starts, vec![value]].concat(), Bracket::Round, Separator::Semicolon)
 				}
 				_ => Node::List(items.into_iter().map(|item| awaited_starts(item, counter)).collect(), bracket, separator),
 			}
@@ -221,6 +277,11 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(awaited_starts(*node, counter)), data },
 		other => other,
 	}
+}
+
+/// `go f(x)`, `go { … }`: a task started where it stands
+fn is_start(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() > 1 && words[0].name() == TASK_WORDS[0])
 }
 
 /// The list variables that collect started tasks, `jobs.add(go f(i))` (P47), with the functions they start
@@ -383,6 +444,10 @@ impl Tasks<'_> {
 					let is_task_handler = matches!(&handled, Node::List(parts, _, _) if word(parts.first().unwrap_or(&Node::Empty)) == TASK_ON);
 					return if is_task_handler { handled } else { self.lower(handled) };
 				}
+				// `await any [a, b]` and `await job within 100 ms` read the tasks themselves, before a read of one waits
+				if let Some(race) = self.raced(&items).or_else(|| self.within(&items, None)).or_else(|| self.within_or(&items)) {
+					return race;
+				}
 				let items: Vec<Node> = items.into_iter().map(|item| self.lower(item)).collect();
 				match self.task_statement(&items) {
 					// `{ go f(x) }` stays a block: a body in braces is no getter
@@ -395,10 +460,81 @@ impl Tasks<'_> {
 			Node::Key(subject, Op::Dot, word) if self.is_task(&subject) && TASK_CONTROLS.contains(&control_word(&word).as_str()) => {
 				self.control(&subject, &control_word(&word))
 			}
+			// `x = await job within 100 ms or 0`
+			Node::Key(left, Op::Or, right) if matches!(left.drop_meta(), Node::List(items, _, _) if self.within(items, Some(right.as_ref().clone())).is_some()) => {
+				let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
+				self.within(items, Some(*right)).expect("guarded")
+			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.lower(*left)), op, Box::new(self.lower(*right))),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node)), data },
 			other => other,
 		}
+	}
+
+	/// `x = await job within 100 ms or 5` arrives as go_blocks' `try·else((await job) (within 100 ms), 5)`
+	fn within_or(&self, items: &[Node]) -> Option<Node> {
+		let [marker_word, awaited, fallback] = items else { return None };
+		if word(marker_word) != crate::wasp_parser::TRY_MARKER {
+			return None;
+		}
+		fn words(node: &Node) -> Vec<Node> {
+			match node.drop_meta() {
+				Node::List(inner, Bracket::None, _) => inner.iter().flat_map(words).collect(),
+				_ => vec![node.clone()],
+			}
+		}
+		self.within(&words(awaited), Some(fallback.clone()))
+	}
+
+	/// `await job within 100 ms or 0` (P154, asyncio.wait_for, Kotlin withTimeout): the job's result if it ends in
+	/// time, else the job is stopped and the value is the `or` one (an error `timeout` without it). A got-it note says so
+	/// where it is written: `(started·0 = clock(); while job runs and clock() - started·0 < 100 {sleep(1)}; if job
+	/// runs then {stop job; 0} else await job)`
+	fn within(&self, items: &[Node], fallback: Option<Node>) -> Option<Node> {
+		use crate::variable_signals::{assign, block, if_then_else};
+		// `(await job) within …`: the await arrives grouped
+		let items: Vec<Node> = match items.split_first() {
+			Some((first, rest)) => match first.drop_meta() {
+				Node::List(inner, Bracket::None, _) if inner.first().is_some_and(|head| word(head) == TASK_WORDS[1]) => [inner.clone(), rest.to_vec()].concat(),
+				_ => items.to_vec(),
+			},
+			None => return None,
+		};
+		let [head, job, within, deadline @ ..] = items.as_slice() else { return None };
+		if word(head) != TASK_WORDS[1] || word(within) != WITHIN_WORD || !self.is_task(job) || deadline.is_empty() {
+			return None;
+		}
+		// `await job within 100 ms or 0` as one statement: the `or` holds the duration and the fallback
+		let (deadline, fallback) = match (deadline, fallback) {
+			([single], None) if matches!(single.drop_meta(), Node::Key(_, Op::Or, _)) => {
+				let Node::Key(duration, _, value) = single.drop_meta() else { unreachable!("guarded") };
+				(duration.as_ref().clone(), Some(value.as_ref().clone()))
+			}
+			([single], fallback) => (single.clone(), fallback),
+			(several, fallback) => (Node::List(several.to_vec(), Bracket::None, Separator::Space), fallback),
+		};
+		let milliseconds = crate::units::milliseconds(&deadline)?;
+		let job_name = match job.drop_meta() {
+			Node::List(parts, _, _) if word(&parts[0]) == TASK_VALUE => parts[1].clone(),
+			other => other.clone(),
+		};
+		let started = format!("{STARTED_PREFIX}{}", RACES.with(|races| races.replace(races.get() + 1)));
+		let status = marker(crate::host::TASK_STATUS, vec![job_name.clone()]);
+		let runs = Node::Key(Box::new(status), Op::Eq, Box::new(crate::node::int(TASK_RUNNING)));
+		let elapsed = Node::Key(Box::new(marker(crate::host::CLOCK, vec![])), Op::Sub, Box::new(Node::Symbol(started.clone())));
+		let in_time = Node::Key(Box::new(elapsed), Op::Lt, Box::new(crate::node::int(milliseconds)));
+		let waiting = Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::While, Box::new(Node::Key(Box::new(runs.clone()), Op::And, Box::new(in_time))))), Op::Do,
+			Box::new(block(vec![marker(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])])));
+		let timed_out = match &fallback {
+			Some(value) => value.clone(),
+			None => Node::List(vec![Node::Symbol(RAISE_WORD.to_string()), Node::Symbol(TIMEOUT_EVENT.to_string())], Bracket::None, Separator::Space),
+		};
+		let written = format!("await {} within {milliseconds} ms", job_name.serialize().trim());
+		let outcome = fallback.as_ref().map_or_else(|| "it fails with timeout".to_string(), |value| format!("the result is {}", value.serialize().trim()));
+		crate::diagnostic::educate_once(WITHIN_TOPIC, &written, &written, &format!("on timeout the job is stopped and {outcome}"));
+		let awaited_job = self.value_of(&word(&job_name))?;
+		let result = if_then_else(runs, block(vec![self.control(job, TASK_CONTROLS[0]), timed_out]), awaited_job);
+		Some(Node::List(vec![assign(&started, marker(crate::host::CLOCK, vec![])), waiting, result], Bracket::Round, Separator::Semicolon))
 	}
 
 	fn task_statement(&self, items: &[Node]) -> Option<Node> {
@@ -428,6 +564,51 @@ impl Tasks<'_> {
 			[control, subject] if TASK_CONTROLS.contains(&word(control).as_str()) && self.is_task(subject) => Some(self.control(subject, &word(control))),
 			_ => None,
 		}
+	}
+
+	/// `await any [a, b]` (also read as `(await any) [a, b]` or `await (any [a, b])`): the first of the tasks to finish
+	fn raced(&self, items: &[Node]) -> Option<Node> {
+		match spoken_words(items).as_slice() {
+			[head, any, list] if word(head) == TASK_WORDS[1] && word(any) == ANY_WORD => self.race(list),
+			[head, phrase] if word(head) == TASK_WORDS[1] => match phrase.drop_meta() {
+				// `any [a, b]` read as an index of any
+				Node::Key(any, _, list) if word(any) == ANY_WORD => self.race(list),
+				_ => None,
+			},
+			_ => None,
+		}
+	}
+
+	/// `(race·0 = 0; while race·0 == 0 { if task_status(a) is finished or failed {race·0 = 1}; …; if race·0 == 0
+	/// {sleep(1)} }; if race·0 == 1 then await a else …)`: the tasks keep running, the first one's result (or failure)
+	fn race(&self, list: &Node) -> Option<Node> {
+		use crate::variable_signals::{assign, block, if_then};
+		let Node::List(listed, Bracket::Square, _) = list.drop_meta() else { return None };
+		if listed.is_empty() || !listed.iter().all(|item| self.is_task(item)) {
+			return None;
+		}
+		let job_of = |item: &Node| match item.drop_meta() {
+			Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => items[1].clone(),
+			other => other.clone(),
+		};
+		let winner = format!("{RACE_PREFIX}{}", RACES.with(|races| races.replace(races.get() + 1)));
+		let winner_is = |index: usize| Node::Key(Box::new(Node::Symbol(winner.clone())), Op::Eq, Box::new(crate::node::int(index as i64)));
+		let ended = |job: &Node| {
+			let status = marker(crate::host::TASK_STATUS, vec![job_of(job)]);
+			let is = |code: i64| Node::Key(Box::new(status.clone()), Op::Eq, Box::new(crate::node::int(code)));
+			Node::Key(Box::new(is(crate::host::TASK_FINISHED)), Op::Or, Box::new(is(crate::host::TASK_FAILED)))
+		};
+		let mut checks: Vec<Node> = listed.iter().enumerate().map(|(index, job)| {
+			if_then(Node::Key(Box::new(winner_is(0)), Op::And, Box::new(ended(job))), block(vec![assign(&winner, crate::node::int(index as i64 + 1))]))
+		}).collect();
+		checks.push(if_then(winner_is(0), block(vec![marker(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])])));
+		let waiting = Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::While, Box::new(winner_is(0)))), Op::Do, Box::new(block(checks)));
+		let awaited_job = |job: &Node| self.value_of(&word(&job_of(job))).unwrap_or_else(|| job.clone());
+		let (last, first) = listed.split_last().expect("not empty");
+		let result = first.iter().enumerate().rev().fold(awaited_job(last), |otherwise, (index, job)| {
+			crate::variable_signals::if_then_else(winner_is(index + 1), awaited_job(job), otherwise)
+		});
+		Some(Node::List(vec![assign(&winner, crate::node::int(0)), waiting, result], Bracket::Round, Separator::Semicolon))
 	}
 
 	fn signal_handler(&self, items: &[Node]) -> Option<Node> {
@@ -1074,16 +1255,20 @@ fn split_at_colon(node: &Node) -> Option<(Node, Node)> {
 	}
 }
 
-/// `name p… last := body extra…`: the function name, its parameters and its body (the extra items the argument of
-/// the braceless call that ends the body)
-fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
+/// The words of `name p… last := body …` before the definition: the name, the leading parameters and the rest, from the
+/// definition on (only the shape: spaced_definition decides)
+pub(crate) fn spaced_definition_words(items: &[Node]) -> Option<(&Node, &[Node], &[Node])> {
 	let definition = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(target, Op::Define | Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))))?;
 	let (words, rest) = items.split_at(definition);
 	let (name, parameters) = words.split_first()?;
 	let is_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if !is_function_keyword(word));
-	if !is_word(name) || !parameters.iter().all(is_word) {
-		return None;
-	}
+	(is_word(name) && parameters.iter().all(is_word)).then_some((name, parameters, rest))
+}
+
+/// `name p… last := body extra…`: the function name, its parameters and its body (the extra items the argument of
+/// the braceless call that ends the body)
+fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
+	let (name, parameters, rest) = spaced_definition_words(items)?;
 	let (definition, extra) = rest.split_first()?;
 	let Node::Key(last, op, body) = definition.drop_meta() else { return None };
 	// with `=` only a recursive definition (wiki/Home.md `fibonacci number = … fibonacci …`): `print x = 5` stays
@@ -1596,7 +1781,7 @@ const SWIFT_FUNCTION_KEYWORD: &str = "func";
 
 /// `real f(real x) { … }`: the definition `f(x:real) := { … }` (the parser reads the type word, then the call and its
 /// block); the result kind is inferred as for any definition
-fn c_function(items: &[Node]) -> Option<Node> {
+pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 	let [result_type, definition] = items else { return None };
 	let Node::Symbol(result_type) = result_type.drop_meta() else { return None };
 	if crate::analyzer::type_word_kind(result_type).is_none() && result_type != "void" {

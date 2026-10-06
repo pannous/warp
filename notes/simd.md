@@ -55,6 +55,30 @@ And warp itself today (release build, 1M floats `xs = float[1000000]`): `xs.map(
   A map of 1M floats is now 14.5 ns per item (old: 19.5); the push itself (bounds, length store, growth) and GC
   allocation are what is left besides NaN canonicalization.
 
+## Implemented: f64x2 map kernels over linear float arrays (2026-10-06, warp-9f, branch fixes-9f)
+`linear xs = float[n]` (notes/linear_arrays.md) put floats in linear memory, so the SIMD half of step 2 came first:
+- `ys = xs.map(x => body)` / `map(xs, x => body)` with xs a linear float array and body float arithmetic of x and
+  number literals (`+ - * /`, unary minus, `sqrt`, `abs`) is the call `linear_mapf·x·<body>(xs)` (lowering
+  shared_arrays.rs float_map; ys, assigned only there, becomes a linear float array too). The emitter
+  (wasm_emitter/linear_arrays.rs emit_float_map) reads the kernel back from its name, which the name section shows:
+  a new block, then `v128.load` two cells, the body in f64x2, `v128.store`, an odd last cell in f64.
+- Any other body (a captured variable, a call, a comparison) stays the general map over the collected list.
+
+Measured (probes/simd/linear_map_bench.py, ns per item of one map, wasmtime under warp's engine, M-series Mac):
+
+| | 1M floats (memory-bound) | 10k floats × 4000 (in cache) |
+|---|---|---|
+| linear array, before (collected to a list, general map) | 44.8 | 41.3 |
+| automatic GC `float[n]`, general map | 8.5-9.0 | 8.7-9.2 |
+| linear array, kernel scalar f64 (a probe build) | 1.1-1.2 | 1.3 |
+| linear array, kernel f64x2 | 1.0-1.2 | 1.1-1.2 |
+
+So 40x for linear arrays and 8x against the automatic array, almost all from the typed loop over memory; f64x2 itself
+adds 5-15% here. The rest is warp's engine settings, not the kernel: the raw f64x2 loop is 0.17-0.4 ns (table above),
+and fuel plus NaN canonicalization (the Interviewer question above) apply to every lane; each map also takes fresh
+zeroed pages (blocks are never freed). Next: the automatic array choosing linear memory for float maps by itself, then
+`go` splitting a kernel into tasks over shared arrays.
+
 ## Steps
 1. (smallest, next) Typed map kernel: `xs.map(x => numeric body)` over a float array known statically as one emits
    `array.new_default(len)` + a loop of `array.get` / body / `array.set` (measured shape: 2.1 ns, 7x today).

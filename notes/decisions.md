@@ -165,6 +165,29 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   when the timeout happens; a timeout itself stays silent.
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P161 (functions, warp-41; the user told the worker directly) no Swift-style argument labels: "we don't do this
+  here, I don't like that redundancy". Ported labels (`func greet(person name: String)`, `_ x: Int`) compile like P157,
+  with a got-it note "wasp names a parameter once"; docs and examples never use labels.
+- P160 (warp-42, wiki/reference.md; survey notes/implicit_params.md) `$0`/`$1` were overloaded three ways (lambda
+  parameters, WebAssembly positional arguments, node ids). The user chose a different syntax for ids: `@1` is the
+  node whose `@id` is 1 (`a[id=1]{ b c { parent=@1 } }`), `ref 1` / `ref a` say the same in words, and `$a` stays
+  the reference by name (nearest enclosing node with key a). `$<digits>` is only ever positional, never an id.
+- P157 (functions, card functions-generic, warp-41) no generic syntax in wasp: untyped functions (`def id(x)`,
+  `max(a, b)`) already work for every type, with copies made per call. Ported `fn id<T>(x: T) -> T { x }` compiles as
+  the untyped form with a got-it note "wasp infers types: write def id(x)"; wasp's docs never use `<T>`.
+- P158 (warp-42) `then` pipes only when the right side is a function stage missing its argument (`… then sort`,
+  `… then filter(x => x > 5)`) and no `else` follows; otherwise it is the condition (`it<2 then 1 else …`). In the
+  collision `x > 2 then print` the condition wins, with a got-it note naming `|>`.
+- P159 (card wiki-mutable, warp-42) `const x=7; x=7` works: assigning a constant its identical value gives a warning
+  with the fix "remove the redundant assignment" (a different value stays P130's error). Changing a `let` variable
+  (`let x="hello"; x+=" world"`) works, with a got-it note teaching `var` for variables that change.
+  No question needed (word-choice rule): `root` is an alias of sqrt (`2|square|root`, wiki/pipe.md); a user
+  variable or function named root wins (P142).
+- P156 (signals, warp-ed) `whenever cond {…}` is edge-triggered: it runs each time the condition becomes true.
+  `x = 0; whenever x > 5 { print "big" }; x = 6; x = 7; x = 3; x = 8` prints big twice (at 6 and 8);
+  `a=0; b=0; whenever a+b==1 {…}; a=1; b=0` runs once.
+  The wiki (where `whenever` is documented, and Footguns.md) shows what to write for while-like behavior instead
+  (every change while it holds: `on change x { if x > 5 {…} }`; as long as it holds), verified examples.
 - P70c (unparked; asked with a realistic example after the user found the old one "completely constructed")
   handlers and definitions created in a loop keep their own iteration's loop variable: `for i in 1 to 3 { button
   "Item {i}" on click { print "clicked {i}" } }` prints "clicked 1" for Item 1 (JS `let`, Swift, C#; not the JS

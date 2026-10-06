@@ -5,7 +5,13 @@ PASSED:
   ✓ control::test_after::after_needs_a_shared_condition
   ✓ control::test_after::after_waits_for_its_condition
   ✓ control::test_all_with_condition::all_with_a_comparison_filters_the_items
+  ✓ control::test_async_ports::await_all_of_started_tasks_gives_their_results
+  ✓ control::test_async_ports::await_any_gives_the_first_to_finish
+  ✓ control::test_async_ports::await_first_is_the_first_tasks_result
+  ✓ control::test_async_ports::await_within_a_deadline
+  ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
+  ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
@@ -177,10 +183,12 @@ PASSED:
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
   ✓ control::test_reactive_ports::a_change_listener_reads_the_old_value
+  ✓ control::test_reactive_ports::a_handler_in_a_block_subscribes_each_pass
   ✓ control::test_reactive_ports::a_listener_watches_one_field
   ✓ control::test_reactive_ports::a_named_event_handler_is_removed_and_counted
   ✓ control::test_reactive_ports::a_named_listener_is_removed_and_shares_variables
   ✓ control::test_reactive_ports::a_once_handler_runs_at_the_first_raise
+  ✓ control::test_reactive_ports::a_raise_carries_a_plain_value
   ✓ control::test_reactive_ports::old_in_set_listeners_and_its_aliases
   ✓ control::test_reactive_ports::rxjs_node_qt_events
   ✓ control::test_reactive_ports::svelte_vue_solid_derivations
@@ -260,9 +268,11 @@ PASSED:
   ✓ control::test_system_signals::on_interrupt_cuts_a_sleep_short
   ✓ control::test_system_signals::on_interrupt_runs_at_the_next_loop_start
   ✓ control::test_system_values::a_listener_on_a_system_value_polls_it
+  ✓ control::test_system_values::a_negated_system_value
   ✓ control::test_system_values::a_program_keeps_its_own_names
   ✓ control::test_system_values::a_system_value_is_a_host_reading
   ✓ control::test_system_values::dark_mode_is_the_appearance_of_macos
+  ✓ control::test_system_values::not_dark_mode_is_the_opposite_reading
   ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
   ✓ control::test_system_values::yes_no_values_read_the_machine
   ✓ control::test_task_closures::a_capturing_text_lambda_runs_in_a_task
@@ -460,6 +470,7 @@ PASSED:
   ✓ ffi::test_ffi_handles::a_pointer_result_is_a_handle
   ✓ ffi::test_ffi_handles::a_sqlite_session_runs_on_handles
   ✓ ffi::test_ffi_handles::an_unknown_handle_is_a_loud_error
+  ✓ ffi::test_ffi_handles::standard_c_structs_are_handles_without_their_header
   ✓ ffi::test_ffi_import_group::a_group_of_three_names_is_imported
   ✓ ffi::test_ffi_import_group::a_group_with_spaces_is_imported
   ✓ ffi::test_ffi_text_results::a_c_string_result_is_a_text
@@ -832,6 +843,7 @@ PASSED:
   ✓ functions::test_phrase_calls::test_to_phrases_are_called_with_their_prepositions
   ✓ functions::test_picked_calls::a_function_picked_from_a_list_is_called
   ✓ functions::test_ported_calls::every_ported_call_form_keeps_its_value
+  ✓ functions::test_ported_calls::linq_methods_work_with_a_note_naming_wasps_word
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
   ✓ functions::test_precomputed::effects_shared_state_and_failures_are_never_folded
@@ -892,6 +904,7 @@ PASSED:
   ✓ functions::test_shadowed_log::the_library_log_to_a_base_stays
   ✓ functions::test_sort_functions::reduce_with_a_start_is_fold
   ✓ functions::test_sort_functions::sort_is_stable
+  ✓ functions::test_sort_functions::sort_texts_with_comparator
   ✓ functions::test_sort_functions::sort_with_comparator
   ✓ functions::test_sort_functions::sort_with_defined_function
   ✓ functions::test_sort_functions::sort_with_key
@@ -1013,6 +1026,7 @@ PASSED:
   ✓ lists::test_lazy_range::a_small_range_variable_is_still_its_list
   ✓ lists::test_linear_append::an_appended_list_of_nodes_keeps_its_items
   ✓ lists::test_linear_append::map_and_filter_of_texts_stay_linear
+  ✓ lists::test_linear_arrays::a_float_map_of_a_linear_array_is_a_simd_kernel
   ✓ lists::test_linear_arrays::a_for_loop_over_a_linear_array_gives_its_last_value
   ✓ lists::test_linear_arrays::a_linear_array_checks_its_bounds_and_stays_in_its_task
   ✓ lists::test_linear_arrays::a_linear_array_is_a_list_as_a_whole
@@ -1199,7 +1213,9 @@ PASSED:
   ✓ modules::test_wasm_modules::an_imported_module_gets_wasi_host_words_and_other_modules
   ✓ modules::test_wasm_modules::include_runs_main_globals_are_set_and_casts_are_ambiguous
   ✓ modules::test_wasm_modules::libc_compiled_to_wasm_is_called_like_c
+  ✓ modules::test_wasm_modules::xxhash_compiled_to_wasm
   ✓ modules::test_wasm_modules::zlib_compiled_to_wasm
+  ✓ modules::test_wasm_modules::zlib_compresses_into_a_buffer_and_back
   ✓ node::node_values_test::test_values_empty
   ✓ node::node_values_test::test_values_key
   ✓ node::node_values_test::test_values_list
@@ -1560,6 +1576,9 @@ PASSED:
   ✓ operators::test_operators::test_for_each
   ✓ operators::test_operators::test_key
   ✓ operators::test_operators::test_while_true_forever
+  ✓ operators::test_pipe_stages::a_pipe_into_a_spaced_definition
+  ✓ operators::test_pipe_stages::a_pipe_into_a_word_operator
+  ✓ operators::test_pipeline::a_braceless_call_is_the_piped_value
   ✓ operators::test_pipeline::a_pipeline_calls_each_stage_with_the_value
   ✓ operators::test_pipeline::a_pipeline_over_several_lines
   ✓ operators::test_structural_equality::a_float_equals_the_same_exact_number
@@ -2071,6 +2090,17 @@ PASSED:
   ✓ types::test_class_extends::a_subclass_has_the_fields_and_methods_of_its_parent
   ✓ types::test_class_extends::a_subclass_instance_is_accepted_where_the_parent_is_wanted
   ✓ types::test_class_extends::a_subclass_overrides_a_method
+  ✓ types::test_class_forms_ported::a_copy_with_changed_fields
+  ✓ types::test_class_forms_ported::a_csharp_record_declares_its_fields
+  ✓ types::test_class_forms_ported::a_java_class_with_typed_fields_and_a_named_constructor
+  ✓ types::test_class_forms_ported::a_javascript_class_with_a_constructor
+  ✓ types::test_class_forms_ported::a_kotlin_primary_constructor_declares_the_fields
+  ✓ types::test_class_forms_ported::a_python_class_attribute_is_shared
+  ✓ types::test_class_forms_ported::a_python_class_with_init
+  ✓ types::test_class_forms_ported::a_rust_struct_takes_the_methods_of_its_impl
+  ✓ types::test_class_forms_ported::a_swift_struct_with_a_mutating_method
+  ✓ types::test_class_forms_ported::a_typescript_class_with_typed_members
+  ✓ types::test_class_forms_ported::csharp_auto_properties_and_an_object_initializer
   ✓ types::test_class_methods::a_method_assigning_its_receiver_says_so
   ✓ types::test_class_methods::a_method_in_the_body_conforms_to_a_trait
   ✓ types::test_class_methods::a_method_in_the_class_body_reads_the_fields
@@ -2621,6 +2651,7 @@ PASSED:
   ✓ welcoming::test_lone_words::test_data_is_the_data_prefix
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
+  ✓ welcoming::test_sleep_unit_warning::a_statement_after_sleep_is_no_duration
   ✓ welcoming::test_sleep_unit_warning::sleep_without_a_unit_warns
   ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
   ✓ welcoming::test_style_dont_care::any_axis_can_stop_caring
@@ -2751,4 +2782,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2746 passed, 0 failed, 2746 total tested
+19 ignored, 2777 passed, 0 failed, 2777 total tested

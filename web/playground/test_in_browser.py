@@ -5,6 +5,7 @@
 web/playground/tests.html with agent-browser and prints the results like libtest (exit code 101 on a failure).
 `test_in_browser.py --examples [name…]` runs the tour (examples.js) in the playground page itself, built by build.sh:
 each example's value and printed output must be the ones it names (a broken example fails CI, .github/workflows/pages.yml).
+`test_in_browser.py --examples --url https://warp.pannous.com/ [name…]` checks the tour of a deployed playground instead.
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
 Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
 src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
@@ -21,6 +22,7 @@ HEADER_NAME = re.compile(r"^[\w.+-]+(/[\w.+-]+)*\.h$")
 RESULTS_PATH = "/__results__"
 LISTING_QUERY = "listing"
 STUB_PATH = "/__stub__"  # answers with the status and body its query names: the fetch tests' HTTP stub (tests/common serve)
+ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its service worker
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 IGNORED_ARGUMENTS = ("--nocapture", "--quiet", "-q", "--color", "--format")
@@ -114,12 +116,25 @@ def show_example(name):
 	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
 
 
-def check_examples(names):
-	"""every example of the tour shows its value and prints its text in the playground; exit code 101 on a difference"""
-	if not os.path.isfile(os.path.join(REPOSITORY, "web", "playground", "warp.wasm")):
-		sys.exit("error: web/playground/warp.wasm is missing; build it with web/playground/build.sh")
-	server = serve(None)
-	browser("open", f"http://127.0.0.1:{PORT}/web/playground/")
+def wait_for_isolation():
+	"""a deployed page reloads once under coi-serviceworker.js (index.html) before it is cross-origin isolated: an example
+	chosen before that reload is lost; the local server sends the headers itself"""
+	deadline = time.time() + ISOLATION_SECONDS
+	while browser("eval", "document.readyState === 'complete' && self.crossOriginIsolated") != "true" and time.time() < deadline:
+		time.sleep(0.5)
+
+
+def check_examples(names, page_url=None):
+	"""every example of the tour shows its value and prints its text in the playground (the local build, or the deployed
+	one at `page_url`); exit code 101 on a difference"""
+	server = None
+	if not page_url:
+		if not os.path.isfile(os.path.join(REPOSITORY, "web", "playground", "warp.wasm")):
+			sys.exit("error: web/playground/warp.wasm is missing; build it with web/playground/build.sh")
+		server = serve(None)
+		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
+	browser("open", page_url)
+	wait_for_isolation()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
 	failures = []
 	for name in names or examples:
@@ -129,7 +144,8 @@ def check_examples(names):
 		if wrong:
 			failures.append(name)
 	browser("close")
-	server.shutdown()
+	if server:
+		server.shutdown()
 	print(f"\nexamples: {len(examples) - len(failures)} of {len(examples)} show what they promise" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 
@@ -144,7 +160,9 @@ def build_components():
 
 def main():
 	if sys.argv[1:2] == ["--examples"]:
-		check_examples(sys.argv[2:])
+		names = sys.argv[2:]
+		page_url = names[1] if names[:1] == ["--url"] else None
+		check_examples(names[2:] if page_url else names, page_url)
 	if sys.argv[1:2] == ["--serve"]:
 		binary = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
 		serve(binary)

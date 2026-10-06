@@ -155,7 +155,7 @@ parameter is `any` (a Node field), a method parameter of one is untyped; `Box<in
 construct a Box (the type arguments of a declared class are read past, not checked yet).
 
 Methods named like a type word (classes-13, P142: class methods are always allowed): `double() := x*2` in a class
-body is the method `double·method` (class_methods renamed_type_word_methods), its calls `c.double()`, `c.double` and
+body is the method `method·double` (class_methods renamed_type_word_methods), its calls `c.double()`, `c.double` and
 `double()` in the class body renamed too; `double(3)` and `3.double()` stay the conversion.
 
 Properties (classes-14, wiki/property.md): `get age() {…}` is the getter `age := …` (read `p.age` like a field),
@@ -170,7 +170,7 @@ first), leaving out those the class defines itself; the methods read the class's
 Methods that change their object and give a value (classes-16, card obj-list): `pop() := items.pop()` returns the
 pair `[pop·value, self]`; `s.pop()` of a variable is `(pop·result = pop(s); s = pop·result#2; pop·result#1)`
 (class_methods Change::GivingValue; a changing method ends in a value unless its last statement assigns or appends).
-A method named like a list mutation (pop, push, add, remove, insert, append) is renamed `pop·method` like a type-word
+A method named like a list mutation (pop, push, add, remove, insert, append) is renamed `method·pop` like a type-word
 method, but called so only on what holds an instance (a variable assigned one, `p:Stack`, self) or bare in its class
 body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (declaration_lowering
 popped_list takes any place, as add/insert did).
@@ -188,3 +188,26 @@ line) are the data key `Person:{…}` (D4: no class, no construction). A field r
 on the node itself reads the tagged object's fields (list_ops tagged_field, between the entry and the meta entry
 `@name`), so `a:{b:1}.b` is 1 and `a:{b:1}.a` still `b:1`. Card class-ticket (a static in value{}) worked already
 after classes-10; its test is in test_tagged_objects.rs.
+
+## Ported forms (classes-19, tests/types/test_class_forms_ported.rs)
+The same class as other languages write it (parser atoms.rs, class_methods.rs class_items):
+- Kotlin: primary constructor `class Point(val x: Int, var y: Int = 0) {…}` (its parameters are the fields, the
+  declaration ends at its line without a body), `data class` / `open` / `abstract` (CLASS_MODIFIERS: a wasp class
+  compares by value already), expression bodies `fun sum() = x + y`.
+- JavaScript: `constructor(x, y) {…}` and `sum() {…}` members, `new Point(1, 2)` of a declared class.
+- Python: `class Point:` with an indented body, `class Dog(Animal):` (parents in parentheses, `object` none),
+  `def __init__(self, x, y):` the constructor, explicit `self` first parameters dropped, `@dataclass` fields.
+- Swift: `struct` with `var count = 0` fields and `mutating func` (MEMBER_MODIFIERS dropped), `init(…)`.
+- C# (classes-20): positional `record Point(int X, int Y);` (`int X` the field X:int), `new Point(1, 2)`.
+- Rust (classes-20): `impl Point { fn sum(&self) -> i32 {…} }` adds its functions to the class Point (class_methods
+  with_impls; `impl Trait for Point` too), `&self` is the receiver.
+- Kotlin `p.copy(y = 5)` is `field_with(p, "y", 5)` (class_methods copies).
+Constructors of all of them are `value(params){…}` (classes-10). A method named like a library word (`sum`, `count`)
+is renamed `method·sum` and called so only on instances, like list-mutation names (classes-16). - classes-21: Java's typed fields `int x;`, a constructor named like the class `Point(int x, int y) {…}`, C-style
+  methods `int sum() {…}`, `Point p = new Point(3, 4);` (`p:Point = …`, the type kept for D10 dispatch);
+  TypeScript `twice(): number {…}`; C# auto-properties `int X { get; set; }` and the object initializer
+  `new Point { X = 3 }`; Python class attributes (a field with a value read as `Counter.count` is static).
+  Every class body is normalized to its members (with_members), not only those with methods. The declared-type
+  pre-scan takes the name right after `class`/`record`/`type` (`record = find(…)` declares nothing).
+Open: Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`), Go (`type P struct {…}`, `func (p P) M()`),
+operators (`__add__`, `operator +`), a method named `norm` (the parser reads it as the operator ‖).

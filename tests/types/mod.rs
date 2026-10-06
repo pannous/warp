@@ -17,6 +17,7 @@ mod test_generic_classes;
 mod test_class_properties;
 mod test_class_mixins;
 mod test_tagged_objects;
+mod test_class_forms_ported;
 mod test_construction_checks;
 mod test_struct_field_of_constructor;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build

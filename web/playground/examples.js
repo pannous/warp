@@ -109,13 +109,17 @@ use wasm "tests/fixtures/components/rust_demo.wasm" as rust
 c = rust.counter(5)
 c.increment(2)
 [rust.fib(50), rust.words("a bc d"), c.value()]` },
+	"C libraries": { value: '["stack" "/b/c" 3400449319 "1.3.2"]', code: `// C runs here too: wasi-libc's string functions, and zlib compiled to WebAssembly from its own sources
+use c
+import tests/fixtures/wasm/zlib
+[strstr("haystack", "st"), strchr("a/b/c", 47), crc32(0, "wasp", 4), zlibVersion()]` },
 	ambiguity: { value: "6", code: `// an ambiguity is a warning naming the explicit form; "got it" silences it, the value stays
 x=0
 for i in 1 upto 4 { x += i }
 x` },
-	"welcoming errors": { value: 'Error("square 3 == 9 is ambiguous; write (square 3) == 9 or square(3 == 9) at 3:8")', code: `// errors explain and offer the fix: click "I meant"
-square(x) := x * x
-square 3 == 9` },
+	"welcoming errors": { value: 'Error("say 3 == 3 is ambiguous; write (say 3) == 3 or say(3 == 3) at 3:5")', code: `// errors explain and offer the fix: click "I meant" (square 3 == 9 is clear: square needs a number)
+say(x) := x
+say 3 == 3` },
 	constants: { value: 'Error("pi is a constant at 2:1; fix: another name")', code: `// constants stay constant
 pi = 4
 2 * pi` },

@@ -566,6 +566,23 @@ impl WaspParser {
 		if !self.options.wit_mode && self.declares_type(&symbol) {
 			return self.parse_type_declaration();
 		}
+		// `new Point(1, 2)` (Java, JavaScript, C#) of a declared class: the construction `Point(1, 2)`
+		if symbol == NEW_WORD && !self.options.data_mode && self.declared_type_after_blanks() {
+			while matches!(self.current_char(), ' ' | '\t') {
+				self.advance();
+			}
+			return self.parse_atom();
+		}
+		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
+		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol.as_str()) {
+			if let Some(keyword) = self.class_keyword_after_blanks() {
+				while matches!(self.current_char(), ' ' | '\t') {
+					self.advance();
+				}
+				self.advance_by(keyword.len());
+				return self.parse_type_declaration();
+			}
+		}
 		if !self.options.wit_mode && symbol == MIXIN_WORD && self.name_and_block_follow() {
 			return match self.parse_type_declaration() {
 				Node::Type { name, body } => Node::Type { name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)), body },
@@ -577,7 +594,8 @@ impl WaspParser {
 		// a capitalized word of no declared type before a block of fields is the tagged object `Person:{…}` (data, D4), as
 		// glued `Person{…}` is: the README's `Person { name: "Alice" … }` (card person-name)
 		let tagged = symbol.starts_with(|first: char| first.is_uppercase());
-		if (self.declared_types.contains(&symbol) || tagged) && self.block_after_blanks() {
+		let declared = self.declared_types.contains(&symbol);
+		if (declared || tagged) && self.block_after_blanks(declared) {
 			while matches!(self.current_char(), ' ' | '\t') {
 				self.advance();
 			}
@@ -645,7 +663,7 @@ impl WaspParser {
 		let start = self.pos.saturating_sub(symbol.chars().count());
 		let is_field = start > 0 && self.chars[start - 1] == '.';
 		!is_key && !is_field && (TYPE_DECLARATION_WORDS.contains(&symbol)
-			|| (symbol == RECORD_WORD && self.name_and_block_follow())
+			|| (symbol == RECORD_WORD && (self.name_and_block_follow() || self.name_and_parameters_follow()))
 			|| (symbol == "type" && self.current_char() != '('))
 	}
 
@@ -671,9 +689,27 @@ impl WaspParser {
 			},
 			_ => vec![],
 		};
-		self.skip_whitespace();
+		let mut constructor_fields = if self.current_char() == '(' { self.parse_primary_constructor() } else { vec![] };
+		// Python's `class Dog(Animal):` names its parents in the parentheses, `object` the root of all
+		let python_body = self.current_char() == ':' && self.peek_char(1) != '=';
+		let python_parent = match python_body {
+			true => std::mem::take(&mut constructor_fields).into_iter().map(|parent| parent.drop_meta().name()).find(|parent| parent != PYTHON_ROOT_CLASS),
+			false => None,
+		};
+		// `class P(val x: Int)` ends at its line when no body follows on it
+		match constructor_fields.is_empty() {
+			true => {
+				self.skip_whitespace();
+			}
+			false => while matches!(self.current_char(), ' ' | '\t') {
+				self.advance();
+			},
+		}
 		// `class dog extends animal {…}` (P117): the parent rides on the name, class_methods copies its fields and methods
 		let mut name = Symbol(type_name);
+		if let Some(parent) = python_parent {
+			name = name.with_attribute(EXTENDS_KEYWORD, Symbol(parent));
+		}
 		if self.matches_keyword(EXTENDS_KEYWORD) {
 			self.advance_by(EXTENDS_KEYWORD.len());
 			self.skip_whitespace();
@@ -702,8 +738,53 @@ impl WaspParser {
 			name = name.with_attribute(WITH_KEYWORD, Node::List(mixins, Bracket::None, Separator::Space));
 		}
 		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
+		// Python's `class Point:` and the lines indented below it
+		let body = match (python_body, body) {
+			(true, Empty) => {
+				self.advance(); // :
+				self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty)
+			}
+			(_, body) => body,
+		};
+		let body = match constructor_fields.is_empty() {
+			true => body,
+			false => {
+				let items = statements(body);
+				let fields = constructor_fields.into_iter().map(Self::transform_fields_to_types);
+				Node::List(fields.chain(items).collect(), Bracket::Curly, Separator::Semicolon)
+			}
+		};
 		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
 		Node::Type { name: Box::new(name), body: Box::new(body) }
+	}
+
+	/// The name of a declared type after blanks: `new Point(…)`
+	fn declared_type_after_blanks(&self) -> bool {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let name: String = (blanks..).map(|offset| self.peek_char(offset)).take_while(|ch| is_identifier_char(*ch)).collect();
+		blanks > 0 && self.declared_types.contains(&name)
+	}
+
+	/// `class` or `struct` after blanks, the word a class modifier stands before
+	fn class_keyword_after_blanks(&self) -> Option<&'static str> {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		TYPE_DECLARATION_WORDS.into_iter().find(|keyword| {
+			keyword.chars().enumerate().all(|(i, c)| self.peek_char(blanks + i) == c) && !is_identifier_char(self.peek_char(blanks + keyword.len()))
+		})
+	}
+
+	/// Kotlin's primary constructor `class Point(val x: Int, var y: Int = 0)`: its parameters are the fields
+	fn parse_primary_constructor(&mut self) -> Vec<Node> {
+		let parameters = statements(self.parse_bracketed('('));
+		parameters.into_iter().map(|parameter| match parameter.drop_meta() {
+			// `val x: Int`, `var y: Int = 0`: the field, its keyword dropped
+			Node::List(words, _, _) if words.len() == 2 && FIELD_KEYWORDS.contains(&words[0].drop_meta().name().as_str()) => words[1].clone(),
+			// C#'s `int X`: the field X of type int
+			Node::List(words, _, _) if words.len() == 2 && matches!(words[1].drop_meta(), Node::Symbol(_)) && crate::analyzer::type_word_kind(&words[0].drop_meta().name()).is_some() => {
+				Node::Key(Box::new(words[1].clone()), Op::Colon, Box::new(words[0].clone()))
+			}
+			_ => parameter,
+		}).collect()
 	}
 
 	/// `<T>`, `<A, B>`: the names of the type parameters of a declared type
@@ -839,5 +920,15 @@ fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> bool) -> Node 
 		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => *name,
 		Node::Meta { node, data } => Node::Meta { node: Box::new(untyped_parameters(*node, is_parameter)), data },
 		other => other.map_children(|child| untyped_parameters(child, is_parameter)),
+	}
+}
+
+/// The items of a block or parameter list `{a; b}`, `(a, b)`; a block of one statement `{fun sum() = x}` is that one
+fn statements(block: Node) -> Vec<Node> {
+	match block {
+		Node::List(items, _, Separator::Colon | Separator::Semicolon | Separator::Newline) => items,
+		Empty => vec![],
+		Node::List(items, Bracket::Curly | Bracket::Round, separator) => vec![Node::List(items, Bracket::None, separator)],
+		single => vec![single],
 	}
 }
