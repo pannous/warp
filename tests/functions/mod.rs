@@ -87,3 +87,4 @@ mod test_sort_functions;
 mod test_lambda_spellings;
 mod test_comma_calls;
 mod test_shadowed_log;
+mod test_returned_blocks;
