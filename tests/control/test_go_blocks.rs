@@ -53,3 +53,12 @@ fn lines_printed_by_tasks_stay_whole() {
 	assert_eq!(lines.len(), 20, "printed {printed:?}");
 	assert!(lines.iter().all(|line| line.len() == 2 && line.parse::<i64>().is_ok()), "printed {printed:?}");
 }
+
+/// `f() := { go h(2) }` is a function in braces, no getter: no warning about running at every read
+#[test]
+#[cfg(feature = "native")]
+fn a_function_starting_a_task_is_no_getter() {
+	let output = crate::common::warp_command().args(["--no-ask", "h(x) := { print(x) }; f() := { go h(2) }; f()"]).output().expect("warp runs");
+	let errors = String::from_utf8_lossy(&output.stderr);
+	assert!(!errors.contains("at every read"), "warned {errors:?}");
+}
