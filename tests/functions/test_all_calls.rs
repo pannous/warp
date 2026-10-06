@@ -27,3 +27,14 @@ fn an_untyped_call_next_to_a_comparison_is_ambiguous() {
 	// P143 (user): both readings type-check, so the error names both forms
 	crate::common::fails_with("square(x) := x*x; square 3 == 9", "write (square 3) == 9 or square(3 == 9)");
 }
+
+#[test]
+fn all_over_nested_lists_broadcasts_again() {
+	assert_eq!(printed("square(x) := x*x; square all [[1, 2], [3]]"), "[[1 4] [9]]");
+}
+
+#[test]
+fn a_list_built_by_appending_broadcasts() {
+	assert_eq!(printed("square(x) := x*x; xs = []; xs.add(2); xs.add(3); ys = square all xs; ys"), "[4 9]");
+	assert_eq!(printed("square(x) := x*x; xs = []; for i in 1..3 { xs = xs + [i] }; square xs"), "[1 4]");
+}
