@@ -35,31 +35,68 @@ pub fn instance_parts_marked(node: &Node) -> bool {
 pub fn lower(node: Node) -> Node {
 	let mut registry = TypeRegistry::new();
 	collect_all_types(&mut registry, &node);
-	construct(node, &registry)
+	let constructors = defined_constructors(&node, &registry);
+	construct(node, &Classes { registry: &registry, constructors: &constructors })
 }
 
-fn construct(node: Node, registry: &TypeRegistry) -> Node {
+/// The declared types and those with a `value{…}` constructor (class_methods::constructor_name)
+struct Classes<'a> {
+	registry: &'a TypeRegistry,
+	constructors: &'a [String],
+}
+
+impl Classes<'_> {
+	/// The instance passed through its class's constructor, when the class has one
+	fn constructed(&self, class: &str, instance: Node) -> Node {
+		match self.constructors.iter().any(|name| *name == crate::class_methods::constructor_name(class)) {
+			true => Node::List(vec![Node::Symbol(crate::class_methods::constructor_name(class)), instance], Bracket::Round, Separator::None),
+			false => instance,
+		}
+	}
+}
+
+/// The constructor functions the program defines
+fn defined_constructors(node: &Node, registry: &TypeRegistry) -> Vec<String> {
+	let names: Vec<String> = registry.types().iter().map(|type_def| crate::class_methods::constructor_name(&type_def.name)).collect();
+	let mut defined = vec![];
+	node.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
+		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
+			let name = items.first().map(|first| first.drop_meta().name()).unwrap_or_default();
+			if names.contains(&name) && !defined.contains(&name) {
+				defined.push(name);
+			}
+		}
+	});
+	defined
+}
+
+fn construct(node: Node, classes: &Classes) -> Node {
+	let registry = classes.registry;
 	match node {
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = items.into_iter().map(|item| construct(item, registry)).collect();
-			instance(&items, &bracket, &separator, registry).unwrap_or(Node::List(items, bracket, separator))
+			let items: Vec<Node> = items.into_iter().map(|item| construct(item, classes)).collect();
+			instance(&items, &bracket, &separator, registry).map(|instance| match call_name(&items, &bracket, &separator) {
+				Some(class) => classes.constructed(class, instance),
+				None => instance,
+			}).unwrap_or(Node::List(items, bracket, separator))
 		}
 		Node::Key(name, Op::None, fields) if matches!(name.drop_meta(), Node::Symbol(_)) => {
-			let entries = entries(&construct(*fields, registry));
+			let entries = entries(&construct(*fields, classes));
 			match registry.get_by_name(&name.name()) {
 				Some(type_def) => match field_error(type_def, registry, &name, &entries) {
 					Some(error) => error,
 					None => {
 						let fields = Node::List(with_defaults(type_def, registry, entries), Bracket::Curly, Separator::Space);
-						Node::meta(Node::Key(name, Op::Colon, Box::new(fields)), Node::data(Instance))
+						let class = name.drop_meta().name();
+						classes.constructed(&class, Node::meta(Node::Key(name, Op::Colon, Box::new(fields)), Node::data(Instance)))
 					}
 				},
 				// the pre-scan of the parser can mistake a word for a type name: plain data
 				None => Node::Key(name, Op::Colon, Box::new(Node::List(entries, Bracket::Curly, Separator::Space))),
 			}
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(construct(*left, registry)), op, Box::new(construct(*right, registry))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(construct(*node, registry)), data },
+		Node::Key(left, op, right) => Node::Key(Box::new(construct(*left, classes)), op, Box::new(construct(*right, classes))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(construct(*node, classes)), data },
 		other => other,
 	}
 }

@@ -11,6 +11,7 @@ mod test_mutating_methods;
 mod test_class_extends;
 mod test_class_cases_ported;
 mod test_struct_instances;
+mod test_value_constructor;
 mod test_struct_field_of_constructor;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_struct_types;
@@ -49,3 +50,4 @@ mod test_is_teaches_be;
 mod test_flags;
 mod test_declared_int_of_float_expression;
 mod test_block_data_paths;
+mod test_int_declaration_stays_whole;

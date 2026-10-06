@@ -516,6 +516,8 @@ impl WasmGcEmitter {
 const INDEX_NOT_INTEGRAL: &str = "index_must_be_an_integer";
 /// `y times "ab"` with y = 2.5 held in a variable (a literal fraction is a compile-time type error)
 const COUNT_NOT_INTEGRAL: &str = "count_must_be_an_integer";
+/// `x:int = 3; x += 0.5`: a declared int (variable or field) given a fraction at run time; a literal one is a type error
+pub(super) const INT_NOT_WHOLE: &str = "an_int_must_be_a_whole_number";
 /// `m.a * 2` with a text in m.a, where the kinds are known only at run time (NODE_ARITHMETIC)
 pub(super) const NOT_A_NUMBER: &str = "not_a_number";
 /// P65: arithmetic a text can't do on a character fails; its code point is ord(c)
@@ -534,7 +536,7 @@ fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 
 /// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
 const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
-const RUNTIME_ERROR_FIXES: [(&str, &str); 2] = [(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX)];
+const RUNTIME_ERROR_FIXES: [(&str, &str); 3] = [(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (INT_NOT_WHOLE, WHOLE_NUMBER_FIX)];
 
 /// The message of the runtime error trapped in the function `name`: its words, then its fix if it has one
 pub fn runtime_error_message(name: &str) -> String {
@@ -554,12 +556,12 @@ const MAP_WITHOUT_CELLS: &str = "map_without_cells";
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
-pub const RUNTIME_ERRORS: [&str; 25] = [
+pub const RUNTIME_ERRORS: [&str; 26] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT, super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
-	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO,
+	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO, INT_NOT_WHOLE,
 ];
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
@@ -871,7 +873,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Trap with `error` when the Int in i64 local `local` is a ratio
-	fn emit_require_whole(&self, func: &mut Function, local: u32, error: &'static str) {
+	pub(super) fn emit_require_whole(&self, func: &mut Function, local: u32, error: &'static str) {
 		if !self.int_runtime() {
 			return; // without the big-int runtime an Int is always a plain i64
 		}
@@ -1026,6 +1028,9 @@ impl WasmGcEmitter {
 
 	/// `target#index = value` leaves the assigned value (i64) on the stack; a variable target gets the updated copy
 	pub(super) fn emit_index_assignment(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) {
+		if self.emit_struct_field_set(func, target, index, value) {
+			return;
+		}
 		if let (Some(slot), Some(key)) = (self.typed_map(target), self.map_key(index)) {
 			self.emit_typed_map_set(func, slot, &key, value);
 			return self.emit_assigned_entry_value(func, target, &key, value);
@@ -1075,7 +1080,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The value of an entry assignment (i64): an Int value read back from the entry, else 0
-	fn emit_assigned_entry_value(&mut self, func: &mut Function, target: &Node, key: &Node, value: &Node) {
+	pub(super) fn emit_assigned_entry_value(&mut self, func: &mut Function, target: &Node, key: &Node, value: &Node) {
 		if self.get_type(value) != Kind::Int {
 			func.instruction(&I::I64Const(0));
 			return;

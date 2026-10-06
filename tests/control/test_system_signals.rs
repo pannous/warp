@@ -49,7 +49,9 @@ fn interrupted_run(name: &str, program: &str) -> (Vec<String>, std::process::Exi
 /// `on every 20 ms {…}` fires while main runs: at its loop starts and during its sleeps
 #[test]
 fn a_timer_fires_while_main_runs() {
-	crate::is!("n=0; on every 10 ms { n += 1 }; while n < 3 { sleep(5 ms) }; n", 3);
+	// the handler stops counting at 3: under load one loop turn can hold two check points with a tick due (its sleep's
+	// wake and the loop start), so an unbounded count could pass 3 before `n < 3` is read again
+	crate::is!("n=0; on every 10 ms { if n < 3 { n += 1 } }; while n < 3 { sleep(5 ms) }; n", 3);
 }
 
 /// `warp run` keeps a program with a timer after main: the timer goes on firing until the run is stopped

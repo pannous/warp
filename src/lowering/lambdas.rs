@@ -281,6 +281,24 @@ fn definition(name: &str, lambda: Lambda) -> Node {
 	Node::Key(Box::new(head), Op::Define, Box::new(lambda.body))
 }
 
+/// Python's `sorted(xs, key=x => -x)`: in a call a function given as `name = …` is the named argument `key: x => -x`
+/// (P37), never the definition of a function `key`
+fn named_function_arguments(items: Vec<Node>, bracket: &Bracket) -> Vec<Node> {
+	let is_call = *bracket == Bracket::Round && items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(_));
+	if !is_call {
+		return items;
+	}
+	items
+		.into_iter()
+		.map(|item| match item.drop_meta() {
+			Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Node::Symbol(_)) && arrow_lambda(value).is_some() => {
+				Node::Key(name.clone(), Op::Colon, value.clone())
+			}
+			_ => item,
+		})
+		.collect()
+}
+
 fn call(name: &str, arguments: Vec<Node>) -> Node {
 	Node::List([vec![Node::Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
@@ -324,6 +342,7 @@ impl Lowering {
 			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
 			Node::List(items, bracket, separator) => {
+				let items = named_function_arguments(items, &bracket);
 				let items = flatten_prefix_application(items, &bracket, &separator);
 				let items: Vec<Node> = if separator == Separator::Space {
 					items

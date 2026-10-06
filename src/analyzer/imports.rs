@@ -86,6 +86,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				};
 				if let Some(counter) = method_name.and_then(|method| counting_method(&method, ctx)) {
 					require_counter(ctx, counter);
+					analyze_required_functions(ctx, key); // the counted value: `s.fs.count` reads the field fs
 					return;
 				}
 			}
@@ -131,6 +132,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if items.len() == 2 {
 					if let Some(counter) = counting_function(fn_name, ctx) {
 						require_counter(ctx, counter);
+						analyze_required_functions(ctx, &items[1]);
 						return;
 					}
 				}

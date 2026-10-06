@@ -295,6 +295,20 @@ fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bo
 	}
 }
 
+/// The field and step of `x++` / `x--` after a dot
+fn field_step(method: &Node) -> Option<(Node, Op)> {
+	match method.drop_meta() {
+		Node::Key(field, op @ (Op::Inc | Op::Dec), _) if matches!(field.drop_meta(), Node::Symbol(_)) => Some((field.as_ref().clone(), op.clone())),
+		_ => None,
+	}
+}
+
+/// `place += 1` for `place++`, `place -= 1` for `place--`
+fn stepped(place: Node, step: Op) -> Node {
+	let update = if step == Op::Inc { Op::AddAssign } else { Op::SubAssign };
+	Node::Key(Box::new(place), update, Box::new(Node::int(1)))
+}
+
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
 fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 	let key = match position {
@@ -473,6 +487,12 @@ impl Lowering {
 				}
 				self.word_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
+			// `p.x++` (parsed as `p.(x++)` or `(p.x)++`) is `p.x += 1`, an update of the field
+			Node::Key(left, Op::Dot, right) if field_step(&right).is_some() => {
+				let (field, op) = field_step(&right).expect("guarded");
+				self.expand(stepped(Node::Key(left, Op::Dot, Box::new(field)), op))
+			}
+			Node::Key(left, op @ (Op::Inc | Op::Dec), _) if matches!(left.drop_meta(), Node::Key(_, Op::Dot, _)) => self.expand(stepped(*left, op)),
 			Node::Key(left, Op::Dot, right) => {
 				let (left, right) = (self.expand(*left), self.expand_method(*right));
 				self.method_call(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Dot, Box::new(right)))

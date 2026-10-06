@@ -101,8 +101,10 @@ replaces that where the static type is known, modelled on map_backend.rs (typed 
 - `P·instance`: one struct type per class (emit_instance_types), mutable fields, an int field i64, a float field f64,
   any other a Node. Today's immutable `$P` (field_storage "int"→I32) stays for FFI/WIT.
 - Struct variables (find_typed_structs): a local whose every assignment is a construction of one class giving every
-  field in declared order with values of the field's kind (int/float fields: static kind Int/Float); any other write
-  (`p.x = v` too, until step 3), a global, a capture, a parameter or a `RAN_WITHOUT_ERROR` block keeps the Node form
+  field in declared order with values of the field's kind (int/float fields: static kind Int/Float), and field writes
+  `p.x = v`, `p.x += v`, `p.x++` (struct.set) of values of the field's kind; a text or list written to a number field
+  is a compile-time type error ("x of Point is an int field, got [1] (a List)"). Any other write, a global, a
+  capture, a parameter or a `RAN_WITHOUT_ERROR` block keeps the Node form
   (names_held_as_nodes, shared with typed maps). `p.x` is struct.get (boxed where a Node is wanted, the bare i64 in
   numeric code); where the instance itself is wanted it becomes the Node `P{x:… y:…}` built from the fields.
 - Struct parameters (find_struct_abi): `m(p:P)` takes `(ref null $P·instance)` when its body only reads fields of p
@@ -111,17 +113,30 @@ replaces that where the static type is known, modelled on map_backend.rs (typed 
   never reads (operators::test_like, `keep(p:photo) := p.width` given `{width:3}`). Closures, tuple functions and
   `compare·T` witnesses (runtime dispatch, witness.rs) keep Node parameters (directly_called_functions).
 - probes/bench_class_instances.sh, 10^6 iterations, debug build: construct_and_read 248 → 5 ms, read_only
-  (`p.x * p.y`) 141 → ~0 ms, method_call (`p.sum()`) 170 → ~0 ms; plain ints 2 ms.
-- Decisions (Interviewer warp-33, user, 2026-10-06): P127 int fields stay fast i64; a write that does not fit is a loud
-  run-time error "x of Point is an int field: 2^70 does not fit in 64 bits; declare it x:bigint or x:number" (step 3,
-  writes). P126 texts inside containers print quoted everywhere (print, interpolation, string()): `P{x:1 name:"a"}`,
+  (`p.x * p.y`) 141 → ~0 ms, method_call (`p.sum()`) 170 → ~0 ms, field_write (`p.x += i`) 16 ms; plain ints 2 ms.
+- Decisions (Interviewer warp-33, user, 2026-10-06): P127 int fields stay fast i64, a value that does not fit a loud
+  run-time error. Found in step 3: nothing overflows, an i64 field carries warp's exact-int encoding like an int local
+  (fixnum or a handle to the big number), so `b.n = 2^70` keeps 2^70 (an_int_field_holds_any_int). Card
+  int-declaration (done): 0.5 is an exact number of kind Int; a declared int variable or a struct int field now traps
+  at run time with "an int must be a whole number" when given a fraction (`x += 0.5`, `p.x = y`), as wiki/Footguns.md
+  refuses `x:int=5; x=2.5` (big_int.rs emit_fits_declared, struct_backend.rs emit_field_value); `/=` still keeps an int
+  an int. Open: a Node instance `P(0.5)` (card int-field). P126 texts inside containers print quoted everywhere (print, interpolation, string()): `P{x:1 name:"a"}`,
   `["a" "b"]`; a top-level `print "a"` still writes a.
-Next steps: 3. writes `p.x = v` as struct.set (with the P127 check), 4. methods that change or return self, a struct
-result (like list_abi's returns_list), struct elements in typed lists.
+Next steps: methods that change or return self, a struct result (like list_abi's returns_list), struct elements in
+typed lists.
 
-Open (next batches): GC struct writes and struct results (above), keyword methods in a class body (`def area() -> int {…}`,
-`fun area(): Int {…}`, Python/Kotlin/Swift style: today "no field area"; class_methods method_parts sees only `:=`
-heads, reuse declarations.rs keyword_definition on the body items first, warp-dd owns that function), the `value{…}` constructor block and `value(name){…}`
-(wiki/constructor.md; today silently ignored), a `pop` method (changes the object and gives another value), a method
+Keyword methods (classes-6, card classes-keyword): `def area() -> int {…}`, `fun area(): Int {…}`,
+`func area() -> Int {…}`, `def scaled(k) {…}` in a class body are methods: class_items feeds each item through
+declarations.rs keyword_definition (warp-dd's) before splitting methods from fields, the result type stays on the
+method (dropped when the method changes its object and so gives it back); the parser no longer reads a keyword
+method's body as field types (wasp_parser transform_fields_to_types: `k` of `side * k` was `type k`).
+
+Constructor block (classes-7, wiki/constructor.md): `value{ id = random() }` or `value {…}` in a class body is the
+function `P·value(self:P)` (class_methods::constructor_name), its field names read and set on self, giving self; a
+field only it sets is an optional field (ø until it runs). type_constructor passes every construction `P(…)`, `P{…}`
+of a class that has one through it, after the given fields are matched and defaults filled.
+
+Open (next batches): struct results and struct methods that change self (above), `value(name){…}` with constructor
+parameters (wiki/constructor.md), a `pop` method (changes the object and gives another value), a method
 named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), generics
 `class Box<T>`, mixins, a field named `pi` (card footgun-pi).

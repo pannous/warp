@@ -161,7 +161,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
      P128 (branch signals-remove, tests/control/test_listener_removal.rs): a main-level listener named where it is
      declared, `alarm = whenever t > 30 {…}`, is the function `alarm(value, old)`; `remove alarm from listeners of t`
      takes it out of t's list (its place is `alarm_index_t`, -1 once removed, the later named listeners move up; a
-     second removal does nothing). Removal is a main-level statement.
+     second removal does nothing). Removal works anywhere: inside a function or block it declares the index places global (`nested_removals`; tests/control/test_listener_removal_in_functions.rs).
    - Lists of signals (branch signals-lists, tests/control/test_signal_lists.rs): a function subscribing to the loop
      variable of `for s in xs {…}` over its parameter xs takes a list of signals; the variables of a list literal
      passed there (`watch_all([a, b])`, or `watched = [a, b]; watch_all(watched)`) become signals and the list holds

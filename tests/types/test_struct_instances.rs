@@ -59,3 +59,25 @@ fn a_method_of_a_struct_variable_takes_the_struct() {
 	is!(&format!("{SUMMED}ps = [Point(1, 2), Point(3, 4)]; s = 0; for p in ps {{ s += p.sum() }}; s"), 10);
 	is!(&format!("{SUMMED}f(p:Point) := p.sum() * 2; f(Point(1, 2))"), 6);
 }
+
+#[test]
+fn a_field_write_of_a_struct_variable_sets_the_field() {
+	let calls = called_function_names(&format!("{POINT}p.x = 7; p.y += 1; p.x * p.y"));
+	assert!(!calls.iter().any(|name| ["map_find", "struct_body", "field_with"].contains(&name.as_str())), "{calls:?}");
+	is!(&format!("{POINT}p.x = 7; p.y += 1; p.x * p.y"), 35);
+	is!(&format!("{POINT}i=0; while i<3 {{ p.x += i; i++ }}; string(p)"), "Point{x:6 y:4}");
+	is!(&format!("{POINT}p.x++; p.y--; p.x - p.y"), 1);
+	is!(&format!("{POINT}q = p; q.x = 9; p.x"), 3); // value semantics: q is a copy
+}
+
+#[test]
+fn an_int_field_holds_any_int() {
+	is!("class Big{n:int}; b = Big(2^70); b.n + 1 == 2^70 + 1", 1);
+	is!("class Big{n:int}; b = Big(1); b.n = 2^70; b.n * 2 == 2^71", 1);
+}
+
+#[test]
+fn a_field_write_of_another_kind_is_a_type_error() {
+	crate::common::fails_with(&format!("{POINT}p.x = \"a\"; p"), "x of Point is an int field, got");
+	crate::common::fails_with(&format!("{POINT}p.y = [1]; p"), "y of Point is an int field, got");
+}
