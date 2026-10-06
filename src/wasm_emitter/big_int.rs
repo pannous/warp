@@ -22,6 +22,7 @@ use crate::fixed_width::FixedWidth;
 use crate::node::Node;
 use crate::operators::Op;
 use num_bigint::{BigInt, Sign};
+use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
@@ -101,6 +102,7 @@ impl WasmGcEmitter {
 			Node::True => Some((1, 1)),
 			Node::False => Some((0, 0)),
 			Node::Char(_) => Some((0, char::MAX as i128)),
+			Node::Symbol(name) if self.bounded_counters.contains(name) => Some((0, i32::MAX as i128)),
 			Node::Key(left, op, right) if matches!(left.drop_meta(), Node::Empty) && (op.is_prefix() || *op == Op::Hash) => match op {
 				Op::Neg => self.int_range(right).map(|(low, high)| (-high, -low)),
 				Op::Not => Some((0, 1)),
@@ -1208,4 +1210,24 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::End, I::End]);
 		});
 	}
+}
+
+/// The loop counters of `body` that stay in 0..i32::MAX: the item counters of for loops over lists (for_loop.rs
+/// INDEX_SUFFIX), only ever set to 0 and stepped by ++ (the loop stops below the item count, which is an i32)
+pub(super) fn bounded_counters(body: &Node) -> HashSet<String> {
+	let (mut counters, mut other_writes) = (HashSet::new(), HashSet::new());
+	body.visit(&mut |part| if let Node::Key(target, op, value) = part {
+		let Node::Symbol(name) = target.drop_meta() else { return };
+		if !name.ends_with(crate::for_loop::INDEX_SUFFIX) {
+			return;
+		}
+		let counts = match op {
+			Op::Assign => matches!(value.drop_meta(), Node::Number(Number::Int(0))),
+			Op::Inc => true,
+			_ => !(op.is_compound_assign() || matches!(op, Op::Define | Op::Dec)),
+		};
+		if counts { counters.insert(name.clone()); } else { other_writes.insert(name.clone()); }
+	});
+	counters.retain(|name| !other_writes.contains(name));
+	counters
 }

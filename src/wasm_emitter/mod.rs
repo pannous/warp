@@ -210,6 +210,7 @@ pub struct WasmGcEmitter {
 	source_position: Option<(usize, usize)>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
+	bounded_counters: std::collections::HashSet<String>, // loop counters of the body being emitted proven to stay in 0..i32::MAX (big_int.rs)
 	typed_maps: std::collections::HashSet<String>, // map variables of the body being emitted held as hash tables (map_backend.rs)
 	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies
 	moved_lists: Vec<(String, String)>,
@@ -268,6 +269,7 @@ impl WasmGcEmitter {
 			source_position: None,
 			loop_labels: Vec::new(),
 			typed_lists: HashMap::new(),
+			bounded_counters: std::collections::HashSet::new(),
 			typed_maps: std::collections::HashSet::new(),
 			moved_lists: Vec::new(),
 			list_abi: HashMap::new(),
@@ -1042,6 +1044,7 @@ impl WasmGcEmitter {
 		let temp_locals = collect_variables(node, &mut self.scope);
 		self.typed_lists = self.find_typed_lists(node);
 		self.typed_maps = self.find_typed_maps(node);
+		self.bounded_counters = big_int::bounded_counters(node);
 
 		// Allocate strings and update Local data pointers
 		self.collect_and_allocate_strings(node);
