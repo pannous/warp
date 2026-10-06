@@ -111,6 +111,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   longer gets the "no meaning in wasp" note (P78).
 - P123 (classes, warp-8e) an object's text is the constructor form `point{x:1 y:2}` everywhere: as a result, from
   `string(p)` and from `print p`; it reads back in as the same value.
+  Follow-up (user): "Maybe Point{x:1 y:2} to distinguish it from untyped data (but that's just optional convention
+  when printing.)" Assumed (undoable): the printer writes the class name as declared, so it still reads back; the
+  convention is to declare classes capitalized (`class Point`) in docs, examples and new tests, so a typed object
+  `Point{x:1 y:2}` stands apart from untyped tagged data `point{x:1 y:2}`. The printer does not capitalize on its own.
 - P118 GPU maps (warp-d9, notes/simd.md): only after SIMD lands, only on an explicit `@gpu` map, never silent
   offloading (f32 differs); native first via wgpu. Card in Later.
 - P119 NaN canonicalization only where a float's bits are observable (print/text, bit reads, memory stores, host/FFI
