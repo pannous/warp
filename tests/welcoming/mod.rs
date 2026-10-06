@@ -30,3 +30,4 @@ mod test_fixits;
 mod test_braceless_call_argument;
 mod test_got_it_scope;
 mod test_lowered_error_text;
+mod test_quiet_hints;
