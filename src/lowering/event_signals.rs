@@ -110,7 +110,8 @@ pub fn lower(program: Node) -> Node {
 	let unnamed = |event: &str| handlers.iter().filter(|(_, name, _)| name == event).count() - named.iter().filter(|(_, other)| other == event).count();
 	let listeners = Listeners {
 		counts: handlers.iter().map(|(_, name, _)| (name.clone(), unnamed(name))).collect(),
-		bound: bound_names(&program),
+		// a handler nothing emits is gone: its name binds nothing
+		bound: statements.iter().flat_map(bound_names).collect(),
 		named,
 	};
 	// `h = on alarm {…}`: h is its place among alarm's handlers, an entry of `listeners of alarm`
