@@ -1159,6 +1159,8 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let (keyword, definition, mut result_type) = match items {
 		[keyword, definition] => (keyword, definition.drop_meta().clone(), None),
+		// a tuple result type `-> (Int, Int) {…}` (Swift): the body's tuple as it is
+		[keyword, head, body] if tuple_result(head).is_some() => (keyword, Node::List(vec![tuple_result(head).expect("guarded").clone(), body.clone()], Bracket::Round, Separator::None), None),
 		[keyword, head, body] => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), None),
 		// Go's `func add1(x int) int {…}`: the result type between the head and the body
 		[keyword, head, result_type, body] if is_type_word(result_type) => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), Some(result_type.clone())),
@@ -1228,6 +1230,13 @@ fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 		_ => return None,
 	};
 	Some((Node::Key(head.clone(), Op::Define, Box::new(body)), result_type))
+}
+
+/// `f(a, b) -> (Int, Int)`: the head of a function whose result type is a tuple of types
+fn tuple_result(head: &Node) -> Option<&Node> {
+	let Node::Key(head, Op::Arrow, result) = head.drop_meta() else { return None };
+	let Node::List(types, Bracket::Round, _) = result.drop_meta() else { return None };
+	(types.len() > 1 && types.iter().all(is_type_word)).then_some(head.as_ref())
 }
 
 /// Swift's `label name: T`: the label (`_` for none)
@@ -1380,9 +1389,15 @@ fn c_function(items: &[Node]) -> Option<Node> {
 	if crate::analyzer::type_word_kind(result_type).is_none() && result_type != "void" {
 		return None;
 	}
-	let Node::List(parts, Bracket::Round, _) = definition.drop_meta() else { return None };
-	let [head, body] = parts.as_slice() else { return None };
-	let Node::List(_, Bracket::Curly, _) = body.drop_meta() else { return None };
+	let (head, body) = match definition.drop_meta() {
+		Node::List(parts, Bracket::Round, _) => match parts.as_slice() {
+			[head, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => (head, body),
+			_ => return None,
+		},
+		// C#'s expression-bodied member `int Add(int a, int b) => a + b`
+		Node::Key(head, Op::FatArrow, body) => (head.as_ref(), body.as_ref()),
+		_ => return None,
+	};
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
 	let (name, arguments) = head_items.split_first()?;
 	let Node::Symbol(_) = name.drop_meta() else { return None };
