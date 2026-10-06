@@ -15,7 +15,7 @@
 use crate::declarations::word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::variable_signals::{assign, block, defines_function, if_then, is_call_head, listener_parts, reads_old, symbols, with_old, with_value, ListenerWord};
+use crate::variable_signals::{assign, block, defines_function, if_then, is_call_head, listener_parts, symbols, with_old, with_value, ListenerWord};
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
 use std::collections::HashSet;
 
@@ -326,13 +326,14 @@ impl Subscriptions {
 		}
 		let value = Node::Symbol(VALUE_WORD.to_string());
 		let mut statements = vec![];
+		// `old` in `on set` / `on change` reads the listener closure's old value
+		let body = match (listener_word, with_old(&body, &self.main_variables)) {
+			(ListenerWord::Set | ListenerWord::Change, Some(with_old)) => with_old(&Node::Symbol(OLD_WORD.to_string())),
+			_ => body,
+		};
 		let check = match listener_word {
 			ListenerWord::Set => with_value(&body, &value),
 			ListenerWord::Change => {
-				let body = match reads_old(&body, &self.main_variables) {
-					true => with_old(&body, &Node::Symbol(OLD_WORD.to_string())),
-					false => body,
-				};
 				if_then(Node::Key(Box::new(value.clone()), Op::Ne, Box::new(Node::Symbol(OLD_WORD.to_string()))), block(vec![with_value(&body, &value)]))
 			}
 			ListenerWord::Whenever => if_then(subject, block(vec![body])),
