@@ -39,3 +39,10 @@ fn sort_with_defined_function() {
 	assert_eq!(printed("def desc(a,b){ b-a }; sorted([1,3,2], desc)"), "[3 2 1]");
 	assert_eq!(printed("def size(s){ s.length }; sorted([\"bb\",\"ccc\",\"a\"], size)"), "['a' \"bb\" \"ccc\"]");
 }
+
+#[test]
+fn reduce_with_a_start_is_fold() {
+	assert_eq!(printed("xs = [1,2,3]; xs.reduce(0, +)"), "6"); // Swift
+	assert_eq!(printed("xs = [1,2,3]; xs.reduce(10, (a, b) => a + b)"), "16");
+	assert_eq!(printed("reduce([1,2,3], 1, (a, b) => a * b)"), "6");
+}
