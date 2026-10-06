@@ -32,6 +32,7 @@ fn a_module_keeps_its_state_for_the_run() {
 #[test]
 fn a_module_is_found_by_name_or_path() {
 	is!("use \"tests/fixtures/wasm/counter.wasm\"; count_up(5)", 5);
+	#[cfg(feature = "native")] // WAT text needs the native build
 	is!("import \"tests/fixtures/wasm/fourty_two.wat\"; ft", 42);
 	fails_with("import tests/fixtures/wasm/no_such; 1", "module not found");
 }

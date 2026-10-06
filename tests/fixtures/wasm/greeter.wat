@@ -1,3 +1,4 @@
+;; built into greeter.wasm (found first, what the browser build reads) by `wasm-tools parse tests/fixtures/wasm/greeter.wat -o tests/fixtures/wasm/greeter.wasm`
 ;; an imported module that imports itself: WASI (fd_write), a warp host word (random_below) and another module
 ;; (counter.wasm), linked with the run's import families (tests/modules/test_wasm_modules.rs)
 (module
