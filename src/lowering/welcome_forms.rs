@@ -24,8 +24,8 @@ pub const GENERIC_MARK: &str = "generic";
 const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
 const CALL_METHOD: &str = "call";
 const OCAML_FUNCTION_KEYWORD: &str = "fun";
-/// F#/OCaml modules whose iteration functions are wasp's words: `List.map f xs` is `map f xs`
-const ITERATION_MODULES: [&str; 3] = ["List", "Seq", "Array"];
+/// F#/OCaml (and Elixir's Enum) modules whose iteration functions are wasp's words: `List.map f xs` is `map f xs`
+const ITERATION_MODULES: [&str; 4] = ["List", "Seq", "Array", "Enum"];
 const MODULE_ITERATIONS: [&str; 5] = ["map", "filter", "fold", "reduce", "sum"];
 /// C# LINQ methods and the wasp words they are (the alias rule: they work, with a note naming wasp's word)
 /// R's apply functions and the wasp word they are: `sapply(xs, f)` is `map(xs, f)` (alias rule, with a note)
@@ -91,6 +91,12 @@ fn forms(node: Node) -> Node {
 		Node::Key(parameters, Op::FatArrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
 			lambda(parameters, Node::List([fields, vec![forms(*body)]].concat(), Bracket::Curly, Separator::Semicolon))
+		}
+		// Elixir's `Enum.map(xs, f)`: the call `map(xs, f)`, with a note naming wasp's word
+		Node::Key(module, Op::Dot, call) if module_call(&module, &call).is_some() => {
+			let iteration = module_call(&module, &call).expect("guarded");
+			crate::normalize::hint(&format!("{}.{iteration}(", module.serialize()), &format!("{iteration}("), "wasp's word for the module function");
+			forms(*call)
 		}
 		// `f = lambda *xs: …`, JS `f = (...xs) => …`: the definition `f(*xs) := …`, which variadic.rs reads
 		Node::Key(name, Op::Assign, value) if starred_lambda(&name, &value).is_some() => forms(starred_lambda(&name, &value).expect("guarded")),
@@ -326,6 +332,14 @@ fn r_vectors(node: Node) -> Node {
 		}
 		other => other.map_children(r_vectors),
 	}
+}
+
+/// `Enum.map(…)`: the iteration word of a module's call
+fn module_call(module: &Node, call: &Node) -> Option<&'static str> {
+	let Node::List(items, Bracket::Round, _) = call.drop_meta() else { return None };
+	let word = items.first()?;
+	let is_module = ITERATION_MODULES.iter().any(|name| is_word(module, name));
+	(is_module && items.len() > 1).then(|| MODULE_ITERATIONS.iter().find(|name| is_word(word, name)).copied()).flatten()
 }
 
 /// F#'s `List.map f xs` (also `Seq.`, `Array.`): `map f xs`, with a note naming wasp's word (alias rule)
