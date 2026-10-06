@@ -13,6 +13,6 @@ fn two_prints_on_one_line_need_a_separator() {
 
 #[test]
 fn separated_prints_still_run() {
-	is!("g=\"hi\"; print g;    print g", "hi");
-	is!("print \"a\"\nprint \"b\"", "b");
+	is!("g=\"hi\"; print g;    print g; g", "hi"); // print gives nothing (issue #18)
+	is!("print \"a\"\nprint \"b\"", warp::Node::Empty);
 }

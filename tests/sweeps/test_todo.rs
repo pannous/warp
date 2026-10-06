@@ -115,7 +115,7 @@ fn test_polymorphic_dispatch() {
 
 #[test]
 fn test_print_function() {
-	is!("print 3", 3);
+	is!("print 3", warp::Node::Empty); // print gives nothing (issue #18)
 }
 
 #[test]

@@ -241,14 +241,8 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		if crate::wasm_emitter::OUTPUT_WORDS.contains(&name.as_str()) && items.len() == 2 {
 			return Kind::Int;
 		}
-		if name == PRINT_CALL && items.len() == 1 && *bracket == Bracket::Round {
-			return Kind::Text; // `print()` is worth the empty text it writes a line of
-		}
-		if name == PRINT_CALL && items.len() >= 2 {
-			return match crate::wasp_parser::print_arguments_of(items, bracket).as_slice() {
-				[printed] => held_kind(printed, || infer_type(printed, scope)), // `print x` is worth x, `print "c"` a text
-				_ => Kind::Text, // `print a, b` is worth the joined text "a b"
-			};
+		if name == PRINT_CALL && (items.len() >= 2 || *bracket == Bracket::Round) {
+			return Kind::Empty; // `print x` writes x and gives nothing (user, issue #18)
 		}
 	}
 	// Check for function calls: (funcname args...) where first item is a symbol
