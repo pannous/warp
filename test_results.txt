@@ -54,6 +54,7 @@ PASSED:
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
   ✓ control::test_event_signals::a_raise_inside_a_function_reaches_the_handler
   ✓ control::test_event_signals::raise_runs_the_handlers_of_its_name
+  ✓ control::test_event_signals::the_handled_signals_name_their_functions
   ✓ control::test_event_signals::the_handler_reads_the_event_data
   ✓ control::test_filter_loop_over_variable::a_filter_loop_over_a_variable
   ✓ control::test_filter_loops::test_a_class_name_loop_visits_only_its_instances
@@ -90,6 +91,8 @@ PASSED:
   ✓ control::test_if_then_assign::a_then_branch_takes_an_assignment
   ✓ control::test_if_then_assign::an_else_branch_takes_an_assignment
   ✓ control::test_if_value_kind::test_if_of_characters_joins_a_text
+  ✓ control::test_implicit_await::a_task_read_as_its_value_warns_that_it_waits
+  ✓ control::test_implicit_await::an_awaited_task_does_not_warn
   ✓ control::test_iteration_words::test_a_wrong_function_is_an_error
   ✓ control::test_iteration_words::test_each_runs_the_body_per_item_and_is_the_last_value
   ✓ control::test_iteration_words::test_filter
@@ -732,6 +735,8 @@ PASSED:
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
   ✓ lists::test_byte_size::byte_size_counts_bytes_and_size_counts_elements
+  ✓ lists::test_counting_word_variables::a_counting_word_variable_in_a_list_is_an_item
+  ✓ lists::test_counting_word_variables::shared_values_named_like_counting_words_reach_a_go_block
   ✓ lists::test_decimal_list_elements::a_decimal_element_can_be_assigned
   ✓ lists::test_decimal_list_elements::a_decimal_element_compares
   ✓ lists::test_decimal_list_elements::a_decimal_element_takes_part_in_arithmetic
@@ -2392,4 +2397,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2387 passed, 0 failed, 2387 total tested
+23 ignored, 2392 passed, 0 failed, 2392 total tested
