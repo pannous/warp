@@ -36,6 +36,9 @@ PASSED:
   ✓ control::test_cell_truth::a_cell_value_as_a_condition
   ✓ control::test_cell_truth::not_of_a_cell_value
   ✓ control::test_charged_fields::test_define_entries_are_values
+  ✓ control::test_clipboard::a_clipboard_listener_watches_the_change_count
+  ✓ control::test_clipboard::reading_the_clipboard_is_one_host_call
+  ✓ control::test_clipboard::the_change_count_is_read_without_the_content
   ✓ control::test_colon_handlers::a_listener_body_after_a_colon_is_the_rest_of_the_line
   ✓ control::test_colon_handlers::a_timer_body_after_a_colon_is_the_rest_of_the_line
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
@@ -1151,6 +1154,7 @@ PASSED:
   ✓ modules::test_wasm_modules::an_export_is_qualified_by_its_module_name
   ✓ modules::test_wasm_modules::an_exported_function_is_called_with_its_declared_types
   ✓ modules::test_wasm_modules::an_exported_global_reads_as_its_value
+  ✓ modules::test_wasm_modules::include_runs_main_globals_are_set_and_casts_are_ambiguous
   ✓ node::node_values_test::test_values_empty
   ✓ node::node_values_test::test_values_key
   ✓ node::node_values_test::test_values_list
@@ -2684,4 +2688,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2679 passed, 0 failed, 2679 total tested
+20 ignored, 2683 passed, 0 failed, 2683 total tested
