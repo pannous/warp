@@ -101,13 +101,15 @@ fn construct(node: Node, classes: &Classes) -> Node {
 	}
 }
 
-/// The instance a call of a declared type constructs; a wrong argument count is an error value at the call
+/// The instance a call of a declared type constructs, `P(1, 2)`, `P(x:1, y:2)` or `P(1, y:2)`; fields are checked as
+/// the braces `P{…}` check them; a wrong argument count is an error value at the call
 fn instance(items: &[Node], bracket: &Bracket, separator: &Separator, registry: &TypeRegistry) -> Option<Node> {
 	let name = call_name(items, bracket, separator)?;
 	let type_def = registry.get_by_name(name)?;
 	let arguments = &items[1..];
+	let (positional, named): (Vec<&Node>, Vec<&Node>) = arguments.iter().partition(|argument| !is_named(argument, type_def));
 	let required = type_def.fields.iter().filter(|field| registry.is_required(type_def, field)).count();
-	if arguments.len() < required || arguments.len() > type_def.fields.len() {
+	if named.is_empty() && (arguments.len() < required || arguments.len() > type_def.fields.len()) {
 		let message = if required == type_def.fields.len() {
 			format!("{name} takes {} fields, got {}", type_def.fields.len(), arguments.len())
 		} else {
@@ -115,16 +117,32 @@ fn instance(items: &[Node], bracket: &Bracket, separator: &Separator, registry: 
 		};
 		return Some(Diagnostic::at(&items[0], message).into_error());
 	}
-	let fields = type_def
-		.fields
-		.iter()
-		.enumerate()
-		.map(|(index, field)| {
-			let value = arguments.get(index).or_else(|| registry.default_of(type_def, field)).cloned().unwrap_or(Node::Empty);
-			Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(value))
-		})
+	let entry = |field: &str, value: &Node| Node::Key(Box::new(Node::Symbol(field.to_string())), Op::Colon, Box::new(value.clone()));
+	let given: Vec<Node> = type_def.fields.iter().zip(&positional).map(|(field, value)| entry(&field.name, value))
+		.chain(named.into_iter().cloned())
 		.collect();
+	if let Some(error) = field_error(type_def, registry, &items[0], &given) {
+		return Some(error);
+	}
+	let fields = type_def.fields.iter().map(|field| {
+		let value = given.iter().find(|entry| entry_name(entry).as_ref() == Some(&field.name)).map(entry_value)
+			.or_else(|| registry.default_of(type_def, field)).cloned().unwrap_or(Node::Empty);
+		entry(&field.name, &value)
+	}).collect();
 	Some(instance_node(name, fields))
+}
+
+/// `x:1` among the arguments of a construction: the declared field x given by name; an instance `engine(90)` is a value
+fn is_named(argument: &Node, type_def: &TypeDef) -> bool {
+	let names_field = |field: &Node| matches!(field.drop_meta(), Node::Symbol(name) if type_def.fields.iter().any(|declared| declared.name == *name));
+	!instance_parts_marked(argument) && matches!(argument.drop_meta(), Node::Key(field, Op::Colon, _) if names_field(field))
+}
+
+fn entry_value(entry: &Node) -> &Node {
+	match entry.drop_meta() {
+		Node::Key(_, _, value) => value,
+		other => other,
+	}
 }
 
 /// The instance of the type `name` with these field entries
@@ -181,7 +199,10 @@ fn field_error(type_def: &TypeDef, registry: &TypeRegistry, located: &Node, entr
 		let actual = literal_kind(value)?;
 		let fits = expected == actual || (expected == Kind::Float && actual == Kind::Int) || (expected == Kind::Text && actual == Kind::Codepoint);
 		(!fits).then(|| {
-			let message = format!("{name}.{field} is {declared_type}, got {} {}", format!("{actual:?}").to_lowercase(), value.serialize());
+			let mut message = format!("{name}.{field} is {declared_type}, got {} {}", format!("{actual:?}").to_lowercase(), value.serialize());
+			if expected == Kind::Int && actual == Kind::Float {
+				message += ": an int must be a whole number"; // as the run-time check says (list_ops INT_NOT_WHOLE)
+			}
 			Diagnostic::at(located, message).into_error()
 		})
 	});
