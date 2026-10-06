@@ -59,7 +59,7 @@ const SYNONYMS: [(&str, &[&str]); 24] = [
 	// the text builtin trim (text_builtins.rs), Python's strip
 	("trim", &["strip"]),
 	("reverse", &[]),
-	("sort", &[]),
+	("sort", &["sorted"]),
 	("split", &[]),
 	("join", &[]),
 	("first", &[]),
