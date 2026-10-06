@@ -186,6 +186,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   `send "file system full"`; only `send v to "chat"` / `broadcast v on "chat"` go to a channel.
 - P164 (functions, warp-64, wiki/argument.md) in a parameter shape `phone number` is the field phone of type number
   (a type word after a name is its type everywhere); the wiki example calling it with a text changes to `phone text`.
+  User, adding: `phone-number:text` works too, a hyphenated field name with a `:` type. Assumed (undoable): in a
+  declaration context (parameter shape, class field, key before `:`) `a-b` is one name; in an expression it stays
+  subtraction, and reading such a field uses `p.phone-number` / `p["phone-number"]`.
 - P162 (classes, warp-e0) `init(…){…}` in a class is always the constructor (user chose this over the recommended
   "unless called explicitly"). User, correcting: `init` is THE constructor name, not `value`. `value`, JS
   `constructor` and Python `__init__` still work as aliases with a got-it note "wasp says init" and an "I meant:
