@@ -46,7 +46,14 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 		let arity = arities.entry(definition.name.clone()).or_insert(Arity { fewest: count, most: count });
 		*arity = Arity { fewest: arity.fewest.min(count), most: arity.most.max(count) };
 	}
-	if arities.is_empty() { program } else { nest_prefix_calls(program, &arities) }
+	if arities.is_empty() {
+		return program;
+	}
+	// `puts add 1 2`: the output words take one value
+	for word in crate::wasm_emitter::OUTPUT_WORDS {
+		arities.entry(word.to_string()).or_insert(Arity { fewest: 1, most: 1 });
+	}
+	nest_prefix_calls(program, &arities)
 }
 
 /// The fewest and the most parameters of a function's definitions
@@ -101,10 +108,19 @@ fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Ari
 			Ok(call) => Ok(Node::Key(target, op, Box::new(call))),
 			Err(value) => Err(Node::Key(target, op, Box::new(value))),
 		},
-		Node::List(items, Bracket::None, Separator::Space) => {
+		Node::List(mut items, Bracket::None, Separator::Space) => {
 			let given = items.len() - 1;
 			let fits = arity_of(&items[0], arities).is_some_and(|takes| given < takes.fewest && given + rest.len() <= takes.most);
-			if fits { Ok(Node::List([items, rest.to_vec()].concat(), Bracket::None, Separator::Space)) } else { Err(Node::List(items, Bracket::None, Separator::Space)) }
+			if fits {
+				return Ok(Node::List([items, rest.to_vec()].concat(), Bracket::None, Separator::Space));
+			}
+			// `puts add 1, 2`: the short call is the last argument
+			let last = items.pop().expect("a call has its function");
+			match with_comma_arguments(last, rest, arities) {
+				Ok(call) if !items.is_empty() => Ok(Node::List([items, vec![call]].concat(), Bracket::None, Separator::Space)),
+				Ok(call) => Ok(call),
+				Err(last) => Err(Node::List([items, vec![last]].concat(), Bracket::None, Separator::Space)),
+			}
 		}
 		other => Err(other),
 	}
