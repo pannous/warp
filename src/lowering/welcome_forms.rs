@@ -1,7 +1,8 @@
 //! Forms other languages use, lowered to wasp's own (notes/welcoming.md), before any other pass:
 //! - `match v { 0 => "zero"; _ => "other" }`: the cases of switch/match written with `=>`, `_` the default
 //! - `loop { … }`: `while true { … }`, left by `break`
-//! - anonymous functions `function(a, b) { … }`, `fn(x) { … }` (JS, Rust-ish) and `lambda x: …` (Python): lambdas
+//! - anonymous functions `function(a, b) { … }`, `fn(x) { … }` (JS, Rust-ish), `f <- function(x) x * 2` (R) and
+//!   `lambda x: …` (Python): lambdas
 //!   (`xs |> f(b)` is read by the parser, `f(1, _)` lowered in declarations.rs)
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 
@@ -20,7 +21,7 @@ pub fn lower(node: Node) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = python_lambdas(items.into_iter().map(lower).collect());
-			if let Some(lambda) = anonymous_function(&items) {
+			if let Some(lambda) = anonymous_function(&items).or_else(|| assigned_braceless_function(&items)) {
 				return lambda;
 			}
 			if let Some(binding) = let_binding(&items) {
@@ -129,17 +130,31 @@ fn lambda(parameters: Node, body: Node) -> Node {
 /// `[function (a, b)] {body}`: a function keyword with parameters and no name, then its body
 fn anonymous_function(items: &[Node]) -> Option<Node> {
 	let [head, body] = items else { return None };
-	let Node::List(head_items, _, _) = head.drop_meta() else { return None };
-	let [keyword, parameters @ ..] = head_items.as_slice() else { return None };
-	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word));
-	if !is_keyword || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
-	let parameters = match parameters {
+	Some(lambda(function_parameters(head)?, lower(body.clone())))
+}
+
+/// R's `f <- function(x) x * 2`, JS-ish `f = function(x) x * 2`: the assignment takes the phrase after the head as
+/// the body, `f = x => x * 2`
+fn assigned_braceless_function(items: &[Node]) -> Option<Node> {
+	let [assignment, body @ ..] = items else { return None };
+	let Node::Key(name, Op::Assign, head) = assignment.drop_meta() else { return None };
+	let body = match body {
+		[] => return None,
 		[single] => single.clone(),
-		_ => return None,
+		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 	};
-	Some(lambda(parameters, lower(body.clone())))
+	Some(Node::Key(name.clone(), Op::Assign, Box::new(lambda(function_parameters(head)?, lower(body)))))
+}
+
+/// `function (a, b)`: the parameters after a function keyword with no name
+fn function_parameters(head: &Node) -> Option<Node> {
+	let Node::List(head_items, _, _) = head.drop_meta() else { return None };
+	let [keyword, parameters] = head_items.as_slice() else { return None };
+	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word));
+	is_keyword.then(|| parameters.clone())
 }
 
 /// `lambda x` (the words before Python's colon): the parameters
