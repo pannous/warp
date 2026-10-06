@@ -1864,7 +1864,7 @@ impl Add<&Node> for &Node {
 			(Node::Number(n), True) => Node::Number(*n + Number::Int(1)),
 			(False, Node::Number(n)) | (Node::Number(n), False) => Node::Number(*n),
 			(Empty, Node::Number(n)) | (Node::Number(n), Empty) => Node::Number(*n),
-			_ => panic!("Cannot add {:?} and {:?}", left, right),
+			_ => error(&format!("Cannot add {left:?} and {right:?}")),
 		};
 
 		// Preserve metadata from left operand
@@ -1946,7 +1946,7 @@ impl Sub<&Node> for &Node {
 			(False, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
 			(Empty, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
 			(Node::Number(n), Empty) => Node::Number(*n),
-			_ => panic!("Cannot subtract {:?} and {:?}", left, right),
+			_ => error(&format!("Cannot subtract {left:?} and {right:?}")),
 		};
 
 		// Preserve metadata from left operand
@@ -2024,7 +2024,7 @@ impl Mul<&Node> for &Node {
 			(True, Node::Number(n)) | (Node::Number(n), True) => Node::Number(*n),
 			(False, _) | (_, False) => Node::Number(Number::Int(0)),
 			(Empty, _) | (_, Empty) => Node::Number(Number::Int(0)),
-			_ => panic!("Cannot multiply {:?} and {:?}", left, right),
+			_ => error(&format!("Cannot multiply {left:?} and {right:?}")),
 		};
 
 		// Preserve metadata from left operand
@@ -2103,7 +2103,7 @@ impl Div<&Node> for &Node {
 			(True, Node::Number(n)) => Node::Number(Number::Int(1) / *n),
 			(False, Node::Number(_)) => Node::Number(Number::Int(0)),
 			(Empty, Node::Number(_)) => Node::Number(Number::Int(0)),
-			_ => panic!("Cannot divide {:?} and {:?}", left, right),
+			_ => error(&format!("Cannot divide {left:?} and {right:?}")),
 		};
 
 		// Preserve metadata from left operand
