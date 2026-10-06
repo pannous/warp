@@ -51,3 +51,10 @@ fn a_literal_after_a_colon_is_a_default_as_in_ruby() {
 	is!("def greet(name, greeting: \"Hello\"){greeting + \" \" + name}; greet(\"Ann\")", "Hello Ann");
 	is!("def f(a, b:int){a+b}; f(1, 2)", 3); // a type word after the colon stays the type
 }
+
+#[test]
+fn a_one_character_text_default_holds_any_text() {
+	is!("def f(s=\"a\"){ s + s }; f()", "aa"); // was 194: the codepoints added
+	is!("def f(s=\"a\"){ s + s }; f(\"xy\")", "xyxy");
+	is!("def f(sep=\",\"){ \"a\" + sep + \"b\" }; f()", "a,b");
+}

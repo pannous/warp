@@ -205,6 +205,8 @@ pub fn param_kind(param: &Param) -> Kind {
 	}
 	match param.default.as_ref().map(|value| argument_literal_kind(value).unwrap_or_else(|| infer_type(value, &Scope::new()))) {
 		Some(kind @ (Kind::Float | Kind::Text | Kind::List)) => kind,
+		// `s="a"`: a one-character text is parsed as a Codepoint; the parameter holds any text
+		Some(Kind::Codepoint) => Kind::Text,
 		_ => param.used_as.unwrap_or(Kind::Int),
 	}
 }
