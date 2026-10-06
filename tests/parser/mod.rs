@@ -1,6 +1,7 @@
 mod test_attributes;
 mod test_comments;
 mod test_dollar_names;
+mod test_glued_method_block;
 mod test_references;
 mod test_glyph_aliases;
 mod test_inline_comments;
