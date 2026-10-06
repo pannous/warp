@@ -37,6 +37,7 @@ mod test_type_dispatch;
 mod test_typed_signatures;
 mod test_object_arguments;
 mod test_return_type_dispatch;
+mod test_return_type_forms;
 mod test_typed_returns;
 mod test_user_method_form;
 mod test_parameter_overloads;
