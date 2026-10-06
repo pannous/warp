@@ -580,6 +580,8 @@ pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
 		Node::Empty => Some(Kind::List),
+		// `"" + n`, `"#" + x + y`: a concatenation with a text is a text
+		Node::Key(_, Op::Add, _) if super::declaration_lowering::is_text(argument) => Some(Kind::Text),
 		// `1.5 as float`, `x as float`: the kind the conversion names
 		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Some(Kind::Float),
 		_ if crate::closures::as_closure_new(argument).is_some() => Some(Kind::Function),

@@ -82,7 +82,10 @@ parameter; std/map.wasp uses `ks = keys(m)` and `m.get(k)` until they are fixed.
    (tests/modules/test_std_time.rs). Fixed on the way: `{year:1970 month:1}` read `1970 month` as a duration
    (card key-unit), and the map parameter bug above (cards over-keys, inside-loop: no list copy for a map parameter).
 Next:
-7. More list words (chunk, window, median), text format; time: date arithmetic (add days, difference), formatting.
+7. Done: list chunk window median; time add_days days_between, format_date (ISO 2026-10-07), format_time (UTC
+   13:05:09), two_digits; text format("{} has {} items", ["cart", 3]). Fixed on the way: `"" + 7` passed to a counted
+   parameter made it a list; the elements of split and chars had no kind (`p[0] + 3` added numbers).
+   Next: more map words, text words (center, words, lines), time parsing.
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 ## 7. Adapters (async, warp-f0)
