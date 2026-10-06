@@ -100,6 +100,7 @@ const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate t
 const IN_KEYWORD: &str = "in";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
+const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
 const ELSE_KEYWORD: &str = "else";
 const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
 const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
@@ -250,6 +251,10 @@ fn dot_call(function: Node, arguments: Node) -> Node {
 		Node::List(items, Bracket::Round, _) if !items.is_empty() => items.clone(),
 		_ => vec![arguments],
 	};
+	// a number broadcasts as itself (Julia, Elixir's `f.(4)`): the call
+	if matches!(arguments[0].drop_meta(), Node::Number(_)) {
+		return Node::List([vec![function], arguments].concat(), Bracket::Round, Separator::None);
+	}
 	let list = arguments.remove(0);
 	let item = Symbol(BROADCAST_ITEM.to_string());
 	let call = Node::List([vec![function, item.clone()], arguments].concat(), Bracket::Round, Separator::None);
