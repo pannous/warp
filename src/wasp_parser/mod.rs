@@ -464,7 +464,7 @@ const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
 
 /// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`; a braceless call is grouped, one argument:
 /// `square xs |> filter(p)` → `filter((square xs), p)`
-fn piped(value: Node, stage: Node) -> Node {
+pub(crate) fn piped(value: Node, stage: Node) -> Node {
 	let value = match value.drop_meta() {
 		Node::List(_, Bracket::None, Separator::Space) => Node::List(vec![value], Bracket::Round, Separator::None),
 		_ => value,
