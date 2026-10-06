@@ -84,7 +84,6 @@ fn an_export_takes_arguments_by_its_parameter_names() {
 
 // a C library compiled to core WebAssembly: the header next to it (shout.h) says which i32 is a char *
 #[test]
-#[cfg(feature = "native")] // host.js does not cross texts into a module yet (card wasm-texts-browser)
 fn a_c_module_takes_and_gives_texts_by_its_header() {
 	const SHOUT: &str = "import tests/fixtures/wasm/shout; ";
 	is!(&format!("{SHOUT}shout(\"hi there\")"), "HI THERE!");
