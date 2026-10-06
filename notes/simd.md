@@ -32,6 +32,23 @@ And warp itself today (release build, 1M floats `xs = float[1000000]`): `xs.map(
 3. So SIMD becomes worth it once float arrays (`float[n]`, `h*w` arrays) can live in linear memory: then 0.17-0.4 ns
    against today's 15, about 40-90x, most of it from the representation, the rest from f64x2.
 
+## Where the time goes in warp's own loops (2026-10-06, after the sized-array fix)
+`for x in xs { s += x * 0.5 + 1 }` over `float[1000000]`, 100 rounds, the compiled module run by wasmtime 49 CLI
+(probes/simd/time_runs.py style), ns per item:
+
+| module | plain | fuel | NaN canonicalization | fuel + NaN (warp's engine) |
+|---|---|---|---|---|
+| before (main) | 4.3 | 6.2 | 7.6 | 7.7 |
+| loop counter proven an i32, items read with array.get | 3.8 | 3.9 | 7.3 | 7.2 |
+
+- The step (wasm_emitter big_int::bounded_counters, list_dispatch walking_counter): a for loop's item counter
+  `x·index` is only ever 0 and ++, below the count, so its compare and step need no big-integer checks and
+  `x·items#(x·index+1)` is a direct `array.get`: about 10% plain, and the fuel cost of the loop is gone.
+- The dominant cost is now `cranelift_nan_canonicalization` (warp-runtime engine.rs deterministic_config): +3.4 ns
+  per item, doubling a float loop, and it applies to f64x2 lanes too. Canonicalizing only where a float's bits can
+  be observed (print, text, comparison by bits, memory stores, host calls) instead of after every operation would keep
+  the determinism decision and remove most of the cost: question to the Interviewer.
+
 ## Steps
 1. (smallest, next) Typed map kernel: `xs.map(x => numeric body)` over a float array known statically as one emits
    `array.new_default(len)` + a loop of `array.get` / body / `array.set` (measured shape: 2.1 ns, 7x today).

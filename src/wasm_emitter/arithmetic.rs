@@ -125,7 +125,7 @@ impl WasmGcEmitter {
 		// i-- → i = i - 1 (returns new value)
 		if let Node::Symbol(name) = left.drop_meta() {
 			let Some(local_pos) = self.defined_local_position(func, name) else { return true };
-			self.emit_int_step(func, local_pos, op);
+			self.emit_int_step(func, local_pos, self.int_range(left), op);
 			self.emit_fits_declared(func, left);
 			// Store and return new value
 			func.instruction(&I::LocalTee(local_pos));
@@ -424,7 +424,7 @@ impl WasmGcEmitter {
 		}
 		if let Node::Symbol(name) = left.drop_meta() {
 			let Some(local_pos) = self.defined_local_position(func, name) else { return };
-			self.emit_int_step(func, local_pos, op);
+			self.emit_int_step(func, local_pos, self.int_range(left), op);
 			self.emit_fits_declared(func, left);
 			// Store and return new value
 			func.instruction(&I::LocalTee(local_pos));
@@ -660,11 +660,11 @@ impl WasmGcEmitter {
 	}
 
 	/// `local ± 1` for i++ / i--
-	pub(super) fn emit_int_step(&mut self, func: &mut Function, local_pos: u32, op: &Op) {
+	pub(super) fn emit_int_step(&mut self, func: &mut Function, local_pos: u32, range: super::big_int::IntRange, op: &Op) {
 		func.instruction(&I::LocalGet(local_pos));
 		func.instruction(&I::I64Const(1));
 		let step = if *op == Op::Inc { Op::Add } else { Op::Sub };
-		self.emit_int_op(func, &step, None, Some((1, 1)));
+		self.emit_int_op(func, &step, range, Some((1, 1)));
 	}
 
 	pub(super) fn wrap_arithmetic_result(&mut self, func: &mut Function, wrap: ArithmeticWrap) {
