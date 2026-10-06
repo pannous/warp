@@ -9,6 +9,9 @@ use ValType::Ref;
 use crate::type_kinds::{CURLY_BRACKET_INFO, CURLY_LIST_KIND, KIND_BITS, SQUARE_LIST_KIND};
 /// The bracket info in a list's kind, above its KIND_BITS
 const BRACKET_INFO_MASK: i64 = 0xff;
+/// The operator code in a key's kind, above its KIND_BITS; a type instance `point{x:1}` has none
+const OP_INFO_MASK: i64 = 0xff;
+const INSTANCE_OP_CODE: i64 = 0;
 use crate::wasm_emitter::layout::BYTE;
 
 const KEY_KIND: i64 = Kind::Key as i64;
@@ -372,6 +375,7 @@ impl WasmGcEmitter {
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
 		let map_texts = [self.allocate_string("{"), self.allocate_string("}"), self.allocate_string(":")];
+		let no_text = self.allocate_string("");
 		let empty_text = self.allocate_string(EMPTY_TEXT);
 		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
@@ -419,7 +423,14 @@ impl WasmGcEmitter {
 					f.instruction(&I::Else);
 					s.emit_field(f, element, 2);
 					Self::emit_list(f, &[I::RefAsNonNull, I::End, I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type)]);
+					// an instance `point{x:1}` (a key without operator) joins its name and fields without one (P123)
+					s.emit_field(f, element, 0);
+					Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(OP_INFO_MASK), I::I64And, I::I64Const(INSTANCE_OP_CODE), I::I64Eq]);
+					f.instruction(&I::If(BlockType::Result(node_ref)));
+					new_text(f, no_text);
+					f.instruction(&I::Else);
 					new_text(f, colon);
+					f.instruction(&I::End);
 					Self::emit_list(f, &[I::Call(own_index), I::LocalSet(element), I::End]);
 					// a curly list is a map: its bracket info, above the kind (other info may sit higher still)
 					let is_map = |f: &mut Function| {

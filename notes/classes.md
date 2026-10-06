@@ -82,7 +82,24 @@ Batch 2 (branch classes-2):
 - `p.items.add(v)` / `.insert(…)` of a field path update the field like `xs.add(v)` updates a variable
   (declaration_lowering is_place); a method doing it changes its object, so a Stack's `push` works.
 - Convention (P123 follow-up): new tests name classes with a capital, `Point{x:1 y:2}`.
-Open (next batches): the `value{…}` constructor block and `value(name){…}` (wiki/constructor.md; today silently
-ignored), a `pop` method (changes the object and gives another value), an object's text in one form
-`point{x:1 y:2}` (P123: result, string(p), print), a method named like a type word (`double()`: "double is a type"),
-property setters (wiki/property.md), generics `class Box<T>`, mixins, a field named `pi` (card footgun-pi).
+Batch 3 (branch classes-3), P123 one text form `Point{x:1 y:2}`:
+- key_emitter emit_default_key: an instance keeps its curly bracket info (it was turned into a `[…]` list, so the
+  result read `P[x:1 y:2]`); its fields are still emitted as data.
+- library_ops list_text (print, interpolation): a key without operator (an instance) joins name and fields without
+  the `:` it puts in an entry `a:1` (print wrote `P:[x:1 y:2]`).
+- casts: `string(p)`, `"\(p)"`, `p as text` of an instance known only at run time go through list_text too (it was
+  "has no runtime text yet").
+- Not yet: a text field prints unquoted at run time (`P{x:1 name:a}`, like `print ["a"]` writes `[a]`), so it does
+  not read back as the same value (question to the Interviewer).
+
+## Representation (found in batch 3, the next big step)
+Instances are not GC structs at run time: `P(1, 2)` is a `$Node` key `P` over a cons list of `x:1`, `y:2` entries, and
+`p.x` is `struct_body` + `map_find`, a search comparing field-name symbols. A `$P` struct type and `new_P` are emitted
+but only used when main gives a struct. The efficient form: `(struct $P (field $x i64) (field $y i64))` built by
+struct.new, `p.x` a struct.get by field index wherever the static type is known, a Node made from it only where a
+Node is wanted (print, a mixed list, the result).
+
+Open (next batches): GC struct instances (above), the `value{…}` constructor block and `value(name){…}`
+(wiki/constructor.md; today silently ignored), a `pop` method (changes the object and gives another value), a method
+named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), generics
+`class Box<T>`, mixins, a field named `pi` (card footgun-pi).

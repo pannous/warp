@@ -311,10 +311,12 @@ impl WasmGcEmitter {
 		}
 		// For struct instances like Person{...}, emit block as list; the value of an entry `a:{b:1}` stays a map
 		let right_node = right.drop_meta();
-		if let (Node::List(items, Bracket::Curly, sep), false) = (right_node, *op == Op::Colon) {
-			// Convert curly block to square list, preserving inner ops
-			let list_node = Node::List(items.clone(), Bracket::Square, sep.clone());
-			self.emit_node_instructions(func, &list_node);
+		if let (Node::List(items, Bracket::Curly, _), false) = (right_node, *op == Op::Colon) {
+			// the fields as data, nothing run as a block; the instance keeps its braces: `point{x:1 y:2}` (P123)
+			match items.is_empty() {
+				true => self.emit_call(func, "new_empty"),
+				false => self.emit_list_structure(func, items, &Bracket::Curly),
+			}
 		} else if *op == Op::Colon {
 			// the value of an entry is data: unknown words in it stay words (P62)
 			let outer = std::mem::replace(&mut self.data_context, true);

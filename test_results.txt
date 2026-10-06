@@ -165,6 +165,19 @@ PASSED:
   ✓ control::test_shared_values::a_self_update_of_a_shared_value_is_atomic
   ✓ control::test_shared_values::a_shared_value_reads_writes_and_adds
   ✓ control::test_signal_in_loop::a_listener_checks_a_write_in_a_one_statement_loop
+  ✓ control::test_signal_values::a_function_subscribes_to_a_main_level_variable
+  ✓ control::test_signal_values::a_function_subscribes_to_the_signal_it_is_given
+  ✓ control::test_signal_values::a_signal_of_text
+  ✓ control::test_signal_values::a_signal_passed_on_to_a_subscribing_function
+  ✓ control::test_signal_values::a_static_listener_and_a_subscription_on_one_variable
+  ✓ control::test_signal_values::a_value_given_for_a_signal_parameter_is_a_signal_nobody_writes
+  ✓ control::test_signal_values::on_change_skips_writes_of_the_same_value
+  ✓ control::test_signal_values::on_set_runs_after_each_write
+  ✓ control::test_signal_values::once_inside_a_function_runs_the_first_time
+  ✓ control::test_signal_values::the_escaping_variable_keeps_its_value
+  ✓ control::test_signal_values::two_subscriptions_both_run_in_order
+  ✓ control::test_signal_values::writes_before_the_subscription_are_not_seen
+  ✓ control::test_signal_values::writes_in_loops_and_functions_notify
   ✓ control::test_structural_patterns::test_a_subject_that_is_no_list_does_not_match
   ✓ control::test_structural_patterns::test_list_patterns_bind_names
   ✓ control::test_structural_patterns::test_nested_lists_and_pairs
@@ -446,6 +459,11 @@ PASSED:
   ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
   ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
+  ✓ functions::test_arity_overloads::a_call_takes_the_definition_of_its_argument_count
+  ✓ functions::test_arity_overloads::a_count_no_definition_fits_or_two_fit_is_an_error
+  ✓ functions::test_arity_overloads::an_overload_may_call_another_one
+  ✓ functions::test_arity_overloads::calls_without_parentheses_pick_by_count_too
+  ✓ functions::test_arity_overloads::defaults_count_for_the_arguments_a_definition_accepts
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_only_defaults_calls_it
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_parameter_is_an_error
@@ -757,6 +775,11 @@ PASSED:
   ✓ functions::test_user_method_form::a_method_form_call_passes_the_further_arguments
   ✓ functions::test_user_method_form::a_user_function_is_called_in_method_form
   ✓ functions::test_user_method_form::a_user_function_taking_a_function_in_method_form
+  ✓ functions::test_variadic::a_list_spreads_into_a_rest_parameter
+  ✓ functions::test_variadic::a_list_spreads_into_fixed_parameters
+  ✓ functions::test_variadic::a_rest_parameter_collects_the_remaining_arguments
+  ✓ functions::test_variadic::a_rest_parameter_may_be_empty
+  ✓ functions::test_variadic::calls_without_parentheses_fill_the_rest_too
   ✓ functions::test_whole_float_to_int_parameter::a_whole_float_for_an_int_parameter_is_refused
   ✓ host::tests::test_host_state
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
@@ -810,6 +833,9 @@ PASSED:
   ✓ lists::test_lazy_range::a_small_range_variable_is_still_its_list
   ✓ lists::test_linear_append::an_appended_list_of_nodes_keeps_its_items
   ✓ lists::test_linear_append::map_and_filter_of_texts_stay_linear
+  ✓ lists::test_linear_arrays::a_linear_array_checks_its_bounds_and_stays_in_its_task
+  ✓ lists::test_linear_arrays::a_linear_array_is_a_list_as_a_whole
+  ✓ lists::test_linear_arrays::a_linear_array_reads_and_writes_its_cells
   ✓ lists::test_list_arithmetic::test_round_group_of_arithmetic_is_still_an_expression
   ✓ lists::test_list_arithmetic::test_square_list_keeps_all_items_that_are_arithmetic
   ✓ lists::test_list_arithmetic::test_square_list_of_one_arithmetic_item_is_a_list
@@ -1817,6 +1843,7 @@ PASSED:
   ✓ types::test_class_cases_ported::a_static_method_is_called_on_the_class
   ✓ types::test_class_cases_ported::a_subclass_instance_is_its_parent_type
   ✓ types::test_class_cases_ported::a_subclass_method_calls_an_inherited_method_without_self
+  ✓ types::test_class_cases_ported::an_object_has_one_text_form
   ✓ types::test_class_cases_ported::an_override_calls_the_parent_method_with_super
   ✓ types::test_class_cases_ported::each_subclass_overrides_the_shared_method
   ✓ types::test_class_cases_ported::fields_have_defaults
@@ -2471,4 +2498,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2466 passed, 0 failed, 2466 total tested
+23 ignored, 2493 passed, 0 failed, 2493 total tested

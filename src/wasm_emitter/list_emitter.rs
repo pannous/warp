@@ -9,8 +9,7 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 20] = [
-	super::cells::CELL_WORDS[0], super::cells::CELL_WORDS[1], super::cells::CELL_WORDS[2],
+const BUILTIN_CALLS: [&str; 17] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF,
@@ -59,6 +58,7 @@ impl WasmGcEmitter {
 			|| name == PRINT
 			|| name == crate::wasp_parser::TEXT_TIMES
 			|| BUILTIN_CALLS.contains(&name)
+			|| super::cells::CELL_WORDS.contains(&name)
 			|| crate::library_words::is_runtime_word(name)
 			|| name == crate::type_tests::IS_TYPE
 			|| ROUNDING_FUNCTIONS.contains(&name)

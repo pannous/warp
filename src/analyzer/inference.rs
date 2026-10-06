@@ -225,7 +225,7 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		}
 		// a cell's value is held as a Node, like a map value (Empty), and joins a text or adds at run time
 		if crate::wasm_emitter::cells::CELL_WORDS.contains(&name.as_str()) {
-			return if name == crate::wasm_emitter::cells::CELL_NEW { Kind::Data } else { Kind::Empty };
+			return if crate::wasm_emitter::cells::MAKING_WORDS.contains(&name.as_str()) { Kind::Data } else { Kind::Empty };
 		}
 		if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 			return kind;
