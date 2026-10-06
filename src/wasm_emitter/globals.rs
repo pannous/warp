@@ -133,6 +133,11 @@ impl WasmGcEmitter {
 	/// `x = v` for a declared global x: store v in the global's own representation and leave it on the stack
 	pub(super) fn emit_global_store(&mut self, func: &mut Function, name: &str, value: &Node) -> Option<Kind> {
 		let &(index, kind) = self.ctx.user_globals.get(name)?;
+		if self.emit_typed_list_store(func, name, value) {
+			func.instruction(&I::Drop);
+			self.emit_typed_list_as_node(func, name);
+			return Some(kind);
+		}
 		self.emit_value_of_kind(func, value, kind);
 		func.instruction(&I::GlobalSet(index));
 		func.instruction(&I::GlobalGet(index));
@@ -187,8 +192,16 @@ impl WasmGcEmitter {
 		collect_variables(program, &mut main);
 		let mut names: Vec<&String> = main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
 		names.sort();
+		let typed = self.find_typed_globals(program, &main);
 		for name in names {
-			self.allocate_global(name, main.globals[name].kind);
+			match typed.get(name) {
+				Some(&list) => {
+					let global = self.declare_typed_list_global(list.element);
+					self.ctx.user_globals.insert(name.to_string(), (global, main.globals[name].kind));
+					self.typed_globals.insert(name.to_string(), (global, list));
+				}
+				None => { self.allocate_global(name, main.globals[name].kind); }
+			}
 		}
 		self.ctx.declared_globals = main.globals;
 	}
@@ -237,6 +250,10 @@ impl WasmGcEmitter {
 			ConstExpr::i64_const(0)
 		};
 		let val_type = if kind.is_ref() { Ref(self.node_ref(true)) } else { self.storage_type(kind) };
+		self.declare_global_of(val_type, init_expr)
+	}
+
+	pub(super) fn declare_global_of(&mut self, val_type: ValType, init_expr: ConstExpr) -> u32 {
 		self.globals.global(GlobalType { val_type, mutable: true, shared: false }, &init_expr);
 		self.next_global_idx += 1;
 		self.next_global_idx - 1
