@@ -8,7 +8,18 @@ use warp::wasm_emitter::eval;
 fn a_tag_takes_its_attributes_in_parentheses() {
 	eq!(eval("html{ div{ label(for:pwd):\"Password\" } }"), eval("html{ div{ label{for:pwd, \"Password\"} } }"));
 	eq!(eval("div{ label(for:pwd a:b) }"), eval("div{ label{for:pwd a:b} }"));
-	assert!(eval("samples/html.wasp").first_error().is_none(), "{}", eval("samples/html.wasp").serialize());
+	runs("samples/html.wasp");
+}
+
+// card g-_bGo: the playground's HTML DSL demo runs; its list items are tags li{…}, children as repeated XML elements
+#[test]
+fn the_html_dsl_sample_runs() {
+	runs("samples/html_dsl.wasp");
+}
+
+fn runs(sample: &str) {
+	let value = eval(sample);
+	assert!(value.first_error().is_none(), "{sample}: {}", value.serialize());
 }
 
 #[test]
