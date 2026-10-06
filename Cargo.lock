@@ -1644,6 +1644,7 @@ dependencies = [
 name = "warp-runtime"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "wasmtime",
 ]
 

@@ -357,6 +357,13 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 	}
 }
 
+/// A program with `on interrupt {…}` polls for the signal at its loop starts (host signal_poll, notes/system_signals.md)
+pub fn extract_signal_polls(ctx: &mut Context) {
+	if ctx.user_functions.contains_key(crate::host::INTERRUPT_HANDLER) {
+		add_ffi_import(ctx, crate::host::SIGNAL_POLL, crate::host::HOST_LIBRARY);
+	}
+}
+
 /// The library an import names: `"z"` and `'m'` are one-character texts, which parse as characters
 pub(super) fn library_name(library: &Node) -> String {
 	match library.drop_meta() {
