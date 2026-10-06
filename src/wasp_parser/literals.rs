@@ -43,6 +43,8 @@ impl WaspParser {
 
 	pub(super) fn parse_string(&mut self) -> Node {
 		let quote = self.current_char();
+		// «text» closes with », every other quote with itself
+		let closing = if quote == '«' { '»' } else { quote };
 		let (quote_line, quote_column) = self.get_position();
 		self.advance(); // skip opening quote
 
@@ -54,9 +56,9 @@ impl WaspParser {
 		loop {
 			let ch = self.current_char();
 			if ch == '\0' {
-				return error(&format!("Unterminated string: the text opened at {quote_line}:{quote_column} has no closing `{quote}`"));
+				return error(&format!("Unterminated string: the text opened at {quote_line}:{quote_column} has no closing `{closing}`"));
 			}
-			if ch == quote {
+			if ch == closing {
 				self.advance(); // skip closing quote
 				let s: String = s.nfc().collect(); // an escape (`e\u{301}`) may leave it unnormalized
 				if is_template {

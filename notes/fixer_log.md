@@ -211,3 +211,6 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-06 fix-diagnostics (user issues #11 #12 #13 #17, g-1pvQ)
 - No hints for 'x'/"x", let/:=, str(x)/x as string, a number joining a text: the default Style leaves those axes Any,
   Style::canonical keeps one spelling each (hint-machinery tests run under it). sleep(1) warns for a unit. norm = abs.
+
+## 2026-10-06 guillemet-strings
+- «text» ended only at another «: parse_string closes « with ».
