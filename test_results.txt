@@ -590,6 +590,8 @@ PASSED:
   ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
+  ✓ functions::test_field_function_values::test_function_in_object_field
+  ✓ functions::test_field_function_values::test_function_list_in_object_field
   ✓ functions::test_float_to_int_parameter::a_float_for_an_int_parameter_is_refused
   ✓ functions::test_float_to_int_parameter::an_explicit_cast_or_an_int_passes
   ✓ functions::test_folding_in_bodies::a_call_on_a_parameter_stays
@@ -776,6 +778,11 @@ PASSED:
   ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_block_body
   ✓ functions::test_return_type_forms::an_arrow_result_type_before_a_colon_body
   ✓ functions::test_return_type_forms::named_arguments_reach_a_function_with_a_result_type
+  ✓ functions::test_returned_blocks::a_block_argument_keeps_its_own_it
+  ✓ functions::test_returned_blocks::a_returned_block_keeps_its_own_it
+  ✓ functions::test_returned_blocks::it_in_the_body_is_the_parameter
+  ✓ functions::test_returned_function_names::calling_the_result_of_a_bare_name_educates
+  ✓ functions::test_returned_function_names::the_explicit_forms_work
   ✓ functions::test_runtime_kind_arithmetic::a_def_body_reads_fields_of_its_parameters
   ✓ functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
@@ -2581,4 +2588,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2576 passed, 0 failed, 2576 total tested
+23 ignored, 2583 passed, 0 failed, 2583 total tested
