@@ -357,6 +357,9 @@ pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 		// a Node whose kind is known only at run time (an awaited job's result, ø): the value keeps that kind, so
 		// `(if c then 0 else job_result) + 1` adds at run time instead of failing as text
 		Kind::Empty
+	} else if kinds.contains(&Kind::Data) && kinds.iter().all(|kind| matches!(kind, Kind::Int | Kind::Float | Kind::Data)) {
+		// a number and a number of run-time kind (`xs#1 + rest`): a number decided at run time, not a text
+		Kind::Data
 	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
 		Kind::Text
 	} else if then_kind == Kind::Float || else_kind == Kind::Float {
