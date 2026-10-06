@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 /// `x?`, `int?`: optional
 const OPTIONAL_MARK: char = '?';
+const MAYBE_WORD: &str = "maybe";
 
 struct Function {
 	parameters: Vec<String>,
@@ -39,13 +40,16 @@ pub fn lower(node: Node) -> Node {
 }
 
 /// Defaults written as other languages do: Ruby's keyword parameter `def f(a, b: 2)` (a literal after the colon is no
-/// type but the default, `b=2`) and the optional `x?`, `x: int?` (TypeScript, Swift, Kotlin: a missing argument is ø)
+/// type but the default, `b=2`) and the optional `x?`, `x: int?` (TypeScript, Swift, Kotlin), `maybe x`, `maybe int x`,
+/// `x: maybe int` (P125: the same as `x=ø`, a missing argument is ø)
 fn default_forms(node: Node) -> Node {
 	match node {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) => {
 			let head = match head.drop_meta() {
 				Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-					Node::List(items.iter().cloned().map(literal_default).collect(), Bracket::Round, separator.clone())
+					let (name, parameters) = items.split_first().expect("a name");
+					let parameters = maybe_parameters(parameters.to_vec()).into_iter().map(literal_default);
+					Node::List(std::iter::once(name.clone()).chain(parameters).collect(), Bracket::Round, separator.clone())
 				}
 				_ => *head,
 			};
@@ -55,8 +59,49 @@ fn default_forms(node: Node) -> Node {
 	}
 }
 
+fn optional(name: Node) -> Node {
+	Node::Key(Box::new(name), Op::Assign, Box::new(Node::Empty))
+}
+
+fn is_maybe(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if word == MAYBE_WORD)
+}
+
+/// `maybe x`, `maybe int x`, `x: maybe int` among the parameters (also spaced in one item): `x=ø`
+fn maybe_parameters(parameters: Vec<Node>) -> Vec<Node> {
+	let mut forms = vec![];
+	let mut items = parameters.into_iter().peekable();
+	while let Some(item) = items.next() {
+		match item.drop_meta() {
+			Node::List(words, Bracket::None | Bracket::Round, Separator::Space) if words.iter().any(is_maybe) || words.first().is_some_and(is_maybe_annotated) => {
+				forms.extend(maybe_parameters(words.clone()));
+			}
+			_ if is_maybe(&item) => {
+				let mut name = items.next();
+				if name.as_ref().is_some_and(|word| crate::analyzer::type_word_kind(&word.drop_meta().name()).is_some()) && items.peek().is_some() {
+					name = items.next(); // `maybe int x`
+				}
+				match name {
+					Some(name) => forms.push(optional(Node::Symbol(parameter_name(&name)))),
+					None => forms.push(item),
+				}
+			}
+			Node::Key(name, Op::Colon, _) if is_maybe_annotated(&item) => {
+				items.next_if(|word| matches!(word.drop_meta(), Node::Symbol(_))); // the type after `maybe`
+				forms.push(optional(name.as_ref().clone()));
+			}
+			_ => forms.push(item),
+		}
+	}
+	forms
+}
+
+/// `x: maybe` (the type word follows as the next item)
+fn is_maybe_annotated(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, Op::Colon, annotation) if is_maybe(annotation))
+}
+
 fn literal_default(parameter: Node) -> Node {
-	let optional = |name: Node| Node::Key(Box::new(name), Op::Assign, Box::new(Node::Empty));
 	match parameter {
 		Node::Key(name, Op::Colon, value) if matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_)) => Node::Key(name, Op::Assign, value),
 		// the value may be ø or of the type: it is held boxed, as any value
