@@ -10,7 +10,7 @@
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use crate::host_words::{FILE_HANDLER_PREFIX, INTERRUPT_HANDLER, SHARED_HANDLER, TIMER_HANDLER_PREFIX};
+use crate::host_words::{EXIT_HANDLER, FILE_HANDLER_PREFIX, INTERRUPT_HANDLER, SHARED_HANDLER, TIMER_HANDLER_PREFIX};
 use std::path::PathBuf;
 use std::time::SystemTime;
 use wasmtime::{AsContextMut, Func, Instance, Result, Store, Val};
@@ -75,6 +75,38 @@ pub fn start_timer(id: i64, milliseconds: i64) {
 	TIMERS.with(|timers| timers.borrow_mut().push(timer));
 }
 
+/// `signal_daily(id, minute_of_day)`: the handler on·every·id runs at that local time of day, every day
+pub fn start_daily_timer(id: i64, minute_of_day: i64) {
+	let delay = Duration::from_secs(seconds_until(minute_of_day, local_second_of_day()) as u64);
+	let timer = Timer { handler: format!("{TIMER_HANDLER_PREFIX}{id}"), period: DAY, due: Instant::now() + delay, watched: None };
+	TIMERS.with(|timers| timers.borrow_mut().push(timer));
+}
+
+const DAY: Duration = Duration::from_secs(24 * 3600);
+
+/// Seconds from `second_of_day` to the next `minute_of_day` (a whole day when it is now)
+pub fn seconds_until(minute_of_day: i64, second_of_day: i64) -> i64 {
+	let day = DAY.as_secs() as i64;
+	match (minute_of_day * 60 - second_of_day).rem_euclid(day) {
+		0 => day,
+		seconds => seconds,
+	}
+}
+
+/// The seconds since local midnight (UTC where the platform gives no time zone)
+fn local_second_of_day() -> i64 {
+	let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |since| since.as_secs() as i64);
+	#[cfg(unix)]
+	{
+		let time = now as libc::time_t;
+		let mut local: libc::tm = unsafe { std::mem::zeroed() };
+		if !unsafe { libc::localtime_r(&time, &mut local) }.is_null() {
+			return (local.tm_hour * 3600 + local.tm_min * 60 + local.tm_sec) as i64;
+		}
+	}
+	now.rem_euclid(DAY.as_secs() as i64)
+}
+
 /// `signal_watch(id, path)`: the handler on·file·id runs when the file changes from now on
 pub fn watch_file(id: i64, path: String) {
 	let path = PathBuf::from(path);
@@ -126,18 +158,46 @@ pub fn run_due_handlers<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&
 	let shared_checks = export(store, SHARED_HANDLER).map(|_| SHARED_HANDLER.to_string());
 	for name in due_handlers(handles_interrupt).into_iter().chain(shared_checks) {
 		let Some(handler) = export(store, &name) else { continue };
-		let mut arguments = vec![];
-		// a handler that reads `event` gets ø
-		if handler.ty(&*store).params().len() == 1 {
-			let empty = export(store, NEW_EMPTY).ok_or_else(|| wasmtime::Error::msg("no new_empty"))?;
-			let mut built = [Val::AnyRef(None)];
-			empty.call(&mut *store, &[], &mut built)?;
-			arguments.push(built[0]);
-		}
-		let mut results = vec![Val::I64(0); handler.ty(&*store).results().len()];
-		handler.call(&mut *store, &arguments, &mut results)?;
+		call_handler(store, handler, &mut export)?;
 	}
 	Ok(())
+}
+
+fn call_handler<S: AsContextMut>(store: &mut S, handler: Func, export: &mut impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
+	let mut arguments = vec![];
+	// a handler that reads `event` gets ø
+	if handler.ty(&*store).params().len() == 1 {
+		let empty = export(store, NEW_EMPTY).ok_or_else(|| wasmtime::Error::msg("no new_empty"))?;
+		let mut built = [Val::AnyRef(None)];
+		empty.call(&mut *store, &[], &mut built)?;
+		arguments.push(built[0]);
+	}
+	let mut results = vec![Val::I64(0); handler.ty(&*store).results().len()];
+	handler.call(&mut *store, &arguments, &mut results)
+}
+
+/// `on exit {…}`: the run ends (main returned, the timers stopped, or `exit(code)`), so on·exit runs once; an `exit`
+/// inside it ends it with that code (ended_by_exit keeps it)
+pub fn run_exit_handler<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
+	let Some(handler) = export(store, EXIT_HANDLER) else { return Ok(()) };
+	call_handler(store, handler, &mut export)
+}
+
+/// The outcome of a run and its exit handler: the handler runs after a normal end and after `exit(code)` (whose code
+/// stays, unless the handler exits with its own), never after a failure
+pub fn with_exit_handler<S: AsContextMut, R>(outcome: Result<R>, store: &mut S, export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<Option<R>> {
+	let exited = ended_by_exit(&outcome);
+	let value = match outcome {
+		Ok(value) => Some(value),
+		Err(_) if exited => None,
+		Err(error) => return Err(error),
+	};
+	let handled = run_exit_handler(store, export);
+	if ended_by_exit(&handled) {
+		return Ok(None);
+	}
+	handled?;
+	Ok(value)
 }
 
 /// Sleep for `duration`, running the handlers that come due on the way; a ctrl-c ends the sleep early
@@ -164,6 +224,7 @@ pub fn allow_staying() {
 fn spoken(period: Duration) -> String {
 	match (period.as_millis(), period.as_millis() % 1000) {
 		(1000, _) => "1 second".to_string(),
+		(milliseconds, _) if milliseconds == DAY.as_millis() => "day".to_string(),
 		(milliseconds, 0) => format!("{} seconds", milliseconds / 1000),
 		(milliseconds, _) => format!("{milliseconds} ms"),
 	}
