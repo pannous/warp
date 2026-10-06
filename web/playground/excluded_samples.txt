@@ -17,11 +17,10 @@ errors	`}` is missing: the group opened at 4:9 runs to the end of the input
 life_kotlin_ranges	index out of range (does the loop bound `..size-1` include the end? at 23:13)
 modules	`}` is missing: the group opened at 22:15 runs to the end of the input
 natural	`n times x` repeats a text (or a list: `n times [x]`), four is a Symbol at 6:21
-netbase	undefined: query in `query "all cities with population > 100000"`
+netbase	undefined: query in `query "all cities with population > 100000"` (needs a netbase package: card netbase-package)
 neural_net	output_weights is a main-level variable: declare it `global output_weights` to change it from a function at 42:9
-particles	Particle{…} takes fields as name:value, got  x:x, y:y (vx keeps the block (cos angle)*speed at 23:13)
+particles	Particle{…} takes fields as name:value, got  x:x, y:y (sketches a drawing API: card drawing-words)
 polymorphism	two parameters are named float: use one-word parameter names here
-sample	PI is a constant at 12:9; fix: another name
-types	undefined function: Ok at 29:24
-wasm_interop	Empty symbol
-webgpu	undefined: vec4 of f32 in `vec4 of f32 (in#uv+1, …)`
+types	undefined function: Ok at 29:24 (variant types: card sum-types)
+wasm_interop	Empty symbol (sketches export, memory and interface declarations: card wasm-interop-sketch)
+webgpu	undefined: vec4 of f32 in `vec4 of f32 (in#uv+1, …)` (WGSL in a webgpu block: cards web-apis, gpu-map)

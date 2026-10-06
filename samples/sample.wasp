@@ -1,23 +1,15 @@
 #!/usr/bin/env wasp
 // Wasp Language Sample
-a + b * 2.0
-
-/* Types */
-int x = 42
-Int x = 42
-string name = "Hello World"
-array numbers = [1, 2, 3]
-map data = {"key": "value"}
-map data = {key: "value"}
-float64 PI = 3.14159// Wasp Language Sample
 
 /* Types */
 int x = 42
 string name = "Hello World"
-array numbers = [1, 2, 3]
-tuple numbers = (1, 2, 3)
-map data = {"key":(1,2)}
-float64 PI = 3.14159
+list numbers = [1, 2, 3]
+triple = (1, 2, 3)
+// a map (array, tuple and map as declaration words: card declaration-type-words)
+data = {key: "value"}
+// PI is wasp's own constant: a program does not redefine it
+float64 ratio = 3.14159
 bool flag = true
 
 /* Functions */
@@ -38,25 +30,4 @@ for item in numbers {
 }
 
 /* Arithmetic */
-result = 2 + 3 * 4
-bool flag = true
-
-/* Functions */
-fun calculate(a: int, b: real) -> float64 {
-    return a + b * 2.0
-}
-
-/* Control flow */
-if (x > 0) {
-    print("Positive")
-} else {
-    print("Non-positive")
-}
-
-/* Collections */
-for item in numbers {
-    print(item)
-}
-
-/* Arithmetic */
-result = 2 + 3 * 4
+result = 2 + 3 * 4 + calculate(1, 2.5)
