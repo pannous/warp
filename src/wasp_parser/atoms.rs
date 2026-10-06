@@ -568,7 +568,7 @@ impl WaspParser {
 		let start = self.pos.saturating_sub(symbol.chars().count());
 		let is_field = start > 0 && self.chars[start - 1] == '.';
 		!is_key && !is_field && (TYPE_DECLARATION_WORDS.contains(&symbol)
-			|| (symbol == RECORD_WORD && self.name_and_block_follow())
+			|| (symbol == RECORD_WORD && (self.name_and_block_follow() || self.name_and_parameters_follow()))
 			|| (symbol == "type" && self.current_char() != '('))
 	}
 
@@ -684,6 +684,10 @@ impl WaspParser {
 		parameters.into_iter().map(|parameter| match parameter.drop_meta() {
 			// `val x: Int`, `var y: Int = 0`: the field, its keyword dropped
 			Node::List(words, _, _) if words.len() == 2 && FIELD_KEYWORDS.contains(&words[0].drop_meta().name().as_str()) => words[1].clone(),
+			// C#'s `int X`: the field X of type int
+			Node::List(words, _, _) if words.len() == 2 && matches!(words[1].drop_meta(), Node::Symbol(_)) && crate::analyzer::type_word_kind(&words[0].drop_meta().name()).is_some() => {
+				Node::Key(Box::new(words[1].clone()), Op::Colon, Box::new(words[0].clone()))
+			}
 			_ => parameter,
 		}).collect()
 	}

@@ -22,6 +22,15 @@ impl WaspParser {
 
 	/// Do blanks, an identifier, optional blanks and a `{` follow the cursor: `record point {…}`
 	pub(super) fn name_and_block_follow(&self) -> bool {
+		self.name_then('{')
+	}
+
+	/// ` Point(int X, int Y)`: a name with parameters, C#'s positional `record Point(…)`
+	pub(super) fn name_and_parameters_follow(&self) -> bool {
+		self.name_then('(')
+	}
+
+	fn name_then(&self, opener: char) -> bool {
 		let is_blank = |ch: char| matches!(ch, ' ' | '\t');
 		let mut offset = 0;
 		while is_blank(self.peek_char(offset)) {
@@ -35,7 +44,7 @@ impl WaspParser {
 		while is_blank(self.peek_char(offset)) {
 			offset += 1;
 		}
-		has_name && self.peek_char(offset) == '{'
+		has_name && self.peek_char(offset) == opener
 	}
 
 	pub(super) fn advance(&mut self) {
