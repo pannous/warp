@@ -1618,6 +1618,8 @@ name = "warp"
 version = "0.1.1"
 dependencies = [
  "anyhow",
+ "crc32fast",
+ "flate2",
  "libloading",
  "log",
  "num-bigint",
