@@ -10,9 +10,17 @@ members = ["crates/warp-runtime"]
 resolver = "2"
 
 [package]
-name = "warp"
+name = "warp-lang" # crates.io: `warp` is the web framework (user 2026-10-06: "lang is perfect"); the library stays `warp`
 version = "1.2.3"
 edition = "2021"  # Cargo edition! NOT package edition!
+description = "Warp: the Wasp language, a data notation that is also a programming language, compiled to WebAssembly GC"
+repository = "https://github.com/pannous/warp"
+homepage = "https://warp.pannous.com/"
+readme = "README.md"
+keywords = ["wasm", "webassembly", "language", "compiler", "notation"]
+categories = ["compilers", "wasm", "command-line-utilities"]
+# the published crate: the sources and the two files they include_str!, not the tests, wiki or playground
+include = ["src/**", "packages.wasp", "web/playground/foreign_python.py", "README.md"]
 # One test binary: cargo would otherwise build and link every tests/*.rs as its own crate (~200 links)
 autotests = false
 
@@ -81,7 +89,7 @@ libloading = { version = "0.9", optional = true }  # Dynamic library loading for
 
 wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-copying", "runtime", "wat"], optional = true }
 wasmtime-wasi = { version = "49.0.1", optional = true }
-warp-runtime = { path = "crates/warp-runtime", default-features = false } # without features: the names of the host words only
+warp-runtime = { path = "crates/warp-runtime", version = "1.2.3", default-features = false } # without features: the names of the host words only
 flate2 = { version = "1.1", optional = true } # paint() writes a PNG natively (src/paint.rs); in the tree through wasmtime already
 crc32fast = { version = "1.5", optional = true } # the PNG chunk checksums
 sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (src/run/module_cache.rs); wasmtime uses it already
@@ -172,6 +180,7 @@ strip = true           # Strip symbols
 opt-level = 3
 
 [lib]
+name = "warp"
 # Only rlib: the browser build asks for the cdylib itself (web/playground/build.sh: `cargo rustc --crate-type cdylib`).
 # A cdylib here made cargo name the rlib without a hash, so every checkout copy linked the same libwarp.rlib.
 crate-type = ["rlib"]

@@ -10,7 +10,12 @@ pannous/homebrew-tap, formula built from source with cargo.
 - GitHub release per tag v<Cargo version>: .github/workflows/release.yml attaches
   warp-<tag>-<target>.tar.gz (warp + warp-runtime) for aarch64-apple-darwin, x86_64/aarch64-unknown-linux-gnu.
 - `cargo install --locked --git https://github.com/pannous/warp warp warp-runtime`.
-- Not on crates.io: the name `warp` belongs to the web framework (open decision: publish as another name?).
+- crates.io, prepared, not uploaded: packages `warp-lang` (user 2026-10-06; `warp` is the web framework; the library is
+  still `warp`, the binary `warp`) and `warp-runtime` (1.2.3, same version). `cargo package --workspace` verifies both
+  (227 files, 860 KB). Blocked by the postponed license (open_decisions P150): crates.io refuses a crate without
+  `license`. Once decided: `license = "…"` in both Cargo.toml, a LICENSE file, then
+  `CARGO_NET_OFFLINE=false cargo publish --workspace`, and the README's Cargo line becomes `cargo install warp-lang`
+  (it installs warp; warp-runtime is a second `cargo install warp-runtime`).
 - Every channel ships warp-runtime too: `warp <file>` builds the standalone executable from the warp-runtime next to
   warp (src/main.rs runtime_stub_path); without it warp tries to build it from its source checkout, gone after install.
   Built on its own (`-p warp-runtime`) it has no Cranelift.
