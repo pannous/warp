@@ -52,6 +52,10 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_event_signals::a_raise_inside_a_function_reaches_the_handler
+  ✓ control::test_event_signals::raise_runs_the_handlers_of_its_name
+  ✓ control::test_event_signals::the_handled_signals_name_their_functions
+  ✓ control::test_event_signals::the_handler_reads_the_event_data
   ✓ control::test_filter_loop_over_variable::a_filter_loop_over_a_variable
   ✓ control::test_filter_loops::test_a_class_name_loop_visits_only_its_instances
   ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
@@ -87,6 +91,8 @@ PASSED:
   ✓ control::test_if_then_assign::a_then_branch_takes_an_assignment
   ✓ control::test_if_then_assign::an_else_branch_takes_an_assignment
   ✓ control::test_if_value_kind::test_if_of_characters_joins_a_text
+  ✓ control::test_implicit_await::a_task_read_as_its_value_warns_that_it_waits
+  ✓ control::test_implicit_await::an_awaited_task_does_not_warn
   ✓ control::test_iteration_words::test_a_wrong_function_is_an_error
   ✓ control::test_iteration_words::test_each_runs_the_body_per_item_and_is_the_last_value
   ✓ control::test_iteration_words::test_filter
@@ -118,9 +124,12 @@ PASSED:
   ✓ control::test_object_blocks::test_statements_in_braces_are_a_block
   ✓ control::test_object_functions::test_fields_are_in_scope_of_function_entries
   ✓ control::test_object_functions::test_function_entries_are_callable
+  ✓ control::test_parallel_map::a_parallel_loop_updating_a_copy_warns
   ✓ control::test_parallel_map::a_parallel_map_gives_the_results_in_order
   ✓ control::test_parallel_map::a_parallel_map_runs_its_items_at_once
   ✓ control::test_parallel_map::a_parallel_map_takes_a_function_value
+  ✓ control::test_parallel_map::go_for_runs_its_iterations_in_parallel
+  ✓ control::test_parallel_map::go_maps_in_parallel
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
   ✓ control::test_run_time_block_cache::a_block_in_a_loop_body_sees_the_variables_assigned_there
@@ -169,6 +178,9 @@ PASSED:
   ✓ control::test_task_exact::a_big_integer_crosses_to_a_task_and_back
   ✓ control::test_task_exact::a_ratio_crosses_to_a_task_and_back
   ✓ control::test_task_list_literal::a_list_of_task_values_holds_each_result
+  ✓ control::test_task_signals::a_raise_in_a_task_runs_the_programs_handler
+  ✓ control::test_task_signals::a_raise_nobody_awaits_is_handled_before_the_run_ends
+  ✓ control::test_task_signals::a_raise_without_handler_fails_the_task
   ✓ control::test_task_values::a_function_value_crosses_to_a_task
   ✓ control::test_task_values::a_task_gives_the_result_of_its_function
   ✓ control::test_task_values::a_task_pauses_and_resumes
@@ -254,9 +266,17 @@ PASSED:
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
   ✓ control::test_unwrap::test_unwrap_gives_the_value
   ✓ control::test_unwrap::test_unwrap_of_nothing_or_an_error_is_loud
+  ✓ control::test_variable_signals::a_condition_calling_a_function_watches_what_it_reads
+  ✓ control::test_variable_signals::a_condition_ending_in_a_variable_keeps_its_block
+  ✓ control::test_variable_signals::a_global_write_before_the_listener_is_not_seen
+  ✓ control::test_variable_signals::a_global_write_inside_a_function_runs_the_listeners
   ✓ control::test_variable_signals::a_listener_on_a_charged_value_watches_what_it_reads
+  ✓ control::test_variable_signals::a_multi_assignment_notifies_once_after_all_its_writes
+  ✓ control::test_variable_signals::a_write_has_the_effects_of_its_listeners
   ✓ control::test_variable_signals::after_a_function_runs_after_each_statement_calling_it
+  ✓ control::test_variable_signals::listeners_see_field_and_item_writes
   ✓ control::test_variable_signals::on_change_runs_only_when_the_value_differs
+  ✓ control::test_variable_signals::on_set_of_a_charged_value_listens_to_its_changes
   ✓ control::test_variable_signals::on_set_runs_after_each_write_with_the_value
   ✓ control::test_variable_signals::once_never_runs_when_the_condition_never_holds
   ✓ control::test_variable_signals::once_runs_the_first_time_the_condition_holds
@@ -723,6 +743,8 @@ PASSED:
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
   ✓ lists::test_byte_size::byte_size_counts_bytes_and_size_counts_elements
+  ✓ lists::test_counting_word_variables::a_counting_word_variable_in_a_list_is_an_item
+  ✓ lists::test_counting_word_variables::shared_values_named_like_counting_words_reach_a_go_block
   ✓ lists::test_decimal_list_elements::a_decimal_element_can_be_assigned
   ✓ lists::test_decimal_list_elements::a_decimal_element_compares
   ✓ lists::test_decimal_list_elements::a_decimal_element_takes_part_in_arithmetic
@@ -922,6 +944,9 @@ PASSED:
   ✓ node::node_values_test::test_values_meta
   ✓ node::node_values_test::test_values_nested_key
   ✓ node::node_values_test::test_values_number
+  ✓ node::test_comment_meta::a_field_named_meta_stays_the_field
+  ✓ node::test_comment_meta::a_missing_field_is_named_from_any_browsers_trace
+  ✓ node::test_comment_meta::the_comment_of_a_binding_is_its_meta
   ✓ node::test_empty_operands::a_condition_keyword_is_written_without_its_empty_left
   ✓ node::test_empty_operands::a_missing_operand_is_not_written
   ✓ node::test_empty_operands::a_prefix_form_reads_back_as_the_same_tree
@@ -1430,6 +1455,8 @@ PASSED:
   ✓ parser::test_symbol_hyphen::test_decrement_inside_a_loop_body
   ✓ parser::test_symbol_hyphen::test_hyphen_between_words_stays_kebab_case
   ✓ parser::test_symbol_hyphen::test_trailing_decrement_is_not_part_of_the_name
+  ✓ parser::test_trailing_annotation::a_leading_annotation_still_marks_what_follows
+  ✓ parser::test_trailing_annotation::a_trailing_annotation_marks_the_expression_before_it
   ✓ parser::test_unary_plus::a_unary_plus_is_its_operand
   ✓ parser::test_uniscript_entities::an_unknown_entity_is_an_error
   ✓ parser::test_uniscript_entities::entities_are_their_characters
@@ -1498,7 +1525,7 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
-  ✓ programs::test_paint::paint_without_a_canvas_is_a_loud_error
+  ✓ programs::test_paint::paint_writes_a_png_natively
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
   ✓ programs::test_samples::test_ackermann
@@ -1971,6 +1998,8 @@ PASSED:
   ✓ wasm::test_standalone_executable::test_running_a_file_leaves_its_executable
   ✓ wasm::test_standalone_executable::test_running_without_a_stub_leaves_no_executable
   ✓ wasm::test_standalone_executable::test_warp_run_leaves_no_executable
+  ✓ wasm::test_standalone_needs_runtime::a_program_with_tasks_says_tasks_need_runtime
+  ✓ wasm::test_standalone_needs_runtime::fetch_says_fetch_and_files_need_runtime
   ✓ wasm::test_wasm_emitter::test_emit_for_node_tree_shaking
   ✓ wasm::test_wasm_emitter::test_emit_gc_types
   ✓ wasm::test_wasm_emitter::test_function_usage_tracking
@@ -2236,6 +2265,7 @@ PASSED:
   ✓ welcoming::test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
   ✓ welcoming::test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
   ✓ welcoming::test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
+  ✓ welcoming::test_index_hint_simple::only_a_simple_index_gets_the_hash_hint
   ✓ welcoming::test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns
   ✓ welcoming::test_it_shadow_warning::a_loop_it_still_shadows_the_function_it
   ✓ welcoming::test_it_shadow_warning::a_loop_it_without_a_function_it_does_not_warn
@@ -2378,4 +2408,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2373 passed, 0 failed, 2373 total tested
+23 ignored, 2403 passed, 0 failed, 2403 total tested

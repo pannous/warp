@@ -37,6 +37,11 @@ pub const TASK_STATUS: &str = "task_status";
 /// task_poll(): where a loop starts in a program that controls tasks, a task the browser paused waits there (natively
 /// epoch interruption does it: a no-op)
 pub const TASK_POLL: &str = "task_poll";
+/// task_inside(): 1 in a task's instance, 0 in the program's; signal_send(handler, [event]): a raise inside a task
+/// queued for the starting thread, which runs the handler's node wrapper at its next task word or at the end of the run
+/// (P110, notes/signals.md phase 6)
+pub const TASK_INSIDE: &str = "task_inside";
+pub const SIGNAL_SEND: &str = "signal_send";
 /// `try f(args) else Y` of a user function: guarded_call("f·node", [args]) calls f's node wrapper in the same instance
 /// through the host, which turns the engine's stack overflow into the Error "call stack exhausted" that `try` catches
 pub const GUARDED_CALL: &str = "guarded_call";
@@ -66,24 +71,23 @@ pub const RUN_BLOCK: &str = "run_block";
 pub const BLOCK_VALUE: &str = "block·value";
 /// foreign_call(runtime, module, member, call, arguments): a module of another runtime (src/foreign.rs), Nodes in and out
 pub const FOREIGN_CALL: &str = "foreign_call";
-/// paint(pixels, width, height): the pixels (a list, row after row, 0 dark, anything else light) drawn on the canvas of
-/// the browser playground (host.js); natively there is no canvas yet: a loud error
+/// paint(pixels, width, height): the pixels (a list, row after row, nonzero ink, 0 paper) drawn on the canvas of the
+/// browser playground (host.js); natively a PNG file (src/paint.rs)
 pub const PAINT: &str = "paint";
-#[cfg(feature = "native")]
-const PAINT_NATIVELY: &str = "paint draws on the canvas of the browser playground (https://warp.pannous.com); the warp CLI has no canvas yet";
 /// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
 pub const VALUE_GIVING_WORDS: [&str; 3] = [RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE];
-pub const HOST_WORDS: [&str; 26] = [GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
+pub const HOST_WORDS: [&str; 28] = [GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
 	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2]];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 26] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 28] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 	[(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
 		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node]), (TASK_STATUS, vec![I64], vec![I64]), (TASK_POLL, vec![], vec![]),
+		(TASK_INSIDE, vec![], vec![I64]), (SIGNAL_SEND, vec![I32, node], vec![I64]),
 		(SHARED_WORDS[0], vec![I64], vec![I64]), (SHARED_WORDS[1], vec![I64, I64], vec![I64]), (SHARED_WORDS[2], vec![I64, I64, I64], vec![I64]),
 		(SHARED_WORDS[3], vec![I64, I64, I64], vec![I64]), (SHARED_WORDS[4], vec![I64], vec![I64]),
 		(SHARED_FLOAT_WORDS[0], vec![I64, I64], vec![F64]), (SHARED_FLOAT_WORDS[1], vec![I64, I64, F64], vec![F64]), (SHARED_FLOAT_WORDS[2], vec![I64, I64, F64], vec![F64])]
@@ -149,6 +153,8 @@ pub struct HostState {
 	next_alloc: u32,
 	/// WASI preview 1 (fd_write …), writing to the process's stdout and stderr
 	pub wasi: wasmtime_wasi::p1::WasiP1Ctx,
+	/// Whether this store runs a task's instance (tasks.rs): a raise there goes to the starting thread's handlers
+	pub in_task: bool,
 	/// The C pointers this run got (sqlite3 *, FILE *), handed to wasp as ids (notes/ffi_handles.md)
 	pub c_handles: crate::ffi::CHandles,
 }
@@ -167,6 +173,7 @@ impl HostState {
 			next_alloc: 65536, // Start allocation after initial memory region
 			wasi: wasmtime_wasi::WasiCtxBuilder::new().inherit_stdout().inherit_stderr().build_p1(),
 			c_handles: Default::default(),
+			in_task: false,
 		}
 	}
 
@@ -408,9 +415,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, RUN_BLOCK, run_block)?;
 	linker.func_wrap(HOST_LIBRARY, BLOCK_VALUE, block_value)?;
 	linker.func_wrap(HOST_LIBRARY, FOREIGN_CALL, foreign_call)?;
-	linker.func_wrap(HOST_LIBRARY, PAINT, |_: Option<wasmtime::Rooted<wasmtime::AnyRef>>, _: i64, _: i64| -> wasmtime::Result<()> {
-		Err(wasmtime::Error::new(crate::tasks::TaskFailure(PAINT_NATIVELY.into())))
-	})?;
+	linker.func_wrap(HOST_LIBRARY, PAINT, paint)?;
 
 	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
 	linker.func_wrap("host", "warn", |mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32| {
@@ -478,6 +483,19 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	)?;
 
 	Ok(())
+}
+
+/// paint(pixels, width, height) natively: the pixels as a PNG (src/paint.rs)
+#[cfg(feature = "native")]
+fn paint(mut caller: Caller<'_, HostState>, pixels: Option<wasmtime::Rooted<wasmtime::AnyRef>>, width: i64, height: i64) -> wasmtime::Result<()> {
+	let failure = |message: String| wasmtime::Error::new(crate::tasks::TaskFailure(message));
+	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("paint: the module exports no memory".into())) };
+	let pixels = crate::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory);
+	let ink: Vec<bool> = match pixels.drop_meta() {
+		crate::node::Node::List(items, _, _) => items.iter().map(|pixel| !matches!(pixel.drop_meta(), crate::node::Node::False | crate::node::Node::Empty) && pixel.drop_meta() != &crate::node::Node::int(0)).collect(),
+		other => return Err(failure(format!("paint needs a list of pixels, got {}", other.serialize()))),
+	};
+	crate::paint::paint(&ink, width.max(0) as usize, height.max(0) as usize).map(|_| ()).map_err(failure)
 }
 
 /// The host side of run_block: the block and the values it sees come in as Nodes, the block's value goes back as one

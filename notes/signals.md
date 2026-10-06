@@ -90,8 +90,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
 - **Recursion guard**: a listener that writes the variable it watches would loop; the check inside the listener body
   is not inserted (today: bodies are lowered with no listeners, so it already holds).
 - **Interaction with `:=`**: assigning a derived value is an error (P71). `on set total` of a derived value is
-  `on change total` (it has no write of its own); today it fires never: phase 2 makes it the change listener with a
-  got-it note.
+  `on change total` (it has no write of its own), done in phase 2.
 - **Interaction with `after` / `go` / tasks**: tasks are isolates (P33); only `shared` values (P106) cross. A listener
   on a shared value cannot be a check after local writes (the writes happen in another instance): it becomes a poll
   at the task check points (task_poll, `await`, loop back-edges), which is what `after done return x` does inside its
@@ -107,6 +106,8 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
   `once` gets a flag global, `on change` a `change_last_N` variable with the last seen value.
 - **Events (phase 2)**: `raise e{…}` with handlers known at compile time is a direct call of a generated `on·e(event)`
   that runs the handlers in order. A raise with no handler stays today's error (exception), caught by `try`.
+  Done: lowering/event_signals.rs. Handlers are program-wide (a raise before the `on` line reaches it too, as a
+  function defined later is callable); the function declares `global` the main-level variables the bodies mention.
 - **Escaping signals (phase 5)**: WASM GC `(struct $Signal (field $value (mut anyref)) (field $listeners (mut (ref null
   $ClosureList))))`; a write is `signal_set` (store, then `call_ref` each listener closure); a read is `struct.get`.
   Only variables that escape get it; the rest stay plain locals/globals.
@@ -119,16 +120,23 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
 
 ## Phases (each its own board card, smallest useful first)
 
-1. **Derived signals and change detection** (done on branch signals): a listener on a `:=` value watches what its
+1. **Derived signals and change detection** (done, 812144532): a listener on a `:=` value watches what its
    definition reads, transitively; `on change x {…}` runs only when the value differs, `value` is the new value.
    tests/control/test_variable_signals.rs.
-2. **Named event signals in one module**: `raise name{data}` → `on name {…}` (payload `event`), static dispatch;
-   `on set` of a derived value means `on change`.
-3. **Program-wide listeners**: writes to a watched main-level variable inside functions (via `global x`) run the
-   checks; `whenever f() > 3` follows the variables f reads; effects.rs counts listener bodies at the writes.
-4. **Batching**: a multi-assignment `a, b = 1, 2` checks once (P112: no batching block).
-5. **Signals as values**: `$Signal` cells for escaping variables and object fields (`on change person.age`),
-   subscription inside functions.
+2. **Named event signals in one module** (done, branch signals-events): `raise name{data}` → `on name {…}` (payload
+   `event`), static dispatch; `on set` of a derived value means `on change`. tests/control/test_event_signals.rs.
+3. **Program-wide listeners** (done): writes to a watched main-level variable inside
+   functions (via `global x`) run the checks: the listener's check is the function `signal·check·N()`, guarded by
+   `signal_listening_N` (set where the listener is declared), called after each such write in a function body.
+   Done too (card signals-phase-rest): `whenever f() > 3` follows the variables f reads, transitively through the
+   functions it calls (function_reads); effects need nothing new: effects.rs runs on the lowered program, where the
+   check is a call inside the writing function, so `effects of f` includes its listeners' IO.
+4. **Batching** (done, branch signals-events): a multi-assignment `a, b = 1, 2` checks once, after all its writes
+   (P112: no batching block); tuples::destructured_names names its targets.
+5. **Signals as values**: static part done (branch signals-events): a field or item write `p.age = 2`, `xs#1 = 9` is
+   a write of its variable, `on change p.age` / `whenever xs#1 > 5` listen to it. Open: `$Signal` cells for
+   variables that escape (passed to a function that subscribes, kept in a list), subscription inside functions; wait
+   for a program that needs them.
 6. **Signals across tasks**: events raised in tasks reach `on` handlers of the starting thread; listeners on `shared`
    values poll at check points (with warp-d9, card task-signals).
 7. **Browser and outside**: DOM events and output bindings in the playground, `broadcast` / channel listeners

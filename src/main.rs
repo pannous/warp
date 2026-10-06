@@ -325,9 +325,16 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
     let engine = util::gc_engine();
     let module = run::module_cache::compiled_module(&engine, &program.bytes).map_err(|failure| failure.to_string())?;
     let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();
-    let missing: Vec<String> = module.imports().filter(|import| !provided.contains(&(import.module(), import.name()))).map(|import| format!("{}.{}", import.module(), import.name())).collect();
+    let mut missing: Vec<String> = vec![];
+    for import in module.imports().filter(|import| !provided.contains(&(import.module(), import.name()))) {
+        let feature = feature_of(import.module(), import.name());
+        if !missing.contains(&feature) {
+            missing.push(feature);
+        }
+    }
     if !missing.is_empty() {
-        return Err(format!("a standalone executable provides print, libm, sleep, random, random_below and clock, not {}: run the program with warp", missing.join(", ")));
+        let need = if missing.len() == 1 && !missing[0].ends_with('s') { "needs" } else { "need" };
+        return Err(format!("{} {need} runtime.", missing.join(", ")));
     }
     let machine_code = module.serialize().map_err(|failure| failure.to_string())?;
     let stub = runtime_stub_path()?;
@@ -348,6 +355,21 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
         Err(failure) => return Err(format!("cannot run codesign for {}: {failure}", output.display())),
     }
     Ok(format!("wrote {} ({} bytes: runtime {}, machine code {})", output.display(), executable.len(), stub.display(), machine_code.len()))
+}
+
+/// What an import the standalone runtime lacks is for, in the user's words (card g-13Vk: "tasks need runtime."): the
+/// host words of tasks, shared arrays and run-time blocks by their feature, any other import as itself. fetch,
+/// fetch_within, read, warn and run are imported together (import_manager emit_host_imports): one feature.
+fn feature_of(module: &str, name: &str) -> String {
+    let feature = match name {
+        "fetch" | "fetch_within" | "read" | "warn" | "run" if module == "host" => "fetch and files",
+        _ if name.starts_with("task_") || name.starts_with("task·") => "tasks",
+        _ if name.starts_with("shared_") => "shared arrays",
+        "run_block" | "block·value" => "run-time blocks",
+        "foreign_call" => "foreign calls",
+        _ => return format!("{module}.{name}"),
+    };
+    feature.to_string()
 }
 
 fn standalone_output_path(target: &str) -> std::path::PathBuf {
