@@ -6,8 +6,8 @@ This is a block comment
 spanning multiple lines
 */
 
-// Comments attach to the next element as metadata
-// This documents the greeting variable
+// Under `use comments` a comment before a binding becomes its meta information:
+// greeting.@comment (or greeting.meta.comment) reads these two lines
 greeting: "Hello"
 
 /*

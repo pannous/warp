@@ -24,3 +24,7 @@ later; the program waits for its tasks before it ends (tasks::TaskTable::join_al
   value; results in order.
 - A task that fails while nobody awaits it ends the run with its error (tasks::TaskTable::join_all, host.js joinTasks);
   a stopped task does not.
+- Data parallelism (user, 2026-10-06: dual use of `go`, src/lowering/parallel.rs): `go xs.map(f)`, `xs.map(f)
+  @parallel` and `go for x in xs { … }` split xs into 8 slices (PARALLEL_CHUNKS), each a go block; a map joins its
+  results in order, a loop ends when every slice is done. A loop body updating a non-shared outer variable warns.
+  Later backends (SIMD, GPU via WebGPU/wgpu for pure numeric f over typed arrays) can take the same forms.

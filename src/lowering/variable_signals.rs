@@ -90,6 +90,7 @@ pub fn lower(node: Node) -> Node {
 	let mut signals = Signals {
 		count: 0,
 		functions: defined_functions(&node),
+		function_reads: function_reads(&node),
 		derived: derived_values(&node),
 		declared_global: declared_globals(&node),
 		main_variables: crate::event_signals::main_level_variables(&main_statements),
@@ -107,6 +108,8 @@ struct Signals {
 	functions: HashSet<String>,
 	/// the `:=` values and the names their definitions read
 	derived: HashMap<String, HashSet<String>>,
+	/// the functions and the names their definitions read: a condition calling one watches them
+	function_reads: HashMap<String, HashSet<String>>,
 	/// the names some function declares `global`: their writes there are watched too (P111)
 	declared_global: HashSet<String>,
 	/// the variables the main level assigns, its generated flags included
@@ -278,12 +281,12 @@ impl Signals {
 	}
 
 	/// The variables a write of which can change the expression: the names it reads, and through each `:=` value
-	/// the names its definition reads
+	/// and each called function the names its definition reads
 	fn sources(&self, expression: &Node) -> HashSet<String> {
 		let mut sources = HashSet::new();
 		let mut pending = symbols(expression);
 		while let Some(name) = pending.pop() {
-			if let Some(read) = self.derived.get(&name).filter(|_| !sources.contains(&name)) {
+			if let Some(read) = self.derived.get(&name).or_else(|| self.function_reads.get(&name)).filter(|_| !sources.contains(&name)) {
 				pending.extend(read.iter().cloned());
 			}
 			sources.insert(name);
@@ -346,22 +349,43 @@ impl Signals {
 
 /// The names of `f(x) := …`, `def f: …` and the other keyword definitions
 fn defined_functions(node: &Node) -> HashSet<String> {
-	let mut functions = HashSet::new();
-	let head_name = |head: &Node| match head.drop_meta() {
-		Node::List(items, Bracket::Round, _) => items.first().map(word),
-		other => Some(word(other)),
-	};
-	node.visit(&mut |part| match part {
-		Node::Key(head, Op::Define, _) => functions.extend(head_name(head)),
-		Node::List(items, _, _) if items.first().is_some_and(|first| crate::operators::is_function_keyword(&word(first))) => {
-			if let Some(Node::Key(head, _, _)) = items.get(1).map(Node::drop_meta) {
-				functions.extend(head_name(head));
+	function_definitions(node).into_keys().collect()
+}
+
+/// Each defined function and the names its definition reads, `global` variables included
+fn function_reads(node: &Node) -> HashMap<String, HashSet<String>> {
+	function_definitions(node).into_iter().map(|(name, definition)| {
+		let reads = symbols(definition).into_iter().filter(|read| *read != name).collect();
+		(name, reads)
+	}).collect()
+}
+
+/// The functions by name, each with its whole definition (`f(x) := …`, `def f(x) {…}`, `def f(x): …`)
+fn function_definitions(node: &Node) -> HashMap<String, &Node> {
+	let mut functions = HashMap::new();
+	node.visit(&mut |part| {
+		let name = match part {
+			Node::Key(head, Op::Define, _) => definition_name(head),
+			Node::List(items, _, _) if items.first().is_some_and(|first| crate::operators::is_function_keyword(&word(first))) => {
+				items.get(1).map(definition_name).unwrap_or_default()
 			}
+			_ => String::new(),
+		};
+		if !name.is_empty() {
+			functions.insert(name, part);
 		}
-		_ => {}
 	});
-	functions.remove("");
 	functions
+}
+
+/// `f`, `f(x)`, `f(x) {…}`, `f(x): …`: f
+fn definition_name(head: &Node) -> String {
+	match head.drop_meta() {
+		Node::Symbol(name) => name.clone(),
+		Node::List(items, _, _) => items.first().map(definition_name).unwrap_or_default(),
+		Node::Key(head, _, _) => definition_name(head),
+		_ => String::new(),
+	}
 }
 
 /// Each `name := expr` value (a getter, P71) and the names expr reads
@@ -452,10 +476,26 @@ fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 fn trailing_block(condition: &Node) -> Option<(Node, Node)> {
 	match condition.drop_meta() {
 		Node::Key(left, op, right) => trailing_block(right).map(|(right, body)| (Node::Key(left.clone(), *op, Box::new(right)), body)),
-		Node::List(items, Bracket::None, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-			Some((items[0].clone(), items[1].clone()))
+		Node::List(items, Bracket::None | Bracket::Round, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			Some((without_empty_argument(&items[0]), items[1].clone()))
 		}
 		_ => None,
+	}
+}
+
+/// `big() {body}` arrives as `big(ø) {body}`: the call `big()`
+fn without_empty_argument(call: &Node) -> Node {
+	match call.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 && is_nothing(&items[1]) => Node::List(vec![items[0].clone()], Bracket::Round, Separator::None),
+		_ => call.clone(),
+	}
+}
+
+fn is_nothing(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Empty => true,
+		Node::List(items, _, _) => items.is_empty(),
+		_ => false,
 	}
 }
 
