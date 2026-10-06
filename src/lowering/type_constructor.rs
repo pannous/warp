@@ -199,7 +199,10 @@ fn field_error(type_def: &TypeDef, registry: &TypeRegistry, located: &Node, entr
 		let actual = literal_kind(value)?;
 		let fits = expected == actual || (expected == Kind::Float && actual == Kind::Int) || (expected == Kind::Text && actual == Kind::Codepoint);
 		(!fits).then(|| {
-			let message = format!("{name}.{field} is {declared_type}, got {} {}", format!("{actual:?}").to_lowercase(), value.serialize());
+			let mut message = format!("{name}.{field} is {declared_type}, got {} {}", format!("{actual:?}").to_lowercase(), value.serialize());
+			if expected == Kind::Int && actual == Kind::Float {
+				message += ": an int must be a whole number"; // as the run-time check says (list_ops INT_NOT_WHOLE)
+			}
 			Diagnostic::at(located, message).into_error()
 		})
 	});
