@@ -538,6 +538,10 @@ pub struct WaspParser {
 	group_start: (usize, usize),
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
 	stops_at_else: bool,
+	/// Constant words the program assigns (`pi = 4`): from the assignment on they are variables (footgun-pi)
+	shadowed_constants: std::collections::HashSet<String>,
+	/// Inside `class Name {…}`: `pi = 3` there names a field, which shadows nothing
+	in_type_body: bool,
 	/// The position of the sign in `1 -1` read as the list `[1 -1]`: no enclosing expression subtracts it either (`x=1 -1`)
 	signed_list_element: Option<usize>,
 	/// Inside `do … end`: the `end` keyword closes the statement list
@@ -790,6 +794,8 @@ impl WaspParser {
 			in_for_header: false,
 			group_start: (0, 0),
 			stops_at_else: false,
+			shadowed_constants: Default::default(),
+			in_type_body: false,
 			signed_list_element: None,
 			stops_at_end: false,
 			in_command: false,
@@ -830,6 +836,9 @@ impl WaspParser {
 fn only<T>(items: Vec<T>) -> T {
 	items.into_iter().next().expect("one element")
 }
+
+/// The got-it topic of `pi = 4`, an assignment shadowing a named constant
+const CONSTANT_SHADOWING_TOPIC: &str = "constant-shadowing";
 
 /// In data only JSON's words are literals; aliases like `yes`, `no`, `none`, `pi` stay symbols.
 const DATA_WORD_LITERALS: [&str; 3] = ["true", "false", "null"];
