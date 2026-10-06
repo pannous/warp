@@ -24,3 +24,13 @@ fn a_shared_array_of_floats() {
 fn tasks_add_floats_to_one_shared_array() {
 	is!("shared total = float[1]; add(t, n) := { for i in 1 to n { t#1 += 0.5 }; n }; a = go add(total, 1000); b = go add(total, 1000); await a + await b; total#1", 1000.0);
 }
+
+/// a shared array used as a whole is the list of its cells, like a linear array; passed on it stays the shared array
+/// (card shared-array-whole-value)
+#[test]
+fn a_shared_array_is_a_list_as_a_whole() {
+	is!("shared xs = int[3]; xs#2 = 5; xs", warp::ints(vec![0, 5, 0]));
+	is!("shared xs = int[3]; xs#3 = 7; t = 0; for x in xs { t += x }; t", 7);
+	is!("shared xs = float[2]; xs#1 = 0.5; xs", warp::list(vec![warp::float(0.5), warp::float(0.0)]));
+	is!("shared xs = int[2]; bump(ys) := { ys#1 += 4 }; bump(xs); xs#1", 4);
+}
