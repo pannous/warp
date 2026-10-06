@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use num_bigint::BigInt;
-use super::reals::{Rational, Real};
+use super::reals::{Exact, Rational, Real};
 use num_integer::Integer;
 use num_traits::{One, Pow, Signed, ToPrimitive, Zero};
 
@@ -87,6 +87,25 @@ impl Number {
 
 	pub fn is_integer(&self) -> bool {
 		matches!(self, Number::Int(_) | Number::BigInt(_))
+	}
+
+	fn is_ratio(&self) -> bool {
+		matches!(self, Number::Quotient(..) | Number::BigQuotient(_))
+	}
+
+	/// An integer or a ratio: exact in Q, what to_rational takes
+	fn is_rational(&self) -> bool {
+		self.is_integer() || self.is_ratio()
+	}
+
+	/// An f64 result as a Number: ±∞ and NaN are their own variants
+	fn of_f64(value: f64) -> Number {
+		match value {
+			f64::INFINITY => Number::Inf,
+			f64::NEG_INFINITY => Number::NegInf,
+			nan if nan.is_nan() => Number::Nan,
+			finite => Number::Float(finite),
+		}
 	}
 
 	pub fn to_bigint(&self) -> BigInt {
@@ -206,6 +225,74 @@ impl Display for Number {
 	}
 }
 
+#[derive(Clone, Copy)]
+enum Operation {
+	Add,
+	Sub,
+	Mul,
+	Div,
+}
+
+impl Operation {
+	fn of_f64(self, a: f64, b: f64) -> f64 {
+		match self {
+			Operation::Add => a + b,
+			Operation::Sub => a - b,
+			Operation::Mul => a * b,
+			Operation::Div => a / b,
+		}
+	}
+
+	fn of_complex(self, (r1, i1): (f64, f64), (r2, i2): (f64, f64)) -> Number {
+		let (real, imaginary) = match self {
+			Operation::Add => (r1 + r2, i1 + i2),
+			Operation::Sub => (r1 - r2, i1 - i2),
+			Operation::Mul => (r1 * r2 - i1 * i2, r1 * i2 + i1 * r2),
+			Operation::Div => {
+				let divisor = r2 * r2 + i2 * i2;
+				((r1 * r2 + i1 * i2) / divisor, (i1 * r2 - r1 * i2) / divisor)
+			}
+		};
+		Number::Complex(real, imaginary)
+	}
+
+	/// Exact where both operands are: ratios and exact reals add, subtract and multiply in normal form
+	fn of_exact(self, a: &Exact, b: &Exact) -> Option<Exact> {
+		match self {
+			Operation::Add => Some(a.add(b)),
+			Operation::Sub => Some(a.sub(b)),
+			Operation::Mul => Some(a.mul(b)),
+			Operation::Div => None,
+		}
+	}
+}
+
+fn exact_of(number: &Number) -> Option<Exact> {
+	match number {
+		Number::Real(Real::Exact(exact)) => Some(exact.clone()),
+		rational if rational.is_rational() => Some(Exact::rational(rational.to_rational())),
+		_ => None,
+	}
+}
+
+/// The operands the exact arms of + - * / do not take, never a panic: a complex operand makes the result complex, an
+/// exact real stays exact with a ratio or another exact real (else it is an approximation, Real::Approx), ∞ and NaN
+/// follow IEEE
+fn mixed(a: Number, b: Number, operation: Operation) -> Number {
+	let complex = |number: Number| match number {
+		Number::Complex(real, imaginary) => (real, imaginary),
+		other => (f64::from(other), 0.0),
+	};
+	if matches!(a, Number::Complex(..)) || matches!(b, Number::Complex(..)) {
+		return operation.of_complex(complex(a), complex(b));
+	}
+	if matches!(a, Number::Real(_)) || matches!(b, Number::Real(_)) {
+		let exact = exact_of(&a).zip(exact_of(&b)).and_then(|(a, b)| operation.of_exact(&a, &b));
+		return Number::real(exact.map_or_else(|| Real::Approx(operation.of_f64(f64::from(a), f64::from(b))), Real::Exact));
+	}
+	Number::of_f64(operation.of_f64(f64::from(a), f64::from(b)))
+}
+
 impl Add for Number {
 	type Output = Self;
 
@@ -216,7 +303,7 @@ impl Add for Number {
 			}
 			(Number::Int(n1), Number::Int(n2)) => n1.checked_add(n2).map(Number::Int).unwrap_or_else(|| Number::from_bigint(BigInt::from(n1) + BigInt::from(n2))),
 			(a, b) if a.is_integer() && b.is_integer() => Number::from_bigint(a.to_bigint() + b.to_bigint()),
-			(a, b) if matches!(a, Number::Quotient(..) | Number::BigQuotient(_)) || matches!(b, Number::Quotient(..) | Number::BigQuotient(_)) => {
+			(a, b) if (a.is_ratio() || b.is_ratio()) && a.is_rational() && b.is_rational() => {
 				Number::from_rational(a.to_rational().add(&b.to_rational()))
 			}
 			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 + n2),
@@ -224,7 +311,7 @@ impl Add for Number {
 			// Mixed type conversions - convert to Float
 			(Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 + n2),
 			(Number::Float(n1), Number::Int(n2)) => Number::Float(n1 + n2 as f64),
-			_ => panic!("unsupported types"),
+			(a, b) => mixed(a, b, Operation::Add),
 		}
 	}
 }
@@ -258,7 +345,7 @@ impl Sub for Number {
 			}
 			(Number::Int(n1), Number::Int(n2)) => n1.checked_sub(n2).map(Number::Int).unwrap_or_else(|| Number::from_bigint(BigInt::from(n1) - BigInt::from(n2))),
 			(a, b) if a.is_integer() && b.is_integer() => Number::from_bigint(a.to_bigint() - b.to_bigint()),
-			(a, b) if matches!(a, Number::Quotient(..) | Number::BigQuotient(_)) || matches!(b, Number::Quotient(..) | Number::BigQuotient(_)) => {
+			(a, b) if (a.is_ratio() || b.is_ratio()) && a.is_rational() && b.is_rational() => {
 				Number::from_rational(a.to_rational().add(&b.to_rational().neg()))
 			}
 			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 - n2),
@@ -266,7 +353,7 @@ impl Sub for Number {
 			// Mixed type conversions - convert to Float
 			(Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 - n2),
 			(Number::Float(n1), Number::Int(n2)) => Number::Float(n1 - n2 as f64),
-			_ => panic!("unsupported types"),
+			(a, b) => mixed(a, b, Operation::Sub),
 		}
 	}
 }
@@ -281,7 +368,7 @@ impl Mul for Number {
 			}
 			(Number::Int(n1), Number::Int(n2)) => n1.checked_mul(n2).map(Number::Int).unwrap_or_else(|| Number::from_bigint(BigInt::from(n1) * BigInt::from(n2))),
 			(a, b) if a.is_integer() && b.is_integer() => Number::from_bigint(a.to_bigint() * b.to_bigint()),
-			(a, b) if matches!(a, Number::Quotient(..) | Number::BigQuotient(_)) || matches!(b, Number::Quotient(..) | Number::BigQuotient(_)) => {
+			(a, b) if (a.is_ratio() || b.is_ratio()) && a.is_rational() && b.is_rational() => {
 				Number::from_rational(a.to_rational().mul(&b.to_rational()))
 			}
 			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 * n2),
@@ -291,7 +378,7 @@ impl Mul for Number {
 				// (a + bi)(c + di) = (ac - bd) + (ad + bc)i
 				Number::Complex(r1 * r2 - i1 * i2, r1 * i2 + i1 * r2)
 			}
-			_ => panic!("unsupported types"),
+			(a, b) => mixed(a, b, Operation::Mul),
 		}
 	}
 }
@@ -323,7 +410,7 @@ impl Div for Number {
 					(i1 * r2 - r1 * i2) / (r2 * r2 + i2 * i2),
 				)
 			}
-			_ => panic!("unsupported types"),
+			(a, b) => mixed(a, b, Operation::Div),
 		}
 	}
 }
@@ -336,7 +423,8 @@ impl From<Number> for f64 {
 			Number::Float(f) => f,
 			Number::Quotient(numer, denom) => numer as f64 / denom as f64,
 			Number::BigQuotient(q) => q.to_f64(),
-			Number::Complex(_, _) => unimplemented!(),
+			// a complex number is a real number only without an imaginary part
+			Number::Complex(real, imaginary) => if imaginary == 0.0 { real } else { f64::NAN },
 			Number::Real(r) => r.to_f64(),
 			Number::Nan => f64::NAN,
 			Number::Inf => f64::INFINITY,
