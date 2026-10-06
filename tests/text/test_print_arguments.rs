@@ -35,3 +35,12 @@ fn print_of_several_arguments_is_worth_the_printed_text() {
 	is!("g=\"hi\"; print g, g", "hi hi");
 	is!("n=3; print(\"n\", n)", "n 3");
 }
+
+/// `print()` writes an empty line, like Python, and is worth the empty text, as `print ""`
+#[test]
+#[cfg(feature = "native")]
+fn print_without_arguments_writes_an_empty_line() {
+	assert!(printed("print(); print 1").starts_with("\n1\n"));
+	is!("print()", "");
+	is!("x = print(); #x", 0);
+}

@@ -253,6 +253,9 @@ PASSED:
   ✓ ffi_parser::tests::test_parse_two_params
   ✓ ffi_parser::tests::test_parse_void_params
   ✓ ffi_parser::tests::test_raylib_functions
+  ✓ ffi::test_components_anywhere::test_a_component_is_called_in_every_host
+  ✓ ffi::test_components_anywhere::test_component_failures_are_loud_in_every_host
+  ✓ ffi::test_components_anywhere::test_resources_of_a_component_are_handles_in_every_host
   ✓ ffi::test_components::test_a_component_written_in_wat_is_called
   ✓ ffi::test_components::test_a_field_of_a_component_result_is_read
   ✓ ffi::test_components::test_a_rust_crate_built_as_a_component_is_called
@@ -1124,6 +1127,9 @@ PASSED:
   ✓ operators::test_add_to::add_to_an_empty_list
   ✓ operators::test_add_to::add_to_appends_an_element
   ✓ operators::test_add_to::add_to_takes_an_expression
+  ✓ operators::test_bar_pipe::a_bar_after_a_braceless_call_pipes_its_result
+  ✓ operators::test_bar_pipe::a_bar_before_a_function_pipes_the_value_into_it
+  ✓ operators::test_bar_pipe::a_bar_between_values_stays_the_logical_or
   ✓ operators::test_compound_assignment::a_list_variable_concatenates_with_plus_assign
   ✓ operators::test_compound_assignment::a_number_variable_refuses_a_text_in_a_loop_too
   ✓ operators::test_equality_never_chains::equality_compares_the_result_of_an_ordering
@@ -1585,6 +1591,7 @@ PASSED:
   ✓ text::test_print_arguments::print_of_a_braceless_call_is_worth_its_result
   ✓ text::test_print_arguments::print_of_a_braceless_call_prints_its_result
   ✓ text::test_print_arguments::print_of_several_arguments_is_worth_the_printed_text
+  ✓ text::test_print_arguments::print_without_arguments_writes_an_empty_line
   ✓ text::test_print_juxtaposed::a_text_next_to_values_prints_joined
   ✓ text::test_print_juxtaposed::the_joined_text_is_written
   ✓ text::test_print_lists::print_of_a_list_is_worth_the_list
@@ -1659,6 +1666,7 @@ PASSED:
   ✓ text::test_text_search::a_text_starts_and_ends_with_a_text
   ✓ text::test_text_variable_assignment::a_one_letter_text_can_be_reassigned
   ✓ text::test_text_variable_assignment::a_one_letter_text_variable_reads_back_as_a_letter
+  ✓ text::test_trim::strip_and_trim_without_parentheses
   ✓ text::test_trim::trim_drops_whitespace_at_both_ends
   ✓ text::test_unicode_escape::a_unicode_escape_is_its_code_point
   ✓ types::test_array_types::hints::test_bracketed_list_type_hints_the_plural_word
@@ -2298,4 +2306,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2293 passed, 0 failed, 2293 total tested
+31 ignored, 2301 passed, 0 failed, 2301 total tested
