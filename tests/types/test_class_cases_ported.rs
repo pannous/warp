@@ -72,3 +72,44 @@ fn objects_hold_objects() {
 	is!("class engine{hp:int}; class car{e:engine}; car(engine(90)).e.hp", 90);
 	is!("class person{name; age:int}; person{name:\"Ann\" age:3}.age", 3);
 }
+
+#[test]
+fn a_method_reads_a_field_with_a_default() {
+	is!("class Point{x:int=1; f() := x}; Point().f() + Point(5).f()", 6);
+	is!("class Circle{r:int; k = 3; f() := k * r}; Circle(2).f()", 6);
+}
+
+#[test]
+fn a_stack_class_pushes_onto_its_list() {
+	// the classic Stack of Java/Python: a method that adds to a list field changes the object
+	is!("class Stack{items:[int]; push(x:int) := items.add(x); size() := count(items)}; s = Stack([]); s.push(1); s.push(2); s.size()", 2);
+	is!("class Stack{items:[int]; push(x:int) := items.add(x); top() := items#count(items)}; s = Stack([]); s.push(1); s.push(7); s.top()", 7);
+	is!("class Bag{items:[text]; put(x) := self.items.add(x)}; b = Bag([]); b.put(\"a\"); b.put(\"b\"); count(b.items)", 2);
+}
+
+#[test]
+fn a_list_field_grows_by_add() {
+	is!("class Holder{items:[int]}; p = Holder([]); p.items.add(1); p.items.add(5); count(p.items)", 2);
+	is!("class Holder{items:[int]}; p = Holder([3]); p.items.insert(9, at:1); p.items#2", 9);
+}
+
+#[test]
+fn static_members_belong_to_the_class() {
+	// P122 (user, 2026-10-06): `static k = 3` is a member of the class, read as C.k and c.k, never stored per instance
+	is!("class Circle{r:int; static k = 3}; Circle.k + Circle(1).k", 6);
+	is!("class Circle{r:int; static k = 3; area() := k * r}; Circle(2).area()", 6);
+	is!("class Cm{r:int; static unit = \"cm\"}; class M{s:int; static unit = \"m\"}; Cm.unit + M.unit", "cmm");
+	crate::common::fails_with("class Circle{r:int; static k = 3}; Circle(1, 2)", "Circle takes 1 fields, got 2");
+}
+
+#[test]
+fn a_static_counter_changes_from_methods_and_outside() {
+	is!("class Clicker{r:int; static clicks = 0; click() := clicks += 1}; x = Clicker(1); x.click(); x.click(); Clicker.clicks", 2);
+	is!("class Clicker{r:int; static clicks = 0}; Clicker.clicks = 5; Clicker.clicks", 5);
+}
+
+#[test]
+fn a_static_method_is_called_on_the_class() {
+	// Java static factory, Python @classmethod / @staticmethod
+	is!("class Circle{r:int; static doubled(x:int) := Circle(x * 2)}; Circle.doubled(4).r", 8);
+}
