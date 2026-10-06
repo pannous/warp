@@ -79,6 +79,12 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P106 tasks share a variable with main only when it is declared `shared` (`shared done = false; go { …; done = true
   }; after done …`), scalars like P44's shared arrays; every other variable stays an isolate copy (P33). Asked by
   warp-d9 (branch async); as recommended. wiki/thread.md's example gets `shared`.
+- P107 (issue #16, card g-1sPM) the playground offers only the .wasm download plus a one-line `warp hello.wasp`
+  instruction, no native executable (user chose this over a static Cranelift stub with the .wasm appended in the
+  browser, and over a pannous.com build endpoint). Asked by warp-76.
+- P108 (Sublime package, pannous/wasp-sublime-text) Angle.sublime-syntax is retired; Wasp.sublime-syntax (scope
+  source.wasp) takes .wasp/.warp/.a/.angle (user chose this over the recommended split by extension). Asked by
+  warp-76 for the Sublime worker. FYI there: ⚠️ no longer starts a comment (warp reads it as an error constant).
 - P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
   behind them go; no test edits. Asked by warp-40 (code-quality).
 - P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.

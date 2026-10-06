@@ -13,3 +13,7 @@ later; the program waits for its tasks before it ends (tasks::TaskTable::join_al
 - `sleep(1000 ms)`, `sleep 1s`, `sleep(2 seconds)` (units::lower_sleep_durations): a constant duration is its
   milliseconds; quantities do not reach run time otherwise (notes/units_runtime.md).
 - `sleep(…)` is a statement like `print`, so `{ sleep(10); "hi" }` runs and gives "hi" (analyzer is_statement).
+- `after C return V` (wiki/thread.md, go_blocks::task_phrases): `go { while not (C) { sleep(1) }; V }`, a task polling
+  every millisecond; C must read shared values (P106), a copied variable is a loud error. `cancel last` stops it.
+  `await job or y` is `try await job else y`. Parser precedence: `x = after n == 5 return v` needs parentheses for now
+  (card after-precedence).

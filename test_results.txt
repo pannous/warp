@@ -1,6 +1,9 @@
 === Test Results ===
 
 PASSED:
+  ✓ control::test_after::a_cancelled_after_gives_the_fallback
+  ✓ control::test_after::after_needs_a_shared_condition
+  ✓ control::test_after::after_waits_for_its_condition
   ✓ control::test_all_with_condition::all_with_a_comparison_filters_the_items
   ✓ control::test_atomic_arrays::atomic_is_shared
   ✓ control::test_await_go::await_of_a_start_is_the_result
@@ -68,6 +71,8 @@ PASSED:
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
+  ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
+  ✓ control::test_go_blocks::a_function_starting_a_task_is_no_getter
   ✓ control::test_go_blocks::a_go_block_does_not_hold_up_the_program
   ✓ control::test_go_blocks::a_go_block_prints_after_the_program_goes_on
   ✓ control::test_go_blocks::a_go_block_sees_the_values_of_its_variables
@@ -138,6 +143,7 @@ PASSED:
   ✓ control::test_shared_arrays::tasks_add_to_one_shared_array
   ✓ control::test_shared_values::a_function_given_a_shared_value_shares_it
   ✓ control::test_shared_values::a_go_block_writes_a_shared_value
+  ✓ control::test_shared_values::a_self_update_of_a_shared_value_is_atomic
   ✓ control::test_shared_values::a_shared_value_reads_writes_and_adds
   ✓ control::test_signal_in_loop::a_listener_checks_a_write_in_a_one_statement_loop
   ✓ control::test_structural_patterns::test_a_subject_that_is_no_list_does_not_match
@@ -1939,6 +1945,7 @@ PASSED:
   ✓ wasm::test_read_bytes_plain_result::a_plain_i32_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::a_plain_i64_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
+  ✓ wasm::test_runtime_stub_found::build_finds_or_builds_the_runtime_stub_by_itself
   ✓ wasm::test_standalone_executable::test_build_exe_prints_lists_as_print_does
   ✓ wasm::test_standalone_executable::test_build_exe_refuses_imports_the_runtime_lacks
   ✓ wasm::test_standalone_executable::test_build_exe_runs_the_program_and_prints_its_value
@@ -2353,4 +2360,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2348 passed, 0 failed, 2348 total tested
+23 ignored, 2355 passed, 0 failed, 2355 total tested

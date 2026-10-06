@@ -74,3 +74,4 @@ mod test_filter_loop_over_variable;
 mod test_all_with_condition;
 mod test_go_blocks;
 mod test_shared_values;
+mod test_after;
