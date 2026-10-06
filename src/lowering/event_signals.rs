@@ -47,7 +47,12 @@ pub fn lower(program: Node) -> Node {
 		.map(|(index, name, body, once)| (index, name, if once { run_once(body, &mut flags) } else { body }))
 		.collect();
 	if handlers.is_empty() {
-		return program;
+		// a program with timers stays like one with page events (system_signals.rs, before this pass made them)
+		if !statements.iter().any(defines_timer) {
+			return program;
+		}
+		let main_variables = main_level_variables(&statements);
+		return Node::List(with_output_binding(statements, &main_variables), bracket, separator);
 	}
 	let statements: Vec<Node> = flags.iter().map(|flag| assign(flag, Node::False)).chain(statements).collect();
 	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
@@ -75,15 +80,29 @@ pub fn lower(program: Node) -> Node {
 	});
 	let lowered: Vec<Node> = lowered.map(|statement| raises_as_calls(statement, &bodies)).collect();
 	let page_handlers: std::collections::BTreeMap<String, usize> = PAGE_EVENTS.iter().filter(|event| bodies.contains_key(**event)).map(|event| (handler_function_name(event), usize::from(reads_event(&bodies[*event])))).collect();
-	let mut lowered = lowered;
-	if let Some(name) = lowered.last().filter(|_| !page_handlers.is_empty()).and_then(|last| match last.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}) {
-		let binding = function_with_globals(PAGE_VALUE, false, &[Node::Symbol(name)], &main_variables);
-		lowered.insert(lowered.len() - 1, binding);
-	}
+	let stays = !page_handlers.is_empty() || lowered.iter().any(defines_timer);
+	let lowered = if stays { with_output_binding(lowered, &main_variables) } else { lowered };
 	crate::declarations::with_node_wrappers(Node::List(lowered, bracket, separator), &page_handlers)
+}
+
+/// The output binding of a program the page keeps running (page events, timers): its last line, when that is a name,
+/// is the function PAGE_VALUE too, which the page reads anew after each handler
+fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<String>) -> Vec<Node> {
+	if let Some(Node::Symbol(name)) = statements.last().map(Node::drop_meta) {
+		let binding = function_with_globals(PAGE_VALUE, false, &[Node::Symbol(name.clone())], main_variables);
+		statements.insert(statements.len() - 1, binding);
+	}
+	statements
+}
+
+/// `(on·every·0) := {…}`, the handler of a timer or channel listener system_signals.rs made
+fn defines_timer(statement: &Node) -> bool {
+	let Node::Key(head, _, _) = statement.drop_meta() else { return false };
+	let name = match head.drop_meta() {
+		Node::List(items, _, _) => items.first().map(Node::drop_meta),
+		other => Some(other),
+	};
+	matches!(name, Some(Node::Symbol(name)) if name.starts_with(crate::host::TIMER_HANDLER_PREFIX))
 }
 
 /// The body guarded by a fresh flag: `if once_fired_0 == false { once_fired_0 = true; body }`
