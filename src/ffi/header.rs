@@ -231,7 +231,7 @@ fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
     }
     let header_dir = std::path::Path::new(header_path).parent().map(|dir| dir.to_string_lossy().to_string()).unwrap_or_default();
     let dirs: Vec<String> = std::iter::once(header_dir).chain(crate::ffi_parser::include_dirs()).collect();
-    match crate::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| std::fs::read_to_string(path).ok()) {
+    match crate::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| crate::web::read_text(&path)) {
         Some(mathcalls) => format!("{content}\n{}", expand_glibc_math_macros(&mathcalls)),
         None => content,
     }
@@ -267,10 +267,7 @@ pub fn expand_glibc_math_macros(source: &str) -> String {
 
 /// Parse a header file and extract all function signatures
 pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => with_glibc_mathcalls(c, path),
-        Err(_) => return Vec::new(),
-    };
+    let Some(content) = crate::web::read_text(path).map(|text| with_glibc_mathcalls(text, path)) else { return Vec::new() };
     let mut struct_types = StructTypes::default();
     let mut signatures = Vec::new();
     let mut current_decl = String::new();
