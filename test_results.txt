@@ -254,6 +254,7 @@ PASSED:
   ✓ ffi_parser::tests::test_parse_void_params
   ✓ ffi_parser::tests::test_raylib_functions
   ✓ ffi::test_components_anywhere::test_a_component_is_called_in_every_host
+  ✓ ffi::test_components_anywhere::test_a_wit_char_is_a_codepoint_in_every_host
   ✓ ffi::test_components_anywhere::test_component_failures_are_loud_in_every_host
   ✓ ffi::test_components_anywhere::test_resources_of_a_component_are_handles_in_every_host
   ✓ ffi::test_components::test_a_component_written_in_wat_is_called
@@ -759,6 +760,8 @@ PASSED:
   ✓ lists::test_lists::test_root_lists
   ✓ lists::test_lists::test_while_nop_issue
   ✓ lists::test_long_list_result::a_long_list_result_reads_back
+  ✓ lists::test_map_starts::a_list_given_for_map_entries_keeps_the_generic_way
+  ✓ lists::test_map_starts::a_map_literal_and_a_map_parameter_are_hash_tables
   ✓ lists::test_map_variables::a_map_variable_reads_as_the_node_of_its_entries
   ✓ lists::test_map_variables::a_missing_key_of_a_map_variable_is_the_same_error
   ✓ lists::test_map_variables::two_million_keys_are_set_and_found
@@ -889,6 +892,10 @@ PASSED:
   ✓ node::node_values_test::test_values_meta
   ✓ node::node_values_test::test_values_nested_key
   ✓ node::node_values_test::test_values_number
+  ✓ node::test_empty_operands::a_condition_keyword_is_written_without_its_empty_left
+  ✓ node::test_empty_operands::a_missing_operand_is_not_written
+  ✓ node::test_empty_operands::a_prefix_form_reads_back_as_the_same_tree
+  ✓ node::test_empty_operands::a_written_empty_value_stays
   ✓ node::test_node_add::adding_unrelated_nodes_builds_the_unevaluated_sum
   ✓ node::test_node_operators::test_chaining
   ✓ node::test_node_operators::test_complex_expression
@@ -2310,4 +2317,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2305 passed, 0 failed, 2305 total tested
+31 ignored, 2312 passed, 0 failed, 2312 total tested
