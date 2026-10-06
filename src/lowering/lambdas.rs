@@ -36,8 +36,13 @@ const SWIFT_IN: &str = "in";
 const SHORTHAND_MARK: char = '$';
 const MAX_SHORTHAND_ARGUMENTS: usize = 10;
 const SORT_WORD: &str = "sort";
-/// Sorting with a function as other languages spell it: JS sort, Python sorted, Ruby sort_by, Kotlin sortedBy
-const SORT_SPELLINGS: [&str; 6] = [SORT_WORD, "sorted", "sort_by", "sortBy", "sortedBy", "sorted_by"];
+const EACH_WORD: &str = "each";
+/// Iteration words as other languages spell them: sorting with a function (Python sorted, Ruby sort_by, Kotlin
+/// sortedBy), each (JS and Kotlin forEach, Rust for_each, PHP foreach)
+const ITERATION_SPELLINGS: [(&str, &[&str]); 2] = [
+	(SORT_WORD, &["sorted", "sort_by", "sortBy", "sortedBy", "sorted_by"]),
+	(EACH_WORD, &["forEach", "for_each", "foreach"]),
+];
 /// The label of the sorting function: Swift `sorted(by: >)`, Python `sorted(xs, key=…)`
 const SORT_LABELS: [&str; 2] = ["by", "key"];
 const COMPARISONS: [Op; 4] = [Op::Lt, Op::Gt, Op::Le, Op::Ge];
@@ -45,7 +50,7 @@ const COMPARISONS: [Op; 4] = [Op::Lt, Op::Gt, Op::Le, Op::Ge];
 const ITERATIONS: [Iteration; 9] = [
 	Iteration { word: "map", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { out.add(loop_call) }; out)" },
 	Iteration { word: "filter", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { if loop_call { out.add(item) } }; out)" },
-	Iteration { word: "each", extra_arguments: 0, function_arguments: 1, template: "(value=ø; for item in loop_list { value = loop_call }; value)" },
+	Iteration { word: EACH_WORD, extra_arguments: 0, function_arguments: 1, template: "(value=ø; for item in loop_list { value = loop_call }; value)" },
 	Iteration { word: "fold", extra_arguments: 1, function_arguments: 2, template: "(acc=loop_start; for item in loop_list { acc = loop_call }; acc)" },
 	Iteration { word: "find", extra_arguments: 0, function_arguments: 1, template: "(found=ø; searching=1; for item in loop_list { if searching and loop_call { found = item; searching = 0 } }; found)" },
 	Iteration { word: "any", extra_arguments: 0, function_arguments: 1, template: "(hit=0; for item in loop_list { if loop_call { hit = 1 } }; hit)" },
@@ -368,7 +373,7 @@ impl Lowering {
 	/// The iteration a word names, unless the program defines a function of that name
 	fn iteration_of(&self, word: &Node) -> Option<&'static Iteration> {
 		let Node::Symbol(name) = word.drop_meta() else { return None };
-		let canonical = if SORT_SPELLINGS.contains(&name.as_str()) { SORT_WORD } else { name };
+		let canonical = ITERATION_SPELLINGS.iter().find(|(_, spellings)| spellings.contains(&name.as_str())).map_or(name.as_str(), |(word, _)| word);
 		ITERATIONS.iter().find(|iteration| iteration.word == canonical && !self.context.user_functions.contains_key(name))
 	}
 
