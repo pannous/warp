@@ -31,6 +31,8 @@ const INTERPRETERS: [Interpreter; 2] = [
 ];
 /// An integer beyond 64 bits, sent as its digits: `{"$int": "15511210043330985984000000"}`
 const BIG_INTEGER_KEY: &str = "$int";
+/// A codepoint (a WIT `char`, P94), which JSON would make a text: `{"$char": "b"}`
+pub const CODEPOINT_KEY: &str = "$char";
 /// The request loop the child runs: {"module", "member", "arguments"} → {"value"} or {"error"}
 const FOREIGN_PYTHON_LOOP: &str = include_str!("../web/playground/foreign_python.py");
 
@@ -174,6 +176,15 @@ fn json_of(node: &Node) -> Value {
 	}
 }
 
+/// The character of `{"$char": "b"}`
+fn codepoint_of(entries: &serde_json::Map<String, Value>) -> Option<char> {
+	let mut characters = entries.get(CODEPOINT_KEY)?.as_str()?.chars();
+	match (entries.len(), characters.next(), characters.next()) {
+		(1, Some(character), None) => Some(character),
+		_ => None,
+	}
+}
+
 /// A JSON value as a Node: null ø, booleans 1/0, objects `{key:value …}`
 fn node_of(value: &Value) -> Node {
 	match value {
@@ -189,6 +200,7 @@ fn node_of(value: &Value) -> Node {
 			let digits = entries[BIG_INTEGER_KEY].as_str().unwrap_or_default();
 			digits.parse::<num_bigint::BigInt>().map(|big| Node::Number(Number::BigInt(Box::leak(Box::new(big))))).unwrap_or_else(|_| Node::Text(digits.to_string()))
 		}
+		Value::Object(entries) if let Some(character) = codepoint_of(entries) => Node::Char(character),
 		Value::Object(entries) => Node::List(
 			entries.iter().map(|(key, value)| Node::Key(Box::new(Node::Symbol(key.clone())), Op::Colon, Box::new(node_of(value)))).collect(),
 			Bracket::Curly,
