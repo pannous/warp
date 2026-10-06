@@ -69,8 +69,12 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
 - `def f(*args): body` (colon body, Python): declarations::keyword_definition reads `def head: body` as `head := body`
   early, so variadic.rs sees the rest parameter (it ran before the later pass that knew the colon form).
 - `def f(x, **kw): …` (Python): the parser reads `**kw` as the symbol `**kw` (atoms.rs); variadic.rs passes the named
-  arguments no fixed parameter takes as one object, `f(5, a=1)` → `f(5, {a: 1})` (`{}` when none). Spreading `f(**m)`
-  into a call is not supported.
+  arguments no fixed parameter takes as one object, `f(5, a=1)` → `f(5, {a: 1})` (`{}` when none). `f(**m)` spreads an object: into `**kw` it is
+  the object itself (a fixed parameter named like one of its fields does not take it out; `f(**m, k=v)` is an error
+  for now), into fixed parameters the fields for the parameters the other arguments leave (`g(1, **m)` →
+  `g(1, b=m.b, c=m.c)`); into a function not defined in the program it is an error.
+- Julia `function f(x; y=2) … end`, `f(3; y=4)` already read as `f(x, y=2)` / `f(3, y=4)`; the `end` body is
+  end_definitions'.
 - Ruby `def f(a, b: 2) a * b end` and `def f(a)` ⏎ statements ⏎ `end`, also `def h` without parentheses:
   declarations::end_definitions (start of lower_c_functions) gives them a `{…}` body. Nested `if … then … end` keeps
   its own `end` (the parser takes it).

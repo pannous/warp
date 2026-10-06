@@ -23,3 +23,18 @@ fn test_ruby_def_end() {
 	is!("def g(x)\n  if x > 1 then x else 0 end\nend\ng(5)", 5);
 	is!("def h\n  42\nend\nh()", 42);
 }
+
+#[test]
+fn test_python_spread_object() {
+	is!("def f(**kw): return kw.a\nm = {a: 7}\nf(**m)", 7);
+	is!("def g(a, b, c): return a * 100 + b * 10 + c\nm = {b: 2, c: 3}\ng(1, **m)", 123);
+	is!("def g(a, b, c): return a * 100 + b * 10 + c\nm = {b: 2, c: 3}\ng(1, c=9, **m)", 129);
+}
+
+#[test]
+fn test_julia_definitions() {
+	is!("function f(x; y=2) x*y end; f(3)", 6);
+	is!("function f(x; y=2) x*y end; f(3; y=4)", 12);
+	is!("function f(x)\n  x * 2\nend\nf(4)", 8);
+	is!("f(x; y=2) = x*y; f(3, y=4)", 12);
+}

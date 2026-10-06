@@ -4,7 +4,9 @@
 //! - `f(...xs)`, `f(xs...)`, `f(*xs)` spread a list: into a rest parameter it is passed as it is (`[2] + xs` after
 //!   other leftover arguments), into fixed parameters as `xs#1, xs#2, …` up to the parameter count;
 //! - `def f(x, **kw)` (Python): the last parameter is the object of the named arguments no other parameter takes,
-//!   `f(5, a=1)` → `f(5, {a: 1})`.
+//!   `f(5, a=1)` → `f(5, {a: 1})`;
+//! - `f(**m)` spreads an object: into a `**kw` parameter it is the object, into fixed parameters the fields named like
+//!   the parameters the other arguments leave, `g(1, **m)` → `g(1, b=m.b)`.
 
 use crate::analyzer::call_name;
 use crate::node::{Bracket, Node, Separator};
@@ -98,7 +100,7 @@ fn named_argument(argument: &Node) -> Option<(String, Node)> {
 fn has_spread(node: &Node) -> bool {
 	let mut found = false;
 	node.visit(&mut |part| if let Node::List(items, bracket, separator) = part {
-		found |= call_name(items, bracket, separator).is_some() && items[1..].iter().any(|item| starred(item).is_some());
+		found |= call_name(items, bracket, separator).is_some() && items[1..].iter().any(|item| starred(item).is_some() || double_starred(item).is_some());
 	});
 	found
 }
@@ -143,7 +145,7 @@ impl Variadic {
 			_ => None,
 		}) else { return false };
 		let rest = self.signatures.get(name).is_some_and(|signature| signature.rest || signature.keywords);
-		let spread = items[1..].iter().any(|item| starred(item).is_some());
+		let spread = items[1..].iter().any(|item| starred(item).is_some() || double_starred(item).is_some());
 		let called = call_name(items, bracket, separator).is_some() || (*separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round));
 		called && (rest || spread)
 	}
@@ -153,8 +155,23 @@ impl Variadic {
 		let head = items.next().expect("a function name");
 		let arguments: Vec<Node> = items.map(|item| self.rewrite(item)).collect();
 		let signature = self.signatures.get(&head.name());
+		let (spread_objects, arguments): (Vec<Node>, Vec<Node>) = arguments.into_iter().partition(|argument| double_starred(argument).is_some());
+		let spread_object = match (spread_objects.as_slice(), signature) {
+			([], _) => None,
+			([object], Some(_)) => double_starred(object),
+			([_], None) => return crate::node::error(&format!("{}(**…) spreads an object into the parameters of a function defined in the program; {} is none", head.name(), head.name())),
+			_ => return crate::node::error(&format!("{}(**a, **b): spread one object", head.name())),
+		};
+		let arguments = match (signature, &spread_object) {
+			(Some(signature), Some(object)) if !signature.keywords => [arguments.clone(), fields_for_parameters(&arguments, &signature.fixed, object)].concat(),
+			_ => arguments,
+		};
 		let (arguments, keywords) = match signature {
-			Some(signature) if signature.keywords => keyword_object(arguments, &signature.fixed),
+			Some(signature) if signature.keywords => match (keyword_object(arguments, &signature.fixed), spread_object) {
+				((arguments, Some(Node::List(entries, _, _))), Some(object)) if entries.is_empty() => (arguments, Some(Node::Symbol(object))),
+				(_, Some(_)) => return crate::node::error(&format!("{}(**m, k=v): the keyword object is m or the named arguments, not both yet", head.name())),
+				(lowered, None) => lowered,
+			},
 			_ => (arguments, None),
 		};
 		let arguments = match signature {
@@ -167,6 +184,16 @@ impl Variadic {
 		};
 		Node::List([vec![head], arguments, keywords.into_iter().collect()].concat(), Bracket::Round, Separator::None)
 	}
+}
+
+/// `g(1, **m)` of `g(a, b, c)`: the named arguments `b=m.b, c=m.c` for the parameters the arguments leave
+fn fields_for_parameters(arguments: &[Node], fixed: &[String], object: &str) -> Vec<Node> {
+	let named: Vec<String> = arguments.iter().filter_map(named_argument).map(|(name, _)| name).collect();
+	let positional = arguments.len() - named.len();
+	fixed.iter().skip(positional).filter(|parameter| !named.contains(parameter)).map(|parameter| {
+		let field = Node::Key(Box::new(Node::Symbol(object.to_string())), Op::Dot, Box::new(Node::Symbol(parameter.clone())));
+		Node::Key(Box::new(Node::Symbol(parameter.clone())), Op::Assign, Box::new(field))
+	}).collect()
 }
 
 /// The named arguments no fixed parameter takes, as the object of a `**kw` parameter, and the other arguments
