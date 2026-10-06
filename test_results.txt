@@ -253,6 +253,9 @@ PASSED:
   ✓ ffi_parser::tests::test_parse_two_params
   ✓ ffi_parser::tests::test_parse_void_params
   ✓ ffi_parser::tests::test_raylib_functions
+  ✓ ffi::test_components_anywhere::test_a_component_is_called_in_every_host
+  ✓ ffi::test_components_anywhere::test_component_failures_are_loud_in_every_host
+  ✓ ffi::test_components_anywhere::test_resources_of_a_component_are_handles_in_every_host
   ✓ ffi::test_components::test_a_component_written_in_wat_is_called
   ✓ ffi::test_components::test_a_field_of_a_component_result_is_read
   ✓ ffi::test_components::test_a_rust_crate_built_as_a_component_is_called
@@ -2303,4 +2306,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2298 passed, 0 failed, 2298 total tested
+31 ignored, 2301 passed, 0 failed, 2301 total tested
