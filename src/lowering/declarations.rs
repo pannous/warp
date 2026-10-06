@@ -1211,7 +1211,10 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		Node::List(group, Bracket::Round, _) => group.clone(),
 		Node::Empty => vec![],
 		_ => vec![argument.clone()],
-	}).map(name_then_type);
+	})
+	// Python's markers `*` (keyword-only after it) and `/` (positional-only before it) take no argument
+	.filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(left, Op::Mul | Op::Div, right) if matches!((left.drop_meta(), right.drop_meta()), (Node::Empty, Node::Empty))))
+	.map(name_then_type);
 	let mut labeled_names = vec![];
 	let mut parameters: Vec<Node> = parameters.map(|parameter| labeled_parameter(parameter, &mut labeled_names)).collect();
 	let body = with_label_names(body, labeled_names);

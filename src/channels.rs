@@ -1,14 +1,18 @@
 //! Channels between programs (wiki/signal.md, notes/system_signals.md): `broadcast value on "chat"` sends the value as
 //! wasp text to every program on this machine listening with `on message from "chat" {…}`. A channel is the directory
-//! `<temp>/warp-channels/<channel>`; each listener binds a Unix datagram socket there (its file removed when the run's
+//! `/tmp/warp-channels-<user>/<channel>` (the temp directory off unix), a named event's (`chat/stop the machine`, P129b)
+//! the directory `stop_the_machine` inside it; each listener binds a Unix datagram socket there (its file removed when the run's
 //! listeners are forgotten), a broadcast sends one datagram to each socket in it and removes those nobody reads any more.
 //! A listener keeps what arrived until the program asks: channel_pending(id) reads the socket without waiting,
 //! channel_next(id) gives the oldest message.
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
+use crate::system_signals::EVENT_SEPARATOR;
 
 const CHANNELS_DIRECTORY: &str = "warp-channels";
+#[cfg(unix)]
+const SHORT_TEMP_DIRECTORY: &str = "/tmp";
 const SOCKET_EXTENSION: &str = "sock";
 /// The largest message: a datagram must fit in one read
 const MAX_MESSAGE_BYTES: usize = 64 * 1024;
@@ -33,10 +37,22 @@ thread_local! {
 	static LISTENERS: RefCell<HashMap<i64, Listener>> = RefCell::new(HashMap::new());
 }
 
-/// The directory of a channel; a name is kept to letters, digits, `-` and `_`
+/// The directory of a channel, a named event's inside its channel's; a name is kept to letters, digits, `-` and `_`
 fn directory(channel: &str) -> PathBuf {
-	let name: String = channel.chars().map(|letter| if letter.is_alphanumeric() || letter == '-' || letter == '_' { letter } else { '_' }).collect();
-	std::env::temp_dir().join(CHANNELS_DIRECTORY).join(name)
+	let kept = |name: &str| -> String { name.chars().map(|letter| if letter.is_alphanumeric() || letter == '-' || letter == '_' { letter } else { '_' }).collect() };
+	channel.split(EVENT_SEPARATOR).fold(channels_root(), |directory, name| directory.join(kept(name)))
+}
+
+/// `/tmp/warp-channels-<user>` on unix: a socket path has at most 104 bytes, and macOS's own temp directory alone takes
+/// about 50 of them; elsewhere the temp directory
+fn channels_root() -> PathBuf {
+	#[cfg(unix)]
+	{
+		let user = std::env::var("USER").or_else(|_| std::env::var("LOGNAME")).unwrap_or_default();
+		PathBuf::from(SHORT_TEMP_DIRECTORY).join(format!("{CHANNELS_DIRECTORY}-{user}"))
+	}
+	#[cfg(not(unix))]
+	std::env::temp_dir().join(CHANNELS_DIRECTORY)
 }
 
 /// A new run on this thread starts without listeners

@@ -23,10 +23,68 @@ const SHARED_CHECK_PERIOD: Duration = Duration::from_millis(10);
 
 struct Timer {
 	handler: String,
-	period: Duration,
-	due: Instant,
+	repeat: Repeat,
+	/// None once a one-shot timer fired
+	due: Option<Instant>,
 	/// a watched file and its stamp when last read: the handler runs only when that changed
 	watched: Option<(PathBuf, Option<FileStamp>)>,
+}
+
+#[derive(Clone, Copy)]
+enum Repeat {
+	Every(Duration),
+	/// a local time of day on the weekdays of the mask (bit 0 Sunday), every week or only `once`
+	Clock { minute_of_day: i64, weekdays: i64, once: bool },
+}
+
+impl Repeat {
+	/// The first time from `now`: a clock is read anew each time, so a change of the local time (summer time) counts
+	fn first(self, now: Instant) -> Instant {
+		match self {
+			Repeat::Every(period) => now + period,
+			Repeat::Clock { minute_of_day, weekdays, .. } => {
+				let (weekday, second_of_day) = local_time();
+				now + Duration::from_secs(seconds_until_on(minute_of_day, weekdays, weekday, second_of_day) as u64)
+			}
+		}
+	}
+
+	/// The time after the one `due` fired at `now` (one call however late); None after a one-shot
+	fn after(self, due: Instant, now: Instant) -> Option<Instant> {
+		match self {
+			Repeat::Every(period) => Some((due + period).max(now)),
+			Repeat::Clock { once: true, .. } => None,
+			Repeat::Clock { .. } => Some(self.first(now)),
+		}
+	}
+
+	/// `every 5 seconds`, `every monday at 9:00`, `at 9:00`
+	fn spoken(self) -> String {
+		match self {
+			Repeat::Every(period) => format!("every {}", spoken(period)),
+			Repeat::Clock { minute_of_day, once: true, .. } => format!("at {}", clock_time(minute_of_day)),
+			Repeat::Clock { minute_of_day, weekdays, once: false } => format!("every {} at {}", spoken_days(weekdays), clock_time(minute_of_day)),
+		}
+	}
+}
+
+const WEEKDAY_NAMES: [&str; 7] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+pub const EVERY_DAY: i64 = 0b111_1111;
+
+fn spoken_days(weekdays: i64) -> String {
+	if weekdays & EVERY_DAY == EVERY_DAY {
+		return "day".to_string();
+	}
+	WEEKDAY_NAMES.iter().enumerate().filter(|(day, _)| weekdays & (1 << day) != 0).map(|(_, name)| *name).collect::<Vec<_>>().join(" and ")
+}
+
+fn clock_time(minute_of_day: i64) -> String {
+	format!("{}:{:02}", minute_of_day / 60, minute_of_day % 60)
+}
+
+fn add_timer(handler: String, repeat: Repeat, watched: Option<(PathBuf, Option<FileStamp>)>) {
+	let timer = Timer { handler, repeat, due: Some(repeat.first(Instant::now())), watched };
+	TIMERS.with(|timers| timers.borrow_mut().push(timer));
 }
 
 thread_local! {
@@ -70,49 +128,61 @@ pub fn forget_timers() {
 
 /// `signal_every(id, milliseconds)`: the handler on·every·id runs every that many milliseconds from now on
 pub fn start_timer(id: i64, milliseconds: i64) {
-	let period = Duration::from_millis(milliseconds.max(1) as u64);
-	let timer = Timer { handler: format!("{TIMER_HANDLER_PREFIX}{id}"), period, due: Instant::now() + period, watched: None };
-	TIMERS.with(|timers| timers.borrow_mut().push(timer));
+	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Every(Duration::from_millis(milliseconds.max(1) as u64)), None);
 }
 
-/// `signal_daily(id, minute_of_day)`: the handler on·every·id runs at that local time of day, every day
-pub fn start_daily_timer(id: i64, minute_of_day: i64) {
-	let delay = Duration::from_secs(seconds_until(minute_of_day, local_second_of_day()) as u64);
-	let timer = Timer { handler: format!("{TIMER_HANDLER_PREFIX}{id}"), period: DAY, due: Instant::now() + delay, watched: None };
-	TIMERS.with(|timers| timers.borrow_mut().push(timer));
+/// `signal_daily(id, minute_of_day, weekdays)`: the handler on·every·id runs at that local time of day on the
+/// weekdays of the mask (bit 0 Sunday … bit 6 Saturday)
+pub fn start_daily_timer(id: i64, minute_of_day: i64, weekdays: i64) {
+	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Clock { minute_of_day, weekdays, once: false }, None);
+}
+
+/// `signal_at(id, minute_of_day)`: the handler on·every·id runs once, at the next such local time of day
+pub fn start_one_shot_timer(id: i64, minute_of_day: i64) {
+	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Clock { minute_of_day, weekdays: EVERY_DAY, once: true }, None);
 }
 
 const DAY: Duration = Duration::from_secs(24 * 3600);
+const WEEK_DAYS: i64 = 7;
 
 /// Seconds from `second_of_day` to the next `minute_of_day` (a whole day when it is now)
 pub fn seconds_until(minute_of_day: i64, second_of_day: i64) -> i64 {
-	let day = DAY.as_secs() as i64;
-	match (minute_of_day * 60 - second_of_day).rem_euclid(day) {
-		0 => day,
-		seconds => seconds,
-	}
+	seconds_until_on(minute_of_day, EVERY_DAY, 0, second_of_day)
 }
 
-/// The seconds since local midnight (UTC where the platform gives no time zone)
-fn local_second_of_day() -> i64 {
+/// Seconds from `second_of_day` of `weekday` (0 Sunday) to the next `minute_of_day` on a weekday of the mask (a whole
+/// week when that is now and the mask has only this day); an empty mask is every day
+pub fn seconds_until_on(minute_of_day: i64, weekdays: i64, weekday: i64, second_of_day: i64) -> i64 {
+	let day = DAY.as_secs() as i64;
+	let weekdays = if weekdays & EVERY_DAY == 0 { EVERY_DAY } else { weekdays };
+	let today = minute_of_day * 60 - second_of_day;
+	(0..=WEEK_DAYS)
+		.map(|days_ahead| (days_ahead, today + days_ahead * day))
+		.find(|(days_ahead, seconds)| *seconds > 0 && weekdays & (1 << ((weekday + days_ahead) % WEEK_DAYS)) != 0)
+		.map_or(WEEK_DAYS * day, |(_, seconds)| seconds)
+}
+
+/// The local weekday (0 Sunday) and seconds since local midnight (UTC where the platform gives no time zone)
+fn local_time() -> (i64, i64) {
 	let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |since| since.as_secs() as i64);
 	#[cfg(unix)]
 	{
 		let time = now as libc::time_t;
 		let mut local: libc::tm = unsafe { std::mem::zeroed() };
 		if !unsafe { libc::localtime_r(&time, &mut local) }.is_null() {
-			return (local.tm_hour * 3600 + local.tm_min * 60 + local.tm_sec) as i64;
+			return (local.tm_wday as i64, (local.tm_hour * 3600 + local.tm_min * 60 + local.tm_sec) as i64);
 		}
 	}
-	now.rem_euclid(DAY.as_secs() as i64)
+	let day = DAY.as_secs() as i64;
+	const THURSDAY: i64 = 4; // 1970-01-01
+	((now.div_euclid(day) + THURSDAY) % WEEK_DAYS, now.rem_euclid(day))
 }
 
 /// `signal_watch(id, path)`: the handler on·file·id runs when the file changes from now on
 pub fn watch_file(id: i64, path: String) {
 	let path = PathBuf::from(path);
 	let seen = stamp(&path);
-	let timer = Timer { handler: format!("{FILE_HANDLER_PREFIX}{id}"), period: FILE_CHECK_PERIOD, due: Instant::now() + FILE_CHECK_PERIOD, watched: Some((path, seen)) };
-	TIMERS.with(|timers| timers.borrow_mut().push(timer));
+	add_timer(format!("{FILE_HANDLER_PREFIX}{id}"), Repeat::Every(FILE_CHECK_PERIOD), Some((path, seen)));
 }
 
 /// Modification time and size: a rewrite within one tick of a coarse clock still changes the size, mostly
@@ -124,7 +194,7 @@ fn stamp(path: &PathBuf) -> Option<FileStamp> {
 }
 
 fn next_due() -> Option<Instant> {
-	TIMERS.with(|timers| timers.borrow().iter().map(|timer| timer.due).min())
+	TIMERS.with(|timers| timers.borrow().iter().filter_map(|timer| timer.due).min())
 }
 
 /// The handlers to run now: on·interrupt after a ctrl-c (watched only by a program with that handler: any other
@@ -136,8 +206,10 @@ fn due_handlers(handles_interrupt: bool) -> Vec<String> {
 	}
 	let now = Instant::now();
 	TIMERS.with(|timers| {
-		for timer in timers.borrow_mut().iter_mut().filter(|timer| timer.due <= now) {
-			timer.due = (timer.due + timer.period).max(now);
+		let mut timers = timers.borrow_mut();
+		for timer in timers.iter_mut() {
+			let Some(when) = timer.due.filter(|when| *when <= now) else { continue };
+			timer.due = timer.repeat.after(when, now);
 			if let Some((path, seen)) = &mut timer.watched {
 				let current = stamp(path);
 				if current == *seen {
@@ -147,6 +219,7 @@ fn due_handlers(handles_interrupt: bool) -> Vec<String> {
 			}
 			due.push(timer.handler.clone());
 		}
+		timers.retain(|timer| timer.due.is_some());
 	});
 	due
 }
@@ -224,7 +297,6 @@ pub fn allow_staying() {
 fn spoken(period: Duration) -> String {
 	match (period.as_millis(), period.as_millis() % 1000) {
 		(1000, _) => "1 second".to_string(),
-		(milliseconds, _) if milliseconds == DAY.as_millis() => "day".to_string(),
 		(milliseconds, 0) => format!("{} seconds", milliseconds / 1000),
 		(milliseconds, _) => format!("{milliseconds} ms"),
 	}
@@ -237,7 +309,7 @@ pub fn stay_while_listening<T>(store: &mut Store<T>, instance: &Instance) -> Res
 	}
 	let listening: Vec<String> = TIMERS.with(|timers| timers.borrow().iter().map(|timer| match &timer.watched {
 		Some((path, _)) => format!("file {} change", path.display()),
-		None => format!("every {}", spoken(timer.period)),
+		None => timer.repeat.spoken(),
 	}).collect());
 	eprintln!("listening: {} (ctrl-c to stop)", listening.join(", "));
 	while let Some(due) = next_due() {

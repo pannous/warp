@@ -337,9 +337,8 @@ pub(super) fn is_update(op: &Op) -> bool {
 /// `field_with(m, key, value)` updating the variable m itself: the key (as an index, `key + 1` like `m[key]`) and value
 pub(super) fn entry_update(name: &str, value: &Node) -> Option<(Node, Node)> {
 	let Node::List(items, _, _) = value.drop_meta() else { return None };
-	let [word, map, key, entry_value] = items.as_slice() else { return None };
-	let updates_itself = word.name() == crate::library_words::FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name);
-	updates_itself.then(|| (Node::Key(Box::new(key.clone()), Op::Add, Box::new(crate::node::int(1))), entry_value.clone()))
+	let [_, _, key, entry_value] = items.as_slice() else { return None };
+	crate::library_words::is_field_update_of(name, value).then(|| (Node::Key(Box::new(key.clone()), Op::Add, Box::new(crate::node::int(1))), entry_value.clone()))
 }
 
 /// What a map variable held as a table may start from: `{}`, a map literal of name keys, or the parameter it copies
