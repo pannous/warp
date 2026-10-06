@@ -79,8 +79,13 @@ fn check_definitions(statements: &[Node], definitions: &[Definition], scope: &Sc
 				}
 				_ => changes.as_slice(),
 			};
-			if let Some(change) = checked.iter().find(|change| observed_after(statements, change, &callers[&definition.function.name])) {
-				return Err(late_binding_error(definition, &variable, change.node, enclosing));
+			let Some(change) = checked.iter().find(|change| observed_after(statements, change, &callers[&definition.function.name])) else { continue };
+			// a getter (P71) reads the value as it is at each use: main's variable becomes global, a function's
+			// captures are refreshed at each call anyway
+			match (definition.getter, enclosing) {
+				(true, None) => late_bound.push(variable.clone()),
+				(true, Some(_)) => {}
+				(false, _) => return Err(late_binding_error(definition, &variable, change.node, enclosing)),
 			}
 		}
 	}
@@ -227,6 +232,8 @@ struct Definition {
 	index: usize,
 	function: UserFunctionDef,
 	line: usize,
+	/// `z() := y*y` from `z := y*y` (getters.rs): reads its free variables as they are at each use
+	getter: bool,
 }
 
 /// A change of a variable: the statement it is in and the assignment
@@ -255,6 +262,10 @@ pub(crate) fn map_statements(program: Node, transform: &mut dyn FnMut(Node) -> N
 /// The functions a statement defines when it is a definition itself; one inside a loop or block keeps capturing the
 /// values of that iteration (loop variables need no declaration)
 pub(crate) fn functions_in(statement: &Node) -> Vec<UserFunctionDef> {
+	// `o·s() := e; o = {…}`: an object with function entries (blocks.rs) is one statement of definitions
+	if let Node::List(items, Bracket::None, Separator::Semicolon) = statement.drop_meta() {
+		return items.iter().flat_map(functions_in).collect();
+	}
 	let is_definition = match statement.drop_meta() {
 		Node::Key(_, Op::Define | Op::Assign, _) => true,
 		Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)),
@@ -351,7 +362,7 @@ fn written_text(node: &Node) -> String {
 }
 
 /// A `def` without parameters whose body is pure and reads only constants (`def area(): 3*4`) always gives the same
-/// value: educate toward `area = 3*4` (wiki/charged.md "Needless charging"). `:=` without parameters waits for P71.
+/// value: educate toward `area = 3*4` (wiki/charged.md "Needless charging"). `:=` without parameters is a getter (P71, getters.rs).
 fn note_needless_charging(definition: &Definition, statements: &[Node], main: &Scope, report: &EffectReport) {
 	let function = &definition.function;
 	let statement = &statements[definition.index];
@@ -370,8 +381,24 @@ fn note_needless_charging(definition: &Definition, statements: &[Node], main: &S
 fn definitions(statements: &[Node]) -> Vec<Definition> {
 	let line_of = |statement: &Node| Diagnostic::at(statement, "").line;
 	statements.iter().enumerate()
-		.flat_map(|(index, statement)| functions_in(statement).into_iter().map(move |function| Definition { index, function, line: line_of(statement) }))
+		.flat_map(|(index, statement)| functions_in(statement).into_iter().map(move |function| {
+			let getter = function.params.is_empty() && is_getter_definition(statement, &function.name);
+			Definition { index, function, line: line_of(statement), getter }
+		}))
 		.collect()
+}
+
+/// `name() := expr` with expr not in braces, in the statement: a getter, whether written so or as `name := expr` (P71);
+/// `def name(){…}` keeps its braces. An object's getter entry is one of the definitions before the object (blocks.rs)
+fn is_getter_definition(statement: &Node, name: &str) -> bool {
+	match statement.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Semicolon) => items.iter().any(|item| is_getter_definition(item, name)),
+		Node::Key(left, Op::Define, body) => !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) && match left.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.len() == 1 && matches!(items[0].drop_meta(), Node::Symbol(head) if head == name),
+			_ => false,
+		},
+		_ => false,
+	}
 }
 
 /// Each function's name with the names of the functions that call it, transitively, itself included: a use of any of

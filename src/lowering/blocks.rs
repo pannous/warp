@@ -6,7 +6,7 @@
 //! `x = …` ends the block.
 //! Stage 2: `x = {statements}` is a block too (no warning: braces say so), an object's computed `key: value` entry is an
 //! uncharged block (`o.s1!` runs it, `o.s1 + 1` is the type error, the object holds it as data), and `obj!` of an object
-//! literal runs it as code: each `key: value` is the call `key(value)` (`help!`). `key := value` entries are values like `key = value` while P71 is open, unless they define a function (`it`).
+//! literal runs it as code: each `key: value` is the call `key(value)` (`help!`). `key := value` entries are getters (P71): the method `o·key()`, run at every read `o.key`.
 //! Stage 3: `x = code e` / `x = block e` are blocks, `y = data e; y!` runs with a got-it warning ("running data as code"),
 //! and a function with a `block` parameter (`when_not(c, body:block) := if not c { body! }`) is expanded at every call:
 //! its other parameters bound to fresh names, `body!` the argument's code, so names resolve where the call is written.
@@ -37,7 +37,7 @@ pub fn lower(program: Node) -> Node {
 			functions.insert(name, function);
 		}
 	});
-	let mut lowering = Blocks { blocks: HashMap::new(), objects: HashMap::new(), data: HashMap::new(), functions, expansions: 0, methods: HashMap::new() };
+	let mut lowering = Blocks { blocks: HashMap::new(), objects: HashMap::new(), data: HashMap::new(), functions, expansions: 0, methods: HashMap::new(), getters: Default::default() };
 	lowering.statement(program)
 }
 
@@ -115,6 +115,8 @@ struct Blocks {
 	/// Function entries of objects in scope: `o.f` → the top-level function `o·f` it became, and whether it takes the
 	/// object (its body reads the other fields)
 	methods: HashMap<String, (String, bool)>,
+	/// The getter entries among them (`s := e`, P71): `o.s` without parentheses calls them
+	getters: std::collections::HashSet<String>,
 }
 
 /// `x : a+b` of a computed expression: the name and the block
@@ -139,11 +141,11 @@ fn is_computed(value: &Node) -> bool {
 	}
 }
 
-/// `s = e`, or `s := e` that defines no function (no `it`; P71 open, read as now): the field and e
+/// `s = e`, or `s := {statements}` (a getter `s := e` is a function entry, P71): the field and e
 fn value_entry(entry: &Node) -> Option<(&Node, &Node)> {
 	match entry.drop_meta() {
 		Node::Key(field, Op::Assign, value) => Some((field, value)),
-		Node::Key(field, Op::Define, value) if !crate::wasp_parser::mentions(value, IT) => Some((field, value)),
+		Node::Key(field, Op::Define, value) if !crate::wasp_parser::mentions(value, IT) && crate::getters::getter_name(entry).is_none() => Some((field, value)),
 		_ => None,
 	}
 }
@@ -163,7 +165,7 @@ fn function_entry(entry: &Node) -> Option<(String, Vec<Node>, Node)> {
 		Node::Key(head, Op::Define, body) => match head.drop_meta() {
 			Node::Symbol(field) => match lambda(body) {
 				Some((parameters, body)) => Some((field.clone(), parameter_list(parameters), body)),
-				None => crate::wasp_parser::mentions(body, IT).then(|| (field.clone(), vec![], body.as_ref().clone())),
+				None => (crate::wasp_parser::mentions(body, IT) || crate::getters::getter_name(entry).is_some()).then(|| (field.clone(), vec![], body.as_ref().clone())),
 			},
 			Node::List(items, Bracket::Round, Separator::None) => match items.split_first() {
 				Some((name, parameters)) if matches!(name.drop_meta(), Node::Symbol(_)) => Some((name.name(), parameters.to_vec(), body.as_ref().clone())),
@@ -322,6 +324,9 @@ impl Blocks {
 					let mut definitions = vec![];
 					for entry in entries.clone() {
 						if let Some((field, parameters, body)) = function_entry(&entry) {
+							if crate::getters::getter_name(&entry).is_some() {
+								self.getters.insert(format!("{name}.{field}"));
+							}
 							definitions.push(self.method(&name, &field, parameters, body, entries));
 							let written = match entry.drop_meta() {
 								Node::Key(head, _, value) if matches!(head.drop_meta(), Node::Symbol(_)) => value.as_ref().clone(),
@@ -401,11 +406,12 @@ impl Blocks {
 		Node::Key(Box::new(head), Op::Define, Box::new(body))
 	}
 
-	/// `o.f(3)`, `o.f 3` of a function entry: the call of its top-level function
+	/// `o.f(3)`, `o.f 3` of a function entry, `o.s` of a getter entry: the call of its top-level function
 	fn method_call(&mut self, node: &Node) -> Option<Node> {
 		let (method, arguments, bracket, separator) = match node.drop_meta() {
 			Node::Key(object, Op::Dot, call) => match call.drop_meta() {
 				Node::List(items, Bracket::Round, Separator::None) => (block_key(&Node::Key(object.clone(), Op::Dot, Box::new(items.first()?.clone())))?, items[1..].to_vec(), Bracket::Round, Separator::None),
+				Node::Symbol(_) => (block_key(node).filter(|key| self.getters.contains(key))?, vec![], Bracket::Round, Separator::None),
 				_ => return None,
 			},
 			Node::List(items, Bracket::None, Separator::Space) => (block_key(items.first()?).filter(|key| key.contains('.'))?, items[1..].to_vec(), Bracket::None, Separator::Space),
@@ -425,6 +431,7 @@ impl Blocks {
 		let prefix = format!("{name}.");
 		self.blocks.retain(|key, _| !key.starts_with(&prefix));
 		self.methods.retain(|key, _| !key.starts_with(&prefix));
+		self.getters.retain(|key| !key.starts_with(&prefix));
 	}
 
 	/// `x!`, `o.s1!`, `help!`: the block inlined where it runs, or the object run as code (each `key: value` the call
