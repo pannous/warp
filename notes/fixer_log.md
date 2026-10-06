@@ -167,3 +167,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-06 fix-text-words
 - g-0muE: `strip` is trim's synonym (Python), `s.trim` / `s.strip` need no parentheses (library_words SYNONYMS).
 - print-empty: `print()` writes an empty line and is worth "", as `print ""` (list_emitter emit_empty_print, analyzer Text).
+
+## 2026-10-06 fix-pipe
+- url-ends-at-space: `fetch url | strip` read as `fetch (url or strip)`. Now `x | f` is f(x) when f names a function
+  (D6; pipes.rs, the parser marks the word after a single `|`), a braceless call pipes its result
+  (`square 2 | root`), `|` between values stays or (its `or` hint only then).
