@@ -690,6 +690,7 @@ PASSED:
   ✓ functions::test_late_binding::nonlocal_reads_the_value_at_each_call
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
+  ✓ functions::test_list_conversion::an_empty_list
   ✓ functions::test_list_conversion::list_of_a_value
   ✓ functions::test_map_phrase::test_map_a_function_first_without_on
   ✓ functions::test_map_phrase::test_map_a_function_on_a_list
@@ -787,6 +788,7 @@ PASSED:
   ✓ functions::test_property_words::test_property_word_after_a_name_counts
   ✓ functions::test_property_words::test_property_word_agrees_with_of_and_getter
   ✓ functions::test_property_words::test_property_word_counts_text_characters
+  ✓ functions::test_python_higher_order::a_python_function_of_a_function
   ✓ functions::test_python_ruby_definitions::test_julia_definitions
   ✓ functions::test_python_ruby_definitions::test_python_keyword_parameter
   ✓ functions::test_python_ruby_definitions::test_python_rest_parameter_with_colon_body
@@ -883,6 +885,7 @@ PASSED:
   ✓ functions::test_variadic::a_rest_parameter_may_be_empty
   ✓ functions::test_variadic::calls_without_parentheses_fill_the_rest_too
   ✓ functions::test_variadic::kotlin_vararg_and_csharp_params
+  ✓ functions::test_variadic::spreading_into_a_function_parameter
   ✓ functions::test_whole_float_to_int_parameter::a_whole_float_for_an_int_parameter_is_refused
   ✓ host::tests::test_host_state
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
@@ -2638,4 +2641,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2633 passed, 0 failed, 2633 total tested
+20 ignored, 2636 passed, 0 failed, 2636 total tested
