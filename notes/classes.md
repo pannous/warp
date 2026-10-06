@@ -50,7 +50,13 @@
   object: its function body is `(body; self)`.
 - On a variable, `c.inc()` is the update `c = inc(c)`; on any other receiver (`counter(4).inc()`) the call gives the
   changed copy. The value of `c.inc()` is the changed object.
-- Not yet: a method that changes its object and gives another value (a `pop`). Its value is the changed object.
+- A method that changes its object and gives another value (`pop() := items.pop()`, a block ending in a value
+  `dequeue() := { first = items#1; items = items[1:]; first }`) gives the pair [value, object]; `q.dequeue()` stores
+  the object back and gives the value (classes-36: a block's statements run before the value, not as data).
+  A change inside `if`/`else` gives the object unless a branch ends in a value.
+- `p.counts#i = v` / `+=` of a list field: `counts·elements = p.counts; counts·elements#i = v; p.counts = …`
+  (element_assignments), so a method setting an element changes its object; also outside classes (`s.xs#2 = 6`).
+- init(x) := … is the constructor like init(x){…}; what a loop in init sets (`for x in xs { i = … }`) stays local.
 
 ## Step 3 as built (P117 inheritance)
 - `class dog extends animal {…}`: the parser keeps the parent as the annotation `@extends(animal)` on the class name.
