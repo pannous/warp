@@ -78,6 +78,7 @@ PASSED:
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
   ✓ control::test_event_footguns::a_change_through_a_list_method_runs_the_listeners
   ✓ control::test_event_footguns::a_derived_value_in_a_method_argument_is_its_value
+  ✓ control::test_event_footguns::a_handler_made_in_a_loop_gets_a_note
   ✓ control::test_event_footguns::a_handler_made_in_a_loop_keeps_its_iteration
   ✓ control::test_event_footguns::a_handler_of_an_event_nothing_raises_never_runs
   ✓ control::test_event_footguns::a_handler_reads_the_current_state
@@ -85,6 +86,8 @@ PASSED:
   ✓ control::test_event_footguns::a_subscribed_listener_changes_a_main_level_variable
   ✓ control::test_event_footguns::an_event_raised_before_its_handler_reaches_it
   ✓ control::test_event_footguns::each_handler_gets_the_event_as_raised
+  ✓ control::test_event_footguns::emit_sends_events_and_raise_stays_an_error
+  ✓ control::test_event_footguns::handlers_emitting_each_other_unconditionally_are_an_error
   ✓ control::test_event_footguns::removing_a_handler_while_dispatching_skips_no_other
   ✓ control::test_event_footguns::whenever_runs_when_the_condition_becomes_true
   ✓ control::test_event_signals::a_body_of_one_raise_stays_a_block
@@ -1618,6 +1621,7 @@ PASSED:
   ✓ operators::test_superscript_operator_declarations::test_suffix_operator_on_a_superscript_digit
   ✓ operators::test_superscript_operator_declarations::test_undeclared_superscripts_stay_powers
   ✓ operators::test_then_pipe::then_pipes_into_a_function
+  ✓ operators::test_then_pipe::then_pipes_into_a_word_operator
   ✓ operators::test_then_pipe::then_without_if_is_the_condition
   ✓ operators::test_truthiness_of_objects::an_object_is_truthy
   ✓ operators::test_truthiness_of_objects::empty_values_are_falsy
@@ -2829,4 +2833,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2824 passed, 0 failed, 2824 total tested
+19 ignored, 2828 passed, 0 failed, 2828 total tested

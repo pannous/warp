@@ -19,3 +19,11 @@ fn then_without_if_is_the_condition() {
 	is!("x = 3; x < 2 then 1 else 2", 2);
 	is!("twice(x) := x * 2; x = 3; x > 2 then twice(x) else 0", 6);
 }
+
+#[test]
+fn then_pipes_into_a_word_operator() {
+	is!("4 then sqrt", 2);
+	is!("9 then root", 3);
+	is!("x = -3; x then abs", 3);
+	is!("twice(x) := x * 2; 8 then twice then sqrt", 4);
+}
