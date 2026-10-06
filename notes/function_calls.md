@@ -111,6 +111,14 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   stabby `->(x) { … }` (parser atom), `lambda { |x| … }` / `proc { … }` and `f.call(args)` (welcome_forms.rs); Lua
   `local` a foreign modifier; Crystal `def sq(x : Int) : Int; …; end` (end_definitions gives the Kotlin head shape);
   Kotlin `listOf`/`arrayOf`/`mutableListOf` are list literals (library_words.rs `list_constructor_calls`).
+- Batch 21: round 6 (probes/function_calls_round6.md). `xs.sort()` panicked (lambdas.rs iteration_method subtracted
+  1 from zero arguments); Python f-strings `f"hi {name}"` (parser literals.rs `parse_f_string`, `brace_holes`, `{{` a
+  brace, a note for `"hi \(name)"`); `return square n` returned the bare function because try_parse_return parsed
+  at binding power 0, which takes no braceless argument (now the assigned-value power); an unknown word under a cast
+  or result type (`def g() -> str: return cube "x"`, `cube 3 as int`) trapped or was data, now the P51 error (casts.rs).
+  Round 6 still open: variadics `vararg xs: Int`, `xs: Int...`, `params int[] xs`; C# `(int x) => …` and PHP
+  `fn($x) => …` lambdas; a default naming an earlier parameter `(a, b = a * 2)`; JS `reduce(f, 0)`; Scala currying
+  `add(x)(y)`; Swift returning `{ $0 + k }`; Kotlin `"hi $name"` (a bare `$` is text by D1).
 
 ## Open
 - Board cards: functions-ruby-yield (warp-93); functions-sort-op,
