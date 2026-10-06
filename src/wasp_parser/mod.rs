@@ -72,7 +72,7 @@ const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
 /// Words before a member of a class body that change nothing in wasp: Swift's `mutating func`, visibility, `override`
-pub const MEMBER_MODIFIERS: [&str; 10] = ["mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async"];
+pub const MEMBER_MODIFIERS: [&str; 11] = ["mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"];
 /// Python's root class `class Point(object):`, no parent of its own
 const PYTHON_ROOT_CLASS: &str = "object";
 /// `record point{x:int y:int}` declares a type like `struct`, but `record` is also an everyday variable name:

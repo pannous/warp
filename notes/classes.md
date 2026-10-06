@@ -214,3 +214,12 @@ operators (`__add__`, `operator +`), a method named `norm` (the parser reads it 
 
 Smart scopes (classes-22, wiki/inventions.md, declarations.rs smart_scope): `Number { Square = it*it }` defines
 `Square(self:Number) := self*self` for a builtin type word, `it` the value the method is called on: `3.Square`.
+
+Operators on instances (classes-23, wiki/operator.md "a & b will try to invoke et, and, add"): `a + b` of an
+instance whose class defines `plus` (or `add`, Python `__add__`, Kotlin `operator fun plus`) is `a.plus(b)`; also
+`-` minus, `*` times, `/` divide, `%` mod, `<` less, `>` more, `==` equals (class_methods OPERATOR_METHODS). Known
+instances only (constructions, annotated or constructed variables, loop variables, chains `a + b + c`); an unknown
+operand keeps the built-in operator (card class-method: dispatch at run time). Open: a method named by its glyph
+`+(o) := …` (the parser reads `+(o)` as unary plus), C++/C# `operator +`.
+Foreign spellings (classes-19 to -23) are accepted silently today; per the alias rule (notes/agents/common.md) they
+should give a got-it note naming the wasp word (normalize::advise): next batch.
