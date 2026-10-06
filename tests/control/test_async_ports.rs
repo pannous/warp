@@ -17,3 +17,11 @@ fn gather_nested_and_wait_group_forms() {
 	is!("shared n = 0; jobs = []; for i in 1 to 4 { jobs.add(go { n += 1 }) }; await all jobs; n", 4);
 	is!("bad() := [1]#5; try await go bad() else 0", 0);
 }
+
+// Promise.race, asyncio FIRST_COMPLETED: `await any [a, b]` is the result of the first task to finish
+#[test]
+fn await_any_gives_the_first_to_finish() {
+	const RACERS: &str = "slow() := { sleep(300 ms); 1 }; quick() := { sleep(10 ms); 2 }; ";
+	is!(&format!("{RACERS}await any [go slow(), go quick()]"), 2);
+	is!(&format!("{RACERS}started = clock(); r = await any [go slow(), go quick()]; clock() - started < 250"), true);
+}

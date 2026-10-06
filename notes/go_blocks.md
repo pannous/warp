@@ -30,5 +30,7 @@ later; the program waits for its tasks before it ends (tasks::TaskTable::join_al
   Later backends (SIMD, GPU via WebGPU/wgpu for pure numeric f over typed arrays) can take the same forms.
 - `await all [go f(1), go f(2)]` (Promise.all, asyncio.gather; declarations::awaited_starts): every task starts first,
   then each is awaited, `(go·job·1 = go f(1); go·job·2 = go f(2); [await go·job·1, await go·job·2])`. It gave the task
-  handles [1 2] before. Ported async cases: probes/async_ports.md, tests/control/test_async_ports.rs. Not yet:
-  `await any` (race), deadlines (`within`), Go channels.
+  handles [1 2] before. `await any [go a(), go b()]` (Promise.race, default queued with the Interviewer): every task
+  starts, a loop polls task_status every millisecond (Tasks::race) and awaits the first finished or failed one; the
+  others keep running. Ported async cases: probes/async_ports.md, tests/control/test_async_ports.rs. Not yet:
+  `await any [a, b]` of task variables (card await-any-vars), deadlines (`within`), Go channels.

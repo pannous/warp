@@ -43,6 +43,17 @@ const IMPLICIT_WAIT_TOPIC: &str = "implicit-await";
 const TASK_ELEMENT: &str = "task·element";
 /// `await all jobs`: the results of every job of a list
 const ALL_WORD: &str = "all";
+/// `await any [a, b]`: the result of the first task to finish (Promise.race)
+const ANY_WORD: &str = "any";
+/// `race·0`: which task of an `await any` finished first (1-based, 0 while none)
+const RACE_PREFIX: &str = "race·";
+/// how often an `await any` looks at its tasks
+const RACE_POLL_MILLISECONDS: i64 = 1;
+const SLEEP_WORD: &str = "sleep";
+thread_local! {
+	/// `await any` races so far, each with its own winner variable
+	static RACES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 const ADD_WORD: &str = "add";
 /// The words that count a list: counting a job list waits for no job
 const JOB_COUNTERS: [&str; 4] = ["count", "size", "length", "len"];
@@ -218,19 +229,23 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 					let awaited = Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space);
 					Node::List(vec![assignment, awaited], Bracket::Round, Separator::Semicolon)
 				}
-				// `await all [go f(1), go f(2)]` (Promise.all, asyncio.gather): every task starts, then each is awaited
-				[await_word, all_word, list] if await_word.name() == TASK_WORDS[1] && all_word.name() == ALL_WORD && matches!(list.drop_meta(), Node::List(listed, Bracket::Square, _) if listed.iter().any(is_start)) => {
+				// `await all [go f(1), go f(2)]` (Promise.all, asyncio.gather): every task starts, then each is awaited;
+				// `await any [go f(1), go f(2)]` (Promise.race): every task starts, then the first to finish is awaited
+				[await_word, all_word, list] if await_word.name() == TASK_WORDS[1] && [ALL_WORD, ANY_WORD].contains(&all_word.name().as_str()) && matches!(list.drop_meta(), Node::List(listed, Bracket::Square, _) if listed.iter().any(is_start)) => {
+					let racing = all_word.name() == ANY_WORD;
 					let Node::List(listed, list_bracket, list_separator) = list.drop_meta().clone() else { unreachable!("guarded") };
 					let mut starts = vec![];
 					let results = listed.into_iter().map(|item| match is_start(&item) {
 						true => {
 							let job = Node::Symbol(format!("go·job·{}", counter.replace(counter.get() + 1)));
 							starts.push(Node::Key(Box::new(job.clone()), Op::Assign, Box::new(item)));
-							Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space)
+							if racing { job } else { Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space) }
 						}
 						false => item,
 					}).collect();
-					Node::List([starts, vec![Node::List(results, list_bracket, list_separator)]].concat(), Bracket::Round, Separator::Semicolon)
+					let results = Node::List(results, list_bracket, list_separator);
+					let value = if racing { Node::List(vec![await_word.clone(), all_word.clone(), results], Bracket::None, Separator::Space) } else { results };
+					Node::List([starts, vec![value]].concat(), Bracket::Round, Separator::Semicolon)
 				}
 				_ => Node::List(items.into_iter().map(|item| awaited_starts(item, counter)).collect(), bracket, separator),
 			}
@@ -406,6 +421,10 @@ impl Tasks<'_> {
 					let is_task_handler = matches!(&handled, Node::List(parts, _, _) if word(parts.first().unwrap_or(&Node::Empty)) == TASK_ON);
 					return if is_task_handler { handled } else { self.lower(handled) };
 				}
+				// `await any [a, b]` reads the tasks themselves, before a read of one waits for it
+				if let Some(race) = self.raced(&items) {
+					return race;
+				}
 				let items: Vec<Node> = items.into_iter().map(|item| self.lower(item)).collect();
 				match self.task_statement(&items) {
 					// `{ go f(x) }` stays a block: a body in braces is no getter
@@ -451,6 +470,52 @@ impl Tasks<'_> {
 			[control, subject] if TASK_CONTROLS.contains(&word(control).as_str()) && self.is_task(subject) => Some(self.control(subject, &word(control))),
 			_ => None,
 		}
+	}
+
+	/// `await any [a, b]` (also read as `await (any [a, b])`): the first of the tasks to finish
+	fn raced(&self, items: &[Node]) -> Option<Node> {
+		match items {
+			[head, any, list] if word(head) == TASK_WORDS[1] && word(any) == ANY_WORD => self.race(list),
+			[head, phrase] if word(head) == TASK_WORDS[1] => match phrase.drop_meta() {
+				Node::List(inner, Bracket::None, _) if inner.len() == 2 && word(&inner[0]) == ANY_WORD => self.race(&inner[1]),
+				// `any [a, b]` read as an index of any
+				Node::Key(any, _, list) if word(any) == ANY_WORD => self.race(list),
+				_ => None,
+			},
+			_ => None,
+		}
+	}
+
+	/// `(race·0 = 0; while race·0 == 0 { if task_status(a) is finished or failed {race·0 = 1}; …; if race·0 == 0
+	/// {sleep(1)} }; if race·0 == 1 then await a else …)`: the tasks keep running, the first one's result (or failure)
+	fn race(&self, list: &Node) -> Option<Node> {
+		use crate::variable_signals::{assign, block, if_then};
+		let Node::List(listed, Bracket::Square, _) = list.drop_meta() else { return None };
+		if listed.is_empty() || !listed.iter().all(|item| self.is_task(item)) {
+			return None;
+		}
+		let job_of = |item: &Node| match item.drop_meta() {
+			Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => items[1].clone(),
+			other => other.clone(),
+		};
+		let winner = format!("{RACE_PREFIX}{}", RACES.with(|races| races.replace(races.get() + 1)));
+		let winner_is = |index: usize| Node::Key(Box::new(Node::Symbol(winner.clone())), Op::Eq, Box::new(crate::node::int(index as i64)));
+		let ended = |job: &Node| {
+			let status = marker(crate::host::TASK_STATUS, vec![job_of(job)]);
+			let is = |code: i64| Node::Key(Box::new(status.clone()), Op::Eq, Box::new(crate::node::int(code)));
+			Node::Key(Box::new(is(crate::host::TASK_FINISHED)), Op::Or, Box::new(is(crate::host::TASK_FAILED)))
+		};
+		let mut checks: Vec<Node> = listed.iter().enumerate().map(|(index, job)| {
+			if_then(Node::Key(Box::new(winner_is(0)), Op::And, Box::new(ended(job))), block(vec![assign(&winner, crate::node::int(index as i64 + 1))]))
+		}).collect();
+		checks.push(if_then(winner_is(0), block(vec![marker(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])])));
+		let waiting = Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::While, Box::new(winner_is(0)))), Op::Do, Box::new(block(checks)));
+		let awaited_job = |job: &Node| self.task_statement(&[Node::Symbol(TASK_WORDS[1].to_string()), job.clone()]).unwrap_or_else(|| job.clone());
+		let (last, first) = listed.split_last().expect("not empty");
+		let result = first.iter().enumerate().rev().fold(awaited_job(last), |otherwise, (index, job)| {
+			crate::variable_signals::if_then_else(winner_is(index + 1), awaited_job(job), otherwise)
+		});
+		Some(Node::List(vec![assign(&winner, crate::node::int(0)), waiting, result], Bracket::Round, Separator::Semicolon))
 	}
 
 	fn signal_handler(&self, items: &[Node]) -> Option<Node> {
