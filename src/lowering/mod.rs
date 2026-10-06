@@ -4,10 +4,12 @@
 pub mod ambiguous_forms;
 pub mod blocks;
 pub mod broadcasting;
+pub mod class_methods;
 pub mod closures;
 pub mod comprehensions;
 pub mod declarations;
 pub mod go_blocks;
+pub mod parallel;
 pub mod folding;
 pub mod memoization;
 pub mod for_loop;

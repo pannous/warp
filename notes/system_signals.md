@@ -127,3 +127,14 @@ imports nothing and starts no connector thread.
 loop back-edges of subscribing programs, the double ctrl-c escape, and a resident main that waits for the next event.
 Then `on file "…" change` (notify crate) and `on every 5 seconds`, then the playground's DOM and visibility
 connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
+
+## Status
+- `on interrupt {…}` natively (unix): event_signals SYSTEM_EVENTS makes the exported handler `on·interrupt` without a
+  raise; a program with it imports the host word `signal_poll` (crates/warp-runtime host_words.rs), called at every
+  loop start (wasm_emitter control_flow, next to task_poll). The first poll installs a libc SIGINT handler that only
+  sets a flag; the poll then runs the handler (with ø as `event` when it reads one). A second ctrl-c within a second,
+  or before the handler ran, exits with 130, so a handler that ignores ctrl-c never makes a program unstoppable.
+  Before the first loop start ctrl-c still ends the run (nothing installed yet). Test: tests/control/test_system_signals.rs
+  (a real `warp run` gets a real SIGINT). The playground's host.js has `signal_poll` as a no-op.
+- Not yet: Windows (SetConsoleCtrlHandler), delivery at `sleep` and at the end of main, resident programs, the other
+  sources (file change, timers, …).

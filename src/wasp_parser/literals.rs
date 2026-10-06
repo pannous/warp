@@ -6,6 +6,10 @@ impl WaspParser {
 	/// Parse a complete value/expression - calls parse_expr(0) for operator chaining
 	pub(super) fn parse_value(&mut self) -> Node {
 		let (_, _, comment) = self.skip_whitespace_and_comments();
+		let comment = match (self.pending_comment.take(), comment) {
+			(Some(before), Some(after)) => Some(format!("{before}\n{after}")),
+			(before, after) => before.or(after),
+		};
 
 		// Capture position before parsing
 		let (line_nr, column) = self.get_position();

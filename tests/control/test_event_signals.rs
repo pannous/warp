@@ -1,6 +1,8 @@
 // Named event signals (wiki/signal.md, notes/signals.md phase 2, P110): `raise name{data}` runs the `on name {…}`
 // handlers of the program, `event` in them is the data; with no handler, raise stays the exception (test_raise.rs)
 use crate::is;
+use warp::node::{Bracket, Node};
+use warp::operators::Op;
 
 #[test]
 fn raise_runs_the_handlers_of_its_name() {
@@ -18,4 +20,35 @@ fn the_handler_reads_the_event_data() {
 fn a_raise_inside_a_function_reaches_the_handler() {
 	is!("n=0; on alarm {n+=1}; def check(x){ if x>2 {raise alarm}; x }; check(1); check(5); n", 1);
 	is!("seen=0; def check(x){ if x>2 {raise too big{value:x}}; x }; on too big {seen=event.value}; check(4); seen", 4);
+}
+
+// The async side (tasks forward a raise to the starting thread) finds the exported handler functions
+#[test]
+fn the_handled_signals_name_their_functions() {
+	let lowered = warp::event_signals::lower(warp::wasp_parser::parse("n=0; on stop the machine {n+=1}; on alarm {n+=2}; raise alarm; raise stop the machine; on idle {n}; n"));
+	let mut handled = warp::event_signals::handled_signals(&lowered);
+	handled.sort();
+	assert_eq!(handled, vec![("alarm".to_string(), "on·alarm".to_string()), ("stop the machine".to_string(), "on·stop·the·machine".to_string())]);
+}
+
+// A function whose body is only a raise keeps its braces (it stays a function, not a getter)
+#[test]
+fn a_body_of_one_raise_stays_a_block() {
+	is!("n=0; on alarm {n+=1}; check() := { raise alarm }; check(); check(); n", 2);
+	let lowered = warp::event_signals::lower(warp::wasp_parser::parse("n=0; on alarm {n+=1}; check() := { raise alarm }; n"));
+	let mut body_is_block = false;
+	lowered.visit(&mut |part| if let Node::Key(head, Op::Define, body) = part {
+		if head.serialize().contains("check") {
+			body_is_block = matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _));
+		}
+	});
+	assert!(body_is_block, "check's body lost its braces: {}", lowered.serialize());
+}
+
+// Page events (notes/signals.md phase 7): `on click {…}` is a handler the playground calls; natively nothing raises it
+#[test]
+fn a_page_event_handler_waits_for_the_page() {
+	is!("n=0; on click {n+=1}; n", 0);
+	let lowered = warp::event_signals::lower(warp::wasp_parser::parse("n=0; on click {n+=1}; n"));
+	assert_eq!(warp::event_signals::handled_signals(&lowered), vec![("click".to_string(), "on·click".to_string())]);
 }

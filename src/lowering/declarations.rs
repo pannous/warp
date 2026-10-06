@@ -28,6 +28,9 @@ const TASK_VALUE: &str = "task·value";
 /// A read of a job list (`jobs.add(go f(i))`, P47): `task·list(jobs, f…)` is every result, `task·element(jobs#i, f…)` one;
 /// until resolve_tasks knows whether the started functions run on threads
 const TASK_LIST: &str = "task·list";
+/// The reads `await` names: `await job`, `await all jobs`; the others (`job + 1`) wait unsaid, which warns
+const AWAITED_MARKERS: [(&str, &str); 3] = [(TASK_VALUE, "task·awaited"), (TASK_LIST, "task·awaited·list"), (TASK_ELEMENT, "task·awaited·element")];
+const IMPLICIT_WAIT_TOPIC: &str = "implicit-await";
 const TASK_ELEMENT: &str = "task·element";
 /// `await all jobs`: the results of every job of a list
 const ALL_WORD: &str = "all";
@@ -261,6 +264,25 @@ fn started_call(rest: &[Node]) -> Option<(String, Vec<Node>)> {
 	}
 }
 
+/// A read of a task that `await` names: no warning that it waits
+fn awaited(node: Node) -> Node {
+	match node {
+		Node::List(mut items, bracket, separator) if AWAITED_MARKERS.iter().any(|(read, _)| word(items.first().unwrap_or(&Node::Empty)) == *read) => {
+			let read = word(&items[0]);
+			let (_, named) = AWAITED_MARKERS.iter().find(|(marker, _)| *marker == read).expect("guarded");
+			items[0] = Node::Symbol(named.to_string());
+			Node::List(items, bracket, separator)
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(awaited(*node)), data },
+		other => other,
+	}
+}
+
+/// The read as `await` would name it, and whether it was named so: `task·awaited` is `task·value` said
+fn read_marker(head: &str) -> (&str, bool) {
+	AWAITED_MARKERS.iter().find(|(_, named)| *named == head).map_or((head, false), |(read, _)| (*read, true))
+}
+
 fn marker(word: &str, parts: Vec<Node>) -> Node {
 	Node::List([vec![Node::Symbol(word.to_string())], parts].concat(), Bracket::Round, Separator::None)
 }
@@ -380,16 +402,19 @@ impl Tasks<'_> {
 			// `await all jobs` (also read as `await (all jobs)`): every result, a job list read awaits them all
 			[head, phrase] if word(head) == TASK_WORDS[1] && self.words.contains(&TASK_WORDS[1]) && matches!(phrase.drop_meta(), Node::List(inner, Bracket::None, _) if inner.len() == 2 && word(&inner[0]) == ALL_WORD) => {
 				let Node::List(inner, _, _) = phrase.drop_meta() else { unreachable!("guarded") };
-				Some(inner[1].clone())
+				Some(awaited(inner[1].clone()))
 			}
-			[head, all, rest @ ..] if word(head) == TASK_WORDS[1] && word(all) == ALL_WORD && !rest.is_empty() && self.words.contains(&TASK_WORDS[1]) => Some(match rest {
+			[head, all, rest @ ..] if word(head) == TASK_WORDS[1] && word(all) == ALL_WORD && !rest.is_empty() && self.words.contains(&TASK_WORDS[1]) => Some(awaited(match rest {
 				[single] => single.clone(),
 				_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
-			}),
-			[head, rest @ ..] if !rest.is_empty() && self.words.contains(&word(head).as_str()) => Some(match rest {
-				[single] => single.clone(),
-				_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
-			}),
+			})),
+			[head, rest @ ..] if !rest.is_empty() && self.words.contains(&word(head).as_str()) => {
+				let value = match rest {
+					[single] => single.clone(),
+					_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
+				};
+				Some(if word(head) == TASK_WORDS[1] { awaited(value) } else { value })
+			}
 			// `stop job`
 			[control, subject] if TASK_CONTROLS.contains(&word(control).as_str()) && self.is_task(subject) => Some(self.control(subject, &word(control))),
 			_ => None,
@@ -455,7 +480,7 @@ const CROSSING_KINDS: [crate::type_kinds::Kind; 8] = {
 pub fn resolve_tasks(node: Node) -> Node {
 	use crate::type_kinds::Kind;
 	let mut has_task = false;
-	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(word(items.first().unwrap_or(&Node::Empty)).as_str(), TASK_GO | TASK_VALUE | TASK_CONTROL_MARK | TASK_LIST | TASK_ELEMENT | crate::wasp_parser::TRY_MARKER)));
+	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(read_marker(&word(items.first().unwrap_or(&Node::Empty))).0, TASK_GO | TASK_VALUE | TASK_CONTROL_MARK | TASK_LIST | TASK_ELEMENT | crate::wasp_parser::TRY_MARKER)));
 	if !has_task {
 		return node;
 	}
@@ -483,6 +508,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 		});
 	let node = guarded_calls(node, &guardable, &wrapped);
 	let node = resolved(node, &path, &wrapped);
+	let node = forwarded_raises(node, &wrapped);
 	with_node_wrappers(node, &wrapped.into_inner())
 }
 
@@ -643,6 +669,35 @@ pub(crate) fn with_definitions_first(node: Node, mut definitions: Vec<Node>) -> 
 	}
 }
 
+/// A raise inside a task reaches the starting thread's handlers (P110, notes/signals.md phase 6): each handler
+/// `on·alarm(event) := body` (event_signals.rs) becomes `if task_inside() { signal_send("on·alarm·node", [event]) } else
+/// { body }`, so in a task's instance it forwards the event, and the program runs it through the node wrapper
+fn forwarded_raises(node: Node, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
+	let handlers: std::collections::HashSet<String> = crate::event_signals::handled_signals(&node).into_iter().map(|(_, function)| function).collect();
+	if handlers.is_empty() {
+		return node;
+	}
+	fn forward(node: Node, handlers: &std::collections::HashSet<String>, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
+		match node {
+			Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if handlers.contains(&word(&items[0]))) => {
+				let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
+				let function = word(&items[0]);
+				wrapped.borrow_mut().insert(function.clone(), items.len() - 1);
+				let arguments = Node::List(items[1..].to_vec(), Bracket::Square, Separator::Colon);
+				let send = marker(crate::host::SIGNAL_SEND, vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments]);
+				let template = crate::wasp_parser::parse(&format!("if {}() {{ {FORWARD_PLACEHOLDER} }} else {{ {BODY_PLACEHOLDER} }}", crate::host::TASK_INSIDE));
+				let body = crate::library_words::substitute(crate::library_words::substitute(template, FORWARD_PLACEHOLDER, &send), BODY_PLACEHOLDER, &body);
+				Node::Key(head, Op::Define, Box::new(body))
+			}
+			other => other.map_children(|child| forward(child, handlers, wrapped)),
+		}
+	}
+	forward(node, &handlers, wrapped)
+}
+
+const FORWARD_PLACEHOLDER: &str = "forwarded_raise_placeholder";
+const BODY_PLACEHOLDER: &str = "handler_body_placeholder";
+
 /// `task·check(task_join(job), task_failure(job)); task_await(job)`: a failed task raises its error from wasm, which
 /// `try` catches, before the result is read
 fn checked_await(await_word: &str, job: &Node) -> Node {
@@ -695,7 +750,12 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = items.into_iter().map(|item| resolved(item, path, wrapped)).collect();
-			match word(items.first().unwrap_or(&Node::Empty)).as_str() {
+			let head = word(items.first().unwrap_or(&Node::Empty));
+			let (read, said) = read_marker(&head);
+			if let Some(error) = (!said).then(|| unsaid_wait(read, &items, path)).flatten() {
+				return error;
+			}
+			match read {
 				TASK_GO => {
 					let function = word(&items[1]);
 					let arguments = items[2..].to_vec();
@@ -725,7 +785,7 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 				},
 				TASK_LIST | TASK_ELEMENT => {
 					let threaded = items[2..].iter().all(|function| path(&word(function)) != TaskPath::Inline);
-					match (threaded, word(&items[0]) == TASK_LIST) {
+					match (threaded, read == TASK_LIST) {
 						(false, _) => items[1].clone(),
 						(true, false) => checked_await(TASK_AWAIT_VALUE, &items[1]),
 						(true, true) => awaited_jobs(&items[1]),
@@ -742,6 +802,25 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 		Node::Meta { node, data } => Node::Meta { node: Box::new(resolved(*node, path, wrapped)), data },
 		other => other,
 	}
+}
+
+/// A task read as its value without `await` (`job + 1`, `starts = jobs`) on a thread: the program waits there, unsaid.
+/// A got-it warning naming `await`; the error a strict program makes of it
+fn unsaid_wait(read: &str, items: &[Node], path: &dyn Fn(&str) -> TaskPath) -> Option<Node> {
+	let functions = match read {
+		TASK_VALUE => &items[2..3],
+		TASK_LIST | TASK_ELEMENT => &items[2..],
+		_ => return None,
+	};
+	if functions.iter().any(|function| path(&word(function)) == TaskPath::Inline) {
+		return None; // it ran where it started: nothing to wait for
+	}
+	let written = crate::diagnostic::written_text(&items[1]);
+	let (all, verb) = if read == TASK_LIST { ("all ", "waits for every task in it") } else { ("", "waits for the task") };
+	let question = crate::diagnostic::Ask::new(IMPLICIT_WAIT_TOPIC, format!("{written} is used as its value: the program {verb} here; write `await {all}{written}` to say so"),
+		vec![crate::diagnostic::reading("wait here", &format!("await {all}{written}"))], crate::diagnostic::Fallback::Warning)
+		.written(&written).at_node(&items[1]);
+	crate::diagnostic::ask(&question).err()
 }
 
 /// `event: body`; `event: x = 7` parses as `(event: x) = 7`

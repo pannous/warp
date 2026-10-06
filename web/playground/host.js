@@ -155,6 +155,7 @@ function programImports(holder, hooks) {
 			random: () => Math.random(),
 			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
 			clock: () => BigInt(Date.now()),
+			signal_poll: () => {}, // a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md)
 			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings)
 			paint: (pixels, width, height) => {
 				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
@@ -170,12 +171,28 @@ function programImports(holder, hooks) {
 				return task.value;
 			},
 			task_await_value: id => buildValue(program(), taskTree(takenTask(holder.run, hooks, id).value)),
-			task_join: id => takenTask(holder.run, hooks, id).failure ? 1n : 0n,
+			// every await joins first: the raises the task forwarded run here, before its value is read
+			task_join: id => {
+				const failed = takenTask(holder.run, hooks, id).failure ? 1n : 0n;
+				deliverSignals(holder);
+				return failed;
+			},
 			task_failure: id => buildValue(program(), textTree(takenTask(holder.run, hooks, id).failure ?? "")),
-			task_status: id => taskStatus(holder.run, id),
+			task_status: id => {
+				const status = taskStatus(holder.run, id);
+				deliverSignals(holder);
+				return status;
+			},
+			// a raise inside a task goes to the starting program's handlers (src/tasks.rs signal_send, deliver)
+			task_inside: () => holder.inTask ? 1n : 0n,
+			signal_send: (handler, values) => {
+				(holder.run.signals ??= []).push({ handler: decode(cString(handler)), values: readTaskValue(program(), values) });
+				return 0n;
+			},
 			task_control: (id, operation) => controlTask(holder.run, id, operation),
 			// where a loop starts: a task paused from its starting program waits (its control word, set by controlTask)
 			task_poll: () => {
+				deliverSignals(holder);
 				const control = holder.control;
 				if (!control) return;
 				while (Atomics.load(control, 0) === CONTROL_PAUSED) Atomics.wait(control, 0, CONTROL_PAUSED);
@@ -318,7 +335,7 @@ function taskName(name) {
 
 // the task here: {value} (a number or a tree) or {failure}
 function runTask(module, hooks, warnings, name, ints, values, arrays, captured = [], control = null) {
-	const taskHolder = { warnings, run: { module, tasks: new Map(), shared: arrays }, control };
+	const taskHolder = { warnings, run: { module, tasks: new Map(), shared: arrays }, control, inTask: true };
 	let instance;
 	try {
 		instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
@@ -328,10 +345,10 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 		const callee = instance.exports[name];
 		const result = values ? callee(buildValue(instance.exports, values)) : callee(...ints.slice(0, callee.length));
 		const unread = joinTasks(taskHolder.run, hooks);
-		if (unread) return { failure: `task ${taskName(name)}: ${unread}` };
-		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result };
+		if (unread) return { failure: `task ${taskName(name)}: ${unread}`, signals: taskHolder.run.signals };
+		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result, signals: taskHolder.run.signals };
 	} catch (trap) {
-		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}` };
+		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}`, signals: taskHolder.run.signals };
 	}
 }
 
@@ -339,7 +356,7 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 // read from its shared buffer, its output printed then
 function finishedTask(run, hooks, id) {
 	const task = run.tasks.get(id);
-	if (!task.worker) return task;
+	if (!task.worker) return queuedSignals(run, task);
 	const header = new Int32Array(task.shared, 0, 2);
 	Atomics.wait(header, 0, 0);
 	const record = JSON.parse(decode(new Uint8Array(task.shared, TASK_HEADER, header[1]).slice()));
@@ -347,7 +364,27 @@ function finishedTask(run, hooks, id) {
 	taskPool.push(task.worker); // free for the next task
 	if (record.value?.kind === KIND_INT && record.ints) record.value = BigInt(record.value.data.int);
 	run.tasks.set(id, record);
+	return queuedSignals(run, record);
+}
+
+// the raises a finished task forwarded, queued once for the program (deliverSignals)
+function queuedSignals(run, record) {
+	if (record.signals?.length && !record.signalsQueued) {
+		(run.signals ??= []).push(...record.signals);
+		record.signalsQueued = true;
+	}
 	return record;
+}
+
+// the raises tasks forwarded, run in the program's instance by their handlers' node wrappers; a task leaves them to
+// the program (its record carries them)
+function deliverSignals(holder) {
+	if (holder.inTask) return;
+	const queue = holder.run.signals ?? [];
+	while (queue.length > 0) {
+		const { handler, values } = queue.shift();
+		holder.exports[handler](buildValue(holder.exports, values));
+	}
 }
 
 // the task's record, read by the program (await, join): a failure nobody read ends the run (joinTasks)
@@ -420,6 +457,8 @@ function readTaskValue(module, node) {
 		const captured = module.closure_captured(node);
 		return { closure: readNode(module, module.reflect_value(node)).data.text, captured: captured === null ? null : readTaskValue(module, captured) };
 	}
+	// a key (`value: 5`, a field of a raised event): left and right, as buildValue rebuilds it
+	if ((kind & KIND_MASK) === KIND_KEY) return { kind: String(kind), key: [readTaskValue(module, module.reflect_data(node)), readTaskValue(module, module.reflect_value(node))] };
 	if ((kind & KIND_MASK) !== KIND_LIST) return readNode(module, node);
 	const items = [];
 	for (let cell = node; cell !== null; cell = module.reflect_value(cell)) {
@@ -601,6 +640,7 @@ function runProgram(bytes, hooks) {
 		const result = instance.exports.main();
 		// the tasks nobody awaited finish before the result, as natively; a failure nobody read ends the run
 		const unread = joinTasks(holder.run, hooks);
+		deliverSignals(holder); // the raises of tasks nobody awaited run their handlers before the run ends
 		if (unread) return { failure: unread, warnings };
 		return { result: readResult(instance.exports, result), warnings };
 	} catch (trap) {

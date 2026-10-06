@@ -166,6 +166,10 @@ impl WasmGcEmitter {
 		if let Some(poll) = self.ffi_func_index(crate::host::TASK_POLL) {
 			func.instruction(&I::Call(poll));
 		}
+		// a program with `on interrupt {…}`: a ctrl-c runs its handler here (host signal_poll)
+		if let Some(poll) = self.ffi_func_index(crate::host::SIGNAL_POLL) {
+			func.instruction(&I::Call(poll));
+		}
 
 		self.emit_condition(func, condition, Self::emit_block_value);
 		func.instruction(&I::I32Eqz);

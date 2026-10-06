@@ -43,6 +43,10 @@ pub fn lower(node: Node) -> Node {
 	let mut results: Vec<(String, Option<String>)> = vec![];
 	lowering.collect(&node, &mut results);
 	lowering.overloads = overloads(&results);
+	// definitions that differ in a parameter type (methods of two classes) dispatch on it (traits.rs), not on their result
+	let mut signatures = HashMap::new();
+	collect_signatures(&node, &mut signatures);
+	lowering.overloads.retain(|name, _| signatures.get(name).is_none_or(|variants| variants.iter().all(|types| *types == variants[0])));
 	if lowering.overloads.is_empty() && !results.iter().any(|(_, result)| result.as_deref().is_some_and(|result| lowering.is_declared(result))) {
 		return node;
 	}

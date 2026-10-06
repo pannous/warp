@@ -150,7 +150,10 @@ pub enum WarningMode {
 }
 
 /// `use strict` in wasp source makes warnings errors for that program
-const STRICT_PRAGMA: [&str; 2] = ["use", "strict"];
+const STRICT_PRAGMA: [&str; 2] = [PRAGMA_WORD, "strict"];
+const PRAGMA_WORD: &str = "use";
+/// `use comments`: a comment before a binding becomes its meta information (P114, lowering/meta_entries.rs)
+const COMMENTS_PRAGMA: &str = "comments";
 /// A "got it" is remembered as the line `ack:<topic> = acknowledged` in the acknowledgements file
 const ACKNOWLEDGED: &str = "acknowledged";
 const ACKNOWLEDGED_PREFIX: &str = "ack:";
@@ -230,27 +233,33 @@ pub fn take_runtime_warnings() -> Vec<String> {
 	RUNTIME_WARNINGS.with(|warnings| std::mem::take(&mut *warnings.borrow_mut()))
 }
 
-fn is_strict_pragma(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2
-		&& items.iter().zip(STRICT_PRAGMA).all(|(item, word)| matches!(item.drop_meta(), Node::Symbol(s) if s == word)))
+/// `use <word>` as a statement: a pragma of the program
+fn is_pragma(node: &Node, word: &str) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(),
+		[using, pragma] if matches!(using.drop_meta(), Node::Symbol(s) if s == PRAGMA_WORD) && matches!(pragma.drop_meta(), Node::Symbol(s) if s == word)))
+}
+
+/// The program without its top-level `use <word>` statements, and whether it had one
+pub fn without_pragma(program: Node, word: &str) -> (Node, bool) {
+	if is_pragma(&program, word) {
+		return (Node::Empty, true);
+	}
+	match program {
+		Node::List(items, bracket, separator) if items.iter().any(|item| is_pragma(item, word)) => {
+			let rest = items.into_iter().filter(|item| !is_pragma(item, word)).collect();
+			(Node::List(rest, bracket, separator), true)
+		}
+		Node::Meta { node, data } => {
+			let (inner, found) = without_pragma(*node, word);
+			(Node::Meta { node: Box::new(inner), data }, found)
+		}
+		other => (other, false),
+	}
 }
 
 /// The program without its top-level `use strict` statements, and whether it had one
 pub fn without_strict_pragma(program: Node) -> (Node, bool) {
-	if is_strict_pragma(&program) {
-		return (Node::Empty, true);
-	}
-	match program {
-		Node::List(items, bracket, separator) if items.iter().any(is_strict_pragma) => {
-			let rest = items.into_iter().filter(|item| !is_strict_pragma(item)).collect();
-			(Node::List(rest, bracket, separator), true)
-		}
-		Node::Meta { node, data } => {
-			let (inner, strict) = without_strict_pragma(*node);
-			(Node::Meta { node: Box::new(inner), data }, strict)
-		}
-		other => (other, false),
-	}
+	without_pragma(program, STRICT_PRAGMA[1])
 }
 
 // ============================================================================
@@ -556,10 +565,24 @@ pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
 	}
 }
 
-/// Run `body` with warnings as errors when the program says `use strict`
+/// Run `body` with warnings as errors when the program says `use strict`, and comments as meta information when it
+/// says `use comments`
 pub fn in_program_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
-	match without_strict_pragma(program) {
+	let (program, comments) = without_pragma(program, COMMENTS_PRAGMA);
+	let previous = COMMENTS_AS_META.with(|flag| flag.replace(comments));
+	let result = match without_strict_pragma(program) {
 		(program, true) => with_warning_mode(WarningMode::Error, || body(program)),
 		(program, false) => body(program),
-	}
+	};
+	COMMENTS_AS_META.with(|flag| flag.set(previous));
+	result
+}
+
+thread_local! {
+	static COMMENTS_AS_META: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Did the program being compiled say `use comments` (P114: off by default, the compiler pays nothing for comments)
+pub fn comments_as_meta() -> bool {
+	COMMENTS_AS_META.with(std::cell::Cell::get)
 }

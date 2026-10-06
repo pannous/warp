@@ -223,10 +223,10 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// Check for introspection and math functions
-		if items.len() == 2 {
+		// Check for introspection and math functions; `[count, a]` lists two items, and a variable `count` heads no call
+		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Colon) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.emit_introspection_fn(func, fn_name, &items[1]) {
+				if self.is_unbound(fn_name) && self.emit_introspection_fn(func, fn_name, &items[1]) {
 					return;
 				}
 			}

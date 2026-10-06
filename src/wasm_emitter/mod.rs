@@ -571,6 +571,7 @@ impl WasmGcEmitter {
 		extract_ffi_imports(&mut self.ctx, node);
 		extract_user_functions(&mut self.ctx, node);
 		crate::analyzer::extract_host_words(&mut self.ctx, node);
+		crate::analyzer::extract_signal_polls(&mut self.ctx);
 		self.type_errors.append(&mut self.ctx.parameter_conflicts);
 		self.scope.function_kinds = self.user_function_kinds();
 		self.derive_imports_from_effects(node);
@@ -738,7 +739,9 @@ impl WasmGcEmitter {
 		let effects = EffectReport::of(node);
 		// task_poll is called by the emitted loops of a program that controls tasks, not by the program itself
 		let polls = effects.calls_external(crate::host::TASK_CONTROL);
-		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || (polls && name == crate::host::TASK_POLL));
+		// signal_poll likewise, by a program with `on interrupt {…}`
+		let polls_signals = self.ctx.user_functions.contains_key(crate::host::INTERRUPT_HANDLER);
+		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || (polls && name == crate::host::TASK_POLL) || (polls_signals && name == crate::host::SIGNAL_POLL));
 		for need in &self.discovered_needs {
 			if let Need::MathImport(key) = need {
 				let function = key.trim_start_matches("m.");
@@ -1142,7 +1145,9 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_codepoint");
 			}
 			Node::Symbol(s) => {
-				if let Some(user_fn) = self.ctx.user_functions.get(s) {
+				// a parameter named like a function of the program (`f(inc) := inc(3)`) is the parameter
+				let parameter = self.scope.lookup(s).is_some_and(|local| local.is_param);
+				if let Some(user_fn) = self.ctx.user_functions.get(s).filter(|_| !parameter) {
 					match user_fn.params.iter().filter(|param| param.default.is_none()).count() {
 						0 => self.emit_user_function_call(func, s, &[]),
 						count => {
