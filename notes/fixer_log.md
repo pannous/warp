@@ -172,3 +172,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - url-ends-at-space: `fetch url | strip` read as `fetch (url or strip)`. Now `x | f` is f(x) when f names a function
   (D6; pipes.rs, the parser marks the word after a single `|`), a braceless call pipes its result
   (`square 2 | root`), `|` between values stays or (its `or` hint only then).
+
+## 2026-10-06 fix-empty-operands
+- print-empty-nodes: `(#name as string)` serialized as `(ø#name as string)`; Node::serialize writes a prefix operator's
+  missing left operand (#, -, +, not, √, if, while) and a suffix operator's (x++) as nothing, `x = ø` stays.
