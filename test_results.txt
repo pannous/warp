@@ -1387,6 +1387,7 @@ PASSED:
   ✓ parser::test_symbol_hyphen::test_decrement_inside_a_loop_body
   ✓ parser::test_symbol_hyphen::test_hyphen_between_words_stays_kebab_case
   ✓ parser::test_symbol_hyphen::test_trailing_decrement_is_not_part_of_the_name
+  ✓ parser::test_unary_plus::a_unary_plus_is_its_operand
   ✓ parser::test_uniscript_entities::an_unknown_entity_is_an_error
   ✓ parser::test_uniscript_entities::entities_are_their_characters
   ✓ parser::test_uniscript_entities::entities_expand_inside_double_quoted_texts
@@ -2317,4 +2318,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2312 passed, 0 failed, 2312 total tested
+31 ignored, 2313 passed, 0 failed, 2313 total tested
