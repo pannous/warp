@@ -2,7 +2,7 @@
 //! subject, so only the chosen body runs; the `default` (or `_`) key catches the rest, without it a miss is the error
 //! `no case for <subject> = <value>`. A list key is a structural pattern (wiki/pattern-matching.md): `["", middle, ""]`
 //! matches a list of three whose first and last items are "", binding `middle`; `_` matches any item, lists nest, and a
-//! pair `k: v` matches a pair whose key is k. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
+//! pair `k: v` matches a pair whose key is k. A guard `n if n < 0 => …` binds n to the subject and tests the condition. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
 use crate::analyzer::extract_user_functions;
 use crate::context::Context;
@@ -144,16 +144,39 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 	}
 }
 
-/// A case as its test and its body: a list key is a structural pattern whose names are bound before the body runs
+/// A case as its test and its body: a list key is a structural pattern whose names are bound before the body runs; a
+/// guard `n if n < 0` binds n to the subject and holds when its condition does
 fn case_test(subject: &Node, case: Case) -> (Node, Node) {
-	if !matches!(case.key.drop_meta(), Node::List(_, Bracket::Square, _)) {
+	let (pattern, guard) = split_guard(&case.key);
+	if guard.is_none() && !matches!(pattern.drop_meta(), Node::List(_, Bracket::Square, _)) {
 		return (key(subject.clone(), Op::Eq, case.key), case.body);
 	}
 	let (mut tests, mut bindings) = (vec![], vec![]);
-	pattern_tests(&case.key, subject.clone(), &mut tests, &mut bindings);
+	pattern_tests(&pattern, subject.clone(), &mut tests, &mut bindings);
+	if let Some(guard) = guard {
+		tests.push(sequence([bindings.clone(), vec![guard]].concat()));
+	}
 	let test = tests.into_iter().reduce(|all, test| key(all, Op::And, test)).unwrap_or(Node::True);
-	let body = if bindings.is_empty() { case.body } else { Node::List([bindings, vec![case.body]].concat(), Bracket::Round, Separator::Semicolon) };
+	let body = if bindings.is_empty() { case.body } else { sequence([bindings, vec![case.body]].concat()) };
 	(test, body)
+}
+
+/// `n if n < 0` (parsed as `if n < 0 then n`): the pattern n and the guard `n < 0`; any other key has no guard
+fn split_guard(case_key: &Node) -> (Node, Option<Node>) {
+	match case_key.drop_meta() {
+		Node::Key(condition, Op::Then, pattern) => match condition.drop_meta() {
+			Node::Key(empty, Op::If, guard) if matches!(empty.drop_meta(), Node::Empty) => (pattern.drop_meta().clone(), Some(guard.as_ref().clone())),
+			_ => (case_key.clone(), None),
+		},
+		_ => (case_key.clone(), None),
+	}
+}
+
+fn sequence(statements: Vec<Node>) -> Node {
+	match <[Node; 1]>::try_from(statements) {
+		Ok([single]) => single,
+		Err(statements) => Node::List(statements, Bracket::Round, Separator::Semicolon),
+	}
 }
 
 /// What the error names: a literal or a variable subject as written, anything else just "value"
