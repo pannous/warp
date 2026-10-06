@@ -359,7 +359,7 @@ fn is_parameter_word(node: &Node) -> bool {
 /// The first word of a class-body item that is code: a function keyword, or the constructor call `value(n)`
 fn starts_code(first: &Node) -> bool {
 	match first.drop_meta() {
-		Node::Symbol(word) => crate::operators::is_function_keyword(word),
+		Node::Symbol(word) => crate::operators::is_function_keyword(word) || super::ACCESSOR_WORDS.contains(&word.as_str()),
 		Node::List(call, Bracket::Round, _) => matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::CONSTRUCTOR_WORD),
 		_ => false,
 	}
