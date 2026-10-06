@@ -33,6 +33,8 @@ const MODULE_ITERATIONS: [&str; 5] = ["map", "filter", "fold", "reduce", "sum"];
 /// R's apply functions and the wasp word they are: `sapply(xs, f)` is `map(xs, f)` (alias rule, with a note)
 const R_ITERATIONS: [&str; 3] = ["sapply", "lapply", "vapply"];
 const MAP_WORD: &str = "map";
+/// JavaScript's math namespace: `Math.sqrt(16)` is `sqrt(16)`
+const JS_MATH: &str = "Math";
 /// R's vector constructor: `c(1, 2, 3)` is the list `[1, 2, 3]` unless the program names something c
 const R_VECTOR_WORD: &str = "c";
 const LINQ_METHODS: [(&str, &str); 12] = [("Select", "map"), ("Where", "filter"), ("Aggregate", "reduce"), ("Sum", "sum"),
@@ -42,6 +44,8 @@ const LINQ_METHODS: [(&str, &str); 12] = [("Select", "map"), ("Where", "filter")
 pub fn lower(node: Node) -> Node {
 	let defined = defined_names(&node);
 	let node = if names_vector_word(&node) { node } else { r_vectors(node) };
+	let modules: Vec<&str> = crate::modules::std_module_names().chain([JS_MATH]).filter(|module| !crate::soft_keywords::program_names(&node, module)).collect();
+	let node = module_calls(node, &modules);
 	let node = linq_calls(forms(node), &defined);
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
@@ -322,6 +326,30 @@ fn is_vector_call(node: &Node) -> bool {
 
 fn is_function_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))
+}
+
+/// `list.zip(a, b)`, `math.gcd(4, 6)`, JS's `Math.sqrt(16)`: a module's word called through the module's name is the
+/// word itself, with a note (a program's own variable `text` keeps its methods)
+fn module_calls(node: Node, modules: &[&str]) -> Node {
+	match node {
+		Node::Key(module, Op::Dot, call) if modules.iter().any(|name| is_word(&module, name)) && matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(_)))) => {
+			let word = match call.drop_meta() {
+				Node::List(items, _, _) => items[0].name(),
+				_ => unreachable!("guarded"),
+			};
+			crate::normalize::hint(&format!("{}.{word}(", module.name()), &format!("{word}("), "wasp calls a module's word by its name");
+			let operator = crate::wasp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(written, _)| *written == word).map(|(_, op)| *op);
+			match (operator, call.drop_meta()) {
+				// `Math.sqrt(16)`: the parser reads `sqrt(16)` as the operator √
+				(Some(op), Node::List(items, _, _)) if items.len() == 2 => {
+					let argument = Node::List(vec![module_calls(items[1].clone(), modules)], Bracket::Round, Separator::None);
+					Node::Key(Box::new(Node::Empty), op, Box::new(argument))
+				}
+				_ => module_calls(*call, modules),
+			}
+		}
+		other => other.map_children(|child| module_calls(child, modules)),
+	}
 }
 
 /// R's `c(1, 2, 3)`: the list `[1, 2, 3]`, with a note

@@ -1,0 +1,4 @@
+// The standard library module random (notes/stdlib.md): `use random`, over the host words random and random_below
+choice(xs) := xs#(random_below(count(xs)) + 1)
+shuffle(xs) := { out = xs; i = count(out); while i > 1 { j = random_below(i) + 1; t = out#i; out#i = out#j; out#j = t; i = i - 1 }; out }
+sample(xs, k) := { mixed = shuffle(xs); out = []; for i in 1 to min(k, count(mixed)) { out = out + [mixed#i] }; out }

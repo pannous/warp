@@ -13,6 +13,7 @@ mod user_operators;
 mod scanning;
 mod xml;
 mod lookahead;
+pub use lookahead::PREFIX_OPERATOR_WORDS;
 mod atoms;
 mod expressions;
 mod statements;
