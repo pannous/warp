@@ -5,6 +5,8 @@ use super::*;
 const BACKTICK: char = '`';
 /// The "got it" topic of the hint on backtick texts
 const BACKTICK_TOPIC: &str = "backtick text";
+const F_STRING_TOPIC: &str = "python f-string";
+const F_STRING_PREFIX: char = 'f';
 
 impl WaspParser {
 	/// Parse a complete value/expression - calls parse_expr(0) for operator chaining
@@ -101,7 +103,15 @@ impl WaspParser {
 				}
 				return Node::text(&s);
 			}
+			let escaped_brace = self.brace_holes && matches!((ch, self.peek_char(1)), ('{', '{') | ('}', '}'));
+			if escaped_brace {
+				self.advance(); // `{{` is the brace itself
+			}
 			let hole = match ch {
+				'{' if self.brace_holes && !escaped_brace => {
+					self.advance();
+					self.text_until_closing('{', '}').map(Some)
+				}
 				'$' if interpolates => self.parse_dollar_hole(),
 				'\\' if interpolates && self.peek_char(1) == '(' => self.parse_swift_hole().map(Some),
 				_ => Ok(None),
@@ -147,6 +157,20 @@ impl WaspParser {
 				c => template.push(c),
 			}
 		}
+	}
+
+	/// Python's `f"hi {name}"` at the cursor: interpolated text whose holes are braces, `"hi \(name)"`
+	pub(super) fn parse_f_string(&mut self) -> Option<Node> {
+		if self.current_char() != F_STRING_PREFIX || self.peek_char(1) != '"' || self.options.data_mode {
+			return None;
+		}
+		set_hint_position(self.line_nr, self.column);
+		crate::diagnostic::educate_once(F_STRING_TOPIC, "f\"…{x}…\"", "\"…\\(x)…\"", "wasp text interpolates without a prefix");
+		self.advance();
+		let outer = std::mem::replace(&mut self.brace_holes, true);
+		let text = self.parse_string();
+		self.brace_holes = outer;
+		Some(text)
 	}
 
 	/// `\u{e9}` after the backslash: the code point of the hex digits; the closing `}` is left for the caller to skip

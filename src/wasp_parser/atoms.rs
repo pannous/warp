@@ -56,7 +56,7 @@ impl WaspParser {
 			ch if ch.is_numeric() || self.number_starts_at(0) || (ch == '-' && self.number_starts_at(1)) => {
 				self.parse_number()
 			}
-			ch if ch.is_alphabetic() || ch == '_' => self.parse_elixir_function().unwrap_or_else(|| self.parse_symbol_with_suffix()),
+			ch if ch.is_alphabetic() || ch == '_' => self.parse_elixir_function().or_else(|| self.parse_f_string()).unwrap_or_else(|| self.parse_symbol_with_suffix()),
 			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
 				(0..length).for_each(|_| self.advance());
 				error(&crate::uniscript_entities::unknown_entity(&name))
