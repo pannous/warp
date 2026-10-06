@@ -34,6 +34,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Standing rules (user)
+- Roadmap, next big features, NOT to be started yet (2026-10-06): "a standard library standard functionality in
+  different modules a solid module manager and then a packet manager for internal and external packages as well as
+  using existing packaging managers and packages to our greatest advantage". Board cards in Later, in this order:
+  stdlib-standard, module-manager, package-manager. Nobody takes them until the user releases them.
 - Word choices are not questions (2026-10-06): "we have the alias mechanism to generally tell people if they use the
   wrong word what the right word is but still keep the synonym working or replacing". When the alternatives are only
   different words for the same thing, the recommended word is canonical and the others become aliases: they work,
@@ -203,6 +207,17 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   `it*it` need a number, so `def f(x){x+1}; f 1 < 5` and `square := it*it; square 3 == 9` are `(f x) op y` without
   a message, for every comparison; the ambiguity error stays only when the body accepts anything (`print x`). The
   footgun test `f := it*10; f 3-1 > 15` → true stands.
+- Async (warp-93, porting Promise/asyncio/Go/Kotlin cases):
+  P150 race: `await any [go a(), go b()]` is the first task to finish, the others keep running. The user's answer on
+  `await first [tasks]` was only "oof" (no pick); assumed (undoable, the recommended option): `first` keeps its list
+  meaning, and on a list of tasks a got-it note says "for the first to finish: await any […]".
+  P151 deadline: `await job within 100 ms or 0`; on timeout the job is stopped and the `or` value is the result,
+  without `or` the timeout is an error. User: "would the syntax 'or stop with 0' be overkill? maybe we can just give
+  it as a hint that this is the behavior": no extra `stop` word. User, clarified: the hint is a compile-time got-it
+  note on the `within … or` expression ("on timeout the job is stopped and the result is 0"), not a run-time message
+  when the timeout happens; a timeout itself stays silent.
+  P152 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
+  until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
