@@ -248,3 +248,11 @@ untyped X), methods `func (p Point) Sum() int {…}` and pointer receivers `func
 (class_methods go_method, taken in like Rust's impl blocks, the receiver read as self). A class's own method named
 like a LINQ word (`Sum`) stays the class's (welcome_forms linq_calls skips defined_names). `p := Point{…}` is charged
 (P138): reading works, a changing method needs `var p = …`. Open (Interviewer): positional `Point{1, 2}`.
+
+Ruby (classes-29, tests/types/test_class_forms_ported.rs a_ruby_class_with_initialize): `class Point` with indented
+lines up to `end` (atoms parse_type_declaration_body, the methods' `end` lines dropped: without_end_lines),
+`attr_accessor :x, :y` (also reader/writer) the fields x and y with a note, `@x` in a class body `self.x`
+(lookahead reads_instance_variable: before an operator, the statement end, or a line end with `end` next; an
+annotation `@deprecated fun f()` stays one), `def initialize(x, y)` the constructor (P162), `Point.new(1, 2)` the
+construction `Point(1, 2)` with a note (class_methods ruby_constructions, unless the class defines `new`). Parser fix
+on the way: a call followed by an indented block keeps its parameters (`def f(x)` + lines; lists.rs dropped them).

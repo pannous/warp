@@ -157,8 +157,12 @@ impl WaspParser {
 				self.base_indent = line_indent;
 				let body = self.parse_list_with_separators(None, Bracket::None);
 				self.base_indent = old_indent;
-				// Combine item with indented body as Key
-				Node::Key(Box::new(Symbol(item.name())), Op::Colon, Box::new(body))
+				// Combine item with indented body as Key; a call keeps its parameters (Ruby's `def f(x)` and its lines)
+				let head = match item.drop_meta() {
+					Node::List(call, Bracket::Round, _) if matches!(call.first().map(Node::drop_meta), Some(Symbol(_))) => item,
+					_ => Symbol(item.name()),
+				};
+				Node::Key(Box::new(head), Op::Colon, Box::new(body))
 			} else if had_newline && line_indent < self.base_indent && bracket == Bracket::None {
 				// Dedent - push item and exit this level
 				items_with_seps.push((item, Separator::None));
