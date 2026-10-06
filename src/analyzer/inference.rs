@@ -241,6 +241,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		if crate::wasm_emitter::OUTPUT_WORDS.contains(&name.as_str()) && items.len() == 2 {
 			return Kind::Int;
 		}
+		// `count ys`, `size t`: a number, the user's own function of that name already answered above
+		if (super::counting::is_counting_word(name) || name == BYTE_SIZE) && items.len() == 2 {
+			return Kind::Int;
+		}
 		if name == PRINT_CALL && (items.len() >= 2 || *bracket == Bracket::Round) {
 			return Kind::Empty; // `print x` writes x and gives nothing (user, issue #18)
 		}
