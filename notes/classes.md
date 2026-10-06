@@ -145,9 +145,12 @@ passes them to it, on an instance of the declared defaults (ø for the other fie
 fields; a field it sets that is no parameter becomes a field.
 
 Open (next batches): struct elements of lists (above), a `pop` method (changes the object and gives another value), a method
-named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), generics
-`class Box<T>`, mixins, a field named `pi` (card footgun-pi, P130: the class's own field), a method named `double` (a type word).
+named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), mixins, a field named `pi` (card footgun-pi, P130: the class's own field), a method named `double` (a type word).
 
 Extension methods (classes-11, card functions-extension, declarations.rs): Kotlin `fun Int.twice() = this * 2` and
 Swift `extension Int { func twice() -> Int { self * 2 } }` define `twice(this:Int)` (`self` when the body says self),
 so `3.twice()` calls it as a method like any function whose first parameter is the receiver.
+
+Generic classes (classes-12, wasp_parser atoms.rs): `class Box<T>{item:T}`, `class Pair<A, B>{…}`: a field of a type
+parameter is `any` (a Node field), a method parameter of one is untyped; `Box<int>(3)` and `Box<int>{item:3}`
+construct a Box (the type arguments of a declared class are read past, not checked yet).
