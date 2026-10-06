@@ -30,3 +30,20 @@ fn a_method_changes_its_object_and_gives_a_value() {
 	is!(&format!("{stack}s = Stack([1 2]); s.pop(); string(s.items)"), "[1]");
 	is!(&format!("{stack}s = Stack([]); s.push(5); s.push(6); s.pop() * 10 + s.pop()"), 65);
 }
+
+#[test]
+fn a_block_method_changes_its_object_and_gives_a_value() {
+	// a Queue's dequeue: statements before the value it gives
+	let queue = "class Queue{items:list; dequeue() := { x = items#1; items = items[1:]; x }}; ";
+	is!(&format!("{queue}q = Queue([4 5 6]); q.dequeue() * 10 + q.dequeue()"), 45);
+	is!(&format!("{queue}q = Queue([4 5 6]); q.dequeue(); count(q.items)"), 2);
+}
+
+#[test]
+fn a_method_changing_its_object_inside_if_gives_the_object() {
+	// a Set's add: the change happens only on one branch, the method still gives its object
+	let set = "class Set{items:list; put(x) := { if not (x in items) { items.add(x) } }}; ";
+	is!(&format!("{set}s = Set([]); s.put(1); s.put(1); s.put(2); count(s.items)"), 2);
+	let either = "class Set{items:list; put(x) := { if x in items { items } else { items = items + [x] } }}; ";
+	is!(&format!("{either}s = Set([]); s.put(1); s.put(1); count(s.items)"), 1);
+}

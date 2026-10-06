@@ -1389,9 +1389,13 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 		Change::None => body,
 		Change::Itself => Node::List(vec![body, receiver], Bracket::None, Separator::Semicolon),
 		Change::GivingValue => {
+			// the statements before the value run first: `x = items#1; items = …; x` gives x, not the block
+			let mut statements = statements_of(body);
+			let value = statements.pop().unwrap_or(Node::Empty);
 			let result = Node::Symbol(format!("{method}{VALUE_SUFFIX}"));
 			let pair = Node::List(vec![result.clone(), receiver], Bracket::Square, Separator::Space);
-			Node::List(vec![Node::Key(Box::new(result), Op::Assign, Box::new(body)), pair], Bracket::None, Separator::Semicolon)
+			statements.extend([Node::Key(Box::new(result), Op::Assign, Box::new(value)), pair]);
+			Node::List(statements, Bracket::None, Separator::Semicolon)
 		}
 	};
 	let receiver = Node::Key(Box::new(Node::Symbol(RECEIVER.to_string())), Op::Colon, Box::new(Node::Symbol(class.to_string())));
@@ -1409,17 +1413,24 @@ enum Change {
 
 /// Does a method body that changes its object end in a value of its own: `items.pop()`, not `n += 1` or `items.add(x)`
 fn gives_value(body: &Node) -> bool {
-	let last = match body.drop_meta() {
-		Node::List(statements, Bracket::Curly, _) | Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements.last(),
-		_ => Some(body),
-	};
-	let Some(last) = last else { return false };
+	let Some(last) = statements_of(body.clone()).pop() else { return false };
 	match last.drop_meta() {
+		// `if c {items.add(x)}`: a branch gives what its last statement gives
+		Node::Key(_, Op::Then, branch) => gives_value(branch),
+		Node::Key(then, Op::Else, otherwise) => gives_value(then) || gives_value(otherwise),
 		Node::Key(_, op, _) if matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign() => false,
 		// a body giving its object back already (a constructor)
 		Node::Symbol(name) if name == RECEIVER => false,
 		Node::Key(_, Op::Dot, call) => !mutating_call(call) || matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| GIVING_MUTATIONS.contains(&word.drop_meta().name().as_str()))),
 		_ => true,
+	}
+}
+
+/// The statements of a block `{a; b}` or sequence `a; b`, or the one statement of any other body
+fn statements_of(body: Node) -> Vec<Node> {
+	match body.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) | Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements.clone(),
+		_ => vec![body],
 	}
 }
 
