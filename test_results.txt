@@ -1830,6 +1830,7 @@ PASSED:
   ✓ types::test_class_cases_ported::a_static_method_is_called_on_the_class
   ✓ types::test_class_cases_ported::a_subclass_instance_is_its_parent_type
   ✓ types::test_class_cases_ported::a_subclass_method_calls_an_inherited_method_without_self
+  ✓ types::test_class_cases_ported::an_object_has_one_text_form
   ✓ types::test_class_cases_ported::an_override_calls_the_parent_method_with_super
   ✓ types::test_class_cases_ported::each_subclass_overrides_the_shared_method
   ✓ types::test_class_cases_ported::fields_have_defaults
@@ -2484,4 +2485,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2479 passed, 0 failed, 2479 total tested
+23 ignored, 2480 passed, 0 failed, 2480 total tested
