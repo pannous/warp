@@ -36,3 +36,24 @@ x = 1; n = 0; on change x {n += 1}; x = 1; x = 1; x = 2; n ||| 1
 # JS addEventListener: once option, removeEventListener
 n = 0; once ready {n += 1}; raise ready; raise ready; n ||| 1
 n = 0; h = on ready {n += 1}; remove h from listeners of ready; raise ready; n ||| 0
+# Round 2: Solid batch, MobX reaction/when, Angular effect, Kotlin StateFlow, RxJS distinct/scan/take
+a = 0; b = 0; runs = 0; whenever a + b == 3 {runs += 1}; a, b = 1, 2; runs ||| 1
+a = 0; b = 0; seen = 0; whenever a + b > 0 {seen += 1}; a, b = 1, 2; seen ||| 1
+temp = 20; alarms = 0; once temp > 30 {alarms += 1}; temp = 31; temp = 35; alarms ||| 1
+x = 0; sum = 0; on change x {sum += value}; x = 1; x = 1; x = 2; x = 2; sum ||| 3
+clicks = 0; total = 0; on click2 {total += 1}; for i in 1 to 3 {raise click2}; total ||| 3
+n = 0; taken = 0; h = on tick {taken += 1; if taken == 2 {remove h from listeners of tick}}; for i in 1 to 5 {raise tick}; taken ||| 2
+items = []; on add {items = items + [event.x]}; raise add{x: 1}; raise add{x: 2}; count items ||| 2
+x = 0; doubled := x * 2; quad := doubled * 2; last = 0; on change quad {last = value}; x = 3; last ||| 12
+user = {name: "a"}; greeting := "hi " + user.name; seen = ""; on change greeting {seen = value}; user.name = "b"; seen ||| hi b
+count = 0; log = ""; whenever count > 2 {log = log + "!"}; for i in 1 to 5 {count = i}; log ||| !!!
+# Round 3: Vue deep watch of a list, Svelte reactive statements over lists, Qt disconnect all, EventEmitter removeAllListeners, prependListener order
+xs = [1]; n = 0; on change xs {n += 1}; xs = xs + [2]; n ||| 1
+xs = [1, 2]; total := sum xs; seen = 0; on change total {seen = value}; xs = [3, 4]; seen ||| 7
+x = 0; n = 0; on set x {n += 1}; on set x {n += 10}; clear listeners of x; x = 1; n ||| 0
+n = 0; on alarm {n += 1}; on alarm {n += 10}; clear listeners of alarm; raise alarm; n ||| 0
+log = 0; on step {log = log*10 + 1}; on step {log = log*10 + 2}; on step {log = log*10 + 3}; raise step; log ||| 123
+x = 0; out = 0; on change x {out = value * 2}; x = 21; out ||| 42
+x = 5; y := x + 1; z := y * 2; whenever z > 20 {x = 0}; x = 10; x ||| 0
+s = "a"; n = 0; on change s {n += 1}; s = s + "b"; s = s + "c"; n ||| 2
+f = 1.5; seen = 0.0; on change f {seen = value}; f = 2.5; seen ||| 2.5

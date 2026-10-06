@@ -979,7 +979,8 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 			let block = Node::List(vec![lower_spaced_definitions(*body)], Bracket::Curly, Separator::Semicolon);
 			Node::List(vec![Node::Symbol("for".into()), *range, block], Bracket::None, Separator::Space)
 		}
-		Node::List(items, bracket, separator) if spaced_definition(&items).is_some() => {
+		// a phrase `name p… = body`, never the items of a comma list (`(a, b = a * 2) => …` has a default)
+		Node::List(items, bracket, separator @ (Separator::Space | Separator::None)) if spaced_definition(&items).is_some() => {
 			let (name, parameters, body) = spaced_definition(&items).expect("guarded");
 			let body = lower_spaced_definitions(body);
 			let head = Node::List([vec![name], parameters].concat(), Bracket::Round, Separator::None);
@@ -1168,8 +1169,9 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 	if !arguments.iter().any(is_placeholder) {
 		return None;
 	}
-	// Swift's `func twice(_ x: Int)`: `_` labels a typed parameter, no placeholder
-	let typed_parameter = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::Colon, type_node) if is_type_word(type_node));
+	// Swift's `func twice(_ x: Int)`, `func sum(_ xs: Int...)`: `_` labels a typed parameter, no placeholder
+	let is_type = |type_node: &Node| is_type_word(type_node) || matches!(type_node.drop_meta(), Node::Key(element, Op::To, end) if is_type_word(element) && matches!(end.drop_meta(), Node::Empty));
+	let typed_parameter = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::Colon, type_node) if is_type(type_node));
 	if arguments.windows(2).any(|pair| is_placeholder(&pair[0]) && typed_parameter(&pair[1])) {
 		return None;
 	}
@@ -1259,6 +1261,8 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 			parameters = vec![Node::Key(Box::new(parameter.clone()), Op::Colon, Box::new(type_word.clone()))];
 		}
 	}
+	// Kotlin/Scala `def square(x) = x*x` defines as `:=` does, so the passes reading definitions see it (P143)
+	let op = if parameters.is_empty() { op } else { Op::Define };
 	let head = Node::List(std::iter::once(name.clone()).chain(parameters).collect(), Bracket::Round, Separator::None);
 	let target = match result_type {
 		Some(result_type) => Node::Key(Box::new(head), Op::Colon, Box::new(result_type)),

@@ -24,8 +24,10 @@ fn broadcasting_compares_as_a_list() {
 
 #[test]
 fn an_untyped_call_next_to_a_comparison_is_ambiguous() {
-	// P143 (user): both readings type-check, so the error names both forms
-	crate::common::fails_with("square(x) := x*x; square 3 == 9", "write (square 3) == 9 or square(3 == 9)");
+	// P143 (user): both readings type-check, so the error names both forms; P149 (user): only when the body accepts
+	// anything, `x*x` needs a number
+	crate::common::fails_with("same(x) := x; same 3 == 9", "write (same 3) == 9 or same(3 == 9)");
+	assert_eq!(printed("square(x) := x*x; square 3 == 9"), "1");
 }
 
 #[test]
@@ -37,4 +39,15 @@ fn all_over_nested_lists_broadcasts_again() {
 fn a_list_built_by_appending_broadcasts() {
 	assert_eq!(printed("square(x) := x*x; xs = []; xs.add(2); xs.add(3); ys = square all xs; ys"), "[4 9]");
 	assert_eq!(printed("square(x) := x*x; xs = []; for i in 1..3 { xs = xs + [i] }; square xs"), "[1 4]");
+}
+
+#[test]
+fn every_definition_form_reads_a_comparison_alike() {
+	// card p143-misses: `def square(x) = x*x` gave 0 silently; P149 (user): a body in arithmetic takes the call
+	for code in ["def square(x) = x*x; square 3 == 9", "square := it*it; square 3 == 9", "square = x => x*x; square 3 == 9", "def f(x){ x + 1 }; f 1 < 5"] {
+		assert_eq!(printed(code), "1", "{code}");
+	}
+	for code in ["def same(x) = x; same 3 == 9", "same := it; same 3 == 9", "same = x => x; same 3 == 9"] {
+		crate::common::fails_with(code, "write (same 3) == 9 or same(3 == 9)");
+	}
 }

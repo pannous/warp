@@ -37,10 +37,15 @@ pub fn lower(node: Node) -> Node {
 	Variadic { signatures, parameters }.rewrite(node)
 }
 
-/// `*xs`, `...xs` (parsed as `*xs`) and `xs...` (an open range of xs): the name xs
+/// `*xs`, `...xs` (parsed as `*xs`) and `xs...` (an open range of xs): the name xs; typed `*xs: int` (Python) and
+/// `xs: Int...` (Swift) too
 fn starred(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) => name.strip_prefix(STARRED).filter(|name| !name.is_empty() && !name.starts_with(STARRED)).map(str::to_string),
+		Node::Key(name, Op::Colon, element_type) => match element_type.drop_meta() {
+			Node::Key(_, Op::To, end) if matches!(end.drop_meta(), Node::Empty) => Some(name.name()),
+			_ => starred(name),
+		},
 		Node::Key(name, Op::To, end) if matches!(end.drop_meta(), Node::Empty) => match name.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
 			_ => None,

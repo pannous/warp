@@ -52,3 +52,11 @@ fn an_effectful_getter_warns_at_the_definition() {
 	warp::wasm_emitter::eval("t := clock(); t");
 	assert!(warp::diagnostic::take_warnings().iter().any(|warning| warning.message.contains("t runs clock() at every read; write t = clock() for one value")));
 }
+
+// a hint shows only code the user wrote: a def returning a lambda (lowered to closure_new) gets none
+#[test]
+fn a_function_factory_gets_no_hint_of_lowered_code() {
+	is!("def mk() { k => { t = k * 2; t } }; g = mk(); g(4)", 8);
+	let hints = hints_of("def mk() { k => { t = k * 2; t } }; g = mk(); g(4)");
+	assert!(hints.iter().all(|(canonical, _)| !canonical.contains("closure")), "{hints:?}");
+}

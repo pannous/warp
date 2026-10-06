@@ -37,3 +37,11 @@ fn a_small_range_variable_is_still_its_list() {
 	is!("xs = 1..5; xs", ints(vec![1, 2, 3, 4]));
 	is!("xs = 1..5; xs#2 = 7; xs", ints(vec![1, 7, 3, 4]));
 }
+
+#[test]
+fn a_range_bound_of_arithmetic_stays_a_descriptor() {
+	// card lazy-range-power: `1..10^12` was collected (out of fuel) while `1..n` with n = 10^12 was not
+	is!("count 1..10^12", 999999999999i64);
+	is!("r = 1..10^12; r#7", 7);
+	is!("n = 5; r = 1..n+2; count r", 6);
+}

@@ -35,3 +35,5 @@ data/
 
 # test fixtures may be prebuilt modules and components (tests/fixtures/components/*/build.sh rebuilds them)
 !tests/fixtures/**/*.wasm
+# libc.wasm is the browser's `use c` (P147), served with the playground; build_libc.sh rebuilds it
+!web/playground/lib/libc.wasm

@@ -5,12 +5,10 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P150 license: warp (and wasp) have none, so package managers list no license and nobody may legally reuse the code.
-  MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). Assumed: none until decided.
-  Asked by the packaging session 2026-10-06 (notes/packaging.md).
-- P151 crates.io: the name `warp` is taken (the web framework). Publish as `warp-lang` (recommended) / `wasp-warp` /
-  stay off crates.io (cargo install --git works). Assumed: off crates.io.
-(the three below the user answered "Later" are parked until their feature is built)
+(the four below the user answered "Later"/postponed are parked)
+- Parked: P150 license: warp (and wasp) have none, so package managers list no license and nobody may legally reuse the
+  code. MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). User 2026-10-06: "let's
+  postpone the license". Blocks the crates.io upload of P151 (crates.io refuses a crate without license metadata).
 - Parked: P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
   as they are at `!` and assigns only declared globals. User 2026-10-05: "Later"; revisit when run-time `!` is built.
 - Parked: P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
@@ -56,6 +54,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   un-ignored, without asking; a change of meaning (one working value into another) still needs a decision.
 
 ## Decided 2026-10-06 (user, multiple-choice interview, as recommended unless quoted)
+- P151 crates.io name (asked by the packaging session, answered there directly): "lang is perfect": the package is
+  `warp-lang` (library still `warp`, binary `warp`), its runtime `warp-runtime`; notes/packaging.md.
 - P71 `:=` without parameters is ALWAYS CHARGED (the user chose this over the recommended "now"): `y=3; z:=y*y; y=4;
   z` → 16, re-evaluated at every use, as wiki/charged.md §2 says; `z = 6` after it is an error. The per-use getter
   exists: commit 0b687e03 on branch late-binding (warp-29). Object entries `{s := clock()}` follow (§4 is revisited).
