@@ -279,6 +279,7 @@ PASSED:
   ✓ control::test_structural_patterns::test_nested_lists_and_pairs
   ✓ control::test_structural_patterns::test_no_match_without_default_is_loud
   ✓ control::test_structural_patterns::test_wildcards_and_numbers
+  ✓ control::test_switch_match::a_switch_inside_an_expression_or_an_argument
   ✓ control::test_switch_match::a_switch_is_a_value
   ✓ control::test_switch_match::a_switch_picks_the_case_of_its_subject
   ✓ control::test_switch_match::a_user_function_named_switch_wins
@@ -641,6 +642,7 @@ PASSED:
   ✓ functions::test_closure_value_arguments::test_a_closure_in_a_list_takes_a_text
   ✓ functions::test_closure_value_arguments::test_a_returned_closure_takes_a_text
   ✓ functions::test_closure_value_arguments::test_a_returned_closure_takes_numbers_and_lists
+  ✓ functions::test_closures::a_curried_call_as_a_value_and_an_argument
   ✓ functions::test_closures::a_float_reassigned_from_its_closure_stays_a_float
   ✓ functions::test_closures::a_function_value_out_of_try_or_a_block_is_called
   ✓ functions::test_closures::a_loop_variable_over_function_values_is_called
@@ -1129,6 +1131,7 @@ PASSED:
   ✓ lists::test_long_list_copies::a_long_list_of_nodes_grows_without_exhausting_the_stack
   ✓ lists::test_long_list_copies::copies_keep_the_order_and_share_nothing_they_change
   ✓ lists::test_long_list_result::a_long_list_result_reads_back
+  ✓ lists::test_map_parameter_keys::keys_of_a_one_entry_map_parameter
   ✓ lists::test_map_starts::a_list_given_for_map_entries_keeps_the_generic_way
   ✓ lists::test_map_starts::a_map_literal_and_a_map_parameter_are_hash_tables
   ✓ lists::test_map_variables::a_map_variable_reads_as_the_node_of_its_entries
@@ -1246,11 +1249,27 @@ PASSED:
   ✓ modules::test_packages::module_directory_is_where_the_module_lives
   ✓ modules::test_packages::the_registry_names_repositories
   ✓ modules::test_packages::use_loads_the_module_of_a_package
+  ✓ modules::test_std_file::use_file_lists_a_folder
+  ✓ modules::test_std_file::use_file_writes_appends_and_reads_back
+  ✓ modules::test_std_file::use_os_reads_the_environment
+  ✓ modules::test_std_json::a_json_word_without_its_use_names_the_module
+  ✓ modules::test_std_json::malformed_json_is_an_error_naming_it
+  ✓ modules::test_std_json::use_json_parses_and_writes_json
   ✓ modules::test_std_list::a_module_word_without_its_use_names_the_module
   ✓ modules::test_std_list::a_programs_own_word_wins_over_the_module
+  ✓ modules::test_std_list::chunk_window_median
   ✓ modules::test_std_list::use_list_brings_its_words
+  ✓ modules::test_std_map::a_one_entry_map_merges_too
+  ✓ modules::test_std_map::use_map_brings_merge_and_map_values
   ✓ modules::test_std_math_text::use_math_brings_libm_and_the_module
   ✓ modules::test_std_math_text::use_text_brings_its_words
+  ✓ modules::test_std_qualified::a_qualified_module_word_is_the_word
+  ✓ modules::test_std_qualified::a_qualified_word_without_its_use_names_the_module
+  ✓ modules::test_std_qualified::a_variable_of_the_modules_name_keeps_its_methods
+  ✓ modules::test_std_random::use_random_brings_choice_shuffle_sample
+  ✓ modules::test_std_time::date_arithmetic
+  ✓ modules::test_std_time::dates_of_milliseconds
+  ✓ modules::test_std_time::today_is_a_date_after_2025
   ✓ modules::test_use_modules::test_module_statements_are_not_imported
   ✓ modules::test_use_modules::test_module_using_module_imports_transitively_and_survives_cycles
   ✓ modules::test_use_modules::test_search_order_prefers_earlier_directory
@@ -1387,6 +1406,7 @@ PASSED:
   ✓ numbers::test_float_assignment::test_float_local_assignment_keeps_its_float_value
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_a_float_are_refused_loudly
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_ints_still_work
+  ✓ numbers::test_float_exact_context::a_rational_constant_of_exact_reals_in_a_runtime_program
   ✓ numbers::test_float_exact_context::test_explicit_cast_truncates_a_float
   ✓ numbers::test_float_exact_context::test_ffi_float_result_in_exact_context_is_refused_loudly
   ✓ numbers::test_float_exact_context::test_float_read_in_exact_context_is_refused_loudly
@@ -1687,6 +1707,7 @@ PASSED:
   ✓ parser::test_dollar_names::dollar_names_survive_eval
   ✓ parser::test_glued_method_block::a_glued_block_after_a_dot_is_a_call
   ✓ parser::test_glued_method_block::a_glued_block_starting_an_item_stays_data
+  ✓ parser::test_glued_pair_value::a_glued_pair_ends_at_its_word
   ✓ parser::test_glyph_aliases::dash_glyphs_subtract
   ✓ parser::test_glyph_aliases::equality_glyphs_compare
   ✓ parser::test_glyph_aliases::glyphs_inside_text_stay_text
@@ -1824,6 +1845,8 @@ PASSED:
   ✓ parser::test_uniscript_entities::an_unknown_entity_is_an_error
   ✓ parser::test_uniscript_entities::entities_are_their_characters
   ✓ parser::test_uniscript_entities::entities_expand_inside_double_quoted_texts
+  ✓ parser::test_unit_word_keys::a_unit_word_after_a_number_is_still_a_unit
+  ✓ parser::test_unit_word_keys::a_unit_word_before_a_colon_is_a_key
   ✓ parser::test_wasp_format::html_attributes_and_repeated_tags_in_data
   ✓ parser::test_wasp_format::test_empty_structures
   ✓ parser::test_wasp_format::test_function_syntax
@@ -2762,6 +2785,7 @@ PASSED:
   ✓ welcoming::test_lone_words::test_data_is_the_data_prefix
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
+  ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
   ✓ welcoming::test_sleep_unit_warning::a_statement_after_sleep_is_no_duration
   ✓ welcoming::test_sleep_unit_warning::sleep_without_a_unit_warns
   ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
@@ -2894,4 +2918,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2889 passed, 0 failed, 2889 total tested
+19 ignored, 2913 passed, 0 failed, 2913 total tested
