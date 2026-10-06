@@ -218,22 +218,24 @@ pub fn lower_tasks(node: Node) -> Node {
 	Tasks { words, tasks, started, functions, job_lists }.lower(node)
 }
 
+/// The words of a statement the parser paired, flat: `(await any) [a, b]`, `await (all [go f(1), …])`
+fn spoken_words(items: &[Node]) -> Vec<Node> {
+	let pair = |node: &Node| match node.drop_meta() {
+		Node::List(inner, Bracket::None, _) if inner.len() == 2 => Some(inner.clone()),
+		_ => None,
+	};
+	match items {
+		[first, rest @ ..] if pair(first).is_some() => [pair(first).expect("guarded"), rest.to_vec()].concat(),
+		[head, second] if head.name() == TASK_WORDS[1] && pair(second).is_some() => [vec![head.clone()], pair(second).expect("guarded")].concat(),
+		_ => items.to_vec(),
+	}
+}
+
 /// `await go f(x)`: the task gets a name, `(go·job·1 = go f(x); await go·job·1)`, so it is awaited like any other
 fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
-			let is_pair = |node: &Node| matches!(node.drop_meta(), Node::List(inner, Bracket::None, _) if inner.len() == 2);
-			let inner = |node: &Node| match node.drop_meta() {
-				Node::List(inner, _, _) => inner.clone(),
-				_ => unreachable!("guarded"),
-			};
-			let words: Vec<Node> = match items.as_slice() {
-				[pair, rest @ ..] if is_pair(pair) => [inner(pair), rest.to_vec()].concat(),
-				// `await (all [go f(1), …])`
-				[head, pair] if head.name() == TASK_WORDS[1] && is_pair(pair) => [vec![head.clone()], inner(pair)].concat(),
-				_ => items.clone(),
-			};
-			match words.as_slice() {
+			match spoken_words(&items).as_slice() {
 				[await_word, go_word, started @ ..] if !started.is_empty() && await_word.name() == TASK_WORDS[1] && go_word.name() == TASK_WORDS[0] => {
 					let job = Node::Symbol(format!("go·job·{}", counter.replace(counter.get() + 1)));
 					let start = Node::List([vec![go_word.clone()], started.to_vec()].concat(), Bracket::None, Separator::Space);
@@ -564,12 +566,11 @@ impl Tasks<'_> {
 		}
 	}
 
-	/// `await any [a, b]` (also read as `await (any [a, b])`): the first of the tasks to finish
+	/// `await any [a, b]` (also read as `(await any) [a, b]` or `await (any [a, b])`): the first of the tasks to finish
 	fn raced(&self, items: &[Node]) -> Option<Node> {
-		match items {
+		match spoken_words(items).as_slice() {
 			[head, any, list] if word(head) == TASK_WORDS[1] && word(any) == ANY_WORD => self.race(list),
 			[head, phrase] if word(head) == TASK_WORDS[1] => match phrase.drop_meta() {
-				Node::List(inner, Bracket::None, _) if inner.len() == 2 && word(&inner[0]) == ANY_WORD => self.race(&inner[1]),
 				// `any [a, b]` read as an index of any
 				Node::Key(any, _, list) if word(any) == ANY_WORD => self.race(list),
 				_ => None,
@@ -1254,16 +1255,20 @@ fn split_at_colon(node: &Node) -> Option<(Node, Node)> {
 	}
 }
 
-/// `name p… last := body extra…`: the function name, its parameters and its body (the extra items the argument of
-/// the braceless call that ends the body)
-fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
+/// The words of `name p… last := body …` before the definition: the name, the leading parameters and the rest, from the
+/// definition on (only the shape: spaced_definition decides)
+pub(crate) fn spaced_definition_words(items: &[Node]) -> Option<(&Node, &[Node], &[Node])> {
 	let definition = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(target, Op::Define | Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))))?;
 	let (words, rest) = items.split_at(definition);
 	let (name, parameters) = words.split_first()?;
 	let is_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if !is_function_keyword(word));
-	if !is_word(name) || !parameters.iter().all(is_word) {
-		return None;
-	}
+	(is_word(name) && parameters.iter().all(is_word)).then_some((name, parameters, rest))
+}
+
+/// `name p… last := body extra…`: the function name, its parameters and its body (the extra items the argument of
+/// the braceless call that ends the body)
+fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
+	let (name, parameters, rest) = spaced_definition_words(items)?;
 	let (definition, extra) = rest.split_first()?;
 	let Node::Key(last, op, body) = definition.drop_meta() else { return None };
 	// with `=` only a recursive definition (wiki/Home.md `fibonacci number = … fibonacci …`): `print x = 5` stays
