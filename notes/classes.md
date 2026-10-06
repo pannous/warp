@@ -102,6 +102,21 @@ Steps (Supervisor, 2026-10-06), each its own commit on classes-4: field reads, t
 methods. Benchmark probes/bench_class_instances.sh, 10^6 iterations, debug build, Node instances (classes-3 tip):
 plain_ints 2 ms, construct_and_read 248 ms, read_only (`p.x * p.y`) 141 ms, method_call (`p.sum()`) 170 ms.
 
+Design for the switch (not started in code yet):
+- Reads and construction come together: `p.x` can be a struct.get only where p holds a `$P`. Mirror the typed lists
+  (wasm_emitter/list_dispatch.rs `find_typed_lists`, notes/typed_lists.md): a `typed_structs` map of the variables
+  whose every assignment is a construction `P(…)` / `P{…}` of one class (not a global, not captured, like
+  `excluded` there), held in a `(ref null $P)` local; `p.x` is struct.get by field index, `p.x = v` struct.set.
+  Wherever the value is wanted as a Node (a result, an argument of an untyped function, print, a mixed list)
+  it becomes the same Node key the literal builds today (`struct_as_node`, like `int_list_as_node`).
+- Methods afterwards: `m(self:P)` with a `(ref $P)` parameter when every call site has a typed receiver
+  (like list_abi.rs, the array calling convention for list parameters).
+- Today's `$P` (type_manager field_def_to_wasm_field) is wrong for this: `int` is i32 (type_kinds field_storage
+  maps "int" to I32) and every field is immutable. Fields must be mutable; an int field i64. Open question (to the
+  Interviewer): an int field overflowing i64 (warp ints are unbounded): trap, or keep that field a Node.
+- The 108-byte module for `class P{x:int; y:int}; print P(1, 2)` returns `struct.new $P` from `i64.const` operands
+  into i32 fields: check it validates (it ran, so someone converts; find the path before relying on it).
+
 Open (next batches): GC struct instances (above), the `value{…}` constructor block and `value(name){…}`
 (wiki/constructor.md; today silently ignored), a `pop` method (changes the object and gives another value), a method
 named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), generics
