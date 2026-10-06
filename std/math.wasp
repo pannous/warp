@@ -1,0 +1,5 @@
+// The standard library module math (notes/stdlib.md): `use math`, together with the C library libm
+gcd(a, b) := if b == 0 then a else gcd(b, a % b)
+lcm(a, b) := a / gcd(a, b) * b
+clamp(x, low, high) := if x < low then low else if x > high then high else x
+sign(x) := if x > 0 then 1 else if x < 0 then -1 else 0

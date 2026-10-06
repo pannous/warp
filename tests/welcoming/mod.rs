@@ -39,3 +39,4 @@ mod test_keys_of_a_map_parameter;
 mod test_constant_shadowing;
 mod test_left_arrow;
 mod test_hint_positions;
+mod test_slash_comment_after_value;

@@ -22,6 +22,34 @@ const MODULE_PATH = /\.(wasm|wat)$/; // src/wasm_modules.rs MODULE_EXTENSIONS
 const SETTER_PREFIX = "set "; // src/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
 const C_CALLS_SECTION = "warp.c_calls"; // src/wasm_modules.rs C_CALLS_SECTION
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
+// the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
+// plain values (plainOfTree / treeOfPlain, as for foreign_call)
+const STD_ADAPTERS = {
+	json: { parse: text => JSON.parse(text), to_json: value => JSON.stringify(value) },
+	file: {
+		write: (path, content) => { writtenFiles.set(filePath(path), contentText(content)); return null; },
+		append: (path, content) => { writtenFiles.set(filePath(path), textOfFile(path) + contentText(content)); return null; },
+		exists: path => writtenFiles.has(filePath(path)) || servedFileExists(path),
+		list: folder => {
+			const prefix = filePath(folder).replace(/\/?$/, "/");
+			return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
+		},
+	},
+	os: { env: () => null }, // a page has no environment
+};
+// the files std's file module wrote, kept while the page is open: read and the file words see them before the served ones
+const writtenFiles = new Map();
+const filePath = path => path.replace(/^\.\//, "");
+const contentText = content => typeof content === "string" ? content : JSON.stringify(content);
+const textOfFile = path => writtenFiles.get(filePath(path)) ?? (servedFileExists(path) ? readFile(filePath(path)) : "");
+function servedFileExists(path) {
+	try {
+		readBytes(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 const utf8 = new TextEncoder();
 
@@ -68,6 +96,8 @@ function fileUrl(path) {
 
 // the bytes of a file of the served repository, of the page or of a URL, failing in the words of the native read
 function readBytes(path) {
+	const written = writtenFiles.get(filePath(path));
+	if (written !== undefined) return utf8.encode(written);
 	try {
 		return getSync(fileUrl(path), 0, true);
 	} catch (failure) {
@@ -142,6 +172,9 @@ function programImports(holder, hooks) {
 				}
 				return buildValue(module, report.result);
 			},
+			// std_pure / std_io(module, member, arguments): a word of std/<module>.wasp (src/std_adapters.rs)
+			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
+			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
 			// a module of another runtime (src/foreign.rs), run by the runtime registered under its name
 			foreign_call: (runtime, module, member, call, argumentList) => {
 				const program_ = program();
@@ -736,12 +769,25 @@ function buildValue(module, tree) {
 	}
 }
 
+function stdCall(program_, module, member, argumentList) {
+	const [moduleName, memberName, given] = [module, member, argumentList].map(node => plainOfTree(readNode(program_, node)));
+	const adapter = STD_ADAPTERS[moduleName]?.[memberName];
+	if (!adapter) throw new Error(`${moduleName}.${memberName}: no such word in the browser`);
+	try {
+		return buildValue(program_, treeOfPlain(adapter(...(Array.isArray(given) ? given : [given]))));
+	} catch (error) {
+		throw new Error(`${moduleName}.${memberName}: ${error.message}`);
+	}
+}
+
 // a value of the program (a reader.js tree) as a plain JavaScript value, for foreign_call: lists arrays, `{a:1}` objects
 const KIND_KEY = 6n;
 function plainOfTree(tree) {
 	const kind = BigInt(tree.kind);
 	const payload = tree.data ?? {};
-	const items = () => [payload.node, ...(tree.chain ?? []).map(cell => cell.data?.node)].filter(Boolean);
+	// a ø item reads as a null node: it stays null ([1, ø] is [1, null]); only an empty list has no first node
+	const items = () => payload.node === undefined ? [] : [payload.node, ...(tree.chain ?? []).map(cell => cell.data?.node ?? null)];
+	const plainOfItem = item => item === null ? null : plainOfTree(item);
 	switch (Number(kind & KIND_MASK)) {
 		case 0: return null;
 		case 1:
@@ -750,11 +796,15 @@ function plainOfTree(tree) {
 		case 2: return Number(payload.float);
 		case 3: case 5: return payload.text;
 		case 4: return String.fromCodePoint(payload.i31);
-		case 6: return { [plainOfTree(payload.node)]: plainOfTree(tree.chain?.[0] ?? { kind: "0" }) };
+		// the value's own cells follow it in the key's flat chain (reader.js): `{a:[1, 2]}` keeps its 2
+		case 6: {
+			const [value, ...rest] = tree.chain ?? [];
+			return { [plainOfTree(payload.node)]: value ? plainOfTree({ ...value, chain: rest }) : null };
+		}
 		case 7: case 8: {
 			const values = items();
-			const isObject = (kind >> 8n) === 0n && values.length > 0 && values.every(item => (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
-			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfTree);
+			const isObject = (kind >> 8n) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
+			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
 		}
 		default: return null;
 	}

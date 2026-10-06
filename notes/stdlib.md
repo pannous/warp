@@ -62,19 +62,96 @@ matches format pad json parse`; `today` and `args` read as symbols; `exec sh "�
 - Names: after `use list`, `zip(a, b)` and `list.zip(a, b)` both work; a program's own `zip` wins (as for prelude words).
 - A module word used without its `use`: the loud error naming the module, with the fix `use list`.
 
-## 6. First steps (functions)
-1. `std/` folder, the embedded loader in modules.rs, `use list` for a first wasp-only module: unique, zip, enumerate,
-   product, mean, flatten, take, drop (tests/modules/test_std_list.rs).
-2. The "word is in module X" error for words of a known module.
-3. text: pad, format; math: gcd, lcm, clamp, pi/e/tau constants.
-4. Host modules with async: file (write, exists, append), os (env, args), json.
+## 6. Steps (functions)
+Done (branch functions, 2026-10-07):
+1. `std/<name>.wasp` embedded in warp (modules.rs STD_MODULES); a local file of the same name wins. The loader keeps a
+   std module's definitions aside and gives the program only those it calls, and those they call
+   (`with_needed_definitions`): an unused word would compile with parameters of no kind.
+   `use list`: unique zip enumerate product mean take drop flatten (tests/modules/test_std_list.rs).
+2. A std word without its `use`: "zip is in the standard module list: write `use list`" (ffi::undefined_function_message,
+   also for the braceless call).
+3. `use math` = libm (as before) + std/math.wasp: gcd lcm clamp sign; `use text`: repeat pad_left pad_right
+   (tests/modules/test_std_math_text.rs). pi, e, tau already exist as exact symbols.
+4. Qualified `list.zip(…)`, `math.gcd(…)`, JS's `Math.sqrt(16)`: the bare word with a note (welcome_forms
+   module_calls); a program's own variable `text`/`list` keeps its methods (tests/modules/test_std_qualified.rs).
+5. `use random`: choice shuffle sample; `use map`: merge map_values (tests/modules/test_std_random.rs, test_std_map.rs).
+   A std module's source shows no style hints (parsed under normalize::without_hints).
+Bugs met (cards over-keys, inside-loop, index-hint): `for k in keys(m)` / `m[k]` in a loop over a one-entry map
+parameter; std/map.wasp uses `ks = keys(m)` and `m.get(k)` until they are fixed.
+6. `use time`: date_of(ms) {year month day}, weekday(ms) (ISO, Monday 1), day_number(ms), today()
+   (tests/modules/test_std_time.rs). Fixed on the way: `{year:1970 month:1}` read `1970 month` as a duration
+   (card key-unit), and the map parameter bug above (cards over-keys, inside-loop: no list copy for a map parameter).
+Next:
+7. More list words (chunk, window, median), text format; time: date arithmetic (add days, difference), formatting.
+8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 ## 7. Adapters (async, warp-f0)
-To be written by warp-f0: per ecosystem (C/wasm FFI, JS, Python, Rust components) how a module's word is backed, and
-which modules (regex, hash, json, http) use which adapter natively and in the browser. See notes/stdlib_connectors.md.
+How a module word is backed when wasp alone cannot do it. All six mechanisms exist (notes/stdlib_connectors.md,
+notes/wasm_modules.md); the question per module is which one ships with warp.
+
+### The adapters and where they run
+| adapter | native | browser | `warp build --exe` | eval_untrusted | values |
+|---|---|---|---|---|---|
+| A host word (Rust in warp, src/host.rs; JS twin in web/playground/host.js) | yes | yes, if host.js has the twin | only the stub's words (print, libm, sleep, random, random_below, clock); others refused, named | per capability | Nodes both ways |
+| B C library compiled to wasm (`use zlib` → zlib.wasm, types from its header, notes/wasm_modules.md) | yes | yes, same module | not yet (the stub links no second module) | sandboxed, a candidate | numbers, texts, byte buffers, out-pointers |
+| C native C FFI (dlopen + headers) | yes | no (host.js shims a few libc words) | refused | refused (Ffi) | numbers, texts, handles |
+| D WIT component (`use wasm "lib.wasm"`) | yes | yes (jco, build.sh components) | refused | sandboxed, a later question | WIT types ↔ Nodes, resources as handles |
+| E Python (`use python`) | python3 child | Pyodide | refused | refused (Ffi) | JSON, handles |
+| F JavaScript (`use js`) | node child | the page's globalThis | refused | refused (Ffi) | JSON, handles |
+
+Rule for the standard library (default): **a std module must work in every host without anything installed.** So it
+uses wasp, A (a Rust crate already in warp's dependencies natively, the browser's built-in API in host.js) or B (a C
+library compiled to wasm once, embedded in warp like std/*.wasp). C, E and F need a library, python3 or node on the
+machine: they stay the user's `use python numpy`, `use js lodash`, `use sqlite3`, never a std module's backing. D is
+for Rust crates without a host word (a crate built to a component) once a std module needs one.
+
+Where the two hosts' engines differ (Rust regex vs JS RegExp), the module defines the common subset; a feature only one
+engine has is a loud error in both, never a different result.
+
+### Per module
+| module | backing natively | backing in the browser | notes |
+|---|---|---|---|
+| regex | A: Rust `regex` crate (new dependency, ~1 MB in the compiler; the compiler's browser build carries it only if the compiler needs regexes itself) | A: JS RegExp | common subset: no look-around or backreferences (regex lacks them), named groups `(?<n>…)` in both; matches find find_all replace_all split |
+| hash | B: sha256/md5 from a small C file compiled to wasm; crc32/adler32 from zlib.wasm and xxh64 from xxhash.wasm (both exist as fixtures) | B: the same modules | one implementation, byte-identical results; Rust `sha2` (in Cargo.toml, optional) would be A natively but needs a JS twin (crypto.subtle is async: a host call cannot wait) |
+| json | A: serde_json via Node::to_json / Node::from_json | A: JSON.parse / JSON.stringify with host.js treeOfPlain / plainOfTree | wasp data is a JSON superset, so parse_json gives Nodes; to_json of a non-JSON value (a closure) is a loud error |
+| net / http | A: `fetch` exists (ureq); post, headers, status as more host words | A: fetch exists; synchronous XHR in the worker (async fetch cannot be awaited by a host call) | Host capability; the browser obeys CORS, a refused request is the error naming it |
+| time (dates, format) | wasp over `clock` (A), the calendar arithmetic in wasp | the same | time zones: A natively (the OS database) vs Intl in the browser, deferred |
+| random | A: random, random_below exist (stub too) | A: Math.random twin exists | seed: wasp PRNG (xorshift) over a seed word, so seeded runs are identical in both hosts |
+| io / file | A: WASI natively | A: host.js virtual file system (in-memory, per run) | Wasi capability |
+| os / process | A: args env exit; exec under Process | A: args empty, env empty, exec the error naming the native host | Process capability (P88 allow-everything mode) |
+| compress (zlib) | B: zlib.wasm (compress, uncompress, crc32 already round-trip) | B: the same | a candidate std module once its buffers read as byte lists |
+| math | libm (stub "m") natively, JS Math in the browser (today) | — | gcd lcm clamp sign in wasp; no adapter needed |
+| text, list, map | wasp | wasp | no adapter |
+
+### How an adapter word is built (A)
+Two host words carry every adapter: `std_pure(module, member, arguments)` for words without effects (json, hash,
+regex: capability like libm's) and `std_io(…)` for words that touch the outside (file, os, net: Host, IO). A std module
+defines its words over them, `parse_json(text) := std_pure("json", "parse", [text])` (std/json.wasp); natively
+src/std_adapters.rs answers by (module, member), in the browser host.js STD_ADAPTERS. Values cross as for the foreign
+runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain). Their results are any Node (analyzer
+ANY_VALUE_WORDS); a parameter that takes any value is annotated `any` (`to_json(value:any)`).
+Adding a word: one match arm in std_adapters.rs, one function in STD_ADAPTERS, one line in std/<module>.wasp, a test
+run natively and in the browser.
+
+### First adapter steps (async)
+1. Done: json (A): `use json` brings parse_json and to_json, native and browser (tests/modules/test_std_json.rs).
+1b. Done: file and os (A, std_io): `use file` brings write, append_file, exists, list_files, lines (read stays a
+   prelude word); `use os` brings env. Natively the file system (paths as read resolves them) and the environment; in
+   the browser host.js keeps written files in memory while the page is open (read sees them first, then the served
+   repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
+   method `xs.append(v)` a program using `use file` still needs (question Q6). args waits for a CLI way to pass them.
+2. hash (B): embed zlib.wasm/xxhash.wasm and a sha256.wasm in warp, `use hash` resolves to them in both hosts.
+3. regex (A): Rust regex + JS RegExp behind matches/find/find_all/replace_all, with the common-subset check.
+4. Later: the AOT stub linking B modules (they need no compiler), then hash and compress work in executables.
 
 ## Open questions (to warp-e9, defaults in force)
 - Q1 `use math` = std module re-exporting libm (default) vs. keep `use math` as the raw C library and name the std
   module differently.
 - Q2 Module words qualified only (`list.zip`) vs. both qualified and bare after `use` (default: both).
 - Q3 Does any new word go straight into the prelude (candidates: zip, enumerate, unique, write, exists)? Default: no.
+- Q4 (adapters) A std module works in every host with nothing installed, so it is backed only by wasp, host words or C
+     compiled to wasm, never by python3/node/a system library (default) vs. allowing std modules that need them.
+- Q5 (adapters) Where Rust regex and JS RegExp differ, the regex module is their common subset with a loud error for
+     the rest (default) vs. one regex engine compiled to wasm for both hosts (identical, but ~300 KB more per page).
+- Q6 (adapters) file words: `append_file(path, text)` (default; `append` stays the list method) vs. a qualified
+     `file.append(path, text)` only, once qualified access exists (Q2).

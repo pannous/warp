@@ -343,7 +343,10 @@ impl WaspParser {
 			let written = if may_pipe { PIPE_GLYPH.to_string() } else { self.hint_operator(chars, false) };
 			let (op_line, op_column) = self.get_position();
 			let bare_symbol = Some(self.current_char()).filter(|symbol| chars == 1 && matches!(symbol, '&' | '|'));
+			let glued_before = !self.prev_char().is_whitespace();
 			self.advance_by(chars);
+			// `for:email "Email"`: the glued pair is for:email, the text the next item (card parser-tag)
+			let glued_pair = op == Op::Colon && glued_before && !self.current_char().is_whitespace();
 			let block_body = match op {
 				Op::Colon if self.only_blanks_before_newline() => {
 					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` assigns
@@ -377,6 +380,12 @@ impl WaspParser {
 					let branch = self.branch_assignment(branch, r_bp);
 					self.branch_bp = outer;
 					branch
+				}
+				None if glued_pair => {
+					let outer = self.glued_pair_bp.replace(r_bp);
+					let value = self.parse_expr(r_bp);
+					self.glued_pair_bp = outer;
+					value
 				}
 				None => self.parse_expr(r_bp),
 			};

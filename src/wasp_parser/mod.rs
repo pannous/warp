@@ -13,6 +13,7 @@ mod user_operators;
 mod scanning;
 mod xml;
 mod lookahead;
+pub use lookahead::PREFIX_OPERATOR_WORDS;
 mod atoms;
 mod expressions;
 mod statements;
@@ -622,6 +623,8 @@ pub struct WaspParser {
 	in_for_header: bool,
 	/// The variables of the enclosing `for k in keys(m)` loops: `m[k]` looks a key up, so no indexing hint
 	key_variables: Vec<String>,
+	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
+	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
 	group_start: (usize, usize),
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
@@ -911,6 +914,7 @@ impl WaspParser {
 			equals_compares: false,
 			in_for_header: false,
 			key_variables: vec![],
+			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,
 			type_fields: None,

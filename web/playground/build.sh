@@ -7,7 +7,7 @@
 #               feature (wasmparser's validator, a quarter of the module: the browser validates anyway), then wasm-opt
 #   debug     → warp.debug.wasm: profile web-debug (opt-level 1, line tables, the name section kept), with `validate`, so
 #               emitter bugs are named and stack traces and the browser's debugger show Rust functions and lines
-#   components → components/<name>.js for every COMPONENTS component (`use <name>.wasm`, components.js): jco
+#   components → components/<name>.js for every COMPONENTS component (`use wasm "<name>.wasm"`, components.js): jco
 #               transpiles it (npm i -g @bytecodealliance/jco), the core modules go into the script as base64, the
 #               WIT signatures of its exports as JSON (wasm-tools component wit --json; cargo install wasm-tools)
 # Measured 2026-10-03: optimized 1.30 MB (545 KB gzipped); debug 22 MB (4.8 MB gzipped; full DWARF would be 53 MB).
@@ -98,6 +98,6 @@ source = open(sys.argv[2], encoding="utf-8").read()
 def words(name):
 	return re.findall(r'"([^"]+)"', re.search(rf"const {name}: \[&str; \d+\] = \[(.*?)\];", source, re.S).group(1))
 with open(sys.argv[1], "w", encoding="utf-8") as script:
-	script.write("// made by build.sh from src/lowering/soft_keywords.rs\nconst KEYWORDS = " + json.dumps({"hard": words("HARD_KEYWORDS"), "soft": words("SOFT_KEYWORDS")}, ensure_ascii=False) + ";\n")
+	script.write("// made by build.sh from src/lowering/soft_keywords.rs\nconst KEYWORDS = " + json.dumps({"hard": words("HARD_KEYWORDS"), "soft": words("SOFT_KEYWORDS") + words("HIGHLIGHTED_WORDS")}, ensure_ascii=False) + ";\n")
 PYTHON
 echo "built $page/keywords.js"

@@ -27,10 +27,12 @@ pub(super) fn parameter_copies(node: Node, maps: &HashSet<(String, usize)>) -> N
 			let mut body = parameter_copies(*body, maps);
 			// a parameter that is assigned (`arr = swap(arr, i, j)`) would convert at every assignment: it keeps walking
 			for (index, parameter) in items[1..].iter().enumerate().filter_map(|(index, parameter)| Some((index, parameter_symbol(parameter)?))) {
-				if indexes(&body, &parameter) && !assigned_from_call_in_loop(&body, &parameter) {
-					body = with_copy(body, &parameter, LIST_COPY_SUFFIX);
-				} else if maps.contains(&(function.clone(), index)) && keys(&body, &parameter) && !assigns(&body, &parameter) {
+				// every call passing a map: `m[k]` looks a key up, no list copy (a one-entry map would lose its key)
+				let takes_maps = maps.contains(&(function.clone(), index));
+				if takes_maps && keys(&body, &parameter) && !assigns(&body, &parameter) {
 					body = with_copy(body, &parameter, crate::wasm_emitter::MAP_COPY_SUFFIX); // a hash table (map_backend.rs)
+				} else if !takes_maps && indexes(&body, &parameter) && !assigned_from_call_in_loop(&body, &parameter) {
+					body = with_copy(body, &parameter, LIST_COPY_SUFFIX);
 				}
 			}
 			Node::Key(head, op, Box::new(body))
