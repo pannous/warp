@@ -45,6 +45,10 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 17] = [
 	(crate::library_words::SLICE, NODE_SLICE),
 ];
 pub const NODE_SLICE: &str = "node_slice";
+/// text_quoted(text) -> text: how a text inside a container prints (P126)
+pub const TEXT_QUOTED: &str = "text_quoted";
+const QUOTE_BYTE: i32 = b'"' as i32;
+const BACKSLASH_BYTE: i32 = b'\\' as i32;
 pub const LIST_JOIN: &str = "list_join";
 /// list_text(list, separator): list_join that also takes nested lists, for the text of a list (`str(xs)`)
 pub const LIST_TEXT: &str = "list_text";
@@ -366,7 +370,40 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// text_quoted(text): the text in double quotes, a `"` or `\` in it escaped by a `\` (P126: `["say \"hi\""]`);
+	/// byte-wise, as neither byte occurs inside a multi-byte UTF-8 character
+	fn emit_text_quoted(&mut self) {
+		if !self.should_emit_function(TEXT_QUOTED) {
+			return;
+		}
+		self.emit_text_heap_global();
+		let node_ref = Ref(self.node_ref(false));
+		self.runtime_function(TEXT_QUOTED, vec![node_ref], vec![node_ref], vec![ValType::I32; 6], |s, f| {
+			let (pointer, end, capacity, destination, out, byte) = (1, 2, 3, 4, 5, 6);
+			let write = |f: &mut Function, value: I<'static>| {
+				Self::emit_list(f, &[I::LocalGet(out), value, I::I32Store8(BYTE), I::LocalGet(out), I32Const(1), I::I32Add, I::LocalSet(out)]);
+			};
+			s.emit_text_bounds(f, pointer, end);
+			// at worst every byte is escaped, plus the two quotes
+			Self::emit_list(f, &[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I32Const(2), I::I32Mul, I32Const(2), I::I32Add, I::LocalSet(capacity)]);
+			s.emit_text_allocation(f, capacity, destination);
+			Self::emit_list(f, &[I::LocalGet(destination), I::LocalSet(out)]);
+			write(f, I32Const(QUOTE_BYTE));
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(byte), I32Const(QUOTE_BYTE), I::I32Eq]);
+			Self::emit_list(f, &[I::LocalGet(byte), I32Const(BACKSLASH_BYTE), I::I32Eq, I::I32Or, I::If(BlockType::Empty)]);
+			write(f, I32Const(BACKSLASH_BYTE));
+			f.instruction(&I::End);
+			write(f, I::LocalGet(byte));
+			Self::emit_list(f, &[I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer), I::Br(0), I::End, I::End]);
+			write(f, I32Const(QUOTE_BYTE));
+			Self::emit_list(f, &[I::LocalGet(destination), I::LocalGet(out), I::LocalGet(destination), I::I32Sub]);
+			s.call(f, "new_text");
+		});
+	}
+
 	fn emit_joining(&mut self, name: &'static str, nested: bool) {
+		self.emit_text_quoted();
 		self.emit_text_heap_global();
 		self.emit_int_to_decimal();
 		self.emit_exact_text();
@@ -376,7 +413,6 @@ impl WasmGcEmitter {
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
 		let map_texts = [self.allocate_string("{"), self.allocate_string("}"), self.allocate_string(":")];
 		let no_text = self.allocate_string("");
-		let quote = self.allocate_string("\"");
 		let empty_text = self.allocate_string(EMPTY_TEXT);
 		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
@@ -398,13 +434,8 @@ impl WasmGcEmitter {
 				if nested { // a text or a character in a container is quoted (P126): `["a" "bc"]`
 					s.emit_field(f, element, 0);
 					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Eq]);
-					Self::emit_list(f, &[I::If(BlockType::Empty), I32Const(quote.0 as i32), I32Const(quote.1 as i32)]);
-					s.call(f, "new_text");
-					Self::emit_list(f, &[I::LocalGet(element), I::RefAsNonNull]);
-					s.call(f, super::text_builtins::TEXT_CONCAT);
-					Self::emit_list(f, &[I32Const(quote.0 as i32), I32Const(quote.1 as i32)]);
-					s.call(f, "new_text");
-					s.call(f, super::text_builtins::TEXT_CONCAT);
+					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
+					s.call(f, TEXT_QUOTED);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				// list_text: a nested list as its literal, "[" + list_text(item, " ") + "]", a map in braces

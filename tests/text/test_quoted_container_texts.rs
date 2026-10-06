@@ -29,3 +29,12 @@ fn string_and_interpolation_quote_texts_in_containers() {
 	is!("x = \"a\"; \"got \\(x)\"", "got a");
 	is!("class Point{x:int name:text}; p = Point{x:1 name:\"a\"}; string(p)", "Point{x:1 name:\"a\"}");
 }
+
+// P126 follow-up: a quote or backslash inside a quoted text is escaped, so the text reads back as written
+#[test]
+fn a_quote_inside_a_text_in_a_container_is_escaped() {
+	is!("string([\"say \\\"hi\\\"\"])", "[\"say \\\"hi\\\"\"]");
+	is!("string([\"a\\\\b\"])", "[\"a\\\\b\"]");
+	is!("xs = [\"q\\\"\"]; \"got \\(xs)\"", "got [\"q\\\"\"]");
+	is!("class P{name:text}; p = P{name:\"a\\\"b\"}; string(p)", "P{name:\"a\\\"b\"}");
+}
