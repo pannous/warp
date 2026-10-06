@@ -88,5 +88,6 @@ mod test_signal_reflection;
 mod test_broadcast;
 mod test_signal_lists;
 mod test_listener_removal;
+mod test_listener_removal_in_functions;
 mod test_cell_truth;
 mod test_braceless_call_in_branch;
