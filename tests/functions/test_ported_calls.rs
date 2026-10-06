@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 273] = [
+const CASES: [(&str, &str); 277] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -278,6 +278,10 @@ twice 4"#, r#"8"#),
 	(r#"lambda = 3; lambda + 1"#, r#"4"#),
 	(r#"fs = []; for i in 1 to 3 { fs.add(x => x + i) }; fs#1(10)"#, r#"11"#),
 	(r#"fs = []; for i in 1 to 3 { fs = fs + [x => x + i] }; fs#3(10)"#, r#"13"#),
+	(r#"dbl = func(x int) int { return x * 2 }; dbl(4)"#, r#"8"#),
+	(r#"twice := func(x int) int { return x * 2 }; twice(4)"#, r#"8"#),
+	(r#"f = func(a, b int) int { return a + b }; f(1, 2)"#, r#"3"#),
+	(r#"func apply(f func(int) int, x int) int { return f(x) }; apply(func(x int) int { return x + 1 }, 2)"#, r#"3"#),
 ];
 
 /// The value as `warp eval` shows it: a text without its quotes

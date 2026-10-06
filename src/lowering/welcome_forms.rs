@@ -185,24 +185,37 @@ fn lambda(parameters: Node, body: Node) -> Node {
 
 /// `[function (a, b)] {body}`: a function keyword with parameters and no name, then its body
 fn anonymous_function(items: &[Node]) -> Option<Node> {
-	let [head, body] = items else { return None };
+	let [head, rest @ ..] = items else { return None };
+	let [body] = without_result_type(rest) else { return None };
 	if !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	Some(lambda(function_parameters(head)?, forms(body.clone())))
 }
 
+/// Go's `func(x int) int { … }`: the body without the result type before it
+fn without_result_type(rest: &[Node]) -> &[Node] {
+	match rest {
+		[result_type, body] if is_type_word(result_type) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => &rest[1..],
+		_ => rest,
+	}
+}
+
+fn is_type_word(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if crate::analyzer::type_word_kind(word).is_some())
+}
+
 /// R's `f <- function(x) x * 2`, JS-ish `f = function(x) x * 2`: the assignment takes the phrase after the head as
 /// the body, `f = x => x * 2`
 fn assigned_braceless_function(items: &[Node]) -> Option<Node> {
 	let [assignment, body @ ..] = items else { return None };
-	let Node::Key(name, Op::Assign, head) = assignment.drop_meta() else { return None };
-	let body = match body {
+	let Node::Key(name, op @ (Op::Assign | Op::Define), head) = assignment.drop_meta() else { return None };
+	let body = match without_result_type(body) {
 		[] => return None,
 		[single] => single.clone(),
 		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 	};
-	Some(Node::Key(name.clone(), Op::Assign, Box::new(lambda(function_parameters(head)?, forms(body)))))
+	Some(Node::Key(name.clone(), *op, Box::new(lambda(function_parameters(head)?, forms(body)))))
 }
 
 /// JS `({a, b}, k) => …`: an object parameter taken apart, `(object·0, k) => { a = object·0.a; b = object·0.b; … }`
@@ -264,9 +277,26 @@ fn called_arguments(call: &Node) -> Option<Vec<Node>> {
 /// `function (a, b)`: the parameters after a function keyword with no name
 fn function_parameters(head: &Node) -> Option<Node> {
 	let Node::List(head_items, _, _) = head.drop_meta() else { return None };
-	let [keyword, parameters] = head_items.as_slice() else { return None };
-	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word));
-	is_keyword.then(|| parameters.clone())
+	let [keyword, parameters @ ..] = head_items.as_slice() else { return None };
+	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
+		return None;
+	}
+	match parameters {
+		[single] => Some(single.clone()),
+		[] => None,
+		// Go's `func(x int)`, `func(a, b int)`: the names, the types after them dropped
+		several => {
+			let names: Vec<Node> = several.iter().filter_map(|parameter| match parameter.drop_meta() {
+				Node::Symbol(_) if !is_type_word(parameter) => Some(parameter.clone()),
+				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_type_word(kind) && !is_type_word(name)) => Some(words[0].clone()),
+				_ => None,
+			}).collect();
+			match names.as_slice() {
+				[single] => Some(single.clone()),
+				_ => Some(Node::List(names, Bracket::Round, Separator::Colon)),
+			}
+		}
+	}
 }
 
 /// `lambda x` (the words before Python's colon): the parameters

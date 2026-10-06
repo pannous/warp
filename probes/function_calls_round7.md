@@ -4,7 +4,7 @@ sq = x -> x^2; sq(4) ||| 16
 map(x -> x * 2, [1, 2, 3]) ||| [2 4 6]
 let inc = fun x -> x + 1 in inc 4 ||| 5
 List.map (fun x -> x * 2) [1; 2; 3] ||| [2 4 6]
-double = func(x int) int { return x * 2 }; double(4) ||| 8
+dbl = func(x int) int { return x * 2 }; dbl(4) ||| 8
 twice := func(x int) int { return x * 2 }; twice(4) ||| 8
 sq = @(x) x.^2; sq(3) ||| 9
 sapply(c(1, 2, 3), function(x) x * 2) ||| [2 4 6]

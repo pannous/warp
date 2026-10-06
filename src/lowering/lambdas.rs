@@ -267,9 +267,13 @@ fn arrow_parts(head: &Node, body: &Node) -> Option<Lambda> {
 
 /// PHP's `fn($x) => …` without its keyword, C#'s `(int x, int y) => …` as `(x: int, y: int)`
 fn c_style_parameters(head: &Node) -> Node {
+	// C#'s `int x`, Go's `x int`
 	let typed = |parameter: &Node| match parameter.drop_meta() {
 		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [kind, name] if is_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_))) => {
 			Node::Key(Box::new(words[1].clone()), Op::Colon, Box::new(words[0].clone()))
+		}
+		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_)) && !is_type_word(name)) => {
+			Node::Key(Box::new(words[0].clone()), Op::Colon, Box::new(words[1].clone()))
 		}
 		_ => parameter.clone(),
 	};
@@ -279,7 +283,7 @@ fn c_style_parameters(head: &Node) -> Node {
 		Node::List(_, Bracket::None, Separator::Space) if keyword_and_names(head).is_some_and(|names| names.len() > 1) => {
 			Node::List(keyword_and_names(head).expect("guarded"), Bracket::Round, Separator::Colon)
 		}
-		Node::List(words, Bracket::Round, Separator::Space) if words.len() == 2 && is_type_word(&words[0]) => Node::List(vec![typed(head)], Bracket::Round, Separator::Colon),
+		Node::List(words, Bracket::Round | Bracket::None, Separator::Space) if words.len() == 2 && words.iter().any(is_type_word) && typed(head) != *head => Node::List(vec![typed(head)], Bracket::Round, Separator::Colon),
 		Node::List(words, Bracket::Round, separator) if words.iter().any(|word| typed(word) != *word) => Node::List(words.iter().map(typed).collect(), Bracket::Round, separator.clone()),
 		_ => head.clone(),
 	}

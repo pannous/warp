@@ -1471,7 +1471,10 @@ fn is_type_word(node: &Node) -> bool {
 
 /// Go's parameter `x int` (the name, then its type) is `x:int`
 fn name_then_type(parameter: Node) -> Node {
+	let is_function_type = |node: &Node| matches!(node.drop_meta(), Node::List(words, _, _) if matches!(words.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)));
 	match parameter.drop_meta() {
+		// Go's function parameter `f func(int) int`: the name, a function (its calls tell the rest)
+		Node::List(parts, _, Separator::Space) if parts.len() >= 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && is_function_type(&parts[1]) => parts[0].clone(),
 		Node::List(parts, _, Separator::Space) if parts.len() == 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && is_type_word(&parts[1]) => {
 			Node::Key(Box::new(parts[0].clone()), Op::Colon, Box::new(parts[1].clone()))
 		}
