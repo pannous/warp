@@ -87,3 +87,4 @@ mod test_shared_signals;
 mod test_signal_reflection;
 mod test_broadcast;
 mod test_signal_lists;
+mod test_listener_removal;
