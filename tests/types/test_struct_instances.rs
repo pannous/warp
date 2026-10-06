@@ -43,7 +43,6 @@ fn a_struct_instance_gives_the_same_values() {
 }
 
 #[test]
-#[ignore = "next"] // step 1 of the struct backend (notes/classes.md "Template")
 fn a_field_read_of_a_struct_variable_searches_no_names() {
 	let calls = called_function_names(&format!("{POINT}p.x * p.y"));
 	assert!(!calls.iter().any(|name| name == "map_find" || name == "struct_body"), "{calls:?}");
