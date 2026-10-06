@@ -277,7 +277,16 @@ pub fn lower_function_methods(node: Node) -> Node {
 	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
 	// are specialised (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
+	let node = if defined.contains(LIST_WORD) { node } else { empty_list_calls(node) };
 	function_methods_as_calls(node, &|name, arguments| (is_builtin(name) && !defined.contains(name)) || takes_receiver(name, arguments))
+}
+
+/// Python's `list()`: the empty list, as `[]` parses
+fn empty_list_calls(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.as_slice(), [word] if matches!(word.drop_meta(), Node::Symbol(name) if name == LIST_WORD)) => Node::Empty,
+		other => other.map_children(empty_list_calls),
+	}
 }
 
 fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bool) -> Node {

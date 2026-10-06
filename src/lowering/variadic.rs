@@ -12,7 +12,7 @@ use crate::analyzer::call_name;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::tuples::STARRED;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// A function's fixed parameters, whether a rest parameter follows them, and whether a keyword parameter `**kw` ends them
 #[derive(Clone)]
@@ -28,7 +28,13 @@ pub fn lower(node: Node) -> Node {
 	if !signatures.values().any(|signature| signature.rest || signature.keywords) && !has_spread(&node) {
 		return node;
 	}
-	Variadic { signatures }.rewrite(node)
+	let mut parameters = HashSet::new();
+	node.visit(&mut |part| {
+		if let Some(head) = definition_head(part) {
+			parameters.extend(head[1..].iter().filter_map(parameter_name));
+		}
+	});
+	Variadic { signatures, parameters }.rewrite(node)
 }
 
 /// `*xs`, `...xs` (parsed as `*xs`) and `xs...` (an open range of xs): the name xs
@@ -123,6 +129,9 @@ fn has_spread(node: &Node) -> bool {
 
 struct Variadic {
 	signatures: HashMap<String, Signature>,
+	/// A call of a parameter `f(*args)` keeps its spread until function_values.rs knows the function passed and
+	/// runs this pass again
+	parameters: HashSet<String>,
 }
 
 impl Variadic {
@@ -205,6 +214,7 @@ impl Variadic {
 				[spread_items(fixed_arguments, None), vec![rest_list(leftover)]].concat()
 			}
 			Some(Signature { fixed, rest: false, .. }) => spread_items(&arguments, Some(fixed.len())),
+			None if self.parameters.contains(&head.name()) => arguments,
 			_ => arguments.iter().map(|argument| starred(argument).map(Node::Symbol).unwrap_or_else(|| argument.clone())).collect(),
 		};
 		Node::List([vec![head], arguments, keywords.into_iter().collect()].concat(), Bracket::Round, Separator::None)

@@ -481,10 +481,13 @@ pub fn lower(program: Node) -> Node {
 	// calls in the code that is not the body of a function taking functions
 	let program = rewrite_outside(program, &mut specialising);
 	let assembled = assemble(program, &specialising);
-	if specialising.lambda_definitions.is_empty() {
-		return assembled;
-	}
-	Node::List([specialising.lambda_definitions.clone(), vec![assembled]].concat(), Bracket::Round, Separator::Semicolon)
+	let program = if specialising.lambda_definitions.is_empty() {
+		assembled
+	} else {
+		Node::List([specialising.lambda_definitions.clone(), vec![assembled]].concat(), Bracket::Round, Separator::Semicolon)
+	};
+	// `f(*args)` of a parameter f spreads into the function now known (variadic.rs kept the spread)
+	crate::variadic::lower(program)
 }
 
 /// Rewrite every call except inside the definitions of functions that take functions (those are only rewritten once specialised)

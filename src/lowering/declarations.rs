@@ -1182,6 +1182,11 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		Node::Key(name, Op::Colon, body) if matches!(name.drop_meta(), Node::Symbol(_)) => {
 			(Node::List(vec![*name], Bracket::Round, Separator::None), Op::Define, *body)
 		}
+		// Python's `def apply(f, x): return f(x)`, early, so the function value passes see a definition; without
+		// parameters it stays a def form for late_binding, which would read `z() := e` as a getter (P71)
+		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() > 1 && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
+			(*head, Op::Define, *body)
+		}
 		Node::List(parts, Bracket::Round, _) if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => (parts[0].clone(), Op::Define, parts[1].clone()),
 		_ => return None,
 	};

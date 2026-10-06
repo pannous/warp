@@ -7,3 +7,8 @@ fn list_of_a_value() {
 	assert_eq!(eval("xs = [1, 2]; list(xs)").serialize(), "[1 2]");
 	assert_eq!(eval("list(\"ab\")").serialize(), "['a' 'b']");
 }
+
+#[test]
+fn an_empty_list() {
+	assert_eq!(eval("xs = list(); xs.add(3); xs").serialize(), "[3]");
+}
