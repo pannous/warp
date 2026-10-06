@@ -5,21 +5,16 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-(the four below the user answered "Later"/postponed are parked)
+(the ones below the user answered "Later"/postponed are parked; reviewed 2026-10-06 evening: P70c and P64 decided,
+P69a and P76 still wait for run-time `!` and narrowed grants (P88), #10 unchanged)
 - Parked: P150 license: warp (and wasp) have none, so package managers list no license and nobody may legally reuse the
   code. MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). User 2026-10-06: "let's
   postpone the license". Blocks the crates.io upload of P151 (crates.io refuses a crate without license metadata).
 - Parked: P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
   as they are at `!` and assigns only declared globals. User 2026-10-05: "Later"; revisit when run-time `!` is built.
-- Parked: P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
-  loop changes are captured per iteration, every other variable follows late binding (recommended) / every variable
-  is captured per iteration and never checked (worker default on branch late-binding, keeps the test → 3). User
-  2026-10-05: "Later". Asked by warp-29.
 - Parked: P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
   run-time blocks are always pure. Asked by warp-29.
-Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
-work on branch runtime-units-survey pauses.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered (handover 2026-10-06 "Needs the user" list): eval_untrusted limits (P88 follow-up "Everything,
 untrusted too"), the AGENTS.md paragraph (P93), stash and obsolete tests (cleanup rule, P96), the git hook "line 240"
@@ -207,17 +202,28 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   `it*it` need a number, so `def f(x){x+1}; f 1 < 5` and `square := it*it; square 3 == 9` are `(f x) op y` without
   a message, for every comparison; the ambiguity error stays only when the body accepts anything (`print x`). The
   footgun test `f := it*10; f 3-1 > 15` → true stands.
-- Async (warp-93, porting Promise/asyncio/Go/Kotlin cases):
-  P150 race: `await any [go a(), go b()]` is the first task to finish, the others keep running. The user's answer on
+- Async (warp-93, porting Promise/asyncio/Go/Kotlin cases; first sent to warp-93 as P150-P152, renumbered because
+  the packaging session's P150 license / P151 crates.io name came first):
+  P153 race: `await any [go a(), go b()]` is the first task to finish, the others keep running. The user's answer on
   `await first [tasks]` (asked again, user picked the recommended option): `first` keeps its list meaning, and on a
   list of tasks a compile-time got-it note says "for the first to finish: await any […]".
-  P151 deadline: `await job within 100 ms or 0`; on timeout the job is stopped and the `or` value is the result,
+  P154 deadline: `await job within 100 ms or 0`; on timeout the job is stopped and the `or` value is the result,
   without `or` the timeout is an error. User: "would the syntax 'or stop with 0' be overkill? maybe we can just give
   it as a hint that this is the behavior": no extra `stop` word. User, clarified: the hint is a compile-time got-it
   note on the `within … or` expression ("on timeout the job is stopped and the result is 0"), not a run-time message
   when the timeout happens; a timeout itself stays silent.
-  P152 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
+  P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P70c (unparked; asked with a realistic example after the user found the old one "completely constructed")
+  handlers and definitions created in a loop keep their own iteration's loop variable: `for i in 1 to 3 { button
+  "Item {i}" on click { print "clicked {i}" } }` prints "clicked 1" for Item 1 (JS `let`, Swift, C#; not the JS
+  `var` / Python late-binding bug). Variables the loop does not own follow P124 sharing. The old test (→ 3) stands.
+- P64 (unparked) units, user: "probably evaluate at compile time but keep as meta data under certain circumstances;
+  units are very valuable in physics, we should not drop them too quickly". Units are checked at compile time
+  (static, F#-style: `3 m + 2 s` is a compile error, no run-time cost) and are kept as metadata on the value where it
+  leaves static knowledge (printing `5 m`, serialization, a value of unknown/any type, data read back), never
+  silently dropped. Card in Later: revive branches static-units-1..5 (green 2026-10-05, 1321 commits behind main)
+  plus the metadata part.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
