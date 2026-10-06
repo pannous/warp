@@ -1447,9 +1447,13 @@ fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
 	let [label, typed] = words.as_slice() else { return parameter };
 	let Some(label) = argument_label(label, typed) else { return parameter };
 	let name = typed_parameter_name(typed).expect("a labeled parameter has a name");
+	// user 2026-10-06: wasp names a parameter once, Swift's label and name are redundant; ported code still compiles
+	let written = format!("{label} {}", typed.serialize());
 	if label == WILDCARD_LABEL {
+		crate::normalize::hint(&written, &typed.serialize(), "wasp names a parameter once, no label");
 		return typed.clone();
 	}
+	crate::normalize::hint(&written, &renamed_parameter(typed, label).serialize(), "wasp names a parameter once, no label");
 	labeled_names.push(Node::Key(Box::new(name.clone()), Op::Assign, Box::new(Node::Symbol(label.to_string()))));
 	renamed_parameter(typed, label)
 }
