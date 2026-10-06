@@ -80,7 +80,7 @@ pub fn constructor_name(class: &str) -> String {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = ruby_constructions(copies(with_impls(node)));
+	let node = positional_braces(ruby_constructions(copies(with_impls(node))));
 	let node = with_init_constructors(node.clone(), &method_calls_named(&node));
 	let node = with_members(node);
 	let node = with_class_attributes(class_typed_declarations(node));
@@ -765,6 +765,34 @@ fn constructed_by_new(node: Node, classes: &[String]) -> Node {
 			Node::List([vec![*class], arguments].concat(), Bracket::Round, Separator::None)
 		}
 		other => other.map_children(|child| constructed_by_new(child, classes)),
+	}
+}
+
+/// Go's positional braces `Point{1, 2}` of a declared class: the construction `Point(1, 2)`, with a note (P167); of
+/// an unknown name they stay tagged data
+fn positional_braces(node: Node) -> Node {
+	let mut classes = vec![];
+	node.visit(&mut |part| if let Node::Type { name, .. } = part {
+		classes.push(name.drop_meta().name());
+	});
+	if classes.is_empty() {
+		return node;
+	}
+	constructed_from_braces(node, &classes)
+}
+
+fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
+	let is_positional = |items: &[Node]| !items.is_empty() && items.iter().all(|item| !matches!(item.drop_meta(), Node::Key(..)));
+	match node {
+		Node::Key(class, Op::None, braces) if matches!(class.drop_meta(), Node::Symbol(name) if classes.contains(name)) && matches!(braces.drop_meta(), Node::List(items, Bracket::Curly, _) if is_positional(items)) => {
+			let Node::List(items, _, _) = braces.drop_meta().clone() else { unreachable!("guarded") };
+			let class_name = class.drop_meta().name();
+			let written: Vec<String> = items.iter().map(Node::serialize).collect();
+			crate::diagnostic::note_alias(&format!("{class_name}{{{}}}", written.join(", ")), &format!("{class_name}({})", written.join(", ")));
+			let arguments = items.into_iter().map(|item| constructed_from_braces(item, classes));
+			Node::List([vec![*class]].into_iter().flatten().chain(arguments).collect(), Bracket::Round, Separator::None)
+		}
+		other => other.map_children(|child| constructed_from_braces(child, classes)),
 	}
 }
 

@@ -247,7 +247,8 @@ Go (classes-28, tests/types/test_class_forms_ported.rs a_go_struct_with_methods)
 untyped X), methods `func (p Point) Sum() int {…}` and pointer receivers `func (p *Point) Move(dx int) {…}`
 (class_methods go_method, taken in like Rust's impl blocks, the receiver read as self). A class's own method named
 like a LINQ word (`Sum`) stays the class's (welcome_forms linq_calls skips defined_names). `p := Point{…}` is charged
-(P138): reading works, a changing method needs `var p = …`. Open (Interviewer): positional `Point{1, 2}`.
+(P138): reading works, a changing method needs `var p = …`. P167: positional braces `Point{1, 2}` of a declared
+class build `Point(1, 2)` with a note (class_methods positional_braces); of an unknown name they stay tagged data.
 
 Ruby (classes-29, tests/types/test_class_forms_ported.rs a_ruby_class_with_initialize): `class Point` with indented
 lines up to `end` (atoms parse_type_declaration_body, the methods' `end` lines dropped: without_end_lines),
