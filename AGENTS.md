@@ -260,7 +260,10 @@ use `cargo fix --offline --allow-dirty --lib --bins` after each commit and commi
 This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
 not in todo.md: every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next); `todo list`,
 `todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). `todo done` moves the card to Done and
-links the fixing commit in its body (default HEAD, so run it right after committing the fix). Without the board,
+links the fixing commit in its body (default HEAD, so run it right after committing the fix; a wiki or other-repo
+change: pass the commit URL). Rule (user, 2026-10-06, issue #7 was closed without one): a card or issue is closed
+only with a commit linked in its description. Close cards with `todo done` only; never `gh issue close` and never
+the board UI; `todo move <card> Done` refuses a card whose description links no commit. Without the board,
 `todo add` falls back to todo.md "## Fallback"; `todo import` moves those entries later.
 
 Other than fixme comment you can find new tasks via tests marked #[ignore = "next"] or even #[ignore = "soon"] 
