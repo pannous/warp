@@ -912,16 +912,13 @@ fn test_euler_identity() {
 
 // ── Termination and determinism (work area 'termination-determinism') ──────────────────────────
 
-/// Bits of `a / b` computed by WASM on this CPU through the project's engine
+/// Bits of `a / b` as a warp program shows them on this CPU (P119: canonicalized where observed, not per operation)
 fn wasm_divide_bits(a: f64, b: f64) -> u64 {
-	use wasmtime::{Instance, Module};
-	let engine = warp::util::gc_engine();
-	let module = Module::new(&engine, r#"(module (func (export "div") (param f64 f64) (result f64) local.get 0 local.get 1 f64.div))"#)
-		.expect("valid module");
-	let mut store = warp::util::fueled_store(&engine, ());
-	let instance = Instance::new(&mut store, &module, &[]).expect("instantiates");
-	let divide = instance.get_typed_func::<(f64, f64), f64>(&mut store, "div").expect("exported");
-	divide.call(&mut store, (a, b)).expect("runs").to_bits()
+	match eval(&format!("({a:?} as float) / ({b:?} as float)")).drop_meta() {
+		Node::Number(warp::Number::Float(x)) => x.to_bits(),
+		Node::Number(warp::Number::Nan) => warp_runtime::floats::CANONICAL_NAN,
+		other => panic!("{a} / {b} gave {other:?}"),
+	}
 }
 
 #[test] // x86 produces the negative NaN 0xfff8…, ARM the positive one: results differ by CPU unless canonicalized
@@ -929,7 +926,7 @@ fn test_nan_bits_are_canonical() {
 	const CANONICAL_NAN: u64 = 0x7ff8_0000_0000_0000;
 	assert_eq!(wasm_divide_bits(0.0, 0.0), CANONICAL_NAN);
 	assert_eq!(wasm_divide_bits(-0.0, 0.0), CANONICAL_NAN);
-	assert_eq!(wasm_divide_bits(f64::from_bits(0xfff8_0000_0000_0001), 1.0), CANONICAL_NAN, "NaN payloads do not leak");
+	assert_eq!(warp_runtime::floats::canonical_nan(f64::from_bits(0xfff8_0000_0000_0001)).to_bits(), CANONICAL_NAN, "NaN payloads do not leak");
 	assert_eq!(wasm_divide_bits(1.0, 4.0), 0.25f64.to_bits(), "ordinary results are untouched");
 }
 

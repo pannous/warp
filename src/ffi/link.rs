@@ -90,14 +90,14 @@ fn link_libm_table(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()>
     for (name, function) in LIBM_UNARY {
         let unary = FuncType::new(engine, [ValType::F64], [ValType::F64]);
         linker.func_new("m", name, unary, move |_caller, params, results| {
-            results[0] = Val::F64(unsafe { function(params[0].unwrap_f64()) }.to_bits());
+            results[0] = Val::F64(unsafe { function(warp_runtime::floats::canonical_nan(params[0].unwrap_f64())) }.to_bits());
             Ok(())
         })?;
     }
     for (name, function) in LIBM_BINARY {
         let binary = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
         linker.func_new("m", name, binary, move |_caller, params, results| {
-            results[0] = Val::F64(unsafe { function(params[0].unwrap_f64(), params[1].unwrap_f64()) }.to_bits());
+            results[0] = Val::F64(unsafe { function(warp_runtime::floats::canonical_nan(params[0].unwrap_f64()), warp_runtime::floats::canonical_nan(params[1].unwrap_f64())) }.to_bits());
             Ok(())
         })?;
     }
@@ -710,7 +710,7 @@ fn create_ffi_wrapper(
         "D_D" => {
             linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F64(f(params[0].unwrap_f64()).to_bits());
+                results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64())).to_bits());
                 Ok(())
             })?;
         }
@@ -718,7 +718,7 @@ fn create_ffi_wrapper(
         "DD_D" => {
             linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(f64, f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F64(f(params[0].unwrap_f64(), params[1].unwrap_f64()).to_bits());
+                results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64()), warp_runtime::floats::canonical_nan(params[1].unwrap_f64())).to_bits());
                 Ok(())
             })?;
         }
@@ -819,7 +819,7 @@ fn native_arguments(caller: &mut wasmtime::Caller<'_, FfiState>, name: &str, par
             ParamType::I32 => param.unwrap_i32() as u64,
             ParamType::I64 => param.unwrap_i64() as u64,
             ParamType::F32 => (param.unwrap_f32() as f64).to_bits(),
-            ParamType::F64 => param.unwrap_f64().to_bits(),
+            ParamType::F64 => warp_runtime::floats::canonical_nan(param.unwrap_f64()).to_bits(),
             ParamType::Ptr => get_memory_ptr(caller, param.unwrap_i32() as usize) as u64,
             ParamType::Handle => {
                 let id = param.unwrap_i32();
