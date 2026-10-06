@@ -35,6 +35,10 @@ const OLD_REASON: &str = "`old` is the value before the write (P148)";
 const OLD_PREFIX: &str = "change_old_";
 /// `once_fired_0`: whether the first once listener ran
 const FIRED_PREFIX: &str = "once_fired_";
+/// `whenever_held_0`, `whenever_was_0`: whether the first whenever's condition holds now and held before the write
+/// (P156: whenever runs each time its condition becomes true)
+const HELD_PREFIX: &str = "whenever_held_";
+const WAS_PREFIX: &str = "whenever_was_";
 /// `change_last_0`: the value the first change listener saw last
 const LAST_PREFIX: &str = "change_last_";
 /// `signal·check·0()`: the check of a listener, called after a write in a function (P111)
@@ -59,8 +63,10 @@ struct Listener {
 	/// None for `on set` and calls: every time
 	condition: Option<Node>,
 	body: Node,
-	/// the flag of a once listener, None for whenever
+	/// the flag of a once listener
 	fired: Option<String>,
+	/// a whenever listener's: whether its condition holds, and held before the write
+	held: Option<(String, String)>,
 	/// the statement that starts the listener where it is declared
 	start: Option<Node>,
 }
@@ -82,6 +88,9 @@ impl Listener {
 
 	fn check(&self) -> Node {
 		let Some(condition) = &self.condition else { return block(vec![self.body.clone()]) };
+		if let Some((held, was)) = &self.held {
+			return edge_check(held, was, condition.clone(), self.body.clone());
+		}
 		match &self.fired {
 			None => if_then(condition.clone(), block(vec![self.body.clone()])),
 			Some(fired) => {
@@ -91,6 +100,15 @@ impl Listener {
 			}
 		}
 	}
+}
+
+/// `whenever cond {body}` runs the body when cond becomes true (P156): `was = held; held = cond; if held and not was
+/// {body}`, the two flags remembered between the checks
+pub(crate) fn edge_check(held: &str, was: &str, condition: Node, body: Node) -> Node {
+	let not_before = Node::Key(Box::new(Node::Empty), Op::Not, Box::new(Node::Symbol(was.to_string())));
+	let became_true = Node::Key(Box::new(Node::Symbol(held.to_string())), Op::And, Box::new(not_before));
+	let parts = vec![assign(was, Node::Symbol(held.to_string())), assign(held, condition), if_then(became_true, block(vec![body]))];
+	Node::List(parts, Bracket::Round, Separator::Semicolon)
 }
 
 pub fn lower(node: Node) -> Node {
@@ -252,7 +270,7 @@ impl Signals {
 		self.remote.iter().enumerate().filter_map(|(number, listener)| {
 			let watched: HashSet<String> = listener.watched()?.intersection(&globals).cloned().collect();
 			let call = Node::List(vec![Node::Symbol(format!("{CHECK_PREFIX}{number}"))], Bracket::Round, Separator::None);
-			(!watched.is_empty()).then(|| Listener { trigger: Trigger::Write(watched), condition: None, body: call, fired: None, start: None })
+			(!watched.is_empty()).then(|| Listener { trigger: Trigger::Write(watched), condition: None, body: call, fired: None, held: None, start: None })
 		}).collect()
 	}
 
@@ -272,9 +290,14 @@ impl Signals {
 			return None;
 		}
 		let fired = (word == ListenerWord::Once).then(|| self.fresh_name(FIRED_PREFIX));
-		let start = fired.as_ref().map(|fired| assign(fired, Node::False));
+		let held = (word == ListenerWord::Whenever).then(|| (self.fresh_name(HELD_PREFIX), self.fresh_name(WAS_PREFIX)));
+		let start = match (&fired, &held) {
+			(Some(fired), _) => Some(assign(fired, Node::False)),
+			(_, Some((held, was))) => Some(Node::List(vec![assign(held, Node::False), assign(was, Node::False)], Bracket::Round, Separator::Semicolon)),
+			_ => None,
+		};
 		let body = self.lower(body, &[]);
-		Some(Listener { trigger: Trigger::Write(watched), condition: Some(subject), body, fired, start })
+		Some(Listener { trigger: Trigger::Write(watched), condition: Some(subject), body, fired, held, start })
 	}
 
 	fn fresh_name(&mut self, prefix: &str) -> String {
@@ -316,7 +339,7 @@ impl Signals {
 			None => (body, None),
 		};
 		let body = self.lower(with_value(&body, &variable), &[]);
-		Some(Listener { trigger: Trigger::Write(HashSet::from([name])), condition: None, body, fired: None, start })
+		Some(Listener { trigger: Trigger::Write(HashSet::from([name])), condition: None, body, fired: None, held: None, start })
 	}
 
 	/// `on change x {body}`: the body after every write that changed x (a variable or a `:=` value), `value` in it is x
@@ -335,6 +358,7 @@ impl Signals {
 			condition: Some(changed),
 			body: block([remembered, vec![assign(&last, variable.clone()), body]].concat()),
 			fired: None,
+			held: None,
 			start: Some(assign(&last, variable)),
 		})
 	}
@@ -350,7 +374,7 @@ impl Signals {
 		let (subject, body) = subject_and_body(rest)?;
 		let function = self.function_named(&word(&subject))?;
 		let body = self.lower(body, &[]);
-		Some(Listener { trigger: Trigger::Call { function, before }, condition: None, body, fired: None, start: None })
+		Some(Listener { trigger: Trigger::Call { function, before }, condition: None, body, fired: None, held: None, start: None })
 	}
 
 	/// `test`, `tested` (and `saved` for save, `stopped` for stop) name the defined function
@@ -625,8 +649,13 @@ pub(crate) fn root_variable(target: &Node) -> Option<String> {
 	}
 }
 
+/// A write statement: an assignment, or a method changing the list it is called on (`xs.add(v)` is `xs = xs + [v]`)
 fn statement_write(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
+		Node::Key(list, Op::Dot, call) => match call.drop_meta() {
+			Node::List(items, _, _) if items.first().is_some_and(|method| crate::analyzer::is_list_mutating_method(&word(method))) => written_path(list),
+			_ => None,
+		},
 		Node::Key(target, op, _) => written_variable(target, *op),
 		_ => None,
 	}
