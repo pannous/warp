@@ -130,7 +130,8 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    `signal_listening_N` (set where the listener is declared), called after each such write in a function body.
    Open (card signals-phase-rest): `whenever f() > 3` follows the variables f reads; effects.rs counts listener
    bodies at the writes.
-4. **Batching**: a multi-assignment `a, b = 1, 2` checks once (P112: no batching block).
+4. **Batching** (done, branch signals-events): a multi-assignment `a, b = 1, 2` checks once, after all its writes
+   (P112: no batching block); tuples::destructured_names names its targets.
 5. **Signals as values**: `$Signal` cells for escaping variables and object fields (`on change person.age`),
    subscription inside functions.
 6. **Signals across tasks**: events raised in tasks reach `on` handlers of the starting thread; listeners on `shared`
