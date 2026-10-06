@@ -7,7 +7,7 @@ relays an explicit user decision counts as the user's decision.
 
 Read first: AGENTS.md, notes/roles.md (roles, enforcement), notes/welcoming.md (clear intent → compile it; ambiguous →
 warning with "got it" or a loud error naming the explicit forms; preferred syntax differs → educate), and the decided
-rules in notes/open_decisions.md and wiki/Footguns.md.
+rules in notes/decisions.md, the standing rules in notes/open_decisions.md and wiki/Footguns.md.
 
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).

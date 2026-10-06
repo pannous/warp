@@ -11,6 +11,6 @@ replace its local-only parts for you:
 - Never change the expected value of an existing test; if one seems wrong, say so in the PR and leave it.
 - Keep the PR to the issue's scope. Conventional commit messages (`fix:`, `feature(minor):`, `test:`).
 - Language rules: notes/welcoming.md (clear intent compiles; ambiguity is a warning or a loud error naming the
-  explicit forms), decided questions in notes/open_decisions.md.
+  explicit forms), decided questions in notes/decisions.md.
 - The maintainer's Integrator runs the full native and browser suites on your branch and merges it to main itself;
   do not merge.
