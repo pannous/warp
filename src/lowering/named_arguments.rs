@@ -45,14 +45,7 @@ pub fn lower(node: Node) -> Node {
 fn default_forms(node: Node) -> Node {
 	match node {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) => {
-			let head = match head.drop_meta() {
-				Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-					let (name, parameters) = items.split_first().expect("a name");
-					let parameters = maybe_parameters(parameters.to_vec()).into_iter().map(literal_default);
-					Node::List(std::iter::once(name.clone()).chain(parameters).collect(), Bracket::Round, separator.clone())
-				}
-				_ => *head,
-			};
+			let head = with_parameters(*head, &|parameters| maybe_parameters(parameters).into_iter().map(literal_default).collect());
 			Node::Key(Box::new(head), op, Box::new(default_forms(*body)))
 		}
 		other => other.map_children(default_forms),
@@ -115,7 +108,7 @@ fn literal_default(parameter: Node) -> Node {
 /// `f(a, b) := body` and the block value `fun = {body}`, by name: their parameters
 fn definitions(node: &Node) -> HashMap<String, Function> {
 	let mut functions = HashMap::new();
-	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, _) = part { match head.drop_meta() {
+	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, _) = part { match untyped_head(head).drop_meta() {
  			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
  				let parameters = items[1..].iter().map(parameter_name).collect();
  				let defaults = items[1..].iter().map(parameter_default).collect();
@@ -136,6 +129,33 @@ fn parameter_name(parameter: &Node) -> String {
 	match parameter.drop_meta() {
 		Node::Key(name, _, _) => name.name(),
 		other => other.name(),
+	}
+}
+
+/// `f(x)`: a name with its parameters
+fn is_function_head(head: &Node) -> bool {
+	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
+}
+
+/// `f(x): T`, `f(x) as T`: the head `f(x)` without its result type
+fn untyped_head(head: &Node) -> &Node {
+	match head.drop_meta() {
+		Node::Key(inner, Op::Colon | Op::As, _) if is_function_head(inner) => inner,
+		_ => head,
+	}
+}
+
+/// The head with its parameters rewritten, its result type kept
+fn with_parameters(head: Node, rewrite: &impl Fn(Vec<Node>) -> Vec<Node>) -> Node {
+	match head.drop_meta() {
+		Node::Key(inner, op @ (Op::Colon | Op::As), result) if is_function_head(inner) => {
+			Node::Key(Box::new(with_parameters(inner.as_ref().clone(), rewrite)), *op, result.clone())
+		}
+		Node::List(items, Bracket::Round, separator) if is_function_head(&head) => {
+			let (name, parameters) = items.split_first().expect("a name");
+			Node::List(std::iter::once(name.clone()).chain(rewrite(parameters.to_vec())).collect(), Bracket::Round, separator.clone())
+		}
+		_ => head,
 	}
 }
 
@@ -194,7 +214,7 @@ fn has_named_call(node: &Node, functions: &HashMap<String, Function>) -> bool {
 fn bodies(node: &Node) -> HashMap<String, Node> {
 	let mut bodies = HashMap::new();
 	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, body) = part {
-		match head.drop_meta() {
+		match untyped_head(head).drop_meta() {
 			Node::List(items, Bracket::Round, _) if !items.is_empty() => { bodies.insert(items[0].name(), body.as_ref().clone()); }
 			Node::Symbol(name) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => { bodies.insert(name.clone(), body.as_ref().clone()); }
 			_ => {}
@@ -270,6 +290,13 @@ impl Rewrite {
 
 	/// The extras join the parameters; `fun = {body}` named in a call becomes `fun(extras) := body`
 	fn definition(&self, head: Node, op: Op, body: Node) -> Node {
+		// `f(x): T := body`: the head keeps its result type
+		if let Node::Key(inner, result_op @ (Op::Colon | Op::As), result) = head.drop_meta() {
+			if is_function_head(inner) {
+				let Node::Key(inner, _, body) = self.definition(inner.as_ref().clone(), op, body) else { unreachable!("a definition") };
+				return Node::Key(Box::new(Node::Key(inner, *result_op, result.clone())), op, body);
+			}
+		}
 		let body = self.node(body);
 		match head.drop_meta() {
 			Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
