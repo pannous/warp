@@ -200,7 +200,7 @@ impl Op {
 			// Structural/Key operators (existing, adjusted for consistency)
 			Op::Colon => (80, 81),    // type annotation: a:b:c → a:(b:c)
 			Op::Arrow => (70, 69),    // right-assoc: a->b->c → a->(b->c)
-			Op::FatArrow => (70, 69), // right-assoc: a => b
+			Op::FatArrow => (70, 58), // right-assoc: a => b; the body takes an assignment as in JS: x => total += x
 			Op::Define => (60, 59),   // right-assoc: a:=b:=c → a:=(b:=c)
 			Op::Assign => (60, 59),   // right-assoc: a=b=c → a=(b=c)
 
