@@ -607,6 +607,9 @@ pub struct WaspParser {
 	generic_names: Option<(String, Vec<String>)>,
 	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
 	in_command: bool,
+	/// Parsing the block of a data literal (`a{ … }`, not a declared type's constructor): a spaced child `c { d:3 }` there
+	/// is the child node of the glued `c{ d:3 }`, as no call with a block can be meant (card spaced-child)
+	in_data_literal: bool,
 	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
 	pipe_takes_call: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
@@ -881,6 +884,7 @@ impl WaspParser {
 			brace_holes: false,
 			generic_names: None,
 			in_command: false,
+			in_data_literal: false,
 			pipe_takes_call: false,
 			times_loops: 0,
 			pending_comment: None,

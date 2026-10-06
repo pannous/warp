@@ -189,6 +189,11 @@ on the node itself reads the tagged object's fields (list_ops tagged_field, betw
 `@name`), so `a:{b:1}.b` is 1 and `a:{b:1}.a` still `b:1`. Card class-ticket (a static in value{}) worked already
 after classes-10; its test is in test_tagged_objects.rs.
 
+Spaced children (card spaced-child): inside a data literal (the block of `a{…}` or `Person {…}`, not a declared type's
+constructor) a spaced `c { d:3 }` is the child node of the glued `c{ d:3 }`, whatever its block holds: data has no
+call with a block (parser flag in_data_literal, atoms.rs). In code `run { … }` stays a call with a block.
+`x = a{ b:2 c { d:3 } }; x.c.d` is 3 (tests/parser/test_spaced_children.rs).
+
 ## Ported forms (classes-19, tests/types/test_class_forms_ported.rs)
 The same class as other languages write it (parser atoms.rs, class_methods.rs class_items):
 - Kotlin: primary constructor `class Point(val x: Int, var y: Int = 0) {…}` (its parameters are the fields, the
