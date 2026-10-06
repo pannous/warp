@@ -20,3 +20,9 @@ fn python_lambda_is_a_lambda() {
 fn an_arrow_lambda_works_too() {
 	is!("f = (a, b) -> a + b; f(3, 4)", 7);
 }
+
+#[test]
+fn an_immediately_invoked_function_without_arguments() {
+	is!("(() => 7)()", 7); // JS IIFE
+	is!("(function(){ return 5 })()", 5);
+}

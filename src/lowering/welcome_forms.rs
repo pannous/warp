@@ -3,8 +3,9 @@
 //! - `loop { … }`: `while true { … }`, left by `break`
 //! - anonymous functions `function(a, b) { … }`, `fn(x) { … }` (JS, Rust-ish) and `lambda x: …` (Python): lambdas
 //!   (`xs |> f(b)` is read by the parser, `f(1, _)` lowered in declarations.rs)
+//! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
@@ -12,6 +13,8 @@ const WILDCARD: &str = "_";
 const DEFAULT_CASE: &str = "default";
 const LOOP_WORD: &str = "loop";
 const LAMBDA_WORD: &str = "lambda";
+const LET_WORD: &str = "let";
+const IN_WORD: &str = "in";
 
 pub fn lower(node: Node) -> Node {
 	match node {
@@ -20,6 +23,10 @@ pub fn lower(node: Node) -> Node {
 			if let Some(lambda) = anonymous_function(&items) {
 				return lambda;
 			}
+			if let Some(binding) = let_binding(&items) {
+				return binding;
+			}
+			let items = go_destructuring(items, &separator);
 			endless_loop(&items).unwrap_or_else(|| Node::List(arrow_cases(items), bracket, separator))
 		}
 		Node::Key(left, Op::Colon, body) if lambda_parameters(&left).is_some() => lambda(lambda_parameters(&left).expect("guarded"), lower(*body)),
@@ -27,6 +34,59 @@ pub fn lower(node: Node) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
 		other => other,
 	}
+}
+
+/// OCaml / F# `let f x = body in rest`, `let f x = body`, `let x = v in rest`: the definition `f(x) := body` (or the
+/// assignment) and then rest
+fn let_binding(items: &[Node]) -> Option<Node> {
+	let [keyword, names @ .., last] = items else { return None };
+	let Node::Key(last_name, Op::Assign, value) = last.drop_meta() else { return None };
+	if !is_word(keyword, LET_WORD) {
+		return None;
+	}
+	let names: Vec<&Node> = names.iter().chain([last_name.as_ref()]).collect();
+	if !names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) {
+		return None;
+	}
+	let (body, rest) = split_at_in(value);
+	if names.len() == 1 && rest.is_none() {
+		return None; // `let x = 5`: a declaration as it is
+	}
+	let (name, parameters) = names.split_first().expect("a name");
+	let binding = match parameters.is_empty() {
+		true => Node::Key(Box::new((*name).clone()), Op::Assign, Box::new(lower(body))),
+		false => {
+			let head = Node::List(names.iter().map(|name| (*name).clone()).collect(), Bracket::Round, Separator::None);
+			Node::Key(Box::new(head), Op::Define, Box::new(lower(body)))
+		}
+	};
+	Some(match rest {
+		Some(rest) => Node::List(vec![binding, lower(rest)], Bracket::Round, Separator::Semicolon),
+		None => binding,
+	})
+}
+
+/// Go's `q, r := f(x)`: names taking the values apart, `q, r = f(x)` (`r := …` alone would define a getter)
+fn go_destructuring(mut items: Vec<Node>, separator: &Separator) -> Vec<Node> {
+	let Some(position) = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Define, _))) else { return items };
+	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
+	let Node::Key(name, Op::Define, value) = items[position].drop_meta() else { return items };
+	if *separator != Separator::Colon || position == 0 || !is_name(name) || !items[..position].iter().all(is_name) {
+		return items;
+	}
+	items[position] = Node::Key(name.clone(), Op::Assign, value.clone());
+	items
+}
+
+/// `x * 2 in double 4` → (`x * 2`, `double 4`); no `in`: the value alone
+fn split_at_in(value: &Node) -> (Node, Option<Node>) {
+	let Node::List(words, Bracket::None, separator @ (Separator::Space | Separator::None)) = value.drop_meta() else { return (value.clone(), None) };
+	let Some(position) = words.iter().position(|word| is_word(word, IN_WORD)) else { return (value.clone(), None) };
+	let phrase = |part: &[Node]| match part {
+		[single] => single.clone(),
+		several => Node::List(several.to_vec(), Bracket::None, separator.clone()),
+	};
+	(phrase(&words[..position]), Some(phrase(&words[position + 1..])))
 }
 
 fn is_word(node: &Node, word: &str) -> bool {
