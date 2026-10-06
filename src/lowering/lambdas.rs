@@ -197,7 +197,7 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 	}
 }
 
-/// `x=>body`, `(x y)->body` and the same in a group `(x=>body)`
+/// `x=>body`, `(x y)->body` and the same in a group `(x=>body)` or a block
 pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 	match node.drop_meta() {
 		Node::Key(left, Op::Arrow | Op::FatArrow, body) => {
@@ -207,7 +207,7 @@ pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 			let typed = if written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon, _))) { written } else { vec![] };
 			Some(Lambda { params, body, typed })
 		}
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => arrow_lambda(&items[0]),
+		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 => arrow_lambda(&items[0]), // Kotlin `{ x -> x*2 }`, Ruby `{ |x| x*2 }`
 		_ => None,
 	}
 }
