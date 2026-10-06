@@ -144,6 +144,13 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   per value (battery, network, dark mode, clipboard), built later.
 - P137 tests/numbers/test_angle.rs test_function_params expects the Int 9 for `f(x)=x*x;f(3)` (the text "9" was a
   C++-port artifact) and is un-ignored.
+- P138 (card functions-go, warp-a8) Go's `total := 0; total += n` stays a loud error ("total is charged (total := 0):
+  it runs at every use and cannot be assigned; write total = … at the definition"); P71 stays strict.
+- WebAssembly modules (warp-25, branch wasm-modules, notes/wasm_modules.md), all as recommended: P139 `import m` /
+  `use` / `require` only declare (ø); `include m` runs m's main/start export and is its value (test_import_wasm → 42).
+  P140 assigning an imported global: a mutable wasm global is set in the module, an immutable one is a loud error
+  (P130's rule). P141 an export named like a builtin (`double`): the builtin wins with a got-it warning naming
+  `m.double(21)`; qualified calls `m.f(x)` get built; never a silent shadow.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
