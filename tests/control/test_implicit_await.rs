@@ -4,7 +4,7 @@ use crate::common::fails_with;
 use crate::is;
 use warp::diagnostic::{with_warning_mode, WarningMode};
 
-const SLOW: &str = "f(x) := { sleep(10); x * 2 }; ";
+const SLOW: &str = "f(x) := { sleep(10 ms); x * 2 }; ";
 
 #[test]
 fn a_task_read_as_its_value_warns_that_it_waits() {
