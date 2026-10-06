@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 295] = [
+const CASES: [(&str, &str); 304] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -300,6 +300,15 @@ twice 4"#, r#"8"#),
 	(r#"fn pair<A, B>(a: A, b: B) -> A { a }; pair(1, 2)"#, r#"1"#),
 	(r#"def add(a, b: int) -> int { a + b }; add(1, 2)"#, r#"3"#),
 	(r#"def apply(f, x: int) -> int { f(x) }; apply(x => x + 1, 2)"#, r#"3"#),
+	(r#"func id<T>(_ x: T) -> T { return x }; id(5)"#, r#"5"#),
+	(r#"func add<T>(_ a: T, _ b: T) -> T { return a + b }; add(2, 3)"#, r#"5"#),
+	(r#"sapply(c(1, 2, 3), function(x) x * 2)"#, r#"[2 4 6]"#),
+	(r#"lapply(c(1, 2), function(x) x + 1)"#, r#"[2 3]"#),
+	(r#"xs=[1,2,3]; map(xs, function(x) x*2)"#, r#"[2 4 6]"#),
+	(r#"c = 3; c * 2"#, r#"6"#),
+	(r#"sq = @(x) x.^2; sq([1,2,3])"#, r#"[1 4 9]"#),
+	(r#"add = @(a, b) a + b; add(3, 4)"#, r#"7"#),
+	(r#"[1,2,3] .^ 2"#, r#"[1 4 9]"#),
 ];
 
 /// The value as `warp eval` shows it: a text without its quotes
@@ -323,4 +332,12 @@ fn linq_methods_work_with_a_note_naming_wasps_word() {
 	let (value, hints) = warp::normalize::capture_hints(|| shown("xs = [1, 2, 3]; xs.Select(x => x * 2).Where(x => x > 2)"));
 	assert_eq!(value, "[4 6]");
 	assert!(hints.iter().any(|hint| hint.canonical == ".map(" && hint.original == ".Select("), "{hints:?}");
+}
+
+#[test]
+fn r_words_work_with_a_note_naming_wasps_form() {
+	let (value, hints) = warp::normalize::capture_hints(|| shown("sapply(c(1, 2, 3), function(x) x * 2)"));
+	assert_eq!(value, "[2 4 6]");
+	assert!(hints.iter().any(|hint| hint.canonical == "map(" && hint.original == "sapply("), "{hints:?}");
+	assert!(hints.iter().any(|hint| hint.canonical == "[" && hint.original == "c("), "{hints:?}");
 }

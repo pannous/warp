@@ -61,6 +61,7 @@ impl WaspParser {
 			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
 			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
+			'@' if self.peek_char(1) == '(' && !self.options.data_mode => self.parse_matlab_lambda(),
 			'$' if self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_' => self.parse_dollar_name(),
 			'$' if self.peek_char(1).is_numeric() => {
 				self.advance(); // skip '$'
@@ -382,6 +383,15 @@ impl WaspParser {
 		let body = self.parse_expr(Op::Assign.binding_power().1);
 		let body = self.continue_expr(body, 0);
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
+	}
+
+	/// MATLAB's anonymous function `@(x) x.^2`: the lambda `x => x^2`
+	fn parse_matlab_lambda(&mut self) -> Node {
+		self.advance(); // '@'
+		let parameters = self.parse_bracketed('(');
+		self.skip_spaces();
+		let body = self.parse_expr(Op::Assign.binding_power().1);
+		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 	}
 
 	/// `<T, F: Fn(i32) -> i32>` glued to a function's name and followed by its parameters: its length

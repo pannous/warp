@@ -59,7 +59,7 @@ const NONLOCAL_WORD: &str = "nonlocal";
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
-const ELEMENT_WISE_OPERATORS: [(char, Op); 4] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div)];
+const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div), ('^', Op::Pow)];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
