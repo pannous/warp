@@ -25,6 +25,8 @@ const GLOBAL: &str = "global";
 pub(crate) const NONLOCAL: &str = "nonlocal";
 const NEEDLESS_CHARGING_TOPIC: &str = "needless-charging";
 const EFFECTFUL_GETTER_TOPIC: &str = "effectful-getter";
+/// names the compiler makes join their parts with it (`closure_lambda_1·captured·0`); the parser reads it as `*`
+const GENERATED_NAME_MARK: char = '·';
 
 pub fn lower(program: Node) -> Result<Node, Node> {
 	let statements = statements_of(&program);
@@ -371,6 +373,11 @@ fn note_charging(definition: &Definition, statements: &[Node], main: &Scope, rep
 	let is_def = matches!(statement.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)));
 	let nested = function.name.contains(NESTED_DEF_SEPARATOR); // `outer·inner` may read outer's variables, `o·s` is an entry
 	if nested || !(is_def || definition.getter) || !function.params.is_empty() {
+		return Ok(());
+	}
+	// a body the compiler already rewrote (a returned lambda is `closure_new(closure_lambda_1)`) is no text the user
+	// wrote: a hint never shows it
+	if reads_any(&function.body, &|word| word == crate::closures::CLOSURE_NEW || word.contains(GENERATED_NAME_MARK)) {
 		return Ok(());
 	}
 	let value = written_text(&function.body);
