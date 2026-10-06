@@ -63,6 +63,18 @@ fn test_law_lean_export() {
 	assert!(source.contains("theorem square_law (x : Int) : (square (-x)) = (square x)"), "{source}");
 }
 
+// An unused simp argument is a Lean warning: unfold only the functions the law reaches
+#[test]
+fn test_law_lean_export_unfolds_only_the_functions_the_law_reaches() {
+	let lawful = separate_laws(parse(&format!("{SQUARE}\nadd(a,b) := a+b\nlaw add(a,b) == add(b,a)")));
+	let sources: Vec<String> = lawful.laws.iter().map(|law| lean::export(&lawful.functions, law, &["grind"]).unwrap()).collect();
+	assert!(sources[0].contains("simp only [square]\n"), "{}", sources[0]);
+	assert!(sources[1].contains("simp only [add]\n"), "{}", sources[1]);
+	let lawful = separate_laws(parse("double(x) := x+x\nquad(x) := double(double(x))\nlaw quad(x) == 4*x"));
+	let source = lean::export(&lawful.functions, &lawful.laws[0], &["grind"]).unwrap();
+	assert!(source.contains("simp only [double, quad]\n"), "{source}");
+}
+
 #[test]
 fn test_law_lean_export_modulo_is_euclidean() {
 	let lawful = separate_laws(parse("m(x) := x % 3\nlaw m(x) >= 0"));
