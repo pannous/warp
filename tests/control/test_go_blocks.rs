@@ -2,6 +2,7 @@
 // (user, 2026-10-06: "def hi: {sleep(1000 ms);print('hi')} go { hi() } print('faster')")
 use crate::is;
 
+#[cfg(feature = "native")]
 const USER_PROGRAM: &str = "def hi: {sleep(1000 ms);print('hi')}\n\ngo {\n  hi()\n  }\nprint('faster')";
 
 #[test]
