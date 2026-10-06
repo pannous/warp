@@ -33,3 +33,4 @@ mod test_lowered_error_text;
 mod test_quiet_hints;
 mod test_sleep_unit_warning;
 mod test_index_hint_simple;
+mod test_constant_shadowing;

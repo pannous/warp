@@ -347,7 +347,9 @@ impl WaspParser {
 		}
 
 		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count())) {
-			return constant; // if true {} fall through :?
+			if !self.names_variable(&symbol, &constant) {
+				return constant; // if true {} fall through :?
+			}
 		}
 
 		if let Some(declaration) = self.try_parse_operator_declaration(&symbol) {
@@ -425,6 +427,35 @@ impl WaspParser {
 		self.parse_glued_suffix(symbol)
 	}
 
+	/// A named number like `pi` the program assigns (`pi = 4`, a field `class c{pi = 3}`) is a variable from there on; the
+	/// assignment notes that it shadows the constant
+	fn names_variable(&mut self, symbol: &str, constant: &Node) -> bool {
+		if !matches!(constant, Node::Number(_)) {
+			return false;
+		}
+		if self.shadowed_constants.contains(symbol) {
+			return true;
+		}
+		if !self.assignment_follows() {
+			return false;
+		}
+		if !self.in_type_body {
+			self.shadowed_constants.insert(symbol.to_string());
+			crate::normalize::set_hint_position(self.line_nr, self.column.saturating_sub(symbol.chars().count()));
+			let reason = format!("{symbol} = … shadows the constant {symbol}: from here on {symbol} is this variable");
+			crate::diagnostic::educate_once(CONSTANT_SHADOWING_TOPIC, &format!("{symbol} = …"), "another name", &reason);
+		}
+		true
+	}
+
+	/// `= …` or `:= …` after blanks, not the comparison `==`
+	fn assignment_follows(&self) -> bool {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let defines = self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) == '=';
+		let assigns = self.peek_char(blanks) == '=' && self.peek_char(blanks + 1) != '=';
+		defines || assigns
+	}
+
 	/// `http://…`, `file://…`: the scheme of a URL, the rest of which reads as one text
 	pub(super) fn url_follows(&self, symbol: &str) -> bool {
 		URL_SCHEMES.contains(&symbol) && self.current_char() == ':' && self.peek_char(1) == '/' && self.peek_char(2) == '/'
@@ -452,6 +483,13 @@ impl WaspParser {
 
 	/// The name and the `{fields}` of a type declaration, after its keyword
 	pub(super) fn parse_type_declaration(&mut self) -> Node {
+		let outer = std::mem::replace(&mut self.in_type_body, true);
+		let declaration = self.parse_type_declaration_body();
+		self.in_type_body = outer;
+		declaration
+	}
+
+	fn parse_type_declaration_body(&mut self) -> Node {
 		self.skip_whitespace();
 		let type_name = match self.parse_symbol() {
 			Ok(name) => name,
