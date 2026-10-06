@@ -1419,6 +1419,8 @@ pub(super) const STRUCT_BODY: &str = "struct_body";
 /// instance_field(fields, name_ptr, name_len): the value of the field whose name is that very string of the string
 /// table, null when none is (then the general lookup decides)
 pub(super) const INSTANCE_FIELD: &str = "instance_field";
+/// tagged_field(node, name): the field of the tagged object `tag:{…}` the node is, null for any other node
+pub(super) const TAGGED_FIELD: &str = "tagged_field";
 const KEY_KIND: i64 = Kind::Key as i64;
 pub const MAP_KEY_NAME: &str = "map_key_name";
 /// node_at_key(xs, key) and node_with_key(xs, key, value): `xs[key]` read and set with a key known only at runtime
@@ -1496,11 +1498,13 @@ impl WasmGcEmitter {
 						self.emit_call(func, INSTANCE_FIELD);
 						func.instruction(&I::BrOnNonNull(0));
 					}
-					for key in std::iter::once(name.clone()).chain(fallback) {
+					// the entry, a field of a tagged object `Person{name:…}` (data, D4), else the meta entry `@name`
+					let attempts = [(name.clone(), "map_find"), (name.clone(), TAGGED_FIELD)].into_iter().chain(fallback.map(|meta| (meta, "map_find")));
+					for (key, finder) in attempts {
 						let (pointer, length) = self.allocate_string(&key);
 						Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, I32Const(pointer as i32), I32Const(length as i32)]);
 						self.emit_call(func, "new_symbol");
-						self.emit_call(func, "map_find");
+						self.emit_call(func, finder);
 						func.instruction(&I::BrOnNonNull(0));
 					}
 					func.instruction(&I::Call(self.func_index(&format!("{NO_FIELD_PREFIX}{name}"))));
@@ -1616,6 +1620,24 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
 			f.instruction(&I::RefNull(HeapType::Concrete(node)));
 		});
+		if self.should_emit_function(TAGGED_FIELD) {
+			let list_kind = Kind::List as i64;
+			self.runtime_function(TAGGED_FIELD, vec![node_ref, node_ref], vec![nullable_node_ref], vec![nullable_node_ref], |s, f| {
+				let value = 2;
+				let kind_of = |f: &mut Function, local: u32| Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 0 }, I::I64Const(KIND_MASK), I::I64And]);
+				kind_of(f, 0);
+				Self::emit_list(f, &[I::I64Const(KEY_KIND), I::I64Ne, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+				Self::emit_list(f, &[I::LocalGet(0), I::StructGet { struct_type_index: node, field_index: 2 }, I::LocalTee(value), I::RefIsNull]);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+				// the fields: a list of entries, or the one entry `{b:1}` is
+				kind_of(f, value);
+				Self::emit_list(f, &[I::I64Const(list_kind), I::I64Ne]);
+				kind_of(f, value);
+				Self::emit_list(f, &[I::I64Const(KEY_KIND), I::I64Ne, I::I32And, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+				Self::emit_list(f, &[I::LocalGet(value), I::RefAsNonNull, I::LocalGet(1)]);
+				s.call(f, "map_find");
+			});
+		}
 		if self.should_emit_function(STRUCT_BODY) {
 			let type_names: Vec<String> = self.ctx.type_registry.types().iter().map(|type_def| type_def.name.clone()).collect();
 			let type_symbols: Vec<(u32, u32)> = type_names.iter().map(|name| self.allocate_string(name)).collect();

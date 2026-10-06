@@ -497,7 +497,8 @@ impl WaspParser {
 		if blanks == 0 || self.peek_char(blanks) != '{' {
 			return false;
 		}
-		let first = blanks + 1 + blanks_from(blanks + 1);
+		// the block's first entry may start on the next line (`Person {⏎ name: "Alice" …}`)
+		let first = blanks + 1 + (blanks + 1..).take_while(|at| self.peek_char(*at).is_whitespace()).count();
 		let name = (first..).take_while(|at| self.peek_char(*at).is_alphanumeric() || self.peek_char(*at) == '_').count();
 		let after_name = first + name + blanks_from(first + name);
 		self.peek_char(first) == '}' || (name > 0 && self.peek_char(after_name) == ':' && self.peek_char(after_name + 1) != '=')
