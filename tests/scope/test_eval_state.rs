@@ -8,8 +8,12 @@ use warp::Node;
 
 const KOTLIN_BOUND: &str = "n=3; s=0; for i in 0..n-1 { s+=i }; s";
 
+/// The `let` notes of the canonical style (the default leaves let and := open, user #12)
 fn let_notes(code: &str) -> usize {
-	capture_hints(|| eval(code)).1.iter().filter(|hint| hint.original.starts_with("let ")).count()
+	warp::normalize::set_style(warp::normalize::Style::canonical());
+	let notes = capture_hints(|| eval(code)).1.iter().filter(|hint| hint.original.starts_with("let ")).count();
+	warp::normalize::set_style(warp::normalize::Style::default());
+	notes
 }
 
 #[test]
