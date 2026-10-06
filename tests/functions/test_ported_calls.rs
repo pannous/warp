@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 168] = [
+const CASES: [(&str, &str); 186] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -173,6 +173,24 @@ twice 4"#, r#"8"#),
 	(r#"square = fn x -> x * x end; square [1 2 3]"#, r#"[1 4 9]"#),
 	(r#"map([1, 2], fn x -> x * 10 end)"#, r#"[10 20]"#),
 	(r#"f = x => x * 2; f.(4)"#, r#"8"#),
+	(r#"fun add(a: Int, b: Int): Int { return a + b }; add(2, 3)"#, r#"5"#),
+	(r#"fun Int.half() = this / 2; 8.half()"#, r#"4"#),
+	(r#"func add(_ a: Int, to b: Int) -> Int { a + b }; add(1, to: 2)"#, r#"3"#),
+	(r#"static int Add(int a, int b) => a + b; Add(2, 3)"#, r#"5"#),
+	(r#"Func<int, int> sq = x => x * x; sq(6)"#, r#"36"#),
+	(r#"const add = (a: number, b: number): number => a + b; add(1, 2)"#, r#"3"#),
+	(r#"function add(a, b = 10) { return a + b }; add(1)"#, r#"11"#),
+	(r#"def add(a, b) = a + b; add(1, 2)"#, r#"3"#),
+	(r#"add(x, y) = x + y; add(2, 3)"#, r#"5"#),
+	(r#"sq(x) = x^2; sq.([1, 2, 3])"#, r#"[1 4 9]"#),
+	(r#"int add(int a, int b) => a + b; add(1, 2)"#, r#"3"#),
+	(r#"proc add(a, b: int): int = a + b; add(1, 2)"#, r#"3"#),
+	(r#"fn add(a: i32, b: i32) -> i32 { a + b }; add(1, 2)"#, r#"3"#),
+	(r#"def add(a: Int, b: Int) = a + b; add(1, 2)"#, r#"3"#),
+	(r#"square x := x * x; square [1 2 3]"#, r#"[1 4 9]"#),
+	(r#"square x := x * x; xs = [1, 2]; square all xs"#, r#"[1 4]"#),
+	(r#"max(1, 5, 3)"#, r#"5"#),
+	(r#"f = (x) -> x + 1; f(1)"#, r#"2"#),
 ];
 
 /// The value as `warp eval` shows it: a text without its quotes
