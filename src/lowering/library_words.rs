@@ -910,6 +910,7 @@ impl Lowering {
 			arguments.resize(wanted, Node::Empty);
 		}
 		if let (COPY, [receiver]) = (word, arguments.as_slice()) {
+			crate::normalize::set_position_of(head);
 			crate::normalize::hint(&format!("{}.{}()", receiver.serialize(), head.serialize()), &receiver.serialize(), "values are never shared: b = a already copies");
 			return receiver.clone();
 		}

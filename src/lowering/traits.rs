@@ -322,6 +322,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 	let Node::Symbol(name) = name.drop_meta() else { return None };
 	if keyword_name != TRAIT_KEYWORDS[0] {
 		let written = format!("{keyword_name} {name}{{…}}");
+		crate::normalize::set_position_of(node);
 		crate::normalize::hint(&written, &format!("{} {name}{{…}}", TRAIT_KEYWORDS[0]), "wasp calls it a trait");
 	}
 	if is_builtin_trait(name) {

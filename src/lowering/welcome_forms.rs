@@ -73,6 +73,7 @@ fn forms(node: Node) -> Node {
 	match node {
 		Node::List(items, bracket, separator) if generic_names(&items).is_some() => {
 			let (function, names) = generic_names(&items).expect("guarded");
+			crate::normalize::set_position_of(&items[0]);
 			crate::normalize::hint(&format!("{function}<{}>", names.join(", ")), &function, "wasp infers types: write the function without type parameters");
 			forms(without_type_parameters(Node::List(items, bracket, separator), &names))
 		}
@@ -247,6 +248,7 @@ fn without_type_parameters(node: Node, names: &[String]) -> Node {
 				if generic_parameter(&item, names) && kept.last().is_some_and(|label| is_word(label, WILDCARD)) {
 					kept.pop();
 					let Node::Key(name, _, _) = item.drop_meta() else { unreachable!("a generic parameter") };
+					crate::normalize::set_position_of(&item);
 					crate::normalize::hint(&format!("{WILDCARD} {}", item.serialize()), &name.serialize(), "wasp names a parameter once, no label");
 				}
 				kept.push(item);
@@ -286,6 +288,7 @@ fn r_iteration(mut items: Vec<Node>) -> Vec<Node> {
 	if items.len() < 2 {
 		return items;
 	}
+	crate::normalize::set_position_of(&items[0]);
 	crate::normalize::hint(&format!("{word}("), &format!("{MAP_WORD}("), "wasp's word for R's apply function");
 	items[0] = Node::Symbol(MAP_WORD.to_string());
 	items
@@ -317,6 +320,7 @@ fn is_function_keyword(node: &Node) -> bool {
 fn r_vectors(node: Node) -> Node {
 	match node {
 		Node::List(items, Bracket::Round, separator) if items.len() > 1 && is_word(&items[0], R_VECTOR_WORD) => {
+			crate::normalize::set_position_of(&items[0]);
 			crate::normalize::hint(&format!("{R_VECTOR_WORD}("), "[", "wasp writes a list in brackets");
 			let elements = items.into_iter().skip(1).map(r_vectors).flat_map(|element| match element {
 				Node::List(group, Bracket::Round, Separator::Colon) => group, // `c(1, 2, 3)` holds its arguments as one group
@@ -336,6 +340,7 @@ fn module_qualified_iteration(mut items: Vec<Node>) -> Vec<Node> {
 	if !is_module || items.len() < 2 {
 		return items;
 	}
+	crate::normalize::set_position_of(&items[0]);
 	crate::normalize::hint(&format!("{}.{iteration}", module.serialize()), iteration, "wasp's word for the module function");
 	items[0] = Node::Symbol(iteration.to_string());
 	items
@@ -423,6 +428,7 @@ fn linq_calls(node: Node, defined: &HashSet<String>) -> Node {
 	match node {
 		Node::Key(receiver, Op::Dot, method) if linq_method(&method).is_some_and(|(written, _, _)| !defined.contains(written)) => {
 			let (written, word, arguments) = linq_method(&method).expect("guarded");
+			crate::normalize::set_position_of(&method);
 			crate::normalize::hint(&format!(".{written}("), &format!(".{word}("), "wasp's word for the LINQ method");
 			let arguments = arguments.into_iter().map(|argument| linq_calls(argument, defined));
 			let call = Node::List([vec![Node::Symbol(word.to_string())], arguments.collect()].concat(), Bracket::Round, Separator::None);
