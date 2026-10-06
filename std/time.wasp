@@ -18,3 +18,14 @@ weekday(ms) := (day_number(ms) + 3) % 7 + 1
 today() := date_of(clock())
 add_days(ms, n) := ms + n * 86400000
 days_between(from, to) := day_number(to) - day_number(from)
+two_digits(n) := if n < 10 then "0" + n else "" + n
+// ISO 8601: 2026-10-07
+format_date(ms) := {
+	d = date_of(ms)
+	"" + d.year + "-" + two_digits(d.month) + "-" + two_digits(d.day)
+}
+// the time of day, UTC: 13:05:09
+format_time(ms) := {
+	s = (ms % 86400000)//1000
+	two_digits(s//3600) + ":" + two_digits(s % 3600//60) + ":" + two_digits(s % 60)
+}
