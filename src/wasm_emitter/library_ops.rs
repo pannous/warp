@@ -357,7 +357,7 @@ impl WasmGcEmitter {
 
 	/// list_join(list, separator): the items (texts, ints, ASCII characters) as one text with the separator between them;
 	/// list_text(list, separator), the text of a list (`str(xs)`), also takes nested lists, each as "[…]" ("{…}" for a
-	/// map), entries as "key:value" and symbols as their names
+	/// map), entries as "key:value", symbols as their names and texts quoted (P126: `["a" "b"]`, `p{name:"a"}`)
 	fn emit_list_join(&mut self) {
 		for (name, nested) in [(LIST_JOIN, false), (LIST_TEXT, true)] {
 			if self.should_emit_function(name) {
@@ -376,6 +376,7 @@ impl WasmGcEmitter {
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
 		let map_texts = [self.allocate_string("{"), self.allocate_string("}"), self.allocate_string(":")];
 		let no_text = self.allocate_string("");
+		let quote = self.allocate_string("\"");
 		let empty_text = self.allocate_string(EMPTY_TEXT);
 		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
@@ -394,6 +395,18 @@ impl WasmGcEmitter {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
+				if nested { // a text or a character in a container is quoted (P126): `["a" "bc"]`
+					s.emit_field(f, element, 0);
+					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Eq]);
+					Self::emit_list(f, &[I::If(BlockType::Empty), I32Const(quote.0 as i32), I32Const(quote.1 as i32)]);
+					s.call(f, "new_text");
+					Self::emit_list(f, &[I::LocalGet(element), I::RefAsNonNull]);
+					s.call(f, super::text_builtins::TEXT_CONCAT);
+					Self::emit_list(f, &[I32Const(quote.0 as i32), I32Const(quote.1 as i32)]);
+					s.call(f, "new_text");
+					s.call(f, super::text_builtins::TEXT_CONCAT);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
 				// list_text: a nested list as its literal, "[" + list_text(item, " ") + "]", a map in braces
 				if nested {
 					let [open, close, space] = texts;
