@@ -515,6 +515,11 @@ PASSED:
   ✓ functions::test_def_forms::definition_forms_agree
   ✓ functions::test_def_forms::probe_def_block_syntax
   ✓ functions::test_def_without_parameters::a_def_without_parameters_is_a_function
+  ✓ functions::test_default_parameters::a_default_may_read_earlier_parameters
+  ✓ functions::test_default_parameters::a_missing_argument_takes_its_default
+  ✓ functions::test_default_parameters::a_typed_parameter_may_have_a_default
+  ✓ functions::test_default_parameters::calls_without_parentheses_take_defaults_too
+  ✓ functions::test_default_parameters::named_arguments_skip_defaults_and_mix_with_positional_ones
   ✓ functions::test_definition_value::a_definition_alone_is_empty
   ✓ functions::test_definition_value::a_spaced_definition_names_its_parameters
   ✓ functions::test_definition_value::it_names_the_one_parameter_of_a_definition
@@ -2446,4 +2451,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2441 passed, 0 failed, 2441 total tested
+23 ignored, 2446 passed, 0 failed, 2446 total tested
