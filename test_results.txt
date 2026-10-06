@@ -1944,6 +1944,7 @@ PASSED:
   ✓ wasm::test_read_bytes_plain_result::a_plain_i32_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::a_plain_i64_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
+  ✓ wasm::test_runtime_stub_found::build_finds_or_builds_the_runtime_stub_by_itself
   ✓ wasm::test_standalone_executable::test_build_exe_prints_lists_as_print_does
   ✓ wasm::test_standalone_executable::test_build_exe_refuses_imports_the_runtime_lacks
   ✓ wasm::test_standalone_executable::test_build_exe_runs_the_program_and_prints_its_value
@@ -2358,4 +2359,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2353 passed, 0 failed, 2353 total tested
+23 ignored, 2354 passed, 0 failed, 2354 total tested
