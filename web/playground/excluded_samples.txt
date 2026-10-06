@@ -1,0 +1,27 @@
+# samples/*.wasp left out of the playground menu (build.sh), each with why; tests/programs/test_playground_samples.rs
+# checks that every other sample runs without an error. Fix one, delete its line, and it is in the menu again
+# (card playground-excluded-samples, 2026-10-07).
+# needs a window: native only
+raylib_circle	module not found: raylib
+raylib_circle_forever	module not found: raylib
+raylib_debug	undefined function: InitWindow at 19:12
+raylib_demo	undefined function: InitWindow at 24:12
+raylib_mouse_circle	module not found: raylib
+raylib_simple	undefined function: InitWindow at 18:12
+raylib_simple_use	module not found: raylib
+raylib_sleep	module not found: raylib
+sdl_red_square	undefined function: SDL_Init at 17:10
+# errors to fix
+control_flow	undefined variable: a at 5:7 (`items` names nothing at 39:10)
+errors	`}` is missing: the group opened at 4:9 runs to the end of the input
+life_kotlin_ranges	index out of range (does the loop bound `..size-1` include the end? at 23:13)
+modules	`}` is missing: the group opened at 22:15 runs to the end of the input
+natural	`n times x` repeats a text (or a list: `n times [x]`), four is a Symbol at 6:21
+netbase	undefined: query in `query "all cities with population > 100000"`
+neural_net	output_weights is a main-level variable: declare it `global output_weights` to change it from a function at 42:9
+particles	Particle{…} takes fields as name:value, got  x:x, y:y (vx keeps the block (cos angle)*speed at 23:13)
+polymorphism	two parameters are named float: use one-word parameter names here
+sample	PI is a constant at 12:9; fix: another name
+types	undefined function: Ok at 29:24
+wasm_interop	Empty symbol
+webgpu	undefined: vec4 of f32 in `vec4 of f32 (in#uv+1, …)`

@@ -83,9 +83,12 @@ case "${1:-all}" in
 	*) echo "usage: $0 [optimized|debug|components]" >&2; exit 2 ;;
 esac
 
-python3 - "$page/samples.js" samples/*.wasp <<'PYTHON'
+python3 - "$page/samples.js" "$page/excluded_samples.txt" samples/*.wasp <<'PYTHON'
 import json, os, sys
-samples = {os.path.basename(path)[:-len(".wasp")]: open(path, encoding="utf-8").read() for path in sys.argv[2:]}
+# the samples the page cannot run yet stay out of the menu, each named with its error in excluded_samples.txt
+excluded = {line.split()[0] for line in open(sys.argv[2], encoding="utf-8") if line.strip() and not line.startswith("#")}
+names = {os.path.basename(path)[:-len(".wasp")]: path for path in sys.argv[3:]}
+samples = {name: open(path, encoding="utf-8").read() for name, path in names.items() if name not in excluded}
 with open(sys.argv[1], "w", encoding="utf-8") as script:
 	script.write("// made by build.sh from samples/*.wasp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
 PYTHON
