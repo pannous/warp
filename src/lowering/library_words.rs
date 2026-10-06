@@ -130,9 +130,9 @@ const INDEX_PLACEHOLDER: &str = "try_placeholder_index";
 const DIVIDEND_PLACEHOLDER: &str = "try_placeholder_dividend";
 const DIVISOR_PLACEHOLDER: &str = "try_placeholder_divisor";
 const ASSERT_CONDITION_PLACEHOLDER: &str = "assert_placeholder_condition";
-const SIMILAR_LEFT_PLACEHOLDER: &str = "similar_placeholder_left";
-const SIMILAR_RIGHT_PLACEHOLDER: &str = "similar_placeholder_right";
-const SIMILAR_TEMPORARY: &str = "similar_tmp";
+const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
+const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
+const OPERAND_TEMPORARY: &str = "operand_tmp";
 /// `a ≈ b` holds when |a-b| ≤ tolerance·max(|a|, |b|); a program that assigns `tolerance` sets it
 const TOLERANCE_VARIABLE: &str = "tolerance";
 const DEFAULT_RELATIVE_TOLERANCE: &str = "1e-9";
@@ -487,6 +487,7 @@ impl Lowering {
 				self.safe_lookup(receiver, word)
 			}
 			Node::Key(left, Op::Similar, right) => self.lower_similar(self.expand(*left), self.expand(*right)),
+			Node::Key(left, Op::Coalesce, right) => self.lower_coalesce(self.expand(*left), self.expand(*right)),
 			Node::Key(left, Op::Define, right) => {
 				let left = self.expand(*left);
 				let right = self.in_definition(&left, *right);
@@ -535,12 +536,21 @@ impl Lowering {
 		let tolerance = if self.shadowed.contains(TOLERANCE_VARIABLE) { TOLERANCE_VARIABLE } else { DEFAULT_RELATIVE_TOLERANCE };
 		let mut bindings = vec![];
 		let [left, right] = [left, right].map(|operand| self.bound_once(operand, &mut bindings));
-		let (l, r) = (SIMILAR_LEFT_PLACEHOLDER, SIMILAR_RIGHT_PLACEHOLDER);
+		let (l, r) = (LEFT_OPERAND_PLACEHOLDER, RIGHT_OPERAND_PLACEHOLDER);
 		let comparison = self.instantiate_template(
 			&format!("abs({l} - {r}) <= {tolerance} * abs({l}) or abs({l} - {r}) <= {tolerance} * abs({r})"),
 			&[(l, &left), (r, &right)],
 		);
 		crate::min_max::with_bindings(bindings, comparison)
+	}
+
+	/// `a ?? b`: a unless it is ø, then b (a is computed once)
+	fn lower_coalesce(&self, left: Node, right: Node) -> Node {
+		let mut bindings = vec![];
+		let left = self.bound_once(left, &mut bindings);
+		let (l, r) = (LEFT_OPERAND_PLACEHOLDER, RIGHT_OPERAND_PLACEHOLDER);
+		let choice = self.instantiate_template(&format!("if {l} == ø then {r} else {l}"), &[(l, &left), (r, &right)]);
+		crate::min_max::with_bindings(bindings, choice)
 	}
 
 	fn bound_once(&self, operand: Node, bindings: &mut Vec<Node>) -> Node {
@@ -549,7 +559,7 @@ impl Lowering {
 		}
 		let number = self.temporaries.get();
 		self.temporaries.set(number + 1);
-		let temporary = Node::Symbol(format!("{SIMILAR_TEMPORARY}_{number}"));
+		let temporary = Node::Symbol(format!("{OPERAND_TEMPORARY}_{number}"));
 		bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(operand)));
 		temporary
 	}
