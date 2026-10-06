@@ -44,6 +44,15 @@ fn a_once_handler_runs_at_the_first_raise() {
 	is!("level = 0; once alarm {level = event.level}; raise alarm{level: 3}; raise alarm{level: 5}; level", 3);
 }
 
+// Vue's watch(x, (value, old) => …), Qt's valueChanged with the previous value: `old` in `on change x` is x before
+#[test]
+fn a_change_listener_reads_the_old_value() {
+	is!("x = 1; diff = 0; on change x {diff = value - old}; x = 5; diff", 4);
+	is!("x = 1; log = 0; on change x {log = log*10 + previous}; x = 2; x = 3; log", 12);
+	is!("watch(s) := on change s {print old}\nx = 1\nwatch(x)\nx = 7\nx", 7);
+}
+
+
 // the example of notes/signals.md: a derived total, a whenever printing with juxtaposed words
 #[test]
 fn the_signals_note_example_runs() {

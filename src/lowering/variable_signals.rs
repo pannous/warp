@@ -27,6 +27,10 @@ const BEFORE_WORD: &str = "before";
 const PAST_SUFFIXES: [&str; 2] = ["ed", "d"];
 /// The written value inside an `on set` listener
 const VALUE_WORDS: [&str; 3] = ["value", "signal", "event"];
+/// `old` (or `previous`) in `on change x {…}`: x before the change (Vue's watch(x, (value, old) => …))
+const OLD_WORDS: [&str; 2] = ["old", "previous"];
+/// `change_old_0`: the value an `on change` listener saw last, for its body's `old`
+const OLD_PREFIX: &str = "change_old_";
 /// `once_fired_0`: whether the first once listener ran
 const FIRED_PREFIX: &str = "once_fired_";
 /// `change_last_0`: the value the first change listener saw last
@@ -308,12 +312,21 @@ impl Signals {
 		let variable = variable.drop_meta().clone();
 		root_variable(&variable)?;
 		let last = self.fresh_name(LAST_PREFIX);
+		let mut remembered = vec![];
+		let body = match reads_old(&body, &self.main_variables) {
+			true => {
+				let old = self.fresh_name(OLD_PREFIX);
+				remembered.push(assign(&old, Node::Symbol(last.clone())));
+				with_old(&body, &Node::Symbol(old))
+			}
+			false => body,
+		};
 		let body = self.lower(with_value(&body, &variable), &[]);
 		let changed = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Symbol(last.clone())));
 		Some(Listener {
 			trigger: Trigger::Write(self.sources(&variable)),
 			condition: Some(changed),
-			body: block(vec![assign(&last, variable.clone()), body]),
+			body: block([remembered, vec![assign(&last, variable.clone()), body]].concat()),
 			fired: None,
 			start: Some(assign(&last, variable)),
 		})
@@ -391,6 +404,17 @@ fn call_listener_word(statement: &Node) -> Option<(String, Vec<Node>)> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };
 	let keyword = word(items.first()?);
 	(keyword == AFTER_WORD || keyword == BEFORE_WORD).then(|| (keyword, items[1..].to_vec()))
+}
+
+/// Does the body read `old` or `previous`, which the program does not use as variables of its own
+pub(crate) fn reads_old(body: &Node, main_variables: &HashSet<String>) -> bool {
+	symbols(body).iter().any(|name| OLD_WORDS.contains(&name.as_str()) && !main_variables.contains(name))
+}
+
+/// The listener body with `old` (or `previous`) standing for the value before the change
+pub(crate) fn with_old(body: &Node, old: &Node) -> Node {
+	let bindings = OLD_WORDS.iter().map(|word| (word.to_string(), old.clone())).collect();
+	crate::law::substitute(body, &bindings)
 }
 
 /// The listener body with `value` (or `signal`, `event`) standing for the written value
