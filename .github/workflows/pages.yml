@@ -45,6 +45,10 @@ jobs:
       run: sudo apt-get install -y binaryen
     - name: Install jco (build.sh components)
       run: npm install -g @bytecodealliance/jco
+    - name: Install wasm-tools (build.sh components: the WIT signatures)
+      uses: taiki-e/install-action@v2
+      with:
+        tool: wasm-tools
     - name: Build the compiler, samples.js and the components
       run: web/playground/build.sh
     - name: Collect the site

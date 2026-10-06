@@ -33,3 +33,12 @@ fn test_component_failures_are_loud_in_every_host() {
 	fails_with(&using("c = r.counter(1); c.nope()"), "a counter has no method nope");
 	fails_with("use wasm \"no/such.wasm\" as lib; lib.f(1)", "cannot load the component");
 }
+
+/// P94 (user, 2026-10-06): a WIT `char` is wasp's Codepoint, in both directions
+#[test]
+fn test_a_wit_char_is_a_codepoint_in_every_host() {
+	use warp::node::{Bracket, Node, Separator};
+	is!(&using("r.next_char('a')"), Node::Char('b'));
+	is!(&using("r.letters(\"a1b\")"), Node::List(vec![Node::Char('a'), Node::Char('b')], Bracket::Square, Separator::Space));
+	is!(&using("r.next_char(r.next_char('a'))"), Node::Char('c'));
+}
