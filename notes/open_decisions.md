@@ -175,6 +175,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P147 (P146 step 4, warp-06, branch hijack-libc) the prebuilt wasi-libc module lives in this repo:
   web/playground/lib/libc.wasm + libc.h, built by a script and committed like warp.wasm; the browser host loads it
   for `use c` instead of host.js's hand-written shims; native keeps dlopen.
+- P148 (warp-93, branch change-old) in `on change x {…}`, `old` (alias `previous`) is x before the change (Vue's
+  watch); a program variable named old/previous keeps its own meaning. Assumed (undoable): `on set x` gets `old` too.
 - P142 (scope of P141, asked by warp-e4) the definition error applies only where the builtin would win, i.e. the
   definition could never take effect (casts like `double`, operators, type names). Library words (`add`, `map`,
   `count`) may be redefined and the user's version wins; class methods are always allowed (called as `x.add`). User:
