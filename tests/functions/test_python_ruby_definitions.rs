@@ -27,19 +27,20 @@ fn test_ruby_def_end() {
 // Ruby blocks (card functions-ruby-yield): `yield v` calls the block the caller passes after the arguments
 #[test]
 fn test_ruby_yield_calls_the_block() {
-	is!("global total = 0\ndef each_twice\n  yield 1\n  yield 2\nend\neach_twice { |x| total += x }\ntotal", 3);
-	is!("def twice(n)\n  yield n\n  yield n * 2\nend\nglobal sum = 0\ntwice(3) { |x| sum += x }\nsum", 9);
+	is!("total = 0\ndef each_twice\n  yield 1\n  yield 2\nend\neach_twice { |x| total += x }\ntotal", 3);
+	is!("def twice(n)\n  yield n\n  yield n * 2\nend\nsum = 0\ntwice(3) { |x| sum += x }\nsum", 9);
 	is!("def apply(n)\n  yield n\nend\napply(3) do |x| x * 2 end", 6);
 	is!("def pair\n  yield 3, 4\nend\npair { |a, b| a * b }", 12);
 	is!("def run\n  yield\nend\nrun { 5 }", 5);
 }
 
-// A block captures by value (wiki/charged.md §3): changing a captured variable needs `global`, never a silent copy
+// A block shares the variables it changes (P124): main's `total` is changed, not a copy
 #[test]
-fn test_closure_changing_a_captured_variable_is_an_error() {
-	crate::common::fails_with("total = 0\ndef each_twice\n  yield 1\nend\neach_twice { |x| total += x }\ntotal", "global total");
-	crate::common::fails_with("total = 0\ndef g(h)\n  h(1)\nend\ng(x => total += x)\ntotal", "global total");
+fn test_block_changes_the_callers_variable() {
+	is!("total = 0\ndef each_twice\n  yield 1\n  yield 2\nend\neach_twice { |x| total += x }\ntotal", 3);
+	is!("total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal", 3);
 	is!("global total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal", 3);
+	is!("n = 0\ninc = () => { n += 1; n }\ninc()\ninc()", 2);
 }
 
 #[test]
