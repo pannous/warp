@@ -177,6 +177,7 @@ fn run_command(args: &[String]) {
         if !file_exists(path) {
             eprintln!("Error: Could not read file '{}'", path);
         }
+        warp_runtime::system_signals::allow_staying(); // a program with a live timer stays after main
         let result = eval(path); // a file: its folder is in scope (D15)
         if !only_run && !matches!(result, Node::Error(_)) {
             leave_executable(path);

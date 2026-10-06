@@ -316,6 +316,9 @@ fn run_main<S: 'static>(
 	let mut results = vec![Val::AnyRef(None); result_types.len()];
 	let outcome = main.call(&mut store, &[], &mut results);
 	with_trap_detail(outcome, &mut store, &instance)?;
+	// `warp run` keeps a program with a live timer after main (notes/system_signals.md)
+	let staying = warp_runtime::system_signals::stay_while_listening(&mut store, &instance);
+	with_trap_detail(staying, &mut store, &instance)?;
 	Ok((results.first().copied().unwrap_or(Val::AnyRef(None)), store, instance))
 }
 

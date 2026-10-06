@@ -45,3 +45,21 @@ fn interrupted_run(name: &str, program: &str) -> (Vec<String>, std::process::Exi
 	let rest: Vec<String> = lines.map_while(Result::ok).collect();
 	(rest, run.wait().expect("warp ends"))
 }
+
+/// `on every 20 ms {…}` fires while main runs: at its loop starts and during its sleeps
+#[test]
+fn a_timer_fires_while_main_runs() {
+	crate::is!("n=0; on every 10 ms { n += 1 }; while n < 3 { sleep(5 ms) }; n", 3);
+}
+
+/// `warp run` keeps a program with a timer after main: the timer goes on firing until the run is stopped
+#[test]
+fn a_program_with_a_timer_stays_after_main() {
+	let file = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("on_every.wasp");
+	std::fs::write(&file, "n = 0\non every 20 ms { n += 1; print n }\nprint \"ready\"\n").expect("write the program");
+	let mut run = warp_command().args(["run", file.to_str().unwrap()]).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().expect("warp runs");
+	let lines: Vec<String> = BufReader::new(run.stdout.take().unwrap()).lines().map_while(Result::ok).take(4).collect();
+	run.kill().expect("stop the run");
+	run.wait().expect("warp ends");
+	assert_eq!(lines, ["ready", "1", "2", "3"]);
+}

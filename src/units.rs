@@ -277,7 +277,7 @@ fn warn_bare_duration(duration: &Node) -> Result<(), Node> {
 }
 
 /// A constant duration in whole milliseconds: `1000 ms`, `2 s`, `1 min`, `2 seconds` (a duration of the time module)
-fn milliseconds(node: &Node) -> Option<i64> {
+pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 	if let Node::Data(data) = node.drop_meta() {
 		return duration_milliseconds(data.downcast_ref::<crate::time::Duration>()?, "ms").ok().flatten();
 	}
