@@ -24,7 +24,7 @@ impl WaspParser {
 					Err(message) => error(&message),
 				}
 			}
-			'"' | '\'' | '«' => self.parse_string(),
+			'"' | '\'' | '«' | '`' => self.parse_string(),
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
 			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/variadic.rs)
 			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => self.parse_starred(3),
