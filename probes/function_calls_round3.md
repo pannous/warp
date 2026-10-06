@@ -1,5 +1,5 @@
 # round 3 of ported call forms: code ||| expected
-fun Int.double() = this * 2; 3.double() ||| 6
+fun Int.twice() = this * 2; 3.twice() ||| 6
 fun total(vararg xs: Int): Int = xs.sum(); total(1, 2, 3) ||| 6
 int Total(params int[] xs) { return xs.sum(); }; Total(1, 2, 3) ||| 6
 def f(a, *, b): return a + b; f(1, b=2) ||| 3

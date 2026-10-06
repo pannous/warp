@@ -104,9 +104,24 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   P145 (user): `x <- 3` assigns with a got-it note "write x = 3", the cramped `x<-3` (and `x<- 3`) is an error naming
   `x = 3` and `x < -3`, `x < -3` and `x <-3` compare (scanning.rs `left_arrow_assignment`). `<-` stays reserved: no
   docs or new tests beyond P145's.
+- Batch 20: Elixir `fn a, b -> body end` (parser atoms.rs `parse_elixir_function`, needs `->` on the line and a
+  closing `end`; Rust's `fn(x) -> i32 { … }` stays); a dot call on a number `f.(4)` is the call (Julia/Elixir
+  broadcast a scalar as itself). Round 5 (probes/function_calls_round5.md, all pass): typed Kotlin lambdas
+  `{ a: Int, b: Int -> a + b }` and Swift closures `{ (x: Int) -> Int in x * x }` (lambdas.rs `arrow_parts`); Ruby
+  stabby `->(x) { … }` (parser atom), `lambda { |x| … }` / `proc { … }` and `f.call(args)` (welcome_forms.rs); Lua
+  `local` a foreign modifier; Crystal `def sq(x : Int) : Int; …; end` (end_definitions gives the Kotlin head shape);
+  Kotlin `listOf`/`arrayOf`/`mutableListOf` are list literals (library_words.rs `list_constructor_calls`).
+- Batch 21: round 6 (probes/function_calls_round6.md). `xs.sort()` panicked (lambdas.rs iteration_method subtracted
+  1 from zero arguments); Python f-strings `f"hi {name}"` (parser literals.rs `parse_f_string`, `brace_holes`, `{{` a
+  brace, a note for `"hi \(name)"`); `return square n` returned the bare function because try_parse_return parsed
+  at binding power 0, which takes no braceless argument (now the assigned-value power); an unknown word under a cast
+  or result type (`def g() -> str: return cube "x"`, `cube 3 as int`) trapped or was data, now the P51 error (casts.rs).
+  Round 6 still open: variadics `vararg xs: Int`, `xs: Int...`, `params int[] xs`; C# `(int x) => …` and PHP
+  `fn($x) => …` lambdas; a default naming an earlier parameter `(a, b = a * 2)`; JS `reduce(f, 0)`; Scala currying
+  `add(x)(y)`; Swift returning `{ $0 + k }`; Kotlin `"hi $name"` (a bare `$` is text by D1).
 
 ## Open
-- Board cards: functions-elixir (mine, `fn x -> … end`); functions-ruby-yield (warp-93); functions-sort-op,
+- Board cards: functions-ruby-yield (warp-93); functions-sort-op,
   functions-key, functions-foreach, functions-lambda-defaults (warp-14). Cases: probes/function_calls_round4.md.
 
 ## Python and Ruby definitions (cards functions-python, functions-ruby-def)

@@ -43,5 +43,10 @@ twice(ft) + half(5.0)                   // 86.5
   serve named arguments where the module has no name section. host.js cannot see an import's types, so the program
   carries a custom section `warp.module_texts` (text_crossings: `module\tname\ttn\tt`, t a text) and callWithTexts
   copies the same way. Plan: notes/stdlib_connectors.md "Status 2026-10-06".
+- libc hijacked (fixture libc_text.wasm, 11.5 KB, no imports, `sh tests/fixtures/wasm/libc_text.sh` with Homebrew
+  llvm + lld + wasi-libc + wasi-runtimes): wasi-libc's strlen, strstr, strchr, strrchr, toupper, tolower, atoi, atol,
+  abs, malloc exported by name; libc_text.h has libc's own prototypes. The header only marks texts and names: the
+  module's number types win (`size_t` and `long` are 32 bits in wasm32, the C FFI maps them to i64). Same results
+  natively and in the browser (test libc_compiled_to_wasm_is_called_like_c).
 - Not yet: `help m.f` (warp has no help word yet). tests/wasm/test_wasm.rs test_import_wasm pins P139 (P144).
 - WebAssembly components (`use wasm "lib.wasm" as lib`, `lib.f(x)`) are the other road: notes/stdlib_connectors.md.

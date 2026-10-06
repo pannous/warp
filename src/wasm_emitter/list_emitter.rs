@@ -619,7 +619,7 @@ impl WasmGcEmitter {
 	/// P51/P62 (user): an unknown word next to a value in code (`cube 3`, `(cube 3)`, `[cube 3]`) is an error, never silent
 	/// data. Data contexts keep it: a `quote`/`data` prefix and the values of an object literal (`data_context`); all-word
 	/// lists (`hello world`) are not judged here
-	fn unknown_word_error(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<String> {
+	pub(super) fn unknown_word_error(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<String> {
 		let in_code = matches!((bracket, separator), (Bracket::None | Bracket::Round, Separator::Space) | (Bracket::Square, _));
 		// an argument: a value or a name the program defines (`cube x`); unknown words alone are symbols (`[red green]`)
 		let is_value = |item: &Node| match item.drop_meta() {
@@ -628,7 +628,8 @@ impl WasmGcEmitter {
 			_ => true,
 		};
 		// only lists of atoms: a list with an operator (`foo x = 3`) names its undefined variable on its own
-		let is_atom = |item: &Node| matches!(item.drop_meta(), Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(..));
+		// a cast value counts too: `cube 3 as int` parses as `cube (3 as int)`
+		let is_atom = |item: &Node| matches!(item.drop_meta(), Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(..) | Node::Key(_, Op::As, _));
 		if self.data_context || !in_code || !items.iter().any(is_value) || !items.iter().all(is_atom) {
 			return None;
 		}

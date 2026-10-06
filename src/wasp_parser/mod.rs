@@ -46,7 +46,7 @@ const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", 
 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 /// Modifiers of other languages with no meaning in wasp: skipped with a note (user decision P78)
-const FOREIGN_MODIFIERS: [&str; 18] = ["public", "private", "protected", "internal", "static", "extern", "external", "C", "inline",
+const FOREIGN_MODIFIERS: [&str; 19] = ["public", "private", "protected", "internal", "static", "extern", "external", "C", "inline", "local",
 	"virtual", "override", "abstract", "constexpr", "volatile", "thread_local", "synchronized", "transient", "native"];
 /// Modifiers with a wasp meaning that change nothing before a function definition (a function is global and constant)
 const DEFINITION_MODIFIERS: [&str; 7] = ["global", "export", "import", "const", "final", "mutable", "mut"];
@@ -100,6 +100,7 @@ const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate t
 const IN_KEYWORD: &str = "in";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
+const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
 const ELSE_KEYWORD: &str = "else";
 const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
 const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
@@ -250,6 +251,10 @@ fn dot_call(function: Node, arguments: Node) -> Node {
 		Node::List(items, Bracket::Round, _) if !items.is_empty() => items.clone(),
 		_ => vec![arguments],
 	};
+	// a number broadcasts as itself (Julia, Elixir's `f.(4)`): the call
+	if matches!(arguments[0].drop_meta(), Node::Number(_)) {
+		return Node::List([vec![function], arguments].concat(), Bracket::Round, Separator::None);
+	}
 	let list = arguments.remove(0);
 	let item = Symbol(BROADCAST_ITEM.to_string());
 	let call = Node::List([vec![function, item.clone()], arguments].concat(), Bracket::Round, Separator::None);
@@ -577,6 +582,8 @@ pub struct WaspParser {
 	signed_list_element: Option<usize>,
 	/// Inside `do … end`: the `end` keyword closes the statement list
 	stops_at_end: bool,
+	/// Inside Python's `f"…{x}…"`: braces are holes, `{{` and `}}` the braces themselves
+	brace_holes: bool,
 	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
 	in_command: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
@@ -843,6 +850,7 @@ impl WaspParser {
 			branch_bp: None,
 			signed_list_element: None,
 			stops_at_end: false,
+			brace_holes: false,
 			in_command: false,
 			times_loops: 0,
 			pending_comment: None,

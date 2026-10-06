@@ -158,3 +158,9 @@ Plan (assumption until the Interviewer answers; smallest step first):
 3. **A small hijacked library as the proof**: e.g. zlib or a string library built to wasm32-wasi into a fixture or a
    package, `use zlib` picking the .wasm where no native library exists (browser) — the same program runs in both.
 4. Later: `use libc` in the browser from wasi-libc compiled once (replacing host.js's hand shims).
+
+Done (P146, user decision as recommended, 2026-10-06): step 1 (texts by the header, native and browser: custom section
+warp.module_texts), step 3 in-repo: tests/fixtures/wasm/libc_text.wasm is wasi-libc's text and number functions, the
+same program gives the same results natively and in the browser. Open: step 2 (struct pointers as handles), step 4
+(`use c` in the browser through that module instead of host.js's `c` shims; where the .wasm lives: a package repository
+would be a new public repo, so asked first), zlib and other libraries that need a real build.
