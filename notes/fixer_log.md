@@ -176,3 +176,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-06 fix-empty-operands
 - print-empty-nodes: `(#name as string)` serialized as `(ø#name as string)`; Node::serialize writes a prefix operator's
   missing left operand (#, -, +, not, √, if, while) and a suffix operator's (x++) as nothing, `x = ø` stays.
+
+## 2026-10-06 fix-todo-comments
+- wasp_parser "todo edge case: leading plus": `+5`, `+x`, `3 + +2`, `[+1 -2]` gave "Unexpected character '+'"; a `+`
+  glued to its operand is now the unary plus, the operand itself (a spaced `+` stays the operator word).
