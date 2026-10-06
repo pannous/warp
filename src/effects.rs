@@ -544,7 +544,7 @@ fn calls_shrink(node: &Node, name: &str, index: usize, parameter: &str, bound: B
 }
 
 /// `f(a, b)` and `f a b` both list their arguments after the name; `f((a))` unwraps one group
-fn call_arguments(arguments: &[Node]) -> Vec<&Node> {
+pub(crate) fn call_arguments(arguments: &[Node]) -> Vec<&Node> {
 	match arguments {
 		[single] => match single.drop_meta() {
 			Node::List(items, crate::node::Bracket::Round, _) if !items.is_empty() => items.iter().collect(),
