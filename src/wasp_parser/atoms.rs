@@ -480,12 +480,16 @@ impl WaspParser {
 		}
 
 		// `point {x:1}` with blanks constructs a declared type like the glued `point{x:1}` (open decision 41)
-		if self.declared_types.contains(&symbol) && self.block_after_blanks() {
+		// a capitalized word of no declared type before a block of fields is the tagged object `Person:{…}` (data, D4), as
+		// glued `Person{…}` is: the README's `Person { name: "Alice" … }` (card person-name)
+		let tagged = symbol.starts_with(|first: char| first.is_uppercase());
+		if (self.declared_types.contains(&symbol) || tagged) && self.block_after_blanks() {
 			while matches!(self.current_char(), ' ' | '\t') {
 				self.advance();
 			}
 			let block = self.parse_bracketed('{');
-			return Node::Key(Box::new(Symbol(symbol)), Op::None, Box::new(block));
+			let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
+			return Node::Key(Box::new(Symbol(symbol)), op, Box::new(block));
 		}
 
 		self.parse_glued_suffix(symbol)

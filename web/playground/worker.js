@@ -20,7 +20,8 @@ const hooks = {
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
 	listen: (holder, events) => {
 		live = holder;
-		post({ type: "listening", events });
+		startTimers(holder);
+		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer))] });
 	},
 	panicked: message => { panicMessage = message; },
 };
@@ -79,13 +80,17 @@ registerForeignRuntime("python", {
 	prepare: code => USES_PYTHON.test(code) && loadPython().catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),
 });
 
-// a page event (playground.js): the live run's handler, its value shown as the compiler shows a program's
+// a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
-	if (!live) return;
-	const handled = runPageEvent(live, hooks, event, detail);
-	// the output binding (src/lowering/event_signals.rs PAGE_VALUE): the program's last name read anew, else what the handler gave
-	const binding = live.exports[PAGE_VALUE];
-	const outcome = handled.result && binding ? outcomeOf(live, hooks, binding) : handled;
+	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
+}
+
+// what a handler gave, shown as the compiler shows a program's value: the output binding (src/lowering/event_signals.rs
+// PAGE_VALUE), the program's last name read anew, else the handler's own value (a timer's only when it failed)
+function showHandled(holder, handled, timer = false) {
+	const binding = holder.exports[PAGE_VALUE];
+	if (timer && !binding && handled.result) return;
+	const outcome = handled.result && binding ? outcomeOf(holder, hooks, binding) : handled;
 	const outcomeText = passText(JSON.stringify(outcome));
 	const length = compiler.web_show(...outcomeText);
 	const value = compilerText(compiler.web_report(), length);
@@ -93,9 +98,30 @@ function handleEvent({ event, detail }) {
 	post({ type: "handled", value, error: outcome.result === undefined });
 }
 
+// the run's timers (host.js addTimer), each running its handler until the next run; a failing handler stops them
+function startTimers(holder) {
+	const handles = [];
+	const fire = timer => {
+		const handled = runTimer(holder, hooks, timer.handler);
+		showHandled(holder, handled, true);
+		if (handled.result === undefined) holder.stopTimers();
+	};
+	const atClock = timer => handles.push(setTimeout(() => {
+		fire(timer);
+		if (!timer.once) atClock(timer);
+	}, millisecondsUntil(timer.minute, timer.weekdays)));
+	for (const timer of holder.timers ?? []) {
+		if (timer.every !== undefined) handles.push(setInterval(() => fire(timer), timer.every));
+		else atClock(timer);
+	}
+	holder.stopTimers = () => handles.forEach(handle => { clearTimeout(handle); clearInterval(handle); });
+}
+
 self.onmessage = async ({ data }) => {
+	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	await ready;
 	if (data.event) return handleEvent(data);
+	if (live) stopListening(live);
 	live = undefined;
 	if (!compiler) await loadCompiler();
 	await prepareForeignRuntimes(data.code); // host.js: a runtime that loads asynchronously loads before the run

@@ -151,6 +151,30 @@ fn header_result(hsig: &FfiHeaderSignature) -> Option<wasm_encoder::ValType> {
     }
 }
 
+/// The C functions whose texts cross as (pointer, length) pairs, not NUL-terminated: that many leading pairs
+pub fn string_pair_count(name: &str) -> usize {
+    match name {
+        "strcmp" | "strncmp" => 2,
+        _ => 0,
+    }
+}
+
+/// Which parameters of a library's C functions are texts (`char *`), as its headers declare them, by function; read
+/// once per library and process
+pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<bool>> {
+    static PARSED: std::sync::Mutex<Vec<(String, &'static HashMap<String, Vec<bool>>)>> = std::sync::Mutex::new(Vec::new());
+    let mut parsed = PARSED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((_, texts)) = parsed.iter().find(|(parsed_library, _)| parsed_library == library) {
+        return texts;
+    }
+    let texts = get_library_header_paths(library).iter().flat_map(|path| parse_header_file(path, library))
+        .map(|declared| (declared.name.clone(), wasp_parameters(&declared.param_types).map(|c_type| pointer_kind(c_type) == Some(CPointer::Text)).collect()))
+        .collect();
+    let texts: &'static HashMap<String, Vec<bool>> = Box::leak(Box::new(texts));
+    parsed.push((library.to_string(), texts));
+    texts
+}
+
 fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
     let mut sigs = HashMap::new();
     let paths = get_library_header_paths(library);

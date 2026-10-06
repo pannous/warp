@@ -1,9 +1,9 @@
 //! System signals (notes/system_signals.md): handlers of events from outside the program, exported functions the
 //! runtime calls at check points: `signal_poll()` (at the start and end of main and at each loop start of a program
 //! with such handlers) and `sleep`, which wakes for them. `on interrupt {…}` is `on·interrupt`, run after a ctrl-c:
-//! the first poll installs the SIGINT handler, which only sets a flag; a second ctrl-c within a second, or before the
-//! handler ran, ends the run at once (exit code 130), so a handler that ignores ctrl-c never makes a program
-//! unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_every(0, 5000)` where the handler is
+//! the first poll installs the ctrl-c handler (Unix SIGINT, Windows SetConsoleCtrlHandler), which only sets a flag; a
+//! second ctrl-c within a second, or before the handler ran, ends the run at once (exit code 130), so a handler that
+//! ignores ctrl-c never makes a program unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_every(0, 5000)` where the handler is
 //! declared. `on file "notes.txt" change {…}` is `on·file·0`, started by `signal_watch(0, "notes.txt")`: a timer of
 //! FILE_CHECK_PERIOD that fires only when the file's modification time or size changed (it appeared, was written, or went).
 //! A run that allows it (`warp run`, built executables) stays after main while a timer or watch lives.
@@ -16,6 +16,7 @@ use std::time::SystemTime;
 use wasmtime::{AsContextMut, Func, Instance, Result, Store, Val};
 
 const NEW_EMPTY: &str = "new_empty";
+const NEW_INT: &str = "new_int";
 /// How often a watched file's modification time is read: polling, no file-system events yet
 const FILE_CHECK_PERIOD: Duration = Duration::from_millis(100);
 /// How often a sleeping program with listeners on shared values (on·shared) looks at them
@@ -231,29 +232,39 @@ pub fn run_due_handlers<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&
 	let shared_checks = export(store, SHARED_HANDLER).map(|_| SHARED_HANDLER.to_string());
 	for name in due_handlers(handles_interrupt).into_iter().chain(shared_checks) {
 		let Some(handler) = export(store, &name) else { continue };
-		call_handler(store, handler, &mut export)?;
+		call_handler(store, handler, None, &mut export)?;
 	}
 	Ok(())
 }
 
-fn call_handler<S: AsContextMut>(store: &mut S, handler: Func, export: &mut impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
+fn call_handler<S: AsContextMut>(store: &mut S, handler: Func, event: Option<i64>, export: &mut impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
 	let mut arguments = vec![];
-	// a handler that reads `event` gets ø
-	if handler.ty(&*store).params().len() == 1 {
-		let empty = export(store, NEW_EMPTY).ok_or_else(|| wasmtime::Error::msg("no new_empty"))?;
-		let mut built = [Val::AnyRef(None)];
-		empty.call(&mut *store, &[], &mut built)?;
-		arguments.push(built[0]);
+	// a handler that reads `event` gets it (the exit code of `on exit`, P134), as a number or a Node; else ø
+	if let Some(parameter) = handler.ty(&*store).params().next() {
+		arguments.push(match (parameter, event) {
+			(wasmtime::ValType::I64, event) => Val::I64(event.unwrap_or(0)),
+			(_, Some(event)) => node_of(store, export, NEW_INT, &[Val::I64(event)])?,
+			(_, None) => node_of(store, export, NEW_EMPTY, &[])?,
+		});
 	}
 	let mut results = vec![Val::I64(0); handler.ty(&*store).results().len()];
 	handler.call(&mut *store, &arguments, &mut results)
+}
+
+/// The Node a constructor export of the program builds (`new_empty()`, `new_int(n)`)
+fn node_of<S: AsContextMut>(store: &mut S, export: &mut impl FnMut(&mut S, &str) -> Option<Func>, constructor: &str, arguments: &[Val]) -> Result<Val> {
+	let function = export(store, constructor).ok_or_else(|| wasmtime::Error::msg(format!("no {constructor}")))?;
+	let mut built = [Val::AnyRef(None)];
+	function.call(&mut *store, arguments, &mut built)?;
+	Ok(built[0])
 }
 
 /// `on exit {…}`: the run ends (main returned, the timers stopped, or `exit(code)`), so on·exit runs once; an `exit`
 /// inside it ends it with that code (ended_by_exit keeps it)
 pub fn run_exit_handler<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
 	let Some(handler) = export(store, EXIT_HANDLER) else { return Ok(()) };
-	call_handler(store, handler, &mut export)
+	let code = EXIT_CODE.with(Cell::get).unwrap_or(0);
+	call_handler(store, handler, Some(code.into()), &mut export)
 }
 
 /// The outcome of a run and its exit handler: the handler runs after a normal end and after `exit(code)` (whose code
@@ -319,15 +330,21 @@ pub fn stay_while_listening<T>(store: &mut Store<T>, instance: &Instance) -> Res
 	Ok(())
 }
 
-#[cfg(unix)]
+/// A ctrl-c ends the run at once, instead of reaching `on interrupt`, when the one before is still `pending` (the
+/// program did not take it yet) or came `last` (monotonic milliseconds, 0: none yet) less than a second before `now`
+pub fn ctrl_c_ends_run(pending: bool, last: i64, now: i64) -> bool {
+	const HARD_EXIT_WITHIN_MILLISECONDS: i64 = 1000;
+	pending || (last != 0 && now - last < HARD_EXIT_WITHIN_MILLISECONDS)
+}
+
+/// `on interrupt`: the first poll installs the platform's ctrl-c handler (Unix SIGINT, Windows SetConsoleCtrlHandler),
+/// which only sets a flag or ends the run (ctrl_c_ends_run)
 mod interrupt {
 	use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 	use std::sync::Once;
 	use std::time::{Duration, Instant};
 
 	const EXIT_INTERRUPTED: i32 = 130; // 128 + SIGINT, what a shell reports for a ctrl-c
-	/// a second ctrl-c this soon after the one before ends the run
-	const HARD_EXIT_WITHIN_MILLISECONDS: i64 = 1000;
 	/// How often a sleep of a watching program looks for a ctrl-c
 	const SLEEP_SLICE: Duration = Duration::from_millis(10);
 	static INTERRUPTED: AtomicBool = AtomicBool::new(false);
@@ -353,41 +370,75 @@ mod interrupt {
 
 	/// Whether a ctrl-c came since the last call; the first call starts watching
 	pub fn take() -> bool {
-		WATCHING.call_once(|| unsafe {
-			libc::signal(libc::SIGINT, on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t);
-		});
+		WATCHING.call_once(platform::install);
 		INTERRUPTED.swap(false, Ordering::SeqCst)
 	}
 
-	/// async-signal-safe (atomics, clock_gettime, _exit): a flag, or the exit of a second ctrl-c within a second or
-	/// one the program did not take yet
-	extern "C" fn on_signal(_: libc::c_int) {
-		let now = monotonic_milliseconds();
+	/// A ctrl-c at `now`: the flag set, or whether it ends the run (atomics only: async-signal-safe)
+	fn interrupted_at(now: i64) -> bool {
 		let last = LAST_SIGNAL.swap(now, Ordering::SeqCst);
-		let soon_after = last != 0 && now - last < HARD_EXIT_WITHIN_MILLISECONDS;
-		if INTERRUPTED.swap(true, Ordering::SeqCst) || soon_after {
-			unsafe { libc::_exit(EXIT_INTERRUPTED) }
+		super::ctrl_c_ends_run(INTERRUPTED.swap(true, Ordering::SeqCst), last, now)
+	}
+
+	#[cfg(unix)]
+	mod platform {
+		pub fn install() {
+			unsafe { libc::signal(libc::SIGINT, on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t) };
+		}
+
+		/// async-signal-safe (atomics, clock_gettime, _exit)
+		extern "C" fn on_signal(_: libc::c_int) {
+			if super::interrupted_at(monotonic_milliseconds()) {
+				unsafe { libc::_exit(super::EXIT_INTERRUPTED) }
+			}
+		}
+
+		fn monotonic_milliseconds() -> i64 {
+			let mut now = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+			unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };
+			now.tv_sec as i64 * 1000 + now.tv_nsec as i64 / 1_000_000
 		}
 	}
 
-	fn monotonic_milliseconds() -> i64 {
-		let mut now = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-		unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };
-		now.tv_sec as i64 * 1000 + now.tv_nsec as i64 / 1_000_000
+	/// Windows calls the handler on a thread of its own, so it may use std
+	#[cfg(windows)]
+	mod platform {
+		use std::sync::OnceLock;
+		use std::time::Instant;
+
+		const CTRL_C_EVENT: u32 = 0;
+		const CTRL_BREAK_EVENT: u32 = 1;
+		const HANDLED: i32 = 1;
+		const NOT_HANDLED: i32 = 0;
+		static STARTED: OnceLock<Instant> = OnceLock::new();
+
+		#[link(name = "kernel32")]
+		extern "system" {
+			fn SetConsoleCtrlHandler(handler: Option<unsafe extern "system" fn(u32) -> i32>, add: i32) -> i32;
+		}
+
+		pub fn install() {
+			STARTED.get_or_init(Instant::now);
+			unsafe { SetConsoleCtrlHandler(Some(on_control), 1) };
+		}
+
+		/// ctrl-c and ctrl-break set the flag; closing the console and the others keep Windows' default
+		unsafe extern "system" fn on_control(event: u32) -> i32 {
+			if event != CTRL_C_EVENT && event != CTRL_BREAK_EVENT {
+				return NOT_HANDLED;
+			}
+			// +1: 0 means no ctrl-c yet
+			let now = STARTED.get_or_init(Instant::now).elapsed().as_millis() as i64 + 1;
+			if super::interrupted_at(now) {
+				std::process::exit(super::EXIT_INTERRUPTED);
+			}
+			HANDLED
+		}
 	}
-}
 
-#[cfg(not(unix))]
-mod interrupt {
-	use std::time::Instant;
-
-	/// not yet on this platform (card signals-system-windows): ctrl-c ends the run as before
-	pub fn wait_until(wake: Instant) -> bool {
-		std::thread::sleep(wake.saturating_duration_since(Instant::now()));
-		false
-	}
-
-	pub fn take() -> bool {
-		false
+	/// no ctrl-c here (wasm): ctrl-c ends the run as before
+	#[cfg(not(any(unix, windows)))]
+	mod platform {
+		pub fn install() {}
 	}
 }

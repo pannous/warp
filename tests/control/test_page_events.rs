@@ -39,6 +39,15 @@ fn the_last_name_of_a_program_with_page_events_is_its_output_binding() {
 	is!("price = 3; total := price * 2; on click { price += 1 }; raise click; total", 8);
 }
 
+// the page keeps a program with timers or channel listeners running too, so its last name is shown anew after each tick
+#[test]
+fn the_last_name_of_a_program_with_timers_is_its_output_binding() {
+	assert!(exports_of("ticks = 0; on every 1 second { ticks += 1 }; ticks").iter().any(|name| name == "page·value"));
+	assert!(exports_of("n = 0; on message from \"chat\" { n += 1 }; n").iter().any(|name| name == "page·value"));
+	assert!(!exports_of("ticks = 0; on every 1 second { ticks += 1 }; ticks + 1").iter().any(|name| name == "page·value"));
+	assert!(!exports_of("ticks = 0; ticks").iter().any(|name| name == "page·value"));
+}
+
 // a handler that never reads `event` takes no parameter, so the page can call it (an unread one would be typed Int)
 #[test]
 fn a_handler_without_event_runs_through_its_wrapper() {

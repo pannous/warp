@@ -18,7 +18,7 @@ const INCLUDE_VARIABLE: &str = "WARP_INCLUDE";
 const SDL_HEADERS: [&str; 4] = ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_timer.h"];
 /// libc's headers: strings, conversions and memory, stdio, character classes (`toupper`). macOS declares much of them
 /// in the _stdlib.h, _stdio.h and _ctype.h that stdlib.h, stdio.h and ctype.h include (`getenv`, `fopen`, `toupper`); a header missing on Linux is skipped
-const LIBC_HEADERS: [&str; 7] = ["string.h", "stdlib.h", "_stdlib.h", "stdio.h", "_stdio.h", "ctype.h", "_ctype.h"];
+const LIBC_HEADERS: [&str; 8] = ["string.h", "_string.h", "stdlib.h", "_stdlib.h", "stdio.h", "_stdio.h", "ctype.h", "_ctype.h"];
 /// Libraries whose header is not named after them: `use z` reads zlib.h
 const LIBRARY_HEADERS: [(&str, &str); 1] = [("z", "zlib.h")];
 

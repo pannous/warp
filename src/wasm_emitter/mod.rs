@@ -1301,9 +1301,9 @@ impl WasmGcEmitter {
 		}
 		self.module.section(&self.code);
 		self.module.section(self.string_table.data_section());
-		let text_crossings = crate::wasm_modules::text_crossings(self.ctx.ffi_imports.values());
-		if !text_crossings.is_empty() {
-			self.module.section(&CustomSection { name: crate::wasm_modules::TEXT_CROSSINGS_SECTION.into(), data: text_crossings.as_bytes().into() });
+		let c_calls = crate::wasm_modules::c_calls(self.ctx.ffi_imports.values());
+		if !c_calls.is_empty() {
+			self.module.section(&CustomSection { name: crate::wasm_modules::C_CALLS_SECTION.into(), data: c_calls.as_bytes().into() });
 		}
 		self.emit_names();
 		self.module.section(&self.names);

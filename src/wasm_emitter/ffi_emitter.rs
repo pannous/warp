@@ -8,17 +8,9 @@ use Instruction as I;
 use super::WasmGcEmitter;
 
 impl WasmGcEmitter {
-	/// Get the number of string pair arguments for a given FFI function
-	pub(super) fn string_pair_arg_count(&self, fn_name: &str) -> usize {
-		match fn_name {
-			"strcmp" | "strncmp" => 2, // (ptr1, len1, ptr2, len2, ...)
-			_ => 0,
-		}
-	}
-
 	/// Emit arguments for FFI function call with type conversion
 	pub(super) fn emit_ffi_args(&mut self, func: &mut Function, fn_name: &str, args: &[Node], sig: &crate::ffi::FfiSignature) {
-		let string_pair_count = self.string_pair_arg_count(fn_name);
+		let string_pair_count = crate::ffi::string_pair_count(fn_name); // (ptr1, len1, ptr2, len2, ...)
 		let mut arg_idx = 0;
 		let mut param_idx = 0;
 

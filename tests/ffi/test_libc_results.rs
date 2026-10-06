@@ -27,3 +27,15 @@ fn strcmp_orders_texts() {
 	is!("import strcmp from \"c\"\nstrcmp(\"abc\", \"abd\")", -1);
 	is!("import strcmp from \"c\"\nstrcmp(\"same\", \"same\")", 0);
 }
+
+// the browser calls libc.wasm for these (P147, web/playground/lib): the same results as the system libc natively
+#[test]
+fn libc_text_and_character_functions() {
+	is!("use c\nstrstr(\"haystack\", \"st\")", "stack");
+	is!("use c\nstrrchr(\"a/b/c\", 47)", "/c");
+	is!("use c\ntoupper(97) + tolower(66)", 163);
+	is!("use c\nisdigit(55) > 0", true);
+	is!("use c\natoi(\"-12\") + strlen(\"abc\")", -9);
+	is!("use c\nstrcspn(\"hello world\", \" \")", 5);
+	is!("use c\nstrchr(\"abc\", 120)", warp::Node::Empty);
+}

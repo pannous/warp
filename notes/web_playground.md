@@ -4,6 +4,12 @@ Run it: `web/playground/build.sh && python3 -m http.server 8000` in the reposito
 http://localhost:8000/web/playground/ (`?example=<name>` picks a tour example or a samples/ file).
 Probe: `probes/web_playground.py [sample…]` (headless agent-browser; compares every sample's value with the CLI's).
 
+## The tour (examples.js)
+Ordered from basics (welcome, data, functions, lists) to wow (broadcasting, call forms, classes, lazy ranges, signals,
+events, timers, system values, channels, components, welcoming errors). Each entry is `{value, printed?, wait?, code}`,
+its first code line a `//` caption. `web/playground/test_in_browser.py --examples [name…]` (after build.sh) shows each
+in the page and compares value and printed text; pages.yml runs it before deploying.
+
 ## Architecture
 - The compiler itself runs in the browser: `cargo rustc --lib --crate-type cdylib --target wasm32-unknown-unknown
   --no-default-features --release` (build.sh, 8 MB stack, wasm-opt -Oz → ~1.7 MB). Plain C ABI, no wasm-bindgen:
@@ -79,10 +85,13 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
     index.html (web/uniscript did: its page's links read as entries, `use project` failed)
 - Need packages/ cloned by a native run first (a fresh worktree has none): test_packages::a_package_is_fetched_once_into_packages,
   test_text_bytes::read_loads_a_file_as_bytes
-- libc in the browser (host.js `c`, 2026-10-04): rand, srand, abs, labs, strlen, strcmp, strncmp, atoi, atol, atof;
-  the shims follow src/ffi.rs signatures: i64 results (size_t, long) are BigInts, strcmp/strncmp get (pointer, length)
-  pairs, the others C strings read up to their zero byte (tests/ffi/test_libc_results.rs); anything else of libc still
-  throws "c.X is not available in the browser"
+- libc in the browser (P147, 2026-10-06): host.js `c` calls web/playground/lib/libc.wasm, wasi-libc built by
+  lib/build_libc.sh (21 KB, deployed with the page: pages.yml SITE_FILES `lib`), one instance per worker. Its exports
+  have the native FFI's types (lib/libc.c wraps strlen, strncmp, strspn, strcspn, atol, labs to 64 bits), so numbers
+  pass through; texts cross by the program's custom section warp.c_calls (src/wasm_modules.rs c_calls: `t` a
+  NUL-terminated text, `l` the length after strcmp's text, `n` a number; result `t` a text): copied into libc.wasm's
+  malloc and freed after the call, a char * result read back (NULL is ø). Functions: lib/libc.h; anything else of libc
+  throws "c.X is not available in the browser". The hand-written shims of 2026-10-04 are gone.
 - Samples: tests/programs/test_samples_run_cleanly.rs runs every sample but raylib/SDL in both; 2026-10-04 all 64 give
   the same result natively and in the browser
 - Ideas: should_panic needs panic=unwind (nightly -Zbuild-std with wasm exception handling); git/lean/process tests could

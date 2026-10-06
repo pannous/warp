@@ -41,12 +41,25 @@ twice(ft) + half(5.0)                   // 86.5
   parameter copies the text into a block of the module's exported `malloc`, a `char *` result reads the NUL-terminated
   text from the module's memory (NULL is ø) and is typed Text (`t = shout("ab"); letters(t)`); header parameter names
   serve named arguments where the module has no name section. host.js cannot see an import's types, so the program
-  carries a custom section `warp.module_texts` (text_crossings: `module\tname\ttn\tt`, t a text) and callWithTexts
-  copies the same way. Plan: notes/stdlib_connectors.md "Status 2026-10-06".
-- libc hijacked (fixture libc_text.wasm, 11.5 KB, no imports, `sh tests/fixtures/wasm/libc_text.sh` with Homebrew
-  llvm + lld + wasi-libc + wasi-runtimes): wasi-libc's strlen, strstr, strchr, strrchr, toupper, tolower, atoi, atol,
-  abs, malloc exported by name; libc_text.h has libc's own prototypes. The header only marks texts and names: the
+  carries a custom section `warp.c_calls` (wasm_modules c_calls: `module\tname\tparameters\tresult`) and host.js
+  callC crosses the same way. Plan: notes/stdlib_connectors.md "Status 2026-10-06".
+- How each C value crosses (wasm_modules CParameter, CResult, by the header): `char *` and a const pointer to bytes
+  (zlib's `const Bytef *buf`) take the program's text, copied into the module's malloc; `T **` is an out-pointer, left
+  out of the wasp call: the module gets a NULL slot of its malloc and what it received is the result (as natively,
+  notes/ffi_handles.md), a text for `char **` (`strtol("42 apples", 10)` is " apples"), else the module's pointer as a
+  number; NULL there is a loud error naming the C status. An `unsigned` result of an i32 is zero-extended into an Int
+  (`crc32(0, "wasp", 4)` is 3400449319, not negative). Pointers to structs and non-const pointers stay the module's
+  numbers (its addresses: opaque, passed back as they came). Blocks are freed after the call when the module exports
+  free.
+- libc hijacked (fixture libc_text.wasm, 14.7 KB, no imports, `sh tests/fixtures/wasm/libc_text.sh` with Homebrew
+  llvm + lld + wasi-libc + wasi-runtimes): wasi-libc's strlen, strstr, strchr, strrchr, strtol, toupper, tolower, atoi,
+  atol, abs, malloc exported by name; libc_text.h has libc's own prototypes. The header only marks texts and names: the
   module's number types win (`size_t` and `long` are 32 bits in wasm32, the C FFI maps them to i64). Same results
   natively and in the browser (test libc_compiled_to_wasm_is_called_like_c).
+- zlib 1.3.2 from its own sources (fixture zlib.wasm, 63 KB, no imports, `sh tests/fixtures/wasm/zlib.sh`, sources from
+  libz-sys in the cargo registry or ZLIB_SRC): zlibVersion, crc32, adler32, compressBound; zlib.h beside it has zlib's
+  prototypes with the typedefs spelled out (the header parser does not resolve uLong or Bytef). Same results natively
+  and in the browser (test zlib_compiled_to_wasm). Not yet: compress/uncompress (exported), which need a writable
+  output buffer and an in/out length (`uLongf *destLen`) — a buffer convention that does not exist yet.
 - Not yet: `help m.f` (warp has no help word yet). tests/wasm/test_wasm.rs test_import_wasm pins P139 (P144).
 - WebAssembly components (`use wasm "lib.wasm" as lib`, `lib.f(x)`) are the other road: notes/stdlib_connectors.md.
