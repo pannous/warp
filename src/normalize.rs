@@ -712,14 +712,6 @@ pub fn text_quote() -> char {
 pub fn operand_text(node: &Node) -> String {
     match node.drop_meta() {
         Node::Text(text) => format!("{0}{text}{0}", text_quote()),
-        Node::Key(left, op, right) if has_prefix_operator(node) => {
-            let gap = if op.as_str().starts_with(char::is_alphabetic) { " " } else { "" };
-            let left = match left.drop_meta() {
-                Node::Empty => String::new(),
-                written => format!("{}{gap}", operand_text(written)),
-            };
-            format!("{left}{op}{gap}{}", operand_text(right))
-        }
         other => as_written(other.clone()).serialize(),
     }
 }
@@ -738,14 +730,6 @@ fn as_written(node: Node) -> Node {
         // a witness `area·square` was written `area`
         Node::Symbol(name) if name.contains('·') => Node::Symbol(name.split('·').next().unwrap_or_default().to_string()),
         other => other,
-    }
-}
-
-/// `#a`, `-x`, `not b` parse with an empty left operand, which `serialize` shows as `ø#a`
-fn has_prefix_operator(node: &Node) -> bool {
-    match node.drop_meta() {
-        Node::Key(left, _, right) => matches!(left.drop_meta(), Node::Empty) || has_prefix_operator(left) || has_prefix_operator(right),
-        _ => false,
     }
 }
 
