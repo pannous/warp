@@ -1,26 +1,21 @@
-// footgun-pi: `pi = 4; pi` gave 3.14159…: the parser read pi as π and the assignment was dropped. The intent is clear, so
-// it compiles: from its assignment on, pi is the variable, with a note that it shadows the constant π; a field named pi
-// is a plain field
+// footgun-pi: `pi = 4; pi` gave 3.14159…: the parser read pi as π and the assignment was dropped. P130 (user: "loud
+// error, if it was declared constant before which it should be"): a named number is a declared constant, assigning it
+// is a compile error; a field named pi is the type's own field
 use crate::is;
-use warp::normalize::capture_hints;
+use crate::common::fails_with;
 
-const SHADOWING_NOTE: &str = "shadows the constant";
+const REFUSAL: &str = "is a constant";
 
-fn shadowing_notes(code: &str) -> usize {
-	capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.reason.contains(SHADOWING_NOTE)).count()
+#[test]
+fn an_assigned_constant_word_is_an_error() {
+	fails_with("pi = 4; pi", "pi is a constant");
+	fails_with("pi := 4", REFUSAL);
+	fails_with("tau = 1; tau + 1", "tau is a constant");
 }
 
 #[test]
-fn an_assigned_constant_word_is_a_variable() {
-	is!("pi = 4; pi", 4);
-	is!("pi = 4; pi * 2", 8);
-	is!("tau = 1; tau + 1", 2);
+fn a_constant_word_still_reads_and_names_fields() {
 	is!("class circle{pi = 3}; c = circle{}; c.pi", 3);
 	is!("x = pi; x > 3.14 and x < 3.15", true);
-}
-
-#[test]
-fn assigning_a_constant_word_says_it_shadows_the_constant() {
-	assert_eq!(shadowing_notes("pi = 4; pi"), 1);
-	assert_eq!(shadowing_notes("r = 2; r * pi"), 0);
+	is!("pi == 3", false);
 }
