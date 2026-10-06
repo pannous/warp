@@ -15,21 +15,26 @@ ch.receive()                   // one value, waits for it
 Semantics (Go's unbuffered channel): `send` waits until a receiver took the value; `receive` waits for a value;
 `for v in ch` receives until the channel is closed and empty; a send on a closed channel is an error.
 
-## Native plan
-- tasks.rs TaskTable (one per run, shared by every task thread through link_into) gets
-  `channels: Mutex<HashMap<i64, Channel>>` + a Condvar; Channel { offered: Option<TaskValue>, closed: bool }.
-- Host words (host.rs HOST_WORDS and signatures): channel_new() -> i64, channel_put(id, node) (blocks until taken:
-  rendezvous), channel_take(id) -> node (blocks; ø once closed and empty), channel_more(id) -> i64 (blocks until a
-  value waits or the channel closed: 1 / 0), channel_close(id). Values cross as TaskValue (Builders::read_value /
-  Builders::build, as task_await_value and signal_send do).
-- Lowering (a source pass before lower_tasks): `channel()` → channel_new(); `ch.send(v)` → channel_put(ch, v);
-  `ch.receive()` → channel_take(ch); `ch.close()` → channel_close(ch); `for v in ch {…}` (ch assigned channel()) →
-  `while channel_more(ch) { v = channel_take(ch); … }`. A go block capturing ch gets the id, which names the same
-  channel in every task of the run.
-- Machine channels: `channel "chat"` → the existing channel_listen/channel_send words behind the same methods.
+## Native (built)
+- tasks.rs TaskTable (one per run, shared by every task thread) holds the channels; host words (host.rs CHANNEL_WORDS):
+  channel_new() -> id, channel_put(id, node) waits until taken (rendezvous), channel_take(id) waits (ø once closed and
+  empty), channel_more(id) waits until a value is offered (1) or the channel closed (0), channel_close(id). The program
+  waiting with no task left is an error ("ch.receive() waits forever: no task is left to answer it"); tasks still
+  waiting stop when the program ends.
+- Lowering src/lowering/channel_words.rs, FIRST of SOURCE_PASSES (go_blocks renames what a go block reads,
+  system_signals takes `send v to "chat"`): `channel()` → channel_new(); `ch.send(v)` / `send v to ch` →
+  channel_put(ch, v); `ch.receive()` → channel_take(ch); `ch.close()` → channel_close(ch); `for v in ch {…}` →
+  `while channel_more(ch) { v = channel_take(ch); … }`. Channels are the variables assigned `channel()` plus the
+  parameters of functions called with one (fixed point). A go block gets the id, the same channel in every task.
+- Machine channels `chat = channel "chat"`: `chat = "chat"; channel_listen(ID, "chat")` (ID from 1<<20 up, apart from
+  system_signals' listener ids), `.send(v)` / `send v to chat` → channel_send(chat, v), `.receive()` polls
+  channel_pending every 5 ms, then channel_next. A program hears its own sends.
+- Tests: tests/control/test_channels.rs.
 
 ## Browser
-Tasks run in Workers: a channel needs a SharedArrayBuffer slot per channel and Atomics.wait. Until built, the
-playground says loudly that channels need the native build (card).
+Tasks run in Workers: a channel needs a SharedArrayBuffer slot per channel and Atomics.wait (see sharedCell and
+startTask in host.js for how shared arrays reach the workers). Until built, host.js's channel_* words throw "channels
+inside a program need the native build". `channel "name"` in the browser would need the receive loop to yield to the
+BroadcastChannel's message events, which a synchronous wasm loop cannot: not built either.
 
 Ported cases: probes/async_ports.md (the two Go channel rows).

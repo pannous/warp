@@ -25,3 +25,10 @@ fn a_channel_passed_to_a_function() {
 fn receiving_with_no_task_left_is_an_error() {
 	crate::common::fails_with("ch = channel(); ch.receive()", "waits forever");
 }
+
+// `channel "name"` is the machine-wide channel (src/channels.rs) with the same words; a program hears its own sends
+#[test]
+fn a_machine_channel_has_the_same_words() {
+	is!("chat = channel \"warp-test-p155\"; chat.send(\"hi\"); chat.receive()", "hi");
+	is!("chat = channel \"warp-test-p155-to\"; send 5 to chat; chat.receive() + 1", 6);
+}
