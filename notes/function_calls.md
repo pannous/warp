@@ -59,6 +59,8 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
 - Julia's dot call `f.(xs)`, `add.(xs, 10)`: `map(xs, broadcast_item => f(broadcast_item, 10))` (parser
   SpecialInfix::DotCall, only a name followed by `.(`).
 - Iteration templates append with `out = out + [x]`: `out.add(x)` was taken by a user function `add`.
+- Python `list(x)` is `x as list` (library_words EXPANDED_WORDS); a tuple result type `-> (Int, Int) {…}` is dropped,
+  the body's tuple stays (declarations.rs `tuple_result`).
 
 ## Call efficiency (probes/call_benchmark.sh [N], 10^8 calls each)
 - Plain, default, named, overload and lambda calls compile to the same direct `call $f` with i64 arguments: equal
