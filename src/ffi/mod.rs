@@ -84,6 +84,9 @@ pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, Ff
 
 /// The error of a call nothing resolves: a libc function says how to import it
 pub fn undefined_function_message(name: &str) -> String {
+    if let Some(module) = crate::modules::std_module_defining(name) {
+        return format!("{name} is in the standard module {module}: write `use {module}`");
+    }
     match get_ffi_signature_from_lib(name, "c") {
         Some(_) => format!("{name} is a C function: write `use c` or `import {name} from \"c\"`"),
         None => format!("undefined function: {name}"),
@@ -110,7 +113,7 @@ const C_QUALIFIERS: [&str; 7] = ["const", "volatile", "struct", "enum", "union",
 /// `FILE` of `FILE *`), "" for none (`unsigned *`)
 fn pointee(c_type: &str) -> String {
     let before_star = &c_type[..c_type.find('*').unwrap_or(c_type.len())];
-    before_star.split_whitespace().filter(|word| !C_QUALIFIERS.contains(word)).last().unwrap_or_default().to_string()
+    before_star.split_whitespace().rfind(|word| !C_QUALIFIERS.contains(word)).unwrap_or_default().to_string()
 }
 
 /// How the C type `c_type` crosses, None for no pointer. A handle points to a struct (`struct stat *`, or one a header
@@ -149,6 +152,31 @@ fn header_result(hsig: &FfiHeaderSignature) -> Option<wasm_encoder::ValType> {
         Some(_) => Some(wasm_encoder::ValType::I32),
         None => map_c_type_to_valtype(&hsig.return_type),
     }
+}
+
+/// The C functions whose texts cross as (pointer, length) pairs, not NUL-terminated: that many leading pairs
+pub fn string_pair_count(name: &str) -> usize {
+    match name {
+        "strcmp" | "strncmp" => 2,
+        _ => 0,
+    }
+}
+
+/// Which parameters of a library's C functions are texts (`char *`), as its headers declare them, by function; read
+/// once per library and process
+pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<bool>> {
+    type TextParameters = HashMap<String, Vec<bool>>;
+    static PARSED: std::sync::Mutex<Vec<(String, &'static TextParameters)>> = std::sync::Mutex::new(Vec::new());
+    let mut parsed = PARSED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((_, texts)) = parsed.iter().find(|(parsed_library, _)| parsed_library == library) {
+        return texts;
+    }
+    let texts = get_library_header_paths(library).iter().flat_map(|path| parse_header_file(path, library))
+        .map(|declared| (declared.name.clone(), wasp_parameters(&declared.param_types).map(|c_type| pointer_kind(c_type) == Some(CPointer::Text)).collect()))
+        .collect();
+    let texts: &'static HashMap<String, Vec<bool>> = Box::leak(Box::new(texts));
+    parsed.push((library.to_string(), texts));
+    texts
 }
 
 fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
@@ -342,17 +370,13 @@ pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignat
     let library = resolve_library_alias(library);
     let built_in = get_ffi_signatures().get(name).filter(|sig| sig.library == library).cloned();
     // the hand-linked libc functions and libm keep their wasm-adapted signatures (strcmp of two texts)
-    if library == "m" || (library == "c" && HAND_LINKED_LIBC.contains(&name)) {
-        if built_in.is_some() {
+    if (library == "m" || (library == "c" && HAND_LINKED_LIBC.contains(&name)))
+        && built_in.is_some() {
             return built_in;
         }
-    }
     // any other function is linked from its header declaration (link_single_function), so it is imported as declared
     get_signatures_from_headers(library).get(name).cloned().or(built_in)
 }
-
-/// Link FFI functions into a wasmtime linker
-
 
 /// Resolve library alias to canonical name
 pub fn resolve_library_alias(alias: &str) -> &'static str {

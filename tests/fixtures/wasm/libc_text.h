@@ -9,3 +9,4 @@ int tolower(int c);
 int atoi(const char *s);
 long atol(const char *s);
 int abs(int n);
+long strtol(const char *nptr, char **endptr, int base);

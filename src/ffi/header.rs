@@ -74,6 +74,7 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
         .replace("SDLCALL ", "")
         .replace("__cdecl ", "")
         .replace("__stdcall ", "");
+    let decl = without_libc_annotations(decl.trim());
     let decl = decl.trim();
     // zlib's K&R-compatible prototypes: `zlibVersion OF((void));` declares `zlibVersion(void);`
     let decl = match decl.find(" OF((") {
@@ -171,6 +172,26 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
     })
 }
 
+/// The macOS SDK's bounds annotations (`char *_LIBC_CSTR strchr(…)`, `_LIBC_COUNT(__n)`) dropped: no C type or name
+const LIBC_ANNOTATION_PREFIX: &str = "_LIBC_";
+
+fn without_libc_annotations(declaration: &str) -> String {
+    let mut rest = declaration;
+    let mut kept = String::new();
+    while let Some(start) = rest.find(LIBC_ANNOTATION_PREFIX) {
+        kept.push_str(&rest[..start]);
+        let after = &rest[start..];
+        let word_end = after.find(|letter: char| !(letter.is_ascii_alphanumeric() || letter == '_')).unwrap_or(after.len());
+        rest = &after[word_end..];
+        if rest.starts_with('(') {
+            rest = matching_paren(rest, 0).map_or("", |close| &rest[close + 1..]);
+        }
+        kept.push(' ');
+    }
+    kept.push_str(rest);
+    kept
+}
+
 /// Convert FfiHeaderSignature to FfiSignature (using 'static lifetime via leak)
 pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> {
     let params: Vec<wasm_encoder::ValType> = wasp_parameters(&hsig.param_types)
@@ -210,7 +231,7 @@ fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
     }
     let header_dir = std::path::Path::new(header_path).parent().map(|dir| dir.to_string_lossy().to_string()).unwrap_or_default();
     let dirs: Vec<String> = std::iter::once(header_dir).chain(crate::ffi_parser::include_dirs()).collect();
-    match crate::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| std::fs::read_to_string(path).ok()) {
+    match crate::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| crate::web::read_text(&path)) {
         Some(mathcalls) => format!("{content}\n{}", expand_glibc_math_macros(&mathcalls)),
         None => content,
     }
@@ -246,10 +267,7 @@ pub fn expand_glibc_math_macros(source: &str) -> String {
 
 /// Parse a header file and extract all function signatures
 pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => with_glibc_mathcalls(c, path),
-        Err(_) => return Vec::new(),
-    };
+    let Some(content) = crate::web::read_text(path).map(|text| with_glibc_mathcalls(text, path)) else { return Vec::new() };
     let mut struct_types = StructTypes::default();
     let mut signatures = Vec::new();
     let mut current_decl = String::new();
@@ -330,8 +348,12 @@ fn remember_struct_types(names: std::collections::HashSet<String>) {
     STRUCT_TYPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).get_or_insert_with(Default::default).extend(names);
 }
 
+/// C's opaque standard types, structs on every platform whichever header declares them (glibc's FILE is in
+/// bits/types/FILE.h, which stdio.h's search does not read): a pointer to one is a handle, never linear memory
+const STANDARD_STRUCT_TYPES: [&str; 2] = ["FILE", "DIR"];
+
 pub(super) fn is_struct_type(name: &str) -> bool {
-    STRUCT_TYPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_ref().is_some_and(|names| names.contains(name))
+    STANDARD_STRUCT_TYPES.contains(&name) || STRUCT_TYPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_ref().is_some_and(|names| names.contains(name))
 }
 
 /// The position of the `)` closing the `(` at `open`
@@ -356,7 +378,7 @@ fn is_annotation_line(line: &str) -> bool {
 }
 
 /// `line` without its block-comment text; `in_comment` carries an unclosed `/*` to the next line
-fn without_block_comments(line: &str, in_comment: &mut bool) -> String {
+pub(crate) fn without_block_comments(line: &str, in_comment: &mut bool) -> String {
     let mut kept = String::new();
     let mut rest = line;
     loop {

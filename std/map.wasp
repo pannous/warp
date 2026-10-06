@@ -1,0 +1,3 @@
+// The standard library module map (notes/stdlib.md): `use map`
+merge(a, b) := { out = a; ks = keys(b); for k in ks { out[k] = b.get(k) }; out }
+map_values(m, f) := { out = {}; ks = keys(m); for k in ks { out[k] = f(m.get(k)) }; out }

@@ -3,6 +3,9 @@
 `cargo browser-test [filter…]` builds tests/main.rs without the native feature for wasm32-wasip1 and calls
 `test_in_browser.py <tests.wasm> [libtest arguments]`: this serves the repository root and the binary, opens
 web/playground/tests.html with agent-browser and prints the results like libtest (exit code 101 on a failure).
+`test_in_browser.py --examples [name…]` runs the tour (examples.js) in the playground page itself, built by build.sh:
+each example's value and printed output must be the ones it names (a broken example fails CI, .github/workflows/pages.yml).
+`test_in_browser.py --examples --url https://warp.pannous.com/ [name…]` checks the tour of a deployed playground instead.
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
 Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
 src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
@@ -11,7 +14,10 @@ import functools, http.server, json, os, re, subprocess, sys, threading, time, u
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "8733"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", "2")
 PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
-SESSION = "warp-browser-tests"
+# one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
+SESSION = f"warp-browser-tests-{os.getpid()}"
+LAUNCH_ATTEMPTS = 3
+LAUNCH_SECONDS = 90  # a page that is not loaded by then did not start: relaunch, loudly
 POLL_SECONDS = 3
 BINARY_PATH = "/__tests__.wasm"
 INCLUDE_PREFIX = "/__include__/"
@@ -19,6 +25,7 @@ HEADER_NAME = re.compile(r"^[\w.+-]+(/[\w.+-]+)*\.h$")
 RESULTS_PATH = "/__results__"
 LISTING_QUERY = "listing"
 STUB_PATH = "/__stub__"  # answers with the status and body its query names: the fetch tests' HTTP stub (tests/common serve)
+ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its service worker
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 IGNORED_ARGUMENTS = ("--nocapture", "--quiet", "-q", "--color", "--format")
@@ -92,11 +99,79 @@ def serve(binary):
 	return server
 
 
+def open_page(url):
+	"""open `url` in this run's browser and wait until it loaded; a launch that fails is reported and retried, and after
+	LAUNCH_ATTEMPTS the run fails with the reason instead of waiting for the stall check"""
+	for attempt in range(1, LAUNCH_ATTEMPTS + 1):
+		try:
+			opened = subprocess.run(["agent-browser", "--session", SESSION, "open", url], capture_output=True, text=True, timeout=LAUNCH_SECONDS)
+			reason = opened.stderr.strip() or opened.stdout.strip()
+			deadline = time.time() + LAUNCH_SECONDS
+			while opened.returncode == 0 and time.time() < deadline:
+				if browser("eval", "document.readyState") == '"complete"':
+					return
+				time.sleep(1)
+			reason = reason if opened.returncode else f"the page did not load in {LAUNCH_SECONDS} s"
+		except subprocess.TimeoutExpired:
+			reason = f"agent-browser open did not return in {LAUNCH_SECONDS} s"
+		print(f"error: the browser did not start (attempt {attempt} of {LAUNCH_ATTEMPTS}): {reason}", file=sys.stderr)
+		subprocess.run(["agent-browser", "--session", SESSION, "close"], capture_output=True, timeout=60)
+	sys.exit(f"error: the browser did not start after {LAUNCH_ATTEMPTS} attempts (agent-browser, session {SESSION})")
+
+
 def browser(*arguments):
 	try:
 		return subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60).stdout.strip()
 	except subprocess.TimeoutExpired:
 		return ""  # a busy or crashed page: the stall check decides
+
+
+def show_example(name):
+	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds"""
+	script = f"""(async () => {{
+		const name = {json.dumps(name)};
+		await playground.chooseExample(name);
+		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
+		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
+		return JSON.stringify({{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent }});
+	}})()"""
+	shown = browser("eval", script)
+	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
+
+
+def wait_for_isolation():
+	"""a deployed page reloads once under coi-serviceworker.js (index.html) before it is cross-origin isolated: an example
+	chosen before that reload is lost; the local server sends the headers itself"""
+	deadline = time.time() + ISOLATION_SECONDS
+	while browser("eval", "document.readyState === 'complete' && self.crossOriginIsolated") != "true" and time.time() < deadline:
+		time.sleep(0.5)
+
+
+def check_examples(names, page_url=None):
+	"""every example of the tour shows its value and prints its text in the playground (the local build, or the deployed
+	one at `page_url`); exit code 101 on a difference"""
+	server = None
+	if not page_url:
+		if not os.path.isfile(os.path.join(REPOSITORY, "web", "playground", "warp.wasm")):
+			sys.exit("error: web/playground/warp.wasm is missing; build it with web/playground/build.sh")
+		server = serve(None)
+		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
+	open_page(page_url)
+	wait_for_isolation()
+	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
+	failures = []
+	names = names or list(examples)
+	for name in names:
+		expected, shown = examples[name], show_example(name)
+		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed") if part in expected and shown[part] != expected[part]]
+		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
+		if wrong:
+			failures.append(name)
+	browser("close")
+	if server:
+		server.shutdown()
+	print(f"\nexamples: {len(names) - len(failures)} of {len(names)} show what they promise" + (f"; failed: {', '.join(failures)}" if failures else ""))
+	sys.exit(101 if failures else 0)
 
 
 def build_components():
@@ -108,6 +183,10 @@ def build_components():
 
 
 def main():
+	if sys.argv[1:2] == ["--examples"]:
+		names = sys.argv[2:]
+		page_url = names[1] if names[:1] == ["--url"] else None
+		check_examples(names[2:] if page_url else names, page_url)
 	if sys.argv[1:2] == ["--serve"]:
 		binary = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
 		serve(binary)
@@ -118,7 +197,7 @@ def main():
 	build_components()
 	server = serve(binary)
 	query = urllib.parse.urlencode({"wasm": BINARY_PATH, "args": json.dumps(arguments), "workers": WORKERS, **({"perWorker": PER_WORKER} if PER_WORKER else {})})
-	browser("open", f"http://127.0.0.1:{PORT}/web/playground/tests.html?{query}")
+	open_page(f"http://127.0.0.1:{PORT}/web/playground/tests.html?{query}")
 	summary, shown, changed = None, "", time.time()
 	while summary is None:
 		time.sleep(POLL_SECONDS)

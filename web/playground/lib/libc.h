@@ -1,0 +1,31 @@
+// what libc.wasm exports (build_libc.sh), with the types of the C headers the compiler reads for `use c`: the browser
+// host (host.js libcImports) calls these for a program's C calls; anything else of libc is a loud error there
+size_t strlen(const char *s);
+int strcmp(const char *a, const char *b);
+int strncmp(const char *a, const char *b, size_t n);
+size_t strspn(const char *s, const char *accept);
+size_t strcspn(const char *s, const char *reject);
+char *strstr(const char *haystack, const char *needle);
+char *strchr(const char *s, int c);
+char *strrchr(const char *s, int c);
+char *strpbrk(const char *s, const char *accept);
+char *strdup(const char *s);
+int toupper(int c);
+int tolower(int c);
+int isalpha(int c);
+int isdigit(int c);
+int isalnum(int c);
+int isspace(int c);
+int isupper(int c);
+int islower(int c);
+int ispunct(int c);
+int isxdigit(int c);
+int atoi(const char *s);
+long atol(const char *s);
+long long atoll(const char *s);
+double atof(const char *s);
+int abs(int n);
+long labs(long n);
+long long llabs(long long n);
+int rand(void);
+void srand(unsigned int seed);

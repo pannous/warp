@@ -27,6 +27,7 @@ const WHOLE: &str = "range_whole";
 const LENGTH: &str = "range_length";
 const LENGTH_TEMPLATE: &str = "(if range_end - range_start > 0 then range_end - range_start else 0)";
 const INDEX_TEMPLATE: &str = "if range_index >= 1 and range_index <= range_length then range_start + range_index - 1 else range_whole#range_index";
+const BOUND_ARITHMETIC: [Op; 5] = [Op::Add, Op::Sub, Op::Mul, Op::Pow, Op::Mod];
 const SUM_TEMPLATE: &str = "range_length * (2 * range_start + range_length - 1) / 2";
 
 pub fn lower(node: Node) -> Node {
@@ -55,8 +56,14 @@ struct Range {
 	whole: Node,
 }
 
+/// An integer literal, a variable, or arithmetic of them (`10^12`, `n + 1`): worked out wherever the range is read
 fn plain_bound(bound: &Node) -> bool {
-	matches!(bound.drop_meta(), Node::Symbol(_) | Node::Number(crate::extensions::numbers::Number::Int(_)))
+	match bound.drop_meta() {
+		Node::Symbol(_) | Node::Number(crate::extensions::numbers::Number::Int(_)) => true,
+		Node::Key(left, op, right) if BOUND_ARITHMETIC.contains(op) => plain_bound(left) && plain_bound(right),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => plain_bound(&items[0]),
+		_ => false,
+	}
 }
 
 /// A range seen through parentheses, of any bounds: the range itself, its start and its end past the last number

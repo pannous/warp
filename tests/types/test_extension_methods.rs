@@ -20,3 +20,10 @@ fn a_swift_extension_block_adds_methods() {
 	is!("extension Int { func twice() -> Int { return self * 2 } }; 3.twice()", 6);
 	is!("extension Int { func twice() -> Int { self * 2 }; func plus(k: Int) -> Int { self + k } }; 3.twice().plus(1)", 7);
 }
+
+#[test]
+fn a_smart_scope_defines_methods_of_a_type() {
+	// wiki/inventions.md "Smart scopes": in the scope of a type, `it` is the value the method is called on
+	is!("Number {\n Square = it*it\n}\n3.Square", 9);
+	is!("Number { Square = it*it }; Square(4)", 16);
+}

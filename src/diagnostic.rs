@@ -78,10 +78,48 @@ pub fn paint(color: Color, text: &str) -> String {
 
 /// Does a message end its description with a position ` at line:column`
 pub fn names_position(message: &str) -> bool {
+	message_position(message).is_some()
+}
+
+/// The position ` at line:column` that ends a message's description
+pub fn message_position(message: &str) -> Option<(usize, usize)> {
 	let description = message.split("; fix: ").next().unwrap_or(message);
-	description.rsplit_once(" at ").is_some_and(|(_, place)| {
-		place.split_once(':').is_some_and(|(line, column)| !line.is_empty() && line.chars().all(|c| c.is_ascii_digit()) && column.chars().all(|c| c.is_ascii_digit()) && !column.is_empty())
-	})
+	let (_, place) = description.rsplit_once(" at ")?;
+	let (line, column) = place.split_once(':')?;
+	let number = |digits: &str| (!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())).then(|| digits.parse().ok()).flatten();
+	Some((number(line)?, number(column)?))
+}
+
+/// Where a failed program's error is: the position its message names (also for an error no diagnostic made)
+pub fn error_position(result: &Node) -> Option<(usize, usize)> {
+	let Node::Error(message) = result.drop_meta() else { return None };
+	let Node::Text(message) = message.drop_meta() else { return None };
+	message_position(message)
+}
+
+/// The source line at a position with `^^` under the word there (one `^` under any other character); tabs before it
+/// stay tabs so the marks line up
+pub fn excerpt(source: &str, line: usize, column: usize) -> Option<String> {
+	let text = source.lines().nth(line.checked_sub(1)?)?;
+	let before: Vec<char> = text.chars().take(column.checked_sub(1)?).collect();
+	if before.len() + 1 != column {
+		return None;
+	}
+	let is_word = |c: &char| c.is_alphanumeric() || *c == '_';
+	let word = text.chars().skip(before.len()).take_while(is_word).count().max(1);
+	let indent: String = before.iter().map(|&c| if c == '\t' { '\t' } else { ' ' }).collect();
+	let gutter = " ".repeat(line.to_string().len());
+	Some(format!("  {line} | {text}\n  {gutter} | {indent}{}", "^".repeat(word)))
+}
+
+/// Print the line a later warning or error names, from this program (the CLI's programs; a host shows them itself)
+pub fn show_lines_of(source: &str) {
+	*SHOWN_SOURCE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(source.to_string());
+}
+
+/// The line of the shown program at a position, with its marks
+pub fn shown_excerpt(line: usize, column: usize) -> Option<String> {
+	SHOWN_SOURCE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_deref().and_then(|source| excerpt(source, line, column))
 }
 
 /// The text of a node for a message: its serialization, or the source from its position to the end of the statement
@@ -165,6 +203,10 @@ thread_local! {
 	static ERROR_DIAGNOSTICS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
+/// The program the CLI runs: its warnings and errors print the line they name (show_lines_of); process-wide, as a
+/// program may compile on another thread
+static SHOWN_SOURCE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 /// The warning mode of every later compilation on this thread (the CLI's `--strict`)
 pub fn set_warning_mode(mode: WarningMode) {
 	WARNING_MODE.with(|current| current.set(mode));
@@ -204,7 +246,12 @@ pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 	match (warning_mode(), warnings.first()) {
 		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
 		_ => {
-			warnings.iter().for_each(|warning| eprintln!("warning: {warning}"));
+			for warning in warnings {
+				eprintln!("warning: {warning}");
+				if let Some(excerpt) = shown_excerpt(warning.line, warning.column) {
+					eprintln!("{excerpt}");
+				}
+			}
 			COMPILE_WARNINGS.with(|reported| reported.borrow_mut().extend_from_slice(warnings));
 			Ok(())
 		}
@@ -520,12 +567,32 @@ fn offer_acknowledgement(topic: &str, written: &str) {
 /// Educate with "got it": the hint (`written` → `preferred`, and why) is shown once per run until the user
 /// acknowledges it, then never again; it never blocks non-interactive runs, which just show the hint
 pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
+	noted_once(topic, written, || crate::normalize::hint(written, preferred, reason));
+}
+
+/// `educate_once` with advice that does not replace `written` (`subscribe before the loop`)
+pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str) {
+	noted_once(topic, written, || crate::normalize::advise(written, preferred, reason));
+}
+
+fn noted_once(topic: &str, written: &str, show: impl FnOnce()) {
 	let hints_off = crate::normalize::hint_mode() == crate::normalize::HintMode::Off;
 	if hints_off || is_acknowledged(topic, written) || silenced_by_comment(crate::normalize::hint_line()) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic)) {
 		return;
 	}
-	crate::normalize::hint(written, preferred, reason);
+	show();
 	offer_acknowledgement(topic, written);
+}
+
+/// Another language's word for a wasp word (`__add__` for `plus`, user 2026-10-06): it works, with a got-it note
+/// naming the wasp word and its "I meant: <wasp word>" fix; a word wasp needs not at all (`data class`, `val x`) is
+/// written with the word it stands before
+pub fn note_alias(written: &str, wasp_word: &str) {
+	let (foreign_word, reason) = match written.strip_suffix(wasp_word).map(str::trim) {
+		Some(dropped) if !dropped.is_empty() => (dropped, format!("{dropped} is superfluous: write {wasp_word}")),
+		_ => (written, format!("wasp says {wasp_word}")),
+	};
+	educate_once(&format!("alias-{foreign_word}"), written, wasp_word, &reason);
 }
 
 /// The reading the program gets: an error-fallback ambiguity is an error naming every explicit form; otherwise the

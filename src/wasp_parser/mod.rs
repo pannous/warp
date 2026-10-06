@@ -13,6 +13,7 @@ mod user_operators;
 mod scanning;
 mod xml;
 mod lookahead;
+pub use lookahead::PREFIX_OPERATOR_WORDS;
 mod atoms;
 mod expressions;
 mod statements;
@@ -59,11 +60,34 @@ const NONLOCAL_WORD: &str = "nonlocal";
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
-const ELEMENT_WISE_OPERATORS: [(char, Op); 4] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div)];
+const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div), ('^', Op::Pow)];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
 const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
+/// Words before a class declaration that change nothing in wasp: `data class` (a wasp class compares by value already),
+/// `open`, `abstract`, `sealed`, `final`, visibility
+const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"];
+/// The keywords of a field in a primary constructor `class Point(val x: Int, var y: Int)`
+const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
+/// `new Point(1, 2)`: the construction `Point(1, 2)`
+const NEW_WORD: &str = "new";
+/// Java's and TypeScript's `class Square implements Shape {…}`
+const IMPLEMENTS_WORD: &str = "implements";
+/// The got-it topic of a class naming its traits (`implements Shape`, Swift's `: Shape`)
+const CONFORMANCE_TOPIC: &str = "conformance-list";
+/// `enum Color {red, green}` (declarations::enum_object), Kotlin's `enum class`
+const ENUM_WORD: &str = "enum";
+/// Go's `type Shape interface {…}` declares the trait Shape
+const GO_INTERFACE_WORD: &str = "interface";
+/// Go's `type Point struct {…}` declares the class Point
+const GO_STRUCT_WORD: &str = "struct";
+/// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
+const OPERATOR_WORD: &str = "operator";
+/// Words before a member of a class body that change nothing in wasp: Swift's `mutating func`, visibility, `override`
+pub const MEMBER_MODIFIERS: [&str; 11] = ["mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"];
+/// Python's root class `class Point(object):`, no parent of its own
+const PYTHON_ROOT_CLASS: &str = "object";
 /// `record point{x:int y:int}` declares a type like `struct`, but `record` is also an everyday variable name:
 /// it is a declaration only when a name and a field block follow
 const RECORD_WORD: &str = "record";
@@ -101,8 +125,15 @@ const IN_KEYWORD: &str = "in";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
 const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
+const PYTHON_LAMBDA_KEYWORD: &str = "lambda";
 const ELSE_KEYWORD: &str = "else";
 const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
+/// The receiver a Ruby instance variable `@x` reads, `self.x`
+const RECEIVER_WORD: &str = "self";
+/// Ruby's field declarations `attr_accessor :x, :y`
+const RUBY_FIELD_WORDS: [&str; 3] = ["attr_accessor", "attr_reader", "attr_writer"];
+/// The words a Ruby `end` closes in a class body: `def … end`, `do … end`
+const RUBY_END_OPENERS: [&str; 3] = ["def", "do", "class"];
 const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
 /// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
 const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
@@ -238,6 +269,11 @@ impl SpecialInfix {
 				if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient }
 			}
 			SpecialInfix::Pipeline => piped(lhs, operand),
+			// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
+			SpecialInfix::ElementWise(Op::Mul) if matches!(operand, Empty) => {
+				crate::normalize::hint(&format!("{}.*", lhs.serialize()), &lhs.serialize(), "wasp imports a module whole");
+				lhs
+			}
 			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
 			SpecialInfix::Membership => Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), operand], Bracket::None, Separator::Space),
 			SpecialInfix::DotCall => dot_call(lhs, operand),
@@ -284,8 +320,8 @@ pub const EXTENDS_KEYWORD: &str = "extends";
 /// `mixin Walker{…}` declares fields and methods classes take in: `class Duck with Walker, Swimmer {…}`
 pub const MIXIN_WORD: &str = "mixin";
 pub const WITH_KEYWORD: &str = "with";
-/// The constructor of a class body, `value{…}` or `value(name){…}` (wiki/constructor.md)
-pub const CONSTRUCTOR_WORD: &str = "value";
+/// The constructor of a class body, `init{…}` or `init(name){…}` (wiki/constructor.md, P162)
+pub const CONSTRUCTOR_WORD: &str = "init";
 /// The accessors of a class property, `get age() {…}`, `set age(v) {…}` (wiki/property.md)
 pub const ACCESSOR_WORDS: [&str; 2] = ["get", "set"];
 /// `static k = 3` in a class body: a member of the class, not of each instance (P122); kept as the annotation `@static`
@@ -323,6 +359,16 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 	})
 }
 
+/// `keys(m)`, `m.keys`, `m.keys()`: an iterable whose items are a map's keys
+fn iterates_keys(iterable: &Node) -> bool {
+	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::library_words::MAP_KEYS);
+	let is_keys_call = |call: &Node| is_keys_word(call) || matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_keys_word));
+	match iterable.drop_meta() {
+		Node::Key(_, Op::Dot, method) => is_keys_call(method),
+		call => is_keys_call(call),
+	}
+}
+
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
 pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
 /// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
@@ -332,6 +378,10 @@ const ODD_WORD: &str = "odd";
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
+const TO_SENTENCE_WORD: &str = "To";
+/// `to greet p do …`: the word between a `to` definition's parameters and its body
+const DO_WORD: &str = "do";
+const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
 const TIMES_WORD: &str = "times";
@@ -446,8 +496,13 @@ const PIPE_GLYPH: &str = "|";
 /// `|>` binds below range and arithmetic, above `as` and comparisons
 const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
 
-/// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`
-fn piped(value: Node, stage: Node) -> Node {
+/// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`; a braceless call is grouped, one argument:
+/// `square xs |> filter(p)` → `filter((square xs), p)`
+pub(crate) fn piped(value: Node, stage: Node) -> Node {
+	let value = match value.drop_meta() {
+		Node::List(_, Bracket::None, Separator::Space) => Node::List(vec![value], Bracket::Round, Separator::None),
+		_ => value,
+	};
 	match stage.drop_meta() {
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(_))) => {
 			let mut items = items.clone();
@@ -568,6 +623,10 @@ pub struct WaspParser {
 	equals_compares: bool,
 	/// Inside the iterable of `for x in …` a block is the loop body, never an argument: `for i in 0..n {…}`
 	in_for_header: bool,
+	/// The variables of the enclosing `for k in keys(m)` loops: `m[k]` looks a key up, so no indexing hint
+	key_variables: Vec<String>,
+	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
+	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
 	group_start: (usize, usize),
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
@@ -584,8 +643,15 @@ pub struct WaspParser {
 	stops_at_end: bool,
 	/// Inside Python's `f"…{x}…"`: braces are holes, `{{` and `}}` the braces themselves
 	brace_holes: bool,
+	/// The type parameters skipped after a function's name (`fn id<T>`), marked on the atom (P157)
+	generic_names: Option<(String, Vec<String>)>,
 	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
 	in_command: bool,
+	/// Parsing the block of a data literal (`a{ … }`, not a declared type's constructor): a spaced child `c { d:3 }` there
+	/// is the child node of the glued `c{ d:3 }`, as no call with a block can be meant (card spaced-child)
+	in_data_literal: bool,
+	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
+	pipe_takes_call: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
 	times_loops: usize,
 	/// A comment between two statements: it belongs to the next one (parse_value attaches it)
@@ -665,12 +731,17 @@ fn is_plain_name(word: &str) -> bool {
 /// outside comments and texts (`// the type end` declares nothing)
 fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 	let source = code_only(source);
-	let words: Vec<&str> = source.split(|c: char| !is_identifier_char(c) && c != '(').flat_map(|word| word.split_inclusive('(')).filter(|word| !word.is_empty()).collect();
+	let words: Vec<&str> = source.split_whitespace().collect();
 	words.windows(2)
 		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
-		.map(|pair| pair[1])
+		// the name right after the word: `class Point{`, `class Point(val x: Int)`, `record Point(int X)`, `class P:`;
+		// `record = find(…)` declares nothing
+		.filter_map(|pair| {
+			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch)).collect();
+			let rest = &pair[1][name.len()..];
+			(rest.is_empty() || rest.starts_with(['(', '{', '<', ':', ';'])).then_some(name)
+		})
 		.filter(|name| is_plain_name(name))
-		.map(str::to_string)
 		.collect()
 }
 
@@ -844,6 +915,8 @@ impl WaspParser {
 			options,
 			equals_compares: false,
 			in_for_header: false,
+			key_variables: vec![],
+			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,
 			type_fields: None,
@@ -851,7 +924,10 @@ impl WaspParser {
 			signed_list_element: None,
 			stops_at_end: false,
 			brace_holes: false,
+			generic_names: None,
 			in_command: false,
+			in_data_literal: false,
+			pipe_takes_call: false,
 			times_loops: 0,
 			pending_comment: None,
 			after_function_keyword: false,

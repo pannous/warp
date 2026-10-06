@@ -441,6 +441,11 @@ impl WaspParser {
 		let Some((unit, length)) = crate::time::unit_after(&self.chars[self.pos..]) else {
 			return number;
 		};
+		// `{year:1970 month:1}`: a unit word that starts the next entry or assignment is no unit
+		let after_word: String = self.chars[self.pos + length..].iter().skip_while(|c| **c == ' ').take(2).collect();
+		if after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==") {
+			return number;
+		}
 		self.advance_by(length);
 		Node::data(unit.times(*count))
 	}
@@ -490,17 +495,26 @@ impl WaspParser {
 		matches!(next, ')' | ']' | '}' | ',' | ';' | '\n' | '\r' | '\0') || (next == '=' && after != '=')
 	}
 
+	/// Do blanks and then `bracket` follow (`c {`, not the glued `c{`)
+	pub(super) fn blanks_then(&self, bracket: char) -> bool {
+		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		blanks > 0 && self.peek_char(blanks) == bracket
+	}
+
 	/// Do blanks and then a block of fields follow the cursor: `{}` or `{ name: …`, never a statement block like `{ out += x }`
-	pub(super) fn block_after_blanks(&self) -> bool {
+	/// `assignments`: C#'s object initializer `Point { X = 3 }` of a declared class sets its fields with `=` too
+	pub(super) fn block_after_blanks(&self, assignments: bool) -> bool {
 		let blanks_from = |start: usize| (start..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
 		let blanks = blanks_from(0);
 		if blanks == 0 || self.peek_char(blanks) != '{' {
 			return false;
 		}
-		let first = blanks + 1 + blanks_from(blanks + 1);
+		// the block's first entry may start on the next line (`Person {⏎ name: "Alice" …}`)
+		let first = blanks + 1 + (blanks + 1..).take_while(|at| self.peek_char(*at).is_whitespace()).count();
 		let name = (first..).take_while(|at| self.peek_char(*at).is_alphanumeric() || self.peek_char(*at) == '_').count();
 		let after_name = first + name + blanks_from(first + name);
-		self.peek_char(first) == '}' || (name > 0 && self.peek_char(after_name) == ':' && self.peek_char(after_name + 1) != '=')
+		let assigns = assignments && self.peek_char(after_name) == '=' && self.peek_char(after_name + 1) != '=';
+		self.peek_char(first) == '}' || (name > 0 && ((self.peek_char(after_name) == ':' && self.peek_char(after_name + 1) != '=') || assigns))
 	}
 
 	/// Do blanks and then a closing bracket, `,`, `;` or the line end follow `offset`: nothing a ternary could be followed by

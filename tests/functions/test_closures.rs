@@ -154,3 +154,13 @@ fn closures_given_floats_take_floats() {
 fn a_float_reassigned_from_its_closure_stays_a_float() {
 	is!("apply(g, n) := { s=0.5 as float; for i in 0..n { s = g(s) }; s }; k = 1.5 as float; apply(x => x*k, 3)", 1.6875);
 }
+
+// card curried-lambda (found by the kitchen sink): the glued call groups of `add(2)(5)` belong to the call, also as an
+// assigned value or an argument; they were the assignment's or a second argument
+#[test]
+fn a_curried_call_as_a_value_and_an_argument() {
+	is!("add(a) := b => a + b; y = add(2)(5); y", 7);
+	is!("twice = f => x => f(f(x)); y = twice(x => x + 3)(1); y", 7);
+	is!("add(a) := b => a + b; xs = []; xs.push(add(2)(5)); xs#1", 7);
+	is!("twice = f => x => f(f(x)); checks = []; checks.push(twice(x => x + 3)(1) == 7); checks#1", true);
+}

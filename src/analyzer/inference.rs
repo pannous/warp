@@ -219,8 +219,8 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		if name == crate::closures::CLOSURE_NEW {
 			return Kind::Function;
 		}
-		// another runtime's value: any Node, held like a map value (its kind decided at run time)
-		if name == crate::host::FOREIGN_CALL {
+		// another runtime's value or a std adapter's: any Node, held like a map value (its kind decided at run time)
+		if crate::host::ANY_VALUE_WORDS.contains(&name.as_str()) {
 			return Kind::Empty;
 		}
 		// a cell's value is held as a Node, like a map value (Empty), and joins a text or adds at run time
@@ -231,7 +231,11 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			return kind;
 		}
 		if name == crate::wasp_parser::TEXT_TIMES {
-			return Kind::Text;
+			// `it times it` of numbers multiplies (list_emitter.rs emit_text_times)
+			return match items.get(2).map(|repeated| infer_type(repeated, scope)) {
+				Some(kind) if kind.is_int() || kind.is_float() => arithmetic_kind(infer_type(&items[1], scope), &Op::Mul, kind),
+				_ => Kind::Text,
+			};
 		}
 		if name == crate::type_tests::TYPE_WORD && items.len() == 2 {
 			return Kind::Symbol; // the type's name

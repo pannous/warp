@@ -176,10 +176,18 @@ impl WaspParser {
 			let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
 			return Some(Node::List(vec![Symbol("for".to_string()), iterable, block], Bracket::None, Separator::Space));
 		};
+		let key_variable = match variable.drop_meta() {
+			Symbol(name) if iterates_keys(&iterable) => Some(name.clone()),
+			_ => None,
+		};
+		self.key_variables.extend(key_variable.clone());
 		let body = match body_word {
 			Some(word) => self.colon_body(word), // `for i in 0..n: body`, `for i in 0..n do body`
 			None => self.parse_atom(),
 		};
+		if key_variable.is_some() {
+			self.key_variables.pop();
+		}
 		// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the item
 		// (P46), a call `friend(…)` still constructs
 		let (variable, body) = match variable.drop_meta() {

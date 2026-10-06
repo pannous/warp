@@ -36,15 +36,19 @@ fn a_text_alone_sends_a_named_event_without_data() {
 #[test]
 #[cfg(all(feature = "native", unix))]
 fn a_named_event_reaches_another_program() {
-	let listener = crate::common::warp_command()
-		.args(["--no-ask", "on stop the machine from \"test-named-other\" { print \"heard \" + event.reason; exit }\nsleep(3000 ms)\nprint \"nothing\""])
+	use std::io::BufRead;
+	// the listener's socket is bound once its `on … from` statement ran: it says so, and the broadcast waits for that
+	// rather than for a time, which a loaded machine overran (card flaky-control-test)
+	let mut listener = crate::common::warp_command()
+		.args(["--no-ask", "on stop the machine from \"test-named-other\" { print \"heard \" + event.reason; exit }\nprint \"listening\"\nsleep(3000 ms)\nprint \"nothing\""])
 		.stdout(std::process::Stdio::piped())
 		.spawn()
 		.expect("the listener starts");
-	std::thread::sleep(std::time::Duration::from_millis(800));
+	let mut lines = std::io::BufReader::new(listener.stdout.take().expect("the listener's output")).lines();
+	assert_eq!(lines.next().and_then(Result::ok).as_deref(), Some("listening"));
 	printed("broadcast stop the machine{reason: \"done\"} on \"test-named-other\"");
-	let output = listener.wait_with_output().expect("the listener ends");
-	assert_eq!(String::from_utf8_lossy(&output.stdout).lines().next(), Some("heard done"));
+	assert_eq!(lines.next().and_then(Result::ok).as_deref(), Some("heard done"));
+	listener.wait().expect("the listener ends");
 }
 
 #[test]
@@ -55,5 +59,5 @@ fn a_send_is_a_statement_of_no_value() {
 
 #[test]
 fn raise_stays_inside_the_program() {
-	crate::is!("n = 1; on stop the machine { n = 2 }; raise stop the machine; n", 2);
+	crate::is!("n = 1; on stop the machine { n = 2 }; emit stop the machine; n", 2);
 }

@@ -2,36 +2,46 @@
 // Uses unified Kind and Signature types from function.rs
 
 use std::collections::HashMap;
-use std::path::Path;
 use crate::type_kinds::Kind;
 use crate::function::{Signature, Arg};
 
 /// Include directories searched for headers, in order (a C compiler's order: the first holding a header wins)
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 const INCLUDE_DIRS: &[&str] = &[
     "/opt/homebrew/include",
     "/usr/local/include",
     "/usr/include",
     "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include",
 ];
+/// The page's include directory: the C headers of what its host provides (web/playground/lib/libc.h, P147)
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+const PAGE_INCLUDE: &str = "page:lib";
 /// `:`-separated include directories replacing INCLUDE_DIRS (web/playground's test runner serves exactly one)
 const INCLUDE_VARIABLE: &str = "WARP_INCLUDE";
 const SDL_HEADERS: [&str; 4] = ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_timer.h"];
 /// libc's headers: strings, conversions and memory, stdio, character classes (`toupper`). macOS declares much of them
 /// in the _stdlib.h, _stdio.h and _ctype.h that stdlib.h, stdio.h and ctype.h include (`getenv`, `fopen`, `toupper`); a header missing on Linux is skipped
-const LIBC_HEADERS: [&str; 7] = ["string.h", "stdlib.h", "_stdlib.h", "stdio.h", "_stdio.h", "ctype.h", "_ctype.h"];
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+const LIBC_HEADERS: [&str; 8] = ["string.h", "_string.h", "stdlib.h", "_stdlib.h", "stdio.h", "_stdio.h", "ctype.h", "_ctype.h"];
+/// the page's libc is libc.wasm, its functions declared in one header
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+const LIBC_HEADERS: [&str; 1] = ["libc.h"];
 /// Libraries whose header is not named after them: `use z` reads zlib.h
 const LIBRARY_HEADERS: [(&str, &str); 1] = [("z", "zlib.h")];
 
 pub(crate) fn include_dirs() -> Vec<String> {
     match std::env::var(INCLUDE_VARIABLE) {
         Ok(list) => list.split(':').filter(|dir| !dir.is_empty()).map(str::to_string).collect(),
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        Err(_) => vec![PAGE_INCLUDE.to_string()],
+        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
         Err(_) => INCLUDE_DIRS.iter().map(|dir| dir.to_string()).collect(),
     }
 }
 
 /// The path of `header` (`math.h`, `SDL2/SDL_render.h`) in the first of `dirs` that holds it
 pub fn find_header_in(header: &str, dirs: &[impl AsRef<str>]) -> Option<String> {
-    dirs.iter().map(|dir| format!("{}/{}", dir.as_ref(), header)).find(|path| Path::new(path).exists())
+    dirs.iter().map(|dir| format!("{}/{}", dir.as_ref(), header)).find(|path| crate::web::file_exists(path))
 }
 
 /// The headers that declare a library's functions, each found once in the include directories
@@ -108,7 +118,7 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
     let decl = decl.trim().trim_end_matches(';').trim();
 
     let paren_pos = decl.find('(')?;
-    let close_paren = crate::ffi::matching_paren(&decl, paren_pos)?;
+    let close_paren = crate::ffi::matching_paren(decl, paren_pos)?;
 
     let before_paren = &decl[..paren_pos];
     let params_str = &decl[paren_pos + 1..close_paren];
@@ -163,7 +173,7 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
                 (parts[0].to_string(), format!("p{}", i))
             } else {
                 let last = *parts.last().unwrap();
-                let is_name = last.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false)
+                let is_name = last.chars().next().map(|c| c.is_alphabetic() || c == '_').unwrap_or(false)
                     && !last.contains('*');
                 if is_name && parts.len() > 1 {
                     (parts[..parts.len() - 1].join(" "), last.trim_start_matches('*').to_string())
@@ -186,14 +196,14 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
 
 /// Parse a header file and extract all function signatures
 pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiFunction> {
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => return vec![],
-    };
+    let Some(content) = crate::web::read_text(path) else { return vec![] };
 
+    // block comments span lines, and their prose may read like a call (glibc's "because tolower (EOF) must be EOF")
+    let mut in_comment = false;
     content
         .lines()
-        .filter_map(|line| parse_declaration(line, library))
+        .map(|line| crate::ffi::without_block_comments(line, &mut in_comment))
+        .filter_map(|line| parse_declaration(&line, library))
         .collect()
 }
 
@@ -238,6 +248,7 @@ pub fn get_library_signatures(library: &str) -> Vec<FfiFunction> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn test_parse_simple_function() {

@@ -7,7 +7,9 @@ relays an explicit user decision counts as the user's decision.
 
 Read first: AGENTS.md, notes/roles.md (roles, enforcement), notes/welcoming.md (clear intent → compile it; ambiguous →
 warning with "got it" or a loud error naming the explicit forms; preferred syntax differs → educate), and the decided
-rules in notes/open_decisions.md and wiki/Footguns.md.
+standing rules in notes/open_decisions.md and wiki/Footguns.md. Decisions reach you from the Interviewer or Supervisor;
+once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
+when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
 
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
@@ -19,9 +21,11 @@ rules in notes/open_decisions.md and wiki/Footguns.md.
   Interviewer with the exact action, and wait on that item only while working on everything else. The Interviewer
   asks the user and relays the answer verbatim; that relayed answer is the user's confirmation.
 - Work in a git worktree outside the repo: `cowtree add -b <branch> /Users/me/dev/angles/warp.worktrees.noindex/<branch> origin/main`,
-  with the uncommitted build tweak `version = "0.1.1-<branch>"` in its Cargo.toml and `version = "0.1.0-<branch>"` in
-  crates/warp-runtime/Cargo.toml (otherwise its stale warp-runtime replaces other branches' build in the shared target
-  dir).
+  with the uncommitted build tweak: append `-<branch>` to the current `version = "…"` of both Cargo.toml and
+  crates/warp-runtime/Cargo.toml, and to the `version = "…"` of the warp-runtime path dependency in Cargo.toml (a
+  pre-release version doesn't satisfy the plain requirement; otherwise its stale warp-runtime replaces other branches'
+  build in the shared target dir). Check with `grep -n version Cargo.toml crates/warp-runtime/Cargo.toml`: a sed
+  written for an old version number silently changes nothing. The Integrator's version_tweak.sh does the same.
   Never edit /Users/me/dev/angles/warp itself (the user's checkout).
 - Word choices need no question (user 2026-10-06, the alias mechanism): when alternatives are only different words
   for the same thing, make the recommended word canonical and the others aliases that work with a got-it note and an

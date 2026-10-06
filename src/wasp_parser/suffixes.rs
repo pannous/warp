@@ -170,7 +170,9 @@ impl WaspParser {
 		if self.options.data_mode || matches!(lhs.drop_meta(), Empty) {
 			return None;
 		}
-		if (min_bp <= TIMES_BP || self.times_fills_list()) && self.matches_keyword(TIMES_WORD) {
+		// `x = it times it`: with a value after it (no block) `times` binds like `*` anywhere
+		let value_follows = self.value_after_times();
+		if (min_bp <= TIMES_BP || self.times_fills_list() || (value_follows && min_bp <= Op::Mul.binding_power().0)) && self.matches_keyword(TIMES_WORD) {
 			self.advance_by(TIMES_WORD.len());
 			return Some(self.parse_times_loop(lhs.clone()));
 		}
@@ -257,6 +259,16 @@ impl WaspParser {
 	}
 
 	/// `N times {body}` and `N times: body` count with a hidden variable of its own, so nested loops do not meet
+	/// `times` at the cursor followed by a value (a name, a number or a text), no block
+	fn value_after_times(&self) -> bool {
+		if !self.matches_keyword(TIMES_WORD) {
+			return false;
+		}
+		let after = (TIMES_WORD.len()..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(TIMES_WORD.len());
+		let next = self.peek_char(after);
+		next.is_ascii_digit() || matches!(next, '"' | '\'') || self.is_identifier_start(after)
+	}
+
 	pub(super) fn parse_times_loop(&mut self, count: Node) -> Node {
 		self.skip_spaces();
 		let body = match self.current_char() {
@@ -270,7 +282,8 @@ impl WaspParser {
 				return crate::analyzer::filled_list(count, &list).unwrap_or_else(|| error("`n times [x]` repeats one element: `3 times [0]`"));
 			}
 			// `3 times "ab"`, `3 times greeting`: the text repeated (a non-text is an error where its kind is known)
-			quote_or_letter if matches!(quote_or_letter, '"' | '\'') || self.is_identifier_start(0) => return Node::List(vec![Symbol(TEXT_TIMES.to_string()), count, self.parse_atom()], Bracket::Round, Separator::None),
+			// `3 times 4`: numbers multiply (list_emitter.rs emit_text_times)
+			quote_or_letter if matches!(quote_or_letter, '"' | '\'') || self.is_identifier_start(0) || quote_or_letter.is_ascii_digit() => return Node::List(vec![Symbol(TEXT_TIMES.to_string()), count, self.parse_atom()], Bracket::Round, Separator::None),
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
 		self.times_loops += 1;
@@ -318,14 +331,39 @@ impl WaspParser {
 			return None;
 		}
 		self.advance(); // skip ']'
+		if let Some(node) = self.try_attributed_body(lhs, &indices) {
+			return Some(node);
+		}
 		// `int[n]` is n zeros of the type unless int is a variable (analyzer lower_declarations): no indexing hint
 		let names_a_type = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::zero_list(Empty, word).is_some());
-		if slice_bounds(&indices[0]).is_none() && !names_a_type {
+		let is_key_variable = matches!(indices[0].drop_meta(), Node::Symbol(index) if self.key_variables.contains(index));
+		if slice_bounds(&indices[0]).is_none() && !names_a_type && !is_key_variable {
 			crate::normalize::set_position_of(lhs);
 			norm::index_operator(&crate::normalize::operand_text(lhs), &crate::normalize::operand_text(&indices[0]), true);
 		}
 
 		Some(indices.into_iter().fold(lhs.clone(), subscript))
+	}
+
+	/// `a[id=1]{…}` (wiki/reference.md): attributes in brackets before a body are its meta entries, `a{@id:1 …}`
+	fn try_attributed_body(&mut self, lhs: &Node, indices: &[Node]) -> Option<Node> {
+		let attributes: Vec<Node> = indices.iter().flat_map(attribute_items).map(|item| match item.drop_meta() {
+			Node::Key(key, Op::Assign | Op::Colon, value) if matches!(key.drop_meta(), Symbol(_)) => {
+				Some(Node::Key(Box::new(Symbol(format!("{ATTRIBUTE_MARK}{}", key.name()))), Op::Colon, value.clone()))
+			}
+			_ => None,
+		}).collect::<Option<_>>()?;
+		let mut offset = 0;
+		while self.peek_char(offset) == ' ' {
+			offset += 1;
+		}
+		if !matches!(lhs.drop_meta(), Symbol(_)) || self.peek_char(offset) != '{' {
+			return None;
+		}
+		self.skip_spaces();
+		let Node::List(items, bracket, separator) = self.parse_bracketed('{') else { return None };
+		let body = Node::List([attributes, items].concat(), bracket, separator);
+		Some(Node::Key(Box::new(lhs.clone()), Op::Colon, Box::new(body)))
 	}
 
 	/// `[:end]` and `[:]`, a slice from the start: `ø:end`
@@ -378,7 +416,7 @@ impl WaspParser {
 		// At statement level a list `f a b` is a call with all its items; a function of the implicit `it` takes one argument,
 		// so `f 3-1 > 15` compares `f(3-1)` just like the operand `1 + f 3-1 > 15` does
 		let takes_one_argument = lhs_is_defined_function && !self.functions_with_parameters.contains(&lhs.name());
-		if (min_bp == 0 && !takes_one_argument) || min_bp > max_bp_for_application {
+		if (min_bp == 0 && !takes_one_argument) || min_bp > max_bp_for_application || self.glued_pair_bp == Some(min_bp) {
 			return None;
 		}
 		if !lhs_is_callable || !self.can_start_atom() || !should_apply || (ch == '{' && self.in_for_header) {
@@ -395,5 +433,13 @@ impl WaspParser {
 			Bracket::None,
 			Separator::Space,
 		))
+	}
+}
+
+/// `id=1 kind="x"` in brackets: each attribute
+fn attribute_items(index: &Node) -> Vec<Node> {
+	match index.drop_meta() {
+		Node::List(items, Bracket::None, _) => items.clone(),
+		single => vec![single.clone()],
 	}
 }

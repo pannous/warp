@@ -158,7 +158,7 @@ fn start(interpreter: &Interpreter) -> Result<Runtime, String> {
 	Ok(Runtime { _child: child, input, output })
 }
 
-fn json_of(node: &Node) -> Value {
+pub(crate) fn json_of(node: &Node) -> Value {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Square | Bracket::Round | Bracket::None, _) => Value::Array(items.iter().map(json_of).collect()),
 		Node::Key(key, Op::Colon, value) => serde_json::json!({ key.name(): json_of(value) }),
@@ -186,7 +186,7 @@ fn codepoint_of(entries: &serde_json::Map<String, Value>) -> Option<char> {
 }
 
 /// A JSON value as a Node: null ø, booleans 1/0, objects `{key:value …}`
-fn node_of(value: &Value) -> Node {
+pub(crate) fn node_of(value: &Value) -> Node {
 	match value {
 		Value::Null => Node::Empty,
 		Value::Bool(truth) => Node::Number(Number::Int(i64::from(*truth))),

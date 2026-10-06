@@ -123,8 +123,19 @@ impl WaspParser {
 			let statement_start = items_with_seps.iter().rposition(|(_, separator)| *separator != Separator::Space).map_or(0, |last| last + 1);
 			let in_command = items_with_seps.get(statement_start).is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(_)));
 			let outer_command = std::mem::replace(&mut self.in_command, in_command);
+			// `square xs |> sum` is `sum(square xs)`: the call of a function on its one argument is the piped value
+			let calls_function = in_command && items_with_seps.len() == statement_start + 1
+				&& matches!(items_with_seps[statement_start].0.drop_meta(), Symbol(name) if crate::type_name_matching::names_a_function(name));
+			let outer_pipe = std::mem::replace(&mut self.pipe_takes_call, calls_function);
 			let item = self.parse_value();
+			self.pipe_takes_call = outer_pipe;
 			self.in_command = outer_command;
+			let item = if calls_function && { self.skip_spaces_and_inline_comments(); self.at_pipeline() } {
+				let (function, _) = items_with_seps.pop().expect("the function before its argument");
+				self.continue_expr(Node::List(vec![function, item], Bracket::None, Separator::Space), 0)
+			} else {
+				item
+			};
 
 			let consumed_input = self.pos != pos_before;
 			// `==` is loose (false equals ø): only a real ø is skipped
@@ -146,8 +157,12 @@ impl WaspParser {
 				self.base_indent = line_indent;
 				let body = self.parse_list_with_separators(None, Bracket::None);
 				self.base_indent = old_indent;
-				// Combine item with indented body as Key
-				Node::Key(Box::new(Symbol(item.name())), Op::Colon, Box::new(body))
+				// Combine item with indented body as Key; a call keeps its parameters (Ruby's `def f(x)` and its lines)
+				let head = match item.drop_meta() {
+					Node::List(call, Bracket::Round, _) if matches!(call.first().map(Node::drop_meta), Some(Symbol(_))) => item,
+					_ => Symbol(item.name()),
+				};
+				Node::Key(Box::new(head), Op::Colon, Box::new(body))
 			} else if had_newline && line_indent < self.base_indent && bracket == Bracket::None {
 				// Dedent - push item and exit this level
 				items_with_seps.push((item, Separator::None));
@@ -181,6 +196,13 @@ impl WaspParser {
 				Separator::Space
 			};
 
+			let item = match items_with_seps.last() {
+				Some((previous, Separator::Space)) if assigned_method_call(previous) && is_block(&item) => {
+					let (previous, _) = items_with_seps.pop().expect("guarded");
+					with_trailing_block(previous, item)
+				}
+				_ => item,
+			};
 			items_with_seps.push((item, sep));
 
 			if self.pos == pos_before {
@@ -293,7 +315,7 @@ impl WaspParser {
 	/// Used for class/struct definitions to convert type names to Type nodes
 	pub(super) fn transform_fields_to_types(node: Node) -> Node {
 		match node {
-			// a keyword method (`def scaled(k) { side * k }`) or a constructor (`value(n) {…}`) in a class body: its body is
+			// a keyword method (`def scaled(k) { side * k }`) or a constructor (`init(n) {…}`) in a class body: its body is
 			// code, no field types
 			Node::List(items, bracket, sep) if items.first().is_some_and(starts_code) => {
 				Node::List(items, bracket, sep)
@@ -356,11 +378,37 @@ fn is_parameter_word(node: &Node) -> bool {
 	}
 }
 
-/// The first word of a class-body item that is code: a function keyword, or the constructor call `value(n)`
+/// The first word of a class-body item that is code: a function keyword, or the constructor call `init(n)`
 fn starts_code(first: &Node) -> bool {
 	match first.drop_meta() {
-		Node::Symbol(word) => crate::operators::is_function_keyword(word) || super::ACCESSOR_WORDS.contains(&word.as_str()),
-		Node::List(call, Bracket::Round, _) => matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::CONSTRUCTOR_WORD),
+		Node::Symbol(word) => crate::operators::is_function_keyword(word) || super::ACCESSOR_WORDS.contains(&word.as_str()) || super::MEMBER_MODIFIERS.contains(&word.as_str()),
+		// `init(n) {…}`, JavaScript's `sum() {…}` and `constructor(x, y) {…}`
+		Node::List(call, Bracket::Round, _) => matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_))),
 		_ => false,
+	}
+}
+
+/// `f(xs) := xs.map`, `ys = xs.filter`, `x -> x.map`: a definition or lambda whose value ends in a method name, waiting
+/// for its trailing block
+fn assigned_method_call(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(_, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, value) => {
+			matches!(value.drop_meta(), Node::Key(_, Op::Dot, method) if matches!(method.drop_meta(), Symbol(_))) || assigned_method_call(value)
+		}
+		_ => false,
+	}
+}
+
+fn is_block(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
+}
+
+/// `f(xs) := xs.map { it*10 }` is `f(xs) := (xs.map {it*10})`: the block belongs to the method call, not to the statement
+fn with_trailing_block(assignment: Node, block: Node) -> Node {
+	match assignment {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_trailing_block(*node, block)), data },
+		Node::Key(target, op, value) if assigned_method_call(&value) => Node::Key(target, op, Box::new(with_trailing_block(*value, block))),
+		Node::Key(target, op, value) => Node::Key(target, op, Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space))),
+		other => other,
 	}
 }

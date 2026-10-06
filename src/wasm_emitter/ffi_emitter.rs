@@ -8,46 +8,33 @@ use Instruction as I;
 use super::WasmGcEmitter;
 
 impl WasmGcEmitter {
-	/// Get the number of string pair arguments for a given FFI function
-	pub(super) fn string_pair_arg_count(&self, fn_name: &str) -> usize {
-		match fn_name {
-			"strcmp" | "strncmp" => 2, // (ptr1, len1, ptr2, len2, ...)
-			_ => 0,
-		}
-	}
-
 	/// Emit arguments for FFI function call with type conversion
-	pub(super) fn emit_ffi_args(&mut self, func: &mut Function, fn_name: &str, args: &[Node], sig: &crate::ffi::FfiSignature) {
-		let string_pair_count = self.string_pair_arg_count(fn_name);
-		let mut arg_idx = 0;
+	pub(super) fn emit_ffi_args(&mut self, func: &mut Function, args: &[Node], sig: &crate::ffi::FfiSignature) {
+		// a text whose length the call leaves out crosses as (pointer, length): strcmp's, a module's `const void *, size_t`
+		let texts_with_lengths = if args.len() < sig.params.len() { crate::wasm_modules::texts_with_lengths(sig) } else { vec![] };
+		let mut args = args.iter();
 		let mut param_idx = 0;
-
-		// Process string arguments that need (ptr, len) pairs
-		for _ in 0..string_pair_count {
-			if arg_idx < args.len() && self.is_string_arg(&args[arg_idx]) {
-				self.emit_string_ptr_len(func, &args[arg_idx]);
-				arg_idx += 1;
-				param_idx += 2;
-			} else if arg_idx < args.len() {
-				self.emit_numeric_value(func, &args[arg_idx]);
-				func.instruction(&I::I32WrapI64);
-				func.instruction(&I::I32Const(0));
-				arg_idx += 1;
-				param_idx += 2;
-			} else {
-				func.instruction(&I::I32Const(0));
-				func.instruction(&I::I32Const(0));
-				param_idx += 2;
-			}
-		}
-
-		// Process remaining arguments according to param types
 		while param_idx < sig.params.len() {
-			if arg_idx < args.len() {
-				self.emit_ffi_arg(func, &args[arg_idx], &sig.params[param_idx]);
-				arg_idx += 1;
-			} else {
-				self.emit_ffi_default(func, &sig.params[param_idx]);
+			let arg = args.next();
+			if texts_with_lengths.contains(&param_idx) {
+				match arg {
+					Some(arg) if self.is_string_arg(arg) => self.emit_string_ptr_len(func, arg),
+					Some(arg) => {
+						self.emit_numeric_value(func, arg);
+						func.instruction(&I::I32WrapI64);
+						func.instruction(&I::I32Const(0));
+					}
+					None => {
+						func.instruction(&I::I32Const(0));
+						func.instruction(&I::I32Const(0));
+					}
+				}
+				param_idx += 2;
+				continue;
+			}
+			match arg {
+				Some(arg) => self.emit_ffi_arg(func, arg, &sig.params[param_idx]),
+				None => self.emit_ffi_default(func, &sig.params[param_idx]),
 			}
 			param_idx += 1;
 		}
@@ -144,7 +131,7 @@ impl WasmGcEmitter {
 			Some(s) => s.clone(),
 			None => return,
 		};
-		self.emit_ffi_args(func, fn_name, args, &sig);
+		self.emit_ffi_args(func, args, &sig);
 		if let Some(idx) = self.ffi_func_index(fn_name) {
 			func.instruction(&I::Call(idx));
 		}

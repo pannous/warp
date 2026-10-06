@@ -15,9 +15,16 @@ const SETTER_PREFIX: &str = "set ";
 /// The exports `include m` runs, the first one m has (P139)
 const ENTRY_POINTS: [&str; 2] = ["main", "_start"];
 
-/// The custom section naming the C texts the program's imports from modules cross, for a host that cannot see an
-/// import's types (web/playground/host.js): a line `module\tname\tparameters\tresult` per import, `t` a text, `n` not
-pub const TEXT_CROSSINGS_SECTION: &str = "warp.module_texts";
+/// The custom section describing the program's C calls for a host that cannot see an import's types
+/// (web/playground/host.js, which calls libc.wasm for `c` and imported modules): a line `module\tname\tparameters\tresult`
+/// per import. Parameter letters: `t` a text (a NUL-terminated copy in the program's memory), `l` the length of the text
+/// before it (strcmp's pairs, then not NUL-terminated), `s` that length passed on to the module too, `n` a number, `o`
+/// an out-pointer, `b` a buffer of the capacity given, `k` its length slot (`o` and `k` take no value of the program);
+/// result: `t` a text Node built by the host, `u` an unsigned number, `ot`/`on` what the first out-pointer received,
+/// `b` the bytes the buffer received, `n` a number or none. libc.wasm has the program's number types (web/playground/lib/libc.c)
+pub const C_CALLS_SECTION: &str = "warp.c_calls";
+/// The C library whose calls the browser host makes through libc.wasm
+const LIBC: &str = "c";
 
 /// What an import from a module does: call its function, read its global (a getter of no parameters) or set it
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -33,10 +40,59 @@ pub struct Export {
 	pub role: Role,
 	/// a function's parameter names from the module's name section (`$from`), else its header's, else `$0`, `$1` …
 	pub parameters: Vec<String>,
-	/// which parameters are C texts (`char *` in the header beside the module): copied into the module's memory
-	pub text_parameters: Vec<bool>,
-	/// a `char *` result: the NUL-terminated text in the module's memory, read back as a wasp text
-	pub text_result: bool,
+	/// how each parameter of the module's function crosses, by the header beside the module (all numbers without one)
+	pub c_parameters: Vec<CParameter>,
+	pub c_result: CResult,
+}
+
+/// How a parameter of a C function compiled to wasm crosses (the header beside the module, notes/wasm_modules.md)
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CParameter {
+	/// a number, or a pointer the program got from the module (`struct x *`): its own wasm value
+	Number,
+	/// `char *` or a const pointer to bytes (zlib's `const Bytef *buf`): the program's text copied into the module's malloc
+	Text,
+	/// the unsigned count after a text (`const void *input, size_t length`): the text's byte length, which the wasp call
+	/// may leave out (`XXH32("hello", 0)`), then the text crosses by its bytes, NUL bytes included
+	TextLength,
+	/// `T **`: left out of the wasp call, the module gets a NULL-initialised slot of its malloc
+	Out,
+	/// a writable buffer followed by its in/out length (`Bytef *dest, uLongf *destLen`): the wasp call passes its
+	/// capacity, the module gets a block of that size
+	Buffer,
+	/// the length slot of the buffer before it: left out of the wasp call, holds the capacity going in, the length written
+	/// coming out
+	BufferLength,
+}
+
+impl CParameter {
+	/// Does the wasp call pass a value for it (the program's import has its parameter)
+	fn is_passed(self) -> bool {
+		!matches!(self, CParameter::Out | CParameter::BufferLength)
+	}
+}
+
+/// What the result of a C function compiled to wasm crosses as
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CResult {
+	Number,
+	/// an unsigned 32-bit C result (`unsigned long` in wasm32): zero-extended into an Int, never negative
+	Unsigned,
+	/// `char *`: the NUL-terminated text in the module's memory, read back as a wasp text, NULL is ø
+	Text,
+	/// what the first out-pointer received (as natively, notes/ffi_handles.md): a text for `char **`, else the module's
+	/// pointer as a number; NULL there is a loud error naming the C status
+	Out { text: bool },
+	/// the bytes the first buffer received (its length slot says how many) as a wasp text; a C status other than 0 is a
+	/// loud error (zlib's Z_BUF_ERROR when the capacity is too small)
+	Buffer,
+}
+
+impl Export {
+	/// Does a call need the module's memory: a text or an out-pointer crosses, or the result changes type
+	pub fn crosses_c_values(&self) -> bool {
+		self.c_result != CResult::Number || self.c_parameters.iter().any(|parameter| *parameter != CParameter::Number)
+	}
 }
 
 /// Does an import name a WebAssembly module file (`lib/x.wasm`, `x.wat`) rather than a C library
@@ -46,7 +102,7 @@ pub fn is_module_path(name: &str) -> bool {
 
 /// The binary of a module file; a `.wat` file is its text form
 pub fn module_bytes(path: &str) -> Result<Vec<u8>, String> {
-	let bytes = std::fs::read(path).map_err(|failure| format!("cannot read the module {path}: {failure}"))?;
+	let bytes = crate::web::read_bytes(path).ok_or_else(|| format!("cannot read the module {path}"))?;
 	if !path.ends_with(".wat") {
 		return Ok(bytes);
 	}
@@ -132,7 +188,7 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 	let mut exports = HashMap::new();
 	let mut add = |name: String, params: Vec<wasm_encoder::ValType>, results: Vec<wasm_encoder::ValType>, role: Role, parameters: Vec<String>| {
 		let import_name: &'static str = Box::leak(name.clone().into_boxed_str());
-		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role, parameters, text_parameters: vec![], text_result: false });
+		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role, parameters, c_parameters: vec![], c_result: CResult::Number });
 	};
 	for (name, kind, index) in exported {
 		match kind {
@@ -159,43 +215,128 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 	Ok(exports)
 }
 
-/// The TEXT_CROSSINGS_SECTION of these imports: the exports of modules that take or give a C text
-pub fn text_crossings<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
-	let letter = |text: bool| if text { 't' } else { 'n' };
-	let lines: std::collections::BTreeSet<String> = imports.filter(|import| is_module_path(import.library))
-		.filter_map(|import| exports(import.library).get(import.name).map(|export| (import, export)))
-		.filter(|(_, export)| export.text_result || export.text_parameters.contains(&true))
-		.map(|(import, export)| {
-			let parameters: String = export.text_parameters.iter().map(|text| letter(*text)).collect();
-			format!("{}\t{}\t{parameters}\t{}\n", import.library, import.name, letter(export.text_result))
+/// The C_CALLS_SECTION of these imports: libc's, and the exports of modules that take or give C texts, out-pointers or
+/// unsigned results
+pub fn c_calls<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
+	let line = |import: &FfiSignature, parameters: String, result: &str| format!("{}\t{}\t{parameters}\t{result}\n", import.library, import.name);
+	let libc_line = |import: &FfiSignature| {
+		let texts = crate::ffi::header_text_parameters(LIBC).get(import.name).cloned().unwrap_or_default();
+		let pairs = crate::ffi::string_pair_count(import.name);
+		let parameters = (0..import.params.len()).map(|index| match index {
+			index if index < 2 * pairs => if index % 2 == 0 { 't' } else { 'l' },
+			index if texts.get(index - pairs).copied().unwrap_or(false) => 't',
+			_ => 'n',
 		}).collect();
+		line(import, parameters, if matches!(import.results.first(), Some(wasm_encoder::ValType::Ref(_))) { "t" } else { "n" })
+	};
+	let module_line = |import: &FfiSignature, export: &Export| {
+		let parameters = export.c_parameters.iter().map(|parameter| match parameter {
+			CParameter::Number => 'n',
+			CParameter::Text => 't',
+			CParameter::TextLength => 's',
+			CParameter::Out => 'o',
+			CParameter::Buffer => 'b',
+			CParameter::BufferLength => 'k',
+		}).collect();
+		line(import, parameters, match export.c_result {
+			CResult::Number => "n",
+			CResult::Unsigned => "u",
+			CResult::Text => "t",
+			CResult::Out { text: true } => "ot",
+			CResult::Out { text: false } => "on",
+			CResult::Buffer => "b",
+		})
+	};
+	let lines: std::collections::BTreeSet<String> = imports.filter_map(|import| match import.library {
+		LIBC => Some(libc_line(import)),
+		library if is_module_path(library) => exports(library).get(import.name)
+			.filter(|export| export.crosses_c_values())
+			.map(|export| module_line(import, export)),
+		_ => None,
+	}).collect();
 	lines.into_iter().collect()
 }
 
-/// A C library compiled to WebAssembly: the header beside it (`shout.h` of `shout.wasm`) says which of its functions'
-/// parameters and results are C texts (`char *`) and names the parameters; the module's own number types win (`size_t`
-/// is 32 bits in wasm32), other pointers stay numbers
+/// A C library compiled to WebAssembly: the header beside it (`zlib.h` of `zlib.wasm`) says how its functions' parameters
+/// and results cross (CParameter, CResult) and names the parameters; the module's own number types win (`size_t` is 32
+/// bits in wasm32), pointers to structs stay the module's numbers
 fn with_header_types(path: &str, exports: &mut HashMap<String, Export>) {
-	use crate::ffi::{parse_header_file, pointer_kind, pointer_result, CPointer};
+	use crate::ffi::{parse_header_file, pointer_kind, CPointer};
 	let header = Path::new(path).with_extension("h");
-	let Some(header) = header.to_str().filter(|_| header.is_file()) else { return };
+	let Some(header) = header.to_str().filter(|header| crate::web::file_exists(header)) else { return };
 	for declared in parse_header_file(header, path) {
 		let Some(export) = exports.get_mut(&declared.name).filter(|export| export.role == Role::Function) else { continue };
-		let text_parameters: Vec<bool> = declared.param_types.iter().map(|c_type| pointer_kind(c_type) == Some(CPointer::Text)).collect();
-		let text_result = pointer_result(&declared) == Some(CPointer::Text);
-		if text_parameters.len() != export.signature.params.len() || text_result && export.signature.results.len() != 1 {
+		let c_parameters = c_parameters(&declared.param_types);
+		let first_out = declared.param_types.iter().find(|c_type| pointer_kind(c_type) == Some(CPointer::Out));
+		let c_result = match pointer_kind(&declared.return_type) {
+			Some(CPointer::Text) => CResult::Text,
+			None if c_parameters.contains(&CParameter::Buffer) => CResult::Buffer,
+			None if first_out.is_some() => CResult::Out { text: first_out.is_some_and(|c_type| c_type.matches('*').count() == 2 && c_type.contains("char")) },
+			None if declared.return_type.contains("unsigned") && export.signature.results == [wasm_encoder::ValType::I32] => CResult::Unsigned,
+			_ => CResult::Number,
+		};
+		if c_parameters.len() != export.signature.params.len() || c_result != CResult::Number && export.signature.results.len() != 1 {
 			eprintln!("[wasm] {header}: {} does not match the module's {} parameters", declared.raw.trim(), export.signature.params.len());
 			continue;
 		}
-		if export.parameters.iter().all(|name| name.starts_with('$')) && declared.param_names.len() == text_parameters.len() {
+		let wasp_parameter = |index: &usize| c_parameters[*index].is_passed();
+		if export.parameters.iter().all(|name| name.starts_with('$')) && declared.param_names.len() == c_parameters.len() {
 			export.parameters = declared.param_names.clone();
 		}
-		if text_result {
-			export.signature.results = vec![wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)]; // the text Node the host builds
-		}
-		export.text_parameters = text_parameters;
-		export.text_result = text_result;
+		export.parameters = (0..c_parameters.len()).filter(wasp_parameter).map(|index| export.parameters[index].clone()).collect();
+		export.signature.params = (0..c_parameters.len()).filter(wasp_parameter).map(|index| export.signature.params[index]).collect();
+		export.signature.results = match c_result {
+			CResult::Text | CResult::Out { text: true } | CResult::Buffer => vec![wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)], // the text Node the host builds
+			CResult::Unsigned => vec![wasm_encoder::ValType::I64],
+			CResult::Number | CResult::Out { text: false } => export.signature.results.clone(),
+		};
+		export.c_parameters = c_parameters;
+		export.c_result = c_result;
 	}
+}
+
+/// How the parameters of these C types cross into a module (CParameter): a writable byte pointer before a pointer to an
+/// unsigned count is a buffer with its in/out length, `char *` and const pointers to anything but a struct carry the
+/// program's text (with its length when an unsigned count follows), `T **` is an out-pointer, the rest are numbers
+fn c_parameters(c_types: &[String]) -> Vec<CParameter> {
+	use crate::ffi::{pointer_kind, CPointer};
+	let is_const = |c_type: &str| c_type.split_whitespace().any(|word| word == "const");
+	let mut parameters: Vec<CParameter> = Vec::with_capacity(c_types.len());
+	for (index, c_type) in c_types.iter().enumerate() {
+		let after = |kind: CParameter| parameters.last() == Some(&kind);
+		let next_counts = c_types.get(index + 1).is_some_and(|next| is_count_pointer(next));
+		parameters.push(match pointer_kind(c_type) {
+			Some(CPointer::Text | CPointer::Memory) if !is_const(c_type) && next_counts => CParameter::Buffer,
+			_ if after(CParameter::Buffer) => CParameter::BufferLength,
+			Some(CPointer::Text) => CParameter::Text,
+			Some(CPointer::Memory) if is_const(c_type) => CParameter::Text,
+			Some(CPointer::Out) => CParameter::Out,
+			None if after(CParameter::Text) && is_count(c_type) => CParameter::TextLength,
+			_ => CParameter::Number,
+		});
+	}
+	parameters
+}
+
+/// An unsigned integer type, as C counts bytes: `size_t`, `unsigned long`, `uint32_t`
+fn is_count(c_type: &str) -> bool {
+	let words: Vec<&str> = c_type.split_whitespace().filter(|word| *word != "const").collect();
+	!c_type.contains('*') && words.first().is_some_and(|first| *first == "unsigned" || *first == "size_t" || first.starts_with("uint"))
+}
+
+/// A writable pointer to an unsigned count (`uLongf *destLen` spelled `unsigned long *destLen`)
+fn is_count_pointer(c_type: &str) -> bool {
+	c_type.matches('*').count() == 1 && !c_type.contains("const") && is_count(&c_type.replace('*', " "))
+}
+
+/// The parameters of a module function's import (the program's view) whose text crosses with its length in the next one
+pub fn texts_with_lengths(signature: &FfiSignature) -> Vec<usize> {
+	if !is_module_path(signature.library) {
+		return (0..crate::ffi::string_pair_count(signature.name)).map(|pair| 2 * pair).collect();
+	}
+	let Some(export) = exports(signature.library).get(signature.name) else { return vec![] };
+	let passed: Vec<CParameter> = export.c_parameters.iter().copied().filter(|parameter| parameter.is_passed()).collect();
+	(0..passed.len()).filter(|index| passed[*index] == CParameter::Text && passed.get(index + 1) == Some(&CParameter::TextLength)).collect()
 }
 
 fn number_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encoder::ValType>> {
@@ -342,9 +483,13 @@ fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 /// The arguments of a call of the function `export` in its parameter order, a named one (`amount: 2`, `amount=2`) at its
 /// parameter of the module's name section; an unknown name or a wrong count is an error showing the parameters
 fn ordered_arguments(path: &str, export: &str, arguments: Vec<Node>) -> Result<Vec<Node>, Node> {
-	let Some(Export { role: Role::Function, parameters, .. }) = exports(path).get(export) else { return Ok(arguments) };
+	let Some(found @ Export { role: Role::Function, parameters, .. }) = exports(path).get(export) else { return Ok(arguments) };
 	let signature = format!("{}({})", qualified(path, export), parameters.join(", "));
 	let wrong_count = || crate::node::error(&format!("{signature} takes {} arguments, got {}", parameters.len(), arguments.len()));
+	// the lengths of texts may be left out (CParameter::TextLength): the call passes the texts' own lengths then
+	let passed = found.c_parameters.iter().filter(|parameter| parameter.is_passed());
+	let lengths: Vec<usize> = passed.enumerate().filter(|(_, parameter)| **parameter == CParameter::TextLength).map(|(index, _)| index).collect();
+	let left_out = |index: usize| arguments.len() + lengths.len() == parameters.len() && lengths.contains(&index);
 	let mut slots: Vec<Option<Node>> = vec![None; parameters.len()];
 	for argument in &arguments {
 		let (slot, value) = match crate::named_arguments::named_argument(argument) {
@@ -353,11 +498,12 @@ fn ordered_arguments(path: &str, export: &str, arguments: Vec<Node>) -> Result<V
 					.ok_or_else(|| crate::node::error(&format!("{signature} has no parameter {name}")))?;
 				(slot, value)
 			}
-			None => (slots.iter().position(Option::is_none).ok_or_else(wrong_count)?, argument),
+			None => ((0..slots.len()).find(|index| slots[*index].is_none() && !left_out(*index)).ok_or_else(wrong_count)?, argument),
 		};
 		slots[slot] = Some(value.clone());
 	}
-	slots.into_iter().collect::<Option<Vec<_>>>().ok_or_else(wrong_count)
+	let given = slots.into_iter().enumerate().filter(|(index, slot)| slot.is_some() || !left_out(*index));
+	given.map(|(_, slot)| slot).collect::<Option<Vec<_>>>().ok_or_else(wrong_count)
 }
 
 /// Link the program's imports from WebAssembly modules: each is a host function that calls the export of the module,
@@ -381,8 +527,8 @@ pub fn link(linker: &mut wasmtime::Linker<crate::host::HostState>, module: &wasm
 				}
 				Role::Function => {
 					let function = instance.get_func(&mut caller, &name).ok_or_else(|| wasmtime::format_err!("{path} exports no function {name}"))?;
-					match exports(&path).get(&name).filter(|export| export.text_result || export.text_parameters.contains(&true)) {
-						Some(export) => call_with_texts(&mut caller, instance, function, export, arguments, results)?,
+					match exports(&path).get(&name).filter(|export| export.crosses_c_values()) {
+						Some(export) => call_c(&mut caller, instance, function, export, arguments, results)?,
 						None => function.call(&mut caller, arguments, results)?,
 					}
 				}
@@ -393,40 +539,116 @@ pub fn link(linker: &mut wasmtime::Linker<crate::host::HostState>, module: &wasm
 	Ok(())
 }
 
-/// A call of a C function of a module whose header says it takes or gives texts: each text argument (a NUL-terminated
-/// copy in the program's memory) is copied into a block of the module's `malloc`, a `char *` result read back as a
-/// text of the program (NULL is ø)
+/// A call of a C function of a module whose header says how its values cross (CParameter, CResult): each text argument
+/// (a NUL-terminated copy in the program's memory, or as many bytes as its length says) is copied into a block of the
+/// module's `malloc`, each out-pointer gets a NULL slot there, each buffer a block of its capacity and a length slot; the
+/// result is read back (a text, an unsigned number, what the first out-pointer or buffer received) before the blocks
+/// are freed
 #[cfg(feature = "native")]
-fn call_with_texts(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, instance: wasmtime::Instance, function: wasmtime::Func,
+fn call_c(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, instance: wasmtime::Instance, function: wasmtime::Func,
 	export: &Export, arguments: &[wasmtime::Val], results: &mut [wasmtime::Val]) -> wasmtime::Result<()> {
 	use wasmtime::Val;
 	let name = export.signature.name;
 	let program_memory = caller.get_export("memory").and_then(|memory| memory.into_memory())
 		.ok_or_else(|| wasmtime::format_err!("{name}: the program has no memory for its text"))?;
-	let module_memory = instance.get_memory(&mut *caller, "memory").ok_or_else(|| wasmtime::format_err!("{name}: its module exports no memory for texts"))?;
-	let mut module_arguments = Vec::with_capacity(arguments.len());
-	for (argument, is_text) in arguments.iter().zip(export.text_parameters.iter().chain(std::iter::repeat(&false))) {
-		if !is_text {
-			module_arguments.push(*argument);
-			continue;
-		}
-		let mut text = c_text(program_memory.data(&*caller), argument.unwrap_i32() as usize).to_vec();
-		text.push(0);
+	let module_memory = instance.get_memory(&mut *caller, "memory").ok_or_else(|| wasmtime::format_err!("{name}: its module exports no memory"))?;
+	let malloc = |caller: &mut wasmtime::Caller<'_, crate::host::HostState>, bytes: &[u8]| -> wasmtime::Result<i32> {
 		let malloc = instance.get_typed_func::<i32, i32>(&mut *caller, "malloc")
-			.map_err(|_| wasmtime::format_err!("{name}: its module exports no malloc(size) to copy a text argument into"))?;
-		let block = malloc.call(&mut *caller, text.len() as i32)?;
-		module_memory.write(&mut *caller, block as usize, &text)?;
-		module_arguments.push(Val::I32(block));
+			.map_err(|_| wasmtime::format_err!("{name}: its module exports no malloc(size) to pass a text or out-pointer"))?;
+		let block = malloc.call(&mut *caller, bytes.len() as i32)?;
+		module_memory.write(&mut *caller, block as usize, bytes)?;
+		Ok(block)
+	};
+	let too_few = || wasmtime::format_err!("{name}: too few arguments");
+	let mut program_arguments = arguments.iter().peekable();
+	let (mut module_arguments, mut blocks, mut out_slots, mut buffers) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+	let (mut capacity, mut buffer) = (0, 0);
+	for (index, parameter) in export.c_parameters.iter().enumerate() {
+		let argument = match parameter {
+			CParameter::Number | CParameter::TextLength => *program_arguments.next().ok_or_else(too_few)?,
+			CParameter::Text => {
+				let address = program_arguments.next().ok_or_else(too_few)?.unwrap_i32() as usize;
+				let memory = program_memory.data(&*caller);
+				let mut text = match export.c_parameters.get(index + 1) {
+					Some(CParameter::TextLength) => memory.get(address..address + count_of(program_arguments.peek().ok_or_else(too_few)?)).unwrap_or_default(),
+					_ => c_text(memory, address),
+				}.to_vec();
+				text.push(0);
+				let block = malloc(caller, &text)?;
+				blocks.push(block);
+				Val::I32(block)
+			}
+			CParameter::Out => {
+				let slot = malloc(caller, &[0; 4])?;
+				blocks.push(slot);
+				out_slots.push(slot);
+				Val::I32(slot)
+			}
+			CParameter::Buffer => {
+				capacity = count_of(program_arguments.next().ok_or_else(too_few)?);
+				buffer = malloc(caller, &vec![0; capacity])?;
+				blocks.push(buffer);
+				Val::I32(buffer)
+			}
+			CParameter::BufferLength => {
+				let slot = malloc(caller, &(capacity as u32).to_le_bytes())?;
+				blocks.push(slot);
+				buffers.push((buffer, slot));
+				Val::I32(slot)
+			}
+		};
+		module_arguments.push(argument);
 	}
-	if !export.text_result {
-		return function.call(&mut *caller, &module_arguments, results);
+	let mut returned = [Val::I32(0)];
+	let result_count = function.ty(&*caller).results().len();
+	function.call(&mut *caller, &module_arguments, &mut returned[..result_count])?;
+	let read_u32 = |caller: &wasmtime::Caller<'_, crate::host::HostState>, address: usize| -> u32 {
+		module_memory.data(caller).get(address..address + 4).map_or(0, |bytes| u32::from_le_bytes(bytes.try_into().unwrap_or_default()))
+	};
+	let text_at = |caller: &wasmtime::Caller<'_, crate::host::HostState>, address: u32| (address != 0).then(|| c_text(module_memory.data(caller), address as usize).to_vec());
+	let result = match export.c_result {
+		CResult::Number => results.first().map(|_| returned[0]),
+		CResult::Unsigned => Some(Val::I64(returned[0].unwrap_i32() as u32 as i64)),
+		CResult::Text => {
+			let text = text_at(caller, returned[0].unwrap_i32() as u32);
+			Some(crate::ffi::text_node(caller, text.as_deref()).map_err(|failure| wasmtime::format_err!("{name}: {failure}"))?)
+		}
+		CResult::Out { text } => {
+			let received = read_u32(caller, out_slots[0] as usize);
+			if received == 0 {
+				return Err(wasmtime::format_err!("{name} gave nothing through its out-pointer (C status {})", returned[0].i32().unwrap_or(0)));
+			}
+			match text {
+				true => Some(crate::ffi::text_node(caller, text_at(caller, received).as_deref()).map_err(|failure| wasmtime::format_err!("{name}: {failure}"))?),
+				false => Some(Val::I32(received as i32)),
+			}
+		}
+		CResult::Buffer => {
+			let status = returned[0].i32().unwrap_or(0);
+			if status != 0 {
+				return Err(wasmtime::format_err!("{name} failed (C status {status})"));
+			}
+			let (block, length_slot) = buffers[0];
+			let length = read_u32(caller, length_slot as usize) as usize;
+			let bytes = module_memory.data(&*caller).get(block as usize..block as usize + length).unwrap_or_default().to_vec();
+			Some(crate::ffi::text_node(caller, Some(&bytes)).map_err(|failure| wasmtime::format_err!("{name}: {failure}"))?)
+		}
+	};
+	if let (Some(result), Some(slot)) = (result, results.first_mut()) {
+		*slot = result;
 	}
-	let mut pointer = [Val::I32(0)];
-	function.call(&mut *caller, &module_arguments, &mut pointer)?;
-	let address = pointer[0].unwrap_i32() as usize;
-	let text = (address != 0).then(|| c_text(module_memory.data(&*caller), address).to_vec());
-	results[0] = crate::ffi::text_node(caller, text.as_deref()).map_err(|failure| wasmtime::format_err!("{name}: {failure}"))?;
+	if let Ok(free) = instance.get_typed_func::<i32, ()>(&mut *caller, "free") {
+		for block in blocks {
+			free.call(&mut *caller, block)?;
+		}
+	}
 	Ok(())
+}
+
+/// A count the program passed (a length, a capacity) as a size
+#[cfg(feature = "native")]
+fn count_of(value: &wasmtime::Val) -> usize {
+	value.i32().map(|count| count as u32 as usize).or_else(|| value.i64().map(|count| count as usize)).unwrap_or(0)
 }
 
 /// The NUL-terminated bytes at `address` of a linear memory

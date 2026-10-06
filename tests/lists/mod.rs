@@ -9,6 +9,8 @@ mod test_key_subscript_hint;
 mod test_list_arithmetic;
 mod test_list_number_comparison;
 mod test_list_plus_number;
+mod test_element_wise_scalar;
+mod test_map_parameter_keys;
 mod test_list_parameters;
 mod test_list_truthiness;
 mod test_lists;

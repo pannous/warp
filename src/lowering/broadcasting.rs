@@ -54,10 +54,12 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	let program = all_calls(program);
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
+	implicit_definitions(&program, &mut found); // `square := it*it` and `f = x => …` take arguments too (P143)
 	let mut arities: HashMap<String, Arity> = HashMap::new();
 	for definition in &found {
 		let count = definition.params.len();
-		let typed = definition.params.first().is_some_and(rules_out_a_truth_value);
+		// P149 (user): an untyped parameter the body uses in arithmetic (`x + 1`, `it*it`) is no truth value either
+		let typed = definition.params.first().is_some_and(|first| rules_out_a_truth_value(first) || is_arithmetic_operand(&definition.body, &first.name()));
 		let arity = arities.entry(definition.name.clone()).or_insert(Arity { fewest: count, most: count, typed_first: typed });
 		*arity = Arity { fewest: arity.fewest.min(count), most: arity.most.max(count), typed_first: arity.typed_first && typed };
 	}
@@ -148,6 +150,17 @@ fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
 	}
 }
 
+/// `say 3 == 3` of a function that takes anything reads both ways (P143): a loud error offering each reading
+fn ambiguous_call(at: &Node, name: &str, argument: &str, op: &Op, right: &str) -> Node {
+	let written = format!("{name} {argument} {op} {right}");
+	let call_compared = format!("({name} {argument}) {op} {right}");
+	let comparison_argument = format!("{name}({argument} {op} {right})");
+	crate::diagnostic::Diagnostic::at(at, format!("{written} is ambiguous; write {call_compared} or {comparison_argument}"))
+		.offer("the call compared", &written, &call_compared)
+		.offer("the comparison as the argument", &written, &comparison_argument)
+		.into_error()
+}
+
 fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 	let arity = |node: &Node| arity_of(node, arities);
 	match node {
@@ -177,12 +190,16 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
 			let Node::Key(left, op, right) = argument.drop_meta().clone() else { unreachable!("guarded") };
 			if !arity(&head).expect("guarded").typed_first {
-				let (name, left_text, right_text) = (head.drop_meta().name(), left.serialize(), right.serialize());
-				let message = format!("{name} {left_text} {op} {right_text} is ambiguous; write ({name} {left_text}) {op} {right_text} or {name}({left_text} {op} {right_text})");
-				return crate::diagnostic::Diagnostic::at(&argument, message).into_error();
+				return ambiguous_call(&argument, &head.drop_meta().name(), &left.serialize(), &op, &right.serialize());
 			}
 			let call = Node::List(vec![head, *left], Bracket::None, Separator::Space);
 			Node::Key(Box::new(nest_prefix_calls(call, arities)), op, Box::new(nest_prefix_calls(*right, arities)))
+		}
+		// the same phrase the parser grouped the other way, `(f 3) == 9`, when it did not know f takes a value: as
+		// ambiguous when the body accepts anything (`f := print it`)
+		Node::Key(left, op, right) if op.is_comparison() && matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first))) => {
+			let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
+			ambiguous_call(&left, &items[0].drop_meta().name(), &items[1].serialize(), &op, &right.serialize())
 		}
 		Node::List(items, Bracket::None, Separator::Colon) if items.len() > 1 => {
 			let mut items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
@@ -456,5 +473,79 @@ impl Broadcast {
 				self.broadcast_call(&items, &Bracket::Round, &Separator::None).unwrap_or_else(|| call(name, items[1].clone()))
 			}
 		}
+	}
+}
+
+/// P166 (user): an element-wise operator on a plain number is the plain operator, `6 ./ 2` is 3. The parser wrote
+/// `x .^ 2` as `x.map(each_element => each_element ^ 2)`; where x is a number literal, or a parameter of its function
+/// or lambda used only as an operand, it becomes `x ^ 2`, which that function's broadcasting maps over a list
+/// (`sq = @(x) x.^2`: `sq(3)` is 9, `sq([1,2,3])` is [1 4 9])
+pub fn lower_scalar_element_wise(program: Node) -> Node {
+	scalar_element_wise(program, &[])
+}
+
+fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
+	if let Some((receiver, op, operand)) = element_wise_parts(&node) {
+		let is_scalar = matches!(receiver.drop_meta(), Node::Number(_)) || matches!(receiver.drop_meta(), Node::Symbol(symbol) if parameters.contains(symbol));
+		if is_scalar {
+			return Node::Key(Box::new(receiver), op, Box::new(scalar_element_wise(operand, parameters)));
+		}
+	}
+	match node {
+		// a function or lambda: its own parameters, the outer ones are out of scope
+		Node::Key(head, op @ (Op::Define | Op::Assign | Op::FatArrow | Op::Arrow), body) if is_function_head(&head, op) => {
+			let inner: Vec<String> = untyped_parameters(&head, op).into_iter().filter(|name| only_operand(&body, name)).collect();
+			Node::Key(head, op, Box::new(scalar_element_wise(*body, &inner)))
+		}
+		other => other.map_children(|child| scalar_element_wise(child, parameters)),
+	}
+}
+
+/// `x.map(each_element => each_element op operand)`: x, op, operand
+fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
+	let Node::Key(receiver, Op::Dot, call) = node.drop_meta() else { return None };
+	let Node::List(items, Bracket::Round, _) = call.drop_meta() else { return None };
+	let [word, lambda] = items.as_slice() else { return None };
+	let Node::Key(element, Op::FatArrow, body) = lambda.drop_meta() else { return None };
+	let Node::Key(left, op, operand) = body.drop_meta() else { return None };
+	let is_element = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if name == crate::analyzer::EACH_ELEMENT);
+	(word.name() == MAP_WORD && is_element(element) && is_element(left)).then(|| (receiver.as_ref().clone(), *op, operand.as_ref().clone()))
+}
+
+fn is_function_head(head: &Node, op: Op) -> bool {
+	matches!(op, Op::FatArrow | Op::Arrow) || matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() > 1)
+}
+
+/// The untyped parameters of `f(a, b) := …`, `(a, b) => …`, `x => …`
+fn untyped_parameters(head: &Node, op: Op) -> Vec<String> {
+	let flattened = |items: &[Node]| -> Vec<Node> {
+		items.iter().flat_map(|item| match item.drop_meta() {
+			Node::List(group, Bracket::Round, _) => group.clone(),
+			other => vec![other.clone()],
+		}).collect()
+	};
+	let parameters = match (head.drop_meta(), op) {
+		(Node::List(items, Bracket::Round, _), Op::Define | Op::Assign) => flattened(&items[1..]),
+		(Node::List(items, _, _), _) => flattened(items),
+		(single, _) => vec![single.clone()],
+	};
+	parameters.iter().filter_map(|parameter| match parameter.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		_ => None,
+	}).collect()
+}
+
+/// Whether `name` appears in body only as an operand of arithmetic or as an element-wise receiver
+fn only_operand(body: &Node, name: &str) -> bool {
+	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == name);
+	if let Some((receiver, _, operand)) = element_wise_parts(body) {
+		return (is_name(&receiver) || only_operand(&receiver, name)) && only_operand(&operand, name);
+	}
+	match body.drop_meta() {
+		Node::Symbol(symbol) => symbol != name,
+		Node::Key(left, op, right) if ARITHMETIC.contains(op) => [left, right].into_iter().all(|side| is_name(side) || only_operand(side, name)),
+		Node::Key(left, _, right) => only_operand(left, name) && only_operand(right, name),
+		Node::List(items, _, _) => items.iter().all(|item| only_operand(item, name)),
+		_ => true,
 	}
 }

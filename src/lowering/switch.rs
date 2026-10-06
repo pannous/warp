@@ -53,7 +53,10 @@ impl Lowering<'_> {
 		match node {
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
-				self.switch(&items).unwrap_or(Node::List(items, bracket, separator))
+				match self.switch(&items) {
+					Some(switch) => switch,
+					None => Node::List(self.with_switch_arguments(items), bracket, separator),
+				}
 			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
@@ -61,9 +64,23 @@ impl Lowering<'_> {
 		}
 	}
 
-	/// `switch subject {cases}`
+	/// `f(switch 2 {1: 10 2: 20})` arrives as the call `f switch 2 {…}`: the three items one argument
+	fn with_switch_arguments(&self, items: Vec<Node>) -> Vec<Node> {
+		let Some(start) = (1..items.len().saturating_sub(2)).find(|&start| self.switch(&items[start..start + 3]).is_some()) else { return items };
+		let switch = self.switch(&items[start..start + 3]).expect("found");
+		let rest = self.with_switch_arguments(items[start + 3..].to_vec());
+		items[..start].iter().cloned().chain([switch]).chain(rest).collect()
+	}
+
+	/// `switch subject {cases}`; `switch 3 {…} == "three"` arrives as `switch 3 ({…} == "three")`: the switch's value
+	/// is the left operand
 	fn switch(&self, items: &[Node]) -> Option<Node> {
 		let (head, subject, cases) = split_switch(items)?;
+		if let Node::Key(..) = cases.drop_meta() {
+			let block = leftmost(cases);
+			let switch = self.switch(&[head.clone(), subject.clone(), block.clone()])?;
+			return Some(with_leftmost(cases.clone(), switch));
+		}
 		let Node::Symbol(word) = head.drop_meta() else { return None };
 		if !self.words.contains(&word.as_str()) {
 			return None;
@@ -102,6 +119,22 @@ fn split_switch(items: &[Node]) -> Option<(&Node, &Node, &Node)> {
 			_ => None,
 		},
 		_ => None,
+	}
+}
+
+/// The leftmost operand of an operator chain
+fn leftmost(node: &Node) -> &Node {
+	match node.drop_meta() {
+		Node::Key(left, _, _) => leftmost(left),
+		_ => node,
+	}
+}
+
+fn with_leftmost(node: Node, replacement: Node) -> Node {
+	match node {
+		Node::Key(left, op, right) => Node::Key(Box::new(with_leftmost(*left, replacement)), op, right),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_leftmost(*node, replacement)), data },
+		_ => replacement,
 	}
 }
 

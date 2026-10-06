@@ -139,12 +139,31 @@ impl WasmGcEmitter {
 		}
 		match self.get_type(repeated) {
 			crate::Kind::Text | crate::Kind::Codepoint => self.emit_text_repeat(func, repeated, count),
+			kind if kind.is_int() || kind.is_float() => {
+				let product = self.numeric_times(&Node::List(items.to_vec(), Bracket::Round, Separator::None)).expect("a number repeated");
+				self.emit_node_instructions(func, &product);
+			}
 			kind => {
 				let reason = format!("`n times x` repeats a text (or a list: `n times [x]`), {} is {}", repeated.serialize(), crate::analyzer::kind_with_article(kind));
 				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
 			}
 		}
 		true
+	}
+
+	/// English `it times it` of numbers: the product `it * it` (alias rule, with a note naming `*`)
+	pub(super) fn numeric_times(&self, node: &Node) -> Option<Node> {
+		let Node::List(items, _, _) = node.drop_meta() else { return None };
+		let [word, count, repeated] = items.as_slice() else { return None };
+		let is_times = matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::TEXT_TIMES);
+		let kind = self.get_type(repeated);
+		if !is_times || !(kind.is_int() || kind.is_float()) {
+			return None;
+		}
+		let (count_text, repeated_text) = (count.serialize(), repeated.serialize());
+		crate::normalize::set_position_of(word);
+		crate::normalize::hint(&format!("{count_text} times {repeated_text}"), &format!("{count_text} * {repeated_text}"), "`times` of two numbers multiplies");
+		Some(Node::Key(Box::new(count.clone()), Op::Mul, Box::new(repeated.clone())))
 	}
 
 	/// `print x` and the WASI calls puts, puti, putl, putf, fd_write; their i64 result is boxed like any value
@@ -636,7 +655,10 @@ impl WasmGcEmitter {
 		let name = items.iter().find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))?;
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
 		let text = crate::diagnostic::written_text(&written);
-		let message = format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data");
+		let message = match crate::modules::std_module_defining(&name) {
+			Some(_) => crate::ffi::undefined_function_message(&name),
+			None => format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data"),
+		};
 		Some(crate::diagnostic::Diagnostic::at(&written, message).to_string())
 	}
 
@@ -651,11 +673,10 @@ impl WasmGcEmitter {
 		if word.chars().count() < 3 || self.is_known_word(word) {
 			return Ok(());
 		}
-		let allowed = if word.chars().count() < 6 { 1 } else { 2 };
 		let mut names: Vec<String> = self.ctx.user_functions.keys().chain(self.ctx.user_globals.keys()).cloned().collect();
 		names.extend(self.scope.local_names());
 		names.extend(KNOWN_WORDS.iter().map(|word| word.to_string()));
-		let Some(near) = names.into_iter().filter(|name| name != word).find(|name| edit_distance(word, name) <= allowed) else { return Ok(()) };
+		let Some(near) = crate::extensions::strings::near_miss(word, names) else { return Ok(()) };
 		let question = Ask::new(NEAR_MISS_TOPIC, format!("`{word}` names nothing: a symbol, or did you mean {near}?"),
 			vec![reading("the symbol", &format!("data {word}")), reading(&format!("the name {near}"), &near)], Fallback::Warning).written(word);
 		let (line, column) = self.source_position.unwrap_or((0, 0));
@@ -839,24 +860,3 @@ impl WasmGcEmitter {
 	}
 }
 
-/// Edit distance (insertions, deletions, substitutions, adjacent swaps) between two words
-fn edit_distance(a: &str, b: &str) -> usize {
-	let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
-	let mut rows = vec![vec![0usize; b.len() + 1]; a.len() + 1];
-	for (i, row) in rows.iter_mut().enumerate() {
-		row[0] = i;
-	}
-	for (j, cell) in rows[0].iter_mut().enumerate() {
-		*cell = j;
-	}
-	for i in 1..=a.len() {
-		for j in 1..=b.len() {
-			let cost = usize::from(a[i - 1] != b[j - 1]);
-			rows[i][j] = (rows[i - 1][j] + 1).min(rows[i][j - 1] + 1).min(rows[i - 1][j - 1] + cost);
-			if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
-				rows[i][j] = rows[i][j].min(rows[i - 2][j - 2] + 1);
-			}
-		}
-	}
-	rows[a.len()][b.len()]
-}

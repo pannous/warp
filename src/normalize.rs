@@ -391,7 +391,11 @@ fn emit_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
     });
     use crate::diagnostic::{paint, Color};
     let position = if pos.is_empty() { String::new() } else { format!(" {}", paint(Color::Gray, &pos)) };
-    eprintln!("{}{position}: prefer {} over {}", paint(Color::Cyan, "hint"), paint(Color::Green, canonical), paint(Color::Yellow, original));
+    // a note about the text as written (`await job within 100 ms`) prefers nothing else
+    match canonical == original {
+        true => eprintln!("{}{position}: {}", paint(Color::Cyan, "note"), paint(Color::Green, original)),
+        false => eprintln!("{}{position}: prefer {} over {}", paint(Color::Cyan, "hint"), paint(Color::Green, canonical), paint(Color::Yellow, original)),
+    }
     eprintln!("      {}", reason);
 }
 

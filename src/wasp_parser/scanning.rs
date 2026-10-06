@@ -22,6 +22,15 @@ impl WaspParser {
 
 	/// Do blanks, an identifier, optional blanks and a `{` follow the cursor: `record point {…}`
 	pub(super) fn name_and_block_follow(&self) -> bool {
+		self.name_then('{')
+	}
+
+	/// ` Point(int X, int Y)`: a name with parameters, C#'s positional `record Point(…)`
+	pub(super) fn name_and_parameters_follow(&self) -> bool {
+		self.name_then('(')
+	}
+
+	fn name_then(&self, opener: char) -> bool {
 		let is_blank = |ch: char| matches!(ch, ' ' | '\t');
 		let mut offset = 0;
 		while is_blank(self.peek_char(offset)) {
@@ -35,7 +44,7 @@ impl WaspParser {
 		while is_blank(self.peek_char(offset)) {
 			offset += 1;
 		}
-		has_name && self.peek_char(offset) == '{'
+		has_name && self.peek_char(offset) == opener
 	}
 
 	pub(super) fn advance(&mut self) {
@@ -51,10 +60,10 @@ impl WaspParser {
 		self.pos += 1;
 	}
 
-	/// The operand after a single `|`: a bare word is marked as a possible pipe stage, any other operand gets the hint
+	/// The operand after a single `|`: a bare word or word operator is marked as a possible pipe stage, any other operand gets the hint
 	/// toward `or`
 	pub(super) fn pipe_operand(&self, operand: Node, line: usize, column: usize) -> Node {
-		if matches!(operand.drop_meta(), Symbol(_)) {
+		if crate::pipes::may_be_stage(&operand) {
 			return crate::pipes::pipe_stage(operand);
 		}
 		set_hint_position(line, column);
@@ -157,8 +166,11 @@ impl WaspParser {
 	}
 
 	/// Code stands before the cursor on its line (`x = 7 // note`, not a `// note` line of its own)
-	pub(super) fn follows_code_on_its_line(&self) -> bool {
-		self.chars[..self.pos].iter().rev().take_while(|&&c| c != '\n').any(|c| !c.is_whitespace())
+	/// Code that could be divided ends right before: a name, a number, `)` or `]` (`xs[1] // 2`); after a text, a comma
+	/// or a brace `//` is plainly a comment
+	fn follows_operand_on_its_line(&self) -> bool {
+		let last = self.chars[..self.pos].iter().rev().take_while(|&&c| c != '\n').find(|c| !c.is_whitespace());
+		last.is_some_and(|&c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -339,7 +351,7 @@ impl WaspParser {
 			}
 			// // line comment (but not :// URL scheme)
 			if c1 == '/' && c2 == '/' && self.prev_char() != ':' && !self.at_floor_division() {
-				if self.follows_code_on_its_line() {
+				if self.follows_operand_on_its_line() {
 					self.set_hint_pos();
 					crate::diagnostic::educate_once(SLASH_COMMENT_TOPIC, "a // b", "a//b", "`// …` after code is a comment; floor division is written glued: a//b");
 				}

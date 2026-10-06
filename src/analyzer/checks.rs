@@ -238,7 +238,7 @@ pub(super) fn type_name_to_kind(name: &str) -> Kind {
 pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 	Some(match canonical_type_name(&name.to_lowercase()) {
 		"int" | "i32" | "i64" | "integer" | "long" | "exact" => Kind::Int,
-		"float" | "f32" | "number" => Kind::Float,
+		"float" | "f32" | "float32" | "number" => Kind::Float,
 		"string" | "str" | "text" => Kind::Text,
 		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
 		"char" | "codepoint" => Kind::Codepoint,
@@ -305,6 +305,10 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		Node::List(items, Bracket::Round, Separator::None) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if ORDER_WORDS.contains(&word.as_str())) => {
 			list_type_name(&items[1], scope)
 		}
+		// `split(t, sep)`, `chars(t)`: texts
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if TEXT_LIST_WORDS.contains(&word.as_str())) => {
+			format!("{PLAIN} of text")
+		}
 		// the result of a call `f(x)` (no list literal of `f` and `x`): its elements are held as Nodes, of any type
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => NODE_LIST_TYPE.to_string(),
 		// a `{key:value …}` map, `map of int` when all its values are ints
@@ -347,9 +351,13 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 }
 
 /// The type name of a map literal, `map of <value type>` when its values share one
+/// The got-it topic of a `let` variable that changes (P159)
+const LET_CHANGES_TOPIC: &str = "let changes";
 pub(super) const MAP_TYPE: &str = "map";
 /// Library words whose list result has the elements of their list argument
 pub(super) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
+/// Library words whose result is a list of texts
+const TEXT_LIST_WORDS: [&str; 2] = ["split", "chars"];
 pub(super) const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 pub(super) const NODE_LIST_TYPE: &str = "list of node";
@@ -688,6 +696,54 @@ pub fn resolve_data_scope(program: Node) -> Node {
 	subtract_kebab_variables(resolved, &variables)
 }
 
+/// P168 (user): `p.phone-number` of an object without that field, `number` a variable, is the subtraction
+/// `p.phone - number`; an object whose fields are unknown keeps the field read. Early, before member reads become indexes
+pub fn lower_kebab_members(program: Node) -> Node {
+	let objects = literal_object_fields(&program);
+	if objects.is_empty() {
+		return program;
+	}
+	let variables: HashSet<String> = assigned_names(&program).into_iter().map(String::from).collect();
+	subtract_kebab_members(program, &variables, &objects)
+}
+
+/// The fields of the variables assigned object literals (`p = {phone: 7}`), over every such assignment
+fn literal_object_fields(program: &Node) -> HashMap<String, HashSet<String>> {
+	let mut objects: HashMap<String, HashSet<String>> = HashMap::new();
+	program.visit(&mut |node| {
+		let Node::Key(target, Op::Assign | Op::Define, value) = node else { return };
+		let (Node::Symbol(name), Node::List(entries, Bracket::Curly, _)) = (target.drop_meta(), value.drop_meta()) else { return };
+		let keys: Option<Vec<String>> = entries.iter().map(|entry| match entry.drop_meta() {
+			Node::Key(key, Op::Colon, _) => Some(key.name()),
+			_ => None,
+		}).collect();
+		if let Some(keys) = keys.filter(|keys| !keys.is_empty()) {
+			objects.entry(name.clone()).or_default().extend(keys);
+		}
+	});
+	objects
+}
+
+fn subtract_kebab_members(node: Node, variables: &HashSet<String>, objects: &HashMap<String, HashSet<String>>) -> Node {
+	match node {
+		Node::Key(receiver, Op::Dot, member) if kebab_member(&receiver, &member, variables, objects).is_some() => {
+			let (field, rest) = kebab_member(&receiver, &member, variables, objects).expect("guarded");
+			let read = Node::Key(receiver, Op::Dot, Box::new(Node::Symbol(field)));
+			rest.into_iter().fold(read, |difference, term| Node::Key(Box::new(difference), Op::Sub, Box::new(Node::Symbol(term))))
+		}
+		other => other.map_children(|child| subtract_kebab_members(child, variables, objects)),
+	}
+}
+
+/// `p.a-b-c`: the field a and the variables b, c, when p's known fields lack `a-b-c`
+fn kebab_member(receiver: &Node, member: &Node, variables: &HashSet<String>, objects: &HashMap<String, HashSet<String>>) -> Option<(String, Vec<String>)> {
+	let (Node::Symbol(object), Node::Symbol(name)) = (receiver.drop_meta(), member.drop_meta()) else { return None };
+	let fields = objects.get(object)?;
+	let (field, rest) = name.split_once('-')?;
+	let rest: Vec<String> = rest.split('-').map(str::to_string).collect();
+	(!fields.contains(name) && rest.iter().all(|part| variables.contains(part))).then(|| (field.to_string(), rest))
+}
+
 /// A hyphenated name that is no data key and whose parts are all variables is their difference: `a=5; b=1; a-b` is 4.
 /// The names of data keys and assignment targets stay as they are.
 pub(super) fn subtract_kebab_variables(node: Node, variables: &HashSet<String>) -> Node {
@@ -982,8 +1038,10 @@ pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Uncheck
 	}
 }
 
-/// `const x=…` binds x once; any later assignment, compound assignment, increment or element assignment is rejected
-pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, String>) -> Option<Diagnostic> {
+/// `const x=…` binds x once: a later assignment of another value, a compound assignment, an increment or an element
+/// assignment is rejected (P130); the same value again only warns (P159). `let x=…` may change, with a note that
+/// teaches `var` for a variable that changes (P159)
+pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (String, String)>) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			let statements = match items.as_slice() {
@@ -995,7 +1053,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, Strin
 					if let Some(found) = check_constants(value, constants) {
 						return Some(found);
 					}
-					constants.insert(target.name(), keyword);
+					constants.insert(target.name(), (keyword, value.serialize()));
 					rest
 				}
 				_ => items.as_slice(),
@@ -1007,15 +1065,23 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, Strin
 				Node::Key(name, Op::Hash, _) => name.name(),
 				other => other.name(),
 			};
-			if let Some(keyword) = constants.get(&place) {
-				let assignment = node.drop_meta().serialize();
-				return Some(if keyword == IMMUTABLE_LET {
-					Diagnostic::at(node, format!("{place} is let (immutable), cannot assign it again: {assignment}"))
-						.fix(format!("declare it with var or plain `{place} =` if it changes"))
-				} else {
-					Diagnostic::at(node, format!("{place} is const, cannot assign it again: {assignment}"))
-						.fix(format!("use a new name instead of {place}, or declare it without const"))
-				});
+			let assignment = node.drop_meta().serialize();
+			match constants.get(&place) {
+				Some((keyword, _)) if keyword == IMMUTABLE_LET => {
+					crate::normalize::set_position_of(node);
+					crate::diagnostic::educate_once(LET_CHANGES_TOPIC, &format!("let {place}"), &format!("var {place}"), &format!("{place} changes ({assignment}): var says so where it is declared"));
+				}
+				Some((_, bound)) if *op == Op::Assign && matches!(target.drop_meta(), Node::Symbol(_)) && value.serialize() == *bound => {
+					let redundant = Diagnostic::at(node, format!("{place} is const and already {bound}: {assignment} changes nothing")).fix("remove the redundant assignment".to_string());
+					if crate::diagnostic::report(std::slice::from_ref(&redundant)).is_err() {
+						return Some(redundant);
+					}
+				}
+				Some(_) => {
+					return Some(Diagnostic::at(node, format!("{place} is const, cannot assign it again: {assignment}"))
+						.fix(format!("use a new name instead of {place}, or declare it without const")));
+				}
+				None => {}
 			}
 			check_constants(value, constants)
 		}
@@ -1037,7 +1103,7 @@ pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> 
 		let is_known_name = |name: &str| type_word_kind(name).is_some() || user_types.get_by_name(name).is_some() || traits.is_trait(name);
 		let known = match type_name.strip_prefix(LIST_OF_PREFIX) {
 			Some(element) => is_known_name(element) || names_list_type(element),
-			None => annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some(),
+			None => annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some() || traits.is_trait(&type_name),
 		};
 		(!known).then(|| Diagnostic::at(annotation, format!("unknown type {type_name} of parameter {}", param.name)))
 	})

@@ -33,8 +33,14 @@ const OLD_WORDS: [&str; 4] = ["old", "previous", "was", "before"];
 const OLD_REASON: &str = "`old` is the value before the write (P148)";
 /// `change_old_0`: the value an `on change` listener saw last, for its body's `old`
 const OLD_PREFIX: &str = "change_old_";
+/// `watched·0`: the `:=` value of the first expression an `on change` listener watches
+const WATCHED_PREFIX: &str = "watched·";
 /// `once_fired_0`: whether the first once listener ran
 const FIRED_PREFIX: &str = "once_fired_";
+/// `whenever_held_0`, `whenever_was_0`: whether the first whenever's condition holds now and held before the write
+/// (P156: whenever runs each time its condition becomes true)
+const HELD_PREFIX: &str = "whenever_held_";
+const WAS_PREFIX: &str = "whenever_was_";
 /// `change_last_0`: the value the first change listener saw last
 const LAST_PREFIX: &str = "change_last_";
 /// `signal·check·0()`: the check of a listener, called after a write in a function (P111)
@@ -59,8 +65,10 @@ struct Listener {
 	/// None for `on set` and calls: every time
 	condition: Option<Node>,
 	body: Node,
-	/// the flag of a once listener, None for whenever
+	/// the flag of a once listener
 	fired: Option<String>,
+	/// a whenever listener's: whether its condition holds, and held before the write
+	held: Option<(String, String)>,
 	/// the statement that starts the listener where it is declared
 	start: Option<Node>,
 }
@@ -82,6 +90,9 @@ impl Listener {
 
 	fn check(&self) -> Node {
 		let Some(condition) = &self.condition else { return block(vec![self.body.clone()]) };
+		if let Some((held, was)) = &self.held {
+			return edge_check(held, was, condition.clone(), self.body.clone());
+		}
 		match &self.fired {
 			None => if_then(condition.clone(), block(vec![self.body.clone()])),
 			Some(fired) => {
@@ -93,7 +104,17 @@ impl Listener {
 	}
 }
 
+/// `whenever cond {body}` runs the body when cond becomes true (P156): `was = held; held = cond; if held and not was
+/// {body}`, the two flags remembered between the checks
+pub(crate) fn edge_check(held: &str, was: &str, condition: Node, body: Node) -> Node {
+	let not_before = Node::Key(Box::new(Node::Empty), Op::Not, Box::new(Node::Symbol(was.to_string())));
+	let became_true = Node::Key(Box::new(Node::Symbol(held.to_string())), Op::And, Box::new(not_before));
+	let parts = vec![assign(was, Node::Symbol(held.to_string())), assign(held, condition), if_then(became_true, block(vec![body]))];
+	Node::List(parts, Bracket::Round, Separator::Semicolon)
+}
+
 pub fn lower(node: Node) -> Node {
+	let node = with_watched_expressions(node, &mut 0);
 	let main_statements = match node.drop_meta() {
 		Node::List(items, bracket, separator) if is_statement_list(bracket, separator) => items.clone(),
 		_ => vec![],
@@ -252,7 +273,7 @@ impl Signals {
 		self.remote.iter().enumerate().filter_map(|(number, listener)| {
 			let watched: HashSet<String> = listener.watched()?.intersection(&globals).cloned().collect();
 			let call = Node::List(vec![Node::Symbol(format!("{CHECK_PREFIX}{number}"))], Bracket::Round, Separator::None);
-			(!watched.is_empty()).then(|| Listener { trigger: Trigger::Write(watched), condition: None, body: call, fired: None, start: None })
+			(!watched.is_empty()).then(|| Listener { trigger: Trigger::Write(watched), condition: None, body: call, fired: None, held: None, start: None })
 		}).collect()
 	}
 
@@ -272,9 +293,14 @@ impl Signals {
 			return None;
 		}
 		let fired = (word == ListenerWord::Once).then(|| self.fresh_name(FIRED_PREFIX));
-		let start = fired.as_ref().map(|fired| assign(fired, Node::False));
+		let held = (word == ListenerWord::Whenever).then(|| (self.fresh_name(HELD_PREFIX), self.fresh_name(WAS_PREFIX)));
+		let start = match (&fired, &held) {
+			(Some(fired), _) => Some(assign(fired, Node::False)),
+			(_, Some((held, was))) => Some(Node::List(vec![assign(held, Node::False), assign(was, Node::False)], Bracket::Round, Separator::Semicolon)),
+			_ => None,
+		};
 		let body = self.lower(body, &[]);
-		Some(Listener { trigger: Trigger::Write(watched), condition: Some(subject), body, fired, start })
+		Some(Listener { trigger: Trigger::Write(watched), condition: Some(subject), body, fired, held, start })
 	}
 
 	fn fresh_name(&mut self, prefix: &str) -> String {
@@ -316,7 +342,7 @@ impl Signals {
 			None => (body, None),
 		};
 		let body = self.lower(with_value(&body, &variable), &[]);
-		Some(Listener { trigger: Trigger::Write(HashSet::from([name])), condition: None, body, fired: None, start })
+		Some(Listener { trigger: Trigger::Write(HashSet::from([name])), condition: None, body, fired: None, held: None, start })
 	}
 
 	/// `on change x {body}`: the body after every write that changed x (a variable or a `:=` value), `value` in it is x
@@ -335,6 +361,7 @@ impl Signals {
 			condition: Some(changed),
 			body: block([remembered, vec![assign(&last, variable.clone()), body]].concat()),
 			fired: None,
+			held: None,
 			start: Some(assign(&last, variable)),
 		})
 	}
@@ -350,7 +377,7 @@ impl Signals {
 		let (subject, body) = subject_and_body(rest)?;
 		let function = self.function_named(&word(&subject))?;
 		let body = self.lower(body, &[]);
-		Some(Listener { trigger: Trigger::Call { function, before }, condition: None, body, fired: None, start: None })
+		Some(Listener { trigger: Trigger::Call { function, before }, condition: None, body, fired: None, held: None, start: None })
 	}
 
 	/// `test`, `tested` (and `saved` for save, `stopped` for stop) name the defined function
@@ -400,6 +427,40 @@ pub(crate) fn listener_parts(statement: &Node) -> Option<(ListenerWord, Node, No
 	Some((listener_word, condition, body))
 }
 
+/// `on change b + c {…}` (Vue's watch(() => b + c)) watches the expression as a `:=` value of its own:
+/// `watched·0 := b + c; on change watched·0 {…}`; `on set` the same
+fn with_watched_expressions(node: Node, count: &mut usize) -> Node {
+	let node = node.map_children(|child| with_watched_expressions(child, count));
+	let Node::List(items, bracket, separator) = node.drop_meta() else { return node };
+	if !is_statement_list(bracket, separator) || !items.iter().any(|statement| watched_expression(statement).is_some()) {
+		return node;
+	}
+	let items = items.iter().flat_map(|statement| match watched_expression(statement) {
+		Some((listener_word, expression, body)) => {
+			let name = Node::Symbol(format!("{WATCHED_PREFIX}{count}"));
+			*count += 1;
+			let derived = Node::Key(Box::new(name.clone()), Op::Define, Box::new(expression));
+			vec![derived, Node::List(vec![Node::Symbol(ON_WORD.to_string()), listener_word, name, body], Bracket::None, Separator::Space)]
+		}
+		None => vec![statement.clone()],
+	});
+	Node::List(items.collect(), bracket.clone(), separator.clone())
+}
+
+/// `on change b + c {body}`, arriving as `on change (b + (c {body}))`: the word set or change, the expression and the
+/// body. A path (`p.age`) and `x: body` are no expressions
+fn watched_expression(statement: &Node) -> Option<(Node, Node, Node)> {
+	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let [on, listener_word, subject] = ungrouped(items).try_into().ok()?;
+	let watches = word(&on) == ON_WORD && [SET_WORD, CHANGE_WORD].contains(&word(&listener_word).as_str());
+	let expression = matches!(subject.drop_meta(), Node::Key(_, op, _) if !matches!(op, Op::Colon | Op::Dot));
+	if !(watches && expression) {
+		return None;
+	}
+	let (expression, body) = trailing_block(&subject)?;
+	Some((listener_word, expression, body))
+}
+
 /// `f(s) := on change s {…}` arrives grouped as `(on change) (s {…})`: its parts in one row
 fn ungrouped(items: &[Node]) -> Vec<Node> {
 	let is_group = |item: &Node| matches!(item.drop_meta(), Node::List(_, Bracket::None, _));
@@ -427,6 +488,7 @@ pub(crate) fn with_old(body: &Node, main_variables: &HashSet<String>) -> Option<
 	if read.is_empty() {
 		return None;
 	}
+	crate::normalize::set_position_of(body);
 	read.iter().filter(|word| word.as_str() != OLD_WORDS[0]).for_each(|alias| crate::normalize::hint(alias, OLD_WORDS[0], OLD_REASON));
 	let body = body.clone();
 	Some(move |old: &Node| crate::law::substitute(&body, &read.iter().map(|word| (word.clone(), old.clone())).collect()))
@@ -455,18 +517,21 @@ fn function_reads(node: &Node) -> HashMap<String, HashSet<String>> {
 fn function_definitions(node: &Node) -> HashMap<String, &Node> {
 	let mut functions = HashMap::new();
 	node.visit(&mut |part| {
-		let name = match part {
-			Node::Key(head, Op::Define, _) => definition_name(head),
-			Node::List(items, _, _) if items.first().is_some_and(|first| crate::operators::is_function_keyword(&word(first))) => {
-				items.get(1).map(definition_name).unwrap_or_default()
-			}
-			_ => String::new(),
-		};
+		let name = defined_function_name(part);
 		if !name.is_empty() {
 			functions.insert(name, part);
 		}
 	});
 	functions
+}
+
+/// The function a definition defines (`f(x) := …`, `def f(x) {…}`, `def f(x): …`), else empty
+pub(crate) fn defined_function_name(part: &Node) -> String {
+	match part {
+		Node::Key(head, Op::Define, _) => definition_name(head),
+		Node::List(items, _, _) if defines_function(items) => items.get(1).map(definition_name).unwrap_or_default(),
+		_ => String::new(),
+	}
 }
 
 /// `f`, `f(x)`, `f(x) {…}`, `f(x): …`: f
@@ -554,10 +619,14 @@ fn calls_inside(node: &Node, function: &str) -> bool {
 	!matches!(node.drop_meta(), Node::Symbol(_)) && calls(node, function)
 }
 
-/// `subject {body}` or `subject: body`
-fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
+/// `subject {body}`, `subject: body` or `subject do body`
+pub(crate) fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 	match rest {
 		[subject, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => Some((subject.clone(), body.clone())),
+		[handler] if matches!(handler.drop_meta(), Node::Key(_, Op::Do, _)) => match handler.drop_meta() {
+			Node::Key(subject, _, body) => Some((subject.drop_meta().clone(), body.as_ref().clone())),
+			_ => unreachable!("guarded"),
+		},
 		[handler] => handler_parts(handler),
 		_ => None,
 	}
@@ -625,8 +694,13 @@ pub(crate) fn root_variable(target: &Node) -> Option<String> {
 	}
 }
 
+/// A write statement: an assignment, or a method changing the list it is called on (`xs.add(v)` is `xs = xs + [v]`)
 fn statement_write(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
+		Node::Key(list, Op::Dot, call) => match call.drop_meta() {
+			Node::List(items, _, _) if items.first().is_some_and(|method| crate::analyzer::is_list_mutating_method(&word(method))) => written_path(list),
+			_ => None,
+		},
 		Node::Key(target, op, _) => written_variable(target, *op),
 		_ => None,
 	}
@@ -646,6 +720,10 @@ fn value_after_write(write: &Node) -> Node {
 pub(crate) fn if_then(condition: Node, body: Node) -> Node {
 	let head = Node::Key(Box::new(Node::Empty), Op::If, Box::new(condition));
 	Node::Key(Box::new(head), Op::Then, Box::new(body))
+}
+
+pub(crate) fn if_then_else(condition: Node, body: Node, otherwise: Node) -> Node {
+	Node::Key(Box::new(if_then(condition, body)), Op::Else, Box::new(otherwise))
 }
 
 pub(crate) fn block(statements: Vec<Node>) -> Node {

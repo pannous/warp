@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds web/playground: the warp compiler for the browser (no wasmtime: the `native` feature off, src/web.rs) in two
-# builds, and samples.js (samples/*.wasp for the example menu). Serve the repository root and open the page:
+# builds, samples.js (samples/*.wasp for the example menu) and keywords.js (the editor's hard and soft keywords). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)
 # Usage: build.sh [optimized|debug|components]   (all when omitted)
 #   optimized → warp.wasm: release profile (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
@@ -83,10 +83,24 @@ case "${1:-all}" in
 	*) echo "usage: $0 [optimized|debug|components]" >&2; exit 2 ;;
 esac
 
-python3 - "$page/samples.js" samples/*.wasp <<'PYTHON'
+python3 - "$page/samples.js" "$page/excluded_samples.txt" samples/*.wasp <<'PYTHON'
 import json, os, sys
-samples = {os.path.basename(path)[:-len(".wasp")]: open(path, encoding="utf-8").read() for path in sys.argv[2:]}
+# the samples the page cannot run yet stay out of the menu, each named with its error in excluded_samples.txt
+excluded = {line.split()[0] for line in open(sys.argv[2], encoding="utf-8") if line.strip() and not line.startswith("#")}
+names = {os.path.basename(path)[:-len(".wasp")]: path for path in sys.argv[3:]}
+samples = {name: open(path, encoding="utf-8").read() for name, path in names.items() if name not in excluded}
 with open(sys.argv[1], "w", encoding="utf-8") as script:
 	script.write("// made by build.sh from samples/*.wasp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
 PYTHON
 echo "built $page/samples.js"
+
+# the editor colors the keywords of P165 from their one definition, src/lowering/soft_keywords.rs
+python3 - "$page/keywords.js" src/lowering/soft_keywords.rs <<'PYTHON'
+import json, re, sys
+source = open(sys.argv[2], encoding="utf-8").read()
+def words(name):
+	return re.findall(r'"([^"]+)"', re.search(rf"const {name}: \[&str; \d+\] = \[(.*?)\];", source, re.S).group(1))
+with open(sys.argv[1], "w", encoding="utf-8") as script:
+	script.write("// made by build.sh from src/lowering/soft_keywords.rs\nconst KEYWORDS = " + json.dumps({"hard": words("HARD_KEYWORDS"), "soft": words("SOFT_KEYWORDS") + words("HIGHLIGHTED_WORDS")}, ensure_ascii=False) + ";\n")
+PYTHON
+echo "built $page/keywords.js"

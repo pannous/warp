@@ -104,3 +104,46 @@ fn libc_compiled_to_wasm_is_called_like_c() {
 	is!(&format!("{LIBC}toupper(97)"), 65);
 	is!(&format!("{LIBC}strchr(\"abc\", 120)"), Node::Empty); // NULL is ø
 }
+
+// an out-pointer (`char **endptr`) is left out of the call: the module gets a slot of its malloc, and what it received
+// is the result, as natively (notes/ffi_handles.md)
+#[test]
+fn a_c_modules_out_pointer_gives_the_result() {
+	const LIBC: &str = "import tests/fixtures/wasm/libc_text; ";
+	is!(&format!("{LIBC}strtol(\"42 apples\", 10)"), " apples");
+	is!(&format!("{LIBC}strtol(\"ff!\", 16)"), "!");
+}
+
+// zlib built from its own sources to wasm32-wasi (zlib.sh, 63 KB, no imports): const byte pointers take texts, unsigned
+// long results stay positive; the same program natively and in the browser
+#[test]
+fn zlib_compiled_to_wasm() {
+	const ZLIB: &str = "import tests/fixtures/wasm/zlib; ";
+	is!(&format!("{ZLIB}zlibVersion()"), "1.3.2");
+	is!(&format!("{ZLIB}crc32(0, \"hello\", 5)"), 907060870);
+	is!(&format!("{ZLIB}crc32(0, \"wasp\", 4)"), 3400449319i64);
+	is!(&format!("{ZLIB}adler32(1, \"hello\", 5)"), 103547413);
+	is!(&format!("{ZLIB}compressBound(100)"), 113);
+}
+
+// a writable buffer with its in/out length (`Bytef *dest, uLongf *destLen`): the call passes the capacity, the bytes
+// written are the result, a C status other than 0 an error; a text's length may be left out (`const Bytef *, uLong`)
+#[test]
+fn zlib_compresses_into_a_buffer_and_back() {
+	const ZLIB: &str = "import tests/fixtures/wasm/zlib; ";
+	is!(&format!("{ZLIB}uncompress(100, compress(64, \"hello hello hello\"))"), "hello hello hello");
+	is!(&format!("{ZLIB}crc32(0, compress(64, \"hello hello hello\"))"), 3327255652i64);
+	is!(&format!("{ZLIB}crc32(0, \"hello\")"), 907060870);
+	fails_with(&format!("{ZLIB}uncompress(4, compress(64, \"hello hello hello\"))"), "uncompress failed (C status -5)");
+}
+
+// xxHash built from its header (xxhash.sh, 13 KB): a second C library the same way; its state is the module's pointer
+#[test]
+fn xxhash_compiled_to_wasm() {
+	const XXHASH: &str = "import tests/fixtures/wasm/xxhash; ";
+	is!(&format!("{XXHASH}XXH_versionNumber()"), 802);
+	is!(&format!("{XXHASH}XXH32(\"hello\", 0)"), 4211111929i64);
+	is!(&format!("{XXHASH}XXH32(\"wasp\", 4, 42)"), 4089166900i64);
+	is!(&format!("{XXHASH}XXH64(\"hello\", 0)"), 2794345569481354659i64);
+	is!(&format!("{XXHASH}state = XXH32_createState(); XXH32_reset(state, 0); XXH32_update(state, \"hel\"); XXH32_update(state, \"lo\"); XXH32_digest(state)"), 4211111929i64);
+}

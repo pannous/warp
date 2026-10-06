@@ -27,10 +27,12 @@ pub(super) fn parameter_copies(node: Node, maps: &HashSet<(String, usize)>) -> N
 			let mut body = parameter_copies(*body, maps);
 			// a parameter that is assigned (`arr = swap(arr, i, j)`) would convert at every assignment: it keeps walking
 			for (index, parameter) in items[1..].iter().enumerate().filter_map(|(index, parameter)| Some((index, parameter_symbol(parameter)?))) {
-				if indexes(&body, &parameter) && !assigned_from_call_in_loop(&body, &parameter) {
-					body = with_copy(body, &parameter, LIST_COPY_SUFFIX);
-				} else if maps.contains(&(function.clone(), index)) && keys(&body, &parameter) && !assigns(&body, &parameter) {
+				// every call passing a map: `m[k]` looks a key up, no list copy (a one-entry map would lose its key)
+				let takes_maps = maps.contains(&(function.clone(), index));
+				if takes_maps && keys(&body, &parameter) && !assigns(&body, &parameter) {
 					body = with_copy(body, &parameter, crate::wasm_emitter::MAP_COPY_SUFFIX); // a hash table (map_backend.rs)
+				} else if !takes_maps && indexes(&body, &parameter) && !assigned_from_call_in_loop(&body, &parameter) {
+					body = with_copy(body, &parameter, LIST_COPY_SUFFIX);
 				}
 			}
 			Node::Key(head, op, Box::new(body))
@@ -95,15 +97,42 @@ pub(super) fn parameter_symbol(parameter: &Node) -> Option<String> {
 /// Does the body index (`xs#i`) or count (`#xs`) the variable in a loop, not by a text key: once is cheaper as a walk
 /// than a conversion
 pub(super) fn indexes(body: &Node, name: &str) -> bool {
+	let key_variables = key_variables(body);
 	let mut found = false;
 	let mut loops = vec![];
 	body.visit(&mut |part| if let Node::Key(_, Op::While | Op::Do, _) = part { loops.push(part) });
 	loops.into_iter().for_each(|body| body.visit(&mut |part| {
 		let Node::Key(list, Op::Hash, index) = part else { return };
 		let counted = if matches!(list.drop_meta(), Node::Empty) { index } else { list };
-		found |= !is_text_key(index) && matches!(counted.drop_meta(), Node::Symbol(symbol) if symbol == name);
+		found |= !looks_up_a_key(index, &key_variables) && matches!(counted.drop_meta(), Node::Symbol(symbol) if symbol == name);
 	}));
 	found
+}
+
+/// A text key or a variable holding one of the map's keys (`m[k]` in `for k in keys(m)`), not a position
+pub fn looks_up_a_key(index: &Node, key_variables: &HashSet<String>) -> bool {
+	is_text_key(index) || matches!(crate::wasp_parser::subscript_key(index).unwrap_or(index).drop_meta(), Node::Symbol(index) if key_variables.contains(index))
+}
+
+/// The variables that hold a map's keys: `k` of a lowered `for k in keys(m)`, `k·items = map_keys(m)` … `k = k·items#i`,
+/// and `k = keys(m)#i`
+pub fn key_variables(body: &Node) -> HashSet<String> {
+	let is_keys_call = |value: &Node| matches!(value.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.name() == crate::library_words::MAP_KEYS));
+	let mut key_lists = HashSet::new();
+	body.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
+		if let (Node::Symbol(list), true) = (target.drop_meta(), is_keys_call(value)) {
+			key_lists.insert(list.clone());
+		}
+	});
+	let mut variables = HashSet::new();
+	body.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
+		let reads_a_key = matches!(value.drop_meta(), Node::Key(list, Op::Hash, _)
+			if is_keys_call(list) || matches!(list.drop_meta(), Node::Symbol(list) if key_lists.contains(list)));
+		if let (Node::Symbol(variable), true) = (target.drop_meta(), reads_a_key) {
+			variables.insert(variable.clone());
+		}
+	});
+	variables
 }
 
 /// Is the variable assigned a call's result inside a loop (`arr = swap(arr, i, j)`, a conversion per iteration)
@@ -121,7 +150,8 @@ pub(super) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 /// Does the body set an entry of the map variable (`m[k] = v`) or look one up in a loop, by a text key
 pub(super) fn keys(body: &Node, name: &str) -> bool {
 	let is_name = |part: &Node| matches!(part.drop_meta(), Node::Symbol(symbol) if symbol == name);
-	let by_key = is_text_key;
+	let key_variables = key_variables(body);
+	let by_key = |index: &Node| looks_up_a_key(index, &key_variables);
 	let mut found = false;
 	body.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
 		found |= matches!(target.drop_meta(), Node::Key(map, Op::Hash, index) if is_name(map) && by_key(index));
@@ -442,7 +472,7 @@ pub const INSERT_AT_CALL: &str = "list_insert_at";
 pub const INSERT_EITHER_CALL: &str = "insert_in_either_order";
 pub(super) const AT_WORD: &str = "at";
 
-/// The name of a constant field key (`p.x`, `p["x"]`) when it is spelled with letters, digits and `_`:
+/// The name of a constant field key (`p.x`, `p["x"]`) when it is spelled with letters, digits, `_` and `-` (`phone-number`, P164):
 /// the runtime error for its miss is a function named after it (`no_field_x`), and the trace of the trap carries the name.
 /// A symbol key `p[k]` is evaluated when `k` is a variable, so it is not a constant.
 pub fn constant_field_name(key: &Node) -> Option<String> {
@@ -451,7 +481,7 @@ pub fn constant_field_name(key: &Node) -> Option<String> {
 		Node::Char(letter) => letter.to_string(),
 		_ => return None,
 	};
-	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')).then_some(name)
+	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')).then_some(name)
 }
 
 /// Methods that change the list variable they are called on: `xs.add(v)`, `xs.insert(v, at:1)`, `xs.pop()`
@@ -666,7 +696,7 @@ pub(super) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
 }
 
 /// The element name of the lambda an element-wise operator maps with: no wasp program writes it
-pub(super) const EACH_ELEMENT: &str = "each_element";
+pub const EACH_ELEMENT: &str = "each_element";
 
 /// `xs .+ n` (also `.-`, `.*`, `./`): the operator applied to each element, `xs.map(each_element => each_element + n)`
 pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
