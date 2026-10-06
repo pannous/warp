@@ -249,7 +249,12 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 				};
 				match milliseconds(&duration) {
 					Some(amount) => Node::List(vec![items[0].clone(), Node::int(amount)], Bracket::Round, Separator::None),
-					None => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
+					None => {
+						if let Err(error) = warn_bare_duration(&duration) {
+							return error;
+						}
+						Node::List(items.into_iter().map(lower).collect(), bracket, separator)
+					}
 				}
 			}
 			other => other.map_children(lower),
@@ -259,6 +264,16 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 		true => program,
 		false => lower(program),
 	}
+}
+
+/// User #17: `sleep(1)` reads as milliseconds but says nothing; a bare number gets the warning that names the units
+fn warn_bare_duration(duration: &Node) -> Result<(), Node> {
+	if !matches!(duration.drop_meta(), Node::Number(_)) {
+		return Ok(());
+	}
+	let amount = duration.serialize();
+	let message = format!("sleep needs a unit: sleep {amount} second or sleep {amount} ms (a bare number is milliseconds)");
+	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(duration, message)])
 }
 
 /// A constant duration in whole milliseconds: `1000 ms`, `2 s`, `1 min`, `2 seconds` (a duration of the time module)

@@ -207,3 +207,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-06 run-fast (P105 follow-up)
 - `warp run` has no machine-code path; fresh 73 ms is front end + emitter (65 ms), JIT ~8 ms; OptLevel::None no gain,
   so no code change; probes/aot/run_speed.sh and notes/aot.md "Run speed".
+
+## 2026-10-06 fix-diagnostics (user issues #11 #12 #13 #17, g-1pvQ)
+- No hints for 'x'/"x", let/:=, str(x)/x as string, a number joining a text: the default Style leaves those axes Any,
+  Style::canonical keeps one spelling each (hint-machinery tests run under it). sleep(1) warns for a unit. norm = abs.

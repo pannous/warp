@@ -276,19 +276,33 @@ pub struct Style {
     pub prefer_string_over_str: bool,
 }
 
+impl Style {
+    /// One spelling per form, every axis decided: what a formatter writes and what the hint machinery is tested
+    /// with; the default leaves open what the user called legitimate (#11, #12, #13)
+    pub fn canonical() -> Self {
+        Self {
+            cast: CastStyle::AsOperator,
+            var_def: VarStyle::ColonEquals,
+            quotes: QuoteStyle::Double,
+            prefer_string_over_str: true,
+            ..Self::default()
+        }
+    }
+}
+
 impl Default for Style {
     fn default() -> Self {
         Self {
             list_type: ListTypeStyle::Plural,
-            cast: CastStyle::AsOperator,
+            cast: CastStyle::Any, // user #13: `str(x)` is fine
             function_def: FunctionStyle::Any, // user 2026-10-03: `f(x) := …`, `def f(x): …` … are all fine
-            var_def: VarStyle::ColonEquals,
+            var_def: VarStyle::Any, // user #12: `let t = …` and `t := …` are both legitimate
             logical: LogicalStyle::Words,
-            quotes: QuoteStyle::Double,
+            quotes: QuoteStyle::Any, // user #11: "I don't care" about 'x' or "x"
             index: IndexStyle::Hash,
             conditional: ConditionalStyle::IfThenElse,
             power: PowerStyle::Caret,
-            prefer_string_over_str: true,
+            prefer_string_over_str: false, // user #13: str(x) gets no hint
         }
     }
 }
@@ -918,9 +932,9 @@ mod tests {
 
 	#[test]
 	fn test_style_swap() {
-		// Default prefers 'as' operator
+		// Default leaves the cast spelling open (user #13: str(x) is fine)
 		let s = style();
-		assert_eq!(s.cast, CastStyle::AsOperator);
+		assert_eq!(s.cast, CastStyle::Any);
 
 		// Swap to constructor style
 		set_style(Style { cast: CastStyle::Constructor, ..Style::default() });
