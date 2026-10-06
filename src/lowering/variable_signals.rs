@@ -451,6 +451,7 @@ pub(crate) fn with_old(body: &Node, main_variables: &HashSet<String>) -> Option<
 	if read.is_empty() {
 		return None;
 	}
+	crate::normalize::set_position_of(body);
 	read.iter().filter(|word| word.as_str() != OLD_WORDS[0]).for_each(|alias| crate::normalize::hint(alias, OLD_WORDS[0], OLD_REASON));
 	let body = body.clone();
 	Some(move |old: &Node| crate::law::substitute(&body, &read.iter().map(|word| (word.clone(), old.clone())).collect()))

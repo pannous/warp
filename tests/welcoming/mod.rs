@@ -36,3 +36,4 @@ mod test_sleep_unit_warning;
 mod test_index_hint_simple;
 mod test_constant_shadowing;
 mod test_left_arrow;
+mod test_hint_positions;

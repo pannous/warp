@@ -212,6 +212,7 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 	if let Some((event, body, false)) = handler(&node).filter(|(event, _, _)| raised.contains(event)) {
 		if in_loop {
 			let reason = format!("a handler in a loop subscribes once per pass: each emit {event} runs all of them; subscribe before the loop unless that is meant");
+			crate::normalize::set_position_of(&node);
 			crate::diagnostic::advise_once(LOOP_SUBSCRIPTION_TOPIC, &format!("on {event} {{…}}"), "on … before the loop", &reason);
 		}
 		let list = Node::Symbol(subscribers_name(&event));
@@ -496,6 +497,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 			_ => String::new(),
 		};
 		if EMIT_ALIASES.contains(&verb.as_str()) {
+			crate::normalize::set_position_of(&node);
 			crate::diagnostic::educate_once(EMIT_TOPIC, &verb, "emit", &format!("`emit {name}` sends an event to its handlers (P163)"));
 		}
 		let call = match handled.get(&name) {

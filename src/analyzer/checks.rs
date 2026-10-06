@@ -1014,6 +1014,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 			let assignment = node.drop_meta().serialize();
 			match constants.get(&place) {
 				Some((keyword, _)) if keyword == IMMUTABLE_LET => {
+					crate::normalize::set_position_of(node);
 					crate::diagnostic::educate_once(LET_CHANGES_TOPIC, &format!("let {place}"), &format!("var {place}"), &format!("{place} changes ({assignment}): var says so where it is declared"));
 				}
 				Some((_, bound)) if *op == Op::Assign && matches!(target.drop_meta(), Node::Symbol(_)) && value.serialize() == *bound => {
