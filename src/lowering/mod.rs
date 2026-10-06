@@ -9,6 +9,7 @@ pub mod closures;
 pub mod comprehensions;
 pub mod declarations;
 pub mod go_blocks;
+pub mod local_channels;
 pub mod parallel;
 pub mod folding;
 pub mod memoization;
