@@ -979,7 +979,8 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 			let block = Node::List(vec![lower_spaced_definitions(*body)], Bracket::Curly, Separator::Semicolon);
 			Node::List(vec![Node::Symbol("for".into()), *range, block], Bracket::None, Separator::Space)
 		}
-		Node::List(items, bracket, separator) if spaced_definition(&items).is_some() => {
+		// a phrase `name p… = body`, never the items of a comma list (`(a, b = a * 2) => …` has a default)
+		Node::List(items, bracket, separator @ (Separator::Space | Separator::None)) if spaced_definition(&items).is_some() => {
 			let (name, parameters, body) = spaced_definition(&items).expect("guarded");
 			let body = lower_spaced_definitions(body);
 			let head = Node::List([vec![name], parameters].concat(), Bracket::Round, Separator::None);
