@@ -46,6 +46,14 @@ impl WasmGcEmitter {
 	/// The variables of `program` held as GC structs, with their class: locals assigned only constructions of one class
 	/// that give every field in declared order, with values of the field's kind
 	pub(super) fn find_typed_structs(&self, program: &Node) -> HashMap<String, String> {
+		let mut classes = self.struct_variables(program);
+		classes.retain(|name, _| self.scope.lookup(name).is_some_and(|local| !local.is_param));
+		classes
+	}
+
+	/// find_typed_structs before the scope is known: the variables a program, or a function body except its
+	/// parameters, holds as structs
+	fn struct_variables(&self, program: &Node) -> HashMap<String, String> {
 		let (mut classes, mut excluded): (HashMap<String, String>, Vec<String>) = (HashMap::new(), vec![]);
 		program.visit(&mut |part| {
 			let Node::Key(target, op, value) = part else { return };
@@ -60,7 +68,7 @@ impl WasmGcEmitter {
 			}
 		});
 		excluded.extend(self.names_held_as_nodes(program));
-		classes.retain(|name, _| !excluded.contains(name) && self.scope.lookup(name).is_some_and(|local| !local.is_param));
+		classes.retain(|name, _| !excluded.contains(name));
 		classes
 	}
 
@@ -145,11 +153,18 @@ impl WasmGcEmitter {
 	}
 
 	/// Per user function: the class of each parameter it takes as a struct. A parameter `p:P` qualifies when the body
-	/// only reads fields of it and every call passes a variable or a construction of P: such an argument becomes the
-	/// struct without making an instance Node (a struct variable is passed as it is)
+	/// only reads fields of it and every call passes a struct variable or a construction of P. Any other value keeps
+	/// the Node parameter: a value that only looks like a P (duck typing) may lack fields the body never reads
 	pub(super) fn find_struct_abi(&self, program: &Node) -> HashMap<String, Vec<Option<String>>> {
 		let functions = self.directly_called_functions();
-		let trees: Vec<&Node> = std::iter::once(program).chain(functions.iter().map(|function| function.body.as_ref())).collect();
+		let struct_variables_of = |tree: &Node, params: &[crate::context::Param]| {
+			let mut variables = self.struct_variables(tree);
+			variables.retain(|name, _| params.iter().all(|param| param.name != *name));
+			variables
+		};
+		let trees: Vec<(&Node, HashMap<String, String>)> = std::iter::once((program, struct_variables_of(program, &[])))
+			.chain(functions.iter().map(|function| (function.body.as_ref(), struct_variables_of(&function.body, &function.params))))
+			.collect();
 		let mut abi = HashMap::new();
 		for function in &functions {
 			let classes: Vec<Option<String>> = function.params.iter().map(|param| {
@@ -159,19 +174,19 @@ impl WasmGcEmitter {
 			if classes.iter().all(Option::is_none) {
 				continue;
 			}
-			let passes_structs = |call: &[Node]| call.len() == classes.len() + 1 && call[1..].iter().zip(&classes).zip(&function.params).all(|((argument, class), param)| match class {
+			let passes_structs = |call: &[Node], variables: &HashMap<String, String>| call.len() == classes.len() + 1 && call[1..].iter().zip(&classes).zip(&function.params).all(|((argument, class), param)| match class {
 				None => true,
 				Some(class) => match argument.drop_meta() {
-					Node::Symbol(_) => true,
+					Node::Symbol(name) => variables.get(name) == Some(class),
 					Node::Key(name, Op::Colon, _) if name.drop_meta().name() == param.name => true, // the definition's head
 					_ => self.constructed_class(argument).as_ref() == Some(class),
 				},
 			});
 			let (mut mentions, mut struct_calls) = (0, 0);
-			for tree in &trees {
+			for (tree, variables) in &trees {
 				tree.visit(&mut |part: &Node| match part {
 					Node::Symbol(name) if *name == function.name => mentions += 1,
-					Node::List(items, _, _) if super::list_abi::called_function(part) == Some(function.name.as_str()) && passes_structs(items) => struct_calls += 1,
+					Node::List(items, _, _) if super::list_abi::called_function(part) == Some(function.name.as_str()) && passes_structs(items, variables) => struct_calls += 1,
 					_ => {}
 				});
 			}
@@ -187,8 +202,7 @@ impl WasmGcEmitter {
 		self.struct_abi.get(function)?.get(index)?.as_ref()
 	}
 
-	/// An argument where a struct of `class` is wanted: a struct variable as it is, a construction or another
-	/// variable's fields made into one
+	/// An argument where a struct of `class` is wanted: a struct variable as it is, a construction made into one
 	pub(super) fn emit_struct_argument(&mut self, func: &mut Function, argument: &Node, class: &str) {
 		if let Some((slot, instance)) = self.typed_struct(argument) {
 			if self.instance_types[class].type_index == instance.type_index {
@@ -201,8 +215,7 @@ impl WasmGcEmitter {
 				Node::List(entries, _, _) => entries.iter().map(|entry| entry_value(entry).clone()).collect(),
 				other => unreachable!("find_struct_abi admits constructions of entry lists, not {other:?}"),
 			},
-			(None, Node::Symbol(name)) => self.instance_types[class].fields.iter().map(|(field, _)| field_read(name, field)).collect(),
-			(None, other) => unreachable!("find_struct_abi admits variables and constructions, not {other:?}"),
+			(None, other) => unreachable!("find_struct_abi admits struct variables and constructions of {class}, not {other:?}"),
 		};
 		self.emit_struct_new(func, class, &values);
 	}
