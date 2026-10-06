@@ -505,6 +505,9 @@ PASSED:
   ✓ function::tests::test_kind_to_valtype
   ✓ function::tests::test_signature_builder
   ✓ function::tests::test_signature_format
+  ✓ functions::test_all_calls::a_function_applied_to_all_items
+  ✓ functions::test_all_calls::an_untyped_call_next_to_a_comparison_is_ambiguous
+  ✓ functions::test_all_calls::broadcasting_compares_as_a_list
   ✓ functions::test_analysis_memo::test_a_changed_tree_is_analysed_anew
   ✓ functions::test_analysis_memo::test_an_analysis_that_says_something_runs_again
   ✓ functions::test_analysis_memo::test_the_same_tree_is_analysed_once
@@ -521,6 +524,7 @@ PASSED:
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
   ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
   ✓ functions::test_argument_labels::a_label_names_the_argument_and_the_name_is_read_inside
+  ✓ functions::test_argument_labels::a_labeled_parameter_of_a_function_type
   ✓ functions::test_argument_labels::an_underscore_label_takes_the_argument_without_a_name
   ✓ functions::test_arity_overloads::a_call_takes_the_definition_of_its_argument_count
   ✓ functions::test_arity_overloads::a_count_no_definition_fits_or_two_fit_is_an_error
@@ -538,6 +542,7 @@ PASSED:
   ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
   ✓ functions::test_body_statement::an_undefined_word_in_it_is_an_error
   ✓ functions::test_broadcasting::julia_dot_call_broadcasts
+  ✓ functions::test_broadcasting::library_words_and_math_operators_broadcast
   ✓ functions::test_broadcasting::test_broadcasting_reaches_nested_lists
   ✓ functions::test_broadcasting::test_function_broadcasts_over_a_list
   ✓ functions::test_broadcasting::test_function_broadcasts_over_pairs_keeping_keys
@@ -684,7 +689,10 @@ PASSED:
   ✓ functions::test_functions::test_stacked_lambdas
   ✓ functions::test_functions::test_variable_reassignment
   ✓ functions::test_functions::test_variables
+  ✓ functions::test_generator_arguments::a_generator_argument
+  ✓ functions::test_generator_arguments::any_and_all_of_a_list
   ✓ functions::test_global_with_closures::global_in_a_program_with_a_lambda
+  ✓ functions::test_go_functions::a_go_short_declaration_that_is_assigned_stays_an_error
   ✓ functions::test_go_functions::several_results
   ✓ functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called
   ✓ functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged
@@ -2688,4 +2696,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2683 passed, 0 failed, 2683 total tested
+20 ignored, 2691 passed, 0 failed, 2691 total tested
