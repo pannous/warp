@@ -165,6 +165,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   when the timeout happens; a timeout itself stays silent.
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P161 (functions, warp-41; the user told the worker directly) no Swift-style argument labels: "we don't do this
+  here, I don't like that redundancy". Ported labels (`func greet(person name: String)`, `_ x: Int`) compile like P157,
+  with a got-it note "wasp names a parameter once"; docs and examples never use labels.
 - P160 (warp-42, wiki/reference.md; survey notes/implicit_params.md) `$0`/`$1` were overloaded three ways (lambda
   parameters, WebAssembly positional arguments, node ids). The user chose a different syntax for ids: `@1` is the
   node whose `@id` is 1 (`a[id=1]{ b c { parent=@1 } }`), `ref 1` / `ref a` say the same in words, and `$a` stays
