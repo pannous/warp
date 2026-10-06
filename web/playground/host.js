@@ -201,6 +201,12 @@ function programImports(holder, hooks) {
 			task_await: id => {
 				const task = takenTask(holder.run, hooks, id);
 				if (task.failure) throw new Error(task.failure);
+				// a task whose function returns a Node (`go { n + 1 }` of a Node parameter n) still gives its number here
+				if (typeof task.value === "object" && task.value !== null) {
+					const number = task.value.data?.int;
+					if (number === undefined) throw new Error(`task ${taskName(task.name ?? "")}: its result is no whole number`);
+					return BigInt(number);
+				}
 				return task.value;
 			},
 			task_await_value: id => buildValue(program(), taskTree(takenTask(holder.run, hooks, id).value)),
