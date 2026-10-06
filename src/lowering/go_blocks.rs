@@ -32,6 +32,14 @@ pub fn lower(node: Node) -> Node {
 	crate::declarations::with_definitions_first(node, blocks.definitions.into_inner())
 }
 
+/// A function as a message names it: `go·block·1` is `go block 1`
+pub fn written_name(function: &str) -> String {
+	match function.strip_prefix(BLOCK_FUNCTION_PREFIX) {
+		Some(number) => format!("{GO_WORD} block {number}"),
+		None => function.to_string(),
+	}
+}
+
 #[derive(Default)]
 struct GoBlocks {
 	definitions: std::cell::RefCell<Vec<Node>>,
