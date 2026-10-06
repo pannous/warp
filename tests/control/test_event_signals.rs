@@ -19,3 +19,12 @@ fn a_raise_inside_a_function_reaches_the_handler() {
 	is!("n=0; on alarm {n+=1}; def check(x){ if x>2 {raise alarm}; x }; check(1); check(5); n", 1);
 	is!("seen=0; def check(x){ if x>2 {raise too big{value:x}}; x }; on too big {seen=event.value}; check(4); seen", 4);
 }
+
+// The async side (tasks forward a raise to the starting thread) finds the exported handler functions
+#[test]
+fn the_handled_signals_name_their_functions() {
+	let lowered = warp::event_signals::lower(warp::wasp_parser::parse("n=0; on stop the machine {n+=1}; on alarm {n+=2}; raise alarm; raise stop the machine; on idle {n}; n"));
+	let mut handled = warp::event_signals::handled_signals(&lowered);
+	handled.sort();
+	assert_eq!(handled, vec![("alarm".to_string(), "on·alarm".to_string()), ("stop the machine".to_string(), "on·stop·the·machine".to_string())]);
+}
