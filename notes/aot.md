@@ -36,7 +36,9 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    `warp <file>.wasm` / `.cwasm` now link host, WASI and FFI imports (a printing program failed with an unknown
    `wasi_snapshot_preview1::fd_write` before).
    CLI, debug warp, ackermann: 41 ms without cache, 12 ms with the cache or the .cwasm.
-3. **Standalone executable, `warp build <file>`** (implemented; `--exe` was needed until g-1KS4, `--wasm` writes only the module): `<file>.exe` is a copy of the prebuilt stub
+3. **Standalone executable, `warp <file>`** (implemented; P103: running a file leaves `<file>` next to it, `<file>.exe`
+   on Windows, rebuilt only when the source is newer; a program the runtime cannot carry gets a note; `warp build`/`compile`
+   only make it, `--wasm` writes only the module): the executable is a copy of the prebuilt stub
    `warp-runtime` (crates/warp-runtime: wasmtime with `runtime`, `gc`, `gc-copying`, `std`, no Cranelift) with the
    program's machine code appended (`[stub][cwasm][u64 le length][WRPCwasm]`); at start the stub reads its own last 16
    bytes and runs what it carries. The stub is found through `WARP_RUNTIME_STUB`, else `warp-runtime` next to `warp`,
