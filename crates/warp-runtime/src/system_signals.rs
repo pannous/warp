@@ -1,9 +1,9 @@
 //! System signals (notes/system_signals.md): handlers of events from outside the program, exported functions the
 //! runtime calls at check points: `signal_poll()` (at the start and end of main and at each loop start of a program
 //! with such handlers) and `sleep`, which wakes for them. `on interrupt {…}` is `on·interrupt`, run after a ctrl-c:
-//! the first poll installs the SIGINT handler, which only sets a flag; a second ctrl-c within a second, or before the
-//! handler ran, ends the run at once (exit code 130), so a handler that ignores ctrl-c never makes a program
-//! unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_every(0, 5000)` where the handler is
+//! the first poll installs the ctrl-c handler (Unix SIGINT, Windows SetConsoleCtrlHandler), which only sets a flag; a
+//! second ctrl-c within a second, or before the handler ran, ends the run at once (exit code 130), so a handler that
+//! ignores ctrl-c never makes a program unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_every(0, 5000)` where the handler is
 //! declared. `on file "notes.txt" change {…}` is `on·file·0`, started by `signal_watch(0, "notes.txt")`: a timer of
 //! FILE_CHECK_PERIOD that fires only when the file's modification time or size changed (it appeared, was written, or went).
 //! A run that allows it (`warp run`, built executables) stays after main while a timer or watch lives.
@@ -319,15 +319,21 @@ pub fn stay_while_listening<T>(store: &mut Store<T>, instance: &Instance) -> Res
 	Ok(())
 }
 
-#[cfg(unix)]
+/// A ctrl-c ends the run at once, instead of reaching `on interrupt`, when the one before is still `pending` (the
+/// program did not take it yet) or came `last` (monotonic milliseconds, 0: none yet) less than a second before `now`
+pub fn ctrl_c_ends_run(pending: bool, last: i64, now: i64) -> bool {
+	const HARD_EXIT_WITHIN_MILLISECONDS: i64 = 1000;
+	pending || (last != 0 && now - last < HARD_EXIT_WITHIN_MILLISECONDS)
+}
+
+/// `on interrupt`: the first poll installs the platform's ctrl-c handler (Unix SIGINT, Windows SetConsoleCtrlHandler),
+/// which only sets a flag or ends the run (ctrl_c_ends_run)
 mod interrupt {
 	use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 	use std::sync::Once;
 	use std::time::{Duration, Instant};
 
 	const EXIT_INTERRUPTED: i32 = 130; // 128 + SIGINT, what a shell reports for a ctrl-c
-	/// a second ctrl-c this soon after the one before ends the run
-	const HARD_EXIT_WITHIN_MILLISECONDS: i64 = 1000;
 	/// How often a sleep of a watching program looks for a ctrl-c
 	const SLEEP_SLICE: Duration = Duration::from_millis(10);
 	static INTERRUPTED: AtomicBool = AtomicBool::new(false);
@@ -353,41 +359,75 @@ mod interrupt {
 
 	/// Whether a ctrl-c came since the last call; the first call starts watching
 	pub fn take() -> bool {
-		WATCHING.call_once(|| unsafe {
-			libc::signal(libc::SIGINT, on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t);
-		});
+		WATCHING.call_once(platform::install);
 		INTERRUPTED.swap(false, Ordering::SeqCst)
 	}
 
-	/// async-signal-safe (atomics, clock_gettime, _exit): a flag, or the exit of a second ctrl-c within a second or
-	/// one the program did not take yet
-	extern "C" fn on_signal(_: libc::c_int) {
-		let now = monotonic_milliseconds();
+	/// A ctrl-c at `now`: the flag set, or whether it ends the run (atomics only: async-signal-safe)
+	fn interrupted_at(now: i64) -> bool {
 		let last = LAST_SIGNAL.swap(now, Ordering::SeqCst);
-		let soon_after = last != 0 && now - last < HARD_EXIT_WITHIN_MILLISECONDS;
-		if INTERRUPTED.swap(true, Ordering::SeqCst) || soon_after {
-			unsafe { libc::_exit(EXIT_INTERRUPTED) }
+		super::ctrl_c_ends_run(INTERRUPTED.swap(true, Ordering::SeqCst), last, now)
+	}
+
+	#[cfg(unix)]
+	mod platform {
+		pub fn install() {
+			unsafe { libc::signal(libc::SIGINT, on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t) };
+		}
+
+		/// async-signal-safe (atomics, clock_gettime, _exit)
+		extern "C" fn on_signal(_: libc::c_int) {
+			if super::interrupted_at(monotonic_milliseconds()) {
+				unsafe { libc::_exit(super::EXIT_INTERRUPTED) }
+			}
+		}
+
+		fn monotonic_milliseconds() -> i64 {
+			let mut now = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+			unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };
+			now.tv_sec as i64 * 1000 + now.tv_nsec as i64 / 1_000_000
 		}
 	}
 
-	fn monotonic_milliseconds() -> i64 {
-		let mut now = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-		unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };
-		now.tv_sec as i64 * 1000 + now.tv_nsec as i64 / 1_000_000
+	/// Windows calls the handler on a thread of its own, so it may use std
+	#[cfg(windows)]
+	mod platform {
+		use std::sync::OnceLock;
+		use std::time::Instant;
+
+		const CTRL_C_EVENT: u32 = 0;
+		const CTRL_BREAK_EVENT: u32 = 1;
+		const HANDLED: i32 = 1;
+		const NOT_HANDLED: i32 = 0;
+		static STARTED: OnceLock<Instant> = OnceLock::new();
+
+		#[link(name = "kernel32")]
+		extern "system" {
+			fn SetConsoleCtrlHandler(handler: Option<unsafe extern "system" fn(u32) -> i32>, add: i32) -> i32;
+		}
+
+		pub fn install() {
+			STARTED.get_or_init(Instant::now);
+			unsafe { SetConsoleCtrlHandler(Some(on_control), 1) };
+		}
+
+		/// ctrl-c and ctrl-break set the flag; closing the console and the others keep Windows' default
+		unsafe extern "system" fn on_control(event: u32) -> i32 {
+			if event != CTRL_C_EVENT && event != CTRL_BREAK_EVENT {
+				return NOT_HANDLED;
+			}
+			// +1: 0 means no ctrl-c yet
+			let now = STARTED.get_or_init(Instant::now).elapsed().as_millis() as i64 + 1;
+			if super::interrupted_at(now) {
+				std::process::exit(super::EXIT_INTERRUPTED);
+			}
+			HANDLED
+		}
 	}
-}
 
-#[cfg(not(unix))]
-mod interrupt {
-	use std::time::Instant;
-
-	/// not yet on this platform (card signals-system-windows): ctrl-c ends the run as before
-	pub fn wait_until(wake: Instant) -> bool {
-		std::thread::sleep(wake.saturating_duration_since(Instant::now()));
-		false
-	}
-
-	pub fn take() -> bool {
-		false
+	/// no ctrl-c here (wasm): ctrl-c ends the run as before
+	#[cfg(not(any(unix, windows)))]
+	mod platform {
+		pub fn install() {}
 	}
 }

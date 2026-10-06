@@ -189,7 +189,10 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   polled. The playground cannot read it (the browser's clipboard API is asynchronous) and says so.
   Not yet: `on dark mode {…}` (use `whenever dark mode`), percent literals
   elsewhere, event-driven connectors instead of polling, Windows.
-- Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, timers in the
+- `on interrupt` on Windows (issue #25): SetConsoleCtrlHandler (kernel32, no crate) sets the same flag at ctrl-c and
+  ctrl-break; the rule shared with Unix is `ctrl_c_ends_run` (tests/control/test_ctrl_c_rule.rs); checked by
+  `cargo check --target x86_64-pc-windows-gnu -p warp-runtime`, never run on Windows yet.
+- Not yet: directories and `created` / `deleted` as separate events, timers in the
   playground (a warning says so), `stop listening`.
 - Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the
   Interviewer): `broadcast value on "chat"` sends any value (`{text: "hi"}`, `21`) as wasp text to every program on this
