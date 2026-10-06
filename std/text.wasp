@@ -11,3 +11,8 @@ format(template, values) := {
 	}
 	result
 }
+// the words between runs of spaces
+words(t) := [w for w in split(t, " ") if w != ""]
+lines(t) := split(t, "\n")
+capitalize(t) := if t == "" then t else upper(t[0]) + t[1..]
+center(t, width) := pad_right(pad_left(t, (width + count(t))//2), width)
