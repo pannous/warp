@@ -837,11 +837,13 @@ PASSED:
   ✓ functions::test_property_words::test_property_word_counts_text_characters
   ✓ functions::test_python_higher_order::a_python_function_of_a_function
   ✓ functions::test_python_higher_order::python_parameter_markers_are_no_parameters
+  ✓ functions::test_python_ruby_definitions::test_closure_changing_a_captured_variable_is_an_error
   ✓ functions::test_python_ruby_definitions::test_julia_definitions
   ✓ functions::test_python_ruby_definitions::test_python_keyword_parameter
   ✓ functions::test_python_ruby_definitions::test_python_rest_parameter_with_colon_body
   ✓ functions::test_python_ruby_definitions::test_python_spread_object
   ✓ functions::test_python_ruby_definitions::test_ruby_def_end
+  ✓ functions::test_python_ruby_definitions::test_ruby_yield_calls_the_block
   ✓ functions::test_recursive_list_functions::a_recursive_maximum
   ✓ functions::test_recursive_list_functions::a_recursive_sum_over_slices
   ✓ functions::test_return_type_dispatch::test_a_picked_overload_warns_nothing
@@ -2055,6 +2057,8 @@ PASSED:
   ✓ types::test_class_methods::classes_with_a_method_of_the_same_name_each_call_their_own
   ✓ types::test_class_methods::keyword_methods_in_a_class_body
   ✓ types::test_class_methods::methods_are_no_fields
+  ✓ types::test_class_mixins::a_class_takes_in_a_mixin
+  ✓ types::test_class_mixins::a_class_takes_in_several_mixins_and_overrides
   ✓ types::test_class_properties::a_getter_reads_like_a_field
   ✓ types::test_class_properties::a_setter_runs_when_the_property_is_assigned
   ✓ types::test_construction_checks::a_call_construction_checks_its_fields_as_the_braces_do
@@ -2719,4 +2723,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2714 passed, 0 failed, 2714 total tested
+19 ignored, 2718 passed, 0 failed, 2718 total tested
