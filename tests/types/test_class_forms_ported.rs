@@ -74,3 +74,11 @@ fn a_go_struct_with_methods() {
 	is!(&format!("{point}func (p Point) Sum() int {{ return p.X + p.Y }}\nPoint{{X: 1, Y: 2}}.Sum()"), 3);
 	is!(&format!("{point}func (p *Point) Move(dx int) {{ p.X += dx }}\nvar p = Point{{X: 1, Y: 2}}\np.Move(3)\np.X"), 4);
 }
+
+#[test]
+fn a_ruby_class_with_initialize() {
+	let point = "class Point\n  attr_accessor :x, :y\n  def initialize(x, y)\n    @x = x\n    @y = y\n  end\n  def sum\n    @x + @y\n  end\nend\n";
+	is!(&format!("{point}Point.new(1, 2).sum"), 3);
+	is!(&format!("{point}p = Point.new(3, 4)\np.y"), 4);
+	is!("class Counter\n  def initialize\n    @count = 0\n  end\n  def current\n    @count\n  end\nend\nCounter.new.current", 0);
+}

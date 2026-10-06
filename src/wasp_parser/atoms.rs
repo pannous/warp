@@ -608,6 +608,16 @@ impl WaspParser {
 			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
 			return construction;
 		}
+		// Ruby's `attr_accessor :x, :y` in a class body: the fields x and y
+		if RUBY_FIELD_WORDS.contains(&symbol.as_str()) && self.type_fields.is_some() {
+			let line: String = (0..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '\n' | '\0' | ';' | '}')).collect();
+			let names: Vec<String> = line.split(',').map(|name| name.trim().trim_start_matches(':').to_string()).collect();
+			if names.iter().all(|name| !name.is_empty() && name.chars().all(is_identifier_char)) {
+				self.advance_by(line.chars().count());
+				crate::diagnostic::note_alias(&format!("{symbol}{line}"), &names.join("; "));
+				return Node::List(names.into_iter().map(Symbol).collect(), Bracket::None, Separator::Semicolon);
+			}
+		}
 		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
 			while matches!(self.current_char(), ' ' | '\t') {
 				self.advance();
@@ -741,6 +751,7 @@ impl WaspParser {
 			true => std::mem::take(&mut constructor_fields).into_iter().map(|parent| parent.drop_meta().name()).find(|parent| parent != PYTHON_ROOT_CLASS),
 			false => None,
 		};
+		let before_body = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		// `class P(val x: Int)` ends at its line when no body follows on it
 		match constructor_fields.is_empty() {
 			true => {
@@ -793,6 +804,16 @@ impl WaspParser {
 			(true, Empty) => {
 				self.advance(); // :
 				self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty)
+			}
+			// Ruby's `class Point` and the lines indented below it, up to its `end`
+			(false, Empty) if self.pos > before_body.0 && self.closing_end_follows(&RUBY_END_OPENERS) => {
+				(self.pos, self.line_nr, self.column, self.current_line) = before_body;
+				let body = self.parse_indented_block().map(without_end_lines).map(Self::transform_fields_to_types).unwrap_or(Empty);
+				self.skip_whitespace();
+				if self.matches_keyword(END_KEYWORD) {
+					self.advance_by(END_KEYWORD.len());
+				}
+				body
 			}
 			(_, body) => body,
 		};
@@ -986,5 +1007,16 @@ fn statements(block: Node) -> Vec<Node> {
 		Empty => vec![],
 		Node::List(items, Bracket::Curly | Bracket::Round, separator) => vec![Node::List(items, Bracket::None, separator)],
 		single => vec![single],
+	}
+}
+
+/// A Ruby class body without the `end` lines of its methods (their bodies are read by indentation)
+fn without_end_lines(body: Node) -> Node {
+	let is_end = |item: &Node| matches!(item.drop_meta(), Node::Symbol(word) if word == END_KEYWORD);
+	match body {
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().filter(|item| !is_end(item)).map(without_end_lines).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(without_end_lines(*left)), op, Box::new(without_end_lines(*right))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(without_end_lines(*node)), data },
+		other => other,
 	}
 }
