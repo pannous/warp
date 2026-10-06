@@ -230,9 +230,10 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 }
 
 /// `for i in xs {…}`, `while c {…}`, `repeat 3 {…}`
-fn is_loop(node: &Node) -> bool {
+pub(crate) fn is_loop(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Key(_, Op::While, _) => true,
+		Node::Key(head, Op::Do, _) => is_loop(head),
 		Node::List(items, _, _) => items.first().is_some_and(|first| LOOP_WORDS.contains(&word(first).as_str())),
 		_ => false,
 	}

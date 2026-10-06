@@ -1020,15 +1020,32 @@ fn constructor_body(item: &Node) -> Option<&Node> {
 /// (`this.x = x` sets the field x also when a parameter is called x; a bare `n = …` of a parameter n sets the parameter)
 fn fields_set(body: &Node, parameters: &[String]) -> Vec<String> {
 	let mut names = vec![];
-	body.visit(&mut |part| if let Node::Key(target, Op::Assign, _) = part {
-		let name = match target.drop_meta() {
-			Node::Symbol(name) if !parameters.contains(name) => Some(name.clone()),
-			Node::Key(receiver, Op::Dot, field) if RECEIVER_ALIASES.contains(&receiver.drop_meta().name().as_str()) || receiver.drop_meta().name() == RECEIVER => Some(field.drop_meta().name()),
-			_ => None,
-		};
-		names.extend(name.filter(|name| !names.contains(name)));
-	});
+	collect_fields_set(body, parameters, &mut names);
 	names
+}
+
+/// The fields `fields_set` finds; what a loop sets (`for x in xs { i = … }`) stays local to the constructor
+fn collect_fields_set(node: &Node, parameters: &[String], names: &mut Vec<String>) {
+	if crate::event_signals::is_loop(node) {
+		return;
+	}
+	match node.drop_meta() {
+		Node::Key(target, op, value) => {
+			let name = match target.drop_meta() {
+				_ if *op != Op::Assign => None,
+				Node::Symbol(name) if !parameters.contains(name) => Some(name.clone()),
+				Node::Key(receiver, Op::Dot, field) if RECEIVER_ALIASES.contains(&receiver.drop_meta().name().as_str()) || receiver.drop_meta().name() == RECEIVER => Some(field.drop_meta().name()),
+				_ => None,
+			};
+			if let Some(name) = name.filter(|name| !names.contains(name)) {
+				names.push(name);
+			}
+			collect_fields_set(target, parameters, names);
+			collect_fields_set(value, parameters, names);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_fields_set(item, parameters, names)),
+		_ => {}
+	}
 }
 
 /// The result type a method declares: `area():int := …`
