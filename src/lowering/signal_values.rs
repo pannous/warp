@@ -346,14 +346,15 @@ impl Subscriptions {
 				if_then(condition, block(vec![call(CELL_SET, vec![Node::Symbol(fired), Node::True]), body]))
 			}
 		};
+		// the listener shares the main-level variables it changes, as a named one does (P124)
+		let globals = crate::event_signals::global_declarations(&[check.clone()], &self.main_variables, &[VALUE_WORD, OLD_WORD]);
+		let closure_check = if globals.is_empty() { check.clone() } else { block(globals.iter().cloned().chain([check.clone()]).collect()) };
 		// every listener closure of one arity returns one kind (wasm_emitter/closures.rs): 0
-		let listener = from_template(&format!("({VALUE_WORD}, {OLD_PLACEHOLDER}) => {{ {CHECK_PLACEHOLDER}; 0 }}"), &[(CHECK_PLACEHOLDER, check.clone())]);
+		let listener = from_template(&format!("({VALUE_WORD}, {OLD_PLACEHOLDER}) => {{ {CHECK_PLACEHOLDER}; 0 }}"), &[(CHECK_PLACEHOLDER, closure_check)]);
 		// a named listener (P128) is a function of that name, and remembers where it sits in each list
 		let listener = match name {
 			Some(name) => {
 				let head = Node::List(vec![Node::Symbol(name.to_string()), Node::Symbol(VALUE_WORD.to_string()), Node::Symbol(OLD_WORD.to_string())], Bracket::Round, Separator::None);
-				// the listener's block shares the main-level variables it changes, as an unnamed one does (P124)
-				let globals = crate::event_signals::global_declarations(&[check.clone()], &self.main_variables, &[VALUE_WORD, OLD_WORD]);
 				let body = globals.into_iter().chain([check, crate::node::int(0)]).collect();
 				statements.push(Node::Key(Box::new(head), Op::Define, Box::new(block(body))));
 				for variable in &watched {

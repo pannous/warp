@@ -399,6 +399,7 @@ fn is_field(node: &Node) -> bool {
 	holder_path(node).is_some_and(|path| path.contains('.'))
 }
 
+const GLOBAL_WORD: &str = "global";
 /// Methods that append one value to a list variable (analyzer APPEND_METHODS)
 const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 
@@ -616,17 +617,29 @@ impl Lifting {
 
 	/// The variables of the enclosing scopes the body reads, in order of first use
 	fn captured(&self, body: &Node, params: &[String], bound: &HashSet<String>) -> Vec<String> {
+		let globals = declared_globals(body);
 		let mut captured: Vec<String> = vec![];
 		body.visit(&mut |node| {
 			if let Node::Symbol(name) = node {
-				// `t = k * 2` before any read of t binds the lambda's own local, no capture
-				if !params.contains(name) && self.is_variable(name, bound) && !captured.contains(name) && !crate::analyzer::starts_with_fresh_binding(body, name) {
+				// `t = k * 2` before any read of t binds the lambda's own local, no capture; `global n` shares n
+				if !params.contains(name) && !globals.contains(name) && self.is_variable(name, bound) && !captured.contains(name) && !crate::analyzer::starts_with_fresh_binding(body, name) {
 					captured.push(name.clone());
 				}
 			}
 		});
 		captured
 	}
+}
+
+/// The names a body declares `global n`: the closure reads and changes the program's own n
+fn declared_globals(body: &Node) -> HashSet<String> {
+	let mut globals = HashSet::new();
+	body.visit(&mut |node| if let Node::Key(keyword, Op::Colon, name) = node {
+		if matches!(keyword.drop_meta(), Node::Symbol(word) if word == GLOBAL_WORD) {
+			globals.insert(name.drop_meta().name());
+		}
+	});
+	globals
 }
 
 /// A closure changing a captured variable would change its own copy (wiki/charged.md §3): a loud error naming `global`
