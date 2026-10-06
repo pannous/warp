@@ -15,7 +15,7 @@
 
 use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, is_list_mutating_method, param_kind, Scope};
 use crate::context::{Context, UserFunctionDef};
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::effects::EffectReport;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
@@ -24,6 +24,7 @@ use std::collections::{HashMap, HashSet};
 const GLOBAL: &str = "global";
 pub(crate) const NONLOCAL: &str = "nonlocal";
 const NEEDLESS_CHARGING_TOPIC: &str = "needless-charging";
+const EFFECTFUL_GETTER_TOPIC: &str = "effectful-getter";
 
 pub fn lower(program: Node) -> Result<Node, Node> {
 	let statements = statements_of(&program);
@@ -38,7 +39,7 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 	let definitions = definitions(&statements);
 	let report = EffectReport::of(&program);
 	for definition in &definitions {
-		note_needless_charging(definition, &statements, &main, &report);
+		note_charging(definition, &statements, &main, &report)?;
 	}
 	let mut late_bound = check_definitions(&statements, &definitions, &main, &|_, name| declared.iter().any(|known| known == name), None)?;
 	for definition in &definitions {
@@ -361,20 +362,42 @@ fn written_text(node: &Node) -> String {
 	}
 }
 
-/// A `def` without parameters whose body is pure and reads only constants (`def area(): 3*4`) always gives the same
-/// value: educate toward `area = 3*4` (wiki/charged.md "Needless charging"). `:=` without parameters is a getter (P71, getters.rs).
-fn note_needless_charging(definition: &Definition, statements: &[Node], main: &Scope, report: &EffectReport) {
+/// A `def` or getter without parameters whose body is pure and reads only constants (`def area(): 3*4`,
+/// `area := 3*4`) always gives the same value: educate toward `area = 3*4` (wiki/charged.md "Needless charging").
+/// A getter whose body has effects (`t := clock()`) gets a got-it warning: it runs them at every read.
+fn note_charging(definition: &Definition, statements: &[Node], main: &Scope, report: &EffectReport) -> Result<(), Node> {
 	let function = &definition.function;
 	let statement = &statements[definition.index];
 	let is_def = matches!(statement.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)));
-	let pure = report.effects_of(&function.name).is_some_and(|effects| effects.is_pure());
-	let nested = function.name.contains(NESTED_DEF_SEPARATOR); // `outer·inner` may read outer's variables
-	if nested || !is_def || !function.params.is_empty() || !pure || reads_any(&function.body, &|word| main.is_global(word)) {
-		return;
+	let nested = function.name.contains(NESTED_DEF_SEPARATOR); // `outer·inner` may read outer's variables, `o·s` is an entry
+	if nested || !(is_def || definition.getter) || !function.params.is_empty() {
+		return Ok(());
 	}
-	crate::normalize::set_position_of(statement);
 	let value = written_text(&function.body);
-	crate::diagnostic::educate_once(NEEDLESS_CHARGING_TOPIC, &format!("def {}(): {value}", function.name), &format!("{} = {value}", function.name), &format!("{} never changes", function.name));
+	let name = &function.name;
+	let written = if is_def { format!("def {name}(): {value}") } else { format!("{name} := {value}") };
+	let pure = report.effects_of(name).is_some_and(|effects| effects.is_pure());
+	if !pure {
+		return match definition.getter {
+			true => warn_effectful_getter(name, &value, &written, statement),
+			false => Ok(()),
+		};
+	}
+	// a getter reading a variable reads its current value (P71); a def's free variables are constants unless global
+	let reads_variables = reads_any(&function.body, &|word| if definition.getter { main.lookup(word).is_some() } else { main.is_global(word) });
+	if !reads_variables {
+		crate::normalize::set_position_of(statement);
+		crate::diagnostic::educate_once(NEEDLESS_CHARGING_TOPIC, &written, &format!("{name} = {value}"), &format!("{name} never changes"));
+	}
+	Ok(())
+}
+
+/// `t := clock()`: the clock is read at every `t`, which may be meant, or `t = clock()` for one reading
+fn warn_effectful_getter(name: &str, value: &str, written: &str, at: &Node) -> Result<(), Node> {
+	let question = Ask::new(EFFECTFUL_GETTER_TOPIC, format!("{name} runs {value} at every read; write {name} = {value} for one value"),
+		vec![reading("at every read", written), reading("one value", &format!("{name} = {value}"))], Fallback::Warning)
+		.written(written).at_node(at);
+	ask(&question).map(|_| ())
 }
 
 /// The functions of the main-level statements, with their statement index

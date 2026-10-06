@@ -33,3 +33,23 @@ fn a_getter_of_now_reads_the_clock_at_every_use() {
 	is!("time := now; (time in \"UTC\").year >= 2026", true);
 	is!("t = now; later := t; later == t", true);
 }
+
+fn hints_of(code: &str) -> Vec<(String, String)> {
+	warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code)).1.into_iter().map(|hint| (hint.canonical, hint.reason)).collect()
+}
+
+#[test]
+fn a_getter_over_constants_gets_the_needless_charging_note() {
+	is!("area := 3*4; area+1", 13);
+	assert!(hints_of("area := 3*4; area").iter().any(|(canonical, reason)| canonical == "area = 3*4" && reason == "area never changes"));
+	assert!(hints_of("y=3; z := y*y; y=4; z").iter().all(|(_, reason)| !reason.contains("never changes")));
+}
+
+#[test]
+fn an_effectful_getter_warns_at_the_definition() {
+	warp::diagnostic::take_warnings();
+	is!("t := clock(); t > 0", true);
+	warp::diagnostic::take_warnings();
+	warp::wasm_emitter::eval("t := clock(); t");
+	assert!(warp::diagnostic::take_warnings().iter().any(|warning| warning.message.contains("t runs clock() at every read; write t = clock() for one value")));
+}
