@@ -1121,16 +1121,23 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 
 /// `def f(a, b) { body }`, `def f(x) := body`, `function g() { … }`: the definition `f(a, b) := body`
 fn keyword_definition(items: &[Node]) -> Option<Node> {
-	let (keyword, definition) = match items {
-		[keyword, definition] => (keyword, definition.drop_meta().clone()),
-		[keyword, head, body] => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None)),
+	let (keyword, definition, mut result_type) = match items {
+		[keyword, definition] => (keyword, definition.drop_meta().clone(), None),
+		[keyword, head, body] => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), None),
 		// Go's `func add1(x int) int {…}`: the result type between the head and the body
-		[keyword, head, result_type, body] if is_type_word(result_type) => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None)),
+		[keyword, head, result_type, body] if is_type_word(result_type) => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), Some(result_type.clone())),
 		_ => return None,
 	};
 	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
 		return None;
 	}
+	let definition = match typed_result(&definition) {
+		Some((untyped, written_type)) => {
+			result_type = Some(written_type);
+			untyped
+		}
+		None => definition,
+	};
 	let (head, op, body) = match definition {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) => (*head, op, *body),
 		// `def test: print "test"` (wiki/signal.md): a function without parameters
@@ -1157,7 +1164,26 @@ fn keyword_definition(items: &[Node]) -> Option<Node> {
 		}
 	}
 	let head = Node::List(std::iter::once(name.clone()).chain(parameters).collect(), Bracket::Round, Separator::None);
-	Some(Node::Key(Box::new(head), op, Box::new(body)))
+	let target = match result_type {
+		Some(result_type) => Node::Key(Box::new(head), Op::Colon, Box::new(result_type)),
+		None => head,
+	};
+	Some(Node::Key(Box::new(target), op, Box::new(body)))
+}
+
+/// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`
+/// (Python): the definition `(f(x) { body })` without its result type, and the type
+fn typed_result(definition: &Node) -> Option<(Node, Node)> {
+	let Node::Key(head, Op::Arrow | Op::Colon, typed_body) = definition else { return None };
+	if !matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) {
+		return None;
+	}
+	let (result_type, body) = match typed_body.drop_meta() {
+		Node::List(parts, _, Separator::Space) if parts.len() == 2 && is_type_word(&parts[0]) && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => (parts[0].clone(), parts[1].clone()),
+		Node::Key(result_type, Op::Colon, body) if is_type_word(result_type) => (result_type.as_ref().clone(), body.as_ref().clone()),
+		_ => return None,
+	};
+	Some((Node::Key(head.clone(), Op::Define, Box::new(body)), result_type))
 }
 
 fn is_type_word(node: &Node) -> bool {
