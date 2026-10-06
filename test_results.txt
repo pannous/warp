@@ -171,6 +171,9 @@ PASSED:
   ✓ control::test_shared_values::a_self_update_of_a_shared_value_is_atomic
   ✓ control::test_shared_values::a_shared_value_reads_writes_and_adds
   ✓ control::test_signal_in_loop::a_listener_checks_a_write_in_a_one_statement_loop
+  ✓ control::test_signal_reflection::a_listener_taken_from_the_list_can_be_called
+  ✓ control::test_signal_reflection::clear_listeners_unsubscribes_them_all
+  ✓ control::test_signal_reflection::listeners_of_a_variable_counts_its_listeners
   ✓ control::test_signal_values::a_function_subscribes_to_a_main_level_variable
   ✓ control::test_signal_values::a_function_subscribes_to_the_signal_it_is_given
   ✓ control::test_signal_values::a_signal_of_text
@@ -676,6 +679,10 @@ PASSED:
   ✓ functions::test_nonlocal_cells::test_an_escaping_closure_keeps_its_cell
   ✓ functions::test_nonlocal_cells::test_an_escaping_closure_keeps_its_values
   ✓ functions::test_nonlocal_cells::test_inner_changes_the_outer_variable
+  ✓ functions::test_nonlocal_lambdas::a_fresh_local_of_the_same_name_is_no_change
+  ✓ functions::test_nonlocal_lambdas::a_lambda_changing_an_enclosing_variable_shares_it
+  ✓ functions::test_nonlocal_lambdas::a_lambda_may_declare_nonlocal
+  ✓ functions::test_nonlocal_lambdas::a_nested_def_changing_it_without_nonlocal_is_an_error
   ✓ functions::test_nonlocal_passed_around::test_a_nested_function_passed_around_reads_the_current_value
   ✓ functions::test_nonlocal_passed_around::test_a_nested_function_reads_a_main_level_variable
   ✓ functions::test_nonlocal_passed_around::test_a_sibling_calls_a_nested_function
@@ -2516,4 +2523,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2511 passed, 0 failed, 2511 total tested
+23 ignored, 2518 passed, 0 failed, 2518 total tested
