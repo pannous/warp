@@ -59,6 +59,23 @@ impl Diagnostic {
 	}
 }
 
+/// The colors of terminal output (ANSI codes)
+#[derive(Clone, Copy)]
+pub enum Color {
+	Green = 32,
+	Yellow = 33,
+	Cyan = 36,
+	Gray = 90,
+}
+
+/// `text` in `color` when stderr is a terminal and NO_COLOR is unset; plain text in a file, a pipe or an editor's
+/// output panel, which would show the raw escape codes. All colored output goes through here.
+pub fn paint(color: Color, text: &str) -> String {
+	static COLORED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+	let colored = *COLORED.get_or_init(|| std::io::IsTerminal::is_terminal(&std::io::stderr()) && std::env::var_os("NO_COLOR").is_none());
+	if colored { format!("\x1b[{}m{text}\x1b[0m", color as u8) } else { text.to_string() }
+}
+
 /// Does a message end its description with a position ` at line:column`
 pub fn names_position(message: &str) -> bool {
 	let description = message.split("; fix: ").next().unwrap_or(message);
