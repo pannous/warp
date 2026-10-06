@@ -1,0 +1,7 @@
+total = 0
+def each_twice
+  yield 1
+  yield 2
+end
+each_twice { |x| total += x }
+total

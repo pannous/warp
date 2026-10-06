@@ -24,6 +24,24 @@ fn test_ruby_def_end() {
 	is!("def h\n  42\nend\nh()", 42);
 }
 
+// Ruby blocks (card functions-ruby-yield): `yield v` calls the block the caller passes after the arguments
+#[test]
+fn test_ruby_yield_calls_the_block() {
+	is!("global total = 0\ndef each_twice\n  yield 1\n  yield 2\nend\neach_twice { |x| total += x }\ntotal", 3);
+	is!("def twice(n)\n  yield n\n  yield n * 2\nend\nglobal sum = 0\ntwice(3) { |x| sum += x }\nsum", 9);
+	is!("def apply(n)\n  yield n\nend\napply(3) do |x| x * 2 end", 6);
+	is!("def pair\n  yield 3, 4\nend\npair { |a, b| a * b }", 12);
+	is!("def run\n  yield\nend\nrun { 5 }", 5);
+}
+
+// A block captures by value (wiki/charged.md §3): changing a captured variable needs `global`, never a silent copy
+#[test]
+fn test_closure_changing_a_captured_variable_is_an_error() {
+	crate::common::fails_with("total = 0\ndef each_twice\n  yield 1\nend\neach_twice { |x| total += x }\ntotal", "global total");
+	crate::common::fails_with("total = 0\ndef g(h)\n  h(1)\nend\ng(x => total += x)\ntotal", "global total");
+	is!("global total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal", 3);
+}
+
 #[test]
 fn test_python_spread_object() {
 	is!("def f(**kw): return kw.a\nm = {a: 7}\nf(**m)", 7);
