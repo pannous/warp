@@ -15,6 +15,7 @@ fn a_daily_timer_needs_a_time_of_day() {
 }
 
 #[test]
+#[cfg(feature = "native")]
 fn the_delay_until_a_time_of_day_wraps_to_tomorrow() {
 	use warp_runtime::system_signals::seconds_until;
 	assert_eq!(seconds_until(9 * 60, 8 * 3600), 3600);
