@@ -131,9 +131,10 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
 ## Status
 - `on interrupt {…}` natively (unix): event_signals SYSTEM_EVENTS makes the exported handler `on·interrupt` without a
   raise; a program with it imports the host word `signal_poll` (crates/warp-runtime host_words.rs), called at every
-  loop start (wasm_emitter control_flow, next to task_poll). The first poll installs a libc SIGINT handler that only
-  sets a flag; the poll then runs the handler (with ø as `event` when it reads one). A second ctrl-c within a second,
-  or before the handler ran, exits with 130, so a handler that ignores ctrl-c never makes a program unstoppable.
+  loop start (wasm_emitter control_flow, next to task_poll). The first poll installs a libc SIGINT handler on Unix or a
+  SetConsoleCtrlHandler callback on Windows; each only sets a flag, and the poll runs the handler (with ø as `event`
+  when it reads one). On Unix, a second ctrl-c within a second, or before the handler ran, exits with 130, so a handler
+  that ignores ctrl-c never makes a program unstoppable.
   main polls at its start (which installs the handler) and before it returns; a ctrl-c also ends a `sleep` early
   (it sleeps in 10 ms slices once watching) and runs the handler. Test: tests/control/test_system_signals.rs
   (a real `warp run` gets a real SIGINT). The playground's host.js has `signal_poll` as a no-op.
@@ -189,7 +190,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   polled. The playground cannot read it (the browser's clipboard API is asynchronous) and says so.
   Not yet: `on dark mode {…}` (use `whenever dark mode`), percent literals
   elsewhere, event-driven connectors instead of polling, Windows.
-- Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, timers in the
+- Not yet: directories and `created` / `deleted` as separate events, timers in the
   playground (a warning says so), `stop listening`.
 - Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the
   Interviewer): `broadcast value on "chat"` sends any value (`{text: "hi"}`, `21`) as wasp text to every program on this

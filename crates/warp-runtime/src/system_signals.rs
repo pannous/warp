@@ -319,6 +319,48 @@ pub fn stay_while_listening<T>(store: &mut Store<T>, instance: &Instance) -> Res
 	Ok(())
 }
 
+#[cfg(any(windows, test))]
+mod console_interrupt {
+	use std::sync::atomic::{AtomicBool, Ordering};
+
+	const CTRL_C_EVENT: u32 = 0;
+	const CTRL_BREAK_EVENT: u32 = 1;
+	static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+
+	#[cfg(windows)]
+	pub fn is_interrupted() -> bool {
+		INTERRUPTED.load(Ordering::SeqCst)
+	}
+
+	pub fn take() -> bool {
+		INTERRUPTED.swap(false, Ordering::SeqCst)
+	}
+
+	pub(super) fn handle_control_event(control_type: u32) -> bool {
+		if control_type != CTRL_C_EVENT && control_type != CTRL_BREAK_EVENT {
+			return false;
+		}
+		INTERRUPTED.store(true, Ordering::SeqCst);
+		true
+	}
+
+	#[cfg(test)]
+	mod tests {
+		use super::*;
+
+		#[test]
+		fn ctrl_c_and_break_set_a_consumable_interrupt_flag() {
+			for control_type in [CTRL_C_EVENT, CTRL_BREAK_EVENT] {
+				assert!(handle_control_event(control_type));
+				assert!(take());
+				assert!(!take());
+			}
+			assert!(!handle_control_event(2));
+			assert!(!take());
+		}
+	}
+}
+
 #[cfg(unix)]
 mod interrupt {
 	use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
@@ -377,7 +419,49 @@ mod interrupt {
 	}
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+mod interrupt {
+	use std::sync::Once;
+	use std::time::{Duration, Instant};
+
+	const SLEEP_SLICE: Duration = Duration::from_millis(10);
+	static WATCHING: Once = Once::new();
+
+	#[link(name = "Kernel32")]
+	unsafe extern "system" {
+		fn SetConsoleCtrlHandler(handler: Option<extern "system" fn(u32) -> i32>, add: i32) -> i32;
+	}
+
+	extern "system" fn on_control_event(control_type: u32) -> i32 {
+		i32::from(super::console_interrupt::handle_control_event(control_type))
+	}
+
+	/// Sleep until `wake`; a watching program wakes early at a ctrl-c or ctrl-break
+	pub fn wait_until(wake: Instant) -> bool {
+		if !WATCHING.is_completed() {
+			std::thread::sleep(wake.saturating_duration_since(Instant::now()));
+			return false;
+		}
+		while !super::console_interrupt::is_interrupted() {
+			let left = wake.saturating_duration_since(Instant::now());
+			if left.is_zero() {
+				return false;
+			}
+			std::thread::sleep(left.min(SLEEP_SLICE));
+		}
+		true
+	}
+
+	/// Whether a console interrupt came since the last call; the first call starts watching
+	pub fn take() -> bool {
+		WATCHING.call_once(|| unsafe {
+			SetConsoleCtrlHandler(Some(on_control_event), 1);
+		});
+		super::console_interrupt::take()
+	}
+}
+
+#[cfg(not(any(unix, windows)))]
 mod interrupt {
 	use std::time::Instant;
 
