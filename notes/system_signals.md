@@ -180,7 +180,13 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   (so `warp run` stays and wakes once a second; it says "listening: every 1 second"), then makes the marks host calls.
   `whenever battery < 20% {…}` arrives as `battery < (20 % {…})`: compared with the battery, `20%` is 20. The page
   reads `online` (navigator.onLine) and `dark mode` where matchMedia exists, and says what it cannot read.
-  Not yet: `on dark mode {…}` (use `whenever dark mode`), the clipboard (card system-clipboard), percent literals
+  The clipboard (card system-clipboard; tests/control/test_clipboard.rs): `on clipboard change {…}` is `on change`
+  of the system value `clipboard count`, macOS `[[NSPasteboard generalPasteboard] changeCount]` through the
+  Objective-C runtime, AppKit dlopened on first use (no new dependency, a plain run never loads it). The count reads no
+  content, so polling it never triggers macOS's paste prompt; elsewhere the content's hash is the count. `clipboard`
+  is its text, the host word `clipboard_text()` (pbpaste, wl-paste or xclip) where the program reads it, never
+  polled. The playground cannot read it (the browser's clipboard API is asynchronous) and says so.
+  Not yet: `on dark mode {…}` (use `whenever dark mode`), percent literals
   elsewhere, event-driven connectors instead of polling, Windows.
 - Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, timers in the
   playground (a warning says so), `stop listening`.

@@ -23,7 +23,12 @@ pub const CHARGING: &str = "charging";
 pub const ONLINE: &str = "online";
 pub const DARK_MODE: &str = "dark mode";
 /// The system values, and whether each is a yes/no value
-pub const SYSTEM_VALUES: [(&str, bool); 4] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true)];
+/// How often the clipboard changed since the machine started (macOS NSPasteboard changeCount): `on clipboard change`
+pub const CLIPBOARD_COUNT: &str = "clipboard count";
+pub const SYSTEM_VALUES: [(&str, bool); 5] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true), (CLIPBOARD_COUNT, false)];
+/// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
+pub const CLIPBOARD: &str = "clipboard";
+pub const CLIPBOARD_TEXT: &str = "clipboard_text";
 /// `on·file·0`: the handler of the first `on file "x" change {…}`
 pub const FILE_HANDLER_PREFIX: &str = "on·file·";
 /// `exit(code)` ends the run, not the process (P121, system_signals.rs ExitRequest)
