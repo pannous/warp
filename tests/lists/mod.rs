@@ -46,3 +46,4 @@ mod test_deep_index_assignment;
 mod test_linear_append;
 mod test_lazy_range;
 mod test_linear_arrays;
+mod test_global_typed_lists;
