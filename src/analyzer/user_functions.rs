@@ -360,8 +360,8 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 
 /// A parameter that the calls pass one kind other than Int takes that kind: `mul(v, 1.0 / length(v))` with length
 /// returning a float, `print_tree(tree.left, prefix + "│ ")` passing a text. infer_parameters_from_calls knows only
-/// literal arguments; this pass runs once the return kinds are known. It only changes undeclared Int parameters, and
-/// leaves a parameter alone when calls disagree. True when a parameter changed.
+/// literal arguments; this pass runs once the return kinds are known. It only changes undeclared Int parameters (and
+/// those guessed a list that get only texts), and leaves a parameter alone when calls disagree. True when a parameter changed.
 pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String, Local>) -> bool {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
 	function_kinds.extend(ctx.field_kinds.clone());
@@ -378,7 +378,9 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 		let kinds: Vec<Kind> = kinds.into_iter().filter(|kind| *kind != Kind::Int && *kind != Kind::Empty).collect();
 		let [kind] = kinds.as_slice() else { continue };
 		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
-		if param.annotation.is_none() && param.default.is_none() && matches!(param.used_as, None | Some(Kind::Int)) {
+		// a parameter the body counts or indexes is guessed a list, until the calls pass it only texts
+		let guessed = matches!(param.used_as, None | Some(Kind::Int)) || (param.used_as == Some(Kind::List) && *kind == Kind::Text);
+		if param.annotation.is_none() && param.default.is_none() && guessed {
 			param.used_as = Some(*kind);
 			changed = true;
 		}
