@@ -172,7 +172,7 @@ pub fn rewrite_uses(program: Node, modules: &[String]) -> Node {
 			Role::Global { mutable } => Some((name, mutable)),
 			_ => None,
 		}).collect();
-	let rewritten = set_globals(program, &globals).and_then(|program| {
+	let rewritten = set_globals(program, &globals, modules).and_then(|program| {
 		let reads: HashMap<String, Node> = globals.keys().map(|global| (global.to_string(), call(global, vec![]))).collect();
 		qualify(crate::law::substitute(&program, &reads), modules)
 	});
@@ -183,28 +183,41 @@ fn call(name: &str, arguments: Vec<Node>) -> Node {
 	Node::List([vec![Node::Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
 
-/// `g = v` and `g += v` of an exported global: the setter call `set g(v)`, `set g(g + v)` of a mutable one; an immutable
-/// one is no variable of the program, like `pi = 4` (P130)
-fn set_globals(node: Node, globals: &HashMap<&String, bool>) -> Result<Node, Node> {
+/// An assignment target naming an exported global, `g` or `m.g`: as written, whether it is mutable, its setter import
+fn assigned_global(target: &Node, globals: &HashMap<&String, bool>, modules: &[String]) -> Option<(String, bool, String)> {
+	match target.drop_meta() {
+		Node::Symbol(global) => globals.get(global).map(|mutable| (global.clone(), *mutable, format!("{SETTER_PREFIX}{global}"))),
+		Node::Key(receiver, Op::Dot, member) => {
+			let (Node::Symbol(alias), Node::Symbol(global)) = (receiver.drop_meta(), member.drop_meta()) else { return None };
+			modules.iter().filter(|path| module_alias(path) == *alias).find_map(|path| match exports(path).get(global)?.role {
+				Role::Global { mutable } => Some((format!("{alias}.{global}"), mutable, qualified(path, &format!("{SETTER_PREFIX}{global}")))),
+				_ => None,
+			})
+		}
+		_ => None,
+	}
+}
+
+/// `g = v` and `g += v` of an exported global (also qualified, `m.g = v`): the setter call `set g(v)`, `set g(g + v)` of
+/// a mutable one; an immutable one is no variable of the program, like `pi = 4` (P130)
+fn set_globals(node: Node, globals: &HashMap<&String, bool>, modules: &[String]) -> Result<Node, Node> {
 	if let Node::Key(target, op, value) = node.drop_meta() {
-		if let Node::Symbol(global) = target.drop_meta() {
-			let assigns = *op == Op::Assign || op.is_compound_assign();
-			match globals.get(global) {
-				Some(false) if assigns => return Err(crate::node::error(&format!("{global} is an immutable global of an imported module; fix: another name"))),
-				Some(true) if assigns => {
-					let value = set_globals(value.as_ref().clone(), globals)?;
-					let value = match op.is_compound_assign() {
-						true => Node::Key(target.clone(), op.base_op(), Box::new(value)),
-						false => value,
-					};
-					return Ok(call(&format!("{SETTER_PREFIX}{global}"), vec![value]));
-				}
-				_ => {}
+		let assigns = *op == Op::Assign || op.is_compound_assign();
+		match assigned_global(target, globals, modules) {
+			Some((global, false, _)) if assigns => return Err(crate::node::error(&format!("{global} is an immutable global of an imported module; fix: another name"))),
+			Some((_, true, setter)) if assigns => {
+				let value = set_globals(value.as_ref().clone(), globals, modules)?;
+				let value = match op.is_compound_assign() {
+					true => Node::Key(target.clone(), op.base_op(), Box::new(value)),
+					false => value,
+				};
+				return Ok(call(&setter, vec![value]));
 			}
+			_ => {}
 		}
 	}
 	let mut failure = None;
-	let node = node.map_children(|child| set_globals(child, globals).unwrap_or_else(|error| {
+	let node = node.map_children(|child| set_globals(child, globals, modules).unwrap_or_else(|error| {
 		failure.get_or_insert(error);
 		Node::Empty
 	}));
