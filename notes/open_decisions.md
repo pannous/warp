@@ -161,6 +161,11 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   "add Not really a built-in, just an example. Also, map should not be the main thing to use. One would just use the
   syntax square all x or maybe even just broadcasting." So docs, hints, examples and new tests prefer broadcasting
   (`square [1 2 3]`, wiki/broadcasting.md) or `square all x` (wiki/all.md) over `map`.
+- P143 (warp-a8) a function called without parentheses next to a comparison, `f x == y`, is a loud error naming
+  both forms: "square 3 == 9 is ambiguous; write (square 3) == 9 or square(3 == 9)" (user chose this over the
+  recommended "(f x) == y for all functions"; warp-a8 had implemented (f x) == y for user functions only). Assumed
+  (undoable): statement words (print, return, assert) still take the whole expression (`print 3 == 3` prints true);
+  the wiki examples `square [1 2 3] == [1 4 9]` (wiki/all.md, wiki/broadcasting.md) get the parentheses.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
