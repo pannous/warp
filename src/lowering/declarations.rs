@@ -1467,8 +1467,16 @@ fn end_definitions(node: Node) -> Node {
 			statements.push(statement);
 			continue;
 		};
-		let body: Vec<Node> = rest.by_ref().take_while(|statement| !is_end(statement)).collect();
-		statements.push(Node::List(vec![keyword, function_head(&head), body_block(body)], Bracket::None, Separator::Space));
+		let body = body_block(rest.by_ref().take_while(|statement| !is_end(statement)).collect());
+		let definition = match head.drop_meta() {
+			// Crystal's `def f(a) : Int`: the head as Kotlin's `fun f(a): Int { … }` has it
+			Node::Key(inner, Op::Colon, result) => {
+				let typed_body = Node::List(vec![result.as_ref().clone(), body], Bracket::None, Separator::Space);
+				vec![keyword, Node::Key(Box::new(function_head(inner)), Op::Colon, Box::new(typed_body))]
+			}
+			_ => vec![keyword, function_head(&head), body],
+		};
+		statements.push(Node::List(definition, Bracket::None, Separator::Space));
 	}
 	Node::List(statements, bracket, separator)
 }
@@ -1477,12 +1485,13 @@ fn is_end(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if word == END_WORD)
 }
 
-/// `def f(a)` or `def h` without a body
+/// `def f(a)` or `def h` without a body, also with Crystal's result type `def f(a) : Int`
 fn bodiless_definition(statement: &Node) -> Option<(Node, Node)> {
 	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
 	let [keyword, head] = items.as_slice() else { return None };
-	let is_head = matches!(head.drop_meta(), Node::Symbol(_)) || matches!(head.drop_meta(), Node::List(parts, Bracket::Round, _) if matches!(parts.first().map(Node::drop_meta), Some(Node::Symbol(_))));
-	(is_function_keyword(&keyword.drop_meta().name()) && is_head).then(|| (keyword.clone(), head.clone()))
+	let is_head = |head: &Node| matches!(head.drop_meta(), Node::Symbol(_)) || matches!(head.drop_meta(), Node::List(parts, Bracket::Round, _) if matches!(parts.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+	let is_typed_head = matches!(head.drop_meta(), Node::Key(inner, Op::Colon, _) if is_head(inner));
+	(is_function_keyword(&keyword.drop_meta().name()) && (is_head(head) || is_typed_head)).then(|| (keyword.clone(), head.clone()))
 }
 
 /// `h` → `h()`; `(f a b:2)` → `(f (a, b:2))`, the parameters as one comma group as `def f(a, b: 2) {…}` has them (two

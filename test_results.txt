@@ -172,6 +172,9 @@ PASSED:
   ✓ control::test_parallel_map::go_maps_in_parallel
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
+  ✓ control::test_reactive_ports::a_listener_watches_one_field
+  ✓ control::test_reactive_ports::rxjs_node_qt_events
+  ✓ control::test_reactive_ports::svelte_vue_solid_derivations
   ✓ control::test_run_time_block_cache::a_block_in_a_loop_body_sees_the_variables_assigned_there
   ✓ control::test_run_time_block_cache::a_block_run_in_a_loop_with_changing_numbers_compiles_once
   ✓ control::test_run_time_block_cache::a_cached_block_sees_the_values_of_each_run
@@ -2724,4 +2727,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2719 passed, 0 failed, 2719 total tested
+19 ignored, 2722 passed, 0 failed, 2722 total tested

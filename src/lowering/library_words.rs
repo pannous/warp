@@ -121,6 +121,7 @@ const EXPANDED_WORDS: [(&str, usize, &str); 10] = [
 ];
 const IS_DIGIT: &str = "is_digit";
 const LIST_WORD: &str = "list";
+const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arrayListOf"];
 /// `round(x, 3)`, `x.round(3)`: x rounded to 3 digits after the point; `round(x)` stays the builtin
 const ROUND_TO: &str = "round_to";
 const ROUND: &str = "round";
@@ -284,15 +285,28 @@ pub fn lower_function_methods(node: Node) -> Node {
 	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
 	// are specialised (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
-	let node = if defined.contains(LIST_WORD) { node } else { empty_list_calls(node) };
+	let node = list_constructor_calls(node, &defined);
 	function_methods_as_calls(node, &|name, arguments| (is_builtin(name) && !defined.contains(name)) || takes_receiver(name, arguments))
 }
 
-/// Python's `list()`: the empty list, as `[]` parses
-fn empty_list_calls(node: Node) -> Node {
+/// Python's `list()`: the empty list, as `[]` parses; Kotlin's `listOf(1, 2)`, `arrayOf`, `mutableListOf`: the list
+/// `[1, 2]` (`listOf()` is `[]` too); a word the program defines keeps its call
+fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
+	let is_constructor = |word: &Node| matches!(word.drop_meta(), Node::Symbol(name) if (name == LIST_WORD || LIST_CONSTRUCTORS.contains(&name.as_str())) && !defined.contains(name));
 	match node {
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.as_slice(), [word] if matches!(word.drop_meta(), Node::Symbol(name) if name == LIST_WORD)) => Node::Empty,
-		other => other.map_children(empty_list_calls),
+		Node::List(items, Bracket::Round, Separator::None) if items.first().is_some_and(is_constructor) => {
+			let elements: Vec<Node> = match &items[1..] {
+				[Node::List(arguments, Bracket::Round, _)] => arguments.clone(),
+				arguments => arguments.to_vec(),
+			};
+			let is_list_word = matches!(items[0].drop_meta(), Node::Symbol(name) if name == LIST_WORD);
+			match elements.is_empty() {
+				true => Node::Empty,
+				false if is_list_word => Node::List(items.into_iter().map(|item| list_constructor_calls(item, defined)).collect(), Bracket::Round, Separator::None), // `list(x)` is `x as list`
+				false => Node::List(elements.into_iter().map(|element| list_constructor_calls(element, defined)).collect(), Bracket::Square, Separator::Colon),
+			}
+		}
+		other => other.map_children(|child| list_constructor_calls(child, defined)),
 	}
 }
 
