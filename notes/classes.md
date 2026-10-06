@@ -94,14 +94,34 @@ Batch 3 (branch classes-3), P123 one text form `Point{x:1 y:2}`:
   emit_dynamic_text passes a lone text or character through unquoted; `string([...])` of a literal list of numbers and
   texts takes the same runtime text. A `"` inside such a text is not escaped yet.
 
-## Representation (found in batch 3, the next big step)
-Instances are not GC structs at run time: `P(1, 2)` is a `$Node` key `P` over a cons list of `x:1`, `y:2` entries, and
-`p.x` is `struct_body` + `map_find`, a search comparing field-name symbols. A `$P` struct type and `new_P` are emitted
-but only used when main gives a struct. The efficient form: `(struct $P (field $x i64) (field $y i64))` built by
-struct.new, `p.x` a struct.get by field index wherever the static type is known, a Node made from it only where a
-Node is wanted (print, a mixed list, the result).
+## Representation: GC structs (classes-4, wasm_emitter/struct_backend.rs)
+Generic form: `P(1, 2)` is a `$Node` key `P` over a cons list of `x:1`, `y:2` entries (type_constructor.rs, the
+Instance mark), `p.x` is `struct_body` + `map_find`, a search comparing field-name symbols. The struct backend
+replaces that where the static type is known, modelled on map_backend.rs (typed maps) and list_abi.rs:
+- `P·instance`: one struct type per class (emit_instance_types), mutable fields, an int field i64, a float field f64,
+  any other a Node. Today's immutable `$P` (field_storage "int"→I32) stays for FFI/WIT.
+- Struct variables (find_typed_structs): a local whose every assignment is a construction of one class giving every
+  field in declared order with values of the field's kind (int/float fields: static kind Int/Float); any other write
+  (`p.x = v` too, until step 3), a global, a capture, a parameter or a `RAN_WITHOUT_ERROR` block keeps the Node form
+  (names_held_as_nodes, shared with typed maps). `p.x` is struct.get (boxed where a Node is wanted, the bare i64 in
+  numeric code); where the instance itself is wanted it becomes the Node `P{x:… y:…}` built from the fields.
+- Struct parameters (find_struct_abi): `m(p:P)` takes `(ref null $P·instance)` when its body only reads fields of p
+  and every mention of m is a direct call passing a struct variable (passed as it is) or a construction of P
+  (straight into struct.new). Any other argument keeps the Node parameter: a duck-typed value may lack fields the body
+  never reads (operators::test_like, `keep(p:photo) := p.width` given `{width:3}`). Closures, tuple functions and
+  `compare·T` witnesses (runtime dispatch, witness.rs) keep Node parameters (directly_called_functions).
+- probes/bench_class_instances.sh, 10^6 iterations, debug build: construct_and_read 248 → 5 ms, read_only
+  (`p.x * p.y`) 141 → ~0 ms, method_call (`p.sum()`) 170 → ~0 ms; plain ints 2 ms.
+- Decisions (Interviewer warp-33, user, 2026-10-06): P127 int fields stay fast i64; a write that does not fit is a loud
+  run-time error "x of Point is an int field: 2^70 does not fit in 64 bits; declare it x:bigint or x:number" (step 3,
+  writes). P126 texts inside containers print quoted everywhere (print, interpolation, string()): `P{x:1 name:"a"}`,
+  `["a" "b"]`; a top-level `print "a"` still writes a.
+Next steps: 3. writes `p.x = v` as struct.set (with the P127 check), 4. methods that change or return self, a struct
+result (like list_abi's returns_list), struct elements in typed lists.
 
-Open (next batches): GC struct instances (above), the `value{…}` constructor block and `value(name){…}`
+Open (next batches): GC struct writes and struct results (above), keyword methods in a class body (`def area() -> int {…}`,
+`fun area(): Int {…}`, Python/Kotlin/Swift style: today "no field area"; class_methods method_parts sees only `:=`
+heads, reuse declarations.rs keyword_definition on the body items first, warp-dd owns that function), the `value{…}` constructor block and `value(name){…}`
 (wiki/constructor.md; today silently ignored), a `pop` method (changes the object and gives another value), a method
 named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), generics
 `class Box<T>`, mixins, a field named `pi` (card footgun-pi).

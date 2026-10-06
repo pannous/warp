@@ -87,8 +87,13 @@ fn instance(items: &[Node], bracket: &Bracket, separator: &Separator, registry: 
 			Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(value))
 		})
 		.collect();
-	let body = Node::List(fields, Bracket::Curly, Separator::Space);
-	Some(Node::meta(Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Colon, Box::new(body)), Node::data(Instance)))
+	Some(instance_node(name, fields))
+}
+
+/// The instance of the type `name` with these field entries
+pub fn instance_node(name: &str, entries: Vec<Node>) -> Node {
+	let body = Node::List(entries, Bracket::Curly, Separator::Space);
+	Node::meta(Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Colon, Box::new(body)), Node::data(Instance))
 }
 
 fn entries(fields: &Node) -> Vec<Node> {
