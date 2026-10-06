@@ -117,7 +117,9 @@ Design for the switch (not started in code yet):
 - The 108-byte module for `class P{x:int; y:int}; print P(1, 2)` returns `struct.new $P` from `i64.const` operands
   into i32 fields: check it validates (it ran, so someone converts; find the path before relying on it).
 
-Open (next batches): GC struct instances (above), the `value{…}` constructor block and `value(name){…}`
+Open (next batches): GC struct instances (above), keyword methods in a class body (`def area() -> int {…}`,
+`fun area(): Int {…}`, Python/Kotlin/Swift style: today "no field area"; class_methods method_parts sees only `:=`
+heads, reuse declarations.rs keyword_definition on the body items first, warp-dd owns that function), the `value{…}` constructor block and `value(name){…}`
 (wiki/constructor.md; today silently ignored), a `pop` method (changes the object and gives another value), a method
 named like a type word (`double()`: "double is a type"), property setters (wiki/property.md), generics
 `class Box<T>`, mixins, a field named `pi` (card footgun-pi).
