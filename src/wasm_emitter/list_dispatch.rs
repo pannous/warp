@@ -289,7 +289,7 @@ impl WasmGcEmitter {
 			Node::Empty => Source::Empty,
 			Node::List(items, Bracket::Square, _) if items.is_empty() => Source::Empty,
 			Node::Key(list, Op::Add, appended) if matches!(list.drop_meta(), Node::Symbol(name) if name == target) => match appended.drop_meta() {
-				Node::List(items, Bracket::Square, _) => self.items_element(items).map_or(Source::Other, Source::Append),
+				Node::List(items, Bracket::Square, _) if !items.is_empty() => Source::Append(self.items_element(items).unwrap_or(ElementType::Node)),
 				_ => Source::Other,
 			},
 			Node::Symbol(name) => Source::Variable(name.clone()),
@@ -377,10 +377,11 @@ impl WasmGcEmitter {
 				break;
 			}
 		}
-		// a Node list pays a conversion wherever it is used as a whole: only one that is indexed or counted is worth it
+		// a Node list pays a conversion wherever it is used as a whole: worth it for one that is indexed or counted, and for
+		// one appended to (map, filter), which as cons cells copies the whole list per append
 		let indexed = indexed_lists(program);
 		typed.into_iter()
-			.filter(|(name, element)| *element != Some(ElementType::Node) || indexed.contains(name))
+			.filter(|(name, element)| *element != Some(ElementType::Node) || indexed.contains(name) || appended(name))
 			.filter_map(|(name, element)| Some((name.clone(), TypedList { element: element?, updated: updated.contains(&name) })))
 			.collect()
 	}
