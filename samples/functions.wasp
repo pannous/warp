@@ -45,15 +45,13 @@ def reduce(list, fn, initial) {
 // Composition and piping
 numbers = [1, 2, 3, 4, 5]
 
-// Method chaining style
-result = numbers
-    .map(square)
+// Method chaining style: square applies to all numbers (broadcasting, no map needed)
+result = (square all numbers)
     .filter(x => x > 5)
     .reduce((a, b) => a + b, 0)
 
 // Pipeline operator style
-result = numbers
-    |> map(square)
+result = (square numbers)
     |> filter(x => x > 5)
     |> sum
 
