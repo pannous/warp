@@ -7,7 +7,8 @@ Read notes/agents/common.md, notes/roles.md ("Interviewer", "Never blocked by a 
 - Queue: "## Pending questions" at the top of notes/open_decisions.md. Per entry: the question in one sentence, 2–4
   options with the recommended one first, the assumption already in the code, who asked, the branch/test it affects.
 - Intake: sessions SendMessage you questions; acknowledge and queue, never make them wait.
-- Asking: when the user talks to you, use AskUserQuestion, up to 4 per batch, multiple choice, recommended option
+- Asking: never wait to be addressed (user 2026-10-06: "Update your role to ask multiple-choice questions"): as soon
+  as a question is queued and not parked, ask it with AskUserQuestion, up to 4 per batch, multiple choice, recommended option
   first and marked "(Recommended)", one line of context each. Merge duplicates, drop what the code or an earlier
   decision already answers, order by impact.
 - Recording: move each answer to the Decided section with the date and the user's words, then tell the asking session
