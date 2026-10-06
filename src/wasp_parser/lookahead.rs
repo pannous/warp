@@ -394,6 +394,9 @@ impl WaspParser {
 		if after_dot {
 			return Symbol(format!("{ATTRIBUTE_MARK}{name}"));
 		}
+		if self.type_fields.is_some() && self.reads_instance_variable() {
+			return Node::Key(Box::new(Symbol(RECEIVER_WORD.to_string())), Op::Dot, Box::new(Symbol(name)));
+		}
 		if self.current_char() == ':' && self.peek_char(1) != '=' {
 			self.advance();
 			self.skip_spaces();
@@ -401,6 +404,21 @@ impl WaspParser {
 		}
 		let value = self.attribute_value();
 		self.parse_atom().with_attribute(&name, value)
+	}
+
+	/// Ruby's instance variable `@x` in a class body, after its name: an operator, the end of the statement, or the line
+	/// end before an `end` follows (an annotation `@deprecated fun f()` stands before a word or its own value)
+	fn reads_instance_variable(&self) -> bool {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		match self.peek_char(blanks) {
+			'\n' => {
+				let next_line = blanks + 1 + (0..).take_while(|&offset| matches!(self.peek_char(blanks + 1 + offset), ' ' | '\t')).count();
+				let word: String = (next_line..).map(|offset| self.peek_char(offset)).take_while(|ch| is_identifier_char(*ch)).collect();
+				word == END_KEYWORD
+			}
+			'(' => false,
+			next => !is_identifier_char(next) && next != '@',
+		}
 	}
 
 	/// The value of `@name(value)`, true for a bare `@name`

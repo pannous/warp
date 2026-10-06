@@ -41,6 +41,11 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 			let op = alias_of(&node).expect("guarded");
 			Node::Meta { node: Box::new(Node::Key(Box::new(Node::Empty), op, Box::new(Node::Empty))), data }
 		}
+		// the stage `then root` (P158, pipes.rs reads the operator alone)
+		Node::Key(value, Op::Then, stage) if alias_of(&stage).is_some() => {
+			let op = alias_of(&stage).expect("guarded");
+			Node::Key(Box::new(operators(*value, aliases)), Op::Then, Box::new(Node::Key(Box::new(Node::Empty), op, Box::new(Node::Empty))))
+		}
 		other => other.map_children(|child| operators(child, aliases)),
 	}
 }

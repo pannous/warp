@@ -37,6 +37,10 @@ const SILENT_MODIFIERS: [&str; 1] = ["async"];
 /// The constructor names of other languages, aliases of `init` (P162): wasp's old `value`, JavaScript, Python, Ruby,
 /// PHP, VB.NET, Delphi, Rust; besides a method named like its class (C++, Java, C#)
 const CONSTRUCTOR_ALIASES: [&str; 8] = ["value", "constructor", "__init__", "initialize", "__construct", "New", "Create", "new"];
+/// Ruby's construction `Point.new(1, 2)`
+const RUBY_NEW_WORD: &str = "new";
+/// Go's function keyword, also of a method `func (p Point) Sum() int {…}`
+const GO_FUNCTION_WORD: &str = "func";
 /// Rust's block of methods of a type, `impl Point {…}`
 const IMPL_WORD: &str = "impl";
 /// Kotlin's `p.copy(y = 5)`
@@ -76,7 +80,7 @@ pub fn constructor_name(class: &str) -> String {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = copies(with_impls(node));
+	let node = positional_braces(ruby_constructions(copies(with_impls(node))));
 	let node = with_init_constructors(node.clone(), &method_calls_named(&node));
 	let node = with_members(node);
 	let node = with_class_attributes(class_typed_declarations(node));
@@ -387,13 +391,43 @@ fn impl_block(node: &Node) -> Option<(String, Vec<Node>)> {
 			_ => return None,
 		},
 		[word, _, for_word, class, block] if word.drop_meta().name() == IMPL_WORD && for_word.drop_meta().name() == "for" => (class, block),
-		_ => return None,
+		_ => return go_method(words),
 	};
 	let Node::Symbol(class) = class.drop_meta() else { return None };
 	match block.drop_meta() {
 		Node::List(_, Bracket::Curly, _) => Some((class.clone(), class_items(block))),
 		_ => None,
 	}
+}
+
+/// Go's method `func (p Point) Sum() int {…}` (or of the pointer `(p *Point)`): the class and the method `func Sum() int
+/// {…}`, its receiver p read as self
+fn go_method(words: &[Node]) -> Option<(String, Vec<Node>)> {
+	let [keyword, receiver, rest @ ..] = words else { return None };
+	if keyword.drop_meta().name() != GO_FUNCTION_WORD || rest.is_empty() {
+		return None;
+	}
+	let Node::List(receiver, Bracket::Round, _) = receiver.drop_meta() else { return None };
+	let (variable, class) = match receiver.as_slice() {
+		[variable, class] => (variable.drop_meta(), class.drop_meta()),
+		[single] => match single.drop_meta() {
+			Node::Key(variable, Op::Mul, class) => (variable.drop_meta(), class.drop_meta()),
+			_ => return None,
+		},
+		_ => return None,
+	};
+	let class = match class {
+		Node::Key(empty, Op::Mul, class) if matches!(empty.drop_meta(), Node::Empty) => class.drop_meta(),
+		class => class,
+	};
+	let (Node::Symbol(variable), Node::Symbol(class)) = (variable, class) else { return None };
+	let rest: Vec<Node> = match rest {
+		[Node::List(group, Bracket::None, _)] => group.clone(),
+		_ => rest.to_vec(),
+	};
+	let bindings = [(variable.clone(), Node::Symbol(RECEIVER.to_string()))].into_iter().collect();
+	let method = crate::law::substitute(&Node::List([vec![keyword.clone()], rest].concat(), Bracket::None, Separator::Space), &bindings);
+	Some((class.clone(), class_items(&Node::List(vec![method], Bracket::Curly, Separator::Semicolon))))
 }
 
 /// Kotlin's `p.copy(y = 5)`: a copy of p with those fields changed, `field_with(p, "y", 5)`
@@ -641,11 +675,15 @@ pub(crate) fn leading_name(member: &Node) -> String {
 	}
 }
 
-/// Java's and C#'s field `int x`: the field `x:int`
+/// Java's and C#'s field `int x`, Go's `x int`: the field `x:int`
 fn typed_field(words: &[Node]) -> Option<Node> {
-	let [field_type, name] = words else { return None };
-	let is_type = crate::analyzer::type_word_kind(&field_type.drop_meta().name()).is_some();
-	(is_type && matches!(name.drop_meta(), Node::Symbol(_))).then(|| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(field_type.clone())))
+	let is_type = |word: &Node| crate::analyzer::type_word_kind(&word.drop_meta().name()).is_some();
+	let field = |name: &Node, field_type: &Node| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(field_type.clone()));
+	match words {
+		[field_type, name] if is_type(field_type) && matches!(name.drop_meta(), Node::Symbol(_)) => Some(field(name, field_type)),
+		[name, field_type] if is_type(field_type) && matches!(name.drop_meta(), Node::Symbol(_)) => Some(field(name, field_type)),
+		_ => None,
+	}
 }
 
 /// C#'s auto-property `int X { get; set; }` (or `{ get; init; }`): the field `X:int`
@@ -698,6 +736,63 @@ fn class_attributes(node: Node, qualified: &[(String, String)]) -> Node {
 			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
 		}
 		other => other.map_children(|child| class_attributes(child, qualified)),
+	}
+}
+
+/// Ruby's `Point.new(1, 2)` of a declared class that defines no `new`: the construction `Point(1, 2)`, with a note
+fn ruby_constructions(node: Node) -> Node {
+	let mut classes = vec![];
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		if !class_items(body).iter().filter_map(method_parts).any(|(method, _, _)| method == RUBY_NEW_WORD) {
+			classes.push(name.drop_meta().name());
+		}
+	});
+	if classes.is_empty() {
+		return node;
+	}
+	constructed_by_new(node, &classes)
+}
+
+fn constructed_by_new(node: Node, classes: &[String]) -> Node {
+	match node {
+		Node::Key(class, Op::Dot, member) if classes.contains(&class.drop_meta().name()) && matches!(class.drop_meta(), Node::Symbol(_)) && leading_name(&member) == RUBY_NEW_WORD => {
+			let class_name = class.drop_meta().name();
+			crate::diagnostic::note_alias(&format!("{class_name}.{RUBY_NEW_WORD}"), &class_name);
+			let arguments = match member.drop_meta().clone() {
+				Node::List(items, _, _) => items[1..].iter().cloned().map(|argument| constructed_by_new(argument, classes)).collect(),
+				_ => vec![],
+			};
+			Node::List([vec![*class], arguments].concat(), Bracket::Round, Separator::None)
+		}
+		other => other.map_children(|child| constructed_by_new(child, classes)),
+	}
+}
+
+/// Go's positional braces `Point{1, 2}` of a declared class: the construction `Point(1, 2)`, with a note (P167); of
+/// an unknown name they stay tagged data
+fn positional_braces(node: Node) -> Node {
+	let mut classes = vec![];
+	node.visit(&mut |part| if let Node::Type { name, .. } = part {
+		classes.push(name.drop_meta().name());
+	});
+	if classes.is_empty() {
+		return node;
+	}
+	constructed_from_braces(node, &classes)
+}
+
+fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
+	let is_positional = |items: &[Node]| !items.is_empty() && items.iter().all(|item| !matches!(item.drop_meta(), Node::Key(..)));
+	match node {
+		Node::Key(class, Op::None, braces) if matches!(class.drop_meta(), Node::Symbol(name) if classes.contains(name)) && matches!(braces.drop_meta(), Node::List(items, Bracket::Curly, _) if is_positional(items)) => {
+			let Node::List(items, _, _) = braces.drop_meta().clone() else { unreachable!("guarded") };
+			let class_name = class.drop_meta().name();
+			let written: Vec<String> = items.iter().map(Node::serialize).collect();
+			crate::diagnostic::note_alias(&format!("{class_name}{{{}}}", written.join(", ")), &format!("{class_name}({})", written.join(", ")));
+			let arguments = items.into_iter().map(|item| constructed_from_braces(item, classes));
+			Node::List([vec![*class]].into_iter().flatten().chain(arguments).collect(), Bracket::Round, Separator::None)
+		}
+		other => other.map_children(|child| constructed_from_braces(child, classes)),
 	}
 }
 
