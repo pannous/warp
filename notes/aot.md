@@ -41,9 +41,10 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    only make it, `--wasm` writes only the module): the executable is a copy of the prebuilt stub
    `warp-runtime` (crates/warp-runtime: wasmtime with `runtime`, `gc`, `gc-copying`, `std`, no Cranelift) with the
    program's machine code appended (`[stub][cwasm][u64 le length][WRPCwasm]`); at start the stub reads its own last 16
-   bytes and runs what it carries. The stub is found through `WARP_RUNTIME_STUB`, else `warp-runtime` next to `warp`,
-   else warp itself is the stub (warp's main also runs a program it carries: tests need no extra build, the executable
-   is then warp-sized). Release stub (`cargo build --release -p warp-runtime`): **805 KB**; ackermann.exe **972 KB**
+   bytes and runs what it carries. The stub is found through `WARP_RUNTIME_STUB`, else `warp-runtime` next to `warp`;
+   without one nothing is written (P104: never a ~120 MB copy of warp; a plain run notes it on stderr, build exits 1).
+   Tests build the stub once per run (tests/common runtime_stub). `warp run <file>` runs without leaving an
+   executable (P105). Release stub (`cargo build --release -p warp-runtime`): **805 KB**; ackermann.exe **972 KB**
    (167 KB machine code), starts and finishes in well under 10 ms (probe build: 0.33 ms in total).
    - The program prints its value: build compiles `print(<last statement>)` (pipeline::compile_printing_result;
      a declaration or a print stays), so the value is formatted by warp's own print (`[10 20 30]`, texts unquoted)
