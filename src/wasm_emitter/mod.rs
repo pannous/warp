@@ -28,6 +28,7 @@ mod text_unicode;
 pub(crate) mod list_ops;
 mod list_abi;
 mod map_backend;
+mod struct_backend;
 pub use map_backend::MAP_COPY_SUFFIX;
 mod loop_control;
 pub(crate) use loop_control::mark_step;
@@ -216,6 +217,9 @@ pub struct WasmGcEmitter {
 	main_typed_lists: Option<HashMap<String, list_dispatch::TypedList>>, // main's typed lists, worked out before the capture globals
 	bounded_counters: std::collections::HashSet<String>, // loop counters of the body being emitted proven to stay in 0..i32::MAX (big_int.rs)
 	typed_maps: std::collections::HashSet<String>, // map variables of the body being emitted held as hash tables (map_backend.rs)
+	typed_structs: HashMap<String, String>, // instance variables of the body being emitted held as GC structs, with their class (struct_backend.rs)
+	instance_types: HashMap<String, struct_backend::InstanceType>, // the `P·instance` struct type of each class
+	struct_abi: HashMap<String, Vec<Option<String>>>, // the parameters user functions take as structs, by class (struct_backend.rs)
 	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies
 	moved_lists: Vec<(String, String)>,
 	/// The array calling convention of the user functions that have one (list_abi.rs)
@@ -278,6 +282,9 @@ impl WasmGcEmitter {
 			main_typed_lists: None,
 			bounded_counters: std::collections::HashSet::new(),
 			typed_maps: std::collections::HashSet::new(),
+			typed_structs: HashMap::new(),
+			instance_types: HashMap::new(),
+			struct_abi: HashMap::new(),
 			moved_lists: Vec::new(),
 			list_abi: HashMap::new(),
 			returns_list: false,
@@ -494,6 +501,7 @@ impl WasmGcEmitter {
 		self.type_manager.emit_gc_types();
 		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
 		self.emit_registered_user_types();
+		self.emit_instance_types();
 		if self.config.emit_kind_globals {
 			self.emit_kind_globals();
 		}
@@ -602,6 +610,7 @@ impl WasmGcEmitter {
 		self.collect_user_function_strings();
 		self.allocate_declared_globals(node);
 		self.allocate_closure_captures(node);
+		self.struct_abi = self.find_struct_abi(node);
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
 		self.emit_compare_dispatcher();
@@ -1052,6 +1061,7 @@ impl WasmGcEmitter {
 		let temp_locals = collect_variables(node, &mut self.scope);
 		self.typed_lists = self.main_typed_lists.take().unwrap_or_else(|| self.find_typed_lists(node));
 		self.typed_maps = self.find_typed_maps(node);
+		self.typed_structs = self.find_typed_structs(node);
 		self.bounded_counters = big_int::bounded_counters(node);
 
 		// Allocate strings and update Local data pointers
@@ -1315,6 +1325,8 @@ impl WasmGcEmitter {
 		let mut types = vec![(tm.string_type, "String"), (tm.i64_box_type, "i64box"), (tm.f64_box_type, "f64box"), (tm.node_type, "Node"),
 			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList"), (tm.float_array_type, "FloatArray"), (tm.float_list_type, "FloatList")];
 		types.extend(self.ctx.user_type_indices.iter().map(|(name, idx)| (*idx, name.as_str())));
+		let instance_names: Vec<(u32, String)> = self.instance_types.iter().map(|(class, instance)| (instance.type_index, format!("{class}{}", struct_backend::INSTANCE_SUFFIX))).collect();
+		types.extend(instance_names.iter().map(|(idx, name)| (*idx, name.as_str())));
 		self.names.types(&name_map(&mut types));
 
 		if self.next_global_idx > 0 {
@@ -1339,6 +1351,7 @@ impl WasmGcEmitter {
 				fields.push((type_idx, type_def.fields.iter().enumerate().map(|(i, field)| (i as u32, field.name.as_str())).collect()));
 			}
 		}
+		fields.extend(self.instance_types.values().map(|instance| (instance.type_index, instance.fields.iter().enumerate().map(|(i, (field, _))| (i as u32, field.as_str())).collect())));
 		fields.sort_by_key(|(type_idx, _)| *type_idx);
 		fields.dedup_by_key(|(type_idx, _)| *type_idx);
 		let mut type_field_names = IndirectNameMap::new();

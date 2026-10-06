@@ -120,6 +120,9 @@ impl WasmGcEmitter {
 			}
 			// Index operator: list#index (1-based)
 			Node::Key(list, Op::Hash, index) => {
+				if self.emit_struct_field_int(func, list, index) {
+					return;
+				}
 				if self.map_is_indexed_by_key(index) {
 					self.emit_indexed_node(func, list, index);
 					self.emit_call(func, "get_int_value");
@@ -176,9 +179,8 @@ impl WasmGcEmitter {
 				return true;
 			}
 		}
-		let [Node::Symbol(fn_name), argument] = items else {
-			return false;
-		};
+		let [word, argument] = items else { return false };
+		let Node::Symbol(fn_name) = word.drop_meta() else { return false }; // `count xs` without parentheses keeps its position
 		let integer_builtin = ROUNDING_FUNCTIONS.contains(&fn_name.as_str())
 			|| fn_name == crate::min_max::EMPTY_EXTREMUM_CALL
 			|| fn_name == crate::switch::NO_CASE_CALL

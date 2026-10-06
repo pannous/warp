@@ -154,7 +154,11 @@ pub fn lower(program: Node) -> Node {
 	if lifting.lifted.is_empty() {
 		return program;
 	}
-	Node::List([lifting.lifted, vec![program]].concat(), Bracket::Round, Separator::Semicolon)
+	// the lifted functions join the program's own statements, so later passes see its statements as before
+	match program {
+		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List([lifting.lifted, statements].concat(), Bracket::None, separator),
+		program => Node::List([lifting.lifted, vec![program]].concat(), Bracket::Round, Separator::Semicolon),
+	}
 }
 
 /// The last statement of a body: its value

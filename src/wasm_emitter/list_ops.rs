@@ -1457,6 +1457,9 @@ impl WasmGcEmitter {
 			func.instruction(&I::End);
 			return;
 		}
+		if self.emit_struct_field_node(func, target, index) {
+			return;
+		}
 		self.emit_generic_indexed_node(func, target, index);
 	}
 

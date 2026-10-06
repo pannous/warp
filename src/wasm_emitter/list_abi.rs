@@ -91,10 +91,7 @@ pub(super) fn called_function(node: &Node) -> Option<&str> {
 impl WasmGcEmitter {
 	/// The list convention of every user function that has one, decided before the signatures are registered
 	pub(super) fn find_list_abi(&mut self) -> HashMap<String, ListAbi> {
-		let excluded: HashSet<String> = self.ctx.closure_targets.iter().map(|(target, _)| target.clone()).collect();
-		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values()
-			.filter(|function| !excluded.contains(&function.name) && function.tuple_kinds.is_empty() && !self.is_closure_call(&function.name))
-			.cloned().collect();
+		let functions = self.directly_called_functions();
 		let mut abi: HashMap<String, ListAbi> = HashMap::new();
 		let mut list_results: HashMap<String, Vec<Node>> = HashMap::new();
 		for function in &functions {
@@ -140,6 +137,16 @@ impl WasmGcEmitter {
 			abi.get_mut(&name).expect("a list function").returns_list = true;
 		}
 		abi
+	}
+
+	/// The user functions only ever called directly, never as a closure, a tuple function or a witness the runtime
+	/// dispatches to (witness.rs): those may take a calling convention of their own (lists as arrays, instances as structs)
+	pub(super) fn directly_called_functions(&self) -> Vec<UserFunctionDef> {
+		let excluded: HashSet<String> = self.ctx.closure_targets.iter().map(|(target, _)| target.clone()).collect();
+		self.ctx.user_functions.values()
+			.filter(|function| !excluded.contains(&function.name) && function.tuple_kinds.is_empty() && !self.is_closure_call(&function.name))
+			.filter(|function| crate::traits::witness_type(&function.name, crate::traits::COMPARE).is_none())
+			.cloned().collect()
 	}
 
 	/// The typed lists of a function body, as compile_user_function_body will find them, its list parameters typed
