@@ -19,3 +19,11 @@ fn test_function_list_in_object_field() {
 	is!("s = {fs: [x => x * 2, x => x + 1]}; s.fs#2(4)", 5);
 	is!("s = {fs: [x => x * 2]}; t = s.fs#1; t(4)", 8);
 }
+
+#[test]
+fn test_function_in_nested_object() {
+	is!("x = {a: {f: x => x + 1}}; x.a.f(1)", 2);
+	is!("x = {a: {b: 2, f: x => x * b}}; x.a.f(3)", 6);
+	is!("x = {a: {f: x => x + 1}}; h = x.a.f; h(1)", 2);
+	is!("x = {n: 1, a: {f: x => x + 1}}; x.n + x.a.f(1)", 3);
+}
