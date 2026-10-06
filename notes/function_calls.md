@@ -59,8 +59,15 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
 - A declared result type `-> int` lowered to `body as int`, which boxed (new_int) and unboxed (get_int_value) on every
   call: 5x a plain call. Fixed: `x as int` of an Int emits the i64 (values.rs, casts.rs `emit_int_value_truncated`,
   test_call_efficiency). The ratio truncation (`exact_trunc` when the range may leave fixnums) stays.
-- A returned closure `h = mk(1); h(i)` is 4-6x a plain call: closure_call_1 tests and casts the $Closure twice, calls
-  through call_ref, and the entry unboxes each Int capture with get_int_value. Card closure-devirtualize.
+- A returned closure `h = mk(1); h(i)` was 4-6x a plain call (closure_call_1 tests and casts the $Closure twice, calls
+  through call_ref, the entry unboxes each capture per call). Now even with a plain call:
+  - a closure variable whose targets (closure_variable_targets) are one function, and no parameter of that name
+    anywhere, calls that target's entry directly (wasm_emitter/closures.rs `emit_direct_closure_call`);
+  - assigned once with captured values, lowering/closures.rs `hoist_captures` reads them once after the assignment,
+    `h·capture·0 = closure_lambda_1·captured·0(h)` (a capture reader, its kind the target's parameter kind via
+    closure_call_kind), and the call passes the locals to the target itself (`emit_hoisted_closure_call`). Nested
+    functions with capture globals keep the entry, which restores them.
 
 ## Open
-- Board cards: closure-devirtualize; functions-sort-op and functions-key went to warp-14.
+- Board cards: functions-julia, functions-csharp (mine); functions-sort-op, functions-key, functions-foreach,
+  functions-lambda-defaults (warp-14); functions-python, functions-ruby-def (warp-66). Cases: probes/function_calls_more.md.
