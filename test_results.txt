@@ -257,6 +257,7 @@ PASSED:
   ✓ ffi::test_components::test_a_field_of_a_component_result_is_read
   ✓ ffi::test_components::test_a_rust_crate_built_as_a_component_is_called
   ✓ ffi::test_components::test_component_failures_are_loud
+  ✓ ffi::test_components::test_handles_of_another_thread_do_not_shift_the_numbering
   ✓ ffi::test_components::test_resource_failures_are_loud
   ✓ ffi::test_components::test_resources_of_a_component_are_handles
   ✓ ffi::test_download::a_failed_download_is_an_error_value
@@ -2297,4 +2298,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2292 passed, 0 failed, 2292 total tested
+31 ignored, 2293 passed, 0 failed, 2293 total tested
