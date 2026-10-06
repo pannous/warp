@@ -108,6 +108,8 @@ PASSED:
   ✓ control::test_object_functions::test_function_entries_are_callable
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
+  ✓ control::test_run_time_block_cache::a_block_run_in_a_loop_with_changing_numbers_compiles_once
+  ✓ control::test_run_time_block_cache::a_cached_block_sees_the_values_of_each_run
   ✓ control::test_run_time_blocks::a_bang_known_only_at_run_time_runs_the_block
   ✓ control::test_run_time_blocks::a_bang_on_a_parameter_or_a_call_result_decides_at_run_time
   ✓ control::test_run_time_blocks::a_block_over_defined_names_does_not_warn
@@ -2195,6 +2197,7 @@ PASSED:
   ✓ welcoming::test_lone_words::test_a_word_applied_to_an_argument_is_an_error
   ✓ welcoming::test_lone_words::test_a_word_close_to_a_name_warns
   ✓ welcoming::test_lone_words::test_data_is_the_data_prefix
+  ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
   ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
   ✓ welcoming::test_style_dont_care::any_axis_can_stop_caring
   ✓ welcoming::test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
@@ -2324,4 +2327,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2319 passed, 0 failed, 2319 total tested
+23 ignored, 2322 passed, 0 failed, 2322 total tested
