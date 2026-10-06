@@ -189,10 +189,13 @@ impl Signals {
 		sources
 	}
 
-	/// `on set x {body}`: the body after every write of x, `value` in it is x
+	/// `on set x {body}`: the body after every write of x, `value` in it is x; of a `:=` value, after each change
 	fn set_listener(&mut self, rest: &[Node]) -> Option<Listener> {
 		let (variable, body) = subject_and_body(rest)?;
 		let Node::Symbol(name) = variable.drop_meta() else { return None };
+		if self.derived.contains_key(name) {
+			return self.change_listener(rest); // a `:=` value is never written: its sets are its changes
+		}
 		let bindings = VALUE_WORDS.iter().map(|value| (value.to_string(), Node::Symbol(name.clone()))).collect();
 		let body = self.lower(crate::law::substitute(&body, &bindings), &[]);
 		Some(Listener { trigger: Trigger::Write(HashSet::from([name.clone()])), condition: None, body, fired: None, start: None })
@@ -270,7 +273,7 @@ fn derived_values(node: &Node) -> HashMap<String, HashSet<String>> {
 	derived
 }
 
-fn symbols(node: &Node) -> Vec<String> {
+pub(crate) fn symbols(node: &Node) -> Vec<String> {
 	let mut names = vec![];
 	node.visit(&mut |part| if let Node::Symbol(name) = part { names.push(name.clone()); });
 	names

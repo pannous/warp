@@ -49,3 +49,8 @@ fn on_change_runs_only_when_the_value_differs() {
 	is!("x=1; n=0; on change x : n+=1; x=1; x=2; x=2; x=3; n", 2);
 	is!("a=1; b=2; sum := a+b; log=0; on change sum {log = log*10 + value}; a=2; a=2; b=1; log", 43);
 }
+
+#[test]
+fn on_set_of_a_charged_value_listens_to_its_changes() {
+	is!("a=1; total := a*2; n=0; on set total : n+=1; a=2; a=2; a=3; n", 2);
+}
