@@ -199,6 +199,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   first: when the parameter type rules out the comparison's bool (`square number = …`, `f(x:int)`), `f x == y` is
   `(f x) == y` without a message; the error stays only when both readings type-check (parameter untyped/any or
   bool). So `square 3 == 9` is true and the wiki examples keep their bare form.
+  P149 (warp-41) an untyped parameter's type is inferred from the body before P143 applies: `x + 1`, `it*10`,
+  `it*it` need a number, so `def f(x){x+1}; f 1 < 5` and `square := it*it; square 3 == 9` are `(f x) op y` without
+  a message, for every comparison; the ambiguity error stays only when the body accepts anything (`print x`). The
+  footgun test `f := it*10; f 3-1 > 15` → true stands.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
