@@ -561,6 +561,7 @@ PASSED:
   ✓ functions::test_constant_free_variables::a_parameter_or_a_key_of_the_same_name_stays
   ✓ functions::test_constant_free_variables::a_stable_constant_is_inlined
   ✓ functions::test_constant_free_variables::constant_arithmetic_is_computed_after_inlining
+  ✓ functions::test_counting_word_result::a_counting_word_gives_a_number
   ✓ functions::test_def_forms::a_def_function_calls_its_function_parameter
   ✓ functions::test_def_forms::a_parameter_tested_for_membership_is_no_function
   ✓ functions::test_def_forms::definition_forms_agree
@@ -2579,4 +2580,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2574 passed, 0 failed, 2574 total tested
+23 ignored, 2575 passed, 0 failed, 2575 total tested
