@@ -168,7 +168,10 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P162 (classes, warp-e0) `init(…){…}` in a class is always the constructor (user chose this over the recommended
   "unless called explicitly"). User, correcting: `init` is THE constructor name, not `value`. `value`, JS
   `constructor` and Python `__init__` still work as aliases with a got-it note "wasp says init" and an "I meant:
-  init" fix; docs, hints and examples use `init`.
+  init" fix; docs, hints and examples use `init`. User, extending: all common constructor names are aliases
+  of `init` with that note: `value` (wiki 2023), `constructor` (JS/TS), `__init__` (Python), `initialize` (Ruby),
+  `__construct` (PHP), `New` (VB.NET), `Create` (Delphi), Rust's `new` inside a class/impl, and a method named like
+  its class (C++/Java/C# `Point(x, y){…}` inside `class Point`).
 - P161 (functions, warp-41; the user told the worker directly) no Swift-style argument labels: "we don't do this
   here, I don't like that redundancy". Ported labels (`func greet(person name: String)`, `_ x: Int`) compile like P157,
   with a got-it note "wasp names a parameter once"; docs and examples never use labels.
