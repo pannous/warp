@@ -209,8 +209,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   footgun test `f := it*10; f 3-1 > 15` → true stands.
 - Async (warp-93, porting Promise/asyncio/Go/Kotlin cases):
   P150 race: `await any [go a(), go b()]` is the first task to finish, the others keep running. The user's answer on
-  `await first [tasks]` was only "oof" (no pick); assumed (undoable, the recommended option): `first` keeps its list
-  meaning, and on a list of tasks a got-it note says "for the first to finish: await any […]".
+  `await first [tasks]` (asked again, user picked the recommended option): `first` keeps its list meaning, and on a
+  list of tasks a compile-time got-it note says "for the first to finish: await any […]".
   P151 deadline: `await job within 100 ms or 0`; on timeout the job is stopped and the `or` value is the result,
   without `or` the timeout is an error. User: "would the syntax 'or stop with 0' be overkill? maybe we can just give
   it as a hint that this is the behavior": no extra `stop` word. User, clarified: the hint is a compile-time got-it
