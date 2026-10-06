@@ -2,6 +2,8 @@
 //! block becomes a function of the variables it reads that are assigned before it, `go·block·1(n) := { … }`, started
 //! like any other function, `go go·block·1(n)`: the task gets their values as they are at its start, copied
 //! (notes/go_blocks.md). declarations::lower_tasks then decides how the function runs.
+//! `after done return x` (wiki/thread.md) is the go block `go { while not done { sleep(1) }; x }`, its condition read
+//! from shared values (P106); `await job or y` is `try await job else y`.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -9,9 +11,20 @@ use crate::operators::Op;
 const GO_WORD: &str = "go";
 const BLOCK_FUNCTION_PREFIX: &str = "go·block·";
 const FOR_WORD: &str = "for";
+const AFTER_WORD: &str = "after";
+const RETURN_WORD: &str = "return";
+const AWAIT_WORD: &str = "await";
+const AFTER_CONDITION: &str = "after_condition_placeholder";
+const AFTER_VALUE: &str = "after_value_placeholder";
+/// How often a waiting `after` checks its condition, in milliseconds
+const AFTER_POLL_MILLISECONDS: i64 = 1;
 
 pub fn lower(node: Node) -> Node {
-	if !has_go_block(&node) || defines_go(&node) {
+	if defines_go(&node) {
+		return node;
+	}
+	let node = task_phrases(node.clone(), &Phrases { assigned: assigned_variables(&node), shared: crate::shared_arrays::shared_names(&node) });
+	if !has_go_block(&node) {
 		return node;
 	}
 	let blocks = GoBlocks::default();
@@ -80,6 +93,69 @@ impl GoBlocks {
 
 fn is_sequence(separator: &Separator) -> bool {
 	matches!(separator, Separator::Semicolon | Separator::Newline)
+}
+
+struct Phrases {
+	/// the program's variables, and those of them that every task shares
+	assigned: Vec<String>,
+	shared: Vec<String>,
+}
+
+/// `after C return V` → `go { while not (C) { sleep(1) }; V }`, `await job or y` → `try await job else y`
+fn task_phrases(node: Node, phrases: &Phrases) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			let items: Vec<Node> = items.into_iter().map(|item| task_phrases(item, phrases)).collect();
+			match after_parts(&items) {
+				Some((condition, value)) => after_task(condition, value, phrases),
+				None => Node::List(items, bracket, separator),
+			}
+		}
+		Node::Key(awaited, Op::Or, fallback) if matches!(awaited.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == AWAIT_WORD)) => {
+			let guarded = Node::List(vec![Node::Symbol(crate::wasp_parser::TRY_MARKER.to_string()), *awaited, task_phrases(*fallback, phrases)], Bracket::Round, Separator::None);
+			task_phrases_inside(guarded, phrases)
+		}
+		other => other.map_children(|child| task_phrases(child, phrases)),
+	}
+}
+
+/// The awaited task itself may hold phrases: `await (after …) or y`
+fn task_phrases_inside(guarded: Node, phrases: &Phrases) -> Node {
+	match guarded {
+		Node::List(mut items, bracket, separator) => {
+			items[1] = task_phrases(items[1].clone(), phrases);
+			Node::List(items, bracket, separator)
+		}
+		other => other,
+	}
+}
+
+/// `after C return V`, written flat or in spaced groups: C and V
+fn after_parts(items: &[Node]) -> Option<(Node, Node)> {
+	let words: Vec<Node> = items.iter().flat_map(|item| match item.drop_meta() {
+		Node::List(inner, Bracket::None, Separator::Space) => inner.clone(),
+		other => vec![other.clone()],
+	}).collect();
+	if words.first()?.drop_meta().name() != AFTER_WORD {
+		return None;
+	}
+	let at = words.iter().position(|word| word.drop_meta().name() == RETURN_WORD)?;
+	let group = |part: &[Node]| match part {
+		[single] => Some(single.clone()),
+		[] => None,
+		several => Some(Node::List(several.to_vec(), Bracket::None, Separator::Space)),
+	};
+	Some((group(&words[1..at])?, group(&words[at + 1..])?))
+}
+
+fn after_task(condition: Node, value: Node, phrases: &Phrases) -> Node {
+	let copied: Vec<String> = read_symbols(&condition).into_iter().filter(|name| phrases.assigned.contains(name) && !phrases.shared.contains(name)).collect();
+	if let Some(name) = copied.first() {
+		return crate::node::error(&format!("after {name}: a task gets a copy of {name}, which never changes there; share it: `shared {name} = …` (P106)"));
+	}
+	let template = crate::wasp_parser::parse(&format!("{GO_WORD} {{ while not ({AFTER_CONDITION}) {{ sleep({AFTER_POLL_MILLISECONDS}) }}; {AFTER_VALUE} }}"));
+	let template = crate::library_words::substitute(template, AFTER_CONDITION, &condition);
+	crate::library_words::substitute(template, AFTER_VALUE, &value)
 }
 
 /// `go { … }` among the items of a list: the index of the block

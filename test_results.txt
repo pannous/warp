@@ -1,6 +1,9 @@
 === Test Results ===
 
 PASSED:
+  ✓ control::test_after::a_cancelled_after_gives_the_fallback
+  ✓ control::test_after::after_needs_a_shared_condition
+  ✓ control::test_after::after_waits_for_its_condition
   ✓ control::test_all_with_condition::all_with_a_comparison_filters_the_items
   ✓ control::test_atomic_arrays::atomic_is_shared
   ✓ control::test_await_go::await_of_a_start_is_the_result
@@ -2353,4 +2356,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2348 passed, 0 failed, 2348 total tested
+23 ignored, 2351 passed, 0 failed, 2351 total tested
