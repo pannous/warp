@@ -997,10 +997,37 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 			Node::Key(head, op, Box::new(body))
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_spaced_definitions(*left)), op, Box::new(lower_spaced_definitions(*right))),
+		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			let items = haskell_definitions(items);
+			Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator)
+		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_spaced_definitions(*node)), data },
 		other => other,
 	}
+}
+
+/// Haskell's `twice x = x * 2` among statements: the definition `twice x := x * 2` when a later statement uses
+/// `twice` and the body uses every parameter (`int x = 3`, `print x = 5`, `my x = 3` stay assignments)
+fn haskell_definitions(statements: Vec<Node>) -> Vec<Node> {
+	let defined: Vec<Option<Node>> = statements.iter().enumerate().map(|(index, statement)| haskell_definition(statement, &statements[index + 1..])).collect();
+	statements.into_iter().zip(defined).map(|(statement, definition)| definition.unwrap_or(statement)).collect()
+}
+
+fn haskell_definition(statement: &Node, later: &[Node]) -> Option<Node> {
+	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
+	let [name, parameters @ .., last] = items.as_slice() else { return None };
+	let Node::Key(last_name, Op::Assign, body) = last.drop_meta() else { return None };
+	let Node::Symbol(function) = name.drop_meta() else { return None };
+	let is_parameter = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == PLACEHOLDER || crate::wasp_parser::mentions(body, word));
+	let is_free_name = !is_function_keyword(function) && !crate::library_words::is_library_word(function) && crate::analyzer::type_word_kind(function).is_none();
+	let is_used_later = later.iter().any(|statement| crate::wasp_parser::mentions(statement, function));
+	if !is_free_name || !is_used_later || !parameters.iter().chain([last_name.as_ref()]).all(is_parameter) {
+		return None;
+	}
+	let mut words = items[..items.len() - 1].to_vec();
+	words.push(Node::Key(last_name.clone(), Op::Define, body.clone()));
+	Some(Node::List(words, Bracket::None, Separator::Space))
 }
 
 /// `each [1,2,3]: print it`, `all xs: …` (wiki/iteration.md): a for loop over the list whose item is `it`

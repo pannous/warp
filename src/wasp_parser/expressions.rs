@@ -263,6 +263,10 @@ impl WaspParser {
 			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
+			if let Err(refused) = self.left_arrow_assignment(op, &lhs) {
+				lhs = refused;
+				break;
+			}
 			if matches!(op, Op::Add | Op::Sub) {
 				match self.signed_number_starts_a_list(&lhs) {
 					Ok(false) => {}

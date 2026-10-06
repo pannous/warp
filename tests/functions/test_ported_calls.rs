@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 150] = [
+const CASES: [(&str, &str); 163] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -154,6 +154,20 @@ const CASES: [(&str, &str); 150] = [
 	(r#"(lambda x: x + 1)(2)"#, r#"3"#),
 	(r#"let xs = [1,2,3]; xs.reduce(0, +)"#, r#"6"#),
 	(r#"[x * 2 for x in [1, 2, 3] if x > 1]"#, r#"[4 6]"#),
+	(r#"twice x = x * 2; twice 4"#, r#"8"#),
+	(r#"add a b = a + b; add 1 2"#, r#"3"#),
+	(r#"twice x = x * 2
+twice 4"#, r#"8"#),
+	(r#"int x = 3; x"#, r#"3"#),
+	(r#"number n = 2; n + n"#, r#"4"#),
+	(r#"f <- function(x) x * 2; f(4)"#, r#"8"#),
+	(r#"f = function(x) x * 2; f(4)"#, r#"8"#),
+	(r#"add = function(a, b) { a + b }; add(1, 2)"#, r#"3"#),
+	(r#"square = function(x) x * x; square [1 2 3]"#, r#"[1 4 9]"#),
+	(r#"x = -5; x < -3 ? 1 : 2"#, r#"1"#),
+	(r#"const f = ({a, b}) => a + b; f({a: 1, b: 2})"#, r#"3"#),
+	(r#"area = ({w, h}) => w * h; area({h: 3, w: 4})"#, r#"12"#),
+	(r#"f = ({a}, k) => a * k; f({a: 5}, 2)"#, r#"10"#),
 ];
 
 /// The value as `warp eval` shows it: a text without its quotes
