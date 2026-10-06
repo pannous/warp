@@ -15,6 +15,8 @@ use std::collections::{HashMap, HashSet};
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
 const MAP_WORD: &str = "map";
 const ALL_WORD: &str = "all";
+/// Methods that append to a list variable (analyzer APPEND_METHODS)
+const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 const EXTREMUM_WORDS: [&str; 2] = ["max", "min"];
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
@@ -103,8 +105,10 @@ fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
 	let is_all = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == ALL_WORD);
 	match items {
 		[function, all, list] if is_all(all) => Some((function, list)),
-		[function, phrase] => match phrase.drop_meta() {
-			Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && is_all(&words[0]) => Some((function, &words[1])),
+		// `square (all xs)` as the parser nests a known function's argument, `(square all) xs` as a value
+		[first, second] => match (first.drop_meta(), second.drop_meta()) {
+			(_, Node::List(words, Bracket::None, Separator::Space)) if words.len() == 2 && is_all(&words[0]) => Some((first, &words[1])),
+			(Node::List(words, Bracket::None, Separator::Space), _) if words.len() == 2 && is_all(&words[1]) => Some((&words[0], second)),
 			_ => None,
 		},
 		_ => None,
@@ -301,10 +305,35 @@ fn is_arithmetic_operand(body: &Node, name: &str) -> bool {
 
 /// Variable → whether every value assigned to it is a list literal that is no object
 fn collect_list_variables(node: &Node, assigned: &mut HashMap<String, bool>) {
+	// `xs = []` (which parses as ø) is a list once the program appends to xs: `xs.add(i)`, `xs = xs + [i]`
+	let mut appended: HashSet<String> = HashSet::new();
+	node.visit(&mut |part| match part {
+		Node::Key(list, Op::Dot, call) => {
+			if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if APPEND_METHODS.contains(&method.as_str())) {
+					appended.insert(name.clone());
+				}
+			}
+		}
+		Node::Key(target, Op::Assign, value) => {
+			if let (Node::Symbol(name), Node::Key(left, Op::Add, right)) = (target.drop_meta(), value.drop_meta()) {
+				if matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)) {
+					appended.insert(name.clone());
+				}
+			}
+		}
+		_ => {}
+	});
 	node.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
 			if let Node::Symbol(name) = target.drop_meta() {
-				let is_list = matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if !items.iter().any(is_pair));
+				let is_list = match value.drop_meta() {
+					Node::List(items, Bracket::Square, _) => !items.iter().any(is_pair),
+					Node::Empty => appended.contains(name),
+					// `xs = xs + [i]`
+					Node::Key(left, Op::Add, right) => matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)),
+					_ => false,
+				};
 				*assigned.entry(name.clone()).or_insert(true) &= is_list;
 			}
 		}
