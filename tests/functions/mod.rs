@@ -7,6 +7,7 @@ mod test_charged_getters;
 mod test_block_function;
 mod test_body_statement;
 mod test_c_style_definitions;
+mod test_character_results;
 mod test_broadcasting;
 mod test_broadcasting_declared;
 mod test_closures;
