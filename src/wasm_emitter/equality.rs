@@ -89,9 +89,9 @@ impl WasmGcEmitter {
 		func.instruction(&I::I64ExtendI32U);
 	}
 
-	/// Push i32 truth value of an if/while condition
+	/// Push i32 truth value of an if/while condition; a structured value or a cell's value is tested as a Node
 	pub(crate) fn emit_condition(&mut self, func: &mut Function, condition: &Node, emit_number: fn(&mut Self, &mut Function, &Node)) {
-		if self.is_structural_operand(condition) {
+		if self.is_structural_operand(condition) || self.is_held_cell_value(condition) {
 			self.emit_node_instructions(func, condition);
 			self.emit_call(func, IS_TRUTHY);
 		} else if self.get_type(condition).is_float() {

@@ -25,3 +25,10 @@ fn a_linear_array_checks_its_bounds_and_stays_in_its_task() {
 	fails_with("linear xs = int[3]; xs#0 = 1", "index out of range");
 	fails_with("linear xs = int[4]; g(a) := a#1; await go g(xs)", "a task cannot take the linear array xs");
 }
+
+/// a for loop over a linear array gives its last x, as over a list (card linear-for-value)
+#[test]
+fn a_for_loop_over_a_linear_array_gives_its_last_value() {
+	is!("linear xs = int[3]; xs#3 = 7; for x in xs { x }", int(7));
+	is!("linear xs = int[3]; xs#1 = 2; r = for x in xs { x * 10 }; r", int(0));
+}
