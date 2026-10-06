@@ -117,14 +117,16 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 29] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 31] = [
+	// `go { … }` before any pass reads into the block (go_blocks.rs)
+	crate::go_blocks::lower,
 	// `x | f` (pipes.rs) before any pass reads the or
 	crate::pipes::lower,
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
 	crate::foreign_modules::lower,
 	crate::phrase_calls::lower,
 	crate::welcome_forms::lower, crate::number_keys::lower,
-	crate::declarations::lower_tasks, crate::shared_arrays::lower, crate::variable_signals::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::result_word::lower, crate::picked_calls::lower, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
+	crate::units::lower_sleep_durations, crate::declarations::lower_tasks, crate::shared_arrays::lower, crate::variable_signals::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::result_word::lower, crate::picked_calls::lower, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
 	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::lower, crate::host::lower_aliases, crate::modules::resolve,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
 	crate::analyzer::lower_negated_calls,

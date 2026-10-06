@@ -77,7 +77,8 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		}
 		// a group that runs statements, `(y=1; y)`, or prints: in a block it runs, it is not an item
 		Node::List(list_items, Bracket::Round, _) if *bracket != Bracket::Square && list_items.iter().any(|inner| is_statement(inner, &Bracket::Round)) => true,
-		Node::List(list_items, _, _) if *bracket != Bracket::Square && matches!(list_items.as_slice(), [word, _] if is_word(word, PRINT_CALL)) => true,
+		// as `sleep(10)`, which gives nothing
+		Node::List(list_items, _, _) if *bracket != Bracket::Square && matches!(list_items.as_slice(), [word, _] if is_word(word, PRINT_CALL) || is_word(word, crate::host::SLEEP)) => true,
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
 			// `cell_set(c, v)` is the assignment of a nonlocal variable (lowering/nonlocal_cells.rs)
 			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return", crate::host::TASK_CHECK, crate::wasm_emitter::cells::CELL_SET].contains(&s.as_str()))

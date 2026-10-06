@@ -68,6 +68,11 @@ PASSED:
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
+  ✓ control::test_go_blocks::a_go_block_does_not_hold_up_the_program
+  ✓ control::test_go_blocks::a_go_block_prints_after_the_program_goes_on
+  ✓ control::test_go_blocks::a_go_block_sees_the_values_of_its_variables
+  ✓ control::test_go_blocks::a_task_of_no_arguments_gives_its_value
+  ✓ control::test_go_blocks::sleep_takes_a_duration
   ✓ control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
   ✓ control::test_if_empty_branch::an_if_with_an_empty_branch_yields_empty_or_the_number
@@ -2343,4 +2348,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2338 passed, 0 failed, 2338 total tested
+23 ignored, 2343 passed, 0 failed, 2343 total tested

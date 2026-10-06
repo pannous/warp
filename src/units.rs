@@ -237,6 +237,43 @@ pub fn answer(program: &Node) -> Option<Node> {
 	}
 }
 
+/// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`: a constant duration is its milliseconds, what the host word takes
+/// (async agent, 2026-10-06: quantities do not reach run time yet, notes/units_runtime.md)
+pub fn lower_sleep_durations(program: Node) -> Node {
+	fn lower(node: Node) -> Node {
+		match node {
+			Node::List(items, bracket, separator) if items.len() >= 2 && items[0].drop_meta().name() == crate::host::SLEEP => {
+				let duration = match &items[1..] {
+					[single] => single.clone(),
+					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
+				};
+				match milliseconds(&duration) {
+					Some(amount) => Node::List(vec![items[0].clone(), Node::int(amount)], Bracket::Round, Separator::None),
+					None => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
+				}
+			}
+			other => other.map_children(lower),
+		}
+	}
+	match defines_unit_name(&program) {
+		true => program,
+		false => lower(program),
+	}
+}
+
+/// A constant duration in whole milliseconds: `1000 ms`, `2 s`, `1 min`, `2 seconds` (a duration of the time module)
+fn milliseconds(node: &Node) -> Option<i64> {
+	if let Node::Data(data) = node.drop_meta() {
+		return duration_milliseconds(data.downcast_ref::<crate::time::Duration>()?, "ms").ok().flatten();
+	}
+	let Ok(Value::Quantity(quantity)) = evaluate(node) else { return None };
+	let [factor] = quantity.factors.as_slice() else { return None };
+	if factor.unit.dimension != Dimension::Time || factor.power != 1 {
+		return None;
+	}
+	whole(&quantity.amount.mul(&Rational::integer(factor.unit.factor)))
+}
+
 fn children(node: &Node) -> Vec<&Node> {
 	match node.drop_meta() {
 		Node::Key(left, _, right) => vec![left, right],
@@ -432,20 +469,29 @@ pub fn duration_in(duration: &crate::time::Duration, unit_word: &str) -> Option<
 	if target.dimension != Dimension::Time {
 		return Some(error(&format!("DimensionError: {duration} cannot be converted to {}", target.name)));
 	}
-	if duration.months != 0 {
-		return Some(error(&format!("DimensionError: {duration} has no fixed length in {}", target.name)));
-	}
-	let nanos = duration.nanos + duration.days as i128 * DAY_MILLISECONDS * NANOS_PER_MILLISECOND;
-	if nanos % NANOS_PER_MILLISECOND != 0 {
-		return Some(error(&format!("{duration} is no whole number of milliseconds")));
-	}
-	let milliseconds = i64::try_from(nanos / NANOS_PER_MILLISECOND).ok()?;
+	let milliseconds = match duration_milliseconds(duration, target.name) {
+		Ok(milliseconds) => milliseconds?,
+		Err(message) => return Some(error(&message)),
+	};
 	let quantity = Quantity::of(milliseconds, unit_named("ms").expect("a unit"));
 	Some(match convert(Value::Quantity(quantity), vec![Factor { unit: target, power: 1 }]) {
 		Ok(Value::Quantity(quantity)) => Node::data(quantity),
 		Err(Stop::Error(message)) => error(&message),
 		_ => return None,
 	})
+}
+
+/// A duration of the time module in whole milliseconds; an error for months (no fixed length in `target`) or a part of
+/// a millisecond, None beyond the 64-bit integers
+fn duration_milliseconds(duration: &crate::time::Duration, target: &str) -> Result<Option<i64>, String> {
+	if duration.months != 0 {
+		return Err(format!("DimensionError: {duration} has no fixed length in {target}"));
+	}
+	let nanos = duration.nanos + duration.days as i128 * DAY_MILLISECONDS * NANOS_PER_MILLISECOND;
+	if nanos % NANOS_PER_MILLISECOND != 0 {
+		return Err(format!("{duration} is no whole number of milliseconds"));
+	}
+	Ok(i64::try_from(nanos / NANOS_PER_MILLISECOND).ok())
 }
 
 /// The amount of a quantity in other units, as a factor: Π (unit/target)^power over its factors (1 km/h in m/s is 5/18)

@@ -72,3 +72,4 @@ mod test_run_time_block_cache;
 mod test_catch_binding;
 mod test_filter_loop_over_variable;
 mod test_all_with_condition;
+mod test_go_blocks;
