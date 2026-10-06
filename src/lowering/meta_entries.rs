@@ -2,8 +2,9 @@
 //! meta entry `{x:1 @unit:"cm"}`, the form that survives emission: the runtime reads it like a field (`p.@unit`), but
 //! never counts it nor compares it (`is_meta_entry` in wasm_emitter/equality.rs).
 //! Also hints `p.source` when p has both the field `source` and the meta entry `@source`: the field wins.
-//! A comment before a binding is its meta information (wiki/comments.md, card g-1tHQ): `x.@comment` is the comment,
-//! `x.meta` the map `{comment: "…"}`, unless x is an object with a field `meta`.
+//! Under `use comments` (P114: off by default) a comment before a binding is its meta information (wiki/comments.md):
+//! `x.@comment` is the comment, `x.meta` the map `{comment: "…"}`, unless x is an object with a field `meta`. Without
+//! the pragma such a read is an error naming it.
 
 use crate::node::{meta_entry, Bracket, Node, Separator, ATTRIBUTE_MARK};
 use crate::operators::Op;
@@ -68,11 +69,15 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 			let read = match (left.drop_meta(), right.drop_meta()) {
 				(Node::Symbol(name), Node::Symbol(field)) => binding(name).and_then(|binding| {
 					let comment = Node::Text(binding.comment.clone());
-					match field.as_str() {
-						_ if field.strip_prefix(ATTRIBUTE_MARK) == Some(COMMENT_KEY) => Some(comment),
-						META_WORD if !binding.meta_field => Some(Node::List(vec![Node::Key(Box::new(Node::Symbol(COMMENT_KEY.to_string())), Op::Colon, Box::new(comment))], Bracket::Curly, Separator::Space)),
-						_ => None,
-					}
+					let read = match field.as_str() {
+						_ if field.strip_prefix(ATTRIBUTE_MARK) == Some(COMMENT_KEY) => comment,
+						META_WORD if !binding.meta_field => Node::List(vec![Node::Key(Box::new(Node::Symbol(COMMENT_KEY.to_string())), Op::Colon, Box::new(comment))], Bracket::Curly, Separator::Space),
+						_ => return None,
+					};
+					Some(match crate::diagnostic::comments_as_meta() {
+						true => read,
+						false => crate::node::error(&format!("no field {field}: {name}'s comment becomes its meta information under `use comments`")),
+					})
 				}),
 				_ => None,
 			};
@@ -158,3 +163,4 @@ fn has_field(object: &Node, field: &str) -> bool {
 	};
 	fields.iter().any(|entry| meta_entry(entry).is_none() && matches!(entry.drop_meta(), Node::Key(key, _, _) if key.name() == field))
 }
+
