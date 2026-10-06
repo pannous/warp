@@ -36,6 +36,8 @@ const CHECK_PREFIX: &str = "signal·check·";
 /// `signal_listening_0`: whether the listener was declared yet
 const LISTENING_PREFIX: &str = "signal_listening_";
 const GLOBAL_WORD: &str = "global";
+/// `p.age` as a watched or written name
+const FIELD_SEPARATOR: char = '.';
 
 #[derive(Clone)]
 enum Trigger {
@@ -58,8 +60,11 @@ struct Listener {
 }
 
 impl Listener {
-	fn watches(&self, name: &str) -> bool {
-		self.watched().is_some_and(|watched| watched.contains(name))
+	/// A write of `p.age` concerns listeners of p and of p.age; a write of p (or of `p#1`) those of p and of its fields
+	fn watches(&self, written: &str) -> bool {
+		let root = written.split(FIELD_SEPARATOR).next().unwrap_or(written);
+		let field_of_written = |watched: &str| watched.strip_prefix(written).is_some_and(|rest| rest.starts_with(FIELD_SEPARATOR));
+		self.watched().is_some_and(|watched| watched.iter().any(|name| name == written || name == root || field_of_written(name)))
 	}
 
 	fn watched(&self) -> Option<&HashSet<String>> {
@@ -287,14 +292,15 @@ impl Signals {
 		sources
 	}
 
-	/// `on set x {body}`: the body after every write of x, `value` in it is x; of a `:=` value, after each change
+	/// `on set x {body}`: the body after every write of x, `value` in it is x; of a `:=` value, after each change.
+	/// `on set p.age {body}`: after each write of the field or of p
 	fn set_listener(&mut self, variable: Node, body: Node) -> Option<Listener> {
-		let Node::Symbol(name) = variable.drop_meta() else { return None };
-		if self.derived.contains_key(name) {
+		let name = written_path(&variable)?;
+		if self.derived.contains_key(&name) {
 			return self.change_listener(variable, body); // a `:=` value is never written: its sets are its changes
 		}
-		let body = self.lower(with_value(&body, &Node::Symbol(name.clone())), &[]);
-		Some(Listener { trigger: Trigger::Write(HashSet::from([name.clone()])), condition: None, body, fired: None, start: None })
+		let body = self.lower(with_value(&body, variable.drop_meta()), &[]);
+		Some(Listener { trigger: Trigger::Write(HashSet::from([name])), condition: None, body, fired: None, start: None })
 	}
 
 	/// `on change x {body}`: the body after every write that changed x (a variable or a `:=` value), `value` in it is x
@@ -561,7 +567,15 @@ fn checks(listeners: &[Listener], written: &[String]) -> Vec<Node> {
 /// The variable `x = …`, `x += …`, `x++`, `x--` writes; a field or item write `p.age = 2`, `xs#1 = 9` writes p, xs
 fn written_variable(target: &Node, op: Op) -> Option<String> {
 	let writes = op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec);
-	writes.then(|| root_variable(target)).flatten()
+	writes.then(|| written_path(target)).flatten()
+}
+
+/// `x`, `p.age`, `p.home.city`; an item `xs#1` is a write of xs
+fn written_path(target: &Node) -> Option<String> {
+	match target.drop_meta() {
+		Node::Key(base, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => Some(format!("{}{FIELD_SEPARATOR}{}", written_path(base)?, field.drop_meta().name())),
+		_ => root_variable(target),
+	}
 }
 
 pub(crate) fn root_variable(target: &Node) -> Option<String> {
