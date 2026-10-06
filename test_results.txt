@@ -266,6 +266,11 @@ PASSED:
   ✓ control::test_threads::tasks_run_at_the_same_time
   ✓ control::test_threads::texts_floats_characters_and_lists_cross_to_a_task
   ✓ control::test_threads::try_catches_the_failure_of_a_task
+  ✓ control::test_time_of_day::a_one_shot_time_starts_and_main_runs_on
+  ✓ control::test_time_of_day::a_time_of_day_must_be_one
+  ✓ control::test_time_of_day::am_and_pm_name_the_half_of_the_day
+  ✓ control::test_time_of_day::the_delay_until_a_weekday_skips_the_other_days
+  ✓ control::test_time_of_day::weekdays_name_the_days_a_timer_runs
   ✓ control::test_times_count_once::a_trailing_if_guards_the_whole_assignment
   ✓ control::test_times_count_once::times_evaluates_its_count_once
   ✓ control::test_times_count_once::trailing_while_stays_a_plain_while_with_a_hint
@@ -2337,8 +2342,8 @@ PASSED:
   ✓ welcoming::test_c_style::test_c_style_definition
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
-  ✓ welcoming::test_constant_shadowing::an_assigned_constant_word_is_a_variable
-  ✓ welcoming::test_constant_shadowing::assigning_a_constant_word_says_it_shadows_the_constant
+  ✓ welcoming::test_constant_shadowing::a_constant_word_still_reads_and_names_fields
+  ✓ welcoming::test_constant_shadowing::an_assigned_constant_word_is_an_error
   ✓ welcoming::test_error_positions::a_rebuilt_node_reports_the_position_of_its_parts
   ✓ welcoming::test_error_positions::an_error_found_while_emitting_names_its_statement
   ✓ welcoming::test_error_positions::an_unclosed_group_names_where_it_opened
@@ -2641,4 +2646,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2636 passed, 0 failed, 2636 total tested
+20 ignored, 2641 passed, 0 failed, 2641 total tested
