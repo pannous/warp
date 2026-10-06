@@ -311,9 +311,10 @@ impl Loader<'_> {
 		}
 	}
 
-	/// A standard module: its definitions wait aside until the program is resolved
+	/// A standard module: its definitions wait aside until the program is resolved; its source shows the program
+	/// no style hints
 	fn use_std_module(&mut self, name: &str, source: &str) -> Result<Vec<Node>, Node> {
-		let definitions = self.load_source(Import::Use, std_path(name), source)?;
+		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(name), source))?;
 		self.std_definitions.extend(definitions);
 		Ok(vec![])
 	}
@@ -462,10 +463,12 @@ impl Loader<'_> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 3] = [
+const STD_MODULES: [(&str, &str); 5] = [
 	("list", include_str!("../std/list.wasp")),
 	("math", include_str!("../std/math.wasp")),
 	("text", include_str!("../std/text.wasp")),
+	("random", include_str!("../std/random.wasp")),
+	("map", include_str!("../std/map.wasp")),
 ];
 const STD_FOLDER: &str = "std";
 
