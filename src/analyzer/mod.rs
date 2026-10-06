@@ -37,7 +37,7 @@ const BYTE_SIZE: &str = "byte_size";
 /// The counting properties that are also functions: `number x` is the type conversion, not a count
 const TYPE_WORDS_AMONG_COUNTING: [&str; 1] = ["number"];
 
-fn is_counting_property(word: &str) -> bool {
+pub(crate) fn is_counting_property(word: &str) -> bool {
 	COUNTING_PROPERTIES.contains(&word)
 }
 
