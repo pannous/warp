@@ -18,6 +18,9 @@ const FIELD_MARKS: [char; 2] = ['?', '!'];
 /// The trait keyword and the name of the implicit trait of a method several classes define: `has·area`
 const TRAIT_KEYWORD: &str = "trait";
 const IMPLICIT_TRAIT_PREFIX: &str = "has·";
+/// `super.speak()` in a method of dog calls the speak dog would inherit, kept for dog as the method `speak·super·dog`
+const SUPER: &str = "super";
+const SUPER_INFIX: &str = "·super·";
 
 pub fn lower(node: Node) -> Node {
 	let (node, likenesses) = match inherit(node) {
@@ -87,9 +90,55 @@ fn inherited_items(class: &str, classes: &[(String, Option<String>, Vec<Node>)],
 	visiting.push(class.to_string());
 	let inherited = inherited_items(parent, classes, visiting)?;
 	visiting.pop();
+	let mut called = vec![];
+	let own: Vec<Node> = own.iter().cloned().map(|item| super_calls(item, class, &mut called)).collect();
+	let mut parent_versions = vec![];
+	for method in called {
+		let Some(version) = inherited.iter().find(|item| method_parts(item).is_some_and(|(name, _, _)| name == method)) else {
+			return Err(crate::node::error(&format!("{class} calls {SUPER}.{method}, but {parent} has no method {method}")));
+		};
+		parent_versions.push(renamed(version, &format!("{method}{SUPER_INFIX}{class}")));
+	}
 	let own_names: Vec<String> = own.iter().filter_map(item_name).collect();
 	let kept = inherited.into_iter().filter(|item| item_name(item).is_none_or(|name| !own_names.contains(&name)));
-	Ok(kept.chain(own.iter().cloned()).collect())
+	Ok(kept.chain(parent_versions).chain(own).collect())
+}
+
+/// `super.speak(…)` in a method of class dog as `self.speak·super·dog(…)`; the names of the methods called go to `called`
+fn super_calls(node: Node, class: &str, called: &mut Vec<String>) -> Node {
+	let Node::Key(object, Op::Dot, member) = node else { return node.map_children(|child| super_calls(child, class, called)) };
+	if object.drop_meta().name() != SUPER || !matches!(object.drop_meta(), Node::Symbol(_)) {
+		return Node::Key(Box::new(super_calls(*object, class, called)), Op::Dot, Box::new(super_calls(*member, class, called)));
+	}
+	let member = match member.drop_meta().clone() {
+		Node::Symbol(name) => parent_version(name, class, called),
+		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+			let arguments: Vec<Node> = items[1..].iter().cloned().map(|argument| super_calls(argument, class, called)).collect();
+			let name = parent_version(items[0].drop_meta().name(), class, called);
+			Node::List([vec![name], arguments].concat(), Bracket::Round, separator)
+		}
+		other => other,
+	};
+	Node::Key(Box::new(Node::Symbol(RECEIVER.to_string())), Op::Dot, Box::new(member))
+}
+
+/// `speak·super·dog`, the name of the speak dog inherits; speak goes to `called`
+fn parent_version(method: String, class: &str, called: &mut Vec<String>) -> Node {
+	let version = format!("{method}{SUPER_INFIX}{class}");
+	if !called.contains(&method) {
+		called.push(method);
+	}
+	Node::Symbol(version)
+}
+
+/// A method definition under another name
+fn renamed(method: &Node, name: &str) -> Node {
+	let Node::Key(head, Op::Define, body) = method.drop_meta() else { return method.clone() };
+	let head = match head.drop_meta() {
+		Node::List(parts, bracket, separator) => Node::List([vec![Node::Symbol(name.to_string())], parts[1..].to_vec()].concat(), bracket.clone(), separator.clone()),
+		_ => Node::Symbol(name.to_string()),
+	};
+	Node::Key(Box::new(head), Op::Define, body.clone())
 }
 
 /// The name a class item defines: a field or a method
@@ -199,9 +248,11 @@ fn split_class(node: &Node, changing: &mut Vec<String>) -> Option<(Node, Vec<Nod
 		return None;
 	}
 	let field_names: Vec<String> = fields.iter().filter_map(field_name).collect();
+	let siblings: Vec<(String, bool)> = methods.iter().filter_map(method_parts).map(|(name, parameters, _)| (name, parameters.is_empty())).collect();
 	let functions = methods.iter().map(|method| {
 		let (method_name, parameters, method_body) = method_parts(method).expect("partitioned");
-		let (function, changes) = function(&class, &field_names, &method_name, parameters, method_body);
+		let members = Members { fields: &field_names, methods: &siblings };
+		let (function, changes) = function(&class, &members, &method_name, parameters, method_body);
 		if changes {
 			changing.push(method_name);
 		}
@@ -233,14 +284,24 @@ fn field_name(item: &Node) -> Option<String> {
 	}
 }
 
-/// `method(self:class, parameters…) := body`, the fields in the body read from self, and whether it changes a field of
-/// self: then it gives the changed object, `(body; self)`
-fn function(class: &str, fields: &[String], method: &str, parameters: Vec<Node>, body: Node) -> (Node, bool) {
+/// The fields of a class and its methods, each with whether it takes no parameters (a getter)
+struct Members<'a> {
+	fields: &'a [String],
+	methods: &'a [(String, bool)],
+}
+
+/// `method(self:class, parameters…) := body`, the fields and methods in the body read from self, and whether it changes
+/// a field of self: then it gives the changed object, `(body; self)`
+fn function(class: &str, members: &Members, method: &str, parameters: Vec<Node>, body: Node) -> (Node, bool) {
 	let parameter_names: Vec<String> = parameters.iter().map(|parameter| match parameter.drop_meta() {
 		Node::Key(name, Op::Colon, _) => name.drop_meta().name(),
 		other => other.name(),
 	}).collect();
-	let readable: Vec<&String> = fields.iter().filter(|field| !parameter_names.contains(field)).collect();
+	let unshadowed = |name: &String| !parameter_names.contains(name);
+	let fields: Vec<&String> = members.fields.iter().filter(|field| unshadowed(field)).collect();
+	let methods: Vec<&String> = members.methods.iter().map(|(name, _)| name).filter(|name| unshadowed(name)).collect();
+	let getters: Vec<&String> = members.methods.iter().filter(|(_, getter)| *getter).map(|(name, _)| name).filter(|name| unshadowed(name)).collect();
+	let readable = Readable { fields: [fields, getters].concat(), methods };
 	let body = receiver_reads(body, &readable);
 	let changes = changes_receiver(&body);
 	let body = match changes {
@@ -252,13 +313,25 @@ fn function(class: &str, fields: &[String], method: &str, parameters: Vec<Node>,
 	(Node::Key(Box::new(head), Op::Define, Box::new(body)), changes)
 }
 
-/// The body with each field name read from self, `this` as self; the member name right of a dot stays as it is
-fn receiver_reads(node: Node, fields: &[&String]) -> Node {
+/// The names a method body reads from its receiver: fields and getters (`area`), and methods it calls (`area()`)
+struct Readable<'a> {
+	fields: Vec<&'a String>,
+	methods: Vec<&'a String>,
+}
+
+/// The body with each field name and getter read from self, each call of a method of the class a call on self (as in
+/// Java), `this` as self; the member name right of a dot stays as it is
+fn receiver_reads(node: Node, readable: &Readable) -> Node {
+	let on_receiver = |member: Node| Node::Key(Box::new(Node::Symbol(RECEIVER.to_string())), Op::Dot, Box::new(member));
 	match node {
-		Node::Symbol(name) if fields.contains(&&name) => Node::Key(Box::new(Node::Symbol(RECEIVER.to_string())), Op::Dot, Box::new(Node::Symbol(name))),
+		Node::Symbol(name) if readable.fields.contains(&&name) => on_receiver(Node::Symbol(name)),
 		Node::Symbol(name) if RECEIVER_ALIASES.contains(&name.as_str()) => Node::Symbol(RECEIVER.to_string()),
-		Node::Key(object, Op::Dot, member) => Node::Key(Box::new(receiver_reads(*object, fields)), Op::Dot, member),
-		other => other.map_children(|child| receiver_reads(child, fields)),
+		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if readable.methods.contains(&name)) => {
+			let arguments = items[1..].iter().cloned().map(|argument| receiver_reads(argument, readable));
+			on_receiver(Node::List(std::iter::once(items[0].clone()).chain(arguments).collect(), Bracket::Round, separator))
+		}
+		Node::Key(object, Op::Dot, member) => Node::Key(Box::new(receiver_reads(*object, readable)), Op::Dot, member),
+		other => other.map_children(|child| receiver_reads(child, readable)),
 	}
 }
 
