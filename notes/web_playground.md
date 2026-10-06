@@ -113,8 +113,13 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 - C headers in the browser tests: WARP_INCLUDE=/include, served by name as /__include__/<header> from INCLUDE_DIRS.
 
 ## Modules and packages in the browser (2026-10-04)
-The compiler reads module files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `fetch_text`,
-cached per address), a path of the served repository or a URL. A registered package (packages.wasp) is read from its
+The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
+per address; `read_text`, `file_exists` on top, the file system outside the page), a path of the served repository or a
+URL: module sources, C modules (`import tests/fixtures/wasm/zlib`: zlib.wasm and the zlib.h beside it), C headers. The
+page's own files go by `page:` (web.rs PAGE_PREFIX, host.js resolves it against the worker's URL, since the page is
+web/playground/ locally but the site root when deployed): `use c` reads page:lib/libc.h (ffi_parser PAGE_INCLUDE), no
+WARP_INCLUDE (2026-10-06, card use-import; before, the page had no headers: `strlen("hello")` gave 0). The deploy
+copies the tour's C module to _site/tests/fixtures/wasm/ (pages.yml), tour example "C libraries". A registered package (packages.wasp) is read from its
 GitHub raw files at the pinned tag (`raw.githubusercontent.com/<owner>/<repo>/v<version>/…`, served to any page), so
 `use uniscript` works; a program's `read(path)` of a URL (the package's data/entities.idx) fetches its bytes as they
 are (host.js `readBytes`, no newline added, like the native read). Browser suite: 1452 passed, 15 failed (inherent);

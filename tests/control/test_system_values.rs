@@ -55,3 +55,20 @@ fn the_battery_is_a_percent_or_a_loud_error() {
 		other => panic!("battery: {other:?}"),
 	}
 }
+
+// `whenever not online {…}` and `not dark mode` negate the system value (cards whenever-online, whenever-dark): the
+// word `not` after `whenever` was read as an infix operator, `whenever not online` fired at once, `not dark mode` split
+// the phrase
+#[test]
+fn a_negated_system_value() {
+	assert!(lowered("whenever not dark mode { print \"light\" }").contains("not (system_value dark mode)"));
+	assert!(lowered("whenever not online { print \"offline\" }").contains("on·shared"));
+	is!("x = 1; whenever not x { x = 7 }; x = 0; x", 7);
+	is!("n = 1; whenever not online { n = 2 }; n", 1);
+}
+
+#[test]
+#[cfg(all(feature = "native", any(target_os = "macos", target_os = "linux")))]
+fn not_dark_mode_is_the_opposite_reading() {
+	is!("x = not dark mode; y = dark mode; x != y", true);
+}

@@ -318,45 +318,64 @@ mod page {
 		pub fn now_ms() -> f64;
 		/// A panic message of the compiler, shown instead of a bare `unreachable`
 		pub fn panicked(message: *const u8, length: usize);
-		/// Fetch a text (a path of the served repository or a URL) and keep it; its length in bytes, -1 when missing
+		/// Fetch a file (a path of the served repository, a PAGE_PREFIX file of the page or a URL) and keep its bytes; their
+		/// count, -1 when missing
 		pub fn fetch(url: *const u8, length: usize) -> isize;
-		/// Copy the kept fetched text to `into`
+		/// Copy the kept fetched bytes to `into`
 		pub fn take_fetched(into: *mut u8);
 	}
 }
 
-/// Without the page (a build without `native` outside wasm): the file itself
-#[cfg(not(any(target_arch = "wasm32", feature = "native")))]
-pub fn fetch_text(address: &str) -> Option<String> {
-	std::fs::read_to_string(address).ok()
+/// The text of a file (module sources, packages, C headers): see read_bytes; `None` when missing
+pub fn read_text(path: &str) -> Option<String> {
+	read_bytes(path).map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
 }
 
-/// A text the page fetches for the compiler (module files, packages), remembered per address: `None` when missing
+/// Is there a file at `path` (see read_bytes)
+pub fn file_exists(path: &str) -> bool {
+	#[cfg(not(all(target_arch = "wasm32", not(feature = "native"))))]
+	return std::path::Path::new(path).is_file();
+	#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+	return read_bytes(path).is_some();
+}
+
+/// Outside the page: the file itself
+#[cfg(not(all(target_arch = "wasm32", not(feature = "native"))))]
+pub fn read_bytes(path: &str) -> Option<Vec<u8>> {
+	std::fs::read(path).ok()
+}
+
+/// A file the page fetches for the compiler, remembered per address: a path of the served repository, a file of the page
+/// itself (PAGE_PREFIX `page:lib/libc.h`, resolved by web/playground/host.js against the page) or a URL
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]
-pub fn fetch_text(address: &str) -> Option<String> {
+pub fn read_bytes(address: &str) -> Option<Vec<u8>> {
 	// the browser tests (wasm32-wasip1) have a file system, the served repository plus the files a test writes
 	// (web/playground/wasi.js): read files there first, unremembered, since a test may write them later
 	#[cfg(target_os = "wasi")]
-	if !address.contains("://") {
-		if let Ok(text) = std::fs::read_to_string(address) {
-			return Some(text);
+	if !address.contains(':') {
+		if let Ok(bytes) = std::fs::read(address) {
+			return Some(bytes);
 		}
 	}
 	thread_local! {
-		static FETCHED: RefCell<std::collections::HashMap<String, Option<String>>> = RefCell::new(std::collections::HashMap::new());
+		static FETCHED: RefCell<std::collections::HashMap<String, Option<Vec<u8>>>> = RefCell::new(std::collections::HashMap::new());
 	}
 	if let Some(known) = FETCHED.with(|fetched| fetched.borrow().get(address).cloned()) {
 		return known;
 	}
 	let length = unsafe { page::fetch(address.as_ptr(), address.len()) };
-	let text = (length >= 0).then(|| {
+	let bytes = (length >= 0).then(|| {
 		let mut bytes = vec![0u8; length as usize];
 		unsafe { page::take_fetched(bytes.as_mut_ptr()) };
-		String::from_utf8_lossy(&bytes).into_owned()
+		bytes
 	});
-	FETCHED.with(|fetched| fetched.borrow_mut().insert(address.to_string(), text.clone()));
-	text
+	FETCHED.with(|fetched| fetched.borrow_mut().insert(address.to_string(), bytes.clone()));
+	bytes
 }
+
+/// Addresses of the page's own files (web/playground/host.js PAGE_PREFIX): `lib/libc.h` sits beside the page, which is
+/// the site root when deployed but web/playground/ of the served repository locally
+pub const PAGE_PREFIX: &str = "page:";
 
 /// Run a compiled module in the embedding host and read its outcome
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]

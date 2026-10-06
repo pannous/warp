@@ -99,12 +99,14 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 			let (mut joined, mut phrases) = (vec![], 0);
 			let mut items = items.into_iter().peekable();
 			while let Some(item) = items.next() {
-				let phrase = items.peek().map(|next| format!("{} {}", word(&item), word(next))).and_then(|phrase| marked(&phrase));
+				// `not dark mode` and `x = not dark mode` arrive as `(not dark) mode`, `(x = not dark) mode`: the phrase's
+				// first word is the rightmost of the item before
+				let phrase = items.peek().and_then(|next| with_phrase(&item, &|first| marked(&format!("{} {}", word(first), word(next)))));
 				match phrase {
 					Some(phrase) => {
 						items.next();
 						phrases += 1;
-						joined.push(phrase);
+						joined.push(mark(phrase, names));
 					}
 					None => joined.push(mark(item, names)),
 				}
@@ -115,6 +117,15 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 			}
 		}
 		other => other.map_children(|child| mark(child, names)),
+	}
+}
+
+/// The item with its rightmost word (along the right operands of keys) replaced by the phrase it starts, if it starts one
+fn with_phrase(item: &Node, phrase: &dyn Fn(&Node) -> Option<Node>) -> Option<Node> {
+	match item.drop_meta() {
+		Node::Key(left, op, right) if !matches!(op, Op::Colon | Op::Dot) => with_phrase(right, phrase).map(|right| Node::Key(left.clone(), *op, Box::new(right))),
+		Node::Symbol(_) => phrase(item),
+		_ => None,
 	}
 }
 
