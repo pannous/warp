@@ -53,7 +53,7 @@ function evaluate(code, acknowledged) {
 const ready = loadCompiler().then(() => post({ type: "ready" }), failure => post({ type: "failed", message: failure.message }));
 
 // `use python` runs in Pyodide (host.js foreign_call): loaded on first use, since a host call cannot wait for it
-const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
+const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.29.5/full/";
 const USES_PYTHON = /\buse\s+python\b/;
 let python; // the loading or loaded Pyodide with the bridge (web/playground/foreign_python.py)
 function loadPython() {
