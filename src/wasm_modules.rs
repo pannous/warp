@@ -102,7 +102,7 @@ pub fn is_module_path(name: &str) -> bool {
 
 /// The binary of a module file; a `.wat` file is its text form
 pub fn module_bytes(path: &str) -> Result<Vec<u8>, String> {
-	let bytes = std::fs::read(path).map_err(|failure| format!("cannot read the module {path}: {failure}"))?;
+	let bytes = crate::web::read_bytes(path).ok_or_else(|| format!("cannot read the module {path}"))?;
 	if !path.ends_with(".wat") {
 		return Ok(bytes);
 	}
@@ -263,7 +263,7 @@ pub fn c_calls<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
 fn with_header_types(path: &str, exports: &mut HashMap<String, Export>) {
 	use crate::ffi::{parse_header_file, pointer_kind, CPointer};
 	let header = Path::new(path).with_extension("h");
-	let Some(header) = header.to_str().filter(|_| header.is_file()) else { return };
+	let Some(header) = header.to_str().filter(|header| crate::web::file_exists(header)) else { return };
 	for declared in parse_header_file(header, path) {
 		let Some(export) = exports.get_mut(&declared.name).filter(|export| export.role == Role::Function) else { continue };
 		let c_parameters = c_parameters(&declared.param_types);

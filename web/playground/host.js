@@ -12,6 +12,7 @@ const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 /// where host.read and the test runner's file system find files: the repository root the static server serves
 const FILE_ROOT = new URL("../../", self.location.href).href;
+const PAGE_PREFIX = "page:"; // src/web.rs PAGE_PREFIX: a file of the page itself (lib/libc.h), not of the served repository
 /// C names of libm functions (ffi "m") that Math spells differently
 const LIBC_URL = new URL("lib/libc.wasm", self.location.href).href; // libc for `use c` (lib/build_libc.sh, P147)
 const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a % b, ceil: Math.ceil, floor: Math.floor };
@@ -58,10 +59,17 @@ function readFile(path) {
 	}
 }
 
-// the bytes of a file of the served repository or of a URL, failing in the words of the native read
+// the URL of a file of the served repository, of the page itself (PAGE_PREFIX) or a URL
+function fileUrl(path) {
+	if (/^https?:/.test(path)) return path;
+	if (path.startsWith(PAGE_PREFIX)) return new URL(path.slice(PAGE_PREFIX.length), self.location.href).href;
+	return FILE_ROOT + path.replace(/^\.\//, "");
+}
+
+// the bytes of a file of the served repository, of the page or of a URL, failing in the words of the native read
 function readBytes(path) {
 	try {
-		return getSync(/^https?:/.test(path) ? path : FILE_ROOT + path, 0, true);
+		return getSync(fileUrl(path), 0, true);
 	} catch (failure) {
 		throw failure.message === HTTP_NOT_FOUND ? new Error(FILE_NOT_FOUND) : failure;
 	}
@@ -201,6 +209,12 @@ function programImports(holder, hooks) {
 			task_await: id => {
 				const task = takenTask(holder.run, hooks, id);
 				if (task.failure) throw new Error(task.failure);
+				// a task whose function returns a Node (`go { n + 1 }` of a Node parameter n) still gives its number here
+				if (typeof task.value === "object" && task.value !== null) {
+					const number = task.value.data?.int;
+					if (number === undefined) throw new Error(`task ${taskName(task.name ?? "")}: its result is no whole number`);
+					return BigInt(number);
+				}
 				return task.value;
 			},
 			task_await_value: id => buildValue(program(), taskTree(takenTask(holder.run, hooks, id).value)),
@@ -980,11 +994,11 @@ function warpHost(memory, hooks) {
 		take: into => new Uint8Array(memory().buffer, into, pendingOutcome.length).set(pendingOutcome),
 		now_ms: () => Date.now(),
 		panicked: (pointer, length) => hooks.panicked(utf8Decoder.decode(new Uint8Array(memory().buffer, pointer, length))),
-		// a module file or package source for the compiler: a path of the served repository, or a URL
+		// a file for the compiler (module, package source, C header): a path of the served repository, of the page, or a URL
 		fetch: (pointer, length) => {
 			const address = utf8Decoder.decode(new Uint8Array(memory().buffer, pointer, length));
 			try {
-				pendingFetched = utf8.encode(/^https?:/.test(address) ? getSync(address) : readFile(address.replace(/^\.\//, "")));
+				pendingFetched = readBytes(address);
 				return pendingFetched.length;
 			} catch {
 				return -1;

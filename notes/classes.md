@@ -21,7 +21,8 @@
    - Pass: lowering/class_methods.rs, early in SOURCE_PASSES.
 2. **Mutating methods** (P116): `inc() := n += 1`; `c.inc()` updates the variable c, like `xs.add(v)` does (objects
    are values, wiki/class.md).
-3. **Constructors and required fields** (wiki/constructor.md): `value{…}` / `value(name){…}` blocks, `name!` required.
+3. **Constructors and required fields** (wiki/constructor.md): `init{…}` / `init(name){…}` blocks (P162; `value` was the
+   first name), `name!` required.
 4. **Traits in the class body.** `class dot{x:int; compare(other) := x - other.x} is Comparable`: methods already
    are the free functions traits look for. Mostly free once step 1 lands.
 5. **Inheritance** (P117): `class b extends a` copies a's fields and methods into b, b's own definitions override.
@@ -136,11 +137,11 @@ declarations.rs keyword_definition (warp-dd's) before splitting methods from fie
 method (dropped when the method changes its object and so gives it back); the parser no longer reads a keyword
 method's body as field types (wasp_parser transform_fields_to_types: `k` of `side * k` was `type k`).
 
-Constructor block (classes-7, wiki/constructor.md): `value{ id = random() }` or `value {…}` in a class body is the
-function `P·value(self:P)` (class_methods::constructor_name), its field names read and set on self, giving self; a
+Constructor block (classes-7, wiki/constructor.md): `init{ id = random() }` or `init {…}` in a class body is the
+function `P·init(self:P)` (class_methods::constructor_name), its field names read and set on self, giving self; a
 field only it sets is an optional field (ø until it runs). type_constructor passes every construction `P(…)`, `P{…}`
 of a class that has one through it, after the given fields are matched and defaults filled.
-`value(name){…}` (classes-10) is `P·value(self:P, name)`: a call `P(a)` with as many arguments as it has parameters
+`init(name){…}` (classes-10) is `P·init(self:P, name)`: a call `P(a)` with as many arguments as it has parameters
 passes them to it, on an instance of the declared defaults (ø for the other fields), instead of matching them to
 fields; a field it sets that is no parameter becomes a field.
 
@@ -155,7 +156,7 @@ parameter is `any` (a Node field), a method parameter of one is untyped; `Box<in
 construct a Box (the type arguments of a declared class are read past, not checked yet).
 
 Methods named like a type word (classes-13, P142: class methods are always allowed): `double() := x*2` in a class
-body is the method `double·method` (class_methods renamed_type_word_methods), its calls `c.double()`, `c.double` and
+body is the method `method·double` (class_methods renamed_type_word_methods), its calls `c.double()`, `c.double` and
 `double()` in the class body renamed too; `double(3)` and `3.double()` stay the conversion.
 
 Properties (classes-14, wiki/property.md): `get age() {…}` is the getter `age := …` (read `p.age` like a field),
@@ -170,7 +171,7 @@ first), leaving out those the class defines itself; the methods read the class's
 Methods that change their object and give a value (classes-16, card obj-list): `pop() := items.pop()` returns the
 pair `[pop·value, self]`; `s.pop()` of a variable is `(pop·result = pop(s); s = pop·result#2; pop·result#1)`
 (class_methods Change::GivingValue; a changing method ends in a value unless its last statement assigns or appends).
-A method named like a list mutation (pop, push, add, remove, insert, append) is renamed `pop·method` like a type-word
+A method named like a list mutation (pop, push, add, remove, insert, append) is renamed `method·pop` like a type-word
 method, but called so only on what holds an instance (a variable assigned one, `p:Stack`, self) or bare in its class
 body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (declaration_lowering
 popped_list takes any place, as add/insert did).
@@ -189,6 +190,11 @@ on the node itself reads the tagged object's fields (list_ops tagged_field, betw
 `@name`), so `a:{b:1}.b` is 1 and `a:{b:1}.a` still `b:1`. Card class-ticket (a static in value{}) worked already
 after classes-10; its test is in test_tagged_objects.rs.
 
+Spaced children (card spaced-child): inside a data literal (the block of `a{…}` or `Person {…}`, not a declared type's
+constructor) a spaced `c { d:3 }` is the child node of the glued `c{ d:3 }`, whatever its block holds: data has no
+call with a block (parser flag in_data_literal, atoms.rs). In code `run { … }` stays a call with a block.
+`x = a{ b:2 c { d:3 } }; x.c.d` is 3 (tests/parser/test_spaced_children.rs).
+
 ## Ported forms (classes-19, tests/types/test_class_forms_ported.rs)
 The same class as other languages write it (parser atoms.rs, class_methods.rs class_items):
 - Kotlin: primary constructor `class Point(val x: Int, var y: Int = 0) {…}` (its parameters are the fields, the
@@ -198,6 +204,45 @@ The same class as other languages write it (parser atoms.rs, class_methods.rs cl
 - Python: `class Point:` with an indented body, `class Dog(Animal):` (parents in parentheses, `object` none),
   `def __init__(self, x, y):` the constructor, explicit `self` first parameters dropped, `@dataclass` fields.
 - Swift: `struct` with `var count = 0` fields and `mutating func` (MEMBER_MODIFIERS dropped), `init(…)`.
-Constructors of all of them are `value(params){…}` (classes-10). Open: C# `record Point(int X, int Y);` and
-`{ get; init; }` properties, Rust `struct` + `impl`, Kotlin `copy(y = 5)`, a method named `norm` (the parser reads it
-as the operator ‖).
+- C# (classes-20): positional `record Point(int X, int Y);` (`int X` the field X:int), `new Point(1, 2)`.
+- Rust (classes-20): `impl Point { fn sum(&self) -> i32 {…} }` adds its functions to the class Point (class_methods
+  with_impls; `impl Trait for Point` too), `&self` is the receiver.
+- Kotlin `p.copy(y = 5)` is `field_with(p, "y", 5)` (class_methods copies).
+Constructors of all of them are `init(params){…}` (classes-10, P162). A method named like a library word (`sum`, `count`)
+is renamed `method·sum` and called so only on instances, like list-mutation names (classes-16). - classes-21: Java's typed fields `int x;`, a constructor named like the class `Point(int x, int y) {…}`, C-style
+  methods `int sum() {…}`, `Point p = new Point(3, 4);` (`p:Point = …`, the type kept for D10 dispatch);
+  TypeScript `twice(): number {…}`; C# auto-properties `int X { get; set; }` and the object initializer
+  `new Point { X = 3 }`; Python class attributes (a field with a value read as `Counter.count` is static).
+  Every class body is normalized to its members (with_members), not only those with methods. The declared-type
+  pre-scan takes the name right after `class`/`record`/`type` (`record = find(…)` declares nothing).
+Open: Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`), Go (`type P struct {…}`, `func (p P) M()`),
+operators (`__add__`, `operator +`), a method named `norm` (the parser reads it as the operator ‖).
+
+Smart scopes (classes-22, wiki/inventions.md, declarations.rs smart_scope): `Number { Square = it*it }` defines
+`Square(self:Number) := self*self` for a builtin type word, `it` the value the method is called on: `3.Square`.
+
+Operators on instances (classes-23, wiki/operator.md "a & b will try to invoke et, and, add"): `a + b` of an
+instance whose class defines `plus` (or `add`, Python `__add__`, Kotlin `operator fun plus`) is `a.plus(b)`; also
+`-` minus, `*` times, `/` divide, `%` mod, `<` less, `>` more, `==` equals (class_methods OPERATOR_METHODS). Known
+instances only (constructions, annotated or constructed variables, loop variables, chains `a + b + c`); an unknown
+operand keeps the built-in operator (card class-method: dispatch at run time). A method named by its glyph
+`+(o) := …` and C++/C#'s `operator +(o) := …` (classes-25: the parser's try_parse_operator_method_head reads a glyph
+before `(…) :=` as the head, as_member renames it to the english name).
+Foreign spellings are aliases (classes-24, alias rule in notes/agents/common.md): they work and give a got-it note
+with an "I meant: <wasp word>" fix, `diagnostic::note_alias(written, wasp_word)` (educate_once, topic
+`alias-<foreign word>`): `__add__`/`add` → `plus` (every non-first name in
+OPERATOR_METHODS), `data class`/`open class`… → `class`, `mutating func` → `func`, `val x`/`var count` → the field
+(`async` stays silent: it may mean something in wasp), `new Point(1, 2)` → `Point(1, 2)` ("new is superfluous").
+Tests: tests/types/test_class_aliases.rs.
+P162 (user, 2026-10-06, classes-26): `init` is the constructor. Aliases with the note "wasp says init": `value` (the
+first wasp name), `constructor`, `__init__`, `initialize`, `__construct`, `New`, `Create`, `new`, and a method named
+like its class (class_methods with_init_constructors, CONSTRUCTOR_ALIASES). An alias the program also calls as a
+method (`p.new(2)`, Rust's `Point::new(1, 2)`: method_calls_named) stays a method. The constructor function is
+`P·init` (it was `P·value`).
+
+Run-time dispatch (classes-27, card class-method): a library-word method (`sum`, the counting words `count`/`size`/…,
+type words) called on a variable of no known class outside the class bodies, `total(x) := x.sum()`, is
+`if x is Bag then x.method·sum() else x.sum()` (class_methods dispatched_by_class, one branch per class defining it).
+A list mutation (`xs.pop()`) on an unknown receiver stays the list's (an if around a mutation is not built); inside
+class bodies receivers are fields of declared types. Open: operators on unknown operands (`f(a, b) := a + b` of two
+instances) still take the built-in operator.

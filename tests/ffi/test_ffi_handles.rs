@@ -31,3 +31,12 @@ fn a_null_out_pointer_is_a_loud_error() {
 fn an_unknown_handle_is_a_loud_error() {
 	crate::common::fails_with("use sqlite3; sqlite3_step(42)", "sqlite3_step: 42 is no C handle of this run");
 }
+
+// FILE and DIR are handles on every platform, whichever header declares them: glibc's FILE is in bits/types/FILE.h,
+// which is not read, and fclose then took the handle id as a memory offset (SIGSEGV in Linux CI)
+#[test]
+fn standard_c_structs_are_handles_without_their_header() {
+	use warp::ffi::{pointer_kind, CPointer};
+	assert_eq!(pointer_kind("FILE *"), Some(CPointer::Handle));
+	assert_eq!(pointer_kind("DIR *"), Some(CPointer::Handle));
+}

@@ -460,6 +460,16 @@ fn bind_read_data_objects(program: Node) -> Node {
 	Node::List(items, bracket, separator)
 }
 
+/// The names the program defines, as variables or functions: an alias word never shadows one (P142)
+pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
+	let mut defined = HashSet::new();
+	collect_assigned_names(node, &mut defined);
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, node);
+	defined.extend(context.user_functions.into_keys());
+	defined
+}
+
 pub(crate) fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, value) => {

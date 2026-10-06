@@ -466,11 +466,8 @@ impl Lifting {
 			};
 			let full_name = self.function_named(&name).unwrap_or(name);
 			self.enclosing.push(full_name);
-			let body = match *body {
-				// `g(a, b) := { $0 - $1 }`: with parameters the block is the body, its `$0` the first parameter, no closure
-				Node::List(items, Bracket::Curly, separator) if has_parameters => Node::List(items.into_iter().map(|item| self.walk(item, &inner)).collect(), Bracket::Curly, separator),
-				body => self.walk(body, &inner),
-			};
+			// `g(a, b) := { $0 - $1 }`: with parameters the block is the body, its `$0` the first parameter, no closure
+			let body = if has_parameters { self.walk_body_block(*body, &inner) } else { self.walk(*body, &inner) };
 			let body = self.function_value(body, &inner);
 			self.enclosing.pop();
 			return Node::Key(head, op, Box::new(body));
@@ -570,6 +567,16 @@ impl Lifting {
 	}
 
 	/// A function name where a value is expected is the closure of that function
+	/// The block of a definition with parameters, its position kept: its statements are walked, the block itself is no
+	/// closure
+	fn walk_body_block(&mut self, body: Node, bound: &HashSet<String>) -> Node {
+		match body {
+			Node::Meta { node, data } => Node::Meta { node: Box::new(self.walk_body_block(*node, bound)), data },
+			Node::List(items, Bracket::Curly, separator) => Node::List(items.into_iter().map(|item| self.walk(item, bound)).collect(), Bracket::Curly, separator),
+			other => self.walk(other, bound),
+		}
+	}
+
 	fn function_value(&mut self, node: Node, bound: &HashSet<String>) -> Node {
 		if let Some(target) = referenced_function(&node).and_then(|name| self.function_named(&name)) {
 			return closure_new(&target, vec![]);

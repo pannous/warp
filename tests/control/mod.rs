@@ -62,6 +62,8 @@ mod test_task_exact;
 mod test_many_tasks;
 mod test_for_it;
 mod test_task_closures;
+mod test_async_ports;
+mod test_await_any_variables;
 mod test_await_go;
 mod test_signal_in_loop;
 mod test_shared_arrays;

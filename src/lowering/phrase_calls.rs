@@ -139,8 +139,26 @@ fn rewrite(node: Node, patterns: &HashMap<String, Vec<Part>>) -> Node {
 				// a spaced definition (`foo of int = …`) has the shape of a call but defines the phrase
 				Some((head, arguments)) if bracket == Bracket::None && separator == Separator::Space && spaced_pattern(&items).is_none() => {
 					word(head).and_then(|name| patterns.get(name).map(|pattern| (name, pattern))).and_then(|(name, pattern)| {
-						let values = matched(arguments, pattern)?;
-						Some(Node::List([vec![Node::Symbol(name.to_string())], values].concat(), Bracket::Round, Separator::None))
+						// `square of x is 9`, `add 1 to 2 == 3`: the phrase's slots are nouns (`a number`), the comparison is
+						// about its value (P149)
+						let (mut values, mut compared) = match (matched(arguments, pattern), arguments.split_last().map(|(last, leading)| (last.drop_meta(), leading))) {
+							(Some(values), _) => (values, None),
+							(None, Some((Node::Key(value, op, other), leading))) if op.is_comparison() => {
+								(matched(&[leading, &[value.as_ref().clone()]].concat(), pattern)?, Some((*op, other.clone())))
+							}
+							_ => return None,
+						};
+						if compared.is_none() {
+							if let Some(Node::Key(value, op, other)) = values.last().map(|last| last.drop_meta().clone()).filter(|last| matches!(last, Node::Key(_, op, _) if op.is_comparison())) {
+								*values.last_mut().expect("not empty") = *value;
+								compared = Some((op, other));
+							}
+						}
+						let call = Node::List([vec![Node::Symbol(name.to_string())], values].concat(), Bracket::Round, Separator::None);
+						Some(match compared {
+							Some((op, other)) => Node::Key(Box::new(call), op, other),
+							None => call,
+						})
 					})
 				}
 				_ => None,

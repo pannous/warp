@@ -59,6 +59,8 @@ jobs:
       run: |
         mkdir _site
         (cd web/playground && cp -r $SITE_FILES ../../_site/)
+        # the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
+        mkdir -p _site/tests/fixtures/wasm && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h _site/tests/fixtures/wasm/
         echo "warp.pannous.com" > _site/CNAME
     - uses: actions/upload-pages-artifact@v3
       with:

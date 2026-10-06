@@ -165,6 +165,57 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   when the timeout happens; a timeout itself stays silent.
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P165 Kotlin-style soft keywords (user's proposal: with so many synonyms in so many situations, allow overwriting
+  keywords except the main ones). Hard keywords, never redefinable: control flow (if, then, else, while, for, in,
+  return, break, continue), declarations (def/fun/fn, class, var/let/const/val, global), literal values (true,
+  false, ø/null/nil) and modules (use, import, include). Every other word (emit, send, init, new, root, listeners,
+  every, …) is soft. User: soft keywords "should not be completely redefinable, just usable in a narrow context".
+  Interpreted (undoable): a soft keyword may name a local variable, parameter, field or method (`send = 3` inside a
+  function, `class Mail{ send(){…} }`, `{emit: 1}`), and there the user's name wins; at top level it can't be
+  redefined globally (loud error naming another name). Each use as a name gives a got-it note ("send is a keyword;
+  here it is your variable").
+- P166 (functions, warp-64) element-wise operators `.+ .- .* ./ .^` on a plain number act as the plain operator
+  (`6 ./ 2` → 3, `sq = @(x) x.^2; sq(3)` → 9), like MATLAB and NumPy; on lists they still map.
+- P163 (signals, warp-ed; from the user's remark that raise and throw mean errors) `emit alarm{level: 3}` runs the
+  `on alarm` handlers and continues; an emit nobody handles does nothing. `raise`/`throw` are always errors, so an
+  `on X` handler no longer turns `raise X` into an event (replaces P110's dual meaning). fire/trigger/signal are
+  aliases of emit with a got-it note; send/broadcast keep their machine-wide meaning (P129). User, adding: "emit and also
+  send": `send alarm{level: 3}` without `to` is a first-class synonym of emit (no note), matching P129's value-less
+  `send "file system full"`; only `send v to "chat"` / `broadcast v on "chat"` go to a channel.
+- P164 (functions, warp-64, wiki/argument.md) in a parameter shape `phone number` is the field phone of type number
+  (a type word after a name is its type everywhere); the wiki example calling it with a text changes to `phone text`.
+- P162 (classes, warp-e0) `init(…){…}` in a class is always the constructor (user chose this over the recommended
+  "unless called explicitly"). User, correcting: `init` is THE constructor name, not `value`. `value`, JS
+  `constructor` and Python `__init__` still work as aliases with a got-it note "wasp says init" and an "I meant:
+  init" fix; docs, hints and examples use `init`. User, extending: all common constructor names are aliases
+  of `init` with that note: `value` (wiki 2023), `constructor` (JS/TS), `__init__` (Python), `initialize` (Ruby),
+  `__construct` (PHP), `New` (VB.NET), `Create` (Delphi), Rust's `new` inside a class/impl, and a method named like
+  its class (C++/Java/C# `Point(x, y){…}` inside `class Point`). At the call site `new Point(1, 2)`
+  builds the same value as `Point(1, 2)`, with a got-it note that `new` is superfluous and a fix removing it; `init`
+  stays the definition name (it initializes an existing instance; Rust's `new` is a factory).
+- P161 (functions, warp-41; the user told the worker directly) no Swift-style argument labels: "we don't do this
+  here, I don't like that redundancy". Ported labels (`func greet(person name: String)`, `_ x: Int`) compile like P157,
+  with a got-it note "wasp names a parameter once"; docs and examples never use labels.
+- P160 (warp-42, wiki/reference.md; survey notes/implicit_params.md) `$0`/`$1` were overloaded three ways (lambda
+  parameters, WebAssembly positional arguments, node ids). The user chose a different syntax for ids: `@1` is the
+  node whose `@id` is 1 (`a[id=1]{ b c { parent=@1 } }`), `ref 1` / `ref a` say the same in words, and `$a` stays
+  the reference by name (nearest enclosing node with key a). `$<digits>` is only ever positional, never an id.
+- P157 (functions, card functions-generic, warp-41) no generic syntax in wasp: untyped functions (`def id(x)`,
+  `max(a, b)`) already work for every type, with copies made per call. Ported `fn id<T>(x: T) -> T { x }` compiles as
+  the untyped form with a got-it note "wasp infers types: write def id(x)"; wasp's docs never use `<T>`.
+- P158 (warp-42) `then` pipes only when the right side is a function stage missing its argument (`… then sort`,
+  `… then filter(x => x > 5)`) and no `else` follows; otherwise it is the condition (`it<2 then 1 else …`). In the
+  collision `x > 2 then print` the condition wins, with a got-it note naming `|>`.
+- P159 (card wiki-mutable, warp-42) `const x=7; x=7` works: assigning a constant its identical value gives a warning
+  with the fix "remove the redundant assignment" (a different value stays P130's error). Changing a `let` variable
+  (`let x="hello"; x+=" world"`) works, with a got-it note teaching `var` for variables that change.
+  No question needed (word-choice rule): `root` is an alias of sqrt (`2|square|root`, wiki/pipe.md); a user
+  variable or function named root wins (P142).
+- P156 (signals, warp-ed) `whenever cond {…}` is edge-triggered: it runs each time the condition becomes true.
+  `x = 0; whenever x > 5 { print "big" }; x = 6; x = 7; x = 3; x = 8` prints big twice (at 6 and 8);
+  `a=0; b=0; whenever a+b==1 {…}; a=1; b=0` runs once.
+  The wiki (where `whenever` is documented, and Footguns.md) shows what to write for while-like behavior instead
+  (every change while it holds: `on change x { if x > 5 {…} }`; as long as it holds), verified examples.
 - P70c (unparked; asked with a realistic example after the user found the old one "completely constructed")
   handlers and definitions created in a loop keep their own iteration's loop variable: `for i in 1 to 3 { button
   "Item {i}" on click { print "clicked {i}" } }` prints "clicked 1" for Item 1 (JS `let`, Swift, C#; not the JS

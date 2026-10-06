@@ -671,6 +671,10 @@ pub(crate) fn if_then(condition: Node, body: Node) -> Node {
 	Node::Key(Box::new(head), Op::Then, Box::new(body))
 }
 
+pub(crate) fn if_then_else(condition: Node, body: Node, otherwise: Node) -> Node {
+	Node::Key(Box::new(if_then(condition, body)), Op::Else, Box::new(otherwise))
+}
+
 pub(crate) fn block(statements: Vec<Node>) -> Node {
 	Node::List(statements, Bracket::Curly, Separator::Semicolon)
 }

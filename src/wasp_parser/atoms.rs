@@ -4,6 +4,24 @@ use super::*;
 
 const VOID_WORD: &str = "void";
 
+/// `T, F: Fn(i32) -> i32` → `T F`: the names before each bound
+fn type_parameter_names(written: &str) -> Vec<String> {
+	let mut depth = 0;
+	let mut parts = vec![String::new()];
+	for ch in written.chars() {
+		match ch {
+			'<' | '(' => depth += 1,
+			'>' | ')' => depth -= 1,
+			',' if depth == 0 => parts.push(String::new()),
+			_ => {}
+		}
+		if ch != ',' || depth != 0 {
+			parts.last_mut().expect("one part").push(ch);
+		}
+	}
+	parts.iter().filter_map(|part| part.split(':').next().map(str::trim).filter(|name| !name.is_empty()).map(str::to_string)).collect()
+}
+
 impl WaspParser {
 	/// Parse an atomic expression (no infix operators)
 	/// Handles: numbers, strings, brackets, symbols with named blocks
@@ -43,6 +61,16 @@ impl WaspParser {
 			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
 			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
+			// `@1`: a reference to the node whose @id is 1 (wiki/reference.md, P160)
+			'@' if self.peek_char(1).is_ascii_digit() => {
+				self.advance(); // skip '@'
+				let mut digits = String::new();
+				while self.current_char().is_ascii_digit() {
+					digits.push(self.current_char());
+					self.advance();
+				}
+				Node::Symbol(format!("{ATTRIBUTE_MARK}{digits}"))
+			}
 			'$' if self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_' => self.parse_dollar_name(),
 			'$' if self.peek_char(1).is_numeric() => {
 				self.advance(); // skip '$'
@@ -56,7 +84,21 @@ impl WaspParser {
 			ch if ch.is_numeric() || self.number_starts_at(0) || (ch == '-' && self.number_starts_at(1)) => {
 				self.parse_number()
 			}
-			ch if ch.is_alphabetic() || ch == '_' => self.parse_elixir_function().or_else(|| self.parse_f_string()).unwrap_or_else(|| self.parse_symbol_with_suffix()),
+			ch if ch.is_alphabetic() || ch == '_' => {
+				let atom = self.parse_elixir_function().or_else(|| self.parse_python_lambda()).or_else(|| self.parse_f_string()).unwrap_or_else(|| self.parse_symbol_with_suffix());
+				// the function's own atom takes the mark, not an atom parsed inside it (its parameters)
+				let head = match atom.drop_meta() {
+					Node::List(items, _, _) => items.first().map(Node::name),
+					other => Some(other.name()),
+				};
+				match self.generic_names.take() {
+					Some((name, names)) if head.as_ref() == Some(&name) => Node::Meta { node: Box::new(atom), data: Box::new(Node::key(crate::welcome_forms::GENERIC_MARK, Node::Text(names.join(" ")))) },
+					pending => {
+						self.generic_names = pending;
+						atom
+					}
+				}
+			}
 			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
 				(0..length).for_each(|_| self.advance());
 				error(&crate::uniscript_entities::unknown_entity(&name))
@@ -152,6 +194,8 @@ impl WaspParser {
 			let head = Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None);
 			// P52: the prepositions of the phrase, for phrase_calls to read calls like `add 1 to 2`
 			let pattern = crate::phrase_calls::pattern_text(&words);
+			// `To square a number: …` of one slot is called in English as `square of x` too (`square 3` stays a call)
+			let pattern = if pattern == crate::phrase_calls::SLOT { format!("{OF_WORD} {pattern}") } else { pattern };
 			if pattern.split(' ').any(|part| part != crate::phrase_calls::SLOT) {
 				Node::Meta { node: Box::new(head), data: Box::new(Node::key(crate::phrase_calls::PHRASE_MARK, Node::Text(pattern))) }
 			} else {
@@ -310,6 +354,57 @@ impl WaspParser {
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
 	}
 
+	/// Python's `lambda a, b=2: a + b`, `lambda *xs: …`, `lambda: 42` at the cursor: the parameters as one group (the
+	/// commas would split them into list items), then the body up to the end of the expression
+	pub(super) fn parse_python_lambda(&mut self) -> Option<Node> {
+		if !self.matches_keyword(PYTHON_LAMBDA_KEYWORD) || self.options.data_mode {
+			return None;
+		}
+		let start = self.pos + PYTHON_LAMBDA_KEYWORD.len();
+		let rest = &self.chars[start..];
+		let colon = rest.iter().position(|ch| matches!(ch, ':' | '\n' | ';' | '{' | '[' | ')'))?;
+		let parameters: String = rest[..colon].iter().collect();
+		let names_a_variable = parameters.trim_start().starts_with('=');
+		if rest[colon] != ':' || names_a_variable || rest.get(colon + 1) == Some(&'=') {
+			return None;
+		}
+		let parameters = match parameters.trim() {
+			"" => Empty,
+			written => match parse(&format!("({written})")) {
+				Node::Error(_) => return None,
+				group => group,
+			},
+		};
+		self.advance_by(start + colon + 1 - self.pos);
+		self.skip_spaces();
+		let body = self.parse_expr(Op::Assign.binding_power().1);
+		let body = self.continue_expr(body, 0);
+		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
+	}
+
+	/// `<T, F: Fn(i32) -> i32>` glued to a function's name and followed by its parameters: its length
+	fn generic_parameters_length(&self) -> Option<usize> {
+		if self.current_char() != '<' {
+			return None;
+		}
+		let mut depth = 0;
+		for (offset, &ch) in self.chars[self.pos..].iter().enumerate() {
+			match ch {
+				'<' => depth += 1,
+				'>' if offset > 0 && self.chars[self.pos + offset - 1] == '-' => {} // the arrow of `Fn(i32) -> i32`
+				'>' => {
+					depth -= 1;
+					if depth == 0 {
+						return (self.peek_char(offset + 1) == '(').then_some(offset + 1);
+					}
+				}
+				'\n' | ';' | '{' => return None,
+				_ => {}
+			}
+		}
+		None
+	}
+
 	/// Ruby's stabby lambda `->(x) { x * x }`, `-> { 42 }`: the lambda `x => {x * x}`
 	fn parse_stabby_lambda(&mut self) -> Node {
 		self.advance_by(2);
@@ -390,6 +485,14 @@ impl WaspParser {
 		if names_function && self.parameters_follow_after_blanks() {
 			self.skip_spaces();
 		}
+		// Rust's and C#'s `fn apply<F: Fn(i32) -> i32>(f: F)`, `id<T>(x: T)`: the type parameters say nothing wasp needs
+		// P157 (user): no generics in wasp; the name carries the type parameters' names (GENERIC_MARK), welcome_forms.rs
+		// drops their annotations: `fn id<T>(x: T) -> T` is `def id(x)`
+		if let Some(length) = if names_function { self.generic_parameters_length() } else { None } {
+			let written: String = self.chars[self.pos + 1..self.pos + length - 1].iter().collect();
+			self.advance_by(length);
+			self.generic_names = Some((symbol.clone(), type_parameter_names(&written)));
+		}
 
 		if let Some(reference) = self.function_reference_after(&symbol) {
 			return reference;
@@ -435,7 +538,8 @@ impl WaspParser {
 			}
 		}
 
-		if symbol == TO_WORD && !self.options.data_mode && !self.options.wit_mode && self.word_starts_statement(symbol.len()) {
+		// `To square a number: …` starts an English sentence with a capital
+		if (symbol == TO_WORD || symbol == TO_SENTENCE_WORD) && !self.options.data_mode && !self.options.wit_mode && self.word_starts_statement(symbol.len()) {
 			if let Some(definition) = self.try_parse_to_definition() {
 				return definition;
 			}
@@ -477,11 +581,24 @@ impl WaspParser {
 			while matches!(self.current_char(), ' ' | '\t') {
 				self.advance();
 			}
-			return self.parse_atom();
+			let construction = self.parse_atom();
+			let class = crate::lowering::class_methods::leading_name(&construction);
+			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
+			return construction;
+		}
+		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
+			while matches!(self.current_char(), ' ' | '\t') {
+				self.advance();
+			}
+			if let Some(head) = self.try_parse_operator_method_head() {
+				crate::diagnostic::note_alias(&format!("{OPERATOR_WORD} {}", head.first().name()), &head.first().name());
+				return head;
+			}
 		}
 		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
 		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol.as_str()) {
 			if let Some(keyword) = self.class_keyword_after_blanks() {
+				crate::diagnostic::note_alias(&format!("{symbol} {keyword}"), keyword);
 				while matches!(self.current_char(), ' ' | '\t') {
 					self.advance();
 				}
@@ -500,13 +617,14 @@ impl WaspParser {
 		// a capitalized word of no declared type before a block of fields is the tagged object `Person:{…}` (data, D4), as
 		// glued `Person{…}` is: the README's `Person { name: "Alice" … }` (card person-name)
 		let tagged = symbol.starts_with(|first: char| first.is_uppercase());
-		if (self.declared_types.contains(&symbol) || tagged) && self.block_after_blanks() {
+		let declared = self.declared_types.contains(&symbol);
+		// inside a data literal any spaced `c { … }` is the child c{ … } (card spaced-child)
+		let spaced_child = self.in_data_literal && !declared && self.blanks_then('{');
+		if spaced_child || ((declared || tagged) && self.block_after_blanks(declared)) {
 			while matches!(self.current_char(), ' ' | '\t') {
 				self.advance();
 			}
-			let block = self.parse_bracketed('{');
-			let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
-			return Node::Key(Box::new(Symbol(symbol)), op, Box::new(block));
+			return self.parse_glued_suffix(symbol);
 		}
 
 		self.parse_glued_suffix(symbol)
@@ -568,7 +686,7 @@ impl WaspParser {
 		let start = self.pos.saturating_sub(symbol.chars().count());
 		let is_field = start > 0 && self.chars[start - 1] == '.';
 		!is_key && !is_field && (TYPE_DECLARATION_WORDS.contains(&symbol)
-			|| (symbol == RECORD_WORD && self.name_and_block_follow())
+			|| (symbol == RECORD_WORD && (self.name_and_block_follow() || self.name_and_parameters_follow()))
 			|| (symbol == "type" && self.current_char() != '('))
 	}
 
@@ -683,7 +801,15 @@ impl WaspParser {
 		let parameters = statements(self.parse_bracketed('('));
 		parameters.into_iter().map(|parameter| match parameter.drop_meta() {
 			// `val x: Int`, `var y: Int = 0`: the field, its keyword dropped
-			Node::List(words, _, _) if words.len() == 2 && FIELD_KEYWORDS.contains(&words[0].drop_meta().name().as_str()) => words[1].clone(),
+			Node::List(words, _, _) if words.len() == 2 && FIELD_KEYWORDS.contains(&words[0].drop_meta().name().as_str()) => {
+				let field = crate::lowering::class_methods::leading_name(&words[1]);
+				crate::diagnostic::note_alias(&format!("{} {field}", words[0].drop_meta().name()), &field);
+				words[1].clone()
+			}
+			// C#'s `int X`: the field X of type int
+			Node::List(words, _, _) if words.len() == 2 && matches!(words[1].drop_meta(), Node::Symbol(_)) && crate::analyzer::type_word_kind(&words[0].drop_meta().name()).is_some() => {
+				Node::Key(Box::new(words[1].clone()), Op::Colon, Box::new(words[0].clone()))
+			}
 			_ => parameter,
 		}).collect()
 	}
@@ -712,17 +838,19 @@ impl WaspParser {
 		let ch = self.current_char();
 		match ch {
 			'{' => {
+				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
+				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
+				let outer_data_literal = std::mem::replace(&mut self.in_data_literal, op == Op::Colon);
 				let mut blocks = vec![self.parse_bracketed('{')];
 				// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`
 				while self.current_char() == '{' {
 					blocks.push(self.parse_bracketed('{'));
 				}
+				self.in_data_literal = outer_data_literal;
 				let block = match blocks.len() {
 					1 => blocks.remove(0),
 					_ => Node::List(blocks, Bracket::None, Separator::None),
 				};
-				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
-				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
 				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
 			'<' if !self.options.xml_mode && !self.options.data_mode && self.type_application_length().is_some() => {
