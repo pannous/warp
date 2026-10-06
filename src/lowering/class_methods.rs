@@ -31,6 +31,10 @@ const SETTER_SUFFIX: &str = "·set";
 const VALUE_SUFFIX: &str = "·value";
 const RESULT_SUFFIX: &str = "·result";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
+/// The keywords of a field: Swift's `var count = 0`, `let`, Kotlin's `val`
+const FIELD_KEYWORDS: [&str; 3] = ["var", "let", "val"];
+/// The constructor names of other languages: JavaScript, Python, Swift
+const CONSTRUCTOR_NAMES: [&str; 3] = ["constructor", "__init__", "init"];
 /// Ruby's `include Walker` in a class body takes in a mixin
 const INCLUDE_WORD: &str = "include";
 /// The suffix of a method named like a type word: `double·method`
@@ -257,8 +261,9 @@ fn class_items(body: &Node) -> Vec<Node> {
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
-	items.into_iter().flat_map(|item| match item.drop_meta() {
-		Node::List(words, _, _) if keyword_method(words).is_some() => keyword_method(words).into_iter().collect(),
+	items.into_iter().map(without_modifiers).flat_map(|item| match item.drop_meta() {
+		Node::List(words, _, _) if keyword_method(words).is_some() => keyword_method(words).into_iter().map(as_member).collect(),
+		Node::List(words, _, _) if braced_method(words).is_some() => braced_method(words).into_iter().map(as_member).collect(),
 		Node::List(words, _, _) if value_block(words).is_some() => value_block(words).into_iter().collect(),
 		Node::List(words, _, _) if accessors(words).is_some() => accessors(words).unwrap_or_default(),
 		Node::List(..) if included_mixin(&item).is_some() => vec![item],
@@ -269,7 +274,11 @@ fn class_items(body: &Node) -> Vec<Node> {
 
 /// `def area() -> int {…}`, `fun area(): Int {…}`, `func area() {…}`: the method `area() := …` (with its result type)
 fn keyword_method(words: &[Node]) -> Option<Node> {
-	crate::declarations::keyword_definition(words)
+	// Kotlin's expression body `fun sum() = x + y` defines as `:=` does
+	match crate::declarations::keyword_definition(words)? {
+		Node::Key(head, Op::Assign, body) => Some(Node::Key(head, Op::Define, body)),
+		definition => Some(definition),
+	}
 }
 
 /// A property's getter and setter as methods: `get age() {…}` is the getter `age := …`, `set age(v) {…}` the setter
@@ -341,6 +350,62 @@ fn setter_calls(node: Node, setters: &[String]) -> Node {
 			_ => Node::Key(Box::new(recurse(*target)), Op::Assign, Box::new(recurse(*value))),
 		},
 		other => other.map_children(recurse),
+	}
+}
+
+/// A member without the words that change nothing in wasp: `mutating func f() {…}` is `func f() {…}`, Swift's
+/// `var count = 0` the field `count = 0`
+fn without_modifiers(item: Node) -> Node {
+	let Node::List(words, bracket, separator) = item.drop_meta().clone() else { return item };
+	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::wasp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || FIELD_KEYWORDS.contains(&word.as_str()));
+	let kept: Vec<Node> = words.iter().skip_while(|word| is_modifier(word)).cloned().collect();
+	match kept.len() {
+		length if length == words.len() => item,
+		1 => kept.into_iter().next().expect("one"),
+		_ => Node::List(kept, bracket, separator),
+	}
+}
+
+/// JavaScript's `sum() { return … }`: the method `sum() := {…}`
+fn braced_method(words: &[Node]) -> Option<Node> {
+	let [call, block] = words else { return None };
+	let is_call = matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if name != VALUE_WORD));
+	let is_block = matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _));
+	(is_call && is_block).then(|| Node::Key(Box::new(call.clone()), Op::Define, Box::new(block.clone())))
+}
+
+/// A method as other languages write it, as a class member: Python's explicit `self` first parameter dropped (the
+/// method gets its receiver anyway), and the constructor `constructor(x, y)` (JavaScript), `__init__(self, x, y)`
+/// (Python), `init(x: Int)` (Swift) the constructor `value(x, y){…}`
+fn as_member(definition: Node) -> Node {
+	let Node::Key(head, Op::Define, body) = definition.drop_meta().clone() else { return definition };
+	let Node::List(call, Bracket::Round, separator) = head.drop_meta().clone() else { return definition };
+	let Some((name, parameters)) = call.split_first() else { return definition };
+	let parameters: Vec<Node> = parameters.iter().flat_map(|parameter| match parameter.drop_meta() {
+		Node::List(group, Bracket::Round, _) => group.clone(),
+		Node::Empty => vec![],
+		_ => vec![parameter.clone()],
+	}).collect();
+	let is_self = |parameter: &Node| matches!(parameter.drop_meta(), Node::Symbol(word) if word == RECEIVER) || matches!(parameter.drop_meta(), Node::Key(word, Op::Colon, _) if word.drop_meta().name() == RECEIVER);
+	let parameters = match parameters.first() {
+		Some(first) if is_self(first) => parameters[1..].to_vec(),
+		_ => parameters,
+	};
+	match CONSTRUCTOR_NAMES.contains(&name.drop_meta().name().as_str()) {
+		true => {
+			let word = Node::List([vec![Node::Symbol(VALUE_WORD.to_string())], parameters].concat(), Bracket::Round, separator);
+			Node::Key(Box::new(word), Op::None, Box::new(curly(*body)))
+		}
+		false => Node::Key(Box::new(Node::List([vec![name.clone()], parameters].concat(), Bracket::Round, separator)), Op::Define, body),
+	}
+}
+
+/// A body as the block `{…}` a constructor has
+fn curly(body: Node) -> Node {
+	match body {
+		Node::List(items, Bracket::Curly, separator) => Node::List(items, Bracket::Curly, separator),
+		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List(items, Bracket::Curly, separator),
+		other => Node::List(vec![other], Bracket::Curly, Separator::Semicolon),
 	}
 }
 
