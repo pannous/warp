@@ -19,5 +19,5 @@ Limits and traps:
 - Peers address sessions by the generated name (warp-7a); a swap changes it. The notice covers it, and the tmux role stays stable.
 - The handover is written by the agent itself, so it is only as good as the instruction text in the hook; check the first swaps by hand.
 - Spawns ignore the CPU-load refusal of claude-remote.sh (FORCE_SPAWN=1): a swap replaces a session, it does not add one.
-- SWAP_TOKENS and SWAP_DRY_RUN=1 are environment switches; per session `export SWAP_TOKENS=99999999` turns the swap off.
+- The limit is read at every Stop from ~/.claude/swap/swap_tokens (beats the environment, so running sessions follow a change at once; currently 300000), else env SWAP_TOKENS, else 300000. SWAP_DRY_RUN=1 only logs.
 - A session at the usage limit cannot write a handover: swapping needs headroom, so keep the limit well above 300k.

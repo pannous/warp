@@ -4,7 +4,7 @@ set -e
 HOME_SWAP=$HOME/.claude/swap
 TRANSCRIPT=$(ls -t ~/.claude/projects/-Users-me-dev-angles-warp/*.jsonl | head -1)
 SESSION_ID=probe-$$
-export SWAP_TOKENS=1000 SWAP_SPAWN_SCRIPT=$PWD/probes/context_swap_fake_spawn.sh
+export SWAP_LIMIT_FILE=/nonexistent SWAP_TOKENS=1000 SWAP_SPAWN_SCRIPT=$PWD/probes/context_swap_fake_spawn.sh
 tmux new-session -d -s warp-probeworker "sleep 120"
 PANE=$(tmux list-panes -t =warp-probeworker -F '#{pane_id}')
 run_hook() { echo "{\"session_id\":\"$SESSION_ID\",\"cwd\":\"/Users/me/dev/angles/warp\",\"transcript_path\":\"$TRANSCRIPT\"}" | TMUX_PANE=$PANE ~/dev/bin/context-swap; }
