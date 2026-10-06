@@ -849,6 +849,9 @@ PASSED:
   ✓ lists::test_float_array_writes::walking_a_typed_array_reads_every_item
   ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
   ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
+  ✓ lists::test_global_typed_lists::a_global_list_a_function_changes_stays_as_before
+  ✓ lists::test_global_typed_lists::a_global_number_list_read_by_a_function_is_an_array
+  ✓ lists::test_global_typed_lists::a_global_typed_list_reads_as_its_list
   ✓ lists::test_hash_range_slices::hash_slices_are_one_based
   ✓ lists::test_hash_range_warning::an_unparenthesized_hash_range_warns
   ✓ lists::test_hash_range_warning::parenthesized_forms_do_not_warn
@@ -2538,4 +2541,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2533 passed, 0 failed, 2533 total tested
+23 ignored, 2536 passed, 0 failed, 2536 total tested
