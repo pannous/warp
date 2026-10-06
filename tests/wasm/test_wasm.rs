@@ -1,5 +1,5 @@
 use warp::analyzer::analyze;
-use warp::extensions::print;
+use warp::extensions::{assert_throws, print};
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::parse;
 use warp::Node;
@@ -931,10 +931,6 @@ fn test_array_indices_wasm() {
 	//	assert!(construct["rhs"].kind == patterns or construct.length==1 and construct.first().kind==patterns);
 	//	emit("pixel=[]");
 	//	exit(0);
-}
-
-pub fn assert_throws(_p0: &str) {
-	todo!()
 }
 
 // random stuff todo: put in proper tests
