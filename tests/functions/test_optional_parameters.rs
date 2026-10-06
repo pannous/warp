@@ -18,3 +18,12 @@ fn coalescing_keeps_zero_and_false() {
 	is!("x = ø; x ?? 5", 5);
 	is!("x = ø; y = ø; x ?? y ?? 3", 3);
 }
+
+#[test]
+fn maybe_marks_an_optional_parameter() {
+	// P125 (user): "x=ø, maybe x, or x?  Same as with optional types."
+	is!("def f(maybe x){ x ?? 5 }; f() + f(2)", 7);
+	is!("def f(a, maybe b){ b ?? a }; f(1) + f(1, 3)", 4);
+	is!("def f(maybe int x){ x ?? 5 }; f()", 5);
+	is!("def f(x: maybe int){ x ?? 5 }; f()", 5);
+}

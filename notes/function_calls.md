@@ -28,7 +28,10 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
 
 - Optional parameters `x?`, `x: int?` mean `x=ø` (the type is dropped: the value is held boxed); `a ?? b` (Op::Coalesce,
   right-assoc, just above `or`) is `if a == ø then b else a`, a computed once (library_words.rs `lower_coalesce`).
-  Asked the Interviewer, default taken.
+  `maybe x`, `maybe int x`, `x: maybe int` are the same (user, P125: "x=ø, maybe x, or x? Same as with optional
+  types"). `??` itself was not addressed: default stands. P124 decided A (lambdas share).
+- Anonymous functions `function(a, b) {…}`, `fn(x) {…}`, `lambda x: …` (welcome_forms.rs); C `void f() {…}`.
+- Recursion over slices `xs#1 + s(xs[1:])`: a branch of Int and run-time number is Data (inference.rs branches_kind).
 
 ## Open
 - Board cards `functions-*` (todo list): slices in recursion, lambda spellings (`fn`, `lambda x:`, `{|x|}`), C-style
