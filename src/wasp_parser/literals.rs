@@ -22,7 +22,11 @@ impl WaspParser {
 		// Handle special non-expression cases first
 		let node = match ch {
 			';' => return Empty, // Semicolons handled by main parse loop
-			'>' => return Empty, // Closing bracket handled by parse_bracketed
+			// a `<…>` group's closer is handled by parse_bracketed; any other lone `>` is the operator value (`sorted(xs, >)`)
+			'>' => match self.try_parse_operator_value() {
+				Some(operator) => operator,
+				None => return Empty,
+			},
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			// Everything else goes through parse_expr for operator chaining
 			_ => self.parse_expr(0),

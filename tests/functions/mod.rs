@@ -89,3 +89,4 @@ mod test_comma_calls;
 mod test_shadowed_log;
 mod test_global_with_closures;
 mod test_counting_word_result;
+mod test_operator_arguments;
