@@ -165,6 +165,12 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   when the timeout happens; a timeout itself stays silent.
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P163 (signals, warp-ed; from the user's remark that raise and throw mean errors) `emit alarm{level: 3}` runs the
+  `on alarm` handlers and continues; an emit nobody handles does nothing. `raise`/`throw` are always errors, so an
+  `on X` handler no longer turns `raise X` into an event (replaces P110's dual meaning). fire/trigger/signal are
+  aliases of emit with a got-it note; send/broadcast keep their machine-wide meaning (P129).
+- P164 (functions, warp-64, wiki/argument.md) in a parameter shape `phone number` is the field phone of type number
+  (a type word after a name is its type everywhere); the wiki example calling it with a text changes to `phone text`.
 - P162 (classes, warp-e0) `init(…){…}` in a class is always the constructor (user chose this over the recommended
   "unless called explicitly"). User, correcting: `init` is THE constructor name, not `value`. `value`, JS
   `constructor` and Python `__init__` still work as aliases with a got-it note "wasp says init" and an "I meant:
