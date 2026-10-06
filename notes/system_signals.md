@@ -157,6 +157,10 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   ctrl-c. warp-runtime system_signals::with_exit_handler wraps the run natively (wasm_reader, standalone executables),
   host.js withExitHandler in the page. `event` is ø for now (the exit code would need a host-built Int).
   Test: tests/control/test_exit_signal.rs.
+- `on every day at 9:00 {…}` (card g-3Gdo; syntax an assumption queued with the Interviewer): the timer handler
+  `on·every·N` started by `signal_daily(N, minute_of_day)`, first due at the next 9:00 local time (libc localtime_r;
+  UTC without it), then every 24 hours; `warp run` stays and says "listening: every day". 24-hour `H:MM` only (no
+  am/pm yet); anything else is "needs a time of day". Test: tests/control/test_daily_timer.rs.
 - Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, timers in the
   playground (a warning says so), `stop listening`.
 - Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the

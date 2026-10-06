@@ -75,6 +75,38 @@ pub fn start_timer(id: i64, milliseconds: i64) {
 	TIMERS.with(|timers| timers.borrow_mut().push(timer));
 }
 
+/// `signal_daily(id, minute_of_day)`: the handler on·every·id runs at that local time of day, every day
+pub fn start_daily_timer(id: i64, minute_of_day: i64) {
+	let delay = Duration::from_secs(seconds_until(minute_of_day, local_second_of_day()) as u64);
+	let timer = Timer { handler: format!("{TIMER_HANDLER_PREFIX}{id}"), period: DAY, due: Instant::now() + delay, watched: None };
+	TIMERS.with(|timers| timers.borrow_mut().push(timer));
+}
+
+const DAY: Duration = Duration::from_secs(24 * 3600);
+
+/// Seconds from `second_of_day` to the next `minute_of_day` (a whole day when it is now)
+pub fn seconds_until(minute_of_day: i64, second_of_day: i64) -> i64 {
+	let day = DAY.as_secs() as i64;
+	match (minute_of_day * 60 - second_of_day).rem_euclid(day) {
+		0 => day,
+		seconds => seconds,
+	}
+}
+
+/// The seconds since local midnight (UTC where the platform gives no time zone)
+fn local_second_of_day() -> i64 {
+	let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |since| since.as_secs() as i64);
+	#[cfg(unix)]
+	{
+		let time = now as libc::time_t;
+		let mut local: libc::tm = unsafe { std::mem::zeroed() };
+		if !unsafe { libc::localtime_r(&time, &mut local) }.is_null() {
+			return (local.tm_hour * 3600 + local.tm_min * 60 + local.tm_sec) as i64;
+		}
+	}
+	now.rem_euclid(DAY.as_secs() as i64)
+}
+
 /// `signal_watch(id, path)`: the handler on·file·id runs when the file changes from now on
 pub fn watch_file(id: i64, path: String) {
 	let path = PathBuf::from(path);
@@ -192,6 +224,7 @@ pub fn allow_staying() {
 fn spoken(period: Duration) -> String {
 	match (period.as_millis(), period.as_millis() % 1000) {
 		(1000, _) => "1 second".to_string(),
+		(milliseconds, _) if milliseconds == DAY.as_millis() => "day".to_string(),
 		(milliseconds, 0) => format!("{} seconds", milliseconds / 1000),
 		(milliseconds, _) => format!("{milliseconds} ms"),
 	}
