@@ -194,6 +194,14 @@ impl WaspParser {
 				continue;
 			}
 
+			// `(() => 7)()`: a parenthesized function called with no arguments, the `()` glued to the group
+			let parenthesized = matches!(lhs.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1);
+			if parenthesized && self.prev_char() == ')' && self.current_char() == '(' && self.peek_char(1) == ')' {
+				self.advance_by(2);
+				lhs = Node::List(vec![lhs, Node::List(vec![], Bracket::Round, Separator::None)], Bracket::None, Separator::Space);
+				continue;
+			}
+
 			// Step 2b: Subscript (tight, like Op::Hash)
 			if let Some(updated) = self.try_parse_subscript(&lhs, min_bp, SUBSCRIPT_BP) {
 				lhs = updated;
