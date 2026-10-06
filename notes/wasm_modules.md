@@ -14,15 +14,19 @@ twice(ft) + half(5.0)                   // 86.5
   convert arguments and results like C calls (an i32 result is an Int, f32/f64 a Float). Other exports (references,
   v128, memories, tables) are not callable from warp yet.
 - An exported global reads as its value: `ft` becomes the call `ft()` (wasm_modules::rewrite_uses), linked to a getter.
-  Assigning it is a loud error (like P130's `pi = 4`): "ft is a global of an imported module; fix: another name".
+  P140: assigning a mutable global (`level = 5`, `level += 2`) sets it in the module (the setter import `set level`);
+  an immutable one is the loud error of P130's `pi = 4`: "ft is an immutable global of an imported module; fix: another name".
 - An export qualified by the module's file stem, `fourty_two.twice(21)`, `fourty_two.ft`, is the same import under the
   key `fourty_two.twice` (wasm_modules::rewrite_uses): it reaches an export named like a warp builtin,
-  `fourty_two.double(21)`, which the bare `double(21)` (the float cast) does not.
+  `fourty_two.double(21)`. P141: the bare `double(21)` is the loud error "double is ambiguous: fourty_two.double(21) for
+  the export, 21 as float for the cast" (an export a cast or type word would take).
+- P139: `import`, `use`, `require` of a module only declare (their value is ø); `include m` also runs m's `main` (or
+  `_start`) and is its value: `include fourty_two` is 42.
 - Linking (src/wasm_modules.rs `link`, native): every import from a module path is a host function that instantiates
   the module in the run's store at its first call (HostState::wasm_modules), so its state (globals, memory) lasts for
   the run: `tick(); tick()` counts on.
 - Not yet: modules that import something themselves (refused loudly at the first call: link WASI or warp's host into
-  them), the browser host (tests/modules/test_wasm_modules.rs is native-only), assigning mutable globals, names from the module's name
-  section (parameter names for named arguments), the value of `import m` alone (ø now; tests/wasm/test_wasm.rs
-  test_import_wasm expects 42 = its main, an open question).
+  them), the browser host (tests/modules/test_wasm_modules.rs is native-only), `m.g = v` qualified assignment, names from the module's name
+  section (parameter names for named arguments). tests/wasm/test_wasm.rs test_import_wasm stays ignored: it expects
+  `import fourty_two` to be 42 (P139 makes that ø) and a module in the working directory.
 - WebAssembly components (`use wasm "lib.wasm" as lib`, `lib.f(x)`) are the other road: notes/stdlib_connectors.md.
