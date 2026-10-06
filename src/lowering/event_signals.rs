@@ -203,7 +203,7 @@ fn handler(statement: &Node) -> Option<(String, Node, bool)> {
 	Some((name, body, once))
 }
 
-/// `raise alarm`, `raise stop the machine{reason:"…"}`: the name and the data (ø without)
+/// `raise alarm`, `raise stop the machine{reason:"…"}`, `raise item 1`: the name and the data (ø without)
 fn raise(node: &Node) -> Option<(String, Node)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
 	let (raise, rest) = items.split_first()?;
@@ -213,6 +213,8 @@ fn raise(node: &Node) -> Option<(String, Node)> {
 	}
 	let (last_word, data) = match last.drop_meta() {
 		Node::Key(name, Op::Colon, data) if matches!(data.drop_meta(), Node::List(_, Bracket::Curly, _)) => (name.as_ref().clone(), data.as_ref().clone()),
+		// `raise item 1`, `raise said "hi"`: a value after the words is the data (EventEmitter's emit("item", 1))
+		Node::Number(_) | Node::Text(_) | Node::Char(_) if !words.is_empty() => return Some((event_name(words.iter())?, last.clone())),
 		_ => (last.clone(), Node::Empty),
 	};
 	Some((event_name(words.iter().chain([&last_word]))?, data))

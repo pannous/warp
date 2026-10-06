@@ -87,3 +87,11 @@ fn a_named_event_handler_is_removed_and_counted() {
 	// RxJS take(2): the handler removes itself
 	is!("taken = 0; h = on tick {taken += 1; if taken == 2 {remove h from listeners of tick}}; for i in 1 to 5 {raise tick}; taken", 2);
 }
+
+// EventEmitter's emit("item", 1), RxJS subject.next(v): a value after the event's words is its data
+#[test]
+fn a_raise_carries_a_plain_value() {
+	is!("xs = []; on item {xs = xs + [event]}; raise item 1; raise item 2; count xs", 2);
+	is!("n = 0; on item {n += event}; raise item 5; raise item 6; n", 11);
+	is!("msg = \"\"; on said {msg = event}; raise said \"hi\"; msg", "hi");
+}
