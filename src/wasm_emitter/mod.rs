@@ -1241,6 +1241,10 @@ impl WasmGcEmitter {
 		self.emit_runtime_errors(); // before the int runtime: exact_div fails divide_by_zero
 		self.emit_int_runtime();
 		self.export_exact_builders();
+		// a C function returning char * hands its text in through the text heap (ffi.rs text_node)
+		if self.ctx.ffi_imports.values().any(|sig| sig.library != crate::host::HOST_LIBRARY && matches!(sig.results.first(), Some(ValType::Ref(_)))) {
+			self.emit_text_heap_global();
+		}
 		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
 		// Emit list and string operation functions
 		self.emit_list_ops();

@@ -22,6 +22,9 @@ CHECKS = {
 	# packages and module files come through the page (warp_host.fetch, host.read of a URL)
 	'use uniscript; uniscript("<:alpha>")': '"α"',
 	"include tests/fixtures/counter; counter": "11",
+	# `use python` loads Pyodide from the CDN in the worker (worker.js loadPython, host.js pythonCall)
+	"use python math; math.floor(2.5) + 1": "3",
+	"use python math; math.factorial(25)": "15511210043330985984000000",
 }
 UPTO = "x=0; for i in 1 upto 4 {x+=i}; x"
 

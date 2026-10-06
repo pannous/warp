@@ -27,6 +27,20 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
   run-time blocks are always pure. Asked by warp-29.
+- P93 may the "Batch board writes" paragraph in AGENTS.md be deleted? `todo` now costs ~1–2 GraphQL points per call
+  and workers call it directly (notes/agents/common.md already says so). Options: delete (recommended) / shorten to
+  "avoid polling `todo list` in loops" / keep. Assumed: kept, AGENTS.md is the user's. Asked by the old Supervisor,
+  relayed by warp-76.
+- P94 WIT `char` maps to a one-character text, not to wasp's Codepoint: keep it? Options: map to Codepoint, as the
+  WIT char is one Unicode scalar value (recommended) / keep the text mapping / Codepoint inside wasp, text at the JS
+  boundary. Assumed: the text mapping stays. Asked by warp-d6 (branch web-components), relayed by warp-76.
+- P95 the main checkout has an uncommitted `mod test_map_starts;` in tests/lists/mod.rs and an untracked
+  tests/lists/test_map_starts.rs (Oct 5, hash-table maps from map literals and map parameters), no commit has it.
+  Options: hand it to a worker who checks that it passes and commits it (recommended) / commit it as it is / drop
+  both. Assumed: left untouched. Raised by warp-76.
+- P96 delete obsolete ignored tests? The old Supervisor didn't name which ones. Options: a worker lists the
+  candidates with reasons first, and the user picks (recommended) / keep all ignored tests. Assumed: nothing deleted.
+  Raised by the old Supervisor, relayed by warp-76.
 Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
 work on branch runtime-units-survey pauses.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
@@ -35,12 +49,14 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
 
 ## User to-dos (not questions)
-- Branch `claude/shared-kind-constants` (only unmerged commit: the dropped cloud pilot report); the hook refuses, run
-  `git -C /Users/me/dev/angles/warp push origin --delete claude/shared-kind-constants`. From BOSS-cheeky-shannon.
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Standing rules (user)
+- Picking tasks (2026-10-06): "When picking new tasks, check if there are some fresh ones under 'Next' that are easily
+  done".
+- Cleanup (2026-10-03): "Don't ask for my confirmation to delete old stuff": merged branches, stale copies, leftover
+  stashes (so warp-90's stash goes without a question; where the hook blocks, the user gets the one-line command).
 - Test upgrades (2026-10-05, "allow all tests to be upgraded from a dumb thing to a better thing, from not working to
   working"): an error/refusal/"not yet" expectation becomes the working value, ignored tests that pass are
   un-ignored, without asking; a change of meaning (one working value into another) still needs a decision.
@@ -85,9 +101,6 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P80 exact ratios and big Ints cross to tasks: control::test_threads::an_exact_number_beyond_the_fixnums_cannot_cross_yet
   becomes is!(…, 3.5), renamed an_exact_number_crosses_to_a_task (user decision, existing-test edit). Asked by the
   Fixer warp-2d (card g-rH6E); as recommended.
-- P81 the kebab-key warning (`a=5; b=1; a-b:2; a-b`) offers "the data key": `"a-b":2` (only when nothing reads `a-b`
-  bare in that block) and "the subtraction" at each bare read: `a - b`. No renaming fix. Asked by the Fixer warp-2d
-  (card g-qU1o, was parked in Later; the user answered anyway); as recommended.
 - P81 the kebab-key warning (`a=5; b=1; a-b:2; a-b`) offers three fixes: "the data key": `"a-b":2` (only when nothing
   reads `a-b` bare in that block); "the subtraction" at each bare read: `a - b`; and "the data key, renamed a_b": the
   key → `a_b:2` and every bare read → `a_b` (always applicable, renames the key in the data). Asked by the Fixer

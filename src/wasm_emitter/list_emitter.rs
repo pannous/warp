@@ -64,7 +64,9 @@ impl WasmGcEmitter {
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
 			|| super::text_builtins::is_text_builtin(name)
-			|| crate::ffi::get_ffi_signature(name).is_some()
+			// a C function resolves once imported (`use c`, `import f from "c"`, libm's implicit imports): known but not
+			// imported it is an error that says so (ffi::undefined_function_message), never data
+			|| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c")
 	}
 
 	/// `reverse(xs)`, `split(text, separator)` …: the library words with a runtime function; returns whether it was one

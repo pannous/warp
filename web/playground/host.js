@@ -470,10 +470,11 @@ function plainOfTree(tree) {
 
 // the runtimes foreign_call reaches in the page, by their name in `use <runtime> …`: call(module, member, arguments,
 // hooks) gives the member's plain value (arguments null: a read, no call); prepare(code), when given, readies the runtime
-// for a program before it runs (an asynchronous load), since a call itself is synchronous
+// for a program before it runs (an asynchronous load), since a call itself is synchronous; a later registration of a
+// name adds to the earlier one (worker.js gives python its prepare)
 const foreignRuntimes = new Map();
 function registerForeignRuntime(name, runtime) {
-	foreignRuntimes.set(name, runtime);
+	foreignRuntimes.set(name, { ...foreignRuntimes.get(name), ...runtime });
 }
 const prepareForeignRuntimes = code => Promise.all([...foreignRuntimes.values()].map(runtime => runtime.prepare?.(code)));
 
@@ -481,6 +482,18 @@ const prepareForeignRuntimes = code => Promise.all([...foreignRuntimes.values()]
 const FOREIGN_OPERATORS = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
 	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
 	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
+
+// `use python` in the page: the bridge of src/foreign.rs (foreign_python.py) in Pyodide, which worker.js loads before
+// a program that says `use python` runs; requests and answers are the same JSON, handles stay in Pyodide
+// `use python`: Pyodide's bridge (web/playground/foreign_python.py), which the playground's worker.js loads before a run
+registerForeignRuntime("python", {
+	call(moduleName, memberName, argumentValues) {
+		if (!self.pythonAnswer) throw new Error(`python ${moduleName}.${memberName}: Python (Pyodide) is not loaded here`);
+		const reply = JSON.parse(self.pythonAnswer(JSON.stringify({ module: moduleName, member: memberName, arguments: argumentValues })));
+		if (reply.error !== undefined) throw new Error(`python ${typeof moduleName === "string" ? moduleName : "value"}.${memberName}: ${reply.error}`);
+		return reply.value;
+	},
+});
 
 // objects of the page without a plain form (a Date, a Map, an instance, a function), kept for foreign_call behind ids:
 // they cross as `{$handle: id, type, text}` and are the object again when they come back
@@ -515,6 +528,8 @@ function treeOfPlain(value) {
 	if (typeof value === "string") return textTree(value);
 	if (Array.isArray(value)) return { kind: SQUARE_LIST, items: value.map(treeOfPlain) };
 	if (typeof value === "function" || (typeof value === "object" && !isPlainObject(value))) return treeOfPlain(handleOf(value));
+	// an integer beyond 64 bits from Python: its digits (foreign_python.py plain)
+	if (typeof value === "object" && Object.keys(value).length === 1 && typeof value.$int === "string") return { kind: KIND_INT, data: { exact: [value.$int, "1"] }, chain: [] };
 	if (typeof value === "object") return { kind: CURLY_LIST, items: Object.entries(value).map(([key, item]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: key }, chain: [] }, treeOfPlain(item)] })) };
 	return textTree(String(value));
 }

@@ -348,17 +348,7 @@ fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &S
 			// FFI/builtin function calls return Int by default
 			// This handles strcmp, strlen, abs, etc.
 			if crate::ffi::is_ffi_function(s) {
-				// Get actual return type from FFI signature if available
-				if let Some(sig) = crate::ffi::get_ffi_signature(s) {
-					if !sig.results.is_empty() {
-						return match sig.results[0] {
-							wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => Kind::Float,
-							wasm_encoder::ValType::Ref(_) => Kind::Empty, // a Node: task_await_value
-							_ => Kind::Int,
-						};
-					}
-				}
-				return Kind::Int;
+				return ffi_call_kind(s);
 			}
 		}
 	}
@@ -389,16 +379,7 @@ fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &S
 	if *bracket == Bracket::Round && items.len() == 1 {
 		if let Node::Symbol(s) = items[0].drop_meta() {
 			if crate::ffi::is_ffi_function(s) {
-				if let Some(sig) = crate::ffi::get_ffi_signature(s) {
-					if !sig.results.is_empty() {
-						return match sig.results[0] {
-							wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => Kind::Float,
-							wasm_encoder::ValType::Ref(_) => Kind::Empty, // a Node: task_await_value
-							_ => Kind::Int,
-						};
-					}
-				}
-				return Kind::Int;
+				return ffi_call_kind(s);
 			}
 			// Assume zero-arg user function returns Int
 			return Kind::Int;
@@ -4349,10 +4330,39 @@ pub fn collect_all_types(registry: &mut crate::type_kinds::TypeRegistry, node: &
 	}
 }
 
+/// The kind of an FFI call's result: a C string is a text (ffi.rs text_node), a host word's Node is known at run time
+/// only (task_await_value), a void or integer result an Int
+fn ffi_call_kind(name: &str) -> Kind {
+	let Some(signature) = crate::ffi::get_ffi_signature(name) else { return Kind::Int };
+	match signature.results.first() {
+		Some(wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32) => Kind::Float,
+		Some(wasm_encoder::ValType::Ref(_)) if signature.library != crate::host::HOST_LIBRARY => Kind::Text,
+		Some(wasm_encoder::ValType::Ref(_)) => Kind::Empty,
+		_ => Kind::Int,
+	}
+}
+
 /// Extract FFI imports from "import X from Y" and "use Y" statements, and the libm functions called without one
 pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 	extract_declared_ffi_imports(ctx, node);
 	add_implicit_libm_imports(ctx, node);
+	// `use c` makes every libc function the program calls importable (getenv, toupper), not only the built-in few
+	if uses_library(node, "c") {
+		add_called_library_imports(ctx, node, "c", &|name| crate::ffi::get_ffi_signature_from_lib(name, "c").is_some());
+	}
+}
+
+/// Does the program say `use <library>` (`use c`, `use libc`)
+fn uses_library(node: &Node, library: &str) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| {
+		if let Node::List(items, _, _) = part {
+			if let [word, named] = items.as_slice() {
+				found |= is_word(word, "use") && crate::ffi::resolve_library_alias(&library_name(named)) == library;
+			}
+		}
+	});
+	found
 }
 
 /// libm functions the emitter does not implement itself (rounding and √ are builtins): a call of one the program neither
@@ -4361,10 +4371,16 @@ fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
 	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == "sqrt";
 	let mut implicit: Vec<&str> = crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_builtin(name)).collect();
 	implicit.push(LIBM_LN); // ffi.rs signs it as libm's log
+	add_called_library_imports(ctx, node, "m", &|name| implicit.contains(&name));
+}
+
+/// Import from `library` every function the program calls that `is_candidate` accepts, unless the program imports or
+/// defines it itself
+fn add_called_library_imports(ctx: &mut Context, node: &Node, library: &str, is_candidate: &dyn Fn(&str) -> bool) {
 	let mut called = HashSet::new();
 	node.visit(&mut |part| {
 		if let Node::List(items, bracket, separator) = part {
-			if let Some(name) = call_name(items, bracket, separator).filter(|name| implicit.contains(name)) {
+			if let Some(name) = call_name(items, bracket, separator).filter(|name| is_candidate(name)) {
 				called.insert(name.to_string());
 			}
 		}
@@ -4376,7 +4392,7 @@ fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
 	let mut defined = Context::new();
 	extract_user_functions(&mut defined, node);
 	for name in called.iter().filter(|name| !defined.user_functions.contains_key(*name)) {
-		add_ffi_import(ctx, name, "m");
+		add_ffi_import(ctx, name, library);
 	}
 }
 
