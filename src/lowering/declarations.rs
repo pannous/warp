@@ -1345,7 +1345,7 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 }
 
 pub fn lower_c_functions(node: Node) -> Node {
-	lower_lists(end_definitions(node), |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| extension_block(items)).or_else(|| partial_application(items)))
+	lower_lists(end_definitions(node), |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| extension_block(items)).or_else(|| smart_scope(items)).or_else(|| partial_application(items)))
 }
 
 /// `add(1, _)`: a call with placeholders is the lambda of the missing arguments, `partial_1 => add(1, partial_1)`
@@ -1481,6 +1481,37 @@ fn with_receiver(call: &[Node], separator: &Separator, receiver_type: &Node, bod
 		_ => vec![parameter.clone()],
 	});
 	Node::List(std::iter::once(call[0].clone()).chain(std::iter::once(receiver)).chain(parameters).collect(), Bracket::Round, separator.clone())
+}
+
+/// A smart scope (wiki/inventions.md) `Number { Square = it*it }`: in the scope of a type each `name = body` defines a
+/// method of the type, `it` the value it is called on: `Square(self:Number) := self*self`, so `3.Square` is 9
+fn smart_scope(items: &[Node]) -> Option<Node> {
+	let [receiver_type, block] = items else { return None };
+	let Node::Symbol(type_name) = receiver_type.drop_meta() else { return None };
+	let Node::List(definitions, Bracket::Curly, separator) = block.drop_meta() else { return None };
+	let separated = matches!(separator, Separator::Semicolon | Separator::Newline | Separator::Colon) || definitions.len() == 1;
+	if !separated {
+		return None;
+	}
+	let is_method = |definition: &Node| matches!(definition.drop_meta(), Node::Key(name, Op::Assign | Op::Define, _) if matches!(name.drop_meta(), Node::Symbol(_)));
+	if crate::analyzer::type_word_kind(&type_name.to_lowercase()).is_none() || definitions.is_empty() || !definitions.iter().all(is_method) {
+		return None;
+	}
+	let receiver = Node::Symbol(SELF_WORD.to_string());
+	let methods = definitions.iter().map(|definition| {
+		let Node::Key(name, _, body) = definition.drop_meta() else { unreachable!("guarded") };
+		let head = Node::List(vec![name.as_ref().clone(), Node::Key(Box::new(receiver.clone()), Op::Colon, Box::new(receiver_type.clone()))], Bracket::Round, Separator::None);
+		Node::Key(Box::new(head), Op::Define, Box::new(renamed_it(body.as_ref().clone(), &receiver)))
+	});
+	Some(Node::List(methods.collect(), Bracket::None, Separator::Semicolon))
+}
+
+/// The body with `it` read as the receiver
+fn renamed_it(node: Node, receiver: &Node) -> Node {
+	match node {
+		Node::Symbol(word) if word == crate::wasp_parser::IT_WORD => receiver.clone(),
+		other => other.map_children(|child| renamed_it(child, receiver)),
+	}
 }
 
 /// Swift's `extension Int { func twice() -> Int { self * 2 } }`: each function of the block a method on the type, as

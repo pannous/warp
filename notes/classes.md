@@ -211,3 +211,6 @@ is renamed `method·sum` and called so only on instances, like list-mutation nam
   pre-scan takes the name right after `class`/`record`/`type` (`record = find(…)` declares nothing).
 Open: Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`), Go (`type P struct {…}`, `func (p P) M()`),
 operators (`__add__`, `operator +`), a method named `norm` (the parser reads it as the operator ‖).
+
+Smart scopes (classes-22, wiki/inventions.md, declarations.rs smart_scope): `Number { Square = it*it }` defines
+`Square(self:Number) := self*self` for a builtin type word, `it` the value the method is called on: `3.Square`.
