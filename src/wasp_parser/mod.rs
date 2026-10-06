@@ -71,6 +71,12 @@ const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final
 const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
+/// Java's and TypeScript's `class Square implements Shape {…}`
+const IMPLEMENTS_WORD: &str = "implements";
+/// The got-it topic of a class naming its traits (`implements Shape`, Swift's `: Shape`)
+const CONFORMANCE_TOPIC: &str = "conformance-list";
+/// Go's `type Shape interface {…}` declares the trait Shape
+const GO_INTERFACE_WORD: &str = "interface";
 /// Go's `type Point struct {…}` declares the class Point
 const GO_STRUCT_WORD: &str = "struct";
 /// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
@@ -260,6 +266,11 @@ impl SpecialInfix {
 				if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient }
 			}
 			SpecialInfix::Pipeline => piped(lhs, operand),
+			// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
+			SpecialInfix::ElementWise(Op::Mul) if matches!(operand, Empty) => {
+				crate::normalize::hint(&format!("{}.*", lhs.serialize()), &lhs.serialize(), "wasp imports a module whole");
+				lhs
+			}
 			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
 			SpecialInfix::Membership => Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), operand], Bracket::None, Separator::Space),
 			SpecialInfix::DotCall => dot_call(lhs, operand),

@@ -166,11 +166,11 @@ impl WaspParser {
 	}
 
 	/// Code stands before the cursor on its line (`x = 7 // note`, not a `// note` line of its own)
-	/// Whether the code before on this line ends in something a `// b` could divide: a word, a number, `)` or `]`
-	/// (`len(xs) // 2`); after a text, `{` or `,` a `//` reads as nothing but the comment it is
-	pub(super) fn follows_a_dividend(&self) -> bool {
-		let before = self.chars[..self.pos].iter().rev().take_while(|&&c| c != '\n').find(|c| !c.is_whitespace());
-		before.is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
+	/// Code that could be divided ends right before: a name, a number, `)` or `]` (`xs[1] // 2`); after a text, a comma
+	/// or a brace `//` is plainly a comment
+	fn follows_operand_on_its_line(&self) -> bool {
+		let last = self.chars[..self.pos].iter().rev().take_while(|&&c| c != '\n').find(|c| !c.is_whitespace());
+		last.is_some_and(|&c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -351,7 +351,7 @@ impl WaspParser {
 			}
 			// // line comment (but not :// URL scheme)
 			if c1 == '/' && c2 == '/' && self.prev_char() != ':' && !self.at_floor_division() {
-				if self.follows_a_dividend() {
+				if self.follows_operand_on_its_line() {
 					self.set_hint_pos();
 					crate::diagnostic::educate_once(SLASH_COMMENT_TOPIC, "a // b", "a//b", "`// …` after code is a comment; floor division is written glued: a//b");
 				}

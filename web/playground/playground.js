@@ -18,6 +18,7 @@ const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // the gray levels of paint: a nonzero pixel, a zero pixel
 const PAINT_INK = 29;
 const PAINT_PAPER = 250;
+const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), scaled by a whole factor so pixels stay square
 
 const $ = id => document.getElementById(id);
 function element(tag, properties = {}, ...children) {
@@ -232,6 +233,7 @@ function markWord(kind, line, column, message) {
 function showPaintings(paintings) {
 	$("paintings").replaceChildren(...paintings.map(({ pixels, width, height }) => {
 		const canvas = element("canvas", { width, height, className: "painting" });
+		canvas.style.width = `${width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(width, height, 1)))}px`;
 		const image = canvas.getContext("2d").createImageData(width, height);
 		for (let index = 0; index < width * height; index++) {
 			const shade = pixels[index] ? PAINT_INK : PAINT_PAPER;

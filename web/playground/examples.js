@@ -86,6 +86,29 @@ ticks = 0
 on every 1 second { ticks += 1; if ticks <= 3 { print "tick " + ticks } }
 at 9:00 { print "good morning" }
 ticks` },
+	"game of life": { value: "15", wait: 1200, code: `// Conway's Game of Life, live: a step every half second on the canvas; three gliders keep 15 cells alive
+width = 24
+height = 12
+global cells = []
+for i in 1 to width * height { cells.push(0) }
+for (x, y) in [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)] {
+  for corner in [0, 8, 16] { cells#((y + corner % 12) * width + x + corner + 1) = 1 }
+}
+alive(x, y) := cells#(((y + height) % height) * width + (x + width) % width + 1)
+step() := {
+  next = []
+  for y in 0 to height - 1 {
+    for x in 0 to width - 1 {
+      n = alive(x-1, y-1) + alive(x, y-1) + alive(x+1, y-1) + alive(x-1, y) + alive(x+1, y) + alive(x-1, y+1) + alive(x, y+1) + alive(x+1, y+1)
+      next.push(if n == 3 or (n == 2 and alive(x, y) == 1) then 1 else 0)
+    }
+  }
+  cells = next
+}
+population = 15
+paint(cells, width, height)
+on every 500 ms { step(); population = sum(cells); paint(cells, width, height) }
+population` },
 	"system values": { value: '"online"', code: `// system values are signals too: switch your system to dark mode and back
 on change dark mode { if value { print "dark mode on" } else { print "light mode on" } }
 if online then "online" else "offline"` },
@@ -123,4 +146,6 @@ say 3 == 3` },
 	constants: { value: 'Error("pi is a constant at 2:1; fix: another name")', code: `// constants stay constant
 pi = 4
 2 * pi` },
+	// samples/kitchensink.wasp itself (samples.js loads after this file), tested natively by test_kitchensink
+	"kitchen sink": { value: '"all 31 checks pass"', get code() { return SAMPLES.kitchensink; } },
 };

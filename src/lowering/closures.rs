@@ -157,10 +157,14 @@ fn lift_closures(program: Node) -> Node {
 		}
 	});
 	let functions: HashSet<String> = context.user_functions.keys().cloned().collect();
-	let mut values = FunctionValues { functions, returning: HashSet::new(), variables: HashSet::new(), lists: HashSet::new() };
+	// `g = x => x`: the parameter a function hands back, so `g(y => y*2)(4)` calls what it was given
+	let passing_through: HashMap<String, usize> = context.user_functions.values()
+		.filter_map(|function| function.params.iter().position(|param| matches!(tail(&function.body), Node::Symbol(name) if *name == param.name)).map(|index| (function.name.clone(), index)))
+		.collect();
+	let mut values = FunctionValues { functions, returning: HashSet::new(), variables: HashSet::new(), lists: HashSet::new(), passing_through: passing_through.clone() };
 	values.settle(&context, &program);
-	let FunctionValues { functions, returning: returns_function, variables: function_variables, lists: function_lists } = values;
-	let mut lifting = Lifting { functions, variables, function_variables, function_lists, returns_function, lifted: vec![], enclosing: vec![] };
+	let FunctionValues { functions, returning: returns_function, variables: function_variables, lists: function_lists, .. } = values;
+	let mut lifting = Lifting { functions, variables, function_variables, function_lists, returns_function, passing_through, lifted: vec![], enclosing: vec![] };
 	let program = lifting.walk(program, &HashSet::new());
 	if lifting.lifted.is_empty() {
 		return program;
@@ -291,6 +295,8 @@ struct FunctionValues {
 	variables: HashSet<String>,
 	/// Variables assigned a list of function values: `fs#2` is one
 	lists: HashSet<String>,
+	/// Functions returning one of their parameters, by its position (`g = x => x`)
+	passing_through: HashMap<String, usize>,
 }
 
 impl FunctionValues {
@@ -303,6 +309,8 @@ impl FunctionValues {
 			Node::Key(_, Op::Then, chosen) => self.is_function_value(chosen),
 			Node::Key(list, Op::Hash, _) => self.is_function_list(list),
 			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name) || self.variables.contains(name)) => true,
+			// `g(y => y*2)` of `g = x => x`: the function value it was given
+			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.passing_through.get(name).and_then(|index| items.get(index + 1)).is_some_and(|argument| self.is_function_value(argument))) => true,
 			Node::List(items, _, _) if matches!(items.as_slice(), [marker, _, _, ..] if matches!(marker.drop_meta(), Node::Symbol(word) if word == crate::wasp_parser::TRY_MARKER)) => {
 				self.is_function_value(&items[1]) || self.is_function_value(&items[2])
 			}
@@ -434,6 +442,8 @@ struct Lifting {
 	returns_function: HashSet<String>,
 	/// Variables assigned a list of function values: `(fs#2)(5)` and `fs#2(5)` call an item
 	function_lists: HashSet<String>,
+	/// Functions returning one of their parameters, by its position: given a function value there, the call is one
+	passing_through: HashMap<String, usize>,
 	lifted: Vec<Node>,
 	/// The functions whose bodies the walk is in, innermost last, by their full names (`outer·inner`)
 	enclosing: Vec<String>,
@@ -545,8 +555,17 @@ impl Lifting {
 		let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return false };
 		match items.first().map(Node::drop_meta) {
 			Some(Node::Key(list, Op::Hash, _)) if items.len() == 1 => self.is_function_list(list),
-			Some(Node::Symbol(name)) => self.returns_function.contains(name) || self.may_hold_function(name, bound) || closure_call_arity(name).is_some(),
+			Some(Node::Symbol(name)) => self.returns_function.contains(name) || self.may_hold_function(name, bound) || closure_call_arity(name).is_some() || self.passes_a_function(name, &items[1..], bound),
 			_ => false,
+		}
+	}
+
+	/// `g(y => y*2)` of `g = x => x`: the function value it was given comes back
+	fn passes_a_function(&self, name: &str, arguments: &[Node], bound: &HashSet<String>) -> bool {
+		let Some(argument) = self.passing_through.get(name).and_then(|index| arguments.get(*index)) else { return false };
+		match argument.drop_meta() {
+			Node::Symbol(held) => self.functions.contains(held) || self.may_hold_function(held, bound),
+			other => arrow_lambda(other).is_some() || as_closure_new(other).is_some(),
 		}
 	}
 

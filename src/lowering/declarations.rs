@@ -1360,7 +1360,41 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 }
 
 pub fn lower_c_functions(node: Node) -> Node {
-	lower_lists(end_definitions(node), |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| extension_block(items)).or_else(|| smart_scope(items)).or_else(|| partial_application(items)))
+	lower_lists(end_definitions(node), |items| definition_then_statements(items).or_else(|| function_definition(items)).or_else(|| extension_block(items)).or_else(|| smart_scope(items)).or_else(|| partial_application(items)))
+}
+
+fn function_definition(items: &[Node]) -> Option<Node> {
+	c_function(items).or_else(|| keyword_definition(items))
+}
+
+/// `function f(x) { return x * 2 } f(3)` (JS, PHP, Go, Rust): the body's closing brace ends the definition, what
+/// follows is the next statement
+fn definition_then_statements(items: &[Node]) -> Option<Node> {
+	let [keyword, ..] = items else { return None };
+	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
+		return None;
+	}
+	let body_end = items.iter().skip(1).position(ends_in_block)? + 1;
+	if body_end + 1 >= items.len() {
+		return None;
+	}
+	let (definition, rest) = items.split_at(body_end + 1);
+	let definition = function_definition(definition).unwrap_or_else(|| Node::List(definition.to_vec(), Bracket::None, Separator::Space));
+	let rest = match rest {
+		[single] => single.clone(),
+		several => definition_then_statements(several).unwrap_or_else(|| Node::List(several.to_vec(), Bracket::None, Separator::Space)),
+	};
+	Some(Node::List(vec![definition, rest], Bracket::None, Separator::Semicolon))
+}
+
+/// A `{…}` block, or a group or arrow whose last part is one: `((f (x)) {…})`, `(f x) -> i32 {…}`
+fn ends_in_block(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => true,
+		Node::List(items, _, _) => items.last().is_some_and(ends_in_block),
+		Node::Key(_, _, right) => ends_in_block(right),
+		_ => false,
+	}
 }
 
 /// `add(1, _)`: a call with placeholders is the lambda of the missing arguments, `partial_1 => add(1, partial_1)`
@@ -1459,9 +1493,10 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let mut labeled_names = vec![];
 	let mut parameters: Vec<Node> = parameters.map(|parameter| labeled_parameter(parameter, &mut labeled_names)).collect();
 	let body = with_label_names(body, labeled_names);
-	// `func add1(x int)`: the one parameter and its type arrive as two words
+	// `func add1(x int)`: the one parameter and its type arrive as two words; `func total(s Shape)` of a declared type
 	if let [parameter, type_word] = parameters.as_slice() {
-		if matches!(parameter.drop_meta(), Node::Symbol(_)) && is_type_word(type_word) {
+		let is_type_name = matches!(type_word.drop_meta(), Node::Symbol(word) if word.starts_with(char::is_uppercase));
+		if matches!(parameter.drop_meta(), Node::Symbol(_)) && (is_type_word(type_word) || is_type_name) {
 			parameters = vec![Node::Key(Box::new(parameter.clone()), Op::Colon, Box::new(type_word.clone()))];
 		}
 	}
