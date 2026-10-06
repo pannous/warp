@@ -13,6 +13,11 @@ rules in notes/open_decisions.md and wiki/Footguns.md.
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit goes in its
   own commit, named in the message), keep working, and SendMessage the Interviewer the question.
+- Never ask the user yourself (user, 2026-10-06: questions go "either through the Supervisor or through the
+  Interviewer"): no AskUserQuestion, no question in your session's output. That includes confirmations a safety rule
+  wants from the user directly (permission or hook changes, anything you won't do on a peer's word): send them to the
+  Interviewer with the exact action, and wait on that item only while working on everything else. The Interviewer
+  asks the user and relays the answer verbatim; that relayed answer is the user's confirmation.
 - Work in a git worktree outside the repo: `cowtree add -b <branch> /Users/me/dev/angles/warp.worktrees.noindex/<branch> origin/main`,
   with the uncommitted build tweak `version = "0.1.1-<branch>"` in its Cargo.toml and `version = "0.1.0-<branch>"` in
   crates/warp-runtime/Cargo.toml (otherwise its stale warp-runtime replaces other branches' build in the shared target
