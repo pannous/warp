@@ -93,3 +93,4 @@ mod test_returned_function_names;
 mod test_global_with_closures;
 mod test_counting_word_result;
 mod test_named_function_argument;
+mod test_operator_arguments;

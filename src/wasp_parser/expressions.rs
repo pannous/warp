@@ -42,6 +42,8 @@ impl WaspParser {
 				}
 				self.finish_prefix(op, rhs)
 			}
+		} else if let Some(operator) = self.try_parse_operator_value() {
+			operator
 		} else if let Some(parameters) = self.pipe_parameters() {
 			let body = self.parse_expr(Op::FatArrow.binding_power().1);
 			Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
@@ -50,6 +52,21 @@ impl WaspParser {
 		};
 
 		self.continue_expr(lhs, min_bp)
+	}
+
+	/// An infix operator alone as an argument or item, `sorted(xs, >)`, `[+, *]`: the operator as a value `(> ø ø)`, as
+	/// `by: >` gives
+	pub(super) fn try_parse_operator_value(&mut self) -> Option<Node> {
+		let (op, chars) = self.peek_operator()?;
+		if self.current_char().is_alphabetic() {
+			return None; // a word operator alone is a name: the parameter `to` of `hanoi(n, from, to, via)`
+		}
+		let blanks = (chars..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		if !matches!(self.peek_char(chars + blanks), ')' | ',' | ']') {
+			return None;
+		}
+		self.advance_by(chars);
+		Some(Node::Key(Box::new(Node::Empty), op, Box::new(Node::Empty)))
 	}
 
 	/// `await a + await b`: `await` takes its operand like a unary minus, so each task is awaited before the sum.
