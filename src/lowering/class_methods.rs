@@ -24,6 +24,8 @@ const SUPER_INFIX: &str = "·super·";
 const GLOBAL_KEYWORD: &str = "global";
 /// The constructor block of a class body, `value{ id = random() }` or `value(name){…}` (wiki/constructor.md)
 const VALUE_WORD: &str = crate::wasp_parser::CONSTRUCTOR_WORD;
+/// The suffix of a method named like a type word: `double·method`
+const METHOD_SUFFIX: &str = "·method";
 
 /// The function a class's `value{…}` block becomes, `person·value(self:person)`: every construction is passed through it
 pub fn constructor_name(class: &str) -> String {
@@ -31,6 +33,7 @@ pub fn constructor_name(class: &str) -> String {
 }
 
 pub fn lower(node: Node) -> Node {
+	let node = renamed_type_word_methods(node);
 	let (node, likenesses) = match inherit(node) {
 		Ok(inherited) => inherited,
 		Err(error) => return error,
@@ -48,6 +51,51 @@ pub fn lower(node: Node) -> Node {
 		(true, node) => node,
 		(false, Node::List(items, bracket, separator)) if separator != Separator::Space => Node::List([traits, items].concat(), bracket, separator),
 		(false, node) => Node::List([traits, vec![node]].concat(), Bracket::None, Separator::Semicolon),
+	}
+}
+
+/// A method named like a type word (`double() := x*2`, P142: class methods are always allowed) under the name
+/// `double·method`, so its calls `c.double()` (and `double()` in the class body) never read as the cast `double(c)`
+fn renamed_type_word_methods(node: Node) -> Node {
+	let mut names = vec![];
+	node.visit(&mut |part| if let Node::Type { body, .. } = part {
+		names.extend(class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name).filter(|name| crate::analyzer::type_word_kind(name).is_some()));
+	});
+	if names.is_empty() { node } else { with_method_names(node, &names, false) }
+}
+
+fn method_name(name: &str) -> String {
+	format!("{name}{METHOD_SUFFIX}")
+}
+
+/// The type-word methods `names` renamed where they are defined and called: `c.double`, `c.double()`, and in a class
+/// body `double()` and the definition `double() := …`
+fn with_method_names(node: Node, names: &[String], in_class: bool) -> Node {
+	let renamed = |name: &Node| match name.drop_meta() {
+		Node::Symbol(word) if names.contains(word) => Some(Node::Symbol(method_name(word))),
+		_ => None,
+	};
+	let renamed_call = |call: &Node| match call.drop_meta() {
+		Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
+			renamed(&items[0]).map(|name| Node::List([vec![name], items[1..].to_vec()].concat(), Bracket::Round, separator.clone()))
+		}
+		_ => None,
+	};
+	let recurse = |child: Node| with_method_names(child, names, in_class);
+	match node {
+		Node::Type { name, body } => Node::Type { name, body: Box::new(with_method_names(*body, names, true)) },
+		// `3.double()` of a number stays the conversion
+		Node::Key(receiver, Op::Dot, member) if !matches!(receiver.drop_meta(), Node::Number(_)) => {
+			let member = renamed(&member).or_else(|| renamed_call(&member)).unwrap_or_else(|| recurse(*member));
+			Node::Key(Box::new(recurse(*receiver)), Op::Dot, Box::new(member))
+		}
+		Node::List(..) if in_class && renamed_call(&node).is_some() => {
+			let Node::List(items, bracket, separator) = renamed_call(&node).expect("guarded") else { unreachable!("a call") };
+			Node::List(items.into_iter().map(recurse).collect(), bracket, separator)
+		}
+		// `double := …`, a getter
+		Node::Key(head, Op::Define, body) if in_class && renamed(&head).is_some() => Node::Key(Box::new(renamed(&head).expect("guarded")), Op::Define, Box::new(recurse(*body))),
+		other => other.map_children(recurse),
 	}
 }
 
