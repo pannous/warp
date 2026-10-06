@@ -108,3 +108,11 @@ fn a_listener_on_an_expression_watches_its_value() {
 	is!("b = 1; c = 2; seen = 0; on change b * c { seen = b * c }; c = 10; seen", 10);
 	is!("b = 1; c = 2; n = 0; on set b + c { n += 1 }; b = 5; c = 3; n", 2);
 }
+
+// Unix coalesces two SIGCHLD into one handler call: `on set` of a shared value runs once per write, also for writes
+// a task makes between two polls
+#[test]
+fn on_set_of_a_shared_value_sees_every_write() {
+	is!("shared n = 0; count = 0; on set n { count += 1 }; job = go { for i in 1 to 5 { n += 1 } }; await job; sleep(50 ms); count", 5);
+	is!("shared n = 0; last = 0; on set n { last = n }; job = go { for i in 1 to 3 { n = i * 10 } }; await job; sleep(50 ms); last", 30);
+}

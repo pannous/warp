@@ -248,21 +248,26 @@ function programImports(holder, hooks) {
 				if (!control) return;
 				while (Atomics.load(control, 0) === CONTROL_PAUSED) Atomics.wait(control, 0, CONTROL_PAUSED);
 			},
-			// shared arrays (src/shared.rs): Ints every task of the run reaches, in shared memory when the page is isolated
+			// shared arrays (src/shared.rs): Ints every task of the run reaches, in shared memory when the page is isolated;
+			// one cell more, the last, counts the writes (shared_writes)
 			shared_new: length => {
 				const Buffer = self.crossOriginIsolated ? SharedArrayBuffer : ArrayBuffer;
-				holder.run.shared.push(new BigInt64Array(new Buffer(8 * Math.max(0, Number(length)))));
+				holder.run.shared.push(new BigInt64Array(new Buffer(8 * (Math.max(0, Number(length)) + 1))));
 				return BigInt(holder.run.shared.length);
 			},
 			shared_get: (id, index) => Atomics.load(...sharedCell(holder.run, id, index)),
-			shared_set: (id, index, value) => (Atomics.store(...sharedCell(holder.run, id, index), value), value),
-			shared_add: (id, index, value) => Atomics.add(...sharedCell(holder.run, id, index), value) + value,
-			shared_count: id => BigInt(sharedArray(holder.run, id).length),
+			shared_set: (id, index, value) => (Atomics.store(...writtenCell(holder.run, id, index), value), value),
+			shared_add: (id, index, value) => Atomics.add(...writtenCell(holder.run, id, index), value) + value,
+			shared_count: id => BigInt(sharedArray(holder.run, id).length - 1),
+			shared_writes: id => {
+				const array = sharedArray(holder.run, id);
+				return Atomics.load(array, array.length - 1);
+			},
 			// an array of floats: the cells hold the bits; an add swaps until no other task came between
 			shared_getf: (id, index) => floatOfBits(Atomics.load(...sharedCell(holder.run, id, index))),
-			shared_setf: (id, index, value) => (Atomics.store(...sharedCell(holder.run, id, index), bitsOfFloat(value)), value),
+			shared_setf: (id, index, value) => (Atomics.store(...writtenCell(holder.run, id, index), bitsOfFloat(value)), value),
 			shared_addf: (id, index, value) => {
-				const [array, cell] = sharedCell(holder.run, id, index);
+				const [array, cell] = writtenCell(holder.run, id, index);
 				for (;;) {
 					const old = Atomics.load(array, cell);
 					const sum = floatOfBits(old) + value;
@@ -359,7 +364,14 @@ function sharedArray(run, id) {
 function sharedCell(run, id, index) {
 	const array = sharedArray(run, id);
 	const cell = Number(index) - 1;
-	if (!(cell >= 0 && cell < array.length)) throw new WebAssembly.RuntimeError("index out of range");
+	if (!(cell >= 0 && cell < array.length - 1)) throw new WebAssembly.RuntimeError("index out of range");
+	return [array, cell];
+}
+
+// the cell a set or add writes, counted in the array's last cell
+function writtenCell(run, id, index) {
+	const [array, cell] = sharedCell(run, id, index);
+	Atomics.add(array, array.length - 1, 1n);
 	return [array, cell];
 }
 

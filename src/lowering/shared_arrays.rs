@@ -285,6 +285,8 @@ impl Rewrite<'_> {
 					_ => Node::Key(Box::new(self.node(*target, function)), op, Box::new(self.node(*value, function))),
 				}
 			}
+			// `shared_writes(n)` (signal_values::poll_shared) takes the array, not its value
+			Node::List(ref items, _, _) if items.first().is_some_and(|head| head.name() == crate::host::SHARED_WRITES) => node,
 			Node::List(items, bracket, separator) => {
 				let names = self.names(function);
 				// a shared value given to a function that shares it goes as its cell, not as its value

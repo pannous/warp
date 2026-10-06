@@ -1,13 +1,14 @@
 //! Shared arrays natively (user decision P33 step 6, lowering/shared_arrays.rs): the host holds them for the whole run,
 //! every instance (the program and its tasks) reaches them through the host words, each cell an atomic Int.
 
-use crate::host::{HostState, HOST_LIBRARY, SHARED_FLOAT_WORDS, SHARED_WORDS};
+use crate::host::{HostState, HOST_LIBRARY, SHARED_FLOAT_WORDS, SHARED_WORDS, SHARED_WRITES};
 use anyhow::Result;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime::{Linker, Module};
 
-/// The arrays of one run, numbered from 1 in the order they are made
+/// The arrays of one run, numbered from 1 in the order they are made. Each has one cell more, its last: the count of
+/// its writes (shared_writes)
 #[derive(Default)]
 pub struct SharedArrays {
 	arrays: Mutex<Vec<Arc<[AtomicI64]>>>,
@@ -27,7 +28,7 @@ impl SharedArrays {
 	/// The cell of 1-based `index`, or the runtime error an index out of range is
 	fn cell(&self, id: i64, index: i64) -> wasmtime::Result<(Arc<[AtomicI64]>, usize)> {
 		let array = self.array(id)?;
-		match usize::try_from(index - 1).ok().filter(|cell| *cell < array.len()) {
+		match usize::try_from(index - 1).ok().filter(|cell| *cell < array.len() - 1) {
 			Some(cell) => Ok((array, cell)),
 			None => Err(wasmtime::Error::new(crate::tasks::TaskFailure("index out of range".to_string()))),
 		}
@@ -39,7 +40,7 @@ impl SharedArrays {
 		let arrays = self.clone();
 		linker.func_wrap(HOST_LIBRARY, new, move |length: i64| -> i64 {
 			let mut all = arrays.arrays.lock().expect("shared arrays");
-			all.push((0..length.max(0)).map(|_| AtomicI64::new(0)).collect());
+			all.push((0..=length.max(0)).map(|_| AtomicI64::new(0)).collect());
 			all.len() as i64
 		})?;
 		let arrays = self.clone();
@@ -51,15 +52,19 @@ impl SharedArrays {
 		linker.func_wrap(HOST_LIBRARY, set, move |id: i64, index: i64, value: i64| -> wasmtime::Result<i64> {
 			let (array, cell) = arrays.cell(id, index)?;
 			array[cell].store(value, Ordering::SeqCst);
+			counted(&array);
 			Ok(value)
 		})?;
 		let arrays = self.clone();
 		linker.func_wrap(HOST_LIBRARY, add, move |id: i64, index: i64, value: i64| -> wasmtime::Result<i64> {
 			let (array, cell) = arrays.cell(id, index)?;
+			counted(&array);
 			Ok(array[cell].fetch_add(value, Ordering::SeqCst) + value)
 		})?;
 		let arrays = self.clone();
-		linker.func_wrap(HOST_LIBRARY, count, move |id: i64| -> wasmtime::Result<i64> { Ok(arrays.array(id)?.len() as i64) })?;
+		linker.func_wrap(HOST_LIBRARY, count, move |id: i64| -> wasmtime::Result<i64> { Ok(arrays.array(id)?.len() as i64 - 1) })?;
+		let arrays = self.clone();
+		linker.func_wrap(HOST_LIBRARY, SHARED_WRITES, move |id: i64| -> wasmtime::Result<i64> { Ok(arrays.array(id)?.last().expect("the write count").load(Ordering::SeqCst)) })?;
 		// an array of floats: the cells hold the bits; an add swaps until no other task came between
 		let [get_float, set_float, add_float] = SHARED_FLOAT_WORDS;
 		let arrays = self.clone();
@@ -72,11 +77,13 @@ impl SharedArrays {
 			let (array, cell) = arrays.cell(id, index)?;
 			let value = warp_runtime::floats::canonical_nan(value);
 			array[cell].store(value.to_bits() as i64, Ordering::SeqCst);
+			counted(&array);
 			Ok(value)
 		})?;
 		let arrays = self.clone();
 		linker.func_wrap(HOST_LIBRARY, add_float, move |id: i64, index: i64, value: f64| -> wasmtime::Result<f64> {
 			let (array, cell) = arrays.cell(id, index)?;
+			counted(&array);
 			let mut old = array[cell].load(Ordering::SeqCst);
 			loop {
 				let sum = warp_runtime::floats::canonical_nan(f64::from_bits(old as u64) + value);
@@ -88,4 +95,9 @@ impl SharedArrays {
 		})?;
 		Ok(())
 	}
+}
+
+/// One more write of the array, in its last cell
+fn counted(array: &[AtomicI64]) {
+	array.last().expect("the write count").fetch_add(1, Ordering::SeqCst);
 }
