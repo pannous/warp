@@ -332,7 +332,7 @@ fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bo
 /// The field and step of `x++` / `x--` after a dot
 fn field_step(method: &Node) -> Option<(Node, Op)> {
 	match method.drop_meta() {
-		Node::Key(field, op @ (Op::Inc | Op::Dec), _) if matches!(field.drop_meta(), Node::Symbol(_)) => Some((field.as_ref().clone(), op.clone())),
+		Node::Key(field, op @ (Op::Inc | Op::Dec), _) if matches!(field.drop_meta(), Node::Symbol(_)) => Some((field.as_ref().clone(), *op)),
 		_ => None,
 	}
 }
@@ -458,6 +458,16 @@ fn bind_read_data_objects(program: Node) -> Node {
 		_ => item,
 	}).collect();
 	Node::List(items, bracket, separator)
+}
+
+/// The names the program defines, as variables or functions: an alias word never shadows one (P142)
+pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
+	let mut defined = HashSet::new();
+	collect_assigned_names(node, &mut defined);
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, node);
+	defined.extend(context.user_functions.into_keys());
+	defined
 }
 
 pub(crate) fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
@@ -900,6 +910,7 @@ impl Lowering {
 			arguments.resize(wanted, Node::Empty);
 		}
 		if let (COPY, [receiver]) = (word, arguments.as_slice()) {
+			crate::normalize::set_position_of(head);
 			crate::normalize::hint(&format!("{}.{}()", receiver.serialize(), head.serialize()), &receiver.serialize(), "values are never shared: b = a already copies");
 			return receiver.clone();
 		}

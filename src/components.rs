@@ -1,4 +1,4 @@
-//! `use wasm "lib.wasm" as lib; lib.f(x)`: a WebAssembly component (a Rust crate built for wasm32-wasip2 with
+//! `use lib.wasm; lib.f(x)` (long form `use wasm "lib.wasm" as lib`): a WebAssembly component (a Rust crate built for wasm32-wasip2 with
 //! wit-bindgen, componentize-py's output, anything with a WIT interface) called through foreign_call
 //! (notes/stdlib_connectors.md). Each component is compiled once per path and process and instantiated once per
 //! thread, on an engine of its own with the component model (the programs' engines run core modules only), with WASI p2 for its imports. Values cross as JSON,
@@ -109,7 +109,7 @@ fn load(path: &str) -> Result<Loaded, String> {
 		let Some(index) = index else { return };
 		match item {
 			ComponentItem::ComponentFunc(_) => functions.push((name.to_string(), index)),
-			ComponentItem::Resource(_) => kinds.extend(instance.get_resource(&mut *store, &index).map(|ty| (ty, name.to_string()))),
+			ComponentItem::Resource(_) => kinds.extend(instance.get_resource(&mut *store, index).map(|ty| (ty, name.to_string()))),
 			_ => {}
 		}
 	};

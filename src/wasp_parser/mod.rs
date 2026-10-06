@@ -59,7 +59,7 @@ const NONLOCAL_WORD: &str = "nonlocal";
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
-const ELEMENT_WISE_OPERATORS: [(char, Op); 4] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div)];
+const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div), ('^', Op::Pow)];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
@@ -268,6 +268,11 @@ impl SpecialInfix {
 				if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient }
 			}
 			SpecialInfix::Pipeline => piped(lhs, operand),
+			// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
+			SpecialInfix::ElementWise(Op::Mul) if matches!(operand, Empty) => {
+				crate::normalize::hint(&format!("{}.*", lhs.serialize()), &lhs.serialize(), "wasp imports a module whole");
+				lhs
+			}
 			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
 			SpecialInfix::Membership => Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), operand], Bracket::None, Separator::Space),
 			SpecialInfix::DotCall => dot_call(lhs, operand),
@@ -362,6 +367,10 @@ const ODD_WORD: &str = "odd";
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
+const TO_SENTENCE_WORD: &str = "To";
+/// `to greet p do …`: the word between a `to` definition's parameters and its body
+const DO_WORD: &str = "do";
+const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
 const TIMES_WORD: &str = "times";
@@ -478,7 +487,7 @@ const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
 
 /// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`; a braceless call is grouped, one argument:
 /// `square xs |> filter(p)` → `filter((square xs), p)`
-fn piped(value: Node, stage: Node) -> Node {
+pub(crate) fn piped(value: Node, stage: Node) -> Node {
 	let value = match value.drop_meta() {
 		Node::List(_, Bracket::None, Separator::Space) => Node::List(vec![value], Bracket::Round, Separator::None),
 		_ => value,
@@ -619,8 +628,13 @@ pub struct WaspParser {
 	stops_at_end: bool,
 	/// Inside Python's `f"…{x}…"`: braces are holes, `{{` and `}}` the braces themselves
 	brace_holes: bool,
+	/// The type parameters skipped after a function's name (`fn id<T>`), marked on the atom (P157)
+	generic_names: Option<(String, Vec<String>)>,
 	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
 	in_command: bool,
+	/// Parsing the block of a data literal (`a{ … }`, not a declared type's constructor): a spaced child `c { d:3 }` there
+	/// is the child node of the glued `c{ d:3 }`, as no call with a block can be meant (card spaced-child)
+	in_data_literal: bool,
 	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
 	pipe_takes_call: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
@@ -893,7 +907,9 @@ impl WaspParser {
 			signed_list_element: None,
 			stops_at_end: false,
 			brace_holes: false,
+			generic_names: None,
 			in_command: false,
+			in_data_literal: false,
 			pipe_takes_call: false,
 			times_loops: 0,
 			pending_comment: None,

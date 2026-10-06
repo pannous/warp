@@ -110,12 +110,12 @@ fn test_wasm_function_definiton() {
 	//0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 , 55 , 89 , 144
 	is!("fib x:=if x<2 then x else fib(x-1)+fib(x-2);fib(7)", 13);
 	is!("fib:=if it<2 then it else fib(it-1)+fib(it-2);fib(7)", 13);
+	is!("fib:=it<2 then 1 else fib(it-1)+fib(it-2);fib(4)", 5);
 	skip!(
 
 		is!("fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)", 13);
 		is!("fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)", 13);
 		is!("fib:=it<2 or fib(it-1)+fib(it-2);fib(4)", 5);
-		is!("fib:=it<2 then 1 else fib(it-1)+fib(it-2);fib(4)", 5);
 	);
 }
 #[test]

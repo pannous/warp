@@ -174,6 +174,7 @@ fn compared_with_type(subject: Node, word: &Node, spec: String, shadowed: &Names
 		return is_type_call(expand(subject, shadowed), spec);
 	}
 	let (written, preferred) = (crate::normalize::operand_text(&subject), word.drop_meta().name());
+	crate::normalize::set_position_of(&subject);
 	crate::normalize::hint(&format!("{written} == {preferred}"), &format!("{written} is {preferred}"), "only `is` tests a type; a value never equals a type");
 	Node::False
 }

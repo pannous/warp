@@ -299,6 +299,34 @@ pub fn grapheme_clusters(text: &str) -> Vec<&str> {
 	clusters
 }
 
+/// Edit distance (insertions, deletions, substitutions, adjacent swaps) between two words
+pub fn edit_distance(a: &str, b: &str) -> usize {
+	let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+	let mut rows = vec![vec![0usize; b.len() + 1]; a.len() + 1];
+	for (i, row) in rows.iter_mut().enumerate() {
+		row[0] = i;
+	}
+	for (j, cell) in rows[0].iter_mut().enumerate() {
+		*cell = j;
+	}
+	for i in 1..=a.len() {
+		for j in 1..=b.len() {
+			let cost = usize::from(a[i - 1] != b[j - 1]);
+			rows[i][j] = (rows[i - 1][j] + 1).min(rows[i][j - 1] + 1).min(rows[i - 1][j - 1] + cost);
+			if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+				rows[i][j] = rows[i][j].min(rows[i - 2][j - 2] + 1);
+			}
+		}
+	}
+	rows[a.len()][b.len()]
+}
+
+/// The first of the names one letter away from `word` (two for words of six letters or more): `pirnt` → print
+pub fn near_miss(word: &str, names: impl IntoIterator<Item = String>) -> Option<String> {
+	let allowed = if word.chars().count() < 6 { 1 } else { 2 };
+	names.into_iter().filter(|name| name != word).find(|name| edit_distance(word, name) <= allowed)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

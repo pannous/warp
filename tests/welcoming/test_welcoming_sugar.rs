@@ -13,12 +13,12 @@ fn let_var_and_const_declare_inside_any_block() {
 	is!("s=0; for i in 1…3 { let t = i; s += t }; s", 6);
 	is!("if 1 { let y = 2; y } else { 0 }", 2);
 	is!("let x = 3; x", 3);
-	// wiki/variable.md: `let` binds once (unlike JS); `var` and plain `=` change
+	// P159: a `let` variable may change, with a got-it note teaching `var`; `var` and plain `=` change
 	is!("var x = 0; x += 1; x", 1);
-	fails_with("let x = 0; x += 1; x", "x is let (immutable), cannot assign it again");
-	fails_with("let x = 1; x = 2", "fix: declare it with var or plain `x =` if it changes");
-	fails_with("let x = 1; x++", "x is let (immutable)");
-	fails_with("let xs = [1 2]; xs#1 = 5", "xs is let (immutable)");
+	is!("let x = 0; x += 1; x", 1);
+	is!("let x = 1; x = 2; x", 2);
+	is!("let x = 1; x++; x", 2);
+	is!("let xs = [1 2]; xs#1 = 5; xs", warp::ints(vec![5, 2]));
 }
 
 #[test]
@@ -175,4 +175,13 @@ fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
 		assert_eq!(notes("x = 7 // 2\nx"), 0, "acknowledged in an earlier run");
 	});
 	std::fs::remove_file(path).unwrap();
+}
+
+// found by the kitchen sink: after a text `//` can only be a comment, no note about division
+#[test]
+fn a_comment_after_a_text_needs_no_note() {
+	use warp::normalize::capture_hints;
+	let notes = |code: &str| capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count();
+	assert_eq!(notes("p = { e: \"trailing\" // a comment\n age: 30 }; p.age"), 0);
+	assert_eq!(notes("x = \"a\", // a comment\nx"), 0);
 }

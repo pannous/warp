@@ -26,6 +26,13 @@ Dropped as answered: code quality 7 (Node operators return Node::Error: Decided 
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
 
+## Defaults to show the user (no question, easy to restyle)
+- Error highlighting (warp-7d, card g-_ZNg): the CLI prints `  2 | pi = 4` and carets `    | ^^` under the word on
+  stderr below an error/warning; the web demo underlines errors (red wavy + tint) and warnings (amber wavy), with the
+  message on hover. Hints aren't underlined yet because their positions lag behind (card hint-positions).
+- P168 detail (warp-64, branch functions 152ddabd4): `p = {phone: 7}; number = 2; p.phone-number` → 5. When p's
+  fields aren't known at compile time, the field read `p.phone-number` stays.
+
 ## User to-dos (not questions)
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
@@ -35,6 +42,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   different modules a solid module manager and then a packet manager for internal and external packages as well as
   using existing packaging managers and packages to our greatest advantage". Board cards in Later, in this order:
   stdlib-standard, module-manager, package-manager. Nobody takes them until the user releases them.
+  Released 2026-10-07 (to warp-96): the standard library, including adapters to other standard libraries. Work starts
+  as soon as the board's Now/Next columns are practically empty. stdlib-standard is in Soon; module-manager and
+  package-manager stay in Later. Leads: warp-64 (stdlib modules in wasp), warp-f0 (adapters: C/wasm, JS, Python, Rust
+  components). Design questions come to the Interviewer, each with a default.
 - Word choices are not questions (2026-10-06): "we have the alias mechanism to generally tell people if they use the
   wrong word what the right word is but still keep the synonym working or replacing". When the alternatives are only
   different words for the same thing, the recommended word is canonical and the others become aliases: they work,
