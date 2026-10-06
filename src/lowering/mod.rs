@@ -28,6 +28,7 @@ pub mod mutation;
 pub mod named_arguments;
 pub mod number_keys;
 pub mod overloads;
+pub mod variadic;
 pub mod phrase_calls;
 pub mod printable;
 pub mod phrase_words;

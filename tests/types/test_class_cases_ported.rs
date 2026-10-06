@@ -113,3 +113,21 @@ fn a_static_method_is_called_on_the_class() {
 	// Java static factory, Python @classmethod / @staticmethod
 	is!("class Circle{r:int; static doubled(x:int) := Circle(x * 2)}; Circle.doubled(4).r", 8);
 }
+
+const POINT: &str = "class Point{x:int; y:int}; p = Point(1, 2); ";
+
+#[test]
+fn an_object_has_one_text_form() {
+	// P123 (user, 2026-10-06): `Point{x:1 y:2}` everywhere, the constructor form (Python __repr__, Kotlin data class toString)
+	assert_eq!(warp::wasm_emitter::eval(&format!("{POINT}p")).serialize(), "Point{x:1 y:2}");
+	assert_eq!(warp::wasm_emitter::eval(&format!("{POINT}[p, Point(3, 4)]")).serialize(), "[Point{x:1 y:2} Point{x:3 y:4}]");
+	is!(&format!("{POINT}string(p)"), "Point{x:1 y:2}");
+	is!(&format!("{POINT}\"at \\(p)\""), "at Point{x:1 y:2}");
+	is!(&format!("{POINT}p as text"), "Point{x:1 y:2}");
+	is!("class Point{x:int; y:int}; string(Point(1, 2))", "Point{x:1 y:2}");
+	#[cfg(feature = "native")]
+	{
+		assert_eq!(crate::common::printed(&format!("{POINT}print p")), "Point{x:1 y:2}\n");
+		assert_eq!(crate::common::printed(&format!("{POINT}print [p]")), "[Point{x:1 y:2}]\n");
+	}
+}

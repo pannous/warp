@@ -335,6 +335,9 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+				if crate::wasm_emitter::linear_arrays::is_linear_word(name) && !ctx.user_functions.contains_key(name) {
+					add_ffi_import(ctx, name, crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY);
+				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
 					// the host builds a caught stack overflow's Error with the module's own error_of
