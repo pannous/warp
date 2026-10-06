@@ -6,7 +6,7 @@
 //! Anything else (floats, variables, functions) takes the normal path, where a unit word is an ordinary symbol.
 
 use crate::extensions::numbers::Number;
-use crate::meta::Dada;
+use crate::meta::DataValue;
 use crate::node::{error, Bracket, Node, Separator};
 use std::collections::HashMap;
 use crate::operators::Op;
@@ -184,7 +184,7 @@ impl fmt::Display for Range {
 }
 
 /// The text of a unit result held in a `Node::Data`, None for any other data
-pub fn describe(data: &Dada) -> Option<String> {
+pub fn describe(data: &DataValue) -> Option<String> {
 	if let Some(quantity) = data.downcast_ref::<Quantity>() {
 		return Some(quantity.to_string());
 	}

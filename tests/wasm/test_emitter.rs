@@ -12,12 +12,12 @@ fn test_compact_empty() {
 	emitter.emit_node_main(&Node::Empty);
 	let bytes = emitter.finish();
 	assert!(!bytes.is_empty());
-	peq!("ø",Empty);
-	peq!("null",Empty);
-	peq!("no",Empty);
-	peq!("none",Empty);
-	peq!("nix",Empty);
-	peq!("empty",Empty);
+	parses_to!("ø",Empty);
+	parses_to!("null",Empty);
+	parses_to!("no",Empty);
+	parses_to!("none",Empty);
+	parses_to!("nix",Empty);
+	parses_to!("empty",Empty);
 	is!("ø",Empty);
 	is!("null",Empty);
 }

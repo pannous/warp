@@ -49,7 +49,7 @@ pub enum DataType {
 	None,   // <- only interesting cases
 }
 
-pub struct Dada {
+pub struct DataValue {
 	pub(crate) data: Box<dyn CloneAny>,
 	pub type_name: String,
 	pub data_type: DataType,
@@ -61,11 +61,11 @@ pub struct Dada {
 // let t = Node::data((42, "answer"));
 // let n = Node::data(CustomData { id: 42, name: "test" });
 // 💡 let extract = dada.downcast_ref::<MyType>(); 💡
-impl Dada {
+impl DataValue {
 	pub fn new<T: 'static + Clone + PartialEq>(data: T) -> Self {
 		let type_name = std::any::type_name::<T>().to_string();
 		let data_type = Self::infer_type(&type_name);
-		Dada {
+		DataValue {
 			data: Box::new(data),
 			type_name,
 			data_type,
@@ -103,9 +103,9 @@ impl Dada {
 	}
 }
 
-impl Clone for Dada {
+impl Clone for DataValue {
 	fn clone(&self) -> Self {
-		Dada {
+		DataValue {
 			data: self.data.clone_any(),
 			type_name: self.type_name.clone(),
 			data_type: self.data_type.clone(),
@@ -113,15 +113,15 @@ impl Clone for Dada {
 	}
 }
 
-impl fmt::Display for Dada {
+impl fmt::Display for DataValue {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		// trace!(f, "Dada({:?}:{})", self.data_type, self.type_name);
-		write!(f, "«Dada({})»", self.type_name)
+		// trace!(f, "DataValue({:?}:{})", self.data_type, self.type_name);
+		write!(f, "«DataValue({})»", self.type_name)
 	}
 }
 
 
-impl fmt::Debug for Dada {
+impl fmt::Debug for DataValue {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		// Special handling for GcObject to show actual values
 		#[cfg(feature = "native")]
@@ -130,42 +130,42 @@ impl fmt::Debug for Dada {
 				return write!(f, "{:?}", gc_obj);
 			}
 		}
-		write!(f, "Dada({:?}:{})", self.data_type, self.type_name)
+		write!(f, "DataValue({:?}:{})", self.data_type, self.type_name)
 	}
 }
 
-impl PartialEq for Dada {
+impl PartialEq for DataValue {
 	fn eq(&self, other: &Self) -> bool {
 		self.data.eq_any(other.data.as_ref())
 	}
 }
 
-impl Serialize for Dada {
+impl Serialize for DataValue {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
-		let mut state = serializer.serialize_struct("Dada", 2)?;
+		let mut state = serializer.serialize_struct("DataValue", 2)?;
 		state.serialize_field("type_name", &self.type_name)?;
 		state.serialize_field("data_type", &self.data_type)?;
 		state.end()
 	}
 }
 
-impl<'de> Deserialize<'de> for Dada {
+impl<'de> Deserialize<'de> for DataValue {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
 		#[derive(Deserialize)]
-		struct DadaHelper {
+		struct DataValueHelper {
 			type_name: String,
 			data_type: DataType,
 		}
 
-		let helper = DadaHelper::deserialize(deserializer)?;
-		// Create a placeholder Dada with empty string
-		Ok(Dada {
+		let helper = DataValueHelper::deserialize(deserializer)?;
+		// Create a placeholder DataValue with empty string
+		Ok(DataValue {
 			data: Box::new(String::from("<deserialized>")),
 			type_name: helper.type_name,
 			data_type: helper.data_type,

@@ -78,7 +78,7 @@ pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
 pub use type_kinds::{AstKind, NodeKind, Kind, TypeRegistry, TypeDef, FieldDef, USER_TYPE_TAG_START, extract_instance_values, RawFieldValue};
 // Metadata
-pub use meta::{Dada, LineInfo, DataType};
+pub use meta::{DataValue, LineInfo, DataType};
 // WASM
 pub use wasm_emitter::{WasmGcEmitter};
 // Host functions

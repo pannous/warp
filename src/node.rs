@@ -2,7 +2,7 @@
 use crate::extensions::lists::{map, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::meta::{Dada, DataType, LineInfo};
+use crate::meta::{DataValue, DataType, LineInfo};
 #[cfg(feature = "native")]
 use crate::wasm_reader::GcObject;
 use serde::{Deserialize, Serialize};
@@ -56,7 +56,7 @@ pub enum Node {
 	Key(Box<Node>, Op, Box<Node>),
 	List(Vec<Node>, Bracket, Separator),
 	// Map via map:{[k,v],…} or "map"={k:v, …} or just [k:v, …] for us
-	Data(Dada), // most generic container for any kind of data not captured by other node types
+	Data(DataValue), // most generic container for any kind of data not captured by other node types
 	Meta { node: Box<Node>, data: Box<Node> },
 	Type { name: Box<Node>, body: Box<Node> }, // type definition: name + fields
 }
@@ -79,13 +79,13 @@ impl Node {
 			_ => false,
 		}
 	}
-	pub fn data_value(&self) -> Dada {
+	pub fn data_value(&self) -> DataValue {
 		// 💡use via
 		// let val = data.data_value().downcast_ref::<MyType>().unwrap().clone();
 		match self {
 			Data(dada) => dada.clone(),
 			Meta { node, .. } => node.data_value(),
-			_ => Dada {
+			_ => DataValue {
 				data: Box::new(()),
 				type_name: "ø".to_string(),
 				data_type: DataType::None,
@@ -128,7 +128,7 @@ impl Node {
 			_ => Empty,
 		}
 	}
-	pub fn laste(&self) -> Node {
+	pub fn last_item(&self) -> Node {
 		// last() belongs to iterator trade!!
 		match self {
 			// Text(t) => {Char(t.chars().last().unwrap_or('\0'))} // switch of semantics!?
@@ -140,7 +140,7 @@ impl Node {
 				}
 			}
 			Key(_k, _, v) => v.as_ref().clone(), // last part of key-value pair is the value
-			Meta { node, .. } => node.laste(),
+			Meta { node, .. } => node.last_item(),
 			_ => Empty,
 		}
 	}
@@ -223,15 +223,15 @@ impl Node {
 		}
 	}
 
-	// pub fn value(&self) -> Dada {
+	// pub fn value(&self) -> DataValue {
 	//     match self {
-	//         Node::Number(n) => Dada::new(n.clone()),
-	//         Node::Text(s) => Dada::new(s.clone()),
-	//         Node::Codepoint(c) => Dada::new(*c),
+	//         Node::Number(n) => DataValue::new(n.clone()),
+	//         Node::Text(s) => DataValue::new(s.clone()),
+	//         Node::Codepoint(c) => DataValue::new(*c),
 	//         Node::Data(dada) => dada.clone(),
 	//         Node::Meta(node, _) => node.value(),
 	//         Node::Key(_, _, v) => v.value(),
-	//         _ => Dada::new(()), // empty Dada
+	//         _ => DataValue::new(()), // empty DataValue
 	//     }
 	// }
 
@@ -553,7 +553,7 @@ impl Node {
 		Symbol(s.to_string())
 	}
 	pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Self {
-		Data(Dada::new(value))
+		Data(DataValue::new(value))
 	}
 	pub fn number(n: Number) -> Self {
 		Node::Number(n)
@@ -2204,7 +2204,7 @@ pub fn node(p0: &str) -> Node {
 // ============ Free Convenience Constructors ============
 // Short, ergonomic functions for creating Node values
 
-pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Node { Data(Dada::new(value)) }
+pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Node { Data(DataValue::new(value)) }
 
 pub fn int(n: i64) -> Node { Number(Number::Int(n)) }
 

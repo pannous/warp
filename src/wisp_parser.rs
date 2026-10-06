@@ -692,7 +692,7 @@ impl WispEmitter {
 }
 
 #[macro_export]
-macro_rules! wis {
+macro_rules! wisp {
 	// Wisp roundtrip: parse wisp -> Node -> emit wisp -> parse again -> compare
 	($input:expr) => {{
 		let node = parse_wisp($input);
@@ -905,35 +905,35 @@ mod tests {
 
 	#[test]
 	fn test_wisp_emit_atoms() {
-		wis!("ø", (&Empty));
-		wis!("true", (&True));
-		wis!("false", (&False));
-		wis!("(int 42)", (&Number(Number::Int(42))));
-		wis!("(float 3.11)", (&Number(Number::Float(3.11))));
-		wis!("(char 'x')", (&Char('x')));
-		wis!("(text 'hello')", (&Text("hello".into())));
-		wis!("foo", (&Symbol("foo".into())));
+		wisp!("ø", (&Empty));
+		wisp!("true", (&True));
+		wisp!("false", (&False));
+		wisp!("(int 42)", (&Number(Number::Int(42))));
+		wisp!("(float 3.11)", (&Number(Number::Float(3.11))));
+		wisp!("(char 'x')", (&Char('x')));
+		wisp!("(text 'hello')", (&Text("hello".into())));
+		wisp!("foo", (&Symbol("foo".into())));
 	}
 
 	#[test]
 	fn test_wisp_emit_compound() {
-		// let list = Strings!["a", "b"];
+		// let list = texts!["a", "b"];
 		let list = expression!["a", "b"];
-		wis!("[a b]", list);
+		wisp!("[a b]", list);
 
 		let key = Key(
 			Box::new(Symbol("x".into())),
 			Op::Colon,
 			Box::new(Number(Number::Int(1))),
 		);
-		wis!("(key x (int 1))", &key);
+		wisp!("(key x (int 1))", &key);
 
 		let pair = Key(
 			Box::new(Symbol("y".into())),
 			Op::Assign,
 			Box::new(Number(Number::Int(2))),
 		);
-		wis!("(pair y (int 2))", &pair);
+		wisp!("(pair y (int 2))", &pair);
 	}
 
 	// ==================== Roundtrip Tests ====================

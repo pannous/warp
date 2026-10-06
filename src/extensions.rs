@@ -30,14 +30,7 @@ macro_rules! s {
 }
 
 #[macro_export]
-macro_rules! strings { // ever used?
-	($($lit:literal),* $(,)?) => {
-		vec![$(String::from($lit)),*]
-	};
-}
-
-#[macro_export]
-macro_rules! Strings { // Texts // boxed list of Text nodes
+macro_rules! texts { // Texts // boxed list of Text nodes
 	($($lit:literal),* $(,)?) => {
 		Node::List(vec![$(Node::Text(($lit).to_string())),*], Bracket::None, Separator::Colon)
 	};
@@ -95,7 +88,7 @@ macro_rules! exists {
 
 
 #[macro_export]
-macro_rules! peq { // parser eq!
+macro_rules! parses_to { // parser eq!
 	// Evaluate string expressions like "3+3" and roundtrip through WASM
 	($a:expr, $b:expr) => {{
 		let result = parse($a);
@@ -224,13 +217,3 @@ pub fn assert_throws(code: &str) {
 	}
 }
 
-pub fn todow(msg: &str) {
-	println!("{}", msg);
-}
-
-#[allow(unused)]
-macro_rules! s {
-	($lit:literal) => {
-		String::from($lit)
-	};
-}

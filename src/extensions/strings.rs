@@ -233,13 +233,6 @@ impl PartialEqStr for char {
 	}
 }
 
-#[allow(unused)]
-macro_rules! s {
-	($lit:literal) => {
-		String::from($lit)
-	};
-}
-
 // Test it see tests/string_tests.rs !!
 
 // fn assert<T: PartialEq + Debug>(x: T) {
