@@ -32,6 +32,8 @@ PASSED:
   ✓ control::test_broadcast::nobody_listening_is_no_error
   ✓ control::test_catch_binding::catch_binds_the_error
   ✓ control::test_catch_binding::except_as_binds_the_error
+  ✓ control::test_cell_truth::a_cell_value_as_a_condition
+  ✓ control::test_cell_truth::not_of_a_cell_value
   ✓ control::test_charged_fields::test_define_entries_are_values
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
   ✓ control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
@@ -163,6 +165,7 @@ PASSED:
   ✓ control::test_run_time_blocks::interpret_of_a_constant_block_runs_it_where_written
   ✓ control::test_run_time_blocks::interpret_runs_a_block_known_only_at_run_time
   ✓ control::test_run_time_blocks::running_a_run_time_block_is_the_eval_effect
+  ✓ control::test_shared_arrays::a_shared_array_is_a_list_as_a_whole
   ✓ control::test_shared_arrays::a_shared_array_of_floats
   ✓ control::test_shared_arrays::a_shared_array_reads_writes_and_adds
   ✓ control::test_shared_arrays::tasks_add_floats_to_one_shared_array
@@ -878,6 +881,7 @@ PASSED:
   ✓ lists::test_lazy_range::a_small_range_variable_is_still_its_list
   ✓ lists::test_linear_append::an_appended_list_of_nodes_keeps_its_items
   ✓ lists::test_linear_append::map_and_filter_of_texts_stay_linear
+  ✓ lists::test_linear_arrays::a_for_loop_over_a_linear_array_gives_its_last_value
   ✓ lists::test_linear_arrays::a_linear_array_checks_its_bounds_and_stays_in_its_task
   ✓ lists::test_linear_arrays::a_linear_array_is_a_list_as_a_whole
   ✓ lists::test_linear_arrays::a_linear_array_reads_and_writes_its_cells
@@ -2547,4 +2551,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2542 passed, 0 failed, 2542 total tested
+23 ignored, 2546 passed, 0 failed, 2546 total tested
