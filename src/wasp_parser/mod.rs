@@ -731,11 +731,19 @@ fn built_in_level(text: &str) -> Option<u8> {
 /// The single argument `(int x)` of `f(int x)` is the typed parameter `x:int`, so that flattening the call `f(T, y)` into
 /// `(f T y)` never reads a parameter named like a type (`offset_of(text, byte, start)`) as the type of the next one
 fn typed_parameter(arguments: Node) -> Node {
+	let is_type_word = |node: &Node| matches!(node.drop_meta(), Symbol(word) if crate::analyzer::type_word_kind(word).is_some());
 	match arguments.drop_meta() {
-		Node::List(items, _, Separator::Space) if matches!(items.as_slice(), [type_word, name]
-			if matches!(type_word.drop_meta(), Symbol(word) if crate::analyzer::type_word_kind(word).is_some()) && matches!(name.drop_meta(), Symbol(_))) => {
-			Node::Key(Box::new(items[1].clone()), Op::Colon, Box::new(items[0].clone()))
-		}
+		Node::List(items, _, Separator::Space) => match items.as_slice() {
+			[type_word, name] if is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) => Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone())),
+			// `int b = 2` (C#, C++): `b:int = 2`
+			[type_word, default] if is_type_word(type_word) => match default.drop_meta() {
+				Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Symbol(_)) => {
+					Node::Key(Box::new(Node::Key(name.clone(), Op::Colon, Box::new(type_word.clone()))), Op::Assign, value.clone())
+				}
+				_ => arguments,
+			},
+			_ => arguments,
+		},
 		_ => arguments,
 	}
 }

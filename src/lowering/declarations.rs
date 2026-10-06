@@ -1317,9 +1317,15 @@ fn c_function(items: &[Node]) -> Option<Node> {
 	if crate::analyzer::type_word_kind(result_type).is_none() && result_type != "void" {
 		return None;
 	}
-	let Node::List(parts, Bracket::Round, _) = definition.drop_meta() else { return None };
-	let [head, body] = parts.as_slice() else { return None };
-	let Node::List(_, Bracket::Curly, _) = body.drop_meta() else { return None };
+	let (head, body) = match definition.drop_meta() {
+		Node::List(parts, Bracket::Round, _) => match parts.as_slice() {
+			[head, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => (head, body),
+			_ => return None,
+		},
+		// C#'s expression-bodied member `int Add(int a, int b) => a + b`
+		Node::Key(head, Op::FatArrow, body) => (head.as_ref(), body.as_ref()),
+		_ => return None,
+	};
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
 	let (name, arguments) = head_items.split_first()?;
 	let Node::Symbol(_) = name.drop_meta() else { return None };
