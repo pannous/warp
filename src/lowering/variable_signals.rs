@@ -517,18 +517,21 @@ fn function_reads(node: &Node) -> HashMap<String, HashSet<String>> {
 fn function_definitions(node: &Node) -> HashMap<String, &Node> {
 	let mut functions = HashMap::new();
 	node.visit(&mut |part| {
-		let name = match part {
-			Node::Key(head, Op::Define, _) => definition_name(head),
-			Node::List(items, _, _) if items.first().is_some_and(|first| crate::operators::is_function_keyword(&word(first))) => {
-				items.get(1).map(definition_name).unwrap_or_default()
-			}
-			_ => String::new(),
-		};
+		let name = defined_function_name(part);
 		if !name.is_empty() {
 			functions.insert(name, part);
 		}
 	});
 	functions
+}
+
+/// The function a definition defines (`f(x) := …`, `def f(x) {…}`, `def f(x): …`), else empty
+pub(crate) fn defined_function_name(part: &Node) -> String {
+	match part {
+		Node::Key(head, Op::Define, _) => definition_name(head),
+		Node::List(items, _, _) if defines_function(items) => items.get(1).map(definition_name).unwrap_or_default(),
+		_ => String::new(),
+	}
 }
 
 /// `f`, `f(x)`, `f(x) {…}`, `f(x): …`: f
@@ -616,10 +619,14 @@ fn calls_inside(node: &Node, function: &str) -> bool {
 	!matches!(node.drop_meta(), Node::Symbol(_)) && calls(node, function)
 }
 
-/// `subject {body}` or `subject: body`
-fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
+/// `subject {body}`, `subject: body` or `subject do body`
+pub(crate) fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 	match rest {
 		[subject, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => Some((subject.clone(), body.clone())),
+		[handler] if matches!(handler.drop_meta(), Node::Key(_, Op::Do, _)) => match handler.drop_meta() {
+			Node::Key(subject, _, body) => Some((subject.drop_meta().clone(), body.as_ref().clone())),
+			_ => unreachable!("guarded"),
+		},
 		[handler] => handler_parts(handler),
 		_ => None,
 	}
