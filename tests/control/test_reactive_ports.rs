@@ -87,3 +87,19 @@ fn a_named_event_handler_is_removed_and_counted() {
 	// RxJS take(2): the handler removes itself
 	is!("taken = 0; h = on tick {taken += 1; if taken == 2 {remove h from listeners of tick}}; for i in 1 to 5 {raise tick}; taken", 2);
 }
+
+// EventEmitter's emit("item", 1), RxJS subject.next(v): a value after the event's words is its data
+#[test]
+fn a_raise_carries_a_plain_value() {
+	is!("xs = []; on item {xs = xs + [event]}; raise item 1; raise item 2; count xs", 2);
+	is!("n = 0; on item {n += event}; raise item 5; raise item 6; n", 11);
+	is!("msg = \"\"; on said {msg = event}; raise said \"hi\"; msg", "hi");
+}
+
+// EventEmitter.on in a loop: a handler inside a block subscribes each time the block runs, with that pass's values
+#[test]
+fn a_handler_in_a_block_subscribes_each_pass() {
+	is!("hits = 0; for i in 1 to 3 { on tick2 {hits += 1} }; raise tick2; hits", 3);
+	is!("log = 0; for i in 1 to 3 { on tick {log = log*10 + i} }; raise tick; log", 123);
+	is!("n = 0; on alarm {n += 100}; if 1 { on alarm {n += event} }; raise alarm 5; n", 105);
+}
