@@ -92,3 +92,11 @@ fn a_method_changing_its_struct_variable_keeps_the_struct() {
 	is!(&format!("{COUNTER}c = Counter(0); d = c; c.inc(); d.n"), 0); // d is a copy
 	is!(&format!("{COUNTER}c = Counter(1); d = inc(c); c.n * 10 + d.n"), 12); // inc gives a changed copy
 }
+
+#[test]
+fn a_field_of_an_instance_in_a_list_is_found_by_its_written_name() {
+	let program = "class Point{x:int; y:int}; ps = [Point(1, 2), Point(3, 4)]; s = 0; for p in ps { s += p.x + p.y }; s";
+	assert!(called_function_names(program).iter().any(|name| name == "instance_field"));
+	is!(program, 10);
+	is!("class P{x:int}; f() := P(4); f().x", 4);
+}

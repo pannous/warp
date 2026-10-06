@@ -174,3 +174,10 @@ A method named like a list mutation (pop, push, add, remove, insert, append) is 
 method, but called so only on what holds an instance (a variable assigned one, `p:Stack`, self) or bare in its class
 body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (declaration_lowering
 popped_list takes any place, as add/insert did).
+
+Instances held as Nodes (classes-17): a field read by name of an instance that is no struct variable (`for p in ps
+{ s += p.x }`) no longer searches with a made symbol: struct_body knows an instance by its own op code (Op::None,
+D4) without comparing type names, and instance_field (list_ops.rs) walks the fields comparing the string-table
+offset and length of the name the program wrote (the table deduplicates) before the general map_find, which still
+answers runtime-built instances and meta entries `@name`. The target is evaluated once. bench list_of_instances
+(10^6 points, build + two field reads each): 3098 → 151 ms.
