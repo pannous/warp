@@ -98,6 +98,9 @@ Instances are not GC structs at run time: `P(1, 2)` is a `$Node` key `P` over a 
 but only used when main gives a struct. The efficient form: `(struct $P (field $x i64) (field $y i64))` built by
 struct.new, `p.x` a struct.get by field index wherever the static type is known, a Node made from it only where a
 Node is wanted (print, a mixed list, the result).
+Steps (Supervisor, 2026-10-06), each its own commit on classes-4: field reads, then construction, then writes and
+methods. Benchmark probes/bench_class_instances.sh, 10^6 iterations, debug build, Node instances (classes-3 tip):
+plain_ints 2 ms, construct_and_read 248 ms, read_only (`p.x * p.y`) 141 ms, method_call (`p.sum()`) 170 ms.
 
 Open (next batches): GC struct instances (above), the `value{…}` constructor block and `value(name){…}`
 (wiki/constructor.md; today silently ignored), a `pop` method (changes the object and gives another value), a method
