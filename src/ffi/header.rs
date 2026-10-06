@@ -74,6 +74,7 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
         .replace("SDLCALL ", "")
         .replace("__cdecl ", "")
         .replace("__stdcall ", "");
+    let decl = without_libc_annotations(decl.trim());
     let decl = decl.trim();
     // zlib's K&R-compatible prototypes: `zlibVersion OF((void));` declares `zlibVersion(void);`
     let decl = match decl.find(" OF((") {
@@ -169,6 +170,26 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
         library: library.to_string(),
         raw: declaration.to_string(),
     })
+}
+
+/// The macOS SDK's bounds annotations (`char *_LIBC_CSTR strchr(…)`, `_LIBC_COUNT(__n)`) dropped: no C type or name
+const LIBC_ANNOTATION_PREFIX: &str = "_LIBC_";
+
+fn without_libc_annotations(declaration: &str) -> String {
+    let mut rest = declaration;
+    let mut kept = String::new();
+    while let Some(start) = rest.find(LIBC_ANNOTATION_PREFIX) {
+        kept.push_str(&rest[..start]);
+        let after = &rest[start..];
+        let word_end = after.find(|letter: char| !(letter.is_ascii_alphanumeric() || letter == '_')).unwrap_or(after.len());
+        rest = &after[word_end..];
+        if rest.starts_with('(') {
+            rest = matching_paren(rest, 0).map_or("", |close| &rest[close + 1..]);
+        }
+        kept.push(' ');
+    }
+    kept.push_str(rest);
+    kept
 }
 
 /// Convert FfiHeaderSignature to FfiSignature (using 'static lifetime via leak)
