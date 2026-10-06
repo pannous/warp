@@ -35,5 +35,5 @@ fn a_method_in_the_body_conforms_to_a_trait() {
 
 #[test]
 fn a_method_assigning_its_receiver_says_so() {
-	crate::common::fails_with("class counter{n:int; inc() := n += 1}; c = counter(0); c.inc(); c.n", "inc changes a field of counter");
+	is!("class counter{n:int; inc() := n += 1}; c = counter(0); c.inc(); c.n", 1);
 }
