@@ -1170,6 +1170,7 @@ PASSED:
   ✓ modules::test_wasm_modules::a_module_keeps_its_state_for_the_run
   ✓ modules::test_wasm_modules::a_qualified_global_is_assigned_in_its_module
   ✓ modules::test_wasm_modules::an_export_is_qualified_by_its_module_name
+  ✓ modules::test_wasm_modules::an_export_takes_arguments_by_its_parameter_names
   ✓ modules::test_wasm_modules::an_exported_function_is_called_with_its_declared_types
   ✓ modules::test_wasm_modules::an_exported_global_reads_as_its_value
   ✓ modules::test_wasm_modules::an_imported_module_gets_wasi_host_words_and_other_modules
@@ -1316,6 +1317,7 @@ PASSED:
   ✓ numbers::test_law::test_law_float_parameters_are_tested
   ✓ numbers::test_law::test_law_lean_export
   ✓ numbers::test_law::test_law_lean_export_modulo_is_euclidean
+  ✓ numbers::test_law::test_law_lean_export_unfolds_only_the_functions_the_law_reaches
   ✓ numbers::test_law::test_law_overflow_promotion_holds_in_property_tests
   ✓ numbers::test_law::test_law_overflow_promotion_proved_by_lean
   ✓ numbers::test_law::test_law_proved_by_lean
@@ -2714,4 +2716,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2709 passed, 0 failed, 2709 total tested
+19 ignored, 2711 passed, 0 failed, 2711 total tested
