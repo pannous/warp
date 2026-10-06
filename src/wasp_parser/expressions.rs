@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// Characters that end a statement: a body cannot start with them
+const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
+
 impl WaspParser {
 	/// Pratt parser: parse expression with given minimum binding power
 	/// Handles prefix, infix, and suffix operators
@@ -39,11 +42,31 @@ impl WaspParser {
 				}
 				self.finish_prefix(op, rhs)
 			}
+		} else if let Some(operator) = self.try_parse_operator_value() {
+			operator
+		} else if let Some(parameters) = self.pipe_parameters() {
+			let body = self.parse_expr(Op::FatArrow.binding_power().1);
+			Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 		} else {
 			self.parse_atom()
 		};
 
 		self.continue_expr(lhs, min_bp)
+	}
+
+	/// An infix operator alone as an argument or item, `sorted(xs, >)`, `[+, *]`: the operator as a value `(> ø ø)`, as
+	/// `by: >` gives
+	pub(super) fn try_parse_operator_value(&mut self) -> Option<Node> {
+		let (op, chars) = self.peek_operator()?;
+		if self.current_char().is_alphabetic() {
+			return None; // a word operator alone is a name: the parameter `to` of `hanoi(n, from, to, via)`
+		}
+		let blanks = (chars..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		if !matches!(self.peek_char(chars + blanks), ')' | ',' | ']') {
+			return None;
+		}
+		self.advance_by(chars);
+		Some(Node::Key(Box::new(Node::Empty), op, Box::new(Node::Empty)))
 	}
 
 	/// `await a + await b`: `await` takes its operand like a unary minus, so each task is awaited before the sum.
@@ -89,7 +112,8 @@ impl WaspParser {
 			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword; // `return := …` as a name
 			return None;
 		} else {
-			self.parse_expr(0)
+			// the binding of an assigned value: `return square n` returns the braceless call, like `x = square n`
+			self.parse_expr(Op::Assign.binding_power().1)
 		};
 		Some(Node::List(vec![Symbol(RETURN_KEYWORD.to_string()), value], Bracket::None, Separator::Space))
 	}
@@ -114,6 +138,11 @@ impl WaspParser {
 		// and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
 		if self.current_char() == '|' && self.peek_char(1) == '>' {
 			return Some((SpecialInfix::Pipeline, 2, PIPELINE_BINDING_POWER));
+		}
+		// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
+		let is_name = matches!(lhs.drop_meta(), Node::Symbol(_));
+		if is_name && self.current_char() == '.' && self.peek_char(1) == '(' && !self.options.data_mode {
+			return Some((SpecialInfix::DotCall, 1, Op::Dot.binding_power()));
 		}
 		// element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
 		if let Some(op) = self.element_wise_operator() {
@@ -163,6 +192,14 @@ impl WaspParser {
 			}
 			if let Some(updated) = self.try_parse_user_infix(&lhs, min_bp) {
 				lhs = updated;
+				continue;
+			}
+
+			// `(() => 7)()`: a parenthesized function called with no arguments, the `()` glued to the group
+			let parenthesized = matches!(lhs.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1);
+			if parenthesized && self.prev_char() == ')' && self.current_char() == '(' && self.peek_char(1) == ')' {
+				self.advance_by(2);
+				lhs = Node::List(vec![lhs, Node::List(vec![], Bracket::Round, Separator::None)], Bracket::None, Separator::Space);
 				continue;
 			}
 
@@ -227,6 +264,10 @@ impl WaspParser {
 			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
+			if let Err(refused) = self.left_arrow_assignment(op, &lhs) {
+				lhs = refused;
+				break;
+			}
 			if matches!(op, Op::Add | Op::Sub) {
 				match self.signed_number_starts_a_list(&lhs) {
 					Ok(false) => {}
@@ -278,8 +319,11 @@ impl WaspParser {
 			let rhs = match block_body {
 				Some(block) => block,
 				None if matches!(op, Op::Then | Op::Else) => {
+					let outer = self.branch_bp.replace(r_bp);
 					let branch = self.parse_expr(r_bp);
-					self.branch_assignment(branch, r_bp)
+					let branch = self.branch_assignment(branch, r_bp);
+					self.branch_bp = outer;
+					branch
 				}
 				None => self.parse_expr(r_bp),
 			};
@@ -446,8 +490,35 @@ impl WaspParser {
 		Node::Key(Box::new(Empty), Op::If, Box::new(rhs))
 	}
 
+	/// `|x| x*x`, `|a, b| a+b` (Rust, and Ruby's `{ |x| x*x }`): the parameters of a lambda between bars, which the
+	/// body follows; nothing else starts with a bar
+	pub(super) fn pipe_parameters(&mut self) -> Option<Node> {
+		if self.current_char() != '|' || self.options.data_mode {
+			return None;
+		}
+		let mut length = 1;
+		while matches!(self.peek_char(length), ' ' | ',') || self.peek_char(length).is_alphanumeric() || self.peek_char(length) == '_' {
+			length += 1;
+		}
+		let written: String = (1..length).map(|offset| self.peek_char(offset)).collect();
+		let names: Vec<Node> = written.split([' ', ',']).filter(|name| !name.is_empty()).map(|name| Node::Symbol(name.to_string())).collect();
+		let mut body_start = length + 1;
+		while self.peek_char(body_start) == ' ' {
+			body_start += 1;
+		}
+		let first_name = 1 + written.len() - written.trim_start().len();
+		if self.peek_char(length) != '|' || names.is_empty() || !self.is_identifier_start(first_name) || BODY_ENDS.contains(&self.peek_char(body_start)) {
+			return None;
+		}
+		self.advance_by(body_start);
+		Some(match <[Node; 1]>::try_from(names) {
+			Ok([name]) => name,
+			Err(names) => Node::List(names, Bracket::Round, Separator::Colon),
+		})
+	}
+
 	/// A statement body follows: not a separator, closing bracket, end of input or the `do` keyword
 	pub(super) fn at_body_start(&self) -> bool {
-		!matches!(self.current_char(), '\0' | ';' | ',' | '\n' | '}' | ')' | ']') && !self.matches_keyword("do")
+		!BODY_ENDS.contains(&self.current_char()) && !self.matches_keyword("do")
 	}
 }

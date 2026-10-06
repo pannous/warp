@@ -37,3 +37,40 @@ fn test_scalar_calls_and_list_functions_do_not_broadcast() {
 fn test_operators_do_not_broadcast() {
 	fails_with("[1 2 3]*2", "multiply each element");
 }
+
+#[test]
+fn julia_dot_call_broadcasts() {
+	assert_eq!(eval("f(x) = x^2; f.([1,2,3])").serialize(), "[1 4 9]");
+	assert_eq!(eval("f(x) = x^2; xs = [1,2]; f.(xs)").serialize(), "[1 4]");
+	assert_eq!(eval("add(a, b) = a + b; add.([1,2], 10)").serialize(), "[11 12]");
+}
+
+#[test]
+fn library_words_and_math_operators_broadcast() {
+	assert_eq!(eval("upper [\"ab\", \"cd\"]").serialize(), "[\"AB\" \"CD\"]");
+	assert_eq!(eval("abs [-1, 2]").serialize(), "[1 2]"); // was 2, silently
+	assert_eq!(eval("sqrt [4, 9]").serialize(), "[2 3]");
+	assert_eq!(eval("xs = [-3, 4]; abs xs").serialize(), "[3 4]");
+}
+
+#[test]
+fn a_broadcast_inside_a_library_word_and_a_lambda_variable() {
+	assert_eq!(eval("square(x) := x*x; sum square [1, 2, 3]").serialize(), "14");
+	assert_eq!(eval("square(x) := x*x; sum(square [1, 2, 3])").serialize(), "14");
+	assert_eq!(eval("f = x => x + 1; f [1, 2]").serialize(), "[2 3]");
+}
+
+#[test]
+fn max_and_min_without_parentheses() {
+	assert_eq!(eval("max [1, 25]").serialize(), "25");
+	assert_eq!(eval("xs = [4, 2]; min xs").serialize(), "2");
+	assert_eq!(eval("square(x) := x*x; max square [1, -5]").serialize(), "25");
+}
+
+#[test]
+fn a_function_of_several_values_broadcasts_over_its_list_argument() {
+	assert_eq!(eval("add(a, b) := a + b; add [1, 2] 10").serialize(), "[11 12]");
+	assert_eq!(eval("add(a, b) := a + b; add(10, [1, 2])").serialize(), "[11 12]");
+	assert_eq!(eval("add(a, b) := a + b; add(all [1, 2], 10)").serialize(), "[11 12]");
+	assert_eq!(eval("square(x) := x*x; xs = [1, 2]; square(all xs)").serialize(), "[1 4]");
+}

@@ -4,6 +4,9 @@
 
 const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
+// the checks of the listeners on shared values (src/lowering/signal_values.rs), run at every check point
+const SHARED_HANDLER = "on·shared";
+const SHARED_CHECK_MILLISECONDS = 10;
 const PAGE_BITS = 16;
 const STDERR = 2;
 /// where host.read and the test runner's file system find files: the repository root the static server serves
@@ -14,6 +17,9 @@ const RAND_MAX = 2147483647;
 const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a % b, ceil: Math.ceil, floor: Math.floor };
 
 const HTTP_NOT_FOUND = "HTTP status 404";
+const MODULE_PATH = /\.(wasm|wat)$/; // src/wasm_modules.rs MODULE_EXTENSIONS
+const SETTER_PREFIX = "set "; // src/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
+const TEXT_CROSSINGS_SECTION = "warp.module_texts"; // src/wasm_modules.rs TEXT_CROSSINGS_SECTION
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 
 const utf8 = new TextEncoder();
@@ -150,12 +156,46 @@ function programImports(holder, hooks) {
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
 			sleep: milliseconds => {
 				const until = Date.now() + Number(milliseconds);
-				while (Date.now() < until);
+				let check = Date.now() + SHARED_CHECK_MILLISECONDS;
+				while (Date.now() < until) {
+					if (Date.now() >= check) {
+						checkShared(holder);
+						check = Date.now() + SHARED_CHECK_MILLISECONDS;
+					}
+				}
+				checkShared(holder);
 			},
 			random: () => Math.random(),
 			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
 			clock: () => BigInt(Date.now()),
-			signal_poll: () => {}, // a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md)
+			// a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md); shared listeners do
+			signal_poll: () => checkShared(holder),
+			// channels between programs (src/channels.rs): a page sends on a BroadcastChannel of the name; receiving needs
+			// the program to keep running after main, which the playground does not do for timers either
+			channel_listen: () => { holder.warnings.push("on message …: the playground does not receive channel messages yet"); },
+			channel_pending: () => 0n,
+			channel_next: () => buildValue(program(), treeOfPlain(null)),
+			channel_send: (channel, message) => {
+				const program_ = program();
+				new BroadcastChannel(plainOfTree(readNode(program_, channel))).postMessage(plainOfTree(readNode(program_, message)));
+			},
+			signal_every: () => { holder.warnings.push("on every …: timers do not run in the playground yet"); },
+			signal_daily: () => { holder.warnings.push("on every day at …: timers do not run in the playground yet"); },
+			signal_at: () => { holder.warnings.push("at 9:00 {…}: timers do not run in the playground yet"); },
+			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
+			// system values (crates/warp-runtime/src/system_values.rs): what the browser tells, a loud error for the rest
+			system_value: name => {
+				const value = decode(cString(name));
+				if (value === "online") return BigInt(navigator.onLine);
+				if (value === "dark mode" && globalThis.matchMedia) return BigInt(matchMedia("(prefers-color-scheme: dark)").matches);
+				throw new Error(`${value}: the playground cannot read it yet`);
+			},
+			clipboard_text: () => { throw new Error("clipboard: the playground cannot read it (the browser's clipboard is asynchronous)"); },
+			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
+			exit: code => {
+				holder.exitCode = Number(code);
+				throw new Error(`exit(${code})`);
+			},
 			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings)
 			paint: (pixels, width, height) => {
 				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
@@ -255,7 +295,7 @@ function programImports(holder, hooks) {
 	// anything else (native FFI libraries) is missing in the browser: say which, when the program calls it
 	const missing = (module, name) => () => { throw new Error(`${module}.${name} is not available in the browser`); };
 	return new Proxy(known, {
-		get: (modules, module) => new Proxy(modules[module] ?? {}, {
+		get: (modules, module) => new Proxy(modules[module] ?? (MODULE_PATH.test(module) ? moduleImports(holder, hooks, module) : {}), {
 			get: (functions, name) => functions[name] ?? missing(module, String(name)),
 		}),
 	});
@@ -281,14 +321,32 @@ const TASK_STOPPED = "task stopped";
 // Workers a task runs on: made while the program's worker is idle (prepareTaskPool), since a Worker only starts once
 // its creator returns to its event loop and a running program never does (emscripten keeps a thread pool for this)
 const taskPool = [];
+const TASK_POOL_SIZE = Math.min(4, self.navigator?.hardwareConcurrency ?? 2);
+// how long a run waits for the pool's Workers to load before it starts anyway (a task then runs inline)
+const TASK_POOL_WAIT_MS = 10000;
+const TASK_POOL_POLL_MS = 10;
+const hasTaskWorkers = () => self.crossOriginIsolated && self.Worker;
+
+function addTaskWorker() {
+	const worker = new Worker(TASK_WORKER);
+	worker.onmessage = () => taskPool.push(worker); // loaded: it can take tasks
+}
 
 // the pool of task Workers, made by the workers that run programs (worker.js, test-worker.js) when they start
-function prepareTaskPool(size = Math.min(4, self.navigator?.hardwareConcurrency ?? 2)) {
-	if (!self.crossOriginIsolated || !self.Worker) return;
-	for (let index = 0; index < size; index++) {
-		const worker = new Worker(TASK_WORKER);
-		worker.onmessage = () => taskPool.push(worker); // loaded: it can take tasks
-	}
+function prepareTaskPool(size = TASK_POOL_SIZE) {
+	if (!hasTaskWorkers()) return;
+	for (let index = 0; index < size; index++) addTaskWorker();
+}
+
+// resolves once every task Worker of the pool has loaded: a run that starts before would run its tasks inline, where
+// `stop` cannot end one (samples/threads.wasp's endless spin hung the browser suite, card flaky-browser)
+function taskPoolReady() {
+	if (!hasTaskWorkers()) return Promise.resolve();
+	const deadline = performance.now() + TASK_POOL_WAIT_MS;
+	return new Promise(resolve => {
+		const check = () => (taskPool.length >= TASK_POOL_SIZE || performance.now() > deadline) ? resolve() : setTimeout(check, TASK_POOL_POLL_MS);
+		check();
+	});
 }
 
 const floatBits = new DataView(new ArrayBuffer(8));
@@ -321,7 +379,7 @@ function startTask(holder, hooks, name, ints, values) {
 		const worker = taskPool.pop();
 		const control = new Int32Array(new SharedArrayBuffer(4));
 		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control });
-		run.tasks.set(id, { name, worker, shared, control });
+		run.tasks.set(id, { name, worker, shared, control, inline: () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured) });
 	} else {
 		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured));
 	}
@@ -348,7 +406,8 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 		if (unread) return { failure: `task ${taskName(name)}: ${unread}`, signals: taskHolder.run.signals };
 		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result, signals: taskHolder.run.signals };
 	} catch (trap) {
-		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}`, signals: taskHolder.run.signals };
+		// no instance: the task never ran (`Out of memory: Cannot allocate Wasm memory`, see finishedTask)
+		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}`, unstarted: !instance, signals: taskHolder.run.signals };
 	}
 }
 
@@ -359,10 +418,15 @@ function finishedTask(run, hooks, id) {
 	if (!task.worker) return queuedSignals(run, task);
 	const header = new Int32Array(task.shared, 0, 2);
 	Atomics.wait(header, 0, 0);
-	const record = JSON.parse(decode(new Uint8Array(task.shared, TASK_HEADER, header[1]).slice()));
+	let record = JSON.parse(decode(new Uint8Array(task.shared, TASK_HEADER, header[1]).slice()));
 	if (record.output) hooks.print(record.output, 1);
 	taskPool.push(task.worker); // free for the next task
 	if (record.value?.kind === KIND_INT && record.ints) record.value = BigInt(record.value.data.int);
+	// a Worker that could not even instantiate the task runs it here instead: a page holds ~124 Wasm memories in all its
+	// Workers, and only the isolate that dropped an instance collects it, so the dead instances of this one (the
+	// starting program's) block the Worker until this isolate collects them, which it does when its own allocation
+	// fails (card browser-test, probes/wasm_memory_limit.html)
+	if (record.unstarted) record = task.inline();
 	run.tasks.set(id, record);
 	return queuedSignals(run, record);
 }
@@ -385,6 +449,11 @@ function deliverSignals(holder) {
 		const { handler, values } = queue.shift();
 		holder.exports[handler](buildValue(holder.exports, values));
 	}
+}
+
+// the listeners on shared values look whether a task changed them; a task leaves that to the program
+function checkShared(holder) {
+	if (!holder.inTask) holder.exports?.[SHARED_HANDLER]?.();
 }
 
 // the task's record, read by the program (await, join): a failure nobody read ends the run (joinTasks)
@@ -422,6 +491,7 @@ function controlTask(run, id, operation) {
 		return 1n;
 	}
 	task.worker.terminate();
+	addTaskWorker(); // the pool's replacement, loaded once this run returns to its event loop
 	run.tasks.set(id, { failure: `task ${task.name}: ${TASK_STOPPED}` });
 	return 1n;
 }
@@ -624,6 +694,69 @@ function exactHandle(module, numerator, denominator) {
 	return denominator === 1n ? integer(numerator) : module.exact_div(integer(numerator), integer(denominator));
 }
 
+// the NUL-terminated bytes at `address` of a linear memory
+function cText(memory, address) {
+	const bytes = new Uint8Array(memory.buffer, address);
+	const end = bytes.indexOf(0);
+	return bytes.slice(0, end < 0 ? bytes.length : end);
+}
+
+// the C texts the program's imports from modules cross (src/wasm_modules.rs text_crossings), by "module\tname"
+function textCrossings(run) {
+	if (!run.textCrossings) {
+		const lines = WebAssembly.Module.customSections(run.module, TEXT_CROSSINGS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
+		run.textCrossings = new Map(lines.filter(Boolean).map(line => line.split("\t")).map(([module, name, parameters, result]) =>
+			[`${module}\t${name}`, { parameters: [...parameters].map(letter => letter === "t"), result: result === "t" }]));
+	}
+	return run.textCrossings;
+}
+
+// a call of a C function of a module that takes or gives texts: a text argument (a NUL-terminated copy in the
+// program's memory) is copied into a block of the module's malloc, a char * result read back as a text (NULL is ø)
+function callWithTexts(holder, exports, member, crossing, values, path) {
+	const program = holder.exports;
+	const moduleArguments = values.map((value, index) => {
+		if (!crossing.parameters[index]) return value;
+		if (!exports.malloc) throw new Error(`${path} exports no malloc(size) to copy a text argument into`);
+		const text = cText(program.memory, value);
+		const block = exports.malloc(text.length + 1);
+		new Uint8Array(exports.memory.buffer).set([...text, 0], block);
+		return block;
+	});
+	const result = member(...moduleArguments);
+	if (!crossing.result) return result;
+	return buildValue(program, treeOfPlain(result === 0 ? null : decode(cText(exports.memory, result))));
+}
+
+// the exports of a WebAssembly module the program imports by path (src/wasm_modules.rs link): instantiated once per
+// run at the first call, with its own imports linked like the program's; a global reads through a getter and is set
+// through `set g`
+function moduleImports(holder, hooks, path) {
+	const instance = () => {
+		const modules = holder.run.wasmModules ??= new Map();
+		const file = new URL(path, FILE_ROOT).href; // one instance however the path is spelled
+		if (!modules.has(file)) {
+			if (file.endsWith(".wat")) throw new Error(`${path}: a module in WAT text needs the native build`);
+			const moduleHolder = { warnings: holder.warnings, run: holder.run };
+			const module = new WebAssembly.Module(readBytes(file));
+			moduleHolder.exports = new WebAssembly.Instance(module, programImports(moduleHolder, hooks)).exports;
+			modules.set(file, moduleHolder.exports);
+		}
+		return modules.get(file);
+	};
+	return new Proxy({}, {
+		get: (_, name) => (...values) => {
+			const exports = instance();
+			if (name.startsWith(SETTER_PREFIX)) return (exports[name.slice(SETTER_PREFIX.length)].value = values[0]);
+			const member = exports[name];
+			if (member instanceof WebAssembly.Global) return member.value;
+			if (!member) throw new Error(`${path} exports no ${name}`);
+			const crossing = textCrossings(holder.run).get(`${path}\t${name}`);
+			return crossing ? callWithTexts(holder, exports, member, crossing, values, path) : member(...values);
+		},
+	});
+}
+
 // run a compiled program: the outcome src/web.rs run_outcome reads
 function runProgram(bytes, hooks) {
 	let instance;
@@ -635,20 +768,60 @@ function runProgram(bytes, hooks) {
 	} catch (failure) {
 		return { failure: String(failure.message ?? failure) };
 	}
-	const { warnings } = holder;
+	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, instance.exports, () => instance.exports.main()));
+	const events = pageEvents(instance.exports);
+	if (events.length > 0 && outcome.result) hooks.listen?.(holder, events);
+	return outcome;
+}
+
+// `on exit {…}` (src/lowering/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
+// main returns or `exit(code)` ends it, never after a failure
+function withExitHandler(holder, exports, call) {
+	const handler = exports["on·exit"];
+	if (!handler) return call();
+	const runHandler = () => (handler.length ? handler(exports.new_empty()) : handler());
+	let result;
 	try {
-		const result = instance.exports.main();
+		result = call();
+	} catch (trap) {
+		if (holder.exitCode !== undefined) runHandler();
+		throw trap;
+	}
+	runHandler();
+	return result;
+}
+
+// the outcome of a call into a run's instance (main, or a page event's handler), as src/web.rs run_outcome reads it
+function outcomeOf(holder, hooks, call) {
+	const { warnings, exports } = holder;
+	try {
+		const result = call();
 		// the tasks nobody awaited finish before the result, as natively; a failure nobody read ends the run
 		const unread = joinTasks(holder.run, hooks);
 		deliverSignals(holder); // the raises of tasks nobody awaited run their handlers before the run ends
+		checkShared(holder); // and the listeners on shared values see what the tasks left
 		if (unread) return { failure: unread, warnings };
-		return { result: readResult(instance.exports, result), warnings };
+		return { result: readResult(exports, result), warnings };
 	} catch (trap) {
+		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, warnings };
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
-		const detail = instance.exports[TRAP_DETAIL_EXPORT]?.value;
-		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(instance.exports, detail) : null, warnings };
+		const detail = exports[TRAP_DETAIL_EXPORT]?.value;
+		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(exports, detail) : null, warnings };
 	}
+}
+
+// the page events a program handles (src/lowering/event_signals.rs PAGE_EVENTS): `on click {…}` exports on·click·node
+const PAGE_EVENT_HANDLER = /^on·(click|key)·node$/;
+function pageEvents(exports) {
+	return Object.keys(exports).map(name => name.match(PAGE_EVENT_HANDLER)?.[1]).filter(Boolean);
+}
+
+// a page event of a program that handles it, after its main ran: the handler with the event's data, its outcome
+function runPageEvent(holder, hooks, event, detail) {
+	holder.warnings = [];
+	const handler = holder.exports[`on·${event}·node`];
+	return outcomeOf(holder, hooks, () => handler(buildValue(holder.exports, treeOfPlain([detail]))));
 }
 
 // The compiler that runs the blocks a program builds at run time (run_block): loaded on first use, an instance of its own,

@@ -5,18 +5,28 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
+- P150 license: warp (and wasp) have none, so package managers list no license and nobody may legally reuse the code.
+  MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). Assumed: none until decided.
+  Asked by the packaging session 2026-10-06 (notes/packaging.md).
+- P151 crates.io: the name `warp` is taken (the web framework). Publish as `warp-lang` (recommended) / `wasp-warp` /
+  stay off crates.io (cargo install --git works). Assumed: off crates.io.
+(the three below the user answered "Later" are parked until their feature is built)
+- Parked: P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
   as they are at `!` and assigns only declared globals. User 2026-10-05: "Later"; revisit when run-time `!` is built.
-- P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
+- Parked: P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
   loop changes are captured per iteration, every other variable follows late binding (recommended) / every variable
   is captured per iteration and never checked (worker default on branch late-binding, keeps the test → 3). User
   2026-10-05: "Later". Asked by warp-29.
-- P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
+- Parked: P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
   run-time blocks are always pure. Asked by warp-29.
 Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
 work on branch runtime-units-survey pauses.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
+Dropped as answered (handover 2026-10-06 "Needs the user" list): eval_untrusted limits (P88 follow-up "Everything,
+untrusted too"), the AGENTS.md paragraph (P93), stash and obsolete tests (cleanup rule, P96), the git hook "line 240"
+fix (superseded: ~/.claude/hooks/git_destructive.py was reworked after that list, 8fc7e6b and a22714f; whoever still
+meets a hook bug files it anew with the exact command).
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
@@ -100,6 +110,108 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   (alias `this`) too; P116 `c.inc()` updates the variable c (objects are values, like `xs.add(v)`); P117 a body
   definition without parentheses (`area := side*side`) is a getter computed at each read, and `class b extends a`
   copies a's fields and methods (b's own override) (user chose inheritance over the recommended none).
+- P124 (warp-dd, branch functions 9f208fbc3) a lambda that assigns a variable of its enclosing function shares it
+  (`def counter(){ n=0; ()=>{ n+=1; n } }` counts 1, 2, 3 like JS/Kotlin/Swift), `nonlocal n` may also be written;
+  this relaxes wiki/charged.md's rule for lambdas. Worker assumption standing: a nested `def` changing one without
+  `nonlocal` is a loud error naming `nonlocal n` (Python's rule).
+- P125 (warp-dd) optional parameters, user: "x=ø, maybe x, or x? Same as with optional types." Three equivalent
+  spellings of a parameter that may be missing (missing = ø): `x=ø`, `maybe x`, `x?`; typed like the optional types
+  (`x:int?`, `maybe int`). Such a parameter holds ø or a T, so `f()` and `f(2)` both work. Assumed (undoable, not
+  addressed by the user): `a ?? b` is a unless a is ø (only ø, not 0/false); Kotlin's `?:` is not added.
+- P126 (warp-32, follows P123) texts inside containers are quoted everywhere (print, interpolation, string()):
+  `P{x:1 name:"a"}`, `["a" "b"]`; a top-level `print "a"` still writes a.
+  Follow-ups (warp-ab), settled by P126's read-back rule without a new question: a character in a container prints
+  with double quotes too (`["c"]`, since one-letter "a" parses as a character), and a `"` inside a quoted text is
+  escaped as `\"`.
+- P127 (warp-32, classes) class int fields are fast i64 struct fields; a write that does not fit is a loud run-time
+  error "x of Point is an int field: 2^70 does not fit in 64 bits; declare it x:bigint or x:number".
+  Moot as implemented (warp-32): int fields are i64 slots carrying warp's exact-int encoding, so 2^70 is kept
+  exactly; no overflow, no error. The speed goal is met without a fixed width, so no follow-up question.
+- P129 (signals, branch signals-broadcast) user: "both above and also sent Signal chat or just send "file system
+  full" if there is no value". Both `broadcast value on "chat"` and `send value to "chat"` (`to` read as the target
+  after `send`, not a range) reach `on message from "chat" {…}` in every program on this machine; without a channel
+  name both use "warp". Interpreted (undoable): `send signal chat` / `send "file system full"` without a value sends a
+  named signal with no payload, received by `on "file system full" {…}`. P129b (user: "Yes, build it now"): named
+  events cross programs: `broadcast stop the machine{…}` reaches `on stop the machine from "chat" {…}`.
+- P130 (card footgun-pi) user: "loud error, if it was declared constant before which it should be": pi and the other
+  named constants are declared constants, so `pi = 4` is a compile error "pi is a constant; fix: another name".
+  Assumed (undoable): a class field named pi (`class circle{pi = 3}`) is the class's own field, not an assignment to
+  the constant, and works without a message.
+- P131 (card int-declaration) an int variable or field refuses a fraction loudly: `x:int = 3; x += 0.5` and
+  `class P{x:int}; P(0.5)` → "x of P is an int field, got 0.5 (a fraction)", a compile-time error for literals, a
+  run-time error for computed values.
+- P132 (card function-values) `{f: x => x * 2}` is the field f holding a lambda; a type word or capitalized word
+  after the colon (`{p: Person => …}`) still makes a typed lambda.
+- P133 `|x| x*2` at the start of an expression is a lambda (Rust/Ruby; `|a, b| a*b`).
+- P134 `on exit {…}` runs once when the program ends (main returns, `exit(code)`, ctrl-c), `event` = the exit code.
+- P135 `on every day at 9:00 {…}`; `at 9:00 {…}` runs once.
+- P136 "ittt" rules over system values (`whenever battery < 20% {…}`, `whenever online {…}`) are split into one card
+  per value (battery, network, dark mode, clipboard), built later.
+- P137 tests/numbers/test_angle.rs test_function_params expects the Int 9 for `f(x)=x*x;f(3)` (the text "9" was a
+  C++-port artifact) and is un-ignored.
+- P138 (card functions-go, warp-a8) Go's `total := 0; total += n` stays a loud error ("total is charged (total := 0):
+  it runs at every use and cannot be assigned; write total = … at the definition"); P71 stays strict.
+- WebAssembly modules (warp-25, branch wasm-modules, notes/wasm_modules.md), all as recommended: P139 `import m` /
+  `use` / `require` only declare (ø); `include m` runs m's main/start export and is its value (test_import_wasm → 42).
+  P140 assigning an imported global: a mutable wasm global is set in the module, an immutable one is a loud error
+  (P130's rule). P141 REVISED (user: "if the built-in wins, then what's the point of even allowing to define it? It
+  should be an error then, no?" … "at the definition side if we don't define it, then you decide"): a wasp
+  definition named like a builtin (`def double(x)…`) is a loud error at the definition. A foreign .wasm export
+  can't be renamed, so (Interviewer's choice, as the user delegated) `import m` works, `m.double(21)` always works
+  (qualified calls get built), and a bare `double(21)` is a loud error "double is ambiguous: m.double(21) for the
+  export, 21 as float for the cast". No warning-and-builtin-wins.
+  P144 (warp-25) the old test_import_wasm (tests/wasm/test_wasm.rs) is edited to the P139 values (import/require →
+  ø, include → 42, fixture from tests/fixtures/wasm) and un-ignored, in its own commit naming P139.
+- P145 (warp-41, branch functions) R's `x <- 3` assigns with a got-it note "write x = 3"; the cramped `x<-3` is a
+  loud error naming `x = 3` and `x < -3`; `x < -3` compares. User afterwards: "we can keep it as an assignment for
+  now, but maybe we reserve it for special things later": `<-` is reserved; the assignment reading may give way to a
+  special meaning later, so docs and examples never use `<-`. FYI (worker, no question): Haskell `twice x = x * 2;
+  twice 4` defines a function when a later statement uses the name and the body uses every parameter (e6f1cbbbe).
+- P146 (card hijack-stdlib, warp-06) next under "hijacking existing standard libraries": C libraries compiled to
+  WebAssembly, imported as core modules with the C header's types (char* texts, pointers), so the same `use zlib`
+  runs natively, sandboxed and in the browser (plan: notes/stdlib_connectors.md "Status 2026-10-06").
+  Dropped as answered by P124: a block/lambda argument writing a captured variable (`total = 0; each_twice { |x|
+  total += x }`) shares it, no `global` needed (warp-93, branch ruby-yield).
+- P147 (P146 step 4, warp-06, branch hijack-libc) the prebuilt wasi-libc module lives in this repo:
+  web/playground/lib/libc.wasm + libc.h, built by a script and committed like warp.wasm; the browser host loads it
+  for `use c` instead of host.js's hand-written shims; native keeps dlopen.
+- P142 (scope of P141, asked by warp-e4) the definition error applies only where the builtin would win, i.e. the
+  definition could never take effect (casts like `double`, operators, type names). Library words (`add`, `map`,
+  `count`) may be redefined and the user's version wins; class methods are always allowed (called as `x.add`). User:
+  "add Not really a built-in, just an example. Also, map should not be the main thing to use. One would just use the
+  syntax square all x or maybe even just broadcasting." So docs, hints, examples and new tests prefer broadcasting
+  (`square [1 2 3]`, wiki/broadcasting.md) or `square all x` (wiki/all.md) over `map`.
+- P143 (warp-a8) a function called without parentheses next to a comparison, `f x == y`, is a loud error naming
+  both forms: "square 3 == 9 is ambiguous; write (square 3) == 9 or square(3 == 9)" (user chose this over the
+  recommended "(f x) == y for all functions"; warp-a8 had implemented (f x) == y for user functions only). Assumed
+  (undoable): statement words (print, return, assert) still take the whole expression (`print 3 == 3` prints true);
+  the wiki examples `square [1 2 3] == [1 4 9]` (wiki/all.md, wiki/broadcasting.md) get the parentheses.
+  Refined (user, same day): "But maybe it's not ambiguous when square takes a number and not a bool." Types decide
+  first: when the parameter type rules out the comparison's bool (`square number = …`, `f(x:int)`), `f x == y` is
+  `(f x) == y` without a message; the error stays only when both readings type-check (parameter untyped/any or
+  bool). So `square 3 == 9` is true and the wiki examples keep their bare form.
+- P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
+  of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
+  `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
+- P122 (classes, warp-8e, card g-1nug) static members take the explicit keyword (user chose this over the
+  recommended "`pi = 3` in the class body is a constant"): `class circle{r:int; static pi = 3}; circle.pi` → 3, also
+  `c.pi`, never stored per instance; a plain `pi = 3` stays a per-instance field with a default value. `static` no
+  longer gets the "no meaning in wasp" note (P78).
+- P123 (classes, warp-8e) an object's text is the constructor form `point{x:1 y:2}` everywhere: as a result, from
+  `string(p)` and from `print p`; it reads back in as the same value.
+  Follow-up (user): "Maybe Point{x:1 y:2} to distinguish it from untyped data (but that's just optional convention
+  when printing.)" Assumed (undoable): the printer writes the class name as declared, so it still reads back; the
+  convention is to declare classes capitalized (`class Point`) in docs, examples and new tests, so a typed object
+  `Point{x:1 y:2}` stands apart from untyped tagged data `point{x:1 y:2}`. The printer does not capitalize on its own.
+- P118 GPU maps (warp-d9, notes/simd.md): only after SIMD lands, only on an explicit `@gpu` map, never silent
+  offloading (f32 differs); native first via wgpu. Card in Later.
+- P119 NaN canonicalization only where a float's bits are observable (print/text, bit reads, memory stores, host/FFI
+  calls, task crossing); arithmetic in between runs free (engine flag off, emitter canonicalizes). warp-d9; float
+  loops measured 7.2 → 3.8 ns per item.
+- P120 a program whose main ends while handlers listen: the CLI (`warp file`, `warp run`, executables) keeps running
+  and prints once to stderr "listening: … (ctrl-c to stop)"; in-process eval and tests never wait. warp-54.
+- P121 `exit` / `exit(code)` end the run, not the process: the CLI exits with the code, an in-process eval returns.
+  warp-54.
 - P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
   behind them go; no test edits. Asked by warp-40 (code-quality).
 - P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.

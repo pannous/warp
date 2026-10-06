@@ -64,6 +64,8 @@ impl WasmGcEmitter {
 			}
 			// Variable definition/assignment: x:=42 or x=42 → store and return value
 			Node::Key(left, Op::Define | Op::Assign, right) => self.emit_numeric_assignment(func, located, left, right),
+			// `x as int` of an Int, what a declared result type `-> int` lowers to: x, a ratio truncated, without a box
+			Node::Key(value, Op::As, target) if self.get_type(value) == Kind::Int && is_int_type_word(target) => self.emit_int_value_truncated(func, value),
 			// Increment/decrement: i++ or i--
 			Node::Key(left, op, right) if *op == Op::Inc || *op == Op::Dec => self.emit_numeric_step(func, left, op, right),
 			// Compound assignment: x += y → x = x + y
@@ -120,6 +122,9 @@ impl WasmGcEmitter {
 			}
 			// Index operator: list#index (1-based)
 			Node::Key(list, Op::Hash, index) => {
+				if self.emit_struct_field_int(func, list, index) {
+					return;
+				}
 				if self.map_is_indexed_by_key(index) {
 					self.emit_indexed_node(func, list, index);
 					self.emit_call(func, "get_int_value");
@@ -176,9 +181,8 @@ impl WasmGcEmitter {
 				return true;
 			}
 		}
-		let [Node::Symbol(fn_name), argument] = items else {
-			return false;
-		};
+		let [word, argument] = items else { return false };
+		let Node::Symbol(fn_name) = word.drop_meta() else { return false }; // `count xs` without parentheses keeps its position
 		let integer_builtin = ROUNDING_FUNCTIONS.contains(&fn_name.as_str())
 			|| fn_name == crate::min_max::EMPTY_EXTREMUM_CALL
 			|| fn_name == crate::switch::NO_CASE_CALL
@@ -432,4 +436,9 @@ impl WasmGcEmitter {
 		// new_list is always emitted; reaching this is a compiler bug, reported as an error value
 		self.emit_type_error(func, "internal error: new_list is not available".to_string());
 	}
+}
+
+/// `int`, `Int`, `integer`: the type `x as int` converts to
+fn is_int_type_word(target: &Node) -> bool {
+	matches!(crate::type_kinds::canonical_type_name(&target.drop_meta().name().to_lowercase()), "int" | "integer")
 }

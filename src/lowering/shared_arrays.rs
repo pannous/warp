@@ -2,8 +2,13 @@
 //! the host: src/shared.rs natively, host.js in the browser), `shared xs = float[n]` n floats; `go f(xs)` passes that
 //! same array, the one exception to copying. The array is an Int naming it; its uses become host words, atomic in the
 //! host: `xs#i` → `shared_get(xs, i)`, `xs#i = v` → `shared_set(xs, i, v)`, `xs#i += v` → `shared_add(xs, i, v)`
-//! (`shared_getf` … for floats), `#xs` / `count(xs)` → `shared_count(xs)`. A parameter given a shared array (by a call
-//! or a `go`) is shared too, of the same element type.
+//! (`shared_getf` … for floats), `#xs` / `count(xs)` → `shared_count(xs)`, `for x in xs` loops over its cells and xs as a
+//! whole is the list of its cells. A parameter given a shared array (by a call or a `go`) is shared too, of the same
+//! element type.
+//! Linear arrays (notes/linear_arrays.md): `linear xs = int[n]`, `linear xs = float[n]` are rewritten the same way into
+//! the module's own words over a block of linear memory (`linear_get`, `linear_set` … in wasm_emitter/linear_arrays.rs);
+//! they stay in their task's memory, so a `go` cannot take one. Declaring one is discouraged: the compiler picks where
+//! number lists live by itself.
 //! Shared values (P106): `shared done = false`, `shared n = 0`, `shared x = 0.5` are one-cell arrays: a read of `n` is
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
 
@@ -19,6 +24,10 @@ const SHARED_COUNT: &str = crate::host::SHARED_WORDS[4];
 const COUNTING_WORDS: [&str; 3] = ["count", "length", "size"];
 const FLOAT_WORDS: [&str; 3] = ["float", "real", "double"];
 
+/// `linear xs = int[n]`: an array in linear memory
+const LINEAR_WORD: &str = "linear";
+const LINEAR_TOPIC: &str = "linear-array";
+
 /// The cell of a shared value
 const VALUE_CELL: i64 = 1;
 
@@ -27,6 +36,24 @@ const VALUE_CELL: i64 = 1;
 struct Shared {
 	element: Element,
 	value: bool,
+	storage: Storage,
+}
+
+/// Where an array's cells are: in the host (shared with every task) or in the module's linear memory
+#[derive(Clone, Copy, PartialEq)]
+enum Storage {
+	Host,
+	Linear,
+}
+
+impl Storage {
+	/// The words that create and count an array
+	fn new_and_count(self) -> (&'static str, &'static str) {
+		match self {
+			Storage::Host => (SHARED_NEW, SHARED_COUNT),
+			Storage::Linear => (crate::wasm_emitter::linear_arrays::LINEAR_NEW, crate::wasm_emitter::linear_arrays::LINEAR_COUNT),
+		}
+	}
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -37,10 +64,16 @@ enum Element {
 	Bool,
 }
 
-/// The words of reading, writing and adding an element of a shared array of Ints or of floats
-fn element_words(element: Element) -> [&'static str; 3] {
+/// The words of reading, writing and adding an element of a shared or linear array of Ints or of floats
+fn element_words(kind: Shared) -> [&'static str; 3] {
+	use crate::wasm_emitter::linear_arrays::{LINEAR_FLOAT_WORDS, LINEAR_INT_WORDS};
 	let [_, get, set, add, _] = crate::host::SHARED_WORDS;
-	if element == Element::Float { crate::host::SHARED_FLOAT_WORDS } else { [get, set, add] }
+	match (kind.storage, kind.element == Element::Float) {
+		(Storage::Host, true) => crate::host::SHARED_FLOAT_WORDS,
+		(Storage::Host, false) => [get, set, add],
+		(Storage::Linear, true) => LINEAR_FLOAT_WORDS,
+		(Storage::Linear, false) => LINEAR_INT_WORDS,
+	}
 }
 
 pub fn lower(node: Node) -> Node {
@@ -48,6 +81,10 @@ pub fn lower(node: Node) -> Node {
 	node.visit(&mut |part| declared.extend(declaration(part).map(|(name, _, shared)| (name, shared))));
 	if declared.is_empty() {
 		return node;
+	}
+	if declared.values().any(|kind| kind.storage == Storage::Linear) {
+		crate::diagnostic::educate_once(LINEAR_TOPIC, "linear xs = int[n]", "xs = int[n]",
+			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
 	}
 	let functions = definitions(&node);
 	let shared_parameters = shared_parameters(&node, &functions, &declared);
@@ -66,16 +103,19 @@ pub(crate) fn shared_names(node: &Node) -> Vec<String> {
 fn declaration(node: &Node) -> Option<(String, Node, Shared)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
 	let [word, assignment] = items.as_slice() else { return None };
-	if !matches!(word.drop_meta(), Node::Symbol(w) if SHARED_WORDS.contains(&w.as_str())) {
-		return None;
-	}
+	let storage = match word.drop_meta() {
+		Node::Symbol(w) if SHARED_WORDS.contains(&w.as_str()) => Storage::Host,
+		Node::Symbol(w) if w == LINEAR_WORD => Storage::Linear,
+		_ => return None,
+	};
 	let Node::Key(target, Op::Assign, value) = assignment.drop_meta() else { return None };
 	let Node::Symbol(name) = target.drop_meta() else { return None };
 	let Node::Key(element, Op::Hash, index) = value.drop_meta() else {
-		return Some((name.clone(), value.as_ref().clone(), Shared { element: value_element(value), value: true }));
+		// a linear value would be a variable: only arrays are linear
+		return (storage == Storage::Host).then(|| (name.clone(), value.as_ref().clone(), Shared { element: value_element(value), value: true, storage }));
 	};
 	let element = if FLOAT_WORDS.contains(&element.name().as_str()) { Element::Float } else { Element::Int };
-	Some((name.clone(), written_count(index), Shared { element, value: false }))
+	Some((name.clone(), written_count(index), Shared { element, value: false, storage }))
 }
 
 /// The type of a shared value from its first value: `false`, `0.5`, `-1.5`, else an Int
@@ -188,12 +228,12 @@ impl Rewrite<'_> {
 	fn node(&self, node: Node, function: Option<&str>) -> Node {
 		if let Some((name, first, kind)) = declaration(&node) {
 			let count = if kind.value { crate::node::int(VALUE_CELL) } else { self.node(first.clone(), function) };
-			let created = Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(builtin(SHARED_NEW, vec![count])));
+			let created = Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(builtin(kind.storage.new_and_count().0, vec![count])));
 			if !kind.value {
 				return created;
 			}
 			// `n = shared_new(1); shared_set(n, 1, v)`: the value is set once the name holds its cell
-			let [_, set, _] = element_words(kind.element);
+			let [_, set, _] = element_words(kind);
 			let first = builtin(set, vec![Node::Symbol(name), crate::node::int(VALUE_CELL), cell_value(self.node(first, function), kind.element)]);
 			return Node::List(vec![created, first], Bracket::None, Separator::Semicolon);
 		}
@@ -208,33 +248,33 @@ impl Rewrite<'_> {
 				match (target.drop_meta(), op) {
 					// `n = n + v`, `n = n - v`: the atomic add, as `n += v`, so no task's update is lost
 					(name, Op::Assign) if let Some(kind) = shared_value(name, &names) && let Some((op, added)) = self_update(name, &value) => {
-						let [_, _, add] = element_words(kind.element);
+						let [_, _, add] = element_words(kind);
 						builtin(add, vec![name.clone(), crate::node::int(VALUE_CELL), signed(self.node(added, function), op)])
 					}
 					// `n = v`, `n += v` of a shared value
 					(name, Op::Assign) if let Some(kind) = shared_value(name, &names) => {
-						let [_, set, _] = element_words(kind.element);
+						let [_, set, _] = element_words(kind);
 						builtin(set, vec![name.clone(), crate::node::int(VALUE_CELL), cell_value(self.node(*value, function), kind.element)])
 					}
 					(name, Op::AddAssign | Op::SubAssign) if let Some(kind) = shared_value(name, &names) => {
-						let [_, _, add] = element_words(kind.element);
+						let [_, _, add] = element_words(kind);
 						builtin(add, vec![name.clone(), crate::node::int(VALUE_CELL), signed(self.node(*value, function), op)])
 					}
 					(Node::Key(array, Op::Hash, index), Op::Assign) if let Some(kind) = shared(array, &names) => {
-						let [_, set, _] = element_words(kind.element);
+						let [_, set, _] = element_words(kind);
 						builtin(set, vec![array.as_ref().clone(), self.node(index.as_ref().clone(), function), self.node(*value, function)])
 					}
 					(Node::Key(array, Op::Hash, index), Op::AddAssign | Op::SubAssign) if let Some(kind) = shared(array, &names) => {
-						let [_, _, add] = element_words(kind.element);
+						let [_, _, add] = element_words(kind);
 						builtin(add, vec![array.as_ref().clone(), self.node(index.as_ref().clone(), function), signed(self.node(*value, function), op)])
 					}
 					(array, Op::Hash) if !matches!(value.drop_meta(), Node::Empty) && let Some(kind) = shared(array, &names) => {
-						let [get, _, _] = element_words(kind.element);
+						let [get, _, _] = element_words(kind);
 						builtin(get, vec![array.clone(), self.node(*value, function)])
 					}
 					// `#xs`, `xs.count`
-					(Node::Empty, Op::Hash) if shared(&value, &names).is_some() => builtin(SHARED_COUNT, vec![*value]),
-					(array, Op::Dot) if shared(array, &names).is_some() && COUNTING_WORDS.contains(&value.name().as_str()) => builtin(SHARED_COUNT, vec![array.clone()]),
+					(Node::Empty, Op::Hash) if let Some(kind) = shared(&value, &names) => builtin(kind.storage.new_and_count().1, vec![*value]),
+					(array, Op::Dot) if let Some(kind) = shared(array, &names) && COUNTING_WORDS.contains(&value.name().as_str()) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
 					_ => Node::Key(Box::new(self.node(*target, function)), op, Box::new(self.node(*value, function))),
 				}
 			}
@@ -242,19 +282,39 @@ impl Rewrite<'_> {
 				let names = self.names(function);
 				// a shared value given to a function that shares it goes as its cell, not as its value
 				let passed = call(&Node::List(items.clone(), bracket.clone(), separator.clone())).and_then(|(callee, _)| self.shared_parameters.get(&callee).cloned()).unwrap_or_default();
-				let offset = if items.first().is_some_and(|head| head.name() == crate::declarations::TASK_GO) { 2 } else { 1 };
+				let starts_task = items.first().is_some_and(|head| head.name() == crate::declarations::TASK_GO);
+				let offset = if starts_task { 2 } else { 1 };
+				let linear_argument = items.iter().skip(offset).find(|item| shared(item, &names).is_some_and(|kind| kind.storage == Storage::Linear));
+				if let (true, Some(array)) = (starts_task, linear_argument) {
+					return crate::diagnostic::Diagnostic::at(array, format!("a task cannot take the linear array {}: it lives in this task's memory; `shared {} = int[n]` shares one", array.name(), array.name())).into_error();
+				}
 				match items.as_slice() {
-					[word, array] if COUNTING_WORDS.contains(&word.name().as_str()) && shared(array, &names).is_some() => builtin(SHARED_COUNT, vec![array.clone()]),
+					[word, array] if COUNTING_WORDS.contains(&word.name().as_str()) && let Some(kind) = shared(array, &names) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
+					// `for x in xs {…}` over an array: over its indexes, x read from each cell
+					[word, item, in_word, array, body] if word.name() == "for" && in_word.name() == "in" && let Some(kind) = shared(array, &names) => {
+						let index = Node::Symbol(format!("{}{}index", array.name(), crate::analyzer::TEMPORARY_SEPARATOR));
+						let read = Node::Key(Box::new(item.clone()), Op::Assign, Box::new(builtin(element_words(kind)[0], vec![array.clone(), index.clone()])));
+						let statements = match self.node(body.clone(), function).drop_meta().clone() {
+							Node::List(statements, Bracket::Curly, Separator::Semicolon | Separator::Newline) => statements,
+							Node::List(statement, Bracket::Curly, separator) => vec![Node::List(statement, Bracket::None, separator)],
+							other => vec![other],
+						};
+						let indexes = Node::Key(Box::new(crate::node::int(1)), Op::To, Box::new(builtin(kind.storage.new_and_count().1, vec![array.clone()])));
+						let body = Node::List([vec![read], statements].concat(), Bracket::Curly, Separator::Semicolon);
+						Node::List(vec![word.clone(), index, in_word.clone(), indexes, body], bracket, separator)
+					}
 					_ => Node::List(items.into_iter().enumerate().map(|(index, item)| match index.checked_sub(offset) {
-						Some(argument) if passed.contains_key(&argument) && shared_value(&item, &names).is_some() => item,
+						Some(argument) if passed.contains_key(&argument) && (shared_value(&item, &names).is_some() || shared(&item, &names).is_some()) => item,
 						_ => self.node(item, function),
 					}).collect(), bracket, separator),
 				}
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.node(*node, function)), data },
+			// an array as a whole: the list of its cells
+			Node::Symbol(_) if let Some(kind) = shared(&node, &self.names(function)) => collected(&node, kind),
 			// a read of a shared value
 			Node::Symbol(_) if let Some(kind) = shared_value(&node, &self.names(function)) => {
-				let [get, _, _] = element_words(kind.element);
+				let [get, _, _] = element_words(kind);
 				let read = builtin(get, vec![node, crate::node::int(VALUE_CELL)]);
 				match kind.element {
 					Element::Bool => Node::Key(Box::new(read), Op::Ne, Box::new(crate::node::int(0))),
@@ -272,6 +332,21 @@ fn shared(node: &Node, names: &HashMap<String, Shared>) -> Option<Shared> {
 		Node::Symbol(name) => names.get(name).copied().filter(|kind| !kind.value),
 		_ => None,
 	}
+}
+
+
+/// `(xs·list = []; for xs·index in 1 to count(xs) { xs·list = xs·list + [get(xs, xs·index)] }; xs·list)`
+fn collected(array: &Node, kind: Shared) -> Node {
+	let name = array.name();
+	let separator = crate::analyzer::TEMPORARY_SEPARATOR;
+	let [get, _, _] = element_words(kind);
+	let count = kind.storage.new_and_count().1;
+	use crate::library_words::substitute;
+	let template = crate::wasp_parser::parse(&format!(
+		"(linear_list = []; for linear_index in 1 to {count}(linear_array) {{ linear_list = linear_list + [{get}(linear_array, linear_index)] }}; linear_list)"
+	));
+	let named = |suffix: &str| Node::Symbol(format!("{name}{separator}{suffix}"));
+	substitute(substitute(substitute(template, "linear_array", array), "linear_list", &named("list")), "linear_index", &named("index"))
 }
 
 /// The type of a shared value named by `node`, if it is one

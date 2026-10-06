@@ -36,6 +36,8 @@ const CHECK_PREFIX: &str = "signal·check·";
 /// `signal_listening_0`: whether the listener was declared yet
 const LISTENING_PREFIX: &str = "signal_listening_";
 const GLOBAL_WORD: &str = "global";
+/// `p.age` as a watched or written name
+const FIELD_SEPARATOR: char = '.';
 
 #[derive(Clone)]
 enum Trigger {
@@ -58,8 +60,11 @@ struct Listener {
 }
 
 impl Listener {
-	fn watches(&self, name: &str) -> bool {
-		self.watched().is_some_and(|watched| watched.contains(name))
+	/// A write of `p.age` concerns listeners of p and of p.age; a write of p (or of `p#1`) those of p and of its fields
+	fn watches(&self, written: &str) -> bool {
+		let root = written.split(FIELD_SEPARATOR).next().unwrap_or(written);
+		let field_of_written = |watched: &str| watched.strip_prefix(written).is_some_and(|rest| rest.starts_with(FIELD_SEPARATOR));
+		self.watched().is_some_and(|watched| watched.iter().any(|name| name == written || name == root || field_of_written(name)))
 	}
 
 	fn watched(&self) -> Option<&HashSet<String>> {
@@ -247,30 +252,23 @@ impl Signals {
 
 	/// `once x==5 {body}`, `whenever x>1 : body`, `on set x {body}`
 	fn listener(&mut self, statement: &Node) -> Option<Listener> {
-		let Node::List(items, _, _) = statement.drop_meta() else { return None };
-		let keyword = word(items.first()?);
-		let on_word = (keyword == ON_WORD).then(|| items.get(1).map(word)).flatten();
-		if on_word.as_deref() == Some(SET_WORD) {
-			return self.set_listener(&items[2..]);
+		if let Some((keyword, rest)) = call_listener_word(statement) {
+			return self.call_listener(&rest, keyword == BEFORE_WORD);
 		}
-		if on_word.as_deref() == Some(CHANGE_WORD) {
-			return self.change_listener(&items[2..]);
+		let (word, subject, body) = listener_parts(statement)?;
+		match word {
+			ListenerWord::Set => return self.set_listener(subject, body),
+			ListenerWord::Change => return self.change_listener(subject, body),
+			ListenerWord::Once | ListenerWord::Whenever => {}
 		}
-		if keyword == AFTER_WORD || keyword == BEFORE_WORD {
-			return self.call_listener(&items[1..], keyword == BEFORE_WORD);
-		}
-		if keyword != ONCE_WORD && keyword != WHENEVER_WORD {
-			return None;
-		}
-		let (condition, body) = subject_and_body(&items[1..]).or_else(|| trailing_block(items.get(1)?).filter(|_| items.len() == 2))?;
-		let watched = self.sources(&condition);
+		let watched = self.sources(&subject);
 		if watched.is_empty() {
 			return None;
 		}
-		let fired = (keyword == ONCE_WORD).then(|| self.fresh_name(FIRED_PREFIX));
+		let fired = (word == ListenerWord::Once).then(|| self.fresh_name(FIRED_PREFIX));
 		let start = fired.as_ref().map(|fired| assign(fired, Node::False));
 		let body = self.lower(body, &[]);
-		Some(Listener { trigger: Trigger::Write(watched), condition: Some(condition), body, fired, start })
+		Some(Listener { trigger: Trigger::Write(watched), condition: Some(subject), body, fired, start })
 	}
 
 	fn fresh_name(&mut self, prefix: &str) -> String {
@@ -294,26 +292,23 @@ impl Signals {
 		sources
 	}
 
-	/// `on set x {body}`: the body after every write of x, `value` in it is x; of a `:=` value, after each change
-	fn set_listener(&mut self, rest: &[Node]) -> Option<Listener> {
-		let (variable, body) = subject_and_body(rest)?;
-		let Node::Symbol(name) = variable.drop_meta() else { return None };
-		if self.derived.contains_key(name) {
-			return self.change_listener(rest); // a `:=` value is never written: its sets are its changes
+	/// `on set x {body}`: the body after every write of x, `value` in it is x; of a `:=` value, after each change.
+	/// `on set p.age {body}`: after each write of the field or of p
+	fn set_listener(&mut self, variable: Node, body: Node) -> Option<Listener> {
+		let name = written_path(&variable)?;
+		if self.derived.contains_key(&name) {
+			return self.change_listener(variable, body); // a `:=` value is never written: its sets are its changes
 		}
-		let bindings = VALUE_WORDS.iter().map(|value| (value.to_string(), Node::Symbol(name.clone()))).collect();
-		let body = self.lower(crate::law::substitute(&body, &bindings), &[]);
-		Some(Listener { trigger: Trigger::Write(HashSet::from([name.clone()])), condition: None, body, fired: None, start: None })
+		let body = self.lower(with_value(&body, variable.drop_meta()), &[]);
+		Some(Listener { trigger: Trigger::Write(HashSet::from([name])), condition: None, body, fired: None, start: None })
 	}
 
 	/// `on change x {body}`: the body after every write that changed x (a variable or a `:=` value), `value` in it is x
-	fn change_listener(&mut self, rest: &[Node]) -> Option<Listener> {
-		let (variable, body) = subject_and_body(rest)?;
+	fn change_listener(&mut self, variable: Node, body: Node) -> Option<Listener> {
 		let variable = variable.drop_meta().clone();
 		root_variable(&variable)?;
 		let last = self.fresh_name(LAST_PREFIX);
-		let bindings = VALUE_WORDS.iter().map(|value| (value.to_string(), variable.clone())).collect();
-		let body = self.lower(crate::law::substitute(&body, &bindings), &[]);
+		let body = self.lower(with_value(&body, &variable), &[]);
 		let changed = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Symbol(last.clone())));
 		Some(Listener {
 			trigger: Trigger::Write(self.sources(&variable)),
@@ -345,6 +340,63 @@ impl Signals {
 		}
 		stems.into_iter().find(|stem| self.functions.contains(stem))
 	}
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum ListenerWord {
+	Once,
+	Whenever,
+	Set,
+	Change,
+}
+
+/// `once cond {body}`, `whenever cond : body`, `on set x {body}`, `on change x {body}`: the word, the condition or the
+/// variable, and the body
+pub(crate) fn listener_parts(statement: &Node) -> Option<(ListenerWord, Node, Node)> {
+	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let items = &ungrouped(items);
+	let keyword = word(items.first()?);
+	if keyword == ON_WORD {
+		let listener_word = match word(items.get(1)?).as_str() {
+			SET_WORD => ListenerWord::Set,
+			CHANGE_WORD => ListenerWord::Change,
+			_ => return None,
+		};
+		let (variable, body) = subject_and_body(&items[2..])?;
+		return Some((listener_word, variable, body));
+	}
+	let listener_word = match keyword.as_str() {
+		ONCE_WORD => ListenerWord::Once,
+		WHENEVER_WORD => ListenerWord::Whenever,
+		_ => return None,
+	};
+	let (condition, body) = subject_and_body(&items[1..]).or_else(|| trailing_block(items.get(1)?).filter(|_| items.len() == 2))?;
+	Some((listener_word, condition, body))
+}
+
+/// `f(s) := on change s {…}` arrives grouped as `(on change) (s {…})`: its parts in one row
+fn ungrouped(items: &[Node]) -> Vec<Node> {
+	let is_group = |item: &Node| matches!(item.drop_meta(), Node::List(_, Bracket::None, _));
+	if !items.first().is_some_and(is_group) {
+		return items.to_vec();
+	}
+	items.iter().flat_map(|item| match item.drop_meta() {
+		Node::List(parts, Bracket::None, _) => parts.clone(),
+		_ => vec![item.clone()],
+	}).collect()
+}
+
+/// `after tested: body`, `before test {body}`: the word and what follows it
+fn call_listener_word(statement: &Node) -> Option<(String, Vec<Node>)> {
+	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let keyword = word(items.first()?);
+	(keyword == AFTER_WORD || keyword == BEFORE_WORD).then(|| (keyword, items[1..].to_vec()))
+}
+
+/// The listener body with `value` (or `signal`, `event`) standing for the written value
+pub(crate) fn with_value(body: &Node, value: &Node) -> Node {
+	let bindings = VALUE_WORDS.iter().map(|word| (word.to_string(), value.clone())).collect();
+	crate::law::substitute(body, &bindings)
 }
 
 /// The names of `f(x) := …`, `def f: …` and the other keyword definitions
@@ -417,7 +469,7 @@ fn declared_globals(node: &Node) -> HashSet<String> {
 }
 
 /// `f(x)` or `f()` as the head of a definition
-fn is_call_head(head: &Node) -> bool {
+pub(crate) fn is_call_head(head: &Node) -> bool {
 	matches!(head.drop_meta(), Node::List(_, Bracket::Round, _))
 }
 
@@ -429,7 +481,7 @@ fn head_word(head: &Node) -> Node {
 }
 
 /// `def f(x) {…}`, `fun f …`: a keyword definition
-fn defines_function(items: &[Node]) -> bool {
+pub(crate) fn defines_function(items: &[Node]) -> bool {
 	items.first().is_some_and(|first| crate::operators::is_function_keyword(&word(first)))
 }
 
@@ -515,10 +567,18 @@ fn checks(listeners: &[Listener], written: &[String]) -> Vec<Node> {
 /// The variable `x = …`, `x += …`, `x++`, `x--` writes; a field or item write `p.age = 2`, `xs#1 = 9` writes p, xs
 fn written_variable(target: &Node, op: Op) -> Option<String> {
 	let writes = op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec);
-	writes.then(|| root_variable(target)).flatten()
+	writes.then(|| written_path(target)).flatten()
 }
 
-fn root_variable(target: &Node) -> Option<String> {
+/// `x`, `p.age`, `p.home.city`; an item `xs#1` is a write of xs
+fn written_path(target: &Node) -> Option<String> {
+	match target.drop_meta() {
+		Node::Key(base, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => Some(format!("{}{FIELD_SEPARATOR}{}", written_path(base)?, field.drop_meta().name())),
+		_ => root_variable(target),
+	}
+}
+
+pub(crate) fn root_variable(target: &Node) -> Option<String> {
 	match target.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
 		Node::Key(base, Op::Dot | Op::Hash, _) => root_variable(base),

@@ -108,3 +108,158 @@ fn through_cell(node: Node, variable: &str, cell: &Node) -> Node {
 fn call(word: &str, arguments: Vec<Node>) -> Node {
 	Node::List([vec![Node::Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
+
+/// The name of a lambda that declares `nonlocal`, made a nested function
+const LAMBDA_PREFIX: &str = "lambda·";
+
+/// A nested def changing a variable of its enclosing function declares it `nonlocal` (Python, wiki/charged.md), else
+/// the change is an error naming the fix; a lambda changing one shares it without a declaration (JS, Kotlin, Swift, C#,
+/// Ruby, Julia; P124). Such a lambda becomes a nested function `lambda·N` declaring the variables `nonlocal`, and its
+/// reference, so it shares their cells as a nested def does. Runs before the lambda passes.
+pub fn lower_lambdas(node: Node) -> Node {
+	let mut count = 0;
+	let node = nonlocal_lambdas(node, &mut count);
+	let shared = main_lambda_changes(&node);
+	crate::analyzer::declare_global(node, &shared)
+}
+
+/// The main-level variables a lambda outside any function changes (`total = 0; g(x => total += x)`): main runs once,
+/// so they are shared as globals, which closures never copy (P124)
+fn main_lambda_changes(program: &Node) -> Vec<String> {
+	let mut locals = vec![];
+	collect_locals(program, &mut locals);
+	let mut shared: Vec<String> = vec![];
+	main_lambdas(program, &mut |params, body| {
+		for (_, name) in undeclared_changes(body, &params, &locals) {
+			if !shared.contains(&name) {
+				shared.push(name);
+			}
+		}
+	});
+	shared
+}
+
+/// The lambdas outside function definitions, with their parameter names and bodies
+fn main_lambdas(node: &Node, action: &mut impl FnMut(Vec<String>, &Node)) {
+	if definition(node).is_some() {
+		return;
+	}
+	match node.drop_meta() {
+		Node::Key(params, Op::FatArrow, body) => action(lambda_parameters(params), body),
+		Node::Key(left, _, right) => {
+			main_lambdas(left, action);
+			main_lambdas(right, action);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| main_lambdas(item, action)),
+		_ => {}
+	}
+}
+
+fn nonlocal_lambdas(node: Node, count: &mut usize) -> Node {
+	if let Some((head, op, params, body)) = definition(&node) {
+		let mut locals = params;
+		collect_locals(body, &mut locals);
+		let mut hoisted = vec![];
+		let body = in_enclosing(body.clone(), &locals, count, &mut hoisted);
+		return Node::Key(Box::new(head.clone()), op, Box::new(with_first(hoisted, body)));
+	}
+	node.map_children(|child| nonlocal_lambdas(child, count))
+}
+
+/// The body with the `statements` before its own
+fn with_first(statements: Vec<Node>, body: Node) -> Node {
+	if statements.is_empty() {
+		return body;
+	}
+	match body {
+		Node::List(items, Bracket::Curly, Separator::Semicolon | Separator::Newline) => Node::List([statements, items].concat(), Bracket::Curly, Separator::Semicolon),
+		single => Node::List([statements, vec![single]].concat(), Bracket::Curly, Separator::Semicolon),
+	}
+}
+
+/// The body of a function whose `locals` its nested functions and lambdas may change only when declared `nonlocal`;
+/// a lambda declaring it is `hoisted` as a nested function
+fn in_enclosing(node: Node, locals: &[String], count: &mut usize, hoisted: &mut Vec<Node>) -> Node {
+	if let Some((_, _, params, body)) = definition(&node) {
+		if let Some(error) = undeclared_change_error(body, &params, locals) {
+			return error;
+		}
+		return nonlocal_lambdas(node, count);
+	}
+	match node {
+		Node::Key(lambda_params, Op::FatArrow, body) => {
+			let params = lambda_parameters(&lambda_params);
+			// a lambda changing an enclosing local shares it, as in JS, Kotlin, Swift, C#, Ruby and Julia
+			let shared: Vec<Node> = undeclared_changes(&body, &params, locals).into_iter()
+				.map(|(_, name)| Node::Key(Box::new(Node::Symbol(NONLOCAL.to_string())), Op::Colon, Box::new(Node::Symbol(name)))).collect();
+			let body = nonlocal_lambdas(with_first(shared, *body), count);
+			if declared_nonlocals(&body).is_empty() {
+				return Node::Key(lambda_params, Op::FatArrow, Box::new(body));
+			}
+			*count += 1;
+			let name = format!("{LAMBDA_PREFIX}{count}");
+			let head = Node::List([vec![Node::Symbol(name.clone())], params.into_iter().map(Node::Symbol).collect()].concat(), Bracket::Round, Separator::None);
+			hoisted.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
+			crate::closures::function_reference(name)
+		}
+		other => other.map_children(|child| in_enclosing(child, locals, count, hoisted)),
+	}
+}
+
+/// `x`, `(a, b)`, `ø`: the parameter names of a lambda
+fn lambda_parameters(params: &Node) -> Vec<String> {
+	match params.drop_meta() {
+		Node::Symbol(name) => vec![name.clone()],
+		Node::List(items, _, _) => items.iter().map(|item| item.drop_meta().name()).collect(),
+		_ => vec![],
+	}
+}
+
+/// The variables a body assigns, not inside its nested functions or lambdas
+fn collect_locals(node: &Node, locals: &mut Vec<String>) {
+	if definition(node).is_some() {
+		return;
+	}
+	match node.drop_meta() {
+		Node::Key(_, Op::FatArrow, _) => {}
+		Node::Key(target, op, value) if *op == Op::Assign || op.is_compound_assign() => {
+			if let Node::Symbol(name) = target.drop_meta() {
+				if !locals.contains(name) {
+					locals.push(name.clone());
+				}
+			}
+			collect_locals(value, locals);
+		}
+		Node::Key(left, _, right) => {
+			collect_locals(left, locals);
+			collect_locals(right, locals);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_locals(item, locals)),
+		_ => {}
+	}
+}
+
+/// The changes of enclosing locals in a nested body that neither declares them `nonlocal` nor has them as parameters:
+/// `n += 1`, `n++`, `n = n + 1` (a fresh `n = 5` is a local of its own), with the variable changed
+fn undeclared_changes<'a>(body: &'a Node, params: &[String], locals: &[String]) -> Vec<(&'a Node, String)> {
+	let declared = declared_nonlocals(body);
+	let mut found: Vec<(&Node, String)> = vec![];
+	body.visit(&mut |part| {
+		let Node::Key(target, op, value) = part else { return };
+		let Node::Symbol(name) = target.drop_meta() else { return };
+		let reads_itself = *op == Op::Assign && { let mut reads = false; value.visit(&mut |read| reads |= matches!(read, Node::Symbol(read) if read == name)); reads };
+		let updates = op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) || reads_itself;
+		if updates && locals.contains(name) && !params.contains(name) && !declared.contains(name) && !found.iter().any(|(_, seen)| seen == name) {
+			found.push((part, name.clone()));
+		}
+	});
+	found
+}
+
+/// A nested def changing an enclosing local without `nonlocal` (Python's rule for def)
+fn undeclared_change_error(body: &Node, params: &[String], locals: &[String]) -> Option<Node> {
+	let (node, name) = undeclared_changes(body, params, locals).into_iter().next()?;
+	Some(crate::diagnostic::Diagnostic::at(node, format!(
+		"{name} belongs to the enclosing function: declare `nonlocal {name}` to change it from this inner function, or use a new local name"))
+		.fix(format!("nonlocal {name}")).into_error())
+}

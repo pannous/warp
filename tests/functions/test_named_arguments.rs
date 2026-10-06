@@ -10,6 +10,13 @@ fn named_arguments_set_parameters_in_any_order() {
 }
 
 #[test]
+fn named_arguments_follow_the_parameter_order_of_a_python_colon_def() {
+	is!("def g(a, b, c): return a*100+b*10+c; g(1, c=9, b=2)", 129);
+	is!("def g(a, b, c):\n    return a*100+b*10+c\ng(1, c=9, b=2)", 129);
+	is!("def g(a, b=5, c=7): return a*100+b*10+c; g(1, c=9)", 159);
+}
+
+#[test]
 fn named_arguments_set_free_variables_of_the_body() {
 	is!("f y := y*y+v; f(y=2, v=3)", 7);
 	is!("fun={x*y}; fun(x:2 y:3)", 6);

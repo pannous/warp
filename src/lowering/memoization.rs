@@ -62,11 +62,14 @@ fn is_memoizable(function: &UserFunctionDef, report: &EffectReport, main: &Scope
 		&& captured_variables(function, main).is_empty()
 }
 
-/// A definition `f(n) := body` or `def f(n): body` (the keyword form, not yet lowered here): its head, body and a
-/// constructor of the same form for another head and body
-fn definition_parts(node: &Node) -> Option<(Node, Node, Box<dyn Fn(Node, Node) -> Node>)> {
+/// A definition `f(n) := body`, `def f(n) = body` (`(f n) = body`) or `def f(n): body` (the keyword form, not yet
+/// lowered here): its head, body and a constructor of the same form for another head and body
+pub(crate) fn definition_parts(node: &Node) -> Option<(Node, Node, Box<dyn Fn(Node, Node) -> Node>)> {
 	match node.drop_meta() {
-		Node::Key(head, Op::Define, body) => Some((head.as_ref().clone(), body.as_ref().clone(), Box::new(|head: Node, body: Node| Node::Key(Box::new(head), Op::Define, Box::new(body))))),
+		Node::Key(head, op @ (Op::Define | Op::Assign), body) if *op == Op::Define || is_call_head(head) => {
+			let op = *op;
+			Some((head.as_ref().clone(), body.as_ref().clone(), Box::new(move |head: Node, body: Node| Node::Key(Box::new(head), op, Box::new(body)))))
+		}
 		Node::List(items, bracket, separator) => match items.as_slice() {
 			[keyword, definition] if crate::operators::is_function_keyword(&keyword.drop_meta().name()) => match definition.drop_meta() {
 				Node::Key(head, Op::Colon | Op::Define, body) => {
@@ -81,6 +84,11 @@ fn definition_parts(node: &Node) -> Option<(Node, Node, Box<dyn Fn(Node, Node) -
 		},
 		_ => None,
 	}
+}
+
+/// `(f n)`: a name and its parameters, what `f(n) = body` assigns, unlike `x = body`
+fn is_call_head(head: &Node) -> bool {
+	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
 }
 
 /// Every definition of a memoized function with its body behind the cache

@@ -100,8 +100,9 @@ impl WasmGcEmitter {
 		let node = match kind {
 			Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint => joined_text(std::slice::from_ref(value), ""),
 			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
-			// a list known only at run time (an element, a parsed value) too: "[1 2]", nested lists as their literals
-			Kind::List | Kind::Empty => {
+			// a list known only at run time (an element, a parsed value) too: "[1 2]", nested lists as their literals;
+			// an instance as its literal "point{x:1 y:2}" (P123), an entry "a:1"
+			Kind::List | Kind::Empty | Kind::Key => {
 				self.emit_dynamic_text(func, value);
 				return;
 			}
@@ -114,16 +115,26 @@ impl WasmGcEmitter {
 	}
 
 	/// The text of a Node of unknown kind, as list_text writes the one item of a list: "[1 2]" for a list, "{a:1 b:2}" for
-	/// a map, "a:1" for an entry, the text itself for a text; gives the local still holding the node
+	/// a map, "{a:1}" for an entry (the one-entry map), the text itself for a text; gives the local still holding the node
 	pub(super) fn emit_dynamic_text(&mut self, func: &mut Function, value: &Node) -> u32 {
 		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
 		self.emit_node_instructions(func, value);
 		func.instruction(&I::LocalSet(held));
-		Self::emit_list(func, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(held), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
+		// a text is itself and a character its text; only texts inside a container are quoted (P126)
+		let kind_is = |kind: Kind| [I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 0 }, I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq];
+		Self::emit_list(func, &kind_is(Kind::Text));
+		Self::emit_list(func, &kind_is(Kind::Codepoint));
+		Self::emit_list(func, &[I::I32Or, I::If(BlockType::Result(Ref(self.node_ref(false)))), I::LocalGet(held), I::RefAsNonNull]);
+		self.emit_call(func, text_builtins::TEXT_OF);
+		func.instruction(&I::Else);
+		func.instruction(&I::I64Const(crate::type_kinds::SQUARE_LIST_KIND));
+		self.emit_entry_in_braces(func, held);
+		Self::emit_list(func, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
 		let (pointer, length) = self.allocate_string("");
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_text");
 		self.emit_call(func, library_ops::LIST_TEXT);
+		func.instruction(&I::End);
 		held
 	}
 
@@ -142,7 +153,12 @@ impl WasmGcEmitter {
 		};
 
 		let value = value.drop_meta();
-		if let Some(refusal) = self.cast_refusal(value, target_type) {
+		// `cube 3 as int`, the body of `def g() -> int { cube 3 }`: an unknown word is an error as without the cast
+		let unknown_word = match value {
+			Node::List(items, bracket, separator) => self.unknown_word_error(items, bracket, separator),
+			_ => None,
+		};
+		if let Some(refusal) = unknown_word.or_else(|| self.cast_refusal(value, target_type)) {
 			self.emit_type_error(func, refusal);
 			return;
 		}
@@ -201,12 +217,17 @@ impl WasmGcEmitter {
 			}
 			// Already int or coercible; a ratio is truncated
 			_ => {
-				self.emit_numeric_value(func, value);
-				if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) {
-					self.emit_call(func, "exact_trunc");
-				}
+				self.emit_int_value_truncated(func, value);
 				self.emit_call(func, "new_int");
 			}
+		}
+	}
+
+	/// The i64 of an Int value; a ratio (`x/2` is exact) is truncated
+	pub(super) fn emit_int_value_truncated(&mut self, func: &mut Function, value: &Node) {
+		self.emit_numeric_value(func, value);
+		if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) {
+			self.emit_call(func, "exact_trunc");
 		}
 	}
 
@@ -253,6 +274,8 @@ impl WasmGcEmitter {
 			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
 			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
 			Node::Text(s) => self.emit_string_call(func, s, "new_text"),
+			// a list of numbers and texts reads as it prints, its texts quoted (P126)
+			Node::List(..) if is_plain_data(value) => self.emit_runtime_text_cast(func, value),
 			// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
 			// text of its value
 			_ if !self.mentions_variable(value) && !self.mentions_call(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
@@ -333,5 +356,14 @@ impl WasmGcEmitter {
 	pub(super) fn is_output_call(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
 			if matches!(word.drop_meta(), Node::Symbol(name) if OUTPUT_CALLS.contains(&name.as_str()) && !self.ctx.user_functions.contains_key(name))))
+	}
+}
+
+/// A list whose items are numbers, texts, characters or such lists
+fn is_plain_data(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Number(_) | Node::Text(_) | Node::Char(_) => true,
+		Node::List(items, Bracket::Square, _) => items.iter().all(is_plain_data),
+		_ => false,
 	}
 }

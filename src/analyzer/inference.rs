@@ -42,8 +42,8 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	{
 		// concatenation; a value held as a Node (a map value, an element of one) joining a text; `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
 		Kind::Text
-	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Error)) {
-		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness"); an error operand stays an error
+	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Error | Kind::Function)) {
+		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness"); an error operand stays an error, a function is no number
 	} else if left == Kind::Float || right == Kind::Float {
 		Kind::Float
 	} else {
@@ -225,7 +225,7 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		}
 		// a cell's value is held as a Node, like a map value (Empty), and joins a text or adds at run time
 		if crate::wasm_emitter::cells::CELL_WORDS.contains(&name.as_str()) {
-			return if name == crate::wasm_emitter::cells::CELL_NEW { Kind::Data } else { Kind::Empty };
+			return if crate::wasm_emitter::cells::MAKING_WORDS.contains(&name.as_str()) { Kind::Data } else { Kind::Empty };
 		}
 		if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 			return kind;
@@ -239,6 +239,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		// `puti x`, `puts t`: the output words give an Int (the number written, or the write's status), with or without
 		// parentheses
 		if crate::wasm_emitter::OUTPUT_WORDS.contains(&name.as_str()) && items.len() == 2 {
+			return Kind::Int;
+		}
+		// `count ys`, `size t`: a number, the user's own function of that name already answered above
+		if (super::counting::is_counting_word(name) || name == BYTE_SIZE) && items.len() == 2 {
 			return Kind::Int;
 		}
 		if name == PRINT_CALL && (items.len() >= 2 || *bracket == Bracket::Round) {
@@ -357,6 +361,9 @@ pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 		// a Node whose kind is known only at run time (an awaited job's result, ø): the value keeps that kind, so
 		// `(if c then 0 else job_result) + 1` adds at run time instead of failing as text
 		Kind::Empty
+	} else if kinds.contains(&Kind::Data) && kinds.iter().all(|kind| matches!(kind, Kind::Int | Kind::Float | Kind::Data)) {
+		// a number and a number of run-time kind (`xs#1 + rest`): a number decided at run time, not a text
+		Kind::Data
 	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
 		Kind::Text
 	} else if then_kind == Kind::Float || else_kind == Kind::Float {

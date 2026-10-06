@@ -1,9 +1,8 @@
 use crate::is;
 
 #[test]
-#[ignore]
 fn test_function_params() {
-	is!("f(x)=x*x;f(3)", "9"); // julia style functions => angle!  pattern ()= ?
+	is!("f(x)=x*x;f(3)", 9); // julia style functions => angle!  pattern ()= ?
 	// eq!(parse("f(x)=x*x").params(),["x"]);
 }
 

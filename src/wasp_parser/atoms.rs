@@ -2,6 +2,8 @@
 
 use super::*;
 
+const VOID_WORD: &str = "void";
+
 impl WaspParser {
 	/// Parse an atomic expression (no infix operators)
 	/// Handles: numbers, strings, brackets, symbols with named blocks
@@ -22,15 +24,17 @@ impl WaspParser {
 					Err(message) => error(&message),
 				}
 			}
-			'"' | '\'' | '«' => self.parse_string(),
-			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs)
-			'*' if self.is_identifier_start(1) => {
-				self.advance();
-				match self.parse_symbol() {
-					Ok(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
-					Err(message) => error(&message),
-				}
-			}
+			'"' | '\'' | '«' | '`' => self.parse_string(),
+			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
+			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/variadic.rs)
+			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => self.parse_starred(3),
+			// Python's `**kw`: the keyword arguments as one object (src/lowering/variadic.rs)
+			'*' if self.peek_char(1) == '*' && self.is_identifier_start(2) => match self.parse_starred(2) {
+				Node::Symbol(name) => Node::Symbol(format!("{}{name}", crate::tuples::STARRED)),
+				other => other,
+			},
+			'*' if self.is_identifier_start(1) => self.parse_starred(1),
+			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
@@ -52,7 +56,7 @@ impl WaspParser {
 			ch if ch.is_numeric() || self.number_starts_at(0) || (ch == '-' && self.number_starts_at(1)) => {
 				self.parse_number()
 			}
-			ch if ch.is_alphabetic() || ch == '_' => self.parse_symbol_with_suffix(),
+			ch if ch.is_alphabetic() || ch == '_' => self.parse_elixir_function().or_else(|| self.parse_f_string()).unwrap_or_else(|| self.parse_symbol_with_suffix()),
 			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
 				(0..length).for_each(|_| self.advance());
 				error(&crate::uniscript_entities::unknown_entity(&name))
@@ -218,8 +222,12 @@ impl WaspParser {
 	/// Ruby/Lua `do … end`, `then … end`, `else … end`: an `end` closes the statements opened here,
 	/// counting the `do`/`then` openers in between; an `end` that closes nothing leaves the one-statement body
 	pub(super) fn closing_end_follows(&self, openers: &[&str]) -> bool {
+		self.closing_end_follows_from(self.pos, openers)
+	}
+
+	fn closing_end_follows_from(&self, start: usize, openers: &[&str]) -> bool {
 		let mut open = 1;
-		let mut position = self.pos;
+		let mut position = start;
 		while position < self.chars.len() {
 			let ch = self.chars[position];
 			if ch == '"' || ch == '\'' {
@@ -270,9 +278,73 @@ impl WaspParser {
 		curly_block(block)
 	}
 
+	/// Elixir's `fn a, b -> body end` at the cursor: the parameter names and where the body starts; Rust's
+	/// `fn(x) -> i32 { … }` names a result type, no body
+	fn elixir_function_head(&self) -> Option<(Vec<String>, usize)> {
+		if !self.matches_keyword(ELIXIR_FUNCTION_KEYWORD) {
+			return None;
+		}
+		let start = self.pos + ELIXIR_FUNCTION_KEYWORD.len();
+		let line_end = (start..self.chars.len()).find(|&at| self.chars[at] == '\n').unwrap_or(self.chars.len());
+		let arrow = (start..line_end.saturating_sub(1)).find(|&at| self.chars[at] == '-' && self.chars[at + 1] == '>')?;
+		let head: String = self.chars[start..arrow].iter().collect();
+		let is_parameter_text = head.chars().all(|ch| is_identifier_char(ch) || matches!(ch, ' ' | ',' | '(' | ')'));
+		let names: Vec<String> = head.split([',', '(', ')', ' ']).filter(|name| !name.is_empty()).map(str::to_string).collect();
+		let body_start = arrow + 2;
+		let after: String = self.chars[body_start..].iter().collect();
+		let mut words = after.trim_start().splitn(2, |ch: char| !is_identifier_char(ch));
+		let is_result_type = words.next().is_some_and(|word| !word.is_empty()) && words.next().is_some_and(|rest| rest.trim_start().starts_with('{'));
+		let is_function = is_parameter_text && !is_result_type && self.closing_end_follows_from(body_start, &[ELIXIR_FUNCTION_KEYWORD, "do"]);
+		is_function.then_some((names, body_start))
+	}
+
+	/// `fn x -> x * 2 end`: the lambda `x => {x * 2}`
+	pub(super) fn parse_elixir_function(&mut self) -> Option<Node> {
+		let (names, body_start) = self.elixir_function_head()?;
+		self.advance_by(body_start - self.pos);
+		let body = self.parse_end_block(false);
+		let parameters = match names.as_slice() {
+			[single] => Node::Symbol(single.clone()),
+			several => Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon),
+		};
+		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
+	}
+
+	/// Ruby's stabby lambda `->(x) { x * x }`, `-> { 42 }`: the lambda `x => {x * x}`
+	fn parse_stabby_lambda(&mut self) -> Node {
+		self.advance_by(2);
+		self.skip_spaces();
+		let parameters = match self.current_char() {
+			'(' => self.parse_bracketed('('),
+			_ => Empty,
+		};
+		self.skip_spaces();
+		if self.current_char() != '{' {
+			return error("a stabby lambda `->(x) { … }` needs its body in braces");
+		}
+		let body = self.parse_bracketed('{');
+		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
+	}
+
 	/// The `end` (or, in a `then` block, the `else`) that closes the block being parsed
 	pub(super) fn at_block_close(&self) -> bool {
 		self.stops_at_end && (self.matches_keyword(END_KEYWORD) || (self.stops_at_else && self.matches_keyword(ELSE_KEYWORD)))
+	}
+
+	/// `*rest`, `...rest`: the name after the `prefix` characters, starred
+	fn parse_starred(&mut self, prefix: usize) -> Node {
+		(0..prefix).for_each(|_| self.advance());
+		match self.parse_symbol() {
+			Ok(name) => Node::Symbol(format!("{}{name}", crate::tuples::STARRED)),
+			Err(message) => error(&message),
+		}
+	}
+
+	/// ` name(`: blanks, a name and its parenthesis
+	fn named_call_follows(&self) -> bool {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let name = (blanks..).take_while(|&offset| is_identifier_char(self.peek_char(offset))).count();
+		blanks > 0 && name > 0 && self.is_identifier_start(blanks) && self.peek_char(blanks + name) == '('
 	}
 
 	pub(super) fn parameters_follow_after_blanks(&self) -> bool {
@@ -327,8 +399,15 @@ impl WaspParser {
 			return self.parse_url(symbol);
 		}
 
+		// C's `void f() { … }`: the result type of a function, not ø (src/lowering/declarations.rs c_function)
+		if symbol == VOID_WORD && self.named_call_follows() {
+			return Node::Symbol(symbol);
+		}
+
 		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count())) {
-			return constant; // if true {} fall through :?
+			if !self.names_field(&symbol, &constant) {
+				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
+			}
 		}
 
 		if let Some(declaration) = self.try_parse_operator_declaration(&symbol) {
@@ -393,6 +472,12 @@ impl WaspParser {
 		if !self.options.wit_mode && self.declares_type(&symbol) {
 			return self.parse_type_declaration();
 		}
+		if !self.options.wit_mode && symbol == MIXIN_WORD && self.name_and_block_follow() {
+			return match self.parse_type_declaration() {
+				Node::Type { name, body } => Node::Type { name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)), body },
+				other => other,
+			};
+		}
 
 		// `point {x:1}` with blanks constructs a declared type like the glued `point{x:1}` (open decision 41)
 		if self.declared_types.contains(&symbol) && self.block_after_blanks() {
@@ -404,6 +489,41 @@ impl WaspParser {
 		}
 
 		self.parse_glued_suffix(symbol)
+	}
+
+	/// `class circle{pi = 3}`, `class C{pi:int}`: a named number declared in a type body names the type's own field, which
+	/// shadows nothing outside; the type's methods read the field
+	fn names_field(&mut self, symbol: &str, constant: &Node) -> bool {
+		if !matches!(constant, Node::Number(_)) {
+			return false;
+		}
+		let declares = self.assignment_follows() || self.type_annotation_follows();
+		let Some(fields) = self.type_fields.as_mut() else { return false };
+		if declares {
+			fields.insert(symbol.to_string());
+		}
+		fields.contains(symbol)
+	}
+
+	/// `:type` right after the name (`pi:int`, `pi: int`), not the definition `:=` nor a ternary's `c ? pi : 0`
+	fn type_annotation_follows(&self) -> bool {
+		self.current_char() == ':' && self.peek_char(1) != '='
+	}
+
+	/// `pi = 4` (P130, user: "loud error, if it was declared constant before which it should be"): a named number is a
+	/// declared constant, an assignment to it is an error
+	fn refuse_constant_assignment(&self, symbol: &str) -> Option<Node> {
+		let column = self.column.saturating_sub(symbol.chars().count());
+		let message = format!("{symbol} is a constant");
+		self.assignment_follows().then(|| Diagnostic { message, line: self.line_nr, column, ..Default::default() }.fix("another name").into_error())
+	}
+
+	/// `= …` or `:= …` after blanks, not the comparison `==`
+	fn assignment_follows(&self) -> bool {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let defines = self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) == '=';
+		let assigns = self.peek_char(blanks) == '=' && self.peek_char(blanks + 1) != '=';
+		defines || assigns
 	}
 
 	/// `http://…`, `file://…`: the scheme of a URL, the rest of which reads as one text
@@ -433,14 +553,78 @@ impl WaspParser {
 
 	/// The name and the `{fields}` of a type declaration, after its keyword
 	pub(super) fn parse_type_declaration(&mut self) -> Node {
+		let outer = self.type_fields.replace(Default::default());
+		let declaration = self.parse_type_declaration_body();
+		self.type_fields = outer;
+		declaration
+	}
+
+	fn parse_type_declaration_body(&mut self) -> Node {
 		self.skip_whitespace();
 		let type_name = match self.parse_symbol() {
 			Ok(name) => name,
 			Err(message) => return error(&message),
 		};
+		// `class Box<T>{item:T}`: a field or parameter of a type parameter holds any value
+		let type_parameters = match self.current_char() {
+			'<' => match self.parse_type_parameters() {
+				Ok(parameters) => parameters,
+				Err(message) => return error(&message),
+			},
+			_ => vec![],
+		};
 		self.skip_whitespace();
+		// `class dog extends animal {…}` (P117): the parent rides on the name, class_methods copies its fields and methods
+		let mut name = Symbol(type_name);
+		if self.matches_keyword(EXTENDS_KEYWORD) {
+			self.advance_by(EXTENDS_KEYWORD.len());
+			self.skip_whitespace();
+			match self.parse_symbol() {
+				Ok(parent) => name = name.with_attribute(EXTENDS_KEYWORD, Symbol(parent)),
+				Err(message) => return error(&message),
+			}
+			self.skip_whitespace();
+		}
+		// `class Duck with Walker, Swimmer {…}`: the mixins ride on the name, class_methods takes in their items
+		if self.matches_keyword(WITH_KEYWORD) {
+			self.advance_by(WITH_KEYWORD.len());
+			let mut mixins = vec![];
+			loop {
+				self.skip_whitespace();
+				match self.parse_symbol() {
+					Ok(mixin) => mixins.push(Symbol(mixin)),
+					Err(message) => return error(&message),
+				}
+				self.skip_whitespace();
+				if self.current_char() != ',' {
+					break;
+				}
+				self.advance();
+			}
+			name = name.with_attribute(WITH_KEYWORD, Node::List(mixins, Bracket::None, Separator::Space));
+		}
 		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
-		Node::Type { name: Box::new(Symbol(type_name)), body: Box::new(body) }
+		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
+		Node::Type { name: Box::new(name), body: Box::new(body) }
+	}
+
+	/// `<T>`, `<A, B>`: the names of the type parameters of a declared type
+	fn parse_type_parameters(&mut self) -> Result<Vec<String>, String> {
+		self.advance(); // <
+		let mut names = vec![];
+		loop {
+			self.skip_whitespace();
+			names.push(self.parse_symbol()?);
+			self.skip_whitespace();
+			match self.current_char() {
+				',' => self.advance(),
+				'>' => {
+					self.advance();
+					return Ok(names);
+				}
+				other => return Err(format!("type parameters <{}…> end with >, got {other}", names.join(", "))),
+			}
+		}
 	}
 
 	/// What is glued to a word: `name{…}`, `List<int>`, `p@unit`, `f(args)`, `f(params) {body}`; else the word itself
@@ -470,6 +654,10 @@ impl WaspParser {
 					norm::list_type(ListTypeStyle::Generic, &element_words);
 				}
 				self.advance_by(length);
+				// `Box<int>(3)`, `Box<int>{item:3}` of a declared class `Box<T>`: its type parameters hold any value
+				if self.declared_types.contains(&symbol) {
+					return self.parse_glued_suffix(symbol);
+				}
 				Symbol(type_application_name(&symbol, &arguments))
 			}
 			'<' if !self.options.xml_mode && !self.peek_char(1).is_numeric() && self.peek_char(1) != '<' && names_a_type(&symbol) => {
@@ -529,5 +717,29 @@ impl WaspParser {
 		for _ in 0..n {
 			self.advance();
 		}
+	}
+}
+
+/// A class body with each type parameter used as a type read as any type: a field `item:T` holds any value, a
+/// parameter `with(x:T)` takes any
+fn any_for_type_parameters(node: Node, parameters: &[String]) -> Node {
+	let is_parameter = |node: &Node| match node.drop_meta() {
+		Node::Symbol(name) => parameters.contains(name),
+		Node::Type { name, body } => matches!(body.drop_meta(), Node::Empty) && parameters.contains(&name.drop_meta().name()),
+		_ => false,
+	};
+	match node {
+		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => Node::Key(name, Op::Colon, Box::new(Symbol(crate::type_kinds::UNTYPED_FIELD.to_string()))),
+		Node::Key(head, Op::Define, body) => Node::Key(Box::new(untyped_parameters(*head, &is_parameter)), Op::Define, body),
+		other => other.map_children(|child| any_for_type_parameters(child, parameters)),
+	}
+}
+
+/// A method head with each parameter of a type parameter untyped: `with(x:T)` is `with(x)`
+fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> bool) -> Node {
+	match head {
+		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => *name,
+		Node::Meta { node, data } => Node::Meta { node: Box::new(untyped_parameters(*node, is_parameter)), data },
+		other => other.map_children(|child| untyped_parameters(child, is_parameter)),
 	}
 }

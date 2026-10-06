@@ -131,7 +131,7 @@ impl GcObject {
 		if let Some(anyref) = data_val.unwrap_anyref() {
 			if let Ok(structref) = anyref.unwrap_struct(&*store) {
 				let field_val = structref.field(&mut *store, 0)?;
-				return Ok(field_val.unwrap_f64());
+				return Ok(warp_runtime::floats::canonical_nan(field_val.unwrap_f64()));
 			}
 		}
 		Err(anyhow!("Cannot read boxed f64"))
@@ -240,7 +240,7 @@ impl FromVal for f64 {
 		_instance: &Instance,
 		_store_rc: &Rc<RefCell<Store<()>>>,
 	) -> Result<Self> {
-		Ok(val.unwrap_f64())
+		Ok(warp_runtime::floats::canonical_nan(val.unwrap_f64()))
 	}
 }
 
@@ -314,9 +314,14 @@ fn run_main<S: 'static>(
 	}
 	// a main without a result leaves nothing to read: the null reference reads as Empty
 	let mut results = vec![Val::AnyRef(None); result_types.len()];
-	let outcome = main.call(&mut store, &[], &mut results);
-	with_trap_detail(outcome, &mut store, &instance)?;
-	Ok((results.first().copied().unwrap_or(Val::AnyRef(None)), store, instance))
+	use warp_runtime::system_signals::{stay_while_listening, with_exit_handler};
+	// `warp run` keeps a program with a live timer after main (notes/system_signals.md), then `on exit {…}` runs
+	let outcome = main.call(&mut store, &[], &mut results).and_then(|_| stay_while_listening(&mut store, &instance));
+	let outcome = with_exit_handler(outcome, &mut store, |store, name| instance.get_func(&mut *store, name));
+	match with_trap_detail(outcome, &mut store, &instance)? {
+		Some(()) => Ok((results.first().copied().unwrap_or(Val::AnyRef(None)), store, instance)),
+		None => Ok((Val::AnyRef(None), store, instance)), // `exit` (P121): the run's value is ø
+	}
 }
 
 /// Load WASM bytes with host function support and return Node
@@ -333,6 +338,11 @@ pub struct Imports {
 	pub ffi: bool,
 }
 
+impl Imports {
+	/// For a module that does not say which families it needs: a .wasm file, an imported module
+	pub const EVERY: Imports = Imports { host: true, wasi: true, ffi: true };
+}
+
 /// Link the import families a module needs: the host words, WASI, FFI (the task words come from tasks::link). `linker`
 /// is a fresh one: it becomes a copy of the linker this thread keeps for the engine and families (linking libm and
 /// the host words took most of a small program's run), plus the dynamic libraries of this module
@@ -344,6 +354,7 @@ pub fn link_imports(linker: &mut Linker<crate::host::HostState>, engine: &wasmti
 		// the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
 		crate::ffi::link_module_libraries(linker, engine, module)?;
 	}
+	crate::wasm_modules::link(linker, module)?;
 	Ok(())
 }
 
@@ -400,9 +411,11 @@ pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 	});
 	let unread_failure = tasks.as_ref().map_or(Ok(()), |tasks| tasks.join_all());
 	let (result, mut store, instance) = outcome?;
-	// the raises of tasks nobody awaited run their handlers before the run ends
+	// the raises of tasks nobody awaited run their handlers before the run ends, and the listeners on shared values
+	// see what the tasks left
 	if let Some(tasks) = &tasks {
 		tasks.deliver(&mut store, &mut |store, name| instance.get_export(&mut *store, name))?;
+		warp_runtime::system_signals::run_due_handlers(&mut store, |store, name| instance.get_func(&mut *store, name))?;
 	}
 	unread_failure?;
 	val_to_node(&result, &mut store, &instance)
@@ -429,7 +442,7 @@ fn val_to_node<T>(result: &Val, store: &mut Store<T>, instance: &Instance) -> Re
 	match result {
 		Val::I64(n) => Ok(Node::Number(Number::Int(*n))),
 		Val::I32(n) => Ok(Node::Number(Number::Int(*n as i64))),
-		Val::F64(bits) => Ok(Node::Number(Number::Float(f64::from_bits(*bits)))),
+		Val::F64(bits) => Ok(Node::Number(Number::Float(warp_runtime::floats::canonical_nan(f64::from_bits(*bits))))),
 		Val::AnyRef(_) => Ok(node_of(result, &mut store.as_context_mut(), instance)),
 		_ => Ok(Node::Empty),
 	}
@@ -521,7 +534,7 @@ fn list_in<T>(mut first: Val, mut rest: Val, bracket: crate::node::Bracket, stor
 
 fn boxed_f64<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<f64> {
 	let float_box = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
-	float_box.field(&mut *store, 0).ok().map(|value| value.unwrap_f64())
+	float_box.field(&mut *store, 0).ok().map(|value| warp_runtime::floats::canonical_nan(value.unwrap_f64()))
 }
 
 /// The letters of a `$String(ptr, len)` in linear memory

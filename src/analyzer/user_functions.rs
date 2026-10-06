@@ -131,7 +131,10 @@ pub(super) fn infer_function_return_kind(params: &[Param], body: &Node, function
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => &statements[statements.len() - 1],
 		other => other,
 	};
+	// `f() := {}`, a handler `{{}}`: a body doing nothing returns ø
+	let empty_block = matches!(last.drop_meta(), Node::List(items, Bracket::Curly, _) if items.is_empty());
 	let last_kind = match (is_error(last), returned.first()) {
+		(false, None) if empty_block => Kind::Empty,
 		(true, Some(_)) if returned.contains(&Kind::Float) && returned.iter().all(|kind| !kind.is_ref()) => Kind::Float,
 		(true, Some(first)) if returned.iter().all(|kind| kind == first) => *first,
 		(true, Some(_)) => Kind::Empty, // returns of different kinds: a Node of unknown kind
@@ -205,6 +208,8 @@ pub fn param_kind(param: &Param) -> Kind {
 	}
 	match param.default.as_ref().map(|value| argument_literal_kind(value).unwrap_or_else(|| infer_type(value, &Scope::new()))) {
 		Some(kind @ (Kind::Float | Kind::Text | Kind::List)) => kind,
+		// `s="a"`: a one-character text is parsed as a Codepoint; the parameter holds any text
+		Some(Kind::Codepoint) => Kind::Text,
 		_ => param.used_as.unwrap_or(Kind::Int),
 	}
 }
@@ -216,10 +221,12 @@ pub(super) fn user_function(name: &str, params: Vec<Param>, body: &Node) -> User
 	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, tuple_kinds: vec![], func_index: None }
 }
 
-/// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) or reads as a map (`g.keys()`, `xs.has(x)`) take a list
+/// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) or reads as a map (`g.keys()`, `xs.has(x)`) take a list;
+/// those handed to `cell_get(c)` and the other cell words are cells
 pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	let mut indexed: HashSet<String> = HashSet::new();
 	let mut called: HashSet<String> = HashSet::new();
+	let mut celled: HashSet<String> = HashSet::new();
 	let mut aliases: Vec<(String, String)> = vec![];
 	body.visit(&mut |node| {
 		if let Some(name) = crate::closures::called_closure(node) {
@@ -231,6 +238,9 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 				let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()) || call == crate::library_words::FIELD_WITH);
 				if let (true, Node::Symbol(name)) = (is_map_word, map.drop_meta()) {
 					indexed.insert(name.clone());
+				}
+				if let (true, Node::Symbol(name)) = (crate::wasm_emitter::cells::is_cell_word(word), map.drop_meta()) {
+					celled.insert(name.clone());
 				}
 			}
 		}
@@ -250,6 +260,8 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	params.into_iter().map(|param| {
 		let used_as = if called.contains(&param.name) {
 			Some(Kind::Function)
+		} else if celled.contains(&param.name) {
+			Some(Kind::Data)
 		} else if indexed.contains(&param.name) {
 			Some(Kind::List)
 		} else {
@@ -286,6 +298,10 @@ pub(super) fn infer_forwarded_parameters(ctx: &mut Context) {
 					None => &items[..],
 				};
 				let Some(Node::Symbol(callee)) = items.first().map(Node::drop_meta) else { return };
+				// a closure call takes Nodes (as in infer_parameters_from_calls): its helper's parameters name no kind
+				if crate::closures::closure_call_arity(callee).is_some() {
+					return;
+				}
 				let Some(called) = ctx.user_functions.get(callee) else { return };
 				for (argument, called_param) in items[1..].iter().zip(&called.params) {
 					let Node::Symbol(name) = argument.drop_meta() else { continue };
@@ -458,7 +474,7 @@ pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: 
 }
 
 /// The program's `global` declarations with their kinds
-pub(super) fn declared_globals(program: &Node) -> HashMap<String, Local> {
+pub(crate) fn declared_globals(program: &Node) -> HashMap<String, Local> {
 	let mut scope = Scope::new();
 	collect_variables(program, &mut scope);
 	scope.globals
@@ -515,6 +531,8 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 			body.visit(&mut |node| {
 				let value_kind = |value: &Node| match value.drop_meta() {
 					Node::Symbol(name) => params.get(name).or(variable_kinds.get(name)).copied(),
+					// a cell's value is a Node of any kind (a signal's new value, lowering/signal_values.rs)
+					Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::cells::CELL_GET) => Some(Kind::Empty),
 					_ => argument_literal_kind(value),
 				};
 				if let Some((target, captured)) = crate::closures::as_closure_new(node) {
@@ -964,12 +982,10 @@ pub(super) fn extract_param(item: &Node) -> Option<Param> {
 				None
 			}
 		}
-		Node::Key(n, Op::Assign, default) => {
-			if let Node::Symbol(s) = n.drop_meta() {
-				Some(Param { name: s.clone(), annotation: None, default: Some(default.as_ref().clone()), used_as: None })
-			} else {
-				None
-			}
+		// `b=2` and the typed `b:int=2`
+		Node::Key(declared, Op::Assign, default) => {
+			let param = extract_param(declared)?;
+			Some(Param { default: Some(default.as_ref().clone()), ..param })
 		}
 		_ => None,
 	}

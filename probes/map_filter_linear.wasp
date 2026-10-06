@@ -1,0 +1,4 @@
+// map-filter card: building 100000 items must stay linear (out.add of a Node list copied the list per item)
+xs = (1..100001).map(x => "a")
+ys = (1..100001).filter(x => x % 2 == 0)
+count(xs) + count(ys)

@@ -6,11 +6,20 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
+/// The receiver of an extension method, as Kotlin (`this`) and Swift (`self`) name it
+const THIS_WORD: &str = "this";
+const SELF_WORD: &str = "self";
+/// Swift's block of methods added to a type: `extension Int {…}`
+const EXTENSION_WORD: &str = "extension";
+
 /// The implicit parameter of a function: `double := it * 2`
 /// `each xs: body`, `all xs: body`: a for loop over xs, the item is `it` (wiki/iteration.md)
 const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
 const IT_PARAMETER: &str = "it";
+const RETURN_WORD: &str = "return";
 const ENUM_WORD: &str = "enum";
+/// Ruby's `def f(x) … end`
+const END_WORD: &str = "end";
 const FLAGS_WORD: &str = "flags";
 const FIRST_CASE_INDEX: i64 = 0;
 /// The argument left out of a partial application: `add(1, _)`
@@ -634,11 +643,19 @@ const WRAPPER_RESULT: &str = "r·node";
 const WRAPPER_ARGUMENTS: &str = "arguments·node";
 
 /// The program with the wrappers of the started functions (name → parameter count) defined first
-fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, usize>) -> Node {
+pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, usize>) -> Node {
+	// a page event's handler has its wrapper already (event_signals.rs), a task may want it too
+	let mut defined = std::collections::HashSet::new();
+	node.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
+		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
+			defined.insert(word(&items[0]));
+		}
+	});
+	let wrapped: Vec<(&String, &usize)> = wrapped.iter().filter(|(function, _)| !defined.contains(&format!("{function}{NODE_WRAPPER_SUFFIX}"))).collect();
 	if wrapped.is_empty() {
 		return node;
 	}
-	let items: Vec<Node> = wrapped.iter().map(|(function, count)| {
+	let items: Vec<Node> = wrapped.into_iter().map(|(function, count)| {
 		let arguments = Node::Symbol(WRAPPER_ARGUMENTS.to_string());
 		// declared a list: a function of no arguments leaves it unused, which would make it an Int (the host passes a Node)
 		let declared = Node::Key(Box::new(arguments.clone()), Op::Colon, Box::new(Node::Symbol("list".to_string())));
@@ -967,7 +984,7 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 			let body = lower_spaced_definitions(body);
 			let head = Node::List([vec![name], parameters].concat(), Bracket::Round, Separator::None);
 			let body = match one_parameter(&head) {
-				Some(parameter) => crate::law::substitute(&body, &[(IT_PARAMETER.to_string(), Node::Symbol(parameter))].into()),
+				Some(parameter) => bind_it(body, &parameter, false),
 				None => body,
 			};
 			let _ = (bracket, separator);
@@ -976,14 +993,41 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 		// `f(x) := x + it`: `it` is the one parameter too
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if one_parameter(&head).is_some() => {
 			let parameter = one_parameter(&head).expect("guarded");
-			let body = crate::law::substitute(&lower_spaced_definitions(*body), &[(IT_PARAMETER.to_string(), Node::Symbol(parameter))].into());
+			let body = bind_it(lower_spaced_definitions(*body), &parameter, false);
 			Node::Key(head, op, Box::new(body))
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_spaced_definitions(*left)), op, Box::new(lower_spaced_definitions(*right))),
+		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			let items = haskell_definitions(items);
+			Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator)
+		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_spaced_definitions(*node)), data },
 		other => other,
 	}
+}
+
+/// Haskell's `twice x = x * 2` among statements: the definition `twice x := x * 2` when a later statement uses
+/// `twice` and the body uses every parameter (`int x = 3`, `print x = 5`, `my x = 3` stay assignments)
+fn haskell_definitions(statements: Vec<Node>) -> Vec<Node> {
+	let defined: Vec<Option<Node>> = statements.iter().enumerate().map(|(index, statement)| haskell_definition(statement, &statements[index + 1..])).collect();
+	statements.into_iter().zip(defined).map(|(statement, definition)| definition.unwrap_or(statement)).collect()
+}
+
+fn haskell_definition(statement: &Node, later: &[Node]) -> Option<Node> {
+	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
+	let [name, parameters @ .., last] = items.as_slice() else { return None };
+	let Node::Key(last_name, Op::Assign, body) = last.drop_meta() else { return None };
+	let Node::Symbol(function) = name.drop_meta() else { return None };
+	let is_parameter = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == PLACEHOLDER || crate::wasp_parser::mentions(body, word));
+	let is_free_name = !is_function_keyword(function) && !crate::library_words::is_library_word(function) && crate::analyzer::type_word_kind(function).is_none();
+	let is_used_later = later.iter().any(|statement| crate::wasp_parser::mentions(statement, function));
+	if !is_free_name || !is_used_later || !parameters.iter().chain([last_name.as_ref()]).all(is_parameter) {
+		return None;
+	}
+	let mut words = items[..items.len() - 1].to_vec();
+	words.push(Node::Key(last_name.clone(), Op::Define, body.clone()));
+	Some(Node::List(words, Bracket::None, Separator::Space))
 }
 
 /// `each [1,2,3]: print it`, `all xs: …` (wiki/iteration.md): a for loop over the list whose item is `it`
@@ -1058,6 +1102,35 @@ fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
 }
 
 /// The one named parameter of a definition head `f(x)` (`f(x:int)`), not `it`
+/// `it` in the body of a function of one parameter is that parameter, except inside a block with `it` given as a value
+/// (returned, assigned, an argument): `mk(k) := { return {it * k} }` returns the function `it => it * k`
+fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
+	let values = |items: Vec<Node>| -> Vec<Node> {
+		let mut items = items.into_iter();
+		items.next().map(|head| bind_it(head, parameter, false)).into_iter().chain(items.map(|item| bind_it(item, parameter, true))).collect()
+	};
+	match node {
+		Node::Symbol(name) if name == IT_PARAMETER => Node::Symbol(parameter.to_string()),
+		Node::List(_, Bracket::Curly, _) if is_value && crate::wasp_parser::mentions(&node, IT_PARAMETER) => crate::lambdas::block_as_arrow(&node).unwrap_or(node),
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) => Node::Key(Box::new(bind_it(*target, parameter, false)), op, Box::new(bind_it(*value, parameter, true))),
+		// `return {…}`, `f({…})`, `f {…}`
+		Node::List(items, bracket @ (Bracket::Round | Bracket::None), separator @ (Separator::Space | Separator::None | Separator::Colon))
+			if items.len() > 1 && matches!(items[0].drop_meta(), Node::Symbol(_)) =>
+		{
+			Node::List(values(items), bracket, separator)
+		}
+		// the last statement of a body is its value
+		Node::List(items, bracket, separator) => {
+			let last = items.len().saturating_sub(1);
+			let is_body = bracket == Bracket::Curly || separator == Separator::Semicolon;
+			Node::List(items.into_iter().enumerate().map(|(index, item)| bind_it(item, parameter, is_body && index == last && !is_value)).collect(), bracket, separator)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(bind_it(*left, parameter, false)), op, Box::new(bind_it(*right, parameter, false))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_it(*node, parameter, is_value)), data },
+		other => other,
+	}
+}
+
 fn one_parameter(head: &Node) -> Option<String> {
 	let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
 	let [name, parameter] = items.as_slice() else { return None };
@@ -1085,7 +1158,7 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 }
 
 pub fn lower_c_functions(node: Node) -> Node {
-	lower_lists(node, |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| partial_application(items)))
+	lower_lists(end_definitions(node), |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| extension_block(items)).or_else(|| partial_application(items)))
 }
 
 /// `add(1, _)`: a call with placeholders is the lambda of the missing arguments, `partial_1 => add(1, partial_1)`
@@ -1093,6 +1166,11 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 	let [Node::Symbol(_), arguments @ ..] = items else { return None };
 	let is_placeholder = |argument: &Node| matches!(argument.drop_meta(), Node::Symbol(name) if name == PLACEHOLDER);
 	if !arguments.iter().any(is_placeholder) {
+		return None;
+	}
+	// Swift's `func twice(_ x: Int)`: `_` labels a typed parameter, no placeholder
+	let typed_parameter = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::Colon, type_node) if is_type_word(type_node));
+	if arguments.windows(2).any(|pair| is_placeholder(&pair[0]) && typed_parameter(&pair[1])) {
 		return None;
 	}
 	let mut parameters = vec![];
@@ -1112,22 +1190,44 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 }
 
 /// `def f(a, b) { body }`, `def f(x) := body`, `function g() { … }`: the definition `f(a, b) := body`
-fn keyword_definition(items: &[Node]) -> Option<Node> {
-	let (keyword, definition) = match items {
-		[keyword, definition] => (keyword, definition.drop_meta().clone()),
-		[keyword, head, body] => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None)),
+pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
+	let (keyword, definition, mut result_type) = match items {
+		[keyword, definition] => (keyword, definition.drop_meta().clone(), None),
+		// a tuple result type `-> (Int, Int) {…}` (Swift): the body's tuple as it is
+		[keyword, head, body] if tuple_result(head).is_some() => {
+			let Node::Key(_, _, result_types) = head.drop_meta() else { unreachable!("guarded") };
+			(keyword, Node::List(vec![tuple_result(head).expect("guarded").clone(), typed_returns(body.clone(), result_types)], Bracket::Round, Separator::None), None)
+		}
+		[keyword, head, body] => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), None),
 		// Go's `func add1(x int) int {…}`: the result type between the head and the body
-		[keyword, head, result_type, body] if is_type_word(result_type) => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None)),
+		[keyword, head, result_type, body] if is_type_word(result_type) => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), Some(result_type.clone())),
+		// Go's `func divmod(a, b int) (int, int) {…}`: a tuple of result types, each returned value converted
+		[keyword, head, result_types, body] if is_type_tuple(result_types) => {
+			(keyword, Node::List(vec![head.clone(), typed_returns(body.clone(), result_types)], Bracket::Round, Separator::None), None)
+		}
 		_ => return None,
 	};
 	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
 		return None;
 	}
+	let definition = extension_definition(definition);
+	let definition = match typed_result(&definition) {
+		Some((untyped, written_type)) => {
+			result_type = Some(written_type);
+			untyped
+		}
+		None => definition,
+	};
 	let (head, op, body) = match definition {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) => (*head, op, *body),
 		// `def test: print "test"` (wiki/signal.md): a function without parameters
 		Node::Key(name, Op::Colon, body) if matches!(name.drop_meta(), Node::Symbol(_)) => {
 			(Node::List(vec![*name], Bracket::Round, Separator::None), Op::Define, *body)
+		}
+		// Python's `def apply(f, x): return f(x)`, early, so the function value passes see a definition; without
+		// parameters it stays a def form for late_binding, which would read `z() := e` as a getter (P71)
+		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() > 1 && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
+			(*head, Op::Define, *body)
 		}
 		Node::List(parts, Bracket::Round, _) if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => (parts[0].clone(), Op::Define, parts[1].clone()),
 		_ => return None,
@@ -1135,13 +1235,24 @@ fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
 	let (name, arguments) = head_items.split_first()?;
 	let Node::Symbol(_) = name.drop_meta() else { return None };
+	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words
+	let arguments = match arguments {
+		[label, typed] if argument_label(label, typed).is_some() => vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)],
+		_ => arguments.to_vec(),
+	};
 	// the parameters may come as one group: `f (a, b)`, `f (m)`, `f ø`
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
+		Node::List(group, Bracket::Round, Separator::Space) if matches!(group.as_slice(), [label, typed] if argument_label(label, typed).is_some()) => vec![argument.clone()],
 		Node::List(group, Bracket::Round, _) => group.clone(),
 		Node::Empty => vec![],
 		_ => vec![argument.clone()],
-	}).map(name_then_type);
-	let mut parameters: Vec<Node> = parameters.collect();
+	})
+	// Python's markers `*` (keyword-only after it) and `/` (positional-only before it) take no argument
+	.filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(left, Op::Mul | Op::Div, right) if matches!((left.drop_meta(), right.drop_meta()), (Node::Empty, Node::Empty))))
+	.map(name_then_type);
+	let mut labeled_names = vec![];
+	let mut parameters: Vec<Node> = parameters.map(|parameter| labeled_parameter(parameter, &mut labeled_names)).collect();
+	let body = with_label_names(body, labeled_names);
 	// `func add1(x int)`: the one parameter and its type arrive as two words
 	if let [parameter, type_word] = parameters.as_slice() {
 		if matches!(parameter.drop_meta(), Node::Symbol(_)) && is_type_word(type_word) {
@@ -1149,7 +1260,171 @@ fn keyword_definition(items: &[Node]) -> Option<Node> {
 		}
 	}
 	let head = Node::List(std::iter::once(name.clone()).chain(parameters).collect(), Bracket::Round, Separator::None);
-	Some(Node::Key(Box::new(head), op, Box::new(body)))
+	let target = match result_type {
+		Some(result_type) => Node::Key(Box::new(head), Op::Colon, Box::new(result_type)),
+		None => head,
+	};
+	Some(Node::Key(Box::new(target), op, Box::new(body)))
+}
+
+/// Kotlin's extension method `fun Int.twice() = this * 2`: the function `twice(this:Int) := this * 2`, its receiver the
+/// first parameter, named as the body names it (`this`, or Swift's `self`), so `3.twice()` calls it as a method
+fn extension_definition(definition: Node) -> Node {
+	let Node::Key(head, op, rest) = definition else { return definition };
+	let Node::Key(receiver_type, Op::Dot, call) = head.drop_meta() else { return Node::Key(head, op, rest) };
+	let Node::List(call, Bracket::Round, separator) = call.drop_meta() else { return Node::Key(head, op, rest) };
+	if !matches!(receiver_type.drop_meta(), Node::Symbol(_)) || !matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_))) {
+		return Node::Key(head, op, rest);
+	}
+	let head = with_receiver(call, separator, receiver_type, &rest);
+	Node::Key(Box::new(head), op, rest)
+}
+
+/// The head `name(receiver:T, parameters…)` of a method on T whose call is `name(parameters…)`
+fn with_receiver(call: &[Node], separator: &Separator, receiver_type: &Node, body: &Node) -> Node {
+	let receiver = if body.mentions_any(&[SELF_WORD]) { SELF_WORD } else { THIS_WORD };
+	let receiver = Node::Key(Box::new(Node::Symbol(receiver.to_string())), Op::Colon, Box::new(receiver_type.clone()));
+	let parameters = call[1..].iter().flat_map(|parameter| match parameter.drop_meta() {
+		Node::List(group, Bracket::Round, _) => group.clone(),
+		Node::Empty => vec![],
+		_ => vec![parameter.clone()],
+	});
+	Node::List(std::iter::once(call[0].clone()).chain(std::iter::once(receiver)).chain(parameters).collect(), Bracket::Round, separator.clone())
+}
+
+/// Swift's `extension Int { func twice() -> Int { self * 2 } }`: each function of the block a method on the type, as
+/// `fun Int.twice()` defines it
+fn extension_block(items: &[Node]) -> Option<Node> {
+	let [word, receiver_type, block] = items else { return None };
+	let is_extension = matches!(word.drop_meta(), Node::Symbol(word) if word == EXTENSION_WORD) && matches!(receiver_type.drop_meta(), Node::Symbol(_));
+	// a block of one function arrives as that definition
+	let definitions = match block.drop_meta() {
+		Node::List(definitions, Bracket::Curly, _) => definitions.clone(),
+		definition @ Node::Key(_, Op::Define | Op::Assign, _) => vec![definition.clone()],
+		_ => return None,
+	};
+	if !is_extension {
+		return None;
+	}
+	let method = |definition: &Node| {
+		let Node::Key(head, op @ (Op::Define | Op::Assign), body) = definition.drop_meta() else { return definition.clone() };
+		let (call, result_type) = match head.drop_meta() {
+			Node::Key(call, Op::Colon, result_type) => (call.drop_meta(), Some(result_type)),
+			call => (call, None),
+		};
+		let Node::List(call, Bracket::Round, separator) = call else { return definition.clone() };
+		let head = with_receiver(call, separator, receiver_type, body);
+		let head = match result_type {
+			Some(result_type) => Node::Key(Box::new(head), Op::Colon, result_type.clone()),
+			None => head,
+		};
+		Node::Key(Box::new(head), op.clone(), body.clone())
+	};
+	Some(Node::List(definitions.iter().map(method).collect(), Bracket::None, Separator::Semicolon))
+}
+
+/// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`
+/// (Python): the definition `(f(x) { body })` without its result type, and the type
+fn typed_result(definition: &Node) -> Option<(Node, Node)> {
+	let Node::Key(head, Op::Arrow | Op::Colon, typed_body) = definition else { return None };
+	if !matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) {
+		return None;
+	}
+	let (result_type, body) = match typed_body.drop_meta() {
+		Node::List(parts, _, Separator::Space) if parts.len() == 2 && is_type_word(&parts[0]) && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => (parts[0].clone(), parts[1].clone()),
+		Node::Key(result_type, Op::Colon, body) if is_type_word(result_type) => (result_type.as_ref().clone(), body.as_ref().clone()),
+		_ => return None,
+	};
+	Some((Node::Key(head.clone(), Op::Define, Box::new(body)), result_type))
+}
+
+/// `f(a, b) -> (Int, Int)`: the head of a function whose result type is a tuple of types
+fn tuple_result(head: &Node) -> Option<&Node> {
+	let Node::Key(head, Op::Arrow, result) = head.drop_meta() else { return None };
+	is_type_tuple(result).then_some(head.as_ref())
+}
+
+/// `return a / b, a % b` of a function returning `(int, int)`: `return (a / b) as int, (a % b) as int`
+fn typed_returns(body: Node, result_types: &Node) -> Node {
+	let Node::List(types, _, _) = result_types.drop_meta() else { return body };
+	let converted = |values: &[Node]| -> Option<Vec<Node>> {
+		(values.len() == types.len()).then(|| values.iter().zip(types).map(|(value, kind)| {
+			let grouped = Node::List(vec![value.clone()], Bracket::Round, Separator::None);
+			Node::Key(Box::new(grouped), Op::As, Box::new(kind.clone()))
+		}).collect())
+	};
+	let is_return = |node: &Node| matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && matches!(words[0].drop_meta(), Node::Symbol(word) if word == RETURN_WORD));
+	match body {
+		// `return a, b` parses as `(return a), b`
+		Node::List(items, bracket, Separator::Colon) if items.first().is_some_and(is_return) => {
+			let Node::List(words, _, _) = items[0].drop_meta() else { unreachable!("guarded") };
+			let values: Vec<Node> = std::iter::once(words[1].clone()).chain(items[1..].iter().cloned()).collect();
+			match converted(&values) {
+				Some(mut values) => {
+					let first = Node::List(vec![words[0].clone(), values.remove(0)], Bracket::None, Separator::Space);
+					Node::List([vec![first], values].concat(), bracket, Separator::Colon)
+				}
+				None => Node::List(items, bracket, Separator::Colon),
+			}
+		}
+		other => other.map_children(|child| typed_returns(child, result_types)),
+	}
+}
+
+/// `(Int, Int)`
+fn is_type_tuple(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(types, Bracket::Round, _) if types.len() > 1 && types.iter().all(is_type_word))
+}
+
+/// Swift's `label name: T`: the label (`_` for none)
+fn argument_label<'a>(label: &'a Node, typed: &Node) -> Option<&'a str> {
+	let Node::Symbol(label) = label.drop_meta() else { return None };
+	typed_parameter_name(typed).is_some().then_some(label.as_str())
+}
+
+/// The name of a typed parameter `name: T`, also of a function type `name: (Int) -> Int`
+fn typed_parameter_name(typed: &Node) -> Option<&Node> {
+	match typed.drop_meta() {
+		Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_)) => Some(name),
+		Node::Key(parameter, Op::Arrow | Op::FatArrow, _) => typed_parameter_name(parameter),
+		_ => None,
+	}
+}
+
+/// The typed parameter under another name: `name: T` → `label: T`
+fn renamed_parameter(typed: &Node, label: &str) -> Node {
+	match typed.drop_meta() {
+		Node::Key(_, Op::Colon, type_node) => Node::Key(Box::new(Node::Symbol(label.to_string())), Op::Colon, type_node.clone()),
+		Node::Key(parameter, op, result) => Node::Key(Box::new(renamed_parameter(parameter, label)), *op, result.clone()),
+		other => other.clone(),
+	}
+}
+
+/// `person name: String` is the parameter `person: String` whose value the body reads as name (`labeled_names` gets
+/// `name = person`); `_ name: String` is `name: String`
+fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
+	let Node::List(words, _, _) = parameter.drop_meta() else { return parameter };
+	let [label, typed] = words.as_slice() else { return parameter };
+	let Some(label) = argument_label(label, typed) else { return parameter };
+	let name = typed_parameter_name(typed).expect("a labeled parameter has a name");
+	if label == WILDCARD_LABEL {
+		return typed.clone();
+	}
+	labeled_names.push(Node::Key(Box::new(name.clone()), Op::Assign, Box::new(Node::Symbol(label.to_string()))));
+	renamed_parameter(typed, label)
+}
+
+/// The body reading every labeled parameter by its label: `name` → `person` (an alias `name = person` would hide that
+/// the parameter is a function, `f(x)` of `using f: (Int) -> Int`)
+fn with_label_names(body: Node, labeled_names: Vec<Node>) -> Node {
+	let bindings: std::collections::HashMap<String, Node> = labeled_names
+		.into_iter()
+		.filter_map(|binding| match binding {
+			Node::Key(name, Op::Assign, label) => Some((name.name(), *label)),
+			_ => None,
+		})
+		.collect();
+	if bindings.is_empty() { body } else { crate::law::substitute(&body, &bindings) }
 }
 
 fn is_type_word(node: &Node) -> bool {
@@ -1164,6 +1439,76 @@ fn name_then_type(parameter: Node) -> Node {
 		}
 		_ => parameter,
 	}
+}
+
+/// Ruby's `def f(a, b: 2) a * b end` and `def f(a)` ⏎ statements ⏎ `end`: the definition `def f(a, b: 2) {…}`
+fn end_definitions(node: Node) -> Node {
+	let node = match node {
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(end_definitions).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(end_definitions(*left)), op, Box::new(end_definitions(*right))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(end_definitions(*node)), data },
+		other => other,
+	};
+	let Node::List(items, bracket, separator) = node else { return node };
+	// one line: `def head body… end`
+	if let ([keyword, head, body @ .., end], Separator::Space) = (items.as_slice(), &separator) {
+		if is_function_keyword(&keyword.drop_meta().name()) && is_end(end) && !body.is_empty() {
+			return Node::List(vec![keyword.clone(), function_head(head), body_block(body.to_vec())], bracket, separator);
+		}
+	}
+	if !matches!(separator, Separator::Newline | Separator::Semicolon) || !items.iter().any(is_end) {
+		return Node::List(items, bracket, separator);
+	}
+	// statements: `def head`, the body's statements, `end`
+	let mut statements: Vec<Node> = vec![];
+	let mut rest = items.into_iter();
+	while let Some(statement) = rest.next() {
+		let Some((keyword, head)) = bodiless_definition(&statement) else {
+			statements.push(statement);
+			continue;
+		};
+		let body = body_block(rest.by_ref().take_while(|statement| !is_end(statement)).collect());
+		let definition = match head.drop_meta() {
+			// Crystal's `def f(a) : Int`: the head as Kotlin's `fun f(a): Int { … }` has it
+			Node::Key(inner, Op::Colon, result) => {
+				let typed_body = Node::List(vec![result.as_ref().clone(), body], Bracket::None, Separator::Space);
+				vec![keyword, Node::Key(Box::new(function_head(inner)), Op::Colon, Box::new(typed_body))]
+			}
+			_ => vec![keyword, function_head(&head), body],
+		};
+		statements.push(Node::List(definition, Bracket::None, Separator::Space));
+	}
+	Node::List(statements, bracket, separator)
+}
+
+fn is_end(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if word == END_WORD)
+}
+
+/// `def f(a)` or `def h` without a body, also with Crystal's result type `def f(a) : Int`
+fn bodiless_definition(statement: &Node) -> Option<(Node, Node)> {
+	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
+	let [keyword, head] = items.as_slice() else { return None };
+	let is_head = |head: &Node| matches!(head.drop_meta(), Node::Symbol(_)) || matches!(head.drop_meta(), Node::List(parts, Bracket::Round, _) if matches!(parts.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+	let is_typed_head = matches!(head.drop_meta(), Node::Key(inner, Op::Colon, _) if is_head(inner));
+	(is_function_keyword(&keyword.drop_meta().name()) && (is_head(head) || is_typed_head)).then(|| (keyword.clone(), head.clone()))
+}
+
+/// `h` → `h()`; `(f a b:2)` → `(f (a, b:2))`, the parameters as one comma group as `def f(a, b: 2) {…}` has them (two
+/// loose words would read as Swift's labeled parameter)
+fn function_head(head: &Node) -> Node {
+	match head.drop_meta() {
+		Node::Symbol(_) => Node::List(vec![head.clone()], Bracket::Round, Separator::None),
+		Node::List(items, Bracket::Round, separator) if items.len() > 2 => {
+			let parameters = Node::List(items[1..].to_vec(), Bracket::Round, Separator::Colon);
+			Node::List(vec![items[0].clone(), parameters], Bracket::Round, separator.clone())
+		}
+		_ => head.clone(),
+	}
+}
+
+fn body_block(statements: Vec<Node>) -> Node {
+	Node::List(statements, Bracket::Curly, Separator::Semicolon)
 }
 
 fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {
@@ -1197,6 +1542,9 @@ fn enum_object(items: &[Node]) -> Option<Node> {
 }
 
 
+/// Swift's label for an argument without a label
+const WILDCARD_LABEL: &str = "_";
+
 /// `real f(real x) { … }`: the definition `f(x:real) := { … }` (the parser reads the type word, then the call and its
 /// block); the result kind is inferred as for any definition
 fn c_function(items: &[Node]) -> Option<Node> {
@@ -1205,14 +1553,21 @@ fn c_function(items: &[Node]) -> Option<Node> {
 	if crate::analyzer::type_word_kind(result_type).is_none() && result_type != "void" {
 		return None;
 	}
-	let Node::List(parts, Bracket::Round, _) = definition.drop_meta() else { return None };
-	let [head, body] = parts.as_slice() else { return None };
-	let Node::List(_, Bracket::Curly, _) = body.drop_meta() else { return None };
+	let (head, body) = match definition.drop_meta() {
+		Node::List(parts, Bracket::Round, _) => match parts.as_slice() {
+			[head, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => (head, body),
+			_ => return None,
+		},
+		// C#'s expression-bodied member `int Add(int a, int b) => a + b`
+		Node::Key(head, Op::FatArrow, body) => (head.as_ref(), body.as_ref()),
+		_ => return None,
+	};
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
 	let (name, arguments) = head_items.split_first()?;
 	let Node::Symbol(_) = name.drop_meta() else { return None };
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
 		Node::List(group, Bracket::Round, Separator::Colon) => group.clone(), // `(real a, int b)`
+		Node::Empty => vec![], // `f()`
 		_ => vec![argument.clone()],
 	});
 	let parameters: Option<Vec<Node>> = parameters.map(|parameter| c_parameter(&parameter)).collect();
@@ -1220,10 +1575,10 @@ fn c_function(items: &[Node]) -> Option<Node> {
 	Some(Node::Key(Box::new(head), Op::Define, Box::new(body.clone())))
 }
 
-/// `real x` is `x:real`; a bare name stays untyped
+/// `real x` is `x:real`; a bare name stays untyped, as does a parameter the parser typed already
 fn c_parameter(parameter: &Node) -> Option<Node> {
 	match parameter.drop_meta() {
-		Node::Symbol(_) => Some(parameter.clone()),
+		Node::Symbol(_) | Node::Key(_, Op::Colon, _) => Some(parameter.clone()),
 		Node::List(words, _, Separator::Space) => match words.as_slice() {
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(Node::Key(Box::new(name.clone()), Op::Colon, Box::new(kind.clone())))

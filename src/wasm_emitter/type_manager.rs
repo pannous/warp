@@ -298,6 +298,14 @@ impl TypeManager {
 		self.user_type_indices.get(name).copied()
 	}
 
+	/// Add a struct type and return its index
+	pub fn add_struct_type(&mut self, fields: Vec<FieldType>) -> u32 {
+		let idx = self.next_type_idx;
+		self.types.ty().struct_(fields);
+		self.next_type_idx += 1;
+		idx
+	}
+
 	/// Add a function type and return its index
 	pub fn add_function_type(&mut self, params: Vec<ValType>, results: Vec<ValType>) -> u32 {
 		let idx = self.next_type_idx;

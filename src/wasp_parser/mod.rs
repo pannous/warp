@@ -27,7 +27,12 @@ use unicode_normalization::UnicodeNormalization;
 const URL_SCHEMES: [&str; 7] = ["http", "https", "ftp", "file", "data", "ws", "wss"];
 const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
 const BYTES_WORD: &str = "bytes";
-const IT_WORD: &str = "it";
+pub const IT_WORD: &str = "it";
+/// The item of the map a Julia dot call `f.(xs)` lowers to
+const BROADCAST_ITEM: &str = "broadcast_item";
+const MAP_WORD: &str = "map";
+/// Words that make a parameter the rest parameter: Kotlin `vararg xs: Int`, C# `params int[] xs`
+const REST_MARKERS: [&str; 2] = ["vararg", "params"];
 const MAX_INTEGER_EXPONENT: i64 = 4096;
 /// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; `0.1l` (long double) → exact, the default anyway
 const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
@@ -41,7 +46,7 @@ const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", 
 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 /// Modifiers of other languages with no meaning in wasp: skipped with a note (user decision P78)
-const FOREIGN_MODIFIERS: [&str; 18] = ["public", "private", "protected", "internal", "static", "extern", "external", "C", "inline",
+const FOREIGN_MODIFIERS: [&str; 19] = ["public", "private", "protected", "internal", "static", "extern", "external", "C", "inline", "local",
 	"virtual", "override", "abstract", "constexpr", "volatile", "thread_local", "synchronized", "transient", "native"];
 /// Modifiers with a wasp meaning that change nothing before a function definition (a function is global and constant)
 const DEFINITION_MODIFIERS: [&str; 7] = ["global", "export", "import", "const", "final", "mutable", "mut"];
@@ -52,6 +57,7 @@ const FUNCTION_REFERENCE_WORDS: [&str; 2] = ["function", "func"];
 const NONLOCAL_WORD: &str = "nonlocal";
 
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
+const LEFT_ARROW_TOPIC: &str = "left-arrow";
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
 const ELEMENT_WISE_OPERATORS: [(char, Op); 4] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div)];
 
@@ -94,6 +100,7 @@ const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate t
 const IN_KEYWORD: &str = "in";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
+const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
 const ELSE_KEYWORD: &str = "else";
 const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
 const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
@@ -218,6 +225,8 @@ enum SpecialInfix {
 	ElementWise(Op),
 	/// `x in xs`
 	Membership,
+	/// Julia's dot call `f.(xs)`, `add.(xs, 10)`: f mapped over the first argument
+	DotCall,
 }
 
 impl SpecialInfix {
@@ -231,8 +240,26 @@ impl SpecialInfix {
 			SpecialInfix::Pipeline => piped(lhs, operand),
 			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
 			SpecialInfix::Membership => Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), operand], Bracket::None, Separator::Space),
+			SpecialInfix::DotCall => dot_call(lhs, operand),
 		}
 	}
+}
+
+/// `f.(xs, a)` → `map(xs, broadcast_item => f(broadcast_item, a))`
+fn dot_call(function: Node, arguments: Node) -> Node {
+	let mut arguments = match arguments.drop_meta() {
+		Node::List(items, Bracket::Round, _) if !items.is_empty() => items.clone(),
+		_ => vec![arguments],
+	};
+	// a number broadcasts as itself (Julia, Elixir's `f.(4)`): the call
+	if matches!(arguments[0].drop_meta(), Node::Number(_)) {
+		return Node::List([vec![function], arguments].concat(), Bracket::Round, Separator::None);
+	}
+	let list = arguments.remove(0);
+	let item = Symbol(BROADCAST_ITEM.to_string());
+	let call = Node::List([vec![function, item.clone()], arguments].concat(), Bracket::Round, Separator::None);
+	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(call));
+	Node::List(vec![Symbol(MAP_WORD.to_string()), list, each], Bracket::Round, Separator::None)
 }
 
 /// `for int in xs` as the explicit filter `for x in xs.filter(x => x is int)`, the body unchanged; None when the body
@@ -252,6 +279,17 @@ fn is_unindexable_keyword(node: &Node) -> bool {
 pub const TRY_MARKER: &str = "try·else";
 /// `after C return V` (wiki/thread.md) as the marker call `after·return(C, V)`, lowered by go_blocks into a waiting task
 pub const AFTER_MARKER: &str = "after·return";
+/// `class dog extends animal {…}`: the class named on the right is the parent (P117)
+pub const EXTENDS_KEYWORD: &str = "extends";
+/// `mixin Walker{…}` declares fields and methods classes take in: `class Duck with Walker, Swimmer {…}`
+pub const MIXIN_WORD: &str = "mixin";
+pub const WITH_KEYWORD: &str = "with";
+/// The constructor of a class body, `value{…}` or `value(name){…}` (wiki/constructor.md)
+pub const CONSTRUCTOR_WORD: &str = "value";
+/// The accessors of a class property, `get age() {…}`, `set age(v) {…}` (wiki/property.md)
+pub const ACCESSOR_WORDS: [&str; 2] = ["get", "set"];
+/// `static k = 3` in a class body: a member of the class, not of each instance (P122); kept as the annotation `@static`
+pub const STATIC_KEYWORD: &str = "static";
 const AFTER_KEYWORD: &str = "after";
 /// `sleep 1s and print "x"`: an `and` between two statements runs them one after the other
 const AND_KEYWORD: &str = "and";
@@ -534,10 +572,18 @@ pub struct WaspParser {
 	group_start: (usize, usize),
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
 	stops_at_else: bool,
+	/// Inside `class Name {…}`: its fields named like a constant (`pi = 3`, `pi:int`), which its methods read instead
+	/// of the constant; None outside a type body
+	type_fields: Option<std::collections::HashSet<String>>,
+	/// The binding power of the `then` or `else` branch being parsed: there it is a statement, so a braceless call takes a
+	/// variable argument (`then count xs`), as at assignment level
+	branch_bp: Option<u8>,
 	/// The position of the sign in `1 -1` read as the list `[1 -1]`: no enclosing expression subtracts it either (`x=1 -1`)
 	signed_list_element: Option<usize>,
 	/// Inside `do … end`: the `end` keyword closes the statement list
 	stops_at_end: bool,
+	/// Inside Python's `f"…{x}…"`: braces are holes, `{{` and `}}` the braces themselves
+	brace_holes: bool,
 	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
 	in_command: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
@@ -720,11 +766,25 @@ fn built_in_level(text: &str) -> Option<u8> {
 /// The single argument `(int x)` of `f(int x)` is the typed parameter `x:int`, so that flattening the call `f(T, y)` into
 /// `(f T y)` never reads a parameter named like a type (`offset_of(text, byte, start)`) as the type of the next one
 fn typed_parameter(arguments: Node) -> Node {
+	let is_type_word = |node: &Node| matches!(node.drop_meta(), Symbol(word) if crate::analyzer::type_word_kind(word).is_some());
 	match arguments.drop_meta() {
-		Node::List(items, _, Separator::Space) if matches!(items.as_slice(), [type_word, name]
-			if matches!(type_word.drop_meta(), Symbol(word) if crate::analyzer::type_word_kind(word).is_some()) && matches!(name.drop_meta(), Symbol(_))) => {
-			Node::Key(Box::new(items[1].clone()), Op::Colon, Box::new(items[0].clone()))
-		}
+		Node::List(items, _, Separator::Space) => match items.as_slice() {
+			[type_word, name] if is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) => Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone())),
+			// Kotlin `vararg xs: Int`, C# `params int[] xs`: the rest parameter `*xs` (lowering/variadic.rs)
+			[marker, .., name] if matches!(marker.drop_meta(), Symbol(word) if REST_MARKERS.contains(&word.as_str())) => match name.drop_meta() {
+				Symbol(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
+				Node::Key(name, Op::Colon, _) => Symbol(format!("{}{}", crate::tuples::STARRED, name.name())),
+				_ => arguments,
+			},
+			// `int b = 2` (C#, C++): `b:int = 2`
+			[type_word, default] if is_type_word(type_word) => match default.drop_meta() {
+				Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Symbol(_)) => {
+					Node::Key(Box::new(Node::Key(name.clone(), Op::Colon, Box::new(type_word.clone()))), Op::Assign, value.clone())
+				}
+				_ => arguments,
+			},
+			_ => arguments,
+		},
 		_ => arguments,
 	}
 }
@@ -786,8 +846,11 @@ impl WaspParser {
 			in_for_header: false,
 			group_start: (0, 0),
 			stops_at_else: false,
+			type_fields: None,
+			branch_bp: None,
 			signed_list_element: None,
 			stops_at_end: false,
+			brace_holes: false,
 			in_command: false,
 			times_loops: 0,
 			pending_comment: None,

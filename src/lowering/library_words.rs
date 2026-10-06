@@ -45,7 +45,8 @@ const FOR_WORD: &str = "for";
 const LOG_WORD: &str = "log";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 24] = [
+const SYNONYMS: [(&str, &[&str]); 25] = [
+	(LIST_WORD, &[]),
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
@@ -59,7 +60,7 @@ const SYNONYMS: [(&str, &[&str]); 24] = [
 	// the text builtin trim (text_builtins.rs), Python's strip
 	("trim", &["strip"]),
 	("reverse", &[]),
-	("sort", &[]),
+	("sort", &["sorted"]),
 	("split", &[]),
 	("join", &[]),
 	("first", &[]),
@@ -104,7 +105,9 @@ macro_rules! digit_test { () => { "(word_tmp >= '0' and word_tmp <= '9')" } }
 macro_rules! letter_test { () => { "((word_tmp >= 'a' and word_tmp <= 'z') or (word_tmp >= 'A' and word_tmp <= 'Z'))" } }
 /// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `word_tmp` a
 /// temporary that holds it once, `word_argument_2` … the arguments after the receiver
-const EXPANDED_WORDS: [(&str, usize, &str); 9] = [
+const EXPANDED_WORDS: [(&str, usize, &str); 10] = [
+	// Python's `list(x)`: the list itself, a text's characters
+	(LIST_WORD, 1, "word_tmp as list"),
 	(ROUND_TO, 2, "round(word_tmp * 10^word_argument_2) / 10^word_argument_2"),
 	("first", 1, "word_tmp#1"),
 	("last", 1, "word_tmp#(count(word_tmp))"),
@@ -117,6 +120,8 @@ const EXPANDED_WORDS: [(&str, usize, &str); 9] = [
 	("is_alphanumeric", 1, concat!(letter_test!(), " or ", digit_test!())),
 ];
 const IS_DIGIT: &str = "is_digit";
+const LIST_WORD: &str = "list";
+const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arrayListOf"];
 /// `round(x, 3)`, `x.round(3)`: x rounded to 3 digits after the point; `round(x)` stays the builtin
 const ROUND_TO: &str = "round_to";
 const ROUND: &str = "round";
@@ -130,9 +135,9 @@ const INDEX_PLACEHOLDER: &str = "try_placeholder_index";
 const DIVIDEND_PLACEHOLDER: &str = "try_placeholder_dividend";
 const DIVISOR_PLACEHOLDER: &str = "try_placeholder_divisor";
 const ASSERT_CONDITION_PLACEHOLDER: &str = "assert_placeholder_condition";
-const SIMILAR_LEFT_PLACEHOLDER: &str = "similar_placeholder_left";
-const SIMILAR_RIGHT_PLACEHOLDER: &str = "similar_placeholder_right";
-const SIMILAR_TEMPORARY: &str = "similar_tmp";
+const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
+const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
+const OPERAND_TEMPORARY: &str = "operand_tmp";
 /// `a ≈ b` holds when |a-b| ≤ tolerance·max(|a|, |b|); a program that assigns `tolerance` sets it
 const TOLERANCE_VARIABLE: &str = "tolerance";
 const DEFAULT_RELATIVE_TOLERANCE: &str = "1e-9";
@@ -151,6 +156,13 @@ pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	} else {
 		LIST_RESULT_WORDS.contains(&word).then_some(Kind::List)
 	}
+}
+
+/// `field_with(m, key, value)` updating the variable m itself: what `m.key = value` lowers to (field_assignment)
+pub fn is_field_update_of(name: &str, value: &Node) -> bool {
+	let Node::List(items, _, _) = value.drop_meta() else { return false };
+	let [word, map, _, _] = items.as_slice() else { return false };
+	word.name() == FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name)
 }
 
 pub fn is_runtime_word(name: &str) -> bool {
@@ -180,6 +192,9 @@ pub fn lower(node: Node) -> Node {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
+	// `sum·point`, a class's own `sum` (traits.rs witness, an overload): the program defines `sum`, no library word
+	let variants: Vec<String> = shadowed.iter().filter_map(|name| name.split_once(crate::traits::WITNESS_SEPARATOR)).map(|(operation, _)| operation.to_string()).collect();
+	shadowed.extend(variants);
 	collect_assigned_names(&node, &mut shadowed);
 	let mut assigned = AssignedObjects::default();
 	collect_assigned_objects(&node, &mut assigned);
@@ -270,7 +285,29 @@ pub fn lower_function_methods(node: Node) -> Node {
 	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
 	// are specialised (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
+	let node = list_constructor_calls(node, &defined);
 	function_methods_as_calls(node, &|name, arguments| (is_builtin(name) && !defined.contains(name)) || takes_receiver(name, arguments))
+}
+
+/// Python's `list()`: the empty list, as `[]` parses; Kotlin's `listOf(1, 2)`, `arrayOf`, `mutableListOf`: the list
+/// `[1, 2]` (`listOf()` is `[]` too); a word the program defines keeps its call
+fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
+	let is_constructor = |word: &Node| matches!(word.drop_meta(), Node::Symbol(name) if (name == LIST_WORD || LIST_CONSTRUCTORS.contains(&name.as_str())) && !defined.contains(name));
+	match node {
+		Node::List(items, Bracket::Round, Separator::None) if items.first().is_some_and(is_constructor) => {
+			let elements: Vec<Node> = match &items[1..] {
+				[Node::List(arguments, Bracket::Round, _)] => arguments.clone(),
+				arguments => arguments.to_vec(),
+			};
+			let is_list_word = matches!(items[0].drop_meta(), Node::Symbol(name) if name == LIST_WORD);
+			match elements.is_empty() {
+				true => Node::Empty,
+				false if is_list_word => Node::List(items.into_iter().map(|item| list_constructor_calls(item, defined)).collect(), Bracket::Round, Separator::None), // `list(x)` is `x as list`
+				false => Node::List(elements.into_iter().map(|element| list_constructor_calls(element, defined)).collect(), Bracket::Square, Separator::Colon),
+			}
+		}
+		other => other.map_children(|child| list_constructor_calls(child, defined)),
+	}
 }
 
 fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bool) -> Node {
@@ -290,6 +327,20 @@ fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bo
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lowered(*node)), data },
 		other => other,
 	}
+}
+
+/// The field and step of `x++` / `x--` after a dot
+fn field_step(method: &Node) -> Option<(Node, Op)> {
+	match method.drop_meta() {
+		Node::Key(field, op @ (Op::Inc | Op::Dec), _) if matches!(field.drop_meta(), Node::Symbol(_)) => Some((field.as_ref().clone(), op.clone())),
+		_ => None,
+	}
+}
+
+/// `place += 1` for `place++`, `place -= 1` for `place--`
+fn stepped(place: Node, step: Op) -> Node {
+	let update = if step == Op::Inc { Op::AddAssign } else { Op::SubAssign };
+	Node::Key(Box::new(place), update, Box::new(Node::int(1)))
 }
 
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
@@ -470,6 +521,12 @@ impl Lowering {
 				}
 				self.word_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
+			// `p.x++` (parsed as `p.(x++)` or `(p.x)++`) is `p.x += 1`, an update of the field
+			Node::Key(left, Op::Dot, right) if field_step(&right).is_some() => {
+				let (field, op) = field_step(&right).expect("guarded");
+				self.expand(stepped(Node::Key(left, Op::Dot, Box::new(field)), op))
+			}
+			Node::Key(left, op @ (Op::Inc | Op::Dec), _) if matches!(left.drop_meta(), Node::Key(_, Op::Dot, _)) => self.expand(stepped(*left, op)),
 			Node::Key(left, Op::Dot, right) => {
 				let (left, right) = (self.expand(*left), self.expand_method(*right));
 				self.method_call(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Dot, Box::new(right)))
@@ -484,6 +541,7 @@ impl Lowering {
 				self.safe_lookup(receiver, word)
 			}
 			Node::Key(left, Op::Similar, right) => self.lower_similar(self.expand(*left), self.expand(*right)),
+			Node::Key(left, Op::Coalesce, right) => self.lower_coalesce(self.expand(*left), self.expand(*right)),
 			Node::Key(left, Op::Define, right) => {
 				let left = self.expand(*left);
 				let right = self.in_definition(&left, *right);
@@ -505,9 +563,21 @@ impl Lowering {
 		let parameters = crate::traits::untyped_parameters(head);
 		let scope = self.parameters.borrow().len();
 		self.parameters.borrow_mut().extend(parameters);
-		let right = self.expand(right);
+		let right = self.expand(self.body_statement(head, right));
 		self.parameters.borrow_mut().truncate(scope);
 		right
+	}
+
+	/// `def total(xs){sum xs}`: the body block of a function that is one braceless call is that statement, not the data
+	/// `{sum xs}`; an undefined word in it (`{square x}`) is then reported as one
+	fn body_statement(&self, head: &Node, right: Node) -> Node {
+		let defines_function = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+		match right {
+			Node::List(items, Bracket::Curly, Separator::Space) if defines_function && items.len() > 1 && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+				Node::List(vec![Node::List(items, Bracket::None, Separator::Space)], Bracket::Curly, Separator::Semicolon)
+			}
+			other => other,
+		}
 	}
 
 	fn is_parameter(&self, node: &Node) -> bool {
@@ -520,12 +590,21 @@ impl Lowering {
 		let tolerance = if self.shadowed.contains(TOLERANCE_VARIABLE) { TOLERANCE_VARIABLE } else { DEFAULT_RELATIVE_TOLERANCE };
 		let mut bindings = vec![];
 		let [left, right] = [left, right].map(|operand| self.bound_once(operand, &mut bindings));
-		let (l, r) = (SIMILAR_LEFT_PLACEHOLDER, SIMILAR_RIGHT_PLACEHOLDER);
+		let (l, r) = (LEFT_OPERAND_PLACEHOLDER, RIGHT_OPERAND_PLACEHOLDER);
 		let comparison = self.instantiate_template(
 			&format!("abs({l} - {r}) <= {tolerance} * abs({l}) or abs({l} - {r}) <= {tolerance} * abs({r})"),
 			&[(l, &left), (r, &right)],
 		);
 		crate::min_max::with_bindings(bindings, comparison)
+	}
+
+	/// `a ?? b`: a unless it is ø, then b (a is computed once)
+	fn lower_coalesce(&self, left: Node, right: Node) -> Node {
+		let mut bindings = vec![];
+		let left = self.bound_once(left, &mut bindings);
+		let (l, r) = (LEFT_OPERAND_PLACEHOLDER, RIGHT_OPERAND_PLACEHOLDER);
+		let choice = self.instantiate_template(&format!("if {l} == ø then {r} else {l}"), &[(l, &left), (r, &right)]);
+		crate::min_max::with_bindings(bindings, choice)
 	}
 
 	fn bound_once(&self, operand: Node, bindings: &mut Vec<Node>) -> Node {
@@ -534,7 +613,7 @@ impl Lowering {
 		}
 		let number = self.temporaries.get();
 		self.temporaries.set(number + 1);
-		let temporary = Node::Symbol(format!("{SIMILAR_TEMPORARY}_{number}"));
+		let temporary = Node::Symbol(format!("{OPERAND_TEMPORARY}_{number}"));
 		bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(operand)));
 		temporary
 	}
@@ -580,8 +659,11 @@ impl Lowering {
 			Node::Symbol(name) => name,
 			_ => return None,
 		};
-		// `log(x, base)` is ln(x)/ln(base): libm's log takes one argument
+		// `log(x, base)` is ln(x)/ln(base): libm's log takes one argument (unless the program defines its own log)
 		if let (LOG_WORD, [_, value, base]) = (head.as_str(), items) {
+			if self.shadowed.contains(LOG_WORD) {
+				return None;
+			}
 			if call_name(items, bracket, separator).is_some() {
 				let log_of = |argument: &Node| Node::List(vec![items[0].clone(), argument.clone()], Bracket::Round, Separator::None);
 				return Some(Node::Key(Box::new(log_of(value)), Op::Div, Box::new(log_of(base))));

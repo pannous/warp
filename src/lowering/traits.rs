@@ -18,7 +18,7 @@ use std::collections::HashMap;
 /// The words that declare a trait: `trait`, the canonical one (user, 2026-10-03: "short"), then the names other languages
 /// use, each accepted with a hint toward `trait`
 pub const TRAIT_KEYWORDS: [&str; 8] = ["trait", "interface", "protocol", "typeclass", "prototype", "capability", "aspect", "feature"];
-const WITNESS_SEPARATOR: char = '·';
+pub const WITNESS_SEPARATOR: char = '·';
 const SORT_WORD: &str = "sort";
 const FOR_WORD: &str = "for";
 const IN_WORD: &str = "in";
@@ -910,10 +910,15 @@ impl Dispatch {
 					let found = self.has_witness(EQUALS, &type_name).then(|| position_by_equals(list, element, &type_name))?;
 					return Some(Node::Key(Box::new(found), Op::Ne, Box::new(Node::int(0))));
 				}
+				// `x is Comparable` of a trait, `dog(…) is animal` of a type dog is like (class dog extends animal)
 				(crate::type_tests::IS_TYPE, [subject, spec]) => {
-					let required = self.traits.named(&spec.drop_meta().name())?;
+					let spec = spec.drop_meta().name();
 					let type_name = self.instance_type(subject)?;
-					let conforms = self.traits.missing(required, &type_name, &self.witnesses).is_none();
+					let conforms = match self.traits.named(&spec) {
+						Some(required) => self.traits.missing(required, &type_name, &self.witnesses).is_none(),
+						None if type_name != spec && self.is_like(&type_name, &spec) => true,
+						None => return None,
+					};
 					return Some(if conforms { Node::True } else { Node::False });
 				}
 				_ => {}

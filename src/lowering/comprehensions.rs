@@ -3,7 +3,7 @@
 //! every later pass like written ones.
 
 use crate::library_words::substitute;
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::wasp_parser::parse;
 use std::cell::Cell;
 
@@ -31,6 +31,11 @@ impl Lowering {
 				let items: Vec<Node> = items.into_iter().map(|item| self.lower(item)).collect();
 				match bracket {
 					Bracket::Square => self.comprehension(&items).unwrap_or(Node::List(items, bracket, separator)),
+					// Python's generator argument `sum(x * x for x in xs)`: the call of the comprehension's list
+					Bracket::Round if separator == Separator::None && items.len() > 1 => match self.comprehension(&items[1..]) {
+						Some(list) => Node::List(vec![items[0].clone(), list], bracket, separator),
+						None => Node::List(items, bracket, separator),
+					},
 					_ => Node::List(items, bracket, separator),
 				}
 			}

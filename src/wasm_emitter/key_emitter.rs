@@ -24,6 +24,13 @@ impl WasmGcEmitter {
 			}
 		}
 
+		// `k.x = 3` (k = field_with(k, "x", 3)) of a k bound nowhere, like `k#1 = 3`
+		if let Node::Symbol(name) = left.drop_meta() {
+			if *op == Op::Assign && self.is_unbound(name) && crate::library_words::is_field_update_of(name, right) {
+				return self.emit_undefined_variable(func, name);
+			}
+		}
+
 		// Handle x = fetch URL pattern: Key(Assign, x, List[fetch, URL]), optionally `… timeout SECONDS`
 		if (*op == Op::Assign || *op == Op::Define) && self.config.emit_host_imports {
 			if let Node::Symbol(var_name) = left.drop_meta() {
@@ -39,10 +46,14 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// text += more → text = text + more, list += [x] → list = list + [x]
+		// text += more → text = text + more, list += [x] → list = list + [x]; a list (or ø) += anything else is what
+		// list + it is (the type error of `xs + 3`)
 		if op.is_compound_assign() && op.base_op() == Op::Add {
 			let concatenation = Node::Key(Box::new(left.clone()), Op::Add, Box::new(right.clone()));
-			if matches!(self.get_type(&concatenation), crate::type_kinds::Kind::Text | crate::type_kinds::Kind::List) {
+			let list_or_text = |kind| matches!(kind, crate::type_kinds::Kind::Text | crate::type_kinds::Kind::List);
+			// `xs = []` holds ø until something is added
+			let left_kind = self.get_type(left);
+			if list_or_text(self.get_type(&concatenation)) || matches!(left_kind, crate::type_kinds::Kind::List | crate::type_kinds::Kind::Empty) {
 				self.emit_key_node(func, left, &Op::Assign, &concatenation);
 				return;
 			}
@@ -311,10 +322,12 @@ impl WasmGcEmitter {
 		}
 		// For struct instances like Person{...}, emit block as list; the value of an entry `a:{b:1}` stays a map
 		let right_node = right.drop_meta();
-		if let (Node::List(items, Bracket::Curly, sep), false) = (right_node, *op == Op::Colon) {
-			// Convert curly block to square list, preserving inner ops
-			let list_node = Node::List(items.clone(), Bracket::Square, sep.clone());
-			self.emit_node_instructions(func, &list_node);
+		if let (Node::List(items, Bracket::Curly, _), false) = (right_node, *op == Op::Colon) {
+			// the fields as data, nothing run as a block; the instance keeps its braces: `point{x:1 y:2}` (P123)
+			match items.is_empty() {
+				true => self.emit_call(func, "new_empty"),
+				false => self.emit_list_structure(func, items, &Bracket::Curly),
+			}
 		} else if *op == Op::Colon {
 			// the value of an entry is data: unknown words in it stay words (P62)
 			let outer = std::mem::replace(&mut self.data_context, true);

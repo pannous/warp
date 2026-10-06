@@ -49,6 +49,7 @@ pub enum Op {
 	Colon,    // :   type annotation and object construction person:{name:"Joe" age:42}
 	Dot,      // .   member access
 	SafeDot,  // ?.  member access that is ø when the receiver is ø
+	Coalesce, // ??  the left value unless it is ø, then the right (Swift, C#, JS)
 	Scope,    // ::  scope resolution
 	Define,   // :=  definition
 	Assign,   // =   assignment
@@ -182,6 +183,7 @@ impl Op {
 			Op::And => (100, 101),
 			Op::Xor => (95, 96),
 			Op::Or => (90, 91),
+			Op::Coalesce => (93, 92), // right-assoc: a ?? b ?? c → a ?? (b ?? c)
 
 			// Ternary: ? needs lower right bp so : can bind within
 			Op::Question => (85, 79), // right-assoc, lower than Colon's left bp (80)
@@ -198,7 +200,7 @@ impl Op {
 			// Structural/Key operators (existing, adjusted for consistency)
 			Op::Colon => (80, 81),    // type annotation: a:b:c → a:(b:c)
 			Op::Arrow => (70, 69),    // right-assoc: a->b->c → a->(b->c)
-			Op::FatArrow => (70, 69), // right-assoc: a => b
+			Op::FatArrow => (70, 58), // right-assoc: a => b; the body takes an assignment as in JS: x => total += x
 			Op::Define => (60, 59),   // right-assoc: a:=b:=c → a:=(b:=c)
 			Op::Assign => (60, 59),   // right-assoc: a=b=c → a=(b=c)
 
@@ -223,6 +225,7 @@ impl Op {
 			Op::Colon => ":",
 			Op::Dot => ".",
 			Op::SafeDot => "?.",
+			Op::Coalesce => "??",
 			Op::Scope => "::",
 			Op::Define => ":=",
 			Op::Assign => "=",
@@ -389,13 +392,14 @@ impl fmt::Display for Op {
 
 /// Every operator by its code in the kind field of a Key node (`(code << 8) | Kind::Key`); the first five are the
 /// codes earlier modules stored, the rest follow, so a quoted expression (`data 1+2`) reads back with its operator
-const OP_CODES: [Op; 57] = [
+const OP_CODES: [Op; 58] = [
 	Op::None, Op::Colon, Op::Assign, Op::Define, Op::Dot,
 	Op::SafeDot, Op::Scope, Op::Arrow, Op::FatArrow, Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Rem, Op::Pow,
 	Op::Shl, Op::Shr, Op::AddAssign, Op::SubAssign, Op::MulAssign, Op::DivAssign, Op::ModAssign, Op::PowAssign,
 	Op::AndAssign, Op::OrAssign, Op::XorAssign, Op::Lt, Op::Gt, Op::Le, Op::Ge, Op::Eq, Op::Ne, Op::Similar, Op::And,
 	Op::Or, Op::Xor, Op::Not, Op::Neg, Op::Sqrt, Op::Cbrt, Op::Abs, Op::Inc, Op::Dec, Op::Square, Op::Cube,
 	Op::Question, Op::If, Op::Then, Op::Else, Op::While, Op::Do, Op::Hash, Op::Range, Op::To, Op::As, Op::PlusMinus,
+	Op::Coalesce,
 ];
 
 /// Encode Op as i64 for storage in kind field

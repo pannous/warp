@@ -430,6 +430,8 @@ pub(super) fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 /// Methods that append one element; with value semantics `x.add(v)` rebinds `x = x + [v]`
 pub(super) const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
 pub(super) const POP_METHOD: &str = "pop";
+/// The list a pop template takes from, replaced by the variable or field popped
+const POP_PLACE: &str = "pop_place";
 pub(super) const REMOVE_METHOD: &str = "remove";
 pub(super) const POP_TEMPORARY: &str = "pop_tmp";
 pub(super) const INSERT_METHOD: &str = "insert";
@@ -457,21 +459,39 @@ pub fn is_list_mutating_method(name: &str) -> bool {
 	APPEND_METHODS.contains(&name) || name == POP_METHOD || name == REMOVE_METHOD
 }
 
-/// The element of `x.add(v)` when x is a variable
+/// A place a list update can assign: a variable `xs` or a field of one `p.items`, `self.stack.items` (by now the
+/// field index `p#…` of a declared type)
+fn is_place(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(_) => true,
+		Node::Key(object, Op::Dot, field) => matches!(field.drop_meta(), Node::Symbol(_)) && is_place(object),
+		Node::Key(object, Op::Hash, _) => is_place(object),
+		_ => false,
+	}
+}
+
+/// The element of `x.add(v)` when x is a variable or a field of one
 pub(super) fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a Node> {
-	let Node::Symbol(_) = list.drop_meta() else { return None };
+	if !is_place(list) {
+		return None;
+	}
 	match call.drop_meta() {
 		Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(method) if APPEND_METHODS.contains(&method.as_str())) => Some(&items[1]),
 		_ => None,
 	}
 }
 
-/// `xs.pop()` when xs is a variable: the last item, removed from xs (Python's list.pop())
+/// `xs.pop()` when xs is a variable or a field of one (`s.items`): the last item, removed from xs (Python's list.pop())
 pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
-	let Node::Symbol(name) = list.drop_meta() else { return None };
+	if !is_place(list) {
+		return None;
+	}
 	match call.drop_meta() {
-		Node::List(items, _, _) if matches!(items.as_slice(), [method] if is_word(method, POP_METHOD)) => Some(crate::wasp_parser::parse(&format!(
-			"({POP_TEMPORARY} = {name}#count({name}); {name} = slice({name}, 0, count({name})-1); {POP_TEMPORARY})"))),
+		Node::List(items, _, _) if matches!(items.as_slice(), [method] if is_word(method, POP_METHOD)) => {
+			let template = crate::wasp_parser::parse(&format!(
+				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = slice({POP_PLACE}, 0, count({POP_PLACE})-1); {POP_TEMPORARY})"));
+			Some(crate::law::substitute(&template, &std::collections::HashMap::from([(POP_PLACE.to_string(), list.clone())])))
+		}
 		_ => None,
 	}
 }
@@ -498,7 +518,9 @@ pub(super) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 /// `xs.insert(a, b)` when xs is a variable. Wasp writes `insert(value, position)`, Python `insert(position, value)`:
 /// the order is never guessed (wiki/Footguns.md "Guessing intent"), `at:` or the kinds decide
 pub(super) fn inserted_element(list: &Node, call: &Node) -> Option<Inserted> {
-	let Node::Symbol(_) = list.drop_meta() else { return None };
+	if !is_place(list) {
+		return None;
+	}
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [method, first, second] = items.as_slice() else { return None };
 	if !is_word(method, INSERT_METHOD) {

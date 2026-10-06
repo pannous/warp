@@ -152,6 +152,8 @@ impl WaspParser {
 				// Dedent - push item and exit this level
 				items_with_seps.push((item, Separator::None));
 				break;
+			} else if bracket == Bracket::Curly {
+				field_holding_lambda(item)
 			} else {
 				item
 			};
@@ -291,6 +293,11 @@ impl WaspParser {
 	/// Used for class/struct definitions to convert type names to Type nodes
 	pub(super) fn transform_fields_to_types(node: Node) -> Node {
 		match node {
+			// a keyword method (`def scaled(k) { side * k }`) or a constructor (`value(n) {…}`) in a class body: its body is
+			// code, no field types
+			Node::List(items, bracket, sep) if items.first().is_some_and(starts_code) => {
+				Node::List(items, bracket, sep)
+			}
 			Node::List(items, bracket, sep) => {
 				let transformed: Vec<Node> = items.into_iter().map(Self::transform_fields_to_types).collect();
 				Node::List(transformed, bracket, sep)
@@ -320,5 +327,40 @@ impl WaspParser {
 			}
 			other => other,
 		}
+	}
+}
+
+/// `{f: x => x * 2}`: `:` binds tighter than `=>`, so the entry parses as the lambda `(f:x) => x*2` with a parameter f of
+/// type x; in an object a lowercase word that is no type after the key is the lambda's parameter: the field f holds
+/// `x => x * 2`. A typed lambda `{x: int => x * 2}` or `{p: Person => p.name}` stays one.
+fn field_holding_lambda(item: Node) -> Node {
+	match item {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(field_holding_lambda(*node)), data },
+		Node::Key(head, Op::FatArrow, body) => match head.drop_meta() {
+			Node::Key(key, Op::Colon, parameter) if matches!(key.drop_meta(), Symbol(_)) && is_parameter_word(parameter) => {
+				let lambda = Node::Key(parameter.clone(), Op::FatArrow, body);
+				Node::Key(key.clone(), Op::Colon, Box::new(lambda))
+			}
+			_ => Node::Key(head, Op::FatArrow, body),
+		},
+		other => other,
+	}
+}
+
+/// A lowercase word that names no type, or a parameter group `(x, y)`
+fn is_parameter_word(node: &Node) -> bool {
+	match node.drop_meta() {
+		Symbol(word) => word.starts_with(char::is_lowercase) && crate::analyzer::type_word_kind(word).is_none(),
+		Node::List(_, Bracket::Round, _) => true,
+		_ => false,
+	}
+}
+
+/// The first word of a class-body item that is code: a function keyword, or the constructor call `value(n)`
+fn starts_code(first: &Node) -> bool {
+	match first.drop_meta() {
+		Node::Symbol(word) => crate::operators::is_function_keyword(word) || super::ACCESSOR_WORDS.contains(&word.as_str()),
+		Node::List(call, Bracket::Round, _) => matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::CONSTRUCTOR_WORD),
+		_ => false,
 	}
 }

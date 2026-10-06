@@ -11,7 +11,12 @@ pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
 	if name == BYTE_SIZE {
 		return Some("node_bytes");
 	}
-	(is_counting_property(name) && !TYPE_WORDS_AMONG_COUNTING.contains(&name)).then_some("node_count")
+	is_counting_word(name).then_some("node_count")
+}
+
+/// `count`, `length`, `size`, `len`: a word counting its argument (`number x` is a cast)
+pub(super) fn is_counting_word(name: &str) -> bool {
+	is_counting_property(name) && !TYPE_WORDS_AMONG_COUNTING.contains(&name)
 }
 
 /// `x.count`, `x.length`, `x.size`, and the explicit units `x.bytes` (memory), `x.chars` (code points), `x.graphemes`
@@ -150,12 +155,17 @@ pub(super) fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Sep
 	Some(unit_count(&counted).unwrap_or_else(|| Node::List(vec![Node::Symbol(counter.to_string()), counted], bracket.clone(), separator.clone())))
 }
 
-/// The list a range of integer literals stands for: `1..4` is [1 2 3], `1…4` and `1 to 4` are [1 2 3 4]; not an empty or computed range
-pub(super) fn range_elements(range: &Node) -> Option<Node> {
+/// The most numbers a range of literals is written out as at compile time; a longer one is collected at run time like
+/// a range of computed bounds (a literal list of 100000 numbers overflowed the compiler's stack)
+const LITERAL_RANGE_MAX_LENGTH: i64 = 1000;
+
+/// The list a range of integer literals stands for: `1..4` is [1 2 3], `1…4` and `1 to 4` are [1 2 3 4]; not an empty,
+/// computed or long range
+pub(crate) fn range_elements(range: &Node) -> Option<Node> {
 	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else { return None };
 	let (Node::Number(Number::Int(start)), Node::Number(Number::Int(end))) = (start.drop_meta(), end.drop_meta()) else { return None };
 	let last = if *op == Op::To { *end } else { end - 1 };
-	(start <= &last).then(|| Node::List((*start..=last).map(Node::int).collect(), Bracket::Square, Separator::Space))
+	(start <= &last && last - start < LITERAL_RANGE_MAX_LENGTH).then(|| Node::List((*start..=last).map(Node::int).collect(), Bracket::Square, Separator::Space))
 }
 
 /// The name a range of computed bounds collects its list under where no variable is assigned (`print a..b`)

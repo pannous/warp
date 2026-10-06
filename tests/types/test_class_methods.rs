@@ -35,5 +35,27 @@ fn a_method_in_the_body_conforms_to_a_trait() {
 
 #[test]
 fn a_method_assigning_its_receiver_says_so() {
-	crate::common::fails_with("class counter{n:int; inc() := n += 1}; c = counter(0); c.inc(); c.n", "inc changes a field of counter");
+	is!("class counter{n:int; inc() := n += 1}; c = counter(0); c.inc(); c.n", 1);
+}
+
+#[test]
+fn a_shared_method_named_like_a_library_word_stays_the_classes_own() {
+	is!("class a{x:int; sum() := x}; class b{y:int; sum() := y}; a(1).sum() + b(2).sum()", 3);
+}
+
+#[test]
+fn keyword_methods_in_a_class_body() {
+	is!("class Square{side:int; def area() -> int { side * side }}; Square(3).area()", 9);
+	is!("class Square{side:int; fun area(): Int { return side * side }}; Square(3).area()", 9);
+	is!("class Square{side:int; func area() -> Int { side * side }}; s = Square(4); s.area()", 16);
+	is!("class Square{side:int; def scaled(k) { side * k }}; Square(3).scaled(2)", 6);
+	is!("class Square{side:int\n  def area() -> int {\n    return side * side\n  }\n}\nSquare(3).area()", 9);
+}
+
+#[test]
+fn a_method_may_be_named_like_a_type_word() {
+	// P142: class methods are always allowed, even named like a library or type word
+	is!("class C{x:int; double() := x*2}; C(2).double()", 4);
+	is!("class C{x:int; double() := x*2; quad() := double() * 2}; c = C(3); c.quad()", 12);
+	is!("class C{x:int; double() := x*2}; type(double(3))", "float"); // the conversion stays
 }

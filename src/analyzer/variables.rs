@@ -106,6 +106,8 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 			if !skip_first_assign && !in_structure {
 				// Check for typed declaration: Key(Key(name, Colon, type), Assign, value)
 				match left.drop_meta() {
+					// `k.x = 3` updates k: it binds no k, so an undefined k stays undefined (as in `k#1 = 3`)
+					Node::Symbol(name) if crate::library_words::is_field_update_of(name, right) && scope.lookup(name).is_none() => {}
 					Node::Symbol(name) if scope.lookup(name).is_none() && !scope.is_global(name) => {
 						let declared = declared_type(left);
 						let (kind, type_node) = match declared {
@@ -463,7 +465,7 @@ pub(crate) fn declare_global(program: Node, names: &[String]) -> Node {
 
 /// Is the first mention of `name` in `body` a plain `name = value` not reading it (`primes = []`)? Then the body
 /// binds its own local, as in Python; reading or updating it first (`n += 1`, `xs#i = v`) means main's variable.
-pub(super) fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
+pub(crate) fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
 	let mut first_mention = None;
 	body.visit(&mut |node| {
 		if first_mention.is_some() {

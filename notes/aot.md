@@ -49,7 +49,7 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    executable (P105). Release stub (`cargo build --release -p warp-runtime`): **805 KB**; ackermann.exe **972 KB**
    (167 KB machine code), starts and finishes in well under 10 ms (probe build: 0.33 ms in total).
    - The program prints its value: build compiles `print(<last statement>)` (pipeline::compile_printing_result;
-     a declaration or a print stays), so the value is formatted by warp's own print (`[10 20 30]`, texts unquoted)
+     a declaration or a print stays), so the value is formatted by warp's own print (`[10 20 30]`, a lone text unquoted, texts in a container quoted, P126)
      and the stub needs no Node reader.
      Decided by the user (P77): an executable shows its prints, then its value as `print` shows it (texts without
      quotes); exit code 0, 1 on a trap.

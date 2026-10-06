@@ -2,6 +2,9 @@
 
 Un-ignored by sweeps 2 and 3: test_types, the twelve test_ffi libc/libm tests (incl. test_ffi_math_pipeline and test_dynlib_import_emit), test_is, test_object_properties_wasm,
 test_wasm_logic_unary, test_wasm_logic_unary_variables, test_wasm_logic_negated, test_for_loop_classic.
+Sweep 4 (2026-10-06, bare `#[ignore]` only): test_assert and test_array_indices_wasm (test_wasm's `assert_throws` was a
+`todo!()` stub; `k#i=4` of an undefined k is now an error), test_function_params (expects Int 9, not text "9").
+The other 21 bare ones need features, network, host imports or a decision (listed below or deliberate).
 
 Legend: (a) a small no-decision fix exists or is pending; (b) needs a user decision (named); (c) the test expects what the Decided rules exclude.
 

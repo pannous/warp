@@ -2,20 +2,47 @@
 //! `sleep(ms)` pauses, `random()` is a float in [0, 1), `random_below(n)` an int in 0..n, `clock()` the milliseconds
 //! since the Unix epoch. A program that defines a word of the same name keeps its own. warp adds the words that need
 //! its compiler, the network or threads (host.rs); these need nothing.
-//! `signal_poll()`, called at each loop start of a program with `on interrupt {…}`, runs that handler (the exported
-//! `on·interrupt`) after a ctrl-c (notes/system_signals.md): the first poll installs the SIGINT handler, which only sets
-//! a flag; a second ctrl-c within a second ends the run at once (exit code 130), so a handler that ignores ctrl-c
-//! never makes a program unstoppable.
+//! `signal_poll()` and `signal_every(id, ms)` serve the handlers of system signals (system_signals.rs).
 pub const HOST_LIBRARY: &str = "host";
 pub const SLEEP: &str = "sleep";
 pub const RANDOM: &str = "random";
 pub const RANDOM_BELOW: &str = "random_below";
 pub const CLOCK: &str = "clock";
 pub const SIGNAL_POLL: &str = "signal_poll";
+pub const SIGNAL_EVERY: &str = "signal_every";
+/// `signal_daily(id, minute_of_day, weekdays)`: `on every day at 9:00 {…}`, the timer on·every·id at that local time
+/// on the weekdays of the mask (bit 0 Sunday … bit 6 Saturday, 127 every day)
+pub const SIGNAL_DAILY: &str = "signal_daily";
+/// `signal_at(id, minute_of_day)`: `at 9:00 {…}`, on·every·id once at the next such local time
+pub const SIGNAL_AT: &str = "signal_at";
+pub const SIGNAL_WATCH: &str = "signal_watch";
+/// `system_value(name)`: the machine's `battery` percent, `charging`, `online`, `dark mode` (system_values.rs)
+pub const SYSTEM_VALUE: &str = "system_value";
+pub const BATTERY: &str = "battery";
+pub const CHARGING: &str = "charging";
+pub const ONLINE: &str = "online";
+pub const DARK_MODE: &str = "dark mode";
+/// The system values, and whether each is a yes/no value
+/// How often the clipboard changed since the machine started (macOS NSPasteboard changeCount): `on clipboard change`
+pub const CLIPBOARD_COUNT: &str = "clipboard count";
+pub const SYSTEM_VALUES: [(&str, bool); 5] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true), (CLIPBOARD_COUNT, false)];
+/// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
+pub const CLIPBOARD: &str = "clipboard";
+pub const CLIPBOARD_TEXT: &str = "clipboard_text";
+/// `on·file·0`: the handler of the first `on file "x" change {…}`
+pub const FILE_HANDLER_PREFIX: &str = "on·file·";
+/// `exit(code)` ends the run, not the process (P121, system_signals.rs ExitRequest)
+pub const EXIT: &str = "exit";
 /// The exported handler of `on interrupt {…}` (src/lowering/event_signals.rs)
 pub const INTERRUPT_HANDLER: &str = "on·interrupt";
+/// The exported handler of `on exit {…}`, run once as the run ends (system_signals.rs run_exit_handler)
+pub const EXIT_HANDLER: &str = "on·exit";
+/// `on·every·0`: the handler of the first `on every … {…}`
+pub const TIMER_HANDLER_PREFIX: &str = "on·every·";
+/// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
+pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
-pub const BASIC_HOST_WORDS: [&str; 5] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL];
+pub const BASIC_HOST_WORDS: [&str; 11] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT];
 
 #[cfg(feature = "engine")]
 pub use linking::*;
@@ -24,81 +51,47 @@ pub use linking::*;
 mod linking {
 	use super::*;
 	use std::time::Duration;
-	use wasmtime::{Caller, Linker, Result, Val};
+	use crate::system_signals;
+	use wasmtime::{Caller, Func, Linker, Result};
 
 	/// Link sleep, random, random_below and clock, for a store of any state
 	pub fn link_host_words<T: 'static>(linker: &mut Linker<T>) -> Result<()> {
-		linker.func_wrap(HOST_LIBRARY, SLEEP, |milliseconds: i64| std::thread::sleep(Duration::from_millis(milliseconds.max(0) as u64)))?;
+		system_signals::forget_timers(); // each run links anew, on its own thread
+		linker.func_wrap(HOST_LIBRARY, SLEEP, |mut caller: Caller<'_, T>, milliseconds: i64| {
+			system_signals::sleep_with_handlers(&mut caller, Duration::from_millis(milliseconds.max(0) as u64), exported)
+		})?;
 		// the top 53 bits make a uniform f64 in [0, 1)
 		linker.func_wrap(HOST_LIBRARY, RANDOM, || (next_random() >> 11) as f64 / (1u64 << 53) as f64)?;
 		linker.func_wrap(HOST_LIBRARY, RANDOM_BELOW, |bound: i64| if bound <= 0 { 0 } else { (next_random() % bound as u64) as i64 })?;
 		linker.func_wrap(HOST_LIBRARY, CLOCK, milliseconds_since_epoch)?;
-		linker.func_wrap(HOST_LIBRARY, SIGNAL_POLL, |caller: Caller<'_, T>| run_interrupt_handler(caller))?;
+		linker.func_wrap(HOST_LIBRARY, SIGNAL_POLL, |mut caller: Caller<'_, T>| system_signals::run_due_handlers(&mut caller, exported))?;
+		linker.func_wrap(HOST_LIBRARY, SIGNAL_EVERY, system_signals::start_timer)?;
+		linker.func_wrap(HOST_LIBRARY, SIGNAL_DAILY, system_signals::start_daily_timer)?;
+		linker.func_wrap(HOST_LIBRARY, SIGNAL_AT, system_signals::start_one_shot_timer)?;
+		linker.func_wrap(HOST_LIBRARY, SIGNAL_WATCH, |mut caller: Caller<'_, T>, id: i64, path: i32| -> Result<()> {
+			let path = c_string(&mut caller, path)?;
+			system_signals::watch_file(id, path);
+			Ok(())
+		})?;
+		linker.func_wrap(HOST_LIBRARY, SYSTEM_VALUE, |mut caller: Caller<'_, T>, name: i32| -> Result<i64> {
+			let name = c_string(&mut caller, name)?;
+			crate::system_values::read(&name).map_err(wasmtime::Error::msg)
+		})?;
+		linker.func_wrap(HOST_LIBRARY, EXIT, |code: i64| -> Result<()> { Err(wasmtime::Error::new(system_signals::ExitRequest(code as i32))) })?;
 		Ok(())
 	}
 
-	/// After a ctrl-c the program's on·interrupt runs, with ø as `event` when it reads one
-	fn run_interrupt_handler<T>(mut caller: Caller<'_, T>) -> Result<()> {
-		if !interrupt::take() {
-			return Ok(());
-		}
-		let Some(handler) = caller.get_export(INTERRUPT_HANDLER).and_then(|export| export.into_func()) else { return Ok(()) };
-		let mut arguments = vec![];
-		if handler.ty(&caller).params().len() == 1 {
-			let empty = caller.get_export("new_empty").and_then(|export| export.into_func()).ok_or_else(|| wasmtime::Error::msg("no new_empty"))?;
-			let mut built = [Val::AnyRef(None)];
-			empty.call(&mut caller, &[], &mut built)?;
-			arguments.push(built[0]);
-		}
-		let mut results = vec![Val::I64(0); handler.ty(&caller).results().len()];
-		handler.call(&mut caller, &arguments, &mut results)
+	/// The NUL-terminated text a text literal passes as an i32 (the emitter's C strings)
+	fn c_string<T>(caller: &mut Caller<'_, T>, pointer: i32) -> Result<String> {
+		let memory = caller.get_export("memory").and_then(|export| export.into_memory()).ok_or_else(|| wasmtime::Error::msg("no memory export"))?;
+		let bytes = memory.data(&*caller);
+		let start = (pointer as usize).min(bytes.len());
+		let end = bytes[start..].iter().position(|byte| *byte == 0).map_or(bytes.len(), |length| start + length);
+		Ok(String::from_utf8_lossy(&bytes[start..end]).into_owned())
 	}
 
-	#[cfg(unix)]
-	mod interrupt {
-		use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
-		use std::sync::Once;
-
-		const EXIT_INTERRUPTED: i32 = 130; // 128 + SIGINT, what a shell reports for a ctrl-c
-		/// a second ctrl-c this soon after the one before ends the run
-		const HARD_EXIT_WITHIN_MILLISECONDS: i64 = 1000;
-		static INTERRUPTED: AtomicBool = AtomicBool::new(false);
-		/// when the last ctrl-c came, monotonic milliseconds (0: none yet)
-		static LAST_SIGNAL: AtomicI64 = AtomicI64::new(0);
-		static WATCHING: Once = Once::new();
-
-		/// Whether a ctrl-c came since the last call; the first call starts watching
-		pub fn take() -> bool {
-			WATCHING.call_once(|| unsafe {
-				libc::signal(libc::SIGINT, on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t);
-			});
-			INTERRUPTED.swap(false, Ordering::SeqCst)
-		}
-
-		/// async-signal-safe (atomics, clock_gettime, _exit): a flag, or the exit of a second ctrl-c within a second or
-		/// one the program did not take yet
-		extern "C" fn on_signal(_: libc::c_int) {
-			let now = monotonic_milliseconds();
-			let last = LAST_SIGNAL.swap(now, Ordering::SeqCst);
-			let soon_after = last != 0 && now - last < HARD_EXIT_WITHIN_MILLISECONDS;
-			if INTERRUPTED.swap(true, Ordering::SeqCst) || soon_after {
-				unsafe { libc::_exit(EXIT_INTERRUPTED) }
-			}
-		}
-
-		fn monotonic_milliseconds() -> i64 {
-			let mut now = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-			unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };
-			now.tv_sec as i64 * 1000 + now.tv_nsec as i64 / 1_000_000
-		}
-	}
-
-	#[cfg(not(unix))]
-	mod interrupt {
-		/// not yet on this platform: ctrl-c ends the run as before
-		pub fn take() -> bool {
-			false
-		}
+	fn exported<T>(caller: &mut Caller<'_, T>, name: &str) -> Option<Func> {
+		caller.get_export(name).and_then(|export| export.into_func())
 	}
 
 	/// xorshift64*, seeded from the clock once per process: random enough for games and samples, not for secrets

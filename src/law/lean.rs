@@ -1,7 +1,8 @@
 //! Export pure integer functions and their laws to Lean 4 and ask Lean to prove them.
 //! Warp Int promotes to arbitrary precision on overflow, so it is exported as Lean `Int`.
 //! Proved therefore covers the same mathematical integer semantics as the runtime.
-//! Results are cached per (definitions + law) hash under target/lean, so a proof runs once.
+//! Results are cached per (definitions + law) hash under ~/.cache/warp/lean (shared by all checkouts, never inside one), so a
+//! proof runs once.
 use super::{FunctionDefinition, Law, Verdict};
 use crate::extensions::numbers::Number;
 use crate::node::Node;
@@ -21,8 +22,9 @@ rcases Int.le_total 0 x with hx | hx\n  \
 · exact Int.mul_nonneg hx hx\n  \
 · exact Int.mul_nonneg_of_nonpos_of_nonpos hx hx\n\n";
 const INTEGER: &str = "Int";
-const CACHE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/target/lean");
+const CACHE_DIR: &str = "~/.cache/warp/lean";
 const PROVED: &str = "proved";
+const ERROR_MARK: &str = ": error";
 
 type Lean = Result<String, String>;
 
@@ -162,10 +164,33 @@ fn closing_alternatives(tactics: &[&str]) -> String {
 	tactics.iter().map(|tactic| format!("({}; done)", tactic)).collect::<Vec<_>>().join(" | ")
 }
 
-/// A complete Lean file trying `tactics` after unfolding all definitions.
+fn called_names(node: &Node) -> Vec<String> {
+	let mut names = vec![];
+	node.visit(&mut |part| if let Some((name, _)) = super::call_parts(part) { names.push(name.to_string()) });
+	names
+}
+
+/// The functions the law calls, directly or through their bodies, in definition order: unfolding any other one is
+/// an unused simp argument, which Lean warns about
+fn reached<'a>(functions: &'a [FunctionDefinition], law: &Law) -> Vec<&'a str> {
+	let mut pending = called_names(&law.statement);
+	let mut seen: Vec<String> = vec![];
+	while let Some(name) = pending.pop() {
+		if seen.contains(&name) {
+			continue;
+		}
+		if let Some(function) = functions.iter().find(|f| f.name == name) {
+			pending.extend(called_names(&function.body));
+		}
+		seen.push(name);
+	}
+	functions.iter().map(|f| f.name.as_str()).filter(|name| seen.iter().any(|s| s == name)).collect()
+}
+
+/// A complete Lean file trying `tactics` after unfolding the definitions the law reaches.
 pub fn export(functions: &[FunctionDefinition], law: &Law, tactics: &[&str]) -> Lean {
 	let definitions: Result<Vec<String>, String> = functions.iter().map(definition).collect();
-	let names: Vec<&str> = functions.iter().map(|f| f.name.as_str()).collect();
+	let names = reached(functions, law);
 	Ok(format!(
 		"{}{}\ntheorem {} {} : {} := by\n  try simp only [{}]\n  all_goals first | {}\n",
 		HEADER,
@@ -206,15 +231,20 @@ fn run_with_timeout(mut command: Command) -> Result<String, String> {
 	}
 	let output = child.wait_with_output().map_err(|e| e.to_string())?;
 	let text = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
-	if output.status.success() && !text.contains("error") {
+	if output.status.success() && !text.lines().any(is_error_line) {
 		Ok(text)
 	} else {
 		Err(text)
 	}
 }
 
+/// `file:line:col: error: …`; a warning's file path may contain the word "error"
+fn is_error_line(line: &str) -> bool {
+	line.contains(ERROR_MARK)
+}
+
 fn first_error(lean_output: &str) -> String {
-	lean_output.lines().find(|l| l.contains("error")).unwrap_or("lean failed").trim().to_string()
+	lean_output.lines().find(|line| is_error_line(line)).unwrap_or("lean failed").trim().to_string()
 }
 
 fn check_file(file: &Path) -> Result<String, String> {
@@ -230,13 +260,14 @@ fn verdict_of(record: &str) -> Verdict {
 fn cached(source: &str, attempt: impl FnOnce(&Path) -> Result<String, String>) -> Verdict {
 	let mut hasher = DefaultHasher::new();
 	source.hash(&mut hasher);
-	let base = Path::new(CACHE_DIR).join(format!("law_{:016x}", hasher.finish()));
+	let cache = expand_home(CACHE_DIR);
+	let base = cache.join(format!("law_{:016x}", hasher.finish()));
 	let result_file = base.with_extension("result");
 	if let Ok(previous) = std::fs::read_to_string(&result_file) {
 		return verdict_of(&previous);
 	}
 	let lean_file = base.with_extension("lean");
-	if let Err(e) = std::fs::create_dir_all(CACHE_DIR).and_then(|_| std::fs::write(&lean_file, source)) {
+	if let Err(e) = std::fs::create_dir_all(&cache).and_then(|_| std::fs::write(&lean_file, source)) {
 		return Verdict::Unknown(format!("cannot write {}: {}", lean_file.display(), e));
 	}
 	let record = match attempt(&lean_file) {

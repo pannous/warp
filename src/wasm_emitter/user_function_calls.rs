@@ -22,6 +22,12 @@ impl WasmGcEmitter {
 	pub(super) fn allocate_closure_captures(&mut self, program: &Node) {
 		let mut outer = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone()); // `x = g()` holds what g returns
 		collect_variables(program, &mut outer);
+		// a typed list of main captured by a function is passed in a global of its array type (a task's instance copies
+		// capture globals as Nodes, so not with tasks)
+		let tasks = self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES) || self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN);
+		let saved_scope = std::mem::replace(&mut self.scope, outer.clone());
+		let main_typed = self.find_typed_lists(program);
+		self.scope = saved_scope;
 		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values().cloned().collect();
 		for function in functions {
 			let enclosing = self.enclosing_scope(&function.name);
@@ -43,7 +49,14 @@ impl WasmGcEmitter {
 			}).collect();
 			self.ctx.capture_bindings.insert(function.name.clone(), bindings);
 			let captures: Vec<(String, (u32, Kind))> = captured.into_iter()
-				.map(|(name, kind)| (name, (self.declare_mutable_global(kind), kind)))
+				.map(|(name, kind)| match main_typed.get(&name).filter(|_| enclosing.is_none() && !tasks) {
+					Some(&list) => {
+						let global = self.declare_typed_list_global(list.element);
+						self.typed_capture_globals.insert(global, list);
+						(name, (global, kind))
+					}
+					None => (name, (self.declare_mutable_global(kind), kind)),
+				})
 				.collect();
 			// a task's instance gets the values the spawning instance captured (src/tasks.rs copies these globals)
 			if self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES) || self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN) {
@@ -53,6 +66,7 @@ impl WasmGcEmitter {
 			}
 			self.ctx.captures.insert(function.name, captures);
 		}
+		self.main_typed_lists = Some(main_typed);
 	}
 
 	/// A host that hands values into the program (run_block's result, a task's value) builds an exact number beyond the
@@ -106,6 +120,10 @@ impl WasmGcEmitter {
 	pub(super) fn emit_closure_capture(&mut self, func: &mut Function, function_name: &str) {
 		let captures = self.ctx.captures.get(function_name).cloned().unwrap_or_default();
 		for (name, (global, kind)) in captures {
+			if self.emit_typed_capture(func, &name, global) || (kind.is_ref() && self.emit_typed_list_as_node(func, &name)) {
+				func.instruction(&I::GlobalSet(global));
+				continue;
+			}
 			let stored_alike = |local: &&Local| self.storage_type(local.kind) == self.storage_type(kind);
 			if let Some(local) = self.scope.lookup(&name).filter(stored_alike) {
 				func.instruction(&I::LocalGet(local.position));
@@ -140,6 +158,8 @@ impl WasmGcEmitter {
 		for name in func_names {
 			if self.is_closure_call(&name) {
 				self.compile_closure_call(&name);
+			} else if crate::closures::capture_reader(&name).is_some() {
+				self.compile_capture_reader(&name);
 			} else {
 				self.compile_user_function_body(&name);
 			}
@@ -155,9 +175,15 @@ impl WasmGcEmitter {
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
 		let func_type_idx = self.type_manager.types().len();
 		let param_types: Vec<ValType> = user_fn.params.iter().enumerate()
-			.map(|(index, param)| if self.takes_list_abi(name, index) { self.node_list_type() } else { self.storage_type(param_kind(param)) })
+			.map(|(index, param)| match self.struct_parameter(name, index) {
+				Some(class) => Ref(self.instance_ref(class)),
+				None if self.takes_list_abi(name, index) => self.node_list_type(),
+				None => self.storage_type(param_kind(param)),
+			})
 			.collect();
-		let result_types = if self.returns_list_abi(name) {
+		let result_types = if let Some(class) = self.struct_results.get(name) {
+			vec![Ref(self.instance_ref(class))]
+		} else if self.returns_list_abi(name) {
 			vec![self.node_list_type()]
 		} else if !user_fn.tuple_kinds.is_empty() {
 			self.tuple_result_types(&user_fn.tuple_kinds)
@@ -198,6 +224,16 @@ impl WasmGcEmitter {
 			self.scope.define_param(param.name.clone(), kind);
 		}
 
+		// a captured typed list of main is read from its capture global (shadowing a typed global of that name)
+		let captures = self.ctx.captures.get(name).cloned().unwrap_or_default();
+		let shadowed_typed: Vec<_> = captures.iter().map(|(variable, (global, _))| {
+			let previous = match self.typed_capture_globals.get(global) {
+				Some(&list) => self.typed_globals.insert(variable.clone(), (*global, list)),
+				None => self.typed_globals.remove(variable),
+			};
+			(variable.clone(), previous)
+		}).collect();
+
 		// Collect any additional variables in the body, and the temp locals its loops need
 		let temp_locals = collect_variables(&user_fn.body, &mut self.scope);
 		let mut typed_lists = self.find_typed_lists(&user_fn.body);
@@ -208,6 +244,10 @@ impl WasmGcEmitter {
 		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 		let typed_maps = self.find_typed_maps(&user_fn.body);
 		let saved_typed_maps = std::mem::replace(&mut self.typed_maps, typed_maps);
+		let mut typed_structs = self.find_typed_structs(&user_fn.body);
+		typed_structs.extend(user_fn.params.iter().enumerate().filter_map(|(index, param)| Some((param.name.clone(), self.struct_parameter(name, index)?.clone()))));
+		let saved_typed_structs = std::mem::replace(&mut self.typed_structs, typed_structs);
+		let saved_bounded_counters = std::mem::replace(&mut self.bounded_counters, super::big_int::bounded_counters(&user_fn.body));
 
 		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
 		let num_params = user_fn.params.len() as u32;
@@ -230,14 +270,15 @@ impl WasmGcEmitter {
 		self.emit_node_local_defaults(&mut func, &user_fn.body, num_params as usize);
 
 		// Captured variables read their definition-time globals
-		let captures = self.ctx.captures.get(name).cloned().unwrap_or_default();
 		let shadowed: Vec<_> = captures.iter()
 			.map(|(variable, global)| (variable.clone(), self.ctx.user_globals.insert(variable.clone(), *global)))
 			.collect();
 
 		let saved_returned_tuple = std::mem::replace(&mut self.returned_tuple, user_fn.tuple_kinds.clone());
 		// Compile the function body - use node instructions for Node-returning functions
-		if self.returns_list {
+		if self.struct_results.contains_key(name) {
+			self.emit_struct_result_body(&mut func, &user_fn.body);
+		} else if self.returns_list {
 			self.emit_list_abi_body(&mut func, &user_fn.body);
 		} else if !user_fn.tuple_kinds.is_empty() {
 			// every path ends in `return a, b` (tuples::check_definition): the body's own value is never reached
@@ -255,6 +296,12 @@ impl WasmGcEmitter {
 			match global {
 				Some(global) => self.ctx.user_globals.insert(variable, global),
 				None => self.ctx.user_globals.remove(&variable),
+			};
+		}
+		for (variable, previous) in shadowed_typed {
+			match previous {
+				Some(previous) => self.typed_globals.insert(variable, previous),
+				None => self.typed_globals.remove(&variable),
 			};
 		}
 
@@ -275,6 +322,8 @@ impl WasmGcEmitter {
 		self.restore_loop_labels(saved_loop_labels);
 		self.typed_lists = saved_typed_lists;
 		self.typed_maps = saved_typed_maps;
+		self.typed_structs = saved_typed_structs;
+		self.bounded_counters = saved_bounded_counters;
 		self.compiling = saved_compiling;
 
 		// Export the function (get func_idx from the stored function definition)
@@ -297,20 +346,26 @@ impl WasmGcEmitter {
 			self.emit_call(func, "node_list_as_node");
 		} else if user_fn.return_kind.is_float() {
 			self.emit_call(func, "new_float");
+		} else if user_fn.return_kind == Kind::Codepoint {
+			// a character is returned as its code point
+			func.instruction(&Instruction::I32WrapI64);
+			self.emit_call(func, "new_codepoint");
 		} else if !returns_node {
 			self.emit_call(func, "new_int");
 		}
 	}
 
-	/// Result kinds of the user functions, and of `floor(x)`, `round(x)`…, which build an Int (emit_introspection_fn)
-	/// unless libm's f64 version is imported
+	/// Result kinds of the user functions, of `floor(x)`, `round(x)`…, which build an Int (emit_introspection_fn)
+	/// unless libm's f64 version is imported, and of the exports of imported WebAssembly modules (`shout("hi")`, a text)
 	pub(super) fn user_function_kinds(&self) -> HashMap<String, Kind> {
 		let rounding = ROUNDING_FUNCTIONS.iter().filter(|name| !self.ctx.ffi_imports.contains_key(**name)).map(|name| (name.to_string(), Kind::Int));
 		let tuple_values = self.ctx.user_functions.iter().flat_map(|(name, function)| {
 			function.tuple_kinds.iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(name, index), *kind))
 		});
 		let fields = crate::analyzer::declared_field_kinds(&self.ctx.type_registry);
-		rounding.chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).chain(tuple_values).chain(fields).collect()
+		let module_exports = self.ctx.ffi_imports.iter().filter(|(_, import)| crate::wasm_modules::is_module_path(import.library))
+			.map(|(name, import)| (name.clone(), crate::analyzer::signature_kind(import)));
+		module_exports.chain(rounding).chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).chain(tuple_values).chain(fields).collect()
 	}
 
 	/// Emit a call to a user-defined function whose result is needed as f64
@@ -361,6 +416,9 @@ impl WasmGcEmitter {
 			return;
 		};
 		self.refresh_enclosing_captures(func);
+		if self.emit_direct_closure_call(func, user_fn, args) {
+			return;
+		}
 
 		if args.len() > user_fn.params.len() {
 			let count = |n: usize| if n == 1 { "1 argument".to_string() } else { format!("{n} arguments") };
@@ -380,6 +438,10 @@ impl WasmGcEmitter {
 			let argument = &argument;
 			if self.takes_list_abi(&user_fn.name, i) {
 				self.emit_list_abi_value(func, argument);
+				continue;
+			}
+			if let Some(class) = self.struct_parameter(&user_fn.name, i).cloned() {
+				self.emit_struct_argument(func, argument, &class);
 				continue;
 			}
 			let expected = param_kind(param);

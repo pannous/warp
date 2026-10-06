@@ -130,6 +130,8 @@ impl ImportManager {
 		let mut imports: Vec<FfiImport> = ctx
 			.ffi_imports
 			.iter()
+			// the linear words are the module's own functions (linear_arrays.rs)
+			.filter(|(_, sig)| sig.library != super::linear_arrays::LINEAR_LIBRARY)
 			.map(|(name, sig)| {
 				(
 					name.clone(),

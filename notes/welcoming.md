@@ -95,3 +95,11 @@ warning's `fix` carries the default's form. A host offers the readings as "chang
 fixes (IDE/LSP code actions); the edit replaces `written` at the position with the chosen `explicit_form`, after which
 the warning is gone because the explicit form never warns. Open: positions of multi-line `written`, several readings
 whose explicit form needs surrounding context (`global n` is a declaration elsewhere), and a CLI form (`warp fix`).
+
+## Assigning a named constant (card footgun-pi, P130)
+`pi = 4; pi` gave 3.14159…: the parser read `pi` as π and dropped the assignment. P130 (user: "loud error, if it was
+declared constant before which it should be"): the named numbers (`pi`, `tau`, `euler`, their glyphs) are declared
+constants, so `pi = …` / `pi := …` is the compile error "pi is a constant; fix: another name". A field
+`class circle{pi = 3}` or `class C{pi:int}` is the type's own field, no message: the type's methods read the field
+(`f() := pi * r`), everywhere else `pi` stays the constant (parser state `type_fields`).
+src/wasp_parser/atoms.rs `refuse_constant_assignment`, tests/welcoming/test_constant_shadowing.rs.

@@ -134,7 +134,79 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   loop start (wasm_emitter control_flow, next to task_poll). The first poll installs a libc SIGINT handler that only
   sets a flag; the poll then runs the handler (with ø as `event` when it reads one). A second ctrl-c within a second,
   or before the handler ran, exits with 130, so a handler that ignores ctrl-c never makes a program unstoppable.
-  Before the first loop start ctrl-c still ends the run (nothing installed yet). Test: tests/control/test_system_signals.rs
+  main polls at its start (which installs the handler) and before it returns; a ctrl-c also ends a `sleep` early
+  (it sleeps in 10 ms slices once watching) and runs the handler. Test: tests/control/test_system_signals.rs
   (a real `warp run` gets a real SIGINT). The playground's host.js has `signal_poll` as a no-op.
-- Not yet: Windows (SetConsoleCtrlHandler), delivery at `sleep` and at the end of main, resident programs, the other
-  sources (file change, timers, …).
+- Timers (P120, 2026-10-06): `on every 50 ms {…}` (src/lowering/system_signals.rs) is the handler `on·every·N()` and
+  `signal_every(N, ms)` where it is written; the runtime (crates/warp-runtime/src/system_signals.rs) runs due handlers
+  at every check point (loop starts, sleeps, which wake for them, main's start and end). `warp run`, `warp <file>` and
+  executables stay after main while a timer lives and say so once on stderr ("listening: every 5 seconds (ctrl-c to
+  stop)"); in-process eval and tests never wait. Only a program with `on interrupt` watches ctrl-c: any other ends at
+  one ctrl-c as usual.
+- `exit`, `exit(code)` (P121): a host word whose error unwinds the run (ExitRequest); the run's value is ø, the CLI and
+  executables exit with the code, the page ends the run. A bare `exit` / `exit()` statement is `exit(0)`.
+- File change (2026-10-06): `on file "notes.txt" change {…}` (or `changes`) is the handler `on·file·N()` and
+  `signal_watch(N, "notes.txt")`: a timer of 100 ms that runs the handler when the file's modification time or size
+  changed since the last check (written, appeared, deleted). Polling on the existing check points instead of the
+  notify crate: no dependency, no thread, and a handler can only run at a check point anyway; notify (8.2 is in the
+  registry) can replace the stat later if many files or directories are watched. Programs stay while a watch lives.
+  The playground warns (a page has no files). Test: a_file_change_runs_its_handler.
+- `on exit {…}` (card g-3Gdo; syntax an assumption queued with the Interviewer): the exported handler `on·exit`
+  (event_signals SYSTEM_EVENTS) runs once as the run ends: after main returns and the timers stop, or at `exit(code)`,
+  whose code stays (an `exit` inside the handler sets its own); never after a failure, and not at a hard second
+  ctrl-c. warp-runtime system_signals::with_exit_handler wraps the run natively (wasm_reader, standalone executables),
+  host.js withExitHandler in the page. `event` is ø for now (the exit code would need a host-built Int).
+  Test: tests/control/test_exit_signal.rs.
+- Times of day (P135, user: `on every day at 9:00 {…}`, and `at 9:00 {…}` runs once; card time-day): the timer
+  handler `on·every·N` started by `signal_daily(N, minute_of_day, weekdays)` or, for `at 9:00 {…}`,
+  `signal_at(N, minute_of_day)`. `weekdays` is a mask, bit 0 Sunday … bit 6 Saturday (C's tm_wday): `day` 127,
+  `monday` (or `mondays`) 2, `weekday` Monday to Friday 62, `weekend` 65. Times are `21:30`, `9:30pm`, `9:30 pm`,
+  `9pm`, `9 pm` (12am is 0:00, 12pm noon); `at 13pm`, `25:00` are "needs a time of day", an unknown day word names the
+  day words. Each next time is computed from the local clock anew (libc localtime_r, UTC without it), so summer time
+  shifts nothing; a one-shot timer is dropped after it fired, so `warp run` ends then ("listening: at 9:00",
+  "listening: every monday at 9:00"). Tests: tests/control/test_daily_timer.rs, test_time_of_day.rs.
+  Not yet: several days (`on every monday and friday`), dates (`at 2026-12-24 18:00`), cron strings.
+- A body after a colon (`on every 5 seconds: print n`, `at 9pm: print n`) is the rest of the line: it arrives as
+  `on every (5 seconds: print) n`, the colon binding its neighbours, and words_and_body joins the words after it.
+- System values (P136, card system-values; tests/control/test_system_values.rs): `battery` (percent, an Int),
+  `charging`, `online`, `dark mode` are reads of the host word `system_value(name)` (i64; a yes/no value is
+  `system_value("online") != 0`), unless the program binds the name itself (assigns it, takes it as a parameter, or
+  uses it as a field name). Readers live in crates/warp-runtime/src/system_values.rs so built executables keep them:
+  macOS `pmset -g batt` and `defaults read -g AppleInterfaceStyle`, Linux /sys/class/power_supply and `gsettings`;
+  `online` is whether a UDP socket can connect to 1.1.1.1 (only the routing table is asked, nothing is sent). A
+  reading is kept for a second, so polling costs at most one subprocess per value per second. A value the machine
+  cannot give is a loud run-time error ("battery: this Mac has no battery"). Listening: lowering/system_values.rs
+  marks the reads (`system·battery`) before signal_values::poll_shared, which treats them like shared values (a check
+  in `on·shared` comparing with the last reading), adds the timer `on every 1000 ms` right after the first listener
+  (so `warp run` stays and wakes once a second; it says "listening: every 1 second"), then makes the marks host calls.
+  `whenever battery < 20% {…}` arrives as `battery < (20 % {…})`: compared with the battery, `20%` is 20. The page
+  reads `online` (navigator.onLine) and `dark mode` where matchMedia exists, and says what it cannot read.
+  The clipboard (card system-clipboard; tests/control/test_clipboard.rs): `on clipboard change {…}` is `on change`
+  of the system value `clipboard count`, macOS `[[NSPasteboard generalPasteboard] changeCount]` through the
+  Objective-C runtime, AppKit dlopened on first use (no new dependency, a plain run never loads it). The count reads no
+  content, so polling it never triggers macOS's paste prompt; elsewhere the content's hash is the count. `clipboard`
+  is its text, the host word `clipboard_text()` (pbpaste, wl-paste or xclip) where the program reads it, never
+  polled. The playground cannot read it (the browser's clipboard API is asynchronous) and says so.
+  Not yet: `on dark mode {…}` (use `whenever dark mode`), percent literals
+  elsewhere, event-driven connectors instead of polling, Windows.
+- Not yet: Windows (SetConsoleCtrlHandler), directories and `created` / `deleted` as separate events, timers in the
+  playground (a warning says so), `stop listening`.
+- Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the
+  Interviewer): `broadcast value on "chat"` sends any value (`{text: "hi"}`, `21`) as wasp text to every program on this
+  machine listening with `on message from "chat" {…}`, where `event` is the value; without a name both use the channel
+  "warp". Natively (unix, src/channels.rs) a channel is the directory `<temp>/warp-channels/<channel>` of Unix datagram
+  sockets, one per listener, removed when its run ends; a broadcast sends to each and drops dead ones. A listener is
+  a timer handler (`on·every·N`, every 20 ms, lowering/system_signals.rs) pulling `channel_pending` / `channel_next`,
+  so a listening program stays after main in `warp run` like one with a timer. The playground sends on a
+  `BroadcastChannel`, but does not receive yet (no timers there); Windows has no channels yet (named pipes).
+- `send` and named events across programs (P129, P129b, card signals-send; tests/control/test_named_broadcast.rs):
+  `send value to "chat"` is `broadcast value on "chat"` (`to` after `send` names the channel, not a range).
+  `broadcast stop the machine{reason: "heat"} on "chat"` (or `send … to "chat"`) sends the data to the sub-channel
+  `chat/stop the machine`, the directory `stop_the_machine` inside the channel's, so only `on stop the machine from
+  "chat" {…}` hears it, `event` being the data (ø without); `on message from "chat"` and other events do not. A text
+  alone after `send` is a named event without data on "warp" (interpreted, undoable): `send "file system full"` →
+  `on "file system full" {…}`. A named event is two or more plain words, or words ending in `name{data}`; one word
+  without data stays a value (`broadcast total`). `on stop the machine {…}` without `from` stays the in-program
+  handler of `raise`: listening across programs needs a `from` or a text name, so no program listens by accident.
+  Channels live in `/tmp/warp-channels-<user>` on unix: a socket path has at most 104 bytes and macOS's temp directory
+  alone takes about 50.

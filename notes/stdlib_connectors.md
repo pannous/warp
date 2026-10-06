@@ -135,3 +135,32 @@ step 3.
 - Not yet: dropping a resource before the process ends, a component's exports as operators, components in the browser (host.js says it runs only in the native host; jco could transpile them),
   `warp build --exe` (refused: foreign_call is a missing import). Capability: Ffi like the other foreign runtimes, though
   a component without preopened files is sandboxed: granting it to eval_untrusted is a later question.
+
+## Status 2026-10-06 and next: C libraries compiled to WebAssembly (warp-06)
+Every connector card of this plan is Done: Python (native + Pyodide), JS (node + page), handles, foreign operators,
+WIT components (native + browser), the C gaps (`getenv`, `use z; zlibVersion()`, `toupper`, `sqlite3_libversion()`
+all work natively), P88 "allow everything". Only the umbrella card hijack-stdlib was left open.
+
+What is still missing for "access to anything": **C libraries in the browser and in sandboxed runs**. The native C FFI
+(dlopen) has no browser counterpart (host.js shims a dozen libc functions by hand). Core WebAssembly modules are now
+imported natively and in the browser (notes/wasm_modules.md: `import lib.wasm`, own WASI/host imports linked, named
+parameters), but only numbers cross. A C library compiled to wasm (`clang --target=wasm32-wasi`, wasi-sdk/wasi-libc;
+Homebrew llvm + lld build `-nostdlib` modules here) works in both hosts and in the sandbox once texts and pointers
+cross.
+
+Plan (assumption until the Interviewer answers; smallest step first):
+1. **Header types for a module's exports**: a header next to the module (`lib.h` beside `lib.wasm`, else the C FFI's
+   header search for the stem) gives the exports their C types through the existing ffi_parser: `char*` parameters
+   copy the text into the module's memory (its exported `malloc`, else a scratch area past its data), `char*` results
+   read the NUL-terminated text from its memory. Numbers stay as today. Native and host.js.
+2. **Pointers as handles**: other pointer results (`struct x *`) are the C FFI's Int handles (ids), out-pointers
+   (`f(&p)`) as in notes/ffi_handles.md, against the module's memory.
+3. **A small hijacked library as the proof**: e.g. zlib or a string library built to wasm32-wasi into a fixture or a
+   package, `use zlib` picking the .wasm where no native library exists (browser) — the same program runs in both.
+4. Later: `use libc` in the browser from wasi-libc compiled once (replacing host.js's hand shims).
+
+Done (P146, user decision as recommended, 2026-10-06): step 1 (texts by the header, native and browser: custom section
+warp.module_texts), step 3 in-repo: tests/fixtures/wasm/libc_text.wasm is wasi-libc's text and number functions, the
+same program gives the same results natively and in the browser. Open: step 2 (struct pointers as handles), step 4
+(`use c` in the browser through that module instead of host.js's `c` shims; where the .wasm lives: a package repository
+would be a new public repo, so asked first), zlib and other libraries that need a real build.

@@ -96,11 +96,14 @@ impl WaspParser {
 		// 2-char operators
 		match (c1, c2) {
 			('a', 's') if !c3.is_alphanumeric() => return Some((Op::As, 2)),
+			('?', '?') => return Some((Op::Coalesce, 2)),
 			('?', '.') if c3.is_alphabetic() || c3 == '_' => return Some((Op::SafeDot, 2)), // `x?.name`; `x ?.5 : 1` is a ternary
 			(':', '=') => return Some((Op::Define, 2)),
 			('~', '~') => return Some((Op::Similar, 2)),
 			(':', ':') => return Some((Op::Scope, 2)),
 			('-', '>') => return Some((Op::Arrow, 2)),
+			// R's `x <- 3` assigns with a note, the cramped `x<-3` is an error (P145, left_arrow_assignment)
+			('<', '-') if c3.is_whitespace() || !self.prev_char().is_whitespace() => return Some((Op::Assign, 2)),
 			('=', '>') => return Some((Op::FatArrow, 2)),
 			('*', '*') => return Some((Op::Pow, 2)),
 			('+', '=') => return Some((Op::AddAssign, 2)),
@@ -336,6 +339,7 @@ impl WaspParser {
 		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
 		let variable_follows = c3.is_alphabetic() || c3 == '_';
 		match c1 {
+			'-' if c2 == '>' => None, // Ruby's stabby lambda `->(x) { … }` is an atom
 			'+' if c2 == '+' && variable_follows => Some((Op::Inc, 2)),
 			'-' if c2 == '-' && variable_follows => Some((Op::Dec, 2)),
 			// unary plus glued to its operand, `+5`, `+x`, `+(a)`: the operand itself; a spaced `+` stays the operator

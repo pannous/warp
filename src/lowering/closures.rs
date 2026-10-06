@@ -7,6 +7,7 @@
 
 use crate::analyzer::extract_user_functions;
 use crate::context::{Context, Param, UserFunctionDef};
+use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
 use crate::library_words::collect_assigned_names;
 use crate::node::{Bracket, Node, Separator};
@@ -35,6 +36,9 @@ pub fn referenced_function(node: &Node) -> Option<String> {
 	}
 }
 const CLOSURE_CALL_PREFIX: &str = "closure_call_";
+/// `h·capture·0`: a captured value of the closure variable h, read once (hoist_captures); `closure_lambda_1·captured·0(h)` reads it
+const CAPTURE_LOCAL_MARK: &str = "·capture·";
+const CAPTURE_READER_MARK: &str = "·captured·";
 const LIFTED_PREFIX: &str = "closure_lambda_";
 const IMPLICIT_PARAMETER: &str = "it";
 const FOR_WORD: &str = "for";
@@ -130,10 +134,17 @@ pub fn may_be_function_value(node: &Node) -> bool {
 }
 
 pub fn lower(program: Node) -> Node {
+	hoist_captures(lift_closures(program))
+}
+
+fn lift_closures(program: Node) -> Node {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &program);
 	let mut variables = HashSet::new();
 	collect_assigned_names(&program, &mut variables);
+	// a `global` is no capture: the closure reads and changes the one variable
+	let globals = crate::analyzer::declared_globals(&program);
+	variables.retain(|name| !globals.contains_key(name));
 	// a loop variable (`for n in xs`, what `xs.map(n => …)` lowers to) is captured by value like any variable
 	program.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
@@ -154,17 +165,120 @@ pub fn lower(program: Node) -> Node {
 	if lifting.lifted.is_empty() {
 		return program;
 	}
-	Node::List([lifting.lifted, vec![program]].concat(), Bracket::Round, Separator::Semicolon)
+	// the lifted functions join the program's own statements, so later passes see its statements as before
+	match program {
+		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List([lifting.lifted, statements].concat(), Bracket::None, separator),
+		program => Node::List([lifting.lifted, vec![program]].concat(), Bracket::Round, Separator::Semicolon),
+	}
+}
+
+/// `h = mk(1)`, a variable that only ever holds closures of one target, assigned once and called later: its captured
+/// values are read once, `h·capture·0 = closure_lambda_1·captured·0(h)`, typed as the target's parameters; a closure
+/// call of h passes them to the target itself (wasm_emitter/closures.rs emit_direct_closure_call), unboxed
+fn hoist_captures(program: Node) -> Node {
+	let mut context = Context::new();
+	crate::analyzer::defined_functions(&mut context, &program);
+	let parameters: HashSet<String> = context.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())).collect();
+	let mut assignments: HashMap<String, usize> = HashMap::new();
+	program.visit(&mut |node| {
+		if let Node::Key(target, Op::Assign | Op::Define, _) = node {
+			if let Node::Symbol(name) = target.drop_meta() {
+				*assignments.entry(name.clone()).or_default() += 1;
+			}
+		}
+	});
+	let made = closure_targets(&program);
+	let hoisted: HashMap<String, (String, usize)> = settle_closure_variable_targets(&context, &program)
+		.into_iter()
+		.filter_map(|(variable, held)| {
+			let [target] = held.iter().collect::<Vec<_>>()[..] else { return None };
+			let (_, captured) = made.iter().find(|(made, _)| made == target)?;
+			let single = *captured > 0 && assignments.get(&variable) == Some(&1) && !parameters.contains(&variable);
+			single.then(|| (variable, (target.clone(), *captured)))
+		})
+		.collect();
+	if hoisted.is_empty() { program } else { with_capture_readers(program, &hoisted) }
+}
+
+/// The local holding the index-th captured value of the closure variable `variable`
+pub fn capture_local(variable: &str, index: usize) -> String {
+	format!("{variable}{CAPTURE_LOCAL_MARK}{index}")
+}
+
+/// `closure_lambda_1·captured·0` → (closure_lambda_1, 0): the reader of a captured value of the target's closures
+pub fn capture_reader(name: &str) -> Option<(&str, usize)> {
+	let (target, index) = name.split_once(CAPTURE_READER_MARK)?;
+	Some((target, index.parse().ok()?))
+}
+
+fn with_capture_readers(node: Node, hoisted: &HashMap<String, (String, usize)>) -> Node {
+	match node {
+		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			let items: Vec<Node> = items.into_iter().map(|item| with_capture_readers(item, hoisted)).collect();
+			let mut statements = Vec::with_capacity(items.len());
+			for (index, item) in items.iter().enumerate() {
+				statements.push(item.clone());
+				let Node::Key(target, Op::Assign | Op::Define, _) = item.drop_meta() else { continue };
+				let Node::Symbol(variable) = target.drop_meta() else { continue };
+				let Some((closure_target, captured)) = hoisted.get(variable) else { continue };
+				if !items[index + 1..].iter().any(|later| calls_closure(later, variable)) {
+					continue;
+				}
+				for position in 0..*captured {
+					let reader = call(&format!("{closure_target}{CAPTURE_READER_MARK}{position}"), vec![Node::Symbol(variable.clone())]);
+					statements.push(Node::Key(Box::new(Node::Symbol(capture_local(variable, position))), Op::Assign, Box::new(reader)));
+				}
+			}
+			Node::List(statements, bracket, separator)
+		}
+		other => other.map_children(|child| with_capture_readers(child, hoisted)),
+	}
+}
+
+fn calls_closure(node: &Node, variable: &str) -> bool {
+	let mut found = false;
+	node.visit(&mut |inner| found |= called_closure(inner) == Some(variable));
+	found
 }
 
 /// The last statement of a body: its value
-fn tail(body: &Node) -> &Node {
+pub(crate) fn tail(body: &Node) -> &Node {
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly | Bracket::Round, Separator::Semicolon | Separator::Newline) if !items.is_empty() => tail(&items[items.len() - 1]),
 		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 => tail(&items[0]),
-		// `return value`
-		Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(name) if name == "return")) => tail(&items[1]),
+		Node::List(items, _, _) if is_return(items) => tail(&items[1]),
 		other => other,
+	}
+}
+
+/// `function add` or `return function add`
+fn gives_reference(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(items, _, _) if is_return(items) => referenced_function(&items[1]).is_some(),
+		_ => referenced_function(node).is_some(),
+	}
+}
+
+/// `return value`
+fn is_return(items: &[Node]) -> bool {
+	matches!(items, [word, _] if matches!(word.drop_meta(), Node::Symbol(name) if name == "return"))
+}
+
+/// The variable or field a node names: `s`, `s.fs` (a field lookup `s#("fs"+1)` after mutation.rs), `s.a.fs`
+fn holder_path(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(object, Op::Dot, field) => Some(format!("{}.{}", holder_path(object)?, field_word(field)?)),
+		Node::Key(object, Op::Hash, index) => Some(format!("{}.{}", holder_path(object)?, field_word(crate::wasp_parser::subscript_key(index)?)?)),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => holder_path(&items[0]),
+		_ => None,
+	}
+}
+
+fn field_word(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Symbol(name) | Node::Text(name) => Some(name.clone()),
+		_ => None,
 	}
 }
 
@@ -181,10 +295,11 @@ impl FunctionValues {
 	/// A lambda, a function name, a variable holding a function, a call returning one (a called closure may), or a choice between them
 	fn is_function_value(&self, node: &Node) -> bool {
 		match node.drop_meta() {
+			field if is_field(field) => holder_path(field).is_some_and(|path| self.variables.contains(&path)),
 			Node::Symbol(name) => self.functions.contains(name) || self.variables.contains(name),
 			Node::Key(choice, Op::Else, otherwise) => self.is_function_value(otherwise) || self.is_function_value(choice),
 			Node::Key(_, Op::Then, chosen) => self.is_function_value(chosen),
-			Node::Key(list, Op::Hash, _) => matches!(list.drop_meta(), Node::Symbol(name) if self.lists.contains(name)),
+			Node::Key(list, Op::Hash, _) => self.is_function_list(list),
 			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name) || self.variables.contains(name)) => true,
 			Node::List(items, _, _) if matches!(items.as_slice(), [marker, _, _, ..] if matches!(marker.drop_meta(), Node::Symbol(word) if word == crate::wasp_parser::TRY_MARKER)) => {
 				self.is_function_value(&items[1]) || self.is_function_value(&items[2])
@@ -196,12 +311,15 @@ impl FunctionValues {
 	}
 
 	/// A list of function values: a literal holding one, another such list, one with more appended (`out + [f]`, what
-	/// `xs.map(n => (x => x + n))` builds), or a block that ends in one
+	/// `xs.map(n => (x => x + n))` builds), a signal's listeners, or a block that ends in one
 	fn is_function_list(&self, node: &Node) -> bool {
 		match node.drop_meta() {
+			field if is_field(field) => holder_path(field).is_some_and(|path| self.lists.contains(&path)),
 			Node::List(items, Bracket::Square, _) => items.iter().any(|item| self.is_function_value(item)),
 			Node::Symbol(name) => self.lists.contains(name),
 			Node::Key(left, Op::Add, right) => self.is_function_list(left) || self.is_function_list(right),
+			// a signal's listeners (`listeners of x`, lowering/signal_values.rs)
+			Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::cells::SIGNAL_LISTENERS) => true,
 			block @ Node::List(..) if !std::ptr::eq(tail(block), block) => self.is_function_list(tail(block)),
 			_ => false,
 		}
@@ -212,8 +330,8 @@ impl FunctionValues {
 		let Node::List(items, _, _) = node else { return None };
 		let [keyword, variable, in_word, list, _body] = items.as_slice() else { return None };
 		let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
-		match (variable.drop_meta(), list.drop_meta()) {
-			(Node::Symbol(variable), Node::Symbol(list)) if is_word(keyword, FOR_WORD) && is_word(in_word, IN_WORD) && self.lists.contains(list) => Some(variable),
+		match variable.drop_meta() {
+			Node::Symbol(variable) if is_word(keyword, FOR_WORD) && is_word(in_word, IN_WORD) && self.is_function_list(list) => Some(variable),
 			_ => None,
 		}
 	}
@@ -236,16 +354,16 @@ impl FunctionValues {
 						}
 					}
 				}
-				let Node::Key(target, Op::Assign | Op::Define, value) = node else { return };
-				let Node::Symbol(name) = target.drop_meta() else { return };
-				if self.functions.contains(name) {
+				// `fs += [f]` appends as `fs = fs + [f]` does
+				let Node::Key(target, op @ (Op::Assign | Op::Define | Op::AddAssign), value) = node else { return };
+				let Some(name) = holder_path(target) else { return };
+				if self.functions.contains(&name) {
 					return;
 				}
-				if self.is_function_value(value) {
-					variables.insert(name.clone());
-				}
-				if self.is_function_list(value) {
-					lists.insert(name.clone());
+				if *op != Op::AddAssign {
+					self.record_holder(&name, value, &mut variables, &mut lists);
+				} else if self.is_function_list(value) {
+					lists.insert(name);
 				}
 			});
 			if returning == self.returning && variables == self.variables && lists == self.lists {
@@ -256,6 +374,27 @@ impl FunctionValues {
 			self.lists = lists;
 		}
 	}
+}
+
+impl FunctionValues {
+	/// The variable or field `path` assigned `value`: a function value, a list of them, or an object whose fields hold them
+	/// (`s = {fs: [x => x * 2]}`: s.fs is a list of function values)
+	fn record_holder(&self, path: &str, value: &Node, variables: &mut HashSet<String>, lists: &mut HashSet<String>) {
+		if self.is_function_value(value) {
+			variables.insert(path.to_string());
+		}
+		if self.is_function_list(value) {
+			lists.insert(path.to_string());
+		}
+		for (field, value) in crate::library_words::object_entries(value).unwrap_or_default() {
+			self.record_holder(&format!("{path}.{field}"), &value, variables, lists);
+		}
+	}
+}
+
+/// A field of a variable: `s.f`, `s#("f"+1)`
+fn is_field(node: &Node) -> bool {
+	holder_path(node).is_some_and(|path| path.contains('.'))
 }
 
 /// Methods that append one value to a list variable (analyzer APPEND_METHODS)
@@ -331,6 +470,10 @@ impl Lifting {
 		if let Some(lambda) = arrow_lambda(&node) {
 			return self.lift(lambda.params, lambda.body, bound);
 		}
+		// `data e` is the code as written: an object's function entry `f: x => x * a`, whose function blocks.rs defined
+		if is_data(&node) {
+			return node;
+		}
 		match node {
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(_)) => {
 				let value = self.walk(*value, bound);
@@ -403,7 +546,7 @@ impl Lifting {
 	}
 
 	fn is_function_list(&self, list: &Node) -> bool {
-		matches!(list.drop_meta(), Node::Symbol(name) if self.function_lists.contains(name))
+		holder_path(list).is_some_and(|path| self.function_lists.contains(&path))
 	}
 
 	/// `fs#2(5)` parses as `fs#(2*(5))`: of a list of function values it is the call of item 2 with (5)
@@ -430,9 +573,15 @@ impl Lifting {
 				Node::Key(Box::new(choice), op, Box::new(self.function_value(*chosen, bound)))
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.function_value(*node, bound)), data },
+			// `return function add`
+			Node::List(mut items, bracket, separator) if is_return(&items) && gives_reference(&items[1]) => {
+				let value = items.pop().expect("a returned value");
+				items.push(self.function_value(value, bound));
+				Node::List(items, bracket, separator)
+			}
 			// `{def add(t){…}; function add}`: a body ending in a function reference gives the function (a bare `add` there
 			// needs its arguments, P82)
-			Node::List(mut items, bracket @ (Bracket::Curly | Bracket::Round), separator) if items.last().is_some_and(|last| referenced_function(last).is_some()) => {
+			Node::List(mut items, bracket @ (Bracket::Curly | Bracket::Round), separator) if items.last().is_some_and(gives_reference) => {
 				let last = items.pop().expect("not empty");
 				items.push(self.function_value(last, bound));
 				Node::List(items, bracket, separator)
@@ -447,6 +596,9 @@ impl Lifting {
 		let body = self.walk(body, &inner);
 		let body = self.function_value(body, &inner);
 		let captured = self.captured(&body, &params, bound);
+		if let Some(error) = changed_capture(&body, &captured) {
+			return error;
+		}
 		let name = format!("{LIFTED_PREFIX}{}", self.lifted.len() + 1);
 		let all_params = captured.iter().chain(&params).map(|param| Node::Symbol(param.clone()));
 		let head = Node::List([vec![Node::Symbol(name.clone())], all_params.collect()].concat(), Bracket::Round, Separator::None);
@@ -460,7 +612,8 @@ impl Lifting {
 		let mut captured: Vec<String> = vec![];
 		body.visit(&mut |node| {
 			if let Node::Symbol(name) = node {
-				if !params.contains(name) && self.is_variable(name, bound) && !captured.contains(name) {
+				// `t = k * 2` before any read of t binds the lambda's own local, no capture
+				if !params.contains(name) && self.is_variable(name, bound) && !captured.contains(name) && !crate::analyzer::starts_with_fresh_binding(body, name) {
 					captured.push(name.clone());
 				}
 			}
@@ -469,10 +622,27 @@ impl Lifting {
 	}
 }
 
+/// A closure changing a captured variable would change its own copy (wiki/charged.md §3): a loud error naming `global`
+fn changed_capture(body: &Node, captured: &[String]) -> Option<Node> {
+	let changes = crate::analyzer::find_assignments(body, &|name| captured.contains(name));
+	let (assignment, name) = changes.into_iter().find(|(assignment, _)| matches!(assignment.drop_meta(), Node::Key(target, _, _) if matches!(target.drop_meta(), Node::Symbol(_))))?;
+	Some(Diagnostic::at(assignment, format!("the closure changes {name}, a variable it captures: declare it `global {name}` to change it from the closure"))
+		.fix(format!("global {name}")).into_error())
+}
+
 /// The helpers `closure_call_n(f, a1…an)` the program calls, as user functions: a closure and n values of any kind (Data)
 pub fn register_closure_calls(context: &mut Context, program: &Node) {
 	context.closure_targets = closure_targets(program);
 	context.closure_variable_targets = settle_closure_variable_targets(context, program);
+	program.visit(&mut |node| {
+		let Node::List(items, Bracket::Round, Separator::None) = node else { return };
+		let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else { return };
+		if capture_reader(name).is_some() {
+			let closure = Param { used_as: Some(Kind::Function), ..Param::untyped("closure") };
+			let reader = UserFunctionDef { name: name.clone(), params: vec![closure], body: Box::new(Node::Empty), return_kind: Kind::Data, tuple_kinds: vec![], func_index: None };
+			context.user_functions.insert(name.clone(), reader);
+		}
+	});
 	for arity in closure_call_arities(program) {
 		let function = Param { used_as: Some(Kind::Function), ..Param::untyped("function") };
 		let values = (1..=arity).map(|index| Param { used_as: Some(Kind::Data), ..Param::untyped(&format!("value{index}")) });
@@ -496,6 +666,10 @@ pub fn targets_of_arity(context: &Context, arity: usize) -> impl Iterator<Item =
 
 /// A closure call returns what all closures of its arity return; Data (any Node) when they differ
 pub fn closure_call_kind(name: &str, context: &Context, kinds: &HashMap<String, Kind>) -> Option<Kind> {
+	// a capture reader gives the kind of the target's parameter it fills
+	if let Some((target, index)) = capture_reader(name) {
+		return Some(context.user_functions.get(target)?.params.get(index).map_or(Kind::Data, crate::analyzer::param_kind));
+	}
 	let arity = closure_call_arity(name)?;
 	Some(join_return_kinds(targets_of_arity(context, arity).map(|function| kinds.get(&function.name).copied().unwrap_or(function.return_kind))))
 }
@@ -627,4 +801,9 @@ pub fn type_closure_calls(context: &mut Context) {
 pub fn is_typed_closure_call(function: &UserFunctionDef) -> bool {
 	closure_call_arity(&function.name).is_some() && function.params.len() > 1
 		&& function.params[1..].iter().all(|param| matches!(param.used_as, Some(Kind::Int | Kind::Float)))
+}
+
+/// `data e` (blocks.rs)
+fn is_data(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && items[0].drop_meta().name() == crate::blocks::DATA_WORD)
 }

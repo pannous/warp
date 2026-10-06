@@ -20,6 +20,7 @@ mod float_text;
 mod import_manager;
 mod key_emitter;
 mod layout;
+pub(crate) mod linear_arrays;
 mod list_emitter;
 mod list_dispatch;
 mod library_ops;
@@ -27,6 +28,7 @@ mod text_unicode;
 pub(crate) mod list_ops;
 mod list_abi;
 mod map_backend;
+mod struct_backend;
 pub use map_backend::MAP_COPY_SUFFIX;
 mod loop_control;
 pub(crate) use loop_control::mark_step;
@@ -210,7 +212,15 @@ pub struct WasmGcEmitter {
 	source_position: Option<(usize, usize)>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
+	typed_globals: HashMap<String, (u32, list_dispatch::TypedList)>, // globals held as typed arrays: their global and element type
+	typed_capture_globals: HashMap<u32, list_dispatch::TypedList>, // capture globals holding a typed list of main
+	main_typed_lists: Option<HashMap<String, list_dispatch::TypedList>>, // main's typed lists, worked out before the capture globals
+	bounded_counters: std::collections::HashSet<String>, // loop counters of the body being emitted proven to stay in 0..i32::MAX (big_int.rs)
 	typed_maps: std::collections::HashSet<String>, // map variables of the body being emitted held as hash tables (map_backend.rs)
+	typed_structs: HashMap<String, String>, // instance variables of the body being emitted held as GC structs, with their class (struct_backend.rs)
+	instance_types: HashMap<String, struct_backend::InstanceType>, // the `P·instance` struct type of each class
+	struct_abi: HashMap<String, Vec<Option<String>>>, // the parameters user functions take as structs, by class (struct_backend.rs)
+	struct_results: HashMap<String, String>, // the user functions giving back a struct, with its class (struct_backend.rs)
 	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies
 	moved_lists: Vec<(String, String)>,
 	/// The array calling convention of the user functions that have one (list_abi.rs)
@@ -268,7 +278,15 @@ impl WasmGcEmitter {
 			source_position: None,
 			loop_labels: Vec::new(),
 			typed_lists: HashMap::new(),
+			typed_globals: HashMap::new(),
+			typed_capture_globals: HashMap::new(),
+			main_typed_lists: None,
+			bounded_counters: std::collections::HashSet::new(),
 			typed_maps: std::collections::HashSet::new(),
+			typed_structs: HashMap::new(),
+			instance_types: HashMap::new(),
+			struct_abi: HashMap::new(),
+			struct_results: HashMap::new(),
 			moved_lists: Vec::new(),
 			list_abi: HashMap::new(),
 			returns_list: false,
@@ -485,6 +503,7 @@ impl WasmGcEmitter {
 		self.type_manager.emit_gc_types();
 		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
 		self.emit_registered_user_types();
+		self.emit_instance_types();
 		if self.config.emit_kind_globals {
 			self.emit_kind_globals();
 		}
@@ -593,6 +612,7 @@ impl WasmGcEmitter {
 		self.collect_user_function_strings();
 		self.allocate_declared_globals(node);
 		self.allocate_closure_captures(node);
+		(self.struct_abi, self.struct_results) = self.find_struct_abi(node);
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
 		self.emit_compare_dispatcher();
@@ -739,8 +759,8 @@ impl WasmGcEmitter {
 		let effects = EffectReport::of(node);
 		// task_poll is called by the emitted loops of a program that controls tasks, not by the program itself
 		let polls = effects.calls_external(crate::host::TASK_CONTROL);
-		// signal_poll likewise, by a program with `on interrupt {…}`
-		let polls_signals = self.ctx.user_functions.contains_key(crate::host::INTERRUPT_HANDLER);
+		// signal_poll likewise, by a program with `on interrupt {…}` or `on every … {…}`
+		let polls_signals = crate::analyzer::handles_system_signals(&self.ctx);
 		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || (polls && name == crate::host::TASK_POLL) || (polls_signals && name == crate::host::SIGNAL_POLL));
 		for need in &self.discovered_needs {
 			if let Need::MathImport(key) = need {
@@ -858,6 +878,7 @@ impl WasmGcEmitter {
 		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
 		// Emit list and string operation functions
 		self.emit_list_ops();
+		self.emit_linear_arrays();
 		self.emit_cells();
 		self.emit_text_of();
 		self.emit_equality_ops();
@@ -1040,8 +1061,10 @@ impl WasmGcEmitter {
 	pub fn emit_node_main(&mut self, node: &Node) {
 		// Pre-pass: collect variables first so scope is populated
 		let temp_locals = collect_variables(node, &mut self.scope);
-		self.typed_lists = self.find_typed_lists(node);
+		self.typed_lists = self.main_typed_lists.take().unwrap_or_else(|| self.find_typed_lists(node));
 		self.typed_maps = self.find_typed_maps(node);
+		self.typed_structs = self.find_typed_structs(node);
+		self.bounded_counters = big_int::bounded_counters(node);
 
 		// Allocate strings and update Local data pointers
 		self.collect_and_allocate_strings(node);
@@ -1069,7 +1092,11 @@ impl WasmGcEmitter {
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, node, 0);
 		self.emit_witness_installation(&mut func);
+		// a program with `on interrupt {…}` watches for ctrl-c from its start and takes one that came at its end
+		let signal_poll = self.ffi_func_index(crate::host::SIGNAL_POLL);
+		signal_poll.iter().for_each(|poll| { func.instruction(&I::Call(*poll)); });
 		self.emit_node_instructions(&mut func, node);
+		signal_poll.iter().for_each(|poll| { func.instruction(&I::Call(*poll)); });
 		func.instruction(&I::End);
 
 		self.code.function(&func);
@@ -1274,6 +1301,10 @@ impl WasmGcEmitter {
 		}
 		self.module.section(&self.code);
 		self.module.section(self.string_table.data_section());
+		let text_crossings = crate::wasm_modules::text_crossings(self.ctx.ffi_imports.values());
+		if !text_crossings.is_empty() {
+			self.module.section(&CustomSection { name: crate::wasm_modules::TEXT_CROSSINGS_SECTION.into(), data: text_crossings.as_bytes().into() });
+		}
 		self.emit_names();
 		self.module.section(&self.names);
 
@@ -1300,6 +1331,8 @@ impl WasmGcEmitter {
 		let mut types = vec![(tm.string_type, "String"), (tm.i64_box_type, "i64box"), (tm.f64_box_type, "f64box"), (tm.node_type, "Node"),
 			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList"), (tm.float_array_type, "FloatArray"), (tm.float_list_type, "FloatList")];
 		types.extend(self.ctx.user_type_indices.iter().map(|(name, idx)| (*idx, name.as_str())));
+		let instance_names: Vec<(u32, String)> = self.instance_types.iter().map(|(class, instance)| (instance.type_index, format!("{class}{}", struct_backend::INSTANCE_SUFFIX))).collect();
+		types.extend(instance_names.iter().map(|(idx, name)| (*idx, name.as_str())));
 		self.names.types(&name_map(&mut types));
 
 		if self.next_global_idx > 0 {
@@ -1324,6 +1357,7 @@ impl WasmGcEmitter {
 				fields.push((type_idx, type_def.fields.iter().enumerate().map(|(i, field)| (i as u32, field.name.as_str())).collect()));
 			}
 		}
+		fields.extend(self.instance_types.values().map(|instance| (instance.type_index, instance.fields.iter().enumerate().map(|(i, (field, _))| (i as u32, field.as_str())).collect())));
 		fields.sort_by_key(|(type_idx, _)| *type_idx);
 		fields.dedup_by_key(|(type_idx, _)| *type_idx);
 		let mut type_field_names = IndirectNameMap::new();

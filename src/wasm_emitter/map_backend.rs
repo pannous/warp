@@ -56,19 +56,27 @@ impl WasmGcEmitter {
 				_ => {}
 			}
 		});
-		program.visit(&mut |part| {
-			if matches!(part, Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::RAN_WITHOUT_ERROR)) {
-				part.visit(&mut |inner| if let Node::Key(target, _, _) = inner {
-					if let Node::Symbol(name) = target.drop_meta() { excluded.insert(name.clone()); }
-				});
-			}
-		});
-		excluded.extend(self.ctx.user_globals.keys().cloned());
-		excluded.extend(self.ctx.captures.values().flatten().map(|(name, _)| name.clone()));
+		excluded.extend(self.names_held_as_nodes(program));
 		started.into_iter()
 			.filter(|name| keyed.contains(name) && !excluded.contains(name))
 			.filter(|name| self.scope.lookup(name).is_some_and(|local| !local.is_param))
 			.collect()
+	}
+
+	/// The variables a typed backend (hash table, struct) never holds: globals, captured ones and those assigned in a
+	/// block that may stop at an error (`RAN_WITHOUT_ERROR`)
+	pub(super) fn names_held_as_nodes(&self, program: &Node) -> HashSet<String> {
+		let mut names = HashSet::new();
+		program.visit(&mut |part| {
+			if matches!(part, Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::RAN_WITHOUT_ERROR)) {
+				part.visit(&mut |inner| if let Node::Key(target, _, _) = inner {
+					if let Node::Symbol(name) = target.drop_meta() { names.insert(name.clone()); }
+				});
+			}
+		});
+		names.extend(self.ctx.user_globals.keys().cloned());
+		names.extend(self.ctx.captures.values().flatten().map(|(name, _)| name.clone()));
+		names
 	}
 
 	/// The local slot of `target` when it is a map variable held as a hash table
@@ -322,16 +330,15 @@ fn is_meta_key(index: &Node) -> bool {
 	matches!(key.drop_meta(), Node::Text(name) | Node::Symbol(name) if name.starts_with(crate::node::ATTRIBUTE_MARK))
 }
 
-fn is_update(op: &Op) -> bool {
+pub(super) fn is_update(op: &Op) -> bool {
 	op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)
 }
 
 /// `field_with(m, key, value)` updating the variable m itself: the key (as an index, `key + 1` like `m[key]`) and value
-fn entry_update(name: &str, value: &Node) -> Option<(Node, Node)> {
+pub(super) fn entry_update(name: &str, value: &Node) -> Option<(Node, Node)> {
 	let Node::List(items, _, _) = value.drop_meta() else { return None };
-	let [word, map, key, entry_value] = items.as_slice() else { return None };
-	let updates_itself = word.name() == crate::library_words::FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name);
-	updates_itself.then(|| (Node::Key(Box::new(key.clone()), Op::Add, Box::new(crate::node::int(1))), entry_value.clone()))
+	let [_, _, key, entry_value] = items.as_slice() else { return None };
+	crate::library_words::is_field_update_of(name, value).then(|| (Node::Key(Box::new(key.clone()), Op::Add, Box::new(crate::node::int(1))), entry_value.clone()))
 }
 
 /// What a map variable held as a table may start from: `{}`, a map literal of name keys, or the parameter it copies

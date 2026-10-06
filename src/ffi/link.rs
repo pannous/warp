@@ -90,14 +90,14 @@ fn link_libm_table(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()>
     for (name, function) in LIBM_UNARY {
         let unary = FuncType::new(engine, [ValType::F64], [ValType::F64]);
         linker.func_new("m", name, unary, move |_caller, params, results| {
-            results[0] = Val::F64(unsafe { function(params[0].unwrap_f64()) }.to_bits());
+            results[0] = Val::F64(unsafe { function(warp_runtime::floats::canonical_nan(params[0].unwrap_f64())) }.to_bits());
             Ok(())
         })?;
     }
     for (name, function) in LIBM_BINARY {
         let binary = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
         linker.func_new("m", name, binary, move |_caller, params, results| {
-            results[0] = Val::F64(unsafe { function(params[0].unwrap_f64(), params[1].unwrap_f64()) }.to_bits());
+            results[0] = Val::F64(unsafe { function(warp_runtime::floats::canonical_nan(params[0].unwrap_f64()), warp_runtime::floats::canonical_nan(params[1].unwrap_f64())) }.to_bits());
             Ok(())
         })?;
     }
@@ -710,7 +710,7 @@ fn create_ffi_wrapper(
         "D_D" => {
             linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F64(f(params[0].unwrap_f64()).to_bits());
+                results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64())).to_bits());
                 Ok(())
             })?;
         }
@@ -718,7 +718,7 @@ fn create_ffi_wrapper(
         "DD_D" => {
             linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(f64, f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F64(f(params[0].unwrap_f64(), params[1].unwrap_f64()).to_bits());
+                results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64()), warp_runtime::floats::canonical_nan(params[1].unwrap_f64())).to_bits());
                 Ok(())
             })?;
         }
@@ -748,7 +748,8 @@ pub fn link_module_libraries(
         let module_name = import.module();
         // Skip built-in libraries that are already linked; libc beyond its built-in functions (toupper) is linked here
         let built_in_libc = matches!(module_name, "c" | "libc") && HAND_LINKED_LIBC.contains(&import.name());
-        if !built_in_libc && !matches!(module_name, "m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY) {
+        let wasm_module = crate::wasm_modules::is_module_path(module_name); // linked by wasm_modules::link
+        if !built_in_libc && !wasm_module && !matches!(module_name, "m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY) {
             libs_to_link.entry(module_name.to_string()).or_default().insert(import.name().to_string());
         }
     }
@@ -819,7 +820,7 @@ fn native_arguments(caller: &mut wasmtime::Caller<'_, FfiState>, name: &str, par
             ParamType::I32 => param.unwrap_i32() as u64,
             ParamType::I64 => param.unwrap_i64() as u64,
             ParamType::F32 => (param.unwrap_f32() as f64).to_bits(),
-            ParamType::F64 => param.unwrap_f64().to_bits(),
+            ParamType::F64 => warp_runtime::floats::canonical_nan(param.unwrap_f64()).to_bits(),
             ParamType::Ptr => get_memory_ptr(caller, param.unwrap_i32() as usize) as u64,
             ParamType::Handle => {
                 let id = param.unwrap_i32();
@@ -920,7 +921,7 @@ fn native_result(returned: u64, ret_type: RetType) -> Val {
 
 /// A wasp text of `bytes` in the calling module (its memory, text heap and new_text), or ø
 #[cfg(feature = "native")]
-fn text_node(caller: &mut wasmtime::Caller<'_, FfiState>, bytes: Option<&[u8]>) -> Result<Val> {
+pub(crate) fn text_node(caller: &mut wasmtime::Caller<'_, FfiState>, bytes: Option<&[u8]>) -> Result<Val> {
     let export = |caller: &mut wasmtime::Caller<'_, FfiState>, name: &str| caller.get_export(name).ok_or_else(|| anyhow::anyhow!("a C text result needs the module's {name}"));
     let mut result = [Val::AnyRef(None)];
     let Some(bytes) = bytes else {

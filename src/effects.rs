@@ -409,8 +409,8 @@ impl Resolver<'_> {
 			return Some(External { capability: Foreign, effects: EffectSet::of(&[IO, FFI]) });
 		}
 		if let Some(import) = self.context.ffi_imports.get(name) {
-			// libm is pure (P26): untrusted code and `! Pure` functions may call it
-			return Some(match import.library == crate::ffi::LIBM {
+			// libm is pure (P26): untrusted code and `! Pure` functions may call it; so are the module's own linear arrays
+			return Some(match import.library == crate::ffi::LIBM || import.library == crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY {
 				true => External { capability: Libm, effects: EffectSet::PURE },
 				false => External { capability: Ffi, effects: EffectSet::of(&[FFI]) },
 			});
@@ -544,7 +544,7 @@ fn calls_shrink(node: &Node, name: &str, index: usize, parameter: &str, bound: B
 }
 
 /// `f(a, b)` and `f a b` both list their arguments after the name; `f((a))` unwraps one group
-fn call_arguments(arguments: &[Node]) -> Vec<&Node> {
+pub(crate) fn call_arguments(arguments: &[Node]) -> Vec<&Node> {
 	match arguments {
 		[single] => match single.drop_meta() {
 			Node::List(items, crate::node::Bracket::Round, _) if !items.is_empty() => items.iter().collect(),

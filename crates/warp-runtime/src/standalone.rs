@@ -102,7 +102,15 @@ pub fn run(machine_code: &[u8]) -> Result<()> {
 		.find_map(|name| instance.get_func(&mut store, name))
 		.ok_or_else(|| wasmtime::Error::msg(format!("the program has no entry point {ENTRY_POINTS:?}")))?;
 	let mut results = vec![Val::AnyRef(None); main.ty(&store).results().len()];
-	main.call(&mut store, &[], &mut results)
+	crate::system_signals::allow_staying();
+	let outcome = main.call(&mut store, &[], &mut results).and_then(|_| crate::system_signals::stay_while_listening(&mut store, &instance));
+	let outcome = crate::system_signals::with_exit_handler(outcome, &mut store, |store, name| instance.get_func(&mut *store, name));
+	if let Ok(None) = outcome {
+		use std::io::Write;
+		let _ = std::io::stdout().flush();
+		std::process::exit(crate::system_signals::take_exit_code().unwrap_or(0)); // `exit(code)` (P121)
+	}
+	outcome.map(|_| ())
 }
 
 /// The imports a standalone executable provides: (module, name)

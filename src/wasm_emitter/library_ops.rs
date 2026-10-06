@@ -9,6 +9,9 @@ use ValType::Ref;
 use crate::type_kinds::{CURLY_BRACKET_INFO, CURLY_LIST_KIND, KIND_BITS, SQUARE_LIST_KIND};
 /// The bracket info in a list's kind, above its KIND_BITS
 const BRACKET_INFO_MASK: i64 = 0xff;
+/// The operator code in a key's kind, above its KIND_BITS; a type instance `point{x:1}` has none
+const OP_INFO_MASK: i64 = 0xff;
+const INSTANCE_OP_CODE: i64 = 0;
 use crate::wasm_emitter::layout::BYTE;
 
 const KEY_KIND: i64 = Kind::Key as i64;
@@ -42,6 +45,10 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 17] = [
 	(crate::library_words::SLICE, NODE_SLICE),
 ];
 pub const NODE_SLICE: &str = "node_slice";
+/// text_quoted(text) -> text: how a text inside a container prints (P126)
+pub const TEXT_QUOTED: &str = "text_quoted";
+const QUOTE_BYTE: i32 = b'"' as i32;
+const BACKSLASH_BYTE: i32 = b'\\' as i32;
 pub const LIST_JOIN: &str = "list_join";
 /// list_text(list, separator): list_join that also takes nested lists, for the text of a list (`str(xs)`)
 pub const LIST_TEXT: &str = "list_text";
@@ -354,7 +361,7 @@ impl WasmGcEmitter {
 
 	/// list_join(list, separator): the items (texts, ints, ASCII characters) as one text with the separator between them;
 	/// list_text(list, separator), the text of a list (`str(xs)`), also takes nested lists, each as "[…]" ("{…}" for a
-	/// map), entries as "key:value" and symbols as their names
+	/// map), entries as "key:value", symbols as their names and texts quoted (P126: `["a" "b"]`, `p{name:"a"}`)
 	fn emit_list_join(&mut self) {
 		for (name, nested) in [(LIST_JOIN, false), (LIST_TEXT, true)] {
 			if self.should_emit_function(name) {
@@ -363,7 +370,40 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// text_quoted(text): the text in double quotes, a `"` or `\` in it escaped by a `\` (P126: `["say \"hi\""]`);
+	/// byte-wise, as neither byte occurs inside a multi-byte UTF-8 character
+	fn emit_text_quoted(&mut self) {
+		if !self.should_emit_function(TEXT_QUOTED) {
+			return;
+		}
+		self.emit_text_heap_global();
+		let node_ref = Ref(self.node_ref(false));
+		self.runtime_function(TEXT_QUOTED, vec![node_ref], vec![node_ref], vec![ValType::I32; 6], |s, f| {
+			let (pointer, end, capacity, destination, out, byte) = (1, 2, 3, 4, 5, 6);
+			let write = |f: &mut Function, value: I<'static>| {
+				Self::emit_list(f, &[I::LocalGet(out), value, I::I32Store8(BYTE), I::LocalGet(out), I32Const(1), I::I32Add, I::LocalSet(out)]);
+			};
+			s.emit_text_bounds(f, pointer, end);
+			// at worst every byte is escaped, plus the two quotes
+			Self::emit_list(f, &[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I32Const(2), I::I32Mul, I32Const(2), I::I32Add, I::LocalSet(capacity)]);
+			s.emit_text_allocation(f, capacity, destination);
+			Self::emit_list(f, &[I::LocalGet(destination), I::LocalSet(out)]);
+			write(f, I32Const(QUOTE_BYTE));
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(byte), I32Const(QUOTE_BYTE), I::I32Eq]);
+			Self::emit_list(f, &[I::LocalGet(byte), I32Const(BACKSLASH_BYTE), I::I32Eq, I::I32Or, I::If(BlockType::Empty)]);
+			write(f, I32Const(BACKSLASH_BYTE));
+			f.instruction(&I::End);
+			write(f, I::LocalGet(byte));
+			Self::emit_list(f, &[I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer), I::Br(0), I::End, I::End]);
+			write(f, I32Const(QUOTE_BYTE));
+			Self::emit_list(f, &[I::LocalGet(destination), I::LocalGet(out), I::LocalGet(destination), I::I32Sub]);
+			s.call(f, "new_text");
+		});
+	}
+
 	fn emit_joining(&mut self, name: &'static str, nested: bool) {
+		self.emit_text_quoted();
 		self.emit_text_heap_global();
 		self.emit_int_to_decimal();
 		self.emit_exact_text();
@@ -372,16 +412,17 @@ impl WasmGcEmitter {
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
 		let map_texts = [self.allocate_string("{"), self.allocate_string("}"), self.allocate_string(":")];
+		let no_text = self.allocate_string("");
 		let empty_text = self.allocate_string(EMPTY_TEXT);
 		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
-		locals.push(ValType::I64);
+		locals.extend([ValType::I64, nullable]);
 		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
-			let (bound, address, position, is_first, number) = (4, 5, 6, 7, 8);
+			let (bound, address, position, is_first, number, entry_value) = (4, 5, 6, 7, 8, 9);
 			let is_kind = |f: &mut Function, kind: Kind| {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
@@ -390,6 +431,13 @@ impl WasmGcEmitter {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
+				if nested { // a text or a character in a container is quoted (P126): `["a" "bc"]`
+					s.emit_field(f, element, 0);
+					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Eq]);
+					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
+					s.call(f, TEXT_QUOTED);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
 				// list_text: a nested list as its literal, "[" + list_text(item, " ") + "]", a map in braces
 				if nested {
 					let [open, close, space] = texts;
@@ -418,8 +466,17 @@ impl WasmGcEmitter {
 					s.call(f, "new_empty");
 					f.instruction(&I::Else);
 					s.emit_field(f, element, 2);
-					Self::emit_list(f, &[I::RefAsNonNull, I::End, I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type)]);
+					f.instruction(&I::LocalSet(entry_value));
+					s.emit_entry_in_braces(f, entry_value);
+					Self::emit_list(f, &[I::End, I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type)]);
+					// an instance `point{x:1}` (a key without operator) joins its name and fields without one (P123)
+					s.emit_field(f, element, 0);
+					Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(OP_INFO_MASK), I::I64And, I::I64Const(INSTANCE_OP_CODE), I::I64Eq]);
+					f.instruction(&I::If(BlockType::Result(node_ref)));
+					new_text(f, no_text);
+					f.instruction(&I::Else);
 					new_text(f, colon);
+					f.instruction(&I::End);
 					Self::emit_list(f, &[I::Call(own_index), I::LocalSet(element), I::End]);
 					// a curly list is a map: its bracket info, above the kind (other info may sit higher still)
 					let is_map = |f: &mut Function| {
@@ -588,6 +645,18 @@ impl WasmGcEmitter {
 			s.call(f, "list_join");
 			Self::emit_list(f, &[I::Else, I::LocalGet(sliced), I::RefAsNonNull, I::End]);
 		});
+	}
+
+	/// Push the node in `local` (not null), a `key:value` entry as the one-entry map `{key:value}` it stands for, so its
+	/// text keeps the braces: `{a:{b:1}}` is the entry a:(b:1) at run time and would write a:b:1
+	pub(super) fn emit_entry_in_braces(&self, f: &mut Function, local: u32) {
+		let node_type = self.type_manager.node_type;
+		let entry_kind_mask = (OP_INFO_MASK << KIND_BITS) | KIND_MASK;
+		let colon_entry_kind = (crate::operators::op_to_code(&crate::operators::Op::Colon) << KIND_BITS) | KEY_KIND;
+		self.emit_field(f, local, 0);
+		Self::emit_list(f, &[I::I64Const(entry_kind_mask), I::I64And, I::I64Const(colon_entry_kind), I::I64Eq, I::If(BlockType::Result(Ref(self.node_ref(false))))]);
+		Self::emit_list(f, &[I::I64Const(CURLY_LIST_KIND), I::LocalGet(local), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
+		Self::emit_list(f, &[I::Else, I::LocalGet(local), I::RefAsNonNull, I::End]);
 	}
 
 	/// field_with(object, name, value): a copy of the object with the field `name` set to `value`, added at the end when it is

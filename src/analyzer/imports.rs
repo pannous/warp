@@ -86,6 +86,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				};
 				if let Some(counter) = method_name.and_then(|method| counting_method(&method, ctx)) {
 					require_counter(ctx, counter);
+					analyze_required_functions(ctx, key); // the counted value: `s.fs.count` reads the field fs
 					return;
 				}
 			}
@@ -131,6 +132,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if items.len() == 2 {
 					if let Some(counter) = counting_function(fn_name, ctx) {
 						require_counter(ctx, counter);
+						analyze_required_functions(ctx, &items[1]);
 						return;
 					}
 				}
@@ -194,7 +196,11 @@ pub fn collect_all_types(registry: &mut crate::type_kinds::TypeRegistry, node: &
 /// The kind of an FFI call's result: a C string is a text (ffi.rs text_node), a host word's Node is known at run time
 /// only (task_await_value), a void or integer result an Int
 pub(super) fn ffi_call_kind(name: &str) -> Kind {
-	let Some(signature) = crate::ffi::get_ffi_signature(name) else { return Kind::Int };
+	crate::ffi::get_ffi_signature(name).map_or(Kind::Int, |signature| signature_kind(&signature))
+}
+
+/// The kind of a foreign function's result: a float, a text (a C string), a host word's Node, else an int
+pub(crate) fn signature_kind(signature: &crate::ffi::FfiSignature) -> Kind {
 	match signature.results.first() {
 		Some(wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32) => Kind::Float,
 		Some(wasm_encoder::ValType::Ref(_)) if signature.library != crate::host::HOST_LIBRARY => Kind::Text,
@@ -335,6 +341,9 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+				if crate::wasm_emitter::linear_arrays::is_linear_word(name) && !ctx.user_functions.contains_key(name) {
+					add_ffi_import(ctx, name, crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY);
+				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
 					// the host builds a caught stack overflow's Error with the module's own error_of
@@ -357,11 +366,16 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 	}
 }
 
-/// A program with `on interrupt {…}` polls for the signal at its loop starts (host signal_poll, notes/system_signals.md)
+/// A program with `on interrupt {…}` or `on every … {…}` polls for them at its loop starts (host signal_poll,
+/// notes/system_signals.md)
 pub fn extract_signal_polls(ctx: &mut Context) {
-	if ctx.user_functions.contains_key(crate::host::INTERRUPT_HANDLER) {
+	if handles_system_signals(ctx) {
 		add_ffi_import(ctx, crate::host::SIGNAL_POLL, crate::host::HOST_LIBRARY);
 	}
+}
+
+pub fn handles_system_signals(ctx: &Context) -> bool {
+	ctx.user_functions.keys().any(|name| name == crate::host::INTERRUPT_HANDLER || name == crate::host::SHARED_HANDLER || name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FILE_HANDLER_PREFIX))
 }
 
 /// The library an import names: `"z"` and `'m'` are one-character texts, which parse as characters
@@ -411,6 +425,14 @@ pub(super) fn add_ffi_lib(ctx: &mut Context, lib: &str) {
 /// Dynamically discover and add all functions from a library via header parsing
 pub(super) fn add_ffi_lib_dynamic(ctx: &mut Context, lib: &str) {
 	use crate::ffi::get_signatures_from_headers;
+
+	if crate::wasm_modules::is_module_path(lib) {
+		for (name, export) in crate::wasm_modules::exports(lib) {
+			ctx.ffi_imports.insert(name.clone(), export.signature.clone());
+			ctx.ffi_imports.insert(crate::wasm_modules::qualified(lib, name), export.signature.clone());
+		}
+		return;
+	}
 
 	let signatures = get_signatures_from_headers(lib);
 	if signatures.is_empty() {

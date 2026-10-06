@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 use wasm_encoder::*;
 use Instruction as I;
 
-const RETURN: &str = "return";
+pub(super) const RETURN: &str = "return";
 
 /// The list calling convention of one function
 #[derive(Clone, Default, Debug)]
@@ -69,6 +69,15 @@ fn results(body: &Node) -> Vec<&Node> {
 	found
 }
 
+/// The statements of a function body: those of its block, `{a; b}` or `a; b`, or the body itself
+pub(super) fn body_statements(body: &Node) -> Vec<Node> {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) => items.clone(),
+		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
+		other => vec![other.clone()],
+	}
+}
+
 /// The last value of a block `(…; x)`
 fn last_value(node: &Node) -> &Node {
 	match node.drop_meta() {
@@ -91,10 +100,7 @@ pub(super) fn called_function(node: &Node) -> Option<&str> {
 impl WasmGcEmitter {
 	/// The list convention of every user function that has one, decided before the signatures are registered
 	pub(super) fn find_list_abi(&mut self) -> HashMap<String, ListAbi> {
-		let excluded: HashSet<String> = self.ctx.closure_targets.iter().map(|(target, _)| target.clone()).collect();
-		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values()
-			.filter(|function| !excluded.contains(&function.name) && function.tuple_kinds.is_empty() && !self.is_closure_call(&function.name))
-			.cloned().collect();
+		let functions = self.directly_called_functions();
 		let mut abi: HashMap<String, ListAbi> = HashMap::new();
 		let mut list_results: HashMap<String, Vec<Node>> = HashMap::new();
 		for function in &functions {
@@ -140,6 +146,16 @@ impl WasmGcEmitter {
 			abi.get_mut(&name).expect("a list function").returns_list = true;
 		}
 		abi
+	}
+
+	/// The user functions only ever called directly, never as a closure, a tuple function or a witness the runtime
+	/// dispatches to (witness.rs): those may take a calling convention of their own (lists as arrays, instances as structs)
+	pub(super) fn directly_called_functions(&self) -> Vec<UserFunctionDef> {
+		let excluded: HashSet<String> = self.ctx.closure_targets.iter().map(|(target, _)| target.clone()).collect();
+		self.ctx.user_functions.values()
+			.filter(|function| !excluded.contains(&function.name) && function.tuple_kinds.is_empty() && !self.is_closure_call(&function.name))
+			.filter(|function| crate::traits::witness_type(&function.name, crate::traits::COMPARE).is_none())
+			.cloned().collect()
 	}
 
 	/// The typed lists of a function body, as compile_user_function_body will find them, its list parameters typed
@@ -207,12 +223,14 @@ impl WasmGcEmitter {
 impl WasmGcEmitter {
 	/// The body of a function returning a $NodeList: its statements, then its last value as the array
 	pub(super) fn emit_list_abi_body(&mut self, func: &mut Function, body: &Node) {
-		let statements = match body.drop_meta() {
-			Node::List(items, Bracket::Curly, _) => items.clone(),
-			other => vec![other.clone()],
-		};
+		self.emit_body_then(func, body, Self::emit_list_abi_value);
+	}
+
+	/// A function body: its statements, then its last value as `emit_last` gives it (a `return` returns)
+	pub(super) fn emit_body_then(&mut self, func: &mut Function, body: &Node, emit_last: impl FnOnce(&mut Self, &mut Function, &Node)) {
+		let statements = body_statements(body);
 		let Some((last, before)) = statements.split_last() else {
-			self.emit_list_abi_value(func, &Node::Empty);
+			emit_last(self, func, &Node::Empty);
 			return;
 		};
 		for statement in before {
@@ -228,7 +246,7 @@ impl WasmGcEmitter {
 		if is_return {
 			self.emit_node_instructions(func, last); // returns, leaving nothing reachable
 		} else {
-			self.emit_list_abi_value(func, last);
+			emit_last(self, func, last);
 		}
 	}
 }

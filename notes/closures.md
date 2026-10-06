@@ -82,3 +82,17 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
   browser build needs nothing). A cell holds any value; `cell_get` is typed like a map value (Kind::Empty, a Node that
   joins texts and adds at run time), `cell_set` counts as a statement (a block of calls only would be a list). The
   closure carries the cell, so a counter returned by `make()` keeps its own cell.
+
+## Functions in object fields (card function-values)
+- Parse: `{f: x => x * 2}` would bind as `(f:x) => …` (`:` is tighter than `=>`). In a curly group an entry whose
+  `:`-right side is a lowercase non-type word (or a `(a, b)` group) is the field holding the lambda
+  (wasp_parser/lists.rs `field_holding_lambda`); `{x: int => …}` and `{p: Person => …}` stay typed lambdas (assumption:
+  capitalised words are types).
+- `s.f(4)`: blocks.rs turns a function entry into the method `s·f` (already so for `f := …`); `f: (x => …)` counts too.
+  `h = s.f` (not called) is `function s·f`, or the lambda `(x) => s·f(s, x)` when the body reads other fields.
+  The object keeps the entry as `data …`, which closures.rs does not lift (the lambda's free field names are no variables).
+- `s.fs#1(4)`: closures.rs tracks holders by path (`s.fs`, `holder_path`), so a list field of function values is called
+  like a list variable; object literals record their fields recursively (`record_holder`).
+- Nested objects: `x = {a: {f: …}}` defines `x·a·f`, called by `x.a.f(1)` (blocks.rs `object_with_entries` recurses).
+- Open: a function entry of an object passed around (it is data, the
+  method belongs to the variable name).

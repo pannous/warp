@@ -17,6 +17,22 @@ const ASCII_LOWERCASE_BIT: i32 = 0x20;
 const TEXT_UNIT_USERS: [&str; 7] =
 	["node_count", "node_bytes", "string_char_at", "node_with_at", "text_byte_count", "text_codepoint_count", "text_grapheme_count"];
 
+/// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
+pub(super) struct CopyCells {
+	cell: u32,
+	cells: u32,
+	position: u32,
+	copied: u32,
+	/// what the copied cells go in front of; the copy when rebuilt
+	result: u32,
+}
+
+impl CopyCells {
+	pub(super) fn at(first: u32) -> Self {
+		CopyCells { cell: first, cells: first + 1, position: first + 2, copied: first + 3, result: first + 4 }
+	}
+}
+
 impl WasmGcEmitter {
 	/// Emit list and string operation helper functions
 	pub(crate) fn emit_list_ops(&mut self) {
@@ -261,7 +277,7 @@ impl WasmGcEmitter {
 	}
 
 	/// list_insert_at(list, position, value): copies the cells before the 0-based position, puts value there and shares
-	/// the rest; a position past the end (or negative) appends
+	/// the rest; a position past the end (or negative) appends. Iteratively (copy_cells)
 	fn emit_list_insert_at(&mut self) {
 		if !self.should_emit_function(crate::analyzer::INSERT_AT_CALL) {
 			return;
@@ -269,25 +285,16 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_ref_nullable = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
-		let list_insert_at = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
 		let params = vec![node_ref_nullable, ValType::I64, node_ref];
-		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], vec![], |s, f| {
-			s.emit_empty_as_null(f, 0);
-			Self::emit_list(f, &[
-				I::LocalGet(0), I::RefIsNull, I::LocalGet(1), I::I64Eqz, I::I32Or,
-				I::If(BlockType::Result(node_ref)),
-				I::I64Const(SQUARE_LIST_KIND), I::LocalGet(2), I::LocalGet(0), I::StructNew(node_type),
-				I::Else,
-			]);
-			s.emit_field(f, 0, 0);
-			s.emit_field(f, 0, 1);
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[
-				I::LocalGet(1), I::I64Const(1), I::I64Sub, I::LocalGet(2), I::Call(list_insert_at),
-				I::StructNew(node_type), I::End,
-			]);
+		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], self.copy_cells_locals(), |s, f| {
+			let (list, position, value) = (0, 1, 2);
+			let copy = CopyCells::at(3);
+			s.emit_empty_as_null(f, list);
+			s.emit_collect_cells(f, list, Some(position), &copy);
+			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value), I::LocalGet(copy.cell), I::StructNew(node_type), I::LocalSet(copy.result)]);
+			s.emit_rebuild_cells(f, &copy);
+			Self::emit_list(f, &[I::LocalGet(copy.result), I::RefAsNonNull]);
 		});
-		assert_eq!(self.func_index(crate::analyzer::INSERT_AT_CALL), list_insert_at, "recursive call index");
 	}
 
 	/// The grapheme at a 1-based index: a Codepoint when it is one code point (`'héllo'#2` → 'é'),
@@ -509,6 +516,8 @@ impl WasmGcEmitter {
 const INDEX_NOT_INTEGRAL: &str = "index_must_be_an_integer";
 /// `y times "ab"` with y = 2.5 held in a variable (a literal fraction is a compile-time type error)
 const COUNT_NOT_INTEGRAL: &str = "count_must_be_an_integer";
+/// `x:int = 3; x += 0.5`: a declared int (variable or field) given a fraction at run time; a literal one is a type error
+pub(super) const INT_NOT_WHOLE: &str = "an_int_must_be_a_whole_number";
 /// `m.a * 2` with a text in m.a, where the kinds are known only at run time (NODE_ARITHMETIC)
 pub(super) const NOT_A_NUMBER: &str = "not_a_number";
 /// P65: arithmetic a text can't do on a character fails; its code point is ord(c)
@@ -527,7 +536,7 @@ fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 
 /// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
 const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
-const RUNTIME_ERROR_FIXES: [(&str, &str); 2] = [(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX)];
+const RUNTIME_ERROR_FIXES: [(&str, &str); 3] = [(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (INT_NOT_WHOLE, WHOLE_NUMBER_FIX)];
 
 /// The message of the runtime error trapped in the function `name`: its words, then its fix if it has one
 pub fn runtime_error_message(name: &str) -> String {
@@ -547,12 +556,12 @@ const MAP_WITHOUT_CELLS: &str = "map_without_cells";
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
-pub const RUNTIME_ERRORS: [&str; 25] = [
+pub const RUNTIME_ERRORS: [&str; 26] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT, super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
-	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO,
+	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO, INT_NOT_WHOLE,
 ];
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
@@ -864,7 +873,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Trap with `error` when the Int in i64 local `local` is a ratio
-	fn emit_require_whole(&self, func: &mut Function, local: u32, error: &'static str) {
+	pub(super) fn emit_require_whole(&self, func: &mut Function, local: u32, error: &'static str) {
 		if !self.int_runtime() {
 			return; // without the big-int runtime an Int is always a plain i64
 		}
@@ -1019,6 +1028,14 @@ impl WasmGcEmitter {
 
 	/// `target#index = value` leaves the assigned value (i64) on the stack; a variable target gets the updated copy
 	pub(super) fn emit_index_assignment(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) {
+		if let Node::Symbol(name) = target.drop_meta() {
+			if self.is_unbound(name) {
+				return self.emit_undefined_variable(func, name);
+			}
+		}
+		if self.emit_struct_field_set(func, target, index, value) {
+			return;
+		}
 		if let (Some(slot), Some(key)) = (self.typed_map(target), self.map_key(index)) {
 			self.emit_typed_map_set(func, slot, &key, value);
 			return self.emit_assigned_entry_value(func, target, &key, value);
@@ -1068,7 +1085,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The value of an entry assignment (i64): an Int value read back from the entry, else 0
-	fn emit_assigned_entry_value(&mut self, func: &mut Function, target: &Node, key: &Node, value: &Node) {
+	pub(super) fn emit_assigned_entry_value(&mut self, func: &mut Function, target: &Node, key: &Node, value: &Node) {
 		if self.get_type(value) != Kind::Int {
 			func.instruction(&I::I64Const(0));
 			return;
@@ -1183,33 +1200,67 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
-	/// list_concat(a, b): copies the cells of a in front of b, which is shared
+	/// list_concat(a, b): copies the cells of a in front of b, which is shared; iteratively (copy_cells)
 	fn emit_list_concat(&mut self) {
 		if !self.should_emit_function("list_concat") {
 			return;
 		}
 		let node_ref_nullable = Ref(self.node_ref(true));
-		let node_type = self.type_manager.node_type;
-		let list_concat = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
 		let params = vec![node_ref_nullable, node_ref_nullable];
-		self.runtime_function("list_concat", params, vec![node_ref_nullable], vec![], |s, f| {
-			for list in 0..2 {
+		self.runtime_function("list_concat", params, vec![node_ref_nullable], self.copy_cells_locals(), |s, f| {
+			let (first, second) = (0, 1);
+			let copy = CopyCells::at(2);
+			for list in [first, second] {
 				s.emit_empty_as_null(f, list);
 			}
-			f.instruction(&I::LocalGet(0));
-			f.instruction(&I::RefIsNull);
-			f.instruction(&I::If(BlockType::Result(node_ref_nullable)));
-			f.instruction(&I::LocalGet(1));
-			f.instruction(&I::Else);
-			s.emit_field(f, 0, 0);
-			s.emit_field(f, 0, 1);
-			s.emit_field(f, 0, 2);
-			f.instruction(&I::LocalGet(1));
-			f.instruction(&I::Call(list_concat));
-			f.instruction(&I::StructNew(node_type));
-			f.instruction(&I::End);
+			s.emit_collect_cells(f, first, None, &copy);
+			Self::emit_list(f, &[I::LocalGet(second), I::LocalSet(copy.result)]);
+			s.emit_rebuild_cells(f, &copy);
+			f.instruction(&I::LocalGet(copy.result));
 		});
-		assert_eq!(self.func_index("list_concat"), list_concat, "recursive call index");
+	}
+
+	/// The locals copy_cells needs, in CopyCells order
+	pub(super) fn copy_cells_locals(&self) -> Vec<ValType> {
+		let node_ref_nullable = Ref(self.node_ref(true));
+		let cells = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.node_array_type) });
+		vec![node_ref_nullable, cells, ValType::I32, node_ref_nullable, node_ref_nullable]
+	}
+
+	/// The first cells of `list` (all, or as many as the i64 local `limit` says; a negative limit is all) into an array,
+	/// counted, then filled: no recursion, so a long list never exhausts the call stack. `cell` ends at the first cell
+	/// not taken
+	pub(super) fn emit_collect_cells(&self, f: &mut Function, list: u32, limit: Option<u32>, copy: &CopyCells) {
+		let node_array = self.type_manager.node_array_type;
+		let reached_limit = |f: &mut Function| if let Some(limit) = limit {
+			Self::emit_list(f, &[I::LocalGet(copy.position), I::I64ExtendI32U, I::LocalGet(limit), I::I64Eq, I::BrIf(1)]);
+		};
+		let next_cell = |s: &Self, f: &mut Function| {
+			s.emit_field(f, copy.cell, 2);
+			Self::emit_list(f, &[I::LocalSet(copy.cell), I::LocalGet(copy.position), I::I32Const(1), I::I32Add, I::LocalSet(copy.position), I::Br(0), I::End, I::End]);
+		};
+		Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(copy.cell), I::I32Const(0), I::LocalSet(copy.position),
+			I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(copy.cell), I::RefIsNull, I::BrIf(1)]);
+		reached_limit(f);
+		next_cell(self, f);
+		Self::emit_list(f, &[I::LocalGet(copy.position), I::ArrayNewDefault(node_array), I::LocalSet(copy.cells),
+			I::LocalGet(list), I::LocalSet(copy.cell), I::I32Const(0), I::LocalSet(copy.position),
+			I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+			I::LocalGet(copy.position), I::LocalGet(copy.cells), I::ArrayLen, I::I32GeU, I::BrIf(1),
+			I::LocalGet(copy.cells), I::LocalGet(copy.position), I::LocalGet(copy.cell), I::ArraySet(node_array)]);
+		next_cell(self, f);
+	}
+
+	/// The collected cells, from the last back, copied in front of `result`, each sharing what follows it
+	pub(super) fn emit_rebuild_cells(&self, f: &mut Function, copy: &CopyCells) {
+		let node_array = self.type_manager.node_array_type;
+		Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+			I::LocalGet(copy.position), I::I32Eqz, I::BrIf(1),
+			I::LocalGet(copy.position), I::I32Const(1), I::I32Sub, I::LocalSet(copy.position),
+			I::LocalGet(copy.cells), I::LocalGet(copy.position), I::ArrayGet(node_array), I::LocalSet(copy.copied)]);
+		self.emit_field(f, copy.copied, 0);
+		self.emit_field(f, copy.copied, 1);
+		Self::emit_list(f, &[I::LocalGet(copy.result), I::StructNew(self.type_manager.node_type), I::LocalSet(copy.result), I::Br(0), I::End, I::End]);
 	}
 
 	/// `x#i += v` → `x#i = x#i + v`, leaving the assigned value (i64) on the stack
@@ -1235,39 +1286,58 @@ impl WasmGcEmitter {
 		let string_type = self.type_manager.string_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 
-		// list_with_at(list, index, value): copies the cells up to index, shares the rest
+		// list_with_at(list, index, value): copies the cells up to index, shares the rest; iterative (the cells before
+		// index into an array, rebuilt backwards), so a deep index never exhausts the call stack
 		let list_with_at = next_index(self);
 		let params = vec![node_ref_nullable, ValType::I64, ValType::I64];
-		self.runtime_function("list_with_at", params, vec![node_ref], vec![], |s, f| {
-			f.instruction(&I::LocalGet(0));
-			f.instruction(&I::RefIsNull);
-			s.emit_fail_if(f, "index_out_of_range");
-			// lists do not grow by index, the empty list ø included (user, 2026-10-04)
-			s.emit_field(f, 0, 0);
-			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq]);
-			s.emit_fail_if(f, "index_out_of_range");
+		let node_array = self.type_manager.node_array_type;
+		let cells_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(node_array) });
+		let locals = vec![node_ref_nullable, ValType::I64, cells_ref, ValType::I32, node_ref_nullable];
+		self.runtime_function("list_with_at", params, vec![node_ref], locals, |s, f| {
+			let (list, index, value, cell, countdown, cells, position, result) = (0, 1, 2, 3, 4, 5, 6, 7);
+			let kind_test = |s: &Self, f: &mut Function| {
+				// a missing cell or ø: lists do not grow by index, the empty list ø included (user, 2026-10-04)
+				Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull]);
+				s.emit_fail_if(f, "index_out_of_range");
+				s.emit_field(f, cell, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq]);
+				s.emit_fail_if(f, "index_out_of_range");
+			};
 			Self::emit_index_compare(f, I::I64LtS);
 			s.emit_fail_if(f, "index_out_of_range");
-			s.emit_field(f, 0, 0);
-			Self::emit_index_compare(f, I::I64Eq);
-			f.instruction(&I::If(BlockType::Result(Ref(RefType::ANYREF))));
-			f.instruction(&I::LocalGet(2));
+			// the cell at index
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::LocalGet(index), I::LocalSet(countdown), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			kind_test(s, f);
+			Self::emit_list(f, &[I::LocalGet(countdown), I::I64Const(1), I::I64Eq, I::BrIf(1)]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::LocalGet(countdown), I::I64Const(1), I::I64Sub, I::LocalSet(countdown), I::Br(0), I::End, I::End]);
+			// it, with the value
+			s.emit_field(f, cell, 0);
+			Self::emit_list(f, &[I::LocalGet(value)]);
 			s.call(f, "new_int");
-			f.instruction(&I::Else);
-			s.emit_field(f, 0, 1);
-			f.instruction(&I::End);
-			Self::emit_index_compare(f, I::I64GtS);
-			f.instruction(&I::If(BlockType::Result(node_ref_nullable)));
-			s.emit_field(f, 0, 2);
-			Self::emit_index_compare(f, I::I64Sub);
-			f.instruction(&I::LocalGet(2));
-			f.instruction(&I::Call(list_with_at));
-			f.instruction(&I::Else);
-			s.emit_field(f, 0, 2);
-			f.instruction(&I::End);
-			f.instruction(&I::StructNew(node_type));
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::StructNew(node_type), I::LocalSet(result)]);
+			// the cells before it, in order
+			Self::emit_list(f, &[
+				I::LocalGet(index), I::I64Const(1), I::I64Sub, I::I32WrapI64, I::ArrayNewDefault(node_array), I::LocalSet(cells),
+				I::LocalGet(list), I::LocalSet(cell), I::I32Const(0), I::LocalSet(position),
+				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(position), I::LocalGet(cells), I::ArrayLen, I::I32GeU, I::BrIf(1),
+				I::LocalGet(cells), I::LocalGet(position), I::LocalGet(cell), I::ArraySet(node_array),
+			]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::LocalGet(position), I::I32Const(1), I::I32Add, I::LocalSet(position), I::Br(0), I::End, I::End]);
+			// rebuilt from the last one back, each sharing what follows
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(position), I::I32Eqz, I::BrIf(1),
+				I::LocalGet(position), I::I32Const(1), I::I32Sub, I::LocalSet(position),
+				I::LocalGet(cells), I::LocalGet(position), I::ArrayGet(node_array), I::LocalSet(cell)]);
+			s.emit_field(f, cell, 0);
+			s.emit_field(f, cell, 1);
+			Self::emit_list(f, &[I::LocalGet(result), I::StructNew(node_type), I::LocalSet(result), I::Br(0), I::End, I::End,
+				I::LocalGet(result), I::RefAsNonNull]);
 		});
-		assert_eq!(self.func_index("list_with_at"), list_with_at, "recursive call index");
+		assert_eq!(self.func_index("list_with_at"), list_with_at, "node_with_at forwards to this index");
 
 		// text_with_char_at(text, index, value): a fresh copy with the grapheme at index replaced by the UTF-8 of value
 		let text_with_char_at = next_index(self);
@@ -1395,6 +1465,9 @@ impl WasmGcEmitter {
 			self.emit_typed_map_lookup(func, slot, &key);
 			self.emit_generic_indexed_node(func, target, index);
 			func.instruction(&I::End);
+			return;
+		}
+		if self.emit_struct_field_node(func, target, index) {
 			return;
 		}
 		self.emit_generic_indexed_node(func, target, index);
