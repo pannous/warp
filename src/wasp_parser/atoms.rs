@@ -798,6 +798,7 @@ impl WaspParser {
 			true => std::mem::take(&mut constructor_fields).into_iter().map(|parent| parent.drop_meta().name()).find(|parent| parent != PYTHON_ROOT_CLASS),
 			false => None,
 		};
+		let ends_statement = matches!(self.peek_char((0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()), '\n' | ';' | '}' | '\0');
 		let before_body = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		// `class P(val x: Int)` ends at its line when no body follows on it
 		match constructor_fields.is_empty() {
@@ -882,8 +883,9 @@ impl WaspParser {
 			}
 		};
 		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
-		// Kotlin's `sealed class Shape`, Swift's `class Marker`: a class without fields
-		let body = if matches!(body, Empty) { Node::List(vec![], Bracket::Curly, Separator::None) } else { body };
+		// Kotlin's `sealed class Shape`, Swift's `class Marker`: a class without fields, when its line ends after the name
+		// (`type of x` goes on: no declaration)
+		let body = if matches!(body, Empty) && ends_statement { Node::List(vec![], Bracket::Curly, Separator::None) } else { body };
 		Node::Type { name: Box::new(name), body: Box::new(body) }
 	}
 
