@@ -57,6 +57,8 @@ PASSED:
   ✓ control::test_empty_block::an_empty_block_inside_a_statement_is_a_value
   ✓ control::test_empty_block_binding::a_bound_empty_block_counts_zero
   ✓ control::test_empty_block_binding::an_empty_block_can_be_bound
+  ✓ control::test_empty_bodies::an_empty_function_body_returns_nothing
+  ✓ control::test_empty_bodies::an_empty_timer_body_does_nothing
   ✓ control::test_error_branch_kind::test_an_error_branch_keeps_the_other_branch_kind
   ✓ control::test_error_branch_kind::test_an_error_value_stays_a_value
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
@@ -2677,4 +2679,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2672 passed, 0 failed, 2672 total tested
+20 ignored, 2674 passed, 0 failed, 2674 total tested
