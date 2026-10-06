@@ -24,19 +24,28 @@ print(m.group(1) if m else "")
 	fi
 fi
 
-cargo build --offline --bin warp
-
 target_dir="$(cargo metadata --offline --format-version 1 --no-deps | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
 src="$target_dir/debug/warp"
-if [ ! -x "$src" ]; then
-	echo "own-warp: missing built binary at $src" >&2
-	exit 1
-fi
-
+own_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
 mkdir -p scratch
-# Atomic replace: readers never see a partial binary (cp to a temp name, then mv).
-tmp="scratch/warp.tmp.$$"
-cp "$src" "$tmp"
-chmod +x "$tmp"
-mv -f "$tmp" scratch/warp
-echo "$repo/scratch/warp"
+# Another checkout can rebuild the shared binary between our build and the copy: the copy must report our version
+for attempt in 1 2 3; do
+	cargo build --offline --bin warp
+	if [ ! -x "$src" ]; then
+		echo "own-warp: missing built binary at $src" >&2
+		exit 1
+	fi
+	# Atomic replace: readers never see a partial binary (cp to a temp name, then mv).
+	tmp="scratch/warp.tmp.$$"
+	cp "$src" "$tmp"
+	chmod +x "$tmp"
+	if "$tmp" version 2>/dev/null | grep -qF "$own_version"; then
+		mv -f "$tmp" scratch/warp
+		echo "$repo/scratch/warp"
+		exit 0
+	fi
+	rm -f "$tmp"
+	echo "own-warp: the shared binary was another checkout's build (attempt $attempt), building again" >&2
+done
+echo "own-warp: could not copy this checkout's build ($own_version)" >&2
+exit 1
