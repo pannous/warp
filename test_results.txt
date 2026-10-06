@@ -11,6 +11,7 @@ PASSED:
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
+  ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
@@ -469,6 +470,7 @@ PASSED:
   ✓ ffi::test_ffi_handles::a_pointer_result_is_a_handle
   ✓ ffi::test_ffi_handles::a_sqlite_session_runs_on_handles
   ✓ ffi::test_ffi_handles::an_unknown_handle_is_a_loud_error
+  ✓ ffi::test_ffi_handles::standard_c_structs_are_handles_without_their_header
   ✓ ffi::test_ffi_import_group::a_group_of_three_names_is_imported
   ✓ ffi::test_ffi_import_group::a_group_with_spaces_is_imported
   ✓ ffi::test_ffi_text_results::a_c_string_result_is_a_text
@@ -1574,6 +1576,8 @@ PASSED:
   ✓ operators::test_operators::test_for_each
   ✓ operators::test_operators::test_key
   ✓ operators::test_operators::test_while_true_forever
+  ✓ operators::test_pipe_stages::a_pipe_into_a_spaced_definition
+  ✓ operators::test_pipe_stages::a_pipe_into_a_word_operator
   ✓ operators::test_pipeline::a_braceless_call_is_the_piped_value
   ✓ operators::test_pipeline::a_pipeline_calls_each_stage_with_the_value
   ✓ operators::test_pipeline::a_pipeline_over_several_lines
@@ -2088,11 +2092,15 @@ PASSED:
   ✓ types::test_class_extends::a_subclass_overrides_a_method
   ✓ types::test_class_forms_ported::a_copy_with_changed_fields
   ✓ types::test_class_forms_ported::a_csharp_record_declares_its_fields
+  ✓ types::test_class_forms_ported::a_java_class_with_typed_fields_and_a_named_constructor
   ✓ types::test_class_forms_ported::a_javascript_class_with_a_constructor
   ✓ types::test_class_forms_ported::a_kotlin_primary_constructor_declares_the_fields
+  ✓ types::test_class_forms_ported::a_python_class_attribute_is_shared
   ✓ types::test_class_forms_ported::a_python_class_with_init
   ✓ types::test_class_forms_ported::a_rust_struct_takes_the_methods_of_its_impl
   ✓ types::test_class_forms_ported::a_swift_struct_with_a_mutating_method
+  ✓ types::test_class_forms_ported::a_typescript_class_with_typed_members
+  ✓ types::test_class_forms_ported::csharp_auto_properties_and_an_object_initializer
   ✓ types::test_class_methods::a_method_assigning_its_receiver_says_so
   ✓ types::test_class_methods::a_method_in_the_body_conforms_to_a_trait
   ✓ types::test_class_methods::a_method_in_the_class_body_reads_the_fields
@@ -2774,4 +2782,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2769 passed, 0 failed, 2769 total tested
+19 ignored, 2777 passed, 0 failed, 2777 total tested
