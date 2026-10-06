@@ -379,9 +379,15 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 	}
 	let mut changed = false;
 	for ((name, index), kinds) in passed {
+		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
+		// passed only values held as Nodes (a loop variable over a list parameter): a Node, no int
+		if kinds.len() == 1 && kinds.contains(&Kind::Empty) && param.used_as.is_none() && param.annotation.is_none() && param.default.is_none() {
+			param.used_as = Some(Kind::Empty);
+			changed = true;
+			continue;
+		}
 		let kinds: Vec<Kind> = kinds.into_iter().filter(|kind| *kind != Kind::Int && *kind != Kind::Empty).collect();
 		let [kind] = kinds.as_slice() else { continue };
-		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
 		// a parameter the body counts or indexes is guessed a list, until the calls pass it only texts
 		let guessed = matches!(param.used_as, None | Some(Kind::Int)) || (param.used_as == Some(Kind::List) && *kind == Kind::Text);
 		if param.annotation.is_none() && param.default.is_none() && guessed {
