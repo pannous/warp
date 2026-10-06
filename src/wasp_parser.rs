@@ -1619,6 +1619,9 @@ impl WaspParser {
 		match c1 {
 			'+' if c2 == '+' && variable_follows => Some((Op::Inc, 2)),
 			'-' if c2 == '-' && variable_follows => Some((Op::Dec, 2)),
+			// unary plus glued to its operand, `+5`, `+x`, `+(a)`: the operand itself; a spaced `+` stays the operator
+			// word (`fold + xs`)
+			'+' if c2.is_alphanumeric() || matches!(c2, '_' | '(' | '.') => Some((Op::Add, 1)),
 			'-' => Some((Op::Neg, 1)),
 			dash if matches!(glyph_operator(dash), Some((Op::Sub, _))) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
@@ -2575,6 +2578,7 @@ impl WaspParser {
 			Op::If | Op::While => self.with_equals_comparing(true, |parser| parser.parse_expr(right_bp)),
 			// `#m#1` counts `m#1`: indexing a count is never meant
 			Op::Hash => self.parse_expr(left_bp - 1),
+			Op::Add => self.parse_expr(Op::Neg.binding_power().1), // `+2^2` like `-2^2`
 			_ => self.parse_expr(right_bp),
 		}
 	}
@@ -2591,6 +2595,7 @@ impl WaspParser {
 			(Op::If, _) => self.finish_if_prefix(rhs),
 			(Op::While, _) => self.finish_while_prefix(rhs),
 			(Op::Neg, Node::Number(number)) => Node::Number(-*number),
+			(Op::Add, _) => rhs,
 			(Op::Inc | Op::Dec, _) => Node::Key(Box::new(rhs), op, Box::new(Empty)), // ++i is i++: increment is immediate
 			_ => Node::Key(Box::new(Empty), op, Box::new(rhs)),
 		}
@@ -3743,7 +3748,7 @@ impl WaspParser {
 		}
 		let mut num_str = String::new();
 
-		// todo edge case: leading plus
+		// a leading plus is the unary plus prefix (peek_prefix_operator)
 		if self.current_char() == '-' {
 			num_str.push('-');
 			self.advance();
