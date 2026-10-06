@@ -1239,9 +1239,11 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
 	let (name, arguments) = head_items.split_first()?;
 	let Node::Symbol(_) = name.drop_meta() else { return None };
-	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words
+	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words; a call's arguments come flat,
+	// so only Swift's keyword reads them so: `def add(a, b: int) -> int` has two parameters
+	let is_swift = matches!(keyword.drop_meta(), Node::Symbol(word) if word == SWIFT_FUNCTION_KEYWORD);
 	let arguments = match arguments {
-		[label, typed] if argument_label(label, typed).is_some() => vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)],
+		[label, typed] if is_swift && argument_label(label, typed).is_some() => vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)],
 		_ => arguments.to_vec(),
 	};
 	// the parameters may come as one group: `f (a, b)`, `f (m)`, `f ø`
@@ -1586,6 +1588,7 @@ fn enum_object(items: &[Node]) -> Option<Node> {
 /// Swift's label for an argument without a label
 const WILDCARD_LABEL: &str = "_";
 const DART_REQUIRED: &str = "required";
+const SWIFT_FUNCTION_KEYWORD: &str = "func";
 
 /// `real f(real x) { … }`: the definition `f(x:real) := { … }` (the parser reads the type word, then the call and its
 /// block); the result kind is inferred as for any definition
