@@ -206,6 +206,11 @@ impl Rewrite<'_> {
 			Node::Key(target, op, value) => {
 				let names = self.names(function);
 				match (target.drop_meta(), op) {
+					// `n = n + v`, `n = n - v`: the atomic add, as `n += v`, so no task's update is lost
+					(name, Op::Assign) if let Some(kind) = shared_value(name, &names) && let Some((op, added)) = self_update(name, &value) => {
+						let [_, _, add] = element_words(kind.element);
+						builtin(add, vec![name.clone(), crate::node::int(VALUE_CELL), signed(self.node(added, function), op)])
+					}
 					// `n = v`, `n += v` of a shared value
 					(name, Op::Assign) if let Some(kind) = shared_value(name, &names) => {
 						let [_, set, _] = element_words(kind.element);
@@ -273,6 +278,16 @@ fn shared(node: &Node, names: &HashMap<String, Shared>) -> Option<Shared> {
 fn shared_value(node: &Node, names: &HashMap<String, Shared>) -> Option<Shared> {
 	match node.drop_meta() {
 		Node::Symbol(name) => names.get(name).copied().filter(|kind| kind.value),
+		_ => None,
+	}
+}
+
+/// `n + v` or `n - v` as the value of `n`: the compound operator and v
+fn self_update(name: &Node, value: &Node) -> Option<(Op, Node)> {
+	match value.drop_meta() {
+		Node::Key(left, op @ (Op::Add | Op::Sub), right) if left.drop_meta() == name.drop_meta() => {
+			Some((if *op == Op::Add { Op::AddAssign } else { Op::SubAssign }, right.as_ref().clone()))
+		}
 		_ => None,
 	}
 }
