@@ -284,8 +284,11 @@ impl WaspParser {
 			let rhs = match block_body {
 				Some(block) => block,
 				None if matches!(op, Op::Then | Op::Else) => {
+					let outer = self.branch_bp.replace(r_bp);
 					let branch = self.parse_expr(r_bp);
-					self.branch_assignment(branch, r_bp)
+					let branch = self.branch_assignment(branch, r_bp);
+					self.branch_bp = outer;
+					branch
 				}
 				None => self.parse_expr(r_bp),
 			};
