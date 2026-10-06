@@ -164,6 +164,8 @@ pub struct HostState {
 	pub in_task: bool,
 	/// The C pointers this run got (sqlite3 *, FILE *), handed to wasp as ids (notes/ffi_handles.md)
 	pub c_handles: crate::ffi::CHandles,
+	/// The WebAssembly modules the program imports, instantiated at their first call (wasm_modules.rs), by path
+	pub wasm_modules: std::collections::HashMap<String, wasmtime::Instance>,
 }
 
 #[cfg(feature = "native")]
@@ -180,6 +182,7 @@ impl HostState {
 			next_alloc: 65536, // Start allocation after initial memory region
 			wasi: wasmtime_wasi::WasiCtxBuilder::new().inherit_stdout().inherit_stderr().build_p1(),
 			c_handles: Default::default(),
+			wasm_modules: Default::default(),
 			in_task: false,
 		}
 	}

@@ -1,0 +1,37 @@
+// `import name` of a WebAssembly core module (name.wasm, or its text name.wat): its exported functions are called with
+// the types the module declares, its exported globals read as values, and its state lives in one instance per run
+use crate::is;
+use crate::common::fails_with;
+
+const FOURTY_TWO: &str = "import tests/fixtures/wasm/fourty_two; ";
+
+fn with_module(code: &str) -> String {
+	format!("{FOURTY_TWO}{code}")
+}
+
+#[test]
+fn an_exported_function_is_called_with_its_declared_types() {
+	is!(&with_module("twice(21)"), 42); // i64
+	is!(&with_module("half(5.0)"), 2.5); // f64
+	is!(&with_module("add32(2, 3)"), 5); // i32
+}
+
+#[test]
+fn an_exported_global_reads_as_its_value() {
+	is!(&with_module("ft * 2"), 84);
+	is!(&with_module("twice(ft) + 1"), 85);
+	fails_with(&with_module("ft = 3; ft"), "ft is a global of an imported module");
+}
+
+#[test]
+fn a_module_keeps_its_state_for_the_run() {
+	is!(&with_module("tick(); tick(); tick()"), 3);
+	is!("import tests/fixtures/wasm/counter.wasm; count_up(2); count_up(3)", 5);
+}
+
+#[test]
+fn a_module_is_found_by_name_or_path() {
+	is!("use \"tests/fixtures/wasm/counter.wasm\"; count_up(5)", 5);
+	is!("import \"tests/fixtures/wasm/fourty_two.wat\"; ft", 42);
+	fails_with("import tests/fixtures/wasm/no_such; 1", "module not found");
+}

@@ -64,6 +64,7 @@ pub mod real;
 pub mod units;
 pub mod fixed_width;
 pub mod modules;
+pub mod wasm_modules;
 #[cfg(feature = "native")]
 pub mod package_tools;
 pub mod web;
