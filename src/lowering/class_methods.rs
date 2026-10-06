@@ -26,6 +26,11 @@ const GLOBAL_KEYWORD: &str = "global";
 const VALUE_WORD: &str = crate::wasp_parser::CONSTRUCTOR_WORD;
 /// A property's setter `set age(v) {…}` is the method `age·set(self, v)`, run by `p.age = v`
 const SETTER_SUFFIX: &str = "·set";
+/// The value a method changing its object gives besides it, `pop·value` in the method and `pop·result` of a call, and
+/// the list mutations that give one
+const VALUE_SUFFIX: &str = "·value";
+const RESULT_SUFFIX: &str = "·result";
+const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
 /// Ruby's `include Walker` in a class body takes in a mixin
 const INCLUDE_WORD: &str = "include";
 /// The suffix of a method named like a type word: `double·method`
@@ -48,7 +53,7 @@ pub fn lower(node: Node) -> Node {
 	};
 	let traits = [shared_method_traits(&node), likenesses].concat();
 	let shared: Vec<String> = traits.iter().filter_map(trait_operation).collect();
-	let mut changing = vec![];
+	let mut changing = Changing::default();
 	let statics = static_members(&node);
 	let setters = property_setters(&node);
 	let node = lower_classes(node, &mut changing);
@@ -64,25 +69,55 @@ pub fn lower(node: Node) -> Node {
 	}
 }
 
-/// A method named like a type word (`double() := x*2`, P142: class methods are always allowed) under the name
-/// `double·method`, so its calls `c.double()` (and `double()` in the class body) never read as the cast `double(c)`
+/// A method named like a type word (`double() := x*2`, P142: class methods are always allowed) or like a list
+/// mutation (`pop() := items.pop()`) under the name `double·method`, so its calls never read as the conversion
+/// `double(c)` or the list's own `xs.pop()`. A type word is renamed wherever it is called as a method; a list word only
+/// on what holds an instance of a class defining it (a variable assigned one, `p:Stack`, self) and called bare in a
+/// class body, so `s.items.pop()` and `xs.pop()` of lists stay list mutations
 fn renamed_type_word_methods(node: Node) -> Node {
-	let mut names = vec![];
-	node.visit(&mut |part| if let Node::Type { body, .. } = part {
-		names.extend(class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name).filter(|name| crate::analyzer::type_word_kind(name).is_some()));
+	let (mut names, mut classes) = (vec![], vec![]);
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		let clashing: Vec<String> = class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name)
+			.filter(|name| crate::analyzer::type_word_kind(name).is_some() || crate::analyzer::is_list_mutating_method(name)).collect();
+		if !clashing.is_empty() {
+			classes.push(name.drop_meta().name());
+		}
+		names.extend(clashing);
 	});
-	if names.is_empty() { node } else { with_method_names(node, &names, false) }
+	if names.is_empty() {
+		return node;
+	}
+	let mut instances = vec![RECEIVER.to_string(), RECEIVER_ALIASES[0].to_string()];
+	node.visit(&mut |part| if let Node::Key(target, op, value) = part {
+		let Node::Symbol(variable) = target.drop_meta() else { return };
+		let class = match (op, value.drop_meta()) {
+			(Op::Assign | Op::Define, Node::List(items, Bracket::Round, _)) => items.first().map(|first| first.drop_meta().name()),
+			(Op::Assign | Op::Define, Node::Key(class, Op::None | Op::Colon, _)) => Some(class.drop_meta().name()),
+			(Op::Colon, Node::Symbol(class)) => Some(class.clone()),
+			_ => None,
+		};
+		if class.is_some_and(|class| classes.contains(&class)) {
+			instances.push(variable.clone());
+		}
+	});
+	with_method_names(node, &MethodNames { names, instances }, false)
+}
+
+/// The clashing method names, and the variables holding instances of the classes defining them
+struct MethodNames {
+	names: Vec<String>,
+	instances: Vec<String>,
 }
 
 fn method_name(name: &str) -> String {
 	format!("{name}{METHOD_SUFFIX}")
 }
 
-/// The type-word methods `names` renamed where they are defined and called: `c.double`, `c.double()`, and in a class
-/// body `double()` and the definition `double() := …`
-fn with_method_names(node: Node, names: &[String], in_class: bool) -> Node {
+/// The clashing methods renamed where they are defined and called: `c.double`, `c.pop()`, and in a class body
+/// `double()` and the definition `double() := …`
+fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node {
 	let renamed = |name: &Node| match name.drop_meta() {
-		Node::Symbol(word) if names.contains(word) => Some(Node::Symbol(method_name(word))),
+		Node::Symbol(word) if methods.names.contains(word) => Some(Node::Symbol(method_name(word))),
 		_ => None,
 	};
 	let renamed_call = |call: &Node| match call.drop_meta() {
@@ -91,20 +126,43 @@ fn with_method_names(node: Node, names: &[String], in_class: bool) -> Node {
 		}
 		_ => None,
 	};
-	let recurse = |child: Node| with_method_names(child, names, in_class);
+	// a type word is a method on anything but a number (`3.double()` stays the conversion), a list word on an instance
+	let calls_method = |receiver: &Node, member: &Node| {
+		let name = match member.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.first().map(|first| first.drop_meta().name()).unwrap_or_default(),
+			other => other.name(),
+		};
+		match crate::analyzer::is_list_mutating_method(&name) {
+			true => matches!(receiver.drop_meta(), Node::Symbol(variable) if methods.instances.contains(variable)),
+			false => !matches!(receiver.drop_meta(), Node::Number(_)),
+		}
+	};
+	let recurse = |child: Node| with_method_names(child, methods, in_class);
 	match node {
-		Node::Type { name, body } => Node::Type { name, body: Box::new(with_method_names(*body, names, true)) },
-		// `3.double()` of a number stays the conversion
-		Node::Key(receiver, Op::Dot, member) if !matches!(receiver.drop_meta(), Node::Number(_)) => {
+		Node::Type { name, body } => Node::Type { name, body: Box::new(with_method_names(*body, methods, true)) },
+		Node::Key(receiver, Op::Dot, member) if calls_method(&receiver, &member) => {
 			let member = renamed(&member).or_else(|| renamed_call(&member)).unwrap_or_else(|| recurse(*member));
+			Node::Key(Box::new(recurse(*receiver)), Op::Dot, Box::new(member))
+		}
+		// `items.pop()` of a list: the member keeps its name, its arguments may call methods
+		Node::Key(receiver, Op::Dot, member) => {
+			let member = match *member {
+				Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
+					Node::List(items[..1].iter().cloned().chain(items[1..].iter().cloned().map(recurse)).collect(), Bracket::Round, separator)
+				}
+				other => other,
+			};
 			Node::Key(Box::new(recurse(*receiver)), Op::Dot, Box::new(member))
 		}
 		Node::List(..) if in_class && renamed_call(&node).is_some() => {
 			let Node::List(items, bracket, separator) = renamed_call(&node).expect("guarded") else { unreachable!("a call") };
 			Node::List(items.into_iter().map(recurse).collect(), bracket, separator)
 		}
-		// `double := …`, a getter
-		Node::Key(head, Op::Define, body) if in_class && renamed(&head).is_some() => Node::Key(Box::new(renamed(&head).expect("guarded")), Op::Define, Box::new(recurse(*body))),
+		// `pop() := …`, or a getter `double := …`
+		Node::Key(head, Op::Define, body) if in_class && (renamed(&head).is_some() || renamed_call(&head).is_some()) => {
+			let head = renamed(&head).or_else(|| renamed_call(&head)).expect("guarded");
+			Node::Key(Box::new(head), Op::Define, Box::new(recurse(*body)))
+		}
 		other => other.map_children(recurse),
 	}
 }
@@ -526,7 +584,7 @@ fn trait_operation(declaration: &Node) -> Option<String> {
 
 /// `x.m` and `x.m(args)` of the methods `m` as calls `m(x)`, `m(x, args)`; of a method changing its object, on a variable,
 /// the update `x = m(x, args)`
-fn method_calls(node: Node, called: &[String], changing: &[String]) -> Node {
+fn method_calls(node: Node, called: &[String], changing: &Changing) -> Node {
 	let recurse = |child: Node| method_calls(child, called, changing);
 	let Node::Key(receiver, Op::Dot, member) = node else { return node.map_children(recurse) };
 	let receiver = recurse(*receiver);
@@ -539,13 +597,42 @@ fn method_calls(node: Node, called: &[String], changing: &[String]) -> Node {
 		return Node::Key(Box::new(receiver), Op::Dot, Box::new(recurse(*member)));
 	}
 	let call = Node::List([Node::Symbol(name.clone()), receiver.clone()].into_iter().chain(arguments).collect(), Bracket::Round, Separator::None);
+	let item = |pair: Node, position: i64| Node::Key(Box::new(pair), Op::Hash, Box::new(Node::int(position)));
 	match receiver.drop_meta() {
-		Node::Symbol(_) if changing.contains(&name) => Node::Key(Box::new(receiver), Op::Assign, Box::new(call)),
+		// `s.pop()`: the pair (value, changed object) of the call, the object stored back, the value given
+		Node::Symbol(_) if changing.giving_value.contains(&name) => {
+			let pair = Node::Symbol(format!("{name}{RESULT_SUFFIX}"));
+			Node::List(vec![
+				Node::Key(Box::new(pair.clone()), Op::Assign, Box::new(call)),
+				Node::Key(Box::new(receiver), Op::Assign, Box::new(item(pair.clone(), 2))),
+				item(pair, 1),
+			], Bracket::Round, Separator::Semicolon)
+		}
+		_ if changing.giving_value.contains(&name) => item(call, 1),
+		Node::Symbol(_) if changing.itself.contains(&name) => Node::Key(Box::new(receiver), Op::Assign, Box::new(call)),
 		_ => call,
 	}
 }
 
-fn lower_classes(node: Node, changing: &mut Vec<String>) -> Node {
+/// The methods changing their object: those giving it back (`inc() := n += 1`) and those giving a value besides
+/// (`pop() := items.pop()`), as the pair [value, object]
+#[derive(Default)]
+struct Changing {
+	itself: Vec<String>,
+	giving_value: Vec<String>,
+}
+
+impl Changing {
+	fn is_empty(&self) -> bool {
+		self.itself.is_empty() && self.giving_value.is_empty()
+	}
+
+	fn contains(&self, name: &String) -> bool {
+		self.itself.contains(name) || self.giving_value.contains(name)
+	}
+}
+
+fn lower_classes(node: Node, changing: &mut Changing) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			let mut lowered = Vec::with_capacity(items.len());
@@ -569,7 +656,7 @@ fn lower_classes(node: Node, changing: &mut Vec<String>) -> Node {
 
 /// A class declaration with methods in its body: the class with its fields only, and the methods as functions; the
 /// names of the methods that change their object go to `changing`
-fn split_class(node: &Node, changing: &mut Vec<String>) -> Option<(Node, Vec<Node>)> {
+fn split_class(node: &Node, changing: &mut Changing) -> Option<(Node, Vec<Node>)> {
 	let Node::Type { name, body } = node.drop_meta() else { return None };
 	let class = name.drop_meta().name();
 	let (statics, items): (Vec<Node>, Vec<Node>) = class_items(body).into_iter().partition(is_static);
@@ -599,11 +686,12 @@ fn split_class(node: &Node, changing: &mut Vec<String>) -> Option<(Node, Vec<Nod
 	functions.extend(methods.iter().map(|method| {
 		let (method_name, parameters, method_body) = method_parts(method).expect("partitioned");
 		let (function, changes) = function(&members, &method_name, parameters, method_body);
-		if changes {
-			changing.push(method_name);
-			return function; // it gives its changed object
+		match changes {
+			Change::Itself => changing.itself.push(method_name),
+			Change::GivingValue => changing.giving_value.push(method_name),
+			Change::None => return with_result_type(function, result_type(method)),
 		}
-		with_result_type(function, result_type(method))
+		function // it gives its changed object
 	}));
 	let field_list = Node::List(fields, Bracket::Curly, Separator::Space);
 	Some((Node::Type { name: name.clone(), body: Box::new(field_list) }, functions))
@@ -666,7 +754,7 @@ struct Members<'a> {
 
 /// `method(self:class, parameters…) := body`, the fields and methods in the body read from self, and whether it changes
 /// a field of self: then it gives the changed object, `(body; self)`
-fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) -> (Node, bool) {
+fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) -> (Node, Change) {
 	let class = members.class;
 	let parameter_names: Vec<String> = parameters.iter().map(|parameter| match parameter.drop_meta() {
 		Node::Key(name, Op::Colon, _) => name.drop_meta().name(),
@@ -679,14 +767,48 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 	let statics: Vec<&String> = members.statics.iter().filter(|name| unshadowed(name)).collect();
 	let readable = Readable { class, fields: [fields, getters].concat(), methods, statics };
 	let body = receiver_reads(body, &readable);
-	let changes = changes_receiver(&body);
+	let receiver = Node::Symbol(RECEIVER.to_string());
+	let changes = match changes_receiver(&body) {
+		false => Change::None,
+		true if gives_value(&body) => Change::GivingValue,
+		true => Change::Itself,
+	};
 	let body = match changes {
-		true => Node::List(vec![body, Node::Symbol(RECEIVER.to_string())], Bracket::None, Separator::Semicolon),
-		false => body,
+		Change::None => body,
+		Change::Itself => Node::List(vec![body, receiver], Bracket::None, Separator::Semicolon),
+		Change::GivingValue => {
+			let result = Node::Symbol(format!("{method}{VALUE_SUFFIX}"));
+			let pair = Node::List(vec![result.clone(), receiver], Bracket::Square, Separator::Space);
+			Node::List(vec![Node::Key(Box::new(result), Op::Assign, Box::new(body)), pair], Bracket::None, Separator::Semicolon)
+		}
 	};
 	let receiver = Node::Key(Box::new(Node::Symbol(RECEIVER.to_string())), Op::Colon, Box::new(Node::Symbol(class.to_string())));
 	let head = Node::List([vec![Node::Symbol(method.to_string()), receiver], parameters].concat(), Bracket::Round, Separator::None);
 	(Node::Key(Box::new(head), Op::Define, Box::new(body)), changes)
+}
+
+/// What a method does to its object: nothing, change it (giving it back), or change it and give a value
+#[derive(PartialEq)]
+enum Change {
+	None,
+	Itself,
+	GivingValue,
+}
+
+/// Does a method body that changes its object end in a value of its own: `items.pop()`, not `n += 1` or `items.add(x)`
+fn gives_value(body: &Node) -> bool {
+	let last = match body.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) | Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements.last(),
+		_ => Some(body),
+	};
+	let Some(last) = last else { return false };
+	match last.drop_meta() {
+		Node::Key(_, op, _) if matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign() => false,
+		// a body giving its object back already (a constructor)
+		Node::Symbol(name) if name == RECEIVER => false,
+		Node::Key(_, Op::Dot, call) => !mutating_call(call) || matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| GIVING_MUTATIONS.contains(&word.drop_meta().name().as_str()))),
+		_ => true,
+	}
 }
 
 /// The names a method body reads from its receiver: fields and getters (`area`), and methods it calls (`area()`)

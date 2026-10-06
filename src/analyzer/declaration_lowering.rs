@@ -430,6 +430,8 @@ pub(super) fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 /// Methods that append one element; with value semantics `x.add(v)` rebinds `x = x + [v]`
 pub(super) const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
 pub(super) const POP_METHOD: &str = "pop";
+/// The list a pop template takes from, replaced by the variable or field popped
+const POP_PLACE: &str = "pop_place";
 pub(super) const REMOVE_METHOD: &str = "remove";
 pub(super) const POP_TEMPORARY: &str = "pop_tmp";
 pub(super) const INSERT_METHOD: &str = "insert";
@@ -479,12 +481,17 @@ pub(super) fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a No
 	}
 }
 
-/// `xs.pop()` when xs is a variable: the last item, removed from xs (Python's list.pop())
+/// `xs.pop()` when xs is a variable or a field of one (`s.items`): the last item, removed from xs (Python's list.pop())
 pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
-	let Node::Symbol(name) = list.drop_meta() else { return None };
+	if !is_place(list) {
+		return None;
+	}
 	match call.drop_meta() {
-		Node::List(items, _, _) if matches!(items.as_slice(), [method] if is_word(method, POP_METHOD)) => Some(crate::wasp_parser::parse(&format!(
-			"({POP_TEMPORARY} = {name}#count({name}); {name} = slice({name}, 0, count({name})-1); {POP_TEMPORARY})"))),
+		Node::List(items, _, _) if matches!(items.as_slice(), [method] if is_word(method, POP_METHOD)) => {
+			let template = crate::wasp_parser::parse(&format!(
+				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = slice({POP_PLACE}, 0, count({POP_PLACE})-1); {POP_TEMPORARY})"));
+			Some(crate::law::substitute(&template, &std::collections::HashMap::from([(POP_PLACE.to_string(), list.clone())])))
+		}
 		_ => None,
 	}
 }
