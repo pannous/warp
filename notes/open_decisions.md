@@ -162,6 +162,11 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   now, but maybe we reserve it for special things later": `<-` is reserved; the assignment reading may give way to a
   special meaning later, so docs and examples never use `<-`. FYI (worker, no question): Haskell `twice x = x * 2;
   twice 4` defines a function when a later statement uses the name and the body uses every parameter (e6f1cbbbe).
+- P146 (card hijack-stdlib, warp-06) next under "hijacking existing standard libraries": C libraries compiled to
+  WebAssembly, imported as core modules with the C header's types (char* texts, pointers), so the same `use zlib`
+  runs natively, sandboxed and in the browser (plan: notes/stdlib_connectors.md "Status 2026-10-06").
+  Dropped as answered by P124: a block/lambda argument writing a captured variable (`total = 0; each_twice { |x|
+  total += x }`) shares it, no `global` needed (warp-93, branch ruby-yield).
 - P142 (scope of P141, asked by warp-e4) the definition error applies only where the builtin would win, i.e. the
   definition could never take effect (casts like `double`, operators, type names). Library words (`add`, `map`,
   `count`) may be redefined and the user's version wins; class methods are always allowed (called as `x.add`). User:
