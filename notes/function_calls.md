@@ -119,6 +119,13 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   Round 6 still open: variadics `vararg xs: Int`, `xs: Int...`, `params int[] xs`; C# `(int x) => …` and PHP
   `fn($x) => …` lambdas; a default naming an earlier parameter `(a, b = a * 2)`; JS `reduce(f, 0)`; Scala currying
   `add(x)(y)`; Swift returning `{ $0 + k }`; Kotlin `"hi $name"` (a bare `$` is text by D1).
+- Batch 22: C# `(int a, int b) => …` and PHP `fn($x) => …` lambdas (lambdas.rs `c_style_parameters`); typed rest
+  parameters `*xs: int`, Swift `_ xs: Int...` (variadic.rs `starred`, declarations.rs partial_application guard); a
+  lambda default naming an earlier parameter `(a, b = a * 2)` was the phrase definition `a b = a * 2`
+  (lower_spaced_definitions now only reads space phrases). Cards: p143-misses (`def f(x) = …` with parameters is a
+  `:=` definition; lower_prefix_calls knows implicit definitions) and P149 (user): an untyped parameter used in
+  arithmetic rules out a truth value, so `f x op y` is `(f x) op y`; the ambiguity stays for a body accepting
+  anything (`same(x) := x`). lazy-range-power: a bound of arithmetic `1..10^12` stays a descriptor.
 
 ## Open
 - Board cards: functions-ruby-yield (warp-93); functions-sort-op,

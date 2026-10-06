@@ -54,10 +54,12 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	let program = all_calls(program);
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
+	implicit_definitions(&program, &mut found); // `square := it*it` and `f = x => …` take arguments too (P143)
 	let mut arities: HashMap<String, Arity> = HashMap::new();
 	for definition in &found {
 		let count = definition.params.len();
-		let typed = definition.params.first().is_some_and(rules_out_a_truth_value);
+		// P149 (user): an untyped parameter the body uses in arithmetic (`x + 1`, `it*it`) is no truth value either
+		let typed = definition.params.first().is_some_and(|first| rules_out_a_truth_value(first) || is_arithmetic_operand(&definition.body, &first.name()));
 		let arity = arities.entry(definition.name.clone()).or_insert(Arity { fewest: count, most: count, typed_first: typed });
 		*arity = Arity { fewest: arity.fewest.min(count), most: arity.most.max(count), typed_first: arity.typed_first && typed };
 	}
@@ -183,6 +185,14 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			}
 			let call = Node::List(vec![head, *left], Bracket::None, Separator::Space);
 			Node::Key(Box::new(nest_prefix_calls(call, arities)), op, Box::new(nest_prefix_calls(*right, arities)))
+		}
+		// the same phrase the parser grouped the other way, `(f 3) == 9`, when it did not know f takes a value: as
+		// ambiguous when the body accepts anything (`f := print it`)
+		Node::Key(left, op, right) if op.is_comparison() && matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first))) => {
+			let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
+			let (name, argument, right_text) = (items[0].drop_meta().name(), items[1].serialize(), right.serialize());
+			let message = format!("{name} {argument} {op} {right_text} is ambiguous; write ({name} {argument}) {op} {right_text} or {name}({argument} {op} {right_text})");
+			crate::diagnostic::Diagnostic::at(&left, message).into_error()
 		}
 		Node::List(items, Bracket::None, Separator::Colon) if items.len() > 1 => {
 			let mut items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
