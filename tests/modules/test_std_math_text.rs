@@ -16,3 +16,10 @@ fn use_text_brings_its_words() {
 	is!("use text; \"[\" + pad_right(\"ab\", 5) + \"]\"", "[ab   ]");
 	is!("use text; repeat(\"ab\", 3)", "ababab");
 }
+
+#[test]
+fn use_text_formats_a_template() {
+	is!("use text; format(\"{} has {} items\", [\"cart\", 3])", "cart has 3 items");
+	is!("use text; format(\"{}{}\", [1, 2])", "12");
+	is!("use text; format(\"none\", [])", "none");
+}

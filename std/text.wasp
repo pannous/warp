@@ -2,3 +2,12 @@
 repeat(t, n) := n times t
 pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
 pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
+// format("{} has {} items", ["cart", 3]): each {} takes the next value
+format(template, values) := {
+	parts = split(template, "{}")
+	result = parts[0]
+	for i in 1 ..< count(parts) {
+		result = result + values[i - 1] + parts[i]
+	}
+	result
+}
