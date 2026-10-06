@@ -243,6 +243,7 @@ pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 
 /// The lambda of `head => body`: TypeScript's result type `(a: number): number => …`, Swift's `(x: Int) -> Int in body`
 fn arrow_parts(head: &Node, body: &Node) -> Option<Lambda> {
+	let head = &c_style_parameters(head);
 	let (left, result_type) = match head.drop_meta() {
 		Node::Key(parameters, Op::Colon, result) if matches!(parameters.drop_meta(), Node::List(_, Bracket::Round, _)) => (parameters.as_ref(), Some(result.as_ref().clone())),
 		_ => (head, None),
@@ -262,6 +263,26 @@ fn arrow_parts(head: &Node, body: &Node) -> Option<Lambda> {
 	let written: Vec<Node> = match left.drop_meta() { Node::List(items, _, _) => items.clone(), other => vec![other.clone()] };
 	let declares = written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon | Op::Assign, _)));
 	Some(Lambda { params, body, written: if declares { written } else { vec![] }, result_type })
+}
+
+/// PHP's `fn($x) => …` without its keyword, C#'s `(int x, int y) => …` as `(x: int, y: int)`
+fn c_style_parameters(head: &Node) -> Node {
+	let typed = |parameter: &Node| match parameter.drop_meta() {
+		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [kind, name] if is_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_))) => {
+			Node::Key(Box::new(words[1].clone()), Op::Colon, Box::new(words[0].clone()))
+		}
+		_ => parameter.clone(),
+	};
+	match head.drop_meta() {
+		Node::List(words, _, _) if matches!(words.as_slice(), [keyword, _] if matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))) => c_style_parameters(&words[1]),
+		Node::List(words, Bracket::Round, Separator::Space) if words.len() == 2 && is_type_word(&words[0]) => Node::List(vec![typed(head)], Bracket::Round, Separator::Colon),
+		Node::List(words, Bracket::Round, separator) if words.iter().any(|word| typed(word) != *word) => Node::List(words.iter().map(typed).collect(), Bracket::Round, separator.clone()),
+		_ => head.clone(),
+	}
+}
+
+fn is_type_word(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if crate::analyzer::type_word_kind(word).is_some())
 }
 
 /// `{it*it}`: a block that is no object; its parameter is `it` when the body uses it
