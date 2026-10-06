@@ -17,3 +17,10 @@ later; the program waits for its tasks before it ends (tasks::TaskTable::join_al
   every millisecond; C must read shared values (P106), a copied variable is a loud error. `cancel last` stops it.
   `await job or y` is `try await job else y`. Parser precedence: `x = after n == 5 return v` needs parentheses for now
   (card after-precedence).
+- A go block's inputs come in renamed, `n` as the parameter `n·in`: a parameter named like a function of the program
+  read as that function (card param-shadows).
+- `@parallel xs.map(f)` (and `xs.map(f) @parallel` once the parser annotates the expression before a trailing
+  attribute): `(jobs = []; for item in xs { jobs.add(go { f(item) }) }; await all jobs)`, f a function or a function
+  value; results in order.
+- A task that fails while nobody awaits it ends the run with its error (tasks::TaskTable::join_all, host.js joinTasks);
+  a stopped task does not.
