@@ -18,8 +18,8 @@ const ENTRY_POINTS: [&str; 2] = ["main", "_start"];
 /// The custom section describing the program's C calls for a host that cannot see an import's types
 /// (web/playground/host.js, which calls libc.wasm for `c` and imported modules): a line `module\tname\tparameters\tresult`
 /// per import. Parameter letters: `t` a text (a NUL-terminated copy in the program's memory), `l` the length of the text
-/// before it (strcmp's pairs, then not NUL-terminated), `i` an i64, `n` any other number; result: `t` a text Node built
-/// by the host, `i` an i64, `n` a number or none
+/// before it (strcmp's pairs, then not NUL-terminated), `n` a number; result: `t` a text Node built by the host, `n` a
+/// number or none. libc.wasm has the program's number types (web/playground/lib/libc.c)
 pub const C_CALLS_SECTION: &str = "warp.c_calls";
 /// The C library whose calls the browser host makes through libc.wasm
 const LIBC: &str = "c";
@@ -166,15 +166,14 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 
 /// The C_CALLS_SECTION of these imports: libc's, and the exports of modules that take or give a C text
 pub fn c_calls<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
-	let number = |value_type: &wasm_encoder::ValType| if *value_type == wasm_encoder::ValType::I64 { 'i' } else { 'n' };
 	let line = |import: &FfiSignature, texts: &[bool], text_result: bool| {
 		let pairs = crate::ffi::string_pair_count(import.name);
-		let parameters: String = import.params.iter().enumerate().map(|(index, value_type)| match index {
+		let parameters: String = (0..import.params.len()).map(|index| match index {
 			index if index < 2 * pairs => if index % 2 == 0 { 't' } else { 'l' },
 			index if texts.get(index - pairs).copied().unwrap_or(false) => 't',
-			_ => number(value_type),
+			_ => 'n',
 		}).collect();
-		let result = if text_result { 't' } else { import.results.first().map_or('n', number) };
+		let result = if text_result { 't' } else { 'n' };
 		format!("{}\t{}\t{parameters}\t{result}\n", import.library, import.name)
 	};
 	let lines: std::collections::BTreeSet<String> = imports.filter_map(|import| match import.library {

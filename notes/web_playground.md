@@ -79,10 +79,13 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
     index.html (web/uniscript did: its page's links read as entries, `use project` failed)
 - Need packages/ cloned by a native run first (a fresh worktree has none): test_packages::a_package_is_fetched_once_into_packages,
   test_text_bytes::read_loads_a_file_as_bytes
-- libc in the browser (host.js `c`, 2026-10-04): rand, srand, abs, labs, strlen, strcmp, strncmp, atoi, atol, atof;
-  the shims follow src/ffi.rs signatures: i64 results (size_t, long) are BigInts, strcmp/strncmp get (pointer, length)
-  pairs, the others C strings read up to their zero byte (tests/ffi/test_libc_results.rs); anything else of libc still
-  throws "c.X is not available in the browser"
+- libc in the browser (P147, 2026-10-06): host.js `c` calls web/playground/lib/libc.wasm, wasi-libc built by
+  lib/build_libc.sh (21 KB, deployed with the page: pages.yml SITE_FILES `lib`), one instance per worker. Its exports
+  have the native FFI's types (lib/libc.c wraps strlen, strncmp, strspn, strcspn, atol, labs to 64 bits), so numbers
+  pass through; texts cross by the program's custom section warp.c_calls (src/wasm_modules.rs c_calls: `t` a
+  NUL-terminated text, `l` the length after strcmp's text, `n` a number; result `t` a text): copied into libc.wasm's
+  malloc and freed after the call, a char * result read back (NULL is ø). Functions: lib/libc.h; anything else of libc
+  throws "c.X is not available in the browser". The hand-written shims of 2026-10-04 are gone.
 - Samples: tests/programs/test_samples_run_cleanly.rs runs every sample but raylib/SDL in both; 2026-10-04 all 64 give
   the same result natively and in the browser
 - Ideas: should_panic needs panic=unwind (nightly -Zbuild-std with wasm exception handling); git/lean/process tests could

@@ -12,14 +12,13 @@ const STDERR = 2;
 /// where host.read and the test runner's file system find files: the repository root the static server serves
 const FILE_ROOT = new URL("../../", self.location.href).href;
 /// C names of libm functions (ffi "m") that Math spells differently
-/// libc's RAND_MAX on glibc and macOS: rand() is 0…RAND_MAX
-const RAND_MAX = 2147483647;
+const LIBC_URL = new URL("lib/libc.wasm", self.location.href).href; // libc for `use c` (lib/build_libc.sh, P147)
 const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a % b, ceil: Math.ceil, floor: Math.floor };
 
 const HTTP_NOT_FOUND = "HTTP status 404";
 const MODULE_PATH = /\.(wasm|wat)$/; // src/wasm_modules.rs MODULE_EXTENSIONS
 const SETTER_PREFIX = "set "; // src/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
-const TEXT_CROSSINGS_SECTION = "warp.module_texts"; // src/wasm_modules.rs TEXT_CROSSINGS_SECTION
+const C_CALLS_SECTION = "warp.c_calls"; // src/wasm_modules.rs C_CALLS_SECTION
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 
 const utf8 = new TextEncoder();
@@ -89,15 +88,6 @@ function programImports(holder, hooks) {
 		while (bytes[end] !== 0 && end < bytes.length) end++;
 		return bytes.slice(pointer, end);
 	};
-	const bytes = (pointer, length) => new Uint8Array(program().memory.buffer).slice(pointer, pointer + length);
-	// C's comparison: the difference of the first differing bytes, a text's end counting as byte 0
-	const compareBytes = (a, b) => {
-		for (let index = 0; index < Math.max(a.length, b.length); index++) {
-			if (a[index] !== b[index]) return (a[index] ?? 0) - (b[index] ?? 0);
-		}
-		return 0;
-	};
-	const cNumber = pointer => parseFloat(new TextDecoder().decode(cString(pointer)));
 	const fetchUrl = (pointer, length, timeout) => {
 		const url = text(pointer, length);
 		return hostResult(program(), () => getSync(url, timeout), `fetch ${url}`);
@@ -275,22 +265,7 @@ function programImports(holder, hooks) {
 		},
 		m: new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] }),
 		// the pure part of libc (ffi "c"): numbers, and C strings read up to their zero byte
-		c: {
-			rand: () => Math.floor(Math.random() * RAND_MAX),
-			srand: () => {},
-			abs: Math.abs,
-			labs: value => value < 0n ? -value : value,
-			// size_t and long are i64: BigInt; texts come as (pointer, length) pairs (src/ffi.rs signatures)
-			strlen: pointer => BigInt(cString(pointer).length),
-			strcmp: (a, aLength, b, bLength) => compareBytes(bytes(a, aLength), bytes(b, bLength)),
-			strncmp: (a, aLength, b, bLength, count) => {
-				const prefix = Number(count);
-				return compareBytes(bytes(a, Math.min(aLength, prefix)), bytes(b, Math.min(bLength, prefix)));
-			},
-			atoi: pointer => Math.trunc(cNumber(pointer)) | 0,
-			atol: pointer => BigInt(Math.trunc(cNumber(pointer)) || 0),
-			atof: pointer => cNumber(pointer) || 0,
-		},
+		c: libcImports(holder),
 	};
 	// anything else (native FFI libraries) is missing in the browser: say which, when the program calls it
 	const missing = (module, name) => () => { throw new Error(`${module}.${name} is not available in the browser`); };
@@ -701,31 +676,59 @@ function cText(memory, address) {
 	return bytes.slice(0, end < 0 ? bytes.length : end);
 }
 
-// the C texts the program's imports from modules cross (src/wasm_modules.rs text_crossings), by "module\tname"
-function textCrossings(run) {
-	if (!run.textCrossings) {
-		const lines = WebAssembly.Module.customSections(run.module, TEXT_CROSSINGS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
-		run.textCrossings = new Map(lines.filter(Boolean).map(line => line.split("\t")).map(([module, name, parameters, result]) =>
-			[`${module}\t${name}`, { parameters: [...parameters].map(letter => letter === "t"), result: result === "t" }]));
+// the program's C calls (src/wasm_modules.rs c_calls) by "module\tname": per parameter t a text, l its length, n a number
+function cCalls(run) {
+	if (!run.cCalls) {
+		const lines = WebAssembly.Module.customSections(run.module, C_CALLS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
+		run.cCalls = new Map(lines.filter(Boolean).map(line => line.split("\t")).map(([module, name, parameters, result]) =>
+			[`${module}\t${name}`, { parameters: [...parameters], result: result === "t" }]));
 	}
-	return run.textCrossings;
+	return run.cCalls;
 }
 
-// a call of a C function of a module that takes or gives texts: a text argument (a NUL-terminated copy in the
-// program's memory) is copied into a block of the module's malloc, a char * result read back as a text (NULL is ø)
-function callWithTexts(holder, exports, member, crossing, values, path) {
+// a C function of a module, called with the program's values: each text (a NUL-terminated copy in the program's memory,
+// or a pointer and length) is copied into a block of the module's malloc, freed after the call; a char * result is
+// read back as a text of the program (NULL is ø)
+function callC(holder, exports, member, call, values, what) {
 	const program = holder.exports;
-	const moduleArguments = values.map((value, index) => {
-		if (!crossing.parameters[index]) return value;
-		if (!exports.malloc) throw new Error(`${path} exports no malloc(size) to copy a text argument into`);
-		const text = cText(program.memory, value);
+	const blocks = [];
+	const moduleArguments = [];
+	values.forEach((value, index) => {
+		const letter = call?.parameters[index];
+		if (letter === "l") return; // the length of the text before it
+		if (letter !== "t") return moduleArguments.push(value);
+		if (!exports.malloc) throw new Error(`${what} takes a text, but its module exports no malloc(size) to copy it into`);
+		const text = call.parameters[index + 1] === "l" ? new Uint8Array(program.memory.buffer, value, values[index + 1]).slice() : cText(program.memory, value);
 		const block = exports.malloc(text.length + 1);
 		new Uint8Array(exports.memory.buffer).set([...text, 0], block);
-		return block;
+		blocks.push(block);
+		moduleArguments.push(block);
 	});
 	const result = member(...moduleArguments);
-	if (!crossing.result) return result;
-	return buildValue(program, treeOfPlain(result === 0 ? null : decode(cText(exports.memory, result))));
+	const value = call?.result ? buildValue(program, treeOfPlain(result === 0 ? null : decode(cText(exports.memory, result)))) : result;
+	if (exports.free) blocks.forEach(block => exports.free(block));
+	return value;
+}
+
+// libc.wasm, instantiated once per worker: its WASI imports serve only stdio, which nothing here reaches
+let libc;
+function libcExports() {
+	const refused = name => () => { throw new Error(`libc.wasm called WASI ${name}`); };
+	libc ??= new WebAssembly.Instance(new WebAssembly.Module(getSync(LIBC_URL, 0, true)),
+		{ wasi_snapshot_preview1: new Proxy({}, { get: (_, name) => refused(String(name)) }) }).exports;
+	return libc;
+}
+
+// `use c` in the browser: the program's C calls go to libc.wasm (natively warp opens the system libc)
+function libcImports(holder) {
+	return new Proxy({}, {
+		get: (_, name) => (...values) => {
+			const exports = libcExports();
+			const member = exports[name];
+			if (typeof member !== "function") throw new Error(`c.${name} is not available in the browser (web/playground/lib/build_libc.sh lists libc.wasm's functions)`);
+			return callC(holder, exports, member, cCalls(holder.run).get(`c\t${name}`), values, `c.${name}`);
+		},
+	});
 }
 
 // the exports of a WebAssembly module the program imports by path (src/wasm_modules.rs link): instantiated once per
@@ -751,8 +754,8 @@ function moduleImports(holder, hooks, path) {
 			const member = exports[name];
 			if (member instanceof WebAssembly.Global) return member.value;
 			if (!member) throw new Error(`${path} exports no ${name}`);
-			const crossing = textCrossings(holder.run).get(`${path}\t${name}`);
-			return crossing ? callWithTexts(holder, exports, member, crossing, values, path) : member(...values);
+			const call = cCalls(holder.run).get(`${path}\t${name}`);
+			return call ? callC(holder, exports, member, call, values, `${path} ${name}`) : member(...values);
 		},
 	});
 }

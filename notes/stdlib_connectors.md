@@ -161,6 +161,7 @@ Plan (assumption until the Interviewer answers; smallest step first):
 
 Done (P146, user decision as recommended, 2026-10-06): step 1 (texts by the header, native and browser: custom section
 warp.module_texts), step 3 in-repo: tests/fixtures/wasm/libc_text.wasm is wasi-libc's text and number functions, the
-same program gives the same results natively and in the browser. Open: step 2 (struct pointers as handles), step 4
-(`use c` in the browser through that module instead of host.js's `c` shims; where the .wasm lives: a package repository
-would be a new public repo, so asked first), zlib and other libraries that need a real build.
+same program gives the same results natively and in the browser. Step 4 (P147): `use c` in the browser calls web/playground/lib/libc.wasm (notes/web_playground.md); native keeps
+dlopen, and reads the macOS SDK's _string.h now (its `_LIBC_CSTR` annotations dropped: strstr, strchr, strcspn were
+undefined natively). Open: step 2 (struct pointers as handles, out-pointers into a module's memory), zlib and other
+libraries that need a real build.
