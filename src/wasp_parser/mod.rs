@@ -46,7 +46,7 @@ const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", 
 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 /// Modifiers of other languages with no meaning in wasp: skipped with a note (user decision P78)
-const FOREIGN_MODIFIERS: [&str; 18] = ["public", "private", "protected", "internal", "static", "extern", "external", "C", "inline",
+const FOREIGN_MODIFIERS: [&str; 19] = ["public", "private", "protected", "internal", "static", "extern", "external", "C", "inline", "local",
 	"virtual", "override", "abstract", "constexpr", "volatile", "thread_local", "synchronized", "transient", "native"];
 /// Modifiers with a wasp meaning that change nothing before a function definition (a function is global and constant)
 const DEFINITION_MODIFIERS: [&str; 7] = ["global", "export", "import", "const", "final", "mutable", "mut"];
