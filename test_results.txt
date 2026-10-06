@@ -136,6 +136,13 @@ PASSED:
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_parameter
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
   ✓ control::test_many_tasks::hundreds_of_tasks_run_at_once
+  ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
+  ✓ control::test_named_broadcast::a_named_event_reaches_another_program
+  ✓ control::test_named_broadcast::a_program_hears_its_own_named_event
+  ✓ control::test_named_broadcast::a_send_is_a_statement_of_no_value
+  ✓ control::test_named_broadcast::a_text_alone_sends_a_named_event_without_data
+  ✓ control::test_named_broadcast::raise_stays_inside_the_program
+  ✓ control::test_named_broadcast::send_to_is_broadcast_on
   ✓ control::test_not_condition_block::a_negated_condition_in_a_loop
   ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
   ✓ control::test_object_blocks::test_a_computed_entry_warns_where_it_is_written
@@ -2649,4 +2656,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-20 ignored, 2644 passed, 0 failed, 2644 total tested
+20 ignored, 2651 passed, 0 failed, 2651 total tested
