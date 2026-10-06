@@ -25,6 +25,8 @@ const GLOBAL: &str = "global";
 pub(crate) const NONLOCAL: &str = "nonlocal";
 const NEEDLESS_CHARGING_TOPIC: &str = "needless-charging";
 const EFFECTFUL_GETTER_TOPIC: &str = "effectful-getter";
+/// A getter body up to this length is quoted in its warning (`t runs clock() at every read`); a longer one is "its code"
+const QUOTED_BODY_LENGTH: usize = 24;
 /// names the compiler makes join their parts with it (`closure_lambda_1·captured·0`); the parser reads it as `*`
 const GENERATED_NAME_MARK: char = '·';
 
@@ -378,7 +380,8 @@ fn note_charging(definition: &Definition, statements: &[Node], main: &Scope, rep
 	}
 	// a body the compiler already rewrote (a returned lambda is `closure_new(closure_lambda_1)`) is no text the user
 	// wrote: a hint never shows it
-	if reads_any(&function.body, &|word| word == crate::closures::CLOSURE_NEW || word.contains(GENERATED_NAME_MARK)) {
+	let generated = |word: &str| word == crate::closures::CLOSURE_NEW || word.contains(GENERATED_NAME_MARK) || word.contains(crate::function_values::LAMBDA_PREFIX);
+	if generated(&function.name) || reads_any(&function.body, &generated) {
 		return Ok(());
 	}
 	let value = written_text(&function.body);
@@ -402,7 +405,12 @@ fn note_charging(definition: &Definition, statements: &[Node], main: &Scope, rep
 
 /// `t := clock()`: the clock is read at every `t`, which may be meant, or `t = clock()` for one reading
 fn warn_effectful_getter(name: &str, value: &str, written: &str, at: &Node) -> Result<(), Node> {
-	let question = Ask::new(EFFECTFUL_GETTER_TOPIC, format!("{name} runs {value} at every read; write {name} = {value} for one value"),
+	let quoted = value.chars().count() <= QUOTED_BODY_LENGTH && !value.contains('\n');
+	let message = match quoted {
+		true => format!("{name} runs {value} at every read; write {name} = {value} for one value"),
+		false => format!("{name} runs its code at every read; write {name} = … for one value"),
+	};
+	let question = Ask::new(EFFECTFUL_GETTER_TOPIC, message,
 		vec![reading("at every read", written), reading("one value", &format!("{name} = {value}"))], Fallback::Warning)
 		.written(written).at_node(at);
 	ask(&question).map(|_| ())

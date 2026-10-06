@@ -16,6 +16,10 @@ use Instruction as I;
 
 pub(super) const INSTANCE_SUFFIX: &str = "·instance";
 
+/// The struct ABI of a program (the emitter's struct_abi, struct_results): by function, which parameters are structs of
+/// which class, and the class of the struct it gives back
+pub(super) type StructAbi = (HashMap<String, Vec<Option<String>>>, HashMap<String, String>);
+
 /// The struct type of the instances of one class held as GC structs, and the kind each field is stored as
 #[derive(Clone)]
 pub(super) struct InstanceType {
@@ -240,7 +244,7 @@ impl WasmGcEmitter {
 	/// a value that only looks like a P (duck typing) may lack fields the body never reads. A function that changes p or
 	/// gives it back is called only as `x = f(x, …)` of a struct variable x: the struct it changes is the one replaced,
 	/// so no caller sees a change by reference, and the result is a struct (`c.inc()` of a method changing c)
-	pub(super) fn find_struct_abi(&self, program: &Node) -> (HashMap<String, Vec<Option<String>>>, HashMap<String, String>) {
+	pub(super) fn find_struct_abi(&self, program: &Node) -> StructAbi {
 		let functions = self.directly_called_functions();
 		let mut candidates: Vec<StructFunction> = functions.iter().filter_map(|function| self.struct_function(function)).collect();
 		// greatest fixpoint: a function giving a struct needs callers whose variables are structs, which they are only

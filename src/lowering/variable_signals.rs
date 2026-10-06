@@ -33,6 +33,8 @@ const OLD_WORDS: [&str; 4] = ["old", "previous", "was", "before"];
 const OLD_REASON: &str = "`old` is the value before the write (P148)";
 /// `change_old_0`: the value an `on change` listener saw last, for its body's `old`
 const OLD_PREFIX: &str = "change_old_";
+/// `watched·0`: the `:=` value of the first expression an `on change` listener watches
+const WATCHED_PREFIX: &str = "watched·";
 /// `once_fired_0`: whether the first once listener ran
 const FIRED_PREFIX: &str = "once_fired_";
 /// `whenever_held_0`, `whenever_was_0`: whether the first whenever's condition holds now and held before the write
@@ -112,6 +114,7 @@ pub(crate) fn edge_check(held: &str, was: &str, condition: Node, body: Node) -> 
 }
 
 pub fn lower(node: Node) -> Node {
+	let node = with_watched_expressions(node, &mut 0);
 	let main_statements = match node.drop_meta() {
 		Node::List(items, bracket, separator) if is_statement_list(bracket, separator) => items.clone(),
 		_ => vec![],
@@ -424,6 +427,40 @@ pub(crate) fn listener_parts(statement: &Node) -> Option<(ListenerWord, Node, No
 	Some((listener_word, condition, body))
 }
 
+/// `on change b + c {…}` (Vue's watch(() => b + c)) watches the expression as a `:=` value of its own:
+/// `watched·0 := b + c; on change watched·0 {…}`; `on set` the same
+fn with_watched_expressions(node: Node, count: &mut usize) -> Node {
+	let node = node.map_children(|child| with_watched_expressions(child, count));
+	let Node::List(items, bracket, separator) = node.drop_meta() else { return node };
+	if !is_statement_list(bracket, separator) || !items.iter().any(|statement| watched_expression(statement).is_some()) {
+		return node;
+	}
+	let items = items.iter().flat_map(|statement| match watched_expression(statement) {
+		Some((listener_word, expression, body)) => {
+			let name = Node::Symbol(format!("{WATCHED_PREFIX}{count}"));
+			*count += 1;
+			let derived = Node::Key(Box::new(name.clone()), Op::Define, Box::new(expression));
+			vec![derived, Node::List(vec![Node::Symbol(ON_WORD.to_string()), listener_word, name, body], Bracket::None, Separator::Space)]
+		}
+		None => vec![statement.clone()],
+	});
+	Node::List(items.collect(), bracket.clone(), separator.clone())
+}
+
+/// `on change b + c {body}`, arriving as `on change (b + (c {body}))`: the word set or change, the expression and the
+/// body. A path (`p.age`) and `x: body` are no expressions
+fn watched_expression(statement: &Node) -> Option<(Node, Node, Node)> {
+	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let [on, listener_word, subject] = ungrouped(items).try_into().ok()?;
+	let watches = word(&on) == ON_WORD && [SET_WORD, CHANGE_WORD].contains(&word(&listener_word).as_str());
+	let expression = matches!(subject.drop_meta(), Node::Key(_, op, _) if !matches!(op, Op::Colon | Op::Dot));
+	if !(watches && expression) {
+		return None;
+	}
+	let (expression, body) = trailing_block(&subject)?;
+	Some((listener_word, expression, body))
+}
+
 /// `f(s) := on change s {…}` arrives grouped as `(on change) (s {…})`: its parts in one row
 fn ungrouped(items: &[Node]) -> Vec<Node> {
 	let is_group = |item: &Node| matches!(item.drop_meta(), Node::List(_, Bracket::None, _));
@@ -451,6 +488,7 @@ pub(crate) fn with_old(body: &Node, main_variables: &HashSet<String>) -> Option<
 	if read.is_empty() {
 		return None;
 	}
+	crate::normalize::set_position_of(body);
 	read.iter().filter(|word| word.as_str() != OLD_WORDS[0]).for_each(|alias| crate::normalize::hint(alias, OLD_WORDS[0], OLD_REASON));
 	let body = body.clone();
 	Some(move |old: &Node| crate::law::substitute(&body, &read.iter().map(|word| (word.clone(), old.clone())).collect()))

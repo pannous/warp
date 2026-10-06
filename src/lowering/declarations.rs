@@ -250,6 +250,7 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 					let racing = all_word.name() == ANY_WORD;
 					let first = all_word.name() == FIRST_WORD;
 					if first {
+						crate::normalize::set_position_of(list);
 						crate::diagnostic::educate_once(FIRST_TOPIC, "await first […]", "await any […]", "await first is the first task's result; for the first to finish: await any […]");
 					}
 					let Node::List(listed, list_bracket, list_separator) = list.drop_meta().clone() else { unreachable!("guarded") };
@@ -1492,9 +1493,10 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let mut labeled_names = vec![];
 	let mut parameters: Vec<Node> = parameters.map(|parameter| labeled_parameter(parameter, &mut labeled_names)).collect();
 	let body = with_label_names(body, labeled_names);
-	// `func add1(x int)`: the one parameter and its type arrive as two words
+	// `func add1(x int)`: the one parameter and its type arrive as two words; `func total(s Shape)` of a declared type
 	if let [parameter, type_word] = parameters.as_slice() {
-		if matches!(parameter.drop_meta(), Node::Symbol(_)) && is_type_word(type_word) {
+		let is_type_name = matches!(type_word.drop_meta(), Node::Symbol(word) if word.starts_with(char::is_uppercase));
+		if matches!(parameter.drop_meta(), Node::Symbol(_)) && (is_type_word(type_word) || is_type_name) {
 			parameters = vec![Node::Key(Box::new(parameter.clone()), Op::Colon, Box::new(type_word.clone()))];
 		}
 	}
@@ -1590,7 +1592,7 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 			Some(result_type) => Node::Key(Box::new(head), Op::Colon, result_type.clone()),
 			None => head,
 		};
-		Node::Key(Box::new(head), op.clone(), body.clone())
+		Node::Key(Box::new(head), *op, body.clone())
 	};
 	Some(Node::List(definitions.iter().map(method).collect(), Bracket::None, Separator::Semicolon))
 }
@@ -1713,13 +1715,14 @@ fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
 	let name = typed_parameter_name(typed).expect("a labeled parameter has a name");
 	// user 2026-10-06: wasp names a parameter once, Swift's label and name are redundant; ported code still compiles
 	let written = format!("{label} {}", typed.serialize());
+	let preferred = if label == WILDCARD_LABEL { typed.clone() } else { renamed_parameter(typed, label) };
+	crate::normalize::set_position_of(&parameter);
+	crate::normalize::hint(&written, &preferred.serialize(), "wasp names a parameter once, no label");
 	if label == WILDCARD_LABEL {
-		crate::normalize::hint(&written, &typed.serialize(), "wasp names a parameter once, no label");
-		return typed.clone();
+		return preferred;
 	}
-	crate::normalize::hint(&written, &renamed_parameter(typed, label).serialize(), "wasp names a parameter once, no label");
 	labeled_names.push(Node::Key(Box::new(name.clone()), Op::Assign, Box::new(Node::Symbol(label.to_string()))));
-	renamed_parameter(typed, label)
+	preferred
 }
 
 /// The body reading every labeled parameter by its label: `name` → `person` (an alias `name = person` would hide that

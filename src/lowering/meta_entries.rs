@@ -145,6 +145,7 @@ fn hint_shadowed_meta(node: &Node) {
 			let shadowed = value.meta_entries().any(|(name, _)| name == field) && has_field(value, field);
 			if shadowed {
 				let reason = format!("{object} has both the field {field} and the meta key @{field}: the field wins");
+				crate::normalize::set_position_of(part);
 				crate::normalize::hint(&format!("{object}.{field}"), &format!("{object}.@{field}"), &reason);
 			}
 		}

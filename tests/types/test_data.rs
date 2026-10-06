@@ -175,3 +175,17 @@ fn test_node_data_metadata() {
 	println!("Tuple debug: {:?}", t);
 	println!("Struct debug: {:?}", c);
 }
+
+// found by the kitchen sink: an object whose fields are separated by commas on some lines and by newlines or
+// semicolons between them (JSON5 style, "commas optional") lost its field access
+#[test]
+fn an_object_mixing_commas_and_newlines_reads_its_fields() {
+	crate::is!("p = { a: 1, b: 2; c: 3 }; p.c", 3);
+	crate::is!("p = { a: 1\n b: 2, c: 3 }; p.c + p.a", 4);
+	crate::is!("p = {\n  f: \"x\",\n  d: \"y\";\n  age: 30\n}; p.age", 30);
+}
+
+#[test]
+fn an_object_of_rows_with_a_quoted_name_reads_its_fields() {
+	crate::is!("p = { \"a\": \"y\"\n age: 30 }; p.age", 30);
+}

@@ -326,10 +326,10 @@ pub(super) fn infer_forwarded_parameters(ctx: &mut Context) {
 	}
 }
 
+/// The functions, imports and closure facts of a program; the same tree is analysed once (analysis_memo.rs, P91).
 /// Recognizes patterns:
 /// - `name(param) = body` → Key(List[name, param], Assign, body)
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
-/// The functions, imports and closure facts of a program; the same tree is analysed once (analysis_memo.rs, P91)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	crate::analysis_memo::analysed(ctx, node, analyse_user_functions);
 }
@@ -832,7 +832,7 @@ pub(super) fn register_user_function(ctx: &mut Context, short_name: &str, params
 	// a sibling calls a nested function too: `def sibling(){ inner() }` beside `def inner()` in outer
 	let nested_prefix = format!("{name}{NESTED_DEF_SEPARATOR}");
 	for function in ctx.user_functions.values_mut().filter(|function| function.name.starts_with(&nested_prefix)) {
-		function.body = Box::new(rename_nested_calls(function.body.as_ref().clone(), &renames));
+		*function.body = rename_nested_calls(function.body.as_ref().clone(), &renames);
 	}
 	if let Some(parent) = enclosing {
 		ctx.enclosing_functions.insert(name.clone(), parent.to_string());
