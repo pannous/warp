@@ -86,14 +86,16 @@ Next:
 Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:
 Stack push pop peek size, Queue enqueue dequeue peek size, Deque push_back push_front pop_back pop_front size,
 Set(xs) add has remove size, Counter(xs) add get most_common (tests/modules/test_std_collections.rs). Module only,
-not prelude (prelude question queued with warp-e9). A used std module's classes go in before class_methods
-(modules::insert_std_classes, its own source pass), since modules::resolve runs after class_methods; use_std_module
-leaves them out. `new Set(xs)`, `collections.Counter(xs)` and the foreign class names (STD_CLASS_ALIASES) work with a
+not prelude (prelude question queued with warp-e9). A used module's classes go in before class_methods
+(modules::insert_module_classes, its own source pass), since modules::resolve runs after class_methods; the loader
+leaves those modules' classes out (EARLY_CLASS_MODULES). Same for a file module's classes (`use shapes`, all its
+classes; a std module's only those the program names); a class the program declares itself wins. A module used only
+inside another module still loads its classes late (their methods unlowered). `new Set(xs)`, `collections.Counter(xs)` and the foreign class names (STD_CLASS_ALIASES) work with a
 note. Other languages' method names (append appendleft popleft offer poll addFirst pollLast contains delete shift …,
 class_methods METHOD_ALIASES) are the class's methods with a note, on a class not defining that name; `len(s)`,
 `count(s)`, `s.len()` of an instance are its size method. OrderedMap() is `{}` (wasp maps keep insertion order),
 OrderedDict and LinkedHashMap its aliases (modules STD_ALIASES). Not yet: `from collections import Counter` (no
-`from … import` form at all), a user module's classes (same order problem as std's: insert_std_classes for files).
+`from … import` form at all).
 
 ## 7. Adapters (async, warp-f0)
 How a module word is backed when wasp alone cannot do it. All six mechanisms exist (notes/stdlib_connectors.md,

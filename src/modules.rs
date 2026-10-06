@@ -57,30 +57,57 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		None => Ok(program),
 	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
 		.map(|program| with_needed_definitions(program, loader.std_definitions));
+	EARLY_CLASS_MODULES.with(|modules| modules.borrow_mut().clear()); // for this program only
 	resolved.unwrap_or_else(|failure| failure)
 }
 
-/// The classes of the standard modules the program uses and names (`use collections; s = Stack()`), in front of it.
-/// class_methods, which turns a class's methods into functions and its method calls into theirs, runs before `resolve`
-/// loads a module's other definitions (use_std_module leaves the classes out)
-pub fn insert_std_classes(program: Node) -> Node {
+/// The classes of the modules the program uses, in front of it: those of a file (`use shapes`) all, those of a standard
+/// module the program names (`use collections; s = Stack()`). class_methods, which turns a class's methods into
+/// functions and its method calls into theirs, runs before `resolve` loads a module's other definitions; the loader
+/// then leaves these modules' classes out (EARLY_CLASS_MODULES). A class the program declares itself wins.
+pub fn insert_module_classes(program: Node) -> Node {
 	let program = crate::welcome_forms::qualified_module_calls(program);
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
-	let definitions: Vec<Node> = statements(program.clone()).iter()
-		.filter_map(used_module)
-		.filter(|used| used.import == Import::Use && loader.find(&used.name).is_none())
-		.filter_map(|used| std_module(&used.name))
-		.flat_map(|source| crate::normalize::without_hints(|| statements(WaspParser::parse(source))))
-		.collect();
-	if definitions.is_empty() {
-		return program;
-	}
-	let defined: Vec<String> = definitions.iter().filter_map(declared_name).collect();
 	let own_names: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
+	let (mut std_definitions, mut file_classes, mut early) = (vec![], vec![], HashSet::new());
+	for used in statements(program.clone()).iter().filter_map(used_module).filter(|used| used.import == Import::Use) {
+		let (path, source, is_std) = match loader.find(&used.name) {
+			Some(path) => match crate::web::read_text(&path.to_string_lossy()) {
+				Some(source) => (path, source, false),
+				None => continue,
+			},
+			None => match std_module(&used.name) {
+				Some(source) => (std_path(&used.name), source.to_string(), true),
+				None => continue,
+			},
+		};
+		let module = WaspParser::parse(&source);
+		if module.first_error().is_some() {
+			continue; // the loader reports it
+		}
+		let definitions = crate::normalize::without_hints(|| statements(module));
+		match is_std {
+			true => std_definitions.extend(definitions),
+			false => file_classes.extend(definitions.into_iter().filter(is_class)),
+		}
+		early.insert(path.canonicalize().unwrap_or(path));
+	}
+	EARLY_CLASS_MODULES.with(|modules| *modules.borrow_mut() = early);
+	let is_foreign = |class: &Node| declared_name(class).is_none_or(|name| !own_names.contains(&name));
+	let defined: Vec<String> = std_definitions.iter().filter_map(declared_name).collect();
 	let aliases: Vec<(&str, &str)> = STD_ALIASES.into_iter().filter(|(alias, word)| defined.iter().any(|name| name == word) && !own_names.contains(*alias)).collect();
-	let classes = definitions.into_iter().filter(is_class).collect();
-	with_needed_definitions(with_std_aliases(program, &aliases), classes)
+	let program = with_std_aliases(program, &aliases);
+	let std_classes = std_definitions.into_iter().filter(|definition| is_class(definition) && is_foreign(definition)).collect();
+	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
+	let program = with_needed_definitions(program, std_classes);
+	match file_classes.is_empty() {
+		true => program,
+		false => match program {
+			Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List([file_classes, statements].concat(), Bracket::None, separator),
+			single => Node::List([file_classes, vec![single]].concat(), Bracket::None, Separator::Semicolon),
+		},
+	}
 }
 
 /// `HashSet(xs)` as `Set(xs)`, with a note
@@ -131,6 +158,8 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 thread_local! {
 	/// The file being compiled; its folder is in scope (D15). None for inline code
 	static PROGRAM_FILE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+	/// The modules whose classes insert_module_classes put in front of the program: the loader leaves them out
+	static EARLY_CLASS_MODULES: std::cell::RefCell<HashSet<PathBuf>> = std::cell::RefCell::new(HashSet::new());
 }
 
 /// `path` as written in the program: a relative path is next to the program's file, or in the working directory for
@@ -360,7 +389,7 @@ impl<'a> Loader<'a> {
 	/// no style hints
 	fn use_std_module(&mut self, name: &str, source: &str) -> Result<Vec<Node>, Node> {
 		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(name), source))?;
-		self.std_definitions.extend(definitions.into_iter().filter(|definition| !is_class(definition)));
+		self.std_definitions.extend(definitions);
 		Ok(vec![])
 	}
 
@@ -388,8 +417,9 @@ impl<'a> Loader<'a> {
 		let module = self.resolve(module);
 		self.including_directory = outer_directory;
 		let statements = statements(module?);
+		let classes_early = EARLY_CLASS_MODULES.with(|modules| modules.borrow().contains(&path.canonicalize().unwrap_or_else(|_| path.clone())));
 		Ok(match import {
-			Import::Use => statements.into_iter().filter(is_declaration).collect(),
+			Import::Use => statements.into_iter().filter(|statement| is_declaration(statement) && !(classes_early && is_class(statement))).collect(),
 			Import::Include => statements,
 		})
 	}

@@ -128,8 +128,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 49] = [
 	crate::word_operators::lower,
 	// `x | f` (pipes.rs) before any pass reads the or
 	crate::pipes::lower,
-	// the classes of a used standard module (`use collections`) before class_methods lowers them with the program's
-	crate::modules::insert_std_classes,
+	// the classes of used modules (`use shapes`, `use collections`) before class_methods lowers them with the program's
+	crate::modules::insert_module_classes,
 	// methods in a class body become functions over the class before any pass reads the body as fields
 	crate::class_methods::lower,
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
