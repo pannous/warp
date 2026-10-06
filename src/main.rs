@@ -25,6 +25,8 @@ const DEFAULT_EXECUTABLE_NAME: &str = "out";
 const RUN_PREFIX: &str = "run ";
 const RUNTIME_STUB_NAME: &str = "warp-runtime";
 const RUNTIME_STUB_VARIABLE: &str = "WARP_RUNTIME_STUB";
+/// The crate of the stub in warp's source checkout
+const RUNTIME_STUB_CRATE: &str = "crates/warp-runtime";
 #[cfg(unix)]
 const EXECUTABLE_MODE: u32 = 0o755;
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
@@ -349,18 +351,43 @@ fn standalone_output_path(target: &str) -> std::path::PathBuf {
     }
 }
 
-/// The runtime an executable is built from: `WARP_RUNTIME_STUB`, else `warp-runtime` next to this warp. P104 (user):
-/// never a copy of warp itself (~120 MB); without a stub nothing is written
+/// The runtime an executable is built from: `WARP_RUNTIME_STUB`, else `warp-runtime` next to this warp (or next to the
+/// file a link to warp points to), else built once from warp's own source checkout (issue #10: it just works). P104
+/// (user): never a copy of warp itself (~120 MB); without a stub nothing is written
 fn runtime_stub_path() -> Result<std::path::PathBuf, String> {
     if let Ok(path) = env::var(RUNTIME_STUB_VARIABLE) {
         return Ok(std::path::PathBuf::from(path));
     }
     let warp = env::current_exe().map_err(|failure| failure.to_string())?;
-    let stub = warp.with_file_name(RUNTIME_STUB_NAME);
-    match stub.is_file() {
-        true => Ok(stub),
-        false => Err(format!("no runtime stub {}: build it with `cargo build --release -p warp-runtime`, or name one in {RUNTIME_STUB_VARIABLE}", stub.display())),
+    let resolved = fs::canonicalize(&warp).unwrap_or_else(|_| warp.clone());
+    let next_to_warp = [&warp, &resolved].map(|binary| binary.with_file_name(RUNTIME_STUB_NAME));
+    match next_to_warp.iter().find(|stub| stub.is_file()) {
+        Some(stub) => Ok(stub.clone()),
+        None => build_runtime_stub(&next_to_warp[0]),
     }
+}
+
+/// `cargo build -p warp-runtime` in warp's source checkout, in warp's own profile: the stub lands next to a warp built
+/// there; its path as cargo reports it
+fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    if !source.join(RUNTIME_STUB_CRATE).is_dir() {
+        return Err(format!("no runtime stub {}: put warp-runtime there or name one in {RUNTIME_STUB_VARIABLE} (the warp source {} that would build it is gone)", expected.display(), source.display()));
+    }
+    eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
+    let mut build = std::process::Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()));
+    build.args(["build", "--quiet", "--message-format=json", "-p", RUNTIME_STUB_NAME, "--bin", RUNTIME_STUB_NAME]).current_dir(source);
+    if !cfg!(debug_assertions) {
+        build.arg("--release");
+    }
+    let output = build.output().map_err(|failure| format!("cannot run cargo to build the runtime stub: {failure}"))?;
+    if !output.status.success() {
+        return Err(format!("building the runtime stub failed (cargo build -p {RUNTIME_STUB_NAME} in {}): {}", source.display(), String::from_utf8_lossy(&output.stderr).trim()));
+    }
+    String::from_utf8_lossy(&output.stdout).lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .find_map(|message| message["executable"].as_str().filter(|path| path.ends_with(RUNTIME_STUB_NAME)).map(std::path::PathBuf::from))
+        .ok_or_else(|| format!("cargo built {RUNTIME_STUB_NAME} but named no executable"))
 }
 
 /// Parse tree as s-expression: `(op left right)` for keys, `[items]` for lists
