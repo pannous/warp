@@ -2,7 +2,7 @@
 // A function never says how it is called: the caller decides with `go`. A task stands in for its value,
 // `await` says where the program waits for it.
 
-fetch_user(id) := { sleep(300); "user $id" }
+fetch_user(id) := { sleep(300); "user \(id)" }
 fetch_posts(id) := { sleep(300); [id, id + 1] }
 
 // the same function, called plainly: it simply runs
