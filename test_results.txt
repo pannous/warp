@@ -504,6 +504,7 @@ PASSED:
   ✓ ffi::test_host_words::test_clock_and_sleep
   ✓ ffi::test_host_words::test_random_stays_in_range
   ✓ ffi::test_libc_results::atol_returns_a_long
+  ✓ ffi::test_libc_results::comment_prose_in_a_header_declares_nothing
   ✓ ffi::test_libc_results::libc_text_and_character_functions
   ✓ ffi::test_libc_results::strcmp_orders_texts
   ✓ ffi::test_libc_results::strlen_inside_a_program
@@ -552,6 +553,7 @@ PASSED:
   ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
   ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
+  ✓ functions::test_argument_labels::a_label_compiles_with_a_note_to_name_the_parameter_once
   ✓ functions::test_argument_labels::a_label_names_the_argument_and_the_name_is_read_inside
   ✓ functions::test_argument_labels::a_labeled_parameter_of_a_function_type
   ✓ functions::test_argument_labels::an_underscore_label_takes_the_argument_without_a_name
@@ -1715,6 +1717,10 @@ PASSED:
   ✓ parser::test_parser_sugar::elvis_takes_the_left_unless_it_is_falsy
   ✓ parser::test_parser_sugar::final_constant_and_val_bind_once_like_const
   ✓ parser::test_parser_sugar::hex_word_reads_a_hexadecimal_number
+  ✓ parser::test_references::a_dollar_digit_stays_a_parameter
+  ✓ parser::test_references::a_path_follows_a_reference
+  ✓ parser::test_references::bracketed_attributes_before_a_body_are_meta_entries
+  ✓ parser::test_references::references_survive_a_round_trip
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_required_fields::spaced_fields_keep_the_required_mark
@@ -2069,6 +2075,11 @@ PASSED:
   ✓ types::test_cast_bugs::a_runtime_value_as_string
   ✓ types::test_cast_bugs::a_text_as_list_is_its_characters
   ✓ types::test_cast_bugs::nonsense_casts_are_loud
+  ✓ types::test_class_aliases::class_modifiers_say_class
+  ✓ types::test_class_aliases::foreign_constructor_names_say_value
+  ✓ types::test_class_aliases::foreign_operator_methods_say_the_wasp_name
+  ✓ types::test_class_aliases::member_modifiers_and_field_keywords_are_dropped
+  ✓ types::test_class_aliases::the_wasp_words_give_no_note
   ✓ types::test_class_cases_ported::a_list_field_grows_by_add
   ✓ types::test_class_cases_ported::a_method_calls_another_method_without_self
   ✓ types::test_class_cases_ported::a_method_reads_a_field_with_a_default
@@ -2112,6 +2123,8 @@ PASSED:
   ✓ types::test_class_methods::methods_are_no_fields
   ✓ types::test_class_mixins::a_class_takes_in_a_mixin
   ✓ types::test_class_mixins::a_class_takes_in_several_mixins_and_overrides
+  ✓ types::test_class_operators::a_class_defines_an_operator_by_its_name
+  ✓ types::test_class_operators::operators_as_python_and_kotlin_write_them
   ✓ types::test_class_properties::a_getter_reads_like_a_field
   ✓ types::test_class_properties::a_setter_runs_when_the_property_is_assigned
   ✓ types::test_construction_checks::a_call_construction_checks_its_fields_as_the_braces_do
@@ -2783,4 +2796,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2778 passed, 0 failed, 2778 total tested
+19 ignored, 2791 passed, 0 failed, 2791 total tested
