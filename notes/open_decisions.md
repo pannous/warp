@@ -166,6 +166,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   recommended "(f x) == y for all functions"; warp-a8 had implemented (f x) == y for user functions only). Assumed
   (undoable): statement words (print, return, assert) still take the whole expression (`print 3 == 3` prints true);
   the wiki examples `square [1 2 3] == [1 4 9]` (wiki/all.md, wiki/broadcasting.md) get the parentheses.
+  Refined (user, same day): "But maybe it's not ambiguous when square takes a number and not a bool." Types decide
+  first: when the parameter type rules out the comparison's bool (`square number = …`, `f(x:int)`), `f x == y` is
+  `(f x) == y` without a message; the error stays only when both readings type-check (parameter untyped/any or
+  bool). So `square 3 == 9` is true and the wiki examples keep their bare form.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
   of x`, `for f in listeners of x`), `clear listeners of x`; one listener is removed by its name:
   `alarm = whenever t > 30 {…}` then `remove alarm from listeners of t`.
