@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 204] = [
+const CASES: [(&str, &str); 219] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -209,6 +209,21 @@ twice 4"#, r#"8"#),
 	(r#"def sq(x : Int) : Int; x * x; end; sq(3)"#, r#"9"#),
 	(r#"fun Int.twice() = this * 2; 3.twice()"#, r#"6"#),
 	(r#"class Adder { k: int; def call(x) { x + k } }; a = Adder(k: 2); a.call(1)"#, r#"3"#),
+	(r#"int sq(int x) => x * x; sq(5)"#, r#"25"#),
+	(r#"let sq x = x * x; sq 6"#, r#"36"#),
+	(r#"let add a b = a + b; add 2 3"#, r#"5"#),
+	(r#"def f(a, *, b): return a * b; f(2, b=5)"#, r#"10"#),
+	(r#"def f(*args): return len(args); f(1, 2, 3)"#, r#"3"#),
+	(r#"def fact(n) = n <= 1 ? 1 : n * fact(n - 1); fact(5)"#, r#"120"#),
+	(r#"fact(n) = n <= 1 ? 1 : n * fact(n - 1); fact(5)"#, r#"120"#),
+	(r#"compose = (f, g) => x => f(g(x)); inc = x => x + 1; dbl = x => x * 2; compose(inc, dbl)(5)"#, r#"11"#),
+	(r#"apply = (f, x) => f(x); apply(x => x * 3, 4)"#, r#"12"#),
+	(r#"[1, 2, 3].map(x => x * x).filter(x => x > 1)"#, r#"[4 9]"#),
+	(r#"[1, 2, 3].reduce((a, b) => a + b)"#, r#"6"#),
+	(r#"square x := x * x; sum square [1 2 3]"#, r#"14"#),
+	(r#"func greet(name: String = "you") -> String { "hi \(name)" }; greet()"#, r#"hi you"#),
+	(r#"xs = [3, 1, 2]; xs.sort()"#, r#"[1 2 3]"#),
+	(r#"[3, 1, 2].sort()"#, r#"[1 2 3]"#),
 ];
 
 /// The value as `warp eval` shows it: a text without its quotes

@@ -433,7 +433,7 @@ impl Lowering {
 	fn iteration_method(&self, method: &Node) -> Option<(&'static Iteration, Vec<Node>)> {
 		let Node::List(items, _, _) = method.drop_meta() else { return None };
 		let (word, arguments) = items.split_first()?;
-		let iteration = with_start(self.iteration_of(word)?, arguments.len() - 1);
+		let iteration = with_start(self.iteration_of(word)?, arguments.len().checked_sub(1)?); // `xs.sort()` has no function
 		(arguments.len() == iteration.extra_arguments + 1).then(|| (iteration, arguments.to_vec()))
 	}
 
