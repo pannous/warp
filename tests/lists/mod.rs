@@ -41,3 +41,4 @@ mod test_map_starts;
 mod test_counting_word_variables;
 mod test_float_array_writes;
 mod test_deep_index_assignment;
+mod test_linear_append;
