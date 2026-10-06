@@ -20,7 +20,7 @@ pub use numbers::*;
 pub use strings::*;
 pub use utils::*;
 
-// fucking s!("to_string")
+// s!(x) is x.to_string()
 // better use "wtf".s() from extensions::strings
 #[macro_export]
 macro_rules! s {
