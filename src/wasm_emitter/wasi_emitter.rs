@@ -90,7 +90,8 @@ impl WasmGcEmitter {
 	/// a runtime text is a type error named after `word`
 	fn emit_written_value(&mut self, func: &mut Function, value: &Node, writer: &'static str, word: &str) {
 		match self.get_type(value) {
-			Kind::List | Kind::Key | Kind::Symbol | Kind::Empty => {
+			// Data: a number whose Int or Float shows at run time (node arithmetic), held as a Node
+			Kind::List | Kind::Key | Kind::Symbol | Kind::Empty | Kind::Data => {
 				let held = self.emit_dynamic_text(func, value);
 				self.emit_call(func, writer);
 				Self::emit_list(func, &[I::Drop, I::LocalGet(held), I::RefAsNonNull]);
