@@ -126,6 +126,11 @@ run natively and in the browser.
 
 ### First adapter steps (async)
 1. Done: json (A): `use json` brings parse_json and to_json, native and browser (tests/modules/test_std_json.rs).
+1b. Done: file and os (A, std_io): `use file` brings write, append_file, exists, list_files, lines (read stays a
+   prelude word); `use os` brings env. Natively the file system (paths as read resolves them) and the environment; in
+   the browser host.js keeps written files in memory while the page is open (read sees them first, then the served
+   repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
+   method `xs.append(v)` a program using `use file` still needs (question Q6). args waits for a CLI way to pass them.
 2. hash (B): embed zlib.wasm/xxhash.wasm and a sha256.wasm in warp, `use hash` resolves to them in both hosts.
 3. regex (A): Rust regex + JS RegExp behind matches/find/find_all/replace_all, with the common-subset check.
 4. Later: the AOT stub linking B modules (they need no compiler), then hash and compress work in executables.
@@ -139,3 +144,5 @@ run natively and in the browser.
      compiled to wasm, never by python3/node/a system library (default) vs. allowing std modules that need them.
 - Q5 (adapters) Where Rust regex and JS RegExp differ, the regex module is their common subset with a loud error for
      the rest (default) vs. one regex engine compiled to wasm for both hosts (identical, but ~300 KB more per page).
+- Q6 (adapters) file words: `append_file(path, text)` (default; `append` stays the list method) vs. a qualified
+     `file.append(path, text)` only, once qualified access exists (Q2).
