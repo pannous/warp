@@ -760,6 +760,7 @@ PASSED:
   ✓ lists::test_decimal_list_elements::a_decimal_element_takes_part_in_arithmetic
   ✓ lists::test_decimal_list_elements::a_loop_walks_decimal_elements
   ✓ lists::test_decimal_list_elements::the_extremum_of_a_decimal_list
+  ✓ lists::test_deep_index_assignment::a_deep_index_assignment_keeps_the_stack
   ✓ lists::test_dynamic_range::a_list_grows_from_empty_by_adding_lists
   ✓ lists::test_dynamic_range::a_range_with_variable_bounds_is_a_list
   ✓ lists::test_dynamic_range::a_recursive_list_function_in_a_ternary
@@ -775,6 +776,8 @@ PASSED:
   ✓ lists::test_empty_list_count::the_count_of_an_empty_list_is_zero
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
   ✓ lists::test_find_any_all::find_any_and_all_test_the_elements
+  ✓ lists::test_float_array_writes::numbers_written_into_a_float_array_are_floats
+  ✓ lists::test_float_array_writes::walking_a_typed_array_reads_every_item
   ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
   ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
   ✓ lists::test_hash_range_slices::hash_slices_are_one_based
@@ -2427,4 +2430,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2422 passed, 0 failed, 2422 total tested
+23 ignored, 2425 passed, 0 failed, 2425 total tested
