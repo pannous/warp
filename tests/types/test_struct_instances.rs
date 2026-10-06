@@ -65,7 +65,7 @@ fn a_field_write_of_a_struct_variable_sets_the_field() {
 	let calls = called_function_names(&format!("{POINT}p.x = 7; p.y += 1; p.x * p.y"));
 	assert!(!calls.iter().any(|name| ["map_find", "struct_body", "field_with"].contains(&name.as_str())), "{calls:?}");
 	is!(&format!("{POINT}p.x = 7; p.y += 1; p.x * p.y"), 35);
-	is!(&format!("{POINT}i=0; while i<3 {{ p.x += i; i++ }}; p"), "Point{x:6 y:4}");
+	is!(&format!("{POINT}i=0; while i<3 {{ p.x += i; i++ }}; string(p)"), "Point{x:6 y:4}");
 	is!(&format!("{POINT}p.x++; p.y--; p.x - p.y"), 1);
 	is!(&format!("{POINT}q = p; q.x = 9; p.x"), 3); // value semantics: q is a copy
 }
