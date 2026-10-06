@@ -165,6 +165,17 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   when the timeout happens; a timeout itself stays silent.
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P165 Kotlin-style soft keywords (user's proposal: with so many synonyms in so many situations, allow overwriting
+  keywords except the main ones). Hard keywords, never redefinable: control flow (if, then, else, while, for, in,
+  return, break, continue), declarations (def/fun/fn, class, var/let/const/val, global), literal values (true,
+  false, ø/null/nil) and modules (use, import, include). Every other word (emit, send, init, new, root, listeners,
+  every, …) is soft. User: soft keywords "should not be completely redefinable, just usable in a narrow context".
+  Interpreted (undoable): a soft keyword may name a local variable, parameter, field or method (`send = 3` inside a
+  function, `class Mail{ send(){…} }`, `{emit: 1}`), and there the user's name wins; at top level it can't be
+  redefined globally (loud error naming another name). Each use as a name gives a got-it note ("send is a keyword;
+  here it is your variable").
+- P166 (functions, warp-64) element-wise operators `.+ .- .* ./ .^` on a plain number act as the plain operator
+  (`6 ./ 2` → 3, `sq = @(x) x.^2; sq(3)` → 9), like MATLAB and NumPy; on lists they still map.
 - P163 (signals, warp-ed; from the user's remark that raise and throw mean errors) `emit alarm{level: 3}` runs the
   `on alarm` handlers and continues; an emit nobody handles does nothing. `raise`/`throw` are always errors, so an
   `on X` handler no longer turns `raise X` into an event (replaces P110's dual meaning). fire/trigger/signal are
