@@ -28,6 +28,11 @@ impl WaspParser {
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
 			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/variadic.rs)
 			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => self.parse_starred(3),
+			// Python's `**kw`: the keyword arguments as one object (src/lowering/variadic.rs)
+			'*' if self.peek_char(1) == '*' && self.is_identifier_start(2) => match self.parse_starred(2) {
+				Node::Symbol(name) => Node::Symbol(format!("{}{name}", crate::tuples::STARRED)),
+				other => other,
+			},
 			'*' if self.is_identifier_start(1) => self.parse_starred(1),
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),

@@ -64,3 +64,13 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
 
 ## Open
 - Board cards: closure-devirtualize; functions-sort-op and functions-key went to warp-14.
+
+## Python and Ruby definitions (cards functions-python, functions-ruby-def)
+- `def f(*args): body` (colon body, Python): declarations::keyword_definition reads `def head: body` as `head := body`
+  early, so variadic.rs sees the rest parameter (it ran before the later pass that knew the colon form).
+- `def f(x, **kw): …` (Python): the parser reads `**kw` as the symbol `**kw` (atoms.rs); variadic.rs passes the named
+  arguments no fixed parameter takes as one object, `f(5, a=1)` → `f(5, {a: 1})` (`{}` when none). Spreading `f(**m)`
+  into a call is not supported.
+- Ruby `def f(a, b: 2) a * b end` and `def f(a)` ⏎ statements ⏎ `end`, also `def h` without parentheses:
+  declarations::end_definitions (start of lower_c_functions) gives them a `{…}` body. Nested `if … then … end` keeps
+  its own `end` (the parser takes it).

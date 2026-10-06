@@ -2,7 +2,9 @@
 //! - `def total(xs...)`, `total(...xs)`, `total(*xs)` (Julia/Swift, JS, Python): the last parameter is the list of the
 //!   arguments the others leave, `total(1, 2, 3)` → `total([1 2 3])`;
 //! - `f(...xs)`, `f(xs...)`, `f(*xs)` spread a list: into a rest parameter it is passed as it is (`[2] + xs` after
-//!   other leftover arguments), into fixed parameters as `xs#1, xs#2, …` up to the parameter count.
+//!   other leftover arguments), into fixed parameters as `xs#1, xs#2, …` up to the parameter count;
+//! - `def f(x, **kw)` (Python): the last parameter is the object of the named arguments no other parameter takes,
+//!   `f(5, a=1)` → `f(5, {a: 1})`.
 
 use crate::analyzer::call_name;
 use crate::node::{Bracket, Node, Separator};
@@ -10,17 +12,18 @@ use crate::operators::Op;
 use crate::tuples::STARRED;
 use std::collections::HashMap;
 
-/// A function's parameter count, and whether its last parameter is a rest parameter
-#[derive(Clone, Copy)]
+/// A function's fixed parameters, whether a rest parameter follows them, and whether a keyword parameter `**kw` ends them
+#[derive(Clone)]
 struct Signature {
-	fixed: usize,
+	fixed: Vec<String>,
 	rest: bool,
+	keywords: bool,
 }
 
 pub fn lower(node: Node) -> Node {
 	let mut signatures = HashMap::new();
 	collect_signatures(&node, &mut signatures);
-	if !signatures.values().any(|signature| signature.rest) && !has_spread(&node) {
+	if !signatures.values().any(|signature| signature.rest || signature.keywords) && !has_spread(&node) {
 		return node;
 	}
 	Variadic { signatures }.rewrite(node)
@@ -29,7 +32,7 @@ pub fn lower(node: Node) -> Node {
 /// `*xs`, `...xs` (parsed as `*xs`) and `xs...` (an open range of xs): the name xs
 fn starred(node: &Node) -> Option<String> {
 	match node.drop_meta() {
-		Node::Symbol(name) => name.strip_prefix(STARRED).filter(|name| !name.is_empty()).map(str::to_string),
+		Node::Symbol(name) => name.strip_prefix(STARRED).filter(|name| !name.is_empty() && !name.starts_with(STARRED)).map(str::to_string),
 		Node::Key(name, Op::To, end) if matches!(end.drop_meta(), Node::Empty) => match name.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
 			_ => None,
@@ -47,12 +50,49 @@ fn definition_head(node: &Node) -> Option<&[Node]> {
 	}
 }
 
+/// `**kw`: the name kw
+fn double_starred(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Symbol(name) => name.strip_prefix(STARRED)?.strip_prefix(STARRED).filter(|name| !name.is_empty()).map(str::to_string),
+		_ => None,
+	}
+}
+
+/// A parameter without its stars
+fn unstarred(parameter: &Node) -> Node {
+	double_starred(parameter).or_else(|| starred(parameter)).map(Node::Symbol).unwrap_or_else(|| parameter.clone())
+}
+
 fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Signature>) {
 	node.visit(&mut |part| {
 		let Some(head) = definition_head(part) else { return };
-		let rest = head.last().is_some_and(|last| head.len() > 1 && starred(last).is_some());
-		signatures.insert(head[0].name(), Signature { fixed: head.len() - 1 - rest as usize, rest });
+		let mut parameters = &head[1..];
+		let keywords = parameters.last().is_some_and(|last| double_starred(last).is_some());
+		parameters = &parameters[..parameters.len() - keywords as usize];
+		let rest = parameters.last().is_some_and(|last| starred(last).is_some());
+		parameters = &parameters[..parameters.len() - rest as usize];
+		let fixed = parameters.iter().map(|parameter| parameter_name(parameter).unwrap_or_default()).collect();
+		signatures.insert(head[0].name(), Signature { fixed, rest, keywords });
 	});
+}
+
+fn parameter_name(parameter: &Node) -> Option<String> {
+	match parameter.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(name, _, _) => parameter_name(name),
+		_ => None,
+	}
+}
+
+/// `a=1`, `a: 1` in a call: the name a and the value
+fn named_argument(argument: &Node) -> Option<(String, Node)> {
+	match argument.drop_meta() {
+		Node::Key(name, Op::Assign | Op::Colon, value) => match name.drop_meta() {
+			Node::Symbol(name) => Some((name.clone(), value.as_ref().clone())),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 fn has_spread(node: &Node) -> bool {
@@ -70,9 +110,9 @@ struct Variadic {
 impl Variadic {
 	fn rewrite(&self, node: Node) -> Node {
 		if let Some(head) = definition_head(&node) {
-			let rest = head.len() > 1 && starred(head.last().expect("a name")).is_some();
+			let starred_parameter = head[1..].iter().any(|parameter| starred(parameter).is_some() || double_starred(parameter).is_some());
 			let Node::Key(target, op, body) = node.drop_meta() else { unreachable!("a definition") };
-			let target = if rest { Box::new(self.unstarred_head(target)) } else { target.clone() };
+			let target = if starred_parameter { Box::new(self.unstarred_head(target)) } else { target.clone() };
 			return Node::Key(target, *op, Box::new(self.rewrite(body.as_ref().clone())));
 		}
 		match node {
@@ -84,15 +124,13 @@ impl Variadic {
 		}
 	}
 
-	/// `(f a xs...)` → `(f a xs)`, also under a result type `f(a, xs...):int`
+	/// `(f a xs...)` → `(f a xs)`, `(f *args **kw)` → `(f args kw)`, also under a result type `f(a, xs...):int`
 	fn unstarred_head(&self, target: &Node) -> Node {
 		match target.drop_meta() {
 			Node::Key(head, op, result) => Node::Key(Box::new(self.unstarred_head(head)), *op, result.clone()),
 			Node::List(items, bracket, separator) => {
-				let mut items = items.clone();
-				let last = items.pop().expect("a rest parameter");
-				items.push(Node::Symbol(starred(&last).expect("a rest parameter")));
-				Node::List(items, bracket.clone(), separator.clone())
+				let (name, parameters) = items.split_first().expect("a function name");
+				Node::List(std::iter::once(name.clone()).chain(parameters.iter().map(unstarred)).collect(), bracket.clone(), separator.clone())
 			}
 			other => other.clone(),
 		}
@@ -104,7 +142,7 @@ impl Variadic {
 			Node::Symbol(name) => Some(name),
 			_ => None,
 		}) else { return false };
-		let rest = self.signatures.get(name).is_some_and(|signature| signature.rest);
+		let rest = self.signatures.get(name).is_some_and(|signature| signature.rest || signature.keywords);
 		let spread = items[1..].iter().any(|item| starred(item).is_some());
 		let called = call_name(items, bracket, separator).is_some() || (*separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round));
 		called && (rest || spread)
@@ -114,17 +152,29 @@ impl Variadic {
 		let mut items = items.into_iter();
 		let head = items.next().expect("a function name");
 		let arguments: Vec<Node> = items.map(|item| self.rewrite(item)).collect();
-		let signature = self.signatures.get(&head.name()).copied();
+		let signature = self.signatures.get(&head.name());
+		let (arguments, keywords) = match signature {
+			Some(signature) if signature.keywords => keyword_object(arguments, &signature.fixed),
+			_ => (arguments, None),
+		};
 		let arguments = match signature {
-			Some(Signature { fixed, rest: true }) if arguments.len() >= fixed => {
-				let (fixed_arguments, leftover) = arguments.split_at(fixed);
+			Some(Signature { fixed, rest: true, .. }) if arguments.len() >= fixed.len() => {
+				let (fixed_arguments, leftover) = arguments.split_at(fixed.len());
 				[spread_items(fixed_arguments, None), vec![rest_list(leftover)]].concat()
 			}
-			Some(Signature { fixed, rest: false }) => spread_items(&arguments, Some(fixed)),
+			Some(Signature { fixed, rest: false, .. }) => spread_items(&arguments, Some(fixed.len())),
 			_ => arguments.iter().map(|argument| starred(argument).map(Node::Symbol).unwrap_or_else(|| argument.clone())).collect(),
 		};
-		Node::List([vec![head], arguments].concat(), Bracket::Round, Separator::None)
+		Node::List([vec![head], arguments, keywords.into_iter().collect()].concat(), Bracket::Round, Separator::None)
 	}
+}
+
+/// The named arguments no fixed parameter takes, as the object of a `**kw` parameter, and the other arguments
+fn keyword_object(arguments: Vec<Node>, fixed: &[String]) -> (Vec<Node>, Option<Node>) {
+	let (named, others): (Vec<Node>, Vec<Node>) = arguments.into_iter().partition(|argument| named_argument(argument).is_some_and(|(name, _)| !fixed.contains(&name)));
+	let entries: Vec<Node> = named.iter().filter_map(named_argument).map(|(name, value)| Node::Key(Box::new(Node::Symbol(name)), Op::Colon, Box::new(value))).collect();
+	let separator = if entries.len() > 1 { Separator::Colon } else { Separator::None };
+	(others, Some(Node::List(entries, Bracket::Curly, separator)))
 }
 
 /// The arguments with every spread list replaced by its items: a list literal's own items, else `xs#1, xs#2, …` as many
