@@ -209,7 +209,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   meaning, and on a list of tasks a got-it note says "for the first to finish: await any […]".
   P151 deadline: `await job within 100 ms or 0`; on timeout the job is stopped and the `or` value is the result,
   without `or` the timeout is an error. User: "would the syntax 'or stop with 0' be overkill? maybe we can just give
-  it as a hint that this is the behavior": no extra `stop` word; a got-it note tells that the job is stopped.
+  it as a hint that this is the behavior": no extra `stop` word. User, clarified: the hint is a compile-time got-it
+  note on the `within … or` expression ("on timeout the job is stopped and the result is 0"), not a run-time message
+  when the timeout happens; a timeout itself stays silent.
   P152 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
 - P128 (warp-3a, card g-3HmY) listeners: `listeners of x` is the list of functions listening to x (`count listeners
