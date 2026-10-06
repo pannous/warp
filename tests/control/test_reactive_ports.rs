@@ -71,3 +71,19 @@ fn old_in_set_listeners_and_its_aliases() {
 	is!("old = 9; x = 1; on change x {print old}; x = 2; old", 9);
 	is!("watch(s) := on set s {print old}\nx = 1\nwatch(x)\nx = 7\nx", 7);
 }
+
+// Node's emitter.off, DOM removeEventListener, C# -=, listenerCount: a named event handler can be removed (P128)
+#[test]
+fn a_named_event_handler_is_removed_and_counted() {
+	is!("n = 0; h = on alarm {n += 1}; raise alarm; remove h from listeners of alarm; raise alarm; n", 1);
+	is!("n = 0; h = on alarm {n += 1}; raise alarm; listeners of alarm -= h; raise alarm; n", 1);
+	is!("n = 0; h = on stop the machine {n += 1}; raise stop the machine; remove h from listeners of stop the machine; raise stop the machine; n", 1);
+	is!("on tick {1}; on tick {2}; count listeners of tick", 2);
+	is!("on tick {1}; h = on tick {2}; remove h from listeners of tick; count listeners of tick", 1);
+	is!("n = 0; h = on ready {n += 1}; remove h from listeners of ready; raise ready; n", 0);
+	// EventEmitter removeAllListeners, Qt disconnect(): every handler stops, the raise reaches none
+	is!("n = 0; on alarm {n += 1}; on alarm {n += 10}; raise alarm; clear listeners of alarm; raise alarm; n", 11);
+	is!("on alarm {1}; on alarm {2}; clear listeners of alarm; count listeners of alarm", 0);
+	// RxJS take(2): the handler removes itself
+	is!("taken = 0; h = on tick {taken += 1; if taken == 2 {remove h from listeners of tick}}; for i in 1 to 5 {raise tick}; taken", 2);
+}

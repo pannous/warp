@@ -20,6 +20,16 @@ const ON_WORD: &str = "on";
 const ONCE_WORD: &str = "once";
 /// `once_fired_0`: whether the once handler ran (a plain word: `global once_fired_0` is parsed)
 const FIRED_PREFIX: &str = "once_fired_";
+/// `h_listening`: whether the named handler h still listens (plain words: `global h_listening` is parsed)
+const LISTENING_SUFFIX: &str = "_listening";
+const REMOVE_WORD: &str = "remove";
+const FROM_WORD: &str = "from";
+const LISTENERS_WORD: &str = "listeners";
+const OF_WORD: &str = "of";
+const COUNT_WORD: &str = "count";
+const CLEAR_WORD: &str = "clear";
+/// `alarm_handler_3`: the flag name of an unnamed handler of a cleared event
+const HANDLER_SUFFIX: &str = "_handler_";
 const RAISE_WORD: &str = "raise";
 /// `on set x` and `on change x` are variable listeners (variable_signals.rs)
 const VARIABLE_LISTENER_WORDS: [&str; 2] = ["set", "change"];
@@ -39,17 +49,35 @@ pub const SYSTEM_EVENTS: [&str; 2] = ["interrupt", "exit"];
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
-	let raised = raised_names(&program);
-	let mut flags = vec![];
+	// an event whose listeners are counted is handled even when nothing raises it yet (`count listeners of tick`)
+	let variables = main_level_variables(&statements);
+	let raised: HashSet<String> = raised_names(&program).into_iter().chain(reflected_events(&program, COUNT_WORD).into_iter().filter(|event| !variables.contains(event))).collect();
+	// `clear listeners of alarm` stops every handler of alarm: each gets a flag as a named one has
+	let cleared: HashSet<String> = reflected_events(&program, CLEAR_WORD).into_iter().filter(|event| !variables.contains(event)).collect();
+	let mut flags: Vec<(String, Node)> = vec![];
+	let mut named: Vec<(String, String)> = vec![];
 	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
-		.filter_map(|(index, statement)| handler(statement).map(|(name, body, once)| (index, name, body, once)))
-		.filter(|(_, name, _, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()) || SYSTEM_EVENTS.contains(&name.as_str()))
-		.map(|(index, name, body, once)| (index, name, if once { run_once(body, &mut flags) } else { body }))
+		.filter_map(|(index, statement)| named_handler(statement).map(|(listener, (name, body, once))| (index, listener, name, body, once)))
+		.filter(|(_, _, name, _, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()) || SYSTEM_EVENTS.contains(&name.as_str()))
+		.map(|(index, listener, name, body, once)| {
+			let body = if once { run_once(body, &mut flags) } else { body };
+			let listener = listener.or_else(|| cleared.contains(&name).then(|| format!("{}{HANDLER_SUFFIX}{index}", name.replace(' ', "_"))));
+			let body = match listener {
+				Some(listener) => listening(body, &listener, &name, &mut flags, &mut named),
+				None => body,
+			};
+			(index, name, body)
+		})
 		.collect();
 	if handlers.is_empty() {
 		return program;
 	}
-	let statements: Vec<Node> = flags.iter().map(|flag| assign(flag, Node::False)).chain(statements).collect();
+	let unnamed = |event: &str| handlers.iter().filter(|(_, name, _)| name == event).count() - named.iter().filter(|(_, other)| other == event).count();
+	let counts: HashMap<String, usize> = handlers.iter().map(|(_, name, _)| (name.clone(), unnamed(name))).collect();
+	let statements: Vec<Node> = statements.into_iter().map(|statement| reflected(statement, &named, &counts)).collect();
+	// a handler may remove itself (`if taken == 2 {remove h from listeners of tick}`)
+	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index, name, reflected(body, &named, &counts))).collect();
+	let statements: Vec<Node> = flags.iter().map(|(flag, initial)| assign(flag, initial.clone())).chain(statements).collect();
 	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
 	#[cfg(feature = "native")]
 	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| PAGE_EVENTS.contains(&name.as_str()) && !raised.contains(name)) {
@@ -87,11 +115,71 @@ pub fn lower(program: Node) -> Node {
 }
 
 /// The body guarded by a fresh flag: `if once_fired_0 == false { once_fired_0 = true; body }`
-fn run_once(body: Node, flags: &mut Vec<String>) -> Node {
+fn run_once(body: Node, flags: &mut Vec<(String, Node)>) -> Node {
 	let flag = format!("{FIRED_PREFIX}{}", flags.len());
-	flags.push(flag.clone());
+	flags.push((flag.clone(), Node::False));
 	let not_fired = Node::Key(Box::new(Node::Symbol(flag.clone())), Op::Eq, Box::new(Node::False));
 	if_then(not_fired, block(vec![assign(&flag, Node::True), body]))
+}
+
+/// `h = on alarm {body}` (Node's emitter.on returning a handle, P128): the handler and the name it can be removed by
+fn named_handler(statement: &Node) -> Option<(Option<String>, (String, Node, bool))> {
+	match statement.drop_meta() {
+		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_)) => handler(&flattened(value)).map(|parts| (Some(word(target)), parts)),
+		_ => handler(statement).map(|parts| (None, parts)),
+	}
+}
+
+/// The value of `h = on alarm {…}` arrives nested, `on (alarm {…})`, `(on stop) (the (machine {…}))`: its words in
+/// one row
+fn flattened(node: &Node) -> Node {
+	fn words(node: &Node) -> Vec<Node> {
+		match node.drop_meta() {
+			Node::List(items, Bracket::None, Separator::Space) => items.iter().flat_map(words).collect(),
+			_ => vec![node.clone()],
+		}
+	}
+	Node::List(words(node), Bracket::None, Separator::Space)
+}
+
+/// A named handler runs while its flag `h_listening` holds: `remove h from listeners of alarm` clears it
+fn listening(body: Node, listener: &str, event: &str, flags: &mut Vec<(String, Node)>, named: &mut Vec<(String, String)>) -> Node {
+	let flag = listening_flag(listener);
+	flags.push((flag.clone(), Node::True));
+	named.push((listener.to_string(), event.to_string()));
+	if_then(Node::Symbol(flag), block(vec![body]))
+}
+
+fn listening_flag(listener: &str) -> String {
+	format!("{listener}{LISTENING_SUFFIX}")
+}
+
+/// `remove h from listeners of alarm` and C#'s `listeners of alarm -= h` of a named handler: its flag cleared;
+/// `count listeners of alarm`: the handlers still listening. Listeners of variables stay signal_values' (P128)
+fn reflected(statement: Node, named: &[(String, String)], counts: &HashMap<String, usize>) -> Node {
+	let items: Vec<Node> = match statement.drop_meta() {
+		Node::List(items, _, _) => items.clone(),
+		_ => return statement.map_children(|child| reflected(child, named, counts)),
+	};
+	let words: Vec<String> = items.iter().map(word).collect();
+	let is_named = |listener: &str, event: &str| named.iter().any(|(name, other)| name == listener && other == event);
+	match words.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+		[REMOVE_WORD, listener, FROM_WORD, LISTENERS_WORD, OF_WORD, event @ ..] if is_named(listener, &event.join(" ")) => assign(&listening_flag(listener), Node::False),
+		[LISTENERS_WORD, OF_WORD, _] => match items[2].drop_meta() {
+			Node::Key(event, Op::SubAssign, listener) if is_named(&word(listener), &word(event)) => assign(&listening_flag(&word(listener)), Node::False),
+			_ => statement,
+		},
+		[CLEAR_WORD, LISTENERS_WORD, OF_WORD, event @ ..] if named.iter().any(|(_, other)| *other == event.join(" ")) => {
+			let event = event.join(" ");
+			block(named.iter().filter(|(_, other)| *other == event).map(|(listener, _)| assign(&listening_flag(listener), Node::False)).collect())
+		}
+		[COUNT_WORD, LISTENERS_WORD, OF_WORD, event @ ..] if counts.contains_key(&event.join(" ")) => {
+			let event = event.join(" ");
+			let listening = named.iter().filter(|(_, other)| *other == event).map(|(listener, _)| format!(" + (if {} then 1 else 0)", listening_flag(listener)));
+			parse(&format!("{}{}", counts[&event], listening.collect::<String>()))
+		}
+		_ => statement.map_children(|child| reflected(child, named, counts)),
+	}
 }
 
 /// `on alarm {body}`, `on stop the machine {body}`, `on alarm: body`, `once alarm {body}`: the event's name, the body
@@ -134,6 +222,20 @@ fn raise(node: &Node) -> Option<(String, Node)> {
 fn event_name<'a>(words: impl Iterator<Item = &'a Node>) -> Option<String> {
 	let words: Vec<String> = words.map(word).collect();
 	(!words.is_empty() && words.iter().all(|word| !word.is_empty())).then(|| words.join(" "))
+}
+
+/// The events of `count listeners of tick` (`verb` count) or `clear listeners of tick` (clear)
+fn reflected_events(program: &Node, verb: &str) -> HashSet<String> {
+	let mut events = HashSet::new();
+	program.visit(&mut |part| if let Node::List(items, _, _) = part {
+		let words: Vec<String> = items.iter().map(word).collect();
+		if let [first, listeners, of, event @ ..] = words.as_slice() {
+			if first == verb && listeners == LISTENERS_WORD && of == OF_WORD && !event.is_empty() && event.iter().all(|word| !word.is_empty()) {
+				events.insert(event.join(" "));
+			}
+		}
+	});
+	events
 }
 
 fn raised_names(program: &Node) -> HashSet<String> {
