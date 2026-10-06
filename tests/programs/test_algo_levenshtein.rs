@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 // natural scripting-style version: `let` inside blocks, string parameters indexed with [], push of indexed values, Kotlin-inclusive 0..n
 #[test]

@@ -1,6 +1,6 @@
 // Signal keywords on variables (wiki/signal.md): `once x==5 {…}` listens to every later change of x and runs its body
 // the first time the condition holds; `whenever` each time it holds after a change
-use warp::is;
+use crate::is;
 
 #[test]
 fn once_runs_the_first_time_the_condition_holds() {

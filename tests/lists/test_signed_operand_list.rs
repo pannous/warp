@@ -1,5 +1,6 @@
 //! D13 (user, 2026-10-03): `1 -1` (a space before the sign, none after) asks list or arithmetic; unanswered it takes
 //! the list `[1 -1]` with a warning; the arithmetic is written `1 - 1`
+use crate::is;
 use warp::diagnostic::{take_assumptions, with_warning_mode, WarningMode};
 use warp::node::ints;
 use warp::*;

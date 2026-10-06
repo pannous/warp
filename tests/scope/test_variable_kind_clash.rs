@@ -1,7 +1,7 @@
 // P45 (user, 2026-10-05): a variable given values of two kinds that do not mix is a compile error naming both kinds,
 // "compile error unless we are in script mode, which is not defined yet". Int → Float widening stays.
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_variable_given_another_kind_is_a_compile_error() {

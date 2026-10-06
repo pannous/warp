@@ -1,5 +1,5 @@
+use crate::is;
 use crate::common::fails_with;
-use warp::*;
 
 #[test]
 fn test_object_variable_is_looked_up_by_key() {

@@ -1,7 +1,7 @@
 // Objects and maps as function arguments: field access on a parameter, class instances for class-typed parameters,
 // and the argument checked against a class-typed parameter (todo.md, impl-types 2026-10-03)
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const PHOTO: &str = "class photo{width:int height:int}; ";
 const PAGE: &str = "class page{width:int}; ";

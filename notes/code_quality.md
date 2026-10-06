@@ -51,6 +51,15 @@ tables (strings.rs, text_unicode.rs) and the operator precedences are data table
 #16 (2026-10-04): every wasm_emitter file writes instructions as `I::X` (`use Instruction as I`); only `use
 Instruction::…` imports still spell the type.
 
+2026-10-06 (branch code-quality-2, user decisions P97–P101): #13 `Node` `+ - * /` of mismatched kinds give an error
+value (`IndexMut` must return `&mut` and still panics); Wisp reads back what it writes (P11, test_wisp_roundtrip);
+P97 GcObject loses its five uncalled methods, gc_struct!/wasm_struct!/wasm_object! stay as sugar on it; P98 19
+commented-out blocks and 27 restating comments deleted in src/; P99 renames (laste → last_item, Dada → DataValue,
+peq! → parses_to!, Strings! → texts!, wis! → wisp!, strings!/todow gone); P100 the test macros live in tests/common;
+P101 neutral comments. The crate-wide allows were already gone (no dead-code warnings).
+Still open: the file splits (#10), a shared Program context for passes (#12), the remaining panics in wisp_parser
+and extensions/numbers.rs (#13), the Unicode/precedence tables (#19).
+
 Left, because they need a decision, edit tests, or would collide with the sessions editing the same files now:
 #4/#5/#10 moves and splits (every open branch touches mod.rs, analyzer.rs,
 wasp_parser.rs), #12, #13, #15–#20, smarty.rs and test_asts.rs, the extensions/ dead traits (extensions.rs says it is

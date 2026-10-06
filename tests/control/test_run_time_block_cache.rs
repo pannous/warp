@@ -1,7 +1,7 @@
 //! Card bang-cache: a block run at run time is compiled as a function of the numbers it reads, so the same block with
 //! other values is the same module: a loop that runs `xs#1!` with a changing variable compiles the block once
 //! (notes/runtime_eval.md "Measured"). Natively; the browser compiles every block again.
-use warp::is;
+use crate::is;
 
 #[test]
 #[cfg(feature = "native")]

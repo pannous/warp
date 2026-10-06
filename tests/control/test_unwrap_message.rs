@@ -1,6 +1,6 @@
 //! An Error value used as a number fails with its own message, not "not a number": `x:int?=ø; x!+1` is "unwrapped ø"
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_unwrapping_an_empty_optional_in_arithmetic_names_it() {

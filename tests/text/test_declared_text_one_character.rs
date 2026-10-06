@@ -1,5 +1,5 @@
 // A one-character text parses as a codepoint; assigned to a variable declared string/text it is that one-character text
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_declared_text_takes_a_one_character_text() {

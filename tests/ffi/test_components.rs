@@ -2,7 +2,8 @@
 //! wasm32-wasip2 (tests/fixtures/components/rust_demo, its WIT in wit/demo.wit) or any component with WIT exports
 use crate::common::fails_with;
 use std::path::PathBuf;
-use warp::{ints, is};
+use warp::ints;
+use crate::is;
 
 /// A component written in WAT: `add: func(a: s64, b: s64) -> s64` and `echo: func(text: string) -> string`
 const WAT_COMPONENT: &str = r#"(component

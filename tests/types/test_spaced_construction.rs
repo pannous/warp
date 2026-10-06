@@ -1,7 +1,7 @@
 //! `T {x: 1}` with a space constructs a declared type T like the glued `T{x: 1}` (D4); an undeclared word before a block
 //! stays data (open decision 41)
+use crate::is;
 use crate::common::fails_with;
-use warp::*;
 
 #[test] // samples/raytracer.wasp, samples/particles.wasp
 fn test_spaced_construction_of_a_declared_type() {

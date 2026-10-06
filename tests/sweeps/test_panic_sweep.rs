@@ -1,7 +1,7 @@
 // User programs the emitter used to panic on: each one is an error value now
+use crate::is;
 use warp::wasm_emitter::eval;
 use warp::*;
-
 use crate::common;
 
 fn assert_error(code: &str) {

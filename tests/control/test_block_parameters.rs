@@ -2,7 +2,7 @@
 //! parameter receives its argument unevaluated (lisp macros without macros), and any `!` on an expression is marked:
 //! one known only at run time runs there (run-block-5, P73)
 use warp::diagnostic::take_warnings;
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 #[test]

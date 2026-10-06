@@ -1,6 +1,7 @@
 //! `f([])` passes the empty list: an argument that is ø is still an argument
 
-use warp::{is, parse};
+use warp::parse;
+use crate::is;
 
 #[test]
 fn an_empty_list_literal_is_a_call_argument() {

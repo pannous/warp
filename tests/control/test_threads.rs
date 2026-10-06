@@ -2,7 +2,7 @@
 // instance of the module, its arguments and result copied; any other function runs where it is started
 #![cfg(feature = "native")] // threads of the wasmtime runner
 use std::time::{Duration, Instant};
-use warp::is;
+use crate::is;
 
 const SLEEPER: &str = "f(ms) := { sleep(ms); ms }; ";
 /// Three tasks of a second each: overlapping they take about one second, one after the other three

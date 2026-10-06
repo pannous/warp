@@ -1287,7 +1287,6 @@ fn parse_function_declaration(items: &[Node], _keyword: &str) -> Option<Function
 	let mut func = Function::new(&name);
 	func.body = body;
 
-	// Parse parameters
 	for param in &params {
 		let (param_name, param_kind) = parse_param(param);
 		func.signature.add(&param_name, param_kind);

@@ -1,6 +1,6 @@
 // `foo()` with explicit empty parentheses is a call (user, P92, wiki/charged.md §1): an undefined name is
 // "undefined function: foo", never the symbol foo; a bare `foo` and the group `(foo)` stay the symbol
-use warp::is;
+use crate::is;
 
 #[test]
 fn an_empty_call_of_an_undefined_name_is_an_error() {

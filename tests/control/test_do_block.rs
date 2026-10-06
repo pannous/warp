@@ -1,6 +1,6 @@
 //! `do <block>` runs the block on the spot, like the evaluating `!`
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn do_runs_a_block_literal() {

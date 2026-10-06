@@ -1,6 +1,6 @@
 // D14 (user 2026-10-03): `x in list` gives the 1-based position of x (truthy when found), 0 when absent;
 // round 3: "Never warn".
-use warp::*;
+use crate::is;
 use warp::diagnostic::{with_warning_mode, WarningMode};
 
 #[test]

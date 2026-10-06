@@ -1,5 +1,5 @@
 // Several C-style typed parameters `f(int x, float y)`, as the single `f(int x)` already works
-use warp::is;
+use crate::is;
 
 #[test]
 fn several_typed_parameters() {

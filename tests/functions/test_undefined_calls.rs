@@ -2,7 +2,8 @@
 
 use crate::common::fails_with;
 use warp::wasm_emitter::eval;
-use warp::{is, parse_data};
+use warp::parse_data;
+use crate::is;
 
 #[test]
 fn test_unresolved_call_is_an_error() {

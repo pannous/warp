@@ -1,5 +1,5 @@
 // `log(x, base)`: the logarithm to a base, ln(x)/ln(base); the second argument used to be dropped (log(100, 10) was ln 100)
-use warp::is;
+use crate::is;
 
 #[test]
 fn log_takes_a_base() {

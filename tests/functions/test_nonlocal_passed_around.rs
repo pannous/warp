@@ -1,6 +1,6 @@
 //! Card g-rQ-U: a nested function is reachable beyond its enclosing body's own calls (a sibling calls it, it is passed
 //! around as a value) and `nonlocal y` still reads y as it is at that call; a nested function reads main-level variables
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_a_sibling_calls_a_nested_function() {

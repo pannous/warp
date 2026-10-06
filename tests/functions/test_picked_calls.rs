@@ -1,6 +1,6 @@
 // A function value called where it is picked from a list: `fs[1](3)` calls the second function (it was the
 // two-item list `closure_lambda_2 3`)
-use warp::*;
+use crate::is;
 
 #[test]
 fn a_function_picked_from_a_list_is_called() {

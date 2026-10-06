@@ -1,7 +1,9 @@
 // Precomputed paths (wiki/charged.md §3, package 3): a call of a pure function with some constant arguments gets its own
 // variant with the constants in place (partial evaluation): `power(x, 3)` becomes x*(x*(x*1)), the program's value
 // unchanged. Compiled modules only, like folding.
-use warp::*;
+use crate::is;
+#[cfg(feature = "native")]
+use crate::eq;
 
 const POWER: &str = "power(x, n) := if n == 0 then 1 else x * power(x, n - 1); ";
 

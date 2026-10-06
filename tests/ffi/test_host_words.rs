@@ -1,6 +1,6 @@
 //! Host words of the running program's environment: `sleep(ms)` pauses, `random()` is a float in [0, 1),
 //! `random(n)` an int in 0..n (n excluded), `clock()` the milliseconds since the Unix epoch
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_random_stays_in_range() {

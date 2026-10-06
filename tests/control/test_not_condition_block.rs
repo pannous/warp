@@ -1,6 +1,6 @@
 //! In `if not x {…}` and `while not x {…}` the block is the body, not an argument of x
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_negated_condition_takes_its_block() {

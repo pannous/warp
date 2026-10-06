@@ -1,7 +1,7 @@
 //! P82 (user 2026-10-05): a function reference is explicit, `function add` or `&add` (wiki/function-pointer.md); a bare
 //! name that needs arguments is "add needs 1 argument" everywhere, a body's last value too, fix: function add
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_a_body_returns_a_function_reference() {

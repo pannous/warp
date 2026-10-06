@@ -1,6 +1,6 @@
 // `try X else Y` (todo.md r3-try 2026-10-03): leaving X by return/break/continue restores the try depth, so a later
 // error keeps its message
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 const LATER_ERROR: &str = " + [1 2]#9";

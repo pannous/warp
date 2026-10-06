@@ -1,6 +1,6 @@
 // `print chars in "hello"` prints each character, like `for chars in "hello": print it` (wiki/in.md); a variable of
 // that name keeps `in` the membership test
-use warp::*;
+use crate::is;
 
 #[test]
 fn print_name_in_a_text_walks_it() {

@@ -1,7 +1,7 @@
 //! WIT flags (wiki examples.md, wasm.md `(flags <name>*) ≡ (record (field <name> bool)*)`): `flags virtues={fast, safe}`
 //! declares the flags type, `virtues goal = fast+safe` a record with those flags true and the others false
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_flags_set_their_named_members() {

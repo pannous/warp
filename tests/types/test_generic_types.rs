@@ -1,5 +1,5 @@
+use crate::is;
 use warp::wasm_emitter::eval;
-use warp::*;
 
 #[test]
 fn test_angle_and_of_forms_are_the_same_type() {

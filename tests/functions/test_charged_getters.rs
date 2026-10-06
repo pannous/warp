@@ -1,8 +1,7 @@
 //! P71 (user, 2026-10-06): `name := expr` without parameters is always charged, a getter evaluated at every use
 //! (wiki/charged.md §2): it reads its free variables as they are at that use, and assigning the name afterwards is an
 //! error that names the definition. Object entries `{s := e}` follow the same rule (§4).
-use warp::*;
-
+use crate::is;
 use crate::common;
 
 #[test]

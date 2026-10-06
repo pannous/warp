@@ -1,6 +1,5 @@
+use crate::is;
 use std::f64::consts::{PI, SQRT_2};
-use warp::*;
-
 use crate::common;
 
 // A declared float target is the one place where an exact real is accepted with its precision loss

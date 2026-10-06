@@ -1,5 +1,5 @@
 //! Card nonlocal-cells: a nested function changes a nonlocal of any value (a cell holds any Node: wasm_emitter/cells.rs)
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_inner_changes_a_nonlocal_text() {

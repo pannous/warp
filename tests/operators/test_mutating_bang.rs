@@ -1,6 +1,6 @@
 // D2 round 3 (user 2026-10-03, "By position"): `fn!` after a function or method name mutates in place:
 // `x.upper!` and `upper x!` assign the result back to x. `{…}!` and a lone `x!` keep evaluating.
-use warp::*;
+use crate::is;
 
 #[test]
 fn a_method_with_bang_assigns_back() {

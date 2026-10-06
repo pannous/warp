@@ -1,5 +1,6 @@
 // `xs.pop()` on a list variable: the last item, removed from the variable (Python's list.pop())
-use warp::{ints, is};
+use warp::ints;
+use crate::is;
 
 #[test]
 fn pop_gives_the_last_item() {

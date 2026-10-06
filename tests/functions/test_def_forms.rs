@@ -1,6 +1,6 @@
 //! Every function definition form defines the same function (condensed from probe_def_syntax.rs and
 //! tests/probes/probe_function_def.rs; the add/test2/$0 cases are in test_functions.rs and test_interpolation.rs)
-use warp::is;
+use crate::is;
 
 #[test]
 fn probe_def_block_syntax() {
@@ -18,12 +18,12 @@ fn definition_forms_agree() {
 
 #[test]
 fn a_def_function_calls_its_function_parameter() {
-	warp::is!("def app(f, x) { return f(x) }; app(y => y+1, 2)", 3);
-	warp::is!("def app(f, x) { f(x) }; g(y):=y*3; app(g, 2)", 6);
+	crate::is!("def app(f, x) { return f(x) }; app(y => y+1, 2)", 3);
+	crate::is!("def app(f, x) { f(x) }; g(y):=y*3; app(g, 2)", 6);
 }
 
 #[test]
 fn a_parameter_tested_for_membership_is_no_function() {
-	warp::is!("snake=[1]; f(p) := not (p in snake); f(3)", 1);
-	warp::is!("snake=[(1,2)]; def is_free(position) { return not (position in snake) }; is_free((1,2))", 0);
+	crate::is!("snake=[1]; f(p) := not (p in snake); f(3)", 1);
+	crate::is!("snake=[(1,2)]; def is_free(position) { return not (position in snake) }; is_free((1,2))", 0);
 }

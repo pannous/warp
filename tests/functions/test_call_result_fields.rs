@@ -1,5 +1,6 @@
 // A field of a call's value is read from the value the call gives: `f().name`, `lib.f(x).field` (card foreign-results)
-use warp::{error, is};
+use warp::error;
+use crate::is;
 
 #[test]
 fn a_field_of_a_call_result_is_read_from_the_result() {

@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_dijkstra() { is!("samples/dijkstra.wasp", "ACBDEF:13"); }

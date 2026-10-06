@@ -1,6 +1,6 @@
 //! A variable first holding a one-letter text is read back as that letter, also after reassignment
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_one_letter_text_variable_reads_back_as_a_letter() {

@@ -480,7 +480,7 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 		}
 		t if t == Kind::Data as u8 => {
 			let type_name = text_of(store, &data, memory);
-			Node::Data(crate::meta::Dada { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: crate::meta::DataType::Other })
+			Node::Data(crate::meta::DataValue { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: crate::meta::DataType::Other })
 		}
 		// a closure reads as the name of its function
 		t if t == Kind::Function as u8 => match child.unwrap_anyref() {

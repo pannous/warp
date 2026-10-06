@@ -321,20 +321,6 @@ impl GcObject {
         }
     }
 
-    /// Create from an existing StructRef
-    pub fn from_struct(
-        struct_ref: Rooted<StructRef>,
-        store: Store<()>,
-        instance: Option<Instance>,
-    ) -> Self {
-        Self {
-            inner: struct_ref,
-            store: Rc::new(RefCell::new(store)),
-            instance,
-            module: None,
-        }
-    }
-
     /// Access the store mutably
     pub fn with_store<F, R>(&self, f: F) -> R
     where
@@ -349,26 +335,6 @@ impl GcObject {
             let idx = field.to_field_index(&self.inner, &*store)?;
             let val = self.inner.field(&mut *store, idx)?;
             T::from_val(val, &mut *store)
-        })
-    }
-
-    pub fn get_int(&self, idx: usize) -> Result<i32> {
-        self.with_store(|store| {
-            let val = self.inner.field(&mut *store, idx)?;
-            i32::from_val(val, &mut *store)
-        })
-    }
-
-    pub fn get_str(&self, idx: usize) -> Result<String> {
-        self.with_store(|store| {
-            let val = self.inner.field(&mut *store, idx)?;
-            // Try with instance for ptr/len strings
-            if let Some(instance) = &self.instance {
-                let gc_string = GcString::from_val(store, val)?;
-                gc_string.to_string_with_instance(store, instance)
-            } else {
-                String::from_val(val, store)
-            }
         })
     }
 
@@ -450,16 +416,6 @@ impl GcObject {
     /// Convert to Val for passing to WASM functions
     pub fn to_val(&self) -> Val {
         Val::AnyRef(Some(self.inner.into()))
-    }
-
-    /// Get a clone of the store
-    pub fn clone_store(&self) -> Rc<RefCell<Store<()>>> {
-        self.store.clone()
-    }
-
-    /// Get a clone of the instance
-    pub fn clone_instance(&self) -> Option<Instance> {
-        self.instance
     }
 }
 

@@ -1,7 +1,7 @@
 //! Structural patterns in `switch`/`match` (wiki/pattern-matching.md, row T5): a list pattern matches a list of its length;
 //! literal parts compare, names bind the element, `_` matches anything, nested lists and pairs match inside.
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const GREET: &str = "greet(xs) := switch xs { [\"\", middle, \"\"]: middle + \"!\"  [\"foo\", x]: x  _: \"never mind\" }; ";
 

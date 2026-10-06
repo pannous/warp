@@ -1,6 +1,6 @@
 // A declared trait operation on a value whose type is known only at run time (an element of a mixed list, a loop
 // variable) calls the witness of the value's type through a generated dispatcher
-use warp::is;
+use crate::is;
 
 const SHAPES: &str = "trait shape{area}; class square{side:int}; class rect{w:int h:int}; area(s:square) := s.side*s.side; area(r:rect) := r.w*r.h; ";
 

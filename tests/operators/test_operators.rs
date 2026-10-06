@@ -1,5 +1,4 @@
-use warp::skip;
-use warp::extensions::todow;
+use crate::skip;
 use warp::node::data;
 use warp::wasp_parser::parse;
 use warp::*;
@@ -17,7 +16,7 @@ fn test_add_boxed_list_item() {
 #[test]
 #[ignore] // shall this ever work?
 fn test_add_pure_vec_data() {
-	let list = data(vec![1, 2]); // only via Dada!
+	let list = data(vec![1, 2]); // only via DataValue!
 	assert_eq!(ints![1, 2], list); // nah, not even this works (for good reason) or to do?
 	assert_eq!(list, ints![1, 2]);
 	let num = int(3);
@@ -28,7 +27,7 @@ fn test_add_pure_vec_data() {
 
 // #[test]
 // fn test_add_pure_list_item() {
-// 	let list = list(vec![1, 2]); // only via Dada!
+// 	let list = list(vec![1, 2]); // only via DataValue!
 // 	list.add(3)
 // 	assert_eq!(result, ints![1, 2, 3]);
 // 	assert_eq!(ints![1, 2, 3], result);
@@ -110,8 +109,6 @@ fn test_add_meta_on_right() {
 
 #[test]
 fn test_while_true_forever() {
-	todow("test_while_true_forever");
-
 	skip!(
 		is!("def stop():{0};while !stop() : {}", 0); // should hang forever
 		is!("def goo():{1};while goo() : {}", 0); // should hang forever

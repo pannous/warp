@@ -75,7 +75,6 @@ pub struct FfiHeaderSignature {
 /// Map C type string to wasm_encoder ValType
 pub fn map_c_type_to_valtype(c_type: &str) -> Option<wasm_encoder::ValType> {
     let t = c_type.trim();
-    // Remove const qualifier
     let t = t.strip_prefix("const ").unwrap_or(t).trim();
 
     match t {
@@ -188,7 +187,6 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
     let close_paren = matching_paren(decl, paren_pos)?;
     let params_str = &decl[paren_pos+1..close_paren];
 
-    // Parse parameters
     let mut param_types = Vec::new();
     let mut param_names = Vec::new();
 
@@ -608,7 +606,6 @@ fn parse_ffi_signatures() -> HashMap<String, FfiSignature> {
             .map(|p| kind_to_valtype(p.kind))
             .collect();
 
-        // Convert Kind return types to ValType
         let results: Vec<wasm_encoder::ValType> = func.signature.return_types.iter()
             .map(|k| kind_to_valtype(*k))
             .collect();
@@ -1204,7 +1201,6 @@ fn link_single_function(
 ) -> Result<()> {
     let func_name = sig.name.clone();
 
-    // Get symbol
     let func_ptr: usize = unsafe {
         let symbol: libloading::Symbol<*const ()> = library
             .get(func_name.as_bytes())
@@ -1216,7 +1212,6 @@ fn link_single_function(
         return Err(anyhow::anyhow!("Null function pointer for {}", func_name));
     }
 
-    // Build wasmtime function type
     let wasm_params: Vec<ValType> = wasp_parameters(&sig.param_types)
         .filter_map(|t| c_type_to_wasm_valtype(t))
         .collect();

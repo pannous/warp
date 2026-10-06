@@ -1,6 +1,6 @@
 // `all numbers > 2: print it` (wiki/iteration.md): `all xs op v: body` visits the items for which `it op v` holds, a
 // filter loop like `for (it>2) in xs` (P46: with its got-it warning)
-use warp::is;
+use crate::is;
 
 #[test]
 fn all_with_a_comparison_filters_the_items() {

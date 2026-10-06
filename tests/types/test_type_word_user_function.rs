@@ -2,7 +2,8 @@
 
 use warp::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
-use warp::{is, Node};
+use warp::Node;
+use crate::is;
 
 fn clash(code: &str) -> String {
 	match eval(code) {

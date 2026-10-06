@@ -1,6 +1,6 @@
 //! `not x` of an object, an empty block or a grouped empty value tests it as a Node
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn an_object_is_truthy() {

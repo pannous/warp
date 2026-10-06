@@ -1,7 +1,7 @@
 // Generic constraints: a parameter `xs: Comparable list` takes a list whose elements conform to the trait, checked
 // where the function is called (wiki/trait.md)
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const AGES: &str = "class dot{x:int}; class age{n:int}; compare(a:age, b:age) := a.n - b.n; smallest(xs: Comparable list) := (sort xs)#1; ";
 const SHAPES: &str = "trait shape{area}; class sq{s:int}; class dot{x:int}; area(q:sq) := q.s*q.s; total(xs: shape list) := { t=0; for x in xs { t += area(x) }; t }; ";

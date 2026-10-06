@@ -1,7 +1,7 @@
 // Exact numbers beyond the fixnums (ratios, big integers) cross to a task and back (card g-rH6E): composed from fixnum
 // pieces in the receiving instance (tasks.rs Builders), as a run-time block hands them back
 #![cfg(feature = "native")] // the browser task path still refuses them
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_ratio_crosses_to_a_task_and_back() {

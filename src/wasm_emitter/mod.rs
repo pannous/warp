@@ -3678,7 +3678,6 @@ impl WasmGcEmitter {
 			self.module.section(&elements);
 		}
 		self.module.section(&self.code);
-		// Get data section from string table
 		self.module.section(self.string_table.data_section());
 		self.emit_names();
 		self.module.section(&self.names);
@@ -3786,7 +3785,6 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// Build types section
 		let mut types = TypeSection::new();
 
 		// Type 0: $String = struct { ptr: i32, len: i32 }

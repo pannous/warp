@@ -3,7 +3,8 @@
 
 use warp::Node;
 use warp::wasp_parser::parse;
-use warp::{eq, exists, skip};
+use warp::exists;
+use crate::{eq, skip};
 
 #[test]
 fn test_meta_field() {

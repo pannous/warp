@@ -1,5 +1,6 @@
 // A lambda's parameters may declare their types like a definition's: `(x:float)=>x/2` (it was no function at all:
 // "cannot extract a numeric value from (x:float)=>x*1.5")
+use crate::is;
 use warp::*;
 
 #[test]

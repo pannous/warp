@@ -1,8 +1,8 @@
 // A list provably of ints (or floats) is held as a wasm GC array: O(1) index and count, no boxing per element.
 // Results must be exactly those of the cons-cell list.
+use crate::is;
 use crate::common::fails_with;
 use warp::wasm_emitter::{compile, eval};
-use warp::*;
 use wasmparser::{CompositeInnerType, Operator, Parser, Payload, StorageType, ValType};
 
 /// How many operators in the module of `code` create, read or write an `(array i64)` or `(array f64)`

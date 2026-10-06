@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 #[test]
 fn global_with_every_constant_word() {

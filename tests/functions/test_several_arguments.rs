@@ -1,7 +1,7 @@
 //! P84 (user 2026-10-05: "This should have already been done with broadcasting"): several juxtaposed arguments of a
 //! function of one parameter are one list, `f 1 2 3` = `f [1 2 3]`; a scalar function broadcasts over it
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 use warp::wasp_parser::parse;
 
 #[test]

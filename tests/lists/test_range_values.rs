@@ -1,6 +1,7 @@
 // A literal range used as a value is the list of its numbers wherever it stands, as `x = 1..5` is: printed, converted,
 // typed, parenthesized, passed on (wiki range.md)
-use warp::{ints, is};
+use warp::ints;
+use crate::is;
 
 #[test]
 fn a_range_is_a_list_as_an_argument() {

@@ -1,6 +1,6 @@
 // Shared arrays (user, P33 step 6, P44): `shared xs = int[n]` is n Ints every task of the run reaches, `go f(xs)`
 // passes the same array; `xs#i += v` adds atomically
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_shared_array_reads_writes_and_adds() {

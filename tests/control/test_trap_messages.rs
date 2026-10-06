@@ -1,5 +1,4 @@
 //! A trap with no friendlier wording names its cause, not a wasm backtrace
-
 use crate::common::fails_with;
 
 #[test]

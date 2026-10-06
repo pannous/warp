@@ -1,6 +1,6 @@
 // `print` with several arguments writes them separated by a space, like Python: `print(a, b)` and `print a, b`.
 // The call is worth the printed text.
-use warp::is;
+use crate::is;
 
 #[cfg(feature = "native")] // runs the warp binary
 use crate::common::printed;

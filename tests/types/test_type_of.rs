@@ -1,6 +1,6 @@
 //! `type(x)` gives the type name as a symbol (condensed from probe_type.rs; int/rational/text/inferred cases are in
 //! test_todo.rs test_type)
-use warp::is;
+use crate::is;
 use warp::Node;
 
 #[test]

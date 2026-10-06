@@ -1,7 +1,7 @@
 //! A float computed at run time has a text: print, `str(x)`, `x as text`, `"a" + x` and join show at most 15
 //! significant digits, positional from 1e-5 up to 1e15, else with an exponent
+use crate::is;
 use warp::wasm_emitter::eval;
-use warp::*;
 
 /// The float `value` computed at run time (a host random number times zero keeps the compiler from folding it)
 fn run_time(value: &str) -> String {

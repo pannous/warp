@@ -1,6 +1,6 @@
 // Overloading by parameter types: each definition is a variant, a call takes the one its arguments fit best
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const COMBINE: &str = "combine(a:float, b:float) := a+b; combine(a:int, b:int) := a*b; ";
 

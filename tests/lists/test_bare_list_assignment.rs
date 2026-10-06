@@ -1,8 +1,8 @@
 //! D12 (user, 2026-10-03): an unbracketed `a=1,2,3` / `a=1 2 3` asks whether it is a list or separate statements,
 //! fallback Error; a bracketed list never asks
+use crate::is;
 use crate::common::fails_with;
 use warp::node::ints;
-use warp::*;
 
 #[test]
 fn an_unbracketed_list_assignment_asks_list_or_statements() {

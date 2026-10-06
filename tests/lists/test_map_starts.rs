@@ -1,6 +1,6 @@
 // The hash-table maps also start from a map literal, and a parameter every call passes a map is copied into one;
 // a list or an instance given where map entries are set keeps the generic way
-use warp::*;
+use crate::is;
 
 #[test]
 fn a_map_literal_and_a_map_parameter_are_hash_tables() {

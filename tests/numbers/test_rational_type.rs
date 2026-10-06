@@ -1,5 +1,5 @@
 //! `rational` names the exact fractions; `rationals` is a list of them, like `ints`. `int` stays the type of whole numbers.
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_type_of_a_list_of_decimals_is_a_list_of_rational() {

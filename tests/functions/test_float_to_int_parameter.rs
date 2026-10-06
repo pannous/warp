@@ -1,6 +1,6 @@
 // P49 (user, 2026-10-05): a float passed to an int parameter is a compile error, wasp never loses digits silently
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_float_for_an_int_parameter_is_refused() {

@@ -1,5 +1,5 @@
 use wasmtime::{Engine, Linker, Module, Store};
-use warp::eq;
+use crate::eq;
 
 /// Demonstration of WASM GC reading patterns inspired by ~/dev/script/rust/rasm
 /// NOTE: This test requires wasmtime 28.0+ for full GC introspection support

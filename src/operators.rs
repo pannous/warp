@@ -403,6 +403,11 @@ pub fn op_to_code(op: &Op) -> i64 {
 	OP_CODES.iter().position(|known| known == op).unwrap_or(0) as i64
 }
 
+/// The operator written `text` (Op::as_str's inverse): `*` is Mul
+pub fn op_named(text: &str) -> Option<Op> {
+	OP_CODES.iter().find(|op| op.as_str() == text).copied()
+}
+
 /// Decode i64 back to Op
 pub fn code_to_op(code: i64) -> Op {
 	usize::try_from(code).ok().and_then(|index| OP_CODES.get(index)).copied().unwrap_or(Op::None)

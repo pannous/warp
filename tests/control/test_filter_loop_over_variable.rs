@@ -1,5 +1,5 @@
 // `for (it>2) in xs { … }` over a list variable: its block is the body, not a construction `xs {…}` (P46 filter loops)
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_filter_loop_over_a_variable() {

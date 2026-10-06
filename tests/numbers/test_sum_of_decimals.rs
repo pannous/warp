@@ -1,6 +1,6 @@
 //! `sum` of a list of decimal literals is exact
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn the_sum_of_decimal_elements() {

@@ -3,7 +3,8 @@
 use warp::diagnostic::take_runtime_warnings;
 use warp::node::Node;
 use warp::wasm_emitter::eval;
-use warp::{error, is};
+use warp::error;
+use crate::is;
 
 /// `use uniscript` makes compiling a program take most of a test's time: one program converts all `cases`
 /// (uniscript, unicode), each checked on its own

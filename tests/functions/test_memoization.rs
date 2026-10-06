@@ -1,7 +1,7 @@
 // Memoization (wiki/charged.md §3, P72: the compiler's decision alone): a pure recursive function of one Int whose calls
 // overlap (fib-shaped: it calls itself more than once) caches its results for small arguments; same values, no blow-up
+use crate::is;
 use std::time::{Duration, Instant};
-use warp::*;
 
 const FAST: Duration = Duration::from_secs(3);
 

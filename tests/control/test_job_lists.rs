@@ -1,6 +1,6 @@
 // P47 (user, 2026-10-05: "jobs are asynchronous by definition; awaiting one must not affect the others"): a job added to
 // a list keeps running on its own; only a use that needs a value awaits it; `await all jobs` gives every result
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_list_of_jobs_gives_their_results_when_used() {

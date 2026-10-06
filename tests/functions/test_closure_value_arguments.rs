@@ -1,6 +1,6 @@
 //! Card closures-untyped: a closure reached as a value (returned, in a list) takes any argument; its call helper
 //! `closure_call_n` takes Nodes unless every closure of that arity takes numbers (type_closure_calls)
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_a_returned_closure_takes_a_text() {

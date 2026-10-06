@@ -1,6 +1,6 @@
 // `once x == 5 {…}` with x written as the only statement of a loop body: the check after the write made the body a
 // juxtaposition (`x = i check`), "not an int"; it is a sequence now
-use warp::*;
+use crate::is;
 
 #[test]
 fn a_listener_checks_a_write_in_a_one_statement_loop() {

@@ -7,7 +7,7 @@ use warp::util::fetch;
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::parse;
 use warp::type_kinds::NodeKind;
-use warp::{eq, is, put, skip};
+use crate::{is, eq, skip, put};
 
 #[test]
 fn test_html_wasp() {

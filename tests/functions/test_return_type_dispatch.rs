@@ -2,7 +2,7 @@
 //! the first-declared overload is taken with a got-it warning naming the explicit form (notes/dispatch.md).
 
 use warp::diagnostic::take_warnings;
-use warp::is;
+use crate::is;
 
 const RENDER: &str = "class pdf{body}; class docx{body}; render(t:text):pdf := pdf(\"%PDF \" + t); render(t:text):docx := docx(\"<w:t>\" + t); ";
 const INFERRED: &str = "class pdf{body}; class docx{body}; render(t:text) := pdf(\"%PDF \" + t); render(t:text) := docx(\"<w:t>\" + t); ";

@@ -2,7 +2,7 @@
 use crate::extensions::lists::{map, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::meta::{Dada, DataType, LineInfo};
+use crate::meta::{DataValue, DataType, LineInfo};
 #[cfg(feature = "native")]
 use crate::wasm_reader::GcObject;
 use serde::{Deserialize, Serialize};
@@ -56,7 +56,7 @@ pub enum Node {
 	Key(Box<Node>, Op, Box<Node>),
 	List(Vec<Node>, Bracket, Separator),
 	// Map via map:{[k,v],…} or "map"={k:v, …} or just [k:v, …] for us
-	Data(Dada), // most generic container for any kind of data not captured by other node types
+	Data(DataValue), // most generic container for any kind of data not captured by other node types
 	Meta { node: Box<Node>, data: Box<Node> },
 	Type { name: Box<Node>, body: Box<Node> }, // type definition: name + fields
 }
@@ -79,13 +79,13 @@ impl Node {
 			_ => false,
 		}
 	}
-	pub fn data_value(&self) -> Dada {
+	pub fn data_value(&self) -> DataValue {
 		// 💡use via
 		// let val = data.data_value().downcast_ref::<MyType>().unwrap().clone();
 		match self {
 			Data(dada) => dada.clone(),
 			Meta { node, .. } => node.data_value(),
-			_ => Dada {
+			_ => DataValue {
 				data: Box::new(()),
 				type_name: "ø".to_string(),
 				data_type: DataType::None,
@@ -128,7 +128,7 @@ impl Node {
 			_ => Empty,
 		}
 	}
-	pub fn laste(&self) -> Node {
+	pub fn last_item(&self) -> Node {
 		// last() belongs to iterator trade!!
 		match self {
 			// Text(t) => {Char(t.chars().last().unwrap_or('\0'))} // switch of semantics!?
@@ -140,7 +140,7 @@ impl Node {
 				}
 			}
 			Key(_k, _, v) => v.as_ref().clone(), // last part of key-value pair is the value
-			Meta { node, .. } => node.laste(),
+			Meta { node, .. } => node.last_item(),
 			_ => Empty,
 		}
 	}
@@ -223,17 +223,6 @@ impl Node {
 		}
 	}
 
-	// pub fn value(&self) -> Dada {
-	//     match self {
-	//         Node::Number(n) => Dada::new(n.clone()),
-	//         Node::Text(s) => Dada::new(s.clone()),
-	//         Node::Codepoint(c) => Dada::new(*c),
-	//         Node::Data(dada) => dada.clone(),
-	//         Node::Meta(node, _) => node.value(),
-	//         Node::Key(_, _, v) => v.value(),
-	//         _ => Dada::new(()), // empty Dada
-	//     }
-	// }
 
 	pub fn value(&self) -> &Node {
 		match self {
@@ -320,28 +309,6 @@ impl Node {
 		}
 	}
 }
-//
-// impl Index<Node> for Node {
-// 	type Output = Node;
-//
-// 	fn index(&self, n: Node) -> &Self::Output {
-// 		match self {
-// 			List(elements, _, _) => match n {
-// 				Number(Number::Int(i)) => elements.get(i).unwrap_or(&Empty),
-// 				_ => &Empty,
-// 			},
-// 			Key(k, _, v) => {
-// 				if **k == n {
-// 					&v /* (a:b)[a]==b */
-// 				} else {
-// 					&v[n]  // Pass through to value: person:{x y}[0] => x
-// 				}
-// 			}
-// 			Meta { node, .. } => &node[n],
-// 			_ => &Empty,
-// 		}
-// 	}
-// }
 
 impl Index<usize> for Node {
 	type Output = Node;
@@ -524,10 +491,6 @@ impl IndexMut<char> for Node {
 }
 
 impl Node {
-	// fn new() -> Self {
-	// 	// can be extended via .add a[b]=c !?! test_mark_as_map wished ;)
-	// 	Empty
-	// }
 
 	// associated 'static' functions
 	pub fn key(s: &str, v: Node) -> Self {
@@ -553,7 +516,7 @@ impl Node {
 		Symbol(s.to_string())
 	}
 	pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Self {
-		Data(Dada::new(value))
+		Data(DataValue::new(value))
 	}
 	pub fn number(n: Number) -> Self {
 		Node::Number(n)
@@ -801,9 +764,6 @@ impl Node {
 		}
 		if let Data(dada) = self {
 			if let Some(_info) = dada.downcast_ref::<LineInfo>() {
-				// if line_info { // noone ever cares!
-				// 	format!("/* line:{} column:{} */", info.line, info.column);
-				// }
 			} else {
 				return format!("{:?}", dada);
 			}
@@ -1373,11 +1333,6 @@ impl PartialEq for Node {
 			}
 			Node::Number(n) => match other {
 				True => !n.zero(), //  2 == true ? sUrE?? hardcore todo Truthy rules
-				// Node::True => match n {
-				//     Number::Int(i) => *i == 1,
-				//     Number::Float(f) => *f == 1.0,
-				//     _ => false,
-				// }
 				False => n.zero(),
 				Node::Number(n2) => n == n2,
 				_ => false,
@@ -1854,12 +1809,10 @@ impl From<&Node> for bool {
 
 // ============ Arithmetic Operators ============
 
-// Add implementations
 impl Add<&Node> for &Node {
 	type Output = Node;
 
 	fn add(self, rhs: &Node) -> Self::Output {
-		// Handle Meta wrappers
 		let (left, left_meta) = match self {
 			Meta { node, data } => (node.as_ref(), Some(data)),
 			_ => (self, None),
@@ -1877,7 +1830,7 @@ impl Add<&Node> for &Node {
 			(Node::Number(n), True) => Node::Number(*n + Number::Int(1)),
 			(False, Node::Number(n)) | (Node::Number(n), False) => Node::Number(*n),
 			(Empty, Node::Number(n)) | (Node::Number(n), Empty) => Node::Number(*n),
-			_ => panic!("Cannot add {:?} and {:?}", left, right),
+			_ => error(&format!("Cannot add {left:?} and {right:?}")),
 		};
 
 		// Preserve metadata from left operand
@@ -1939,7 +1892,6 @@ impl Sub<&Node> for &Node {
 	type Output = Node;
 
 	fn sub(self, rhs: &Node) -> Self::Output {
-		// Handle Meta wrappers
 		let (left, left_meta) = match self {
 			Meta { node, data } => (node.as_ref(), Some(data)),
 			_ => (self, None),
@@ -1959,7 +1911,7 @@ impl Sub<&Node> for &Node {
 			(False, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
 			(Empty, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
 			(Node::Number(n), Empty) => Node::Number(*n),
-			_ => panic!("Cannot subtract {:?} and {:?}", left, right),
+			_ => error(&format!("Cannot subtract {left:?} and {right:?}")),
 		};
 
 		// Preserve metadata from left operand
@@ -2021,7 +1973,6 @@ impl Mul<&Node> for &Node {
 	type Output = Node;
 
 	fn mul(self, rhs: &Node) -> Self::Output {
-		// Handle Meta wrappers
 		let (left, left_meta) = match self {
 			Meta { node, data } => (node.as_ref(), Some(data)),
 			_ => (self, None),
@@ -2037,7 +1988,7 @@ impl Mul<&Node> for &Node {
 			(True, Node::Number(n)) | (Node::Number(n), True) => Node::Number(*n),
 			(False, _) | (_, False) => Node::Number(Number::Int(0)),
 			(Empty, _) | (_, Empty) => Node::Number(Number::Int(0)),
-			_ => panic!("Cannot multiply {:?} and {:?}", left, right),
+			_ => error(&format!("Cannot multiply {left:?} and {right:?}")),
 		};
 
 		// Preserve metadata from left operand
@@ -2099,7 +2050,6 @@ impl Div<&Node> for &Node {
 	type Output = Node;
 
 	fn div(self, rhs: &Node) -> Self::Output {
-		// Handle Meta wrappers
 		let (left, left_meta) = match self {
 			Meta { node, data } => (node.as_ref(), Some(data)),
 			_ => (self, None),
@@ -2116,7 +2066,7 @@ impl Div<&Node> for &Node {
 			(True, Node::Number(n)) => Node::Number(Number::Int(1) / *n),
 			(False, Node::Number(_)) => Node::Number(Number::Int(0)),
 			(Empty, Node::Number(_)) => Node::Number(Number::Int(0)),
-			_ => panic!("Cannot divide {:?} and {:?}", left, right),
+			_ => error(&format!("Cannot divide {left:?} and {right:?}")),
 		};
 
 		// Preserve metadata from left operand
@@ -2217,7 +2167,7 @@ pub fn node(p0: &str) -> Node {
 // ============ Free Convenience Constructors ============
 // Short, ergonomic functions for creating Node values
 
-pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Node { Data(Dada::new(value)) }
+pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Node { Data(DataValue::new(value)) }
 
 pub fn int(n: i64) -> Node { Number(Number::Int(n)) }
 

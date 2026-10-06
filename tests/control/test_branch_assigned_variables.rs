@@ -1,5 +1,5 @@
 // A variable holding a Node that is first assigned inside the branches of an `if` (or a loop) is read after them.
-use warp::*;
+use crate::is;
 
 #[test]
 fn a_text_assigned_in_both_branches_is_read_after_them() {

@@ -1,5 +1,5 @@
 //! Property access on objects: `o.a`, `a of o`, `o's a` and `o["a"]` are one lookup; a missing key is a loud error value
-use warp::*;
+use crate::is;
 use crate::common::fails_with;
 
 #[test]

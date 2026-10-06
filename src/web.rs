@@ -6,7 +6,7 @@
 use crate::diagnostic::{self, Acknowledger};
 use crate::extensions::numbers::Number;
 use crate::fixits::{self, Fix};
-use crate::meta::{Dada, DataType};
+use crate::meta::{DataValue, DataType};
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::{Kind, KIND_MASK};
 use num_bigint::{BigInt, Sign};
@@ -248,7 +248,7 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 		tag if tag == Kind::List as i64 => list_node(data.get("node").map(node_from_tree), value, bracket_of(info)),
 		tag if tag == Kind::Data as i64 => {
 			let type_name = text();
-			Node::Data(Dada { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: DataType::Other })
+			Node::Data(DataValue { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: DataType::Other })
 		}
 		tag if tag == Kind::Function as i64 => value_node(), // a closure reads as the name of its function
 		tag if tag == Kind::TypeDef as i64 => Node::Type { name: Box::new(data_node()), body: Box::new(value_node()) },

@@ -1,6 +1,7 @@
 // A text held in a variable converts to an Int at run time like its literal does (`"12" as int` is 12):
 // optional sign, decimal digits; anything else is the runtime error "invalid number"
-use warp::{error, is};
+use warp::error;
+use crate::is;
 
 #[test]
 fn a_text_variable_converts_to_int() {

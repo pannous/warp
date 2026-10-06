@@ -4,7 +4,8 @@
 
 use crate::common::{fails_with, serve};
 use warp::wasm_emitter::{eval, eval_untrusted};
-use warp::{is, parse_data, Node};
+use warp::{parse_data, Node};
+use crate::is;
 
 #[test]
 fn test_division_is_not_truncating() {

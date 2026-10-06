@@ -1,7 +1,7 @@
 //! P46 leftovers (user, 2026-10-05): a built-in type word filters a loop too (`for number in xs`), and an adjective with a
 //! type word is a condition (`for (even number) in xs`, wiki/for.md); both announce the filter (got-it topic for-filter)
 use warp::diagnostic::take_warnings;
-use warp::is;
+use crate::is;
 use warp::wasm_emitter::eval;
 
 #[test]

@@ -1,7 +1,7 @@
 // P61 (user, 2026-10-05: "educate the user to use the be key word for definitions"): `is` compares; with a name defined
 // nowhere `x is <value>` is an error that teaches `x be <value>`
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn is_with_an_undefined_name_teaches_be() {

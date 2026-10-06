@@ -1,6 +1,6 @@
 // `if c then s += 5`: a branch without braces takes the whole statement, an assignment or a compound assignment
 // included (card if-parses: it parsed as `(if c then s) += 5`, and `(if c then s) = 5` silently changed nothing)
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_then_branch_takes_an_assignment() {

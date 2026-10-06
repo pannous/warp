@@ -2,7 +2,7 @@
 // into the run's handle table, 0 is NULL; a struct-pointer parameter takes such an id; an out-pointer (sqlite3 **ppDb)
 // is left out of the wasp call and becomes its result, NULL there is a loud error with the C status
 #![cfg(feature = "native")]
-use warp::is;
+use crate::is;
 
 const OPEN_AND_PREPARE: &str = "use sqlite3; db = sqlite3_open(\":memory:\"); stmt = sqlite3_prepare_v2(db, \"select 1+2, 'wasp'\", -1)";
 

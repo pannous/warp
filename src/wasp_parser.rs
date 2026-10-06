@@ -4035,13 +4035,11 @@ impl WaspParser {
 			return error(&format!("Unmatched closing tag </{}>", tag_name));
 		}
 
-		// Parse tag name
 		let tag_name = match self.parse_symbol() {
 			Ok(name) => name,
 			Err(e) => return error(&e),
 		};
 
-		// Parse attributes
 		let mut attributes = Vec::new();
 		self.skip_whitespace_and_comments();
 
@@ -4324,7 +4322,6 @@ impl WaspParser {
 			}
 		}
 
-		// Add final group
 		if !current_group.is_empty() {
 			groups.push(current_group);
 		}
@@ -4351,7 +4348,6 @@ impl WaspParser {
 			})
 			.collect();
 
-		// Return result
 		if grouped_nodes.len() == 1 && bracket == Bracket::None {
 			// Only unwrap single items for implicit groupings (Bracket::None)
 			// Explicit brackets like {x} or [x] should preserve the wrapper

@@ -1,4 +1,5 @@
 // #21 (user 2026-10-03, "x=π stays real"): a variable holding π has the type of π.
+use crate::is;
 use warp::*;
 
 #[test]

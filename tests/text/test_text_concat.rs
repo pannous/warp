@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 #[test]
 fn texts_concatenate_with_plus() {

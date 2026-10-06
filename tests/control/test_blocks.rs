@@ -1,4 +1,4 @@
-use warp::{eq, is, skip};
+use crate::{is, eq, skip};
 use warp::wasp_parser::parse;
 
 #[test]

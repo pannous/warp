@@ -1,7 +1,7 @@
 //! `operator ⊕ has precedence above|below [operator] Y` (wiki/Features.md, row 35, P48 user-decided): a declared operator binds
 //! just tighter or looser than Y, a built-in or declared operator. Built-in operators are never re-ranked.
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 const PLUS: &str = "infix operator ⊕ := a+b; ";
 

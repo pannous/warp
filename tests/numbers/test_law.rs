@@ -3,7 +3,8 @@ use warp::law::{extract_laws, lean, property_test, separate_laws, verify, Assura
 use warp::type_kinds::Kind;
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::parse;
-use warp::{is, Node};
+use warp::Node;
+use crate::is;
 
 const SQUARE: &str = "square(x) := x*x\nlaw square(-x) == square(x)";
 const WRONG_DOUBLE: &str = "twice(x) := x+x\nlaw twice(x) == x";

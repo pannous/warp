@@ -1,6 +1,6 @@
 // `try a / b else c` checks the divisor before dividing and catches any other error of the division too (a text
 // divided was an uncaught "not a number")
-use warp::is;
+use crate::is;
 
 #[test]
 fn try_catches_every_error_of_a_division() {

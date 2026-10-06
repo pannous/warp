@@ -27,7 +27,8 @@
 // Dynamic Library Import Tests (using 'use' keyword);
 // ============================================================================
 
-use warp::{eq, is, parse};
+use warp::parse;
+use crate::{is, eq};
 use warp::ffi_parser::{find_library_headers, parse_header_file};
 
 #[test]

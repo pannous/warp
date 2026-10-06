@@ -1,6 +1,6 @@
 // Lists do not grow by index (user, 2026-10-04, P43): setting past the end, the empty list included, is a loud and
 // catchable index error
-use warp::is;
+use crate::is;
 
 #[test]
 fn setting_into_the_empty_list_is_an_index_error() {

@@ -3,7 +3,7 @@
 use crate::common::fails_with;
 use crate::functions::test_multi_value::result_count;
 use warp::wasm_emitter::compile;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_two_returned_values_destructure() {

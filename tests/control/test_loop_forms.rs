@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 #[test]
 fn for_without_variable_binds_it() {

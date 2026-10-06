@@ -1,7 +1,7 @@
 // P66 (user, 2026-10-05): Int division by zero is always the catchable error divide_by_zero; only a float division
 // (a decimal point written in it: 1.0/0.0) is ∞
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn int_division_by_zero_is_an_error() {

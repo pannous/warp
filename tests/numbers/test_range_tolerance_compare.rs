@@ -1,6 +1,6 @@
 // A range and a value with tolerance are both closed spans: `1900 - 2000 AD` is `1950 AD ± 50` (card range-units,
 // numbers::test_math::test_hyphen_units). Equal when they cover the same span in the same unit
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_range_equals_the_same_span_with_tolerance() {

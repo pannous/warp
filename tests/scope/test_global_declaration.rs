@@ -1,5 +1,5 @@
 // `global x` without initializer declares a zero-initialized global that later statements assign
-use warp::*;
+use crate::is;
 
 #[test]
 fn test_global_without_initializer() {

@@ -1,8 +1,7 @@
 // Charged bodies read their free variables like Python functions (wiki/charged.md section 3, released 2026-10-05,
 // package 2): at call time; a free variable that changes after the definition needs `global y` in the reading function,
 // else the change is a compile error where a later call sees it. `name := expr` without parameters waits for P71.
-use warp::*;
-
+use crate::is;
 use crate::common;
 
 const DECLARE_GLOBAL: &str = "z reads y (line 1): declare `global y` in z to read its current value, or pass y as a parameter";

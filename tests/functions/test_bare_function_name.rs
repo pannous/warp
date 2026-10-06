@@ -1,5 +1,5 @@
+use crate::is;
 use crate::common::fails_with;
-use warp::*;
 
 #[test]
 fn test_bare_name_of_function_with_parameter_is_an_error() {

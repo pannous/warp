@@ -1,6 +1,6 @@
 // `try f x else y`: the guarded part may be a braceless call, it is no missing `else`
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_braceless_call_is_guarded() {

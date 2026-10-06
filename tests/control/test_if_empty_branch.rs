@@ -1,4 +1,5 @@
 //! A branch yielding ø makes the if a Node of run-time kind: the other branch's number stays a number
+use crate::is;
 use warp::*;
 
 #[test]

@@ -1,5 +1,5 @@
 use warp::extensions::print;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_arithmetic() {

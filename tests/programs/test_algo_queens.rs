@@ -1,4 +1,4 @@
-use warp::is;
+use crate::is;
 
 // natural scripting style: range(n), [0] * n and list params of fn-defined functions fail, see probes/algo/queens/
 #[test]

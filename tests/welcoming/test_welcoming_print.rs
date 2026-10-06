@@ -1,5 +1,6 @@
 // `print` writes any number, text or character through its runtime text form; exact numbers that are no fixnum
 // (ratios, big integers) have a text form like the host's; an exact variable assigned an f64 becomes a float. probes/print/
+use crate::is;
 use warp::*;
 
 #[test]

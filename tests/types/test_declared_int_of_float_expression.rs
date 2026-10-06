@@ -1,6 +1,6 @@
 // `int i = π*1000000`: a float computed from literals is a type mismatch like the float literal `int i = 3.5`, not
 // invalid wasm ("WASM validation failed: expected i64, found f64"); exact decimals stay exact (`2.0*3` is 6)
-use warp::is;
+use crate::is;
 
 #[test]
 fn an_int_declaration_refuses_a_float_expression() {

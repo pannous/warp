@@ -1,5 +1,6 @@
 // A leading plus glued to its operand is the unary plus: the operand itself (`+5`, `+x`, `3 + +2`), as in Python and JS
-use warp::{ints, is};
+use warp::ints;
+use crate::is;
 
 #[test]
 fn a_unary_plus_is_its_operand() {

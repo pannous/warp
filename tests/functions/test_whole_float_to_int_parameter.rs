@@ -1,6 +1,6 @@
 // P49b (user, 2026-10-05): a whole float passed to an int parameter is refused too, like `x:int = 2.0`
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_whole_float_for_an_int_parameter_is_refused() {

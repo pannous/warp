@@ -1,7 +1,7 @@
 // A spaced ` // ` inside brackets starts a comment; when that comment hides the closing bracket the writer meant floor
 // division: a loud parse error naming the `//`, not a validation failure or a misleading undefined function
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_comment_that_hides_a_closing_bracket_is_an_error() {

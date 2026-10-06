@@ -1,5 +1,5 @@
 // P47 stage 1: task variables inside a list literal are each awaited: `[a, b]` holds both results, not the last one
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_list_of_task_values_holds_each_result() {

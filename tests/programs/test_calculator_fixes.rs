@@ -1,6 +1,6 @@
 //! What samples/calculator.wasp needed: `else` on the next line, texts in comparisons, failing returns, run-time math
+use crate::is;
 use warp::wasm_emitter::eval;
-use warp::*;
 
 #[test] // `}` newline `else if …` was not attached: the wrong branch ran
 fn test_else_on_the_next_line() {

@@ -1,5 +1,6 @@
 use warp::wasm_emitter::eval;
-use warp::{is, Node};
+use warp::Node;
+use crate::is;
 
 // every function definition form infers a list parameter from its indexing use
 #[test]

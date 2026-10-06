@@ -1,7 +1,8 @@
 //! `int x = v` declares like `x:int = v`: the value must fit the declared type
 
 use warp::wasm_emitter::eval;
-use warp::{eq, is, Node};
+use warp::Node;
+use crate::{is, eq};
 
 fn error_text(code: &str) -> String {
 	match eval(code) {

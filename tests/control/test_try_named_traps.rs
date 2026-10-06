@@ -1,6 +1,6 @@
 // Errors that were raw engine traps are named runtime errors a `try` catches: indexing a number, a missing field
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn indexing_a_number_is_not_a_list() {

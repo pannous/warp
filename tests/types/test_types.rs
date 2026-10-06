@@ -6,7 +6,8 @@ use warp::extensions::assert_throws;
 use warp::Node;
 use warp::type_kinds::NodeKind;
 use warp::wasp_parser::parse;
-use warp::{is, skip, Number};
+use warp::Number;
+use crate::{is, skip};
 
 // const functions : Map<String, Function> = warp::analyzer::FUNCTIONS;
 

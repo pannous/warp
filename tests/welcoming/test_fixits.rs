@@ -143,9 +143,9 @@ fn the_page_gets_each_fix_as_an_edit() {
 #[test]
 fn codepoint_is_the_preferred_name() {
 	// P74 (user, 2026-10-05): codepoint(c) in hints, fixes and docs; ord and ordinal stay synonyms
-	warp::is!("codepoint('x') as float", 120.0);
-	warp::is!("(codepoint('x') as float) / 8", 15.0);
-	warp::is!("ord('x') + ordinal('x')", 240);
+	crate::is!("codepoint('x') as float", 120.0);
+	crate::is!("(codepoint('x') as float) / 8", 15.0);
+	crate::is!("ord('x') + ordinal('x')", 240);
 	let (_, hints) = capture_hints(|| eval("codepoint('x')"));
 	assert!(hints.is_empty(), "codepoint(c) is no type constructor: {hints:?}");
 }

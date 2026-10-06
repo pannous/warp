@@ -1,6 +1,6 @@
 //! `use python "math"`: a module of the Python runtime through the host word foreign_call (notes/stdlib_connectors.md)
 use crate::common::fails_with;
-use warp::is;
+use crate::is;
 
 #[test]
 fn test_python_calls_and_reads() {

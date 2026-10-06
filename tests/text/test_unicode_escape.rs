@@ -1,5 +1,5 @@
 // `\u{e9}` in a text is the code point U+00E9, and the text is normalized to NFC like source text (wiki/Footguns.md)
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_unicode_escape_is_its_code_point() {

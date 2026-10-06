@@ -1,5 +1,5 @@
 // `=>` binds looser than the space: the words after the arrow are the lambda's body (`x => print x`)
-use warp::is;
+use crate::is;
 
 #[test]
 fn a_lambda_body_may_be_a_spaced_call() {

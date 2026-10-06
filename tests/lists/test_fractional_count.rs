@@ -1,6 +1,7 @@
 // A repeat count held in a variable must be whole: `y=2.5; y times "ab"` is a runtime error, not ø or ""
 use crate::common::fails_with;
-use warp::{ints, is};
+use warp::ints;
+use crate::is;
 
 #[test]
 fn a_fractional_count_in_a_variable_is_an_error() {

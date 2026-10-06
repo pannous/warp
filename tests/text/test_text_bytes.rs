@@ -1,7 +1,7 @@
 //! Text as UTF-8 bytes: `+` concatenates texts and characters, `read(path)` loads a file,
 //! `byte_at(text, offset)` and `byte_slice(text, start, end)` address bytes by 0-based offset
 
-use warp::is;
+use crate::is;
 
 #[test]
 fn plus_concatenates_texts_and_characters() {
