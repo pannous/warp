@@ -62,7 +62,7 @@ impl FromVal for f32 {
 
 impl FromVal for f64 {
     fn from_val(val: Val, _store: &mut Store<()>) -> Result<Self> {
-        Ok(val.unwrap_f64())
+        Ok(warp_runtime::floats::canonical_nan(val.unwrap_f64()))
     }
 }
 

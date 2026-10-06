@@ -217,3 +217,9 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-06 hash-index-hint
 - g-2WPo: the xs#n hint only for a literal or a name as index (normalize is_simple_index).
+
+## 2026-10-06 flaky-browser
+- every_sample_runs_without_a_compiler_error timed out when the task pool was empty (Workers not loaded yet, or used up
+  by stopped tasks): host.js then runs a task inline, and threads.wasp's `go spin(10^12)`; `stop endless` cannot stop
+  an inline task. Reproduced with prepareTaskPool(0) (120 s timeout); fixed by taskPoolReady before each run and a
+  replacement Worker for a stopped one. Alone the test takes 3.4 s in the browser.

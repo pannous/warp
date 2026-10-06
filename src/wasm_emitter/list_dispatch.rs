@@ -21,6 +21,9 @@ use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
 
+/// The field of a typed list struct holding its array (type_manager emit_typed_list_types: length, items)
+const TYPED_LIST_ITEMS: u32 = 1;
+
 /// Capacity of the first items array a push into an empty list allocates; it doubles when full
 const FIRST_CAPACITY: i32 = 4;
 const NODE_COUNT: &str = "node_count";
@@ -305,10 +308,17 @@ impl WasmGcEmitter {
 		let mut excluded: HashSet<String> = HashSet::new();
 		let mut updated: HashSet<String> = HashSet::new();
 		let mut assigned_kinds: HashMap<String, Vec<Kind>> = HashMap::new();
+		// `xs = float[n]`: declared floats, so any number written into it is stored as one
+		let mut declared_floats: HashSet<String> = HashSet::new();
 		program.visit(&mut |part| {
 			let Node::Key(target, op, value) = part else { return };
 			match target.drop_meta() {
-				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => sources.entry(name.clone()).or_default().push(self.source_of(name, value)),
+				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => {
+					if zero_fill_parts(value).is_some_and(|(_, zero)| self.items_element(std::slice::from_ref(zero)) == Some(ElementType::Float)) {
+						declared_floats.insert(name.clone());
+					}
+					sources.entry(name.clone()).or_default().push(self.source_of(name, value));
+				}
 				Node::Symbol(name) if is_update(op) => { excluded.insert(name.clone()); }
 				Node::Key(list, Op::Hash, index) if matches!(op, Op::Assign | Op::Define) || is_update(op) => {
 					let Node::Symbol(name) = list.drop_meta() else { return };
@@ -341,9 +351,11 @@ impl WasmGcEmitter {
 		let appended = |name: &String| sources[name].iter().any(|source| matches!(source, Source::Append(_)));
 		let is_list_local = |name: &String| self.scope.lookup(name).is_some_and(|local| !local.is_param && (local.kind == Kind::List || (local.kind == Kind::Empty && appended(name))));
 		let has_start = |name: &String| sources[name].iter().any(|source| !matches!(source, Source::Append(_)));
-		// an index assignment stores what node_with_at would: any number into an int list, only floats into a float list
+		// an index assignment stores what node_with_at would: any number into an int list, only floats into a float list,
+		// any number into a declared float array (converted)
 		let takes_assignments = |name: &String, element: ElementType| {
-			element != ElementType::Float || assigned_kinds.get(name).is_none_or(|kinds| kinds.iter().all(|kind| *kind == Kind::Float))
+			let takes = |kind: &Kind| *kind == Kind::Float || (*kind == Kind::Int && declared_floats.contains(name));
+			element != ElementType::Float || assigned_kinds.get(name).is_none_or(|kinds| kinds.iter().all(takes))
 		};
 		let mut typed: HashMap<String, Option<ElementType>> = sources.keys()
 			.filter(|name| is_list_local(name) && has_start(name) && !excluded.contains(*name))
@@ -498,8 +510,24 @@ impl WasmGcEmitter {
 	fn emit_typed_element(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		let (slot, list) = self.typed_list(target).expect("typed backend");
 		func.instruction(&I::LocalGet(slot));
+		if let Some(counter) = self.walking_counter(target, index).filter(|_| list.element != ElementType::Node) {
+			// `x·items#(x·index + 1)` of a for loop: the counter is below the count, read the array directly
+			let (array, list_type) = self.typed_list_types(list.element);
+			Self::emit_list(func, &[I::StructGet { struct_type_index: list_type, field_index: TYPED_LIST_ITEMS }, I::LocalGet(counter), I::I32WrapI64, I::ArrayGet(array)]);
+			return;
+		}
 		self.emit_numeric_value(func, index);
 		self.emit_call(func, list.element.runtime().at);
+	}
+
+	/// The local of the counter when `index` is `x·index + 1` and `target` is `x·items`, the list a for loop walks
+	/// (for_loop.rs): the loop runs while the counter is below the count, so the element exists
+	fn walking_counter(&self, target: &Node, index: &Node) -> Option<u32> {
+		let Node::Key(counter, Op::Add, one) = index.drop_meta() else { return None };
+		let (Node::Symbol(counter), Node::Symbol(list)) = (counter.drop_meta(), target.drop_meta()) else { return None };
+		let walked = counter.strip_suffix(crate::for_loop::INDEX_SUFFIX)?;
+		let is_walk = matches!(one.drop_meta(), Node::Number(crate::extensions::numbers::Number::Int(1))) && *list == format!("{walked}{}", crate::for_loop::ITEMS_SUFFIX);
+		(is_walk && self.bounded_counters.contains(counter) && !self.typed_lists[list].updated).then(|| self.scope.lookup(counter).map(|local| local.position)).flatten()
 	}
 
 	/// Emit `value` as an element of a typed list

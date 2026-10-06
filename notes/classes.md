@@ -43,4 +43,10 @@
   such a name becomes `name(x, …)` before that happens.
 - overloads.rs dispatches on the return type only among definitions with the same parameter types, so methods of
   two classes that return different classes are no return-type overloads.
-- A method changing a field of its receiver is a loud error until step 2.
+
+## Step 2 as built (P116)
+- A method whose body assigns a field of its receiver (`n += 1`, `self.n = …`, `x += dx` in a block) gives the changed
+  object: its function body is `(body; self)`.
+- On a variable, `c.inc()` is the update `c = inc(c)`; on any other receiver (`counter(4).inc()`) the call gives the
+  changed copy. The value of `c.inc()` is the changed object.
+- Not yet: a method that changes its object and gives another value (a `pop`). Its value is the changed object.

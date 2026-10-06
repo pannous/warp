@@ -110,7 +110,7 @@ fn guarded_call(mut caller: Caller<'_, HostState>, name: i32, arguments: Option<
 	let value = match function.call(&mut caller, &[Val::AnyRef(arguments)], &mut result) {
 		Ok(()) => match result[0] {
 			Val::I64(n) => crate::tasks::TaskValue::Int(n),
-			Val::F64(bits) => crate::tasks::TaskValue::Float(f64::from_bits(bits)),
+			Val::F64(bits) => crate::tasks::TaskValue::Float(warp_runtime::floats::canonical_nan(f64::from_bits(bits))),
 			node => return Ok(node.unwrap_anyref().copied()),
 		},
 		Err(failure) if failure.downcast_ref::<wasmtime::Trap>() == Some(&wasmtime::Trap::StackOverflow) => {

@@ -42,3 +42,4 @@ mod test_big_ratio;
 mod test_superscript_variables;
 mod test_mixed_number_arithmetic;
 mod test_norm;
+mod test_nan_observed;

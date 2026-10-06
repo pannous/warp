@@ -33,4 +33,11 @@ x`,
 xs[3]`,
 	fetch: `// the browser fetches only from servers that allow it (CORS)
 fetch https://pannous.com/files/test`,
+	events: `// click the result (or type there): on click / on key run in the page, the last line shows the new total
+count = 0
+price = 3
+total := price * count
+on click { count += 1; print "click at " + event.x + "," + event.y }
+on key { price = 10 }
+total`,
 };

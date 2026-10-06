@@ -143,6 +143,17 @@ def main():
 	print(f"{'ok  ' if ok else 'FAIL'} a fix of several edits renames the key and its read: {renamed}")
 	if not ok: failures.append("multi-edit fix button")
 
+	# page events (notes/signals.md phase 7): a click on the result runs `on click`, the last line (total) is shown anew
+	browser("select", "#examples", "events")
+	time.sleep(1.5)
+	for _ in range(2):
+		browser("click", "#value")
+		time.sleep(0.7)
+	clicked = (browser("get", "text", "#value"), browser("get", "text", "#printed").count("click at"))
+	ok = clicked == ("6", 2)
+	print(f"{'ok  ' if ok else 'FAIL'} two clicks run on click and show total again: {clicked}")
+	if not ok: failures.append("page events")
+
 	# the debug build (?debug, warp.debug.wasm) compiles the same programs
 	browser("open", PAGE + "?debug")
 	for _ in range(60):
