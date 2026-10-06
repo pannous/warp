@@ -283,20 +283,22 @@ fn reflections(program: Node) -> (Node, HashSet<String>) {
 	(program, reflected)
 }
 
+/// `for f in listeners of x {…}` arrives grouped `(listeners of) (x {…})`: its parts in one row
+pub(crate) fn ungrouped_reflection(items: Vec<Node>) -> Vec<Node> {
+	let grouped_reflection = |item: &Node| matches!(item.drop_meta(), Node::List(parts, Bracket::None, _) if parts.last().is_some_and(|last| word(last) == OF_WORD) && parts.iter().any(|part| word(part) == LISTENERS_WORD));
+	if !items.iter().any(grouped_reflection) {
+		return items;
+	}
+	items.into_iter().flat_map(|item| match item.drop_meta() {
+		Node::List(parts, Bracket::None, _) => parts.clone(),
+		_ => vec![item],
+	}).collect()
+}
+
 fn reflected_lists(node: Node, reflected: &mut HashSet<String>) -> Node {
 	let Node::List(items, bracket, separator) = node else { return map_children(node, &mut |child| reflected_lists(child, reflected)) };
 	let mut out: Vec<Node> = vec![];
-	// `for f in listeners of x {…}` arrives grouped `(listeners of) (x {…})`: its parts in one row
-	let grouped_reflection = |item: &Node| matches!(item.drop_meta(), Node::List(parts, Bracket::None, _) if parts.last().is_some_and(|last| word(last) == OF_WORD) && parts.iter().any(|part| word(part) == LISTENERS_WORD));
-	let items: Vec<Node> = if items.iter().any(grouped_reflection) {
-		items.into_iter().flat_map(|item| match item.drop_meta() {
-			Node::List(parts, Bracket::None, _) => parts.clone(),
-			_ => vec![item],
-		}).collect()
-	} else {
-		items
-	};
-	let items: Vec<Node> = items.into_iter().map(|item| reflected_lists(item, reflected)).collect();
+	let items: Vec<Node> = ungrouped_reflection(items).into_iter().map(|item| reflected_lists(item, reflected)).collect();
 	let mut rest = items.into_iter().peekable();
 	while let Some(item) = rest.next() {
 		if word(&item) == LISTENERS_WORD && rest.peek().is_some_and(|next| word(next) == OF_WORD) {
@@ -402,7 +404,7 @@ impl Subscriptions {
 			}
 		};
 		// the listener shares the main-level variables it changes, as a named one does (P124)
-		let globals = crate::event_signals::global_declarations(&[check.clone()], &self.main_variables, &[VALUE_WORD, OLD_WORD]);
+		let globals = crate::event_signals::global_declarations(std::slice::from_ref(&check), &self.main_variables, &[VALUE_WORD, OLD_WORD]);
 		let closure_check = if globals.is_empty() { check.clone() } else { block(globals.iter().cloned().chain([check.clone()]).collect()) };
 		// every listener closure of one arity returns one kind (wasm_emitter/closures.rs): 0
 		let listener = from_template(&format!("({VALUE_WORD}, {OLD_PLACEHOLDER}) => {{ {CHECK_PLACEHOLDER}; 0 }}"), &[(CHECK_PLACEHOLDER, closure_check)]);

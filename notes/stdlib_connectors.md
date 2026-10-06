@@ -112,7 +112,7 @@ step 3.
   object with the same names. `(a * 2).sum()` chains through the group.
 
 ## Step 3: `use wasm` — WebAssembly components (card wit-components, branch wit-components)
-- `use wasm "lib.wasm" as lib` (alias by default the file's stem): a WebAssembly component, the general answer for Rust
+- `use lib.wasm` (long form `use wasm "lib.wasm" as lib`; alias by default the file's stem): a WebAssembly component, the general answer for Rust
   crates and every language that compiles to components. A Rust crate builds one directly: `cargo build --target
   wasm32-wasip2` with `wit_bindgen::generate!` exporting a WIT world (tests/fixtures/components/rust_demo: fib, words,
   a record, an enum, a result; 84 KB). componentize-py and jco make them from Python and JS.

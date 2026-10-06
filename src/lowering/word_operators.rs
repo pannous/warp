@@ -23,6 +23,7 @@ pub fn lower(node: Node) -> Node {
 fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 	let alias_of = |word: &Node| match word.drop_meta() {
 		Node::Symbol(name) => aliases.iter().find(|(alias, _, _)| alias == name).map(|(alias, canonical, op)| {
+			crate::normalize::set_position_of(word);
 			crate::normalize::hint(alias, canonical, &format!("{alias} is the word {canonical}"));
 			*op
 		}),
@@ -32,7 +33,7 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 		// `root 4`, `root(4)`
 		Node::List(items, bracket, separator) if items.len() == 2 && alias_of(&items[0]).is_some() => {
 			let op = alias_of(&items[0]).expect("guarded");
-			let [_, argument] = <[Node; 2]>::try_from(items).ok().expect("two items");
+			let [_, argument] = <[Node; 2]>::try_from(items).expect("two items");
 			let _ = (bracket, separator);
 			Node::Key(Box::new(Node::Empty), op, Box::new(operators(argument, aliases)))
 		}

@@ -5,6 +5,11 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-06 (user, multiple-choice interview, as recommended unless quoted)
+- P165b soft keywords vs tests: strict P165. tests/functions/test_named_arguments.rs:22 renames `fun` → `g`
+  (`fun` is a hard keyword); tests/operators/test_root_word.rs:14-15 top-level `root = 5` / `root(x) := …` expect the
+  error. Unblocks branch soft-keywords (warp-64, merge by warp-3f).
+- P168 `p.phone-number` when p has no field phone-number but `number` exists: FALL BACK to subtraction
+  `p.phone - number` (the user chose this over the recommended field error). Implemented by warp-64.
 - P151 crates.io name (asked by the packaging session, answered there directly): "lang is perfect": the package is
   `warp-lang` (library still `warp`, binary `warp`), its runtime `warp-runtime`; notes/packaging.md.
 - P71 `:=` without parameters is ALWAYS CHARGED (the user chose this over the recommended "now"): `y=3; z:=y*y; y=4;

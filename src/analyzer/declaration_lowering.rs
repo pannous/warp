@@ -442,7 +442,7 @@ pub const INSERT_AT_CALL: &str = "list_insert_at";
 pub const INSERT_EITHER_CALL: &str = "insert_in_either_order";
 pub(super) const AT_WORD: &str = "at";
 
-/// The name of a constant field key (`p.x`, `p["x"]`) when it is spelled with letters, digits and `_`:
+/// The name of a constant field key (`p.x`, `p["x"]`) when it is spelled with letters, digits, `_` and `-` (`phone-number`, P164):
 /// the runtime error for its miss is a function named after it (`no_field_x`), and the trace of the trap carries the name.
 /// A symbol key `p[k]` is evaluated when `k` is a variable, so it is not a constant.
 pub fn constant_field_name(key: &Node) -> Option<String> {
@@ -451,7 +451,7 @@ pub fn constant_field_name(key: &Node) -> Option<String> {
 		Node::Char(letter) => letter.to_string(),
 		_ => return None,
 	};
-	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')).then_some(name)
+	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')).then_some(name)
 }
 
 /// Methods that change the list variable they are called on: `xs.add(v)`, `xs.insert(v, at:1)`, `xs.pop()`
@@ -666,7 +666,7 @@ pub(super) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
 }
 
 /// The element name of the lambda an element-wise operator maps with: no wasp program writes it
-pub(super) const EACH_ELEMENT: &str = "each_element";
+pub const EACH_ELEMENT: &str = "each_element";
 
 /// `xs .+ n` (also `.-`, `.*`, `./`): the operator applied to each element, `xs.map(each_element => each_element + n)`
 pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {

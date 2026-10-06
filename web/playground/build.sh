@@ -1,13 +1,13 @@
 #!/bin/bash
 # Builds web/playground: the warp compiler for the browser (no wasmtime: the `native` feature off, src/web.rs) in two
-# builds, and samples.js (samples/*.wasp for the example menu). Serve the repository root and open the page:
+# builds, samples.js (samples/*.wasp for the example menu) and keywords.js (the editor's hard and soft keywords). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)
 # Usage: build.sh [optimized|debug|components]   (all when omitted)
 #   optimized → warp.wasm: release profile (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
 #               feature (wasmparser's validator, a quarter of the module: the browser validates anyway), then wasm-opt
 #   debug     → warp.debug.wasm: profile web-debug (opt-level 1, line tables, the name section kept), with `validate`, so
 #               emitter bugs are named and stack traces and the browser's debugger show Rust functions and lines
-#   components → components/<name>.js for every COMPONENTS component (`use wasm "<name>.wasm"`, components.js): jco
+#   components → components/<name>.js for every COMPONENTS component (`use <name>.wasm`, components.js): jco
 #               transpiles it (npm i -g @bytecodealliance/jco), the core modules go into the script as base64, the
 #               WIT signatures of its exports as JSON (wasm-tools component wit --json; cargo install wasm-tools)
 # Measured 2026-10-03: optimized 1.30 MB (545 KB gzipped); debug 22 MB (4.8 MB gzipped; full DWARF would be 53 MB).
@@ -90,3 +90,14 @@ with open(sys.argv[1], "w", encoding="utf-8") as script:
 	script.write("// made by build.sh from samples/*.wasp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
 PYTHON
 echo "built $page/samples.js"
+
+# the editor colors the keywords of P165 from their one definition, src/lowering/soft_keywords.rs
+python3 - "$page/keywords.js" src/lowering/soft_keywords.rs <<'PYTHON'
+import json, re, sys
+source = open(sys.argv[2], encoding="utf-8").read()
+def words(name):
+	return re.findall(r'"([^"]+)"', re.search(rf"const {name}: \[&str; \d+\] = \[(.*?)\];", source, re.S).group(1))
+with open(sys.argv[1], "w", encoding="utf-8") as script:
+	script.write("// made by build.sh from src/lowering/soft_keywords.rs\nconst KEYWORDS = " + json.dumps({"hard": words("HARD_KEYWORDS"), "soft": words("SOFT_KEYWORDS")}, ensure_ascii=False) + ";\n")
+PYTHON
+echo "built $page/keywords.js"

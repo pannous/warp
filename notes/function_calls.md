@@ -150,6 +150,14 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   now only after `func`). P161 (user): Swift argument labels compile with the note "wasp names a parameter once"
   (tests/functions/test_argument_labels.rs). Round 7 still open: MATLAB `@(x)`, R `sapply(c(…), function(x) …)`,
   `func id<T>(_ x: T)`.
+- Batch 26: `it` and `$0` belong to the innermost lambda (Kotlin): `xs.map{ it.map{ it*10 } }` shadows, a function's
+  `it` stops at an inner lambda (lambdas.rs `bind_parameter`, declarations.rs `bind_it`); glued `xs.map{ it*2 }` after
+  a dot with an iteration word is the call, not the data `map:{…}`; two lambda-lowering runs no longer reuse
+  `loop_out_0` (`first_fresh_number`). Parser: a trailing block after a method call in a definition or lambda belongs
+  to the call (`f(xs) := xs.map { it*10 }` was `(f(xs) := xs.map) {…}`). Shaped parameters (wiki/argument.md,
+  parameter_shapes.rs): `to call person{name?, phone number, mutable status} do …` and `f(p{name, title?})`; a
+  missing required field of an object written at the call (`{…}`, `person{…}`, `person {…}`) is a compile error.
+  Open: the type word of `phone number` is not checked (the wiki passes the text "899-573-5842"), nor `mutable`.
 
 ## Open
 - Board cards: functions-ruby-yield (warp-93); functions-sort-op,

@@ -61,6 +61,8 @@ impl WaspParser {
 			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
 			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
+			'@' if self.peek_char(1) == '(' && !self.options.data_mode => self.parse_matlab_lambda(),
+			'\\' if self.backslash_lambda_ahead() && !self.options.data_mode => self.parse_backslash_lambda(),
 			// `@1`: a reference to the node whose @id is 1 (wiki/reference.md, P160)
 			'@' if self.peek_char(1).is_ascii_digit() => {
 				self.advance(); // skip '@'
@@ -154,6 +156,8 @@ impl WaspParser {
 			return None;
 		};
 		let mut parameters = Vec::new();
+		// `to call person{name?, phone number} do …` (wiki/argument.md): the parameter's fields, glued to it
+		let mut shapes = Vec::new();
 		loop {
 			self.skip_spaces();
 			// `to square a number: …` or `to square a number { … }`
@@ -161,7 +165,13 @@ impl WaspParser {
 				break;
 			}
 			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
-				Some(parameter) => parameters.push(parameter),
+				Some(word) if word == DO_WORD && !parameters.is_empty() => break,
+				Some(parameter) => {
+					if self.current_char() == '{' {
+						shapes.push((parameter.clone(), self.parse_atom()));
+					}
+					parameters.push(parameter)
+				}
 				None => {
 					restore(self);
 					return None;
@@ -183,6 +193,10 @@ impl WaspParser {
 			Ok(parameters) => parameters,
 			Err(message) => return Some(error(&message)),
 		};
+		let parameters: Vec<Node> = parameters.into_iter().map(|parameter| match shapes.iter().find(|(name, _)| *name == parameter.name()) {
+			Some((_, fields)) => Node::Key(Box::new(parameter), Op::Colon, Box::new(fields.clone())),
+			None => parameter,
+		}).collect();
 		if let Some(clash) = self.phrase_redefinition(&name, &parameters) {
 			return Some(clash);
 		}
@@ -380,6 +394,47 @@ impl WaspParser {
 		let body = self.parse_expr(Op::Assign.binding_power().1);
 		let body = self.continue_expr(body, 0);
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
+	}
+
+	/// MATLAB's anonymous function `@(x) x.^2`: the lambda `x => x^2`
+	fn parse_matlab_lambda(&mut self) -> Node {
+		self.advance(); // '@'
+		let parameters = self.parse_bracketed('(');
+		self.skip_spaces();
+		let body = self.parse_expr(Op::Assign.binding_power().1);
+		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
+	}
+
+	/// `\x ->`, `\a b ->`: names and an arrow after the backslash (`\alpha` alone is an entity)
+	fn backslash_lambda_ahead(&self) -> bool {
+		let rest: String = self.chars[self.pos + 1..].iter().take_while(|ch| **ch != '\n').collect();
+		let Some((names, _)) = rest.split_once("->") else { return false };
+		let names: Vec<&str> = names.split_whitespace().collect();
+		!names.is_empty() && names.iter().all(|name| name.starts_with(char::is_alphabetic) && name.chars().all(|ch| ch.is_alphanumeric() || ch == '_'))
+	}
+
+	/// Haskell's `\x -> x * 2`, `\a b -> a + b`: the lambda
+	fn parse_backslash_lambda(&mut self) -> Node {
+		self.advance(); // '\\'
+		let mut names = Vec::new();
+		loop {
+			self.skip_spaces();
+			if self.current_char() == '-' && self.peek_char(1) == '>' {
+				self.advance_by(2);
+				break;
+			}
+			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
+				Some(name) => names.push(Symbol(name)),
+				None => return error("a lambda `\\x -> …` needs its arrow"),
+			}
+		}
+		self.skip_spaces();
+		let parameters = match names.len() {
+			1 => names.remove(0),
+			_ => Node::List(names, Bracket::Round, Separator::Colon),
+		};
+		let body = self.parse_expr(Op::Assign.binding_power().1);
+		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 	}
 
 	/// `<T, F: Fn(i32) -> i32>` glued to a function's name and followed by its parameters: its length
@@ -586,6 +641,16 @@ impl WaspParser {
 			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
 			return construction;
 		}
+		// Ruby's `attr_accessor :x, :y` in a class body: the fields x and y
+		if RUBY_FIELD_WORDS.contains(&symbol.as_str()) && self.type_fields.is_some() {
+			let line: String = (0..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '\n' | '\0' | ';' | '}')).collect();
+			let names: Vec<String> = line.split(',').map(|name| name.trim().trim_start_matches(':').to_string()).collect();
+			if names.iter().all(|name| !name.is_empty() && name.chars().all(is_identifier_char)) {
+				self.advance_by(line.chars().count());
+				crate::diagnostic::note_alias(&format!("{symbol}{line}"), &names.join("; "));
+				return Node::List(names.into_iter().map(Symbol).collect(), Bracket::None, Separator::Semicolon);
+			}
+		}
 		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
 			while matches!(self.current_char(), ' ' | '\t') {
 				self.advance();
@@ -713,12 +778,14 @@ impl WaspParser {
 			_ => vec![],
 		};
 		let mut constructor_fields = if self.current_char() == '(' { self.parse_primary_constructor() } else { vec![] };
+		self.skip_conformances();
 		// Python's `class Dog(Animal):` names its parents in the parentheses, `object` the root of all
 		let python_body = self.current_char() == ':' && self.peek_char(1) != '=';
 		let python_parent = match python_body {
 			true => std::mem::take(&mut constructor_fields).into_iter().map(|parent| parent.drop_meta().name()).find(|parent| parent != PYTHON_ROOT_CLASS),
 			false => None,
 		};
+		let before_body = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		// `class P(val x: Int)` ends at its line when no body follows on it
 		match constructor_fields.is_empty() {
 			true => {
@@ -760,6 +827,15 @@ impl WaspParser {
 			}
 			name = name.with_attribute(WITH_KEYWORD, Node::List(mixins, Bracket::None, Separator::Space));
 		}
+		// Go's `type Shape interface {…}`: the trait Shape, as `interface Shape {…}` declares it (traits.rs)
+		if self.matches_keyword(GO_INTERFACE_WORD) {
+			self.advance_by(GO_INTERFACE_WORD.len());
+			self.skip_whitespace();
+			if self.current_char() == '{' {
+				let block = self.parse_bracketed('{');
+				return Node::List(vec![Symbol(GO_INTERFACE_WORD.to_string()), name, block], Bracket::None, Separator::Space);
+			}
+		}
 		// Go's `type Point struct {…}`
 		if self.matches_keyword(GO_STRUCT_WORD) {
 			self.advance_by(GO_STRUCT_WORD.len());
@@ -771,6 +847,16 @@ impl WaspParser {
 			(true, Empty) => {
 				self.advance(); // :
 				self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty)
+			}
+			// Ruby's `class Point` and the lines indented below it, up to its `end`
+			(false, Empty) if self.pos > before_body.0 && self.closing_end_follows(&RUBY_END_OPENERS) => {
+				(self.pos, self.line_nr, self.column, self.current_line) = before_body;
+				let body = self.parse_indented_block().map(without_end_lines).map(Self::transform_fields_to_types).unwrap_or(Empty);
+				self.skip_whitespace();
+				if self.matches_keyword(END_KEYWORD) {
+					self.advance_by(END_KEYWORD.len());
+				}
+				body
 			}
 			(_, body) => body,
 		};
@@ -784,6 +870,28 @@ impl WaspParser {
 		};
 		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
 		Node::Type { name: Box::new(name), body: Box::new(body) }
+	}
+
+	/// The traits a class names before its body, Java's and TypeScript's `implements Shape, Named {`, Swift's
+	/// `struct Square: Shape {`, Kotlin's `class Square(…) : Shape {`: skipped with a note, since a type conforms to a
+	/// trait by defining its operations (notes/traits.md T2)
+	fn skip_conformances(&mut self) {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let start = if self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) != '=' {
+			blanks + 1
+		} else if (0..IMPLEMENTS_WORD.len()).all(|i| self.peek_char(blanks + i) == IMPLEMENTS_WORD.as_bytes()[i] as char) && !is_identifier_char(self.peek_char(blanks + IMPLEMENTS_WORD.len())) {
+			blanks + IMPLEMENTS_WORD.len()
+		} else {
+			return;
+		};
+		let names: String = (start..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '{' | '\n' | '\0')).collect();
+		let are_names = names.split(',').all(|name| !name.trim().is_empty() && name.trim().chars().all(is_identifier_char));
+		if !are_names || self.peek_char(start + names.chars().count()) != '{' {
+			return;
+		}
+		let written: String = (blanks..start).map(|offset| self.peek_char(offset)).collect::<String>() + names.trim_end();
+		crate::diagnostic::educate_once(CONFORMANCE_TOPIC, written.trim(), "", "a type conforms to a trait by defining its operations: wasp needs no list of them");
+		self.advance_by(start + names.chars().count());
 	}
 
 	/// The name of a declared type after blanks: `new Point(…)`
@@ -986,5 +1094,16 @@ fn statements(block: Node) -> Vec<Node> {
 		Empty => vec![],
 		Node::List(items, Bracket::Curly | Bracket::Round, separator) => vec![Node::List(items, Bracket::None, separator)],
 		single => vec![single],
+	}
+}
+
+/// A Ruby class body without the `end` lines of its methods (their bodies are read by indentation)
+fn without_end_lines(body: Node) -> Node {
+	let is_end = |item: &Node| matches!(item.drop_meta(), Node::Symbol(word) if word == END_KEYWORD);
+	match body {
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().filter(|item| !is_end(item)).map(without_end_lines).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(without_end_lines(*left)), op, Box::new(without_end_lines(*right))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(without_end_lines(*node)), data },
+		other => other,
 	}
 }

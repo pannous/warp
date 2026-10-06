@@ -250,6 +250,7 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 					let racing = all_word.name() == ANY_WORD;
 					let first = all_word.name() == FIRST_WORD;
 					if first {
+						crate::normalize::set_position_of(list);
 						crate::diagnostic::educate_once(FIRST_TOPIC, "await first […]", "await any […]", "await first is the first task's result; for the first to finish: await any […]");
 					}
 					let Node::List(listed, list_bracket, list_separator) = list.drop_meta().clone() else { unreachable!("guarded") };
@@ -1359,7 +1360,41 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 }
 
 pub fn lower_c_functions(node: Node) -> Node {
-	lower_lists(end_definitions(node), |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| extension_block(items)).or_else(|| smart_scope(items)).or_else(|| partial_application(items)))
+	lower_lists(end_definitions(node), |items| definition_then_statements(items).or_else(|| function_definition(items)).or_else(|| extension_block(items)).or_else(|| smart_scope(items)).or_else(|| partial_application(items)))
+}
+
+fn function_definition(items: &[Node]) -> Option<Node> {
+	c_function(items).or_else(|| keyword_definition(items))
+}
+
+/// `function f(x) { return x * 2 } f(3)` (JS, PHP, Go, Rust): the body's closing brace ends the definition, what
+/// follows is the next statement
+fn definition_then_statements(items: &[Node]) -> Option<Node> {
+	let [keyword, ..] = items else { return None };
+	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
+		return None;
+	}
+	let body_end = items.iter().skip(1).position(ends_in_block)? + 1;
+	if body_end + 1 >= items.len() {
+		return None;
+	}
+	let (definition, rest) = items.split_at(body_end + 1);
+	let definition = function_definition(definition).unwrap_or_else(|| Node::List(definition.to_vec(), Bracket::None, Separator::Space));
+	let rest = match rest {
+		[single] => single.clone(),
+		several => definition_then_statements(several).unwrap_or_else(|| Node::List(several.to_vec(), Bracket::None, Separator::Space)),
+	};
+	Some(Node::List(vec![definition, rest], Bracket::None, Separator::Semicolon))
+}
+
+/// A `{…}` block, or a group or arrow whose last part is one: `((f (x)) {…})`, `(f x) -> i32 {…}`
+fn ends_in_block(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => true,
+		Node::List(items, _, _) => items.last().is_some_and(ends_in_block),
+		Node::Key(_, _, right) => ends_in_block(right),
+		_ => false,
+	}
 }
 
 /// `add(1, _)`: a call with placeholders is the lambda of the missing arguments, `partial_1 => add(1, partial_1)`
@@ -1459,9 +1494,10 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let mut labeled_names = vec![];
 	let mut parameters: Vec<Node> = parameters.map(|parameter| labeled_parameter(parameter, &mut labeled_names)).collect();
 	let body = with_label_names(body, labeled_names);
-	// `func add1(x int)`: the one parameter and its type arrive as two words
+	// `func add1(x int)`: the one parameter and its type arrive as two words; `func total(s Shape)` of a declared type
 	if let [parameter, type_word] = parameters.as_slice() {
-		if matches!(parameter.drop_meta(), Node::Symbol(_)) && is_type_word(type_word) {
+		let is_type_name = matches!(type_word.drop_meta(), Node::Symbol(word) if word.starts_with(char::is_uppercase));
+		if matches!(parameter.drop_meta(), Node::Symbol(_)) && (is_type_word(type_word) || is_type_name) {
 			parameters = vec![Node::Key(Box::new(parameter.clone()), Op::Colon, Box::new(type_word.clone()))];
 		}
 	}
@@ -1557,7 +1593,7 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 			Some(result_type) => Node::Key(Box::new(head), Op::Colon, result_type.clone()),
 			None => head,
 		};
-		Node::Key(Box::new(head), op.clone(), body.clone())
+		Node::Key(Box::new(head), *op, body.clone())
 	};
 	Some(Node::List(definitions.iter().map(method).collect(), Bracket::None, Separator::Semicolon))
 }
@@ -1698,13 +1734,14 @@ fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
 	let name = typed_parameter_name(typed).expect("a labeled parameter has a name");
 	// user 2026-10-06: wasp names a parameter once, Swift's label and name are redundant; ported code still compiles
 	let written = format!("{label} {}", typed.serialize());
+	let preferred = if label == WILDCARD_LABEL { typed.clone() } else { renamed_parameter(typed, label) };
+	crate::normalize::set_position_of(&parameter);
+	crate::normalize::hint(&written, &preferred.serialize(), "wasp names a parameter once, no label");
 	if label == WILDCARD_LABEL {
-		crate::normalize::hint(&written, &typed.serialize(), "wasp names a parameter once, no label");
-		return typed.clone();
+		return preferred;
 	}
-	crate::normalize::hint(&written, &renamed_parameter(typed, label).serialize(), "wasp names a parameter once, no label");
 	labeled_names.push(Node::Key(Box::new(name.clone()), Op::Assign, Box::new(Node::Symbol(label.to_string()))));
-	renamed_parameter(typed, label)
+	preferred
 }
 
 /// The body reading every labeled parameter by its label: `name` → `person` (an alias `name = person` would hide that

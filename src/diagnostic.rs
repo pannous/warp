@@ -78,10 +78,48 @@ pub fn paint(color: Color, text: &str) -> String {
 
 /// Does a message end its description with a position ` at line:column`
 pub fn names_position(message: &str) -> bool {
+	message_position(message).is_some()
+}
+
+/// The position ` at line:column` that ends a message's description
+pub fn message_position(message: &str) -> Option<(usize, usize)> {
 	let description = message.split("; fix: ").next().unwrap_or(message);
-	description.rsplit_once(" at ").is_some_and(|(_, place)| {
-		place.split_once(':').is_some_and(|(line, column)| !line.is_empty() && line.chars().all(|c| c.is_ascii_digit()) && column.chars().all(|c| c.is_ascii_digit()) && !column.is_empty())
-	})
+	let (_, place) = description.rsplit_once(" at ")?;
+	let (line, column) = place.split_once(':')?;
+	let number = |digits: &str| (!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())).then(|| digits.parse().ok()).flatten();
+	Some((number(line)?, number(column)?))
+}
+
+/// Where a failed program's error is: the position its message names (also for an error no diagnostic made)
+pub fn error_position(result: &Node) -> Option<(usize, usize)> {
+	let Node::Error(message) = result.drop_meta() else { return None };
+	let Node::Text(message) = message.drop_meta() else { return None };
+	message_position(message)
+}
+
+/// The source line at a position with `^^` under the word there (one `^` under any other character); tabs before it
+/// stay tabs so the marks line up
+pub fn excerpt(source: &str, line: usize, column: usize) -> Option<String> {
+	let text = source.lines().nth(line.checked_sub(1)?)?;
+	let before: Vec<char> = text.chars().take(column.checked_sub(1)?).collect();
+	if before.len() + 1 != column {
+		return None;
+	}
+	let is_word = |c: &char| c.is_alphanumeric() || *c == '_';
+	let word = text.chars().skip(before.len()).take_while(is_word).count().max(1);
+	let indent: String = before.iter().map(|&c| if c == '\t' { '\t' } else { ' ' }).collect();
+	let gutter = " ".repeat(line.to_string().len());
+	Some(format!("  {line} | {text}\n  {gutter} | {indent}{}", "^".repeat(word)))
+}
+
+/// Print the line a later warning or error names, from this program (the CLI's programs; a host shows them itself)
+pub fn show_lines_of(source: &str) {
+	*SHOWN_SOURCE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(source.to_string());
+}
+
+/// The line of the shown program at a position, with its marks
+pub fn shown_excerpt(line: usize, column: usize) -> Option<String> {
+	SHOWN_SOURCE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_deref().and_then(|source| excerpt(source, line, column))
 }
 
 /// The text of a node for a message: its serialization, or the source from its position to the end of the statement
@@ -165,6 +203,10 @@ thread_local! {
 	static ERROR_DIAGNOSTICS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
+/// The program the CLI runs: its warnings and errors print the line they name (show_lines_of); process-wide, as a
+/// program may compile on another thread
+static SHOWN_SOURCE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 /// The warning mode of every later compilation on this thread (the CLI's `--strict`)
 pub fn set_warning_mode(mode: WarningMode) {
 	WARNING_MODE.with(|current| current.set(mode));
@@ -204,7 +246,12 @@ pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 	match (warning_mode(), warnings.first()) {
 		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
 		_ => {
-			warnings.iter().for_each(|warning| eprintln!("warning: {warning}"));
+			for warning in warnings {
+				eprintln!("warning: {warning}");
+				if let Some(excerpt) = shown_excerpt(warning.line, warning.column) {
+					eprintln!("{excerpt}");
+				}
+			}
 			COMPILE_WARNINGS.with(|reported| reported.borrow_mut().extend_from_slice(warnings));
 			Ok(())
 		}

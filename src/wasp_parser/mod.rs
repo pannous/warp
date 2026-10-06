@@ -59,7 +59,7 @@ const NONLOCAL_WORD: &str = "nonlocal";
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
-const ELEMENT_WISE_OPERATORS: [(char, Op); 4] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div)];
+const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div), ('^', Op::Pow)];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
@@ -71,6 +71,12 @@ const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final
 const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
+/// Java's and TypeScript's `class Square implements Shape {…}`
+const IMPLEMENTS_WORD: &str = "implements";
+/// The got-it topic of a class naming its traits (`implements Shape`, Swift's `: Shape`)
+const CONFORMANCE_TOPIC: &str = "conformance-list";
+/// Go's `type Shape interface {…}` declares the trait Shape
+const GO_INTERFACE_WORD: &str = "interface";
 /// Go's `type Point struct {…}` declares the class Point
 const GO_STRUCT_WORD: &str = "struct";
 /// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
@@ -119,6 +125,12 @@ const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
 const PYTHON_LAMBDA_KEYWORD: &str = "lambda";
 const ELSE_KEYWORD: &str = "else";
 const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
+/// The receiver a Ruby instance variable `@x` reads, `self.x`
+const RECEIVER_WORD: &str = "self";
+/// Ruby's field declarations `attr_accessor :x, :y`
+const RUBY_FIELD_WORDS: [&str; 3] = ["attr_accessor", "attr_reader", "attr_writer"];
+/// The words a Ruby `end` closes in a class body: `def … end`, `do … end`
+const RUBY_END_OPENERS: [&str; 3] = ["def", "do", "class"];
 const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
 /// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
 const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
@@ -254,6 +266,11 @@ impl SpecialInfix {
 				if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient }
 			}
 			SpecialInfix::Pipeline => piped(lhs, operand),
+			// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
+			SpecialInfix::ElementWise(Op::Mul) if matches!(operand, Empty) => {
+				crate::normalize::hint(&format!("{}.*", lhs.serialize()), &lhs.serialize(), "wasp imports a module whole");
+				lhs
+			}
 			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
 			SpecialInfix::Membership => Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), operand], Bracket::None, Separator::Space),
 			SpecialInfix::DotCall => dot_call(lhs, operand),
@@ -349,6 +366,8 @@ const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 const TO_SENTENCE_WORD: &str = "To";
+/// `to greet p do …`: the word between a `to` definition's parameters and its body
+const DO_WORD: &str = "do";
 const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
