@@ -173,27 +173,27 @@ fn test_chaining() {
 }
 
 #[test]
-#[should_panic(expected = "Cannot add")]
 fn test_type_mismatch_add() {
-	let _ = &Node::text("hello") + &Node::int(5);
+	let result = &Node::text("hello") + &Node::int(5);
+	assert!(matches!(result.drop_meta(), Node::Error(_)) && result.to_string().contains("Cannot add"), "{result:?}");
 }
 
 #[test]
-#[should_panic(expected = "Cannot subtract")]
 fn test_type_mismatch_sub() {
-	let _ = &Node::text("world") - &Node::int(3);
+	let result = &Node::text("world") - &Node::int(3);
+	assert!(matches!(result.drop_meta(), Node::Error(_)) && result.to_string().contains("Cannot subtract"), "{result:?}");
 }
 
 #[test]
-#[should_panic(expected = "Cannot multiply")]
 fn test_type_mismatch_mul() {
-	let _ = &Node::symbol("x") * &Node::int(2);
+	let result = &Node::symbol("x") * &Node::int(2);
+	assert!(matches!(result.drop_meta(), Node::Error(_)) && result.to_string().contains("Cannot multiply"), "{result:?}");
 }
 
 #[test]
-#[should_panic(expected = "Cannot divide")]
 fn test_type_mismatch_div() {
-	let _ = &Node::List(vec![], Bracket::Square, Separator::None) / &Node::int(5);
+	let result = &Node::List(vec![], Bracket::Square, Separator::None) / &Node::int(5);
+	assert!(matches!(result.drop_meta(), Node::Error(_)) && result.to_string().contains("Cannot divide"), "{result:?}");
 }
 
 #[test]
