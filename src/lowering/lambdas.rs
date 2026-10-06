@@ -226,6 +226,12 @@ fn block_lambda(node: &Node) -> Option<Lambda> {
 	Some(Lambda::new(params, body))
 }
 
+/// `{it*2}` as the arrow lambda `it => it*2`, for passes that know only arrows (closures.rs)
+pub(crate) fn block_as_arrow(node: &Node) -> Option<Node> {
+	let lambda = block_lambda(node).filter(|lambda| !lambda.params.is_empty())?;
+	Some(Node::Key(Box::new(Node::Symbol(IMPLICIT_PARAMETER.to_string())), Op::FatArrow, Box::new(lambda.body)))
+}
+
 /// The definition `name(params) := body` of a lambda, a block with `it` or an operator given as a value
 pub fn lambda_definition(name: &str, function: &Node) -> Option<Node> {
 	let lambda = arrow_lambda(function).or_else(|| block_lambda(function).filter(|lambda| !lambda.params.is_empty())).or_else(|| operator_lambda(function))?;

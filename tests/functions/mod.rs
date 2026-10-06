@@ -87,5 +87,7 @@ mod test_sort_functions;
 mod test_lambda_spellings;
 mod test_comma_calls;
 mod test_shadowed_log;
+mod test_returned_blocks;
+mod test_returned_function_names;
 mod test_global_with_closures;
 mod test_counting_word_result;

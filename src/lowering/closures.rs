@@ -162,7 +162,7 @@ pub fn lower(program: Node) -> Node {
 }
 
 /// The last statement of a body: its value
-fn tail(body: &Node) -> &Node {
+pub(crate) fn tail(body: &Node) -> &Node {
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly | Bracket::Round, Separator::Semicolon | Separator::Newline) if !items.is_empty() => tail(&items[items.len() - 1]),
 		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 => tail(&items[0]),
