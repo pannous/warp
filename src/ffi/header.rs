@@ -381,7 +381,7 @@ fn is_annotation_line(line: &str) -> bool {
 }
 
 /// `line` without its block-comment text; `in_comment` carries an unclosed `/*` to the next line
-fn without_block_comments(line: &str, in_comment: &mut bool) -> String {
+pub(crate) fn without_block_comments(line: &str, in_comment: &mut bool) -> String {
     let mut kept = String::new();
     let mut rest = line;
     loop {

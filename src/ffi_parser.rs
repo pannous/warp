@@ -163,7 +163,7 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
                 (parts[0].to_string(), format!("p{}", i))
             } else {
                 let last = *parts.last().unwrap();
-                let is_name = last.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false)
+                let is_name = last.chars().next().map(|c| c.is_alphabetic() || c == '_').unwrap_or(false)
                     && !last.contains('*');
                 if is_name && parts.len() > 1 {
                     (parts[..parts.len() - 1].join(" "), last.trim_start_matches('*').to_string())
@@ -191,9 +191,12 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiFunction> {
         Err(_) => return vec![],
     };
 
+    // block comments span lines, and their prose may read like a call (glibc's "because tolower (EOF) must be EOF")
+    let mut in_comment = false;
     content
         .lines()
-        .filter_map(|line| parse_declaration(line, library))
+        .map(|line| crate::ffi::without_block_comments(line, &mut in_comment))
+        .filter_map(|line| parse_declaration(&line, library))
         .collect()
 }
 
