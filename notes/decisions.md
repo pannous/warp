@@ -165,6 +165,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   when the timeout happens; a timeout itself stays silent.
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P167 (classes, warp-e0) Go's positional literal `Point{1, 2}` builds `Point(1, 2)` when Point is a known class,
+  with a got-it note "wasp writes Point(1, 2)"; for an unknown name it stays tagged data.
 - P165 Kotlin-style soft keywords (user's proposal: with so many synonyms in so many situations, allow overwriting
   keywords except the main ones). Hard keywords, never redefinable: control flow (if, then, else, while, for, in,
   return, break, continue), declarations (def/fun/fn, class, var/let/const/val, global), literal values (true,
