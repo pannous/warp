@@ -77,6 +77,7 @@ self.onmessage = async ({ data }) => {
 	await ready;
 	if (!compiler) await loadCompiler();
 	await prepareForeignRuntimes(data.code); // host.js: a runtime that loads asynchronously loads before the run
+	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
 	const started = performance.now();
 	const report = evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });
