@@ -104,3 +104,24 @@ fn libc_compiled_to_wasm_is_called_like_c() {
 	is!(&format!("{LIBC}toupper(97)"), 65);
 	is!(&format!("{LIBC}strchr(\"abc\", 120)"), Node::Empty); // NULL is ø
 }
+
+// an out-pointer (`char **endptr`) is left out of the call: the module gets a slot of its malloc, and what it received
+// is the result, as natively (notes/ffi_handles.md)
+#[test]
+fn a_c_modules_out_pointer_gives_the_result() {
+	const LIBC: &str = "import tests/fixtures/wasm/libc_text; ";
+	is!(&format!("{LIBC}strtol(\"42 apples\", 10)"), " apples");
+	is!(&format!("{LIBC}strtol(\"ff!\", 16)"), "!");
+}
+
+// zlib built from its own sources to wasm32-wasi (zlib.sh, 63 KB, no imports): const byte pointers take texts, unsigned
+// long results stay positive; the same program natively and in the browser
+#[test]
+fn zlib_compiled_to_wasm() {
+	const ZLIB: &str = "import tests/fixtures/wasm/zlib; ";
+	is!(&format!("{ZLIB}zlibVersion()"), "1.3.2");
+	is!(&format!("{ZLIB}crc32(0, \"hello\", 5)"), 907060870);
+	is!(&format!("{ZLIB}crc32(0, \"wasp\", 4)"), 3400449319i64);
+	is!(&format!("{ZLIB}adler32(1, \"hello\", 5)"), 103547413);
+	is!(&format!("{ZLIB}compressBound(100)"), 113);
+}

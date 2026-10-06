@@ -676,36 +676,50 @@ function cText(memory, address) {
 	return bytes.slice(0, end < 0 ? bytes.length : end);
 }
 
-// the program's C calls (src/wasm_modules.rs c_calls) by "module\tname": per parameter t a text, l its length, n a number
+// the program's C calls (src/wasm_modules.rs c_calls) by "module\tname": per parameter t a text, l its length, n a
+// number, o an out-pointer (no value of the program); result t a text, u an unsigned number, n a number, ot / on what
+// the first out-pointer received as a text / number
 function cCalls(run) {
 	if (!run.cCalls) {
 		const lines = WebAssembly.Module.customSections(run.module, C_CALLS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
 		run.cCalls = new Map(lines.filter(Boolean).map(line => line.split("\t")).map(([module, name, parameters, result]) =>
-			[`${module}\t${name}`, { parameters: [...parameters], result: result === "t" }]));
+			[`${module}\t${name}`, { parameters: [...parameters], result }]));
 	}
 	return run.cCalls;
 }
 
 // a C function of a module, called with the program's values: each text (a NUL-terminated copy in the program's memory,
-// or a pointer and length) is copied into a block of the module's malloc, freed after the call; a char * result is
-// read back as a text of the program (NULL is ø)
+// or a pointer and length) is copied into a block of the module's malloc, each out-pointer gets a NULL slot there, all
+// freed after the call; a char * result (or char ** out-pointer) is read back as a text of the program (NULL is ø)
 function callC(holder, exports, member, call, values, what) {
 	const program = holder.exports;
 	const blocks = [];
+	const outSlots = [];
 	const moduleArguments = [];
-	values.forEach((value, index) => {
-		const letter = call?.parameters[index];
+	const malloc = bytes => {
+		if (!exports.malloc) throw new Error(`${what} takes a text or out-pointer, but its module exports no malloc(size)`);
+		const block = exports.malloc(bytes.length);
+		new Uint8Array(exports.memory.buffer).set(bytes, block);
+		blocks.push(block);
+		return block;
+	};
+	const remaining = [...values];
+	(call?.parameters ?? values.map(() => "n")).forEach((letter, index) => {
+		if (letter === "o") return moduleArguments.push(outSlots[outSlots.push(malloc([0, 0, 0, 0])) - 1]);
+		const value = remaining.shift();
 		if (letter === "l") return; // the length of the text before it
 		if (letter !== "t") return moduleArguments.push(value);
-		if (!exports.malloc) throw new Error(`${what} takes a text, but its module exports no malloc(size) to copy it into`);
-		const text = call.parameters[index + 1] === "l" ? new Uint8Array(program.memory.buffer, value, values[index + 1]).slice() : cText(program.memory, value);
-		const block = exports.malloc(text.length + 1);
-		new Uint8Array(exports.memory.buffer).set([...text, 0], block);
-		blocks.push(block);
-		moduleArguments.push(block);
+		const text = call.parameters[index + 1] === "l" ? new Uint8Array(program.memory.buffer, value, remaining[0]).slice() : cText(program.memory, value);
+		moduleArguments.push(malloc([...text, 0]));
 	});
-	const result = member(...moduleArguments);
-	const value = call?.result ? buildValue(program, treeOfPlain(result === 0 ? null : decode(cText(exports.memory, result)))) : result;
+	const returned = member(...moduleArguments);
+	const textOf = address => buildValue(program, treeOfPlain(address === 0 ? null : decode(cText(exports.memory, address))));
+	const received = () => {
+		const address = new DataView(exports.memory.buffer).getUint32(outSlots[0], true);
+		if (address === 0) throw new Error(`${what} gave nothing through its out-pointer (C status ${returned ?? 0})`);
+		return address;
+	};
+	const value = { t: () => textOf(returned), u: () => BigInt(returned >>> 0), ot: () => textOf(received()), on: () => received() | 0 }[call?.result]?.() ?? returned;
 	if (exports.free) blocks.forEach(block => exports.free(block));
 	return value;
 }
