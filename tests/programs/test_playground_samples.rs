@@ -7,6 +7,7 @@ use warp::Node;
 
 const EXCLUDED_LIST: &str = "web/playground/excluded_samples.txt";
 const SAMPLES: &str = "samples";
+const PAINT_CALL: &str = "paint(";
 
 /// The names excluded_samples.txt lists: the first word of each line that is no comment
 fn excluded_samples() -> Vec<String> {
@@ -20,12 +21,17 @@ fn sample_path(name: &str) -> String {
 	format!("{SAMPLES}/{name}.wasp")
 }
 
+/// A sample that paints needs the page's canvas, which the browser suite's worker has not: natively it writes a PNG
+fn runs_here(name: &str) -> bool {
+	cfg!(feature = "native") || !fs::read_to_string(sample_path(name)).is_ok_and(|source| source.contains(PAINT_CALL))
+}
+
 #[test]
 fn every_playground_sample_runs_without_an_error() {
 	let excluded = excluded_samples();
 	let mut menu: Vec<String> = fs::read_dir(SAMPLES).expect(SAMPLES)
 		.filter_map(|entry| entry.ok()?.path().file_name()?.to_str()?.strip_suffix(".wasp").map(str::to_string))
-		.filter(|name| !excluded.contains(name))
+		.filter(|name| !excluded.contains(name) && runs_here(name))
 		.collect();
 	menu.sort();
 	let failures: Vec<String> = menu.iter().filter_map(|name| match eval(&sample_path(name)) {
