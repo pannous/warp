@@ -162,6 +162,10 @@ pub fn lower_tasks(node: Node) -> Node {
 	if words.is_empty() {
 		return node;
 	}
+	// `def hi: {…}`, `fun f(x) {…}` too
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, &node);
+	functions.extend(context.user_functions.into_keys());
 	// the functions a `go` starts: `once the download finishes` names the task by its function
 	node.visit(&mut |part| if let Node::List(items, _, _) = part {
 		if let [word, started, ..] = items.as_slice() {
@@ -603,7 +607,7 @@ fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, u
 	if wrapped.is_empty() {
 		return node;
 	}
-	let mut items: Vec<Node> = wrapped.iter().map(|(function, count)| {
+	let items: Vec<Node> = wrapped.iter().map(|(function, count)| {
 		let arguments = Node::Symbol(WRAPPER_ARGUMENTS.to_string());
 		// declared a list: a function of no arguments leaves it unused, which would make it an Int (the host passes a Node)
 		let declared = Node::Key(Box::new(arguments.clone()), Op::Colon, Box::new(Node::Symbol("list".to_string())));
@@ -614,14 +618,22 @@ fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, u
 		let body = Node::List(vec![Node::Key(Box::new(result.clone()), Op::Assign, Box::new(call)), result], Bracket::Curly, Separator::Semicolon);
 		Node::Key(Box::new(head), Op::Define, Box::new(body))
 	}).collect();
+	with_definitions_first(node, items)
+}
+
+/// The program with `definitions` as its first statements
+pub(crate) fn with_definitions_first(node: Node, mut definitions: Vec<Node>) -> Node {
+	if definitions.is_empty() {
+		return node;
+	}
 	match node {
 		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			items.extend(statements);
-			Node::List(items, Bracket::None, separator)
+			definitions.extend(statements);
+			Node::List(definitions, Bracket::None, separator)
 		}
 		single => {
-			items.push(single);
-			Node::List(items, Bracket::None, Separator::Semicolon)
+			definitions.push(single);
+			Node::List(definitions, Bracket::None, Separator::Semicolon)
 		}
 	}
 }
