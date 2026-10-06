@@ -32,3 +32,17 @@ fn a_for_loop_over_a_linear_array_gives_its_last_value() {
 	is!("linear xs = int[3]; xs#3 = 7; for x in xs { x }", int(7));
 	is!("linear xs = int[3]; xs#1 = 2; r = for x in xs { x * 10 }; r", int(0));
 }
+
+// a float map of a linear float array runs as a kernel two cells at a time in f64x2 lanes (card simd-map,
+// notes/simd.md): its result is a new linear array; any other body stays the general map
+#[test]
+fn a_float_map_of_a_linear_array_is_a_simd_kernel() {
+	let fill = "linear xs = float[5]; for i in 1 to 5 { xs#i = i * i * 1.0 }; ";
+	is!(&format!("{fill}ys = xs.map(x => x * 0.5 + 1); ys"), list(vec![float(1.5), float(3.0), float(5.5), float(9.0), float(13.5)]));
+	is!(&format!("{fill}ys = map(xs, v => -sqrt(v) / 2); [ys#5, #ys]"), list(vec![float(-2.5), int(5)]));
+	let lowered = |code: &str| warp::pipeline::lower(code).expect("a program").serialize();
+	assert!(lowered(&format!("{fill}ys = xs.map(x => x * 0.5 + 1); ys#1")).contains("linear_mapf·x·x*0.5+1"));
+	let k = "k = 3.0; ";
+	assert!(!lowered(&format!("{fill}{k}ys = xs.map(x => x * k); ys#1")).contains("linear_mapf"));
+	is!(&format!("{fill}{k}ys = xs.map(x => x * k); ys#2"), 12.0);
+}
