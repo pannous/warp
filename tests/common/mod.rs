@@ -134,7 +134,7 @@ pub fn printed(code: &str) -> String {
 }
 
 /// The warp-runtime stub executables are built from (P104: warp never copies itself into one): built once per test run
-/// and kept under this checkout's version, as warp_command keeps its warp
+/// and kept as this checkout's own copy, as warp_command keeps its warp
 #[cfg(feature = "native")]
 pub fn runtime_stub() -> &'static std::path::Path {
 	static STUB: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
@@ -144,45 +144,52 @@ pub fn runtime_stub() -> &'static std::path::Path {
 		assert!(built.success(), "cargo build -p warp-runtime failed");
 		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name("warp-runtime");
 		let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("crates").join("warp-runtime");
-		let checkouts = checkout_build(&shared, "warp_runtime-", &runtime_manifest.to_string_lossy(), None).unwrap_or(shared);
-		let own = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("warp-runtime-{}", env!("CARGO_PKG_VERSION")));
-		std::fs::copy(&checkouts, &own).expect("copy the warp-runtime stub");
-		own
+		let build = checkout_build(&shared, "warp_runtime-", &runtime_manifest.to_string_lossy(), None).unwrap_or(shared);
+		own_copy(&build, "warp-runtime").expect("copy the warp-runtime stub")
 	})
 }
 
 /// A command running this checkout's warp binary. Every checkout builds the one shared target/debug/warp, so another
-/// worktree's build can replace it while these tests run: at first use it is linked (or copied) to a file of its own,
-/// named by this checkout's version (each checkout builds `version = "0.1.1-<branch>"`), and checked by that version;
-/// when the shared one is another checkout's, this checkout's own build is taken from target/debug/deps (checkout_build)
+/// worktree's build can replace it at any moment while these tests run, and versions overlap (`0.1.1` is a prefix of
+/// every branch's `0.1.1-<branch>`). So the binary is this checkout's own build in target/debug/deps (checkout_build:
+/// its dep-info names this manifest directory and version), copied once to a file keyed by this checkout's path,
+/// checked by its exact version; the shared path only where deps holds none
 #[cfg(feature = "native")]
 pub fn warp_command() -> std::process::Command {
 	static BINARY: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
 	let binary = BINARY.get_or_init(|| {
 		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp"));
-		let own = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("warp-{}", env!("CARGO_PKG_VERSION")));
-		if keep_as(shared, &own) {
-			return own;
-		}
-		let checkouts = checkout_build(shared, "warp-", env!("CARGO_MANIFEST_DIR"), Some(env!("CARGO_PKG_VERSION")));
-		assert!(checkouts.as_deref().is_some_and(|build| keep_as(build, &own)),
-			"{} is another checkout's build and target/debug/deps holds none of version {} built from {}",
-			shared.display(), env!("CARGO_PKG_VERSION"), env!("CARGO_MANIFEST_DIR"));
-		own
+		let build = checkout_build(shared, "warp-", env!("CARGO_MANIFEST_DIR"), Some(env!("CARGO_PKG_VERSION")));
+		let own = build.iter().chain([&shared.to_path_buf()]).filter_map(|candidate| own_copy(candidate, "warp").ok()).find(|own| is_this_version(own));
+		own.unwrap_or_else(|| panic!("neither target/debug/deps nor {} holds a warp of version {} built from {}", shared.display(), env!("CARGO_PKG_VERSION"), env!("CARGO_MANIFEST_DIR")))
 	});
 	std::process::Command::new(binary)
 }
 
-/// Link (or copy) the warp binary to `own` and tell whether it is this checkout's version
+/// A copy of `binary` that only this checkout writes: named by the checkout's version and path, put in place by a
+/// rename, so a run never sees a half-written file nor another checkout's
 #[cfg(feature = "native")]
-fn keep_as(binary: &std::path::Path, own: &std::path::Path) -> bool {
-	let _ = std::fs::remove_file(own);
-	// a hard link keeps this build even when cargo relinks target/debug/warp to a newer one; a copy where links fail
-	if std::fs::hard_link(binary, own).is_err() && std::fs::copy(binary, own).is_err() {
-		return false;
+fn own_copy(binary: &std::path::Path, name: &str) -> std::io::Result<std::path::PathBuf> {
+	use std::hash::{Hash, Hasher};
+	let mut checkout = std::collections::hash_map::DefaultHasher::new();
+	env!("CARGO_MANIFEST_DIR").hash(&mut checkout);
+	let directory = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
+	let own = directory.join(format!("{name}-{}-{:x}", env!("CARGO_PKG_VERSION"), checkout.finish()));
+	let partial = directory.join(format!("{name}-{:x}.partial{}", checkout.finish(), std::process::id()));
+	let _ = std::fs::remove_file(&partial);
+	// a hard link keeps this build when the linker writes a newer one (a new file); a copy where links fail
+	if std::fs::hard_link(binary, &partial).is_err() {
+		std::fs::copy(binary, &partial)?;
 	}
-	let version = std::process::Command::new(own).arg("version").output().map(|output| String::from_utf8_lossy(&output.stdout).to_string());
-	version.is_ok_and(|version| version.contains(env!("CARGO_PKG_VERSION")))
+	std::fs::rename(&partial, &own)?;
+	Ok(own)
+}
+
+/// Whether `warp version` of `binary` names exactly this checkout's version
+#[cfg(feature = "native")]
+fn is_this_version(binary: &std::path::Path) -> bool {
+	let output = std::process::Command::new(binary).arg("version").output();
+	output.is_ok_and(|output| String::from_utf8_lossy(&output.stdout).split_whitespace().last() == Some(env!("CARGO_PKG_VERSION")))
 }
 
 /// This checkout's own build of a binary in target/debug/deps, where each package version keeps its own file
