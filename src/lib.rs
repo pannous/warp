@@ -32,6 +32,8 @@ pub mod wasm_reader;
 pub mod tasks;
 #[cfg(feature = "native")]
 pub mod shared;
+#[cfg(feature = "native")]
+pub mod paint;
 pub mod wasm_optimizer;
 pub mod wasp_parser;
 pub mod wisp_parser;
