@@ -1028,6 +1028,11 @@ impl WasmGcEmitter {
 
 	/// `target#index = value` leaves the assigned value (i64) on the stack; a variable target gets the updated copy
 	pub(super) fn emit_index_assignment(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) {
+		if let Node::Symbol(name) = target.drop_meta() {
+			if self.is_unbound(name) {
+				return self.emit_undefined_variable(func, name);
+			}
+		}
 		if self.emit_struct_field_set(func, target, index, value) {
 			return;
 		}
