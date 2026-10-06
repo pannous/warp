@@ -7,7 +7,11 @@
 //! Channels (src/channels.rs): `on message from "chat" {body}` (`on message {body}` for the channel "warp") is the timer
 //! handler `on·every·0() := {global …; while channel_pending(0) > 0 { event = channel_next(0); body }}`, started by
 //! `channel_listen(0, "chat")` and `signal_every(0, 20)`, so a program listening stays like one with a timer;
-//! `broadcast value on "chat"` (`broadcast value`) is `channel_send("chat", value)`.
+//! `broadcast value on "chat"` (`broadcast value`) is `channel_send("chat", value)`, and so is `send value to "chat"`.
+//! Named events across programs (P129b): `broadcast stop the machine{reason: "heat"} on "chat"` is
+//! `channel_send("chat/stop the machine", {reason: "heat"})`, heard by `on stop the machine from "chat" {…}`, a message
+//! listener of that sub-channel; `send "file system full"` alone is that named event on "warp" without data, heard by
+//! `on "file system full" {…}`. `raise` stays inside the program (event_signals.rs).
 
 use crate::declarations::word;
 use crate::diagnostic::Diagnostic;
@@ -29,6 +33,9 @@ const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 const MESSAGE_WORD: &str = "message";
 const FROM_WORD: &str = "from";
 const BROADCAST_WORD: &str = "broadcast";
+const SEND_WORD: &str = "send";
+/// `chat/stop the machine`: the named event `stop the machine` on the channel `chat`, a channel of its own
+pub const EVENT_SEPARATOR: char = '/';
 /// The channel of `on message {…}` and `broadcast value` without a channel name
 const DEFAULT_CHANNEL: &str = "warp";
 /// How often a listening program looks for messages
@@ -38,7 +45,8 @@ const MESSAGES_TEMPLATE: &str = "while channel_pending(ID) > 0 { event = channel
 
 pub fn lower(program: Node) -> Node {
 	let program = if defines(&program, crate::host::EXIT) { program } else { bare_exits(program) };
-	let program = if defines(&program, BROADCAST_WORD) { program } else { broadcasts(program) };
+	let verbs: Vec<&str> = [BROADCAST_WORD, SEND_WORD].into_iter().filter(|verb| !defines(&program, verb)).collect();
+	let program = broadcasts(program, &verbs);
 	lower_timers(program)
 }
 
@@ -111,37 +119,96 @@ fn lower_timers(program: Node) -> Node {
 	Node::List(lowered, bracket, separator)
 }
 
-/// `on message {body}`, `on message from "chat" {body}`: the channel (a text) and the body
+/// `on message {body}`, `on message from "chat" {body}`, and named events from other programs:
+/// `on stop the machine from "chat" {body}`, `on "file system full" {body}`: the channel (a text) and the body
 fn message_listener(statement: &Node) -> Option<(Node, Node)> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };
-	let (channel, body) = match items.as_slice() {
-		[on, message, body] if word(on) == ON_WORD && word(message) == MESSAGE_WORD => (Node::Text(DEFAULT_CHANNEL.to_string()), body),
-		[on, message, from, channel, body] if word(on) == ON_WORD && word(message) == MESSAGE_WORD && word(from) == FROM_WORD => (channel.drop_meta().clone(), body),
+	let (on, rest) = items.split_first()?;
+	if word(on) != ON_WORD {
+		return None;
+	}
+	let (words, body) = words_and_body(rest)?;
+	let (name, channel) = match words.as_slice() {
+		[name @ .., from, channel] if word(from) == FROM_WORD && !name.is_empty() => (name, text(channel)?),
+		name => (name, DEFAULT_CHANNEL.to_string()),
+	};
+	let from_written = name.len() < words.len();
+	let channel = match name {
+		[message] if word(message) == MESSAGE_WORD => channel,
+		[event] if text(event).is_some() => event_channel(&channel, &text(event)?),
+		words if from_written => event_channel(&channel, &event_name(words)?),
 		_ => return None,
 	};
-	(matches!(channel, Node::Text(_)) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))).then(|| (channel, body.clone()))
+	Some((Node::Text(channel), body))
 }
 
-/// `broadcast value on "chat"`, `broadcast value`: `channel_send("chat", value)`
-fn broadcasts(node: Node) -> Node {
+fn text(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Text(text) => Some(text.clone()),
+		_ => None,
+	}
+}
+
+/// The words of an event joined by spaces; None unless all are plain words
+fn event_name(words: &[Node]) -> Option<String> {
+	let words: Vec<String> = words.iter().map(word).collect();
+	(!words.is_empty() && words.iter().all(|word| !word.is_empty())).then(|| words.join(" "))
+}
+
+/// The channel of a named event: its own sub-channel, so a listener hears only that event
+fn event_channel(channel: &str, event: &str) -> String {
+	format!("{channel}{EVENT_SEPARATOR}{event}")
+}
+
+/// `stop the machine{reason: "heat"}`, `stop the machine`, `alarm{}`: a named event's name and data (ø without);
+/// a single word without data stays a value (`broadcast total`)
+fn named_event(value: &[Node]) -> Option<(String, Node)> {
+	let (last, words) = value.split_last()?;
+	let (last_word, data) = match last.drop_meta() {
+		Node::Key(name, Op::Colon, data) if matches!(data.drop_meta(), Node::List(_, Bracket::Curly, _)) => (name.as_ref().clone(), Some(data.as_ref().clone())),
+		_ => (last.clone(), None),
+	};
+	if words.is_empty() && data.is_none() {
+		return None;
+	}
+	let name = event_name(&[words, &[last_word]].concat())?;
+	Some((name, data.unwrap_or(Node::Empty)))
+}
+
+/// `broadcast value on "chat"`, `send value to "chat"`, `broadcast value`: `channel_send("chat", value)`; a named
+/// event goes to its own sub-channel with its data, and `send "file system full"` alone is that named event
+fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 	let sent = |items: &[Node]| -> Option<Node> {
 		let (first, rest) = items.split_first()?;
-		if word(first) != BROADCAST_WORD || rest.is_empty() {
+		let verb = word(first);
+		if !verbs.contains(&verb.as_str()) || rest.is_empty() {
 			return None;
 		}
-		let (value, channel) = match rest {
-			[value @ .., on, channel] if word(on) == ON_WORD && matches!(channel.drop_meta(), Node::Text(_)) && !value.is_empty() => (value, channel.drop_meta().clone()),
-			value => (value, Node::Text(DEFAULT_CHANNEL.to_string())),
+		let (value, channel) = match (verb.as_str(), rest) {
+			(BROADCAST_WORD, [value @ .., on, channel]) if word(on) == ON_WORD && !value.is_empty() => (value.to_vec(), Some(text(channel)?)),
+			(SEND_WORD, [value @ .., last]) => match last.drop_meta() {
+				Node::Key(left, Op::To, channel) => ([value, &[left.as_ref().clone()]].concat(), Some(text(channel)?)),
+				_ => (rest.to_vec(), None),
+			},
+			_ => (rest.to_vec(), None),
 		};
-		let value = match value {
-			[single] => single.clone(),
-			several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
+		let named = match value.as_slice() {
+			[name] if verb == SEND_WORD && channel.is_none() => text(name).map(|name| (name, Node::Empty)),
+			value => named_event(value),
 		};
-		Some(call(crate::host::CHANNEL_SEND, vec![channel, broadcasts(value)]))
+		let channel = channel.unwrap_or(DEFAULT_CHANNEL.to_string());
+		let (channel, value) = match named {
+			Some((name, data)) => (event_channel(&channel, &name), data),
+			None => (channel, match value.as_slice() {
+				[single] => single.clone(),
+				several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
+			}),
+		};
+		Some(call(crate::host::CHANNEL_SEND, vec![Node::Text(channel), broadcasts(value, verbs)]))
 	};
 	match node {
 		Node::List(items, _, _) if sent(&items).is_some() => sent(&items).expect("checked"),
-		other => other.map_children(broadcasts),
+		other => other.map_children(|child| broadcasts(child, verbs)),
 	}
 }
 

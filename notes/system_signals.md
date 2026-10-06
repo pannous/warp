@@ -177,4 +177,14 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   a timer handler (`on·every·N`, every 20 ms, lowering/system_signals.rs) pulling `channel_pending` / `channel_next`,
   so a listening program stays after main in `warp run` like one with a timer. The playground sends on a
   `BroadcastChannel`, but does not receive yet (no timers there); Windows has no channels yet (named pipes).
-  Open: named events across programs (`broadcast stop the machine{…}` → `on stop the machine from "chat"`).
+- `send` and named events across programs (P129, P129b, card signals-send; tests/control/test_named_broadcast.rs):
+  `send value to "chat"` is `broadcast value on "chat"` (`to` after `send` names the channel, not a range).
+  `broadcast stop the machine{reason: "heat"} on "chat"` (or `send … to "chat"`) sends the data to the sub-channel
+  `chat/stop the machine`, the directory `stop_the_machine` inside the channel's, so only `on stop the machine from
+  "chat" {…}` hears it, `event` being the data (ø without); `on message from "chat"` and other events do not. A text
+  alone after `send` is a named event without data on "warp" (interpreted, undoable): `send "file system full"` →
+  `on "file system full" {…}`. A named event is two or more plain words, or words ending in `name{data}`; one word
+  without data stays a value (`broadcast total`). `on stop the machine {…}` without `from` stays the in-program
+  handler of `raise`: listening across programs needs a `from` or a text name, so no program listens by accident.
+  Channels live in `/tmp/warp-channels-<user>` on unix: a socket path has at most 104 bytes and macOS's temp directory
+  alone takes about 50.
