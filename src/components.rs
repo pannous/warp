@@ -1,10 +1,11 @@
 //! `use wasm "lib.wasm" as lib; lib.f(x)`: a WebAssembly component (a Rust crate built for wasm32-wasip2 with
 //! wit-bindgen, componentize-py's output, anything with a WIT interface) called through foreign_call
-//! (notes/stdlib_connectors.md). Each component is loaded once per path and process, on an engine of its own with the
-//! component model (the programs' engines run core modules only), with WASI p2 for its imports. Values cross as JSON,
+//! (notes/stdlib_connectors.md). Each component is compiled once per path and process and instantiated once per
+//! thread, on an engine of its own with the component model (the programs' engines run core modules only), with WASI p2 for its imports. Values cross as JSON,
 //! like the other foreign runtimes: a Node argument becomes the WIT type the function declares, its result comes back as
 //! JSON (records objects, variants `{case: payload}`, enums and chars texts, an `err` of a result an error).
 use serde_json::{Map, Value};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use wasmtime::component::types::ComponentItem;
@@ -35,8 +36,14 @@ struct Loaded {
 	held: Vec<ResourceAny>,
 }
 
-/// The components loaded in this process, by path
-static LOADED: Mutex<Option<HashMap<String, Loaded>>> = Mutex::new(None);
+thread_local! {
+	/// The components instantiated on this thread, by path: a program's handles count from 1 whatever programs on other
+	/// threads (parallel tests, a server's requests) created
+	static LOADED: RefCell<HashMap<String, Loaded>> = RefCell::new(HashMap::new());
+}
+
+/// The components compiled in this process, by path
+static COMPILED: Mutex<Option<HashMap<String, Component>>> = Mutex::new(None);
 
 /// A handle's id and the path of its component, keys of the record warp holds
 const HANDLE_KEY: &str = "$handle";
@@ -71,16 +78,27 @@ pub fn call_method(handle: &Value, member: &str, arguments: &[Value]) -> Result<
 }
 
 fn with_component<R>(path: &str, body: impl FnOnce(&mut Loaded) -> Result<R, String>) -> Result<R, String> {
-	let mut loaded = LOADED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-	let components = loaded.get_or_insert_with(HashMap::new);
-	if !components.contains_key(path) {
-		components.insert(path.to_string(), load(path)?);
+	LOADED.with_borrow_mut(|components| {
+		if !components.contains_key(path) {
+			components.insert(path.to_string(), load(path)?);
+		}
+		body(components.get_mut(path).expect("loaded"))
+	})
+}
+
+fn compiled(path: &str) -> Result<Component, String> {
+	let mut compiled = COMPILED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+	let components = compiled.get_or_insert_with(HashMap::new);
+	if let Some(component) = components.get(path) {
+		return Ok(component.clone());
 	}
-	body(components.get_mut(path).expect("loaded"))
+	let component = Component::from_file(engine(), path).map_err(|failure| format!("cannot load the component {path}: {failure:#}"))?;
+	components.insert(path.to_string(), component.clone());
+	Ok(component)
 }
 
 fn load(path: &str) -> Result<Loaded, String> {
-	let component = Component::from_file(engine(), path).map_err(|failure| format!("cannot load the component {path}: {failure:#}"))?;
+	let component = compiled(path)?;
 	let mut linker = Linker::new(engine());
 	wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|failure| failure.to_string())?;
 	let state = ComponentState { wasi: WasiCtx::builder().inherit_stdio().build(), table: ResourceTable::new() };
