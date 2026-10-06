@@ -345,6 +345,8 @@ const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 const TO_SENTENCE_WORD: &str = "To";
+/// `to greet p do …`: the word between a `to` definition's parameters and its body
+const DO_WORD: &str = "do";
 const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";

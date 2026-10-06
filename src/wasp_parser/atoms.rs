@@ -144,6 +144,8 @@ impl WaspParser {
 			return None;
 		};
 		let mut parameters = Vec::new();
+		// `to call person{name?, phone number} do …` (wiki/argument.md): the parameter's fields, glued to it
+		let mut shapes = Vec::new();
 		loop {
 			self.skip_spaces();
 			// `to square a number: …` or `to square a number { … }`
@@ -151,7 +153,13 @@ impl WaspParser {
 				break;
 			}
 			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
-				Some(parameter) => parameters.push(parameter),
+				Some(word) if word == DO_WORD && !parameters.is_empty() => break,
+				Some(parameter) => {
+					if self.current_char() == '{' {
+						shapes.push((parameter.clone(), self.parse_atom()));
+					}
+					parameters.push(parameter)
+				}
 				None => {
 					restore(self);
 					return None;
@@ -173,6 +181,10 @@ impl WaspParser {
 			Ok(parameters) => parameters,
 			Err(message) => return Some(error(&message)),
 		};
+		let parameters: Vec<Node> = parameters.into_iter().map(|parameter| match shapes.iter().find(|(name, _)| *name == parameter.name()) {
+			Some((_, fields)) => Node::Key(Box::new(parameter), Op::Colon, Box::new(fields.clone())),
+			None => parameter,
+		}).collect();
 		if let Some(clash) = self.phrase_redefinition(&name, &parameters) {
 			return Some(clash);
 		}

@@ -32,6 +32,7 @@ pub mod variadic;
 pub mod phrase_calls;
 pub mod printable;
 pub mod phrase_words;
+pub mod parameter_shapes;
 pub mod picked_calls;
 pub mod pipes;
 pub mod result_word;

@@ -24,6 +24,7 @@ mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_map_phrase;
 mod test_nested_it;
+mod test_parameter_shapes;
 mod test_method_words;
 mod test_method_syntax_calls;
 mod test_failed_word;
