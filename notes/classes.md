@@ -241,3 +241,10 @@ type words) called on a variable of no known class outside the class bodies, `to
 A list mutation (`xs.pop()`) on an unknown receiver stays the list's (an if around a mutation is not built); inside
 class bodies receivers are fields of declared types. Open: operators on unknown operands (`f(a, b) := a + b` of two
 instances) still take the built-in operator.
+
+Go (classes-28, tests/types/test_class_forms_ported.rs a_go_struct_with_methods): `type Point struct { X int; Y int }`
+(the parser skips `struct` after the name), fields `X int` (typed_field takes both orders, `X, Y int` gives an
+untyped X), methods `func (p Point) Sum() int {…}` and pointer receivers `func (p *Point) Move(dx int) {…}`
+(class_methods go_method, taken in like Rust's impl blocks, the receiver read as self). A class's own method named
+like a LINQ word (`Sum`) stays the class's (welcome_forms linq_calls skips defined_names). `p := Point{…}` is charged
+(P138): reading works, a changing method needs `var p = …`. Open (Interviewer): positional `Point{1, 2}`.
