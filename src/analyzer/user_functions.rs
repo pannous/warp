@@ -163,6 +163,10 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
 		return Some(Kind::List);
 	}
+	// `v:any`, as an untyped field: any value, held as a Node (std/json.wasp's to_json takes what parse_json gives)
+	if type_name == crate::type_kinds::UNTYPED_FIELD {
+		return Some(Kind::Empty);
+	}
 	type_word_kind(&type_name)
 }
 
@@ -322,10 +326,10 @@ pub(super) fn infer_forwarded_parameters(ctx: &mut Context) {
 	}
 }
 
+/// The functions, imports and closure facts of a program; the same tree is analysed once (analysis_memo.rs, P91).
 /// Recognizes patterns:
 /// - `name(param) = body` → Key(List[name, param], Assign, body)
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
-/// The functions, imports and closure facts of a program; the same tree is analysed once (analysis_memo.rs, P91)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	crate::analysis_memo::analysed(ctx, node, analyse_user_functions);
 }
@@ -360,8 +364,8 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 
 /// A parameter that the calls pass one kind other than Int takes that kind: `mul(v, 1.0 / length(v))` with length
 /// returning a float, `print_tree(tree.left, prefix + "│ ")` passing a text. infer_parameters_from_calls knows only
-/// literal arguments; this pass runs once the return kinds are known. It only changes undeclared Int parameters, and
-/// leaves a parameter alone when calls disagree. True when a parameter changed.
+/// literal arguments; this pass runs once the return kinds are known. It only changes undeclared Int parameters (and
+/// those guessed a list that get only texts), and leaves a parameter alone when calls disagree. True when a parameter changed.
 pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String, Local>) -> bool {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
 	function_kinds.extend(ctx.field_kinds.clone());
@@ -375,10 +379,18 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 	}
 	let mut changed = false;
 	for ((name, index), kinds) in passed {
+		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
+		// passed only values held as Nodes (a loop variable over a list parameter): a Node, no int
+		if kinds.len() == 1 && kinds.contains(&Kind::Empty) && param.used_as.is_none() && param.annotation.is_none() && param.default.is_none() {
+			param.used_as = Some(Kind::Empty);
+			changed = true;
+			continue;
+		}
 		let kinds: Vec<Kind> = kinds.into_iter().filter(|kind| *kind != Kind::Int && *kind != Kind::Empty).collect();
 		let [kind] = kinds.as_slice() else { continue };
-		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
-		if param.annotation.is_none() && param.default.is_none() && matches!(param.used_as, None | Some(Kind::Int)) {
+		// a parameter the body counts or indexes is guessed a list, until the calls pass it only texts
+		let guessed = matches!(param.used_as, None | Some(Kind::Int)) || (param.used_as == Some(Kind::List) && *kind == Kind::Text);
+		if param.annotation.is_none() && param.default.is_none() && guessed {
 			param.used_as = Some(*kind);
 			changed = true;
 		}
@@ -576,6 +588,8 @@ pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
 		Node::Empty => Some(Kind::List),
+		// `"" + n`, `"#" + x + y`: a concatenation with a text is a text
+		Node::Key(_, Op::Add, _) if super::declaration_lowering::is_text(argument) => Some(Kind::Text),
 		// `1.5 as float`, `x as float`: the kind the conversion names
 		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Some(Kind::Float),
 		_ if crate::closures::as_closure_new(argument).is_some() => Some(Kind::Function),
@@ -828,7 +842,7 @@ pub(super) fn register_user_function(ctx: &mut Context, short_name: &str, params
 	// a sibling calls a nested function too: `def sibling(){ inner() }` beside `def inner()` in outer
 	let nested_prefix = format!("{name}{NESTED_DEF_SEPARATOR}");
 	for function in ctx.user_functions.values_mut().filter(|function| function.name.starts_with(&nested_prefix)) {
-		function.body = Box::new(rename_nested_calls(function.body.as_ref().clone(), &renames));
+		*function.body = rename_nested_calls(function.body.as_ref().clone(), &renames);
 	}
 	if let Some(parent) = enclosing {
 		ctx.enclosing_functions.insert(name.clone(), parent.to_string());

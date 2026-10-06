@@ -9,6 +9,7 @@ mod test_print_arguments;
 mod test_print_type_error;
 mod test_quote_output;
 mod test_runtime_text_as_int;
+mod test_split_element_kind;
 mod test_string;
 mod test_text_bytes;
 mod test_text_casts;

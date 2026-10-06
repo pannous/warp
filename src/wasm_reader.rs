@@ -358,10 +358,13 @@ pub fn link_imports(linker: &mut Linker<crate::host::HostState>, engine: &wasmti
 	Ok(())
 }
 
+/// A linker made for an engine and its import families
+type FamilyLinker = (wasmtime::Engine, [bool; 3], Linker<crate::host::HostState>);
+
 /// The linkers made on this thread, by engine and import families; past FAMILY_LINKERS_KEPT they start over
 const FAMILY_LINKERS_KEPT: usize = 16;
 thread_local! {
-	static FAMILY_LINKERS: RefCell<Vec<(wasmtime::Engine, [bool; 3], Linker<crate::host::HostState>)>> = const { RefCell::new(Vec::new()) };
+	static FAMILY_LINKERS: RefCell<Vec<FamilyLinker>> = const { RefCell::new(Vec::new()) };
 }
 
 fn family_linker(engine: &wasmtime::Engine, imports: Imports) -> Result<Linker<crate::host::HostState>> {

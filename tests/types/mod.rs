@@ -7,6 +7,7 @@ mod test_generic_types;
 mod test_person_struct;
 mod test_records_classes;
 mod test_class_methods;
+mod test_class_method_changes;
 mod test_mutating_methods;
 mod test_class_extends;
 mod test_class_cases_ported;
@@ -20,6 +21,7 @@ mod test_tagged_objects;
 mod test_class_forms_ported;
 mod test_class_operators;
 mod test_class_aliases;
+mod test_class_interfaces;
 mod test_construction_checks;
 mod test_struct_field_of_constructor;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build

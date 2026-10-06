@@ -79,9 +79,19 @@ Done (branch functions, 2026-10-07):
    A std module's source shows no style hints (parsed under normalize::without_hints).
 Bugs met (cards over-keys, inside-loop, index-hint): `for k in keys(m)` / `m[k]` in a loop over a one-entry map
 parameter; std/map.wasp uses `ks = keys(m)` and `m.get(k)` until they are fixed.
+6. `use time`: date_of(ms) {year month day}, weekday(ms) (ISO, Monday 1), day_number(ms), today()
+   (tests/modules/test_std_time.rs). Fixed on the way: `{year:1970 month:1}` read `1970 month` as a duration
+   (card key-unit), and the map parameter bug above (cards over-keys, inside-loop: no list copy for a map parameter).
 Next:
-6. time (date parts and calendar arithmetic over clock), more list words (chunk, window, median), text format.
-7. Host modules (async, warp-f0): json, hash, regex, file, os, net.
+7. Done: list chunk window median; time add_days days_between, format_date (ISO 2026-10-07), format_time (UTC
+   13:05:09), two_digits; text format("{} has {} items", ["cart", 3]). Fixed on the way: `"" + 7` passed to a counted
+   parameter made it a list; the elements of split and chars had no kind (`p[0] + 3` added numbers).
+   Then: text words lines capitalize center. Fixed on the way: a module's source now gets the program's early
+   passes (pipeline::lower_module_source; a comprehension in a module was read as a list), its getters lowered with
+   the program (a second getters pass after modules::resolve); a parameter guessed a list takes text when the calls
+   pass only texts (pad_right(pad_left(…))).
+   map: invert pick from_pairs; time: parse_date("2026-10-07"), days_from_date(y, m, d).
+8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:
 Stack push pop peek size, Queue enqueue dequeue peek size, Deque push_back push_front pop_back pop_front size,
@@ -135,8 +145,23 @@ engine has is a loud error in both, never a different result.
 | math | libm (stub "m") natively, JS Math in the browser (today) | — | gcd lcm clamp sign in wasp; no adapter needed |
 | text, list, map | wasp | wasp | no adapter |
 
+### How an adapter word is built (A)
+Two host words carry every adapter: `std_pure(module, member, arguments)` for words without effects (json, hash,
+regex: capability like libm's) and `std_io(…)` for words that touch the outside (file, os, net: Host, IO). A std module
+defines its words over them, `parse_json(text) := std_pure("json", "parse", [text])` (std/json.wasp); natively
+src/std_adapters.rs answers by (module, member), in the browser host.js STD_ADAPTERS. Values cross as for the foreign
+runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain). Their results are any Node (analyzer
+ANY_VALUE_WORDS); a parameter that takes any value is annotated `any` (`to_json(value:any)`).
+Adding a word: one match arm in std_adapters.rs, one function in STD_ADAPTERS, one line in std/<module>.wasp, a test
+run natively and in the browser.
+
 ### First adapter steps (async)
-1. json (A): parse_json and to_json host words natively and in host.js, tests in both hosts.
+1. Done: json (A): `use json` brings parse_json and to_json, native and browser (tests/modules/test_std_json.rs).
+1b. Done: file and os (A, std_io): `use file` brings write, append_file, exists, list_files, lines (read stays a
+   prelude word); `use os` brings env. Natively the file system (paths as read resolves them) and the environment; in
+   the browser host.js keeps written files in memory while the page is open (read sees them first, then the served
+   repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
+   method `xs.append(v)` a program using `use file` still needs (question Q6). args waits for a CLI way to pass them.
 2. hash (B): embed zlib.wasm/xxhash.wasm and a sha256.wasm in warp, `use hash` resolves to them in both hosts.
 3. regex (A): Rust regex + JS RegExp behind matches/find/find_all/replace_all, with the common-subset check.
 4. Later: the AOT stub linking B modules (they need no compiler), then hash and compress work in executables.
@@ -150,3 +175,5 @@ engine has is a loud error in both, never a different result.
      compiled to wasm, never by python3/node/a system library (default) vs. allowing std modules that need them.
 - Q5 (adapters) Where Rust regex and JS RegExp differ, the regex module is their common subset with a loud error for
      the rest (default) vs. one regex engine compiled to wasm for both hosts (identical, but ~300 KB more per page).
+- Q6 (adapters) file words: `append_file(path, text)` (default; `append` stays the list method) vs. a qualified
+     `file.append(path, text)` only, once qualified access exists (Q2).

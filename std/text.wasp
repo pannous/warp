@@ -2,3 +2,17 @@
 repeat(t, n) := n times t
 pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
 pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
+// format("{} has {} items", ["cart", 3]): each {} takes the next value
+format(template, values) := {
+	parts = split(template, "{}")
+	result = parts[0]
+	for i in 1 ..< count(parts) {
+		result = result + values[i - 1] + parts[i]
+	}
+	result
+}
+// the words between runs of spaces
+words(t) := [w for w in split(t, " ") if w != ""]
+lines(t) := split(t, "\n")
+capitalize(t) := if t == "" then t else upper(t[0]) + t[1..]
+center(t, width) := pad_right(pad_left(t, (width + count(t))//2), width)

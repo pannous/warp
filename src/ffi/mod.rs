@@ -113,7 +113,7 @@ const C_QUALIFIERS: [&str; 7] = ["const", "volatile", "struct", "enum", "union",
 /// `FILE` of `FILE *`), "" for none (`unsigned *`)
 fn pointee(c_type: &str) -> String {
     let before_star = &c_type[..c_type.find('*').unwrap_or(c_type.len())];
-    before_star.split_whitespace().filter(|word| !C_QUALIFIERS.contains(word)).last().unwrap_or_default().to_string()
+    before_star.split_whitespace().rfind(|word| !C_QUALIFIERS.contains(word)).unwrap_or_default().to_string()
 }
 
 /// How the C type `c_type` crosses, None for no pointer. A handle points to a struct (`struct stat *`, or one a header
@@ -165,7 +165,8 @@ pub fn string_pair_count(name: &str) -> usize {
 /// Which parameters of a library's C functions are texts (`char *`), as its headers declare them, by function; read
 /// once per library and process
 pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<bool>> {
-    static PARSED: std::sync::Mutex<Vec<(String, &'static HashMap<String, Vec<bool>>)>> = std::sync::Mutex::new(Vec::new());
+    type TextParameters = HashMap<String, Vec<bool>>;
+    static PARSED: std::sync::Mutex<Vec<(String, &'static TextParameters)>> = std::sync::Mutex::new(Vec::new());
     let mut parsed = PARSED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     if let Some((_, texts)) = parsed.iter().find(|(parsed_library, _)| parsed_library == library) {
         return texts;
@@ -369,17 +370,13 @@ pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignat
     let library = resolve_library_alias(library);
     let built_in = get_ffi_signatures().get(name).filter(|sig| sig.library == library).cloned();
     // the hand-linked libc functions and libm keep their wasm-adapted signatures (strcmp of two texts)
-    if library == "m" || (library == "c" && HAND_LINKED_LIBC.contains(&name)) {
-        if built_in.is_some() {
+    if (library == "m" || (library == "c" && HAND_LINKED_LIBC.contains(&name)))
+        && built_in.is_some() {
             return built_in;
         }
-    }
     // any other function is linked from its header declaration (link_single_function), so it is imported as declared
     get_signatures_from_headers(library).get(name).cloned().or(built_in)
 }
-
-/// Link FFI functions into a wasmtime linker
-
 
 /// Resolve library alias to canonical name
 pub fn resolve_library_alias(alias: &str) -> &'static str {

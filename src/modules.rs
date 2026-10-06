@@ -13,7 +13,7 @@ use std::sync::Mutex;
 pub const SEARCH_DIRECTORIES: [&str; 6] = [".", "include", "lib", "src", "source", "samples"];
 pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 /// `use x`, and its aliases `require x` and `import x`: the declarations of the file x
-const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
+pub(crate) const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
 /// `include x`: the whole file, spliced in place
 const INCLUDE_KEYWORD: &str = "include";
 const USE_KEYWORD: &str = "use";
@@ -411,15 +411,20 @@ impl<'a> Loader<'a> {
 		if let Some(failure) = module.first_error() {
 			return Err(failure.clone());
 		}
+		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
+		let classes_early = import == Import::Use && EARLY_CLASS_MODULES.with(|modules| modules.borrow().contains(&path.canonicalize().unwrap_or_else(|_| path.clone())));
+		let module = match classes_early {
+			true => Node::List(statements(module).into_iter().filter(|statement| !is_class(statement)).collect(), Bracket::None, Separator::Semicolon),
+			false => module,
+		};
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
-		let module = with_module_directory(module, &directory);
+		let module = with_module_directory(crate::pipeline::lower_module_source(module), &directory);
 		let outer_directory = self.including_directory.replace(directory);
 		let module = self.resolve(module);
 		self.including_directory = outer_directory;
 		let statements = statements(module?);
-		let classes_early = EARLY_CLASS_MODULES.with(|modules| modules.borrow().contains(&path.canonicalize().unwrap_or_else(|_| path.clone())));
 		Ok(match import {
-			Import::Use => statements.into_iter().filter(|statement| is_declaration(statement) && !(classes_early && is_class(statement))).collect(),
+			Import::Use => statements.into_iter().filter(is_declaration).collect(),
 			Import::Include => statements,
 		})
 	}
@@ -538,13 +543,17 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 6] = [
+const STD_MODULES: [(&str, &str); 10] = [
 	("collections", include_str!("../std/collections.wasp")),
+	("file", include_str!("../std/file.wasp")),
+	("json", include_str!("../std/json.wasp")),
+	("os", include_str!("../std/os.wasp")),
 	("list", include_str!("../std/list.wasp")),
 	("math", include_str!("../std/math.wasp")),
 	("text", include_str!("../std/text.wasp")),
 	("random", include_str!("../std/random.wasp")),
 	("map", include_str!("../std/map.wasp")),
+	("time", include_str!("../std/time.wasp")),
 ];
 const STD_FOLDER: &str = "std";
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
@@ -572,7 +581,7 @@ fn std_module(name: &str) -> Option<&'static str> {
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
 pub fn std_module_defining(word: &str) -> Option<&'static str> {
 	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
-	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(WaspParser::parse(source)).iter().filter_map(declared_name).collect())).collect());
+	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(declared_name).collect())).collect());
 	defined.iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
 }
 
@@ -847,7 +856,7 @@ fn is_word(node: &Node, word: &str) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word)
 }
 
-fn path_of(node: &Node) -> Option<String> {
+pub(crate) fn path_of(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) | Node::Text(name) => Some(name.clone()),
 		Node::Key(directory, Op::Div, name) => Some(format!("{}/{}", path_of(directory)?, path_of(name)?)),

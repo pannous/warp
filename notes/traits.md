@@ -92,5 +92,19 @@ Lists of numbers or texts pass (sorted by value at run time). `xs: list of T` re
 is known, `as text` / str / print / interpolation call the first, `for x in b` and `x in b` walk what the second gives.
 The pass runs right after type_constructor: later passes would read `for x in b` of an instance as a walk of its keys.
 
+## Classes and foreign interfaces (classes-32, tests/types/test_class_interfaces.rs)
+- A class method satisfies a trait operation: `trait Shape { area }` + `class Sq{side:int; area() := side*side}`; the
+  method is the witness area·Sq. `s.area()` of a declared trait's operation is the call `area(s)`
+  (traits::operation_calls), which picks the witness like any call.
+- `f(s:Shape)` of a declared trait is untyped (traits::lower_trait_parameters before class_methods, again in
+  lower_declarations for definitions later passes make): it takes any conforming instance. `xs: shape list` keeps its
+  annotation (generic constraints above).
+- Declarations as other languages write them: the spaced `trait Shape { area }`, Java's `double area();`, Kotlin's
+  `fun area(): Int`, Swift's `func area() -> Double`, Go's `Area() float64` and `type Shape interface {…}`,
+  TypeScript's `area(): number`, Rust's `fn area(&self) -> f64` (traits::foreign_signature: the receiver implicit).
+- A class naming its traits, `implements Shape` (Java, TypeScript), `: Shape` (Swift, Kotlin), is skipped with a got-it
+  note (topic conformance-list): conformance is structural (T2). Not a checked claim yet.
+
 ## Later
-- `<` defined directly (`a:person < b:person := …`) and methods in the class body as sugar for the witnesses
+- `<` defined directly (`a:person < b:person := …`)
+- `implements Shape` as a checked claim (claim_error) instead of a note

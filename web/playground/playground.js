@@ -18,6 +18,7 @@ const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // the gray levels of paint: a nonzero pixel, a zero pixel
 const PAINT_INK = 29;
 const PAINT_PAPER = 250;
+const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), scaled by a whole factor so pixels stay square
 
 const $ = id => document.getElementById(id);
 function element(tag, properties = {}, ...children) {
@@ -201,14 +202,38 @@ function showReport(report) {
 		...notes.filter(topic => !inline.has(topic)).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
 	];
 	$("diagnostics").replaceChildren(...items);
+	markPositions(report);
 	showAcknowledged();
 	setStatus(report.crashed ? "the compiler crashed; reloaded" : `${Math.round(report.milliseconds ?? 0)} ms`, report.crashed);
+}
+
+let positionMarks = []; // the editor's underlines of the shown report
+
+// the word at each error and warning position underlined in the editor, its message on hover (src/web.rs error_at is
+// the position of an error no diagnostic made); hints are not marked: their positions can lag behind (card hint-positions)
+function markPositions(report) {
+	positionMarks.forEach(mark => mark.clear());
+	const errors = report.errors?.length ? report.errors : [report.error_at && { ...report.error_at, message: report.value }].filter(Boolean);
+	const places = [...errors.map(error => ["error", error]), ...(report.warnings ?? []).map(warning => ["warning", warning])];
+	positionMarks = places.filter(([, { line, column }]) => line > 0 && column > 0 && line <= editor.lineCount())
+		.map(([kind, { line, column, message }]) => markWord(kind, line - 1, column - 1, message)).filter(Boolean);
+}
+
+// the word (or the one character) at a position in characters, as the compiler counts, not UTF-16 units
+function markWord(kind, line, column, message) {
+	const characters = Array.from(editor.getLine(line));
+	const rest = characters.slice(column).join("");
+	const marked = rest.match(/^[\p{L}\p{N}_]+/u)?.[0] ?? Array.from(rest)[0];
+	if (!marked) return null;
+	const ch = characters.slice(0, column).join("").length;
+	return editor.markText({ line, ch }, { line, ch: ch + marked.length }, { className: `marked-${kind}`, title: message ?? "" });
 }
 
 // paint(pixels, width, height): one canvas per call, a pixel dark where its value is nonzero (true), light where 0
 function showPaintings(paintings) {
 	$("paintings").replaceChildren(...paintings.map(({ pixels, width, height }) => {
 		const canvas = element("canvas", { width, height, className: "painting" });
+		canvas.style.width = `${width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(width, height, 1)))}px`;
 		const image = canvas.getContext("2d").createImageData(width, height);
 		for (let index = 0; index < width * height; index++) {
 			const shade = pixels[index] ? PAINT_INK : PAINT_PAPER;

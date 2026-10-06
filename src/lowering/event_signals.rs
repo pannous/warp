@@ -11,6 +11,7 @@
 use crate::declarations::{handler_parts, word};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::signal_values::ungrouped_reflection;
 use crate::variable_signals::{assign, block, if_then, symbols};
 use crate::wasp_parser::parse;
 use std::collections::{HashMap, HashSet};
@@ -42,6 +43,8 @@ const EMIT_WORDS: [&str; 2] = ["emit", "send"];
 const EMIT_ALIASES: [&str; 3] = ["fire", "trigger", "signal"];
 const EMIT_TOPIC: &str = "emit-word";
 const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
+/// `remove (listeners of alarm)#1 from listeners of alarm`: the place removed, evaluated once
+const REMOVED_PLACE: &str = "removed·listener";
 /// `on set x` and `on change x` are variable listeners (variable_signals.rs)
 const VARIABLE_LISTENER_WORDS: [&str; 2] = ["set", "change"];
 pub const HANDLER_PREFIX: &str = "on·";
@@ -62,13 +65,16 @@ pub const SYSTEM_EVENTS: [&str; 2] = ["interrupt", "exit"];
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
-	// an event whose listeners are counted is handled even when nothing raises it yet (`count listeners of tick`)
+	// an event whose listeners are named is handled even when nothing raises it yet (`count listeners of tick`), and
+	// every handler of it gets a flag as a named one has, so any of them can be listed and removed (card event-handlers)
 	let variables = main_level_variables(&statements);
-	let verbs = emit_verbs(&program, &variables);
-	let raised: HashSet<String> = emitted_names(&program, &verbs).into_iter().chain(reflected_events(&program, COUNT_WORD).into_iter().filter(|event| !variables.contains(event))).collect();
+	let listed: HashSet<String> = listed_events(&program).into_iter().filter(|event| !variables.contains(event)).collect();
+	let verbs = emit_verbs(&program);
+	let raised: HashSet<String> = emitted_names(&program, &verbs).into_iter().chain(listed.iter().cloned()).collect();
+	// so does an event with a named handler: the name is the handler's place among all of the event's handlers
+	let with_names = statements.iter().filter_map(named_handler).filter(|(listener, _)| listener.is_some()).map(|(_, (event, _, _))| event);
+	let flagged: HashSet<String> = listed.into_iter().chain(with_names).collect();
 	let statements = subscribed_in_blocks(statements, &raised);
-	// `clear listeners of alarm` stops every handler of alarm: each gets a flag as a named one has
-	let cleared: HashSet<String> = reflected_events(&program, CLEAR_WORD).into_iter().filter(|event| !variables.contains(event)).collect();
 	let kept = match without_unraised(&statements, &raised, &variables, &emitted_names(&program, &RAISE_WORDS.map(String::from))) {
 		Ok(kept) => kept,
 		Err(error) => return error,
@@ -76,12 +82,14 @@ pub fn lower(program: Node) -> Node {
 	let statements = kept;
 	let mut flags: Vec<(String, Node)> = vec![];
 	let mut named: Vec<(String, String)> = vec![];
+	let mut user_named: Vec<(String, String)> = vec![];
 	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
 		.filter_map(|(index, statement)| named_handler(statement).map(|(listener, (name, body, once))| (index, listener, name, body, once)))
 		.filter(|(_, _, name, _, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()) || SYSTEM_EVENTS.contains(&name.as_str()))
 		.map(|(index, listener, name, body, once)| {
 			let body = if once { run_once(body, &mut flags) } else { body };
-			let listener = listener.or_else(|| cleared.contains(&name).then(|| format!("{}{HANDLER_SUFFIX}{index}", name.replace(' ', "_"))));
+			user_named.extend(listener.iter().map(|listener| (listener.clone(), name.clone())));
+			let listener = listener.or_else(|| flagged.contains(&name).then(|| format!("{}{HANDLER_SUFFIX}{index}", name.replace(' ', "_"))));
 			let body = match listener {
 				Some(listener) => listening(body, &listener, &name, &mut flags, &mut named),
 				None => body,
@@ -100,10 +108,20 @@ pub fn lower(program: Node) -> Node {
 		return Node::List(with_output_binding(statements, &main_variables), bracket, separator);
 	}
 	let unnamed = |event: &str| handlers.iter().filter(|(_, name, _)| name == event).count() - named.iter().filter(|(_, other)| other == event).count();
-	let counts: HashMap<String, usize> = handlers.iter().map(|(_, name, _)| (name.clone(), unnamed(name))).collect();
-	let statements: Vec<Node> = statements.into_iter().map(|statement| reflected(statement, &named, &counts)).collect();
+	let listeners = Listeners {
+		counts: handlers.iter().map(|(_, name, _)| (name.clone(), unnamed(name))).collect(),
+		// a handler nothing emits is gone: its name binds nothing
+		bound: statements.iter().flat_map(bound_names).collect(),
+		named,
+	};
+	// `h = on alarm {…}`: h is its place among alarm's handlers, an entry of `listeners of alarm`
+	flags.extend(user_named.iter().filter_map(|(listener, event)| listeners.place(listener, event).map(|place| (listener.clone(), Node::int(place as i64)))));
+	let statements: Vec<Node> = statements.into_iter().map(|statement| reflected(statement, &listeners)).collect();
 	// a handler may remove itself (`if taken == 2 {remove h from listeners of tick}`)
-	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index, name, reflected(body, &named, &counts))).collect();
+	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index, name, reflected(body, &listeners))).collect();
+	if let Some(failure) = statements.iter().chain(handlers.iter().map(|(_, _, body)| body)).find_map(first_error) {
+		return failure;
+	}
 	let statements: Vec<Node> = flags.iter().map(|(flag, initial)| assign(flag, initial.clone())).chain(statements).collect();
 	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
 	#[cfg(feature = "native")]
@@ -212,6 +230,7 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 	if let Some((event, body, false)) = handler(&node).filter(|(event, _, _)| raised.contains(event)) {
 		if in_loop {
 			let reason = format!("a handler in a loop subscribes once per pass: each emit {event} runs all of them; subscribe before the loop unless that is meant");
+			crate::normalize::set_position_of(&node);
 			crate::diagnostic::advise_once(LOOP_SUBSCRIPTION_TOPIC, &format!("on {event} {{…}}"), "on … before the loop", &reason);
 		}
 		let list = Node::Symbol(subscribers_name(&event));
@@ -275,32 +294,133 @@ fn listening_flag(listener: &str) -> String {
 	format!("{listener}{LISTENING_SUFFIX}")
 }
 
-/// `remove h from listeners of alarm` and C#'s `listeners of alarm -= h` of a named handler: its flag cleared;
-/// `count listeners of alarm`: the handlers still listening. Listeners of variables stay signal_values' (P128)
-fn reflected(statement: Node, named: &[(String, String)], counts: &HashMap<String, usize>) -> Node {
-	let items: Vec<Node> = match statement.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		_ => return statement.map_children(|child| reflected(child, named, counts)),
+/// The handlers of the program's events as `listeners of alarm` reflects them (P128, card event-handlers)
+struct Listeners {
+	/// every handler with a flag, by its name (`h`, or `alarm_handler_3` of an unnamed one) and event, in order
+	named: Vec<(String, String)>,
+	/// the handlers without a flag, by event: they always listen
+	counts: HashMap<String, usize>,
+	/// the names the program binds (variables, loop variables): a removed word that is none of them is no listener
+	bound: HashSet<String>,
+}
+
+impl Listeners {
+	fn flags(&self, event: &str) -> Vec<String> {
+		self.named.iter().filter(|(_, other)| other == event).map(|(listener, _)| listening_flag(listener)).collect()
+	}
+
+	/// The place of a named handler among its event's handlers, from 1
+	fn place(&self, listener: &str, event: &str) -> Option<usize> {
+		self.named.iter().filter(|(_, other)| other == event).position(|(name, _)| name == listener).map(|index| index + 1)
+	}
+
+	fn is_event(&self, event: &str) -> bool {
+		self.counts.contains_key(event)
+	}
+
+	/// `remove x from listeners of alarm`: a named handler's flag cleared; a place (`2`, `(listeners of alarm)#1`, a
+	/// loop variable) clears the flag at that place, nothing once removed; any other word is a loud error
+	fn removal(&self, removed: &Node, event: &str) -> Node {
+		let name = word(removed);
+		if self.place(&name, event).is_some() {
+			return assign(&listening_flag(&name), Node::False);
+		}
+		let listens_elsewhere = self.named.iter().any(|(listener, _)| *listener == name);
+		if !name.is_empty() && (listens_elsewhere || !self.bound.contains(&name)) {
+			return crate::node::error(&format!("{name} is no named listener of {event}"));
+		}
+		// evaluated once: `(listeners of alarm)#1` names another handler after the first removal
+		let place = Node::Symbol(REMOVED_PLACE.to_string());
+		let at_place = |(index, flag): (usize, String)| {
+			let condition = Node::Key(Box::new(place.clone()), Op::Eq, Box::new(Node::int(index as i64 + 1)));
+			if_then(condition, block(vec![assign(&flag, Node::False)]))
+		};
+		let removal = std::iter::once(assign(REMOVED_PLACE, reflected(removed.clone(), self)));
+		block(removal.chain(self.flags(event).into_iter().enumerate().map(at_place)).collect())
+	}
+
+	/// `listeners of alarm`: the places of its handlers still listening, `[1, 3]` once the second is removed
+	fn list(&self, event: &str) -> Node {
+		let entries: Vec<String> = self.flags(event).iter().enumerate().map(|(index, flag)| format!("(if {flag} then [{}] else [])", index + 1)).collect();
+		match entries.is_empty() {
+			true => parse("[]"),
+			false => parse(&entries.join(" + ")),
+		}
+	}
+}
+
+/// `remove h from listeners of alarm` and C#'s `listeners of alarm -= h`: the handler's flag cleared; `count listeners
+/// of alarm`: the handlers still listening; `listeners of alarm` anywhere else: their places. Listeners of variables
+/// stay signal_values' (P128)
+fn reflected(statement: Node, listeners: &Listeners) -> Node {
+	let (items, bracket, separator) = match statement.drop_meta() {
+		Node::List(items, bracket, separator) => (ungrouped_reflection(items.clone()), bracket.clone(), separator.clone()),
+		_ => return statement.map_children(|child| reflected(child, listeners)),
 	};
 	let words: Vec<String> = items.iter().map(word).collect();
-	let is_named = |listener: &str, event: &str| named.iter().any(|(name, other)| name == listener && other == event);
+	let named = &listeners.named;
 	match words.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
-		[REMOVE_WORD, listener, FROM_WORD, LISTENERS_WORD, OF_WORD, event @ ..] if is_named(listener, &event.join(" ")) => assign(&listening_flag(listener), Node::False),
+		[REMOVE_WORD, _, FROM_WORD, LISTENERS_WORD, OF_WORD, event @ ..] if listeners.is_event(&event.join(" ")) => listeners.removal(&items[1], &event.join(" ")),
+		// `remove h from alarm`: short for the above unless alarm is also a variable (card g-_SgI)
+		[REMOVE_WORD, _, FROM_WORD, event @ ..] if listeners.is_event(&event.join(" ")) && !listeners.bound.contains(&event.join(" ")) => listeners.removal(&items[1], &event.join(" ")),
 		[LISTENERS_WORD, OF_WORD, _] => match items[2].drop_meta() {
-			Node::Key(event, Op::SubAssign, listener) if is_named(&word(listener), &word(event)) => assign(&listening_flag(&word(listener)), Node::False),
+			Node::Key(event, Op::SubAssign, removed) if listeners.is_event(&word(event)) => listeners.removal(removed, &word(event)),
+			_ if listeners.is_event(&words[2]) => listeners.list(&words[2]),
 			_ => statement,
 		},
 		[CLEAR_WORD, LISTENERS_WORD, OF_WORD, event @ ..] if named.iter().any(|(_, other)| *other == event.join(" ")) => {
 			let event = event.join(" ");
 			block(named.iter().filter(|(_, other)| *other == event).map(|(listener, _)| assign(&listening_flag(listener), Node::False)).collect())
 		}
-		[COUNT_WORD, LISTENERS_WORD, OF_WORD, event @ ..] if counts.contains_key(&event.join(" ")) => {
+		[COUNT_WORD, LISTENERS_WORD, OF_WORD, event @ ..] if listeners.is_event(&event.join(" ")) => {
 			let event = event.join(" ");
-			let listening = named.iter().filter(|(_, other)| *other == event).map(|(listener, _)| format!(" + (if {} then 1 else 0)", listening_flag(listener)));
-			parse(&format!("{}{}", counts[&event], listening.collect::<String>()))
+			let listening = listeners.flags(&event).into_iter().map(|flag| format!(" + (if {flag} then 1 else 0)"));
+			parse(&format!("{}{}", listeners.counts[&event], listening.collect::<String>()))
 		}
-		_ => statement.map_children(|child| reflected(child, named, counts)),
+		[LISTENERS_WORD, OF_WORD, event @ ..] if listeners.is_event(&event.join(" ")) => listeners.list(&event.join(" ")),
+		_ => match listed_inline(&items, listeners) {
+			Some(inlined) => Node::List(inlined, bracket, separator).map_children(|child| reflected(child, listeners)),
+			None => statement.map_children(|child| reflected(child, listeners)),
+		},
 	}
+}
+
+/// `for l in listeners of alarm {…}`: the words `listeners of alarm` inside a longer row become its list
+fn listed_inline(items: &[Node], listeners: &Listeners) -> Option<Vec<Node>> {
+	let words: Vec<String> = items.iter().map(word).collect();
+	let start = (0..words.len().saturating_sub(2)).find(|at| words[*at] == LISTENERS_WORD && words[at + 1] == OF_WORD)?;
+	let end = (start + 3..=words.len()).rev().find(|end| listeners.is_event(&words[start + 2..*end].join(" ")))?;
+	let mut items = items.to_vec();
+	items.splice(start..end, [listeners.list(&words[start + 2..end].join(" "))]);
+	Some(items)
+}
+
+/// The first error a lowering left in `node` (`h is no named listener of tick`)
+fn first_error(node: &Node) -> Option<Node> {
+	let mut found = None;
+	node.visit(&mut |part| if found.is_none() && matches!(part, Node::Error(_)) {
+		found = Some(part.clone());
+	});
+	found
+}
+
+/// The names a program binds: assigned ones and loop variables (`for l in …`)
+fn bound_names(program: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |part| match part {
+		Node::Key(target, Op::Assign | Op::Define, _) => {
+			names.insert(word(target));
+		}
+		Node::List(items, _, _) => {
+			if let [first, variable, ..] = items.as_slice() {
+				if word(first) == "for" {
+					names.insert(word(variable));
+				}
+			}
+		}
+		_ => {}
+	});
+	names
 }
 
 /// `on alarm {body}`, `on stop the machine {body}`, `on alarm: body`, `once alarm {body}`: the event's name, the body
@@ -324,17 +444,9 @@ fn handler(statement: &Node) -> Option<(String, Node, bool)> {
 	Some((name, body, once))
 }
 
-/// The words that emit in this program: emit, send and the aliases it does not define or assign itself
-fn emit_verbs(program: &Node, variables: &HashSet<String>) -> Vec<String> {
-	let mut defined = variables.clone();
-	program.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
-		let name = match head.drop_meta() {
-			Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
-			other => word(other),
-		};
-		defined.insert(name);
-	});
-	EMIT_WORDS.iter().chain(EMIT_ALIASES.iter()).filter(|verb| !defined.contains(**verb)).map(|verb| verb.to_string()).collect()
+/// The words that emit in this program: emit, send and the aliases it does not name itself (soft keywords, P165)
+fn emit_verbs(program: &Node) -> Vec<String> {
+	EMIT_WORDS.iter().chain(EMIT_ALIASES.iter()).filter(|verb| !crate::soft_keywords::program_names(program, verb)).map(|verb| verb.to_string()).collect()
 }
 
 /// `emit alarm`, `emit stop the machine{reason:"…"}`, `emit item 1` (or a `verbs` word): the name and the data (ø
@@ -361,13 +473,18 @@ fn event_name<'a>(words: impl Iterator<Item = &'a Node>) -> Option<String> {
 	(!words.is_empty() && words.iter().all(|word| !word.is_empty())).then(|| words.join(" "))
 }
 
-/// The events of `count listeners of tick` (`verb` count) or `clear listeners of tick` (clear)
-fn reflected_events(program: &Node, verb: &str) -> HashSet<String> {
+/// The events of `listeners of tick` anywhere: counted, cleared, listed or removed from (`count listeners of tick`)
+fn listed_events(program: &Node) -> HashSet<String> {
 	let mut events = HashSet::new();
 	program.visit(&mut |part| if let Node::List(items, _, _) = part {
+		let items = ungrouped_reflection(items.clone());
 		let words: Vec<String> = items.iter().map(word).collect();
-		if let [first, listeners, of, event @ ..] = words.as_slice() {
-			if first == verb && listeners == LISTENERS_WORD && of == OF_WORD && !event.is_empty() && event.iter().all(|word| !word.is_empty()) {
+		for at in (0..words.len().saturating_sub(2)).filter(|at| words[*at] == LISTENERS_WORD && words[at + 1] == OF_WORD) {
+			let event: Vec<String> = items[at + 2..].iter().map(|item| match item.drop_meta() {
+				Node::Key(event, Op::SubAssign, _) => word(event),
+				_ => word(item),
+			}).take_while(|word| !word.is_empty()).collect();
+			if !event.is_empty() {
 				events.insert(event.join(" "));
 			}
 		}
@@ -497,6 +614,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 			_ => String::new(),
 		};
 		if EMIT_ALIASES.contains(&verb.as_str()) {
+			crate::normalize::set_position_of(&node);
 			crate::diagnostic::educate_once(EMIT_TOPIC, &verb, "emit", &format!("`emit {name}` sends an event to its handlers (P163)"));
 		}
 		let call = match handled.get(&name) {

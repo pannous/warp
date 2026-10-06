@@ -29,7 +29,6 @@ const SETTER_SUFFIX: &str = "·set";
 /// the list mutations that give one
 const VALUE_SUFFIX: &str = "·value";
 const RESULT_SUFFIX: &str = "·result";
-const ELEMENTS_SUFFIX: &str = "·elements";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
 /// Other languages' method names (Python's deque, Java's Deque and Queue, JS's Array and Set) and the wasp methods they
 /// mean, the first one the class defines taken, with a note; only on a class that does not define the name itself
@@ -58,28 +57,6 @@ const RUBY_NEW_WORD: &str = "new";
 const GO_FUNCTION_WORD: &str = "func";
 /// Rust's block of methods of a type, `impl Point {…}`
 const IMPL_WORD: &str = "impl";
-/// `p.counts#i = v` (and `+=`) of a list in a field: the list taken out, its element set, the list stored back
-/// (`counts·elements = p.counts; counts·elements#i = v; p.counts = counts·elements`), so a method setting an element
-/// of its field changes its object like any field assignment
-fn element_assignments(node: Node) -> Node {
-	let Node::Key(target, op, value) = node else { return node.map_children(element_assignments) };
-	let is_assignment = op == Op::Assign || op.is_compound_assign();
-	let (field, name, index) = match target.drop_meta() {
-		Node::Key(field, Op::Hash, index) if is_assignment => match field.drop_meta() {
-			Node::Key(_, Op::Dot, name) if matches!(name.drop_meta(), Node::Symbol(_)) => (field.drop_meta().clone(), name.drop_meta().name(), index.clone()),
-			_ => return Node::Key(target, op, value).map_children(element_assignments),
-		},
-		_ => return Node::Key(target, op, value).map_children(element_assignments),
-	};
-	let elements = Node::Symbol(format!("{name}{ELEMENTS_SUFFIX}"));
-	let element = Node::Key(Box::new(elements.clone()), Op::Hash, index.clone());
-	Node::List(vec![
-		Node::Key(Box::new(elements.clone()), Op::Assign, Box::new(field.clone())),
-		Node::Key(Box::new(element), op, Box::new(element_assignments(*value))),
-		Node::Key(Box::new(field), Op::Assign, Box::new(elements)),
-	], Bracket::Round, Separator::Semicolon)
-}
-
 /// Kotlin's `p.copy(y = 5)`
 const COPY_WORD: &str = "copy";
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
@@ -117,7 +94,7 @@ pub fn constructor_name(class: &str) -> String {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = positional_braces(ruby_constructions(copies(element_assignments(with_impls(node)))));
+	let node = positional_braces(ruby_constructions(copies(with_impls(node))));
 	let node = with_init_constructors(node.clone(), &method_calls_named(&node));
 	let node = with_members(node);
 	let node = with_class_attributes(class_typed_declarations(node));
@@ -295,9 +272,10 @@ fn operator_calls(node: Node) -> Node {
 		for (method, _, _) in class_items(body).iter().filter_map(method_parts) {
 			if let Some((op, names)) = OPERATOR_METHODS.iter().find(|(_, names)| names.contains(&method.as_str())) {
 				if method != names[0] {
+					crate::normalize::set_position_of(part);
 					crate::diagnostic::note_alias(&method, names[0]);
 				}
-				methods.push((name.drop_meta().name(), op.clone(), method));
+				methods.push((name.drop_meta().name(), *op, method));
 			}
 		}
 	});
@@ -651,6 +629,7 @@ fn class_items(body: &Node) -> Vec<Node> {
 		Node::List(words, _, _) if value_block(words).is_some() => value_block(words).into_iter().collect(),
 		Node::List(words, _, _) if accessors(words).is_some() => accessors(words).unwrap_or_default(),
 		Node::List(..) if included_mixin(&item).is_some() => vec![item],
+		Node::List(words, _, _) if nested_fields(words).is_some() => nested_fields(words).into_iter().collect(),
 		// Java's `int x`: the field x of type int; C#'s auto-property `int X { get; set; }` the field X
 		Node::List(words, _, _) if typed_field(words).is_some() => typed_field(words).into_iter().collect(),
 		Node::List(words, _, _) if auto_property(words).is_some() => auto_property(words).into_iter().collect(),
@@ -751,6 +730,7 @@ fn without_modifiers(item: Node) -> Node {
 	if let Some(kept_word) = kept.first().map(leading_name).filter(|_| kept.len() < words.len()) {
 		let modifiers: Vec<String> = words[..words.len() - kept.len()].iter().map(|word| word.drop_meta().name()).collect();
 		if !modifiers.iter().any(|word| SILENT_MODIFIERS.contains(&word.as_str())) {
+			crate::normalize::set_position_of(&item);
 			crate::diagnostic::note_alias(&format!("{} {kept_word}", modifiers.join(" ")), &kept_word);
 		}
 	}
@@ -768,6 +748,21 @@ pub(crate) fn leading_name(member: &Node) -> String {
 		Node::List(items, _, _) => items.first().map(leading_name).unwrap_or_default(),
 		other => other.name(),
 	}
+}
+
+/// wiki/class.md's `address { street; city; zip? }`: the field address holding a block of fields, `address:{…}`
+fn nested_fields(words: &[Node]) -> Option<Node> {
+	let [name, block] = words else { return None };
+	let Node::Symbol(word) = name.drop_meta() else { return None };
+	let Node::List(fields, Bracket::Curly, _) = block.drop_meta() else { return None };
+	let is_field = |field: &Node| match field.drop_meta() {
+		Node::Symbol(_) => true,
+		Node::Key(_, Op::Colon, _) => true,
+		Node::List(group, Bracket::None, _) => group.iter().all(|field| matches!(field.drop_meta(), Node::Symbol(_) | Node::Key(_, Op::Colon, _))),
+		_ => false,
+	};
+	let is_member_word = crate::operators::is_function_keyword(word) || is_constructor_word(word) || crate::wasp_parser::ACCESSOR_WORDS.contains(&word.as_str());
+	(!is_member_word && !fields.is_empty() && fields.iter().all(is_field)).then(|| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(block.clone())))
 }
 
 /// Java's and C#'s field `int x`, Go's `x int`: the field `x:int`
@@ -859,6 +854,7 @@ fn constructed_by_new(node: Node, classes: &[String]) -> Node {
 		}
 		Node::Key(class, Op::Dot, member) if classes.contains(&class.drop_meta().name()) && matches!(class.drop_meta(), Node::Symbol(_)) && leading_name(&member) == RUBY_NEW_WORD => {
 			let class_name = class.drop_meta().name();
+			crate::normalize::set_position_of(&class);
 			crate::diagnostic::note_alias(&format!("{class_name}.{RUBY_NEW_WORD}"), &class_name);
 			let arguments = match member.drop_meta().clone() {
 				Node::List(items, _, _) => items[1..].iter().cloned().map(|argument| constructed_by_new(argument, classes)).collect(),
@@ -890,6 +886,7 @@ fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 			let Node::List(items, _, _) = braces.drop_meta().clone() else { unreachable!("guarded") };
 			let class_name = class.drop_meta().name();
 			let written: Vec<String> = items.iter().map(Node::serialize).collect();
+			crate::normalize::set_position_of(&class);
 			crate::diagnostic::note_alias(&format!("{class_name}{{{}}}", written.join(", ")), &format!("{class_name}({})", written.join(", ")));
 			let arguments = items.into_iter().map(|item| constructed_from_braces(item, classes));
 			Node::List([vec![*class]].into_iter().flatten().chain(arguments).collect(), Bracket::Round, Separator::None)
@@ -905,17 +902,17 @@ fn with_init_constructors(node: Node, called: &std::collections::HashSet<String>
 	match node {
 		Node::Type { name, body } => {
 			let class = name.drop_meta().name();
-			let is_alias = |item: &Node| constructor_alias(item).filter(|alias| *alias == class || ([&CONSTRUCTOR_ALIASES[..], &[CONSTRUCTOR_WORD]].concat().contains(&alias.as_str()) && !called.contains(alias)));
+			let is_alias = |item: &Node| constructor_alias(item).filter(|alias| *alias == class || ((CONSTRUCTOR_ALIASES.contains(&alias.as_str()) || *alias == CONSTRUCTOR_WORD) && !called.contains(alias)));
 			let items: Vec<Node> = class_items(&body);
 			if !items.iter().any(|item| is_alias(item).is_some()) {
 				return Node::Type { name, body };
 			}
 			let items = items.into_iter().map(|item| match is_alias(&item) {
+				// `init(xs) := {…}` is the constructor too, without a note
+				Some(alias) if alias == CONSTRUCTOR_WORD => as_init(item),
 				Some(alias) => {
-					// `init(x) := …` is the constructor already, written as a method
-					if alias != CONSTRUCTOR_WORD {
-						crate::diagnostic::note_alias(&alias, CONSTRUCTOR_WORD);
-					}
+					crate::normalize::set_position_of(&item);
+					crate::diagnostic::note_alias(&alias, CONSTRUCTOR_WORD);
 					as_init(item)
 				}
 				None => item,
@@ -1500,7 +1497,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 	let getters: Vec<&String> = members.methods.iter().filter(|(_, getter)| *getter).map(|(name, _)| name).filter(|name| unshadowed(name)).collect();
 	let statics: Vec<&String> = members.statics.iter().filter(|name| unshadowed(name)).collect();
 	let readable = Readable { class, fields: [fields, getters].concat(), methods, statics };
-	let body = element_assignments(receiver_reads(body, &readable));
+	let body = receiver_reads(body, &readable);
 	let receiver = Node::Symbol(RECEIVER.to_string());
 	let changes = match changes_receiver(&body) {
 		false => Change::None,
@@ -1540,7 +1537,7 @@ fn gives_value(body: &Node) -> bool {
 		// `if c {items.add(x)}`: a branch gives what its last statement gives
 		Node::Key(_, Op::Then, branch) => gives_value(branch),
 		Node::Key(then, Op::Else, otherwise) => gives_value(then) || gives_value(otherwise),
-		// a nested sequence (element_assignments) gives what its last statement gives
+		// a nested sequence gives what its last statement gives
 		Node::List(_, Bracket::Round, Separator::Semicolon) | Node::List(_, Bracket::Curly, _) => gives_value(&last),
 		Node::Key(_, op, _) if matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign() => false,
 		// a body giving its object back already (a constructor)
@@ -1602,10 +1599,11 @@ fn changes_receiver(body: &Node) -> bool {
 	changes
 }
 
-/// `self.items`, `self.stack.items`
+/// `self.items`, `self.stack.items`, an element `self.counts#i`
 fn is_receiver_field(target: &Node) -> bool {
 	match target.drop_meta() {
 		Node::Key(object, Op::Dot, _) => matches!(object.drop_meta(), Node::Symbol(name) if name == RECEIVER) || is_receiver_field(object),
+		Node::Key(list, Op::Hash, _) => is_receiver_field(list),
 		_ => false,
 	}
 }

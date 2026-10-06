@@ -441,6 +441,11 @@ impl WaspParser {
 		let Some((unit, length)) = crate::time::unit_after(&self.chars[self.pos..]) else {
 			return number;
 		};
+		// `{year:1970 month:1}`: a unit word that starts the next entry or assignment is no unit
+		let after_word: String = self.chars[self.pos + length..].iter().skip_while(|c| **c == ' ').take(2).collect();
+		if after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==") {
+			return number;
+		}
 		self.advance_by(length);
 		Node::data(unit.times(*count))
 	}

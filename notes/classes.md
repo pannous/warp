@@ -55,7 +55,7 @@
   the object back and gives the value (classes-36: a block's statements run before the value, not as data).
   A change inside `if`/`else` gives the object unless a branch ends in a value.
 - `p.counts#i = v` / `+=` of a list field: `counts·elements = p.counts; counts·elements#i = v; p.counts = …`
-  (element_assignments), so a method setting an element changes its object; also outside classes (`s.xs#2 = 6`).
+  (lowering field_elements, functions), so a method setting an element changes its object; also outside classes (`s.xs#2 = 6`).
 - init(x) := … is the constructor like init(x){…}; what a loop in init sets (`for x in xs { i = … }`) stays local.
 
 ## Step 3 as built (P117 inheritance)
@@ -268,3 +268,10 @@ lines up to `end` (atoms parse_type_declaration_body, the methods' `end` lines d
 annotation `@deprecated fun f()` stays one), `def initialize(x, y)` the constructor (P162), `Point.new(1, 2)` the
 construction `Point(1, 2)` with a note (class_methods ruby_constructions, unless the class defines `new`). Parser fix
 on the way: a call followed by an indented block keeps its parameters (`def f(x)` + lines; lists.rs dropped them).
+
+Wiki gaps (classes-31): class.md's nested block of fields `address { street; city; zip? }` declares the field
+address holding them (class_methods nested_fields). struct.md's example works. property.md is a sketch with open
+questions (`age:{date - 1996}` getters of data, setters): nothing ported from it.
+
+Interfaces (classes-32): class methods satisfy traits, trait-typed parameters, foreign interface/protocol forms and
+`implements`/`: Shape` lists: notes/traits.md "Classes and foreign interfaces".

@@ -250,6 +250,7 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 					let racing = all_word.name() == ANY_WORD;
 					let first = all_word.name() == FIRST_WORD;
 					if first {
+						crate::normalize::set_position_of(list);
 						crate::diagnostic::educate_once(FIRST_TOPIC, "await first […]", "await any […]", "await first is the first task's result; for the first to finish: await any […]");
 					}
 					let Node::List(listed, list_bracket, list_separator) = list.drop_meta().clone() else { unreachable!("guarded") };
@@ -1428,6 +1429,7 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 /// `def f(a, b) { body }`, `def f(x) := body`, `function g() { … }`: the definition `f(a, b) := body`
 pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let (keyword, definition, mut result_type) = match items {
+		[keyword, glued] if glued_curried_definition(glued).is_some() => (keyword, glued_curried_definition(glued).expect("guarded"), None),
 		[keyword, definition] => (keyword, definition.drop_meta().clone(), None),
 		// a tuple result type `-> (Int, Int) {…}` (Swift): the body's tuple as it is
 		[keyword, head, body] if tuple_result(head).is_some() => {
@@ -1492,9 +1494,10 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let mut labeled_names = vec![];
 	let mut parameters: Vec<Node> = parameters.map(|parameter| labeled_parameter(parameter, &mut labeled_names)).collect();
 	let body = with_label_names(body, labeled_names);
-	// `func add1(x int)`: the one parameter and its type arrive as two words
+	// `func add1(x int)`: the one parameter and its type arrive as two words; `func total(s Shape)` of a declared type
 	if let [parameter, type_word] = parameters.as_slice() {
-		if matches!(parameter.drop_meta(), Node::Symbol(_)) && is_type_word(type_word) {
+		let is_type_name = matches!(type_word.drop_meta(), Node::Symbol(word) if word.starts_with(char::is_uppercase));
+		if matches!(parameter.drop_meta(), Node::Symbol(_)) && (is_type_word(type_word) || is_type_name) {
 			parameters = vec![Node::Key(Box::new(parameter.clone()), Op::Colon, Box::new(type_word.clone()))];
 		}
 	}
@@ -1590,7 +1593,7 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 			Some(result_type) => Node::Key(Box::new(head), Op::Colon, result_type.clone()),
 			None => head,
 		};
-		Node::Key(Box::new(head), op.clone(), body.clone())
+		Node::Key(Box::new(head), *op, body.clone())
 	};
 	Some(Node::List(definitions.iter().map(method).collect(), Bracket::None, Separator::Semicolon))
 }
@@ -1625,6 +1628,24 @@ fn curried_definition(head: &Node, rest: &Node) -> Option<Node> {
 	}
 	let lambda = Node::Key(Box::new(second.clone()), Op::FatArrow, body.clone());
 	Some(Node::Key(Box::new(head.clone()), Op::Define, Box::new(lambda)))
+}
+
+/// The glued groups `add(x)(y)` arrive as one operand (the parser's curried call): `def add(x)(y) = x + y` and
+/// `def add(x: Int)(y: Int): Int = …` as curried_definition takes them
+fn glued_curried_definition(definition: &Node) -> Option<Node> {
+	let Node::Key(left, Op::Assign, body) = definition.drop_meta() else { return None };
+	let groups = |node: &Node| match node.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 => Some((items[0].clone(), items[1].clone())),
+		_ => None,
+	};
+	let (head, second) = match left.drop_meta() {
+		Node::Key(signature, Op::Colon, result_type) => {
+			let (head, second) = groups(signature)?;
+			(head, Node::Key(Box::new(second), Op::Colon, result_type.clone()))
+		}
+		other => groups(other)?,
+	};
+	curried_definition(&head, &Node::Key(Box::new(second), Op::Assign, body.clone()))
 }
 
 /// Swift's `f(k) -> (Int) -> Int { body }`, a function as the result: the definition `f(k) { body }`, the closure it
@@ -1713,13 +1734,14 @@ fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
 	let name = typed_parameter_name(typed).expect("a labeled parameter has a name");
 	// user 2026-10-06: wasp names a parameter once, Swift's label and name are redundant; ported code still compiles
 	let written = format!("{label} {}", typed.serialize());
+	let preferred = if label == WILDCARD_LABEL { typed.clone() } else { renamed_parameter(typed, label) };
+	crate::normalize::set_position_of(&parameter);
+	crate::normalize::hint(&written, &preferred.serialize(), "wasp names a parameter once, no label");
 	if label == WILDCARD_LABEL {
-		crate::normalize::hint(&written, &typed.serialize(), "wasp names a parameter once, no label");
-		return typed.clone();
+		return preferred;
 	}
-	crate::normalize::hint(&written, &renamed_parameter(typed, label).serialize(), "wasp names a parameter once, no label");
 	labeled_names.push(Node::Key(Box::new(name.clone()), Op::Assign, Box::new(Node::Symbol(label.to_string()))));
-	renamed_parameter(typed, label)
+	preferred
 }
 
 /// The body reading every labeled parameter by its label: `name` → `person` (an alias `name = person` would hide that

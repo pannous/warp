@@ -75,10 +75,33 @@ fn function_name(node: &Node) -> Option<&'static str> {
 	}
 }
 
-/// Programs that were not evaluated exactly see exact reals as their f64 value (as before)
+/// Programs that were not evaluated exactly see exact reals as their f64 value (as before), except their constant
+/// expressions with a rational or true/false value
 pub fn lower(node: Node) -> Node {
+	let node = folded_exact(node);
 	let real_variables = real_variables(&node);
 	lower_reals(with_real_type_arguments(node, &real_variables))
+}
+
+/// In a program evaluated at run time, a constant expression of exact reals whose value is rational or a truth is that
+/// value: `xs.add(√2 * √2 == 2)` adds true, `r = √2 * √2` is 2 (card exact-reals); an irrational one (or one beyond
+/// i64) stays for lower_reals to make a float
+fn folded_exact(node: Node) -> Node {
+	let statement_like = matches!(node.drop_meta(), Node::List(_, _, Separator::Semicolon | Separator::Newline) | Node::Key(_, Op::Assign | Op::Define, _));
+	if !statement_like && mentions_generator(&node) {
+		match evaluate(&node, &mut Scope::new()) {
+			Ok(Value::Bool(truth)) => return if truth { Node::True } else { Node::False },
+			// beyond i64 the run-time path stays as it was (√1e40 is a float there, floor of it out of int range)
+			Ok(Value::Real(real)) if rational(&real).is_some_and(|q| q.numerator.to_i64().is_some() && q.denominator.to_i64().is_some()) => return Value::Real(real).into_node(),
+			_ => {}
+		}
+	}
+	match node {
+		Node::Key(left, op, right) => Node::Key(Box::new(folded_exact(*left)), op, Box::new(folded_exact(*right))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(folded_exact).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(folded_exact(*node)), data },
+		other => other,
+	}
 }
 
 /// Variables assigned once, to a value that mentions an exact real (`x=π`): their type is the type of that value

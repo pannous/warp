@@ -13,3 +13,10 @@ fn a_one_entry_map_merges_too() {
 	is!("use map; merge({a: 1}, {b: 2})", parse("{a:1 b:2}"));
 	is!("use map; map_values({a: 1}, x => x + 1)", parse("{a:2}"));
 }
+
+#[test]
+fn use_map_inverts_picks_and_builds_from_pairs() {
+	is!("use map; m = invert({a:\"x\" b:\"y\"}); m.get(\"y\")", "b");
+	is!("use map; count(keys(pick({a:1 b:2 c:3}, [\"a\", \"c\", \"z\"])))", 2);
+	is!("use map; m = from_pairs([[\"a\", 1], [\"b\", 2]]); m.get(\"b\")", 2);
+}

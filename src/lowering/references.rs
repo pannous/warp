@@ -54,6 +54,7 @@ fn named_references(node: Node, enclosing: &mut Vec<(String, Option<String>)>, w
 		Node::Symbol(word) if word.strip_prefix(REFERENCE_MARK).is_some_and(digits) => {
 			let id = &word[REFERENCE_MARK.len_utf8()..];
 			if name_with_id(id, enclosing).is_some() {
+				crate::normalize::set_position_of(&node);
 				crate::normalize::advise(word, &format!("{ATTRIBUTE_MARK}{id}"), &format!("{word} is a parameter; the node with id {id} is {ATTRIBUTE_MARK}{id}"));
 			}
 			return node;

@@ -16,3 +16,19 @@ fn use_text_brings_its_words() {
 	is!("use text; \"[\" + pad_right(\"ab\", 5) + \"]\"", "[ab   ]");
 	is!("use text; repeat(\"ab\", 3)", "ababab");
 }
+
+#[test]
+fn use_text_formats_a_template() {
+	is!("use text; format(\"{} has {} items\", [\"cart\", 3])", "cart has 3 items");
+	is!("use text; format(\"{}{}\", [1, 2])", "12");
+	is!("use text; format(\"none\", [])", "none");
+}
+
+#[test]
+fn use_text_brings_words_lines_capitalize_center() {
+	// words is a comprehension: a module's source gets the program's early passes (pipeline::lower_module_source)
+	is!("use text; count(words(\" a b  c \"))", 3);
+	is!("use text; count(lines(\"a\\nb\"))", 2);
+	is!("use text; capitalize(\"abc\")", "Abc");
+	is!("use text; \"[\" + center(\"ab\", 6) + \"]\"", "[  ab  ]");
+}

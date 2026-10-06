@@ -6,6 +6,8 @@ mod test_ffi;
 mod test_foreign_python;
 #[cfg(feature = "native")] // wasmtime components: not in the browser build
 mod test_components;
+#[cfg(feature = "native")] // wasmtime components: not in the browser build
+mod test_component_short_use;
 mod test_components_anywhere;
 mod test_foreign_js;
 mod test_foreign_handles;
