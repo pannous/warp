@@ -58,6 +58,16 @@ const INCLUDE_WORD: &str = "include";
 /// `sum·T` reads as the witness of sum for T and would shadow the library's sum)
 const METHOD_PREFIX: &str = "method·";
 
+/// The method an operator on an instance calls, `plus` for `+`
+pub(crate) fn operator_method(op: Op) -> Option<&'static str> {
+	OPERATOR_METHODS.iter().find(|(known, _)| *known == op).map(|(_, names)| names[0])
+}
+
+/// A method named by an operator's glyph, `+(o) := …`: the operator's method `plus`
+fn glyph_method(name: &str) -> Option<&'static str> {
+	OPERATOR_METHODS.iter().find(|(op, _)| op.as_str() == name).map(|(_, names)| names[0])
+}
+
 /// The function a class's `value{…}` block becomes, `person·value(self:person)`: every construction is passed through it
 pub fn constructor_name(class: &str) -> String {
 	format!("{class}·{VALUE_WORD}")
@@ -781,7 +791,10 @@ fn as_member(definition: Node) -> Node {
 			let word = Node::List([vec![Node::Symbol(VALUE_WORD.to_string())], parameters].concat(), Bracket::Round, separator);
 			Node::Key(Box::new(word), Op::None, Box::new(curly(*body)))
 		}
-		false => Node::Key(Box::new(Node::List([vec![name.clone()], parameters].concat(), Bracket::Round, separator)), Op::Define, body),
+		false => {
+			let name = glyph_method(&name.drop_meta().name()).map_or(name.clone(), |method| Node::Symbol(method.to_string()));
+			Node::Key(Box::new(Node::List([vec![name], parameters].concat(), Bracket::Round, separator)), Op::Define, body)
+		}
 	}
 }
 

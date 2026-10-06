@@ -219,8 +219,9 @@ Operators on instances (classes-23, wiki/operator.md "a & b will try to invoke e
 instance whose class defines `plus` (or `add`, Python `__add__`, Kotlin `operator fun plus`) is `a.plus(b)`; also
 `-` minus, `*` times, `/` divide, `%` mod, `<` less, `>` more, `==` equals (class_methods OPERATOR_METHODS). Known
 instances only (constructions, annotated or constructed variables, loop variables, chains `a + b + c`); an unknown
-operand keeps the built-in operator (card class-method: dispatch at run time). Open: a method named by its glyph
-`+(o) := …` (the parser reads `+(o)` as unary plus), C++/C# `operator +`.
+operand keeps the built-in operator (card class-method: dispatch at run time). A method named by its glyph
+`+(o) := …` and C++/C#'s `operator +(o) := …` (classes-25: the parser's try_parse_operator_method_head reads a glyph
+before `(…) :=` as the head, as_member renames it to the english name).
 Foreign spellings are aliases (classes-24, alias rule in notes/agents/common.md): they work and give a got-it note
 with an "I meant: <wasp word>" fix, `diagnostic::note_alias(written, wasp_word)` (educate_once, topic
 `alias-<foreign word>`): `constructor`/`__init__`/`init` → `value`, `__add__`/`add` → `plus` (every non-first name in

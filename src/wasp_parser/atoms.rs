@@ -507,6 +507,15 @@ impl WaspParser {
 			}
 			return self.parse_atom();
 		}
+		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
+			while matches!(self.current_char(), ' ' | '\t') {
+				self.advance();
+			}
+			if let Some(head) = self.try_parse_operator_method_head() {
+				crate::diagnostic::note_alias(&format!("{OPERATOR_WORD} {}", head.first().name()), &head.first().name());
+				return head;
+			}
+		}
 		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
 		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol.as_str()) {
 			if let Some(keyword) = self.class_keyword_after_blanks() {

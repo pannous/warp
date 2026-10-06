@@ -27,6 +27,8 @@ impl WaspParser {
 			statement
 		} else if let Some(awaited) = self.try_parse_await() {
 			awaited
+		} else if let Some(head) = self.try_parse_operator_method_head() {
+			head
 		} else if let Some((op, chars)) = self.peek_prefix_operator().filter(|_| !self.at_member_name(0)) {
 			let (prefix_line, prefix_column) = self.get_position();
 			self.hint_operator(chars, true);
@@ -52,6 +54,45 @@ impl WaspParser {
 		};
 
 		self.continue_expr(lhs, min_bp)
+	}
+
+	/// `+(o) := …` defines the method of an operator by its glyph (a class's `plus`): the head is the call `+(o)`, no
+	/// unary plus
+	pub(super) fn try_parse_operator_method_head(&mut self) -> Option<Node> {
+		let (op, chars) = self.peek_operator()?;
+		crate::lowering::class_methods::operator_method(op)?;
+		let mut offset = chars + self.parenthesis_length(chars)?;
+		while matches!(self.peek_char(offset), ' ' | '\t') {
+			offset += 1;
+		}
+		if (self.peek_char(offset), self.peek_char(offset + 1)) != (':', '=') {
+			return None;
+		}
+		self.advance_by(chars);
+		let parameters = match self.parse_atom().drop_meta().clone() {
+			Node::List(parameters, Bracket::Round, _) => parameters,
+			Node::Empty => vec![],
+			parameter => vec![parameter],
+		};
+		Some(Node::List([vec![Symbol(op.to_string())], parameters].concat(), Bracket::Round, Separator::None))
+	}
+
+	/// The length of the balanced `(…)` at `offset`, None when none starts there or it never closes
+	fn parenthesis_length(&self, offset: usize) -> Option<usize> {
+		if self.peek_char(offset) != '(' {
+			return None;
+		}
+		let mut depth = 0;
+		for length in 0.. {
+			match self.peek_char(offset + length) {
+				'(' => depth += 1,
+				')' if depth == 1 => return Some(length + 1),
+				')' => depth -= 1,
+				'\0' => return None,
+				_ => {}
+			}
+		}
+		None
 	}
 
 	/// An infix operator alone as an argument or item, `sorted(xs, >)`, `[+, *]`: the operator as a value `(> ø ø)`, as
