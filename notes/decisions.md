@@ -171,7 +171,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   init" fix; docs, hints and examples use `init`. User, extending: all common constructor names are aliases
   of `init` with that note: `value` (wiki 2023), `constructor` (JS/TS), `__init__` (Python), `initialize` (Ruby),
   `__construct` (PHP), `New` (VB.NET), `Create` (Delphi), Rust's `new` inside a class/impl, and a method named like
-  its class (C++/Java/C# `Point(x, y){…}` inside `class Point`).
+  its class (C++/Java/C# `Point(x, y){…}` inside `class Point`). At the call site `new Point(1, 2)`
+  builds the same value as `Point(1, 2)`, with a got-it note that `new` is superfluous and a fix removing it; `init`
+  stays the definition name (it initializes an existing instance; Rust's `new` is a factory).
 - P161 (functions, warp-41; the user told the worker directly) no Swift-style argument labels: "we don't do this
   here, I don't like that redundancy". Ported labels (`func greet(person name: String)`, `_ x: Int`) compile like P157,
   with a got-it note "wasp names a parameter once"; docs and examples never use labels.
