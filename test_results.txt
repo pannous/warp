@@ -72,6 +72,8 @@ PASSED:
   ✓ control::test_go_blocks::a_go_block_prints_after_the_program_goes_on
   ✓ control::test_go_blocks::a_go_block_sees_the_values_of_its_variables
   ✓ control::test_go_blocks::a_task_of_no_arguments_gives_its_value
+  ✓ control::test_go_blocks::go_blocks_fill_a_job_list
+  ✓ control::test_go_blocks::lines_printed_by_tasks_stay_whole
   ✓ control::test_go_blocks::sleep_takes_a_duration
   ✓ control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
@@ -134,6 +136,9 @@ PASSED:
   ✓ control::test_shared_arrays::a_shared_array_reads_writes_and_adds
   ✓ control::test_shared_arrays::tasks_add_floats_to_one_shared_array
   ✓ control::test_shared_arrays::tasks_add_to_one_shared_array
+  ✓ control::test_shared_values::a_function_given_a_shared_value_shares_it
+  ✓ control::test_shared_values::a_go_block_writes_a_shared_value
+  ✓ control::test_shared_values::a_shared_value_reads_writes_and_adds
   ✓ control::test_signal_in_loop::a_listener_checks_a_write_in_a_one_statement_loop
   ✓ control::test_structural_patterns::test_a_subject_that_is_no_list_does_not_match
   ✓ control::test_structural_patterns::test_list_patterns_bind_names
@@ -2348,4 +2353,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-23 ignored, 2343 passed, 0 failed, 2343 total tested
+23 ignored, 2348 passed, 0 failed, 2348 total tested
