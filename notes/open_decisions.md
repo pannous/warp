@@ -5,42 +5,15 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P63 (rest) a comma tuple `(frobnicate, 3)` in code: data (worker default) or code like `[cube 3]`? (1) and (2) are
-  decided (see Decided 2026-10-05, interview). Asked by warp-90. 2026-10-05.
 - P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
   as they are at `!` and assigns only declared globals. User 2026-10-05: "Later"; revisit when run-time `!` is built.
 - P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
   loop changes are captured per iteration, every other variable follows late binding (recommended) / every variable
   is captured per iteration and never checked (worker default on branch late-binding, keeps the test → 3). User
   2026-10-05: "Later". Asked by warp-29.
-- P71 What does `:=` mean without parameters? The spec (wiki/charged.md section 2) says charged (`z := y*y`
-  re-evaluated at every use); the implementation and every mainstream language (Go, Pascal, Python's walrus) read it
-  as now: `y=3; z:=y*y; y=4; z` → 9, `x := 5; x = 6` → 6; the user's own model was "like let, later = may
-  overwrite". The original wiki said "semi charged, evaluated upon normal evaluation of the parent context"; "every
-  use" came from the Interviewer's table. Options: (1) now, unless it defines a function (parameters or `it`:
-  `square := it*it` stays a function), zero-parameter charged definitions via `def` (recommended); (2) always charged,
-  `z = 6` after it an error; (3) Go-strict: `:=` declares a new variable, `=` only reassigns. User 2026-10-05: "idk".
-  Assumed until decided: today's behaviour (1); workers do not change zero-parameter `:=` semantics, and the
-  "needless charging" note applies to `def` only. If (2) is chosen: the per-use getter is ~20 lines, commit 0b687e03 on
-  branch late-binding (warp-29). Object entries follow (1) too: `o = {a: 1, s := clock()}` evaluates `s` once, like
-  `s = …` (72a856af0, g-qUmA; wiki/charged.md §4 e0cf82f); (2) would revisit them.
 - P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
   run-time blocks are always pure. Asked by warp-29.
-- P93 may the "Batch board writes" paragraph in AGENTS.md be deleted? `todo` now costs ~1–2 GraphQL points per call
-  and workers call it directly (notes/agents/common.md already says so). Options: delete (recommended) / shorten to
-  "avoid polling `todo list` in loops" / keep. Assumed: kept, AGENTS.md is the user's. Asked by the old Supervisor,
-  relayed by warp-76.
-- P94 WIT `char` maps to a one-character text, not to wasp's Codepoint: keep it? Options: map to Codepoint, as the
-  WIT char is one Unicode scalar value (recommended) / keep the text mapping / Codepoint inside wasp, text at the JS
-  boundary. Assumed: the text mapping stays. Asked by warp-d6 (branch web-components), relayed by warp-76.
-- P95 the main checkout has an uncommitted `mod test_map_starts;` in tests/lists/mod.rs and an untracked
-  tests/lists/test_map_starts.rs (Oct 5, hash-table maps from map literals and map parameters), no commit has it.
-  Options: hand it to a worker who checks that it passes and commits it (recommended) / commit it as it is / drop
-  both. Assumed: left untouched. Raised by warp-76.
-- P96 delete obsolete ignored tests? The old Supervisor didn't name which ones. Options: a worker lists the
-  candidates with reasons first, and the user picks (recommended) / keep all ignored tests. Assumed: nothing deleted.
-  Raised by the old Supervisor, relayed by warp-76.
 Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
 work on branch runtime-units-survey pauses.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
@@ -60,6 +33,18 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - Test upgrades (2026-10-05, "allow all tests to be upgraded from a dumb thing to a better thing, from not working to
   working"): an error/refusal/"not yet" expectation becomes the working value, ignored tests that pass are
   un-ignored, without asking; a change of meaning (one working value into another) still needs a decision.
+
+## Decided 2026-10-06 (user, multiple-choice interview, as recommended unless quoted)
+- P71 `:=` without parameters is ALWAYS CHARGED (the user chose this over the recommended "now"): `y=3; z:=y*y; y=4;
+  z` → 16, re-evaluated at every use, as wiki/charged.md §2 says; `z = 6` after it is an error. The per-use getter
+  exists: commit 0b687e03 on branch late-binding (warp-29). Object entries `{s := clock()}` follow (§4 is revisited).
+  Tests pinning "now" may be edited, each in its own commit naming P71.
+- P63 (rest) a comma tuple `(frobnicate, 3)` in code is data, never called (worker default stands). Asked by warp-90.
+- P94 WIT `char` maps to wasp's Codepoint, not a one-character text. Asked by warp-d6 (branch web-components).
+- P93 the "Batch board writes" paragraph is deleted from AGENTS.md.
+- P95 tests/lists/test_map_starts.rs and its `mod` line: a worker checks it passes and commits it on a branch; the
+  user's checkout is cleaned once main has it.
+- P96 obsolete ignored tests: a worker lists the candidates with a reason each; the user picks which go.
 
 ## Decided 2026-10-05 (user, multiple-choice interview, all as recommended unless quoted)
 - Data vs code (P51, P62, P63 (1-2), charge levels, D7 revised): specified in wiki/charged.md, the single source;
