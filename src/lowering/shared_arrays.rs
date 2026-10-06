@@ -79,15 +79,21 @@ fn element_words(kind: Shared) -> [&'static str; 3] {
 
 pub fn lower(node: Node) -> Node {
 	let mut declared = HashMap::new();
-	node.visit(&mut |part| declared.extend(declaration(part).map(|(name, _, shared)| (name, shared))));
+	let mut first_linear: Option<Node> = None;
+	node.visit(&mut |part| if let Some((name, _, shared)) = declaration(part) {
+		if shared.storage == Storage::Linear && first_linear.is_none() {
+			first_linear = Some(part.clone());
+		}
+		declared.insert(name, shared);
+	});
 	if declared.is_empty() {
 		return node;
 	}
-	if declared.values().any(|kind| kind.storage == Storage::Linear) {
+	if let Some(linear) = first_linear {
+		crate::normalize::set_position_of(&linear);
 		crate::diagnostic::educate_once(LINEAR_TOPIC, "linear xs = int[n]", "xs = int[n]",
 			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
 	}
-	let mut declared = declared;
 	declared.extend(float_map_results(&node, &declared));
 	let functions = definitions(&node);
 	let shared_parameters = shared_parameters(&node, &functions, &declared);
@@ -285,6 +291,8 @@ impl Rewrite<'_> {
 					_ => Node::Key(Box::new(self.node(*target, function)), op, Box::new(self.node(*value, function))),
 				}
 			}
+			// `shared_writes(n)` (signal_values::poll_shared) takes the array, not its value
+			Node::List(ref items, _, _) if items.first().is_some_and(|head| head.name() == crate::host::SHARED_WRITES) => node,
 			Node::List(items, bracket, separator) => {
 				let names = self.names(function);
 				// a shared value given to a function that shares it goes as its cell, not as its value

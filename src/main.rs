@@ -178,6 +178,7 @@ fn run_command(args: &[String]) {
             eprintln!("Error: Could not read file '{}'", path);
         }
         warp_runtime::system_signals::allow_staying(); // a program with a live timer stays after main
+        diagnostic::show_lines_of(&source_of(path));
         let result = eval(path); // a file: its folder is in scope (D15)
         if !only_run && !matches!(result, Node::Error(_)) {
             leave_executable(path);
@@ -211,6 +212,7 @@ fn run_command(args: &[String]) {
         }
     } else if arg_string.starts_with("eval ") {
         let code = arg_string.strip_prefix("eval ").unwrap_or("");
+        diagnostic::show_lines_of(code);
         show(&eval(code), RESULT_MARK);
     } else if let Some(code) = arg_string.strip_prefix("lower ") {
         match wasm_emitter::lower(code) {
@@ -267,7 +269,12 @@ fn show(result: &Node, mark: &str) {
     if result.drop_meta() != &Node::Empty {
         println!("{mark}{}", result.serialize());
     }
+    if let Some(excerpt) = diagnostic::error_position(result).and_then(|(line, column)| diagnostic::shown_excerpt(line, column)) {
+        let _ = io::stdout().flush();
+        eprintln!("{excerpt}");
+    }
 }
+
 
 /// The text of the file `target` names, else `target` itself as code
 fn source_of(target: &str) -> String {

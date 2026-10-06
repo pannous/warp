@@ -193,3 +193,11 @@ fn the_page_gets_every_edit_of_a_fix() {
 	// the last in the text first: the read at the end, then the key
 	assert_eq!((edits[0]["start"].as_u64(), edits[1]["start"].as_u64()), (Some(code.len() as u64 - 3), Some(10)));
 }
+
+#[test]
+fn ambiguous_call_comparison_fixes() {
+	assert_fix("say(x) := x\nsay 3 == 4", "the call compared", "0");
+	assert_fix("say(x) := x\nsay 3 == 4", "the comparison as the argument", "0");
+	assert_fix("say(x) := x\nsay 3 == 3", "the call compared", "1");
+	assert_eq!(fixed_by("say(x) := x\nsay 3 == 3", "the comparison as the argument"), "say(x) := x\nsay(3 == 3)");
+}

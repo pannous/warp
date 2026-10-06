@@ -7,9 +7,6 @@ use warp::Node;
 
 const EXCLUDED_LIST: &str = "web/playground/excluded_samples.txt";
 const SAMPLES: &str = "samples";
-/// In the menu with an error while a branch fixes them (warp-f0: html's `label`, html_dsl's duplicate key `li`): the
-/// fix deletes them here
-const BEING_FIXED: [&str; 2] = ["html", "html_dsl"];
 
 /// The names excluded_samples.txt lists: the first word of each line that is no comment
 fn excluded_samples() -> Vec<String> {
@@ -28,7 +25,7 @@ fn every_playground_sample_runs_without_an_error() {
 	let excluded = excluded_samples();
 	let mut menu: Vec<String> = fs::read_dir(SAMPLES).expect(SAMPLES)
 		.filter_map(|entry| entry.ok()?.path().file_name()?.to_str()?.strip_suffix(".wasp").map(str::to_string))
-		.filter(|name| !excluded.contains(name) && !BEING_FIXED.contains(&name.as_str()))
+		.filter(|name| !excluded.contains(name))
 		.collect();
 	menu.sort();
 	let failures: Vec<String> = menu.iter().filter_map(|name| match eval(&sample_path(name)) {

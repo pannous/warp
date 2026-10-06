@@ -176,3 +176,12 @@ fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
 	});
 	std::fs::remove_file(path).unwrap();
 }
+
+// found by the kitchen sink: after a text `//` can only be a comment, no note about division
+#[test]
+fn a_comment_after_a_text_needs_no_note() {
+	use warp::normalize::capture_hints;
+	let notes = |code: &str| capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count();
+	assert_eq!(notes("p = { e: \"trailing\" // a comment\n age: 30 }; p.age"), 0);
+	assert_eq!(notes("x = \"a\", // a comment\nx"), 0);
+}
