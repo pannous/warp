@@ -144,7 +144,7 @@ of a class that has one through it, after the given fields are matched and defau
 passes them to it, on an instance of the declared defaults (ø for the other fields), instead of matching them to
 fields; a field it sets that is no parameter becomes a field.
 
-Open (next batches): struct elements of lists (above), a `pop` method (changes the object and gives another value), a method
+Open (next batches): struct elements of lists (above), a method
 named like a type word (`double()`: "double is a type"), mixins, a field named `pi` (card footgun-pi, P130: the class's own field), 
 Extension methods (classes-11, card functions-extension, declarations.rs): Kotlin `fun Int.twice() = this * 2` and
 Swift `extension Int { func twice() -> Int { self * 2 } }` define `twice(this:Int)` (`self` when the body says self),
@@ -166,3 +166,11 @@ Mixins (classes-15): `mixin Walker{steps:int=0; walk() := name + " walks"}` decl
 in: `class Duck with Walker, Swimmer {…}` (Dart/Scala) or `include Walker` in the body (Ruby). class_methods
 with_mixins appends the mixin's fields and methods after the class's own (so `Duck("Don")` fills the own fields
 first), leaving out those the class defines itself; the methods read the class's fields.
+
+Methods that change their object and give a value (classes-16, card obj-list): `pop() := items.pop()` returns the
+pair `[pop·value, self]`; `s.pop()` of a variable is `(pop·result = pop(s); s = pop·result#2; pop·result#1)`
+(class_methods Change::GivingValue; a changing method ends in a value unless its last statement assigns or appends).
+A method named like a list mutation (pop, push, add, remove, insert, append) is renamed `pop·method` like a type-word
+method, but called so only on what holds an instance (a variable assigned one, `p:Stack`, self) or bare in its class
+body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (declaration_lowering
+popped_list takes any place, as add/insert did).
