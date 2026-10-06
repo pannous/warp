@@ -21,6 +21,8 @@ const COMPILE_FLAGS: [&str; 3] = [EXE_FLAG, WASM_FLAG, AOT_FLAG];
 const MACHINE_CODE_EXTENSION: &str = "cwasm";
 /// The name of an executable built from inline code (plus the platform's extension)
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
+/// `warp run <file>`: the program runs, no executable is left (P105)
+const RUN_PREFIX: &str = "run ";
 const RUNTIME_STUB_NAME: &str = "warp-runtime";
 const RUNTIME_STUB_VARIABLE: &str = "WARP_RUNTIME_STUB";
 #[cfg(unix)]
@@ -46,10 +48,6 @@ fn node_to_i32(node: &Node) -> i32 {
 
 #[cfg(not(test))]
 fn main() {
-    // an executable made by `warp build` from warp itself runs the program it carries
-    if let Some(exit_code) = warp_runtime::standalone::run_carried_program() {
-        std::process::exit(exit_code);
-    }
     let mut args: Vec<String> = env::args().collect();
     apply_flags(&mut args);
     run_command(&args);
@@ -168,12 +166,17 @@ fn run_command(args: &[String]) {
             }
         }
     } else if arg_string.ends_with(".wasp") || arg_string.ends_with(".warp") {
-        if !file_exists(&arg_string) {
-            eprintln!("Error: Could not read file '{}'", arg_string);
+        // P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
+        let (only_run, path) = match arg_string.strip_prefix(RUN_PREFIX) {
+            Some(path) => (true, path),
+            None => (false, arg_string.as_str()),
+        };
+        if !file_exists(path) {
+            eprintln!("Error: Could not read file '{}'", path);
         }
-        let result = eval(&arg_string); // a file: its folder is in scope (D15)
-        if !matches!(result, Node::Error(_)) {
-            leave_executable(&arg_string);
+        let result = eval(path); // a file: its folder is in scope (D15)
+        if !only_run && !matches!(result, Node::Error(_)) {
+            leave_executable(path);
         }
         print_and_exit(result);
     } else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {
@@ -307,7 +310,7 @@ fn leave_executable(path: &str) {
 }
 
 /// The program, printing its value, compiled to machine code and appended to a copy of the compiler-less `warp-runtime`
-/// stub (crates/warp-runtime, notes/aot.md), without a stub to a copy of warp itself; Ok is the report of what was written
+/// stub (crates/warp-runtime, notes/aot.md); Ok is the report of what was written
 fn write_standalone_executable(code: &str, target: &str) -> Result<String, String> {
     let program = wasm_emitter::compile_printing_result(code).map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
     let engine = util::gc_engine();
@@ -318,7 +321,7 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
         return Err(format!("a standalone executable provides print, libm, sleep, random, random_below and clock, not {}: run the program with warp", missing.join(", ")));
     }
     let machine_code = module.serialize().map_err(|failure| failure.to_string())?;
-    let stub = runtime_stub_path();
+    let stub = runtime_stub_path()?;
     let runtime = fs::read(&stub).map_err(|failure| format!("cannot read the runtime {}: {failure}", stub.display()))?;
     let output = standalone_output_path(target);
     let executable = warp_runtime::standalone::with_machine_code(&runtime, &machine_code);
@@ -346,15 +349,18 @@ fn standalone_output_path(target: &str) -> std::path::PathBuf {
     }
 }
 
-/// The runtime an executable is built from: `WARP_RUNTIME_STUB`, else `warp-runtime` next to this warp, else warp
-/// itself (which runs the program it carries too, main)
-fn runtime_stub_path() -> std::path::PathBuf {
+/// The runtime an executable is built from: `WARP_RUNTIME_STUB`, else `warp-runtime` next to this warp. P104 (user):
+/// never a copy of warp itself (~120 MB); without a stub nothing is written
+fn runtime_stub_path() -> Result<std::path::PathBuf, String> {
     if let Ok(path) = env::var(RUNTIME_STUB_VARIABLE) {
-        return std::path::PathBuf::from(path);
+        return Ok(std::path::PathBuf::from(path));
     }
-    let warp = env::current_exe().expect("warp knows its own path");
+    let warp = env::current_exe().map_err(|failure| failure.to_string())?;
     let stub = warp.with_file_name(RUNTIME_STUB_NAME);
-    if stub.is_file() { stub } else { warp }
+    match stub.is_file() {
+        true => Ok(stub),
+        false => Err(format!("no runtime stub {}: build it with `cargo build --release -p warp-runtime`, or name one in {RUNTIME_STUB_VARIABLE}", stub.display())),
+    }
 }
 
 /// Parse tree as s-expression: `(op left right)` for keys, `[items]` for lists
@@ -377,6 +383,7 @@ fn structure(node: &Node) -> String {
 fn usage() {
     // println!("Usage: warp [options] [file]");
     println!("  warp <file.warp>     Run a warp file and leave its standalone executable <file> next to it");
+    println!("  warp run <file.warp> Run a warp file, no executable");
     println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
     println!("  warp eval <code>     Evaluate code");
     println!("  warp lower <code>    Show the program after the lowering passes");
