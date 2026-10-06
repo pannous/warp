@@ -172,24 +172,27 @@ pub fn text_crossings<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> St
 	lines.into_iter().collect()
 }
 
-/// A C library compiled to WebAssembly: the header beside it (`shout.h` of `shout.wasm`) gives its functions C types,
-/// `char *` parameters and results cross as texts; other pointers stay numbers
+/// A C library compiled to WebAssembly: the header beside it (`shout.h` of `shout.wasm`) says which of its functions'
+/// parameters and results are C texts (`char *`) and names the parameters; the module's own number types win (`size_t`
+/// is 32 bits in wasm32), other pointers stay numbers
 fn with_header_types(path: &str, exports: &mut HashMap<String, Export>) {
-	use crate::ffi::{header_sig_to_ffi_sig, parse_header_file, pointer_kind, pointer_result, CPointer};
+	use crate::ffi::{parse_header_file, pointer_kind, pointer_result, CPointer};
 	let header = Path::new(path).with_extension("h");
 	let Some(header) = header.to_str().filter(|_| header.is_file()) else { return };
 	for declared in parse_header_file(header, path) {
 		let Some(export) = exports.get_mut(&declared.name).filter(|export| export.role == Role::Function) else { continue };
 		let text_parameters: Vec<bool> = declared.param_types.iter().map(|c_type| pointer_kind(c_type) == Some(CPointer::Text)).collect();
 		let text_result = pointer_result(&declared) == Some(CPointer::Text);
-		let Some(signature) = header_sig_to_ffi_sig(&declared).filter(|signature| signature.params.len() == export.signature.params.len()) else {
+		if text_parameters.len() != export.signature.params.len() || text_result && export.signature.results.len() != 1 {
 			eprintln!("[wasm] {header}: {} does not match the module's {} parameters", declared.raw.trim(), export.signature.params.len());
 			continue;
-		};
+		}
 		if export.parameters.iter().all(|name| name.starts_with('$')) && declared.param_names.len() == text_parameters.len() {
 			export.parameters = declared.param_names.clone();
 		}
-		export.signature = FfiSignature { name: export.signature.name, library: export.signature.library, ..signature };
+		if text_result {
+			export.signature.results = vec![wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)]; // the text Node the host builds
+		}
 		export.text_parameters = text_parameters;
 		export.text_result = text_result;
 	}
