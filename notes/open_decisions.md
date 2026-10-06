@@ -17,6 +17,11 @@ P69a and P76 still wait for run-time `!` and narrowed grants (P88), #10 unchange
 - Parked: P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
   run-time blocks are always pure. Asked by warp-29.
+Parked: P160 `$1` as a reference to the node with id 1 (wiki/reference.md) vs `$0`/`$1` as lambda parameters.
+  User 2026-10-06: unsure; finds both numbered parameters and `it` dangerous across contexts. Next step: warp-42
+  writes notes/implicit_params.md listing where `$n` and `it` change meaning (nested lambdas, data literals, loops,
+  handlers, and $0/$1 as WebAssembly positional arguments, user 2026-10-06) with concrete examples, then the question comes back with options. Until then: `$n` is a reference only
+  when an enclosing node of the same literal declares that id (undoable worker default).
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered (handover 2026-10-06 "Needs the user" list): eval_untrusted limits (P88 follow-up "Everything,
 untrusted too"), the AGENTS.md paragraph (P93), stash and obsolete tests (cleanup rule, P96), the git hook "line 240"
