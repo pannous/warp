@@ -1289,7 +1289,25 @@ fn is_type_tuple(node: &Node) -> bool {
 /// Swift's `label name: T`: the label (`_` for none)
 fn argument_label<'a>(label: &'a Node, typed: &Node) -> Option<&'a str> {
 	let Node::Symbol(label) = label.drop_meta() else { return None };
-	matches!(typed.drop_meta(), Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_))).then_some(label.as_str())
+	typed_parameter_name(typed).is_some().then_some(label.as_str())
+}
+
+/// The name of a typed parameter `name: T`, also of a function type `name: (Int) -> Int`
+fn typed_parameter_name(typed: &Node) -> Option<&Node> {
+	match typed.drop_meta() {
+		Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_)) => Some(name),
+		Node::Key(parameter, Op::Arrow | Op::FatArrow, _) => typed_parameter_name(parameter),
+		_ => None,
+	}
+}
+
+/// The typed parameter under another name: `name: T` → `label: T`
+fn renamed_parameter(typed: &Node, label: &str) -> Node {
+	match typed.drop_meta() {
+		Node::Key(_, Op::Colon, type_node) => Node::Key(Box::new(Node::Symbol(label.to_string())), Op::Colon, type_node.clone()),
+		Node::Key(parameter, op, result) => Node::Key(Box::new(renamed_parameter(parameter, label)), *op, result.clone()),
+		other => other.clone(),
+	}
 }
 
 /// `person name: String` is the parameter `person: String` whose value the body reads as name (`labeled_names` gets
@@ -1298,25 +1316,25 @@ fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
 	let Node::List(words, _, _) = parameter.drop_meta() else { return parameter };
 	let [label, typed] = words.as_slice() else { return parameter };
 	let Some(label) = argument_label(label, typed) else { return parameter };
-	let Node::Key(name, Op::Colon, type_node) = typed.drop_meta() else { return parameter };
+	let name = typed_parameter_name(typed).expect("a labeled parameter has a name");
 	if label == WILDCARD_LABEL {
 		return typed.clone();
 	}
-	labeled_names.push(Node::Key(name.clone(), Op::Assign, Box::new(Node::Symbol(label.to_string()))));
-	Node::Key(Box::new(Node::Symbol(label.to_string())), Op::Colon, type_node.clone())
+	labeled_names.push(Node::Key(Box::new(name.clone()), Op::Assign, Box::new(Node::Symbol(label.to_string()))));
+	renamed_parameter(typed, label)
 }
 
-/// The body with `name = label` first for every labeled parameter
+/// The body reading every labeled parameter by its label: `name` → `person` (an alias `name = person` would hide that
+/// the parameter is a function, `f(x)` of `using f: (Int) -> Int`)
 fn with_label_names(body: Node, labeled_names: Vec<Node>) -> Node {
-	if labeled_names.is_empty() {
-		return body;
-	}
-	match body.drop_meta() {
-		Node::List(items, Bracket::Curly, separator) if items.len() == 1 || matches!(separator, Separator::Semicolon | Separator::Newline) => {
-			Node::List([labeled_names, items.clone()].concat(), Bracket::Curly, Separator::Semicolon)
-		}
-		_ => Node::List([labeled_names, vec![body]].concat(), Bracket::Curly, Separator::Semicolon),
-	}
+	let bindings: std::collections::HashMap<String, Node> = labeled_names
+		.into_iter()
+		.filter_map(|binding| match binding {
+			Node::Key(name, Op::Assign, label) => Some((name.name(), *label)),
+			_ => None,
+		})
+		.collect();
+	if bindings.is_empty() { body } else { crate::law::substitute(&body, &bindings) }
 }
 
 fn is_type_word(node: &Node) -> bool {
