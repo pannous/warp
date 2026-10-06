@@ -64,7 +64,8 @@ const POLLING_PREFIX: &str = "signal_polling_";
 
 /// Main-level listeners watching a `shared` value become checks of the function `on·shared()` the runtime polls
 pub fn poll_shared(program: Node) -> Node {
-	let shared: HashSet<String> = crate::shared_arrays::shared_names(&program).into_iter().collect();
+	// a system value (system_values.rs) changes outside the program too
+	let shared: HashSet<String> = crate::shared_arrays::shared_names(&program).into_iter().chain(crate::system_values::marked_names(&program)).collect();
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
 	if shared.is_empty() || !crate::variable_signals::is_statement_list(&bracket, &separator) {
 		return program;
