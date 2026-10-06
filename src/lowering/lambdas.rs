@@ -325,6 +325,21 @@ fn swift_closure(items: &[Node]) -> Option<Lambda> {
 	params.iter().any(|param| mentions(&body, param)).then(|| Lambda::new(params, body))
 }
 
+/// Swift's trailing closure `xs.reduce(0) { $0 + $1 }`: the call's word and arguments, then the closure
+fn trailing_closure(items: &[Node]) -> Option<Vec<Node>> {
+	let [call, closure] = items else { return None };
+	let Node::List(call_items, _, _) = call.drop_meta() else { return None };
+	let (word, arguments) = call_items.split_first()?;
+	if !matches!(word.drop_meta(), Node::Symbol(_)) || !matches!(closure.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+		return None;
+	}
+	let arguments = match arguments {
+		[Node::List(group, Bracket::Round, _)] => group.clone(),
+		other => other.to_vec(),
+	};
+	Some([vec![word.clone()], arguments, vec![closure.clone()]].concat())
+}
+
 /// `reduce` given a start value is `fold`: Swift's `xs.reduce(0, +)`, JS's `xs.reduce(f, 0)` aside
 fn with_start(iteration: &'static Iteration, extras: usize) -> &'static Iteration {
 	match iteration.word {
@@ -453,9 +468,16 @@ impl Lowering {
 	/// `word(extras, function)` after a dot: the iteration and its arguments, the function last
 	fn iteration_method(&self, method: &Node) -> Option<(&'static Iteration, Vec<Node>)> {
 		let Node::List(items, _, _) = method.drop_meta() else { return None };
+		let items = trailing_closure(items).unwrap_or_else(|| items.clone());
 		let (word, arguments) = items.split_first()?;
 		let iteration = with_start(self.iteration_of(word)?, arguments.len().checked_sub(1)?); // `xs.sort()` has no function
-		(arguments.len() == iteration.extra_arguments + 1).then(|| (iteration, arguments.to_vec()))
+		let is_function = |node: &Node| arrow_lambda(node).is_some();
+		let arguments = match arguments {
+			// JS's `xs.reduce((a, b) => a + b, 0)`: the start value after the function
+			[function, start] if iteration.word == FOLD_WORD && is_function(function) && !is_function(start) => vec![start.clone(), function.clone()],
+			_ => arguments.to_vec(),
+		};
+		(arguments.len() == iteration.extra_arguments + 1).then_some((iteration, arguments))
 	}
 
 	/// `{x*x}(x=5)`: an anonymous function called with its bindings; `{it*2} 3` and `{it^2}[1 2 3]`: with its argument,
