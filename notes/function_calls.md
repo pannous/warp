@@ -69,5 +69,5 @@ list in probes/function_calls.md (run probes/function_calls.sh after scripts/own
     functions with capture globals keep the entry, which restores them.
 
 ## Open
-- Board cards: functions-julia, functions-csharp (mine); functions-sort-op, functions-key, functions-foreach,
+- Board cards: functions-csharp (mine); functions-julia (warp-66); functions-sort-op, functions-key, functions-foreach,
   functions-lambda-defaults (warp-14); functions-python, functions-ruby-def (warp-66). Cases: probes/function_calls_more.md.
