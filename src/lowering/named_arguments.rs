@@ -185,7 +185,7 @@ fn is_type(name: &str) -> bool {
 
 /// `b=1` or `b:1` in a call: the name and the value. Not `pic:{…}` (an instance) nor `s:shape` (a parameter
 /// declaration in a signature)
-fn named_argument(argument: &Node) -> Option<(String, &Node)> {
+pub(crate) fn named_argument(argument: &Node) -> Option<(String, &Node)> {
 	match argument.drop_meta() {
 		Node::Key(name, op @ (Op::Assign | Op::Colon), value) => match name.drop_meta() {
 			Node::Symbol(_) if *op == Op::Colon && is_type(&name.name()) => None,

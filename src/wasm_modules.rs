@@ -27,6 +27,8 @@ pub enum Role {
 pub struct Export {
 	pub signature: FfiSignature,
 	pub role: Role,
+	/// a function's parameter names from the module's name section (`$from`), `$0`, `$1` … where it has none
+	pub parameters: Vec<String>,
 }
 
 /// Does an import name a WebAssembly module file (`lib/x.wasm`, `x.wat`) rather than a C library
@@ -70,6 +72,7 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 	let mut function_types = Vec::new(); // the type of every function, imported ones first
 	let mut global_types = Vec::new();
 	let mut exported = Vec::new();
+	let mut local_names: HashMap<u32, HashMap<u32, String>> = HashMap::new(); // by function index, by local index
 	for payload in Parser::new(0).parse_all(bytes) {
 		match payload.map_err(failure)? {
 			Payload::TypeSection(reader) => {
@@ -96,6 +99,18 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 					global_types.push(global.map_err(failure)?.ty);
 				}
 			}
+			Payload::CustomSection(section) => {
+				if let wasmparser::KnownCustom::Name(reader) = section.as_known() {
+					for entry in reader {
+						let wasmparser::Name::Local(functions) = entry.map_err(failure)? else { continue };
+						for function in functions {
+							let function = function.map_err(failure)?;
+							let names = function.names.into_iter().filter_map(Result::ok).map(|naming| (naming.index, naming.name.to_string()));
+							local_names.insert(function.index, names.collect());
+						}
+					}
+				}
+			}
 			Payload::ExportSection(reader) => {
 				for export in reader {
 					let export = export.map_err(failure)?;
@@ -107,25 +122,27 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 	}
 	let library: &'static str = Box::leak(path.to_string().into_boxed_str());
 	let mut exports = HashMap::new();
-	let mut add = |name: String, params: Vec<wasm_encoder::ValType>, results: Vec<wasm_encoder::ValType>, role: Role| {
+	let mut add = |name: String, params: Vec<wasm_encoder::ValType>, results: Vec<wasm_encoder::ValType>, role: Role, parameters: Vec<String>| {
 		let import_name: &'static str = Box::leak(name.clone().into_boxed_str());
-		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role });
+		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role, parameters });
 	};
 	for (name, kind, index) in exported {
 		match kind {
 			ExternalKind::Func => {
 				let Some(function_type) = function_types.get(index).and_then(|type_index| types.get(*type_index as usize)) else { continue };
 				if let (Some(params), Some(results)) = (number_types(function_type.params()), number_types(function_type.results())) {
-					add(name, params, results, Role::Function);
+					let names = local_names.get(&(index as u32));
+					let parameters = (0..params.len() as u32).map(|local| names.and_then(|names| names.get(&local)).cloned().unwrap_or_else(|| format!("${local}"))).collect();
+					add(name, params, results, Role::Function, parameters);
 				}
 			}
 			ExternalKind::Global => {
 				let Some(global) = global_types.get(index) else { continue };
 				let Some(value_type) = number_types(&[global.content_type]) else { continue };
 				if global.mutable {
-					add(format!("{SETTER_PREFIX}{name}"), value_type.clone(), value_type.clone(), Role::Setter);
+					add(format!("{SETTER_PREFIX}{name}"), value_type.clone(), value_type.clone(), Role::Setter, vec![name.clone()]);
 				}
-				add(name, vec![], value_type, Role::Global { mutable: global.mutable });
+				add(name, vec![], value_type, Role::Global { mutable: global.mutable }, vec![]);
 			}
 			_ => {}
 		}
@@ -242,7 +259,7 @@ fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 				};
 				if let Some(path) = module_of(alias, &export) {
 					let arguments = arguments.into_iter().map(|argument| qualify(argument, modules)).collect::<Result<_, _>>()?;
-					return Ok(call(&qualified(path, &export), arguments));
+					return Ok(call(&qualified(path, &export), ordered_arguments(path, &export, arguments)?));
 				}
 			}
 		}
@@ -256,6 +273,12 @@ fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 					let message = format!("{name} is ambiguous: {}({written}) for the export, {written} as {kind} for the cast", qualified(path, name));
 					return Err(crate::node::error(&message));
 				}
+				// `minus(amount: 2, from: 10)`: an export called by its parameter names
+				let named = arguments.iter().any(|argument| crate::named_arguments::named_argument(argument).is_some());
+				if let (true, Some(path)) = (named, exporting) {
+					let arguments = arguments.iter().cloned().map(|argument| qualify(argument, modules)).collect::<Result<_, _>>()?;
+					return Ok(call(&qualified(path, name), ordered_arguments(path, name, arguments)?));
+				}
 			}
 		}
 		_ => {}
@@ -266,6 +289,27 @@ fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 		Node::Empty
 	}));
 	failure.map_or(Ok(node), Err)
+}
+
+/// The arguments of a call of the function `export` in its parameter order, a named one (`amount: 2`, `amount=2`) at its
+/// parameter of the module's name section; an unknown name or a wrong count is an error showing the parameters
+fn ordered_arguments(path: &str, export: &str, arguments: Vec<Node>) -> Result<Vec<Node>, Node> {
+	let Some(Export { role: Role::Function, parameters, .. }) = exports(path).get(export) else { return Ok(arguments) };
+	let signature = format!("{}({})", qualified(path, export), parameters.join(", "));
+	let wrong_count = || crate::node::error(&format!("{signature} takes {} arguments, got {}", parameters.len(), arguments.len()));
+	let mut slots: Vec<Option<Node>> = vec![None; parameters.len()];
+	for argument in &arguments {
+		let (slot, value) = match crate::named_arguments::named_argument(argument) {
+			Some((name, value)) => {
+				let slot = parameters.iter().position(|parameter| *parameter == name)
+					.ok_or_else(|| crate::node::error(&format!("{signature} has no parameter {name}")))?;
+				(slot, value)
+			}
+			None => (slots.iter().position(Option::is_none).ok_or_else(wrong_count)?, argument),
+		};
+		slots[slot] = Some(value.clone());
+	}
+	slots.into_iter().collect::<Option<Vec<_>>>().ok_or_else(wrong_count)
 }
 
 /// Link the program's imports from WebAssembly modules: each is a host function that calls the export of the module,

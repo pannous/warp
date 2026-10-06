@@ -71,3 +71,13 @@ fn a_qualified_global_is_assigned_in_its_module() {
 	is!(&with_module("fourty_two.level += 2; fourty_two.level * 10"), 30);
 	fails_with(&with_module("fourty_two.ft = 3"), "fourty_two.ft is an immutable global of an imported module");
 }
+
+#[test]
+fn an_export_takes_arguments_by_its_parameter_names() {
+	is!(&with_module("fourty_two.minus(amount: 2, from: 10)"), 8);
+	is!(&with_module("minus(amount=2, from=10)"), 8);
+	is!(&with_module("fourty_two.minus(10, amount: 2)"), 8);
+	fails_with(&with_module("fourty_two.minus(by: 2, from: 10)"), "fourty_two.minus(from, amount) has no parameter by");
+	fails_with(&with_module("fourty_two.minus(10)"), "fourty_two.minus(from, amount) takes 2 arguments, got 1");
+	fails_with(&with_module("minus(from: 10)"), "fourty_two.minus(from, amount) takes 2 arguments, got 1");
+}
