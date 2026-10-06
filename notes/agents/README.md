@@ -11,7 +11,7 @@ way. Proven on 2026-10-03 (about 30 branches merged, suite 1345 → 1525 passed,
    - warp-integrator (merge, full suite, push to main)
    - warp-interviewer (the only one who asks you decision questions; talk to it when you have a minute)
    - warp-fixer (small to-dos from the board `todo list`, ignored "next"/"soon" tests)
-3. Feature workers are spawned per task by the supervisor with `notes/agents/start.sh worker <name> "<task>"`.
+3. At most TWO feature workers at a time (user, 2026-10-06; the 2026-10-06 fleet of eight stalled on the usage limit). Workers are spawned per task by the supervisor with `notes/agents/start.sh worker <name> "<task>"`.
 
 Spawned sessions get generated names (warp-6c …). Find them with ListAgents: the tmux column shows the role
 (tmux `warp-<role>`). Two sessions can share a generated name; then address one by its `[ref]`.
@@ -29,3 +29,6 @@ Open questions are queued in notes/open_decisions.md ("Pending questions"), the 
 ## End of day
 Workers remove their worktrees after the merge; the Integrator deletes merged remote branches. Leftovers:
 `git worktree list`, `ls /Users/me/dev/angles/warp.worktrees.noindex`, `git branch -r` (delete what is merged).
+
+## Context swap
+A global Stop hook swaps any tmux-hosted session at 300k context tokens (handover + replacement + notice to peers): notes/agent_swap.md.
