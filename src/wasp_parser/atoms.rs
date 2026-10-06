@@ -23,14 +23,10 @@ impl WaspParser {
 				}
 			}
 			'"' | '\'' | '«' => self.parse_string(),
-			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs)
-			'*' if self.is_identifier_start(1) => {
-				self.advance();
-				match self.parse_symbol() {
-					Ok(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
-					Err(message) => error(&message),
-				}
-			}
+			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
+			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/variadic.rs)
+			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => self.parse_starred(3),
+			'*' if self.is_identifier_start(1) => self.parse_starred(1),
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
@@ -273,6 +269,15 @@ impl WaspParser {
 	/// The `end` (or, in a `then` block, the `else`) that closes the block being parsed
 	pub(super) fn at_block_close(&self) -> bool {
 		self.stops_at_end && (self.matches_keyword(END_KEYWORD) || (self.stops_at_else && self.matches_keyword(ELSE_KEYWORD)))
+	}
+
+	/// `*rest`, `...rest`: the name after the `prefix` characters, starred
+	fn parse_starred(&mut self, prefix: usize) -> Node {
+		(0..prefix).for_each(|_| self.advance());
+		match self.parse_symbol() {
+			Ok(name) => Node::Symbol(format!("{}{name}", crate::tuples::STARRED)),
+			Err(message) => error(&message),
+		}
 	}
 
 	pub(super) fn parameters_follow_after_blanks(&self) -> bool {

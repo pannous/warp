@@ -279,19 +279,131 @@ fn lower_parameter_overloads(node: Node) -> Node {
 	renaming.rewrite(node)
 }
 
-fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Vec<Vec<Option<String>>>>) {
+/// The argument counts a definition accepts: its parameters without a default are required
+#[derive(Clone, Copy, PartialEq)]
+struct Arity {
+	required: usize,
+	total: usize,
+}
+
+impl Arity {
+	fn of(parameters: &[Node]) -> Self {
+		let required = parameters.iter().filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _))).count();
+		Arity { required, total: parameters.len() }
+	}
+
+	fn accepts(&self, count: usize) -> bool {
+		(self.required..=self.total).contains(&count)
+	}
+}
+
+/// Definitions of one name with different parameter counts (C#, Kotlin, Julia overloading by arity) become separate
+/// functions `f·1`, `f·2`; every call names the one its argument count fits, so dispatch stays static
+pub fn lower_arity_overloads(node: Node) -> Node {
+	let mut arities: HashMap<String, Vec<Arity>> = HashMap::new();
+	each_definition(&node, &mut |definition| arities.entry(definition.head[0].name()).or_default().push(Arity::of(&definition.head[1..])));
+	arities.retain(|_, variants| variants.len() > 1 && variants.iter().enumerate().all(|(index, arity)| variants[..index].iter().all(|other| other.total != arity.total)));
+	if arities.is_empty() {
+		return node;
+	}
+	ArityOverloads { arities }.rewrite(node)
+}
+
+/// Calls `visit` with every definition, also the ones nested in bodies
+fn each_definition<'a>(node: &'a Node, visit: &mut impl FnMut(&Definition<'a>)) {
 	if let Some(definition) = definition(node) {
-		signatures.entry(definition.head[0].name()).or_default().push(definition.head[1..].iter().map(parameter_type).collect());
-		return collect_signatures(definition.body, signatures);
+		visit(&definition);
+		return each_definition(definition.body, visit);
 	}
 	match node.drop_meta() {
 		Node::Key(left, _, right) => {
-			collect_signatures(left, signatures);
-			collect_signatures(right, signatures);
+			each_definition(left, visit);
+			each_definition(right, visit);
 		}
-		Node::List(items, _, _) => items.iter().for_each(|item| collect_signatures(item, signatures)),
+		Node::List(items, _, _) => items.iter().for_each(|item| each_definition(item, visit)),
 		_ => {}
 	}
+}
+
+struct ArityOverloads {
+	arities: HashMap<String, Vec<Arity>>,
+}
+
+fn arity_variant(name: &str, arity: Arity) -> String {
+	witness_name(name, &arity.total.to_string())
+}
+
+/// A pass that renames the definitions of overloaded names to their variants and every call to the variant it fits
+trait VariantRenaming {
+	/// The variant name of this definition of `name`, None when the name is not overloaded
+	fn renamed(&mut self, name: &str, parameters: &[Node]) -> Option<String>;
+	fn resolve_call(&mut self, node: &Node) -> Option<Node>;
+
+	fn rewrite(&mut self, node: Node) -> Node {
+		if let Some(renamed) = self.rewrite_definition(&node) {
+			return renamed;
+		}
+		if let Some(call) = self.resolve_call(&node) {
+			return call;
+		}
+		match node {
+			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
+			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
+			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
+			other => other,
+		}
+	}
+
+	fn rewrite_definition(&mut self, node: &Node) -> Option<Node> {
+		let definition = definition(node)?;
+		let Node::Key(target, op, _) = node.drop_meta() else { return None };
+		let body = Box::new(self.rewrite(definition.body.clone()));
+		let Some(variant) = self.renamed(&definition.head[0].name(), &definition.head[1..]) else { return Some(Node::Key(target.clone(), *op, body)) };
+		let mut head = definition.head.to_vec();
+		head[0] = Node::Symbol(variant);
+		let head = Node::List(head, Bracket::Round, Separator::None);
+		let target = match target.drop_meta() {
+			Node::Key(_, result_op @ (Op::Colon | Op::As), result) => Node::Key(Box::new(head), *result_op, result.clone()),
+			_ => head,
+		};
+		Some(Node::Key(Box::new(target), *op, body))
+	}
+}
+
+impl VariantRenaming for ArityOverloads {
+	fn renamed(&mut self, name: &str, parameters: &[Node]) -> Option<String> {
+		self.arities.contains_key(name).then(|| arity_variant(name, Arity::of(parameters)))
+	}
+
+	/// `f(1, 2)`, `f 1 2`: the call of the definition that accepts two arguments
+	fn resolve_call(&mut self, node: &Node) -> Option<Node> {
+		let Node::List(items, bracket, separator) = node.drop_meta() else { return None };
+		let [head, arguments @ ..] = items.as_slice() else { return None };
+		let name = head.drop_meta().name();
+		let variants = self.arities.get(&name)?.clone();
+		if !is_call(items, bracket, separator) {
+			return None;
+		}
+		let fitting: Vec<&Arity> = variants.iter().filter(|arity| arity.accepts(arguments.len())).collect();
+		let written = format!("{name}({})", arguments.iter().map(|argument| argument.serialize().trim().to_string()).collect::<Vec<_>>().join(", "));
+		let chosen = match fitting.as_slice() {
+			[arity] => **arity,
+			[] => {
+				let mut counts: Vec<usize> = variants.iter().flat_map(|arity| arity.required..=arity.total).collect();
+				counts.sort();
+				counts.dedup();
+				let counts = counts.iter().map(usize::to_string).collect::<Vec<_>>().join(" or ");
+				return Some(crate::diagnostic::Diagnostic::at(head, format!("{name} takes {counts} arguments, got {}", arguments.len())).into_error());
+			}
+			_ => return Some(crate::diagnostic::Diagnostic::at(head, format!("`{written}` fits two definitions of {name}: pass every argument of the one you mean")).into_error()),
+		};
+		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
+		Some(Node::List([vec![Node::Symbol(arity_variant(&name, chosen))], arguments].concat(), Bracket::Round, Separator::None))
+	}
+}
+
+fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Vec<Vec<Option<String>>>>) {
+	each_definition(node, &mut |definition| signatures.entry(definition.head[0].name()).or_default().push(definition.head[1..].iter().map(parameter_type).collect()));
 }
 
 /// The kind a variable is assigned everywhere in the program; a variable assigned values of different kinds has none
@@ -341,47 +453,27 @@ struct ParameterOverloads {
 	seen: HashMap<String, usize>,
 }
 
+impl VariantRenaming for ParameterOverloads {
+	fn renamed(&mut self, name: &str, _parameters: &[Node]) -> Option<String> {
+		let variants = self.overloaded.get(name)?;
+		let index = self.seen.entry(name.to_string()).or_default();
+		let variant = Self::variant_name(name, &variants[*index]);
+		*index += 1;
+		Some(variant)
+	}
+
+	fn resolve_call(&mut self, node: &Node) -> Option<Node> {
+		self.resolve_typed_call(node)
+	}
+}
+
 impl ParameterOverloads {
 	fn variant_name(name: &str, types: &[String]) -> String {
 		types.iter().fold(name.to_string(), |variant, type_name| witness_name(&variant, type_name))
 	}
 
-	fn rewrite(&mut self, node: Node) -> Node {
-		if let Some(renamed) = self.rewrite_definition(&node) {
-			return renamed;
-		}
-		if let Some(call) = self.resolve_call(&node) {
-			return call;
-		}
-		match node {
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
-		}
-	}
-
-	fn rewrite_definition(&mut self, node: &Node) -> Option<Node> {
-		let definition = definition(node)?;
-		let name = definition.head[0].name();
-		let Node::Key(target, op, _) = node.drop_meta() else { return None };
-		let body = Box::new(self.rewrite(definition.body.clone()));
-		let Some(variants) = self.overloaded.get(&name) else { return Some(Node::Key(target.clone(), *op, body)) };
-		let index = self.seen.entry(name.clone()).or_default();
-		let variant = Self::variant_name(&name, &variants[*index]);
-		*index += 1;
-		let mut head = definition.head.to_vec();
-		head[0] = Node::Symbol(variant);
-		let head = Node::List(head, Bracket::Round, Separator::None);
-		let target = match target.drop_meta() {
-			Node::Key(_, result_op @ (Op::Colon | Op::As), result) => Node::Key(Box::new(head), *result_op, result.clone()),
-			_ => head,
-		};
-		Some(Node::Key(Box::new(target), *op, body))
-	}
-
 	/// `combine(1.1, 2.2)`: the call of the variant the arguments fit best
-	fn resolve_call(&mut self, node: &Node) -> Option<Node> {
+	fn resolve_typed_call(&mut self, node: &Node) -> Option<Node> {
 		let Node::List(items, bracket, separator) = node.drop_meta() else { return None };
 		let [head, arguments @ ..] = items.as_slice() else { return None };
 		let variants = self.overloaded.get(&head.drop_meta().name())?.clone();

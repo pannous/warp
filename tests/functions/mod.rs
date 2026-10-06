@@ -1,4 +1,5 @@
 mod test_argument_kinds;
+mod test_arity_overloads;
 mod test_bare_function_name;
 mod test_call_result_fields;
 mod test_charged_getters;
@@ -29,6 +30,7 @@ mod test_suffix_words;
 mod test_to_definition;
 mod test_multi_value;
 mod test_undefined_calls;
+mod test_variadic;
 mod test_tuple_returns;
 mod test_type_dispatch;
 mod test_typed_signatures;
