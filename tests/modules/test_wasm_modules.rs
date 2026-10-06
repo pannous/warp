@@ -125,3 +125,25 @@ fn zlib_compiled_to_wasm() {
 	is!(&format!("{ZLIB}adler32(1, \"hello\", 5)"), 103547413);
 	is!(&format!("{ZLIB}compressBound(100)"), 113);
 }
+
+// a writable buffer with its in/out length (`Bytef *dest, uLongf *destLen`): the call passes the capacity, the bytes
+// written are the result, a C status other than 0 an error; a text's length may be left out (`const Bytef *, uLong`)
+#[test]
+fn zlib_compresses_into_a_buffer_and_back() {
+	const ZLIB: &str = "import tests/fixtures/wasm/zlib; ";
+	is!(&format!("{ZLIB}uncompress(100, compress(64, \"hello hello hello\"))"), "hello hello hello");
+	is!(&format!("{ZLIB}crc32(0, compress(64, \"hello hello hello\"))"), 3327255652i64);
+	is!(&format!("{ZLIB}crc32(0, \"hello\")"), 907060870);
+	fails_with(&format!("{ZLIB}uncompress(4, compress(64, \"hello hello hello\"))"), "uncompress failed (C status -5)");
+}
+
+// xxHash built from its header (xxhash.sh, 13 KB): a second C library the same way; its state is the module's pointer
+#[test]
+fn xxhash_compiled_to_wasm() {
+	const XXHASH: &str = "import tests/fixtures/wasm/xxhash; ";
+	is!(&format!("{XXHASH}XXH_versionNumber()"), 802);
+	is!(&format!("{XXHASH}XXH32(\"hello\", 0)"), 4211111929i64);
+	is!(&format!("{XXHASH}XXH32(\"wasp\", 4, 42)"), 4089166900i64);
+	is!(&format!("{XXHASH}XXH64(\"hello\", 0)"), 2794345569481354659i64);
+	is!(&format!("{XXHASH}state = XXH32_createState(); XXH32_reset(state, 0); XXH32_update(state, \"hel\"); XXH32_update(state, \"lo\"); XXH32_digest(state)"), 4211111929i64);
+}
