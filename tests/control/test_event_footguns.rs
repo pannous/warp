@@ -79,3 +79,13 @@ fn emit_sends_events_and_raise_stays_an_error() {
 	is!("try { raise alarm } else { 7 }", 7);
 	crate::common::fails_with("n = 0; on alarm { n += 1 }; raise alarm; n", "alarm");
 }
+
+// Handlers that emit each other without a condition never end (a stack overflow at run time): a compile error naming
+// the cycle; a condition or a once handler breaks it
+#[test]
+fn handlers_emitting_each_other_unconditionally_are_an_error() {
+	crate::common::fails_with("on a { emit b }; on b { emit a }; emit a", "on a emits b, on b emits a");
+	crate::common::fails_with("on ping { emit ping }; emit ping", "on ping emits ping");
+	is!("n = 0; on a { n += 1; if n < 3 { emit b } }; on b { emit a }; emit a; n", 3);
+	is!("n = 0; once a { n += 1; emit b }; on b { emit a }; emit a; n", 1);
+}

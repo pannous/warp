@@ -120,6 +120,12 @@ pub fn lower(program: Node) -> Node {
 		}
 		bodies.entry(name.clone()).or_default().push(body.clone());
 	}
+	if let Some(cycle) = emit_cycle(&bodies, &verbs) {
+		let (index, _) = first_handler.iter().find(|(_, name)| **name == cycle[0]).expect("a cycle runs through handlers");
+		let steps: Vec<String> = cycle.iter().zip(cycle.iter().cycle().skip(1)).map(|(from, to)| format!("on {from} emits {to}")).collect();
+		let message = format!("endless emit loop: {}; emit one of them under a condition", steps.join(", "));
+		return crate::diagnostic::Diagnostic::at(&statements[*index], message).into_error();
+	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
 	let lowered = statements.into_iter().enumerate().filter_map(|(index, statement)| match first_handler.get(&index) {
 		Some(name) => Some(function_with_globals(&handler_function_name(name), reads_event(&bodies[name]), &each_its_event(&bodies[name]), &main_variables)),
@@ -425,6 +431,43 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 /// could pass a value as
 fn reads_event(bodies: &[Node]) -> bool {
 	bodies.iter().flat_map(symbols).any(|name| name == EVENT_WORD)
+}
+
+/// `on a {emit b}; on b {emit a}` never ends (the stack overflows at run time): the first cycle of handlers that emit
+/// the next one without a condition, `[a, b]`. A once handler or a named one runs under a flag, so it breaks a cycle
+fn emit_cycle(bodies: &HashMap<String, Vec<Node>>, verbs: &[String]) -> Option<Vec<String>> {
+	let edges: HashMap<String, Vec<String>> = bodies.iter().map(|(name, handlers)| {
+		let emitted = handlers.iter().flat_map(|body| unconditional_emits(body, verbs)).filter(|next| bodies.contains_key(next));
+		(name.clone(), emitted.collect())
+	}).collect();
+	let mut names: Vec<&String> = bodies.keys().collect();
+	names.sort();
+	let mut done = HashSet::new();
+	names.into_iter().find_map(|name| cycle_from(name, &edges, &mut vec![], &mut done))
+}
+
+fn cycle_from(name: &str, edges: &HashMap<String, Vec<String>>, path: &mut Vec<String>, done: &mut HashSet<String>) -> Option<Vec<String>> {
+	if let Some(start) = path.iter().position(|visited| visited == name) {
+		return Some(path[start..].to_vec());
+	}
+	if !done.insert(name.to_string()) {
+		return None;
+	}
+	path.push(name.to_string());
+	let cycle = edges[name].iter().find_map(|next| cycle_from(next, edges, path, done));
+	path.pop();
+	cycle
+}
+
+/// The events a handler body emits at its top level, outside any condition or loop
+fn unconditional_emits(body: &Node, verbs: &[String]) -> Vec<String> {
+	if let Some((name, _)) = emitted(body, verbs) {
+		return vec![name];
+	}
+	match body.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) => statements.iter().filter_map(|statement| emitted(statement, verbs).map(|(name, _)| name)).collect(),
+		_ => vec![],
+	}
 }
 
 /// Each `emit name{data}` with handlers is the call `on·name(data)`, `on·name()` when no handler reads `event`; one
