@@ -11,6 +11,8 @@ use crate::operators::{is_function_keyword, Op};
 const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
 const IT_PARAMETER: &str = "it";
 const ENUM_WORD: &str = "enum";
+/// Ruby's `def f(x) … end`
+const END_WORD: &str = "end";
 const FLAGS_WORD: &str = "flags";
 const FIRST_CASE_INDEX: i64 = 0;
 /// The argument left out of a partial application: `add(1, _)`
@@ -1122,7 +1124,7 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 }
 
 pub fn lower_c_functions(node: Node) -> Node {
-	lower_lists(node, |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| partial_application(items)))
+	lower_lists(end_definitions(node), |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| partial_application(items)))
 }
 
 /// `add(1, _)`: a call with placeholders is the lambda of the missing arguments, `partial_1 => add(1, partial_1)`
@@ -1273,6 +1275,67 @@ fn name_then_type(parameter: Node) -> Node {
 		}
 		_ => parameter,
 	}
+}
+
+/// Ruby's `def f(a, b: 2) a * b end` and `def f(a)` ⏎ statements ⏎ `end`: the definition `def f(a, b: 2) {…}`
+fn end_definitions(node: Node) -> Node {
+	let node = match node {
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(end_definitions).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(end_definitions(*left)), op, Box::new(end_definitions(*right))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(end_definitions(*node)), data },
+		other => other,
+	};
+	let Node::List(items, bracket, separator) = node else { return node };
+	// one line: `def head body… end`
+	if let ([keyword, head, body @ .., end], Separator::Space) = (items.as_slice(), &separator) {
+		if is_function_keyword(&keyword.drop_meta().name()) && is_end(end) && !body.is_empty() {
+			return Node::List(vec![keyword.clone(), function_head(head), body_block(body.to_vec())], bracket, separator);
+		}
+	}
+	if !matches!(separator, Separator::Newline | Separator::Semicolon) || !items.iter().any(is_end) {
+		return Node::List(items, bracket, separator);
+	}
+	// statements: `def head`, the body's statements, `end`
+	let mut statements: Vec<Node> = vec![];
+	let mut rest = items.into_iter();
+	while let Some(statement) = rest.next() {
+		let Some((keyword, head)) = bodiless_definition(&statement) else {
+			statements.push(statement);
+			continue;
+		};
+		let body: Vec<Node> = rest.by_ref().take_while(|statement| !is_end(statement)).collect();
+		statements.push(Node::List(vec![keyword, function_head(&head), body_block(body)], Bracket::None, Separator::Space));
+	}
+	Node::List(statements, bracket, separator)
+}
+
+fn is_end(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if word == END_WORD)
+}
+
+/// `def f(a)` or `def h` without a body
+fn bodiless_definition(statement: &Node) -> Option<(Node, Node)> {
+	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
+	let [keyword, head] = items.as_slice() else { return None };
+	let is_head = matches!(head.drop_meta(), Node::Symbol(_)) || matches!(head.drop_meta(), Node::List(parts, Bracket::Round, _) if matches!(parts.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+	(is_function_keyword(&keyword.drop_meta().name()) && is_head).then(|| (keyword.clone(), head.clone()))
+}
+
+/// `h` → `h()`; `(f a b:2)` → `(f (a, b:2))`, the parameters as one comma group as `def f(a, b: 2) {…}` has them (two
+/// loose words would read as Swift's labeled parameter)
+fn function_head(head: &Node) -> Node {
+	match head.drop_meta() {
+		Node::Symbol(_) => Node::List(vec![head.clone()], Bracket::Round, Separator::None),
+		Node::List(items, Bracket::Round, separator) if items.len() > 2 => {
+			let parameters = Node::List(items[1..].to_vec(), Bracket::Round, Separator::Colon);
+			Node::List(vec![items[0].clone(), parameters], Bracket::Round, separator.clone())
+		}
+		_ => head.clone(),
+	}
+}
+
+fn body_block(statements: Vec<Node>) -> Node {
+	Node::List(statements, Bracket::Curly, Separator::Semicolon)
 }
 
 fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {
