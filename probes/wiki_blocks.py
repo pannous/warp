@@ -13,6 +13,8 @@ WARP = os.environ.get("WARP", "/Users/me/.cargo/shared-target.noindex/debug/warp
 FENCE = re.compile(r"^```(\w*)\s*$")
 LANGUAGES = {"", "wasp", "warp", "angle"}
 TIMEOUT_SECONDS = 20
+# `warp eval` writes test.wasm into its working directory: run it in scratch/, never in the wiki checkout
+SCRATCH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scratch")
 
 
 def blocks(page):
@@ -31,7 +33,7 @@ def blocks(page):
 
 def outcome(code):
     try:
-        run = subprocess.run([WARP, "eval", code], capture_output=True, text=True, timeout=TIMEOUT_SECONDS)
+        run = subprocess.run([WARP, "eval", code], capture_output=True, text=True, timeout=TIMEOUT_SECONDS, cwd=SCRATCH)
     except subprocess.TimeoutExpired:
         return "TIMEOUT"
     text = (run.stdout + run.stderr).strip()
@@ -39,7 +41,8 @@ def outcome(code):
 
 
 def main():
-    pages = sys.argv[1:] or sorted(glob.glob("wiki/*.md"))
+    os.makedirs(SCRATCH, exist_ok=True)
+    pages = [os.path.abspath(page) for page in sys.argv[1:] or sorted(glob.glob("wiki/*.md"))]
     total = failing = 0
     for page in pages:
         for line, code in blocks(page):

@@ -528,6 +528,17 @@ pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 	offer_acknowledgement(topic, written);
 }
 
+/// Another language's word for a wasp word (`__add__` for `plus`, user 2026-10-06): it works, with a got-it note
+/// naming the wasp word and its "I meant: <wasp word>" fix; a word wasp needs not at all (`data class`, `val x`) is
+/// written with the word it stands before
+pub fn note_alias(written: &str, wasp_word: &str) {
+	let (foreign_word, reason) = match written.strip_suffix(wasp_word).map(str::trim) {
+		Some(dropped) if !dropped.is_empty() => (dropped, format!("{dropped} is superfluous: write {wasp_word}")),
+		_ => (written, format!("wasp says {wasp_word}")),
+	};
+	educate_once(&format!("alias-{foreign_word}"), written, wasp_word, &reason);
+}
+
 /// The reading the program gets: an error-fallback ambiguity is an error naming every explicit form; otherwise the
 /// default, with a warning shown until the user says "got it" (an error under `use strict`, acknowledged or not)
 pub fn ask(question: &Ask) -> Result<usize, Node> {

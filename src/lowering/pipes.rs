@@ -2,6 +2,8 @@
 //! differently with different types", wiki/pipe.md); between values `|` stays the logical or. The parser marks the bare
 //! word after a single `|` (pipe_stage); this pass decides. A pipe after a braceless call takes the call's result:
 //! `square 2 | root` is `root(square(2))`, `fetch url | trim` trims the fetched text, as in a shell.
+//! `then` pipes the same way into a function missing its argument (`xs then sort`, P158); otherwise it is the
+//! condition, also without `if`.
 
 use crate::analyzer::{counting_function, extract_user_functions};
 use crate::context::Context;
@@ -68,6 +70,25 @@ impl Pipes {
 	fn rewrite(&self, node: Node) -> Node {
 		match node {
 			Node::Key(value, Op::Or, stage) if self.is_stage(&stage) => self.applied(&stage, self.rewrite(*value)),
+			// `cond then a else b`: the condition, also without `if` (P158)
+			Node::Key(then, Op::Else, otherwise) if is_bare_then(&then) => {
+				let Node::Key(condition, _, body) = then.drop_meta().clone() else { unreachable!("guarded") };
+				let condition = if_then(self.rewrite(*condition), self.rewrite(*body));
+				Node::Key(Box::new(condition), Op::Else, Box::new(self.rewrite(*otherwise)))
+			}
+			// `3 then f then g` parses as `3 then (f then g)`: a pipeline reads left to right, `(3 then f) then g`
+			Node::Key(value, Op::Then, stage) if !is_if_head(&value) && is_bare_then(&stage) => {
+				let Node::Key(first, _, rest) = stage.drop_meta().clone() else { unreachable!("guarded") };
+				self.rewrite(Node::Key(Box::new(Node::Key(value, Op::Then, first)), Op::Then, rest))
+			}
+			Node::Key(value, Op::Then, stage) if !is_if_head(&value) => self.then_reading(self.rewrite(*value), self.rewrite(*stage)),
+			// `square numbers then filter(p)`: the braceless call is the piped value
+			Node::List(mut items, Bracket::None, Separator::Space) if self.then_pipes_braceless_call(&items) => {
+				let Some(Node::Key(argument, Op::Then, stage)) = items.pop().map(|last| last.drop_meta().clone()) else { unreachable!("guarded") };
+				items.push(*argument);
+				let value = self.rewrite(Node::List(items, Bracket::None, Separator::Space));
+				self.then_call(&self.rewrite(*stage), &value).expect("guarded")
+			}
 			Node::List(mut items, Bracket::None, Separator::Space) if self.pipes_braceless_call(&items) => {
 				let Some(Node::Key(argument, Op::Or, stage)) = items.pop().map(|last| last.drop_meta().clone()) else { unreachable!("guarded") };
 				items.push(*argument);
@@ -75,6 +96,56 @@ impl Pipes {
 			}
 			other => other.map_children(|child| self.rewrite(child)),
 		}
+	}
+
+	/// `value then stage` without `if` (P158): the call when the stage is a function missing its argument and the
+	/// value no truth value, else the condition; a truth value before a function stays the condition, with a note
+	fn then_reading(&self, value: Node, stage: Node) -> Node {
+		match self.then_call(&stage, &value) {
+			Some(_) if is_truth_value(&value) => {
+				let written = format!("{} then {}", value.serialize(), stage.serialize());
+				crate::normalize::advise(&written, &format!("{} |> {}", value.serialize(), stage.serialize()), "then after a comparison is the condition; to pipe the truth value write |>");
+				if_then(value, stage)
+			}
+			Some(call) => call,
+			None => if_then(value, stage),
+		}
+	}
+
+	/// `then sort`, `then filter(p)`: the call of the function with the value as its first argument (as `|>`), when
+	/// the stage names a function and leaves out an argument
+	fn then_call(&self, stage: &Node, value: &Node) -> Option<Node> {
+		let pipes = match stage.drop_meta() {
+			Node::Symbol(name) => self.names_function(name, 0),
+			Node::List(items, Bracket::Round, Separator::None) => match items.first().map(Node::drop_meta) {
+				Some(Node::Symbol(name)) => self.leaves_out_an_argument(name, items.len() - 1),
+				_ => false,
+			},
+			_ => false,
+		};
+		pipes.then(|| crate::wasp_parser::piped(value.clone(), stage.clone()))
+	}
+
+	/// Does `name` call a function that takes more than `given` arguments (a word's own count is not known: any)
+	fn names_function(&self, name: &str, given: usize) -> bool {
+		if let Some(function) = self.context.user_functions.get(name) {
+			return function.params.len() > given;
+		}
+		self.spaced_functions.contains(name) || (!self.variables.contains(name) && is_function_word(name, &self.context))
+	}
+
+	/// `filter(p)`: a call of anything but a variable, short of an argument when it is the program's function
+	fn leaves_out_an_argument(&self, name: &str, given: usize) -> bool {
+		match self.context.user_functions.get(name) {
+			Some(function) => function.params.len() > given,
+			None => !self.variables.contains(name),
+		}
+	}
+
+	/// `square numbers then filter(p)`: a braceless call whose last argument pipes on with `then`
+	fn then_pipes_braceless_call(&self, items: &[Node]) -> bool {
+		let head_is_function = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.names_function(name, 0));
+		head_is_function && items.len() >= 2 && matches!(items.last().map(Node::drop_meta), Some(Node::Key(argument, Op::Then, stage)) if !is_truth_value(argument) && self.then_call(stage, argument).is_some())
 	}
 
 	/// A marked stage that pipes: a function or a word operator
@@ -121,6 +192,29 @@ fn is_function_word(name: &str, context: &Context) -> bool {
 		|| crate::wasm_emitter::text_builtins::is_text_builtin(name)
 		|| counting_function(name, context).is_some()
 		|| crate::ffi::get_ffi_signature(name).is_some()
+}
+
+/// `a then b` without `if`
+fn is_bare_then(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(head, Op::Then, _) if !is_if_head(head))
+}
+
+/// `if c` before `then`
+fn is_if_head(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, Op::If, _))
+}
+
+/// A comparison or logic: `x > 2`, `a and b`, `not x`, true
+fn is_truth_value(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(_, op, _) => op.is_comparison() || op.is_equality() || op.is_logical() || *op == Op::Not,
+		Node::True | Node::False => true,
+		_ => false,
+	}
+}
+
+fn if_then(condition: Node, body: Node) -> Node {
+	crate::variable_signals::if_then(condition, body)
 }
 
 /// `square 2` as the operand of a prefix operator: `√(square 2)`, not `√ square 2` (which reads as square(√2))

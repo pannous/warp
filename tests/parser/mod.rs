@@ -1,6 +1,7 @@
 mod test_attributes;
 mod test_comments;
 mod test_dollar_names;
+mod test_references;
 mod test_glyph_aliases;
 mod test_inline_comments;
 mod test_json;
@@ -32,3 +33,4 @@ mod test_wisp_roundtrip;
 mod test_unary_plus;
 mod test_wisp_malformed;
 mod test_trailing_annotation;
+mod test_spaced_children;

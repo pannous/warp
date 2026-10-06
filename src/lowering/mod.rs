@@ -35,6 +35,8 @@ pub mod phrase_words;
 pub mod parameter_shapes;
 pub mod picked_calls;
 pub mod pipes;
+pub mod references;
+pub mod word_operators;
 pub mod result_word;
 pub mod ruby_blocks;
 pub mod run_time_blocks;

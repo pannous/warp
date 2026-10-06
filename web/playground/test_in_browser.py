@@ -14,7 +14,10 @@ import functools, http.server, json, os, re, subprocess, sys, threading, time, u
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "8733"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", "2")
 PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
-SESSION = "warp-browser-tests"
+# one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
+SESSION = f"warp-browser-tests-{os.getpid()}"
+LAUNCH_ATTEMPTS = 3
+LAUNCH_SECONDS = 90  # a page that is not loaded by then did not start: relaunch, loudly
 POLL_SECONDS = 3
 BINARY_PATH = "/__tests__.wasm"
 INCLUDE_PREFIX = "/__include__/"
@@ -96,6 +99,26 @@ def serve(binary):
 	return server
 
 
+def open_page(url):
+	"""open `url` in this run's browser and wait until it loaded; a launch that fails is reported and retried, and after
+	LAUNCH_ATTEMPTS the run fails with the reason instead of waiting for the stall check"""
+	for attempt in range(1, LAUNCH_ATTEMPTS + 1):
+		try:
+			opened = subprocess.run(["agent-browser", "--session", SESSION, "open", url], capture_output=True, text=True, timeout=LAUNCH_SECONDS)
+			reason = opened.stderr.strip() or opened.stdout.strip()
+			deadline = time.time() + LAUNCH_SECONDS
+			while opened.returncode == 0 and time.time() < deadline:
+				if browser("eval", "document.readyState") == '"complete"':
+					return
+				time.sleep(1)
+			reason = reason if opened.returncode else f"the page did not load in {LAUNCH_SECONDS} s"
+		except subprocess.TimeoutExpired:
+			reason = f"agent-browser open did not return in {LAUNCH_SECONDS} s"
+		print(f"error: the browser did not start (attempt {attempt} of {LAUNCH_ATTEMPTS}): {reason}", file=sys.stderr)
+		subprocess.run(["agent-browser", "--session", SESSION, "close"], capture_output=True, timeout=60)
+	sys.exit(f"error: the browser did not start after {LAUNCH_ATTEMPTS} attempts (agent-browser, session {SESSION})")
+
+
 def browser(*arguments):
 	try:
 		return subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60).stdout.strip()
@@ -133,11 +156,12 @@ def check_examples(names, page_url=None):
 			sys.exit("error: web/playground/warp.wasm is missing; build it with web/playground/build.sh")
 		server = serve(None)
 		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
-	browser("open", page_url)
+	open_page(page_url)
 	wait_for_isolation()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
 	failures = []
-	for name in names or examples:
+	names = names or list(examples)
+	for name in names:
 		expected, shown = examples[name], show_example(name)
 		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed") if part in expected and shown[part] != expected[part]]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
@@ -146,7 +170,7 @@ def check_examples(names, page_url=None):
 	browser("close")
 	if server:
 		server.shutdown()
-	print(f"\nexamples: {len(examples) - len(failures)} of {len(examples)} show what they promise" + (f"; failed: {', '.join(failures)}" if failures else ""))
+	print(f"\nexamples: {len(names) - len(failures)} of {len(names)} show what they promise" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 
 
@@ -173,7 +197,7 @@ def main():
 	build_components()
 	server = serve(binary)
 	query = urllib.parse.urlencode({"wasm": BINARY_PATH, "args": json.dumps(arguments), "workers": WORKERS, **({"perWorker": PER_WORKER} if PER_WORKER else {})})
-	browser("open", f"http://127.0.0.1:{PORT}/web/playground/tests.html?{query}")
+	open_page(f"http://127.0.0.1:{PORT}/web/playground/tests.html?{query}")
 	summary, shown, changed = None, "", time.time()
 	while summary is None:
 		time.sleep(POLL_SECONDS)

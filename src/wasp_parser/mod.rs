@@ -71,8 +71,10 @@ const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final
 const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
+/// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
+const OPERATOR_WORD: &str = "operator";
 /// Words before a member of a class body that change nothing in wasp: Swift's `mutating func`, visibility, `override`
-pub const MEMBER_MODIFIERS: [&str; 10] = ["mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async"];
+pub const MEMBER_MODIFIERS: [&str; 11] = ["mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"];
 /// Python's root class `class Point(object):`, no parent of its own
 const PYTHON_ROOT_CLASS: &str = "object";
 /// `record point{x:int y:int}` declares a type like `struct`, but `record` is also an everyday variable name:
@@ -296,8 +298,8 @@ pub const EXTENDS_KEYWORD: &str = "extends";
 /// `mixin Walker{…}` declares fields and methods classes take in: `class Duck with Walker, Swimmer {…}`
 pub const MIXIN_WORD: &str = "mixin";
 pub const WITH_KEYWORD: &str = "with";
-/// The constructor of a class body, `value{…}` or `value(name){…}` (wiki/constructor.md)
-pub const CONSTRUCTOR_WORD: &str = "value";
+/// The constructor of a class body, `init{…}` or `init(name){…}` (wiki/constructor.md, P162)
+pub const CONSTRUCTOR_WORD: &str = "init";
 /// The accessors of a class property, `get age() {…}`, `set age(v) {…}` (wiki/property.md)
 pub const ACCESSOR_WORDS: [&str; 2] = ["get", "set"];
 /// `static k = 3` in a class body: a member of the class, not of each instance (P122); kept as the annotation `@static`
@@ -464,7 +466,7 @@ const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
 
 /// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`; a braceless call is grouped, one argument:
 /// `square xs |> filter(p)` → `filter((square xs), p)`
-fn piped(value: Node, stage: Node) -> Node {
+pub(crate) fn piped(value: Node, stage: Node) -> Node {
 	let value = match value.drop_meta() {
 		Node::List(_, Bracket::None, Separator::Space) => Node::List(vec![value], Bracket::Round, Separator::None),
 		_ => value,
@@ -609,6 +611,9 @@ pub struct WaspParser {
 	generic_names: Option<(String, Vec<String>)>,
 	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
 	in_command: bool,
+	/// Parsing the block of a data literal (`a{ … }`, not a declared type's constructor): a spaced child `c { d:3 }` there
+	/// is the child node of the glued `c{ d:3 }`, as no call with a block can be meant (card spaced-child)
+	in_data_literal: bool,
 	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
 	pipe_takes_call: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
@@ -883,6 +888,7 @@ impl WaspParser {
 			brace_holes: false,
 			generic_names: None,
 			in_command: false,
+			in_data_literal: false,
 			pipe_takes_call: false,
 			times_loops: 0,
 			pending_comment: None,

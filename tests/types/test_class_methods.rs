@@ -59,3 +59,13 @@ fn a_method_may_be_named_like_a_type_word() {
 	is!("class C{x:int; double() := x*2; quad() := double() * 2}; c = C(3); c.quad()", 12);
 	is!("class C{x:int; double() := x*2}; type(double(3))", "float"); // the conversion stays
 }
+
+/// Card class-method: a library-word method on a receiver of no known class is chosen at run time by its class
+#[test]
+fn a_library_word_method_dispatches_at_run_time() {
+	let stack = "class Stack{items:list; count() := 42}; ";
+	is!(&format!("{stack}size(x) := x.count(); size(Stack([1, 2]))"), 42);
+	is!(&format!("{stack}size(x) := x.count(); size([1, 2, 3])"), 3);
+	is!(&format!("{stack}size(x) := x.count(); size(Stack([1])) + size([1, 2, 3])"), 45);
+	is!("class Bag{items:list; sum() := 42}; total(x) := x.sum(); total([1, 2, 3]) + total(Bag([1]))", 48);
+}
