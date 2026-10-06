@@ -51,3 +51,23 @@ fn other_languages_class_names_are_the_collections() {
 	// a program's own class of that name wins
 	is!("use collections; class HashSet{n=7}; HashSet().n", 7);
 }
+
+#[test]
+fn other_languages_method_names_are_the_collections_methods() {
+	// Python's deque
+	is!("use collections; d = deque(); d.append(1); d.appendleft(0); d.popleft() * 10 + d.pop()", 1);
+	// Java's ArrayDeque and Queue
+	is!("use collections; d = ArrayDeque(); d.addLast(2); d.addFirst(1); d.pollFirst() * 10 + d.pollLast()", 12);
+	is!("use collections; q = Queue(); q.offer(4); q.offer(5); q.poll()", 4);
+	// JS's Set and Java's contains
+	is!("use collections; s = Set([1 2]); s.delete(1); s.contains(2) and not s.has(1)", true);
+	// a stack's append and JS's shift on a queue
+	is!("use collections; s = Stack(); s.append(3); s.pop()", 3);
+	is!("use collections; q = Queue([7 8]); q.shift()", 7);
+}
+
+#[test]
+fn the_size_of_an_instance_through_len_and_count() {
+	is!("use collections; s = Set([1 2 2]); len(s)", 2);
+	is!("use collections; s = Stack(); s.push(1); count(s) + s.len() + s.count()", 3);
+}

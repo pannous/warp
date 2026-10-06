@@ -31,6 +31,20 @@ const VALUE_SUFFIX: &str = "·value";
 const RESULT_SUFFIX: &str = "·result";
 const ELEMENTS_SUFFIX: &str = "·elements";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
+/// Other languages' method names (Python's deque, Java's Deque and Queue, JS's Array and Set) and the wasp methods they
+/// mean, the first one the class defines taken, with a note; only on a class that does not define the name itself
+const METHOD_ALIASES: [(&str, &[&str]); 22] = [
+	("append", &["push_back", "push", "enqueue", "add"]), ("addLast", &["push_back", "enqueue"]), ("offerLast", &["push_back", "enqueue"]),
+	("offer", &["enqueue", "push_back"]), ("push", &["push_back", "enqueue"]),
+	("appendleft", &["push_front"]), ("addFirst", &["push_front"]), ("offerFirst", &["push_front"]), ("unshift", &["push_front"]),
+	("popleft", &["pop_front", "dequeue"]), ("pollFirst", &["pop_front", "dequeue"]), ("removeFirst", &["pop_front", "dequeue"]),
+	("shift", &["pop_front", "dequeue"]), ("poll", &["dequeue", "pop_front"]),
+	("pollLast", &["pop_back", "pop"]), ("removeLast", &["pop_back", "pop"]), ("pop", &["pop_back"]),
+	("contains", &["has"]), ("includes", &["has"]), ("delete", &["remove"]), ("discard", &["remove"]),
+	("len", &["size"]),
+];
+/// `len(s)`, `count(s)`, `s.count()` of an instance whose class defines its size under another of these names
+const SIZE_WORDS: [&str; 4] = ["size", "count", "len", "length"];
 /// The keywords of a field: Swift's `var count = 0`, `let`, Kotlin's `val`
 const FIELD_KEYWORDS: [&str; 3] = ["var", "let", "val"];
 /// Member modifiers that may mean something in wasp, so they get no note that wasp needs them not
@@ -112,6 +126,7 @@ pub fn lower(node: Node) -> Node {
 		Ok(node) => node,
 		Err(error) => return error,
 	};
+	let node = method_aliases(node);
 	let node = renamed_type_word_methods(node);
 	let (node, likenesses) = match inherit(node) {
 		Ok(inherited) => inherited,
@@ -132,6 +147,63 @@ pub fn lower(node: Node) -> Node {
 		(true, node) => node,
 		(false, Node::List(items, bracket, separator)) if separator != Separator::Space => Node::List([traits, items].concat(), bracket, separator),
 		(false, node) => Node::List([traits, vec![node]].concat(), Bracket::None, Separator::Semicolon),
+	}
+}
+
+/// `d.append(1)` of a deque, `s.contains(2)` of a set, `len(s)`: the class's own method when it does not define that
+/// name (METHOD_ALIASES, SIZE_WORDS), with a note
+fn method_aliases(node: Node) -> Node {
+	let mut methods: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		methods.insert(name.drop_meta().name(), class_items(body).iter().filter_map(method_parts).map(|(method, _, _)| method).collect());
+	});
+	if methods.is_empty() {
+		return node;
+	}
+	let classes: Vec<String> = methods.keys().cloned().collect();
+	let instances: std::collections::HashMap<String, Vec<String>> = instance_classes(&node, &classes).into_iter().map(|(variable, class)| (variable, methods[&class].clone())).collect();
+	with_method_aliases(node, &instances)
+}
+
+/// The method of the class for `written`: the name itself, or the alias's wasp method, or for a size word the size
+/// method the class defines
+fn aliased_method(written: &str, defined: &[String]) -> Option<String> {
+	if defined.iter().any(|method| method == written) {
+		return None;
+	}
+	let candidates: Vec<&str> = match SIZE_WORDS.contains(&written) {
+		true => SIZE_WORDS.to_vec(),
+		false => METHOD_ALIASES.iter().find(|(alias, _)| *alias == written).map(|(_, methods)| methods.to_vec()).unwrap_or_default(),
+	};
+	let method = candidates.into_iter().find(|candidate| defined.iter().any(|method| method == candidate))?;
+	crate::diagnostic::note_alias(written, method);
+	Some(method.to_string())
+}
+
+fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String, Vec<String>>) -> Node {
+	let defined_by = |receiver: &Node| match receiver.drop_meta() {
+		Node::Symbol(variable) => instances.get(variable),
+		_ => None,
+	};
+	match node {
+		Node::Key(receiver, Op::Dot, member) if defined_by(&receiver).is_some() => {
+			let member = match member.drop_meta() {
+				Node::List(items, Bracket::Round, separator) if !items.is_empty() => match aliased_method(&items[0].drop_meta().name(), defined_by(&receiver).expect("guarded")) {
+					Some(method) => Node::List([vec![Node::Symbol(method)], items[1..].iter().cloned().map(|item| with_method_aliases(item, instances)).collect()].concat(), Bracket::Round, separator.clone()),
+					None => with_method_aliases(*member, instances),
+				},
+				_ => *member,
+			};
+			Node::Key(receiver, Op::Dot, Box::new(member))
+		}
+		// `len(s)`: `s.size()`
+		Node::List(items, Bracket::Round, separator) if matches!(items.as_slice(), [word, argument] if SIZE_WORDS.contains(&word.drop_meta().name().as_str()) && defined_by(argument).is_some()) => {
+			match aliased_method(&items[0].drop_meta().name(), defined_by(&items[1]).expect("guarded")) {
+				Some(method) => Node::Key(Box::new(items[1].clone()), Op::Dot, Box::new(Node::List(vec![Node::Symbol(method)], Bracket::Round, Separator::None))),
+				None => Node::List(items, Bracket::Round, separator),
+			}
+		}
+		other => other.map_children(|child| with_method_aliases(child, instances)),
 	}
 }
 
