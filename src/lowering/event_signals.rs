@@ -134,7 +134,10 @@ pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Nod
 /// Each `raise name{data}` with handlers is the call `on·name(data)`
 fn raises_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>) -> Node {
 	if let Some((name, data)) = raise(&node).filter(|(name, _)| handled.contains_key(name)) {
-		return Node::List(vec![Node::Symbol(handler_function_name(&name)), data], Bracket::Round, Separator::None);
+		let call = Node::List(vec![Node::Symbol(handler_function_name(&name)), data], Bracket::Round, Separator::None);
+		// `{ raise alarm }` is a block of one statement: it stays a block
+		let braced = matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
+		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };
 	}
 	match node {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| raises_as_calls(item, handled)).collect(), bracket, separator),

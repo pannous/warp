@@ -1,6 +1,8 @@
 // Named event signals (wiki/signal.md, notes/signals.md phase 2, P110): `raise name{data}` runs the `on name {…}`
 // handlers of the program, `event` in them is the data; with no handler, raise stays the exception (test_raise.rs)
 use crate::is;
+use warp::node::{Bracket, Node};
+use warp::operators::Op;
 
 #[test]
 fn raise_runs_the_handlers_of_its_name() {
@@ -27,4 +29,18 @@ fn the_handled_signals_name_their_functions() {
 	let mut handled = warp::event_signals::handled_signals(&lowered);
 	handled.sort();
 	assert_eq!(handled, vec![("alarm".to_string(), "on·alarm".to_string()), ("stop the machine".to_string(), "on·stop·the·machine".to_string())]);
+}
+
+// A function whose body is only a raise keeps its braces (it stays a function, not a getter)
+#[test]
+fn a_body_of_one_raise_stays_a_block() {
+	is!("n=0; on alarm {n+=1}; check() := { raise alarm }; check(); check(); n", 2);
+	let lowered = warp::event_signals::lower(warp::wasp_parser::parse("n=0; on alarm {n+=1}; check() := { raise alarm }; n"));
+	let mut body_is_block = false;
+	lowered.visit(&mut |part| if let Node::Key(head, Op::Define, body) = part {
+		if head.serialize().contains("check") {
+			body_is_block = matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _));
+		}
+	});
+	assert!(body_is_block, "check's body lost its braces: {}", lowered.serialize());
 }
