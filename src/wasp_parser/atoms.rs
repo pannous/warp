@@ -618,13 +618,13 @@ impl WaspParser {
 		// glued `Person{…}` is: the README's `Person { name: "Alice" … }` (card person-name)
 		let tagged = symbol.starts_with(|first: char| first.is_uppercase());
 		let declared = self.declared_types.contains(&symbol);
-		if (declared || tagged) && self.block_after_blanks(declared) {
+		// inside a data literal any spaced `c { … }` is the child c{ … } (card spaced-child)
+		let spaced_child = self.in_data_literal && !declared && self.blanks_then('{');
+		if spaced_child || ((declared || tagged) && self.block_after_blanks(declared)) {
 			while matches!(self.current_char(), ' ' | '\t') {
 				self.advance();
 			}
-			let block = self.parse_bracketed('{');
-			let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
-			return Node::Key(Box::new(Symbol(symbol)), op, Box::new(block));
+			return self.parse_glued_suffix(symbol);
 		}
 
 		self.parse_glued_suffix(symbol)
@@ -838,17 +838,19 @@ impl WaspParser {
 		let ch = self.current_char();
 		match ch {
 			'{' => {
+				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
+				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
+				let outer_data_literal = std::mem::replace(&mut self.in_data_literal, op == Op::Colon);
 				let mut blocks = vec![self.parse_bracketed('{')];
 				// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`
 				while self.current_char() == '{' {
 					blocks.push(self.parse_bracketed('{'));
 				}
+				self.in_data_literal = outer_data_literal;
 				let block = match blocks.len() {
 					1 => blocks.remove(0),
 					_ => Node::List(blocks, Bracket::None, Separator::None),
 				};
-				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
-				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
 				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
 			'<' if !self.options.xml_mode && !self.options.data_mode && self.type_application_length().is_some() => {
