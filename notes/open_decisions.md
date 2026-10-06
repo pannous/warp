@@ -5,7 +5,12 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-(none open; the three below the user answered "Later" are parked until their feature is built)
+- P150 license: warp (and wasp) have none, so package managers list no license and nobody may legally reuse the code.
+  MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). Assumed: none until decided.
+  Asked by the packaging session 2026-10-06 (notes/packaging.md).
+- P151 crates.io: the name `warp` is taken (the web framework). Publish as `warp-lang` (recommended) / `wasp-warp` /
+  stay off crates.io (cargo install --git works). Assumed: off crates.io.
+(the three below the user answered "Later" are parked until their feature is built)
 - Parked: P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them
   as they are at `!` and assigns only declared globals. User 2026-10-05: "Later"; revisit when run-time `!` is built.
 - Parked: P70c a definition inside a loop or block (`i=0; while i<3 { i+=1; f(y):=i*y }; i=10; f(1)`): only the variables the
@@ -167,6 +172,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   runs natively, sandboxed and in the browser (plan: notes/stdlib_connectors.md "Status 2026-10-06").
   Dropped as answered by P124: a block/lambda argument writing a captured variable (`total = 0; each_twice { |x|
   total += x }`) shares it, no `global` needed (warp-93, branch ruby-yield).
+- P147 (P146 step 4, warp-06, branch hijack-libc) the prebuilt wasi-libc module lives in this repo:
+  web/playground/lib/libc.wasm + libc.h, built by a script and committed like warp.wasm; the browser host loads it
+  for `use c` instead of host.js's hand-written shims; native keeps dlopen.
 - P142 (scope of P141, asked by warp-e4) the definition error applies only where the builtin would win, i.e. the
   definition could never take effect (casts like `double`, operators, type names). Library words (`add`, `map`,
   `count`) may be redefined and the user's version wins; class methods are always allowed (called as `x.add`). User:

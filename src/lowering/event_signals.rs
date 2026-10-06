@@ -11,11 +11,15 @@
 use crate::declarations::{handler_parts, word};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::variable_signals::symbols;
+use crate::variable_signals::{assign, block, if_then, symbols};
 use crate::wasp_parser::parse;
 use std::collections::{HashMap, HashSet};
 
 const ON_WORD: &str = "on";
+/// `once alarm {…}`: the handler runs at the first raise only (Node's emitter.once, DOM `{once: true}`)
+const ONCE_WORD: &str = "once";
+/// `once_fired_0`: whether the once handler ran (a plain word: `global once_fired_0` is parsed)
+const FIRED_PREFIX: &str = "once_fired_";
 const RAISE_WORD: &str = "raise";
 /// `on set x` and `on change x` are variable listeners (variable_signals.rs)
 const VARIABLE_LISTENER_WORDS: [&str; 2] = ["set", "change"];
@@ -36,13 +40,17 @@ pub const SYSTEM_EVENTS: [&str; 2] = ["interrupt", "exit"];
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
 	let raised = raised_names(&program);
+	let mut flags = vec![];
 	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
-		.filter_map(|(index, statement)| handler(statement).map(|(name, body)| (index, name, body)))
-		.filter(|(_, name, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()) || SYSTEM_EVENTS.contains(&name.as_str()))
+		.filter_map(|(index, statement)| handler(statement).map(|(name, body, once)| (index, name, body, once)))
+		.filter(|(_, name, _, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()) || SYSTEM_EVENTS.contains(&name.as_str()))
+		.map(|(index, name, body, once)| (index, name, if once { run_once(body, &mut flags) } else { body }))
 		.collect();
 	if handlers.is_empty() {
 		return program;
 	}
+	let statements: Vec<Node> = flags.iter().map(|flag| assign(flag, Node::False)).chain(statements).collect();
+	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
 	#[cfg(feature = "native")]
 	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| PAGE_EVENTS.contains(&name.as_str()) && !raised.contains(name)) {
 		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
@@ -78,12 +86,22 @@ pub fn lower(program: Node) -> Node {
 	crate::declarations::with_node_wrappers(Node::List(lowered, bracket, separator), &page_handlers)
 }
 
-/// `on alarm {body}`, `on stop the machine {body}`, `on alarm: body`: the event's name and the body
-fn handler(statement: &Node) -> Option<(String, Node)> {
+/// The body guarded by a fresh flag: `if once_fired_0 == false { once_fired_0 = true; body }`
+fn run_once(body: Node, flags: &mut Vec<String>) -> Node {
+	let flag = format!("{FIRED_PREFIX}{}", flags.len());
+	flags.push(flag.clone());
+	let not_fired = Node::Key(Box::new(Node::Symbol(flag.clone())), Op::Eq, Box::new(Node::False));
+	if_then(not_fired, block(vec![assign(&flag, Node::True), body]))
+}
+
+/// `on alarm {body}`, `on stop the machine {body}`, `on alarm: body`, `once alarm {body}`: the event's name, the body
+/// and whether it runs once
+fn handler(statement: &Node) -> Option<(String, Node, bool)> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };
 	let (on, rest) = items.split_first()?;
 	let (last, words) = rest.split_last()?;
-	if word(on) != ON_WORD || words.first().is_some_and(|first| VARIABLE_LISTENER_WORDS.contains(&word(first).as_str())) {
+	let once = word(on) == ONCE_WORD;
+	if !(once || word(on) == ON_WORD) || words.first().is_some_and(|first| VARIABLE_LISTENER_WORDS.contains(&word(first).as_str())) {
 		return None;
 	}
 	let (last_word, body) = match last.drop_meta() {
@@ -94,7 +112,7 @@ fn handler(statement: &Node) -> Option<(String, Node)> {
 		}
 	};
 	let name = event_name(words.iter().chain(last_word.as_ref()))?;
-	Some((name, body))
+	Some((name, body, once))
 }
 
 /// `raise alarm`, `raise stop the machine{reason:"…"}`: the name and the data (ø without)
@@ -146,16 +164,20 @@ fn handler_function_name(event: &str) -> String {
 
 /// `on·alarm(event) := { global n; body; body2 }`: the main-level variables the bodies mention are declared global
 pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Node], main_variables: &HashSet<String>) -> Node {
-	let mut mentioned: Vec<String> = bodies.iter().flat_map(symbols).filter(|name| main_variables.contains(name) && name != EVENT_WORD).collect();
-	mentioned.sort();
-	mentioned.dedup();
-	let globals = mentioned.iter().map(|name| parse(&format!("global {name}")));
-	let statements: Vec<Node> = globals.chain(bodies.iter().cloned()).collect();
+	let statements: Vec<Node> = global_declarations(bodies, main_variables, &[EVENT_WORD]).into_iter().chain(bodies.iter().cloned()).collect();
 	let template = if takes_event { FUNCTION_TEMPLATE } else { PARAMETERLESS_TEMPLATE };
 	let Node::Key(head, op, _) = parse(template).drop_meta().clone() else { unreachable!("the template is a definition") };
 	let name = Node::Symbol(name.to_string());
 	let head = crate::law::substitute(&head, &HashMap::from([(TEMPLATE_NAME.to_string(), name)]));
 	Node::Key(Box::new(head), op, Box::new(Node::List(statements, Bracket::Curly, Separator::Semicolon)))
+}
+
+/// `global n` for each main-level variable the bodies mention, except the `parameters` of the function they become
+pub(crate) fn global_declarations(bodies: &[Node], main_variables: &HashSet<String>, parameters: &[&str]) -> Vec<Node> {
+	let mut mentioned: Vec<String> = bodies.iter().flat_map(symbols).filter(|name| main_variables.contains(name) && !parameters.contains(&name.as_str())).collect();
+	mentioned.sort();
+	mentioned.dedup();
+	mentioned.iter().map(|name| parse(&format!("global {name}"))).collect()
 }
 
 /// Handlers take `event` only when a body reads it: an unread parameter has no type a caller from outside (the page)

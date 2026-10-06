@@ -40,14 +40,40 @@ Worker.
   html{ body{ h1: "Welcome"  p: "made of data" } }
   ```
 
-## Install & run
+## Install
 
+**Nothing to install:** [warp.pannous.com](https://warp.pannous.com/) runs the compiler in your browser.
+
+**Homebrew** (macOS, Linux):
+```bash
+brew install pannous/tap/warp
+```
+
+**Prebuilt binaries** (macOS arm64, Linux x86_64 and arm64): download the archive for your platform from the
+[latest release](https://github.com/pannous/warp/releases/latest) and put `warp` and `warp-runtime` together on your `PATH`.
+
+**Cargo** (any platform with [Rust](https://rustup.rs)):
+```bash
+cargo install --locked --git https://github.com/pannous/warp warp warp-runtime
+```
+
+**From source:**
 ```bash
 git clone https://github.com/pannous/warp && cd warp
-cargo build --release
-target/release/warp samples/fibonacci.wasp   # run a file
-target/release/warp eval "6*7"               # evaluate code
-target/release/warp repl                     # interactive console
+CARGO_NET_OFFLINE=false cargo fetch    # once: the repository builds offline, from cargo's local cache
+cargo build --release && cargo build --release -p warp-runtime   # binaries in target/release/
+```
+
+`warp-runtime` is the small runtime that standalone executables are made from; it belongs in the same folder as `warp`.
+
+## Run
+
+```bash
+warp run samples/fibonacci.wasp   # run a file
+warp samples/fibonacci.wasp       # run it and leave the standalone executable samples/fibonacci
+warp eval "6*7"                   # evaluate code: 42
+warp repl                         # interactive console
+warp help                         # all commands
 ```
 
 `samples/` contains classics (game of life, Dijkstra, Levenshtein, a JSON parser, a neural net) in both a
