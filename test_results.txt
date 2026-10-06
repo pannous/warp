@@ -2318,4 +2318,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2313 passed, 0 failed, 2313 total tested
+23 ignored, 2313 passed, 0 failed, 2313 total tested
