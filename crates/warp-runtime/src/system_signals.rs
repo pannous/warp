@@ -4,19 +4,27 @@
 //! the first poll installs the SIGINT handler, which only sets a flag; a second ctrl-c within a second, or before the
 //! handler ran, ends the run at once (exit code 130), so a handler that ignores ctrl-c never makes a program
 //! unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_every(0, 5000)` where the handler is
-//! declared. A run that allows it (`warp run`, built executables) stays after main while a timer lives.
+//! declared. `on file "notes.txt" change {…}` is `on·file·0`, started by `signal_watch(0, "notes.txt")`: a timer of
+//! FILE_CHECK_PERIOD that fires only when the file's modification time changed (it appeared, was written, or went).
+//! A run that allows it (`warp run`, built executables) stays after main while a timer or watch lives.
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use crate::host_words::{INTERRUPT_HANDLER, TIMER_HANDLER_PREFIX};
+use crate::host_words::{FILE_HANDLER_PREFIX, INTERRUPT_HANDLER, TIMER_HANDLER_PREFIX};
+use std::path::PathBuf;
+use std::time::SystemTime;
 use wasmtime::{AsContextMut, Func, Instance, Result, Store, Val};
 
 const NEW_EMPTY: &str = "new_empty";
+/// How often a watched file's modification time is read: polling, no file-system events yet
+const FILE_CHECK_PERIOD: Duration = Duration::from_millis(100);
 
 struct Timer {
 	handler: String,
 	period: Duration,
 	due: Instant,
+	/// a watched file and its modification time when last read: the handler runs only when that changed
+	watched: Option<(PathBuf, Option<SystemTime>)>,
 }
 
 thread_local! {
@@ -61,8 +69,20 @@ pub fn forget_timers() {
 /// `signal_every(id, milliseconds)`: the handler on·every·id runs every that many milliseconds from now on
 pub fn start_timer(id: i64, milliseconds: i64) {
 	let period = Duration::from_millis(milliseconds.max(1) as u64);
-	let timer = Timer { handler: format!("{TIMER_HANDLER_PREFIX}{id}"), period, due: Instant::now() + period };
+	let timer = Timer { handler: format!("{TIMER_HANDLER_PREFIX}{id}"), period, due: Instant::now() + period, watched: None };
 	TIMERS.with(|timers| timers.borrow_mut().push(timer));
+}
+
+/// `signal_watch(id, path)`: the handler on·file·id runs when the file changes from now on
+pub fn watch_file(id: i64, path: String) {
+	let path = PathBuf::from(path);
+	let modified = modified(&path);
+	let timer = Timer { handler: format!("{FILE_HANDLER_PREFIX}{id}"), period: FILE_CHECK_PERIOD, due: Instant::now() + FILE_CHECK_PERIOD, watched: Some((path, modified)) };
+	TIMERS.with(|timers| timers.borrow_mut().push(timer));
+}
+
+fn modified(path: &PathBuf) -> Option<SystemTime> {
+	std::fs::metadata(path).and_then(|metadata| metadata.modified()).ok()
 }
 
 fn next_due() -> Option<Instant> {
@@ -80,6 +100,13 @@ fn due_handlers(handles_interrupt: bool) -> Vec<String> {
 	TIMERS.with(|timers| {
 		for timer in timers.borrow_mut().iter_mut().filter(|timer| timer.due <= now) {
 			timer.due = (timer.due + timer.period).max(now);
+			if let Some((path, seen)) = &mut timer.watched {
+				let now_modified = modified(path);
+				if now_modified == *seen {
+					continue;
+				}
+				*seen = now_modified;
+			}
 			due.push(timer.handler.clone());
 		}
 	});
@@ -137,7 +164,10 @@ pub fn stay_while_listening<T>(store: &mut Store<T>, instance: &Instance) -> Res
 	if !STAYING_ALLOWED.load(Ordering::SeqCst) || next_due().is_none() {
 		return Ok(());
 	}
-	let listening: Vec<String> = TIMERS.with(|timers| timers.borrow().iter().map(|timer| format!("every {}", spoken(timer.period))).collect());
+	let listening: Vec<String> = TIMERS.with(|timers| timers.borrow().iter().map(|timer| match &timer.watched {
+		Some((path, _)) => format!("file {} change", path.display()),
+		None => format!("every {}", spoken(timer.period)),
+	}).collect());
 	eprintln!("listening: {} (ctrl-c to stop)", listening.join(", "));
 	while let Some(due) = next_due() {
 		interrupt::wait_until(due);
