@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 137] = [
+const CASES: [(&str, &str); 150] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -141,6 +141,19 @@ const CASES: [(&str, &str); 137] = [
 	(r#"def f(n){ return n if n < 2 else f(n-1) + f(n-2) }; f(10)"#, r#"55"#),
 	(r#"max(3, 7)"#, r#"7"#),
 	(r#"let twice x = x * 2 in twice 4"#, r#"8"#),
+	(r#"func divmod(a, b int) (int, int) { return a / b, a % b }; q, r := divmod(7, 2); q * 10 + r"#, r#"31"#),
+	(r#"function add(a, b) return a + b end; add(1, 2)"#, r#"3"#),
+	(r#"function f($a) { return $a * 2; }; f(4)"#, r#"8"#),
+	(r#"int twice(int x) => x * 2; twice(4)"#, r#"8"#),
+	(r#"def twice(x: Int): Int = x * 2; twice(4)"#, r#"8"#),
+	(r#"fun f(a: Int, b: Int = 2) = a * b; f(b = 3, a = 4)"#, r#"12"#),
+	(r#"[1,2,3].map { $0 * 2 }"#, r#"[2 4 6]"#),
+	(r#"def f(a, b = 2) a + b end; f(1)"#, r#"3"#),
+	(r#"(function(){ return 5 })()"#, r#"5"#),
+	(r#"(() => 7)()"#, r#"7"#),
+	(r#"(lambda x: x + 1)(2)"#, r#"3"#),
+	(r#"let xs = [1,2,3]; xs.reduce(0, +)"#, r#"6"#),
+	(r#"[x * 2 for x in [1, 2, 3] if x > 1]"#, r#"[4 6]"#),
 ];
 
 /// The value as `warp eval` shows it: a text without its quotes
