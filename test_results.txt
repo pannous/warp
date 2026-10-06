@@ -506,6 +506,8 @@ PASSED:
   ✓ function::tests::test_signature_builder
   ✓ function::tests::test_signature_format
   ✓ functions::test_all_calls::a_function_applied_to_all_items
+  ✓ functions::test_all_calls::a_list_built_by_appending_broadcasts
+  ✓ functions::test_all_calls::all_over_nested_lists_broadcasts_again
   ✓ functions::test_all_calls::an_untyped_call_next_to_a_comparison_is_ambiguous
   ✓ functions::test_all_calls::broadcasting_compares_as_a_list
   ✓ functions::test_analysis_memo::test_a_changed_tree_is_analysed_anew
@@ -541,8 +543,11 @@ PASSED:
   ✓ functions::test_block_function::data_blocks_stay_data
   ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
   ✓ functions::test_body_statement::an_undefined_word_in_it_is_an_error
+  ✓ functions::test_broadcasting::a_broadcast_inside_a_library_word_and_a_lambda_variable
+  ✓ functions::test_broadcasting::a_function_of_several_values_broadcasts_over_its_list_argument
   ✓ functions::test_broadcasting::julia_dot_call_broadcasts
   ✓ functions::test_broadcasting::library_words_and_math_operators_broadcast
+  ✓ functions::test_broadcasting::max_and_min_without_parentheses
   ✓ functions::test_broadcasting::test_broadcasting_reaches_nested_lists
   ✓ functions::test_broadcasting::test_function_broadcasts_over_a_list
   ✓ functions::test_broadcasting::test_function_broadcasts_over_pairs_keeping_keys
@@ -1162,6 +1167,7 @@ PASSED:
   ✓ modules::test_versions::versions_compare_part_by_part
   ✓ modules::test_wasm_modules::a_module_is_found_by_name_or_path
   ✓ modules::test_wasm_modules::a_module_keeps_its_state_for_the_run
+  ✓ modules::test_wasm_modules::a_qualified_global_is_assigned_in_its_module
   ✓ modules::test_wasm_modules::an_export_is_qualified_by_its_module_name
   ✓ modules::test_wasm_modules::an_exported_function_is_called_with_its_declared_types
   ✓ modules::test_wasm_modules::an_exported_global_reads_as_its_value
@@ -2046,6 +2052,8 @@ PASSED:
   ✓ types::test_class_methods::classes_with_a_method_of_the_same_name_each_call_their_own
   ✓ types::test_class_methods::keyword_methods_in_a_class_body
   ✓ types::test_class_methods::methods_are_no_fields
+  ✓ types::test_class_properties::a_getter_reads_like_a_field
+  ✓ types::test_class_properties::a_setter_runs_when_the_property_is_assigned
   ✓ types::test_construction_checks::a_call_construction_checks_its_fields_as_the_braces_do
   ✓ types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ types::test_constructor_vs_data::test_construction_checks_field_types
@@ -2705,4 +2713,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 2700 passed, 0 failed, 2700 total tested
+19 ignored, 2708 passed, 0 failed, 2708 total tested
