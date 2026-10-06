@@ -89,7 +89,9 @@ pub fn poll_shared(program: Node) -> Node {
 	if checks.is_empty() {
 		return program;
 	}
-	let handler = crate::event_signals::function_with_globals(crate::host::SHARED_HANDLER, false, &checks, &main_variables);
+	// a shared value is no global of the instance: shared_arrays makes its uses host words
+	let globals: HashSet<String> = main_variables.difference(&shared).cloned().collect();
+	let handler = crate::event_signals::function_with_globals(crate::host::SHARED_HANDLER, false, &checks, &globals);
 	let starts = flags.iter().map(|flag| assign(flag, Node::False));
 	Node::List(starts.chain(std::iter::once(handler)).chain(lowered).collect(), bracket, separator)
 }
