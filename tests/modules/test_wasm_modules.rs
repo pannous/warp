@@ -64,3 +64,10 @@ fn an_imported_module_gets_wasi_host_words_and_other_modules() {
 	// one instance per file: the program's counter.wasm is greeter's
 	is!(&format!("import tests/fixtures/wasm/counter.wasm; {GREETER}count_up(1); count_twice(1)"), 3);
 }
+
+#[test]
+fn a_qualified_global_is_assigned_in_its_module() {
+	is!(&with_module("fourty_two.level = 5; level"), 5);
+	is!(&with_module("fourty_two.level += 2; fourty_two.level * 10"), 30);
+	fails_with(&with_module("fourty_two.ft = 3"), "fourty_two.ft is an immutable global of an imported module");
+}

@@ -14,7 +14,7 @@ twice(ft) + half(5.0)                   // 86.5
   convert arguments and results like C calls (an i32 result is an Int, f32/f64 a Float). Other exports (references,
   v128, memories, tables) are not callable from warp yet.
 - An exported global reads as its value: `ft` becomes the call `ft()` (wasm_modules::rewrite_uses), linked to a getter.
-  P140: assigning a mutable global (`level = 5`, `level += 2`) sets it in the module (the setter import `set level`);
+  P140: assigning a mutable global (`level = 5`, `level += 2`, qualified `fourty_two.level = 5`) sets it in the module (the setter import `set level`);
   an immutable one is the loud error of P130's `pi = 4`: "ft is an immutable global of an imported module; fix: another name".
 - An export qualified by the module's file stem, `fourty_two.twice(21)`, `fourty_two.ft`, is the same import under the
   key `fourty_two.twice` (wasm_modules::rewrite_uses): it reaches an export named like a warp builtin,
@@ -32,6 +32,6 @@ twice(ft) + half(5.0)                   // 86.5
   (fetched from the served repository) once per run at the first call, its own imports linked by `programImports`; a
   global reads through its getter, `set g` sets it. WAT text needs the native build, so each fixture .wat has its
   binary .wasm next to it (found first; rebuild with the `wasm-tools parse` line at the top of the .wat).
-- Not yet: `m.g = v` qualified assignment, names from the module's name
+- Not yet: names from the module's name
   section (parameter names for named arguments). tests/wasm/test_wasm.rs test_import_wasm pins P139 (P144).
 - WebAssembly components (`use wasm "lib.wasm" as lib`, `lib.f(x)`) are the other road: notes/stdlib_connectors.md.
