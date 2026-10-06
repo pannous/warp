@@ -1,0 +1,23 @@
+<!-- Probe (card browser-test): Chrome holds ~124 live Wasm memories per page, all its Workers together; an isolate that
+runs out collects only the instances it dropped itself. The page drops 120 instances, then a Worker tries 20: it fails
+after a few ("Out of memory: Cannot allocate Wasm memory for new instance"), while the page itself instantiates again at
+once, its failed allocation collecting its own dead instances first (what host.js finishedTask relies on for a task its
+Worker could not start). Serve over http (a blob Worker needs an origin), e.g. python3 -m http.server -d probes, and
+read the page text with agent-browser get text body. -->
+<title>wasm memory limit</title>
+<body>running</body>
+<script>
+const bytes = [0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 0, 1]; // (module (memory 1)), no maximum, like warp's programs
+const module = new WebAssembly.Module(new Uint8Array(bytes));
+const DROPPED = 120, WANTED = 20;
+for (let i = 0; i < DROPPED; i++) new WebAssembly.Instance(module);
+const code = `const module = new WebAssembly.Module(new Uint8Array([${bytes}])); const live = [];
+	try { while (live.length < ${WANTED}) live.push(new WebAssembly.Instance(module)); postMessage("worker held ${WANTED}"); }
+	catch (failure) { postMessage("worker failed after " + live.length); }`;
+const worker = new Worker(URL.createObjectURL(new Blob([code])));
+worker.onmessage = ({ data }) => {
+	const live = [];
+	try { while (live.length < WANTED) live.push(new WebAssembly.Instance(module)); } catch (failure) {}
+	document.body.textContent = `${data}; the page then held ${live.length}`;
+};
+</script>
