@@ -299,6 +299,41 @@ impl WasmGcEmitter {
 		self.exports.export(name, ExportKind::Func, index);
 	}
 
+	/// `closure_call_n(h, a1…an)` where the variable h only ever holds closures of one target: that target's entry called
+	/// directly with h's captured values, no closure or arity test and no call_ref (what closure_call_n does)
+	pub(super) fn emit_direct_closure_call(&mut self, func: &mut Function, helper: &UserFunctionDef, args: &[Node]) -> bool {
+		let Some(arity) = closure_call_arity(&helper.name) else { return false };
+		let Some((callee, values)) = args.split_first() else { return false };
+		let Some((_, entry, _, _)) = self.single_closure_target(callee, arity) else { return false };
+		let closure = self.closure_type();
+		self.emit_node_instructions(func, callee);
+		func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
+		func.instruction(&I::RefCastNonNull(HeapType::Concrete(closure)));
+		func.instruction(&I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD });
+		for (value, param) in values.iter().zip(&helper.params[1..]) {
+			self.emit_value_of_kind(func, value, param_kind(param));
+		}
+		func.instruction(&I::Call(entry));
+		if !self.typed_entry(arity) {
+			func.instruction(&I::RefAsNonNull);
+			self.emit_node_as_kind(func, helper.return_kind);
+		}
+		true
+	}
+
+	/// The entry a closure variable always calls: one target of that arity, and no parameter of that name anywhere
+	/// (closure_variable_targets joins the assignments to a name across all bodies, parameters are not among them)
+	fn single_closure_target(&self, callee: &Node, arity: usize) -> Option<(String, u32, usize, usize)> {
+		let Node::Symbol(variable) = callee.drop_meta() else { return None };
+		let targets = self.ctx.closure_variable_targets.get(variable)?;
+		let [target] = targets.iter().collect::<Vec<_>>()[..] else { return None };
+		let is_parameter = self.ctx.user_functions.values().any(|function| function.params.iter().any(|param| param.name == *variable));
+		if is_parameter {
+			return None;
+		}
+		self.closures.entry_functions.iter().find(|(name, _, _, entry_arity)| name == target && *entry_arity == arity).cloned()
+	}
+
 	/// The runtime error `error` unless the i32 on the stack is true
 	fn emit_fail_unless(&mut self, func: &mut Function, error: &'static str) {
 		func.instruction(&I::I32Eqz);

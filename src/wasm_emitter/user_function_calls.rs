@@ -408,6 +408,9 @@ impl WasmGcEmitter {
 			return;
 		};
 		self.refresh_enclosing_captures(func);
+		if self.emit_direct_closure_call(func, user_fn, args) {
+			return;
+		}
 
 		if args.len() > user_fn.params.len() {
 			let count = |n: usize| if n == 1 { "1 argument".to_string() } else { format!("{n} arguments") };
