@@ -172,3 +172,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - url-ends-at-space: `fetch url | strip` read as `fetch (url or strip)`. Now `x | f` is f(x) when f names a function
   (D6; pipes.rs, the parser marks the word after a single `|`), a braceless call pipes its result
   (`square 2 | root`), `|` between values stays or (its `or` hint only then).
+
+## 2026-10-06 fix-todo-comments
+- wasp_parser "todo edge case: leading plus": `+5`, `+x`, `3 + +2`, `[+1 -2]` gave "Unexpected character '+'"; a `+`
+  glued to its operand is now the unary plus, the operand itself (a spaced `+` stays the operator word).
