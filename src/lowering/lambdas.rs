@@ -68,13 +68,16 @@ const ITERATIONS: [Iteration; 9] = [
 pub(crate) struct Lambda {
 	pub(crate) params: Vec<String>,
 	pub(crate) body: Node,
-	/// The parameters as written when one of them declares a type (`(x:float)=>…`): the definition keeps them
-	pub(crate) typed: Vec<Node>,
+	/// The parameters as written when one of them declares a type or a default (`(x:float, n = 2)=>…`): the definition
+	/// keeps them
+	pub(crate) written: Vec<Node>,
+	/// TypeScript's result type `(a: number): number => …`
+	pub(crate) result_type: Option<Node>,
 }
 
 impl Lambda {
 	fn new(params: Vec<String>, body: Node) -> Self {
-		Lambda { params, body, typed: vec![] }
+		Lambda { params, body, written: vec![], result_type: None }
 	}
 }
 
@@ -193,7 +196,8 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 			.iter()
 			.map(|item| match item.drop_meta() {
 				Node::Symbol(name) => Some(name.clone()),
-				Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_)) => Some(name.name()), // `x:float`
+				// `x:float`, a default `n = 2`
+				Node::Key(name, Op::Colon | Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)) => Some(name.name()),
 				_ => None,
 			})
 			.collect(),
@@ -204,12 +208,16 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 /// `x=>body`, `(x y)->body` and the same in a group `(x=>body)` or a block
 pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 	match node.drop_meta() {
-		Node::Key(left, Op::Arrow | Op::FatArrow, body) => {
+		Node::Key(head, Op::Arrow | Op::FatArrow, body) => {
+			let (left, result_type) = match head.drop_meta() {
+				Node::Key(parameters, Op::Colon, result) if matches!(parameters.drop_meta(), Node::List(_, Bracket::Round, _)) => (parameters.as_ref(), Some(result.as_ref().clone())),
+				_ => (head.as_ref(), None),
+			};
 			let params = parameter_names(left)?;
 			let body = subtract_kebab_parameters(body.as_ref().clone(), &params);
 			let written: Vec<Node> = match left.drop_meta() { Node::List(items, _, _) => items.clone(), other => vec![other.clone()] };
-			let typed = if written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon, _))) { written } else { vec![] };
-			Some(Lambda { params, body, typed })
+			let declares = written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon | Op::Assign, _)));
+			Some(Lambda { params, body, written: if declares { written } else { vec![] }, result_type })
 		}
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => arrow_lambda(&items[0]),
 		// Kotlin `{ x -> x*2 }`, Ruby `{ |x| x*2 }`, Swift `{ x in x*2 }` and `{ $0 * 2 }`
@@ -276,9 +284,17 @@ pub fn lambda_definition(name: &str, function: &Node) -> Option<Node> {
 }
 
 fn definition(name: &str, lambda: Lambda) -> Node {
-	let parameters = if lambda.typed.is_empty() { lambda.params.into_iter().map(Node::Symbol).collect() } else { lambda.typed };
+	let parameters = if lambda.written.is_empty() { lambda.params.into_iter().map(Node::Symbol).collect() } else { lambda.written };
 	let head = Node::List([vec![Node::Symbol(name.to_string())], parameters].concat(), Bracket::Round, Separator::None);
-	Node::Key(Box::new(head), Op::Define, Box::new(lambda.body))
+	// a result type converts the body, as `f(a:number):number := …` is lowered before this pass runs
+	let body = match lambda.result_type {
+		Some(result_type) => {
+			let grouped = Node::List(vec![lambda.body], Bracket::Round, Separator::None);
+			Node::Key(Box::new(grouped), Op::As, Box::new(result_type))
+		}
+		None => lambda.body,
+	};
+	Node::Key(Box::new(head), Op::Define, Box::new(body))
 }
 
 /// Python's `sorted(xs, key=x => -x)`: in a call a function given as `name = …` is the named argument `key: x => -x`
