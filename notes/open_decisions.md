@@ -58,6 +58,14 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   Correction (user, same day): test_wasm's test_dom_property did assert ($canvas.width == 300); it moves into
   web/test_web.rs, replacing that file's empty namesake, still ignored for the browser host (warp-f6, branch
   p96-obsolete-ignored).
+- P102 (card g-1KS4) `warp build hello.wasp` makes the native executable by default; on macOS/Linux it is named
+  `hello` (no extension), on Windows hello.exe; `warp compile` makes the executable too (user chose this over the
+  recommended "compile stays .wasm"); the .wasm only with `--wasm`; `--exe` still accepted. Asked by warp-f6 (branch
+  build-exe-default).
+- P103 (replaces P102's command words) user: "we don't need the build and compile flags at all. Just giving it a file
+  will compile it." `warp hello.wasp` compiles once, runs the program right away (output as before) and leaves the
+  executable `hello` beside it (hello.exe on Windows); `build`/`compile` stay accepted as synonyms, not in the help.
+  Assumed (undoable): `--wasm` and `--aot` stay for the module only. warp-f6, branch build-exe-default.
 - P97 (after P12) gc_struct!/wasm_struct!/wasm_object! stay as thin sugar on GcObject; only the unused gc_traits
   behind them go; no test edits. Asked by warp-40 (code-quality).
 - P98 commented-out code blocks of 3+ lines and comments restating the next line are deleted from src/, one commit.
