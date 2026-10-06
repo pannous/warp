@@ -14,7 +14,7 @@ def f(x): return x * 2; list(map(f, [1, 2, 3])) ||| [2 4 6]
 square = lambda x: x ** 2; square(5) ||| 25
 const inc = x => x + 1; [1,2,3].map(inc) ||| [2 3 4]
 fn add(a: i32, b: i32) -> i32 { a + b }; add(2, 3) ||| 5
-let double x = x * 2 in double 4 ||| 8
+let twice x = x * 2 in twice 4 ||| 8
 def greet(name="World"): return "Hello " + name; greet() ||| Hello World
 greet = (name = "World") => `Hello ${name}`; greet("Bob") ||| Hello Bob
 def f(n){ return n if n < 2 else f(n-1) + f(n-2) }; f(10) ||| 55
