@@ -33,6 +33,8 @@ const RESULT_SUFFIX: &str = "·result";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
 /// The keywords of a field: Swift's `var count = 0`, `let`, Kotlin's `val`
 const FIELD_KEYWORDS: [&str; 3] = ["var", "let", "val"];
+/// Member modifiers that may mean something in wasp, so they get no note that wasp needs them not
+const SILENT_MODIFIERS: [&str; 1] = ["async"];
 /// The constructor names of other languages: JavaScript, Python, Swift
 const CONSTRUCTOR_NAMES: [&str; 3] = ["constructor", "__init__", "init"];
 /// Rust's block of methods of a type, `impl Point {…}`
@@ -178,7 +180,10 @@ fn operator_calls(node: Node) -> Node {
 	let mut methods: Vec<(String, Op, String)> = vec![];
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
 		for (method, _, _) in class_items(body).iter().filter_map(method_parts) {
-			if let Some((op, _)) = OPERATOR_METHODS.iter().find(|(_, names)| names.contains(&method.as_str())) {
+			if let Some((op, names)) = OPERATOR_METHODS.iter().find(|(_, names)| names.contains(&method.as_str())) {
+				if method != names[0] {
+					crate::diagnostic::note_alias(&method, names[0]);
+				}
 				methods.push((name.drop_meta().name(), op.clone(), method));
 			}
 		}
@@ -576,10 +581,25 @@ fn without_modifiers(item: Node) -> Node {
 	let Node::List(words, bracket, separator) = item.drop_meta().clone() else { return item };
 	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::wasp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || FIELD_KEYWORDS.contains(&word.as_str()));
 	let kept: Vec<Node> = words.iter().skip_while(|word| is_modifier(word)).cloned().collect();
+	if let Some(kept_word) = kept.first().map(leading_name).filter(|_| kept.len() < words.len()) {
+		let modifiers: Vec<String> = words[..words.len() - kept.len()].iter().map(|word| word.drop_meta().name()).collect();
+		if !modifiers.iter().any(|word| SILENT_MODIFIERS.contains(&word.as_str())) {
+			crate::diagnostic::note_alias(&format!("{} {kept_word}", modifiers.join(" ")), &kept_word);
+		}
+	}
 	match kept.len() {
 		length if length == words.len() => item,
 		1 => kept.into_iter().next().expect("one"),
 		_ => Node::List(kept, bracket, separator),
+	}
+}
+
+/// The name a member starts with: `count` of `count = 0`, `up` of `up() {…}`
+pub(crate) fn leading_name(member: &Node) -> String {
+	match member.drop_meta() {
+		Node::Key(left, _, _) => leading_name(left),
+		Node::List(items, _, _) => items.first().map(leading_name).unwrap_or_default(),
+		other => other.name(),
 	}
 }
 
@@ -757,6 +777,7 @@ fn as_member(definition: Node) -> Node {
 	};
 	match CONSTRUCTOR_NAMES.contains(&name.drop_meta().name().as_str()) {
 		true => {
+			crate::diagnostic::note_alias(&name.drop_meta().name(), VALUE_WORD);
 			let word = Node::List([vec![Node::Symbol(VALUE_WORD.to_string())], parameters].concat(), Bracket::Round, separator);
 			Node::Key(Box::new(word), Op::None, Box::new(curly(*body)))
 		}

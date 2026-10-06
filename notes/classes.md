@@ -221,5 +221,8 @@ instance whose class defines `plus` (or `add`, Python `__add__`, Kotlin `operato
 instances only (constructions, annotated or constructed variables, loop variables, chains `a + b + c`); an unknown
 operand keeps the built-in operator (card class-method: dispatch at run time). Open: a method named by its glyph
 `+(o) := …` (the parser reads `+(o)` as unary plus), C++/C# `operator +`.
-Foreign spellings (classes-19 to -23) are accepted silently today; per the alias rule (notes/agents/common.md) they
-should give a got-it note naming the wasp word (normalize::advise): next batch.
+Foreign spellings are aliases (classes-24, alias rule in notes/agents/common.md): they work and give a got-it note
+with an "I meant: <wasp word>" fix, `diagnostic::note_alias(written, wasp_word)` (educate_once, topic
+`alias-<foreign word>`): `constructor`/`__init__`/`init` → `value`, `__add__`/`add` → `plus` (every non-first name in
+OPERATOR_METHODS), `data class`/`open class`… → `class`, `mutating func` → `func`, `val x`/`var count` → the field
+(`async` stays silent: it may mean something in wasp). Tests: tests/types/test_class_aliases.rs.
