@@ -16,3 +16,5 @@ date_of(ms) := {
 // ISO weekday: Monday 1 … Sunday 7
 weekday(ms) := (day_number(ms) + 3) % 7 + 1
 today() := date_of(clock())
+add_days(ms, n) := ms + n * 86400000
+days_between(from, to) := day_number(to) - day_number(from)
