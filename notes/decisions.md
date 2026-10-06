@@ -165,6 +165,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   when the timeout happens; a timeout itself stays silent.
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P167 (classes, warp-e0) Go's positional literal `Point{1, 2}` builds `Point(1, 2)` when Point is a known class,
+  with a got-it note "wasp writes Point(1, 2)"; for an unknown name it stays tagged data.
 - P165 Kotlin-style soft keywords (user's proposal: with so many synonyms in so many situations, allow overwriting
   keywords except the main ones). Hard keywords, never redefinable: control flow (if, then, else, while, for, in,
   return, break, continue), declarations (def/fun/fn, class, var/let/const/val, global), literal values (true,
@@ -184,6 +186,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   `send "file system full"`; only `send v to "chat"` / `broadcast v on "chat"` go to a channel.
 - P164 (functions, warp-64, wiki/argument.md) in a parameter shape `phone number` is the field phone of type number
   (a type word after a name is its type everywhere); the wiki example calling it with a text changes to `phone text`.
+  User, adding: `phone-number:text` works too, a hyphenated field name with a `:` type. Assumed (undoable): in a
+  declaration context (parameter shape, class field, key before `:`) `a-b` is one name; in an expression it stays
+  subtraction, and reading such a field uses `p.phone-number` / `p["phone-number"]`.
 - P162 (classes, warp-e0) `init(…){…}` in a class is always the constructor (user chose this over the recommended
   "unless called explicitly"). User, correcting: `init` is THE constructor name, not `value`. `value`, JS
   `constructor` and Python `__init__` still work as aliases with a got-it note "wasp says init" and an "I meant:

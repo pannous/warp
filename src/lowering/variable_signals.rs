@@ -89,10 +89,7 @@ impl Listener {
 	fn check(&self) -> Node {
 		let Some(condition) = &self.condition else { return block(vec![self.body.clone()]) };
 		if let Some((held, was)) = &self.held {
-			let not_before = Node::Key(Box::new(Node::Empty), Op::Not, Box::new(Node::Symbol(was.clone())));
-			let became_true = Node::Key(Box::new(Node::Symbol(held.clone())), Op::And, Box::new(not_before));
-			let parts = vec![assign(was, Node::Symbol(held.clone())), assign(held, condition.clone()), if_then(became_true, block(vec![self.body.clone()]))];
-			return Node::List(parts, Bracket::Round, Separator::Semicolon);
+			return edge_check(held, was, condition.clone(), self.body.clone());
 		}
 		match &self.fired {
 			None => if_then(condition.clone(), block(vec![self.body.clone()])),
@@ -103,6 +100,15 @@ impl Listener {
 			}
 		}
 	}
+}
+
+/// `whenever cond {body}` runs the body when cond becomes true (P156): `was = held; held = cond; if held and not was
+/// {body}`, the two flags remembered between the checks
+pub(crate) fn edge_check(held: &str, was: &str, condition: Node, body: Node) -> Node {
+	let not_before = Node::Key(Box::new(Node::Empty), Op::Not, Box::new(Node::Symbol(was.to_string())));
+	let became_true = Node::Key(Box::new(Node::Symbol(held.to_string())), Op::And, Box::new(not_before));
+	let parts = vec![assign(was, Node::Symbol(held.to_string())), assign(held, condition), if_then(became_true, block(vec![body]))];
+	Node::List(parts, Bracket::Round, Separator::Semicolon)
 }
 
 pub fn lower(node: Node) -> Node {

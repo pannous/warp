@@ -59,5 +59,5 @@ fn a_send_is_a_statement_of_no_value() {
 
 #[test]
 fn raise_stays_inside_the_program() {
-	crate::is!("n = 1; on stop the machine { n = 2 }; raise stop the machine; n", 2);
+	crate::is!("n = 1; on stop the machine { n = 2 }; emit stop the machine; n", 2);
 }

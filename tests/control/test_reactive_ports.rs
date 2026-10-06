@@ -20,10 +20,10 @@ fn a_listener_watches_one_field() {
 
 #[test]
 fn rxjs_node_qt_events() {
-	is!("total = 0; on price {total += event.value}; raise price{value: 5}; raise price{value: 7}; total", 12);
-	is!("evens = 0; on number {if event.n % 2 == 0 {evens += 1}}; for i in 1 to 6 {raise number{n: i}}; evens", 3);
-	is!("sum = 0; on add {sum += event.a + event.b}; raise add{a: 1, b: 2}; sum", 3);
-	is!("n = 0; on pressed {raise clicked}; on clicked {n += 1}; raise pressed; n", 1);
+	is!("total = 0; on price {total += event.value}; emit price{value: 5}; emit price{value: 7}; total", 12);
+	is!("evens = 0; on number {if event.n % 2 == 0 {evens += 1}}; for i in 1 to 6 {emit number{n: i}}; evens", 3);
+	is!("sum = 0; on add {sum += event.a + event.b}; emit add{a: 1, b: 2}; sum", 3);
+	is!("n = 0; on pressed {emit clicked}; on clicked {n += 1}; emit pressed; n", 1);
 	is!("seen = 0; def show(v){ global seen; seen = v }; x = 0; on set x : show(value); x = 9; seen", 9);
 }
 
@@ -38,10 +38,10 @@ fn a_named_listener_is_removed_and_shares_variables() {
 // Node's emitter.once, DOM addEventListener(…, {once: true}): `once alarm {…}` runs at the first raise only
 #[test]
 fn a_once_handler_runs_at_the_first_raise() {
-	is!("n = 0; once alarm {n += 1}; raise alarm; raise alarm; n", 1);
-	is!("n = 0; once alarm {n += 1}; on alarm {n += 10}; raise alarm; raise alarm; n", 21);
-	is!("n = 0; def f() { raise ping }; once ping {n += 1}; f(); f(); n", 1);
-	is!("level = 0; once alarm {level = event.level}; raise alarm{level: 3}; raise alarm{level: 5}; level", 3);
+	is!("n = 0; once alarm {n += 1}; emit alarm; emit alarm; n", 1);
+	is!("n = 0; once alarm {n += 1}; on alarm {n += 10}; emit alarm; emit alarm; n", 21);
+	is!("n = 0; def f() { emit ping }; once ping {n += 1}; f(); f(); n", 1);
+	is!("level = 0; once alarm {level = event.level}; emit alarm{level: 3}; emit alarm{level: 5}; level", 3);
 }
 
 // Vue's watch(x, (value, old) => …), Qt's valueChanged with the previous value: `old` in `on change x` is x before
@@ -75,31 +75,31 @@ fn old_in_set_listeners_and_its_aliases() {
 // Node's emitter.off, DOM removeEventListener, C# -=, listenerCount: a named event handler can be removed (P128)
 #[test]
 fn a_named_event_handler_is_removed_and_counted() {
-	is!("n = 0; h = on alarm {n += 1}; raise alarm; remove h from listeners of alarm; raise alarm; n", 1);
-	is!("n = 0; h = on alarm {n += 1}; raise alarm; listeners of alarm -= h; raise alarm; n", 1);
-	is!("n = 0; h = on stop the machine {n += 1}; raise stop the machine; remove h from listeners of stop the machine; raise stop the machine; n", 1);
+	is!("n = 0; h = on alarm {n += 1}; emit alarm; remove h from listeners of alarm; emit alarm; n", 1);
+	is!("n = 0; h = on alarm {n += 1}; emit alarm; listeners of alarm -= h; emit alarm; n", 1);
+	is!("n = 0; h = on stop the machine {n += 1}; emit stop the machine; remove h from listeners of stop the machine; emit stop the machine; n", 1);
 	is!("on tick {1}; on tick {2}; count listeners of tick", 2);
 	is!("on tick {1}; h = on tick {2}; remove h from listeners of tick; count listeners of tick", 1);
-	is!("n = 0; h = on ready {n += 1}; remove h from listeners of ready; raise ready; n", 0);
+	is!("n = 0; h = on ready {n += 1}; remove h from listeners of ready; emit ready; n", 0);
 	// EventEmitter removeAllListeners, Qt disconnect(): every handler stops, the raise reaches none
-	is!("n = 0; on alarm {n += 1}; on alarm {n += 10}; raise alarm; clear listeners of alarm; raise alarm; n", 11);
+	is!("n = 0; on alarm {n += 1}; on alarm {n += 10}; emit alarm; clear listeners of alarm; emit alarm; n", 11);
 	is!("on alarm {1}; on alarm {2}; clear listeners of alarm; count listeners of alarm", 0);
 	// RxJS take(2): the handler removes itself
-	is!("taken = 0; h = on tick {taken += 1; if taken == 2 {remove h from listeners of tick}}; for i in 1 to 5 {raise tick}; taken", 2);
+	is!("taken = 0; h = on tick {taken += 1; if taken == 2 {remove h from listeners of tick}}; for i in 1 to 5 {emit tick}; taken", 2);
 }
 
 // EventEmitter's emit("item", 1), RxJS subject.next(v): a value after the event's words is its data
 #[test]
 fn a_raise_carries_a_plain_value() {
-	is!("xs = []; on item {xs = xs + [event]}; raise item 1; raise item 2; count xs", 2);
-	is!("n = 0; on item {n += event}; raise item 5; raise item 6; n", 11);
-	is!("msg = \"\"; on said {msg = event}; raise said \"hi\"; msg", "hi");
+	is!("xs = []; on item {xs = xs + [event]}; emit item 1; emit item 2; count xs", 2);
+	is!("n = 0; on item {n += event}; emit item 5; emit item 6; n", 11);
+	is!("msg = \"\"; on said {msg = event}; emit said \"hi\"; msg", "hi");
 }
 
 // EventEmitter.on in a loop: a handler inside a block subscribes each time the block runs, with that pass's values
 #[test]
 fn a_handler_in_a_block_subscribes_each_pass() {
-	is!("hits = 0; for i in 1 to 3 { on tick2 {hits += 1} }; raise tick2; hits", 3);
-	is!("log = 0; for i in 1 to 3 { on tick {log = log*10 + i} }; raise tick; log", 123);
-	is!("n = 0; on alarm {n += 100}; if 1 { on alarm {n += event} }; raise alarm 5; n", 105);
+	is!("hits = 0; for i in 1 to 3 { on tick2 {hits += 1} }; emit tick2; hits", 3);
+	is!("log = 0; for i in 1 to 3 { on tick {log = log*10 + i} }; emit tick; log", 123);
+	is!("n = 0; on alarm {n += 100}; if 1 { on alarm {n += event} }; emit alarm 5; n", 105);
 }

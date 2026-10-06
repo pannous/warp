@@ -44,18 +44,20 @@ JSON, wasp text). A state signal is a **variable**: nothing new to write, `x = 3
 2. **`:=` is the derived signal.** `total := a + b` already recomputes at each use (P71); listeners on `total` watch
    `a` and `b` (phase 1, done). Glitch-free by construction: a derived value has no cache, so it can never be stale.
    A cache with a dirty flag (memo) is an optimization the compiler may add later when the body is pure (effects.rs).
-3. **Listeners are the effects**: `whenever cond {…}` (each time it holds after a change), `once cond {…}`,
+3. **Listeners are the effects**: `whenever cond {…}` (each time the condition becomes true, P156: flags `whenever_held_N` /
+   `whenever_was_N`, `edge_check`; a cell `signal·held·N` in a subscription), `once cond {…}`,
    `on set x {…}` (each write), `on change x {…}` (each write that changed the value, phase 1, done), `after f`/`before f`.
    Inside: `value` (alias `signal`, `event`) is the new value.
-4. **Events**: `raise name{data}` sends the event, `on name {…}` receives it (`event` is the payload node). With no
-   `on name` handler in the program, `raise` stays today's catchable exception (P110). A write of x is the event
+4. **Events**: `emit name{data}` (or `send name{data}` without `to`) sends the event, `on name {…}` receives it
+   (`event` is the payload node); an emit nobody handles does nothing. `raise` and `throw` are errors only (P163,
+   replacing P110); fire, trigger and signal are aliases of emit with a note. A write of x is the event
    `set x`, so `on set x` is one case of the general rule. `once name {…}` runs at the first raise only (Node's
    `emitter.once`; a flag `once_fired_N`, event_signals.rs). `on set p.age` watches one field: a write of it or of p.
    `old` in `on change x {…}` and `on set x {…}` is x before the write (Vue's watch, P148); `previous`, `was` and
    `before` are its aliases with a note naming `old`; a program variable of one of these names keeps its meaning.
    A named handler `h = on alarm {…}` runs while its flag `h_listening` holds: `remove h from listeners of alarm`
    (or `listeners of alarm -= h`, also from inside its own body) clears it, `clear listeners of alarm` clears every
-   handler's, `count listeners of alarm` counts the listening ones. `raise item 1` carries the value 1 as `event`.
+   handler's, `count listeners of alarm` counts the listening ones. `emit item 1` carries the value 1 as `event`.
    `listeners of alarm` is the list of its handlers still listening, each by its place among alarm's handlers in
    declaration order (`[1, 3]` once the second is removed); a named handler `h` is its place. Any handler is removed
    by its place, also an unnamed one: `remove 2 from listeners of alarm`, `remove (listeners of alarm)#1 from …`,
@@ -81,7 +83,7 @@ whenever total > 10 { print "big order: " total }
 on change total { print "total is now " value }
 count = 5                            // prints both
 
-raise stop the machine{reason:"human nearby"}
+emit stop the machine{reason:"human nearby"}
 on stop the machine { print event.reason }
 
 price, count = 4, 1                  // one notification for both writes (P112)
@@ -122,8 +124,8 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
 - **Static (phases 1-4)**: no runtime objects. Checks are inlined after writes (today) or, once there are many write
   sites, a generated function `x·changed()` per watched variable that runs its listeners, called after each write.
   `once` gets a flag global, `on change` a `change_last_N` variable with the last seen value.
-- **Events (phase 2)**: `raise e{…}` with handlers known at compile time is a direct call of a generated `on·e(event)`
-  that runs the handlers in order. A raise with no handler stays today's error (exception), caught by `try`.
+- **Events (phase 2)**: `emit e{…}` with handlers known at compile time is a direct call of a generated `on·e(event)`
+  that runs the handlers in order; an emit with no handler is nothing (P163).
   Done: lowering/event_signals.rs. Handlers are program-wide (a raise before the `on` line reaches it too, as a
   function defined later is callable); the function declares `global` the main-level variables the bodies mention.
 - **Escaping signals (phase 5, done: lowering/signal_values.rs)**: a $Signal is a cell (wasm_emitter/cells.rs: a
@@ -209,8 +211,11 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
 ## Decisions (user, 2026-10-06, via the Interviewer)
 
 - P109 implicit: any variable can be watched; the compiler adds checks only for watched ones. No `signal` keyword.
-- P110 `raise X` goes to the `on X` handlers first; with no handler it stays today's catchable exception.
+- P110 (replaced by P163) `raise X` went to the `on X` handlers first. P163: `emit X` (and `send X` without `to`)
+  sends events, `raise` / `throw` are errors only; an unhandled emit does nothing.
 - P111 writes through `global x` inside called functions run the listeners (phase 3). Revises P38: tests pinning
   "never fires" may be changed, each in one commit naming P111.
+- P156 `whenever` is edge-triggered: it runs each time its condition becomes true, not at every write while it holds
+  (wiki signal.md shows `on change x { if … }`, `on set x { if … }` and a timer for the other behaviours).
 - P112 no batching block (the user chose this over `together { … }`); only a multi-assignment `a, b = 1, 2`
   notifies once.

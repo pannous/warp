@@ -760,6 +760,11 @@ impl WaspParser {
 			}
 			name = name.with_attribute(WITH_KEYWORD, Node::List(mixins, Bracket::None, Separator::Space));
 		}
+		// Go's `type Point struct {…}`
+		if self.matches_keyword(GO_STRUCT_WORD) {
+			self.advance_by(GO_STRUCT_WORD.len());
+			self.skip_whitespace();
+		}
 		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
 		// Python's `class Point:` and the lines indented below it
 		let body = match (python_body, body) {

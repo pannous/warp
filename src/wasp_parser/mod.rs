@@ -71,6 +71,8 @@ const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final
 const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
+/// Go's `type Point struct {…}` declares the class Point
+const GO_STRUCT_WORD: &str = "struct";
 /// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
 const OPERATOR_WORD: &str = "operator";
 /// Words before a member of a class body that change nothing in wasp: Swift's `mutating func`, visibility, `override`
