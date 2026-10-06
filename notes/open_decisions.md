@@ -155,6 +155,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   can't be renamed, so (Interviewer's choice, as the user delegated) `import m` works, `m.double(21)` always works
   (qualified calls get built), and a bare `double(21)` is a loud error "double is ambiguous: m.double(21) for the
   export, 21 as float for the cast". No warning-and-builtin-wins.
+  P144 (warp-25) the old test_import_wasm (tests/wasm/test_wasm.rs) is edited to the P139 values (import/require →
+  ø, include → 42, fixture from tests/fixtures/wasm) and un-ignored, in its own commit naming P139.
 - P142 (scope of P141, asked by warp-e4) the definition error applies only where the builtin would win, i.e. the
   definition could never take effect (casts like `double`, operators, type names). Library words (`add`, `map`,
   `count`) may be redefined and the user's version wins; class methods are always allowed (called as `x.add`). User:
