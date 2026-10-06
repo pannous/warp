@@ -165,6 +165,15 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   when the timeout happens; a timeout itself stays silent.
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
+- P162 (classes, warp-e0) `init(…){…}` in a class is always the constructor (user chose this over the recommended
+  "unless called explicitly"). User, correcting: `init` is THE constructor name, not `value`. `value`, JS
+  `constructor` and Python `__init__` still work as aliases with a got-it note "wasp says init" and an "I meant:
+  init" fix; docs, hints and examples use `init`. User, extending: all common constructor names are aliases
+  of `init` with that note: `value` (wiki 2023), `constructor` (JS/TS), `__init__` (Python), `initialize` (Ruby),
+  `__construct` (PHP), `New` (VB.NET), `Create` (Delphi), Rust's `new` inside a class/impl, and a method named like
+  its class (C++/Java/C# `Point(x, y){…}` inside `class Point`). At the call site `new Point(1, 2)`
+  builds the same value as `Point(1, 2)`, with a got-it note that `new` is superfluous and a fix removing it; `init`
+  stays the definition name (it initializes an existing instance; Rust's `new` is a factory).
 - P161 (functions, warp-41; the user told the worker directly) no Swift-style argument labels: "we don't do this
   here, I don't like that redundancy". Ported labels (`func greet(person name: String)`, `_ x: Int`) compile like P157,
   with a got-it note "wasp names a parameter once"; docs and examples never use labels.
