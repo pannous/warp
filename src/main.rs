@@ -11,8 +11,11 @@ use extensions::numbers::Number;
 const DEFAULT_COMPILED_NAME: &str = "out.wasm";
 /// `warp compile --aot` also writes the machine code (wasmtime's .cwasm), which `warp <file>.cwasm` runs
 const AOT_FLAG: &str = "--aot";
-/// `warp build --exe`: a standalone executable, the warp-runtime stub with the program's machine code appended
+/// `warp build <file>`: a standalone executable, the warp-runtime stub with the program's machine code appended (g-1KS4,
+/// user: "must produce an executable without --exe"); `--exe` still says so, `--wasm` writes the module as `compile` does
+const BUILD_COMMAND: &str = "build";
 const EXE_FLAG: &str = "--exe";
+const WASM_FLAG: &str = "--wasm";
 const MACHINE_CODE_EXTENSION: &str = "cwasm";
 const STANDALONE_EXTENSION: &str = "exe";
 const RUNTIME_STUB_NAME: &str = "warp-runtime";
@@ -40,7 +43,7 @@ fn node_to_i32(node: &Node) -> i32 {
 
 #[cfg(not(test))]
 fn main() {
-    // an executable made by `warp build --exe` from warp itself runs the program it carries
+    // an executable made by `warp build` from warp itself runs the program it carries
     if let Some(exit_code) = warp_runtime::standalone::run_carried_program() {
         std::process::exit(exit_code);
     }
@@ -134,14 +137,10 @@ fn run_command(args: &[String]) {
     } else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
         // DONE: don't run, just compile and save binary
         let target = extract_after(&arg_string, " ");
-        let (standalone, target) = match target.strip_prefix(EXE_FLAG) {
-            Some(rest) => (true, rest.trim_start().to_string()),
-            None => (false, target),
-        };
-        let (ahead_of_time, target) = match target.strip_prefix(AOT_FLAG) {
-            Some(rest) => (true, rest.trim_start().to_string()),
-            None => (false, target),
-        };
+        let (exe_flag, target) = without_flag(target, EXE_FLAG);
+        let (wasm_flag, target) = without_flag(target, WASM_FLAG);
+        let standalone = exe_flag || (args[1] == BUILD_COMMAND && !wasm_flag);
+        let (ahead_of_time, target) = without_flag(target, AOT_FLAG);
         let code = source_of(&target);
         if standalone {
             write_standalone_executable(&code, &target);
@@ -272,11 +271,19 @@ fn write_machine_code(bytes: &[u8], wasm_path: &str) {
     }
 }
 
-/// `warp build --exe`: the program, printing its value, compiled to machine code and appended to a copy of the
+/// `warp build`: the program, printing its value, compiled to machine code and appended to a copy of the
 /// compiler-less `warp-runtime` stub (crates/warp-runtime, notes/aot.md); without a stub, to a copy of warp itself
+/// Whether `arguments` start with `flag`, and the arguments after it
+fn without_flag(arguments: String, flag: &str) -> (bool, String) {
+    match arguments.strip_prefix(flag) {
+        Some(rest) => (true, rest.trim_start().to_string()),
+        None => (false, arguments),
+    }
+}
+
 fn write_standalone_executable(code: &str, target: &str) {
     let fail = |message: String| -> ! {
-        eprintln!("warp build --exe: {message}");
+        eprintln!("warp build: {message}");
         std::process::exit(1);
     };
     let program = wasm_emitter::compile_printing_result(code).unwrap_or_else(|value| fail(format!("nothing to compile: {}", value.serialize())));
@@ -359,8 +366,8 @@ fn usage() {
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
     println!("  warp compile <file|code>  Compile to <file>.wasm (out.wasm for inline code) without running");
     println!("  warp compile --aot <file|code>  Also compile to machine code, <file>.cwasm, for this machine");
-    println!("  warp build --exe <file|code>    A standalone executable, <file>.exe, printing the program's value");
-    println!("  warp build --exe <file|code>    A standalone executable, <file>.exe, that prints the program's value");
+    println!("  warp build <file|code>    A standalone executable, <file>.exe, that prints the program's value");
+    println!("  warp build --wasm <file|code>   Only the module, <file>.wasm, as compile");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");
     println!("  warp version         Show version");

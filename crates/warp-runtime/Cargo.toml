@@ -1,5 +1,5 @@
 # Running compiled warp programs without the compiler (notes/aot.md): the engine settings and host words warp links
-# for its own runs, and the binary `warp-runtime`, the prebuilt stub `warp build --exe` appends a program's machine
+# for its own runs, and the binary `warp-runtime`, the prebuilt stub `warp build` appends a program's machine
 # code to. Built on its own (`cargo build --release -p warp-runtime`) it is wasmtime without Cranelift, about 1 MB.
 [package]
 name = "warp-runtime"

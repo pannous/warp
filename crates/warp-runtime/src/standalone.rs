@@ -20,7 +20,7 @@ const ALIGNMENT: usize = 16;
 pub const ENTRY_POINTS: [&str; 2] = ["main", "_start"];
 
 /// `runtime` (an executable, with or without a program) carrying `machine_code` instead. A Mach-O executable comes
-/// back unsigned: sign it (`codesign --sign -`, which `warp build --exe` runs), else macOS refuses to start it.
+/// back unsigned: sign it (`codesign --sign -`, which `warp build` runs), else macOS refuses to start it.
 pub fn with_machine_code(runtime: &[u8], machine_code: &[u8]) -> Vec<u8> {
 	let mut executable = without_machine_code(runtime);
 	executable.extend_from_slice(machine_code);
@@ -85,11 +85,11 @@ pub fn run_carried_program() -> Option<i32> {
 	})
 }
 
-/// Run machine code compiled with warp's settings (`warp build --exe`): its host words, libm and print are linked, its
-/// result is what it printed (build --exe makes the program print its value)
+/// Run machine code compiled with warp's settings (`warp build`): its host words, libm and print are linked, its
+/// result is what it printed (build makes the program print its value)
 pub fn run(machine_code: &[u8]) -> Result<()> {
 	let engine = Engine::new(&fueled_config())?;
-	// SAFETY: the machine code is warp's own output, appended to this executable by `warp build --exe`
+	// SAFETY: the machine code is warp's own output, appended to this executable by `warp build`
 	let module = unsafe { Module::deserialize(&engine, machine_code)? };
 	let mut linker = Linker::new(&engine);
 	crate::host_words::link_host_words(&mut linker)?;

@@ -202,7 +202,7 @@ pub fn compile(code: &str) -> Result<CompiledModule, Node> {
 	compile_program(code, |program| program)
 }
 
-/// compile for a standalone executable (`warp build --exe`): the program prints its value at the end, as `warp <file>`
+/// compile for a standalone executable (`warp build`): the program prints its value at the end, as `warp <file>`
 /// shows it, since nobody reads the result of an executable
 pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
 	compile_program(code, printing_result)
