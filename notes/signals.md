@@ -44,7 +44,8 @@ JSON, wasp text). A state signal is a **variable**: nothing new to write, `x = 3
 2. **`:=` is the derived signal.** `total := a + b` already recomputes at each use (P71); listeners on `total` watch
    `a` and `b` (phase 1, done). Glitch-free by construction: a derived value has no cache, so it can never be stale.
    A cache with a dirty flag (memo) is an optimization the compiler may add later when the body is pure (effects.rs).
-3. **Listeners are the effects**: `whenever cond {…}` (each time it holds after a change), `once cond {…}`,
+3. **Listeners are the effects**: `whenever cond {…}` (each time the condition becomes true, P156: flags `whenever_held_N` /
+   `whenever_was_N`, `edge_check`; a cell `signal·held·N` in a subscription), `once cond {…}`,
    `on set x {…}` (each write), `on change x {…}` (each write that changed the value, phase 1, done), `after f`/`before f`.
    Inside: `value` (alias `signal`, `event`) is the new value.
 4. **Events**: `raise name{data}` sends the event, `on name {…}` receives it (`event` is the payload node). With no
@@ -204,5 +205,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
 - P110 `raise X` goes to the `on X` handlers first; with no handler it stays today's catchable exception.
 - P111 writes through `global x` inside called functions run the listeners (phase 3). Revises P38: tests pinning
   "never fires" may be changed, each in one commit naming P111.
+- P156 `whenever` is edge-triggered: it runs each time its condition becomes true, not at every write while it holds
+  (wiki signal.md shows `on change x { if … }`, `on set x { if … }` and a timer for the other behaviours).
 - P112 no batching block (the user chose this over `together { … }`); only a multi-assignment `a, b = 1, 2`
   notifies once.

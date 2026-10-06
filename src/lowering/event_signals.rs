@@ -43,6 +43,8 @@ const FUNCTION_TEMPLATE: &str = "handler(event) := {}";
 const PARAMETERLESS_TEMPLATE: &str = "handler() := {}";
 const TEMPLATE_NAME: &str = "handler";
 const EVENT_WORD: &str = "event";
+/// The event as raised, kept while a handler that changes its `event` runs before the next one
+const RAISED_EVENT: &str = "raised_event";
 /// The events of the page that call their handlers from outside the program
 pub const PAGE_EVENTS: [&str; 2] = ["click", "key"];
 /// The output binding of a program with page events: its last line when that is a name, read anew after each handler
@@ -58,6 +60,12 @@ pub fn lower(program: Node) -> Node {
 	let statements = subscribed_in_blocks(statements, &raised);
 	// `clear listeners of alarm` stops every handler of alarm: each gets a flag as a named one has
 	let cleared: HashSet<String> = reflected_events(&program, CLEAR_WORD).into_iter().filter(|event| !variables.contains(event)).collect();
+	let kept = match without_unraised(&statements, &raised, &variables) {
+		Ok(kept) => kept,
+		Err(error) => return error,
+	};
+	let program = if kept.len() < statements.len() { Node::List(kept.clone(), bracket.clone(), separator.clone()) } else { program };
+	let statements = kept;
 	let mut flags: Vec<(String, Node)> = vec![];
 	let mut named: Vec<(String, String)> = vec![];
 	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
@@ -106,7 +114,7 @@ pub fn lower(program: Node) -> Node {
 	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
 	let lowered = statements.into_iter().enumerate().filter_map(|(index, statement)| match first_handler.get(&index) {
-		Some(name) => Some(function_with_globals(&handler_function_name(name), reads_event(&bodies[name]), &bodies[name], &main_variables)),
+		Some(name) => Some(function_with_globals(&handler_function_name(name), reads_event(&bodies[name]), &each_its_event(&bodies[name]), &main_variables)),
 		None if handler_lines.contains(&index) => None,
 		None => Some(statement),
 	});
@@ -115,6 +123,23 @@ pub fn lower(program: Node) -> Node {
 	let stays = !page_handlers.is_empty() || lowered.iter().any(defines_timer);
 	let lowered = if stays { with_output_binding(lowered, &main_variables) } else { lowered };
 	crate::declarations::with_node_wrappers(Node::List(lowered, bracket, separator), &page_handlers)
+}
+
+/// `on conect {…}` where nothing raises conect never runs (Node's emitter.on("conect") is silent): a warning, naming
+/// a raised event one letter away, and the statements without it (it ran its body once, as a block). Page and system
+/// events come from outside the program
+fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &HashSet<String>) -> Result<Vec<Node>, Node> {
+	// `once ready {…}` of a variable is a variable listener (variable_signals.rs)
+	let from_outside = |name: &str| PAGE_EVENTS.contains(&name) || SYSTEM_EVENTS.contains(&name) || variables.contains(name);
+	let unraised = |statement: &Node| named_handler(statement).map(|(_, (name, _, _))| name).filter(|name| !raised.contains(name) && !from_outside(name));
+	let warnings: Vec<crate::diagnostic::Diagnostic> = statements.iter().filter_map(|statement| unraised(statement).map(|name| {
+		let hint = crate::extensions::strings::near_miss(&name, raised.iter().cloned()).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
+		crate::diagnostic::Diagnostic::at(statement, format!("on {name}: nothing raises {name}, so this handler never runs{hint}"))
+	})).collect();
+	if !warnings.is_empty() {
+		crate::diagnostic::report(&warnings)?;
+	}
+	Ok(statements.iter().filter(|statement| unraised(statement).is_none()).cloned().collect())
 }
 
 /// The output binding of a program the page keeps running (page events, timers): its last line, when that is a name,
@@ -343,6 +368,32 @@ pub(crate) fn global_declarations(bodies: &[Node], main_variables: &HashSet<Stri
 	mentioned.sort();
 	mentioned.dedup();
 	mentioned.iter().map(|name| parse(&format!("global {name}"))).collect()
+}
+
+/// Each handler gets the event as raised (the DOM hands one mutable event object down the listeners): when a body
+/// changes `event`, the next one starts with `event = raised_event`
+fn each_its_event(bodies: &[Node]) -> Vec<Node> {
+	let changes_event = |body: &Node| {
+		let mut changes = false;
+		body.visit(&mut |part| match part {
+			Node::Key(target, op, _) if *op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) => {
+				changes |= crate::variable_signals::root_variable(target).is_some_and(|name| name == EVENT_WORD);
+			}
+			Node::Key(target, Op::Dot, call) => {
+				let mutating = matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|method| crate::analyzer::is_list_mutating_method(&word(method))));
+				changes |= mutating && crate::variable_signals::root_variable(target).is_some_and(|name| name == EVENT_WORD);
+			}
+			_ => {}
+		});
+		changes
+	};
+	let changing_before_last = bodies.split_last().is_some_and(|(_, earlier)| earlier.iter().any(changes_event));
+	if !changing_before_last {
+		return bodies.to_vec();
+	}
+	let restored = |index: usize| (index > 0 && bodies[..index].iter().any(changes_event)).then(|| assign(EVENT_WORD, Node::Symbol(RAISED_EVENT.to_string())));
+	let kept = assign(RAISED_EVENT, Node::Symbol(EVENT_WORD.to_string()));
+	std::iter::once(kept).chain(bodies.iter().enumerate().flat_map(|(index, body)| restored(index).into_iter().chain([body.clone()]))).collect()
 }
 
 /// Handlers take `event` only when a body reads it: an unread parameter has no type a caller from outside (the page)

@@ -38,8 +38,9 @@ const LINQ_METHODS: [(&str, &str); 12] = [("Select", "map"), ("Where", "filter")
 	("Contains", "contains")];
 
 pub fn lower(node: Node) -> Node {
+	let defined = defined_names(&node);
 	let node = if names_vector_word(&node) { node } else { r_vectors(node) };
-	let node = forms(node);
+	let node = linq_calls(forms(node), &defined);
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
 	lambda_calls(node, &lambda_names)
@@ -90,12 +91,6 @@ fn forms(node: Node) -> Node {
 		Node::Key(parameters, Op::FatArrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
 			lambda(parameters, Node::List([fields, vec![forms(*body)]].concat(), Bracket::Curly, Separator::Semicolon))
-		}
-		Node::Key(receiver, Op::Dot, method) if linq_method(&method).is_some() => {
-			let (written, word, arguments) = linq_method(&method).expect("guarded");
-			crate::normalize::hint(&format!(".{written}("), &format!(".{word}("), "wasp's word for the LINQ method");
-			let call = Node::List([vec![Node::Symbol(word.to_string())], arguments.into_iter().map(forms).collect()].concat(), Bracket::Round, Separator::None);
-			Node::Key(Box::new(forms(*receiver)), Op::Dot, Box::new(call))
 		}
 		// `f = lambda *xs: …`, JS `f = (...xs) => …`: the definition `f(*xs) := …`, which variadic.rs reads
 		Node::Key(name, Op::Assign, value) if starred_lambda(&name, &value).is_some() => forms(starred_lambda(&name, &value).expect("guarded")),
@@ -423,6 +418,39 @@ fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
 
 /// C#'s `xs.Sum()`, `xs.Select(x => x * 2)`: the LINQ name, wasp's word and the arguments (a called method only:
 /// `obj.Count` may be a field)
+/// `xs.Select(f)`: wasp's `xs.map(f)`, with a note; a method the program defines itself (Go's `Sum()`) stays
+fn linq_calls(node: Node, defined: &HashSet<String>) -> Node {
+	match node {
+		Node::Key(receiver, Op::Dot, method) if linq_method(&method).is_some_and(|(written, _, _)| !defined.contains(written)) => {
+			let (written, word, arguments) = linq_method(&method).expect("guarded");
+			crate::normalize::hint(&format!(".{written}("), &format!(".{word}("), "wasp's word for the LINQ method");
+			let arguments = arguments.into_iter().map(|argument| linq_calls(argument, defined));
+			let call = Node::List([vec![Node::Symbol(word.to_string())], arguments.collect()].concat(), Bracket::Round, Separator::None);
+			Node::Key(Box::new(linq_calls(*receiver, defined)), Op::Dot, Box::new(call))
+		}
+		other => other.map_children(|child| linq_calls(child, defined)),
+	}
+}
+
+/// The names the program defines: `f(x) := …`, `def f`, `func f`, Go's method `func (p Point) Sum()`
+fn defined_names(node: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	node.visit(&mut |part| match part {
+		Node::Key(head, Op::Define, _) => {
+			names.insert(crate::lowering::class_methods::leading_name(head));
+		}
+		Node::List(words, _, _) if words.first().is_some_and(|keyword| matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))) => {
+			let name = match words.get(1).map(Node::drop_meta) {
+				Some(Node::List(_, Bracket::Round, _)) if words.len() > 2 => words.get(2),
+				_ => words.get(1),
+			};
+			names.extend(name.map(crate::lowering::class_methods::leading_name));
+		}
+		_ => {}
+	});
+	names
+}
+
 fn linq_method(method: &Node) -> Option<(&'static str, &'static str, Vec<Node>)> {
 	let Node::List(items, Bracket::Round, _) = method.drop_meta() else { return None };
 	let (word, arguments) = items.split_first()?;

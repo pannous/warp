@@ -15,7 +15,7 @@ fn once_never_runs_when_the_condition_never_holds() {
 
 #[test]
 fn whenever_runs_each_time_the_condition_holds() {
-	is!("x=0; hits=0; whenever x>1 {hits+=1}; x=1; x=2; x=3; x=0; hits", 2);
+	is!("x=0; hits=0; whenever x>1 {hits+=1}; x=1; x=2; x=3; x=0; hits", 1); // P156: when it becomes true
 	is!("x=0; total=0; whenever x%2==0 : total+=x; for i in 1 to 6 { x = i }; total", 12);
 }
 
@@ -60,7 +60,7 @@ fn on_set_of_a_charged_value_listens_to_its_changes() {
 fn a_global_write_inside_a_function_runs_the_listeners() {
 	is!("x=0; hits=0; once x==5 {hits+=1}; def f(){ global x; x=5 }; f(); hits", 1);
 	is!("x=0; hits=0; def f(){ global x; x=5 }; once x==5 {hits+=1}; f(); hits", 1);
-	is!("x=0; hits=0; whenever x>1 {hits+=1}; def f(v){ global x; x=v }; f(2); f(3); f(0); hits", 2);
+	is!("x=0; hits=0; whenever x>1 {hits+=1}; def f(v){ global x; x=v }; f(2); f(3); f(0); hits", 1); // P156
 	is!("x=0; log=0; on change x {log=log*10+value}; def store(v){ global x; x=v }; store(1); store(1); store(2); log", 12);
 }
 
