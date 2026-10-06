@@ -76,7 +76,8 @@ const RETURN_KEYWORD: &str = "return";
 const AWAIT_KEYWORD: &str = "await";
 /// `await all jobs`: every task of a list (P47)
 const AWAIT_ALL_WORD: &str = "all";
-const AWAIT_OPERAND_BP: u8 = 155;
+/// `await x` binds its operand like unary minus
+const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
 const PRINT_WORD: &str = "print";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
@@ -275,8 +276,8 @@ pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
 /// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
 const EVEN_WORD: &str = "even";
 const ODD_WORD: &str = "odd";
-/// How tight a suffix `!` binds: below the index `#` (170), above `^` (160) and arithmetic
-const BANG_BP: u8 = 165;
+/// How tight a suffix `!` binds: below the index `#`, above `^` and arithmetic
+const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
@@ -570,9 +571,9 @@ const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
 use crate::node::ATTRIBUTE_MARK;
 const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] = [("prefix", UserOperatorKind::Prefix), ("suffix", UserOperatorKind::Suffix), ("infix", UserOperatorKind::Infix)];
 /// A user operator binds like the built-ins it resembles: suffix like the superscripts, prefix like unary minus, infix like `+`
-const USER_SUFFIX_BP: u8 = 200;
-const USER_PREFIX_RIGHT_BP: u8 = 155;
-const USER_INFIX_BP: (u8, u8) = (140, 141);
+const USER_SUFFIX_BP: u8 = Op::Square.binding_power().0;
+const USER_PREFIX_RIGHT_BP: u8 = Op::Neg.binding_power().1;
+const USER_INFIX_BP: (u8, u8) = Op::Add.binding_power();
 /// `operator ⊕ has precedence above *`: ⊕ binds this much tighter than `*`; the built-in levels are at least 5 apart
 const PRECEDENCE_STEP: u8 = 2;
 const PRECEDENCE_DIRECTIONS: [(&str, bool); 2] = [("above", true), ("below", false)];
@@ -2343,9 +2344,9 @@ impl WaspParser {
 
 	/// The infix and suffix operators after an already parsed left operand, binding tighter than `min_bp`
 	fn continue_expr(&mut self, mut lhs: Node, min_bp: u8) -> Node {
-		const ARGUMENT_BP: u8 = 140; // a braceless argument takes arithmetic, stops at ranges and comparisons: f 3-1 > 5
-		const MAX_BP_FOR_APPLICATION: u8 = 151; // operand of + - * / takes a braceless call: 1 + f 3
-		const SUBSCRIPT_BP: u8 = 170; // Matches Op::Hash
+		const ARGUMENT_BP: u8 = Op::Add.binding_power().0; // a braceless argument takes arithmetic, stops at ranges and comparisons: f 3-1 > 5
+		const MAX_BP_FOR_APPLICATION: u8 = Op::Mul.binding_power().1; // operand of + - * / takes a braceless call: 1 + f 3
+		const SUBSCRIPT_BP: u8 = Op::Hash.binding_power().0;
 		// Right operand of the last comparison, to chain a<b<c into a<b and b<c
 		let mut previous_comparand: Option<Node> = None;
 		loop {

@@ -136,7 +136,7 @@ impl Op {
 	/// Higher = tighter binding. Right > left means right-associative.
 	/// Suffix operators: (left_bp, 0) - only binds to left
 	/// Prefix operators: (0, right_bp) - only binds to right
-	pub fn binding_power(&self) -> (u8, u8) {
+	pub const fn binding_power(&self) -> (u8, u8) {
 		match self {
 			// Suffix operators (bind very tight to left, no right operand)
 			Op::Square | Op::Cube => (200, 0),
