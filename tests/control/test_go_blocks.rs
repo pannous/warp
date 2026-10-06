@@ -27,3 +27,11 @@ fn a_task_of_no_arguments_gives_its_value() {
 fn a_go_block_sees_the_values_of_its_variables() {
 	is!("n = 20; job = go { n + 1 }; await job", 21);
 }
+
+/// sleep takes a constant duration in any time unit: its milliseconds
+#[test]
+fn sleep_takes_a_duration() {
+	is!("started = clock(); sleep(300 ms); clock() - started >= 300", true);
+	is!("started = clock(); sleep 1s; clock() - started >= 1000", true);
+	is!("f() := { sleep(10 ms); \"hi\" }; f()", "hi");
+}
