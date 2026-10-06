@@ -13,6 +13,9 @@ const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
+// the gray levels of paint: a nonzero pixel, a zero pixel
+const PAINT_INK = 29;
+const PAINT_PAPER = 250;
 
 const $ = id => document.getElementById(id);
 function element(tag, properties = {}, ...children) {
@@ -73,8 +76,9 @@ function startWorker() {
 			if (data.type === "failed") return reject(new Error(data.message));
 			if (!pending) return;
 			if (data.type === "print") pending.printed.push(data);
+			if (data.type === "paint") pending.paintings.push(data);
 			if (data.type === "module") lastModule = data.bytes;
-			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, milliseconds: data.milliseconds });
+			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, milliseconds: data.milliseconds });
 		};
 	});
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
@@ -97,7 +101,7 @@ function evaluate(code) {
 async function runInWorker(code) {
 	await workerReady;
 	return new Promise(resolve => {
-		const run = { id: ++nextRunId, resolve, printed: [] };
+		const run = { id: ++nextRunId, resolve, printed: [], paintings: [] };
 		run.timer = setTimeout(() => {
 			worker.terminate(); // a program that does not stop blocks the worker: replace it
 			startWorker();
@@ -172,6 +176,7 @@ function showReport(report) {
 	const printed = report.printed.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join("");
 	$("printed").textContent = printed;
 	$("printed").hidden = printed === "";
+	showPaintings(report.paintings ?? []);
 	const notes = report.notes ?? [];
 	const inline = new Set((report.warnings ?? []).map(warning => warning.topic).filter(topic => notes.includes(topic)));
 	const expressionOf = topic => (report.got_it ?? []).find(offer => offer.topic === topic)?.expression;
@@ -188,6 +193,20 @@ function showReport(report) {
 	$("diagnostics").replaceChildren(...items);
 	showAcknowledged();
 	setStatus(report.crashed ? "the compiler crashed; reloaded" : `${Math.round(report.milliseconds ?? 0)} ms`, report.crashed);
+}
+
+// paint(pixels, width, height): one canvas per call, a pixel dark where its value is nonzero (true), light where 0
+function showPaintings(paintings) {
+	$("paintings").replaceChildren(...paintings.map(({ pixels, width, height }) => {
+		const canvas = element("canvas", { width, height, className: "painting" });
+		const image = canvas.getContext("2d").createImageData(width, height);
+		for (let index = 0; index < width * height; index++) {
+			const shade = pixels[index] ? PAINT_INK : PAINT_PAPER;
+			image.data.set([shade, shade, shade, 255], index * 4);
+		}
+		canvas.getContext("2d").putImageData(image, 0, 0);
+		return canvas;
+	}));
 }
 
 async function show(code) {

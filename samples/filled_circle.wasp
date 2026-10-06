@@ -1,0 +1,11 @@
+// a filled circle, painted on the playground's canvas: paint(pixels, width, height), row after row, nonzero is ink
+radius = 50
+width = height = 200
+center = height / 2
+surface = height * width int
+for y in 0..height {
+	for x in 0..width {
+		surface[y * width + x] = (y - center)^2 + (x - center)^2 < radius^2
+	}
+}
+paint(surface, width, height)

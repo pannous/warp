@@ -155,6 +155,11 @@ function programImports(holder, hooks) {
 			random: () => Math.random(),
 			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
 			clock: () => BigInt(Date.now()),
+			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings)
+			paint: (pixels, width, height) => {
+				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
+				hooks.paint(plainOfTree(readNode(program(), pixels)), Number(width), Number(height));
+			},
 			// tasks (src/tasks.rs): `go f(x)` runs f in a fresh instance of the program, values copied in and out; a page
 			// without cross-origin isolation has no shared memory to wait on, so the task runs at once where it starts
 			task_spawn: (name, a0, a1, a2, a3) => startTask(holder, hooks, decode(cString(name)), [a0, a1, a2, a3]),
