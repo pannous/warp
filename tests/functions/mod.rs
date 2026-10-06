@@ -83,3 +83,4 @@ mod test_function_aliases;
 mod test_several_arguments;
 mod test_empty_call;
 mod test_analysis_memo;
+mod test_shadowed_log;
