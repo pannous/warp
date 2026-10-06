@@ -338,6 +338,29 @@ impl WaspParser {
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
 	}
 
+	/// `<T, F: Fn(i32) -> i32>` glued to a function's name and followed by its parameters: its length
+	fn generic_parameters_length(&self) -> Option<usize> {
+		if self.current_char() != '<' {
+			return None;
+		}
+		let mut depth = 0;
+		for (offset, &ch) in self.chars[self.pos..].iter().enumerate() {
+			match ch {
+				'<' => depth += 1,
+				'>' if offset > 0 && self.chars[self.pos + offset - 1] == '-' => {} // the arrow of `Fn(i32) -> i32`
+				'>' => {
+					depth -= 1;
+					if depth == 0 {
+						return (self.peek_char(offset + 1) == '(').then_some(offset + 1);
+					}
+				}
+				'\n' | ';' | '{' => return None,
+				_ => {}
+			}
+		}
+		None
+	}
+
 	/// Ruby's stabby lambda `->(x) { x * x }`, `-> { 42 }`: the lambda `x => {x * x}`
 	fn parse_stabby_lambda(&mut self) -> Node {
 		self.advance_by(2);
@@ -417,6 +440,12 @@ impl WaspParser {
 		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && !self.options.wit_mode && !self.options.data_mode);
 		if names_function && self.parameters_follow_after_blanks() {
 			self.skip_spaces();
+		}
+		// Rust's and C#'s `fn apply<F: Fn(i32) -> i32>(f: F)`, `id<T>(x: T)`: the type parameters say nothing wasp needs
+		if names_function {
+			if let Some(length) = self.generic_parameters_length() {
+				self.advance_by(length);
+			}
 		}
 
 		if let Some(reference) = self.function_reference_after(&symbol) {
