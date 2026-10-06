@@ -31,3 +31,4 @@ mod test_wisp_def_params;
 mod test_wisp_roundtrip;
 mod test_unary_plus;
 mod test_wisp_malformed;
+mod test_trailing_annotation;
