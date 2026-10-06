@@ -1026,6 +1026,9 @@ impl WasmGcEmitter {
 
 	/// `target#index = value` leaves the assigned value (i64) on the stack; a variable target gets the updated copy
 	pub(super) fn emit_index_assignment(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) {
+		if self.emit_struct_field_set(func, target, index, value) {
+			return;
+		}
 		if let (Some(slot), Some(key)) = (self.typed_map(target), self.map_key(index)) {
 			self.emit_typed_map_set(func, slot, &key, value);
 			return self.emit_assigned_entry_value(func, target, &key, value);
@@ -1075,7 +1078,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The value of an entry assignment (i64): an Int value read back from the entry, else 0
-	fn emit_assigned_entry_value(&mut self, func: &mut Function, target: &Node, key: &Node, value: &Node) {
+	pub(super) fn emit_assigned_entry_value(&mut self, func: &mut Function, target: &Node, key: &Node, value: &Node) {
 		if self.get_type(value) != Kind::Int {
 			func.instruction(&I::I64Const(0));
 			return;

@@ -4,7 +4,7 @@
 //! variable: wherever the program needs the instance as a value it becomes the same Node the construction builds,
 //! `Point{x:3 y:4}`, made from the fields (notes/classes.md "Representation").
 
-use super::map_backend::is_update;
+use super::map_backend::{entry_update, is_update};
 use super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
@@ -44,24 +44,45 @@ impl WasmGcEmitter {
 	}
 
 	/// The variables of `program` held as GC structs, with their class: locals assigned only constructions of one class
-	/// that give every field in declared order, with values of the field's kind
+	/// that give every field in declared order, and field writes, all with values of the field's kind
 	pub(super) fn find_typed_structs(&self, program: &Node) -> HashMap<String, String> {
 		let (mut classes, mut excluded): (HashMap<String, String>, Vec<String>) = (HashMap::new(), vec![]);
+		// (variable, the one-based field index, the value written)
+		let mut writes: Vec<(String, Node, Node)> = vec![];
 		program.visit(&mut |part| {
 			let Node::Key(target, op, value) = part else { return };
 			match target.drop_meta() {
+				Node::Symbol(name) if *op == Op::Assign && entry_update(name, value).is_some() => {
+					let (index, written) = entry_update(name, value).expect("guarded");
+					writes.push((name.clone(), index, written));
+				}
 				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => match self.constructed_class(value) {
 					Some(class) if classes.get(name).is_none_or(|known| *known == class) => { classes.insert(name.clone(), class); }
 					_ => excluded.push(name.clone()),
 				},
 				Node::Symbol(name) if is_update(op) => excluded.push(name.clone()),
-				Node::Key(instance, Op::Hash, _) if matches!(op, Op::Assign | Op::Define) || is_update(op) => excluded.push(instance.drop_meta().name()),
+				Node::Key(instance, Op::Hash, index) if matches!(op, Op::Assign | Op::Define) || op.is_compound_assign() => {
+					let written = if *op == Op::Assign { value.as_ref().clone() } else { Node::Key(target.clone(), op.base_op(), value.clone()) };
+					writes.push((instance.drop_meta().name(), index.as_ref().clone(), written));
+				}
+				Node::Key(instance, Op::Hash, _) if is_update(op) => excluded.push(instance.drop_meta().name()),
 				_ => {}
 			}
 		});
+		for (name, index, written) in writes {
+			let fits = classes.get(&name).and_then(|class| field_of(&self.instance_types[class], &index)).is_some_and(|(_, kind)| self.fits(&written, kind));
+			if !fits {
+				excluded.push(name);
+			}
+		}
 		excluded.extend(self.names_held_as_nodes(program));
 		classes.retain(|name, _| !excluded.contains(name) && self.scope.lookup(name).is_some_and(|local| !local.is_param));
 		classes
+	}
+
+	/// Does a value of this node go into a field of the kind: any into a Node field, a number only of its own kind
+	fn fits(&self, value: &Node, kind: Kind) -> bool {
+		kind.is_ref() || self.get_type(value) == kind
 	}
 
 	/// The class whose instance `value` constructs, when a struct can hold it
@@ -71,7 +92,7 @@ impl WasmGcEmitter {
 		let Node::List(entries, _, _) = fields.drop_meta() else { return None };
 		let fits = entries.len() == instance.fields.len()
 			&& entries.iter().zip(&instance.fields).all(|(entry, (field, kind))| {
-				entry_name(entry).as_ref() == Some(field) && (kind.is_ref() || self.get_type(entry_value(entry)) == *kind)
+				entry_name(entry).as_ref() == Some(field) && self.fits(entry_value(entry), *kind)
 			});
 		fits.then(|| class.name())
 	}
@@ -90,9 +111,8 @@ impl WasmGcEmitter {
 	/// `target#index` when target is a struct variable and the index one of its fields by name
 	fn field_access(&self, target: &Node, index: &Node) -> Option<FieldAccess> {
 		let (slot, instance) = self.typed_struct(target)?;
-		let name = crate::analyzer::constant_field_name(crate::wasp_parser::subscript_key(index)?)?;
-		let field_index = instance.fields.iter().position(|(field, _)| *field == name)?;
-		Some(FieldAccess { slot, type_index: instance.type_index, field_index: field_index as u32, kind: instance.fields[field_index].1 })
+		let (field_index, kind) = field_of(instance, index)?;
+		Some(FieldAccess { slot, type_index: instance.type_index, field_index, kind })
 	}
 
 	fn emit_field_get(&self, func: &mut Function, access: &FieldAccess) {
@@ -116,8 +136,27 @@ impl WasmGcEmitter {
 		true
 	}
 
-	/// `p = P{…}`: the struct of the field values in p's local, left on the stack
-	pub(super) fn emit_typed_struct_store(&mut self, func: &mut Function, slot: u32, class: &str, value: &Node) {
+	/// `target#index = value` when it writes a field of a struct variable, leaving the i64 an index assignment gives
+	/// (emit_assigned_entry_value); false otherwise
+	pub(super) fn emit_struct_field_set(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) -> bool {
+		let Some(access) = self.field_access(target, index) else { return false };
+		func.instruction(&I::LocalGet(access.slot));
+		self.emit_value_of_kind(func, value, access.kind);
+		func.instruction(&I::StructSet { struct_type_index: access.type_index, field_index: access.field_index });
+		let key = crate::wasp_parser::subscript_key(index).expect("a field by name").clone();
+		self.emit_assigned_entry_value(func, target, &key, value);
+		true
+	}
+
+	/// `p = P{…}`: the struct of the field values in p's local; `p = field_with(p, "x", v)`: the field set in place.
+	/// The struct is left on the stack
+	pub(super) fn emit_typed_struct_store(&mut self, func: &mut Function, name: &str, slot: u32, class: &str, value: &Node) {
+		if let Some((index, written)) = entry_update(name, value) {
+			let target = Node::Symbol(name.to_string());
+			self.emit_struct_field_set(func, &target, &index, &written);
+			Self::emit_list(func, &[I::Drop, I::LocalGet(slot)]);
+			return;
+		}
 		let (_, fields) = instance_parts(value).expect("find_typed_structs admits only constructions");
 		let Node::List(entries, _, _) = fields.drop_meta() else { unreachable!("find_typed_structs admits only entry lists") };
 		let values: Vec<Node> = entries.iter().map(|entry| entry_value(entry).clone()).collect();
@@ -206,6 +245,13 @@ impl WasmGcEmitter {
 		};
 		self.emit_struct_new(func, class, &values);
 	}
+}
+
+/// The index and stored kind of the field a one-based subscript `"x" + 1` names
+fn field_of(instance: &InstanceType, index: &Node) -> Option<(u32, Kind)> {
+	let name = crate::analyzer::constant_field_name(crate::wasp_parser::subscript_key(index)?)?;
+	let position = instance.fields.iter().position(|(field, _)| *field == name)?;
+	Some((position as u32, instance.fields[position].1))
 }
 
 /// `name#field`, the lowered `name.field`
