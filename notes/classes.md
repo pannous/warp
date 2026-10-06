@@ -60,3 +60,18 @@
   class like any shared method.
 - library_words: a class's own `sum·point` (any `name·Type` variant) shadows the library word `sum`, so a shared
   method named like a library word stays the class's.
+
+## Ported cases (tests/types/test_class_cases_ported.rs, probe probes/class_cases.sh)
+Cases from Python, Java, Kotlin, Swift, C# and Ruby. Batch 1 (branch classes-1) added:
+- Implicit receiver (Java/Kotlin/C#): inside a method, `area()` calls the class's own (or inherited) method on self,
+  a bare getter name `area` reads it from self; a parameter of the same name shadows both.
+- `super.speak(…)` in dog's method: inherit gives dog the speak it would have inherited as its own method
+  `speak·super·dog` and the call is `self.speak·super·dog(…)`. Static dispatch, nothing at run time; chains work
+  (puppy's super is dog's speak, whose super is animal's). super of a method the parent lacks is an error.
+- `dog(…) is animal` is true when dog extends animal (traits.rs IS_TYPE through the likeness); `animal(…) is dog` false.
+Already worked: field defaults `x:int=0`, `self.w`, getters, methods with arguments, overriding per subclass, value
+equality `==`, mutating methods, field assignment, a method giving a changed copy, nested objects, named construction.
+Open (next batches): `static` members (currently "static has no meaning in wasp", question to the Interviewer), the
+`value{…}` constructor block (wiki/constructor.md), required `name!` fields, an object's text (result `point[x:1 y:2]`,
+`string(p)` `point{x:1 y:2}`, print `point:[x:1 y:2]`: three forms), a method named like a type word (`double()`:
+"double is a type"), property setters (wiki/property.md), generics, mixins, interfaces with default methods.
