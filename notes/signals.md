@@ -129,7 +129,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    subscription inside functions.
 6. **Signals across tasks**: events raised in tasks reach `on` handlers of the starting thread; listeners on `shared`
    values poll at check points (with warp-d9, card task-signals).
-7. **Browser and outside**: DOM events and output bindings in the playground, `broadcast` / channel listeners System signals (OS, devices, page): notes/system_signals.md.
+7. **Browser and outside**: DOM events and output bindings in the playground, `broadcast` / channel listeners. System signals (OS, devices, page): notes/system_signals.md.
    (stdlib, wiki/signal.md).
 
 ## Open questions (sent to the Interviewer warp-eb, defaults assumed)
