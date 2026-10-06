@@ -199,11 +199,15 @@ pub fn lower_tasks(node: Node) -> Node {
 fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
+			let is_pair = |node: &Node| matches!(node.drop_meta(), Node::List(inner, Bracket::None, _) if inner.len() == 2);
+			let inner = |node: &Node| match node.drop_meta() {
+				Node::List(inner, _, _) => inner.clone(),
+				_ => unreachable!("guarded"),
+			};
 			let words: Vec<Node> = match items.as_slice() {
-				[pair, rest @ ..] if matches!(pair.drop_meta(), Node::List(inner, Bracket::None, _) if inner.len() == 2) => {
-					let Node::List(inner, _, _) = pair.drop_meta() else { unreachable!("guarded") };
-					[inner.clone(), rest.to_vec()].concat()
-				}
+				[pair, rest @ ..] if is_pair(pair) => [inner(pair), rest.to_vec()].concat(),
+				// `await (all [go f(1), …])`
+				[head, pair] if head.name() == TASK_WORDS[1] && is_pair(pair) => [vec![head.clone()], inner(pair)].concat(),
 				_ => items.clone(),
 			};
 			match words.as_slice() {
@@ -214,6 +218,20 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 					let awaited = Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space);
 					Node::List(vec![assignment, awaited], Bracket::Round, Separator::Semicolon)
 				}
+				// `await all [go f(1), go f(2)]` (Promise.all, asyncio.gather): every task starts, then each is awaited
+				[await_word, all_word, list] if await_word.name() == TASK_WORDS[1] && all_word.name() == ALL_WORD && matches!(list.drop_meta(), Node::List(listed, Bracket::Square, _) if listed.iter().any(is_start)) => {
+					let Node::List(listed, list_bracket, list_separator) = list.drop_meta().clone() else { unreachable!("guarded") };
+					let mut starts = vec![];
+					let results = listed.into_iter().map(|item| match is_start(&item) {
+						true => {
+							let job = Node::Symbol(format!("go·job·{}", counter.replace(counter.get() + 1)));
+							starts.push(Node::Key(Box::new(job.clone()), Op::Assign, Box::new(item)));
+							Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space)
+						}
+						false => item,
+					}).collect();
+					Node::List([starts, vec![Node::List(results, list_bracket, list_separator)]].concat(), Bracket::Round, Separator::Semicolon)
+				}
 				_ => Node::List(items.into_iter().map(|item| awaited_starts(item, counter)).collect(), bracket, separator),
 			}
 		}
@@ -221,6 +239,11 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(awaited_starts(*node, counter)), data },
 		other => other,
 	}
+}
+
+/// `go f(x)`, `go { … }`: a task started where it stands
+fn is_start(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() > 1 && words[0].name() == TASK_WORDS[0])
 }
 
 /// The list variables that collect started tasks, `jobs.add(go f(i))` (P47), with the functions they start
