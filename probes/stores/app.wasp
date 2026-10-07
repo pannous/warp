@@ -1,4 +1,5 @@
-// repro of card module-signal-writes: should print "theme is light" (a module function writes the shared theme)
+// card web-stores: a used module's stored theme is kept in app.stored.json; each run toggles it
+// (prints "theme is light", then "theme is dark" on the next run)
 use settings
 on change theme { print "theme is " + value }
 toggle()
