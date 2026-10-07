@@ -111,6 +111,9 @@ Next:
    to_base from_base; text: word_count snake_case kebab_case camel_case indent is_numeric between wrap; map: find_key.
    A std module's word cannot call another module's words (camel_case cannot use list's drop): written with loops.
    Met: a name `end` after else is Ruby's block end (card end-variable); `none(xs, f)` is the null (card none-call).
+   P171: write and exists are prelude words (modules PRELUDE_WORDS: only their definitions come along, a program's own
+   word wins); P183: a "file://…" text loads the whole file module; file.append(path, text) is the qualified-only word
+   (welcome_forms QUALIFIED_WORDS → append_file), bare append stays the list method.
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:

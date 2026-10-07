@@ -55,7 +55,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
 	let folder = loader.including_directory.clone();
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
-	let resolved = loader.resolve(program).and_then(|program| match loader.scope {
+	let resolved = loader.resolve(program).and_then(|program| loader.implicit_std_modules(&program).map(|_| program)).and_then(|program| match loader.scope {
 		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 		None => Ok(program),
 	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
@@ -410,6 +410,32 @@ impl<'a> Loader<'a> {
 		}
 	}
 
+	/// The standard modules a program uses without `use`: the file module for a file URL (P183), the prelude words it
+	/// mentions (P171); a module the program used is loaded already
+	fn implicit_std_modules(&mut self, program: &Node) -> Result<(), Node> {
+		let mut mentioned = HashSet::new();
+		let mut file_url = false;
+		program.visit(&mut |node| match node {
+			Node::Symbol(name) => { mentioned.insert(name.clone()); }
+			Node::Text(text) => file_url |= text.starts_with(FILE_URL_PREFIX),
+			_ => {}
+		});
+		if file_url {
+			self.use_std_module("file", std_module("file").expect("std/file.wasp is embedded"))?;
+		}
+		// a program's own `write(x, y)` wins
+		let own: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
+		for (module, words) in PRELUDE_WORDS {
+			let words: Vec<&str> = words.iter().copied().filter(|word| mentioned.contains(*word) && !own.contains(*word)).collect();
+			if !words.is_empty() {
+				let source = std_module(module).expect("a prelude module is embedded");
+				let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(module), source))?;
+				self.std_definitions.extend(definitions.into_iter().filter(|definition| declared_name(definition).is_some_and(|name| words.contains(&name.as_str()))));
+			}
+		}
+		Ok(())
+	}
+
 	/// A standard module: its definitions wait aside until the program is resolved; its source shows the program
 	/// no style hints
 	fn use_std_module(&mut self, name: &str, source: &str) -> Result<Vec<Node>, Node> {
@@ -597,6 +623,10 @@ const STD_MODULES: [(&str, &str); 19] = [
 	("i18n", include_str!("../std/i18n.wasp")),
 ];
 const STD_FOLDER: &str = "std";
+/// P171: module words a program calls without their `use` (the prelude); only these definitions come along
+const PRELUDE_WORDS: [(&str, &[&str]); 1] = [("file", &["write", "exists"])];
+/// P183: a file URL in the program loads the file module, no `use file` needed
+const FILE_URL_PREFIX: &str = "file://";
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
 /// a note, when a used module defines that word
 const STD_ALIASES: [(&str, &str); 9] = [
