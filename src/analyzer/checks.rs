@@ -421,8 +421,13 @@ pub fn literal_number_type_word(node: &Node) -> Option<&'static str> {
 	}
 }
 
+/// A list item's word keeps its own elements: `[[1 2]]` is a `list of int` item, so `[[[1 2]]]` is a
+/// `list of list of list of int` and `c#1#1` a `list of int` (card nested-index)
 pub(super) fn element_type_word(item: &Node, scope: &Scope) -> String {
-	literal_number_type_word(item).map(str::to_string).unwrap_or_else(|| infer_type(item, scope).to_string())
+	literal_number_type_word(item).map(str::to_string).unwrap_or_else(|| match infer_type(item, scope) {
+		Kind::List if matches!(item.drop_meta(), Node::List(_, Bracket::Square, _)) => list_type_name(item, scope),
+		kind => kind.to_string(),
+	})
 }
 
 /// The one type word all element words fit: the same word, `rational` for a mix of `int` and `rational` (int is a special
