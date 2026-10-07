@@ -106,3 +106,4 @@ mod test_listener_removal_in_functions;
 mod test_cell_truth;
 mod test_braceless_call_in_branch;
 mod test_event_handler_lists;
+mod test_for_underscore;

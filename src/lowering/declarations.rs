@@ -1475,7 +1475,11 @@ fn ends_in_block(node: &Node) -> bool {
 
 /// `add(1, _)`: a call with placeholders is the lambda of the missing arguments, `partial_1 => add(1, partial_1)`
 fn partial_application(items: &[Node]) -> Option<Node> {
-	let [Node::Symbol(_), arguments @ ..] = items else { return None };
+	let [Node::Symbol(head), arguments @ ..] = items else { return None };
+	// `for _ in 0..3 {…}`: a keyword is no call, its `_` an unused loop variable
+	if crate::soft_keywords::HARD_KEYWORDS.contains(&head.as_str()) {
+		return None;
+	}
 	let is_placeholder = |argument: &Node| matches!(argument.drop_meta(), Node::Symbol(name) if name == PLACEHOLDER);
 	if !arguments.iter().any(is_placeholder) {
 		return None;
