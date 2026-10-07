@@ -7,6 +7,7 @@ const NARROW_SCREEN = "(max-width: 900px)"; // playground.css stacks the panes t
 const EXAMPLES_PREFIX = "Examples: ";
 const SAMPLES_SEPARATOR = "; samples: ";
 const SNIPPET_FENCE = /^```wasp(?: => (.*))?$/;
+const PRINTED_FENCE = "```printed"; // right after a snippet: the lines it prints, shown above its value
 
 const chapterOfExample = new Map();
 const examplesOfChapter = new Map(); // in the guide's order: the example menu's groups
@@ -45,10 +46,18 @@ function exampleLinks(line, chapter) {
 	return element("p", { className: "guide-examples" }, ...parts);
 }
 
-function snippet(code, value) {
+function snippet(code, value, printed) {
 	const run = element("button", { className: "guide-try", title: "load into the editor and run", onclick: () => window.playground.runCode(code) }, "try ▶");
+	const shownPrinted = printed ? [element("pre", { className: "guide-printed" }, printed)] : [];
 	const shown = value ? [element("div", { className: "guide-value" }, element("span", { className: "prompt" }, "» "), value)] : [];
-	return element("div", { className: "guide-snippet" }, run, element("pre", {}, element("code", {}, code)), ...shown);
+	return element("div", { className: "guide-snippet" }, run, element("pre", {}, element("code", {}, code)), ...shownPrinted, ...shown);
+}
+
+// the lines of the fence that starts after lines[index]; index ends on its closing line
+function fenceLines(lines, index) {
+	const body = [];
+	while (++index < lines.length && lines[index] !== "```") body.push(lines[index]);
+	return [body.join("\n"), index];
 }
 
 function paragraph(lines) {
@@ -66,9 +75,10 @@ function renderBody(lines, chapter) {
 		const line = lines[index], fence = line.match(SNIPPET_FENCE);
 		if (fence) {
 			flush();
-			const code = [];
-			while (++index < lines.length && lines[index] !== "```") code.push(lines[index]);
-			blocks.push(snippet(code.join("\n"), fence[1]));
+			let code, printed;
+			[code, index] = fenceLines(lines, index);
+			if (lines[index + 1] === PRINTED_FENCE) [printed, index] = fenceLines(lines, index + 1);
+			blocks.push(snippet(code, fence[1], printed));
 		} else if (line.startsWith(EXAMPLES_PREFIX)) {
 			flush();
 			blocks.push(exampleLinks(line, chapter));

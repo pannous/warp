@@ -16,6 +16,9 @@ The last line of a program is its result.
 print "Hello"
 42
 ```
+```printed
+Hello
+```
 
 `//` starts a comment. `/* … */` can go anywhere.
 
@@ -24,7 +27,7 @@ print "Hello"
 1 + /* so is this */ 2
 ```
 
-Examples: hello; samples: hello
+Examples: hello
 
 ## Numbers
 

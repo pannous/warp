@@ -149,6 +149,7 @@ main.single { grid-template-columns: minmax(0, 1fr); }
 .guide-snippet pre { margin: 0; padding-right: 3.5em; white-space: pre-wrap; word-break: break-word; }
 .guide-snippet code { padding: 0; background: none; }
 .guide-try { position: absolute; top: 4px; right: 4px; padding: 0 6px; font-size: 0.85em; }
+.guide-printed { margin: 4px 0 0; padding-top: 4px; border-top: 1px dashed var(--muted); color: var(--ink); white-space: pre-wrap; font-size: 0.95em; }
 .guide-value { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--muted); margin-top: 2px; }
 .guide-examples a, .guide-link { color: var(--accent); }
 .guide-link { font-size: 0.9em; }
