@@ -78,3 +78,4 @@ mod test_type_alias_fields;
 mod test_optional_number_fields;
 mod test_variant_payloads;
 mod test_file_declarations;
+mod test_match_static_variant;

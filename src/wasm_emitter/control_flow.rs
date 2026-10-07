@@ -56,7 +56,8 @@ impl WasmGcEmitter {
 			self.emit_malformed(func, left, IF_THEN);
 			return;
 		};
-		self.emit_raw_branches(func, condition, then_expr, else_expr, value_type, emit);
+		let then_expr = self.live_then(condition, then_expr, else_expr);
+		self.emit_raw_branches(func, condition, &then_expr, else_expr, value_type, emit);
 	}
 
 	pub(super) fn emit_raw_branches(&mut self, func: &mut Function, condition: &Node, then_expr: &Node, else_expr: Option<&Node>, value_type: ValType, emit: fn(&mut Self, &mut Function, &Node)) {
@@ -81,6 +82,7 @@ impl WasmGcEmitter {
 			self.emit_malformed(func, left, IF_THEN);
 			return;
 		};
+		let then_expr = &self.live_then(condition, then_expr, else_expr);
 
 		// A branch yielding a text, character, list or error (`if x {x} else {"offline"}`): both branches are Node values
 		let branch_value = |branch: &Node| match branch.drop_meta() {
@@ -135,6 +137,25 @@ impl WasmGcEmitter {
 		self.emit_call(func, "new_int");
 
 		func.instruction(&I::End);
+	}
+
+	/// The then branch, or the else branch in its place when the condition is a class test the subject can never pass:
+	/// a match arm `Circle(r) => r * r` of `s = Dot` is dead, and typed with s (a symbol) `s#r` would be a character
+	/// (card match-static). The condition is still evaluated, and false.
+	fn live_then(&self, condition: &Node, then_expr: &Node, else_expr: Option<&Node>) -> Node {
+		match self.never_an_instance(condition) {
+			true => else_expr.cloned().unwrap_or(Node::int(0)),
+			false => then_expr.clone(),
+		}
+	}
+
+	/// `is_type(x, "Circle")` of a declared class, x statically a number, text or symbol
+	fn never_an_instance(&self, condition: &Node) -> bool {
+		let Node::List(items, _, _) = last_statement(condition).drop_meta() else { return false };
+		let [head, subject, spec] = items.as_slice() else { return false };
+		let is_class_test = head.drop_meta().name() == crate::type_tests::IS_TYPE
+			&& matches!(spec.drop_meta(), Node::Text(class) if self.ctx.type_registry.get_by_name(class).is_some());
+		is_class_test && matches!(self.get_type(subject), Kind::Int | Kind::Float | Kind::Text | Kind::Symbol | Kind::Codepoint)
 	}
 
 	/// Emit while loop: (while condition) do body
@@ -245,5 +266,14 @@ impl WasmGcEmitter {
 
 	pub(super) fn emit_while_loop_value(&mut self, func: &mut Function, left: &Node, body: &Node) {
 		self.emit_while_loop_impl(func, left, body, false);
+	}
+}
+
+/// `(x = s; is_type x "Circle")`: the statement whose value a block is
+fn last_statement(node: &Node) -> &Node {
+	match node.drop_meta() {
+		Node::List(items, _, Separator::Semicolon | Separator::Newline) if !items.is_empty() => last_statement(&items[items.len() - 1]),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => last_statement(&items[0]),
+		_ => node,
 	}
 }
