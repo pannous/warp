@@ -41,3 +41,22 @@ fn a_built_component_is_used_by_another_program() {
 	is!(&format!("{using}calc.add(2, 3)"), 5);
 	is!(&format!("{using}calc.scale(2.0)"), 5.0);
 }
+
+/// The `use` line of the component built from `source` (a file in the test's scratch directory, named `name.wasm`)
+#[cfg(feature = "native")]
+fn built_component(name: &str, source: &str) -> String {
+	let directory = crate::common::scratch_directory("built_components");
+	std::fs::create_dir_all(&directory).unwrap();
+	let path = directory.join(format!("{name}.wasm"));
+	std::fs::write(&path, warp::component_builder::build(source).expect("a component")).unwrap();
+	format!("use wasm \"{}\" as {name}\n", path.display())
+}
+
+/// step 3: texts cross the boundary as the canonical ABI lays them out, in the component's linear memory
+#[cfg(feature = "native")]
+#[test]
+fn texts_cross_the_component_boundary() {
+	let using = built_component("greeting", "interface greeter { greet: (string) -> string; size: (string) -> i32 }\ncomponent greeting { export api: greeter }\nexport def greet(name: string) -> string { \"hi \" + name }\nexport def size(t: string) -> i32 { count(t) }\n0");
+	is!(&format!("{using}greeting.greet(\"Al\")"), "hi Al");
+	is!(&format!("{using}greeting.size(\"abc\")"), 3);
+}

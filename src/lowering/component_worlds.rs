@@ -20,6 +20,7 @@ const WIT_TYPES: [(&str, &str); 16] = [
 const INDENT: &str = "  ";
 
 /// A function of an interface: its name, parameter types and result type (None for `()`), in WIT
+#[derive(Clone)]
 pub struct Signature {
 	pub name: String,
 	pub parameters: Vec<String>,
@@ -41,6 +42,15 @@ pub struct World {
 }
 
 pub const EXPORT_DIRECTION: &str = "export";
+pub const WIT_STRING: &str = "string";
+
+impl World {
+	/// The functions the component exports, each with the name of its export (`api`)
+	pub fn exported_functions(&self) -> Vec<(String, Signature)> {
+		self.items.iter().filter(|item| item.direction == EXPORT_DIRECTION)
+			.flat_map(|item| item.functions.iter().map(|function| (item.name.clone(), function.clone()))).collect()
+	}
+}
 
 /// The program without its component declarations
 pub fn lower(node: Node) -> Node {
