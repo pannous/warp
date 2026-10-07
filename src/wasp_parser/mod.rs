@@ -336,6 +336,8 @@ pub const TRY_MARKER: &str = "try·else";
 pub const AFTER_MARKER: &str = "after·return";
 /// `class dog extends animal {…}`: the class named on the right is the parent (P117)
 pub const EXTENDS_KEYWORD: &str = "extends";
+/// The field of a sum type's variant with one unnamed payload, `Some(T)`: `Some(3).value`; several are value1, value2…
+const VARIANT_FIELD: &str = "value";
 /// `mixin Walker{…}` declares fields and methods classes take in: `class Duck with Walker, Swimmer {…}`
 pub const MIXIN_WORD: &str = "mixin";
 pub const WITH_KEYWORD: &str = "with";
@@ -769,7 +771,7 @@ fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 		.filter_map(|pair| {
 			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch)).collect();
 			let rest = &pair[1][name.len()..];
-			(rest.is_empty() || rest.starts_with(['(', '{', '<', ':', ';'])).then_some(name)
+			(rest.is_empty() || rest.starts_with(['(', '{', '<', '[', ':', ';'])).then_some(name)
 		})
 		.filter(|name| is_plain_name(name))
 		.collect()

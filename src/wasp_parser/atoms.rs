@@ -772,11 +772,11 @@ impl WaspParser {
 		self.assignment_follows().then(|| Diagnostic { message, line: self.line_nr, column, ..Default::default() }.fix("another name").into_error())
 	}
 
-	/// `= …` or `:= …` after blanks, not the comparison `==`
+	/// `= …` or `:= …` after blanks, not the comparison `==` nor the arrow `=>`
 	fn assignment_follows(&self) -> bool {
 		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		let defines = self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) == '=';
-		let assigns = self.peek_char(blanks) == '=' && self.peek_char(blanks + 1) != '=';
+		let assigns = self.peek_char(blanks) == '=' && !matches!(self.peek_char(blanks + 1), '=' | '>'); // `None => 0` is a match arm
 		defines || assigns
 	}
 
@@ -829,8 +829,16 @@ impl WaspParser {
 				}
 				Err(message) => return error(&message),
 			},
+			// `type Option[T] = Some(T) | None` (samples/types.wasp): wasp's own spelling, no note
+			'[' => match self.parse_type_parameters() {
+				Ok(parameters) => parameters,
+				Err(message) => return error(&message),
+			},
 			_ => vec![],
 		};
+		if let Some(variants_start) = self.variants_ahead() {
+			return self.parse_sum_type(type_name, &type_parameters, variants_start);
+		}
 		let mut constructor_fields = if self.current_char() == '(' { self.parse_primary_constructor() } else { vec![] };
 		let kotlin_parent = self.skip_conformances();
 		// Python's `class Dog(Animal):` names its parents in the parentheses, `object` the root of all
@@ -1007,9 +1015,101 @@ impl WaspParser {
 		}).collect()
 	}
 
-	/// `<T>`, `<A, B>`: the names of the type parameters of a declared type
+	/// `= Some(T) | None`, `: red | rgb(int, int, int)`, Elm's `= Failure HttpError | …` on lines of their own: the
+	/// offset after the `=` or `:` when the declaration lists alternatives one of which carries a payload
+	fn variants_ahead(&self) -> Option<usize> {
+		let blanks = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		let (sign, next) = (self.peek_char(blanks), self.peek_char(blanks + 1));
+		let opens = (sign == '=' && !matches!(next, '=' | '>')) || (sign == ':' && next != '=');
+		if !opens {
+			return None;
+		}
+		let start = blanks + 1;
+		let (mut depth, mut alternatives, mut payload, mut words) = (0, false, false, 0);
+		let mut offset = start;
+		loop {
+			let ch = self.peek_char(offset);
+			let after_word = is_identifier_char(self.peek_char(offset - 1));
+			match ch {
+				'\0' | ';' if depth == 0 => break,
+				'\n' if depth == 0 => {
+					let blanks = (offset + 1..).take_while(|&at| self.peek_char(at).is_whitespace()).count();
+					if self.peek_char(offset + 1 + blanks) != '|' {
+						break;
+					}
+				}
+				'(' if depth == 0 && after_word => {
+					payload = true;
+					depth += 1;
+				}
+				'(' | '[' | '{' => depth += 1,
+				')' | ']' | '}' if depth == 0 => break,
+				')' | ']' | '}' => depth -= 1,
+				'|' if depth == 0 && self.peek_char(offset + 1) == '|' => offset += 1,
+				'|' if depth == 0 => (alternatives, words) = (true, 0),
+				_ if depth == 0 && is_identifier_char(ch) && !after_word => {
+					words += 1;
+					payload |= words > 1;
+				}
+				_ => {}
+			}
+			offset += 1;
+		}
+		(alternatives && payload).then_some(start)
+	}
+
+	/// The sum type `Name = A(T) | B | C(x: int)` (card sum-types): the class Name without fields and a class extending
+	/// it for each variant with a payload, its fields in order (an unnamed one is `value`, several `value1`, `value2`…);
+	/// a variant without payload is its name, a symbol (`None` stays ø)
+	fn parse_sum_type(&mut self, type_name: String, type_parameters: &[String], start: usize) -> Node {
+		self.advance_by(start);
+		let mut declarations = vec![Node::Type { name: Box::new(Symbol(type_name.clone())), body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)) }];
+		loop {
+			self.skip_spaces();
+			let variant = match self.parse_symbol() {
+				Ok(name) => name,
+				Err(message) => return error(&format!("a variant of {type_name} needs a name: {message}")),
+			};
+			let mut payload = if self.current_char() == '(' { statements(self.parse_bracketed('(')) } else { vec![] };
+			// Elm's `Failure HttpError`: the payload's types after the name
+			self.skip_spaces();
+			while self.is_identifier_start(0) {
+				payload.extend(self.parse_symbol().ok().map(Symbol));
+				self.skip_spaces();
+			}
+			if !payload.is_empty() {
+				declarations.push(self.variant_class(&type_name, variant, payload, type_parameters));
+			}
+			let blanks = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+			if self.peek_char(blanks) != '|' {
+				return Node::List(declarations, Bracket::None, Separator::Semicolon);
+			}
+			self.advance_by(blanks + 1);
+		}
+	}
+
+	fn variant_class(&mut self, type_name: &str, variant: String, payload: Vec<Node>, type_parameters: &[String]) -> Node {
+		let count = payload.len();
+		let field_name = |index: usize| if count == 1 { VARIANT_FIELD.to_string() } else { format!("{VARIANT_FIELD}{}", index + 1) };
+		// `(T)` and `(radius: int)` arrive as groups of one
+		let sole = |field: Node| match field.drop_meta() {
+			Node::List(items, _, _) if items.len() == 1 => items[0].clone(),
+			_ => field,
+		};
+		let fields = payload.into_iter().map(sole).enumerate().map(|(index, field)| match field.drop_meta() {
+			Node::Key(_, Op::Colon, _) => field,
+			_ => Node::Key(Box::new(Symbol(field_name(index))), Op::Colon, Box::new(field)),
+		});
+		let body = Self::transform_fields_to_types(Node::List(fields.collect(), Bracket::Curly, Separator::Semicolon));
+		self.declared_types.insert(variant.clone());
+		let name = Symbol(variant).with_attribute(EXTENDS_KEYWORD, Symbol(type_name.to_string()));
+		Node::Type { name: Box::new(name), body: Box::new(any_for_type_parameters(body, type_parameters)) }
+	}
+
+	/// `<T>`, `<A, B>`, `[T]`: the names of the type parameters of a declared type
 	fn parse_type_parameters(&mut self) -> Result<Vec<String>, String> {
-		self.advance(); // <
+		let close = if self.current_char() == '[' { ']' } else { '>' };
+		self.advance(); // < or [
 		let mut names = vec![];
 		loop {
 			self.skip_whitespace();
@@ -1017,11 +1117,11 @@ impl WaspParser {
 			self.skip_whitespace();
 			match self.current_char() {
 				',' => self.advance(),
-				'>' => {
+				ch if ch == close => {
 					self.advance();
 					return Ok(names);
 				}
-				other => return Err(format!("type parameters <{}…> end with >, got {other}", names.join(", "))),
+				other => return Err(format!("type parameters <{}…> end with {close}, got {other}", names.join(", "))),
 			}
 		}
 	}
