@@ -60,6 +60,7 @@ pub mod element_events;
 pub mod event_signals;
 pub mod system_signals;
 pub mod fetch_signals;
+pub mod page_html;
 pub mod system_values;
 pub mod signal_values;
 pub mod variable_signals;

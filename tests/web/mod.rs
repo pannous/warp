@@ -8,6 +8,8 @@ mod test_web_playground;
 mod test_web_server;
 #[cfg(feature = "native")] // warp build --site writes files with the native compiler
 mod test_site;
+#[cfg(feature = "native")] // std/markup.wasp against src/html.rs, natively
+mod test_html_module;
 #[cfg(feature = "native")] // a main waiting for a reply: the browser delivers it only after main returned
 mod test_async_data;
 mod test_html_render;
