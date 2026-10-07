@@ -94,6 +94,8 @@ mod test_implicit_await;
 mod test_task_parameter_shadows;
 mod test_task_signals;
 mod test_signal_values;
+mod test_stored_signals;
+mod test_undo_history;
 mod test_shared_signals;
 mod test_signal_reflection;
 mod test_broadcast;

@@ -137,3 +137,18 @@ Each step is useful on its own and is what the next ones stand on.
   src/html.rs no longer renders sites. Until then a built page is static after load (site.js warns on the console).
 - Open: page·html (next step); timers and fetch replies in a built page (site.js has the hooks, no timer loop yet);
   `serve` programs serving their own page.
+
+## Step 12 (web-stores), what is done and what is left
+- Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
+  value an earlier run kept under its name, else the default; `on change theme` keeps each change. Natively the values
+  are JSON in `<program>.stored.json` beside the program (in memory for inline code), in the playground the page's
+  localStorage (`wasp stored <name>`): the worker gets them at start and sends each save back (host.js
+  STD_ADAPTERS.store, playground.js keepStored). Values cross as JSON (std_adapters, as foreign calls).
+- Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
+  main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
+  old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
+  `stored` are soft keywords.
+- Shared stores: a used module's main-level variables are already shared (`use settings` reads and writes its theme),
+  but a program's `on change theme` misses writes made by the module's functions: card module-signal-writes
+  (probes/stores/app.wasp). Context (a value for a subtree of components without props): question with the
+  Interviewer; default until then: main-level variables, which every component reads.
