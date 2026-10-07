@@ -6,6 +6,9 @@
 //! loads that route's module first, card web-bundle), and page·routed() that route's value, else "no page at <path>"; `route "*"`
 //! matches any path (the not-found page). The program shows page·routed() where it says `outlet` (a layout around the
 //! routes), else as its last line when that is a route. The matching is std/router.wasp's.
+//! A route's block may hold routes (card route-nested), their patterns relative to it: the block's other items are its
+//! layout, showing the inner route where it says `outlet` (the inner route's own function page·part·N); each inner route
+//! is a route of the page with the whole pattern, and the route itself follows them with an empty outlet.
 
 use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::node::{Bracket, Node, Separator};
@@ -14,6 +17,9 @@ use std::collections::HashMap;
 
 const ROUTE_WORD: &str = "route";
 const ROUTE_PREFIX: &str = "page·route·";
+/// An inner route's own block, which its layout shows at its outlet
+const PART_PREFIX: &str = "page·part·";
+const PATH_SEPARATOR: char = '/';
 /// The patterns of the routes in order, exported for the site's loader (warp-cf: a module per route, card web-bundle)
 pub const PAGE_ROUTES: &str = "page·routes";
 const PAGE_ROUTED: &str = "page·routed";
@@ -37,6 +43,8 @@ const NOT_FOUND_TEMPLATE: &str = "\"no page at \" + page_path()";
 
 /// A route as written: its pattern and the items of its block
 type Route = (String, Vec<Node>);
+/// The block of an inner route as a function of its own: its name, whole pattern and items
+type Part = (String, String, Vec<Node>);
 
 pub fn lower(program: Node) -> Node {
 	let (statements, bracket, separator) = crate::variable_signals::main_statements(&program);
@@ -45,10 +53,12 @@ pub fn lower(program: Node) -> Node {
 	}
 	let ends_with_route = statements.last().is_some_and(|last| route(last).is_some());
 	let main_variables = main_level_variables(&statements);
-	let routes: Vec<Route> = statements.iter().filter_map(route).collect();
+	let mut parts: Vec<Part> = vec![];
+	let routes: Vec<Route> = statements.iter().filter_map(route).flat_map(|(pattern, body)| flattened(&pattern, &body, &mut parts)).collect();
 	let routed = call(PAGE_ROUTED, vec![]);
 	let outlet = HashMap::from([(OUTLET.to_string(), routed.clone())]);
 	let mut lowered: Vec<Node> = vec![crate::wasp_parser::parse(ROUTER_MODULE_USE)];
+	lowered.extend(parts.iter().map(|(name, pattern, body)| function_with_globals(name, false, &route_body(pattern, body), &main_variables)));
 	lowered.extend(routes.iter().enumerate().map(|(index, (pattern, body))| function_with_globals(&format!("{ROUTE_PREFIX}{index}"), false, &route_body(pattern, body), &main_variables)));
 	lowered.push(function_with_globals(PAGE_ROUTES, false, &[patterns(&routes)], &main_variables));
 	lowered.push(function_with_globals(PAGE_ROUTE_INDEX, false, &matching(&routes), &main_variables));
@@ -71,6 +81,34 @@ fn route(statement: &Node) -> Option<Route> {
 		_ => return None,
 	};
 	(word.drop_meta().name() == ROUTE_WORD).then(|| (pattern, body.clone()))
+}
+
+/// The routes a route stands for: itself when its block holds none, else each inner route (flattened in turn) shown in
+/// its layout at the outlet, the inner block a part of its own, then the route itself with an empty outlet
+fn flattened(pattern: &str, body: &[Node], parts: &mut Vec<Part>) -> Vec<Route> {
+	let inner: Vec<Route> = body.iter().filter_map(route).collect();
+	if inner.is_empty() {
+		return vec![(pattern.to_string(), body.to_vec())];
+	}
+	let layout: Vec<Node> = body.iter().filter(|item| route(item).is_none()).cloned().collect();
+	let shown_at_outlet = |shown: Node| layout.iter().map(|item| crate::law::substitute(item, &HashMap::from([(OUTLET.to_string(), shown.clone())]))).collect::<Vec<Node>>();
+	let mut routes = vec![];
+	for (inner_pattern, inner_body) in inner {
+		for (whole, items) in flattened(&joined(pattern, &inner_pattern), &inner_body, parts) {
+			let part = format!("{PART_PREFIX}{}", parts.len());
+			parts.push((part.clone(), whole.clone(), items));
+			routes.push((whole, shown_at_outlet(call(&part, vec![]))));
+		}
+	}
+	routes.push((pattern.to_string(), shown_at_outlet(text(""))));
+	routes
+}
+
+/// "/users" and ":id" (or "/:id") → "/users/:id"; an inner "/" is the route's own path
+fn joined(outer: &str, inner: &str) -> String {
+	let inner = inner.trim_start_matches(PATH_SEPARATOR);
+	let outer = outer.trim_end_matches(PATH_SEPARATOR);
+	if inner.is_empty() { format!("{outer}{PATH_SEPARATOR}") } else { format!("{outer}{PATH_SEPARATOR}{inner}") }
 }
 
 /// The route's block after a `let` for each parameter of its pattern, typed when the parameter declares its type
