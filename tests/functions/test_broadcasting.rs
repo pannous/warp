@@ -74,3 +74,14 @@ fn a_function_of_several_values_broadcasts_over_its_list_argument() {
 	assert_eq!(eval("add(a, b) := a + b; add(all [1, 2], 10)").serialize(), "[11 12]");
 	assert_eq!(eval("square(x) := x*x; xs = [1, 2]; square(all xs)").serialize(), "[1 4]");
 }
+
+#[test] // cards sqrt-square and square-error: a range broadcasts like a list literal
+fn a_range_broadcasts_like_a_list() {
+	crate::is!("sqrt (1 to 4) == [1, sqrt 2, sqrt 3, 2]", true);
+	crate::is!("abs (-2 to 1)", warp::ints(vec![2, 1, 0, 1]));
+	crate::is!("xs = 1 to 3; sqrt xs == [1, sqrt 2, sqrt 3]", true);
+	crate::is!("use math; square (1 to 3)", warp::ints(vec![1, 4, 9]));
+	crate::is!("sq(x) := x*x; xs = 1 to 3; sq xs", warp::ints(vec![1, 4, 9]));
+	crate::is!("use math; square all 1 to 5", warp::ints(vec![1, 4, 9, 16, 25]));
+	crate::is!("sq(x) := x*x; sq all 1 to 5", warp::ints(vec![1, 4, 9, 16, 25]));
+}
