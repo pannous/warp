@@ -13,6 +13,7 @@ mod closures;
 pub use closures::{CLOSURE_CAPTURED, CLOSURE_REBUILD};
 pub(crate) mod exact;
 mod constructors;
+pub use constructors::NEW_BOOL;
 mod equality;
 mod function_builder;
 mod config;

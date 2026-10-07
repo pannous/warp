@@ -118,6 +118,9 @@ impl PartialEq<i64> for Node {
 			Node::Number(Number::Int(n)) => n == other,
 			Node::Number(Number::Float(f)) => *f == *other as f64,
 			Node::Number(Number::Real(r)) => r.to_f64() == *other as f64,
+			// a bool acts as 1/0 under == (notes/decisions.md, card bool-type)
+			True => *other == 1,
+			False => *other == 0,
 			Key(_, _, v) => v.as_ref().eq(other), // Compare value of Key
 			Meta { node, .. } => node.as_ref().eq(other),
 			Data(data) => data.downcast_ref::<crate::units::Quantity>().is_some_and(|quantity| quantity.is_amount(*other)),
