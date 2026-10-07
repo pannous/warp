@@ -108,6 +108,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
 		required.insert("map_find");
 	}
+	if required.contains(super::list_ops::ELEMENT_BODY) {
+		required.insert(super::list_ops::ELEMENT_CHILDREN);
+	}
 	if required.contains(super::list_ops::NODE_AT_KEY) {
 		required.extend(["node_index_at", "map_get"]);
 	}

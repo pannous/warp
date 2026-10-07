@@ -23,6 +23,15 @@ fn a_tag_over_a_list_literal() {
 	assert_eq!(html_of("ul{ h2{ \"Fruit\" } li all [\"apple\" \"pear\"] }"), "<ul><h2>Fruit</h2><li>apple</li><li>pear</li></ul>");
 }
 
+// card ul-li-fruit: a list among an element's children is spliced into them, also in the value, not only in its HTML
+#[test]
+fn a_list_among_children_is_spliced_into_them() {
+	let shown = |code: &str| eval(code).serialize();
+	assert_eq!(shown("fruits = [\"apple\" \"pear\"]\nul{ [li{ fruit } for fruit in fruits] }"), "ul{li:\"apple\" li:\"pear\"}");
+	assert_eq!(shown("fruits = [\"apple\" \"pear\"]\nul{ h2{ \"Fruit\" } li all fruits p{ \"end\" } }"), "ul{h2:\"Fruit\" li:\"apple\" li:\"pear\" p:\"end\"}");
+	assert_eq!(shown("fruits = []\nul{ h2{ \"Fruit\" } [li{ fruit } for fruit in fruits] }"), "ul:h2:\"Fruit\"");
+}
+
 #[test]
 fn a_tag_of_one_value_stays_one_tag() {
 	assert_eq!(html_of("ul{ li \"apple\" }"), "<ul><li>apple</li></ul>");

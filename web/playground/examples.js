@@ -194,7 +194,7 @@ def Counter(label, start) {
 	div{ button{ on click { count += 1 } "+" } p{ label + ": " + count } }
 }
 div{ Counter("Apples", 1) Counter("Pears", 5) }` },
-	cleanup: { value: 'div{button{data-wasp-click:"1" "hide pears"} span:"apples " [span:"pears "]}', printed: "hello apples\nhello pears\n", clicks: ["hide pears"], clicked: 'div{button{data-wasp-click:"1" "hide pears"} span:"apples " [ø]}', clickedPrinted: "hello apples\nhello pears\nbye pears\n", code: `// on mount and on cleanup run when a component appears and leaves
+	cleanup: { value: 'div{button{data-wasp-click:"1" "hide pears"} span:"apples " span:"pears "}', printed: "hello apples\nhello pears\n", clicks: ["hide pears"], clicked: 'div{button{data-wasp-click:"1" "hide pears"} span:"apples "}', clickedPrinted: "hello apples\nhello pears\nbye pears\n", code: `// on mount and on cleanup run when a component appears and leaves
 def Fruit(label) {
 	name = label
 	on mount { print "hello " + name }
@@ -203,7 +203,7 @@ def Fruit(label) {
 }
 pears = true
 div{ button{ on click { pears = false } "hide pears" } Fruit("apples") (if pears then Fruit("pears") else []) }` },
-	"keyed list": { value: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:1 "milk"} li{key:2 "eggs"} li{key:3 "tea"}]]}', clicks: ["rotate"], clicked: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:2 "eggs"} li{key:3 "tea"} li{key:1 "milk"}]]}', kept: true, keyed: true, code: `// with a key, a list item keeps its element when the list reorders
+	"keyed list": { value: 'div{button{data-wasp-click:"1" "rotate"} ul{li{key:1 "milk"} li{key:2 "eggs"} li{key:3 "tea"}}}', clicks: ["rotate"], clicked: 'div{button{data-wasp-click:"1" "rotate"} ul{li{key:2 "eggs"} li{key:3 "tea"} li{key:1 "milk"}}}', kept: true, keyed: true, code: `// with a key, a list item keeps its element when the list reorders
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{ button{ on click { todos = todos[1..] + [todos#1] } "rotate" } ul{ [li{ key: todo.id todo.text } for todo in todos] } }` },
 	"form binding": { value: 'div{label{"Name " input{value:"Ann" data-wasp-input:"1"}} p:"Hello Ann"}', typed: "Bob", clicked: 'div{label{"Name " input{value:"Bob" data-wasp-input:"1"}} p:"Hello Bob"}', kept: true, code: `// bind ties an input to a variable: type a name
@@ -221,7 +221,7 @@ users = ["Ann", "Bo"]
 route "/" { div{ h1{ "Users" } a{ href: "/users/2" "Bo" } } }
 route "/users/:id:int" { div{ h1{ users#id } a{ href: "/" "back" } } }
 route "*" { p{ "no such page" } }` },
-	transitions: { value: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:1 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "milk"} li{key:2 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "eggs"} li{key:3 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "tea"}]]}', clicks: ["rotate", "remove"], clicked: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:3 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "tea"} li{key:1 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "milk"}]]}', keyed: true, animated: true, code: `// CSS transitions: removed items fade out, the others glide
+	transitions: { value: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul{li{key:1 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "milk"} li{key:2 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "eggs"} li{key:3 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "tea"}}}', clicks: ["rotate", "remove"], clicked: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul{li{key:3 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "tea"} li{key:1 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "milk"}}}', keyed: true, animated: true, code: `// CSS transitions: removed items fade out, the others glide
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{
 	button{ on click { todos = todos[1..] + [todos#1] } "rotate" }
