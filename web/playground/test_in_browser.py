@@ -142,7 +142,7 @@ def browser(*arguments):
 
 def show_example(name):
 	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
-	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons, whether every element shown stayed (`kept`) and kept its key (`keyed`)"""
+	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`)"""
 	script = f"""(async () => {{
 		const name = {json.dumps(name)};
 		await playground.chooseExample(name);
@@ -156,6 +156,9 @@ def show_example(name):
 		const elements = [...rendered.querySelectorAll("*")];
 		const keys = elements.map(element => element.getAttribute("data-wasp-key"));
 		const field = rendered.querySelector("input");
+		let animations = 0;
+		const animate = Element.prototype.animate;
+		Element.prototype.animate = function (...options) {{ animations += 1; return animate.apply(this, options); }};
 		if (typed !== undefined && field) {{
 			field.value = typed;
 			field.dispatchEvent(new Event("input", {{ bubbles: true, composed: true }}));
@@ -165,9 +168,10 @@ def show_example(name):
 			[...rendered.querySelectorAll("button")].find(button => button.textContent === text)?.click();
 			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
 		}}
+		Element.prototype.animate = animate;
 		const kept = elements.every(element => element.isConnected);
 		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-wasp-key") === keys[index]);
-		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, kept, keyed }});
+		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, kept, keyed, animated: animations > 0 }});
 	}})()"""
 	shown = browser("eval", script)
 	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
@@ -197,7 +201,7 @@ def check_examples(names, page_url=None):
 	names = names or list(examples)
 	for name in names:
 		expected, shown = examples[name], show_example(name)
-		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "clicked", "kept", "keyed") if part in expected and shown[part] != expected[part]]
+		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "clicked", "kept", "keyed", "animated") if part in expected and shown[part] != expected[part]]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
 		if wrong:
 			failures.append(name)
