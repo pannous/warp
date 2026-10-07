@@ -6,6 +6,8 @@
 //! of a handler carries `data-wasp-instance`, which the page passes as `event.instance` (playground.js), so the handler
 //! (element_events.rs makes it main-level) changes its own instance's entry. The program's last line becomes the
 //! getter `page·markup`, which starts each render at the first instance.
+//! A component whose markup holds a style sheet names itself on its root element (`data-wasp-scope: "Card"`), so the
+//! sheet styles only its own elements (html.rs, card web-scoped).
 
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
 use crate::law::substitute;
@@ -32,6 +34,7 @@ const RESET: &str = "COUNTER = 0";
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program else { return program };
+	let statements: Vec<Node> = statements.into_iter().map(|statement| scoped_component(&statement).unwrap_or(statement)).collect();
 	if !statements.iter().any(has_element_handler) {
 		return Node::List(statements, bracket, separator);
 	}
@@ -75,6 +78,41 @@ fn stateful_component(statement: &Node) -> Option<StatefulComponent> {
 	let mentioned = handler_symbols(&statements);
 	let state: Vec<(String, Node)> = statements.iter().filter_map(assignment).filter(|(name, _)| mentioned.contains(name)).collect();
 	(!state.is_empty()).then_some((*head, statements, state))
+}
+
+/// `def Card(t) = div{ style{ "h2": {…} } h2{t} }`: the definition with its root element naming the component
+fn scoped_component(statement: &Node) -> Option<Node> {
+	let mut has_sheet = false;
+	statement.visit(&mut |part| has_sheet |= crate::html::is_style_sheet(part));
+	if !has_sheet {
+		return None;
+	}
+	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = crate::declarations::lower_c_functions(statement.clone()).drop_meta().clone() else { return None };
+	let Node::List(parts, Bracket::Round, _) = head.drop_meta() else { return None };
+	let name = parts.first()?.name();
+	let attribute = Node::Key(Box::new(Node::Symbol(crate::html::SCOPE_ATTRIBUTE.into())), Op::Colon, Box::new(Node::Text(name)));
+	let body = match *body {
+		Node::List(mut items, Bracket::Curly, separator) => {
+			let root = with_attribute(items.pop()?, attribute)?;
+			items.push(root);
+			Node::List(items, Bracket::Curly, separator)
+		}
+		root => with_attribute(root, attribute)?,
+	};
+	Some(Node::Key(head, op, Box::new(body)))
+}
+
+/// The element with the attribute first among its items
+fn with_attribute(element: Node, attribute: Node) -> Option<Node> {
+	let Node::Key(tag, op, content) = element.drop_meta().clone() else { return None };
+	if !crate::html::is_element_tag(&tag.drop_meta().name()) {
+		return None;
+	}
+	let items = match *content {
+		Node::List(items, Bracket::Curly, _) => items,
+		single => vec![single],
+	};
+	Some(Node::Key(tag, op, Box::new(Node::List(std::iter::once(attribute).chain(items).collect(), Bracket::Curly, Separator::Space))))
 }
 
 /// `x = value`: the name and the value

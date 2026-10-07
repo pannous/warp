@@ -118,5 +118,9 @@ Each step is useful on its own and is what the next ones stand on.
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
   sheet of rules (html.rs). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
   are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
-- Left: scoping a component's sheet to its own elements (a generated class per component), `.card { … }` written
+- Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
+  (`data-wasp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
+  `[data-wasp-scope="Card"] ` (html.rs), so they style only elements inside it (not the root itself; a nested
+  component's elements still match).
+- Left (warp-06 takes the parser bits): `.card { … }` written
   without quotes (the parser stops at `.`), `8px` written as a number with a unit (parses as 8 * px).

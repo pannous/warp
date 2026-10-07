@@ -30,6 +30,8 @@ const BOOLEAN_ATTRIBUTES: [&str; 8] = ["checked", "disabled", "selected", "reado
 const HEAD: &str = "head";
 /// the element of a style sheet and the attribute of an inline style (card web-styles)
 const STYLE: &str = "style";
+/// the attribute naming the component of an element, whose style sheets style only its elements
+pub const SCOPE_ATTRIBUTE: &str = "data-wasp-scope";
 /// CSS properties whose number has no unit; any other number is pixels
 const UNITLESS_PROPERTIES: [&str; 10] = ["opacity", "z-index", "font-weight", "line-height", "flex", "flex-grow", "flex-shrink", "order", "zoom", "tab-size"];
 /// `data-wasp-click` (element_events.rs) and any other data attribute
@@ -51,7 +53,7 @@ pub fn is_markup(node: &Node) -> bool {
 /// The HTML of a markup value; any other value as escaped text
 pub fn to_html(node: &Node) -> String {
 	let mut html = String::new();
-	write_node(node, &mut html);
+	write_node(node, None, &mut html);
 	html
 }
 
@@ -77,18 +79,19 @@ fn attribute_parts<'a>(node: &'a Node, parent: &str) -> Option<(&'a str, &'a Nod
 	(is_attribute && (plain || inline_style)).then_some((name.as_str(), value.as_ref()))
 }
 
-fn write_node(node: &Node, html: &mut String) {
+/// `scope`: the component whose elements a style sheet styles (data-wasp-scope, card web-scoped)
+fn write_node(node: &Node, scope: Option<&str>, html: &mut String) {
 	if let Some((tag, content)) = element_parts(node) {
-		return write_element(tag, content, html);
+		return write_element(tag, content, scope, html);
 	}
 	match node.drop_meta() {
-		Node::List(items, _, _) => items.iter().for_each(|item| write_node(item, html)),
+		Node::List(items, _, _) => items.iter().for_each(|item| write_node(item, scope, html)),
 		Node::Empty => {}
 		other => html.push_str(&escaped(&plain_text(other))),
 	}
 }
 
-fn write_element(tag: &str, content: &Node, html: &mut String) {
+fn write_element(tag: &str, content: &Node, scope: Option<&str>, html: &mut String) {
 	let items: Vec<&Node> = match content.drop_meta() {
 		Node::List(items, Bracket::Curly | Bracket::None, _) => items.iter().collect(),
 		Node::Empty => vec![],
@@ -97,7 +100,7 @@ fn write_element(tag: &str, content: &Node, html: &mut String) {
 	let (attributes, children): (Vec<&Node>, Vec<&Node>) = items.into_iter().partition(|item| attribute_parts(item, tag).is_some());
 	html.push('<');
 	html.push_str(tag);
-	for attribute in attributes {
+	for attribute in &attributes {
 		let (name, value) = attribute_parts(attribute, tag).expect("partitioned");
 		let name = if name == KEY { KEY_ATTRIBUTE } else { name };
 		if let Some(declarations) = declarations(value) {
@@ -115,8 +118,11 @@ fn write_element(tag: &str, content: &Node, html: &mut String) {
 		return;
 	}
 	match tag {
-		STYLE => html.push_str(&style_sheet(&children).replace("</", "<\\/")),
-		_ => children.into_iter().for_each(|child| write_node(child, html)),
+		STYLE => html.push_str(&style_sheet(&children, scope).replace("</", "<\\/")),
+		_ => {
+			let own_scope = attributes.iter().filter_map(|attribute| attribute_parts(attribute, tag)).find(|(name, _)| *name == SCOPE_ATTRIBUTE).map(|(_, value)| plain_text(value));
+			children.into_iter().for_each(|child| write_node(child, own_scope.as_deref().or(scope), html));
+		}
 	}
 	html.push_str(&format!("</{tag}>"));
 }
@@ -153,14 +159,25 @@ fn css_declarations(declarations: &[(String, &Node)]) -> String {
 }
 
 /// `style{ ".card": { padding: 8 } }`: each rule `selector { declarations }`; a text is CSS as written
-fn style_sheet(rules: &[&Node]) -> String {
+fn style_sheet(rules: &[&Node], scope: Option<&str>) -> String {
 	rules.iter().map(|rule| match rule.drop_meta() {
 		Node::Key(selector, Op::Colon, body) => match declarations(body) {
-			Some(declarations) => format!("{} {{ {} }}", plain_text(selector), css_declarations(&declarations)),
-			None => format!("{} {{ {} }}", plain_text(selector), style_sheet(&block_items(body))),
+			Some(declarations) => format!("{} {{ {} }}", scoped(&plain_text(selector), scope), css_declarations(&declarations)),
+			None => format!("{} {{ {} }}", plain_text(selector), style_sheet(&block_items(body), scope)),
 		},
 		other => plain_text(other),
 	}).collect::<Vec<_>>().join(" ")
+}
+
+/// `h2, p` in the component Card: `[data-wasp-scope="Card"] h2, [data-wasp-scope="Card"] p`
+fn scoped(selectors: &str, scope: Option<&str>) -> String {
+	let Some(scope) = scope else { return selectors.to_string() };
+	selectors.split(',').map(|selector| format!("[{SCOPE_ATTRIBUTE}=\"{scope}\"] {}", selector.trim())).collect::<Vec<_>>().join(", ")
+}
+
+/// `style{ ".card": { … } }`: a style sheet among an element's items (not the inline `style: { color: … }`)
+pub fn is_style_sheet(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(name, Op::Colon, value) if name.drop_meta().name() == STYLE && declarations(value).is_none())
 }
 
 fn kebab_case(name: &str) -> String {
