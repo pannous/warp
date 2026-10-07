@@ -9,8 +9,7 @@
 // shows before running it (host-routes.js loadRouteModule).
 
 const SITE_ROOT = "wasp-root";
-const SITE_MODULE = "app.wasm"; // beside this script, which a page at a deeper path names from the site's root
-const SITE_SCRIPT = document.currentScript.src;
+const SITE_MODULE = "app.wasm";
 const PAGE_HTML = "page·html";
 const SITE_EVENTS = { click: () => ({}), input: happened => inputDetail(happened.composedPath()[0]) };
 
@@ -45,7 +44,7 @@ function show() {
 }
 
 async function hydrate() {
-	const bytes = new Uint8Array(await (await fetch(new URL(SITE_MODULE, SITE_SCRIPT))).arrayBuffer());
+	const bytes = new Uint8Array(await (await fetch(SITE_MODULE)).arrayBuffer());
 	// stored values and those a `warp dev` page keeps across reloads (host.js STD_ADAPTERS.store, markup.js)
 	Object.assign(storedValues, keptValues());
 	self.keepStored = keepValue;

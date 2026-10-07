@@ -58,7 +58,7 @@ const PAGE_TEMPLATE: &str = r#"<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{title}}</title>
-</head>
+{{base}}</head>
 <body>
 <div id="{{root}}">{{body}}</div>
 {{scripts}}</body>
@@ -241,10 +241,13 @@ fn with_excerpt(code: &str, message: String) -> String {
 	[message].into_iter().chain(excerpt).collect::<Vec<_>>().join("\n")
 }
 
+/// A page at a deeper path than the site's files finds them, and the module and route modules they load, through its
+/// <base> (`root`); an in-page "#anchor" link there resolves against the root too
 fn page(title: &str, body: &str, scripts: &[(&str, &str)], root: &str) -> String {
-	let scripts: String = scripts.iter().map(|(name, _)| format!("<script src=\"{root}{name}\"></script>\n")).collect();
+	let scripts: String = scripts.iter().map(|(name, _)| format!("<script src=\"{name}\"></script>\n")).collect();
+	let base = if root == BESIDE { String::new() } else { format!("<base href=\"{root}\">\n") };
 	// the program's texts last, so nothing in them is read as a placeholder
-	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
+	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{base}}", &base).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
 }
 
 /// A script without its comment lines, blank lines and indentation (card web-bundle: host.js gzipped 24 → 17 KB); the

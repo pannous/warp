@@ -7,8 +7,6 @@ const PAGE_ROUTED_EXPORT = "page·routed"; // the value of the route the path pi
 const ROUTE_INDEX_EXPORT = "page·route_index"; // the index of the route the path picks
 const ROUTE_MODULE_PREFIX = "app-route-"; // src/route_split.rs: the module of route N is app-route-N.wasm
 const PLACEHOLDER_PREFIX = "placeholder."; // wasm-split's import module of the functions a route's module fills in
-// the route modules lie beside this script, which a page at a deeper path (/users/2) names from the site's root
-const ROUTES_SCRIPT = globalThis.document?.currentScript?.src ?? location.href;
 
 // the page goes to `path` (a link, the back button): page_path() gives it from now on, hooks.navigated hears it (a pending
 // fetch is dropped there); the caller shows the page anew (site.js, worker.js)
@@ -51,7 +49,7 @@ function loadRouteModule(holder) {
 	const name = ROUTE_MODULE_PREFIX + holder.exports[ROUTE_INDEX_EXPORT]?.();
 	if (!WebAssembly.Module.imports(holder.run.module).some(entry => entry.module === PLACEHOLDER_PREFIX + name)) return;
 	if (!loadedRoutes.has(name)) {
-		loadedRoutes.set(name, fetch(new URL(`${name}.wasm`, ROUTES_SCRIPT)).then(response => response.arrayBuffer())
+		loadedRoutes.set(name, fetch(`${name}.wasm`).then(response => response.arrayBuffer())
 			.then(bytes => WebAssembly.instantiate(bytes, { primary: holder.exports })));
 	}
 	return loadedRoutes.get(name);
