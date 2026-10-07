@@ -19,7 +19,7 @@ const VALUE_DELAY_MILLISECONDS = 50;
 let panicMessage; // the compiler's last panic message
 
 const post = message => self.postMessage(message);
-self.keepStored = (name, value) => post({ type: "stored", name, value }); // host.js STD_ADAPTERS.store
+self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host.js STD_ADAPTERS.store
 const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),

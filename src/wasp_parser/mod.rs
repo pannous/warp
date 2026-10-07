@@ -336,6 +336,8 @@ pub const TRY_MARKER: &str = "try·else";
 pub const AFTER_MARKER: &str = "after·return";
 /// `class dog extends animal {…}`: the class named on the right is the parent (P117)
 pub const EXTENDS_KEYWORD: &str = "extends";
+/// The field of a sum type's variant with one unnamed payload, `Some(T)`: `Some(3).value`; several are value1, value2…
+const VARIANT_FIELD: &str = "value";
 /// `mixin Walker{…}` declares fields and methods classes take in: `class Duck with Walker, Swimmer {…}`
 pub const MIXIN_WORD: &str = "mixin";
 pub const WITH_KEYWORD: &str = "with";
@@ -350,6 +352,8 @@ const AFTER_KEYWORD: &str = "after";
 const AND_KEYWORD: &str = "and";
 /// Words after `and` that continue an expression rather than start a statement: `a and b or c`
 const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
+/// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
+const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
@@ -767,7 +771,7 @@ fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 		.filter_map(|pair| {
 			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch)).collect();
 			let rest = &pair[1][name.len()..];
-			(rest.is_empty() || rest.starts_with(['(', '{', '<', ':', ';'])).then_some(name)
+			(rest.is_empty() || rest.starts_with(['(', '{', '<', '[', ':', ';'])).then_some(name)
 		})
 		.filter(|name| is_plain_name(name))
 		.collect()

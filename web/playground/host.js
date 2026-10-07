@@ -14,10 +14,11 @@ const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 const STD_ADAPTERS = {
 	json: { parse: text => JSON.parse(text), to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
 	os: { env: () => null }, // a page has no environment
-	// `stored theme = "dark"` (src/lowering/stored_values.rs): the page's values (worker.js), each save sent back to it
+	// `stored theme = "dark"` (src/lowering/stored_values.rs): the page's values (markup.js keptValues), each save sent
+	// back to it with its store (the dev store of a `warp dev` page, else the program's)
 	store: {
 		load: (name, fallback) => name in storedValues ? storedValues[name] : fallback,
-		save: (name, value) => { storedValues[name] = value; self.keepStored?.(name, value); return null; },
+		save: (name, value, file) => { storedValues[name] = value; self.keepStored?.(name, value, file); return null; },
 	},
 	regex: {
 		matches: (subject, pattern) => regexOf(pattern).test(subject),

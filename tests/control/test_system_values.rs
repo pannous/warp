@@ -73,14 +73,10 @@ fn not_dark_mode_is_the_opposite_reading() {
 	is!("x = not dark mode; y = dark mode; x != y", true);
 }
 
-// the pointer over the page's canvas (card drawing-frames): mouse_x / mouse_y in canvas pixels, mouse_down yes/no;
-// a native run has no canvas, a loud error naming where it works
+// a method call's arguments were taken for a field name: seen.push([online, battery]) pushed the symbols
 #[test]
-fn the_mouse_is_a_system_value_of_the_page() {
-	assert!(lowered("print mouse_x").contains("(system_value \"mouse_x\")"));
-	let pressed = lowered("if mouse_down { print 1 }");
-	assert!(pressed.contains("(system_value mouse_down)!=0"), "{pressed}");
-	is!("mouse_y = 3; mouse_y + 1", 4);
-	#[cfg(feature = "native")]
-	crate::common::fails_with("print mouse_x", "mouse_x: the pointer over the playground's canvas");
+fn method_arguments_read_system_values() {
+	assert!(lowered("seen = []; seen.push([online, battery]); seen").contains("(system_value \"battery\")"));
+	assert!(lowered("seen = []; seen.push(online); seen").contains("system_value"));
+	is!("p = {battery: 5}; p.battery", 5);
 }

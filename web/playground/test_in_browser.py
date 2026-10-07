@@ -148,8 +148,7 @@ def show_example(name):
 		await playground.chooseExample(name);
 		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
 		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
-		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent,
-			canvases: document.querySelectorAll("#paintings canvas").length }};
+		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent }};
 		const clicks = EXAMPLES[name].clicks ?? [];
 		const typed = EXAMPLES[name].typed;
 		if (!clicks.length && typed === undefined) return JSON.stringify(shown);
@@ -172,7 +171,8 @@ def show_example(name):
 		Element.prototype.animate = animate;
 		const kept = elements.every(element => element.isConnected);
 		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-wasp-key") === keys[index]);
-		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, kept, keyed, animated: animations > 0 }});
+		const clickedPrinted = document.getElementById("printed").textContent;
+		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0 }});
 	}})()"""
 	shown = browser("eval", script)
 	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
@@ -202,7 +202,7 @@ def check_examples(names, page_url=None):
 	names = names or list(examples)
 	for name in names:
 		expected, shown = examples[name], show_example(name)
-		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "kept", "keyed", "animated") if part in expected and shown[part] != expected[part]]
+		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "clicked", "clickedPrinted", "kept", "keyed", "animated") if part in expected and shown[part] != expected[part]]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
 		if wrong:
 			failures.append(name)

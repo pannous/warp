@@ -1,0 +1,21 @@
+html{
+	body{
+		h1: "Shop"
+		h3: "Fruit"
+		img{ src: "apple.png" }
+		img{ src: "line.png" alt: "" }
+		input{ placeholder: "name" }
+		input{ type: "hidden" name: "token" }
+		input{ id: "email" }
+		label{ for: "email" "Email" }
+		label{ "Age" input{ type: "number" } }
+		textarea{}
+		button{ img{ src: "x.png" alt: "" } }
+		button{ "Save" }
+		button{ aria-label: "close" }
+		a{ "home" }
+		a{ href: "/" }
+		p{ id: "x" "a" }
+		p{ id: "x" "b" }
+	}
+}
