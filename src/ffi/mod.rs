@@ -90,8 +90,12 @@ pub fn undefined_function_message(name: &str) -> String {
     if let Some(module) = crate::modules::std_module_defining(name) {
         return format!("{name} is in the standard module {module}: write `use {module}`");
     }
-    match get_ffi_signature_from_lib(name, "c") {
-        Some(_) => format!("{name} is a C function: write `use c` or `import {name} from \"c\"`"),
+    if get_ffi_signature_from_lib(name, "c").is_some() {
+        return format!("{name} is a C function: write `use c` or `import {name} from \"c\"`");
+    }
+    match get_ffi_signature_from_lib(name, "m") {
+        // only f64 functions link by themselves (analyzer imports.rs is_f64_header_function)
+        Some(_) => format!("{name} is a libm function with a parameter other than a float: not supported yet"),
         None => format!("undefined function: {name}"),
     }
 }

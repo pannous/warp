@@ -2,6 +2,7 @@
 use crate::is;
 
 #[test]
+#[allow(clippy::approx_constant, reason = "the digits libm returns, written out as the program prints them")]
 fn trigonometry_and_logarithms_from_libm() {
 	is!("hypot(3, 4)", 5);
 	is!("atan2(1, 1) * 4", 3.141592653589793);

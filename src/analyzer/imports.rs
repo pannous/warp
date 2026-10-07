@@ -238,7 +238,16 @@ pub(super) fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
 	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == "sqrt";
 	let mut implicit: Vec<&str> = crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_builtin(name)).collect();
 	implicit.push(LIBM_LN); // ffi.rs signs it as libm's log
-	add_called_library_imports(ctx, node, "m", &|name| implicit.contains(&name));
+	add_called_library_imports(ctx, node, "m", &|name| implicit.contains(&name) || (!is_builtin(name) && is_f64_header_function(name)));
+}
+
+/// A function math.h declares with f64 parameters and an f64 result (exp2, cbrt, erf): it links from libm like the
+/// listed ones (card call-name: it compiled to its last argument)
+fn is_f64_header_function(name: &str) -> bool {
+	use wasm_encoder::ValType::F64;
+	crate::ffi::get_signatures_from_headers("m").get(name).is_some_and(|signature| {
+		!signature.params.is_empty() && signature.params.iter().all(|param| *param == F64) && signature.results == [F64]
+	})
 }
 
 /// Import from `library` every function the program calls that `is_candidate` accepts, unless the program imports or
