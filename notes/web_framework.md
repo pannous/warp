@@ -77,9 +77,13 @@ Each step is useful on its own and is what the next ones stand on.
   playground.js `morphChildren` changes only the text nodes and attributes that differ, matching nodes by position;
   a node of another kind or tag is replaced. Elements keep their identity, focus, input and scroll state. Tour example
   "fine updates" checks it (`clicks`, `clicked`, `kept` in examples.js, test_in_browser.py --examples).
-- Left (compute side, card web-fine-holes): the markup is still evaluated whole after each handler. Per-hole updates
-  (each signal-reading text or attribute its own derived binding, only the changed ones sent) need the lowering to
-  mark the holes; worth it once markup gets large (web-components).
+- Done (compute side, card web-fine-holes): the holes of shown markup are the outermost elements holding a computed
+  text, attribute or child directly (html.rs `holes`); each is its own binding `page·hole·<path>` (event_signals.rs),
+  the path its element indices from the root, which the fixed elements above it keep stable. After a handler worker.js
+  reads only the holes and sends `patches` for those whose HTML changed; playground.js morphs just those elements. The
+  value text follows once events pause (50 ms). Falls back to the whole markup when the root itself holds a computed
+  part, when the last line is a name (components: `page·markup`), or when a hole fails.
+- Left: holes inside components (an instance's elements by instance), text-node granularity (a hole is an element).
 - Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
 
 ## Step 4 (web-components), what is done and what is left
@@ -142,5 +146,37 @@ Each step is useful on its own and is what the next ones stand on.
   A program with a top-level test block that renders runs its tests host-side on headless pages: the code outside the
   tests is the setup, other lines in a test are its own setup, `check` holds with `text` / `html` bound to the page.
   Its value is `2 tests passed` or an Error naming each failed test, the check and what the page shows. Source text is
-  used throughout (Node::serialize drops quotes in places). While a page renders, event_signals skips its warning
-  that a native run never raises page events (headless::rendering).
+  used throughout (Node::serialize drops quotes in places). A headless page compiles for a page (pipeline::for_a_page),
+  so its page events draw no warning.
+
+## Built sites (card web-ssr, 2026-10-07; split agreed with warp-cd, renderer decided by warp-96)
+- `warp build --site app.wasp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
+  host.js, markup.js, site.js, carried in the warp binary (src/site.rs include_str!, one source with the playground).
+  index.html holds the program's value as HTML, rendered at build time (server-side rendering): the page reads
+  without JavaScript. Pages are compiled with the reflection getters the browser host needs (pipeline::for_a_page),
+  and their page event handlers draw no "a native run never raises it" warning.
+- Hydration (web/playground/site.js): the loader runs app.wasm with host.js in the page; main runs once as it ran at
+  build time, so the component instances count alike. The DOM stays; click and input on the root find their element's
+  handler (markup.js elementEvent), and after a handler the page morphs (markup.js morphChildren) the HTML the program
+  renders itself.
+- One renderer (warp-96: "Wasp is wasm-first"): the HTML of the live updates comes from the program, an export
+  page·html that the emitter builds, reusing how print renders Nodes inside wasm; no second renderer in JS, no
+  compiler shipped with the site. Once page·html exists, the build-time rendering runs that same export natively and
+  src/html.rs no longer renders sites. Until then a built page is static after load (site.js warns on the console).
+- Open: page·html (next step); timers and fetch replies in a built page (site.js has the hooks, no timer loop yet);
+  `serve` programs serving their own page.
+
+## Step 12 (web-stores), what is done and what is left
+- Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
+  value an earlier run kept under its name, else the default; `on change theme` keeps each change. Natively the values
+  are JSON in `<program>.stored.json` beside the program (in memory for inline code), in the playground the page's
+  localStorage (`wasp stored <name>`): the worker gets them at start and sends each save back (host.js
+  STD_ADAPTERS.store, playground.js keepStored). Values cross as JSON (std_adapters, as foreign calls).
+- Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
+  main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
+  old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
+  `stored` are soft keywords.
+- Shared stores: a used module's main-level variables are already shared (`use settings` reads and writes its theme),
+  but a program's `on change theme` misses writes made by the module's functions: card module-signal-writes
+  (probes/stores/app.wasp). Context (a value for a subtree of components without props): question with the
+  Interviewer; default until then: main-level variables, which every component reads.

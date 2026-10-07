@@ -29,15 +29,6 @@ const VOID_ELEMENTS: [&str; 13] = ["area", "base", "br", "col", "embed", "hr", "
 const HIDDEN_CONTENT: [&str; 2] = ["style", "script"];
 const ENTITIES: [(&str, &str); 5] = [("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&amp;", "&")];
 
-thread_local! {
-	static RENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// Is a headless page being compiled: its page events do come (event_signals.rs warns of them otherwise)
-pub fn rendering() -> bool {
-	RENDERING.with(std::cell::Cell::get)
-}
-
 pub struct Page {
 	markup: Node,
 	#[cfg(feature = "native")]
@@ -47,10 +38,8 @@ pub struct Page {
 impl Page {
 	/// Runs the program; Err is its value when it fails or needs no module
 	pub fn render(code: &str) -> Result<Page, Node> {
-		RENDERING.with(|rendering| rendering.set(true));
-		let module = crate::pipeline::compile(code);
-		RENDERING.with(|rendering| rendering.set(false));
-		let module = module?;
+		// compiled for a page: its page events do come
+		let module = crate::pipeline::for_a_page(|| crate::pipeline::compile(code))?;
 		#[cfg(feature = "native")]
 		let page = native::Run::start(module).map(|(markup, run)| Page { markup, run });
 		#[cfg(not(feature = "native"))]

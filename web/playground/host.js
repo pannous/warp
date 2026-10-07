@@ -77,6 +77,11 @@ const STD_ADAPTERS = {
 		},
 	},
 	os: { env: () => null }, // a page has no environment
+	// `stored theme = "dark"` (src/lowering/stored_values.rs): the page's values (worker.js), each save sent back to it
+	store: {
+		load: (name, fallback) => name in storedValues ? storedValues[name] : fallback,
+		save: (name, value) => { storedValues[name] = value; self.keepStored?.(name, value); return null; },
+	},
 	net: { post: (url, body) => postSync(url, contentText(body)) },
 	hash: { sha256: subject => sha256Hex(utf8.encode(contentText(subject))), crc32: subject => crc32Of(utf8.encode(contentText(subject))) },
 	regex: {
@@ -100,6 +105,8 @@ function regexOf(pattern, flags = "") {
 	if (feature) throw new Error(`${feature} is not in wasp's regex (one engine lacks it): ${pattern}`);
 	return new RegExp(pattern, flags + "u");
 }
+// the stored values of `stored x = v`, by name: the page's localStorage as the worker started (playground.js)
+const storedValues = {};
 // the files std's file module wrote, kept while the page is open: read and the file words see them before the served ones
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");

@@ -79,6 +79,7 @@ function startWorker() {
 	workerReady = new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
 			if (data.type === "ready") return resolve();
+			if (data.type === "stored") return keepStored(data.name, data.value);
 			if (data.type === "failed") return reject(new Error(data.message));
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") pending.listening = data.events;
@@ -90,6 +91,27 @@ function startWorker() {
 	});
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
 	tellSystemValues();
+	worker.postMessage({ stored: storedValues() });
+}
+
+// `stored theme = "dark"` (src/lowering/stored_values.rs): the page keeps each stored value in localStorage as JSON,
+// the worker gets them all when it starts and sends each change back (host.js STD_ADAPTERS.store)
+const STORED_PREFIX = "wasp stored ";
+function storedValues() {
+	try {
+		const names = Object.keys(localStorage).filter(key => key.startsWith(STORED_PREFIX));
+		return Object.fromEntries(names.map(key => [key.slice(STORED_PREFIX.length), JSON.parse(localStorage.getItem(key))]));
+	} catch (failure) {
+		console.error("stored values could not be read from localStorage:", failure);
+		return {};
+	}
+}
+function keepStored(name, value) {
+	try {
+		localStorage.setItem(STORED_PREFIX + name, JSON.stringify(value));
+	} catch (failure) {
+		console.error(`stored ${name} could not be kept in localStorage:`, failure);
+	}
 }
 
 // the system values a Worker cannot read itself (host.js system_value), sent again when they change
@@ -305,11 +327,24 @@ function showEventOutput(data) {
 		$("printed").hidden = false;
 	}
 	if (data.type === "paint") showPaintings([data]);
-	if (data.type === "handled") {
+	if (data.type !== "handled") return;
+	if (data.value !== undefined) {
 		$("value").textContent = data.value;
 		$("value").classList.toggle("error", data.error);
-		showRendered(data.html);
 	}
+	if (data.html !== undefined) showRendered(data.html);
+	(data.patches ?? []).forEach(showPatch);
+}
+
+// one element of the shown markup anew (card web-fine-holes): `path` its element indices from the root down
+function showPatch({ path, html }) {
+	const root = $("rendered").shadowRoot;
+	const shown = path.reduce((element, index) => element?.children[index], root?.children[0]);
+	const template = document.createElement("template");
+	template.innerHTML = html;
+	const wanted = template.content.children[0];
+	if (shown && wanted && shown.nodeName === wanted.nodeName) morphElement(shown, wanted);
+	else console.error(`markup hole ${path.join("·")}: no ${wanted?.nodeName} there to update`, shown);
 }
 
 async function show(code) {
