@@ -59,6 +59,8 @@ pub mod dev_server;
 pub mod fetches;
 #[cfg(feature = "native")]
 pub mod components;
+#[cfg(feature = "native")]
+pub mod component_builder;
 pub mod ffi;
 pub mod ffi_parser;
 pub mod function;

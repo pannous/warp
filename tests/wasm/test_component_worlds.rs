@@ -27,3 +27,17 @@ fn an_unknown_interface_is_named() {
 	let failure = warp::component_worlds::world_wit(&parse("component c { export api: missing }")).unwrap_err();
 	assert!(failure.contains("missing"), "{failure}");
 }
+
+/// step 2: `warp build --component` makes a component of the world's exports, which another program uses like any
+#[cfg(feature = "native")]
+#[test]
+fn a_built_component_is_used_by_another_program() {
+	let directory = crate::common::scratch_directory("built_component");
+	std::fs::create_dir_all(&directory).unwrap();
+	let path = directory.join("calc.wasm");
+	let source = "interface calculator { add: (i32, i32) -> i32; scale: (f64) -> f64 }\ncomponent calc { export api: calculator }\nexport def add(a: i32, b: i32) -> i32 { a + b }\nexport def scale(x: f64) -> f64 { x * 2.5 }\n0";
+	std::fs::write(&path, warp::component_builder::build(source).expect("a component")).unwrap();
+	let using = format!("use wasm \"{}\" as calc\n", path.display());
+	is!(&format!("{using}calc.add(2, 3)"), 5);
+	is!(&format!("{using}calc.scale(2.0)"), 5.0);
+}
