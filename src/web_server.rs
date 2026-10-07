@@ -55,9 +55,17 @@ impl Answer {
 pub fn routes_of(routes: &Node) -> Vec<Route> {
 	let Node::List(items, _, _) = routes.drop_meta() else { return vec![] };
 	items.iter().filter_map(|route| match route.drop_meta() {
-		Node::List(parts, _, _) if parts.len() == 3 => Some(Route { method: parts[0].name(), path: parts[1].name(), function: parts[2].name() }),
+		Node::List(parts, _, _) if parts.len() == 3 => Some(Route { method: text_of(&parts[0]), path: text_of(&parts[1]), function: text_of(&parts[2]) }),
 		_ => None,
 	}).collect()
+}
+
+/// A text of the route table; the path "/" arrives as a one-character Char
+fn text_of(node: &Node) -> String {
+	match node.drop_meta() {
+		Node::Char(character) => character.to_string(),
+		other => other.name(),
+	}
 }
 
 /// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function
