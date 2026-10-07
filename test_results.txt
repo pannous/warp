@@ -2658,6 +2658,7 @@ PASSED:
   ✓ types::test_type_of::test_type_inside_a_function_body
   ✓ types::test_type_of::test_type_symbol
   ✓ types::test_type_of::test_type_typed_variable
+  ✓ types::test_type_of::test_type_without_parentheses
   ✓ types::test_type_of_real_variable::a_variable_holding_pi_is_real
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
   ✓ types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is
@@ -3345,4 +3346,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3340 passed, 0 failed, 3340 total tested
+19 ignored, 3341 passed, 0 failed, 3341 total tested
