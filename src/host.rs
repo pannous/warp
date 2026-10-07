@@ -780,7 +780,7 @@ fn gpu_compute(mut caller: Caller<'_, HostState>, shader: HostNode, numbers: Hos
 	};
 	let numbers = given_node(&mut caller, numbers)?;
 	let floats = numbers.iter().map(|number| match number.drop_meta() {
-		Node::Number(number) => Ok(f64::from(number.clone()) as f32),
+		Node::Number(number) => Ok(f64::from(*number) as f32),
 		other => Err(failure(format!("it computes over numbers, got {}", other.serialize()))),
 	}).collect::<wasmtime::Result<Vec<f32>>>()?;
 	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;

@@ -88,6 +88,6 @@ fn compile_errors(module: &wgpu::ShaderModule) -> Vec<String> {
 /// innermost cause (`Unable to find entry point 'main'`)
 fn essence(report: &str) -> String {
 	let lines = || report.lines().map(str::trim).filter(|line| !line.is_empty());
-	let cause = lines().find_map(|line| line.split_once("error: ").map(|(_, why)| why)).or_else(|| lines().last());
+	let cause = lines().find_map(|line| line.split_once("error: ").map(|(_, why)| why)).or_else(|| lines().next_back());
 	cause.unwrap_or(report).to_string()
 }
