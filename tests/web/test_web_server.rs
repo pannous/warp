@@ -38,10 +38,8 @@ fn serve_answers_routes() {
 
 // typed RPC (notes/web_framework.md "Server and page"): `server def f(…)` is also POST /rpc/f, the arguments a JSON
 // array, the result JSON
-// open (card rpc-arguments): the RPC route's call of f fails (500) while f's parameters, fed only by JSON values of
-// unknown kind, default to Int; to be annotated any
+// a server function's unannotated parameters take any value (card rpc-arguments)
 #[test]
-#[ignore = "next"]
 fn a_server_function_is_called_over_http() {
 	const RPC_PORT: u16 = 18432;
 	let server = std::thread::spawn(|| {
