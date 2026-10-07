@@ -22,6 +22,17 @@ fn the_block_after_the_call_is_the_children() {
 	assert_eq!(html_of(&format!("{CARD}section{{ Card(\"Hi\") {{ p:\"text\" em:\"x\" }} }}")), format!("<section>{card}</section>"));
 }
 
+// each instance keeps its own state (component_state.rs): the page passes the clicked instance as event.instance
+// (tour example "components", test_in_browser.py --examples clicks it)
+const COUNTER: &str = "def Counter(start) {\n\tcount = start\n\tdiv{ button{ on click { count += 1 } \"+\" } p{ \"n \" + count } }\n}\n";
+
+#[test]
+fn each_instance_of_a_component_has_its_own_state() {
+	let counter = |instance: usize, count: usize| format!("<div><button data-wasp-instance=\"{instance}\" data-wasp-click=\"1\">+</button><p>n {count}</p></div>");
+	assert_eq!(html_of(&format!("{COUNTER}div{{ Counter(1) Counter(5) }}")), format!("<div>{}{}</div>", counter(1, 1), counter(2, 5)));
+	assert_eq!(html_of(&format!("{COUNTER}Counter(3)")), counter(1, 3));
+}
+
 #[test]
 fn a_trailing_block_fills_a_function_parameter() {
 	assert_eq!(eval("def apply(x, f) = f(x)\napply(3) { it * 2 }").serialize(), "6");

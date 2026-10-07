@@ -27,14 +27,14 @@ pub fn lower(program: Node) -> Node {
 	Node::List(lowered, bracket, separator)
 }
 
-fn has_element_handler(node: &Node) -> bool {
+pub(crate) fn has_element_handler(node: &Node) -> bool {
 	let mut found = false;
 	node.visit(&mut |part| found |= element_items(part).is_some_and(|items| (0..items.len()).any(|index| handler_at(items, index).is_some())));
 	found
 }
 
 /// The items of an element's block: `button{ … }` (a block of anything else is code, its `on click` page-wide)
-fn element_items(node: &Node) -> Option<&Vec<Node>> {
+pub(crate) fn element_items(node: &Node) -> Option<&Vec<Node>> {
 	let Node::Key(tag, Op::Colon | Op::None, content) = node else { return None };
 	let Node::Symbol(tag) = tag.drop_meta() else { return None };
 	match content.drop_meta() {
@@ -44,7 +44,7 @@ fn element_items(node: &Node) -> Option<&Vec<Node>> {
 }
 
 /// `on click {…}` at `index` of a tag's items, as a block reads it (`on`, then `click: {…}`) or as a statement does
-fn handler_at(items: &[Node], index: usize) -> Option<(String, Node, usize)> {
+pub(crate) fn handler_at(items: &[Node], index: usize) -> Option<(String, Node, usize)> {
 	if !matches!(items.get(index)?.drop_meta(), Node::Symbol(word) if word == ON_WORD) {
 		return None;
 	}

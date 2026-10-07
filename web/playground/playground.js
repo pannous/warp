@@ -13,6 +13,7 @@ const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
+const INSTANCE_ATTRIBUTE = "data-wasp-instance"; // a component instance's elements (src/lowering/element_events.rs)
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -304,11 +305,14 @@ function sendPageEvent(event, detail) {
 	if (listening.has(event)) worker.postMessage({ event, detail });
 }
 
-// an event inside the shown markup, for the handler of the element it happened in (data-wasp-click="1": click·1)
+// an event inside the shown markup, for the handler of the element it happened in (data-wasp-click="1": click·1); in
+// a component (data-wasp-instance="2", element_events.rs) the event names its instance
 function sendElementEvent(event, happened, detail) {
 	const attribute = `data-wasp-${event}`;
-	const element = happened.composedPath().find(node => node.getAttribute?.(attribute));
-	if (element) sendPageEvent(`${event}·${element.getAttribute(attribute)}`, detail);
+	const path = happened.composedPath();
+	const element = path.find(node => node.getAttribute?.(attribute));
+	const instance = path.find(node => node.getAttribute?.(INSTANCE_ATTRIBUTE))?.getAttribute(INSTANCE_ATTRIBUTE);
+	if (element) sendPageEvent(`${event}·${element.getAttribute(attribute)}`, instance ? { ...detail, instance: Number(instance) } : detail);
 }
 
 function clickDetail(click) {

@@ -23,6 +23,12 @@ div{ button{ on click { count += 1 } "+1" } button{ on click { count = 0 } "rese
 done = false
 toggles = 0
 div{ button{ on click { done = not done; toggles += 1 } "toggle" } p{ class: done ? "done" : "open" "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
+	components: { value: 'div{div{button{data-wasp-instance:1 data-wasp-click:"1" \'+\'} p:"Apples: 1"} div{button{data-wasp-instance:2 data-wasp-click:"1" \'+\'} p:"Pears: 5"}}', clicks: ["+"], clicked: 'div{div{button{data-wasp-instance:1 data-wasp-click:"1" \'+\'} p:"Apples: 2"} div{button{data-wasp-instance:2 data-wasp-click:"1" \'+\'} p:"Pears: 5"}}', kept: true, code: `// a component is a function returning markup; each one on the page keeps its own count
+def Counter(label, start) {
+	count = start
+	div{ button{ on click { count += 1 } "+" } p{ label + ": " + count } }
+}
+div{ Counter("Apples", 1) Counter("Pears", 5) }` },
 	functions: { value: "25", code: `// a function, called with or without parentheses
 def square(x) = x*x
 square(4) + square 3` },
