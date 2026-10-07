@@ -9,3 +9,10 @@ fn a_one_character_argument_is_a_text() {
 	is!("g(t) := t; x = \"3\"; g(x)", "3");
 	is!("g(t) := count(t); g(\"a\") + g(\"bc\")", 3);
 }
+
+// card char-text: ord of a one-character text, as such a parameter now holds, is its code point
+#[test]
+fn ord_of_a_one_character_text_is_its_code_point() {
+	is!("f(c) := ord(c); f('a')", 97);
+	is!("ord(\"é\")", 233);
+}
