@@ -8,6 +8,8 @@ use wasmtime::{Instance, Memory, Module, Rooted, Store, StructRef, Val};
 const KIND_MASK: i64 = 0xff;
 const KIND_TEXT: i64 = 3;
 const KIND_ERROR: i64 = 11;
+const TEXT_HEAP_EXPORT: &str = "text_heap";
+const PAGE_BITS: usize = 16;
 
 struct Compiled {
 	store: Store<HostState>,
@@ -50,11 +52,20 @@ impl Compiled {
 		self.read(&node)
 	}
 
-	/// a text node made by the module from bytes written past its memory, as the browser host does
+	/// a text node made by the module from bytes written past its memory, as the browser host does: from its text heap
+	/// (web/uniscript/uniscript.js writeBytes), the heap pointer moved past them, so texts the module builds later never
+	/// overwrite them
 	fn new_text(&mut self, text: &str) -> Val {
 		let memory = self.memory();
-		let pointer = memory.grow(&mut self.store, 1).unwrap() << 16;
-		memory.write(&mut self.store, pointer as usize, text.as_bytes()).unwrap();
+		let heap = self.instance.get_global(&mut self.store, TEXT_HEAP_EXPORT).expect("the text heap export");
+		let memory_end = memory.data_size(&self.store);
+		let mut pointer = heap.get(&mut self.store).unwrap_i32() as usize;
+		if pointer == 0 || pointer + text.len() > memory_end {
+			memory.grow(&mut self.store, (text.len() >> PAGE_BITS) as u64 + 1).unwrap();
+			pointer = memory_end;
+		}
+		memory.write(&mut self.store, pointer, text.as_bytes()).unwrap();
+		heap.set(&mut self.store, Val::I32((pointer + text.len()) as i32)).unwrap();
 		self.call("new_text", &[Val::I32(pointer as i32), Val::I32(text.len() as i32)])
 	}
 
@@ -78,5 +89,6 @@ fn compiled_uniscript_converts_like_the_browser_page() {
 	uniscript.main();
 	assert_eq!(uniscript.apply("uniscript", "<:alpha> <:fracture A> \\:infinity"), (KIND_TEXT, "α 𝔄 ∞".to_string()));
 	assert_eq!(uniscript.apply("uniscript", "<:nosuchthing>"), (KIND_ERROR, "unknown uniscript entity: nosuchthing".to_string()));
-	assert_eq!(uniscript.apply("unicode_to_uniscript", "α 𝔄"), (KIND_TEXT, "<:alpha> <:fracture A>".to_string()));
+	assert_eq!(uniscript.apply("unicode_to_uniscript", "α 𝔄"), (KIND_TEXT, "\\:alpha \\:fracture-A".to_string()));
 }
+
