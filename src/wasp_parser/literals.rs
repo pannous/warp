@@ -199,20 +199,21 @@ impl WaspParser {
 		(words.first() == Some(&"as") && is_number).then(|| number_type.to_string())
 	}
 
-	/// `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$x`, `$ `).
-	/// User decision D1: "only the one with the curly braces must interpolate the other is text like dollar money".
+	/// `${expr}` or `$(expr)` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$x`,
+	/// `$ `). User decision D1: "only the one with the curly braces must interpolate the other is text like dollar
+	/// money"; card dollar-paren (user, 2026-10-07): `$()` behaves just like `${}`.
 	pub(super) fn parse_dollar_hole(&mut self) -> Result<Option<String>, String> {
 		let (line, column) = self.get_position();
-		let next = self.peek_char(1);
-		let expression = if next == '{' {
-			self.advance_by(2);
-			let expression = self.text_until_closing('{', '}')?;
-			set_hint_position(line, column);
-			norm::interpolation(&format!("${{{expression}}}"), &expression);
-			expression
-		} else {
-			return Ok(None);
+		let open = self.peek_char(1);
+		let close = match open {
+			'{' => '}',
+			'(' => ')',
+			_ => return Ok(None),
 		};
+		self.advance_by(2);
+		let expression = self.text_until_closing(open, close)?;
+		set_hint_position(line, column);
+		norm::interpolation(&format!("${open}{expression}{close}"), &expression);
 		Ok(Some(expression))
 	}
 
