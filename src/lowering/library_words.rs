@@ -658,7 +658,7 @@ impl Lowering {
 		if let Some(lookup) = self.of_lookup(items) {
 			return Some(lookup);
 		}
-		if let Some(membership) = self.membership(items) {
+		if let Some(membership) = self.membership(items).or_else(|| self.containment(items)) {
 			return Some(membership);
 		}
 		if let Some(raised) = raise_call(items) {
@@ -776,6 +776,15 @@ impl Lowering {
 		Some(self.call(COLLECTION_POSITION, in_word, vec![collection.clone(), element.clone()], false))
 	}
 
+	/// `xs contains x`, `xs has x`, `xs includes x`: the method `xs.contains(x)` written between its two values, unless
+	/// the program defines the word
+	fn containment(&self, items: &[Node]) -> Option<Node> {
+		let [collection, word, element] = items else { return None };
+		let Node::Symbol(name) = word.drop_meta() else { return None };
+		let canonical = self.library_word_for(name, 2).filter(|canonical| *canonical == COLLECTION_CONTAINS)?;
+		Some(self.call(canonical, word, vec![collection.clone(), element.clone()], false))
+	}
+
 	/// `x.word` and `x.word(args)`; an unknown word on a value is an error
 	fn method_call(&self, receiver: &Node, method: &Node) -> Option<Node> {
 		// `pair.0` is the first item of a tuple or list, counted from 0 like `pair[0]`
@@ -799,7 +808,12 @@ impl Lowering {
 		if let Some(word) = self.library_word_for(name, arguments.len() + 1).filter(|_| is_called || counting_method(name, &self.context).is_none()) {
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
-		// `x.square` and `x.add(y)` call the user function with the receiver as first argument
+		// `x.square` and `x.add(y)` call the user function with the receiver as first argument; `l.start` of an object
+		// with a field start reads the field, even beside a function start (`start(l) := l.start`)
+		let reads_declared_field = !is_called && self.instances.is_declared_field(name) && (self.is_parameter(receiver) || self.instances.shape(receiver).is_some());
+		if reads_declared_field {
+			return Some(field_lookup(receiver, name, word_node));
+		}
 		if self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty()) {
 			let call = [vec![word_node.clone(), receiver.clone()], arguments].concat();
 			return Some(Node::List(call, Bracket::Round, Separator::None));

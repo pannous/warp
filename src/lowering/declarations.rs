@@ -1378,6 +1378,8 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 	};
 	match node {
 		Node::Symbol(name) if name == IT_PARAMETER => Node::Symbol(parameter.to_string()),
+		// a lambda of its own `it`: `mk(k) := it => it * k`
+		Node::Key(ref parameters, Op::FatArrow, _) if names_it(parameters) => node,
 		// `{it * k}`, Swift's `{ $0 + k }`
 		Node::List(_, Bracket::Curly, _) if is_value && crate::lambdas::block_as_arrow(&node).is_some() => crate::lambdas::block_as_arrow(&node).unwrap_or(node),
 		Node::Key(target, op @ (Op::Assign | Op::Define), value) => Node::Key(Box::new(bind_it(*target, parameter, false)), op, Box::new(bind_it(*value, parameter, true))),
@@ -1398,6 +1400,15 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 		Node::Key(left, op, right) => Node::Key(Box::new(bind_it(*left, parameter, false)), op, Box::new(bind_it(*right, parameter, false))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_it(*node, parameter, is_value)), data },
 		other => other,
+	}
+}
+
+/// `it` or `(it, …)`: lambda parameters that bind `it`
+fn names_it(parameters: &Node) -> bool {
+	match parameters.drop_meta() {
+		Node::Symbol(name) => name == IT_PARAMETER,
+		Node::List(items, _, _) => items.iter().any(names_it),
+		_ => false,
 	}
 }
 

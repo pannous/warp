@@ -51,11 +51,7 @@ pub fn lower(program: Node) -> Node {
 }
 
 fn lower_timers(program: Node) -> Node {
-	// a program of one statement (`on every day at 9:00 {…}`) is a list of that one
-	let (statements, bracket, separator) = match program.drop_meta() {
-		Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(bracket, separator) => (items.clone(), bracket.clone(), separator.clone()),
-		single => (vec![single.clone()], Bracket::None, Separator::Newline),
-	};
+	let (statements, bracket, separator) = crate::variable_signals::main_statements(&program);
 	if !statements.iter().any(|statement| one_shot(statement).is_some() || timer(statement).is_some() || file_watch(statement).is_some() || message_listener(statement).is_some()) {
 		return program;
 	}

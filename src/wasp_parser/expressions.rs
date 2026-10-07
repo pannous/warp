@@ -197,9 +197,11 @@ impl WaspParser {
 		// `item is in basket` reads as `item in basket`
 		let membership = [IS_IN_PHRASE, IN_KEYWORD].into_iter().find(|word| self.matches_keyword(word));
 		if let (Some(word), false) = (membership, counts_units) {
-			return Some((SpecialInfix::Membership, word.len(), Op::Eq.binding_power()));
+			return Some((SpecialInfix::Membership(IN_KEYWORD), word.len(), Op::Eq.binding_power()));
 		}
-		None
+		// `xs contains x` binds like `x in xs`, in code only (data keeps the words as they are)
+		let containment = CONTAINMENT_WORDS.into_iter().find(|word| !self.options.data_mode && self.matches_keyword(word) && self.operand_after(word.len()));
+		containment.map(|word| (SpecialInfix::Membership(word), word.len(), Op::Eq.binding_power()))
 	}
 
 	/// The right operand of a special infix operator, None when it binds looser than `min_bp` (nothing consumed)

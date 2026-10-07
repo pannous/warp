@@ -196,8 +196,9 @@ fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &H
 /// The output binding of a program the page keeps running (page events, timers): its last line, when that is a name,
 /// is the function PAGE_VALUE too, which the page reads anew after each handler
 fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<String>) -> Vec<Node> {
-	// a name, or markup (`div{ p{ "clicked " + count } }`, card web-element), which the page shows anew
-	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::html::is_markup(last)).cloned();
+	// a name, markup (`div{ p{ "clicked " + count } }`, card web-element), or a choice between such
+	// (`if users.loading then "Loading…" else users`, card web-async), which the page shows anew
+	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::html::is_markup(last) || is_shown_choice(last)).cloned();
 	if let Some(shown) = shown {
 		let binding = function_with_globals(PAGE_VALUE, false, &[shown], main_variables);
 		statements.insert(statements.len() - 1, binding);
@@ -205,14 +206,32 @@ fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<Strin
 	statements
 }
 
-/// `(on·every·0) := {…}`, the handler of a timer or channel listener system_signals.rs made
+/// `if c then a else b`, `c ? a : b`, `a ?? b`: a choice whose parts only read (no call, no write), so reading it anew
+/// changes nothing
+fn is_shown_choice(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, Op::Else | Op::Question | Op::Coalesce, _)) && only_reads(node)
+}
+
+/// Names, literals, markup, operators that compute (no assignment, no ++), and data lists of these
+fn only_reads(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty | Node::True | Node::False => true,
+		markup if crate::html::is_markup(markup) => true,
+		Node::Key(left, op, right) => !matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec | Op::While | Op::Do) && !op.is_compound_assign() && only_reads(left) && only_reads(right),
+		Node::List(items, Bracket::Square | Bracket::Curly, _) => items.iter().all(only_reads),
+		_ => false,
+	}
+}
+
+/// `(on·every·0) := {…}`, the handler of a timer or channel listener system_signals.rs made, or `(on·fetch·0) := {…}`
+/// of an async fetch (fetch_signals.rs)
 fn defines_timer(statement: &Node) -> bool {
 	let Node::Key(head, _, _) = statement.drop_meta() else { return false };
 	let name = match head.drop_meta() {
 		Node::List(items, _, _) => items.first().map(Node::drop_meta),
 		other => Some(other),
 	};
-	matches!(name, Some(Node::Symbol(name)) if name.starts_with(crate::host::TIMER_HANDLER_PREFIX))
+	matches!(name, Some(Node::Symbol(name)) if name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FETCH_HANDLER_PREFIX))
 }
 
 /// The body guarded by a fresh flag: `if once_fired_0 == false { once_fired_0 = true; body }`
@@ -601,7 +620,12 @@ pub(crate) fn global_declarations(bodies: &[Node], main_variables: &HashSet<Stri
 	let mut mentioned: Vec<String> = bodies.iter().flat_map(symbols).filter(|name| main_variables.contains(name) && !parameters.contains(&name.as_str())).collect();
 	mentioned.sort();
 	mentioned.dedup();
-	mentioned.iter().map(|name| parse(&format!("global {name}"))).collect()
+	mentioned.iter().map(|name| global_declaration(name)).collect()
+}
+
+/// `global name`, built rather than parsed: a generated name (`users·loading`) parses as a product
+pub(crate) fn global_declaration(name: &str) -> Node {
+	crate::law::substitute(&parse(&format!("global {TEMPLATE_NAME}")), &HashMap::from([(TEMPLATE_NAME.to_string(), Node::Symbol(name.to_string()))]))
 }
 
 /// Each handler gets the event as raised (the DOM hands one mutable event object down the listeners): when a body

@@ -108,6 +108,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if let Some(word) = crate::wasm_emitter::cells::CELL_WORDS.iter().find(|word| **word == fn_name) {
 					ctx.required_functions.insert(word);
 				}
+				if fn_name == REMOVED_VALUE_CALL {
+					ctx.required_functions.extend([crate::library_words::MAP_GET_OR, crate::library_words::MAP_WITHOUT]);
+				}
 				if fn_name == INSERT_AT_CALL || fn_name == INSERT_EITHER_CALL {
 					ctx.required_functions.insert(INSERT_AT_CALL);
 				}
@@ -392,7 +395,7 @@ pub fn extract_signal_polls(ctx: &mut Context) {
 }
 
 pub fn handles_system_signals(ctx: &Context) -> bool {
-	ctx.user_functions.keys().any(|name| name == crate::host::INTERRUPT_HANDLER || name == crate::host::SHARED_HANDLER || name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FILE_HANDLER_PREFIX))
+	ctx.user_functions.keys().any(|name| name == crate::host::INTERRUPT_HANDLER || name == crate::host::SHARED_HANDLER || name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FILE_HANDLER_PREFIX) || name.starts_with(crate::host::FETCH_HANDLER_PREFIX))
 }
 
 /// The library an import names: `"z"` and `'m'` are one-character texts, which parse as characters

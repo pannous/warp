@@ -28,9 +28,18 @@ impl WasmGcEmitter {
 		}
 		let Some((names, values)) = destructuring(node) else { return false };
 		self.emit_destructuring(func, &names, values);
-		// the statement's value is the last name's, as `y = v` gives v
-		read(self, func, &Node::Symbol(names.last().map(|name| unstarred(name).to_string()).unwrap_or_default()));
+		read(self, func, &Self::destructured_value(&names));
 		true
+	}
+
+	/// The value of a destructuring statement is its last name's, as `y = v` gives v
+	fn destructured_value(names: &[String]) -> Node {
+		Node::Symbol(names.last().map(|name| unstarred(name).to_string()).unwrap_or_default())
+	}
+
+	/// The kind of a destructuring statement's value (its last name's), None for any other statement
+	pub(super) fn destructured_kind(&self, node: &Node) -> Option<Kind> {
+		destructuring(node).map(|(names, _)| self.get_type(&Self::destructured_value(&names)))
 	}
 
 	/// In a tuple function every value in its own result; elsewhere (main) the values as the list `[a b]`

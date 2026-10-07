@@ -6,6 +6,7 @@
 //! ignores ctrl-c never makes a program unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_every(0, 5000)` where the handler is
 //! declared. `on file "notes.txt" change {…}` is `on·file·0`, started by `signal_watch(0, "notes.txt")`: a timer of
 //! FILE_CHECK_PERIOD that fires only when the file's modification time or size changed (it appeared, was written, or went).
+//! `users := fetch url` runs on·fetch·0 once the reply arrived (await_ready, src/fetches.rs).
 //! A run that allows it (`warp run`, built executables) stays after main while a timer or watch lives.
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,6 +20,8 @@ const NEW_EMPTY: &str = "new_empty";
 const NEW_INT: &str = "new_int";
 /// How often a watched file's modification time is read: polling, no file-system events yet
 const FILE_CHECK_PERIOD: Duration = Duration::from_millis(100);
+/// How often an awaited thing (await_ready) is looked at
+const AWAIT_CHECK_PERIOD: Duration = Duration::from_millis(10);
 /// How often a sleeping program with listeners on shared values (on·shared) looks at them
 const SHARED_CHECK_PERIOD: Duration = Duration::from_millis(10);
 
@@ -27,8 +30,38 @@ struct Timer {
 	repeat: Repeat,
 	/// None once a one-shot timer fired
 	due: Option<Instant>,
+	trigger: Trigger,
+}
+
+/// What must hold, besides the time, for a due timer to run its handler
+enum Trigger {
+	Always,
 	/// a watched file and its stamp when last read: the handler runs only when that changed
-	watched: Option<(PathBuf, Option<FileStamp>)>,
+	FileChange(PathBuf, Option<FileStamp>),
+	/// something awaited (a fetch's reply), described for "listening: …": the handler runs once, when `ready()`
+	Ready(String, Box<dyn FnMut() -> bool>),
+}
+
+impl Trigger {
+	/// Whether the handler runs now: a changed file, an awaited thing ready (which ends the timer)
+	fn holds(&mut self, due: &mut Option<Instant>) -> bool {
+		match self {
+			Trigger::Always => true,
+			Trigger::FileChange(path, seen) => {
+				let current = stamp(path);
+				let changed = current != *seen;
+				*seen = current;
+				changed
+			}
+			Trigger::Ready(_, ready) => {
+				let holds = ready();
+				if holds {
+					*due = None;
+				}
+				holds
+			}
+		}
+	}
 }
 
 #[derive(Clone, Copy)]
@@ -83,8 +116,8 @@ fn clock_time(minute_of_day: i64) -> String {
 	format!("{}:{:02}", minute_of_day / 60, minute_of_day % 60)
 }
 
-fn add_timer(handler: String, repeat: Repeat, watched: Option<(PathBuf, Option<FileStamp>)>) {
-	let timer = Timer { handler, repeat, due: Some(repeat.first(Instant::now())), watched };
+fn add_timer(handler: String, repeat: Repeat, trigger: Trigger) {
+	let timer = Timer { handler, repeat, due: Some(repeat.first(Instant::now())), trigger };
 	TIMERS.with(|timers| timers.borrow_mut().push(timer));
 }
 
@@ -129,18 +162,25 @@ pub fn forget_timers() {
 
 /// `signal_every(id, milliseconds)`: the handler on·every·id runs every that many milliseconds from now on
 pub fn start_timer(id: i64, milliseconds: i64) {
-	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Every(Duration::from_millis(milliseconds.max(1) as u64)), None);
+	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Every(Duration::from_millis(milliseconds.max(1) as u64)), Trigger::Always);
 }
 
 /// `signal_daily(id, minute_of_day, weekdays)`: the handler on·every·id runs at that local time of day on the
 /// weekdays of the mask (bit 0 Sunday … bit 6 Saturday)
 pub fn start_daily_timer(id: i64, minute_of_day: i64, weekdays: i64) {
-	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Clock { minute_of_day, weekdays, once: false }, None);
+	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Clock { minute_of_day, weekdays, once: false }, Trigger::Always);
 }
 
 /// `signal_at(id, minute_of_day)`: the handler on·every·id runs once, at the next such local time of day
 pub fn start_one_shot_timer(id: i64, minute_of_day: i64) {
-	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Clock { minute_of_day, weekdays: EVERY_DAY, once: true }, None);
+	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Clock { minute_of_day, weekdays: EVERY_DAY, once: true }, Trigger::Always);
+}
+
+/// The handler `handler` runs once, at the first check point after `ready()` holds (a fetch's reply arrived); it
+/// replaces a timer of that handler still waiting (a fetch started anew)
+pub fn await_ready(handler: String, awaited: String, ready: impl FnMut() -> bool + 'static) {
+	TIMERS.with(|timers| timers.borrow_mut().retain(|timer| timer.handler != handler));
+	add_timer(handler, Repeat::Every(AWAIT_CHECK_PERIOD), Trigger::Ready(awaited, Box::new(ready)));
 }
 
 const DAY: Duration = Duration::from_secs(24 * 3600);
@@ -183,7 +223,7 @@ fn local_time() -> (i64, i64) {
 pub fn watch_file(id: i64, path: String) {
 	let path = PathBuf::from(path);
 	let seen = stamp(&path);
-	add_timer(format!("{FILE_HANDLER_PREFIX}{id}"), Repeat::Every(FILE_CHECK_PERIOD), Some((path, seen)));
+	add_timer(format!("{FILE_HANDLER_PREFIX}{id}"), Repeat::Every(FILE_CHECK_PERIOD), Trigger::FileChange(path, seen));
 }
 
 /// Modification time and size: a rewrite within one tick of a coarse clock still changes the size, mostly
@@ -211,12 +251,8 @@ fn due_handlers(handles_interrupt: bool) -> Vec<String> {
 		for timer in timers.iter_mut() {
 			let Some(when) = timer.due.filter(|when| *when <= now) else { continue };
 			timer.due = timer.repeat.after(when, now);
-			if let Some((path, seen)) = &mut timer.watched {
-				let current = stamp(path);
-				if current == *seen {
-					continue;
-				}
-				*seen = current;
+			if !timer.trigger.holds(&mut timer.due) {
+				continue;
 			}
 			due.push(timer.handler.clone());
 		}
@@ -318,9 +354,10 @@ pub fn stay_while_listening<T>(store: &mut Store<T>, instance: &Instance) -> Res
 	if !STAYING_ALLOWED.load(Ordering::SeqCst) || next_due().is_none() {
 		return Ok(());
 	}
-	let listening: Vec<String> = TIMERS.with(|timers| timers.borrow().iter().map(|timer| match &timer.watched {
-		Some((path, _)) => format!("file {} change", path.display()),
-		None => timer.repeat.spoken(),
+	let listening: Vec<String> = TIMERS.with(|timers| timers.borrow().iter().map(|timer| match &timer.trigger {
+		Trigger::FileChange(path, _) => format!("file {} change", path.display()),
+		Trigger::Ready(awaited, _) => awaited.clone(),
+		Trigger::Always => timer.repeat.spoken(),
 	}).collect());
 	eprintln!("listening: {} (ctrl-c to stop)", listening.join(", "));
 	while let Some(due) = next_due() {
