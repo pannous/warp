@@ -35,3 +35,10 @@ fn use_time_parses_dates() {
 	is!("use time; format_date(parse_date(\"2000-02-29\"))", "2000-02-29");
 	is!("use time; days_between(parse_date(\"2026-01-01\"), parse_date(\"2026-12-25\"))", 358);
 }
+
+#[test]
+fn format_duration_in_the_largest_units() {
+	is!("use time; format_duration(5430000)", "1h 30m 30s");
+	is!("use time; format_duration(250)", "250ms");
+	is!("use time; format_duration(86400000 + 5000)", "1d 5s");
+}
