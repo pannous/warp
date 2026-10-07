@@ -7,7 +7,7 @@ const PART_KEYS: [&str; 2] = ["words: ", "\n\t}"];
 
 fn part_files(code: &str) -> Vec<&'static str> {
 	let module = warp::pipeline::for_a_page(|| warp::pipeline::compile(code)).expect("compiled");
-	let scripts = scripts_of(&module.bytes).expect("the module's scripts");
+	let scripts = scripts_of(&module.bytes, false).expect("the module's scripts");
 	scripts.into_iter().map(|(name, _)| name).filter(|name| name.starts_with("host-")).collect()
 }
 
