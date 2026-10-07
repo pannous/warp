@@ -117,7 +117,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 56] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 57] = [
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
 	crate::channel_words::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
@@ -135,6 +135,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 56] = [
 	crate::word_operators::lower,
 	// `x | f` (pipes.rs) before any pass reads the or
 	crate::pipes::lower,
+	// the classes of used modules (`use shapes`, `use collections`) before class_methods lowers them with the program's
+	crate::modules::insert_module_classes,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::traits::lower_trait_parameters,
 	// methods in a class body become functions over the class before any pass reads the body as fields

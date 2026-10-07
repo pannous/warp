@@ -67,8 +67,7 @@ const LINQ_METHODS: [(&str, &str); 12] = [("Select", "map"), ("Where", "filter")
 pub fn lower(node: Node) -> Node {
 	let defined = defined_names(&node);
 	let node = if names_vector_word(&node) { node } else { r_vectors(node) };
-	let modules: Vec<&str> = crate::modules::std_module_names().chain([JS_MATH]).filter(|module| !crate::soft_keywords::program_names(&node, module)).collect();
-	let node = module_calls(node, &modules);
+	let node = qualified_module_calls(node);
 	let node = linq_calls(forms(node), &defined);
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
@@ -517,7 +516,12 @@ fn is_function_keyword(node: &Node) -> bool {
 
 /// `list.zip(a, b)`, `math.gcd(4, 6)`, JS's `Math.sqrt(16)`: a module's word called through the module's name is the
 /// word itself, with a note (a program's own variable `text` keeps its methods)
-fn module_calls(node: Node, modules: &[&str]) -> Node {
+fn qualified_module_calls(node: Node) -> Node {
+	let modules: Vec<&str> = crate::modules::std_module_names().chain([JS_MATH]).filter(|module| !crate::soft_keywords::program_names(&node, module)).collect();
+	module_calls(node, &modules)
+}
+
+pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 	match node {
 		Node::Key(module, Op::Dot, call) if modules.iter().any(|name| is_word(&module, name)) && matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(_)))) => {
 			let word = match call.drop_meta() {

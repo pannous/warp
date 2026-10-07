@@ -36,6 +36,7 @@ needs no files on disk and works in the browser.
 | os / process | args env exit exec | host words (exit exists), Process capability |
 | regex | matches find find_all replace_all | adapter (Rust regex as host word natively, JS RegExp in the browser) |
 | hash | hash sha256 md5 crc32 | adapter (xxHash/zlib C modules exist, notes/wasm_modules.md) |
+| collections | classes Stack Queue Deque Set Counter, OrderedMap; HashSet TreeSet frozenset ArrayDeque VecDeque deque as aliases | wasp classes over a list field (std/collections.wasp, classes side warp-41) |
 
 ## 3. Prelude (global without `use`)
 Everything that works today (section 4) plus the language forms (print, type, int/text/float/as, error/raise/try,
@@ -91,6 +92,20 @@ Next:
    pass only texts (pad_right(pad_left(…))).
    map: invert pick from_pairs; time: parse_date("2026-10-07"), days_from_date(y, m, d).
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
+
+Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:
+Stack push pop peek size, Queue enqueue dequeue peek size, Deque push_back push_front pop_back pop_front size,
+Set(xs) add has remove size, Counter(xs) add get most_common (tests/modules/test_std_collections.rs). Module only,
+not prelude (prelude question queued with warp-e9). A used module's classes go in before class_methods
+(modules::insert_module_classes, its own source pass), since modules::resolve runs after class_methods; the loader
+leaves those modules' classes out (EARLY_CLASS_MODULES). Same for a file module's classes (`use shapes`, all its
+classes; a std module's only those the program names); a class the program declares itself wins. A module used only
+inside another module still loads its classes late (their methods unlowered). `new Set(xs)`, `collections.Counter(xs)` and the foreign class names (STD_CLASS_ALIASES) work with a
+note. Other languages' method names (append appendleft popleft offer poll addFirst pollLast contains delete shift …,
+class_methods METHOD_ALIASES) are the class's methods with a note, on a class not defining that name; `len(s)`,
+`count(s)`, `s.len()` of an instance are its size method. OrderedMap() is `{}` (wasp maps keep insertion order),
+OrderedDict and LinkedHashMap its aliases (modules STD_ALIASES). Not yet: `from collections import Counter` (no
+`from … import` form at all).
 
 ## 7. Adapters (async, warp-f0)
 How a module word is backed when wasp alone cannot do it. All six mechanisms exist (notes/stdlib_connectors.md,
