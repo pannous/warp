@@ -325,7 +325,11 @@ impl WaspParser {
 				Node::List(items, bracket, sep)
 			}
 			Node::List(items, bracket, sep) => {
-				let transformed: Vec<Node> = without_ref_words(items).into_iter().map(Self::transform_fields_to_types).collect();
+				let mut transformed: Vec<Node> = without_ref_words(items).into_iter().map(Self::transform_fields_to_types).collect();
+				// the line `left: ref Node?` is the one field once its `ref` is read
+				if bracket == Bracket::None && transformed.len() == 1 && matches!(transformed[0].drop_meta(), Node::Key(_, Op::Colon, _)) {
+					return transformed.remove(0);
+				}
 				Node::List(transformed, bracket, sep)
 			}
 			// a method in a class body (`greet() := …`): its body is code, no field type

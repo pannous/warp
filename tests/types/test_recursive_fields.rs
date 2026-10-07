@@ -13,3 +13,8 @@ fn gc_struct_and_ref_are_wasm_spellings() {
 	is!("type N: gc struct { tag: i32 value: i64 }; n = N { tag: 1 value: 42 }; n.value", 42);
 	is!("type N: gc struct { tag: i32 left: ref N? }; n = N { tag: 7 left: ø }; n.tag", 7);
 }
+
+#[test]
+fn ref_fields_on_their_own_lines() {
+	is!("type Node: gc struct {\n    tag: i32\n    left: ref Node?\n    right: ref Node?\n}\ntree = Node {\n    tag: 5\n    left: ø\n    right: ø\n}\ntree.tag", 5);
+}
