@@ -319,6 +319,12 @@ function programImports(holder, hooks) {
 				if (known !== undefined) return BigInt(known);
 				throw new Error(`${value}: the playground cannot read it yet`);
 			},
+			// `notify "text"` (src/host.rs notify): the page shows it (playground.js notification)
+			notify: text => {
+				const shown = plainOfTree(readNode(program(), text));
+				if (!hooks.notify) throw new Error(`notify ${JSON.stringify(shown)}: this page shows no notifications`);
+				hooks.notify(typeof shown === "string" ? shown : JSON.stringify(shown));
+			},
 			clipboard_text: () => { throw new Error("clipboard: the playground cannot read it (the browser's clipboard is asynchronous)"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {

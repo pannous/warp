@@ -23,6 +23,7 @@ const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
+	notify: text => post({ type: "notify", text }),
 	listen: (holder, events) => {
 		live = holder;
 		startTimers(holder);

@@ -19,3 +19,4 @@ mod test_keyed_lists;
 mod test_markup_holes;
 mod test_form_bindings;
 mod test_styles;
+mod test_web_apis;

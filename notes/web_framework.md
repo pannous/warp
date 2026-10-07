@@ -161,3 +161,12 @@ Each step is useful on its own and is what the next ones stand on.
   module contributes: kept in the store of the program that uses it (probes/stores/app.wasp, tests/modules/
   test_module_signals.rs). Context (a value for a subtree of components without props): question with the
   Interviewer; default until then: main-level variables, which every component reads.
+
+## web-apis: notify (2026-10-07, warp-90; plan approved by warp-03)
+- `notify "text"` is the host word notify (src/host.rs, warp-runtime system_values.rs notify): natively osascript
+  `display notification` (macOS, the text as an argument, never quoted into the script) or notify-send (Linux); in the
+  playground the page shows the browser's Notification once allowed, and until then, or when refused, the printed line
+  `notification: text` (playground.js notification; the first one asks for the permission). Tests check only the
+  compiled import (tests/web/test_web_apis.rs): a test run shows no notification.
+- Next pieces: clipboard write (the word waits for the user: `copy` already means clone; question at the Interviewer),
+  WebSocket (card web-websocket), frames and pointer in built sites (site.js, after warp-89's timers).
