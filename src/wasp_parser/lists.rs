@@ -330,6 +330,16 @@ impl WaspParser {
 				if bracket == Bracket::None && transformed.len() == 1 && matches!(transformed[0].drop_meta(), Node::Key(_, Op::Colon, _)) {
 					return transformed.remove(0);
 				}
+				// the line `left: ref Node? right: ref Node?` among others: its fields are fields of the body
+				// a typed field, not a property with its block (`age:{2026 - birthday} set{…}`)
+				let is_field = |item: &Node| matches!(item.drop_meta(), Node::Key(_, Op::Colon, value) if !matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _)));
+				let row_of_fields = |item: &Node| matches!(item.drop_meta(), Node::List(row, Bracket::None, Separator::Space) if row.iter().all(is_field));
+				if sep != Separator::Space && transformed.iter().any(row_of_fields) {
+					transformed = transformed.into_iter().flat_map(|item| match item.drop_meta() {
+						Node::List(row, Bracket::None, Separator::Space) if row.iter().all(is_field) => row.clone(),
+						_ => vec![item],
+					}).collect();
+				}
 				Node::List(transformed, bracket, sep)
 			}
 			// a method in a class body (`greet() := …`): its body is code, no field type

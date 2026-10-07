@@ -496,6 +496,15 @@ impl WaspParser {
 		matches!(next, ')' | ']' | '}' | ',' | ';' | '\n' | '\r' | '\0') || (next == '=' && after != '=')
 	}
 
+	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on
+	/// one line is two optional fields, no ternary
+	pub(super) fn next_field_follows(&self, width: usize) -> bool {
+		let blanks = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let name = self.word_at(width + blanks).chars().count();
+		let colon = width + blanks + name;
+		self.type_fields.is_some() && blanks > 0 && name > 0 && self.peek_char(colon) == ':' && !matches!(self.peek_char(colon + 1), '=' | ':')
+	}
+
 	/// Do blanks and then `bracket` follow (`c {`, not the glued `c{`)
 	pub(super) fn blanks_then(&self, bracket: char) -> bool {
 		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
