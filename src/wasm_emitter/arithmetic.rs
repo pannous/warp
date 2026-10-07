@@ -624,11 +624,16 @@ impl WasmGcEmitter {
 	pub(super) fn emit_int_operands_op(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		// `s < "b"`, `c >= "0"` with a text: ordered by code points (node_order, as sort orders them); a value held as a
 		// Node (a cell's, another runtime's: `time.time() > 0`) by its value, an Int or a Float decided at run time
-		// (an element `xs#2` keeps its own path: a character there compares by code point, `x#2 > 50`)
-		let held_node = |side: &&Node| matches!(self.get_type(side), Kind::Empty | Kind::Data) && !matches!(side.drop_meta(), Node::Key(_, Op::Hash, _));
-		if op.is_ordering() && [left, right].iter().any(|side| self.get_type(side) == Kind::Text || held_node(side)) {
-			self.emit_node_instructions(func, left);
-			self.emit_node_instructions(func, right);
+		// (an element `xs#2` that is a character compares by its code point with a number, `x#2 > 50`)
+		let [left_kind, right_kind] = [left, right].map(|side| self.get_type(side));
+		let held = |kind: Kind| matches!(kind, Kind::Empty | Kind::Data);
+		if op.is_ordering() && [left_kind, right_kind].iter().any(|&kind| kind == Kind::Text || held(kind)) {
+			for (side, kind, other_kind) in [(left, left_kind, right_kind), (right, right_kind, left_kind)] {
+				self.emit_node_instructions(func, side);
+				if held(kind) && !matches!(other_kind, Kind::Text | Kind::Codepoint) && matches!(side.drop_meta(), Node::Key(_, Op::Hash, _)) {
+					self.emit_codepoint_as_int_node(func);
+				}
+			}
 			self.emit_call(func, library_ops::NODE_ORDER);
 			let sign_test = match op {
 				Op::Lt => I::I32LtS,
@@ -741,5 +746,17 @@ impl WasmGcEmitter {
 		self.emit_call(func, "get_int_value");
 		self.emit_int_to_f64(func, None);
 		func.instruction(&I::End);
+	}
+
+	/// The Node on the stack, a character replaced by the Int of its code point: ordered against a number (`x#2 > 50`)
+	fn emit_codepoint_as_int_node(&mut self, func: &mut Function) {
+		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
+		let node_ref = RefType { nullable: false, heap_type: HeapType::Concrete(node_type) };
+		Self::emit_list(func, &[I::LocalTee(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
+		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Codepoint as i64), I::I64Eq]);
+		Self::emit_list(func, &[I::If(BlockType::Result(Ref(node_ref))), I::LocalGet(held), I::RefAsNonNull]);
+		self.emit_call(func, "get_int_value");
+		self.emit_call(func, "new_int");
+		Self::emit_list(func, &[I::Else, I::LocalGet(held), I::RefAsNonNull, I::End]);
 	}
 }

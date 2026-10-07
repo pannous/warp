@@ -45,7 +45,7 @@ pub fn is_markup(node: &Node) -> bool {
 /// The HTML of a markup value; any other value as escaped text
 pub fn to_html(node: &Node) -> String {
 	let mut html = String::new();
-	write_node(node, "", &mut html);
+	write_node(node, &mut html);
 	html
 }
 
@@ -70,12 +70,12 @@ fn attribute_parts<'a>(node: &'a Node, parent: &str) -> Option<(&'a str, &'a Nod
 	(is_attribute && plain).then_some((name.as_str(), value.as_ref()))
 }
 
-fn write_node(node: &Node, parent: &str, html: &mut String) {
+fn write_node(node: &Node, html: &mut String) {
 	if let Some((tag, content)) = element_parts(node) {
 		return write_element(tag, content, html);
 	}
 	match node.drop_meta() {
-		Node::List(items, _, _) => items.iter().for_each(|item| write_node(item, parent, html)),
+		Node::List(items, _, _) => items.iter().for_each(|item| write_node(item, html)),
 		Node::Empty => {}
 		other => html.push_str(&escaped(&plain_text(other))),
 	}
@@ -99,7 +99,7 @@ fn write_element(tag: &str, content: &Node, html: &mut String) {
 	if VOID_ELEMENTS.contains(&tag) {
 		return;
 	}
-	children.into_iter().for_each(|child| write_node(child, tag, html));
+	children.into_iter().for_each(|child| write_node(child, html));
 	html.push_str(&format!("</{tag}>"));
 }
 
