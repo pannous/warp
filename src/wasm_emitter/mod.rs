@@ -98,6 +98,15 @@ const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
 pub const TRAP_DETAIL: &str = "trap_detail";
 /// How a trapped run carries that value into its error: `trap detail: <value>`
 pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
+
+/// The `trap detail: <value>` line of a trapped run; an Error value raised as it is (Node arithmetic on an Error, a text
+/// builtin of an Error) names its message
+pub fn trap_detail_line(detail: &Node) -> String {
+	match detail {
+		Node::Error(reason) => format!("{TRAP_DETAIL_PREFIX}{}", reason.serialize()),
+		value => format!("{TRAP_DETAIL_PREFIX}{}", value.serialize()),
+	}
+}
 /// Why a unit word is an undefined variable: quantities are computed in constant expressions only
 const UNIT_AT_RUN_TIME: &str = " (a unit: quantities compute only in constant expressions so far, not yet in functions, loops, lists, branches or print; notes/units_runtime.md)";
 /// The global behind the export `trap_detail`: not a wasp name, so no user global meets it
