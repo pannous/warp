@@ -271,6 +271,12 @@ impl WaspParser {
 			return number;
 		}
 		let tight = (next.is_alphabetic() || next == '_' || next == '(') && !self.at_ordinal_suffix();
+		// `1500 meters` stays the pair the unit lowering reads (`3010 meters`), joined so it binds tighter than `>`
+		if !tight && self.spaced_word().is_some_and(|word| crate::units::is_long_unit_name(&word)) {
+			self.skip_spaces();
+			let unit = self.parse_atom();
+			return Node::List(vec![number, unit], Bracket::None, Separator::Space);
+		}
 		if !tight && !self.at_spaced_unit() {
 			return number;
 		}
@@ -284,15 +290,19 @@ impl WaspParser {
 	/// unit word that starts the next entry or assignment: `{w:2 h:3}`; a spaced colon ends a condition instead:
 	/// `if x > 1500 m : "far"`
 	pub(super) fn at_spaced_unit(&self) -> bool {
+		// `2 m²`: the power is no part of the unit's name
+		self.spaced_word().is_some_and(|word| crate::units::is_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some())))
+	}
+
+	/// The word after one or more spaces, unless it starts the next entry or assignment
+	fn spaced_word(&self) -> Option<String> {
 		let rest = &self.chars[self.pos..];
 		let spaces = rest.iter().take_while(|c| **c == ' ').count();
 		let word: String = rest[spaces..].iter().take_while(|c| is_identifier_char(**c)).collect();
 		let after_word = &rest[spaces + word.chars().count()..];
 		let next_two: String = after_word.iter().skip_while(|c| **c == ' ').take(2).collect();
 		let starts_entry = after_word.first() == Some(&':') || (next_two.starts_with('=') && next_two != "==");
-		// `2 m²`: the power is no part of the unit's name
-		let unit = word.trim_end_matches(|c: char| superscript_digit(c).is_some());
-		spaces > 0 && crate::units::is_unit(unit) && !starts_entry
+		(spaces > 0 && !word.is_empty() && !starts_entry).then_some(word)
 	}
 
 	pub(super) fn at_ordinal_suffix(&self) -> bool {
