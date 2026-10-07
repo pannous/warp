@@ -486,7 +486,7 @@ impl WaspParser {
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
 	}
 
-	/// `🌍`, `🇩🇪`, `👍🏽` in code, one user-perceived character: one code point is a codepoint, several a symbol
+	/// `🌍`, `🇩🇪`, `👍🏽` in code, one user-perceived character: one code point is a codepoint, several a text
 	fn parse_emoji(&mut self) -> Node {
 		let ahead: String = self.chars[self.pos..].iter().take(LONGEST_EMOJI).collect();
 		let emoji = crate::extensions::strings::grapheme_clusters(&ahead)[0].to_string();
@@ -494,7 +494,7 @@ impl WaspParser {
 		let mut code_points = emoji.chars();
 		match (code_points.next(), code_points.next()) {
 			(Some(single), None) => Node::Char(single),
-			_ => Node::Symbol(emoji),
+			_ => Node::Text(emoji),
 		}
 	}
 
