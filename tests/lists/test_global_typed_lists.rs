@@ -57,4 +57,6 @@ fn a_global_array_a_function_writes_stays_an_array() {
 	is!("global s = float[3]; def f() { s[1] = 1.5 }; f(); s[1]", 1.5);
 	is!("global s = int[3]; def f() { s[1] = 'a' }; f(); [s[0], s[1] == 'a']", ints(vec![0, 1]));
 	is!("global s = int[3]; def f() { s = [4, 5] }; f(); s", ints(vec![4, 5]));
+	is!("global s = [0]; def f(n) { s = int[n] }; f(4); s[3] = 9; s", ints(vec![0, 0, 0, 9]));
+	is!("use draw; canvas(200, 200); clear(red); canvas_pixels[39999] == red", true);
 }
