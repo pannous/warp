@@ -10,6 +10,7 @@ const SHARED_CHECK_MILLISECONDS = 10;
 const PAGE_BITS = 16;
 const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
+const SOCKET_ADDRESS = /^wss?:\/\//; // src/web_sockets.rs SOCKET_SCHEMES
 /// where host.read and the test runner's file system find files: the repository root the static server serves
 const FILE_ROOT = new URL("../../", self.location.href).href;
 const PAGE_PREFIX = "page:"; // src/web.rs PAGE_PREFIX: a file of the page itself (lib/libc.h), not of the served repository
@@ -294,7 +295,9 @@ function programImports(holder, hooks) {
 			channel_next: id => buildValue(program(), treeOfPlain(holder.channels?.get(Number(id))?.messages.shift() ?? null)),
 			channel_send: (channel, message) => {
 				const program_ = program();
-				new BroadcastChannel(plainOfTree(readNode(program_, channel))).postMessage(plainOfTree(readNode(program_, message)));
+				const [name, value] = [channel, message].map(node => plainOfTree(readNode(program_, node)));
+				if (SOCKET_ADDRESS.test(name)) return sendOnSocket(holder, hooks, name, value);
+				new BroadcastChannel(name).postMessage(value);
 			},
 			// channels inside one run (P155, src/tasks.rs Channels): Go's unbuffered channel between the task Workers
 			channel_new: () => openChannel(holder.run),
@@ -1231,16 +1234,48 @@ function fetchReply(holder, id) {
 	const { reply } = holder.fetches?.get(id) ?? {};
 	if (!reply) return [null, `fetch ${id} has no reply yet`];
 	if (reply.error) return [null, reply.error];
-	try {
-		const value = JSON.parse(reply.body);
-		if (value !== null && typeof value === "object") return [value, null];
-	} catch {} // not JSON: the text
+	const structure = structureOf(reply.body);
+	if (structure !== undefined) return [structure, null];
 	return [reply.body.endsWith("\n") ? reply.body : reply.body + "\n", null]; // wasp convention (src/host.rs fetch)
+}
+
+// a JSON object or array of the text, undefined for any other text (src/web_server.rs value_of_body)
+function structureOf(text) {
+	try {
+		const value = JSON.parse(text);
+		if (value !== null && typeof value === "object") return value;
+	} catch {} // not JSON
+	return undefined;
+}
+
+// a channel named by a ws:// or wss:// address is a WebSocket (src/web_sockets.rs): one connection per address in a
+// run, its listeners share what arrives; a message sent before it is open waits for it
+function webSocket(holder, hooks, address) {
+	const sockets = holder.sockets ??= new Map();
+	if (sockets.has(address)) return sockets.get(address);
+	const connection = { socket: new WebSocket(address), messages: [], waiting: [] };
+	connection.socket.onopen = () => connection.waiting.splice(0).forEach(text => connection.socket.send(text));
+	connection.socket.onmessage = ({ data }) => connection.messages.push(structureOf(data) ?? data);
+	connection.socket.onerror = () => hooks.print?.(`on message from "${address}": the connection failed\n`, STDERR);
+	sockets.set(address, connection);
+	return connection;
+}
+
+// a text as it is, any other value as JSON
+function sendOnSocket(holder, hooks, address, value) {
+	const { socket, waiting } = webSocket(holder, hooks, address);
+	const text = typeof value === "string" ? value : JSON.stringify(value);
+	if (socket.readyState === WebSocket.OPEN) socket.send(text);
+	else waiting.push(text);
 }
 
 // `on message from "chat" {…}`: what arrives waits in the listener's queue until its timer asks
 function listenOnChannel(holder, hooks, id, name) {
 	if (!hooks.listen) return holder.warnings.push(`on message from "${name}": channels are not received here`);
+	if (SOCKET_ADDRESS.test(name)) {
+		const { socket, messages } = webSocket(holder, hooks, name);
+		return void (holder.channels ??= new Map()).set(id, { name, channel: socket, messages });
+	}
 	const channel = new BroadcastChannel(name);
 	const listener = { name, channel, messages: [] };
 	channel.onmessage = ({ data }) => listener.messages.push(data);
@@ -1251,6 +1286,7 @@ function listenOnChannel(holder, hooks, id, name) {
 function stopListening(holder) {
 	holder.stopped = true;
 	holder.channels?.forEach(({ channel }) => channel.close());
+	holder.sockets?.forEach(({ socket }) => socket.close());
 	holder.stopTimers?.();
 }
 

@@ -687,7 +687,7 @@ fn fetch_reply(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<H
 /// The oldest message the listener got, as the value it was sent as (ø when none waits)
 #[cfg(feature = "native")]
 fn channel_next(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<HostNode> {
-	let message = crate::channels::next(id).map(|text| crate::wasp_parser::parse(&text).drop_meta().clone()).unwrap_or(Node::Empty);
+	let message = crate::web_sockets::next(id).unwrap_or_else(|| crate::channels::next(id).map(|text| crate::wasp_parser::parse(&text).drop_meta().clone()).unwrap_or(Node::Empty));
 	built_in_program(&mut caller, &message, "on message")
 }
 
@@ -714,6 +714,9 @@ fn built_in_program(caller: &mut Caller<'_, HostState>, value: &Node, word: &str
 fn channel_send(mut caller: Caller<'_, HostState>, channel: HostNode, message: HostNode) -> wasmtime::Result<()> {
 	let channel = given_node(&mut caller, channel)?;
 	let message = given_node(&mut caller, message)?;
+	if crate::web_sockets::is_socket_address(&channel.name()) {
+		return crate::web_sockets::send(&channel.name(), &message).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)));
+	}
 	crate::channels::send(&channel.name(), message.serialize().trim()).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))
 }
 

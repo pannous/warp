@@ -50,6 +50,8 @@ mod test_for_unit_words;
 mod test_each_colon;
 mod test_event_signals; mod test_event_footguns;
 mod test_channels;
+#[cfg(feature = "native")] // a WebSocket server on a local port
+mod test_web_sockets;
 mod test_page_events;
 mod test_system_signals;
 mod test_system_values;
