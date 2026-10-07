@@ -63,4 +63,7 @@ Each step is useful on its own and is what the next ones stand on.
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
   `stored` are soft keywords.
-- Left: shared stores / context across modules and components.
+- Shared stores: a used module's main-level variables are already shared (`use settings` reads and writes its theme),
+  but a program's `on change theme` misses writes made by the module's functions: card module-signal-writes
+  (probes/stores/app.wasp). Context (a value for a subtree of components without props): question with the
+  Interviewer; default until then: main-level variables, which every component reads.
