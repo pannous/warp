@@ -1,0 +1,2 @@
+// the length of each word
+[#word for word in "the quick brown fox".split(" ")]

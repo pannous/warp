@@ -154,3 +154,7 @@ main.single { grid-template-columns: minmax(0, 1fr); }
 .guide-examples a, .guide-link { color: var(--accent); }
 .guide-link { font-size: 0.9em; }
 @media (max-width: 900px) { .guide-pane { position: static; max-height: 50vh; } .tagline { display: none; } }
+
+/* a position goes to its place in the editor (playground.js positionLink, an error value with error_at) */
+button.position { border: none; background: none; padding: 0; color: inherit; font: inherit; text-decoration: underline dotted; cursor: pointer; }
+output.located { cursor: pointer; }

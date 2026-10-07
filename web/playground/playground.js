@@ -222,8 +222,24 @@ function setStatus(text, failed = false) {
 
 const at = (line, column) => line ? `${line}:${column}` : "";
 
+const POSITION = /^(\d+):(\d+)$/;
+
+// the editor's cursor at the 1-based line and column, in view
+function jumpTo(line, column) {
+	editor.focus();
+	editor.setCursor({ line: line - 1, ch: column - 1 });
+	editor.scrollIntoView(null, 40);
+}
+
+// a line:column goes there when clicked
+function positionLink(position) {
+	const [, line, column] = position.match(POSITION) ?? [];
+	if (!line) return element("span", { className: "position" }, position);
+	return element("button", { className: "position", title: "go there", onclick: () => jumpTo(Number(line), Number(column)) }, position);
+}
+
 function diagnostic(kind, position, ...content) {
-	return element("li", { className: kind }, element("span", { className: "label" }, kind), position ? element("span", { className: "position" }, position) : "", ...content);
+	return element("li", { className: kind }, element("span", { className: "label" }, kind), position ? positionLink(position) : "", ...content);
 }
 
 const code = text => element("code", {}, text);
@@ -273,6 +289,10 @@ function showAcknowledged() {
 function showReport(report) {
 	$("value").textContent = report.value;
 	$("value").classList.toggle("error", report.error);
+	const errorAt = report.error ? report.error_at : null; // the failing place: clicking the error goes there
+	$("value").classList.toggle("located", Boolean(errorAt));
+	$("value").title = errorAt ? `go to ${at(errorAt.line, errorAt.column)}` : "";
+	$("value").onclick = errorAt ? () => jumpTo(errorAt.line, errorAt.column) : null;
 	const printed = report.printed.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join("");
 	$("printed").textContent = printed;
 	$("printed").hidden = printed === "";

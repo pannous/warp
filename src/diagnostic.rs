@@ -50,12 +50,17 @@ impl Diagnostic {
 
 	/// The error, remembered with its fixes for a host to offer (take_error_diagnostics)
 	pub fn into_error(self) -> Node {
-		let error = crate::node::error(&self.to_string());
+		crate::node::error(&self.remembered())
+	}
+
+	/// The error's text, the error remembered with its fixes for a host to offer (an emitter error is a text)
+	pub fn remembered(self) -> String {
+		let text = self.to_string();
 		if !self.fixes.is_empty() {
 			note_said();
 			ERROR_DIAGNOSTICS.with(|errors| errors.borrow_mut().push(self));
 		}
-		error
+		text
 	}
 }
 
