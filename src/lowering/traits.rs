@@ -400,7 +400,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
-	let operations = requirements.iter().map(|requirement| operation(requirement).or_else(|| default_method(requirement)).or_else(|| foreign_signature(requirement)).ok_or_else(|| {
+	let operations = requirements.iter().map(|requirement| operation(requirement).or_else(|| default_method(requirement)).or_else(|| foreign_signature(requirement)).or_else(|| function_type_member(requirement)).ok_or_else(|| {
 		let message = format!("trait {name} takes operations like `area` or `area(s)`, got {}", requirement.serialize());
 		Diagnostic::at(requirement, message).fix("define the operation for each type that conforms, e.g. area(s:square) := …").into_error()
 	}));
@@ -438,6 +438,21 @@ fn foreign_signature(requirement: &Node) -> Option<Operation> {
 	});
 	let names: Vec<String> = std::iter::once(Some(DEFAULT_PARAMETER.to_string())).chain(names).collect::<Option<_>>()?;
 	Some(Operation { name, parameters: names, symmetric: false, contract: None, default: None })
+}
+
+/// A member typed as a function, as WIT and TypeScript write an interface: `add: (i32, i32) -> i32` is the operation
+/// `add(p1, p2)` (the types dropped, as in foreign_signature)
+fn function_type_member(requirement: &Node) -> Option<Operation> {
+	let Node::Key(member, Op::Arrow, _) = requirement.drop_meta() else { return None };
+	let Node::Key(name, Op::Colon, parameter_types) = member.drop_meta() else { return None };
+	let Node::Symbol(name) = name.drop_meta() else { return None };
+	let count = match parameter_types.drop_meta() {
+		Node::List(types, Bracket::Round, _) => types.len(),
+		Node::Empty => 0,
+		_ => 1,
+	};
+	let parameters = (1..=count).map(|position| format!("p{position}")).collect();
+	Some(Operation { name: name.clone(), parameters, symmetric: false, contract: None, default: None })
 }
 
 /// The name and parameters of the first call in a signature, through its keyword, result type and modifiers
