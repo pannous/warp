@@ -746,7 +746,8 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 					};
 					float_for_int.push(format!("{written} is no int: write {written} as int"));
 				}
-				if let Some(kind) = argument_kind(argument) {
+				// `g("a")`: a one-character text is parsed as a Codepoint; the parameter holds any text, as for a default
+				if let Some(kind) = argument_kind(argument).map(|kind| if kind == Kind::Codepoint { Kind::Text } else { kind }) {
 					let kinds = argument_kinds.entry((name.clone(), index)).or_default();
 					if !kinds.contains(&kind) {
 						kinds.push(kind);

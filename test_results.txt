@@ -56,6 +56,7 @@ PASSED:
   ✓ control::test_colon_handlers::a_timer_body_after_a_colon_is_the_rest_of_the_line
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
   ✓ control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
+  ✓ control::test_control_words::an_if_with_a_block_after_a_statement_starts_a_statement
   ✓ control::test_control_words::bang_evaluates_a_block
   ✓ control::test_control_words::n_times_repeats_its_block
   ✓ control::test_control_words::trailing_if_guards_the_statement
@@ -919,7 +920,7 @@ PASSED:
   ✓ functions::test_parameter_call_kinds::disagreeing_calls_are_a_loud_error_naming_both_kinds
   ✓ functions::test_parameter_call_kinds::untyped_parameter_takes_the_kind_all_calls_agree_on
   ✓ functions::test_parameter_call_kinds::untyped_parameter_with_int_calls_or_none_stays_int
-  ✓ functions::test_parameter_codepoint_calls::a_character_literal_argument_disagrees_with_a_text_argument
+  ✓ functions::test_parameter_codepoint_calls::a_character_literal_argument_agrees_with_a_text_argument
   ✓ functions::test_parameter_codepoint_calls::a_character_literal_argument_disagrees_with_an_int_argument
   ✓ functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
@@ -2220,6 +2221,8 @@ PASSED:
   ✓ text::test_nested_list_text::a_count_takes_the_indexed_element
   ✓ text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal
   ✓ text::test_nested_list_text::an_index_is_an_atom_so_a_method_applies_to_the_element
+  ✓ text::test_one_character_argument::a_one_character_argument_is_a_text
+  ✓ text::test_one_character_argument::ord_of_a_one_character_text_is_its_code_point
   ✓ text::test_print_all_characters::print_all_characters_prints_each
   ✓ text::test_print_arguments::print_joins_its_arguments_with_a_space
   ✓ text::test_print_arguments::print_of_a_braceless_call_gives_nothing
@@ -2283,6 +2286,7 @@ PASSED:
   ✓ text::test_text_bytes::read_loads_a_file_as_bytes
   ✓ text::test_text_bytes::text_plus_number_stays_a_type_error
   ✓ text::test_text_casts::a_double_quoted_text_as_float_is_loud
+  ✓ text::test_text_casts::a_numeric_text_as_float_in_a_float_variable
   ✓ text::test_text_casts::a_single_quoted_codepoint_still_converts
   ✓ text::test_text_casts::an_int_list_variable_as_string_is_its_text
   ✓ text::test_text_concat::concatenation_takes_results_of_functions_and_library_words
@@ -2905,6 +2909,8 @@ PASSED:
   ✓ web::test_web_server::a_served_page_s_events_draw_no_warning
   ✓ web::test_web_server::a_server_function_is_called_over_http
   ✓ web::test_web_server::serve_answers_routes
+  ✓ web::test_webgpu::a_compute_shader_runs_over_the_numbers
+  ✓ web::test_webgpu::a_shader_that_does_not_compile_says_where
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
   ✓ welcoming::test_braceless_call_argument::an_operator_in_a_braceless_argument_warns_with_both_readings
@@ -3245,4 +3251,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3240 passed, 0 failed, 3240 total tested
+19 ignored, 3246 passed, 0 failed, 3246 total tested

@@ -23,3 +23,14 @@ fn a_double_quoted_text_as_float_is_loud() {
 fn a_single_quoted_codepoint_still_converts() {
 	is!("ord('x')", 120);
 }
+
+// card float-text: a numeric text converted where a float is held: float(text), `"1.5" as float`
+#[test]
+fn a_numeric_text_as_float_in_a_float_variable() {
+	is!("p = float(\"1.5\"); p*2", 3.0);
+	is!("x = \"1.5\"; p = float(x); p*2", 3.0);
+	is!("p = \"1.5\" as float; p*2", 3.0);
+	is!("float(\"1.5\") * 2", 3.0);
+	is!("half(t) := float(t) / 2; half(\"4.5\")", 2.25);
+	fails_with("p = \"x\" as float; p*2", "as float");
+}
