@@ -113,6 +113,7 @@ thread_local! {
 	static FOR_A_PAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
 	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// `run` with `flag` set on this thread
@@ -124,21 +125,27 @@ fn with_flag<T>(flag: &'static std::thread::LocalKey<std::cell::Cell<bool>>, run
 }
 
 thread_local! {
-	/// The functions the component compiled on this thread exports (`warp build --component`), with their export names
-	static COMPONENT_EXPORTS: std::cell::RefCell<Vec<(String, crate::component_worlds::Signature)>> = const { std::cell::RefCell::new(Vec::new()) };
+	/// The functions the component compiled on this thread exports and imports (`warp build --component`)
+	static COMPONENT_FUNCTIONS: std::cell::RefCell<crate::component_worlds::WorldFunctions> = std::cell::RefCell::new(Default::default());
 }
 
-/// `run` compiling a program as a component exporting `exports`: the emitter adds their canonical-ABI adapters
-pub fn for_a_component<T>(exports: Vec<(String, crate::component_worlds::Signature)>, run: impl FnOnce() -> T) -> T {
-	let before = COMPONENT_EXPORTS.with(|current| current.replace(exports));
+/// `run` compiling a program as a component exporting and importing `functions`: the emitter adds the canonical-ABI
+/// adapters of the exports and imports the imports from the core modules the world names
+pub fn for_a_component<T>(functions: crate::component_worlds::WorldFunctions, run: impl FnOnce() -> T) -> T {
+	let before = COMPONENT_FUNCTIONS.with(|current| current.replace(functions));
 	let result = run();
-	COMPONENT_EXPORTS.with(|current| *current.borrow_mut() = before);
+	COMPONENT_FUNCTIONS.with(|current| *current.borrow_mut() = before);
 	result
 }
 
 /// The functions the component being compiled exports, none for a program
 pub fn component_exports() -> Vec<(String, crate::component_worlds::Signature)> {
-	COMPONENT_EXPORTS.with(|current| current.borrow().clone())
+	COMPONENT_FUNCTIONS.with(|current| current.borrow().exports.clone())
+}
+
+/// The functions the component being compiled imports, none for a program
+pub fn component_imports() -> Vec<(String, crate::component_worlds::Signature)> {
+	COMPONENT_FUNCTIONS.with(|current| current.borrow().imports.clone())
 }
 
 /// `run` compiling a program for a page: its page event handlers are expected, not warned about
@@ -149,6 +156,17 @@ pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
 /// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
 pub fn is_for_a_page() -> bool {
 	FOR_A_PAGE.with(|page| page.get())
+}
+
+/// `run` compiling a program that renders its own markup (the playground, web.rs renders_itself): it exports page·html
+/// and page·render as a page does (lowering/page_html.rs); nothing else of a page changes (it may still serve)
+pub fn rendering_itself<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&RENDERS_ITSELF, run)
+}
+
+/// Whether the program compiled now exports its renderer: a page's, or one rendering itself
+pub fn renders_itself() -> bool {
+	is_for_a_page() || RENDERS_ITSELF.with(|renders| renders.get())
 }
 
 /// `run` compiling a program for `warp dev`: the main-level variables it changes are kept (lowering/stored_values.rs)
@@ -172,7 +190,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 73] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 74] = [
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::component_worlds::lower,
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
@@ -219,7 +237,7 @@ const SOURCE_PASSES: [fn(Node) -> Node; 73] = [
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)
 	crate::object_groups::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
-	crate::page_html::use_markup, crate::modules::resolve,
+	crate::routes::lower, crate::page_html::use_markup, crate::modules::resolve,
 	crate::units::lower_sleep_durations, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
 	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
@@ -319,7 +337,8 @@ pub fn compile(code: &str) -> Result<CompiledModule, Node> {
 /// compile for a standalone executable (`warp build`): the program prints its value at the end, as `warp <file>`
 /// shows it, since nobody reads the result of an executable
 pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
-	compile_program(code, printing_result)
+	// the routes first: a program ending with a route prints the page its path shows, not the route statement
+	compile_program(code, |program| printing_result(crate::routes::lower(program)))
 }
 
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {

@@ -41,7 +41,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit a single FFI argument with appropriate type conversion
-	fn emit_ffi_arg(&mut self, func: &mut Function, arg: &Node, param_type: &ValType) {
+	pub(super) fn emit_ffi_arg(&mut self, func: &mut Function, arg: &Node, param_type: &ValType) {
 		match param_type {
 			ValType::F64 => self.emit_float_value(func, arg),
 			ValType::F32 => {
@@ -127,6 +127,9 @@ impl WasmGcEmitter {
 
 	/// Emit FFI function call with automatic result handling based on context
 	pub(super) fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node], ctx: Option<Kind>) {
+		if self.emit_import_call(func, fn_name, args, ctx) {
+			return;
+		}
 		let sig = match self.ctx.ffi_imports.get(fn_name) {
 			Some(s) => s.clone(),
 			None => return,

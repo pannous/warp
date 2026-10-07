@@ -86,6 +86,8 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap:
 .output-pane { padding: 12px 14px; overflow-x: auto; }
 code, .result, .printed { font-family: ui-monospace, Menlo, Consolas, monospace; }
 /* a markup value shown as DOM (playground.js showRendered) */
+.address { box-sizing: border-box; width: 100%; margin: 10px 0 0; padding: 4px 8px; font-family: ui-monospace, Menlo, Consolas, monospace; border: 1px solid var(--line); border-radius: 6px; }
+.address:not([hidden]) + .rendered { margin-top: 4px; }
 .rendered { margin: 10px 0 0; padding: 8px 10px; background: #fff; color: #111; border-radius: 6px; max-height: 50vh; overflow: auto; }
 code { background: var(--code-ground); padding: 0 4px; border-radius: 4px; }
 

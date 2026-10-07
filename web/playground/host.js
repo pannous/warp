@@ -6,6 +6,7 @@
 const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
+const PAGE_ROUTES_EXPORT = "page·routes";
 const PAGE_BITS = 16;
 const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -77,15 +78,15 @@ function writeBytes(program, bytes) {
 }
 
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
-// host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js. A built site
+// host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js. A built site
 // ships a part only when its module imports one of the part's words (src/site.rs HOST_PARTS); the playground's workers
 // load them all. A part gives any of: words(holder, hooks, access) the host words it adds, access being {program, text,
 // cString} of programImports; imports(holder, hooks) import modules of their own (m, c); importModule(holder, hooks,
 // name) an import module by its name (a .wasm path), else undefined; adapters, std modules for STD_ADAPTERS;
 // started(run) as a run begins; poll(holder) at each check point (sleep, signal_poll); finished(holder, hooks) after a
 // call into the run returned, a failure nobody read or nothing; ended(holder) after the call failed; stopped(holder)
-// when the page drops the run (stopListening)
-const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js"];
+// when the page drops the run (stopListening); navigated(holder) when the page goes to another path (navigate)
+const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js"];
 const hostParts = [];
 function addHostPart(part) {
 	hostParts.push(part);
@@ -381,19 +382,22 @@ function stopListening(holder) {
 // run a compiled program: the outcome src/web.rs run_outcome reads
 function runProgram(bytes, hooks) {
 	let instance;
-	const holder = { warnings: [] }; // the runtime warnings go back to the compiler, which reports them (src/web.rs)
+	// the runtime warnings go back to the compiler, which reports them (src/web.rs); the page's path is the page's own
+	const holder = { warnings: [], pagePath: hooks.pagePath?.() };
 	try {
 		const module = new WebAssembly.Module(bytes);
 		holder.run = { module };
 		eachHostPart("started", holder.run);
 		instance = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks));
 		holder.exports = instance.exports;
+		hooks.instantiated?.(holder);
 	} catch (failure) {
 		return { failure: String(failure.message ?? failure) };
 	}
 	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, instance.exports, () => instance.exports.main()));
 	const events = pageEvents(instance.exports);
-	if ((events.length > 0 || holder.timers || holder.fetches) && outcome.result) hooks.listen?.(holder, events);
+	// a program with routes stays for its links (lowering/routes.rs page·routes)
+	if ((events.length > 0 || holder.timers || holder.fetches || instance.exports[PAGE_ROUTES_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
 	// a run without page events (std/markup.wasp rendering the page's HTML, src/markup.rs) keeps the page's run
 	if (events.length > 0 && outcome.result) listeningRun = holder;
 	return outcome;
@@ -402,6 +406,20 @@ function runProgram(bytes, hooks) {
 // the last run that handles page events, for the compiler's warp_host.page_event (src/headless.rs in the browser tests)
 let listeningRun;
 const PAGE_VALUE_EXPORT = "page·value";
+const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/page_html.rs PAGE_RENDER
+
+// the HTML of a value by the program's own renderer (std/markup.wasp's to_html, exported as page·render by a program
+// holding markup): undefined for a number, a program without one, or a rendering that failed (the compiler then
+// renders the value itself, src/web.rs html_of)
+function renderedHtml(exports, value) {
+	const render = exports[PAGE_RENDER_EXPORT];
+	if (!render || value === null || typeof value !== "object") return undefined;
+	try {
+		return plainOfTree(readNode(exports, render(value)));
+	} catch {
+		return undefined;
+	}
+}
 
 // `on exit {…}` (src/lowering/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
 // main returns or `exit(code)` ends it, never after a failure
@@ -437,7 +455,7 @@ function outcomeOf(holder, hooks, call) {
 		const result = call();
 		const unread = eachHostPart("finished", holder, hooks).find(Boolean);
 		if (unread) return { failure: unread, warnings };
-		return { result: readResult(exports, result), warnings };
+		return { result: readResult(exports, result), html: hooks.renders ? renderedHtml(exports, result) : undefined, warnings };
 	} catch (trap) {
 		eachHostPart("ended", holder);
 		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, warnings };

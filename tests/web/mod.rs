@@ -17,9 +17,12 @@ mod test_bundle_budget;
 mod test_host_parts; // the parts of host.js a site ships
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
+mod test_rendering_itself; // card playground-render
 #[cfg(feature = "native")] // std/markup.wasp against src/html.rs, natively
 mod test_html_render;
 mod test_markup_renderer;
+#[cfg(feature = "native")] // the page path of a native render (host::with_page_path)
+mod test_routes;
 mod test_element_events;
 mod test_class_components;
 mod test_components;
@@ -33,3 +36,4 @@ mod test_page_tests;
 mod test_transitions;
 mod test_web_apis;
 mod test_accessibility;
+mod test_i18n;

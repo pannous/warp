@@ -15,3 +15,5 @@ filter_values(m, f) := { out = {}; ks = keys(m); for k in ks { if f(m.get(k)) { 
 entries(m) := { out = []; ks = keys(m); for k in ks { out = out + [[k, m.get(k)]] }; out }
 // the value of key, or fallback when m has none
 get_or(m, key, fallback) := if m.has(key) then m.get(key) else fallback
+// the first key whose value f holds for, ø when none
+find_key(m, f) := { ks = keys(m); for k in ks { if f(m.get(k)) { return k } }; ø }

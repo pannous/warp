@@ -6,6 +6,8 @@
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
 const RUN_TIMEOUT_MS = 10000;
+// the origin a link of the shown program resolves against: "/about" is a page of the program, "https://…" is not
+const PROGRAM_ORIGIN = "http://program.invalid";
 const TYPING_DELAY_MS = 300;
 const DEFAULT_EXAMPLE = "welcome";
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
@@ -86,12 +88,12 @@ function startWorker() {
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "failed") return reject(new Error(data.message));
 			if (!pending) return showEventOutput(data);
-			if (data.type === "listening") pending.listening = data.events;
+			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") pending.printed.push(data);
 			if (data.type === "sleep") pending.slept = true;
 			if (data.type === "paint") painted(pending, data);
 			if (data.type === "module") lastModule = data.bytes;
-			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], milliseconds: data.milliseconds });
+			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
@@ -227,6 +229,7 @@ function showReport(report) {
 	showRendered(report.html);
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
+	showAddress(report.address);
 	const notes = report.notes ?? [];
 	const inline = new Set((report.warnings ?? []).map(warning => warning.topic).filter(topic => notes.includes(topic)));
 	const expressionOf = topic => (report.got_it ?? []).find(offer => offer.topic === topic)?.expression;
@@ -338,6 +341,28 @@ function sendElementEvent(event, happened, detail) {
 	if (found) sendPageEvent(found.event, found.detail);
 }
 
+// a click on a link inside the shown markup goes to that page of the program (lowering/routes.rs), not away from here
+function followLink(click) {
+	const link = click.composedPath().find(element => element.matches?.("a[href]"));
+	if (!link || click.metaKey || click.ctrlKey || click.shiftKey) return false;
+	const url = new URL(link.getAttribute("href"), PROGRAM_ORIGIN);
+	if (url.origin !== PROGRAM_ORIGIN) return false;
+	click.preventDefault();
+	worker.postMessage({ navigate: url.pathname });
+	return true;
+}
+
+// the address bar shows the path of a program with routes (worker.js addressOf); a path typed there goes to that page
+function showAddress(path) {
+	$("address").hidden = path === undefined;
+	$("address").value = path ?? "";
+}
+
+function goToAddress(key) {
+	if (key.key !== "Enter") return;
+	worker.postMessage({ navigate: new URL($("address").value, PROGRAM_ORIGIN).pathname });
+}
+
 // mouse_x, mouse_y, mouse_down (host.js system_value): the pointer over a canvas in shared memory, which a running
 // animation reads at once (its worker takes no message while it runs); the worker gets the buffer and these names
 const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down"];
@@ -364,6 +389,7 @@ function showEventOutput(data) {
 		$("printed").hidden = false;
 	}
 	if (data.type === "paint") showPaintings([data]);
+	if (data.type === "address") showAddress(data.path);
 	if (data.type !== "handled") return;
 	if (data.value !== undefined) {
 		$("value").textContent = data.value;
@@ -458,7 +484,8 @@ function initialize() {
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
 	$("run").onclick = runNow;
-	$("rendered").onclick = click => sendElementEvent("click", click, clickDetail(click));
+	$("address").onkeydown = goToAddress;
+	$("rendered").onclick = click => followLink(click) || sendElementEvent("click", click, clickDetail(click));
 	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
 	$("output").onclick = click => sendPageEvent("click", clickDetail(click));
 	$("output").onkeydown = key => sendPageEvent("key", { key: key.key });

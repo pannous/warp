@@ -2,9 +2,14 @@
 //! world exports, an adapter `api#add` taking and giving the core types of the WIT signature and converting them to the
 //! program's own: s32 widened to its i64, a string (pointer and length in linear memory) a text node, a text result
 //! written to a return area as pointer and length. `cabi_realloc` lets the host place arguments in the text heap.
+//! Each function the world imports (`host.time`) is a core import of the module its import names, called the way the
+//! canonical ABI lowers it: a text argument as pointer and length, a text result through a return area.
 use super::WasmGcEmitter;
 use crate::analyzer::param_kind;
-use crate::component_worlds::{Signature, WIT_STRING};
+use crate::component_worlds::{import_name, Signature, WIT_STRING};
+use crate::ffi::FfiSignature;
+use crate::node::Node;
+use crate::type_kinds::Kind;
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -23,11 +28,55 @@ const WORD: MemArg = MemArg { offset: 0, align: 2, memory_index: 0 };
 /// The runtime functions the adapters call
 const ADAPTER_NEEDS: [&str; 5] = ["new_text", "new_int", "new_float", "get_int_value", super::text_builtins::TEXT_OF];
 
-/// The runtime functions a component's adapters need, when it has any
+/// Does the program compile as a component crossing the boundary: exporting or importing a function
+fn crosses_the_boundary() -> bool {
+	!crate::pipeline::component_exports().is_empty() || !crate::pipeline::component_imports().is_empty()
+}
+
+/// The runtime functions a component's adapters and import calls need, when it has any
 pub(super) fn add_dependencies(required: &mut std::collections::HashSet<&'static str>) {
-	if !crate::pipeline::component_exports().is_empty() {
+	if crosses_the_boundary() {
 		required.extend(ADAPTER_NEEDS);
 	}
+}
+
+/// The function the component being compiled imports under `name` (`host.time`)
+fn imported(name: &str) -> Option<Signature> {
+	crate::pipeline::component_imports().into_iter().find(|(interface, function)| import_name(interface, &function.name) == name).map(|(_, function)| function)
+}
+
+/// The kind of value a call of the imported function `name` gives
+pub(crate) fn imported_kind(name: &str) -> Option<Kind> {
+	imported(name).map(|function| match function.result.as_deref() {
+		None => Kind::Empty,
+		Some(WIT_STRING) => Kind::Text,
+		Some(wit) if core_scalar(wit).is_some_and(|(core, _)| matches!(core, ValType::F32 | ValType::F64)) => Kind::Float,
+		Some(_) => Kind::Int,
+	})
+}
+
+/// The core imports of the component's imported functions, keyed by their names: a text parameter is pointer and
+/// length, a text result a return area whose address is the last parameter
+pub(crate) fn imported_signatures() -> Vec<(String, FfiSignature)> {
+	let leaked = |name: &str| -> &'static str { Box::leak(name.to_string().into_boxed_str()) };
+	crate::pipeline::component_imports().into_iter().map(|(interface, function)| {
+		let mut params = vec![];
+		for wit in &function.parameters {
+			match core_scalar(wit) {
+				Some((core, _)) => params.push(core),
+				None => params.extend([ValType::I32, ValType::I32]),
+			}
+		}
+		let results = match function.result.as_deref() {
+			None => vec![],
+			Some(WIT_STRING) => {
+				params.push(ValType::I32);
+				vec![]
+			}
+			Some(wit) => core_scalar(wit).map(|(core, _)| vec![core]).unwrap_or_default(),
+		};
+		(import_name(&interface, &function.name), FfiSignature::new(leaked(&function.name), leaked(&interface), params, results))
+	}).collect()
 }
 
 fn core_scalar(wit: &str) -> Option<(ValType, bool)> {
@@ -50,13 +99,12 @@ impl WasmGcEmitter {
 
 	/// The adapters of the component being compiled, after the program's functions
 	pub(super) fn emit_component_adapters(&mut self) {
-		let exports = crate::pipeline::component_exports();
-		if exports.is_empty() {
+		if !crosses_the_boundary() {
 			return;
 		}
 		self.emit_text_heap_global();
 		self.emit_component_realloc();
-		for (interface, function) in exports {
+		for (interface, function) in crate::pipeline::component_exports() {
 			if let Err(failure) = self.emit_adapter(&interface, &function) {
 				self.type_errors.push(failure);
 			}
@@ -205,5 +253,47 @@ impl WasmGcEmitter {
 		self.emit_text_field(f, text, 1);
 		f.instruction(&I::I32Store(MemArg { offset: LENGTH_OFFSET, ..WORD }));
 		f.instruction(&I::LocalGet(address));
+	}
+
+	/// A call of the imported function `name` when it is one (`host.time()`): its value as a Node, or as the number
+	/// `context` wants
+	pub(super) fn emit_import_call(&mut self, f: &mut Function, name: &str, arguments: &[Node], context: Option<Kind>) -> bool {
+		let (Some(function), Some(signature)) = (imported(name), self.ctx.ffi_imports.get(name).cloned()) else { return false };
+		if arguments.len() != function.parameters.len() {
+			let reason = format!("{name} takes {} arguments, got {}", function.parameters.len(), arguments.len());
+			self.emit_type_error(f, reason);
+			return true;
+		}
+		let mut core = signature.params.iter();
+		for (wit, argument) in function.parameters.iter().zip(arguments) {
+			if wit == WIT_STRING {
+				self.emit_string_ptr_len(f, argument);
+				core.nth(1);
+			} else if let Some(param_type) = core.next() {
+				self.emit_ffi_arg(f, argument, param_type);
+			}
+		}
+		let return_area = (function.result.as_deref() == Some(WIT_STRING)).then(|| self.static_return_area());
+		if let Some(area) = return_area {
+			f.instruction(&I::I32Const(area));
+		}
+		if let Some(index) = self.ffi_func_index(name) {
+			f.instruction(&I::Call(index));
+		}
+		match (return_area, context) {
+			(Some(area), None) => {
+				Self::emit_list(f, &[I::I32Const(area), I::I32Load(WORD), I::I32Const(area), I::I32Load(MemArg { offset: LENGTH_OFFSET, ..WORD })]);
+				self.emit_call(f, "new_text");
+			}
+			(Some(_), Some(kind)) => self.emit_type_error(f, format!("{name} gives a text, not {}", crate::analyzer::kind_with_article(kind))),
+			(None, _) => self.emit_ffi_result(f, &signature, context),
+		}
+		true
+	}
+
+	/// A return area in the module's data, aligned for the pointer and length a text result leaves there
+	fn static_return_area(&mut self) -> i32 {
+		let (address, _) = self.allocate_string(&"\0".repeat((RETURN_AREA_BYTES + RETURN_AREA_ALIGNMENT - 1) as usize));
+		(address as i32 + RETURN_AREA_ALIGNMENT - 1) & -RETURN_AREA_ALIGNMENT
 	}
 }
