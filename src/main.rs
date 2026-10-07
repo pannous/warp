@@ -345,7 +345,8 @@ fn leave_executable(path: &str) {
         return;
     }
     let program_file = std::path::Path::new(path);
-    if let Err(failure) = warp::modules::with_program_file(program_file, || write_standalone_executable(&load_file(path), path)) {
+    let written = diagnostic::quietly(|| warp::modules::with_program_file(program_file, || write_standalone_executable(&load_file(path), path)));
+    if let Err(failure) = written {
         eprintln!("note: no executable {}: {failure}", executable.display());
     }
 }
