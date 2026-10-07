@@ -5,10 +5,18 @@ http://localhost:8000/web/playground/ (`?example=<name>` picks a tour example or
 Probe: `probes/web_playground.py [sample…]` (headless agent-browser; compares every sample's value with the CLI's).
 
 ## The tour (examples.js)
-Ordered from basics (welcome, data, functions, lists) to wow (broadcasting, call forms, classes, lazy ranges, signals,
-events, timers, system values, channels, components, welcoming errors). Each entry is `{value, printed?, wait?, code}`,
-its first code line a `//` caption. `web/playground/test_in_browser.py --examples [name…]` (after build.sh) shows each
-in the page and compares value and printed text; pages.yml runs it before deploying.
+In the order of the guide's chapters (card playground-redesign, 2026-10-07): small examples with one idea each and an
+obvious result first (hello, numbers, text, lists, data, conditions, loops), then functions, signals, events, markup,
+WebAssembly. Each entry is `{value, printed?, wait?, code}`, its first code line a plain `//` caption.
+`web/playground/test_in_browser.py --examples [name…]` (after build.sh) shows each in the page and compares value and
+printed text; pages.yml runs it before deploying. The example menu is grouped by guide chapter (guide.js
+groupExamplesByChapter: each chapter's Examples line), the samples no chapter links under "more samples".
+
+## Page layout (index.html, playground.css)
+guide | workspace (toolbar, editor, output stacked); ≤900px everything stacks and the guide starts closed. Two drag
+handles (playground.js dragToResize) set the guide's width and the editor's height, remembered in localStorage
+(warp-playground-sizes), double-click resets, arrow keys when focused. The developer things (native install, ⤓ wasm,
+build switch, silenced hints) sit in the header's ⋯ menu; the run time is a small note in the output's corner.
 
 ## The language guide (guide.md, guide.js)
 The left pane of the page (cards "core feature", "doc-example"; P188 one page): web/playground/guide.md, chapters `## Title` from
