@@ -7,6 +7,7 @@ pub mod broadcasting;
 pub mod class_methods;
 pub mod closures;
 pub mod component_state;
+pub mod component_worlds;
 pub mod comprehensions;
 pub mod declarations;
 pub mod go_blocks;

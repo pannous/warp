@@ -26,3 +26,4 @@ mod test_optimizer_exceptions;
 mod test_optimizer_extended_const;
 mod test_read_bytes_plain_result;
 mod test_wasm_interop_rest;
+mod test_component_worlds;

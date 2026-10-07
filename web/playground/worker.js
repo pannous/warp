@@ -1,7 +1,8 @@
 // The warp compiler (warp.wasm, built by build.sh) and the programs it compiles (host.js), run off the page's thread:
 // a worker may compile any module synchronously and block on a synchronous fetch, which the host calls need.
 
-importScripts("reader.js", "host.js", "components.js");
+importScripts("reader.js", "host.js");
+importScripts(...HOST_PART_FILES, "components.js");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 // warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)
@@ -23,6 +24,8 @@ const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
+	sleeping: () => post({ type: "sleep" }),
+	notify: text => post({ type: "notify", text }),
 	listen: (holder, events) => {
 		live = holder;
 		startTimers(holder, handler => runHandler(holder, handler));
@@ -155,6 +158,7 @@ function runHandler(holder, handler) {
 
 // the run's timers (host.js addTimer), each running its handler until the next run
 self.onmessage = async ({ data }) => {
+	if (data.pointer) return self.pagePointer = { values: new Int32Array(data.pointer.buffer), names: data.pointer.names }; // host.js system_value
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.stored) return Object.assign(storedValues, data.stored); // host.js STD_ADAPTERS.store
 	await ready;

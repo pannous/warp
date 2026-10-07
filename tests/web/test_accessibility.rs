@@ -29,3 +29,11 @@ fn accessible_markup_draws_no_warning() {
 	assert_eq!(warnings_of(fine), Vec::<String>::new());
 	assert_eq!(warnings_of("count = 0\ndiv{ button{ \"Add\" } p{ count } }"), Vec::<String>::new());
 }
+
+/// a typed parameter or field named like a tag (`a: i32`, `s: string`, `p: Person`) is no element
+#[test]
+fn typed_names_are_no_elements() {
+	assert!(warnings_of("export def add(a: i32, b: i32) -> i32 { a + b }\nadd(1, 2)").is_empty());
+	assert!(warnings_of("class P { a: int; s: string }\nP(1, \"x\").a").is_empty());
+	assert!(warnings_of("img: \"x\"").iter().any(|warning| warning.contains("img")), "a real element still warns");
+}

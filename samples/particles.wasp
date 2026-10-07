@@ -1,6 +1,6 @@
 // Particle System
 // Physics simulation with gravity and collision, drawn with `use draw`: three bursts, simulated for a second, then
-// painted with their trails (animation frames and mouse input: card drawing-words)
+// painted with their trails (animation frames: loop { …; show(); sleep(16) } in the playground; mouse input: card drawing-frames)
 use draw
 
 type Particle: {

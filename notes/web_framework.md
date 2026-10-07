@@ -237,6 +237,61 @@ Each step is useful on its own and is what the next ones stand on.
   test_module_signals.rs). Context (a value for a subtree of components without props): question with the
   Interviewer; default until then: main-level variables, which every component reads.
 
+## Step 17 (web-bundle), what is done and what is left
+- Budget: tests/web/test_bundle_budget.rs builds `p{ "hello world" }` as a site and holds its gzipped total under a
+  budget, printing each file (the suite's log tracks it). 2026-10-07: 46.2 KB → 40.5 KB (case table as ranges,
+  wasm_emitter/text_unicode.rs: app.wasm 17.5 → 11.9) → 32.1 KB (site::compacted: shipped scripts without comment
+  lines and indentation, host.js 23.8 → 16.7). Svelte's hello world is about 3 KB, Solid's about 5 KB.
+- Not taken: wasm-opt -Oz on app.wasm (11 KB smaller raw, 0.6 KB larger gzipped).
+- What is left in app.wasm is the runtime std/markup.wasp's to_html reaches (texts, lists, equality, floats): a shared
+  runtime module, cached across pages, would help sites with several pages, not the first load.
+- host.js split (2026-10-07, 32.1 → 21.9 KB, host.js 16.7 → 6.1): the core keeps what every page runs (run, outcome,
+  page events, timers, values between JS and wasp, std json/os/store/regex); the parts add themselves with addHostPart:
+  host-files.js (fetch, read, std file and net), host-hashes.js (std hash), host-tasks.js (tasks, channels,
+  BroadcastChannel and WebSocket, shared arrays, fetch_start), host-foreign.js (foreign_call, libm, libc.wasm, .wasm
+  imports; needs files), host-compiler.js (warpHost, run_block; needs files). A part hooks into a run through its
+  steps (started, poll, finished, ended, stopped). src/site.rs HOST_PARTS ships a part when the module imports one of
+  its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
+  a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the
+  std module's name is a runtime text; a custom section naming the std modules a program uses would refine it).
+- Next: lazy loading per route, agreed with warp-89 (web-router): routes lower to functions
+  page·route·<N> with the table exported as page·routes; the splitter moves a route's function and what only it reaches
+  into app·<N>.wasm, which site.js loads on the first navigation there.
+
+## web-apis: animation frames (card drawing-frames, first piece of web-apis)
+- In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`
+  shows each frame at once in place of the last canvas (host.js sleep → worker message "sleep" → playground.js
+  painted). Frames keep the run alive past RUN_TIMEOUT_MS; editing the code stops the animation (show → stopRun) and
+  runs the new code. Paints without a sleep between them stay one canvas each. Tour example animation (`canvases` check).
+- Frames draw into the canvas shown (showFrame), so the pointer stays over it. `mouse_x`, `mouse_y` (canvas pixels) and
+  `mouse_down` are system values (host_words.rs): the page keeps the pointer over a canvas in a SharedArrayBuffer that
+  the worker reads at once, also in the middle of an animation, when it takes no messages (playground.js
+  trackPointer → worker pagePointer → host.js system_value). `on click` over the canvas gives event.x / event.y.
+  Natively mouse_x is a loud error (no canvas). Tour example mouse.
+- Natively each show still writes paint-N.png (src/paint.rs). `color.with_alpha(a)` works as a method (test_draw.rs).
+  Left: built sites (site.js) show no frames and no pointer yet.
+
+## web-apis: notify (2026-10-07, warp-90; plan approved by warp-03)
+- `notify "text"` is the host word notify (src/host.rs, warp-runtime system_values.rs notify): natively osascript
+  `display notification` (macOS, the text as an argument, never quoted into the script) or notify-send (Linux); in the
+  playground the page shows the browser's Notification once allowed, and until then, or when refused, the printed line
+  `notification: text` (playground.js notification; the first one asks for the permission). Tests check only the
+  compiled import (tests/web/test_web_apis.rs): a test run shows no notification.
+- Next pieces: clipboard write (the word waits for the user: `copy` already means clone; question at the Interviewer),
+  WebSocket (card web-websocket), frames and pointer in built sites (site.js, after warp-89's timers).
+
+## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
+- No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`
+  connects at once (natively an unreachable server is a loud error there) and hears what the server sends;
+  `broadcast value on "wss://…"` sends over the same connection (or opens one). A text goes as it is, any other value
+  as JSON; an arriving JSON object or array is data, any other message a text (web_server.rs value_of_body).
+- Natively src/web_sockets.rs (tungstenite 0.30 with rustls webpki roots): a thread per connection reads with a 20 ms
+  timeout and writes what the program sent; channels.rs / host.rs channel_next ask it first. Listeners on one address
+  share its connection. Tests: tests/control/test_web_sockets.rs against a local tungstenite server that answers.
+- Playground: host.js webSocket / sendOnSocket, a browser WebSocket per address in the run, closed with the run
+  (stopListening); messages are handled when the worker is idle, as for BroadcastChannel channels. Checked by hand
+  against wss://echo.websocket.org (text and JSON).
+
 ## Step 13 (web-dev), what is done and what is left
 - `warp dev app.wasp [port]` (src/dev_server.rs, default port 8008) serves the program's site from memory
   (site::files, the same page `warp build --site` writes, plus web/playground/dev.js). No watcher: a request finding
