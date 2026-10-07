@@ -73,3 +73,4 @@ mod test_recursive_fields;
 mod test_interface_signatures;
 mod test_class_field_names;
 mod test_list_annotations;
+mod test_sum_types;
