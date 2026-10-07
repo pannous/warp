@@ -220,6 +220,12 @@ Each step is useful on its own and is what the next ones stand on.
   not found. An untyped one stays a run-time value of any kind (`"a" + (id + 1)` is a type error: declare the type).
   An unknown type is an error naming the known ones. Casts use `as`: float(text) is broken (card float-of-text), and a
   std function returning int, float or text mixed came back int-typed (card return-type-mixed).
+- URLPattern syntax (card route-urlpattern, P188 "stay close to the web"): `:id(\\d+)` (a regular expression the part
+  must match whole, written as in a JS string; page·route_index checks it with std regex, imported only then),
+  `:tab?` (optional last part, ø when absent: `tab or "main"`), `:path*` / `:path+` (the rest of the path, zero / one
+  or more parts, joined by "/"), `/docs/*` (the rest, unnamed). Only the last part may carry ?, * or +; an unnamed
+  group `(…)` and a mark before the last part are loud errors. Not supported: `{…}` groups, marks in the middle.
+  `:id:int` stays the typed form (a group or mark makes the parameter untyped).
 - The path is the host word page_path(): natively "/" (host::with_page_path for a render at another path), in a built
   site location.pathname (site.js hooks.pagePath), in the playground "/" until a link is followed. host.js
   navigate(holder, hooks, path) sets it and calls hooks.navigated (warp-34: drop pending fetches there).
