@@ -49,3 +49,12 @@ fn comprehensions_in_module_and_program_ask_nothing() {
 	assert_eq!(value, warp::Node::text("Cd"));
 	assert!(warnings.iter().all(|warning| !warning.contains("new local")), "{warnings:?}");
 }
+
+#[test]
+fn use_math_rounds_to_places_factorial_is_prime_lerp() {
+	is!("use math; round_to(3.14159, 2)", 3.14);
+	is!("use math; factorial(5)", 120);
+	is!("use math; [is_prime(7), is_prime(9), is_prime(2), is_prime(1)]", warp::ints(vec![1, 0, 1, 0]));
+	is!("use math; lerp(0, 10, 0.25)", 2.5);
+	is!("use text; [is_blank(\"  \"), is_blank(\" a\")]", warp::ints(vec![1, 0]));
+}

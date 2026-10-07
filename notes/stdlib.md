@@ -100,6 +100,8 @@ Next:
    ("1h 30m 30s", "250ms"; plain milliseconds: units don't reach functions yet); map: omit filter_values. Fixed on
    the way: a slice of a Node is a Node (capitalize(w) for the elements of words(t) was 'text + list'); a
    comprehension's list is a `let` local (one in a module and one in the program asked "new local or main-level?").
+   math: round_to factorial is_prime lerp; list: scan take_while drop_while argmax argmin (from 0, like index_of);
+   map: entries; text: is_blank. Not yet: random seed, a `without` alias of omit.
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:
