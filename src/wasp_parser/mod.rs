@@ -73,9 +73,7 @@ const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
 /// Java's and TypeScript's `class Square implements Shape {…}`
-const IMPLEMENTS_WORD: &str = "implements";
-/// The got-it topic of a class naming its traits (`implements Shape`, Swift's `: Shape`)
-const CONFORMANCE_TOPIC: &str = "conformance-list";
+pub const IMPLEMENTS_WORD: &str = "implements";
 /// `enum Color {red, green}` (declarations::enum_object), Kotlin's `enum class`
 const ENUM_WORD: &str = "enum";
 /// Swift's `enum Shape { case circle(radius: Double) }`

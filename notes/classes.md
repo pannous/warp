@@ -345,3 +345,11 @@ block as children and per-instance state are web's (ruby_blocks.rs, component_st
   dead arm and fails (card match-static); inside a function it works.
 - Emitter fix found on the way: `((a) or b) or c` took the parenthesized operation as a truthy literal and dropped c
   (arithmetic.rs is_operation).
+
+## Checked conformance claims (P177; tests/types/test_conformance_claims.rs)
+`class Square implements Shape, Named {…}`, Swift's `struct Square: Shape {…}`, Kotlin's `class Square(…) : Shape {…}`:
+the parser (skip_conformances) puts the named traits on the type's name as `@implements(Shape Named)`; traits.rs
+named_claims checks each declared trait like the claim `class Square{…} is Shape`: a missing operation is the compile
+error "Square claims Shape but defines no area(s:Square)". A name that is no declared trait (a parent class written
+`: Base`) is not checked. The old "wasp needs no list of them" note is gone. Found on the way: a trait written
+`interface Shape { fun area(): Int }` on one line took `fun` as an operation; function keywords are dropped there.

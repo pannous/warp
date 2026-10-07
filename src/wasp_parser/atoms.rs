@@ -901,7 +901,7 @@ impl WaspParser {
 			return self.parse_sum_type(type_name, &type_parameters, variants_start);
 		}
 		let mut constructor_fields = if self.current_char() == '(' { self.parse_primary_constructor() } else { vec![] };
-		let kotlin_parent = self.skip_conformances();
+		let (kotlin_parent, claims) = self.skip_conformances().unwrap_or_default();
 		// Python's `class Dog(Animal):` names its parents in the parentheses, `object` the root of all
 		let python_body = self.current_char() == ':' && self.peek_char(1) != '=';
 		let python_parent = match python_body {
@@ -923,6 +923,10 @@ impl WaspParser {
 		let mut name = Symbol(type_name);
 		if let Some(parent) = python_parent.or(kotlin_parent) {
 			name = name.with_attribute(EXTENDS_KEYWORD, Symbol(parent));
+		}
+		// P177: `implements Shape`, Swift's `: Shape` claim the traits, checked like `class Square{…} is Shape`
+		if !claims.is_empty() {
+			name = name.with_attribute(IMPLEMENTS_WORD, Node::List(claims, Bracket::None, Separator::Space));
 		}
 		if self.matches_keyword(EXTENDS_KEYWORD) {
 			self.advance_by(EXTENDS_KEYWORD.len());
@@ -1017,10 +1021,10 @@ impl WaspParser {
 	}
 
 	/// The traits a class names before its body, Java's and TypeScript's `implements Shape, Named {`, Swift's
-	/// `struct Square: Shape {`, Kotlin's `class Square(…) : Shape {`: skipped with a note, since a type conforms to a
-	/// trait by defining its operations (notes/traits.md T2). Kotlin's superclass `: Shape()` (its constructor called)
-	/// is the parent, as `extends Shape`
-	fn skip_conformances(&mut self) -> Option<String> {
+	/// `struct Square: Shape {`, Kotlin's `class Square(…) : Shape {`: the parent and the claimed traits. A type conforms
+	/// to a trait by defining its operations (notes/traits.md T2); a named one is a claim, checked (P177). Kotlin's
+	/// superclass `: Shape()` (its constructor called) is the parent, as `extends Shape`
+	fn skip_conformances(&mut self) -> Option<(Option<String>, Vec<Node>)> {
 		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		let start = if self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) != '=' {
 			blanks + 1
@@ -1039,13 +1043,9 @@ impl WaspParser {
 			return None;
 		}
 		let parent = parent.map(str::to_string);
-		let traits: Vec<&str> = names_list.iter().filter(|name| !name.ends_with("()")).copied().collect();
-		if !traits.is_empty() {
-			let written: String = (blanks..start).map(|offset| self.peek_char(offset)).collect::<String>() + names.trim_end();
-			crate::diagnostic::educate_once(CONFORMANCE_TOPIC, written.trim(), "", "a type conforms to a trait by defining its operations: wasp needs no list of them");
-		}
+		let claims = names_list.iter().filter(|name| !name.ends_with("()")).map(|name| Symbol(name.to_string())).collect();
 		self.advance_by(start + names.trim_end().chars().count());
-		parent
+		Some((parent, claims))
 	}
 
 	/// The name of a declared type after blanks: `new Point(…)`
