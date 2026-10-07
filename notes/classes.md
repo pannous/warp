@@ -304,3 +304,10 @@ Not ported: hashCode/__hash__ (wasp has no hash witness; they stay plain methods
   statement sequence as a construction argument is data, so no temporaries below the top. `parse_json(t) as [Point]`
   and a field `points:[Point]` map each element (`list.map(Point·element => Point(…))`); such a list is built before
   the construction, into `elements·1`, … (built_instance).
+
+## Destructuring instances (classes-38, tests/types/test_class_destructuring.rs)
+class_methods destructurings: `{x, y} = p` and `{x: a} = p` by field name (maps too); `(a, b) = p` and Python's
+`a, b = p` of a known instance (a variable assigned a construction, `p:Point`, or a construction) in field order, a
+count other than the fields' left as it was; match arms `Point{x, y} => …` and `Point(x, y) => …` the guard
+`parts·from if parts·from is Point` binding the fields before the body. All go through `parts·from`. Not built: nested
+patterns, constants inside a pattern (`Point(0, y)`), rest patterns.
