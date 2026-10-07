@@ -230,6 +230,11 @@ fn raise_call(items: &[Node]) -> Option<Node> {
 		return None;
 	}
 	let message = crate::pipeline::returned_error_message(raised).unwrap_or(raised).clone();
+	// the message is a text, so `catch e` reads it whatever was raised (`raise 42`: "42"); a word (`raise oops`) is its name
+	let message = match message.drop_meta() {
+		Node::Text(_) | Node::Symbol(_) => message,
+		_ => Node::List(vec![Node::Symbol(crate::wasm_emitter::text_builtins::TEXT_FORM.to_string()), message], Bracket::Round, Separator::None),
+	};
 	Some(Node::List(vec![Node::Symbol(crate::wasm_emitter::text_builtins::RAISE.to_string()), message], Bracket::Round, Separator::None))
 }
 

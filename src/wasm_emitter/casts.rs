@@ -106,12 +106,28 @@ impl WasmGcEmitter {
 				self.emit_dynamic_text(func, value);
 				return;
 			}
+			// card try-raise: an Error (a caught one, `catch e`) reads as its message
+			Kind::Error => {
+				self.emit_error_message(func, value);
+				return;
+			}
 			_ => {
 				self.emit_type_error(func, format!("cannot cast {kind} to string: `{} as string` has no runtime text yet", value.serialize()));
 				return;
 			}
 		};
 		self.emit_node_instructions(func, &node);
+	}
+
+	/// The message of an Error as a Text: error_of builds an Error as a Text is built, its $String in the data field
+	fn emit_error_message(&mut self, func: &mut Function, error: &Node) {
+		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
+		self.emit_node_instructions(func, error);
+		Self::emit_list(func, &[
+			I::LocalSet(held), I::I64Const(Kind::Text as i64),
+			I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 1 },
+			I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+		]);
 	}
 
 	/// The text of a Node of unknown kind, as list_text writes the one item of a list: "[1 2]" for a list, "{a:1 b:2}" for

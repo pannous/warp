@@ -81,7 +81,8 @@ pub fn is_text_builtin(name: &str) -> bool {
 /// `+` of two texts or characters is a text; a number joins a text in its text form (`"F:" + 13` → `"F:13"`, as JS/Kotlin)
 pub fn concatenates(left: Kind, right: Kind) -> bool {
 	let is_text = |kind: &Kind| matches!(kind, Kind::Text | Kind::Codepoint);
-	[left, right].iter().any(is_text) && [left, right].iter().all(|kind| is_text(kind) || is_number(*kind))
+	// an Error joins as its message (card try-raise: `"caught: " + e` of `catch e`)
+	[left, right].iter().any(is_text) && [left, right].iter().all(|kind| is_text(kind) || is_number(*kind) || *kind == Kind::Error)
 }
 
 fn is_number(kind: Kind) -> bool {
@@ -360,6 +361,10 @@ impl WasmGcEmitter {
 		if self.get_type(operand) == Kind::Empty {
 			// a value held as a Node (a map value) may be a number at runtime: joined, a number takes its text form
 			self.emit_node_instructions(func, &super::joined_text(std::slice::from_ref(operand), ""));
+			return;
+		}
+		if self.get_type(operand) == Kind::Error {
+			self.emit_runtime_text_cast(func, operand);
 			return;
 		}
 		if !is_number(self.get_type(operand)) {
