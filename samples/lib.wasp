@@ -1,4 +1,6 @@
 #!/usr/bin/env wasp
-# fun	ok(){
-# 	return 42;
-# }
+// a module: a program that says `use lib` gets ok(); run alone it gives 42
+fun ok(){
+	return 42;
+}
+ok()
