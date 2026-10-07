@@ -1,6 +1,7 @@
 mod test_add_to;
 mod test_equality_never_chains;
 mod test_in_position;
+mod test_contains_infix;
 mod test_less_than_compare;
 mod test_logic_grouped_operands;
 mod test_mutating_bang;
