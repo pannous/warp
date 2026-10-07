@@ -1182,6 +1182,16 @@ impl WasmGcEmitter {
 		if !matches!(kind, Kind::Error | Kind::List | Kind::Text) {
 			return false;
 		}
+		// `"clicks " + cont` of an undefined cont: the undefined variable at the name, as in number arithmetic
+		let unbound = [left, right].into_iter().find_map(|operand| match operand.drop_meta() {
+			Node::Symbol(name) if self.is_unbound(name) => Some((operand, name.clone())),
+			_ => None,
+		});
+		if let Some((operand, name)) = unbound {
+			self.note_position(operand);
+			self.emit_undefined_variable(func, &name);
+			return true;
+		}
 		let (left_kind, right_kind) = (self.get_type(left), self.get_type(right));
 		if crate::analyzer::repeats_text(left_kind, op, right_kind) {
 			let (text, count) = if right_kind == Kind::Int { (left, right) } else { (right, left) };
