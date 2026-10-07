@@ -57,12 +57,31 @@ pub fn repeats_text(left: Kind, op: &Op, right: Kind) -> bool {
 	*op == Op::Mul && ((is_text(left) && right == Kind::Int) || (left == Kind::Int && is_text(right)))
 }
 
-/// `base ^ 0.5`: an exact base with a non-integral literal exponent is no exact number, it is computed as f64
+/// `base ^ 0.5`, `base ^ (1/3)`: an exact base with a non-integral constant exponent is no exact number, it is computed as f64
 pub fn arithmetic_kind_of_operands(left: Kind, op: &Op, right: Kind, right_operand: &Node) -> Kind {
-	let fractional_exponent = *op == Op::Pow && matches!(right_operand.drop_meta(), Node::Number(number) if f64::from(*number).fract() != 0.0);
+	let fractional_exponent = *op == Op::Pow && constant_value(right_operand).is_some_and(|exponent| exponent.fract() != 0.0);
 	match arithmetic_kind(left, op, right) {
 		Kind::Int if fractional_exponent => Kind::Float,
 		kind => kind,
+	}
+}
+
+/// The value of an expression of number literals alone: `(1/3)`, `1.0 / 3`
+fn constant_value(node: &Node) -> Option<f64> {
+	match node.drop_meta() {
+		Node::Number(number) => Some(f64::from(*number)),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => constant_value(&items[0]),
+		Node::Key(left, op, right) => {
+			let (a, b) = (constant_value(left)?, constant_value(right)?);
+			match op {
+				Op::Add => Some(a + b),
+				Op::Sub => Some(a - b),
+				Op::Mul => Some(a * b),
+				Op::Div => Some(a / b),
+				_ => None,
+			}
+		}
+		_ => None,
 	}
 }
 
