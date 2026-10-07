@@ -1743,6 +1743,14 @@ pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 	trap_error(&format!("{:?}", failure), trap.to_string())
 }
 
+/// "index out of range: 7 not in 1…3" from index_out_of_range_of's detail `7:3` (the index asked for, the list's count)
+fn index_range_message(detail: &str) -> Option<String> {
+	let numbers: Vec<i64> = detail.split(|c: char| !(c.is_ascii_digit() || c == '-')).filter_map(|part| part.parse().ok()).collect();
+	let [index, count] = numbers.as_slice() else { return None };
+	let range = if *count == 0 { "an empty list".to_string() } else { format!("1…{count}") };
+	Some(format!("{}: {index} not in {range}", list_ops::runtime_error_message("index_out_of_range")))
+}
+
 /// The runtime error a trap means, read from its trace: the function names on the stack and the `trap detail: …`
 /// line; `trap` (the engine's own words) when the trace names none. Shared by wasmtime and the browser (web.rs).
 pub fn trap_error(trace: &str, trap: String) -> Node {
@@ -1766,7 +1774,8 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 	// `return error("…")` from a number function: the message is the trap detail
 	let returned_error = trace.contains(list_ops::RETURNED_ERROR).then(|| trace.split_once(TRAP_DETAIL_PREFIX).and_then(|(_, rest)| rest.lines().next()))
 		.flatten().map(|detail| detail.trim_matches('"').to_string());
-	let runtime_error = returned_error.or(missing_field).or(no_case).or(overflow).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
+	let index_range = trace.contains(list_ops::INDEX_OUT_OF_RANGE_OF).then(|| trace.split_once(TRAP_DETAIL_PREFIX).and_then(|(_, rest)| index_range_message(rest.lines().next()?))).flatten();
+	let runtime_error = returned_error.or(index_range).or(missing_field).or(no_case).or(overflow).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
 	// the engine's own integer divide trap (a division the emitter did not guard) reads as the guarded one
 	let divide_trap = trap.ends_with(ENGINE_DIVIDE_BY_ZERO).then(|| list_ops::runtime_error_message(list_ops::DIVIDE_BY_ZERO));

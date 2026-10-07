@@ -40,3 +40,11 @@ fn test_type_without_parentheses() {
 	is!("y = type 3.5; y", symbol("rational"));
 	is!("type Point { x: int }; p = Point(1); p.x", 1);
 }
+
+#[test] // card type-pi: `type pi` declared a type named pi
+fn test_type_of_a_name_without_parentheses() {
+	is!("type pi", Node::Symbol("real".to_string()));
+	is!("x = 3; type x", Node::Symbol("int".to_string()));
+	is!("type point{x:int}; 4", 4);
+	is!("type Shape; 5", 5);
+}

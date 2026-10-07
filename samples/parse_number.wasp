@@ -1,0 +1,2 @@
+// read a number from text, or -1 if it is not a number
+try { int("abc") } catch { -1 }

@@ -60,6 +60,8 @@ PASSED:
   ✓ control::test_colon_handlers::a_timer_body_after_a_colon_is_the_rest_of_the_line
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
   ✓ control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
+  ✓ control::test_constant_listener::a_listener_on_a_copy_warns_with_the_derived_value
+  ✓ control::test_constant_listener::a_listener_on_a_written_or_derived_value_does_not_warn
   ✓ control::test_control_words::an_if_with_a_block_after_a_statement_starts_a_statement
   ✓ control::test_control_words::bang_evaluates_a_block
   ✓ control::test_control_words::n_times_repeats_its_block
@@ -1167,6 +1169,7 @@ PASSED:
   ✓ lists::test_index_assignment::test_index_assign_in_while_with_increment
   ✓ lists::test_index_assignment::test_index_assign_with_variable
   ✓ lists::test_index_assignment::test_simple_index_assign
+  ✓ lists::test_index_out_of_range::an_index_out_of_range_names_the_range
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -2143,6 +2146,8 @@ PASSED:
   ✓ programs::test_samples::test_sudoku
   ✓ programs::test_samples::test_sum
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
+  ✓ programs::test_small_samples::error_samples
+  ✓ programs::test_small_samples::text_samples
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
@@ -2662,10 +2667,12 @@ PASSED:
   ✓ types::test_type_name_matching::test_type_word_is_the_parameter_name
   ✓ types::test_type_of::test_type_as_a_method
   ✓ types::test_type_of::test_type_inside_a_function_body
+  ✓ types::test_type_of::test_type_of_a_name_without_parentheses
   ✓ types::test_type_of::test_type_symbol
   ✓ types::test_type_of::test_type_typed_variable
   ✓ types::test_type_of::test_type_without_parentheses
   ✓ types::test_type_of_real_variable::a_variable_holding_pi_is_real
+  ✓ types::test_type_of_real_variable::an_expression_of_pi_is_real
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
   ✓ types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is
   ✓ types::test_type_test_is_only::is_tests_types
@@ -2945,6 +2952,8 @@ PASSED:
   ✓ web::test_markup_tags::rendering_markup_warns_nothing_more
   ✓ web::test_markup_tags::repeated_keys_in_a_tag_block_are_children
   ✓ web::test_markup_tags::the_html_dsl_sample_runs
+  ✓ web::test_missing_use::a_missing_use_offers_to_add_it
+  ✓ web::test_missing_use::the_added_use_makes_it_run
   ✓ web::test_page_tests::a_failing_check_names_its_test_and_the_page
   ✓ web::test_page_tests::a_missing_button_fails_the_test
   ✓ web::test_page_tests::passing_page_tests_are_counted
@@ -3352,4 +3361,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3347 passed, 0 failed, 3347 total tested
+19 ignored, 3356 passed, 0 failed, 3356 total tested

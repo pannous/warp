@@ -95,8 +95,7 @@ impl WasmGcEmitter {
 			return false;
 		}
 		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
-		let diagnostic = crate::diagnostic::Diagnostic::at(&call, crate::ffi::undefined_function_message(name));
-		self.emit_type_error(func, diagnostic.to_string());
+		self.emit_type_error(func, crate::ffi::undefined_function_diagnostic(&call, name).remembered());
 		true
 	}
 
@@ -676,11 +675,11 @@ impl WasmGcEmitter {
 		let name = items.iter().find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))?;
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
 		let text = crate::diagnostic::written_text(&written);
-		let message = match crate::modules::std_module_defining(&name) {
-			Some(_) => crate::ffi::undefined_function_message(&name),
-			None => format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data"),
+		let diagnostic = match crate::modules::std_module_defining(&name) {
+			Some(_) => crate::ffi::undefined_function_diagnostic(&written, &name),
+			None => crate::diagnostic::Diagnostic::at(&written, format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data")),
 		};
-		Some(crate::diagnostic::Diagnostic::at(&written, message).to_string())
+		Some(diagnostic.remembered())
 	}
 
 	/// A word that names nothing the program or the language knows: no function, type, unit or keyword

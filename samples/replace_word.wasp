@@ -1,0 +1,2 @@
+// swap one word for another
+"I like tea".replace("tea", "coffee")

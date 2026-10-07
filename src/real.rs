@@ -172,8 +172,11 @@ fn is_type_test_of_real(items: &[Node]) -> bool {
 		&& matches!(spec.drop_meta(), Node::Text(_)) && mentions_real(argument))
 }
 
+/// The type of the written number, else of the exact value of a constant expression (`2 * π` is real, `π / π` int)
 fn type_name_before_lowering(argument: &Node) -> String {
-	match crate::analyzer::literal_number_type_word(argument) {
+	let exact_value = || evaluate(argument, &mut Scope::new()).ok().map(Value::into_node);
+	let word = crate::analyzer::literal_number_type_word(argument).or_else(|| exact_value().and_then(|value| crate::analyzer::literal_number_type_word(&value)));
+	match word {
 		Some(word) => word.to_string(),
 		None => crate::analyzer::shown_list_type_name(argument, &crate::analyzer::Scope::new()),
 	}

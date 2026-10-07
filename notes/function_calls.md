@@ -65,6 +65,11 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 - Python `list()` is `[]` (library_words `empty_list_calls`, unless the program defines list).
 - Spreading into a function parameter `def apply(f, *args){ f(*args) }`: variadic.rs keeps the spread of a call of a
   parameter, function_values.rs runs variadic::lower again once f is known.
+- Card speak-parens (user asked why `speak() :=`): `speak := …` and `speak() := …` both run the body at every use;
+  `:=` is the canonical form (examples, kitchensink: `speak := name + " barks"`, read as `rex.speak`). The empty
+  parentheses stay for actions: a body with effects (`step() := { cells = next }`, `print`, `random()`) written
+  `step := …` warns "step runs … at every read", since a bare read should not change anything; `step()` says "call".
+  A constant body (`x := "hi"`) hints `x = "hi"`.
 - Python colon definitions with parameters become definitions in lower_c_functions (keyword_definition), so the
   function value passes see them; without parameters they stay def forms for late_binding (a `z() := e` is a getter).
 - OCaml/F# `let f x = body in rest` (welcome_forms.rs `let_binding`); JS IIFE `(() => 7)()` (parser: a glued `()`
