@@ -48,7 +48,7 @@ enum Token {
 fn chain(items: &[Node], context: &Context) -> Option<Node> {
 	if let Some(Node::Key(target, op @ (Op::Assign | Op::Define), value)) = items.first().map(Node::drop_meta) {
 		let chained = chain(&[vec![value.as_ref().clone()], items[1..].to_vec()].concat(), context)?;
-		return Some(Node::Key(target.clone(), op.clone(), Box::new(chained)));
+		return Some(Node::Key(target.clone(), *op, Box::new(chained)));
 	}
 	let mut tokens = vec![];
 	for item in items {
