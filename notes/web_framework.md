@@ -241,16 +241,13 @@ Each step is useful on its own and is what the next ones stand on.
   ("/users/:id:int") whose function is the layout with page·part·N() at the outlet (page·part·N: the inner block, its
   parameters, the outer ones too, bound by `let`); after them the outer route itself with an empty outlet, so an inner
   "/" route answers the outer path first. page·routes lists the whole patterns.
-- A serve program with routes (card serve-route): src/site.rs ServedSite keeps the compiled module; a GET that is no
-  serve route and no file of the site renders the page at that path (main + page·html under host::with_page_path), so
-  GET /users/2 is that route's HTML, hydrated by site.js at the same path. A path no route takes gets the "*" route's
-  page (status 200; without one the "no page at <path>" text). Fixture tests/fixtures/served_routes.wasp.
-- Prerendered routes (card route-prerender): `warp build --site` (and `warp dev`) also writes <path>/index.html for
-  each route without parameters but "/" (src/site.rs prerendered, patterns from page·routes), rendered at that path,
-  finding the site's files through <base href="../"> per level (a page served for a deeper path has <base href="/">;
-  no script grows, card web-bundle's budget), so the page hydrates at /about/. An in-page "#anchor" link on such a
-  deep page resolves against the root. site::file_at finds "/about" as about/index.html (warp dev, serve). Routes with parameters and "*" are
-  rendered by the page itself (a static host needs a fallback to index.html for them).
+- One page for every path (card single-page; user, 2026-10-07: "I much preferred the single HTML", replacing the
+  per-route pages of route-prerender and the per-request rendering of serve-route): a site with routes is index.html
+  (rendered at "/") plus its copy 404.html with <base href="/">, which static hosts (GitHub Pages) serve for any path
+  they have no file of; site::file_at answers such a path with it in `warp dev` and in a serve program
+  (tests/fixtures/served_routes.wasp). site.js runs main at location.pathname and shows that route, so a deep link
+  shows the home page's HTML until the module ran. The <base> makes the scripts, app.wasm and app-route-N.wasm load
+  from the root (a site in a subfolder of its host gets no deep links). Browser check: probes/site/deep_link_in_browser.sh.
 - `outlet` is the canonical word (aliases such as slot on demand).
 
 ## Step 12 (web-stores), what is done and what is left

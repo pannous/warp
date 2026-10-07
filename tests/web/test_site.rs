@@ -38,20 +38,19 @@ fn a_static_page_is_its_last_line_rendered() {
 	std::fs::remove_dir_all(directory).unwrap();
 }
 
-// card route-prerender: each route without parameters is rendered at build time into its own <path>/index.html, which
-// finds the site's files through <base href> from its depth, so a deep link reads without JavaScript and hydrates; routes with parameters
-// and "*" are rendered by the page itself
+// card single-page (user, 2026-10-07: one HTML page, not one per route): a site with routes is one page, index.html,
+// and its copy 404.html, which a static host serves for any other path (a deep link); it finds the site's files through
+// <base href="/"> and its router shows the path's route (in a browser: probes/site/deep_link_in_browser.sh)
 #[test]
-fn a_site_prerenders_each_static_route() {
+fn a_site_with_routes_is_one_page_for_every_path() {
 	let directory = scratch_directory("routes-site");
-	let program = "route \"/\" { h1{ \"Home\" } }\nroute \"/about\" { p{ \"About us\" } }\nroute \"/docs/intro\" { p{ \"Intro\" } }\nroute \"/users/:id:int\" { p{ \"User \" + id } }\nroute \"*\" { p{ \"no such page\" } }";
+	let program = "route \"/\" { h1{ \"Home\" } }\nroute \"/about\" { p{ \"About us\" } }\nroute \"/users/:id:int\" { p{ \"User \" + id } }\nroute \"*\" { p{ \"no such page\" } }";
 	let site = warp::site::build(program, "routes", &directory).expect("the site is built");
-	assert!(site.files.contains(&"about/index.html".to_string()) && site.files.contains(&"docs/intro/index.html".to_string()), "{:?}", site.files);
-	assert!(!site.files.iter().any(|file| file.contains(':') || file.contains('*')), "{:?}", site.files);
+	assert!(site.files.contains(&"404.html".to_string()) && !site.files.iter().any(|file| file.contains('/')), "{:?}", site.files);
 	let page = |file: &str| std::fs::read_to_string(directory.join(file)).unwrap();
-	assert!(page("index.html").contains("<h1>Home</h1>"));
-	assert!(page("about/index.html").contains("<p>About us</p>") && page("about/index.html").contains(r#"<base href="../">"#), "{}", page("about/index.html"));
-	assert!(page("docs/intro/index.html").contains(r#"<base href="../../">"#));
-	assert!(!page("index.html").contains("<base"));
+	assert!(page("index.html").contains("<h1>Home</h1>") && !page("index.html").contains("<base"));
+	assert_eq!(page("404.html"), page("index.html").replace("</title>\n", "</title>\n<base href=\"/\">\n"));
 	std::fs::remove_dir_all(directory).unwrap();
+	let unrouted = warp::site::files("p{ \"hi\" }", "plain", false).expect("the site is built");
+	assert!(!unrouted.iter().any(|(file, _)| file == "404.html"));
 }
