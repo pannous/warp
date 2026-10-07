@@ -67,6 +67,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   `on every day at 9am`); a program's own `time` wins; comparisons of constant quantities are decided at compile
   time; `time < 12` fails with the hint `time < 12h`, a non-duration gives a DimensionError; `print time` alone still
   fails until run-time quantities exist (units-p64).
+- P56 revised (user's card unknown-entity, 2026-10-07: "must not stop the program"): an unknown entity `\:name` stays
+  as written, in texts and outside them, with a compile-time warning; an error only with --strict. A bare `\alpha`
+  stays the error "write \:alpha". Branch unknown-entity ecc9c2fcf (warp-ad).
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
   compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
