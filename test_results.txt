@@ -2937,6 +2937,7 @@ PASSED:
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
   ✓ web::test_guide::every_example_a_chapter_links_exists
   ✓ web::test_guide::every_guide_snippet_prints_what_the_guide_shows
+  ✓ web::test_guide::every_guide_snippet_shows_its_value
   ✓ web::test_headless_pages::a_click_runs_the_handler_and_shows_the_page_anew
   ✓ web::test_headless_pages::a_missing_button_is_a_loud_error
   ✓ web::test_headless_pages::each_component_instance_counts_on_its_own
@@ -3002,6 +3003,7 @@ PASSED:
   ✓ web::test_styles::a_style_sheet_in_a_component_is_scoped_to_it
   ✓ web::test_styles::a_style_sheet_is_a_block_of_rules
   ✓ web::test_styles::an_inline_style_is_a_block_of_properties
+  ✓ web::test_tag_lists::a_list_among_children_is_spliced_into_them
   ✓ web::test_tag_lists::a_tag_of_one_value_stays_one_tag
   ✓ web::test_tag_lists::a_tag_over_a_list_literal
   ✓ web::test_tag_lists::a_tag_over_all_items_of_a_list
@@ -3383,7 +3385,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ web::test_guide::every_guide_snippet_shows_its_value
 
 SUMMARY:
-19 ignored, 3380 passed, 1 failed, 3381 total tested
+19 ignored, 3382 passed, 0 failed, 3382 total tested
