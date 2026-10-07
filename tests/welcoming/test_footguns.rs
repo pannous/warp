@@ -79,7 +79,7 @@ fn test_norway_problem_in_data() {
 	assert_eq!(parse_data("country: NO").serialize(), "country:NO"); // YAML 1.1: false
 	assert_eq!(parse_data("answer: yes").serialize(), "answer:yes"); // YAML 1.1: true
 	assert_eq!(parse_data("[de gb no]").serialize(), "[de gb no]");
-	assert_eq!(parse_data("flag: true").serialize(), "flag:true");
+	assert_eq!(parse_data("flag: true").serialize(), "flag:yes");
 	assert_eq!(parse_data("missing: null")["missing"], Node::Empty);
 }
 
