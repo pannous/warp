@@ -52,3 +52,11 @@ Each step is useful on its own and is what the next ones stand on.
   attributes, other children nested in order. Unknown names stay data (no custom elements yet).
 - Natively the value serializes as HTML (`to_html`), text escaped. In the page the program's value, when it is markup, is
   shown as DOM in the output pane instead of its wasp text; `show(markup)` places it explicitly.
+
+## Step 12 (web-stores), what is done and what is left
+- Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
+  value an earlier run kept under its name, else the default; `on change theme` keeps each change. Natively the values
+  are JSON in `<program>.stored.json` beside the program (in memory for inline code), in the playground the page's
+  localStorage (`wasp stored <name>`): the worker gets them at start and sends each save back (host.js
+  STD_ADAPTERS.store, playground.js keepStored). Values cross as JSON (std_adapters, as foreign calls).
+- Left: undo history of a signal, shared stores / context across modules and components.

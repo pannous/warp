@@ -60,8 +60,47 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		}
 		("net", "post", [url, body]) => crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, crate::host::FETCH_TIMEOUT).map(Node::Text).map_err(failure),
 		("os", "env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
+		// `stored theme = "dark"` (lowering/stored_values.rs): the value kept under its name, or the default
+		("store", "load", [name, default, file]) => {
+			let kept = stored_values(&text_of(file)?).map_err(failure)?.remove(&text_of(name)?);
+			Ok(kept.map_or_else(|| default.clone(), |value| crate::foreign::node_of(&value)))
+		}
+		("store", "save", [name, value, file]) => {
+			let file = text_of(file)?;
+			let mut values = stored_values(&file).map_err(failure)?;
+			values.insert(text_of(name)?, crate::foreign::json_of(value));
+			save_stored_values(&file, values).map(|_| Node::Empty).map_err(failure)
+		}
 		_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
 	}
+}
+
+type StoredValues = serde_json::Map<String, serde_json::Value>;
+
+thread_local! {
+	/// The stored values of a program run without a file (`warp eval`, tests): kept while the process runs
+	static UNFILED_STORE: std::cell::RefCell<StoredValues> = std::cell::RefCell::new(StoredValues::new());
+}
+
+/// The stored values in the program's store file (a JSON object by name), none when it does not exist yet
+fn stored_values(file: &str) -> Result<StoredValues, String> {
+	if file.is_empty() {
+		return Ok(UNFILED_STORE.with(|store| store.borrow().clone()));
+	}
+	match std::fs::read_to_string(file) {
+		Ok(text) => serde_json::from_str(&text).map_err(|problem| format!("{file} holds no stored values: {problem}")),
+		Err(problem) if problem.kind() == std::io::ErrorKind::NotFound => Ok(StoredValues::new()),
+		Err(problem) => Err(format!("{file}: {problem}")),
+	}
+}
+
+fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
+	if file.is_empty() {
+		UNFILED_STORE.with(|store| *store.borrow_mut() = values);
+		return Ok(());
+	}
+	let text = serde_json::to_string_pretty(&values).map_err(|problem| problem.to_string())?;
+	std::fs::write(file, text).map_err(|problem| format!("{file}: {problem}"))
 }
 
 /// A list of texts

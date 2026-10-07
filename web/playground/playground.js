@@ -78,6 +78,7 @@ function startWorker() {
 	workerReady = new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
 			if (data.type === "ready") return resolve();
+			if (data.type === "stored") return keepStored(data.name, data.value);
 			if (data.type === "failed") return reject(new Error(data.message));
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") pending.listening = data.events;
@@ -89,6 +90,27 @@ function startWorker() {
 	});
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
 	tellSystemValues();
+	worker.postMessage({ stored: storedValues() });
+}
+
+// `stored theme = "dark"` (src/lowering/stored_values.rs): the page keeps each stored value in localStorage as JSON,
+// the worker gets them all when it starts and sends each change back (host.js STD_ADAPTERS.store)
+const STORED_PREFIX = "wasp stored ";
+function storedValues() {
+	try {
+		const names = Object.keys(localStorage).filter(key => key.startsWith(STORED_PREFIX));
+		return Object.fromEntries(names.map(key => [key.slice(STORED_PREFIX.length), JSON.parse(localStorage.getItem(key))]));
+	} catch (failure) {
+		console.error("stored values could not be read from localStorage:", failure);
+		return {};
+	}
+}
+function keepStored(name, value) {
+	try {
+		localStorage.setItem(STORED_PREFIX + name, JSON.stringify(value));
+	} catch (failure) {
+		console.error(`stored ${name} could not be kept in localStorage:`, failure);
+	}
 }
 
 // the system values a Worker cannot read itself (host.js system_value), sent again when they change

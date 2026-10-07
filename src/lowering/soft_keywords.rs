@@ -14,7 +14,7 @@ pub const HARD_KEYWORDS: [&str; 26] = [
 	"use", "import", "include", // modules
 ];
 /// emit's aliases fire, trigger and signal stay out: a program may define them (P163, test_event_footguns; asked)
-pub const SOFT_KEYWORDS: [&str; 9] = ["emit", "send", "broadcast", "every", "whenever", "init", "new", "root", "listeners"];
+pub const SOFT_KEYWORDS: [&str; 10] = ["emit", "send", "broadcast", "every", "whenever", "init", "new", "root", "listeners", "stored"];
 /// Keyword-like words in neither list: the playground editor colors them like soft keywords (web/playground/build.sh
 /// makes keywords.js). Display only: P165 gives them no meaning; moving one into a list above is a user decision
 pub const HIGHLIGHTED_WORDS: [&str; 59] = ["try", "catch", "except", "switch", "match", "case", "do", "yield", "await", "go", "elif", "elsif", "elseif", "end", "until", "law", "on", "once", "within", "after", "of", "from", "to", "upto", "times", "is", "as", "with", "extends", "mixin", "static", "trait", "interface", "protocol", "struct", "record", "operator", "nonlocal", "lambda", "define", "function", "func", "result", "print", "assert", "linear", "shared", "ref", "meta", "raise", "throw", "require", "and", "or", "not", "xor", "fire", "trigger", "signal"];

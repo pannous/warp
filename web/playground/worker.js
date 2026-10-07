@@ -14,6 +14,7 @@ const PAGE_VALUE = "page·value";
 let panicMessage; // the compiler's last panic message
 
 const post = message => self.postMessage(message);
+self.keepStored = (name, value) => post({ type: "stored", name, value }); // host.js STD_ADAPTERS.store
 const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
@@ -119,6 +120,7 @@ function startTimers(holder) {
 
 self.onmessage = async ({ data }) => {
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
+	if (data.stored) return Object.assign(storedValues, data.stored); // host.js STD_ADAPTERS.store
 	await ready;
 	if (data.event) return handleEvent(data);
 	if (live) stopListening(live);

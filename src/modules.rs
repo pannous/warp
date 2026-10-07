@@ -181,6 +181,11 @@ pub fn beside_program(path: &str) -> String {
 	}
 }
 
+/// The file being compiled, None for inline code
+pub fn program_file() -> Option<PathBuf> {
+	PROGRAM_FILE.with(|current| current.borrow().clone())
+}
+
 /// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
 pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
 	let previous = PROGRAM_FILE.with(|current| current.replace(Some(file.to_path_buf())));

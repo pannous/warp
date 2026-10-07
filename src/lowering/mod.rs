@@ -49,6 +49,7 @@ pub mod shared_arrays;
 pub mod serve;
 pub mod soft_keywords;
 pub mod std_aliases;
+pub mod stored_values;
 pub mod switch;
 pub mod traits;
 pub mod tuples;
