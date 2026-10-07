@@ -665,6 +665,7 @@ PASSED:
   ✓ functions::test_charged_getters::an_effectful_getter_warns_at_the_definition
   ✓ functions::test_charged_getters::an_object_getter_runs_at_every_read
   ✓ functions::test_charged_getters::assigning_a_getter_is_an_error_naming_the_definition
+  ✓ functions::test_closure_value_arguments::a_lambda_of_the_loop_variable_given_to_a_function_sees_each_turn
   ✓ functions::test_closure_value_arguments::test_a_closure_in_a_list_takes_a_text
   ✓ functions::test_closure_value_arguments::test_a_returned_closure_takes_a_text
   ✓ functions::test_closure_value_arguments::test_a_returned_closure_takes_numbers_and_lists
@@ -1346,19 +1347,23 @@ PASSED:
   ✓ modules::test_std_list::chunk_window_median
   ✓ modules::test_std_list::use_list_brings_its_words
   ✓ modules::test_std_list::use_list_groups_partitions_and_picks_by
+  ✓ modules::test_std_list::use_list_pairs_splits_crosses_and_measures_spread
   ✓ modules::test_std_list::use_list_scans_takes_and_drops_while_finds_argmax
   ✓ modules::test_std_list::use_list_zips_with_sums_by_rotates_interleaves_dedupes
   ✓ modules::test_std_map::a_one_entry_map_merges_too
   ✓ modules::test_std_map::use_map_brings_merge_and_map_values
+  ✓ modules::test_std_map::use_map_gets_with_a_fallback
   ✓ modules::test_std_map::use_map_inverts_picks_and_builds_from_pairs
   ✓ modules::test_std_map::use_map_lists_its_entries
   ✓ modules::test_std_map::use_map_omits_and_filters_values
   ✓ modules::test_std_math_text::comprehensions_in_module_and_program_ask_nothing
   ✓ modules::test_std_math_text::use_math_brings_libm_and_the_module
+  ✓ modules::test_std_math_text::use_math_parity_digits_choose_mod_pow
   ✓ modules::test_std_math_text::use_math_rounds_to_places_factorial_is_prime_lerp
   ✓ modules::test_std_math_text::use_text_brings_its_words
   ✓ modules::test_std_math_text::use_text_brings_title_slug_truncate
   ✓ modules::test_std_math_text::use_text_brings_words_lines_capitalize_center
+  ✓ modules::test_std_math_text::use_text_cases_prefixes_counts_palindromes
   ✓ modules::test_std_math_text::use_text_formats_a_template
   ✓ modules::test_std_matrix::a_matrix_element_is_written
   ✓ modules::test_std_matrix::numpy_names_are_matrix_words
@@ -1380,6 +1385,7 @@ PASSED:
   ✓ modules::test_std_time::format_duration_in_the_largest_units
   ✓ modules::test_std_time::today_is_a_date_after_2025
   ✓ modules::test_std_time::use_time_formats_dates_and_times
+  ✓ modules::test_std_time::use_time_knows_leap_years_and_month_lengths
   ✓ modules::test_std_time::use_time_parses_dates
   ✓ modules::test_use_modules::module_function_locals_are_not_the_programs_variables
   ✓ modules::test_use_modules::test_module_statements_are_not_imported
@@ -2457,6 +2463,8 @@ PASSED:
   ✓ types::test_mutating_methods::a_method_setting_an_element_of_a_list_field_changes_its_object
   ✓ types::test_mutating_methods::pop_on_a_list_field
   ✓ types::test_mutating_methods::the_call_gives_the_changed_object
+  ✓ types::test_optional_number_fields::a_given_optional_number_is_the_number
+  ✓ types::test_optional_number_fields::an_omitted_optional_number_is_empty
   ✓ types::test_person_struct::test_person_struct_roundtrip
   ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
   ✓ types::test_printable::print_and_interpolation_call_the_printable_operation
@@ -2635,6 +2643,10 @@ PASSED:
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_keys_on_the_engine_settings
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_recompiles_a_damaged_entry
   ✓ wasm::test_compiled_module_cache::test_gc_engine_is_shared
+  ✓ wasm::test_component_worlds::a_component_declaration_does_nothing_at_run_time
+  ✓ wasm::test_component_worlds::a_program_without_component_has_no_world
+  ✓ wasm::test_component_worlds::an_unknown_interface_is_named
+  ✓ wasm::test_component_worlds::the_world_as_wit
   ✓ wasm::test_dead_functions::a_module_without_dead_functions_stays_as_it_is
   ✓ wasm::test_dead_functions::compiled_programs_carry_no_dead_functions
   ✓ wasm::test_dead_functions::unreachable_functions_are_dropped_and_the_rest_renumbered
@@ -2787,6 +2799,7 @@ PASSED:
   ✓ web::test_headless_pages::typing_into_a_bound_field_sets_its_variable
   ✓ web::test_html_render::a_computed_child_next_to_an_attribute
   ✓ web::test_html_render::a_for_loop_inside_markup
+  ✓ web::test_html_render::a_for_loop_nested_in_html
   ✓ web::test_html_render::a_whole_page
   ✓ web::test_html_render::other_values_are_no_markup
   ✓ web::test_html_render::tags_attributes_and_text
@@ -3051,6 +3064,7 @@ PASSED:
   ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
   ✓ welcoming::test_style_dont_care::any_axis_can_stop_caring
   ✓ welcoming::test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
+  ✓ welcoming::test_undefined_in_text_sum::an_undefined_name_in_a_text_sum_is_an_undefined_variable
   ✓ welcoming::test_unknown_prefix_word::an_unknown_word_applied_to_a_value_warns
   ✓ welcoming::test_unknown_prefix_word::known_words_and_plain_data_do_not_warn
   ✓ welcoming::test_unknown_prefix_word::the_call_form_stays_an_error
@@ -3178,4 +3192,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3173 passed, 0 failed, 3173 total tested
+19 ignored, 3187 passed, 0 failed, 3187 total tested
