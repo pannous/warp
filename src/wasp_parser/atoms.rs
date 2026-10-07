@@ -151,6 +151,10 @@ impl WaspParser {
 				(0..=name.len()).for_each(|_| self.advance());
 				error(&format!("a uniscript entity is written \\:{name}, not \\{name}"))
 			}
+			_ if let Some((operator, length)) = self.bare_operator_in_block() => {
+				(0..length).for_each(|_| self.advance());
+				error(&format!("{{{operator}}} is an operator without operands, no function: write them, e.g. map xs {{it + 1}}"))
+			}
 			ch => {
 				warn!(
 					"Unexpected character '{}' at line {}, column {}",
