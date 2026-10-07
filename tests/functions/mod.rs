@@ -52,6 +52,8 @@ mod test_multi_value;
 mod test_undefined_calls;
 mod test_variadic;
 mod test_tuple_returns;
+mod test_destructuring_in_a_body;
+mod test_deterministic_inference;
 mod test_type_dispatch;
 mod test_typed_signatures;
 mod test_object_arguments;

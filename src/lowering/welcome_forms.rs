@@ -11,7 +11,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
-const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
+use crate::switch::SWITCH_WORDS;
 const WILDCARD: &str = "_";
 const DEFAULT_CASE: &str = "default";
 const LOOP_WORD: &str = "loop";
@@ -67,8 +67,7 @@ const LINQ_METHODS: [(&str, &str); 12] = [("Select", "map"), ("Where", "filter")
 pub fn lower(node: Node) -> Node {
 	let defined = defined_names(&node);
 	let node = if names_vector_word(&node) { node } else { r_vectors(node) };
-	let modules: Vec<&str> = crate::modules::std_module_names().chain([JS_MATH]).filter(|module| !crate::soft_keywords::program_names(&node, module)).collect();
-	let node = module_calls(node, &modules);
+	let node = qualified_module_calls(node);
 	let node = linq_calls(forms(node), &defined);
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
@@ -224,29 +223,40 @@ fn is_word(node: &Node, word: &str) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word)
 }
 
-/// `[match, subject, {k => v …}]`: the cases as `k: v`, `_ => v` as `default: v`
+/// `[match, subject, {k => v …}]`, or `[match, (subject {k => v …})]` as an assigned match parses: the cases as `k: v`,
+/// `_ => v` as `default: v`
 fn arrow_cases(mut items: Vec<Node>) -> Vec<Node> {
-	let is_switch = items.len() == 3 && SWITCH_WORDS.iter().any(|word| is_word(&items[0], word));
-	if !is_switch {
+	if !items.first().is_some_and(|word| SWITCH_WORDS.iter().any(|switch| is_word(word, switch))) {
 		return items;
 	}
-	if let Node::List(cases, Bracket::Curly, separator) = items[2].drop_meta() {
-		let cases = cases.iter().map(|case| match case.drop_meta() {
-			// Swift's `case .north: 1` (read as the member `case.north`) and `case Direction.north: 1`
-			Node::Key(label, Op::Colon, body) if matches!(label.drop_meta(), Node::Key(word, Op::Dot, _) if is_word(word, CASE_WORD)) => {
-				let Node::Key(_, _, member) = label.drop_meta() else { unreachable!("guarded") };
-				Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::Dot, member.clone())), Op::Colon, body.clone())
+	match items.len() {
+		3 => items[2] = colon_cases(&items[2]),
+		2 => if let Node::List(pair, bracket, separator) = items[1].drop_meta() {
+			if let [subject, cases] = pair.as_slice() {
+				items[1] = Node::List(vec![subject.clone(), colon_cases(cases)], bracket.clone(), separator.clone());
 			}
-			Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if is_word(word, CASE_WORD)) => words[1].clone(),
-			Node::Key(pattern, Op::FatArrow, body) => {
-				let pattern = if is_word(pattern, WILDCARD) { Node::Symbol(DEFAULT_CASE.to_string()) } else { pattern.as_ref().clone() };
-				Node::Key(Box::new(pattern), Op::Colon, body.clone())
-			}
-			_ => case.clone(),
-		});
-		items[2] = Node::List(cases.collect(), Bracket::Curly, separator.clone());
+		},
+		_ => {}
 	}
 	items
+}
+
+fn colon_cases(block: &Node) -> Node {
+	let Node::List(cases, Bracket::Curly, separator) = block.drop_meta() else { return block.clone() };
+	let cases = cases.iter().map(|case| match case.drop_meta() {
+		// Swift's `case .north: 1` (read as the member `case.north`) and `case Direction.north: 1`
+		Node::Key(label, Op::Colon, body) if matches!(label.drop_meta(), Node::Key(word, Op::Dot, _) if is_word(word, CASE_WORD)) => {
+			let Node::Key(_, _, member) = label.drop_meta() else { unreachable!("guarded") };
+			Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::Dot, member.clone())), Op::Colon, body.clone())
+		}
+		Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if is_word(word, CASE_WORD)) => words[1].clone(),
+		Node::Key(pattern, Op::FatArrow, body) => {
+			let pattern = if is_word(pattern, WILDCARD) { Node::Symbol(DEFAULT_CASE.to_string()) } else { pattern.as_ref().clone() };
+			Node::Key(Box::new(pattern), Op::Colon, body.clone())
+		}
+		_ => case.clone(),
+	});
+	Node::List(cases.collect(), Bracket::Curly, separator.clone())
 }
 
 /// Kotlin's `when (x) { 1, 2 -> a; is Circle -> b; else -> c }` (or `when { x > 0 -> a … }` without a subject): the
@@ -506,7 +516,12 @@ fn is_function_keyword(node: &Node) -> bool {
 
 /// `list.zip(a, b)`, `math.gcd(4, 6)`, JS's `Math.sqrt(16)`: a module's word called through the module's name is the
 /// word itself, with a note (a program's own variable `text` keeps its methods)
-fn module_calls(node: Node, modules: &[&str]) -> Node {
+fn qualified_module_calls(node: Node) -> Node {
+	let modules: Vec<&str> = crate::modules::std_module_names().chain([JS_MATH]).filter(|module| !crate::soft_keywords::program_names(&node, module)).collect();
+	module_calls(node, &modules)
+}
+
+pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 	match node {
 		Node::Key(module, Op::Dot, call) if modules.iter().any(|name| is_word(&module, name)) && matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(_)))) => {
 			let word = match call.drop_meta() {

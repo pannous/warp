@@ -147,6 +147,10 @@ impl WaspParser {
 			('|', '|') => return Some((Op::Or, 2)),
 			_ => {}
 		}
+		// a blank after it: `plus(a, b)` stays a call of the function plus
+		if let Some((phrase, op)) = WORD_OPERATORS.iter().find(|(phrase, _)| self.matches_keyword(phrase) && matches!(self.peek_char(phrase.len()), ' ' | '\t')) {
+			return Some((*op, phrase.len()));
+		}
 		// Keywords (2-char)
 		if self.matches_keyword("or") { return Some((Op::Or, 2)); }
 		if self.matches_keyword("is") { return Some((Op::Eq, 2)); } // wiki/equality.md: `is` compares by value like ==
@@ -155,6 +159,7 @@ impl WaspParser {
 		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
 		if self.matches_keyword("to") { return Some((Op::To, 2)); }
 		if self.matches_keyword("upto") { return Some((Op::Range, 4)); } // wiki/range.md: `1 upto 10` excludes 10
+		if let Some(length) = self.down_to_length() { return Some((Op::To, length)); }
 		// Kotlin's `for i in 0 until n`; elsewhere `until` guards a statement: `i++ until c`
 		if self.in_for_header && self.matches_keyword("until") { return Some((Op::Range, 5)); }
 
@@ -204,6 +209,15 @@ impl WaspParser {
 			.map(|(word, op, _)| (*op, word.len()))
 	}
 
+	/// `10 down to 1`: the length of the words `down to` (Kotlin's `downTo`), the range counting down
+	fn down_to_length(&self) -> Option<usize> {
+		if !self.matches_keyword(DOWN_WORD) {
+			return None;
+		}
+		let blanks = (DOWN_WORD.len()..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		(blanks > 0 && self.word_at(DOWN_WORD.len() + blanks) == TO_WORD).then(|| DOWN_WORD.len() + blanks + TO_WORD.len())
+	}
+
 	/// `try` or `assert` followed by an operand: the words that guard a statement
 	pub(super) fn peek_guard_word(&self) -> Option<&'static str> {
 		if self.options.data_mode {
@@ -239,7 +253,23 @@ impl WaspParser {
 		};
 		// `catch e { … }` (P67): the name the fallback reads the caught Error by, a fourth item
 		let binding = caught.filter(|name| mentions(&fallback, name)).map(Symbol);
-		Node::List([vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(), Bracket::Round, Separator::None)
+		let guard = Node::List([vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(), Bracket::Round, Separator::None);
+		self.with_finally(guard)
+	}
+
+	/// `… finally {Z}` after a guard: `(finally·N = guard; Z; finally·N)`, Z runs and the guard's value stays
+	fn with_finally(&mut self, guard: Node) -> Node {
+		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		if self.word_at(ahead) != FINALLY_KEYWORD {
+			return guard;
+		}
+		self.advance_by(ahead + FINALLY_KEYWORD.len());
+		self.skip_spaces();
+		let cleanup = if self.current_char() == ':' { self.colon_body(":") } else { self.rest_of_statement() };
+		self.finally_blocks += 1;
+		let value = Symbol(format!("{FINALLY_KEYWORD}·{}", self.finally_blocks));
+		let held = Node::Key(Box::new(value.clone()), Op::Assign, Box::new(guard));
+		Node::List(vec![held, cleanup, value], Bracket::Round, Separator::Semicolon)
 	}
 
 	/// `after C return V`: the marker call `after·return(C, V)`, when a `return` follows on the statement (outside brackets);
@@ -370,6 +400,17 @@ impl WaspParser {
 			'∛' => Some((Op::Cbrt, 1)),
 			'‖' => Some((Op::Abs, 1)),
 			'#' => Some((Op::Hash, 1)), // prefix # means count/length
+			// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the
+			// subject; a glued `<tag` stays a bracket
+			'>' | '<' if !self.options.xml_mode && !self.options.data_mode => {
+				let (op, length) = match (c1, c2) {
+					('>', '=') => (Op::Ge, 2),
+					('<', '=') => (Op::Le, 2),
+					('>', _) => (Op::Gt, 1),
+					_ => (Op::Lt, 1),
+				};
+				matches!(self.peek_char(length), ' ' | '\t').then_some((op, length))
+			}
 			_ => None,
 		}
 	}

@@ -33,6 +33,7 @@ mod test_type_of_real_variable;
 mod test_type_test_is_only;
 mod test_type_name_definition_forms;
 mod test_type_name_matching;
+mod test_repeated_type_parameters;
 mod test_type_of;
 mod test_type_tests;
 mod test_type_tests_anywhere;
