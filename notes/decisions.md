@@ -63,6 +63,10 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - Trailing percent (default, warp-d0, card postfix-words): a `%` with nothing after it is a percent, x/100 exact:
   `10%` = 1/10, `200 * 10%` = 20, `50 % of 200` = 100 (`of` multiplies after a percent). CSS values like
   `width: 50%` stay as written; `whenever battery < 20%` keeps its battery-level reading. Infix `%` stays remainder.
+- `time` (default, warp-ad, card time-day-value): the machine's local time of day as a duration since midnight (as in
+  `on every day at 9am`); a program's own `time` wins; comparisons of constant quantities are decided at compile
+  time; `time < 12` fails with the hint `time < 12h`, a non-duration gives a DimensionError; `print time` alone still
+  fails until run-time quantities exist (units-p64).
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
   compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
