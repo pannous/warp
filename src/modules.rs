@@ -464,8 +464,11 @@ impl<'a> Loader<'a> {
 		self.find_with(name, &MODULE_EXTENSIONS)
 	}
 
+	/// never the program's own file: hash.wasp saying `use hash` means the standard module
 	fn find_with(&self, name: &str, extensions: &[&str]) -> Option<PathBuf> {
-		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path))
+		let program = program_file().and_then(|file| file.canonicalize().ok());
+		let is_program = |path: &PathBuf| program.is_some() && path.canonicalize().ok() == program;
+		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path) && !is_program(path))
 	}
 
 	fn candidates(&self, name: &str) -> Vec<PathBuf> {
@@ -634,6 +637,13 @@ pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
 		},
 		_ => None,
 	}).unwrap_or_default()
+}
+
+/// The file of the program's folder or search directories that `use module` finds before the standard module of
+/// that name (a local file wins)
+pub fn module_file_shadowing(module: &str) -> Option<PathBuf> {
+	let folder = program_file().as_deref().map(folder_of);
+	Loader::new(&SEARCH_DIRECTORIES, folder).find(module)
 }
 
 fn is_builtin_library(name: &str) -> bool {
