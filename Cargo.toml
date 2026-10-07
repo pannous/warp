@@ -61,7 +61,7 @@ anyhow = "1.0"
 #regex = "1.10.3" # removed: unused
 unicode-normalization = "0.1"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = { version = "1.0", features = ["preserve_order"] } # objects keep the order of wasp maps (and of JS JSON.stringify)
 #wast = "*"
 wasmparser = "0.259"
 wat = { version = "1.259", optional = true } # native: an imported module may be WAT text (wasm_modules.rs)
