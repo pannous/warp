@@ -445,7 +445,8 @@ pub(super) fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, 
 /// two calls traps (g-rT0c). Closures need the same (`t = "!"; shout = s => s + t`). Kinds are merged only where no
 /// declared global of that name exists.
 pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: HashMap<String, Local>) -> HashMap<String, Local> {
-	let mut outer = Scope::new();
+	// `xs = [w(), w()]` holds what w returns, as the emitter's capture globals do (card float-calls)
+	let mut outer = Scope::with_function_kinds(ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect());
 	collect_variables(program, &mut outer);
 	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	functions.sort_by(|a, b| a.name.cmp(&b.name));
@@ -502,7 +503,7 @@ pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 	user_functions.chain(crate::real::FUNCTIONS.iter().map(|name| name.to_string())).collect()
 }
 
-pub(super) fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
+pub(super) fn negate_calls(node: Node, functions: &std::collections::BTreeMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
 	let is_function = |operand: &Node| match operand.drop_meta() {
 		Node::Symbol(name) => functions.get(name).is_some_and(|function| !function.params.is_empty())
 			|| (crate::real::FUNCTIONS.contains(&name.as_str()) && !bound.contains(name)),

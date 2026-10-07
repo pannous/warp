@@ -55,3 +55,8 @@ Object arguments (tests/functions/test_object_arguments.rs): an untyped paramete
 (`measure(p) := p.width; measure({width:3})`), and an argument known at compile time not to be an instance of a
 class-typed parameter is an error (`keep 3`, `keep(page{…})` for `keep(p:photo)`: "keep needs a photo for parameter p,
 got 3 (an Int)"). An argument of unknown type, or a written map, is judged by the fields its uses read ("no field width").
+
+Repeated type words (samples/polymorphism.wasp, tests/types/test_repeated_type_parameters.rs): a type word repeated
+alone in a head numbers its parameters, `combine float with float = float#1 + float#2` is
+`combine(float·1:float, float·2:float) := float·1 + float·2`; `$0`, `$1` read them by position as in any definition.
+Other repeated names stay the error "two parameters are named …" (type_name_matching.rs numbered_repeated_types).

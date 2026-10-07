@@ -203,7 +203,11 @@ impl WaspParser {
 				}
 				_ => item,
 			};
-			items_with_seps.push((item, sep));
+			match declarations_of_several_globals(&item) {
+				// `global a, b`: its declarations are statements of this block
+				Some(declarations) => items_with_seps.extend(declarations.into_iter().map(|declaration| (declaration, sep.clone()))),
+				None => items_with_seps.push((item, sep)),
+			}
 
 			if self.pos == pos_before {
 				self.advance();
@@ -411,4 +415,11 @@ fn with_trailing_block(assignment: Node, block: Node) -> Node {
 		Node::Key(target, op, value) => Node::Key(target, op, Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space))),
 		other => other,
 	}
+}
+
+/// `global a, b` as parsed: the declarations `global: a`, `global: b`
+fn declarations_of_several_globals(item: &Node) -> Option<Vec<Node>> {
+	let Node::List(declarations, Bracket::None, Separator::Semicolon) = item.drop_meta() else { return None };
+	let is_global = |declaration: &Node| matches!(declaration.drop_meta(), Node::Key(keyword, Op::Colon, _) if matches!(keyword.drop_meta(), Node::Symbol(word) if word == crate::node::GLOBAL_DECLARATION));
+	declarations.iter().all(is_global).then(|| declarations.clone())
 }

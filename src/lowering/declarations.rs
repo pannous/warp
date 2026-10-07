@@ -640,7 +640,11 @@ impl Tasks<'_> {
 		};
 		let winner = format!("{RACE_PREFIX}{}", RACES.with(|races| races.replace(races.get() + 1)));
 		let winner_is = |index: usize| Node::Key(Box::new(Node::Symbol(winner.clone())), Op::Eq, Box::new(crate::node::int(index as i64)));
+		// `go 1+1` is computed right away, no task is started: it has ended (card await-hang)
 		let ended = |job: &Node| {
+			if !self.started.contains_key(&word(&job_of(job))) {
+				return Node::True;
+			}
 			let status = marker(crate::host::TASK_STATUS, vec![job_of(job)]);
 			let is = |code: i64| Node::Key(Box::new(status.clone()), Op::Eq, Box::new(crate::node::int(code)));
 			Node::Key(Box::new(is(crate::host::TASK_FINISHED)), Op::Or, Box::new(is(crate::host::TASK_FAILED)))
@@ -1356,12 +1360,12 @@ fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
 	let names: Vec<String> = words.iter().map(Node::name).collect();
 	let names: Vec<&str> = names.iter().map(String::as_str).collect();
 	// one parse with type_name_matching: `square of a number := …` takes the same slots as with `=`
-	let parameters = match crate::type_name_matching::spaced_parameters(&names, body) {
-		None => words,
-		Some(Ok(parameters)) => parameters,
+	let (parameters, body) = match crate::type_name_matching::spaced_parameters(&names, body) {
+		None => (words, body.as_ref().clone()),
+		Some(Ok(slots)) => slots,
 		Some(Err(_)) => return None, // type_name_matching reports it
 	};
-	Some((name.drop_meta().clone(), parameters, applied_to_last(body.as_ref().clone(), extra)))
+	Some((name.drop_meta().clone(), parameters, applied_to_last(body, extra)))
 }
 
 /// The one named parameter of a definition head `f(x)` (`f(x:int)`), not `it`
