@@ -137,5 +137,10 @@ Each step is useful on its own and is what the next ones stand on.
   showHandled). Elements and text are read from the rendered HTML (headless.rs `shown`), so html.rs is untouched and a
   later renderer (std/markup.wasp) keeps working.
 - The playground examples keep their `clicks` / `typed` / `clicked` checks (test_in_browser.py --examples).
-- Left: tests written in wasp itself (`test "counter" { page = render(Counter()); click page "Add"; … }`) need a
-  run-time handler lookup inside the module; not started.
+- Tests in wasp (src/page_tests.rs, tests/web/test_page_tests.rs; syntax an undoable default, queued with the
+  Interviewer): `test "counter" { render Counter(1); click "Add"; fill "name" with "Ada"; check text is "Addn 2" }`.
+  A program with a top-level test block that renders runs its tests host-side on headless pages: the code outside the
+  tests is the setup, other lines in a test are its own setup, `check` holds with `text` / `html` bound to the page.
+  Its value is `2 tests passed` or an Error naming each failed test, the check and what the page shows. Source text is
+  used throughout (Node::serialize drops quotes in places). While a page renders, event_signals skips its warning
+  that a native run never raises page events (headless::rendering).

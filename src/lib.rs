@@ -66,6 +66,7 @@ pub mod interpolation;
 pub mod diagnostic;
 pub mod html;
 pub mod headless;
+pub mod page_tests;
 pub mod fixits;
 pub mod time;
 pub mod real;
