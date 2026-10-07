@@ -50,6 +50,7 @@ mod test_undefined_calls;
 mod test_variadic;
 mod test_tuple_returns;
 mod test_destructuring_in_a_body;
+mod test_float_values_of_tuples;
 mod test_deterministic_inference;
 mod test_type_dispatch;
 mod test_typed_signatures;
