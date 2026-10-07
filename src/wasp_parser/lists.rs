@@ -89,6 +89,7 @@ impl WaspParser {
 	}
 
 	pub(super) fn parse_list_with_separators(&mut self, close: Option<char>, bracket: Bracket) -> Node {
+		let tag_block = std::mem::take(&mut self.tag_block);
 		// Collect all items with their following separators
 		let mut items_with_seps: Vec<(Node, Separator)> = Vec::new();
 
@@ -127,7 +128,10 @@ impl WaspParser {
 			let calls_function = in_command && items_with_seps.len() == statement_start + 1
 				&& matches!(items_with_seps[statement_start].0.drop_meta(), Symbol(name) if crate::type_name_matching::names_a_function(name));
 			let outer_pipe = std::mem::replace(&mut self.pipe_takes_call, calls_function);
+			// `ul { li: "a" li: "b" }`: a block after a name and a blank is that tag's block
+			self.tag_block = ch == '{' && matches!(items_with_seps.last(), Some((previous, Separator::Space)) if matches!(previous.drop_meta(), Symbol(_)));
 			let item = self.parse_value();
+			self.tag_block = false;
 			self.pipe_takes_call = outer_pipe;
 			self.in_command = outer_command;
 			let item = if calls_function && { self.skip_spaces_and_inline_comments(); self.at_pipeline() } {
@@ -216,7 +220,7 @@ impl WaspParser {
 
 		self.pending_comment = None; // a comment closing a list documents nothing after it
 		let list = self.group_by_separators(items_with_seps, bracket);
-		match list.duplicate_key() {
+		match list.duplicate_key().filter(|_| !tag_block) {
 			Some(key) => error(&format!("duplicate key '{}'", key)),
 			None => list,
 		}

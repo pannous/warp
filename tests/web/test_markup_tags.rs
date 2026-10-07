@@ -43,3 +43,16 @@ fn rendering_markup_warns_nothing_more() {
 	assert_eq!(warp::markup::to_html(&shown), "<html><p>x</p></html>");
 	assert_eq!(warp::diagnostic::take_warnings().len(), 0);
 }
+
+// card g-_bGo, user decision P176: in a named tag's block a repeated `key: value` is a child, as repeated elements in
+// XML/HTML (`ul{ li: "First" li: "Second" }` holds two li), glued or spaced; a plain `{…}` stays a map whose
+// repeated key is an error, also inside a tag, and so does a declared type's constructor
+#[test]
+fn repeated_keys_in_a_tag_block_are_children() {
+	eq!(eval("ul{ li: \"First\" li: \"Second\" }"), eval("ul{ li{ \"First\" } li{ \"Second\" } }"));
+	eq!(eval("ul { li: \"First\" li: \"Second\" }"), eval("ul{ li{ \"First\" } li{ \"Second\" } }"));
+	eq!(eval("div{ class: \"x\" p: \"a\" p: \"b\" }"), eval("div{ class: \"x\" p{ \"a\" } p{ \"b\" } }"));
+	fails_with("{ a: 1 a: 2 }", "duplicate key 'a'");
+	fails_with("ul{ li: \"a\" data: { b: 1 b: 2 } }", "duplicate key 'b'");
+	fails_with("class Point { x: int y: int }; Point{ x: 1 x: 2 }", "duplicate key 'x'");
+}
