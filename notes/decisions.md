@@ -56,6 +56,10 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   said library/). netbase does not belong among the standard modules: "lib/extra/ or just a completely external
   module". Now lib/extra/netbase.wasp; later an external module in pannous/netbase (P193, card netbase-first).
   Rule: long, readable names, as long as they don't get too long. Card lib-rename (worker session).
+- Web words (defaults from P188 + the word-choice rule, no user answer; warp-19, branch web-words 23b405bb1): storage
+  `local["k"]` canonical (localStorage), `storage["k"]` alias, `session["k"]` sessionStorage (natively in memory);
+  clipboard `clipboard.write("text")` (navigator.clipboard.writeText), `clipboard.read()` = `clipboard` (native only;
+  in a browser page reading stays a loud error, it is async).
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
   compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
