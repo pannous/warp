@@ -653,7 +653,7 @@ const STD_ALIASES: [(&str, &str); 27] = [
 /// repository it was built from; in the browser lib/ of the served repository, the page's file root)
 fn is_embedded_std_file(path: &Path) -> bool {
 	let stem = path.file_stem().and_then(|stem| stem.to_str());
-	if !stem.is_some_and(|stem| std_module(stem).is_some()) {
+	if stem.is_none_or(|stem| std_module(stem).is_none()) {
 		return false;
 	}
 	let folder = path.parent().unwrap_or(Path::new(""));
