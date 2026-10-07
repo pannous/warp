@@ -1915,6 +1915,7 @@ PASSED:
   ✓ parser::test_end_word::a_name_end_stays_a_name
   ✓ parser::test_end_word::end_still_closes_blocks
   ✓ parser::test_entity_table::hello_world_is_the_uniscript_world
+  ✓ parser::test_entity_table::latex_names_of_uniscript_1_0_4
   ✓ parser::test_entity_table::the_entity_table_is_the_pinned_uniscript_index
   ✓ parser::test_glued_method_block::a_glued_block_after_a_dot_is_a_call
   ✓ parser::test_glued_method_block::a_glued_block_starting_an_item_stays_data
@@ -3389,4 +3390,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3384 passed, 0 failed, 3384 total tested
+19 ignored, 3385 passed, 0 failed, 3385 total tested
