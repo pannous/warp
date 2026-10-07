@@ -30,12 +30,13 @@ type Result[T, E] = Ok(T) | Err(E)
 type Option[T] = Some(T) | None
 
 // Instantiation
-alice: Person {
+alice = Person {
     name: "Alice"
     age: 30
 }
 
 // Pattern matching on types
+color = rgb(1, 2, 3)
 match color {
     red => print "It's red"
     green => print "It's green"

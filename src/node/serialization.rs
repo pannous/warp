@@ -79,6 +79,8 @@ impl Node {
 			Key(k, op, v) if op.as_str().starts_with(char::is_alphabetic) => format!("{} {} {}", k, op, v.serialize_recurse(meta)), // 0.1 as float, not 0.1asfloat
 			Key(k, Op::Colon, v) if matches!(v.drop_meta(), List(_, Bracket::Curly, _)) => format!("{}{}{}", v.attribute_prefix(), k, v.serialize_with(meta, false)), // tee{a:1}
 			// `1- -x`: a prefix operand glued to the operator would read as another operator (`1--x`)
+			// `g[i]` is the ungrouped `g#(i+1)` in the tree: an operation after `#` needs its parentheses back
+			Key(k, Op::Hash, v) if matches!(v.drop_meta(), Key(..)) && !v.is_prefix_form() => format!("{k}#({})", v.serialize_recurse(meta)),
 			Key(k, op, v) if v.is_prefix_form() => format!("{}{}{} {}", v.attribute_prefix(), k, op, v.serialize_with(meta, false)),
 			Key(k, op, v) => format!("{}{}{}{}", v.attribute_prefix(), k, op, v.serialize_with(meta, false)),
 			Error(e) => format!("Error({})", e.serialize_recurse(meta)),

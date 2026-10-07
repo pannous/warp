@@ -27,7 +27,7 @@ pub const PAGE_ROUTE_INDEX: &str = "page·route_index";
 const ROUTER_MODULE_USE: &str = "use router";
 /// Where a layout shows the matched route
 const OUTLET: &str = "outlet";
-pub const PARAMETER_MARK: &str = ":";
+const PARAMETER_MARK: &str = ":";
 /// The types a parameter may declare (std/router.wasp route_fits)
 const PARAMETER_TYPES: [&str; 4] = ["int", "float", "text", "string"];
 /// `id` of the pattern bound in the route's function: without a type a number when it is digits, else its text

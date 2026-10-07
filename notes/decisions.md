@@ -52,6 +52,18 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P192 netbase backend: later, as a first external-module experiment (Later card); if the server is revived, a
   smaller version, not the full multi-GB one.
 - P193 the netbase wasp package lives inside pannous/netbase.
+- P194 (to warp-84): std/ merges into lib/ ("it would be libraries plural, so lib is probably better"; the user first
+  said library/). netbase does not belong among the standard modules: "lib/extra/ or just a completely external
+  module". Now lib/extra/netbase.wasp; later an external module in pannous/netbase (P193, card netbase-first).
+  Rule: long, readable names, as long as they don't get too long. Card lib-rename (worker session).
+- Web words (defaults from P188 + the word-choice rule, no user answer; warp-19, branch web-words 23b405bb1): storage
+  `local["k"]` canonical (localStorage), `storage["k"]` alias, `session["k"]` sessionStorage (natively in memory);
+  clipboard `clipboard.write("text")` (navigator.clipboard.writeText), `clipboard.read()` = `clipboard` (native only;
+  in a browser page reading stays a loud error, it is async).
+- Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
+  demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
+  compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
+  parameter given a one-character text takes it as Text, `g(t) := t as float; g("3")` → 3, `ord` still works).
 
 ## Decided 2026-10-06 (user, multiple-choice interview, as recommended unless quoted)
 - P165b soft keywords vs tests: strict P165. tests/functions/test_named_arguments.rs:22 renames `fun` → `g`

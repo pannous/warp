@@ -105,7 +105,7 @@ pub fn lower(node: Node) -> Node {
 	let node = with_witness_methods(node);
 	let node = with_members(node);
 	let node = with_class_attributes(class_typed_declarations(node));
-	let node = rendered_components(destructurings(from_objects(node)));
+	let node = rendered_components(positional_fields(destructurings(from_objects(node))));
 	let node = operator_calls(node);
 	let node = match with_mixins(node) {
 		Ok(node) => node,
@@ -355,6 +355,48 @@ fn destructurings(node: Node) -> Node {
 		other => constructed_class(other).filter(|class| fields.contains_key(class)),
 	};
 	taken_apart(node, &fields, &class_of)
+}
+
+/// P179: a field by its position, `c#1` 1-based and Rust's `c.0` 0-based, of an instance whose class is known
+/// (`c = rgb(1, 2, 3)`, `Some(4)#1`): the field by name, `c.value1`
+fn positional_fields(node: Node) -> Node {
+	let fields = class_fields(&node);
+	let classes: Vec<String> = fields.keys().cloned().collect();
+	let instances = instance_classes(&node, &classes);
+	let class_of = |value: &Node| match value.drop_meta() {
+		Node::Symbol(variable) => instances.get(variable).cloned(),
+		other => constructed_class(other).filter(|class| fields.contains_key(class)),
+	};
+	by_position(node, &fields, &class_of)
+}
+
+fn by_position(node: Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>, class_of: &dyn Fn(&Node) -> Option<String>) -> Node {
+	let position = |op: Op, index: &Node| match (op, index.drop_meta()) {
+		(Op::Hash, Node::Number(crate::Number::Int(number))) => Some(number - 1),
+		(Op::Dot, Node::Number(crate::Number::Int(number))) => Some(*number),
+		_ => None,
+	};
+	// `a: int = Some(3)`: a variable of a built-in type takes the single field of the construction it is given
+	let unwrapped_field = |declared: &Node, value: &Node| match (declared.drop_meta(), constructed_class(value).and_then(|class| fields.get(&class))) {
+		(Node::Key(_, Op::Colon, kind), Some(class_fields)) if class_fields.len() == 1 && crate::analyzer::builtin_type_kind(&kind.drop_meta().name()).is_some() => Some(class_fields[0].0.clone()),
+		_ => None,
+	};
+	match node {
+		Node::Key(declared, Op::Assign, value) if unwrapped_field(&declared, &value).is_some() => {
+			let field = unwrapped_field(&declared, &value).expect("guarded");
+			Node::Key(declared, Op::Assign, Box::new(field_of(&by_position(*value, fields, class_of), &field)))
+		}
+		Node::Key(instance, op @ (Op::Hash | Op::Dot), index) if position(op, &index).is_some() && class_of(&instance).is_some() => {
+			let class = class_of(&instance).expect("guarded");
+			let class_fields = &fields[&class];
+			let instance = by_position(*instance, fields, class_of);
+			match usize::try_from(position(op, &index).expect("guarded")).ok().and_then(|at| class_fields.get(at)) {
+				Some((field, _)) => field_of(&instance, field),
+				None => crate::node::error(&format!("{} has {} fields: {} is out of range", class, class_fields.len(), index.serialize().trim())),
+			}
+		}
+		other => other.map_children(|child| by_position(child, fields, class_of)),
+	}
 }
 
 fn taken_apart(node: Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>, class_of: &dyn Fn(&Node) -> Option<String>) -> Node {

@@ -288,6 +288,13 @@ PASSED:
   ✓ control::test_signal_values::two_subscriptions_both_run_in_order
   ✓ control::test_signal_values::writes_before_the_subscription_are_not_seen
   ✓ control::test_signal_values::writes_in_loops_and_functions_notify
+  ✓ control::test_storage::a_program_variable_named_storage_stays_its_own
+  ✓ control::test_storage::a_stored_variable_and_its_key_are_one_entry
+  ✓ control::test_storage::a_value_kept_under_a_key_is_read_back
+  ✓ control::test_storage::an_absent_key_is_empty
+  ✓ control::test_storage::delete_drops_a_key
+  ✓ control::test_storage::kept_values_last_into_the_next_run
+  ✓ control::test_storage::keys_name_the_kept_values
   ✓ control::test_stored_signals::a_change_of_a_stored_value_is_kept_for_the_next_run
   ✓ control::test_stored_signals::a_local_named_stored_keeps_the_word
   ✓ control::test_stored_signals::a_program_keeps_its_stored_values_in_a_file_beside_it
@@ -1152,6 +1159,7 @@ PASSED:
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
   ✓ lists::test_key_lookup::test_object_variable_is_looked_up_by_key
   ✓ lists::test_key_lookup::test_text_value_is_looked_up
+  ✓ lists::test_key_subscript_hint::a_chained_index_hint_keeps_its_parentheses
   ✓ lists::test_key_subscript_hint::a_text_key_subscript_gets_no_index_hint
   ✓ lists::test_key_subscript_hint::a_text_variable_subscript_gets_no_index_hint
   ✓ lists::test_lazy_range::a_big_range_variable_compiles
@@ -1454,6 +1462,8 @@ PASSED:
   ✓ node::test_empty_operands::a_missing_operand_is_not_written
   ✓ node::test_empty_operands::a_prefix_form_reads_back_as_the_same_tree
   ✓ node::test_empty_operands::a_written_empty_value_stays
+  ✓ node::test_index_serialization::a_bracket_index_roundtrips
+  ✓ node::test_index_serialization::a_bracket_index_serializes_with_its_parentheses
   ✓ node::test_node::test_mark_as_map
   ✓ node::test_node::test_remove
   ✓ node::test_node::test_remove2
@@ -2438,6 +2448,7 @@ PASSED:
   ✓ types::test_collection_declarations::a_program_naming_the_word_keeps_it
   ✓ types::test_collection_declarations::dict_and_array_say_their_wasp_word
   ✓ types::test_construction_checks::a_call_construction_checks_its_fields_as_the_braces_do
+  ✓ types::test_constructor_vs_data::test_a_typed_optional_field_puts_the_question_mark_on_its_name
   ✓ types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ types::test_constructor_vs_data::test_construction_checks_field_types
   ✓ types::test_constructor_vs_data::test_construction_fills_defaults_and_leaves_optional_fields_out
@@ -2506,6 +2517,7 @@ PASSED:
   ✓ types::test_mutating_methods::a_method_setting_an_element_of_a_list_field_changes_its_object
   ✓ types::test_mutating_methods::pop_on_a_list_field
   ✓ types::test_mutating_methods::the_call_gives_the_changed_object
+  ✓ types::test_optional_number_fields::a_comment_after_an_optional_type_ends_the_field
   ✓ types::test_optional_number_fields::a_given_optional_number_is_the_number
   ✓ types::test_optional_number_fields::an_omitted_optional_number_is_empty
   ✓ types::test_person_struct::test_person_struct_roundtrip
@@ -2678,6 +2690,12 @@ PASSED:
   ✓ types::test_types_scope::test_type_of_mixed_list_is_plain_list
   ✓ types::test_value_constructor::a_value_block_runs_at_every_construction
   ✓ types::test_value_constructor::a_value_constructor_takes_parameters
+  ✓ types::test_variant_payloads::a_payload_free_variant_is_its_symbol_and_of_its_type
+  ✓ types::test_variant_payloads::a_typed_variable_unwraps_a_single_payload
+  ✓ types::test_variant_payloads::an_or_of_a_grouped_operation_keeps_its_right_side
+  ✓ types::test_variant_payloads::payload_fields_by_position
+  ✓ types::test_variant_payloads::payload_names_name_the_fields
+  ✓ types::test_variant_payloads::rust_style_positions_count_from_zero
   ✓ wasm::test_compile_only::compile_command_emits_the_same_struct_module_as_eval
   ✓ wasm::test_compile_only::compile_command_writes_wasm_without_running
   ✓ wasm::test_compiled_module_cache::test_compile_aot_writes_machine_code_that_runs
@@ -2816,6 +2834,8 @@ PASSED:
   ✓ wasm::wasm_optimizer_test::test_no_optimization
   ✓ wasm::wasm_optimizer_test::test_tools_availability
   ✓ web::test_accessibility::accessible_markup_draws_no_warning
+  ✓ web::test_accessibility::head_attributes_count
+  ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
@@ -2834,6 +2854,11 @@ PASSED:
   ✓ web::test_components::each_instance_of_a_component_has_its_own_state
   ✓ web::test_components::on_mount_runs_once_per_new_instance
   ✓ web::test_components::the_block_after_the_call_is_the_children
+  ✓ web::test_css_transitions::a_css_transition_is_the_inline_style
+  ✓ web::test_css_transitions::a_css_transition_joins_the_element_style
+  ✓ web::test_css_transitions::a_made_up_kind_is_css_with_a_hint
+  ✓ web::test_css_transitions::a_site_with_transitions_carries_their_script
+  ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
   ✓ web::test_element_events::an_element_handler_marks_its_element
@@ -2847,6 +2872,7 @@ PASSED:
   ✓ web::test_headless_pages::each_component_instance_counts_on_its_own
   ✓ web::test_headless_pages::typing_into_a_bound_field_sets_its_variable
   ✓ web::test_host_parts::a_hello_world_page_ships_no_part_of_the_host
+  ✓ web::test_host_parts::a_page_keeping_values_ships_the_store
   ✓ web::test_host_parts::a_page_ships_the_parts_its_module_imports
   ✓ web::test_host_parts::a_page_with_routes_ships_the_routes_part
   ✓ web::test_host_parts::each_part_is_chosen_by_the_words_it_gives
@@ -2893,7 +2919,7 @@ PASSED:
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
-  ✓ web::test_site::a_site_prerenders_each_static_route
+  ✓ web::test_site::a_site_with_routes_is_one_page_for_every_path
   ✓ web::test_site::a_static_page_is_its_last_line_rendered
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
   ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
@@ -2931,8 +2957,8 @@ PASSED:
   ✓ web::test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
   ✓ web::test_web_playground::evaluate_reports_the_value_the_cli_prints
   ✓ web::test_web_server::a_program_serves_its_own_page
-  ✓ web::test_web_server::a_served_page_is_rendered_for_each_route
   ✓ web::test_web_server::a_served_page_s_events_draw_no_warning
+  ✓ web::test_web_server::a_served_page_with_routes_answers_every_path
   ✓ web::test_web_server::a_server_function_is_called_over_http
   ✓ web::test_web_server::serve_answers_routes
   ✓ web::test_webgpu::a_compute_shader_runs_over_the_numbers
@@ -3147,6 +3173,7 @@ PASSED:
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
+  ✓ welcoming::test_slash_comment_after_value::a_prose_comment_after_a_value_gets_no_division_note
   ✓ welcoming::test_sleep_unit_shadow::a_unit_named_variable_keeps_other_durations
   ✓ welcoming::test_sleep_unit_warning::a_statement_after_sleep_is_no_duration
   ✓ welcoming::test_sleep_unit_warning::sleep_without_a_unit_warns
@@ -3281,4 +3308,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3276 passed, 0 failed, 3276 total tested
+19 ignored, 3303 passed, 0 failed, 3303 total tested
