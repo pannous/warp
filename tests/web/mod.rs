@@ -11,9 +11,8 @@ mod test_async_data; // the browser: a task Worker fetches into shared memory, r
 mod test_site;
 #[cfg(feature = "native")] // builds a site natively
 mod test_bundle_budget;
-#[cfg(feature = "native")] // std/markup.wasp against src/html.rs, natively
-mod test_html_module;
 mod test_html_render;
+mod test_markup_renderer;
 mod test_element_events;
 mod test_class_components;
 mod test_components;

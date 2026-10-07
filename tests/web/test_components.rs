@@ -1,6 +1,6 @@
 //! Components are functions returning markup (card web-components, notes/web_framework.md step 4): props are its
 //! parameters, positional or named, and a block after the call is its last argument, the children
-use warp::html::to_html;
+use warp::markup::to_html;
 use warp::wasm_emitter::eval;
 
 const CARD: &str = "def Card(title, children) = div{ class:\"card\" h2{ title } children }\n";

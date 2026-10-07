@@ -66,7 +66,7 @@ pub mod effects;
 pub mod injection;
 pub mod interpolation;
 pub mod diagnostic;
-pub mod html;
+pub mod markup;
 pub mod headless;
 pub mod page_tests;
 pub mod fixits;

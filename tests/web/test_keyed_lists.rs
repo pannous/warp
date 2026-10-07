@@ -1,7 +1,7 @@
 //! Lists in markup (card web-keyed, notes/web_framework.md step 5): a comprehension or map inside an element gives its
 //! children; `key:` names an item, so the page moves its element instead of rewriting it (playground.js morphChildren,
 //! tour example "keyed list")
-use warp::html::to_html;
+use warp::markup::to_html;
 use warp::wasm_emitter::eval;
 
 fn html_of(code: &str) -> String {

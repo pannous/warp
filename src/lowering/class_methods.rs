@@ -290,7 +290,7 @@ fn with_render_aliases(node: Node) -> Node {
 /// The children of each element rendered
 fn with_rendered_children(node: Node, components: &[String]) -> Node {
 	match node {
-		Node::Key(tag, op @ (Op::None | Op::Colon), children) if crate::html::is_element_tag(&tag.drop_meta().name()) && matches!(children.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+		Node::Key(tag, op @ (Op::None | Op::Colon), children) if crate::markup::is_element_tag(&tag.drop_meta().name()) && matches!(children.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
 			let Node::List(items, bracket, separator) = children.drop_meta().clone() else { unreachable!("guarded") };
 			let items = items.into_iter().map(|item| rendered(with_rendered_children(item, components), components)).collect();
 			Node::Key(tag, op, Box::new(Node::List(items, bracket, separator)))

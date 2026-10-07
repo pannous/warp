@@ -285,7 +285,7 @@ function paintShade(value) {
 	return [PAINT_INK, PAINT_INK, PAINT_INK];
 }
 
-// a markup value as DOM (src/html.rs, card web-dom), in a shadow root so its own style cannot restyle the page.
+// a markup value as DOM (std/markup.wasp, card web-dom), in a shadow root so its own style cannot restyle the page.
 // Markup shown anew after a handler changes only the text nodes and attributes that differ (card web-fine): the
 // elements stay, with their focus, input and scroll state.
 function showRendered(html) {

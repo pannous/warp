@@ -26,7 +26,7 @@ const hooks = {
 	sleeping: () => post({ type: "sleep" }),
 	listen: (holder, events) => {
 		live = holder;
-		startTimers(holder);
+		startTimers(holder, handler => runHandler(holder, handler));
 		const fetches = [...(holder.fetches?.values() ?? [])].map(({ url }) => `fetch ${url}`);
 		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches] });
 	},
@@ -148,20 +148,6 @@ function runHandler(holder, handler) {
 }
 
 // the run's timers (host.js addTimer), each running its handler until the next run
-function startTimers(holder) {
-	const handles = [];
-	const fire = timer => runHandler(holder, timer.handler);
-	const atClock = timer => handles.push(setTimeout(() => {
-		fire(timer);
-		if (!timer.once) atClock(timer);
-	}, millisecondsUntil(timer.minute, timer.weekdays)));
-	for (const timer of holder.timers ?? []) {
-		if (timer.every !== undefined) handles.push(setInterval(() => fire(timer), timer.every));
-		else atClock(timer);
-	}
-	holder.stopTimers = () => handles.forEach(handle => { clearTimeout(handle); clearInterval(handle); });
-}
-
 self.onmessage = async ({ data }) => {
 	if (data.pointer) return self.pagePointer = { values: new Int32Array(data.pointer.buffer), names: data.pointer.names }; // host.js system_value
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value

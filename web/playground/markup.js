@@ -2,7 +2,7 @@
 // changes only what differs (morphChildren), and an event inside it names its element's handler (elementEvent).
 
 const INSTANCE_ATTRIBUTE = "data-wasp-instance"; // a component instance's elements (src/lowering/element_events.rs)
-const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (src/html.rs)
+const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (std/markup.wasp)
 const NUMBER_FIELDS = ["number", "range"]; // fields whose bound value is a number
 const TRANSITION_ATTRIBUTE = "data-wasp-transition"; // `li{ transition: fade 200ms }` (src/lowering/transitions.rs)
 const LEAVING_ATTRIBUTE = "data-wasp-leaving"; // an element animating out: no longer matched, removed when done

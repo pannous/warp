@@ -78,7 +78,7 @@ Each step is useful on its own and is what the next ones stand on.
   a node of another kind or tag is replaced. Elements keep their identity, focus, input and scroll state. Tour example
   "fine updates" checks it (`clicks`, `clicked`, `kept` in examples.js, test_in_browser.py --examples).
 - Done (compute side, card web-fine-holes): the holes of shown markup are the outermost elements holding a computed
-  text, attribute or child directly (html.rs `holes`); each is its own binding `page·hole·<path>` (event_signals.rs),
+  text, attribute or child directly (src/markup.rs `holes`); each is its own binding `page·hole·<path>` (event_signals.rs),
   the path its element indices from the root, which the fixed elements above it keep stable. After a handler worker.js
   reads only the holes and sends `patches` for those whose HTML changed; playground.js morphs just those elements. The
   value text follows once events pause (50 ms). Falls back to the whole markup when the root itself holds a computed
@@ -113,14 +113,14 @@ Each step is useful on its own and is what the next ones stand on.
 - `input{ bind: name }` is `input{ value: name on input { name = event.value } }` (element_events.rs); a checkbox or
   radio binds `checked`. `input` is a page event (PAGE_EVENTS); the page sends {value, checked} (a number from a
   number or range field) and sets a changed field's value/checked when the markup comes back (morphElement).
-- Boolean attributes (checked, disabled, …) are present or absent (html.rs; true arrives from a run as 1).
+- Boolean attributes (checked, disabled, …) are present or absent (std/markup.wasp; true arrives from a run as 1).
 - Tour example "form binding" (`typed` field of examples.js).
 - Left: `select{ bind: choice }` (its first render shows the first option), `bind:` inside a component's state
   (component_state.rs sees only handlers), form submit as an event with the fields as an object, validation from types.
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
-  sheet of rules (html.rs). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
+  sheet of rules (std/markup.wasp). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
   are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
 - CSS as CSS (classes-42, src/lowering/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
   one rule per line (`.card {…}`, `ul > li {…}`, `h1, h2 {…}`, `a:hover {…}`, `p.note {…}`, `ul li {…}`, `#main {…}`),
@@ -166,21 +166,24 @@ Each step is useful on its own and is what the next ones stand on.
 - `warp build --site app.wasp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
   host.js, markup.js, site.js, carried in the warp binary (src/site.rs include_str!, one source with the playground).
 - One renderer, written in wasp (warp-96: "Wasp is wasm-first"): std/markup.wasp's to_html (`use markup`; not `html`,
-  which samples/html.wasp would shadow) mirrors src/html.rs (tests/web/test_html_module.rs keeps them alike). A program
+  which samples/html.wasp would shadow) is the one renderer: the CLI and the playground render a markup value with it
+  too (src/markup.rs to_html runs `use markup; to_html(value)`; src/html.rs is gone). A program
   compiled for a page (pipeline::for_a_page) exports page·html := to_html(page·value) (lowering/page_html.rs); its
   page·value is event_signals' output binding, else the last line when that is an expression (no assignment,
   definition, print, use). `warp build --site` runs main and page·html natively (wasm_reader::read_export_after_main)
-  for index.html, so the page reads without JavaScript; the page calls the same export after each handler. html.rs no
-  longer renders sites; it still renders for the CLI and the playground. Page builds also export the reflection getters
+  for index.html, so the page reads without JavaScript; the page calls the same export after each handler. Page builds also export the reflection getters
   the browser host needs and draw no "a native run never raises it" warning for page events.
 - Hydration (web/playground/site.js): the loader runs app.wasm with host.js in the page; main runs once as it ran at
   build time, so the component instances count alike. The DOM stays; click and input on the root find their element's
   handler (markup.js elementEvent), and after a handler (or a fetch reply) the page morphs (markup.js morphChildren) in
   the HTML of page·html.
-- std/markup.wasp cannot tell a square list from a curly one at run time: a list value of an attribute whose items are
-  all pairs is inline CSS, any other list the joined attribute value (`class:["a" "b"]`).
-- Open: timers in a built page (site.js has no timer loop yet); `serve` programs serving their own page; switching the
-  playground and CLI to std/markup.wasp too, retiring src/html.rs.
+- std/markup.wasp cannot tell a square list from a curly one at run time: a list value whose items hold pairs is
+  inline CSS (for style) or children (`style{ ".x": {…} }`), any other list the joined attribute value (`class:["a" "b"]`).
+- Scoped style sheets (card web-scoped): an element with data-wasp-scope:"Card" prefixes the selectors of the sheets
+  inside it with `[data-wasp-scope="Card"] `; src/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
+- Timers in a built page: site.js starts them after main (host.js startTimers, shared with the playground worker),
+  each handler morphs the page; a failing handler stops them (probes/site/ticker.wasp).
+- Open: `serve` programs serving their own page.
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
