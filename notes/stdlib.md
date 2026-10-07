@@ -100,13 +100,17 @@ Next:
    ("1h 30m 30s", "250ms"; plain milliseconds: units don't reach functions yet); map: omit filter_values. Fixed on
    the way: a slice of a Node is a Node (capitalize(w) for the elements of words(t) was 'text + list'); a
    comprehension's list is a `let` local (one in a module and one in the program asked "new local or main-level?").
-   math: round_to factorial is_prime lerp; list: scan take_while drop_while argmax argmin (from 0, like index_of);
+   math: round_to factorial is_prime lerp; list: scan take_while drop_while argmax argmin (from 1, like index_of);
    map: entries; text: is_blank; random: seed(n) (host word random_seed: xorshift64* natively and in host.js, per run).
    math: is_even is_odd digits choose mod_pow; list: pairwise split_at cartesian mode variance stdev; text: is_upper
    is_lower remove_prefix remove_suffix count_of is_palindrome; map: get_or; time: is_leap_year days_in_month. Fixed on
    the way: a lambda reading the loop variable given to a function (mode's count_by(xs, y => y == x)) was specialised
    into a function reading the variable before the loop; loop variables now make it a closure
    (closures::captured_variables_of).
+   list: index_where last_n fill minmax; math: percent to_radians to_degrees isqrt is_square divisors prime_factors
+   to_base from_base; text: word_count snake_case kebab_case camel_case indent is_numeric between wrap; map: find_key.
+   A std module's word cannot call another module's words (camel_case cannot use list's drop): written with loops.
+   Met: a name `end` after else is Ruby's block end (card end-variable); `none(xs, f)` is the null (card none-call).
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:

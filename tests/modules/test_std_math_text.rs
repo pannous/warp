@@ -76,3 +76,28 @@ fn use_text_cases_prefixes_counts_palindromes() {
 	is!("use text; count_of(\"banana\", \"an\")", 2);
 	is!("use text; [is_palindrome(\"A man, a plan, a canal: Panama\"), is_palindrome(\"abc\")]", warp::ints(vec![1, 0]));
 }
+
+#[test]
+fn use_math_percent_angles_roots_factors_bases() {
+	is!("use math; percent(1, 4)", 25);
+	is!("use math; to_degrees(pi)", 180);
+	is!("use math; to_radians(180) == pi", true);
+	is!("use math; [isqrt(17), isqrt(16), isqrt(0)]", warp::ints(vec![4, 4, 0]));
+	is!("use math; [is_square(16), is_square(17)]", warp::ints(vec![1, 0]));
+	is!("use math; divisors(12)", warp::ints(vec![1, 2, 3, 4, 6, 12]));
+	is!("use math; prime_factors(360)", warp::ints(vec![2, 2, 2, 3, 3, 5]));
+	is!("use math; [to_base(255, 16), to_base(5, 2), to_base(-10, 10)]", warp::wasp_parser::parse(r#"["ff" "101" "-10"]"#));
+	is!("use math; [from_base(\"ff\", 16), from_base(\"101\", 2)]", warp::ints(vec![255, 5]));
+}
+
+#[test]
+fn use_text_cases_wraps_and_cuts() {
+	is!("use text; word_count(\"a b  c\")", 3);
+	is!("use text; [snake_case(\"helloWorld\"), snake_case(\"Hello World\"), snake_case(\"hello-world\")]", warp::wasp_parser::parse(r#"["hello_world" "hello_world" "hello_world"]"#));
+	is!("use text; kebab_case(\"Hello World\")", "hello-world");
+	is!("use text; camel_case(\"Hello big World\")", "helloBigWorld");
+	is!("use text; indent(\"a\\nb\", 2) == \"  a\\n  b\"", true);
+	is!("use text; [is_numeric(\"12.5\"), is_numeric(\"-3\"), is_numeric(\"1.2.3\"), is_numeric(\"a1\"), is_numeric(\"\")]", warp::ints(vec![1, 1, 0, 0, 0]));
+	is!("use text; between(\"a[bc]d\", \"[\", \"]\")", "bc");
+	is!("use text; wrap(\"aaa bbb ccc\", 7) == \"aaa bbb\\nccc\"", true);
+}
