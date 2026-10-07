@@ -12,6 +12,7 @@ mod test_c_style_definitions;
 mod test_character_results;
 mod test_broadcasting;
 mod test_broadcasting_declared;
+mod test_broadcast_reassigned;
 mod test_closures;
 mod test_concatenated_text_argument;
 mod test_concatenating_parameter;

@@ -266,7 +266,7 @@ pub fn lower(program: Node) -> Node {
 	let defined: HashSet<&String> = found.iter().map(|definition| &definition.name).collect();
 	broadcasting.extend(SCALAR_LIBRARY_WORDS.iter().map(|word| word.to_string()).filter(|word| !defined.contains(word)));
 	let mut assigned = HashMap::new();
-	collect_list_variables(&program, &mut assigned);
+	collect_list_variables(&program, &broadcasting, &mut assigned);
 	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
 	let scalar_parameters = found.iter().map(|definition| (definition.name.clone(), definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect())).collect();
 	Broadcast { functions: broadcasting, list_variables, scalar_parameters }.rewrite(program)
@@ -323,8 +323,17 @@ fn is_arithmetic_operand(body: &Node, name: &str) -> bool {
 	found
 }
 
-/// Variable → whether every value assigned to it is a list literal that is no object
-fn collect_list_variables(node: &Node, assigned: &mut HashMap<String, bool>) {
+/// The function and argument of `f x` or `f(x)` when f broadcasts
+fn broadcasting_call<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator, functions: &HashSet<String>) -> Option<(&'a str, &'a Node)> {
+	let is_call = matches!((bracket, separator), (Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)); // also `(f [1 2])`
+	let [head, argument] = items else { return None };
+	let Node::Symbol(name) = head.drop_meta() else { return None };
+	(is_call && functions.contains(name)).then_some((name.as_str(), argument))
+}
+
+/// Variable → whether every value assigned to it is a list literal that is no object; a broadcast over the variable itself
+/// (`ps = moved ps`) keeps what it is, so it needs a list assigned elsewhere (`up(x) := { x = upper x }` maps no text)
+fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &mut HashMap<String, bool>) {
 	// `xs = []` (which parses as ø) is a list once the program appends to xs: `xs.add(i)`, `xs = xs + [i]`
 	let mut appended: HashSet<String> = HashSet::new();
 	node.visit(&mut |part| match part {
@@ -347,6 +356,9 @@ fn collect_list_variables(node: &Node, assigned: &mut HashMap<String, bool>) {
 	node.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
 			if let Node::Symbol(name) = target.drop_meta() {
+				if is_broadcast_over(value, name, functions) {
+					return;
+				}
 				let is_list = match value.drop_meta() {
 					Node::List(items, Bracket::Square, _) => !items.iter().any(is_pair),
 					_ if is_range(value) => true,
@@ -368,6 +380,12 @@ fn is_range(node: &Node) -> bool {
 		Node::List(items, Bracket::Round, _) => matches!(items.as_slice(), [only] if is_range(only)),
 		_ => false,
 	}
+}
+
+/// `moved ps`, `moved(ps)` of a broadcasting function
+fn is_broadcast_over(value: &Node, variable: &str, functions: &HashSet<String>) -> bool {
+	let Node::List(items, bracket, separator) = value.drop_meta() else { return false };
+	broadcasting_call(items, bracket, separator, functions).is_some_and(|(_, argument)| matches!(argument.drop_meta(), Node::Symbol(same) if same == variable))
 }
 
 fn is_pair(node: &Node) -> bool {
@@ -413,12 +431,7 @@ impl Broadcast {
 
 	/// `f [1 2]`, `f([1 2])`, `f xs` of a broadcasting function `f`
 	fn broadcast_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		let is_call = matches!((bracket, separator), (Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)); // also `(f [1 2])`
-		let [head, argument] = items else { return None };
-		let Node::Symbol(name) = head.drop_meta() else { return None };
-		if !is_call || !self.functions.contains(name) {
-			return None;
-		}
+		let (name, argument) = broadcasting_call(items, bracket, separator, &self.functions)?;
 		match argument.drop_meta() {
 			Node::List(elements, Bracket::Square, element_separator) if !elements.is_empty() => {
 				let applied = elements.iter().map(|element| self.apply(name, element.clone())).collect();
