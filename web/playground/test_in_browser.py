@@ -25,7 +25,7 @@ INCLUDE_PREFIX = "/__include__/"
 HEADER_NAME = re.compile(r"^[\w.+-]+(/[\w.+-]+)*\.h$")
 RESULTS_PATH = "/__results__"
 LISTING_QUERY = "listing"
-STUB_PATH = "/__stub__"  # answers with the status and body its query names: the fetch tests' HTTP stub (tests/common serve)
+STUB_PATH = "/__stub__"  # answers with the status and body its query names, after `delay` milliseconds: the fetch tests' HTTP stub (tests/common serve)
 CLICK_MILLISECONDS = 300  # a click's handler runs in the worker and its markup comes back
 ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its service worker
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
@@ -70,6 +70,7 @@ def serve(binary):
 			query = urllib.parse.parse_qs(split.query, keep_blank_values=True)
 			body = query.get("body", [""])[0].encode()
 			code, _, reason = query.get("status", ["200 OK"])[0].partition(" ")
+			time.sleep(int(query.get("delay", ["0"])[0]) / 1000)  # milliseconds before the reply: one still pending
 			self.send_response(int(code), reason)
 			self.send_header("Content-Length", str(len(body)))
 			self.end_headers()
