@@ -9,6 +9,7 @@ mod test_web_server;
 mod test_async_data; // the browser: a task Worker fetches into shared memory, read at the check points
 mod test_html_render;
 mod test_element_events;
+mod test_class_components;
 mod test_components;
 mod test_keyed_lists;
 mod test_form_bindings;
