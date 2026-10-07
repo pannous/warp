@@ -31,7 +31,7 @@ dedupe(xs) := { out = []; for x in xs { if count(out) == 0 or last(out) != x { o
 scan(xs, start, f) := { out = []; acc = start; for x in xs { acc = f(acc, x); out = out + [acc] }; out }
 take_while(xs, f) := { out = []; for x in xs { if not f(x) { break }; out = out + [x] }; out }
 drop_while(xs, f) := { out = []; dropping = true; for x in xs { if not (dropping and f(x)) { dropping = false; out = out + [x] } }; out }
-// the index (from 0, like index_of) of the greatest element, the first of equal ones
+// the index (from 0, like xs[i]) of the greatest element, the first of equal ones
 argmax(xs) := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best - 1 }
 argmin(xs) := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best - 1 }
 // the neighbours: pairwise([1, 2, 3]) is [[1 2] [2 3]]
@@ -45,3 +45,10 @@ mode(xs) := { best = xs#1; most = 0; for x in xs { n = count_by(xs, y => y == x)
 // the population variance and standard deviation
 variance(xs) := { m = mean(xs); sum_by(xs, x => (x - m) * (x - m)) / count(xs) }
 stdev(xs) := sqrt(variance(xs))
+// the position (from 1, like index_of) of the first element f holds for, 0 when none does
+index_where(xs, f) := { for i in 1 to count(xs) { if f(xs#i) { return i } }; 0 }
+last_n(xs, n) := drop(xs, max(count(xs) - n, 0))
+// n copies of value: fill(3, 0) is [0 0 0]
+fill(n, value) := { out = []; for i in 1 to n { out = out + [value] }; out }
+// [smallest, greatest]
+minmax(xs) := [min(xs), max(xs)]

@@ -36,3 +36,8 @@ fn use_map_lists_its_entries() {
 fn use_map_gets_with_a_fallback() {
 	is!("use map; [get_or({ab:1}, \"cd\", 0), get_or({ab:1}, \"ab\", 0)]", warp::ints(vec![0, 1]));
 }
+
+#[test]
+fn use_map_finds_a_key_by_its_value() {
+	is!("use map; find_key({ab:1, cd:2}, v => v == 2)", "cd");
+}

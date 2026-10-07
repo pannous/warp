@@ -324,6 +324,9 @@ impl WaspParser {
 	}
 
 	fn closing_end_follows_from(&self, start: usize, openers: &[&str]) -> bool {
+		if self.names_end() {
+			return false;
+		}
 		let mut open = 1;
 		let mut position = start;
 		while position < self.chars.len() {
@@ -350,6 +353,40 @@ impl WaspParser {
 				_ => {}
 			}
 			if open == 0 {
+				return true;
+			}
+		}
+		false
+	}
+
+	/// Whether the source uses `end` as a name: a parameter or argument between separators (`f(a, end)`) or an assigned variable
+	/// (`end = 3`). Then no `end` closes a block: `if a == 0 then 1 else end` hands back the variable
+	fn names_end(&self) -> bool {
+		let next_visible = |from: usize| self.chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
+		let previous_visible = |before: usize| self.chars[..before].iter().rposition(|ch| !ch.is_whitespace());
+		let mut position = 0;
+		while position < self.chars.len() {
+			let ch = self.chars[position];
+			if ch == '"' || ch == '\'' {
+				position += 2 + self.chars[position + 1..].iter().position(|quoted| *quoted == ch).unwrap_or(self.chars.len());
+				continue;
+			}
+			if !is_identifier_char(ch) {
+				position += 1;
+				continue;
+			}
+			let word_start = position;
+			while position < self.chars.len() && is_identifier_char(self.chars[position]) {
+				position += 1;
+			}
+			if self.chars[word_start..position].iter().copied().ne(END_KEYWORD.chars()) {
+				continue;
+			}
+			let before = previous_visible(word_start).map(|index| self.chars[index]);
+			let after = next_visible(position);
+			let assigned = after.is_some_and(|index| self.chars[index] == '=' && self.chars.get(index + 1) != Some(&'='));
+			// `(…, end)` both sides: `foo(if c then 1 else 2 end)` closes a block
+			if matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(self.chars[index], ',' | ')')) || assigned {
 				return true;
 			}
 		}
