@@ -871,6 +871,10 @@ impl Lowering {
 		if may_hold_object && !is_known && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}
+		// `x.type`, `x.type()`: `type(x)`, once no field of that name can be meant
+		if name == crate::type_tests::TYPE_WORD && !has_arguments {
+			return Some(Node::List(vec![word_node.clone(), receiver.clone()], Bracket::Round, Separator::None));
+		}
 		let is_value = matches!(receiver.drop_meta(), Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _));
 		let call = Node::Key(Box::new(receiver.clone()), Op::Dot, Box::new(method.clone()));
 		(!is_known && is_value).then(|| Diagnostic::at(&call, crate::ffi::undefined_function_message(name)).into_error())
