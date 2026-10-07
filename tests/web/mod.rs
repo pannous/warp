@@ -13,6 +13,7 @@ mod test_async_data; // the browser: a task Worker fetches into shared memory, r
 mod test_site;
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
+mod test_rendering_itself; // card playground-render
 #[cfg(feature = "native")] // std/markup.wasp against src/html.rs, natively
 mod test_html_render;
 mod test_markup_renderer;

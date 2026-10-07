@@ -11,20 +11,24 @@ use crate::operators::Op;
 use std::collections::HashSet;
 
 pub const PAGE_HTML: &str = "page·html";
+/// page·render(value): the HTML of any value of the program, for the playground's fine holes (worker.js showHoles)
+pub const PAGE_RENDER: &str = "page·render";
 const MARKUP_MODULE_USE: &str = "use markup";
 const TO_HTML: &str = "to_html";
 /// Words that start a statement, not a value to show
 const STATEMENT_WORDS: [&str; 5] = ["print", "puts", "use", "import", "return"];
 
-/// A page uses std/markup.wasp and exports page·html := to_html(page·value()), before modules::resolve joins the used
-/// modules (it keeps the std definitions the program names)
+/// A page uses std/markup.wasp and exports page·html := to_html(page·value()) and page·render(event) := to_html(event),
+/// before modules::resolve joins the used modules (it keeps the std definitions the program names)
 pub fn use_markup(program: Node) -> Node {
-	if !crate::pipeline::is_for_a_page() {
+	if !crate::pipeline::renders_itself() {
 		return program;
 	}
 	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
 	let rendered = call(TO_HTML, vec![call(PAGE_VALUE, vec![])]);
 	statements.insert(statements.len().saturating_sub(1), function_with_globals(PAGE_HTML, false, &[rendered], &HashSet::new()));
+	let any_value = call(TO_HTML, vec![Node::Symbol(crate::event_signals::EVENT_WORD.to_string())]);
+	statements.insert(statements.len().saturating_sub(1), function_with_globals(PAGE_RENDER, true, &[any_value], &HashSet::new()));
 	statements.insert(0, crate::wasp_parser::parse(MARKUP_MODULE_USE));
 	Node::List(statements, bracket, separator)
 }
@@ -32,7 +36,7 @@ pub fn use_markup(program: Node) -> Node {
 /// page·value is the output binding event_signals made, else the last line when that is a value; without one the page
 /// shows nothing and page·html goes again
 pub fn lower(program: Node) -> Node {
-	if !crate::pipeline::is_for_a_page() {
+	if !crate::pipeline::renders_itself() {
 		return program;
 	}
 	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);

@@ -113,6 +113,7 @@ thread_local! {
 	static FOR_A_PAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
 	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// `run` with `flag` set on this thread
@@ -131,6 +132,17 @@ pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
 /// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
 pub fn is_for_a_page() -> bool {
 	FOR_A_PAGE.with(|page| page.get())
+}
+
+/// `run` compiling a program that renders its own markup (the playground, web.rs renders_itself): it exports page·html
+/// and page·render as a page does (lowering/page_html.rs); nothing else of a page changes (it may still serve)
+pub fn rendering_itself<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&RENDERS_ITSELF, run)
+}
+
+/// Whether the program compiled now exports its renderer: a page's, or one rendering itself
+pub fn renders_itself() -> bool {
+	is_for_a_page() || RENDERS_ITSELF.with(|renders| renders.get())
 }
 
 /// `run` compiling a program for `warp dev`: the main-level variables it changes are kept (lowering/stored_values.rs)
