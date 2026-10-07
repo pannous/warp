@@ -377,6 +377,7 @@ fn feature_of(module: &str, name: &str) -> String {
         "fetch" | "fetch_within" | "read" | "warn" | "run" if module == "host" => "fetch and files",
         _ if name.starts_with("task_") || name.starts_with("task·") => "tasks",
         _ if name.starts_with("shared_") => "shared arrays",
+        "fetch_start" | "fetch_reply" => "async fetch",
         "run_block" | "block·value" => "run-time blocks",
         "foreign_call" => "foreign calls",
         _ => return format!("{module}.{name}"),

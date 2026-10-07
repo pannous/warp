@@ -196,14 +196,15 @@ fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<Strin
 	statements
 }
 
-/// `(on·every·0) := {…}`, the handler of a timer or channel listener system_signals.rs made
+/// `(on·every·0) := {…}`, the handler of a timer or channel listener system_signals.rs made, or `(on·fetch·0) := {…}`
+/// of an async fetch (fetch_signals.rs)
 fn defines_timer(statement: &Node) -> bool {
 	let Node::Key(head, _, _) = statement.drop_meta() else { return false };
 	let name = match head.drop_meta() {
 		Node::List(items, _, _) => items.first().map(Node::drop_meta),
 		other => Some(other),
 	};
-	matches!(name, Some(Node::Symbol(name)) if name.starts_with(crate::host::TIMER_HANDLER_PREFIX))
+	matches!(name, Some(Node::Symbol(name)) if name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FETCH_HANDLER_PREFIX))
 }
 
 /// The body guarded by a fresh flag: `if once_fired_0 == false { once_fired_0 = true; body }`
@@ -592,7 +593,12 @@ pub(crate) fn global_declarations(bodies: &[Node], main_variables: &HashSet<Stri
 	let mut mentioned: Vec<String> = bodies.iter().flat_map(symbols).filter(|name| main_variables.contains(name) && !parameters.contains(&name.as_str())).collect();
 	mentioned.sort();
 	mentioned.dedup();
-	mentioned.iter().map(|name| parse(&format!("global {name}"))).collect()
+	mentioned.iter().map(|name| global_declaration(name)).collect()
+}
+
+/// `global name`, built rather than parsed: a generated name (`users·loading`) parses as a product
+pub(crate) fn global_declaration(name: &str) -> Node {
+	crate::law::substitute(&parse(&format!("global {TEMPLATE_NAME}")), &HashMap::from([(TEMPLATE_NAME.to_string(), Node::Symbol(name.to_string()))]))
 }
 
 /// Each handler gets the event as raised (the DOM hands one mutable event object down the listeners): when a body

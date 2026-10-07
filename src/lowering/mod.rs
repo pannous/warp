@@ -57,6 +57,7 @@ pub mod type_name_matching;
 pub mod type_tests;
 pub mod event_signals;
 pub mod system_signals;
+pub mod fetch_signals;
 pub mod system_values;
 pub mod signal_values;
 pub mod variable_signals;
