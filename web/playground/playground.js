@@ -84,7 +84,8 @@ function startWorker() {
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") pending.listening = data.events;
 			if (data.type === "print") pending.printed.push(data);
-			if (data.type === "paint") pending.paintings.push(data);
+			if (data.type === "sleep") pending.slept = true;
+			if (data.type === "paint") painted(pending, data);
 			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], milliseconds: data.milliseconds });
 		};
@@ -119,6 +120,30 @@ const darkMode = matchMedia(DARK_MODE_QUERY);
 const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches } });
 darkMode.addEventListener("change", tellSystemValues);
 
+// `loop { …; show(); sleep(16) }`: a paint after a sleep is an animation's next frame, shown at once in place of the
+// last one; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (card drawing-frames)
+function painted(run, painting) {
+	if (!run.slept) return run.paintings.push(painting);
+	run.slept = false;
+	run.animating = true;
+	run.paintings = [painting];
+	showPaintings(run.paintings);
+	stopAfterTimeout(run);
+}
+
+function stopAfterTimeout(run) {
+	clearTimeout(run.timer);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`), RUN_TIMEOUT_MS);
+}
+
+// a program that does not stop blocks the worker: replace it
+function stopRun(run, message) {
+	worker.terminate();
+	startWorker();
+	finish(run, { value: message, error: !run.animating, printed: run.printed, paintings: run.paintings,
+		warnings: [], runtime_warnings: [], hints: [], notes: [] });
+}
+
 function finish(run, report) {
 	clearTimeout(run.timer);
 	if (pending === run) pending = undefined;
@@ -137,12 +162,7 @@ async function runInWorker(code) {
 	await workerReady;
 	return new Promise(resolve => {
 		const run = { id: ++nextRunId, resolve, printed: [], paintings: [] };
-		run.timer = setTimeout(() => {
-			worker.terminate(); // a program that does not stop blocks the worker: replace it
-			startWorker();
-			finish(run, { value: `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`, error: true, printed: run.printed,
-				warnings: [], runtime_warnings: [], hints: [], notes: [] });
-		}, RUN_TIMEOUT_MS);
+		stopAfterTimeout(run);
 		pending = run;
 		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
 	});
@@ -350,6 +370,7 @@ function showPatch({ path, html }) {
 async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
+		if (pending?.animating) stopRun(pending, "animation stopped");
 		return;
 	}
 	showing = true;

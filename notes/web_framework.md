@@ -161,3 +161,11 @@ Each step is useful on its own and is what the next ones stand on.
   module contributes: kept in the store of the program that uses it (probes/stores/app.wasp, tests/modules/
   test_module_signals.rs). Context (a value for a subtree of components without props): question with the
   Interviewer; default until then: main-level variables, which every component reads.
+
+## web-apis: animation frames (card drawing-frames, first piece of web-apis)
+- In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`
+  shows each frame at once in place of the last canvas (host.js sleep → worker message "sleep" → playground.js
+  painted). Frames keep the run alive past RUN_TIMEOUT_MS; editing the code stops the animation (show → stopRun) and
+  runs the new code. Paints without a sleep between them stay one canvas each. Tour example animation (`canvases` check).
+- Natively each show still writes paint-N.png (src/paint.rs). Left of drawing-frames: mouse input over the canvas
+  (event.x/y, mouse_x / mouse_y / mouse_down), color.with_alpha(a) as a method; built sites (site.js) show no frames yet.
