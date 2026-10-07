@@ -72,6 +72,9 @@ const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final
 const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
+/// `constant x = 3` is `const x = 3`, with a note naming const (card constant-alias)
+const CONSTANT_ALIAS: &str = "constant";
+const CONST_WORD: &str = "const";
 /// Java's and TypeScript's `class Square implements Shape {…}`
 pub const IMPLEMENTS_WORD: &str = "implements";
 /// `enum Color {red, green}` (declarations::enum_object), Kotlin's `enum class`

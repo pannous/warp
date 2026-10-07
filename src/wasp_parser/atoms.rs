@@ -742,6 +742,10 @@ impl WaspParser {
 			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
 			return construction;
 		}
+		if symbol == CONSTANT_ALIAS && !self.options.data_mode && self.identifier_after_blanks() {
+			crate::diagnostic::note_alias(CONSTANT_ALIAS, CONST_WORD);
+			return Symbol(CONST_WORD.to_string());
+		}
 		// Ruby's `attr_accessor :x, :y` in a class body: the fields x and y
 		if RUBY_FIELD_WORDS.contains(&symbol.as_str()) && self.type_fields.is_some() {
 			let line: String = (0..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '\n' | '\0' | ';' | '}')).collect();
@@ -1078,10 +1082,20 @@ impl WaspParser {
 
 	/// `class` or `struct` after blanks, the word a class modifier stands before
 	fn class_keyword_after_blanks(&self) -> Option<&'static str> {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = self.blanks_ahead();
 		TYPE_DECLARATION_WORDS.into_iter().find(|keyword| {
 			keyword.chars().enumerate().all(|(i, c)| self.peek_char(blanks + i) == c) && !is_identifier_char(self.peek_char(blanks + keyword.len()))
 		})
+	}
+
+	fn blanks_ahead(&self) -> usize {
+		(0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()
+	}
+
+	/// `constant x`: a name after one or more blanks
+	fn identifier_after_blanks(&self) -> bool {
+		let blanks = self.blanks_ahead();
+		blanks > 0 && (self.peek_char(blanks).is_alphabetic() || self.peek_char(blanks) == '_')
 	}
 
 	/// Kotlin's primary constructor `class Point(val x: Int, var y: Int = 0)`: its parameters are the fields
