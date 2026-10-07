@@ -1,3 +1,4 @@
+mod test_libm_functions;
 mod test_angle;
 mod test_counting_units;
 mod test_declared_float_exact_reals;
