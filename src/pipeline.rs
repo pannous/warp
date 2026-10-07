@@ -178,9 +178,7 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 	SOURCE_PASSES[..resolved_at].iter().filter(|pass| !std::ptr::fn_addr_eq(**pass, getters)).fold(module, |module, pass| pass(module))
 }
 
-type Pass = fn(Node) -> Node;
-
-fn run_passes(node: Node, passes: &[Pass]) -> Node {
+fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
 	passes.iter().fold(node, |node, pass| pass(node))
 }
 

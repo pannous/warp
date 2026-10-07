@@ -18,3 +18,10 @@ fn a_where_condition_without_it_is_an_error() {
 	let Node::Error(message) = eval("xs = [1, 2, 3]; xs where x > 1") else { panic!("should be an error") };
 	assert!(format!("{message}").contains("where it > 1"), "{message}");
 }
+
+/// Haskell's binding `e where x = 3`: the assignment runs first, then e (not a filter)
+#[test]
+fn where_with_an_assignment_binds() {
+	is!("x * 2 where x = 3", 6);
+	is!("xs.reduce(0) { $0 + $1 } where xs = [1,2,3]", 6);
+}
