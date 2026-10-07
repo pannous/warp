@@ -96,12 +96,45 @@ pub fn files(code: &str, title: &str, dev: bool) -> Result<Vec<SiteFile>, String
 	site_files(code, title, dev)?.ok_or_else(|| format!("the program shows no page: it exports no {}", crate::page_html::PAGE_HTML))
 }
 
-/// The files of the site a program serving its page serves (src/web_server.rs), none when its last line shows nothing
-pub fn served_files(code: &str, title: &str) -> Result<Option<Vec<SiteFile>>, String> {
-	site_files(code, title, false)
+/// The site a program serving its page serves (src/web_server.rs), none when its last line shows nothing
+pub fn served_site(code: &str, title: &str) -> Result<Option<ServedSite>, String> {
+	let routed = |site: &Site| exports(&site.module, crate::routes::PAGE_ROUTES);
+	Ok(site_of(code, title, false)?.map(|site| ServedSite { code: code.to_string(), title: title.to_string(), routed: routed(&site), site }))
+}
+
+/// The site a program serving its page serves: its files, and for a program with routes the page of any other path,
+/// rendered when it is asked for (card serve-route)
+pub struct ServedSite {
+	code: String,
+	title: String,
+	site: Site,
+	routed: bool,
+}
+
+impl ServedSite {
+	/// What a GET of `path` gets: a file of the site ("/" the page), else the page at that path of a program with routes
+	pub fn file(&self, path: &str) -> Option<Result<SiteFile, String>> {
+		if let Some(file) = file_at(&self.site.files, path) {
+			return Some(Ok(file.clone()));
+		}
+		let rendered = || crate::host::with_page_path(path, || rendered_page(&self.code, &self.title, &self.site));
+		self.routed.then(|| rendered().map(|page| (PAGE_FILE.to_string(), page.into_bytes())))
+	}
+}
+
+/// A program's page: its module with the imports it needs, the scripts it loads and the files (its page at /)
+struct Site {
+	module: Vec<u8>,
+	imports: crate::wasm_reader::Imports,
+	scripts: Vec<Script>,
+	files: Vec<SiteFile>,
 }
 
 fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>>, String> {
+	Ok(site_of(code, title, dev)?.map(|site| site.files))
+}
+
+fn site_of(code: &str, title: &str, dev: bool) -> Result<Option<Site>, String> {
 	let compile = || crate::pipeline::for_a_page(|| crate::pipeline::compile(code));
 	let module = if dev { crate::pipeline::for_dev(compile) } else { compile() };
 	let module = module.map_err(|value| format!("nothing to compile: {}", with_excerpt(code, message_of(&value))))?;
@@ -109,16 +142,22 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>
 		return Ok(None);
 	}
 	let imports = crate::wasm_reader::Imports { host: module.needs_host, wasi: module.needs_wasi, ffi: module.needs_ffi };
-	let rendered = crate::wasm_reader::read_export_after_main(&module.bytes, imports, crate::page_html::PAGE_HTML)
+	let scripts = scripts_of(&module.bytes, dev)?;
+	let mut site = Site { module: module.bytes, imports, scripts, files: vec![] };
+	let page = rendered_page(code, title, &site)?;
+	site.files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), site.module.clone())];
+	site.files.extend(site.scripts.iter().map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
+	Ok(Some(site))
+}
+
+/// The page of the program, its markup rendered after main at the page path set now (host::with_page_path)
+fn rendered_page(code: &str, title: &str, site: &Site) -> Result<String, String> {
+	let rendered = crate::wasm_reader::read_export_after_main(&site.module, site.imports, crate::page_html::PAGE_HTML)
 		.map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))?;
 	let Node::Text(html) = rendered.drop_meta() else {
 		return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, rendered.serialize()));
 	};
-	let scripts = scripts_of(&module.bytes, dev)?;
-	let page = page(title, html, &scripts);
-	let mut files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), module.bytes)];
-	files.extend(scripts.iter().map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
-	Ok(Some(files))
+	Ok(page(title, html, &site.scripts))
 }
 
 /// The file of a site a request path names: "/" is the page, "/app.wasm" the module, …

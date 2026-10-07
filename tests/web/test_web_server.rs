@@ -99,3 +99,27 @@ fn a_served_page_s_events_draw_no_warning() {
 	let warnings = warp::diagnostic::take_warnings();
 	assert!(warnings.iter().all(|warning| !warning.message.contains("never raises it")), "{warnings:?}");
 }
+
+// card serve-route: a served program with routes answers each path with that route's page, rendered for the path
+#[test]
+fn a_served_page_is_rendered_for_each_route() {
+	const ROUTES_PORT: u16 = 18441;
+	let server = std::thread::spawn(|| {
+		warp::web_server::stop_after(4);
+		let value = warp::wasm_emitter::eval("tests/fixtures/served_routes.wasp");
+		(value.first_error().is_none(), value.serialize())
+	});
+	let started = std::time::Instant::now();
+	while std::net::TcpStream::connect(("127.0.0.1", ROUTES_PORT)).is_err() {
+		assert!(started.elapsed() < Duration::from_secs(60), "the server did not start");
+		std::thread::sleep(Duration::from_millis(50));
+	}
+	let page = |path: &str| get_from(ROUTES_PORT, path);
+	assert!(page("/").contains("<h1>Users</h1>"), "{}", page("/"));
+	let user = page("/users/2");
+	assert!(user.contains("<p>User Bo</p>") && user.contains("<script src=\"site.js\"></script>"), "{user}");
+	assert!(page("/elsewhere").contains("<p>no such page</p>"));
+	assert_eq!(page("/api/users"), r#"["Ann","Bo"]"#);
+	let (fine, value) = server.join().expect("the server thread");
+	assert!(fine, "{value}");
+}

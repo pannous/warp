@@ -227,9 +227,12 @@ Each step is useful on its own and is what the next ones stand on.
   ("/users/:id:int") whose function is the layout with page·part·N() at the outlet (page·part·N: the inner block, its
   parameters, the outer ones too, bound by `let`); after them the outer route itself with an empty outlet, so an inner
   "/" route answers the outer path first. page·routes lists the whole patterns.
-- Open: a built site
-  prerendering each static route (index.html is "/" only; a deep link needs the serve program to render it), the serve
-  program rendering per request path. `outlet` is the canonical word (aliases such as slot on demand).
+- A serve program with routes (card serve-route): src/site.rs ServedSite keeps the compiled module; a GET that is no
+  serve route and no file of the site renders the page at that path (main + page·html under host::with_page_path), so
+  GET /users/2 is that route's HTML, hydrated by site.js at the same path. A path no route takes gets the "*" route's
+  page (status 200; without one the "no page at <path>" text). Fixture tests/fixtures/served_routes.wasp.
+- Open: a built site prerendering each static route (index.html is "/" only; card route-prerender). `outlet` is the
+  canonical word (aliases such as slot on demand).
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
