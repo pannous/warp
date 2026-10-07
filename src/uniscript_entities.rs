@@ -51,13 +51,13 @@ pub fn bare_entity_name_at(chars: &[char], at: usize) -> Option<String> {
 	entity(&name).map(|_| name)
 }
 
-/// The loud error of `\:name` that names no entity
+/// The warning of `\:name` that names no entity: it stays as written (card unknown-entity)
 pub fn unknown_entity(name: &str) -> String {
-	format!("unknown entity \\:{name}: write the character itself, or a known name such as \\:alpha or \\:infinity")
+	format!("unknown entity \\:{name} stays as written: write the character itself, or a known name such as \\:alpha or \\:infinity")
 }
 
 /// The source with every known entity outside texts and comments replaced by its character; an unknown one stays
-/// and the parser names it (texts expand theirs in the text parser)
+/// and the parser warns about it (texts expand theirs in the text parser)
 pub fn expand_entities(source: &str) -> String {
 	if !source.contains('\\') {
 		return source.to_string();

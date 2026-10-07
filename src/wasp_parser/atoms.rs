@@ -145,8 +145,9 @@ impl WaspParser {
 				}
 			}
 			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
+				let warned = self.warn_unknown_entity(&name, self.column);
 				(0..length).for_each(|_| self.advance());
-				error(&crate::uniscript_entities::unknown_entity(&name))
+				warned.map_or_else(|strict| strict, |()| Node::Text(format!("\\:{name}")))
 			}
 			'\\' if let Some(name) = crate::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
 				(0..=name.len()).for_each(|_| self.advance());

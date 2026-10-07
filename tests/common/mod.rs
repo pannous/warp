@@ -90,6 +90,20 @@ pub fn fails_with(code: &str, needle: &str) {
 	}
 }
 
+/// The value of `code` and the compile-time warnings it reported
+pub fn warnings_of(code: &str) -> (Node, Vec<String>) {
+	warp::diagnostic::take_warnings();
+	let value = eval(code);
+	(value, warp::diagnostic::take_warnings().iter().map(|warning| warning.to_string()).collect())
+}
+
+/// `code` gives `expected` and warns with a message containing `needle`
+pub fn warns_with(code: &str, expected: impl Into<Node>, needle: &str) {
+	let (value, warnings) = warnings_of(code);
+	assert_eq!(value, expected.into(), "{code}");
+	assert!(warnings.iter().any(|warning| warning.contains(needle)), "no warning containing {needle:?} for {code}: {warnings:?}");
+}
+
 /// Local HTTP stub answering every request with `status` and `body`: fetch tests need no network
 #[cfg(feature = "native")]
 pub fn serve(status: &'static str, body: &'static str) -> String {
