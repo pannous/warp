@@ -58,8 +58,8 @@ matches format pad json parse`; `today` and `args` read as symbols; `exec sh "�
 
 ## 5. How a module is loaded
 - `use math` resolves: a local `math.wasp` (the file wins) → the embedded `std/math.wasp` → an FFI library (`m`) →
-  the package registry. Today `use math` goes to libm directly (modules.rs `is_builtin_library`); std/math.wasp
-  re-exports libm's functions, so nothing changes for existing programs.
+  the package registry. std/math.wasp forwards to libm (P169), whose C names still work with a note; `use cmath` is
+  libm alone.
 - Names: after `use list`, `zip(a, b)` and `list.zip(a, b)` both work; a program's own `zip` wins (as for prelude words).
 - A module word used without its `use`: the loud error naming the module, with the fix `use list`.
 
@@ -111,6 +111,14 @@ Next:
    to_base from_base; text: word_count snake_case kebab_case camel_case indent is_numeric between wrap; map: find_key.
    A std module's word cannot call another module's words (camel_case cannot use list's drop): written with loops.
    Met: a name `end` after else is Ruby's block end (card end-variable); `none(xs, f)` is the null (card none-call).
+   P171: write and exists are prelude words (modules PRELUDE_WORDS: only their definitions come along, a program's own
+   word wins); P183: a "file://…" text loads the whole file module; file.append(path, text) is the qualified-only word
+   (welcome_forms QUALIFIED_WORDS → append_file), bare append stays the list method.
+   P169/P191: `use math` adds descriptive names forwarding to C (square square_root cube_root power exponential
+   natural_log binary_log decimal_log logarithm sine … hyperbolic_tangent angle hypotenuse ceiling whole_part
+   remainder); the C names still work with a note (modules STD_ALIASES, positioned at the nearest positioned node);
+   `use cmath` is the raw C library. A constant fractional exponent (`x ^ (1/3)`) is a float
+   power (analyzer inference constant_value); one held in a variable still traps. sqrt/cbrt have no alias: they are the operators √ ∛ (∛ of a run-time value calls libm cbrt, Math.cbrt in the browser).
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:
@@ -202,14 +210,10 @@ run natively and in the browser.
    through the foreign bridges (notes/stdlib_connectors.md).
 4. Later: the AOT stub linking B modules (they need no compiler), then hash and compress work in executables.
 
-## Open questions (to warp-e9, defaults in force)
-- Q1 `use math` = std module re-exporting libm (default) vs. keep `use math` as the raw C library and name the std
-  module differently.
-- Q2 Module words qualified only (`list.zip`) vs. both qualified and bare after `use` (default: both).
-- Q3 Does any new word go straight into the prelude (candidates: zip, enumerate, unique, write, exists)? Default: no.
-- Q4 (adapters) A std module works in every host with nothing installed, so it is backed only by wasp, host words or C
-     compiled to wasm, never by python3/node/a system library (default) vs. allowing std modules that need them.
-- Q5 (adapters) Where Rust regex and JS RegExp differ, the regex module is their common subset with a loud error for
-     the rest (default) vs. one regex engine compiled to wasm for both hosts (identical, but ~300 KB more per page).
-- Q6 (adapters) file words: `append_file(path, text)` (default; `append` stays the list method) vs. a qualified
-     `file.append(path, text)` only, once qualified access exists (Q2).
+## Decisions (user, 2026-10-07; the former open questions Q1-Q6)
+- P169/P191: `use math` is wasp's math module with descriptive names (square, sine, cube_root …), forwarding to C until
+  wasp has its own; `use cmath` is the raw C library.
+- P170: module words work bare and qualified (`zip(a, b)`, `list.zip(a, b)`).
+- P171: new words stay in their modules, except `write` and `exists` (global); a file URL loads the file module.
+- P183: std modules are backed only by wasp, host words or C compiled to wasm; regex is the common subset of Rust regex
+  and JS RegExp with a loud error for the rest; the file module's append is `file.append(path, text)`.

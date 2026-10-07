@@ -48,6 +48,9 @@ const FOREIGN_ITERATIONS: [(&str, &str, bool, &str); 6] = [
 ];
 /// JavaScript's math namespace: `Math.sqrt(16)` is `sqrt(16)`
 const JS_MATH: &str = "Math";
+/// Module words written only qualified, as the module's own name for them (P183: `file.append(path, text)`; a bare
+/// `append` stays the list method)
+const QUALIFIED_WORDS: [(&str, &str, &str); 1] = [("file", "append", "append_file")];
 /// R's vector constructor: `c(1, 2, 3)` is the list `[1, 2, 3]` unless the program names something c
 const R_VECTOR_WORD: &str = "c";
 /// Ruby's `xs.sum { |x| x * 2 }`, Kotlin's `xs.sumOf { it * 2 }`, `xs.count { it > 1 }`: a reduction of the list
@@ -546,6 +549,11 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 				Node::List(items, _, _) => items[0].name(),
 				_ => unreachable!("guarded"),
 			};
+			if let Some((_, _, own_word)) = QUALIFIED_WORDS.iter().find(|(owner, written, _)| is_word(&module, owner) && *written == word) {
+				let Node::List(mut items, bracket, separator) = call.drop_meta().clone() else { unreachable!("guarded") };
+				items[0] = Node::Symbol(own_word.to_string());
+				return Node::List(items.into_iter().map(|item| module_calls(item, modules)).collect(), bracket, separator);
+			}
 			crate::normalize::hint(&format!("{}.{word}(", module.name()), &format!("{word}("), "wasp calls a module's word by its name");
 			let operator = crate::wasp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(written, _)| *written == word).map(|(_, op)| *op);
 			match (operator, call.drop_meta()) {

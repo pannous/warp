@@ -29,3 +29,33 @@ prime_factors(n) := { out = []; rest = n; d = 2; while d * d <= rest { while res
 // the digits of n in a base up to 36: to_base(255, 16) is "ff"
 to_base(n, base) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { out = symbols#(rest % base + 1) + out; rest = rest//base }; if n < 0 then "-" + out else out }
 from_base(t, base) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; out = 0; for c in chars(lower(t)) { out = out * base + index_of(symbols, c) - 1 }; out }
+// P169/P191: descriptive names; they forward to the C library (use cmath) until wasp has its own implementations.
+// The C names still work after `use math`, each with a note naming the word here (modules STD_ALIASES)
+square(x) := x * x
+square_root(x) := sqrt(x)
+cube_root(x) := ∛x
+power(base, exponent) := base ^ exponent
+exponential(x) := exp(x)
+natural_log(x) := log(x)
+binary_log(x) := log2(x)
+decimal_log(x) := log10(x)
+// the logarithm of x to any base: logarithm(8, 2) is 3
+logarithm(x, base) := log(x) / log(base)
+sine(x) := sin(x)
+cosine(x) := cos(x)
+tangent(x) := tan(x)
+arc_sine(x) := asin(x)
+arc_cosine(x) := acos(x)
+arc_tangent(x) := atan(x)
+// the angle of the point (x, y) from the x axis, in radians: C's atan2(y, x)
+angle(x, y) := atan2(y, x)
+hyperbolic_sine(x) := sinh(x)
+hyperbolic_cosine(x) := cosh(x)
+hyperbolic_tangent(x) := tanh(x)
+// the length of the long side of a right triangle with sides a and b
+hypotenuse(a, b) := hypot(a, b)
+ceiling(x) := ceil(x)
+// x without its fraction, toward zero: whole_part(-2.5) is -2
+whole_part(x) := trunc(x)
+// what remains of a after taking out b as often as it fits, with the sign of a (C's fmod)
+remainder(a, b) := fmod(a, b)

@@ -3,8 +3,9 @@
 use super::*;
 
 const VOID_WORD: &str = "void";
-/// `none(xs, f)` (Kotlin), the opposite of `any`: a call, while a bare `none` is the null
+/// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
 const NONE_WORD: &str = "none";
+const NONE_CALL_ERROR: &str = "none is the null ø, not a function: for \"no element matches\" write not any(xs, f)";
 const STYLE_WORD: &str = "style";
 /// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
 const CAPTURED_ARGUMENT: &str = "$0";
@@ -656,8 +657,10 @@ impl WaspParser {
 			return Node::Symbol(symbol);
 		}
 
-		let none_call = symbol == NONE_WORD && self.peek_char(0) == '(';
-		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !none_call && !self.at_member_name(symbol.chars().count())) {
+		if symbol == NONE_WORD && self.peek_char(0) == '(' && !self.options.data_mode {
+			return error(NONE_CALL_ERROR);
+		}
+		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count())) {
 			if !self.names_field(&symbol, &constant) {
 				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
 			}

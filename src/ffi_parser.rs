@@ -47,7 +47,7 @@ pub fn find_header_in(header: &str, dirs: &[impl AsRef<str>]) -> Option<String> 
 /// The headers that declare a library's functions, each found once in the include directories
 pub fn find_library_headers(library: &str) -> Vec<String> {
     let headers: Vec<String> = match library {
-        "m" | "math" | "libm" => vec!["math.h".into()],
+        "m" | "math" | "cmath" | "libm" => vec!["math.h".into()],
         "c" | "libc" => LIBC_HEADERS.iter().map(|header| header.to_string()).collect(),
         "SDL2" | "sdl2" | "sdl" => SDL_HEADERS.iter().map(|header| format!("SDL2/{header}")).collect(),
         _ => match LIBRARY_HEADERS.iter().find(|(name, _)| *name == library) {

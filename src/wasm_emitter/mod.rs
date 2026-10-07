@@ -84,6 +84,8 @@ const LOGICAL_SCRATCH: u32 = 2;
 
 /// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
 const LIBM_POW: &str = "m.pow";
+/// ffi_imports key of libm's cbrt for ∛ of a run-time value
+const LIBM_CBRT: &str = "m.cbrt";
 
 /// Traps of the exact runtime with the message a user should read instead of a wasm backtrace
 const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
@@ -899,10 +901,10 @@ impl WasmGcEmitter {
 		}
 		self.emit_math_helpers();
 		self.emit_text_builtins();
-		self.emit_node_arithmetic(); // after text_as_float, get_int_value and text_concat, which it calls
 		self.emit_map_get(); // after the text builtins: map keys are compared by text_of
 		self.emit_node_map_runtime();
 		self.emit_library_ops(); // after the text builtins: the library words call text_of
+		self.emit_node_arithmetic(); // after text_as_float, get_int_value, text_concat and list_join, which it calls
 	}
 
 	fn emit_getters(&mut self) {

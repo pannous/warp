@@ -12,5 +12,5 @@ fn a_one_call_body_block_runs_the_call() {
 
 #[test]
 fn an_undefined_word_in_it_is_an_error() {
-	fails_with("def f(x){square x}; f(3)", "undefined: square");
+	fails_with("def f(x){square x}; f(3)", "square is in the standard module math: write `use math`");
 }

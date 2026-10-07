@@ -149,9 +149,6 @@ fn lower_reals(node: Node) -> Node {
 			Real::Exact(exact) if exact.has_epsilon() => error(&format!("{exact} is a hyperreal: ε and ω are only supported in constant expressions")),
 			_ => Node::Number(Number::Float(real.to_f64())),
 		},
-		Node::Key(left, Op::Cbrt, _) if matches!(left.drop_meta(), Node::Empty) => {
-			error("∛ of a runtime value is not supported yet, only of constants")
-		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_reals(*left)), op, Box::new(lower_reals(*right))),
 		Node::List(items, _, _) if is_type_of_real(&items) => Node::Symbol(type_name_before_lowering(&items[1])),
 		// `π is real`: answered before π becomes a float

@@ -310,10 +310,10 @@ impl WasmGcEmitter {
 				self.emit_float_value(func, left);
 				func.instruction(&I::F64Mul);
 			}
-			// Prefix operators: √x = sqrt(x) (returns f64)
-			Node::Key(left, Op::Sqrt, right) if matches!(left.drop_meta(), Node::Empty) => {
+			// Prefix operators: √x, ∛x (return f64)
+			Node::Key(left, root @ (Op::Sqrt | Op::Cbrt), right) if matches!(left.drop_meta(), Node::Empty) => {
 				self.emit_float_value(func, right);
-				func.instruction(&I::F64Sqrt);
+				self.emit_float_root(func, root);
 			}
 			// Prefix negation: -x (returns f64)
 			Node::Key(left, Op::Neg, right) if matches!(left.drop_meta(), Node::Empty) => {

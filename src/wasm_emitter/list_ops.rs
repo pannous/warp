@@ -674,6 +674,24 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
 					s.call(f, super::text_builtins::TEXT_CONCAT);
 					Self::emit_list(f, &[I::Return, I::End]);
+					// a text and a number: the number's text joined to it, as `1 + "x"` is "1x" when the kinds are known
+					is_text(f, 0);
+					is_text(f, 1);
+					f.instruction(&I::I32Or);
+					f.instruction(&I::If(BlockType::Empty));
+					let node_type = s.type_manager.node_type;
+					f.instruction(&I::I64Const(crate::type_kinds::SQUARE_LIST_KIND));
+					f.instruction(&I::LocalGet(0));
+					s.call(f, super::text_builtins::TEXT_OF);
+					f.instruction(&I::I64Const(crate::type_kinds::SQUARE_LIST_KIND));
+					f.instruction(&I::LocalGet(1));
+					s.call(f, super::text_builtins::TEXT_OF);
+					Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type)]);
+					let (pointer, length) = s.allocate_string("");
+					Self::emit_list(f, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+					s.call(f, "new_text");
+					s.call(f, super::library_ops::LIST_JOIN);
+					Self::emit_list(f, &[I::Return, I::End]);
 				}
 				// an Error value fails with its own message (`x!` of ø is "unwrapped ø"), never as "not a number"
 				let trap_detail = s.trap_detail_global();
