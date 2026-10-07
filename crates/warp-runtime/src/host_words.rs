@@ -29,6 +29,8 @@ pub const SYSTEM_VALUES: [(&str, bool); 5] = [(BATTERY, false), (CHARGING, true)
 /// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
 pub const CLIPBOARD: &str = "clipboard";
 pub const CLIPBOARD_TEXT: &str = "clipboard_text";
+/// The path of the page shown ("/users/7"), which picks its route (lowering/routes.rs); "/" natively
+pub const PAGE_PATH: &str = "page_path";
 /// `on·file·0`: the handler of the first `on file "x" change {…}`
 pub const FILE_HANDLER_PREFIX: &str = "on·file·";
 /// `exit(code)` ends the run, not the process (P121, system_signals.rs ExitRequest)

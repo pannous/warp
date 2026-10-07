@@ -6,6 +6,7 @@ const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
 // the checks of the listeners on shared values (src/lowering/signal_values.rs), run at every check point
 const SHARED_HANDLER = "on·shared";
+const ROOT_PATH = "/"; // the page path before any navigation (page_path)
 const SHARED_CHECK_MILLISECONDS = 10;
 const PAGE_BITS = 16;
 const STDERR = 2;
@@ -319,6 +320,8 @@ function programImports(holder, hooks) {
 				if (known !== undefined) return BigInt(known);
 				throw new Error(`${value}: the playground cannot read it yet`);
 			},
+			// the path of the page shown, which picks its route (src/lowering/routes.rs); navigate changes it
+			page_path: () => buildValue(program(), treeOfPlain(holder.pagePath ?? ROOT_PATH)),
 			clipboard_text: () => { throw new Error("clipboard: the playground cannot read it (the browser's clipboard is asynchronous)"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {
@@ -1123,6 +1126,13 @@ function millisecondsUntil(minuteOfDay, weekdays = EVERY_DAY, now = new Date()) 
 		if (due > now && (weekdays || EVERY_DAY) & (1 << due.getDay())) return due - now;
 	}
 	return 7 * DAY_MILLISECONDS;
+}
+
+// the page goes to `path` (a link, the back button): page_path() gives it from now on, hooks.navigated hears it (a pending
+// fetch is dropped there); the caller shows the page anew (site.js, worker.js)
+function navigate(holder, hooks, path) {
+	holder.pagePath = path;
+	hooks.navigated?.(holder, path);
 }
 
 // a run's timers started: `fire(handler)` runs the handler on·every·<id> of each when it is due; stopTimers ends them
