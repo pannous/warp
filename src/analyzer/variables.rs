@@ -84,11 +84,13 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 			if let Node::Symbol(kw) = left.drop_meta() {
 				if kw == "global" {
 					// Don't define local for global variable
-					// But still count any variables in the value expression
+					// But still count any variables in the value expression, first: the kind of a hoisted block
+					// `global:xs = (made = ø; …; made)` is the kind of its temporaries
+					let count = collect_variables_inner(right, scope, true, false);
 					if let Some(global) = global_binding(right, scope).filter(|global| !scope.is_global(&global.name)) {
 						scope.globals.insert(global.name.clone(), global);
 					}
-					return collect_variables_inner(right, scope, true, false);
+					return count;
 				}
 				// Symbol:body is a tag/structure - right side is structure context
 				// Inside structures, Op::Assign is attribute, not variable
@@ -131,6 +133,7 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 						widen_to_float(scope, name, right);
 						widen_to_node(scope, name, right);
 					}
+					Node::Key(list, Op::Hash, _) => widen_element_type(scope, list, right),
 					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
 					Node::Key(var_name, Op::Colon, type_node) => {
 						if let Node::Symbol(name) = var_name.drop_meta() {
@@ -180,10 +183,26 @@ pub(super) fn type_list_by_first_append(name: &str, value: &Node, scope: &mut Sc
 		return;
 	}
 	let appended_type = list_type_name(appended, scope);
-	if let Some(local) = scope.locals.get_mut(name).filter(|local| local.kind == Kind::Empty && local.type_node.is_none()) {
+	if let Some(local) = scope.own_binding_mut(name).filter(|local| local.kind == Kind::Empty && local.type_node.is_none()) {
 		local.kind = Kind::List;
 		local.type_node = Some(Box::new(Node::Symbol(appended_type)));
 	}
+}
+
+/// `xs#i = v` with an element of another type than the inferred `list of <type>` of xs: a list of ints given a float
+/// holds floats (`xs = [0, 0]; xs#1 = random()`), any other mix Nodes of any type; a declared type is kept (checked elsewhere)
+pub(super) fn widen_element_type(scope: &mut Scope, list: &Node, value: &Node) {
+	let Node::Symbol(name) = list.drop_meta() else { return };
+	let assigned = element_type_word(value, scope);
+	let Some(local) = scope.own_binding_mut(name) else { return };
+	let Some(element) = local.type_node.as_ref().and_then(|type_node| type_node.name().strip_prefix(LIST_OF_PREFIX).map(str::to_string)) else { return };
+	let widened = match (element.as_str(), assigned.as_str()) {
+		(element, assigned) if element == assigned => return,
+		(INT_WORD, FLOAT_WORD) => format!("{LIST_OF_PREFIX}{FLOAT_WORD}"),
+		(_, INT_WORD) if element == RATIONAL_WORD || element == FLOAT_WORD => return, // an Int fits a rational or float list
+		_ => NODE_LIST_TYPE.to_string(),
+	};
+	local.type_node = Some(Box::new(Node::Symbol(widened)));
 }
 
 /// An exact variable that is later assigned an f64 (`x=10; x=floor(2.5)` with libm's floor) holds an f64 throughout,
@@ -575,6 +594,14 @@ impl Scope {
 	/// The local or declared global a name refers to, for its kind and type
 	pub fn binding(&self, name: &str) -> Option<&Local> {
 		self.lookup(name).or_else(|| self.global(name))
+	}
+
+	/// A local or declared global of this scope itself, to refine its type
+	pub fn own_binding_mut(&mut self, name: &str) -> Option<&mut Local> {
+		match self.locals.contains_key(name) {
+			true => self.locals.get_mut(name),
+			false => self.globals.get_mut(name),
+		}
 	}
 
 	pub fn function_kind(&self, name: &str) -> Option<Kind> {
