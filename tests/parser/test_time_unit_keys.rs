@@ -12,3 +12,11 @@ fn a_unit_word_before_a_colon_is_a_key() {
 fn a_unit_word_after_a_number_is_still_a_unit() {
 	is!("x = 3 months; x == 3 months", 1);
 }
+
+/// card interface-time: a key or member named now is no read of the time (was "dates and times are evaluated at
+/// compile time only")
+#[test]
+fn a_key_or_member_named_now_is_no_time() {
+	is!("interface calculator { now: () -> i64 }; 6 * 7", 42);
+	is!("x = {now: 5}; x.now", 5);
+}
