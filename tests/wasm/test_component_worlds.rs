@@ -60,3 +60,18 @@ fn texts_cross_the_component_boundary() {
 	is!(&format!("{using}greeting.greet(\"Al\")"), "hi Al");
 	is!(&format!("{using}greeting.size(\"abc\")"), 3);
 }
+
+/// card component-imports: the functions a world imports are the program's calls `host.time()`, core imports of the
+/// module the import names; warp's host serves a component's `host` import its words print, time and read
+#[cfg(feature = "native")]
+#[test]
+fn a_component_calls_what_its_world_imports() {
+	let directory = crate::common::scratch_directory("component_imports");
+	std::fs::create_dir_all(&directory).unwrap();
+	let file = directory.join("greeting.txt");
+	std::fs::write(&file, "hello").unwrap();
+	let using = built_component("clocked", "interface clock { later: (i64) -> i64; shout: (string) -> string; say: (string) -> i32 }\ncomponent clocked {\n  import host: { print: (string) -> (); time: () -> i64; read: (string) -> string }\n  export api: clock\n}\nexport def later(x: i64) -> i64 { host.time() + x }\nexport def shout(path: string) -> string { host.read(path) + \"!\" }\nexport def say(t: string) -> i32 { host.print(t); count(t) }\n0");
+	is!(&format!("{using}clocked.later(0) > 1700000000000"), true);
+	is!(&format!("{using}clocked.say(\"abc\")"), 3);
+	is!(&format!("{using}clocked.shout(\"{}\")", file.display()), "hello!");
+}

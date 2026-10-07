@@ -124,21 +124,27 @@ fn with_flag<T>(flag: &'static std::thread::LocalKey<std::cell::Cell<bool>>, run
 }
 
 thread_local! {
-	/// The functions the component compiled on this thread exports (`warp build --component`), with their export names
-	static COMPONENT_EXPORTS: std::cell::RefCell<Vec<(String, crate::component_worlds::Signature)>> = const { std::cell::RefCell::new(Vec::new()) };
+	/// The functions the component compiled on this thread exports and imports (`warp build --component`)
+	static COMPONENT_FUNCTIONS: std::cell::RefCell<crate::component_worlds::WorldFunctions> = std::cell::RefCell::new(Default::default());
 }
 
-/// `run` compiling a program as a component exporting `exports`: the emitter adds their canonical-ABI adapters
-pub fn for_a_component<T>(exports: Vec<(String, crate::component_worlds::Signature)>, run: impl FnOnce() -> T) -> T {
-	let before = COMPONENT_EXPORTS.with(|current| current.replace(exports));
+/// `run` compiling a program as a component exporting and importing `functions`: the emitter adds the canonical-ABI
+/// adapters of the exports and imports the imports from the core modules the world names
+pub fn for_a_component<T>(functions: crate::component_worlds::WorldFunctions, run: impl FnOnce() -> T) -> T {
+	let before = COMPONENT_FUNCTIONS.with(|current| current.replace(functions));
 	let result = run();
-	COMPONENT_EXPORTS.with(|current| *current.borrow_mut() = before);
+	COMPONENT_FUNCTIONS.with(|current| *current.borrow_mut() = before);
 	result
 }
 
 /// The functions the component being compiled exports, none for a program
 pub fn component_exports() -> Vec<(String, crate::component_worlds::Signature)> {
-	COMPONENT_EXPORTS.with(|current| current.borrow().clone())
+	COMPONENT_FUNCTIONS.with(|current| current.borrow().exports.clone())
+}
+
+/// The functions the component being compiled imports, none for a program
+pub fn component_imports() -> Vec<(String, crate::component_worlds::Signature)> {
+	COMPONENT_FUNCTIONS.with(|current| current.borrow().imports.clone())
 }
 
 /// `run` compiling a program for a page: its page event handlers are expected, not warned about

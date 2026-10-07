@@ -9,7 +9,7 @@ pub fn build(code: &str) -> Result<Vec<u8>, String> {
 	let program = crate::wasp_parser::parse(code);
 	let world = crate::component_worlds::world(&program)?;
 	let wit = crate::component_worlds::world_wit(&program)?;
-	let module = crate::pipeline::for_a_component(world.exported_functions(), || crate::pipeline::compile(code))
+	let module = crate::pipeline::for_a_component(world.functions(), || crate::pipeline::compile(code))
 		.map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
 	let mut bytes = module.bytes;
 	let failure = |error: anyhow::Error| format!("{error:#}");

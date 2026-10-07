@@ -260,6 +260,12 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			return Kind::Empty; // `print x` writes x and gives nothing (user, issue #18)
 		}
 	}
+	// a call of a function the component being compiled imports (`host.time()`)
+	if let Some(Node::Symbol(callee)) = items.first().map(Node::drop_meta) {
+		if let Some(kind) = crate::wasm_emitter::component_adapters::imported_kind(callee) {
+			return kind;
+		}
+	}
 	// Check for function calls: (funcname args...) where first item is a symbol
 	if items.len() >= 2 {
 		if let Node::Symbol(s) = items[0].drop_meta() {
