@@ -134,6 +134,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "string" | "str" | "text") => Kind::Text,
 		// `v as float` is an f64; `as int`, `as exact` stay exact Ints
 		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Kind::Float,
+		// `a or b`, `a and b` give one of their operands (`"" or "d"` is "d")
+		Node::Key(left, Op::And | Op::Or, right) => branches_kind(infer_type(left, scope), infer_type(right, scope)),
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
 		// √x is irrational in general: an f64
