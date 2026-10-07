@@ -4,12 +4,16 @@
 // might have meant is an "I meant: …" button that rewrites the code at the warning and runs it again (notes/fixits.md).
 
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
+const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
+const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
+const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
+const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
 const RUN_TIMEOUT_MS = 10000;
 // the origin a link of the shown program resolves against: "/about" is a page of the program, "https://…" is not
 const PROGRAM_ORIGIN = "http://program.invalid";
 const TYPING_DELAY_MS = 300;
-const DEFAULT_EXAMPLE = "welcome";
+const DEFAULT_EXAMPLE = "hello";
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
@@ -62,6 +66,51 @@ function saveAcknowledged(topics) {
 }
 
 let acknowledged = loadAcknowledged();
+
+// ---- the resizers: the guide's width and the editor's height, remembered in this browser -------------------
+
+let sizes = (() => { try { return JSON.parse(localStorage.getItem(SIZES_KEY)) ?? {}; } catch { return {}; } })();
+const clamp = (value, [least, share], whole) => Math.round(Math.min(Math.max(value, least), whole * share));
+
+function applySizes() {
+	const main = document.querySelector("main");
+	if (sizes.guide) main.style.setProperty("--guide-width", `${clamp(sizes.guide, GUIDE_WIDTH_RANGE, main.clientWidth)}px`);
+	else main.style.removeProperty("--guide-width");
+	editor.getWrapperElement().style.height = sizes.editor ? `${clamp(sizes.editor, EDITOR_HEIGHT_RANGE, innerHeight)}px` : "";
+	editor.refresh();
+}
+
+function setSize(name, value) {
+	if (value === undefined) delete sizes[name];
+	else sizes[name] = Math.round(value);
+	applySizes();
+	try { localStorage.setItem(SIZES_KEY, JSON.stringify(sizes)); } catch { /* private window: lasts for this page */ }
+}
+
+// drag the handle (or press its arrow keys) to set a size; sizeAt(pointer event) is the size there, current() the size now
+function dragToResize(handle, name, sizeAt, current, [lessKey, moreKey]) {
+	handle.addEventListener("pointerdown", down => {
+		down.preventDefault();
+		handle.setPointerCapture(down.pointerId);
+		handle.classList.add("dragging");
+		const move = event => setSize(name, sizeAt(event));
+		handle.addEventListener("pointermove", move);
+		handle.addEventListener("pointerup", () => { handle.removeEventListener("pointermove", move); handle.classList.remove("dragging"); }, { once: true });
+	});
+	handle.addEventListener("keydown", key => {
+		const step = { [lessKey]: -RESIZE_STEP, [moreKey]: RESIZE_STEP }[key.key];
+		if (step) { key.preventDefault(); setSize(name, current() + step); }
+	});
+	handle.ondblclick = () => setSize(name, undefined);
+}
+
+function startResizers() {
+	const main = document.querySelector("main"), editorPane = document.querySelector(".editor-pane");
+	dragToResize($("guide-resizer"), "guide", event => event.clientX - main.getBoundingClientRect().left, () => $("guide").offsetWidth, ["ArrowLeft", "ArrowRight"]);
+	dragToResize($("editor-resizer"), "editor", event => event.clientY - editorPane.getBoundingClientRect().top, () => editorPane.offsetHeight, ["ArrowUp", "ArrowDown"]);
+	addEventListener("resize", applySizes);
+	applySizes();
+}
 
 // what web_evaluate takes: `ack:<topic>` keys (the newer compiler also takes the plain list of topics)
 const acknowledgements = () => Object.fromEntries(acknowledged.map(topic => [ACKNOWLEDGED_PREFIX + topic, ACKNOWLEDGED]));
@@ -481,7 +530,7 @@ function fillExamples() {
 
 function initialize() {
 	editor = CodeMirror.fromTextArea($("code"), {
-		lineNumbers: true, mode: "wasp", indentWithTabs: true, tabSize: 4,
+		lineNumbers: true, lineWrapping: true, mode: "wasp", indentWithTabs: true, tabSize: 4,
 		extraKeys: { "Ctrl-Enter": runNow, "Cmd-Enter": runNow },
 	});
 	editor.on("change", () => {
@@ -498,6 +547,7 @@ function initialize() {
 	for (const event of ["pointermove", "pointerdown", "pointerup"]) $("output").addEventListener(event, trackPointer);
 	document.addEventListener("pointerup", () => pointer && Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), 0));
 	$("download").onclick = downloadModule;
+	startResizers();
 	showBuildSwitch();
 	fillExamples();
 	startWorker();

@@ -30,38 +30,47 @@
 <body>
 <header>
 	<h1>🐝 warp <span>playground</span></h1>
-	<p class="tagline">wasp compiled to WebAssembly GC by the warp compiler, itself running as WebAssembly in your browser</p>
+	<p class="tagline">wasp, running in your browser</p>
 	<a class="source" href="https://github.com/pannous/warp" target="_blank" rel="noopener">source</a>
+	<details class="tools">
+		<summary title="more">⋯</summary>
+		<div class="tools-menu">
+			<p>Run it on your machine: <code>warp hello.wasp</code> (<a href="https://github.com/pannous/warp#install--run" target="_blank" rel="noopener">get warp</a>)</p>
+			<p><button id="download" title="the WebAssembly module of the last run">⤓ download the wasm</button></p>
+			<p><a id="build" class="build"></a></p>
+			<div id="silenced" class="silenced" hidden>
+				<p>Silenced hints:</p>
+				<ul id="acknowledged"></ul>
+			</div>
+		</div>
+	</details>
 </header>
-<nav class="toolbar">
-	<label>example <select id="examples"></select></label>
-	<button id="run" title="Ctrl/Cmd-Enter">Run ▶</button>
-	<label><input id="auto" type="checkbox" checked> run while typing</label>
-	<button id="download" title="the WebAssembly module of the last run">⤓ wasm</button>
-	<span class="native">natively: <code>warp hello.wasp</code> (<a href="https://github.com/pannous/warp#install--run" target="_blank" rel="noopener">get warp</a>)</span>
-	<a id="guide-link" class="guide-link" hidden></a>
-	<a id="build" class="build"></a>
-	<span id="status" class="status">loading the compiler…</span>
-</nav>
 <main>
 	<details id="guide" class="guide-pane" open>
 		<summary>guide</summary>
 		<div id="guide-chapters" class="guide-chapters">loading the guide…</div>
 	</details>
-	<section class="editor-pane"><textarea id="code" spellcheck="false"></textarea></section>
-	<section id="output" class="output-pane" tabindex="0">
-		<div id="listening" class="listening-note" hidden></div>
-		<div class="result"><span class="prompt">»</span> <output id="value"></output></div>
-		<pre id="printed" class="printed" hidden></pre>
-		<input id="address" class="address" hidden spellcheck="false" aria-label="page path" title="the page's path: type one and press Enter">
-		<div id="rendered" class="rendered" hidden></div>
-		<div id="paintings" class="paintings"></div>
-		<ul id="diagnostics" class="diagnostics"></ul>
-		<details id="silenced" class="silenced" hidden>
-			<summary>silenced warnings</summary>
-			<ul id="acknowledged"></ul>
-		</details>
-	</section>
+	<div id="guide-resizer" class="resizer columns" role="separator" aria-orientation="vertical" aria-label="guide width" tabindex="0" title="drag to resize, double-click to reset"></div>
+	<div class="workspace">
+		<nav class="toolbar">
+			<select id="examples" aria-label="example"></select>
+			<button id="run" title="Ctrl/Cmd-Enter">Run ▶</button>
+			<label><input id="auto" type="checkbox" checked> run while typing</label>
+			<a id="guide-link" class="guide-link" hidden></a>
+		</nav>
+		<section class="editor-pane"><textarea id="code" spellcheck="false"></textarea></section>
+		<div id="editor-resizer" class="resizer rows" role="separator" aria-orientation="horizontal" aria-label="editor height" tabindex="0" title="drag to resize, double-click to reset"></div>
+		<section id="output" class="output-pane" tabindex="0">
+			<span id="status" class="status">loading the compiler…</span>
+			<div id="listening" class="listening-note" hidden></div>
+			<div class="result"><span class="prompt">»</span> <output id="value"></output></div>
+			<pre id="printed" class="printed" hidden></pre>
+			<input id="address" class="address" hidden spellcheck="false" aria-label="page path" title="the page's path: type one and press Enter">
+			<div id="rendered" class="rendered" hidden></div>
+			<div id="paintings" class="paintings"></div>
+			<ul id="diagnostics" class="diagnostics"></ul>
+		</section>
+	</div>
 </main>
 </body>
 </html>
