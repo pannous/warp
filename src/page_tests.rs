@@ -3,9 +3,9 @@
 //! ```wasp
 //! def Counter() { count = 0; div{ button{ on click { count += 1 } "Add" } p{ count } } }
 //! test "counter" {
-//! 	render Counter()
-//! 	click "Add"
-//! 	check text is "Add1"
+//!     render Counter()
+//!     click "Add"
+//!     check text is "Add1"
 //! }
 //! ```
 //!
