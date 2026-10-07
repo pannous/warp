@@ -3,6 +3,8 @@
 use super::*;
 
 const VOID_WORD: &str = "void";
+/// `none(xs, f)` (Kotlin), the opposite of `any`: a call, while a bare `none` is the null
+const NONE_WORD: &str = "none";
 const STYLE_WORD: &str = "style";
 /// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
 const CAPTURED_ARGUMENT: &str = "$0";
@@ -602,7 +604,8 @@ impl WaspParser {
 			return Node::Symbol(symbol);
 		}
 
-		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count())) {
+		let none_call = symbol == NONE_WORD && self.peek_char(0) == '(';
+		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !none_call && !self.at_member_name(symbol.chars().count())) {
 			if !self.names_field(&symbol, &constant) {
 				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
 			}

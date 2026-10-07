@@ -62,3 +62,4 @@ mod test_global_comprehension;
 mod test_captured_call_lists;
 mod test_nested_index_assignment;
 mod test_pair_values;
+mod test_none_word;
