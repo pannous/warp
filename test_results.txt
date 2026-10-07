@@ -2041,6 +2041,7 @@ PASSED:
   ✓ parser::test_trailing_annotation::a_trailing_annotation_marks_the_expression_before_it
   ✓ parser::test_unary_plus::a_unary_plus_is_its_operand
   ✓ parser::test_uniscript_entities::an_unknown_entity_is_an_error
+  ✓ parser::test_uniscript_entities::an_unknown_entity_stays_as_written_and_warns
   ✓ parser::test_uniscript_entities::entities_are_their_characters
   ✓ parser::test_uniscript_entities::entities_expand_inside_double_quoted_texts
   ✓ parser::test_wasp_format::html_attributes_and_repeated_tags_in_data
@@ -2262,6 +2263,7 @@ PASSED:
   ✓ text::test_interpolation::dollar_arguments_and_templates_keep_working
   ✓ text::test_interpolation::holes_take_parameters_lists_and_exact_numbers
   ✓ text::test_interpolation::holes_take_text_results_of_library_words
+  ✓ text::test_interpolation::round_dollar_holes_interpolate_like_curly_ones
   ✓ text::test_interpolation::single_quotes_stay_literal
   ✓ text::test_interpolation::swift_holes_interpolate_any_expression
   ✓ text::test_interpolation::the_normalizer_hints_the_swift_form
@@ -3350,4 +3352,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3345 passed, 0 failed, 3345 total tested
+19 ignored, 3347 passed, 0 failed, 3347 total tested
