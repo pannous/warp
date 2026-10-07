@@ -417,6 +417,11 @@ function programImports(holder, hooks) {
 		m: new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] }),
 		// the pure part of libc (ffi "c"): numbers, and C strings read up to their zero byte
 		c: libcImports(holder),
+		// `use { memory, table } from "env"` (src/wasm_reader.rs define_imported_entities): a fresh memory and table
+		env: {
+			get memory() { return new WebAssembly.Memory({ initial: IMPORTED_MEMORY_PAGES }); },
+			get table() { return new WebAssembly.Table({ initial: 0, element: "anyfunc" }); },
+		},
 	};
 	// anything else (native FFI libraries) is missing in the browser: say which, when the program calls it
 	const missing = (module, name) => () => { throw new Error(`${module}.${name} is not available in the browser`); };
@@ -427,6 +432,7 @@ function programImports(holder, hooks) {
 	});
 }
 
+const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
 const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED, TASK_STOPPED, TASK_STOP
 const TASK_FAILED = 2n;
 const TASK_STOPPED_CODE = 3n;

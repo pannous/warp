@@ -303,6 +303,7 @@ fn run_main<S: 'static>(
 	let module = crate::run::module_cache::compiled_module(&engine, bytes)?;
 	let mut linker = Linker::new(&engine);
 	link(&mut linker, &engine, &module)?;
+	define_imported_entities(&mut linker, &mut store, &module)?;
 	let instance = linker.instantiate(&mut store, &module)?;
 	let main = ENTRY_POINTS
 		.iter()
@@ -322,6 +323,23 @@ fn run_main<S: 'static>(
 		Some(()) => Ok((results.first().copied().unwrap_or(Val::AnyRef(None)), store, instance)),
 		None => Ok((Val::AnyRef(None), store, instance)), // `exit` (P121): the run's value is ø
 	}
+}
+
+/// The memories and tables a module imports (`use { memory, table } from "env"`) that nothing linked provides: fresh
+/// ones, as the embedder of a run of its own
+fn define_imported_entities<S>(linker: &mut Linker<S>, store: &mut Store<S>, module: &Module) -> Result<()> {
+	for import in module.imports() {
+		if linker.get_by_import(&mut *store, &import).is_some() {
+			continue;
+		}
+		let entity: wasmtime::Extern = match import.ty() {
+			wasmtime::ExternType::Memory(memory) => wasmtime::Memory::new(&mut *store, memory)?.into(),
+			wasmtime::ExternType::Table(table) => wasmtime::Table::new(&mut *store, table, wasmtime::Ref::Func(None))?.into(),
+			_ => continue,
+		};
+		linker.define(&*store, import.module(), import.name(), entity)?;
+	}
+	Ok(())
 }
 
 /// Instantiates `bytes` with the import families it needs and runs `main`, keeping the instance for later calls of its
