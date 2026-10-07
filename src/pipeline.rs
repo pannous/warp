@@ -170,12 +170,15 @@ const MEANING_PASSES: [fn(Node) -> Node; 28] = [
 /// its definitions join the program in the same forms (`[w for w in ws if …]` is lowered, not read as a list).
 /// Not getters::lower: a getter `answer := 42` is lowered with the program, whose reads of it become calls.
 pub(crate) fn lower_module_source(module: Node) -> Node {
-	let (resolve, getters): (fn(Node) -> Node, fn(Node) -> Node) = (crate::modules::resolve, crate::getters::lower);
+	let resolve: Pass = crate::modules::resolve;
+	let getters: Pass = crate::getters::lower;
 	let resolved_at = SOURCE_PASSES.iter().position(|pass| std::ptr::fn_addr_eq(*pass, resolve)).expect("modules::resolve is a source pass");
 	SOURCE_PASSES[..resolved_at].iter().filter(|pass| !std::ptr::fn_addr_eq(**pass, getters)).fold(module, |module, pass| pass(module))
 }
 
-fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
+type Pass = fn(Node) -> Node;
+
+fn run_passes(node: Node, passes: &[Pass]) -> Node {
 	passes.iter().fold(node, |node, pass| pass(node))
 }
 
