@@ -658,7 +658,7 @@ impl Lowering {
 		if let Some(lookup) = self.of_lookup(items) {
 			return Some(lookup);
 		}
-		if let Some(membership) = self.membership(items) {
+		if let Some(membership) = self.membership(items).or_else(|| self.containment(items)) {
 			return Some(membership);
 		}
 		if let Some(raised) = raise_call(items) {
@@ -774,6 +774,15 @@ impl Lowering {
 			return None;
 		}
 		Some(self.call(COLLECTION_POSITION, in_word, vec![collection.clone(), element.clone()], false))
+	}
+
+	/// `xs contains x`, `xs has x`, `xs includes x`: the method `xs.contains(x)` written between its two values, unless
+	/// the program defines the word
+	fn containment(&self, items: &[Node]) -> Option<Node> {
+		let [collection, word, element] = items else { return None };
+		let Node::Symbol(name) = word.drop_meta() else { return None };
+		let canonical = self.library_word_for(name, 2).filter(|canonical| *canonical == COLLECTION_CONTAINS)?;
+		Some(self.call(canonical, word, vec![collection.clone(), element.clone()], false))
 	}
 
 	/// `x.word` and `x.word(args)`; an unknown word on a value is an error
