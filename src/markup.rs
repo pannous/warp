@@ -31,6 +31,11 @@ pub fn is_element_tag(word: &str) -> bool {
 	ELEMENTS.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ELEMENTS_LIST)).iter().any(|element| element == word)
 }
 
+/// Does the word name an HTML attribute: a listed one or a `data-` one
+pub fn names_attribute(word: &str) -> bool {
+	word.starts_with(DATA_ATTRIBUTE_PREFIX) || is_attribute_name(word)
+}
+
 fn is_attribute_name(word: &str) -> bool {
 	static ATTRIBUTES: OnceLock<Vec<String>> = OnceLock::new();
 	ATTRIBUTES.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ATTRIBUTES_LIST)).iter().any(|attribute| attribute == word)
