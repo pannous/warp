@@ -769,10 +769,24 @@ fn notify(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Result
 	warp_runtime::system_values::notify(&text).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))
 }
 
-/// Natively there is no GPU yet (wgpu would be a dependency of its own): a loud failure naming where it runs
+/// `gpu_compute(shader, numbers, workgroups)` through wgpu (src/gpu.rs): the floats the shader left
 #[cfg(feature = "native")]
-fn gpu_compute(_caller: Caller<'_, HostState>, _shader: HostNode, _numbers: HostNode, _workgroups: i64) -> wasmtime::Result<HostNode> {
-	Err(wasmtime::Error::new(crate::tasks::TaskFailure(format!("{GPU_COMPUTE} needs WebGPU: run it in the browser (the playground)"))))
+fn gpu_compute(mut caller: Caller<'_, HostState>, shader: HostNode, numbers: HostNode, workgroups: i64) -> wasmtime::Result<HostNode> {
+	let failure = |problem: String| wasmtime::Error::new(crate::tasks::TaskFailure(format!("{GPU_COMPUTE}: {problem}")));
+	let shader = match given_node(&mut caller, shader)? {
+		Node::Text(shader) => shader,
+		Node::Char(letter) => letter.to_string(), // a one-letter text reads as a code point
+		other => return Err(failure(format!("the shader is a text of WGSL, got {}", other.serialize()))),
+	};
+	let numbers = given_node(&mut caller, numbers)?;
+	let floats = numbers.iter().map(|number| match number.drop_meta() {
+		Node::Number(number) => Ok(f64::from(number.clone()) as f32),
+		other => Err(failure(format!("it computes over numbers, got {}", other.serialize()))),
+	}).collect::<wasmtime::Result<Vec<f32>>>()?;
+	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
+	let left = crate::gpu::compute(&shader, &floats, workgroups).map_err(failure)?;
+	let left = left.into_iter().map(|float| Node::Number(Number::Float(float as f64))).collect();
+	built_in_program(&mut caller, &Node::List(left, crate::node::Bracket::Square, crate::node::Separator::Space), GPU_COMPUTE)
 }
 
 #[cfg(feature = "native")]
