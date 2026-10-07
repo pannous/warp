@@ -123,6 +123,24 @@ fn with_flag<T>(flag: &'static std::thread::LocalKey<std::cell::Cell<bool>>, run
 	result
 }
 
+thread_local! {
+	/// The functions the component compiled on this thread exports (`warp build --component`), with their export names
+	static COMPONENT_EXPORTS: std::cell::RefCell<Vec<(String, crate::component_worlds::Signature)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// `run` compiling a program as a component exporting `exports`: the emitter adds their canonical-ABI adapters
+pub fn for_a_component<T>(exports: Vec<(String, crate::component_worlds::Signature)>, run: impl FnOnce() -> T) -> T {
+	let before = COMPONENT_EXPORTS.with(|current| current.replace(exports));
+	let result = run();
+	COMPONENT_EXPORTS.with(|current| *current.borrow_mut() = before);
+	result
+}
+
+/// The functions the component being compiled exports, none for a program
+pub fn component_exports() -> Vec<(String, crate::component_worlds::Signature)> {
+	COMPONENT_EXPORTS.with(|current| current.borrow().clone())
+}
+
 /// `run` compiling a program for a page: its page event handlers are expected, not warned about
 pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
 	with_flag(&FOR_A_PAGE, run)

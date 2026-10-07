@@ -1,6 +1,7 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
 mod user_function_calls;
+mod component_adapters;
 mod arithmetic;
 mod globals;
 mod control_flow;
@@ -613,6 +614,7 @@ impl WasmGcEmitter {
 			Need::Function(name) => Some(*name),
 			Need::MathImport(_) => None,
 		}));
+		component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		self.guards_errors = try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();
@@ -629,6 +631,7 @@ impl WasmGcEmitter {
 		(self.struct_abi, self.struct_results) = self.find_struct_abi(node);
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
+		self.emit_component_adapters();
 		self.emit_compare_dispatcher();
 		self.emit_node_main(node);
 		if self.discovered_needs.iter().any(|need| !self.is_provided(need)) {
