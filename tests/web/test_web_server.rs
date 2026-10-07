@@ -117,8 +117,8 @@ fn a_served_page_is_rendered_for_each_route() {
 	let page = |path: &str| get_from(ROUTES_PORT, path);
 	assert!(page("/").contains("<h1>Users</h1>"), "{}", page("/"));
 	let user = page("/users/2");
-	// its scripts come from the server's root, not from /users/
-	assert!(user.contains("<p>User Bo</p>") && user.contains("<script src=\"/site.js\"></script>"), "{user}");
+	// its scripts, module and route modules come from the server's root (its <base>), not from /users/
+	assert!(user.contains("<p>User Bo</p>") && user.contains("<base href=\"/\">") && user.contains("<script src=\"site.js\"></script>"), "{user}");
 	assert!(page("/elsewhere").contains("<p>no such page</p>"));
 	assert_eq!(page("/api/users"), r#"["Ann","Bo"]"#);
 	let (fine, value) = server.join().expect("the server thread");

@@ -5,10 +5,11 @@
 // to_html, which also rendered index.html at build time; notes/web_framework.md "Built sites"). Main runs once here as it ran at build time, so the component instances count alike.
 // A link to a page of the same site goes through the program's routes (History API): the address changes, the program
 // reads the new path (page_path) and the page morphs; the back button does the same (lowering/routes.rs).
+// Each route's own code may come in a module of its own (src/route_split.rs): the page loads the one of the route it
+// shows before running it (host-routes.js loadRouteModule).
 
 const SITE_ROOT = "wasp-root";
-const SITE_MODULE = "app.wasm"; // beside this script, which a page at a deeper path names from the site's root
-const SITE_SCRIPT = document.currentScript.src;
+const SITE_MODULE = "app.wasm";
 const PAGE_HTML = "page·html";
 const SITE_EVENTS = { click: () => ({}), input: happened => inputDetail(happened.composedPath()[0]) };
 
@@ -43,11 +44,14 @@ function show() {
 }
 
 async function hydrate() {
-	const bytes = new Uint8Array(await (await fetch(new URL(SITE_MODULE, SITE_SCRIPT))).arrayBuffer());
+	const bytes = new Uint8Array(await (await fetch(SITE_MODULE)).arrayBuffer());
 	// stored values and those a `warp dev` page keeps across reloads (host.js STD_ADAPTERS.store, markup.js)
 	Object.assign(storedValues, keptValues());
 	self.keepStored = keepValue;
-	const outcome = runProgram(bytes, siteHooks);
+	const holder = instantiateProgram(bytes, siteHooks);
+	if (holder.failure) return console.error("wasp:", holder.failure);
+	await globalThis.loadRouteModule?.(holder);
+	const outcome = runMain(holder, siteHooks);
 	if (outcome.result === undefined) return console.error("wasp:", outcome.failure ?? outcome.trap ?? outcome.error);
 	// a program with routes imports page_path, which ships host-routes.js
 	globalThis.followSiteLinks?.(goTo);
@@ -63,9 +67,11 @@ async function hydrate() {
 }
 
 // the page at `path` (host-routes.js followSiteLinks: a link was followed, or the back button pressed)
-function goTo(path) {
+async function goTo(path) {
 	navigate(site, siteHooks, path);
+	await loadRouteModule(site);
 	show();
+	focusRoute(document.getElementById(SITE_ROOT));
 }
 
 hydrate();

@@ -5,7 +5,7 @@
 //! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary, and the parts of
 //! host.js its module imports words of (HOST_PARTS, card web-bundle).
 
-use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
+use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
 use crate::node::Node;
 use std::path::{Path, PathBuf};
 
@@ -28,7 +28,7 @@ pub struct HostPart {
 
 /// The parts of host.js, in load order (host.js HOST_PART_FILES). std_pure and std_io are coarse: they carry every std
 /// module's words, so a program using json (std_pure) also gets the hashes
-pub const HOST_PARTS: [HostPart; 6] = [
+pub const HOST_PARTS: [HostPart; 7] = [
 	HostPart {
 		script: ("host-files.js", include_str!("../web/playground/host-files.js")),
 		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", STD_IO].contains(&name),
@@ -47,6 +47,7 @@ pub const HOST_PARTS: [HostPart; 6] = [
 	},
 	HostPart { script: ("host-compiler.js", include_str!("../web/playground/host-compiler.js")), gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK, needs: &["host-files.js"] },
 	HostPart { script: ("host-routes.js", include_str!("../web/playground/host-routes.js")), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
+	HostPart { script: ("host-gpu.js", include_str!("../web/playground/host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && name == GPU_COMPUTE, needs: &["host-tasks.js"] },
 ];
 const LINE_COMMENT: &str = "//";
 /// The element holding the program's markup (site.js SITE_ROOT)
@@ -57,7 +58,7 @@ const PAGE_TEMPLATE: &str = r#"<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{title}}</title>
-</head>
+{{base}}</head>
 <body>
 <div id="{{root}}">{{body}}</div>
 {{scripts}}</body>
@@ -182,7 +183,15 @@ fn site_of(code: &str, title: &str, dev: bool) -> Result<Option<Site>, String> {
 	let scripts = scripts_of(&module.bytes, dev)?;
 	let mut site = Site { module: module.bytes, imports, scripts, files: vec![] };
 	let page = rendered_page(code, title, &site, BESIDE)?;
-	site.files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), site.module.clone())];
+	// each route's own functions in a module the page loads when it shows the route; a dev page reloads whole anyway.
+	// The site keeps the whole module, which renders its pages natively
+	let split = if dev { None } else { crate::route_split::split_by_route(&site.module)? };
+	let (primary, route_modules) = match split {
+		Some(split) => (split.primary, split.routes),
+		None => (site.module.clone(), vec![]),
+	};
+	site.files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), primary)];
+	site.files.extend(route_modules);
 	site.files.extend(site.scripts.iter().map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
 	Ok(Some(site))
 }
@@ -267,10 +276,13 @@ fn with_excerpt(code: &str, message: String) -> String {
 	[message].into_iter().chain(excerpt).collect::<Vec<_>>().join("\n")
 }
 
+/// A page at a deeper path than the site's files finds them, and the module and route modules they load, through its
+/// <base> (`root`); an in-page "#anchor" link there resolves against the root too
 fn page(title: &str, body: &str, scripts: &[(&str, &str)], root: &str) -> String {
-	let scripts: String = scripts.iter().map(|(name, _)| format!("<script src=\"{root}{name}\"></script>\n")).collect();
+	let scripts: String = scripts.iter().map(|(name, _)| format!("<script src=\"{name}\"></script>\n")).collect();
+	let base = if root == BESIDE { String::new() } else { format!("<base href=\"{root}\">\n") };
 	// the program's texts last, so nothing in them is read as a placeholder
-	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
+	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{base}}", &base).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
 }
 
 /// A script without its comment lines, blank lines and indentation (card web-bundle: host.js gzipped 24 → 17 KB); the

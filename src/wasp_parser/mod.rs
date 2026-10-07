@@ -650,6 +650,8 @@ pub struct WaspParser {
 	in_for_header: bool,
 	/// The variables of the enclosing `for k in keys(m)` loops: `m[k]` looks a key up, so no indexing hint
 	key_variables: Vec<String>,
+	/// Names assigned a text or typed text (`l = "en"`, `k:text`): `m[l]` looks a key up too (card text-key)
+	text_variables: std::collections::HashSet<String>,
 	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
 	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
@@ -948,6 +950,7 @@ impl WaspParser {
 			equals_compares: false,
 			in_for_header: false,
 			key_variables: vec![],
+			text_variables: Default::default(),
 			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,

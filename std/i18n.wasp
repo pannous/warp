@@ -1,0 +1,68 @@
+// The standard library module i18n (card web-i18n, notes/i18n.md): `use i18n`. Translations are data, one map per
+// language; a message is a text with {name} holes, or a map of plural categories (Unicode CLDR: zero one two few many
+// other) chosen by the value `count`:
+//   messages = { en: { cart: { one: "{count} item", other: "{count} items" } }, de: { cart: { one: "{count} Artikel", other: "{count} Artikel" } } }
+//   translate(messages, "de", "cart", { count: 3 }) → "3 Artikel"
+// A language the messages lack, or a message one language lacks, comes from the first language (de-AT reads de first).
+
+translate(messages:any, language:text, key:text, values:any) := {
+	let message = i18n_message(messages, language, key)
+	var chosen = message
+	if not (message is text) { chosen = i18n_plural_form(message, plural_category(language, values["count"])) }
+	i18n_filled(chosen, values)
+}
+
+// The message of a key: in the language, its base language (de for de-AT), else the first language
+i18n_message(messages:any, language:text, key:text) := {
+	let base = split(language, "-")[0]
+	for candidate in [language, base, keys(messages)#1] {
+		if contains(keys(messages), candidate) {
+			let translations = messages[candidate]
+			if contains(keys(translations), key) { return translations[key] }
+		}
+	}
+	throw "no translation of " + key
+}
+
+// A plural message's form for the category, else its form other
+i18n_plural_form(forms:any, category:text) := {
+	if contains(keys(forms), category) { return forms[category] }
+	forms["other"]
+}
+
+// The text with each {name} replaced by the value named name
+i18n_filled(message:text, values:any) := {
+	var out = message
+	for name in keys(values) { out = replace(out, "{" + name + "}", "" + values[name]) }
+	out
+}
+
+// The CLDR plural category of a whole number in a language: "one", "few", "other", …
+plural_category(language:text, n:int) := {
+	let base = split(language, "-")[0]
+	let last = n % 10
+	let last_two = n % 100
+	let teen = last_two >= 12 and last_two <= 14
+	if contains(["ja", "zh", "ko", "th", "vi", "id", "ms"], base) { return "other" }
+	if contains(["fr", "hi"], base) { return if n <= 1 then "one" else "other" }
+	if contains(["ru", "uk", "be"], base) {
+		if last == 1 and last_two != 11 { return "one" }
+		if last >= 2 and last <= 4 and not teen { return "few" }
+		return "many"
+	}
+	if base == "pl" {
+		if n == 1 { return "one" }
+		if last >= 2 and last <= 4 and not teen { return "few" }
+		return "many"
+	}
+	if contains(["cs", "sk"], base) {
+		if n == 1 { return "one" }
+		return if n >= 2 and n <= 4 then "few" else "other"
+	}
+	if base == "ar" {
+		if n <= 2 { return ["zero", "one", "two"]#(n + 1) }
+		if last_two >= 3 and last_two <= 10 { return "few" }
+		return if last_two >= 11 then "many" else "other"
+	}
+	if n == 1 then "one" else "other"
+}

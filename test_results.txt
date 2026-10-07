@@ -56,6 +56,7 @@ PASSED:
   ✓ control::test_colon_handlers::a_timer_body_after_a_colon_is_the_rest_of_the_line
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
   ✓ control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
+  ✓ control::test_control_words::an_if_with_a_block_after_a_statement_starts_a_statement
   ✓ control::test_control_words::bang_evaluates_a_block
   ✓ control::test_control_words::n_times_repeats_its_block
   ✓ control::test_control_words::trailing_if_guards_the_statement
@@ -919,7 +920,7 @@ PASSED:
   ✓ functions::test_parameter_call_kinds::disagreeing_calls_are_a_loud_error_naming_both_kinds
   ✓ functions::test_parameter_call_kinds::untyped_parameter_takes_the_kind_all_calls_agree_on
   ✓ functions::test_parameter_call_kinds::untyped_parameter_with_int_calls_or_none_stays_int
-  ✓ functions::test_parameter_codepoint_calls::a_character_literal_argument_disagrees_with_a_text_argument
+  ✓ functions::test_parameter_codepoint_calls::a_character_literal_argument_agrees_with_a_text_argument
   ✓ functions::test_parameter_codepoint_calls::a_character_literal_argument_disagrees_with_an_int_argument
   ✓ functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
@@ -1144,6 +1145,7 @@ PASSED:
   ✓ lists::test_key_lookup::test_object_variable_is_looked_up_by_key
   ✓ lists::test_key_lookup::test_text_value_is_looked_up
   ✓ lists::test_key_subscript_hint::a_text_key_subscript_gets_no_index_hint
+  ✓ lists::test_key_subscript_hint::a_text_variable_subscript_gets_no_index_hint
   ✓ lists::test_lazy_range::a_big_range_variable_compiles
   ✓ lists::test_lazy_range::a_range_bound_of_arithmetic_stays_a_descriptor
   ✓ lists::test_lazy_range::a_range_is_read_from_its_bounds
@@ -1222,6 +1224,8 @@ PASSED:
   ✓ lists::test_node_lists::a_node_list_keeps_its_elements_and_values
   ✓ lists::test_node_lists::a_recursive_list_function_passes_its_array
   ✓ lists::test_node_lists::loops_over_a_list_are_linear
+  ✓ lists::test_none_word::a_bare_none_is_null
+  ✓ lists::test_none_word::none_of_a_list_is_the_opposite_of_any
   ✓ lists::test_number_keys::a_list_keeps_its_positions
   ✓ lists::test_number_keys::a_number_subscript_keys_an_empty_map
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
@@ -2217,6 +2221,8 @@ PASSED:
   ✓ text::test_nested_list_text::a_count_takes_the_indexed_element
   ✓ text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal
   ✓ text::test_nested_list_text::an_index_is_an_atom_so_a_method_applies_to_the_element
+  ✓ text::test_one_character_argument::a_one_character_argument_is_a_text
+  ✓ text::test_one_character_argument::ord_of_a_one_character_text_is_its_code_point
   ✓ text::test_print_all_characters::print_all_characters_prints_each
   ✓ text::test_print_arguments::print_joins_its_arguments_with_a_space
   ✓ text::test_print_arguments::print_of_a_braceless_call_gives_nothing
@@ -2280,6 +2286,7 @@ PASSED:
   ✓ text::test_text_bytes::read_loads_a_file_as_bytes
   ✓ text::test_text_bytes::text_plus_number_stays_a_type_error
   ✓ text::test_text_casts::a_double_quoted_text_as_float_is_loud
+  ✓ text::test_text_casts::a_numeric_text_as_float_in_a_float_variable
   ✓ text::test_text_casts::a_single_quoted_codepoint_still_converts
   ✓ text::test_text_casts::an_int_list_variable_as_string_is_its_text
   ✓ text::test_text_concat::concatenation_takes_results_of_functions_and_library_words
@@ -2830,6 +2837,9 @@ PASSED:
   ✓ web::test_html_render::tags_attributes_and_text
   ✓ web::test_html_render::the_page_gets_the_html_of_markup
   ✓ web::test_html_render::void_elements_and_attribute_lists
+  ✓ web::test_i18n::a_message_takes_its_values_and_plural_form
+  ✓ web::test_i18n::a_missing_translation_comes_from_the_first_language
+  ✓ web::test_i18n::plural_categories_follow_cldr
   ✓ web::test_keyed_lists::a_key_names_the_element_of_an_item
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
@@ -2849,7 +2859,11 @@ PASSED:
   ✓ web::test_rendering_itself::a_program_with_markup_exports_its_renderer
   ✓ web::test_rendering_itself::only_a_program_with_markup_renders_itself
   ✓ web::test_rendering_itself::the_renderer_inside_the_module_gives_the_html
+  ✓ web::test_route_modules::a_dev_site_and_a_site_without_routes_ship_one_module
+  ✓ web::test_route_modules::each_route_comes_in_a_module_of_its_own
   ✓ web::test_routes::a_layout_shows_the_route_at_its_outlet
+  ✓ web::test_routes::a_typed_route_parameter_computes_with_its_type
+  ✓ web::test_routes::nested_routes_show_inside_their_layout
   ✓ web::test_routes::the_route_index_names_the_route_the_path_picks
   ✓ web::test_routes::the_route_matching_the_path_is_shown
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
@@ -2895,6 +2909,8 @@ PASSED:
   ✓ web::test_web_server::a_served_page_s_events_draw_no_warning
   ✓ web::test_web_server::a_server_function_is_called_over_http
   ✓ web::test_web_server::serve_answers_routes
+  ✓ web::test_webgpu::a_compute_shader_runs_over_the_numbers
+  ✓ web::test_webgpu::a_shader_that_does_not_compile_says_where
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
   ✓ welcoming::test_braceless_call_argument::an_operator_in_a_braceless_argument_warns_with_both_readings
@@ -3089,6 +3105,11 @@ PASSED:
   ✓ welcoming::test_left_arrow::a_spaced_less_than_compares
   ✓ welcoming::test_let_const_changes::a_constant_assigned_its_own_value_again
   ✓ welcoming::test_let_const_changes::a_let_variable_changes
+  ✓ welcoming::test_list_phrases::a_chain_of_phrases
+  ✓ welcoming::test_list_phrases::a_method_of_a_parenthesized_filter
+  ✓ welcoming::test_list_phrases::keep_only_a_property
+  ✓ welcoming::test_list_phrases::sort_by_a_key
+  ✓ welcoming::test_list_phrases::take_first_n
   ✓ welcoming::test_lone_words::test_a_lone_word_is_a_symbol
   ✓ welcoming::test_lone_words::test_a_word_applied_to_an_argument_is_an_error
   ✓ welcoming::test_lone_words::test_a_word_close_to_a_name_warns
@@ -3230,4 +3251,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3225 passed, 0 failed, 3225 total tested
+19 ignored, 3246 passed, 0 failed, 3246 total tested

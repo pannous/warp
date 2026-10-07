@@ -273,9 +273,18 @@ Each step is useful on its own and is what the next ones stand on.
   its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
   a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the
   std module's name is a runtime text; a custom section naming the std modules a program uses would refine it).
-- Next: lazy loading per route, agreed with warp-89 (web-router): routes lower to functions
-  page·route·<N> with the table exported as page·routes; the splitter moves a route's function and what only it reaches
-  into app·<N>.wasm, which site.js loads on the first navigation there.
+- Lazy loading per route (2026-10-07, src/route_split.rs, tests/web/test_route_modules.rs, browser probe
+  probes/lazy_routes/check_in_browser.sh): `warp build --site` moves each route's function page·route·N and the
+  functions only it reaches into app-route-N.wasm with binaryen's `wasm-split --multi-split` (features named one by one,
+  src/binaryen.rs: --all-features would emit exact imports no browser takes). app.wasm keeps a table slot and a
+  placeholder import (`placeholder.app-route-N`) per moved function. site.js instantiates app.wasm (host.js
+  instantiateProgram), loads the module of the route the path picks (host-routes.js loadRouteModule: page·route_index,
+  instantiated with app.wasm's exports as `primary`), then runs main (runMain); each navigation loads the next route's
+  module once. Without wasm-split on PATH the site ships one module with a note; a dev site never splits.
+  Limits: functions the module exports (every user function, the runtime) stay in app.wasm, so a route's module holds
+  its body (markup, its text constants' code), not the helpers it calls; data segments stay too. Next: let user
+  functions only one route reaches move as well (wasm-split keeps their exports as thunks), once nothing on the host
+  calls them before the route loads.
 
 ## web-apis: animation frames (card drawing-frames, first piece of web-apis)
 - In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`
@@ -298,6 +307,20 @@ Each step is useful on its own and is what the next ones stand on.
   compiled import (tests/web/test_web_apis.rs): a test run shows no notification.
 - Next pieces: clipboard write (the word waits for the user: `copy` already means clone; question at the Interviewer),
   WebSocket (card web-websocket), frames and pointer in built sites (site.js, after warp-89's timers).
+
+## web-apis: WebGPU (2026-10-07, warp-d2; host parts agreed with warp-34)
+- `gpu_compute(shader, numbers, workgroups)` (host word, warp-runtime host_words.rs GPU_COMPUTE): a WGSL compute
+  shader whose entry point `main` reads and writes the numbers as `array<f32>` at @group(0) @binding(0), dispatched
+  over `workgroups` workgroups; the value is the list of floats it left (f32: WGSL has no f64). Example:
+  probes/webgpu/double.wasp; tests/web/test_webgpu.rs (browser suite: real GPU, skips loudly without an adapter).
+- Browser: host part web/playground/host-gpu.js (site.rs HOST_PARTS, needs host-tasks.js). WebGPU only answers
+  asynchronously, so a task Worker (task-worker.js `data.gpu`) asks for the device once, runs the job and writes
+  {values} or {error} with writeShared; the program's worker blocks in host-tasks.js readShared (shared by tasks,
+  fetches and the GPU). A shader that does not compile fails loudly with its line:column. Without task Workers (a page
+  that is not cross-origin isolated, e.g. a built site) it is a loud error.
+- Natively a loud error ("gpu_compute needs WebGPU"): wgpu would be a dependency of its own (open question, card
+  simd-map). Not a sample yet: samples run natively in tests/programs/test_playground_samples.rs.
+- Next: more buffers and uniforms (a map of named arrays), typed results (ints as array<i32>), render to a canvas.
 
 ## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
 - No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`
@@ -334,5 +357,8 @@ Each step is useful on its own and is what the next ones stand on.
   placeholder alone gets its own warning; hidden/submit/button/reset/image inputs need none); button or a with no text
   and no aria-label/title; a without href; a heading skipping a level (h1 → h3); an id used twice; html without lang.
   Each points at the element and names a fix; `use strict` / `--strict` make them errors like every warning.
-- Not here: focus on route change and live regions for async content (warp-89, web-router / web-async); translations
-  as data (i18n) later. Markup built at run time (strings, computed tags) is not checked.
+- Translations as data: `use i18n`, translate(messages, language, key, values) with CLDR plural forms (notes/i18n.md).
+- Focus on route change (card web-i18n): after a link or the back button shows another route, host-routes.js
+  focusRoute moves the focus to the route's main heading (`main h1`, else `h1`), else `main`, else the page's root, made
+  focusable with tabindex -1, so a screen reader reads the new page (probes/lazy_routes/check_in_browser.sh).
+- Not here: live regions for async content (web-async). Markup built at run time (strings, computed tags) is not checked.

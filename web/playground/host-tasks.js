@@ -267,9 +267,7 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 function finishedTask(run, hooks, id) {
 	const task = run.tasks.get(id);
 	if (!task.worker) return queuedSignals(run, task);
-	const header = new Int32Array(task.shared, 0, 2);
-	Atomics.wait(header, 0, 0);
-	let record = JSON.parse(decode(new Uint8Array(task.shared, TASK_HEADER, header[1]).slice()));
+	let record = readShared(task.shared, true);
 	if (record.output) hooks.print(record.output, 1);
 	taskPool.push(task.worker); // free for the next task
 	if (record.value?.kind === KIND_INT && record.ints) record.value = BigInt(record.value.data.int);
@@ -407,8 +405,8 @@ function taskTree(value) {
 // `users := fetch url` (src/fetches.rs, src/lowering/fetch_signals.rs): fetch_start fetches without waiting. A Worker
 // of the task pool fetches into shared memory, so a running main sees the reply at its check points (sleep, loop
 // starts: deliverFetches runs on·fetch·<id> there, as natively); else, and for a reply that comes after main returned,
-// the page runs the handler (worker.js hooks.arrived). A fetch started anew drops the reply of the one before; a run
-// that ended drops all.
+// the page runs the handler (worker.js hooks.arrived). A fetch started anew drops the reply of the one before, going
+// to another page (navigate) the pending ones, a run that ended all.
 const FETCH_HANDLER_PREFIX = "on·fetch·";
 function startFetch(holder, hooks, id, url) {
 	if (!hooks.arrived && taskPool.length === 0) return holder.warnings.push(`fetch ${url}: replies arriving later are not handled here`);
@@ -438,6 +436,13 @@ function startFetch(holder, hooks, id, url) {
 	worker.postMessage({ fetch: new URL(url, self.location.href).href, shared: started.shared });
 }
 
+// the page went to another path (card fetch-cancel): a reply still pending runs no handler; the ones in stay the values
+function dropPendingFetches(holder) {
+	for (const [id, started] of holder.fetches ?? []) {
+		if (!started.reply) holder.fetches.delete(id);
+	}
+}
+
 // {body} or {error} of a URL: the HTTP status of a failed request, or why it failed
 function fetchReplyOf(url) {
 	return fetch(url).then(async response => response.ok ? { body: await response.text() } : { error: `HTTP status ${response.status}` }, failure => ({ error: failure.message }));
@@ -454,11 +459,20 @@ function writeShared(shared, record) {
 	Atomics.notify(header, 0);
 }
 
+// the record a task Worker wrote into a shared buffer (writeShared): waited for when `wait`, else undefined while none is
+// there yet
+function readShared(shared, wait = false) {
+	const header = new Int32Array(shared, 0, 2);
+	if (wait) Atomics.wait(header, 0, 0);
+	if (Atomics.load(header, 0) === 0) return undefined;
+	return JSON.parse(decode(new Uint8Array(shared, TASK_HEADER, header[1]).slice()));
+}
+
 // the reply a task Worker wrote into the fetch's shared buffer, once: undefined while none is there or it was taken
 function sharedFetchReply(started) {
-	const header = new Int32Array(started.shared, 0, 2);
-	if (started.reply || Atomics.load(header, 0) === 0) return undefined;
-	const { body, error } = JSON.parse(decode(new Uint8Array(started.shared, TASK_HEADER, header[1]).slice()));
+	const answer = started.reply ? undefined : readShared(started.shared);
+	if (!answer) return undefined;
+	const { body, error } = answer;
 	return error ? started.failed(error) : { body };
 }
 
@@ -633,6 +647,7 @@ addHostPart({
 		return unread;
 	},
 	ended: holder => endChannels(holder.run),
+	navigated: dropPendingFetches,
 	stopped: holder => {
 		holder.channels?.forEach(({ channel }) => channel.close());
 		holder.sockets?.forEach(({ socket }) => socket.close());
