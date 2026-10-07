@@ -331,8 +331,8 @@ fn broadcasting_call<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separ
 	(is_call && functions.contains(name)).then_some((name.as_str(), argument))
 }
 
-/// Variable → whether every value assigned to it is a list literal that is no object, or a broadcast over the variable
-/// itself (`ps = moved ps`)
+/// Variable → whether every value assigned to it is a list literal that is no object; a broadcast over the variable itself
+/// (`ps = moved ps`) keeps what it is, so it needs a list assigned elsewhere (`up(x) := { x = upper x }` maps no text)
 fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &mut HashMap<String, bool>) {
 	// `xs = []` (which parses as ø) is a list once the program appends to xs: `xs.add(i)`, `xs = xs + [i]`
 	let mut appended: HashSet<String> = HashSet::new();
@@ -356,19 +356,26 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 	node.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
 			if let Node::Symbol(name) = target.drop_meta() {
+				if is_broadcast_over(value, name, functions) {
+					return;
+				}
 				let is_list = match value.drop_meta() {
 					Node::List(items, Bracket::Square, _) => !items.iter().any(is_pair),
 					Node::Empty => appended.contains(name),
 					// `xs = xs + [i]`
 					Node::Key(left, Op::Add, right) => matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)),
-					Node::List(items, bracket, separator) => broadcasting_call(items, bracket, separator, functions)
-						.is_some_and(|(_, argument)| matches!(argument.drop_meta(), Node::Symbol(same) if same == name)),
 					_ => false,
 				};
 				*assigned.entry(name.clone()).or_insert(true) &= is_list;
 			}
 		}
 	});
+}
+
+/// `moved ps`, `moved(ps)` of a broadcasting function
+fn is_broadcast_over(value: &Node, variable: &str, functions: &HashSet<String>) -> bool {
+	let Node::List(items, bracket, separator) = value.drop_meta() else { return false };
+	broadcasting_call(items, bracket, separator, functions).is_some_and(|(_, argument)| matches!(argument.drop_meta(), Node::Symbol(same) if same == variable))
 }
 
 fn is_pair(node: &Node) -> bool {
