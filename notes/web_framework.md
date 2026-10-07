@@ -150,6 +150,18 @@ Each step is useful on its own and is what the next ones stand on.
   used throughout (Node::serialize drops quotes in places). A headless page compiles for a page (pipeline::for_a_page),
   so its page events draw no warning.
 
+## Step 15 (web-transitions), what is done and what is left
+- `li{ transition: fade 200ms }` (lowering/transitions.rs, right after markup_tags) is the attribute
+  `data-wasp-transition: "fade 200ms"`: its words are data (not variables), durations normalized to ms, a text taken as
+  written; the words end where the children begin. In `style: {…}` transition stays the CSS property.
+- The page (markup.js morphChildren, Web Animations API, no CSS): an element with a transition animates in when
+  inserted and out before removal (marked data-wasp-leaving, skipped by matching, removed when done; a keyed item gone
+  from its list leaves where it stands); a keyed one glides to its new place (FLIP). Kinds fade, scale, slide; default
+  fade 200ms ease; any other word is the easing. Nothing animates on the first render or with prefers-reduced-motion.
+  Tour example transitions (`animated` check of test_in_browser.py); probes/transitions/leave_check.py.
+- Left: separate enter / leave kinds (`enter: slide leave: fade`), custom keyframes as data, `0.3s` (card
+  fractional-durations), leaving items still take their space until removed (no absolute positioning while leaving).
+
 ## Built sites (card web-ssr, 2026-10-07; split agreed with warp-cd, renderer decided by warp-96)
 - `warp build --site app.wasp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
   host.js, markup.js, site.js, carried in the warp binary (src/site.rs include_str!, one source with the playground).
