@@ -199,6 +199,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 73] = [
 	crate::soft_keywords::lower,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
 	crate::late_binding::split_global_assignments,
+	// `xs.keep only positive` is `xs where it > 0`, before lower_where reads it (list_phrases.rs)
+	crate::list_phrases::lower,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
 	crate::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
