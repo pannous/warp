@@ -15,6 +15,7 @@ use crate::node::Node::*;
 use crate::type_kinds::Kind;
 
 mod serialization;
+pub use serialization::{NO, YES};
 mod json_xml;
 mod indexing;
 mod comparison;

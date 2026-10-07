@@ -421,7 +421,7 @@ impl WasmGcEmitter {
 		let map_texts = [self.allocate_string("{"), self.allocate_string("}"), self.allocate_string(":")];
 		let no_text = self.allocate_string("");
 		let empty_text = self.allocate_string(EMPTY_TEXT);
-		let bool_texts = [self.allocate_string("false"), self.allocate_string("true")];
+		let bool_texts = [self.allocate_string(crate::node::NO), self.allocate_string(crate::node::YES)];
 		let i64_box = self.type_manager.i64_box_type;
 		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
