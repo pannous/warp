@@ -35,7 +35,8 @@ const SCOPE_WORDS: [(&str, Scope); 3] = [("folder", Scope::Folder), ("package", 
 /// Folders a package or project scope never looks into, besides hidden ones and nested repositories
 const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
 const PROJECT_MARKER: &str = ".git";
-const DECLARATION_KEYWORDS: [&str; 5] = ["use", "import", "let", "var", "global"];
+/// `stored x = v` too: a used module's persisted signal is the program's (card web-stores)
+const DECLARATION_KEYWORDS: [&str; 6] = ["use", "import", "let", "var", "global", crate::stored_values::STORED_WORD];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
 	DECLARATION_KEYWORDS.contains(&keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
