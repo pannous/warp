@@ -525,11 +525,22 @@ fn paint(mut caller: Caller<'_, HostState>, pixels: Option<wasmtime::Rooted<wasm
 	let failure = |message: String| wasmtime::Error::new(crate::tasks::TaskFailure(message));
 	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("paint: the module exports no memory".into())) };
 	let pixels = crate::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory);
-	let ink: Vec<bool> = match pixels.drop_meta() {
-		crate::node::Node::List(items, _, _) => items.iter().map(|pixel| !matches!(pixel.drop_meta(), crate::node::Node::False | crate::node::Node::Empty) && pixel.drop_meta() != &crate::node::Node::int(0)).collect(),
+	let values: Vec<u64> = match pixels.drop_meta() {
+		crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
 		other => return Err(failure(format!("paint needs a list of pixels, got {}", other.serialize()))),
 	};
-	crate::paint::paint(&ink, width.max(0) as usize, height.max(0) as usize).map(|_| ()).map_err(failure)
+	crate::paint::paint(&values, width.max(0) as usize, height.max(0) as usize).map(|_| ()).map_err(failure)
+}
+
+/// A pixel as paint reads it: 0 for false, ø and 0, a number as it is (a color 0xAARRGGBB), any other value 1 (ink)
+#[cfg(feature = "native")]
+fn pixel_value(pixel: &crate::node::Node) -> u64 {
+	use crate::node::Node;
+	match pixel.drop_meta() {
+		Node::False | Node::Empty => 0,
+		Node::Number(number) => f64::from(number.clone()).abs() as u64,
+		_ => 1,
+	}
 }
 
 /// The host side of run_block: the block and the values it sees come in as Nodes, the block's value goes back as one

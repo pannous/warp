@@ -251,6 +251,10 @@ impl WasmGcEmitter {
 					}
 				};
 			}
+			// `xs#i = 0.5`: the element's value after the assignment
+			Node::Key(left, Op::Assign, right) if matches!(left.drop_meta(), Node::Key(_, Op::Hash, _)) => {
+				self.emit_index_assignment_read_back(func, left, right, Self::emit_float_value);
+			}
 			// Variable definition/assignment: x:=42 or x=42
 			Node::Key(left, Op::Define | Op::Assign, right) => {
 				if let Node::Symbol(name) = left.drop_meta() {

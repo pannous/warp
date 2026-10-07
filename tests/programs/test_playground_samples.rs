@@ -7,7 +7,8 @@ use warp::Node;
 
 const EXCLUDED_LIST: &str = "web/playground/excluded_samples.txt";
 const SAMPLES: &str = "samples";
-const PAINT_CALL: &str = "paint(";
+/// paint directly or through the draw module (std/draw.wasp show)
+const PAINTING: [&str; 2] = ["paint(", "use draw"];
 
 /// The names excluded_samples.txt lists: the first word of each line that is no comment
 fn excluded_samples() -> Vec<String> {
@@ -23,7 +24,7 @@ fn sample_path(name: &str) -> String {
 
 /// A sample that paints needs the page's canvas, which the browser suite's worker has not: natively it writes a PNG
 fn runs_here(name: &str) -> bool {
-	cfg!(feature = "native") || !fs::read_to_string(sample_path(name)).is_ok_and(|source| source.contains(PAINT_CALL))
+	cfg!(feature = "native") || !fs::read_to_string(sample_path(name)).is_ok_and(|source| PAINTING.iter().any(|word| source.contains(word)))
 }
 
 #[test]

@@ -1020,9 +1020,13 @@ impl WasmGcEmitter {
 		func.instruction(&I::I32Or);
 	}
 
-	fn emit_forward_arguments(func: &mut Function, callee: u32) {
+	/// callee(node, index, value) with the caller's three arguments, the value through `convert` when given
+	fn emit_forward_arguments(&mut self, func: &mut Function, callee: u32, convert: Option<&'static str>) {
 		for local in 0..3 {
 			func.instruction(&I::LocalGet(local));
+		}
+		if let Some(convert) = convert {
+			self.call(func, convert);
 		}
 		func.instruction(&I::Call(callee));
 	}
@@ -1050,6 +1054,17 @@ impl WasmGcEmitter {
 		if self.emit_typed_element_assignment(func, target, index, value) {
 			return;
 		}
+		// a value that is no exact Int (a float, a text, a list) is stored as its Node and leaves 0, as an entry
+		// assignment of a non-number does
+		if !self.is_exact_int_element(target, value) {
+			self.emit_node_instructions(func, target);
+			self.emit_numeric_value(func, index);
+			self.emit_node_instructions(func, value);
+			self.emit_call(func, NODE_WITH_NODE_AT);
+			self.emit_store_updated(func, target);
+			func.instruction(&I::I64Const(0));
+			return;
+		}
 		let assigned = self.scratch(2);
 		self.emit_node_instructions(func, target);
 		self.emit_numeric_value(func, index);
@@ -1058,6 +1073,24 @@ impl WasmGcEmitter {
 		self.emit_call(func, "node_with_at");
 		self.emit_store_updated(func, target);
 		func.instruction(&I::LocalGet(assigned));
+	}
+
+	/// An element value node_with_at stores as given: an Int, or a character in anything but a list (a text's element)
+	pub(super) fn is_exact_int_element(&self, target: &Node, value: &Node) -> bool {
+		match self.get_type(value) {
+			Kind::Int => true,
+			Kind::Codepoint => self.get_type(target) != Kind::List,
+			_ => false,
+		}
+	}
+
+	/// `left = value` with `left` an element `target#index`, valued as `read` emits it: the element read back after the
+	/// assignment, so a float or text keeps its value (emit_index_assignment leaves an Int)
+	pub(super) fn emit_index_assignment_read_back(&mut self, func: &mut Function, left: &Node, value: &Node, read: fn(&mut Self, &mut Function, &Node)) {
+		let Node::Key(target, crate::operators::Op::Hash, index) = left.drop_meta() else { unreachable!("an element target") };
+		self.emit_index_assignment(func, target, index, value);
+		func.instruction(&I::Drop);
+		read(self, func, left);
 	}
 
 	/// A variable target (local or declared global) gets the updated copy on the stack, any other target drops it
@@ -1288,10 +1321,10 @@ impl WasmGcEmitter {
 		let string_type = self.type_manager.string_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 
-		// list_with_at(list, index, value): copies the cells up to index, shares the rest; iterative (the cells before
+		// list_with_at(list, index, value node): copies the cells up to index, shares the rest; iterative (the cells before
 		// index into an array, rebuilt backwards), so a deep index never exhausts the call stack
 		let list_with_at = next_index(self);
-		let params = vec![node_ref_nullable, ValType::I64, ValType::I64];
+		let params = vec![node_ref_nullable, ValType::I64, node_ref];
 		let node_array = self.type_manager.node_array_type;
 		let cells_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(node_array) });
 		let locals = vec![node_ref_nullable, ValType::I64, cells_ref, ValType::I32, node_ref_nullable];
@@ -1316,7 +1349,6 @@ impl WasmGcEmitter {
 			// it, with the value
 			s.emit_field(f, cell, 0);
 			Self::emit_list(f, &[I::LocalGet(value)]);
-			s.call(f, "new_int");
 			s.emit_field(f, cell, 2);
 			Self::emit_list(f, &[I::StructNew(node_type), I::LocalSet(result)]);
 			// the cells before it, in order
@@ -1405,11 +1437,22 @@ impl WasmGcEmitter {
 		self.runtime_function("node_with_at", params, vec![node_ref], vec![], |s, f| {
 			s.emit_is_text(f);
 			f.instruction(&I::If(BlockType::Result(node_ref)));
-			Self::emit_forward_arguments(f, text_with_char_at);
+			s.emit_forward_arguments(f, text_with_char_at, None);
 			f.instruction(&I::Else);
-			Self::emit_forward_arguments(f, list_with_at);
+			s.emit_forward_arguments(f, list_with_at, Some("new_int"));
 			f.instruction(&I::End);
 		});
+		// node_with_node_at(node, index, value node): as node_with_at, with any value in a list (a float stays a float)
+		if self.should_emit_function(NODE_WITH_NODE_AT) {
+			self.runtime_function(NODE_WITH_NODE_AT, vec![node_ref, ValType::I64, node_ref], vec![node_ref], vec![], |s, f| {
+				s.emit_is_text(f);
+				f.instruction(&I::If(BlockType::Result(node_ref)));
+				s.emit_forward_arguments(f, text_with_char_at, Some("get_int_value"));
+				f.instruction(&I::Else);
+				s.emit_forward_arguments(f, list_with_at, None);
+				f.instruction(&I::End);
+			});
+		}
 	}
 }
 
@@ -1428,6 +1471,8 @@ pub const MAP_KEY_NAME: &str = "map_key_name";
 /// node_at_key(xs, key) and node_with_key(xs, key, value): `xs[key]` read and set with a key known only at runtime
 pub const NODE_AT_KEY: &str = "node_at_key";
 pub const NODE_WITH_KEY: &str = "node_with_key";
+/// node_with_node_at(node, index, value): the copy with a Node value at index (node_with_at takes an Int)
+pub const NODE_WITH_NODE_AT: &str = "node_with_node_at";
 const IS_MAP: &str = "is_map";
 const MAP_PART: &str = "map_part";
 const MAP_COLUMN: &str = "map_column";
@@ -1745,8 +1790,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::If(BlockType::Result(node_ref)), I::LocalGet(0)]);
 				one_based(s, f);
 				f.instruction(&I::LocalGet(2));
-				s.call(f, "get_int_value");
-				s.call(f, "node_with_at");
+				s.call(f, NODE_WITH_NODE_AT);
 				Self::emit_list(f, &[I::Else, I::LocalGet(0), I::LocalGet(1), I::LocalGet(2)]);
 				s.call(f, crate::library_words::FIELD_WITH);
 				f.instruction(&I::End);

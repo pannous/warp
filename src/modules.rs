@@ -550,7 +550,7 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 13] = [
+const STD_MODULES: [(&str, &str); 14] = [
 	("net", include_str!("../std/net.wasp")),
 	("collections", include_str!("../std/collections.wasp")),
 	("hash", include_str!("../std/hash.wasp")),
@@ -564,6 +564,7 @@ const STD_MODULES: [(&str, &str); 13] = [
 	("random", include_str!("../std/random.wasp")),
 	("map", include_str!("../std/map.wasp")),
 	("time", include_str!("../std/time.wasp")),
+	("draw", include_str!("../std/draw.wasp")),
 ];
 const STD_FOLDER: &str = "std";
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
@@ -906,6 +907,8 @@ fn declared_name(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
 		Node::Type { name, .. } => leftmost_symbol(name),
 		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
+		// `global x = 0`, as the parser reads it: `global: (x = 0)`
+		Node::Key(keyword, Op::Colon, declared) if matches!(keyword.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword)) => declared_name(declared),
 		Node::List(items, _, _) if items.len() >= 2 => leftmost_symbol(&items[1]),
 		_ => None,
 	}

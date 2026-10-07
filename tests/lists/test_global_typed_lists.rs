@@ -26,3 +26,24 @@ fn a_global_list_a_function_changes_stays_as_before() {
 	is!("global xs = []; push(v) := { xs.add(v) }; push(4); push(5); xs", ints(vec![4, 5]));
 	is!("global xs = [1, 2, 3]; f(i) := xs#i; f(2)", 2);
 }
+
+/// card global-comprehension: a global list of floats built by a comprehension, by appends or by index, changed by a
+/// function element by element, keeps its floats (was "text + int", "not an int", "cast failure")
+#[test]
+fn a_global_float_list_a_function_changes_keeps_its_floats() {
+	let changed_by_g = "def g() { global hb; hb[1] = hb[1] + 0.5 }; g(); hb[1] >= 0.5 and hb[1] < 1.5";
+	is!(&format!("hb = [random() for j in 0..4]; {changed_by_g}"), true);
+	is!(&format!("hb = []; for j in 0..4 {{ hb.push(random()) }}; {changed_by_g}"), true);
+	is!(&format!("hb = [0.0, 0.0, 0.0]; for j in 0..3 {{ hb[j] = random() }}; {changed_by_g}"), true);
+	is!("hb = [random() for j in 0..4]; def f() { t = hb[1]; t + 1 }; def g() { global hb; hb[1] = 0.25 }; g(); f()", 1.25);
+	is!("hb = [random() for j in 0..4]; def g() { global hb; hb[1] = 0.75 }; g()", 0.75);
+}
+
+/// an exact list given a float or a character by index holds it as it is
+#[test]
+fn an_element_of_another_type_widens_the_list() {
+	is!("xs = [0, 0]; xs[0] = random(); xs[0] < 1", true);
+	is!("xs = [0, 0]; xs[0] = random(); type(xs)", "list of float");
+	is!("xs = [1, 2]; xs[0] = 2.5; print(xs[0] = 2.5); string(xs)", "[2.5 2]");
+	is!("xs = [1, 2]; xs[0] = 'a'; string(xs)", r#"["a" 2]"#);
+}

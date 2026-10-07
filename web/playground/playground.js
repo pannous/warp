@@ -15,9 +15,11 @@ const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
 const PAGE_EVENT = /^on (click|key)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
-// the gray levels of paint: a nonzero pixel, a zero pixel
+// the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
+// (src/paint.rs shade, std/draw.wasp)
 const PAINT_INK = 29;
 const PAINT_PAPER = 250;
+const PAINT_COLOR_FROM = 2 ** 24;
 const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), scaled by a whole factor so pixels stay square
 
 const $ = id => document.getElementById(id);
@@ -230,14 +232,21 @@ function markWord(kind, line, column, message) {
 }
 
 // paint(pixels, width, height): one canvas per call, a pixel dark where its value is nonzero (true), light where 0
+// what a pixel value shows, as src/paint.rs shade: paper for 0, its color for a value with an alpha byte, else ink
+function paintShade(value) {
+	const number = Number(value);
+	if (!value) return [PAINT_PAPER, PAINT_PAPER, PAINT_PAPER];
+	if (number >= PAINT_COLOR_FROM) return [Math.floor(number / 65536) % 256, Math.floor(number / 256) % 256, number % 256];
+	return [PAINT_INK, PAINT_INK, PAINT_INK];
+}
+
 function showPaintings(paintings) {
 	$("paintings").replaceChildren(...paintings.map(({ pixels, width, height }) => {
 		const canvas = element("canvas", { width, height, className: "painting" });
 		canvas.style.width = `${width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(width, height, 1)))}px`;
 		const image = canvas.getContext("2d").createImageData(width, height);
 		for (let index = 0; index < width * height; index++) {
-			const shade = pixels[index] ? PAINT_INK : PAINT_PAPER;
-			image.data.set([shade, shade, shade, 255], index * 4);
+			image.data.set([...paintShade(pixels[index]), 255], index * 4);
 		}
 		canvas.getContext("2d").putImageData(image, 0, 0);
 		return canvas;

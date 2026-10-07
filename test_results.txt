@@ -134,6 +134,7 @@ PASSED:
   ✓ control::test_for_loop::test_for_with_colon_body
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
+  ✓ control::test_for_underscore::a_loop_over_underscore_runs
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
   ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
   ✓ control::test_go_blocks::a_function_starting_a_task_is_no_getter
@@ -1090,9 +1091,13 @@ PASSED:
   ✓ lists::test_float_array_writes::walking_a_typed_array_reads_every_item
   ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
   ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
+  ✓ lists::test_global_comprehension::a_function_writes_a_float_into_a_global_list
+  ✓ lists::test_global_comprehension::a_global_comprehension_list_takes_writes
+  ✓ lists::test_global_typed_lists::a_global_float_list_a_function_changes_keeps_its_floats
   ✓ lists::test_global_typed_lists::a_global_list_a_function_changes_stays_as_before
   ✓ lists::test_global_typed_lists::a_global_number_list_read_by_a_function_is_an_array
   ✓ lists::test_global_typed_lists::a_global_typed_list_reads_as_its_list
+  ✓ lists::test_global_typed_lists::an_element_of_another_type_widens_the_list
   ✓ lists::test_hash_range_slices::hash_slices_are_one_based
   ✓ lists::test_hash_range_warning::an_unparenthesized_hash_range_warns
   ✓ lists::test_hash_range_warning::parenthesized_forms_do_not_warn
@@ -1308,11 +1313,15 @@ PASSED:
   ✓ modules::test_std_list::chunk_window_median
   ✓ modules::test_std_list::use_list_brings_its_words
   ✓ modules::test_std_list::use_list_groups_partitions_and_picks_by
+  ✓ modules::test_std_list::use_list_zips_with_sums_by_rotates_interleaves_dedupes
   ✓ modules::test_std_map::a_one_entry_map_merges_too
   ✓ modules::test_std_map::use_map_brings_merge_and_map_values
   ✓ modules::test_std_map::use_map_inverts_picks_and_builds_from_pairs
+  ✓ modules::test_std_map::use_map_omits_and_filters_values
+  ✓ modules::test_std_math_text::comprehensions_in_module_and_program_ask_nothing
   ✓ modules::test_std_math_text::use_math_brings_libm_and_the_module
   ✓ modules::test_std_math_text::use_text_brings_its_words
+  ✓ modules::test_std_math_text::use_text_brings_title_slug_truncate
   ✓ modules::test_std_math_text::use_text_brings_words_lines_capitalize_center
   ✓ modules::test_std_math_text::use_text_formats_a_template
   ✓ modules::test_std_net::use_net_posts_a_text
@@ -1325,6 +1334,7 @@ PASSED:
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
   ✓ modules::test_std_time::date_arithmetic
   ✓ modules::test_std_time::dates_of_milliseconds
+  ✓ modules::test_std_time::format_duration_in_the_largest_units
   ✓ modules::test_std_time::today_is_a_date_after_2025
   ✓ modules::test_std_time::use_time_formats_dates_and_times
   ✓ modules::test_std_time::use_time_parses_dates
@@ -1966,6 +1976,9 @@ PASSED:
   ✓ programs::test_data_structure_fixes::test_data_key_read_as_a_variable
   ✓ programs::test_data_structure_fixes::test_list_comprehension
   ✓ programs::test_data_structure_fixes::test_named_tuple_fields
+  ✓ programs::test_draw::a_color_with_alpha_mixes_with_what_is_below
+  ✓ programs::test_draw::colors_are_numbers_with_an_alpha_byte
+  ✓ programs::test_draw::shapes_set_the_pixels_they_cover
   ✓ programs::test_json_parser_fixes::test_field_of_a_call_result
   ✓ programs::test_json_parser_fixes::test_mixed_returns_are_nodes
   ✓ programs::test_json_parser_fixes::test_text_of_a_run_time_value
@@ -1973,6 +1986,7 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
   ✓ programs::test_paint::paint_writes_a_png_natively
+  ✓ programs::test_paint::paint_writes_colors_as_a_truecolor_png
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
@@ -2452,6 +2466,7 @@ PASSED:
   ✓ types::test_traits::test_two_user_types_each_have_their_own_compare
   ✓ types::test_tuple_values::a_tuple_with_a_variable_is_assigned_whole
   ✓ types::test_tuple_values::tuples_compare_element_by_element
+  ✓ types::test_type_colon_block::a_type_colon_block_declares_its_fields
   ✓ types::test_type_name_definition_forms::test_define_operator_takes_the_same_slots_as_assign
   ✓ types::test_type_name_definition_forms::test_to_phrase_with_a_block_body
   ✓ types::test_type_name_definition_forms::test_wiki_forms
@@ -3010,4 +3025,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3005 passed, 0 failed, 3005 total tested
+19 ignored, 3020 passed, 0 failed, 3020 total tested
