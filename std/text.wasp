@@ -12,7 +12,7 @@ format(template, values) := {
 	result
 }
 // UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
-def to_utf8(t) {
+def to_utf8(t: text) {
 	out = []
 	for c in t {
 		n = ord(c)
