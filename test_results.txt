@@ -1711,6 +1711,7 @@ PASSED:
   ✓ numbers::test_unit_conversion::an_inexact_conversion_is_a_ratio
   ✓ numbers::test_unit_conversion::another_dimension_is_the_dimension_error
   ✓ numbers::test_unit_conversion::long_unit_names_name_the_target
+  ✓ numbers::test_unit_literals::a_long_unit_name_belongs_to_its_amount_in_a_condition
   ✓ numbers::test_unit_literals::a_unit_after_a_comparison_belongs_to_its_amount
   ✓ numbers::test_unit_literals::a_variable_named_like_a_unit_stays_a_variable
   ✓ numbers::test_unit_polish::test_as_converts_to_a_powered_unit
@@ -3349,4 +3350,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3344 passed, 0 failed, 3344 total tested
+19 ignored, 3345 passed, 0 failed, 3345 total tested
