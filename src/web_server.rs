@@ -92,10 +92,15 @@ pub fn serve(port: u16, routes: &[Route], mut answer: impl FnMut(&Route, Node) -
 	Ok(())
 }
 
+/// An HTTP body as a value: a JSON object or array parsed into its map or list, any other body the text
+pub fn value_of_body(body: String) -> Node {
+	serde_json::from_str::<serde_json::Value>(&body).ok().filter(|value| value.is_object() || value.is_array())
+		.map_or(Node::Text(body), |value| crate::foreign::node_of(&value))
+}
+
 /// The request as the route's `request`: {method, path, query, body}, a JSON body parsed into its value
 fn request_node(method: &str, path: &str, query: &str, body: String) -> Node {
-	let body = serde_json::from_str::<serde_json::Value>(&body).ok().filter(|value| value.is_object() || value.is_array())
-		.map_or(Node::Text(body), |value| crate::foreign::node_of(&value));
+	let body = value_of_body(body);
 	let query = query.split('&').filter(|pair| !pair.is_empty()).map(|pair| {
 		let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
 		entry(key, Node::Text(value.replace('+', " ")))
