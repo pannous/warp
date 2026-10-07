@@ -71,6 +71,14 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			values.insert(text_of(name)?, crate::foreign::json_of(value));
 			save_stored_values(&file, values).map(|_| Node::Empty).map_err(failure)
 		}
+		// `delete storage[k]`, `keys(storage)` (lowering/stored_values.rs)
+		("store", "remove", [name, file]) => {
+			let file = text_of(file)?;
+			let mut values = stored_values(&file).map_err(failure)?;
+			values.remove(&text_of(name)?);
+			save_stored_values(&file, values).map(|_| Node::Empty).map_err(failure)
+		}
+		("store", "names", [file]) => Ok(texts(stored_values(&text_of(file)?).map_err(failure)?.into_iter().map(|(name, _)| name))),
 		_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
 	}
 }

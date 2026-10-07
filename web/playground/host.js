@@ -36,6 +36,9 @@ const STD_ADAPTERS = {
 	store: {
 		load: (name, fallback) => name in storedValues ? storedValues[name] : fallback,
 		save: (name, value, file) => { storedValues[name] = value; self.keepStored?.(name, value, file); return null; },
+		// `delete storage[k]` (kept as undefined: markup.js keepValue drops it), `keys(storage)`
+		remove: (name, file) => { delete storedValues[name]; self.keepStored?.(name, undefined, file); return null; },
+		names: () => Object.keys(storedValues),
 	},
 	regex: {
 		matches: (subject, pattern) => regexOf(pattern).test(subject),

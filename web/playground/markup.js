@@ -137,7 +137,8 @@ function keptValues() {
 function keepValue(name, value, file) {
 	try {
 		const [storage, prefix] = keptStorage(file);
-		storage.setItem(prefix + name, JSON.stringify(value));
+		if (value === undefined) storage.removeItem(prefix + name);
+		else storage.setItem(prefix + name, JSON.stringify(value));
 	} catch (failure) {
 		console.error(`${name} could not be kept:`, failure);
 	}
