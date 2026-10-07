@@ -375,7 +375,8 @@ function runProgram(bytes, hooks) {
 	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, instance.exports, () => instance.exports.main()));
 	const events = pageEvents(instance.exports);
 	if ((events.length > 0 || holder.timers || holder.fetches) && outcome.result) hooks.listen?.(holder, events);
-	listeningRun = events.length > 0 && outcome.result ? holder : undefined;
+	// a run without page events (std/markup.wasp rendering the page's HTML, src/markup.rs) keeps the page's run
+	if (events.length > 0 && outcome.result) listeningRun = holder;
 	return outcome;
 }
 
