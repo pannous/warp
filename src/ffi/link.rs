@@ -579,7 +579,7 @@ fn create_ffi_wrapper(
     match sig_key {
         // void -> void
         "_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, _, _| {
+            link_native(linker, lib_name, func_name, func_type, move |_, _, _| {
                 let f: extern "C" fn() = unsafe { std::mem::transmute(func_ptr) };
                 f();
                 Ok(())
@@ -587,7 +587,7 @@ fn create_ffi_wrapper(
         }
         // void -> int (WindowShouldClose, GetMouseX, etc.)
         "_I" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
                 let f: extern "C" fn() -> i32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::I32(f());
                 Ok(())
@@ -595,7 +595,7 @@ fn create_ffi_wrapper(
         }
         // void -> bool
         "_B" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
                 let f: extern "C" fn() -> i32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::I32(if f() != 0 { 1 } else { 0 });
                 Ok(())
@@ -603,7 +603,7 @@ fn create_ffi_wrapper(
         }
         // void -> float
         "_F" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
                 let f: extern "C" fn() -> f32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::F32(f().to_bits());
                 Ok(())
@@ -611,7 +611,7 @@ fn create_ffi_wrapper(
         }
         // void -> double
         "_D" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
                 let f: extern "C" fn() -> f64 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::F64(f().to_bits());
                 Ok(())
@@ -619,7 +619,7 @@ fn create_ffi_wrapper(
         }
         // int -> void (SetTargetFPS, etc.)
         "I_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
                 let f: extern "C" fn(i32) = unsafe { std::mem::transmute(func_ptr) };
                 f(params[0].unwrap_i32());
                 Ok(())
@@ -627,7 +627,7 @@ fn create_ffi_wrapper(
         }
         // int -> int (IsKeyPressed, etc.)
         "I_I" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::I32(f(params[0].unwrap_i32()));
                 Ok(())
@@ -635,7 +635,7 @@ fn create_ffi_wrapper(
         }
         // int -> bool
         "I_B" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::I32(if f(params[0].unwrap_i32()) != 0 { 1 } else { 0 });
                 Ok(())
@@ -643,7 +643,7 @@ fn create_ffi_wrapper(
         }
         // int,int -> void
         "II_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
                 let f: extern "C" fn(i32, i32) = unsafe { std::mem::transmute(func_ptr) };
                 f(params[0].unwrap_i32(), params[1].unwrap_i32());
                 Ok(())
@@ -651,7 +651,7 @@ fn create_ffi_wrapper(
         }
         // int,int -> int
         "II_I" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(i32, i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::I32(f(params[0].unwrap_i32(), params[1].unwrap_i32()));
                 Ok(())
@@ -659,7 +659,7 @@ fn create_ffi_wrapper(
         }
         // int,int,ptr -> void (InitWindow with title)
         "IIP_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |mut caller, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
                 let f: extern "C" fn(i32, i32, *const u8) = unsafe { std::mem::transmute(func_ptr) };
                 let ptr = get_memory_ptr(&mut caller, params[2].unwrap_i32() as usize);
                 f(params[0].unwrap_i32(), params[1].unwrap_i32(), ptr);
@@ -668,7 +668,7 @@ fn create_ffi_wrapper(
         }
         // int,int,float,int -> void (DrawCircle: x, y, radius, color)
         "IIFI_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
                 let f: extern "C" fn(i32, i32, f32, i32) = unsafe { std::mem::transmute(func_ptr) };
                 f(
                     params[0].unwrap_i32(),
@@ -681,7 +681,7 @@ fn create_ffi_wrapper(
         }
         // int,int,int,int,int -> void (DrawRectangle: x, y, w, h, color)
         "IIIII_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
                 let f: extern "C" fn(i32, i32, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
                 f(
                     params[0].unwrap_i32(),
@@ -695,7 +695,7 @@ fn create_ffi_wrapper(
         }
         // ptr,int,int,int -> void (DrawText: text, x, y, fontSize, color)
         "PIII_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |mut caller, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
                 let f: extern "C" fn(*const u8, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
                 let ptr = get_memory_ptr(&mut caller, params[0].unwrap_i32() as usize);
                 f(ptr, params[1].unwrap_i32(), params[2].unwrap_i32(), params[3].unwrap_i32());
@@ -704,7 +704,7 @@ fn create_ffi_wrapper(
         }
         // ptr,int,int,int,int -> void (DrawText with color: text, x, y, fontSize, color)
         "PIIII_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |mut caller, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
                 let f: extern "C" fn(*const u8, i32, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
                 let ptr = get_memory_ptr(&mut caller, params[0].unwrap_i32() as usize);
                 f(ptr, params[1].unwrap_i32(), params[2].unwrap_i32(), params[3].unwrap_i32(), params[4].unwrap_i32());
@@ -713,7 +713,7 @@ fn create_ffi_wrapper(
         }
         // float -> float
         "F_F" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(f32) -> f32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::F32(f(params[0].unwrap_f32()).to_bits());
                 Ok(())
@@ -721,7 +721,7 @@ fn create_ffi_wrapper(
         }
         // double -> double
         "D_D" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64())).to_bits());
                 Ok(())
@@ -729,7 +729,7 @@ fn create_ffi_wrapper(
         }
         // double,double -> double
         "DD_D" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(f64, f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64()), warp_runtime::floats::canonical_nan(params[1].unwrap_f64())).to_bits());
                 Ok(())
@@ -784,6 +784,27 @@ pub fn link_module_libraries(
     Ok(())
 }
 
+/// Takes turns for calls into linked libraries: C libraries keep global state that is not thread-safe (SDL_Init and
+/// SDL_Quit crash when two runs of one process call them at once), so programs running on several threads queue here
+#[cfg(feature = "native")]
+static NATIVE_CALL_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Link a wrapper of a library function that holds the native call turn while it runs
+#[cfg(feature = "native")]
+fn link_native(
+    linker: &mut Linker<FfiState>,
+    lib_name: &str,
+    func_name: &str,
+    func_type: FuncType,
+    call: impl Fn(wasmtime::Caller<'_, FfiState>, &[Val], &mut [Val]) -> wasmtime::Result<()> + Send + Sync + 'static,
+) -> Result<()> {
+    linker.func_new(lib_name, func_name, func_type, move |caller, params, results| {
+        let _turn = NATIVE_CALL_TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        call(caller, params, results)
+    })?;
+    Ok(())
+}
+
 /// Generic FFI wrapper for uncommon signatures - uses dynamic argument handling
 #[cfg(feature = "native")]
 fn create_generic_ffi_wrapper(
@@ -797,7 +818,7 @@ fn create_generic_ffi_wrapper(
 ) -> Result<()> {
     let param_types = param_types.to_vec();
 
-    linker.func_new(lib_name, func_name, func_type, move |mut caller, params, results| {
+    link_native(linker, lib_name, func_name, func_type, move |mut caller, params, results| {
         let args = native_arguments(&mut caller, "", params, &param_types, &mut 0)?;
 
         let ret = unsafe { call_native_function(func_ptr, &args, ret_type) };
@@ -909,7 +930,7 @@ struct PointerCall {
 #[cfg(feature = "native")]
 fn create_pointer_wrapper(linker: &mut Linker<FfiState>, lib_name: &str, func_type: FuncType, call: PointerCall) -> Result<()> {
     let name = call.name.clone();
-    linker.func_new(lib_name, &name, func_type, move |mut caller, params, results| {
+    link_native(linker, lib_name, &name, func_type, move |mut caller, params, results| {
         let mut out_slot: usize = 0;
         let args = native_arguments(&mut caller, &call.name, params, &call.param_types, &mut out_slot)?;
         let returned = unsafe { call_native_function(call.func_ptr, &args, call.ret_type) };
