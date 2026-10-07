@@ -11,12 +11,14 @@ const FENCE_START: &str = "```wasp";
 const VALUE_MARK: &str = " => ";
 const FENCE_END: &str = "```";
 const PRINTED_FENCE: &str = "```printed\n";
+#[cfg(feature = "native")]
 const RESULT_PROMPT: &str = "» "; // the CLI's result line, after what the program printed
 const EXAMPLES_LINE: &str = "Examples: ";
 
 struct Snippet {
 	code: &'static str,
 	value: Option<&'static str>,
+	#[cfg_attr(not(feature = "native"), allow(dead_code))] // read by the native test only
 	printed: Option<&'static str>,
 }
 
