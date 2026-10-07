@@ -424,6 +424,16 @@ pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 	val_to_node(&result, &mut store, &instance)
 }
 
+/// Run main, then call the parameterless export `name` (a page's page·html, src/site.rs): its value
+pub fn read_export_after_main(bytes: &[u8], imports: Imports, name: &str) -> Result<Node> {
+	let (_, mut store, instance) = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_imports(linker, engine, module, imports))?;
+	let export = instance.get_func(&mut store, name).ok_or_else(|| anyhow!("the module exports no {name}"))?;
+	let mut results = vec![Val::AnyRef(None); export.ty(&store).results().len()];
+	let outcome = export.call(&mut store, &[], &mut results);
+	with_trap_detail(outcome, &mut store, &instance)?;
+	val_to_node(&results.first().copied().unwrap_or(Val::AnyRef(None)), &mut store, &instance)
+}
+
 pub use crate::wasm_emitter::{TRAP_DETAIL, TRAP_DETAIL_PREFIX};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context

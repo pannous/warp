@@ -1,6 +1,6 @@
 //! `warp build --site app.wasp` (card web-ssr, notes/web_framework.md "Built sites"): a directory a static web server
-//! serves as it is. index.html holds the HTML of the program's value as the program showed it at build time (server-side
-//! rendering), so the page reads without JavaScript; app.wasm is the program, which the loader (web/playground/site.js)
+//! serves as it is. index.html holds the HTML of what the program shows, rendered at build time by the program itself
+//! (its export page·html, lowering/page_html.rs, run natively after main), so the page reads without JavaScript; app.wasm is the program, which the loader (web/playground/site.js)
 //! runs in the page to hydrate it: the DOM stays, the handlers of its elements run, and what they change is shown anew.
 //! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary.
 
@@ -39,14 +39,16 @@ pub struct BuiltSite {
 
 /// The site of the program `code` in `directory`, titled `title`: the page, the module and the scripts
 pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, String> {
-	let (module, shown) = crate::pipeline::for_a_page(|| (crate::pipeline::compile(code), crate::pipeline::eval(code)));
-	let module = module.map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
-	if let Node::Error(failure) = shown.drop_meta() {
-		return Err(format!("the program failed at build time: {}", failure.serialize()));
-	}
+	let module = crate::pipeline::for_a_page(|| crate::pipeline::compile(code)).map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
+	let imports = crate::wasm_reader::Imports { host: module.needs_host, wasi: module.needs_wasi, ffi: module.needs_ffi };
+	let rendered = crate::wasm_reader::read_export_after_main(&module.bytes, imports, crate::page_html::PAGE_HTML)
+		.map_err(|failure| format!("the program failed at build time: {failure}"))?;
+	let Node::Text(html) = rendered.drop_meta() else {
+		return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, rendered.serialize()));
+	};
 	std::fs::create_dir_all(directory).map_err(|failure| format!("cannot make {}: {failure}", directory.display()))?;
 	let write = |name: &str, bytes: &[u8]| std::fs::write(directory.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"));
-	write(PAGE_FILE, page(title, &crate::html::to_html(&shown)).as_bytes())?;
+	write(PAGE_FILE, page(title, html).as_bytes())?;
 	write(MODULE_FILE, &module.bytes)?;
 	for (name, text) in SCRIPTS {
 		write(name, text.as_bytes())?;

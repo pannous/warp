@@ -128,19 +128,22 @@ Each step is useful on its own and is what the next ones stand on.
 ## Built sites (card web-ssr, 2026-10-07; split agreed with warp-cd, renderer decided by warp-96)
 - `warp build --site app.wasp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
   host.js, markup.js, site.js, carried in the warp binary (src/site.rs include_str!, one source with the playground).
-  index.html holds the program's value as HTML, rendered at build time (server-side rendering): the page reads
-  without JavaScript. Pages are compiled with the reflection getters the browser host needs (pipeline::for_a_page),
-  and their page event handlers draw no "a native run never raises it" warning.
+- One renderer, written in wasp (warp-96: "Wasp is wasm-first"): std/markup.wasp's to_html (`use markup`; not `html`,
+  which samples/html.wasp would shadow) mirrors src/html.rs (tests/web/test_html_module.rs keeps them alike). A program
+  compiled for a page (pipeline::for_a_page) exports page·html := to_html(page·value) (lowering/page_html.rs); its
+  page·value is event_signals' output binding, else the last line when that is an expression (no assignment,
+  definition, print, use). `warp build --site` runs main and page·html natively (wasm_reader::read_export_after_main)
+  for index.html, so the page reads without JavaScript; the page calls the same export after each handler. html.rs no
+  longer renders sites; it still renders for the CLI and the playground. Page builds also export the reflection getters
+  the browser host needs and draw no "a native run never raises it" warning for page events.
 - Hydration (web/playground/site.js): the loader runs app.wasm with host.js in the page; main runs once as it ran at
   build time, so the component instances count alike. The DOM stays; click and input on the root find their element's
-  handler (markup.js elementEvent), and after a handler the page morphs (markup.js morphChildren) the HTML the program
-  renders itself.
-- One renderer (warp-96: "Wasp is wasm-first"): the HTML of the live updates comes from the program, an export
-  page·html that the emitter builds, reusing how print renders Nodes inside wasm; no second renderer in JS, no
-  compiler shipped with the site. Once page·html exists, the build-time rendering runs that same export natively and
-  src/html.rs no longer renders sites. Until then a built page is static after load (site.js warns on the console).
-- Open: page·html (next step); timers and fetch replies in a built page (site.js has the hooks, no timer loop yet);
-  `serve` programs serving their own page.
+  handler (markup.js elementEvent), and after a handler (or a fetch reply) the page morphs (markup.js morphChildren) in
+  the HTML of page·html.
+- std/markup.wasp cannot tell a square list from a curly one at run time: a list value of an attribute whose items are
+  all pairs is inline CSS, any other list the joined attribute value (`class:["a" "b"]`).
+- Open: timers in a built page (site.js has no timer loop yet); `serve` programs serving their own page; switching the
+  playground and CLI to std/markup.wasp too, retiring src/html.rs.
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the

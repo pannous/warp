@@ -9,6 +9,8 @@ mod test_web_server;
 mod test_async_data; // the browser: a task Worker fetches into shared memory, read at the check points
 #[cfg(feature = "native")] // warp build --site writes files with the native compiler
 mod test_site;
+#[cfg(feature = "native")] // std/markup.wasp against src/html.rs, natively
+mod test_html_module;
 mod test_html_render;
 mod test_element_events;
 mod test_class_components;

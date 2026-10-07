@@ -15,8 +15,8 @@ fn a_site_holds_the_rendered_page_the_module_and_its_scripts() {
 	assert!(page.contains("<title>counter</title>") && page.contains(r#"<script src="site.js"></script>"#), "{page}");
 	let module = std::fs::read(directory.join("app.wasm")).unwrap();
 	let names = String::from_utf8_lossy(&module);
-	// the page's host reads values through the reflection getters and calls the button's handler
-	assert!(names.contains("reflect_data") && names.contains("on·click·1·node"));
+	// the page's host reads values through the reflection getters, calls the button's handler and renders the page anew
+	assert!(names.contains("reflect_data") && names.contains("on·click·1·node") && names.contains("page·html"));
 	std::fs::remove_dir_all(directory).unwrap();
 }
 
@@ -26,4 +26,14 @@ fn a_program_failing_at_build_time_builds_no_site() {
 	let failure = warp::site::build("div{ p{ 1 / undefined_name } }", "failing", &directory).err().expect("no site");
 	assert!(failure.contains("undefined_name"), "{failure}");
 	assert!(!directory.join("index.html").exists());
+}
+
+/// A page without handlers is static: its last line, rendered by the program at build time
+#[test]
+fn a_static_page_is_its_last_line_rendered() {
+	let directory = scratch_directory("static-site");
+	warp::site::build("title = \"Docs\"\narticle{ h1{ title } p{ \"1 < 2\" } }", "docs", &directory).expect("the site is built");
+	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
+	assert!(page.contains(r#"<div id="wasp-root"><article><h1>Docs</h1><p>1 &lt; 2</p></article></div>"#), "{page}");
+	std::fs::remove_dir_all(directory).unwrap();
 }
