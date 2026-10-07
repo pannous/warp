@@ -538,7 +538,7 @@ fn pixel_value(pixel: &crate::node::Node) -> u64 {
 	use crate::node::Node;
 	match pixel.drop_meta() {
 		Node::False | Node::Empty => 0,
-		Node::Number(number) => f64::from(number.clone()).abs() as u64,
+		Node::Number(number) => f64::from(*number).abs() as u64,
 		_ => 1,
 	}
 }
