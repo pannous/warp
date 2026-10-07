@@ -183,7 +183,7 @@ send {text: "hi"} to "chat"
 div{ h2{ "Alice" } p{ "30 years, likes:" } ul{ li{ "reading" } li{ "hiking" } } }` },
 	"element events": { value: 'div{button{data-wasp-click:"1" "+1"} button{data-wasp-click:"2" "reset"} p:"count: 0"}', code: `// a button with a click handler: click it
 count = 0
-div{ button{ on click { count += 1 } "+1" } button{ on click { count = 0 } "reset" } p{ "count: " + count } }` },
+div{ button{ "+1" on click { count += 1 } } button{ "reset" on click { count = 0 } } p{ "count: " + count } }` },
 	"fine updates": { value: 'div{button{data-wasp-click:"1" "toggle"} p{class:"open" "state"} ul:li:"toggled 0 times"}', clicks: ["toggle", "toggle", "toggle"], clicked: 'div{button{data-wasp-click:"1" "toggle"} p{class:"done" "state"} ul:li:"toggled 3 times"}', kept: true, code: `// after a click only what changed is redrawn
 done = false
 toggles = 0
