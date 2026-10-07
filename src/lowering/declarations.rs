@@ -640,7 +640,11 @@ impl Tasks<'_> {
 		};
 		let winner = format!("{RACE_PREFIX}{}", RACES.with(|races| races.replace(races.get() + 1)));
 		let winner_is = |index: usize| Node::Key(Box::new(Node::Symbol(winner.clone())), Op::Eq, Box::new(crate::node::int(index as i64)));
+		// `go 1+1` is computed right away, no task is started: it has ended (card await-hang)
 		let ended = |job: &Node| {
+			if !self.started.contains_key(&word(&job_of(job))) {
+				return Node::True;
+			}
 			let status = marker(crate::host::TASK_STATUS, vec![job_of(job)]);
 			let is = |code: i64| Node::Key(Box::new(status.clone()), Op::Eq, Box::new(crate::node::int(code)));
 			Node::Key(Box::new(is(crate::host::TASK_FINISHED)), Op::Or, Box::new(is(crate::host::TASK_FAILED)))

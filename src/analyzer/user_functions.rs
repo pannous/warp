@@ -445,7 +445,8 @@ pub(super) fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, 
 /// two calls traps (g-rT0c). Closures need the same (`t = "!"; shout = s => s + t`). Kinds are merged only where no
 /// declared global of that name exists.
 pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: HashMap<String, Local>) -> HashMap<String, Local> {
-	let mut outer = Scope::new();
+	// `xs = [w(), w()]` holds what w returns, as the emitter's capture globals do (card float-calls)
+	let mut outer = Scope::with_function_kinds(ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect());
 	collect_variables(program, &mut outer);
 	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	functions.sort_by(|a, b| a.name.cmp(&b.name));
