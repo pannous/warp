@@ -732,8 +732,9 @@ impl WaspParser {
 		// glued `Person{…}` is: the README's `Person { name: "Alice" … }` (card person-name)
 		let tagged = symbol.starts_with(|first: char| first.is_uppercase());
 		let declared = self.declared_types.contains(&symbol);
-		// inside a data literal any spaced `c { … }` is the child c{ … } (card spaced-child)
-		let spaced_child = self.in_data_literal && !declared && self.blanks_then('{');
+		// inside a data literal any spaced `c { … }` is the child c{ … } (card spaced-child), but in a for header
+		// `for t in todos { … }` it is the collection and the body (card markup-ul)
+		let spaced_child = self.in_data_literal && !self.in_for_header && !declared && self.blanks_then('{');
 		if spaced_child || ((declared || tagged) && self.block_after_blanks(declared)) {
 			while matches!(self.current_char(), ' ' | '\t') {
 				self.advance();

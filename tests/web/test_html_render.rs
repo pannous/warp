@@ -48,3 +48,12 @@ fn a_computed_child_next_to_an_attribute() {
 	assert_eq!(html_of("count = 3\np{ class: \"x\" \"c\" + count }"), "<p class=\"x\">c3</p>");
 	assert_eq!(html_of("count = 3\ndiv{ p{ style: { fontSize: 12 } \"c\" + count } }"), "<div><p style=\"font-size: 12px\">c3</p></div>");
 }
+
+// a for loop among an element's children gives its items as children, as [li{t} for t in todos] does (card markup-ul)
+#[test]
+fn a_for_loop_inside_markup() {
+	assert_eq!(html_of("todos = [\"a\", \"b\"]\nul{ for t in todos { li{ t } } }"), "<ul><li>a</li><li>b</li></ul>");
+	assert_eq!(html_of("todos = [\"a\", \"b\"]\ndiv{ p:\"y\" for t in todos { span{ t } } }"), "<div><p>y</p><span>a</span><span>b</span></div>");
+	assert_eq!(html_of("items = [\"a\"]\nul { for item in items { li: item } }"), "<ul><li>a</li></ul>");
+}
+

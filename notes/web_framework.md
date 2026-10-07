@@ -106,8 +106,10 @@ Each step is useful on its own and is what the next ones stand on.
   statements to run; analyzer/variables.rs: a statement group in a structure declares its locals).
 - `li{ key: todo.id … }` is the attribute data-wasp-key; playground.js morphChildren moves the shown element of that
   key into place instead of rewriting elements by position. Tour example "keyed list" (`keyed` check).
-- Not yet: `for t in ts { li{t} }` inside a block (the parser reads `ts { … }` as the tag ts; card markup-for),
-  transitions (web-transitions).
+- A for loop among an element's children, `ul{ for t in ts { li{t} } }`, is the comprehension `[li{t} for t in ts]`
+  (markup_tags.rs loop_as_comprehension; in a for header the parser no longer reads `ts { … }` as the child tag ts).
+  A spaced element statement `ul { … }` reads as the glued `ul{ … }` (card markup-ul).
+- Not yet: transitions (web-transitions).
 
 ## Step 6 (web-bind), what is done and what is left
 - `input{ bind: name }` is `input{ value: name on input { name = event.value } }` (element_events.rs); a checkbox or
