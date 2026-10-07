@@ -26,3 +26,4 @@ mod test_use_modules;
 mod test_versions;
 mod test_wasm_modules;
 mod test_std_aliases;
+mod test_std_named_program; // card cli-std
