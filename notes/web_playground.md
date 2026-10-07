@@ -10,6 +10,15 @@ events, timers, system values, channels, components, welcoming errors). Each ent
 its first code line a `//` caption. `web/playground/test_in_browser.py --examples [name…]` (after build.sh) shows each
 in the page and compares value and printed text; pages.yml runs it before deploying.
 
+## The language guide (guide.md, guide.js)
+The left pane of the page (cards "core feature", "doc-example"; P188 one page): web/playground/guide.md, chapters `## Title` from
+easy to advanced, one open at a time (anchor `#<title-in-kebab-case>`). A fence ```` ```wasp => <value> ```` is a snippet
+with a `try ▶` button (window.playground.runCode) and the value the page shows for it; an `Examples: a, "b c"; samples:
+x, y` line links tour examples and samples/ files, and choosing one of those shows a toolbar back-link "guide: <chapter>".
+tests/web/test_guide.rs checks every fence's value through warp::web::evaluate (the page's own report) and every linked
+example. Write snippets in canonical style (`^`, `\(name)`, `xs#1`, `if … then … else`): the page shows hints otherwise.
+Markup values show as wasp data there (`p{class:"note" "hello"}`), not as HTML like the CLI.
+
 ## Architecture
 - The compiler itself runs in the browser: `cargo rustc --lib --crate-type cdylib --target wasm32-unknown-unknown
   --no-default-features --release` (build.sh, 8 MB stack, wasm-opt -Oz → ~1.7 MB). Plain C ABI, no wasm-bindgen:

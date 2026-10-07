@@ -458,14 +458,19 @@ function runNow() {
 
 const exampleSource = name => EXAMPLES[name]?.code ?? SAMPLES[name];
 
+// puts the code in the editor and runs it once; resolves once its report is shown
+function runCode(source) {
+	editor.setValue(source);
+	clearTimeout(typingTimer); // the change event's run would run it twice
+	return runNow();
+}
+
 // shows the example or sample; resolves once its report is shown
 function chooseExample(name) {
 	const source = exampleSource(name);
 	if (source === undefined) return;
 	$("examples").value = name;
-	editor.setValue(source);
-	clearTimeout(typingTimer); // the change event's run would run it twice
-	return runNow();
+	return runCode(source);
 }
 
 function fillExamples() {
@@ -501,6 +506,6 @@ function initialize() {
 }
 
 // for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
+window.playground = { evaluate, applyFix, chooseExample, runCode, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
 
 initialize();

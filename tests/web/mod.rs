@@ -4,6 +4,7 @@ mod test_uniscript;
 mod test_web;
 mod test_markup_tags;
 mod test_web_playground;
+mod test_guide; // the language guide on the playground page
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_web_server;
 #[cfg(feature = "native")] // `warp dev` serves HTTP on a port
