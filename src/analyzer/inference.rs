@@ -103,10 +103,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(left, op, right) if op.is_arithmetic() => {
 			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), right)
 		}
-		// Assignment/definition: type comes from value
-		Node::Key(_left, Op::Define | Op::Assign, right) => {
-			infer_type(right, scope)
-		}
+		// Assignment/definition: type comes from value, ø as the Node a variable holding it is (`if c { f = [] }`)
+		Node::Key(_left, Op::Define | Op::Assign, right) => held_kind(right, || infer_type(right, scope)),
 		// Compound assignment: upgrade if either side is Float
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			let left_kind = infer_type(left, scope);
@@ -292,6 +290,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			if name == crate::library_words::FIELD_WITH {
 				// a copy of the object with one field set: a Node, whatever the object's kind is known as
 				return match infer_type(&items[1], scope) { kind if kind.is_ref() => kind, _ => Kind::Empty };
+			}
+			if name == REMOVED_VALUE_CALL {
+				// a map's value or a list: decided at runtime (removed_value), a Node
+				return Kind::Empty;
 			}
 			if name == crate::library_words::MAP_GET_OR {
 				// `m.get(k)` is worth what `m[k]` is: a value of the map

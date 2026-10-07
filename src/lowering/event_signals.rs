@@ -55,11 +55,11 @@ const NAME_JOINER: &str = "·";
 const FUNCTION_TEMPLATE: &str = "handler(event) := {}";
 const PARAMETERLESS_TEMPLATE: &str = "handler() := {}";
 const TEMPLATE_NAME: &str = "handler";
-const EVENT_WORD: &str = "event";
+pub(crate) const EVENT_WORD: &str = "event";
 /// The event as raised, kept while a handler that changes its `event` runs before the next one
 const RAISED_EVENT: &str = "raised_event";
 /// The events of the page that call their handlers from outside the program
-pub const PAGE_EVENTS: [&str; 2] = ["click", "key"];
+pub const PAGE_EVENTS: [&str; 3] = ["click", "key", "input"];
 /// `click·1`: the page event of one element's handler (element_events.rs), the page event and the element's number
 pub const ELEMENT_EVENT_JOINER: char = '·';
 
@@ -139,7 +139,7 @@ pub fn lower(program: Node) -> Node {
 	let statements: Vec<Node> = flags.iter().map(|(flag, initial)| assign(flag, initial.clone())).chain(statements).collect();
 	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
 	#[cfg(feature = "native")]
-	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| is_page_event(name) && !raised.contains(name)) {
+	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| is_page_event(name) && !raised.contains(name) && !crate::pipeline::is_for_a_page()) {
 		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
 		if let Err(error) = crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning)]) {
 			return error;

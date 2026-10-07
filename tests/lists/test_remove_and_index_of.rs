@@ -20,3 +20,13 @@ fn index_of_is_the_one_based_position() {
 fn a_stack_built_from_empty_pops() {
 	is!("rpn(tokens) := { st = []; for t in tokens { if t == \"+\" { b = st.pop(); a = st.pop(); st.add(a + b) } else { st.add(t as int) } }; st#1 }; rpn([\"3\" \"4\" \"+\"])", 7);
 }
+
+/// card list-remove: on a list variable `xs.remove(v)` takes out the first element equal to v and gives the list
+/// (tests/lists/test_lists.rs `pixel.remove(3)`); it silently changed nothing
+#[test]
+fn remove_takes_a_value_out_of_a_list_variable() {
+	is!("xs = [\"a\", \"b\", \"c\"]; xs.remove(\"a\"); count(xs)", 2);
+	is!("xs = [\"a\", \"b\", \"c\"]; xs.remove(\"a\"); xs#1", "b");
+	is!("xs = [1, 2, 3, 2]; xs.remove(2); xs", warp::ints(vec![1, 3, 2]));
+	is!("pixel = [1 2 3]; pixel.remove(3)", warp::ints(vec![1, 2]));
+}

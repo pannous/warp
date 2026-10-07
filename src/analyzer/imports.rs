@@ -108,6 +108,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if let Some(word) = crate::wasm_emitter::cells::CELL_WORDS.iter().find(|word| **word == fn_name) {
 					ctx.required_functions.insert(word);
 				}
+				if fn_name == REMOVED_VALUE_CALL {
+					ctx.required_functions.extend([crate::library_words::MAP_GET_OR, crate::library_words::MAP_WITHOUT]);
+				}
 				if fn_name == INSERT_AT_CALL || fn_name == INSERT_EITHER_CALL {
 					ctx.required_functions.insert(INSERT_AT_CALL);
 				}

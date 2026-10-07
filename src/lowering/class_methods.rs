@@ -105,7 +105,7 @@ pub fn lower(node: Node) -> Node {
 	let node = with_witness_methods(node);
 	let node = with_members(node);
 	let node = with_class_attributes(class_typed_declarations(node));
-	let node = destructurings(from_objects(node));
+	let node = rendered_components(destructurings(from_objects(node)));
 	let node = operator_calls(node);
 	let node = match with_mixins(node) {
 		Ok(node) => node,
@@ -230,6 +230,81 @@ fn with_json_classes(node: Node, classes: &Node) -> Node {
 			Node::List(vec![Node::Symbol(TO_JSON_OF_CLASSES_WORD.to_string()), value, classes.clone()], Bracket::Round, separator)
 		}
 		other => other.map_children(|child| with_json_classes(child, classes)),
+	}
+}
+
+/// A class component's method giving its markup (Lit, React classes); other frameworks' names for it, with a note:
+/// Backbone's and Mithril's `view`, Angular's `template`, Flutter's `build`
+const RENDER_WORD: &str = "render";
+const RENDER_ALIASES: [&str; 3] = ["view", "template", "build"];
+
+/// Class components (notes/web_framework.md step 4): an instance of a class with a render() method is its markup where
+/// markup is expected, a child of an element (`div{ Greeting("Ann") }`) or the program's value; anywhere else it stays
+/// an instance
+fn rendered_components(node: Node) -> Node {
+	let node = with_render_aliases(node);
+	let mut components = vec![];
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		if class_items(body).iter().filter_map(method_parts).any(|(method, _, _)| method == RENDER_WORD) {
+			components.push(name.drop_meta().name());
+		}
+	});
+	if components.is_empty() {
+		return node;
+	}
+	let node = with_rendered_children(node, &components);
+	match node {
+		Node::List(mut statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			if let Some(last) = statements.pop() {
+				statements.push(rendered(last, &components));
+			}
+			Node::List(statements, Bracket::None, separator)
+		}
+		single => rendered(single, &components),
+	}
+}
+
+/// `view() := …` in a class without its own render: `render() := …`
+fn with_render_aliases(node: Node) -> Node {
+	match node {
+		Node::Type { name, body } => {
+			let items = class_items(&body);
+			let methods: Vec<String> = items.iter().filter_map(method_parts).map(|(method, _, _)| method).collect();
+			let alias = RENDER_ALIASES.iter().find(|alias| methods.iter().any(|method| method == *alias));
+			match alias.filter(|_| !methods.iter().any(|method| method == RENDER_WORD)) {
+				Some(alias) => {
+					crate::diagnostic::note_alias(alias, RENDER_WORD);
+					let items = items.into_iter().map(|item| match method_parts(&item) {
+						Some((method, _, _)) if method == *alias => renamed(&item, RENDER_WORD),
+						_ => item,
+					}).collect();
+					Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
+				}
+				None => Node::Type { name, body },
+			}
+		}
+		other => other.map_children(with_render_aliases),
+	}
+}
+
+/// The children of each element rendered
+fn with_rendered_children(node: Node, components: &[String]) -> Node {
+	match node {
+		Node::Key(tag, op @ (Op::None | Op::Colon), children) if crate::html::is_element_tag(&tag.drop_meta().name()) && matches!(children.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			let Node::List(items, bracket, separator) = children.drop_meta().clone() else { unreachable!("guarded") };
+			let items = items.into_iter().map(|item| rendered(with_rendered_children(item, components), components)).collect();
+			Node::Key(tag, op, Box::new(Node::List(items, bracket, separator)))
+		}
+		other => other.map_children(|child| with_rendered_children(child, components)),
+	}
+}
+
+/// A construction of a component as `Greeting("Ann").render()`
+fn rendered(node: Node, components: &[String]) -> Node {
+	let is_construction = matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|class| components.contains(&class.drop_meta().name())));
+	match is_construction {
+		true => Node::Key(Box::new(node), Op::Dot, Box::new(Node::List(vec![Node::Symbol(RENDER_WORD.to_string())], Bracket::Round, Separator::None))),
+		false => node,
 	}
 }
 
@@ -1868,6 +1943,8 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 	let getters: Vec<&String> = members.methods.iter().filter(|(_, getter)| *getter).map(|(name, _)| name).filter(|name| unshadowed(name)).collect();
 	let statics: Vec<&String> = members.statics.iter().filter(|name| unshadowed(name)).collect();
 	let readable = Readable { class, fields: [fields, getters].concat(), methods, statics };
+	// the holes of `"#\(n)"` as code first, so a field in one is read from self too
+	let body = crate::injection::lower_templates(body).map(crate::interpolation::lower).unwrap_or_else(|error| error);
 	let body = receiver_reads(body, &readable);
 	let receiver = Node::Symbol(RECEIVER.to_string());
 	let changes = match changes_receiver(&body) {

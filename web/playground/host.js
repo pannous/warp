@@ -274,16 +274,18 @@ function programImports(holder, hooks) {
 				while (Date.now() < until) {
 					if (Date.now() >= check) {
 						checkShared(holder);
+						deliverFetches(holder);
 						check = Date.now() + SHARED_CHECK_MILLISECONDS;
 					}
 				}
 				checkShared(holder);
+				deliverFetches(holder);
 			},
 			random: () => Math.random(),
 			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
 			clock: () => BigInt(Date.now()),
 			// a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md); shared listeners do
-			signal_poll: () => checkShared(holder),
+			signal_poll: () => { checkShared(holder); deliverFetches(holder); },
 			// channels between programs (src/channels.rs): a BroadcastChannel of the name, which reaches the other tabs and
 			// workers of this page's origin; the listener's timer (lowering/system_signals.rs) takes what arrived
 			channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), plainOfTree(readNode(program(), channel))),
@@ -437,6 +439,8 @@ const KIND_MASK = 0xFFn;
 const decode = bytes => utf8Decoder.decode(bytes);
 
 const TASK_WORKER = "task-worker.js";
+const TASK_WORKER_READY = "ready"; // a task Worker's first message: loaded
+const FETCH_DONE = "fetched"; // a task Worker's message after a fetch it made (startFetch)
 const TASK_RESULT_BYTES = 1 << 16; // the shared buffer a Worker writes its result into, grown as needed
 const TASK_RESULT_LIMIT = 1 << 28;
 const TASK_HEADER = 8; // [state, length] as Int32, then the result's JSON
@@ -452,7 +456,8 @@ const hasTaskWorkers = () => self.crossOriginIsolated && self.Worker;
 
 function addTaskWorker() {
 	const worker = new Worker(TASK_WORKER);
-	worker.onmessage = () => taskPool.push(worker); // loaded: it can take tasks
+	// loaded: it can take tasks; later a fetch it made is done (startFetch)
+	worker.onmessage = ({ data }) => data === FETCH_DONE ? worker.fetched?.() : taskPool.push(worker);
 }
 
 // the pool of task Workers, made by the workers that run programs (worker.js, test-worker.js) when they start
@@ -1129,21 +1134,73 @@ function timerLabel(holder, { id, every, minute, once }) {
 	return once ? `at ${time}` : `every day at ${time}`;
 }
 
-// `users := fetch url` (src/fetches.rs, src/lowering/fetch_signals.rs): fetch_start fetches without waiting; once the
-// reply arrived the page runs on·fetch·<id> (worker.js hooks.arrived), whose fetch_reply takes it. A fetch started
-// anew drops the reply of the one before; a run that ended drops all.
+// `users := fetch url` (src/fetches.rs, src/lowering/fetch_signals.rs): fetch_start fetches without waiting. A Worker
+// of the task pool fetches into shared memory, so a running main sees the reply at its check points (sleep, loop
+// starts: deliverFetches runs on·fetch·<id> there, as natively); else, and for a reply that comes after main returned,
+// the page runs the handler (worker.js hooks.arrived). A fetch started anew drops the reply of the one before; a run
+// that ended drops all.
 const FETCH_HANDLER_PREFIX = "on·fetch·";
 function startFetch(holder, hooks, id, url) {
-	if (!hooks.arrived) return holder.warnings.push(`fetch ${url}: replies arriving later are not handled here`);
+	if (!hooks.arrived && taskPool.length === 0) return holder.warnings.push(`fetch ${url}: replies arriving later are not handled here`);
 	const started = { url };
 	(holder.fetches ??= new Map()).set(id, started);
+	const current = () => holder.fetches.get(id) === started && !holder.stopped;
+	const arrive = reply => {
+		if (!current() || started.reply) return;
+		started.reply = reply;
+		hooks.arrived?.(holder, FETCH_HANDLER_PREFIX + id);
+	};
 	const failed = reason => ({ error: `fetch ${url} failed: ${reason}` });
-	fetch(url).then(async response => response.ok ? { body: await response.text() } : failed(`HTTP status ${response.status}`), failure => failed(failure.message))
-		.then(reply => {
-			if (holder.fetches.get(id) !== started || holder.stopped) return;
-			started.reply = reply;
-			hooks.arrived(holder, FETCH_HANDLER_PREFIX + id);
-		});
+	if (taskPool.length === 0) return void fetchReplyOf(url).then(({ body, error }) => arrive(error ? failed(error) : { body }));
+	const worker = taskPool.pop();
+	started.shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	started.failed = failed;
+	// the Worker is free once it wrote the reply: taken at a check point or here, whichever comes first
+	started.release = () => {
+		if (!taskPool.includes(worker)) taskPool.push(worker);
+		started.release = () => {};
+	};
+	worker.fetched = () => {
+		started.release();
+		const reply = sharedFetchReply(started);
+		if (reply) arrive(reply);
+	};
+	worker.postMessage({ fetch: new URL(url, self.location.href).href, shared: started.shared });
+}
+
+// {body} or {error} of a URL: the HTTP status of a failed request, or why it failed
+function fetchReplyOf(url) {
+	return fetch(url).then(async response => response.ok ? { body: await response.text() } : { error: `HTTP status ${response.status}` }, failure => ({ error: failure.message }));
+}
+
+// a task Worker's answer: the JSON of `record` in the shared buffer, then its state set to done for the waiting side
+function writeShared(shared, record) {
+	const reply = utf8.encode(JSON.stringify(record));
+	if (TASK_HEADER + reply.length > shared.byteLength) shared.grow(TASK_HEADER + reply.length);
+	new Uint8Array(shared, TASK_HEADER, reply.length).set(reply);
+	const header = new Int32Array(shared, 0, 2);
+	header[1] = reply.length;
+	Atomics.store(header, 0, 1);
+	Atomics.notify(header, 0);
+}
+
+// the reply a task Worker wrote into the fetch's shared buffer, once: undefined while none is there or it was taken
+function sharedFetchReply(started) {
+	const header = new Int32Array(started.shared, 0, 2);
+	if (started.reply || Atomics.load(header, 0) === 0) return undefined;
+	const { body, error } = JSON.parse(decode(new Uint8Array(started.shared, TASK_HEADER, header[1]).slice()));
+	return error ? started.failed(error) : { body };
+}
+
+// a check point of a running main (sleep, loop starts): the handlers of the fetches whose reply is in shared memory
+function deliverFetches(holder) {
+	for (const [id, started] of holder.fetches ?? []) {
+		const reply = started.shared && !holder.stopped ? sharedFetchReply(started) : undefined;
+		if (!reply) continue;
+		started.reply = reply;
+		started.release();
+		holder.exports[FETCH_HANDLER_PREFIX + id]();
+	}
 }
 
 // [value, error] as src/fetches.rs reply gives it: a JSON object or array parsed, any other body the text
@@ -1242,7 +1299,7 @@ function outcomeOf(holder, hooks, call) {
 }
 
 // the page events a program handles (src/lowering/event_signals.rs PAGE_EVENTS): `on click {…}` exports on·click·node
-const PAGE_EVENT_HANDLER = /^on·((?:click|key)(?:·\d+)?)·node$/;
+const PAGE_EVENT_HANDLER = /^on·((?:click|key|input)(?:·\d+)?)·node$/;
 function pageEvents(exports) {
 	return Object.keys(exports).map(name => name.match(PAGE_EVENT_HANDLER)?.[1]).filter(Boolean);
 }
