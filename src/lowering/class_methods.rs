@@ -259,6 +259,15 @@ fn from_objects(node: Node) -> Node {
 	with_objects_as_instances(node, &fields)
 }
 
+/// A map literal `{x:1 y:2}` or parsed json `parse_json(t)`: what `as Point` builds an instance from
+fn is_plain_object(object: &Node) -> bool {
+	match object.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => true,
+		Node::List(items, Bracket::Round, _) => items.first().is_some_and(|word| word.drop_meta().name() == PARSE_JSON_WORD),
+		_ => false,
+	}
+}
+
 /// `int` of `x:int`, `[Point]` of `points:[Point]`, the empty name for an untyped field
 fn field_type_name(item: &Node) -> String {
 	match item.drop_meta() {
@@ -280,7 +289,8 @@ fn with_objects_as_instances(node: Node, fields: &std::collections::HashMap<Stri
 			let class = list.drop_meta().children()[0].drop_meta().name();
 			instances_of(with_objects_as_instances(*object, fields), &class, fields)
 		}
-		Node::Key(object, Op::As, class) if class_of(&class).is_some() => {
+		// only an object that is no instance yet: `render(t) as docx` picks render's overload (overloads.rs)
+		Node::Key(object, Op::As, class) if class_of(&class).is_some() && is_plain_object(&object) => {
 			let class = class.drop_meta().name();
 			instance_from(with_objects_as_instances(*object, fields), &class, fields)
 		}
