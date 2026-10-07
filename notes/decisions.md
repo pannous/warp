@@ -62,6 +62,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   in a browser page reading stays a loud error, it is async).
 - Codepoint arithmetic (default, warp-84, card a1-codepoint, fixer): `'a' + 1` = 'b': a codepoint plus a number is
   a codepoint (codepoint is a subtype of integer, P74), not the text "a1".
+- Trailing percent (default, warp-d0, card postfix-words): a `%` with nothing after it is a percent, x/100 exact:
+  `10%` = 1/10, `200 * 10%` = 20, `50 % of 200` = 100 (`of` multiplies after a percent). CSS values like
+  `width: 50%` stay as written; `whenever battery < 20%` keeps its battery-level reading. Infix `%` stays remainder.
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
   compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
