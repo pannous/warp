@@ -43,3 +43,15 @@ fn rendering_markup_warns_nothing_more() {
 	assert_eq!(warp::markup::to_html(&shown), "<html><p>x</p></html>");
 	assert_eq!(warp::diagnostic::take_warnings().len(), 0);
 }
+
+// P188 (stay close to HTML): HTML's own attribute form name="value" inside a tag's block is the attribute name:"value",
+// also for the keywords type and class and in parentheses; a name that is no attribute stays an assignment
+#[test]
+fn a_tag_takes_html_attributes_with_equals() {
+	let html_of = |code: &str| warp::markup::to_html(&eval(code));
+	assert_eq!(html_of("label{\"Name\" input{type=\"text\" style=\"color: blue\"}}"), "<label>Name<input type=\"text\" style=\"color: blue\"></label>");
+	assert_eq!(html_of("p{class=\"card\" id=\"main\" \"x\"}"), "<p class=\"card\" id=\"main\">x</p>");
+	assert_eq!(html_of("a{href=\"/about\" data-page=\"about\" \"About\"}"), "<a href=\"/about\" data-page=\"about\">About</a>");
+	assert_eq!(html_of("div{ label(for=\"pwd\"):\"Password\" }"), "<div><label for=\"pwd\">Password</label></div>");
+	assert_eq!(html_of("p{ shown = \"seen\" }"), "<p>seen</p>");
+}

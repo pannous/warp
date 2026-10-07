@@ -835,9 +835,11 @@ impl WaspParser {
 	}
 
 	/// `class Name {…}`, `struct`, `type Name {…}`, `record Name {…}`; `class:"btn"`, `type:email` (html attributes),
-	/// `x.class` and `type(x)` are no declarations
+	/// `class="btn"`, `type = "text"` (html attributes, P188), `x.class` and `type(x)` are no declarations
 	pub(super) fn declares_type(&self, symbol: &str) -> bool {
-		let is_key = self.current_char() == ':' && self.peek_char(1) != '=';
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let is_assigned = self.peek_char(blanks) == '=' && self.peek_char(blanks + 1) != '=';
+		let is_key = (self.current_char() == ':' && self.peek_char(1) != '=') || is_assigned;
 		let start = self.pos.saturating_sub(symbol.chars().count());
 		let is_field = start > 0 && self.chars[start - 1] == '.';
 		!is_key && !is_field && (TYPE_DECLARATION_WORDS.contains(&symbol)
