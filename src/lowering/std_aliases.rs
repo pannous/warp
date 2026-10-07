@@ -22,7 +22,7 @@ const fn alias(module: &'static str, member: &'static str, std_module: &'static 
 	StdAlias { module, member, std_module, word, order }
 }
 
-const STD_ALIASES: [StdAlias; 19] = [
+const STD_ALIASES: [StdAlias; 21] = [
 	alias("JSON", "parse", "json", "parse_json", &[0]),
 	alias("JSON", "stringify", "json", "to_json", &[0]),
 	alias("json", "loads", "json", "parse_json", &[0]),
@@ -42,6 +42,8 @@ const STD_ALIASES: [StdAlias; 19] = [
 	alias("np", "transpose", "matrix", "transpose", &[0]),
 	alias("np", "matmul", "matrix", "matmul", &[0, 1]),
 	alias("np", "dot", "matrix", "dot", &[0, 1]),
+	alias("String", "from_utf8", "text", "from_utf8", &[0]),
+	alias("string", "from_utf8", "text", "from_utf8", &[0]),
 ];
 const USE_WORD: &str = "use";
 

@@ -12,6 +12,8 @@ alice.age = 42
 	data: { value: '"hiking"', code: `// wasp is a data notation first: this object is a value, and code reads it
 alice = { name: "Alice" age: 30 hobbies: ["reading" "hiking" "coding"] }
 alice.hobbies#2` },
+	markup: { value: 'div{h2:"Alice" p:"30 years, likes:" ul{li:"reading" li:"hiking"}}', code: `// markup is wasp data too: a value made of HTML tags shows as a page (warp prints it as HTML)
+div{ h2{ "Alice" } p{ "30 years, likes:" } ul{ li{ "reading" } li{ "hiking" } } }` },
 	functions: { value: "25", code: `// a function, called with or without parentheses
 def square(x) = x*x
 square(4) + square 3` },

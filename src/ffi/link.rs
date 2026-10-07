@@ -25,6 +25,18 @@ extern "C" {
 	fn exp(x: f64) -> f64;
 	fn log(x: f64) -> f64;
 	fn log10(x: f64) -> f64;
+	fn asin(x: f64) -> f64;
+	fn acos(x: f64) -> f64;
+	fn atan(x: f64) -> f64;
+	fn atan2(y: f64, x: f64) -> f64;
+	fn sinh(x: f64) -> f64;
+	fn cosh(x: f64) -> f64;
+	fn tanh(x: f64) -> f64;
+	fn hypot(x: f64, y: f64) -> f64;
+	fn log2(x: f64) -> f64;
+	fn trunc(x: f64) -> f64;
+	fn log1p(x: f64) -> f64;
+	fn expm1(x: f64) -> f64;
 
 	// libc functions
 	fn abs(x: i32) -> i32;
@@ -41,9 +53,10 @@ extern "C" {
 /// the header-driven path (get_signatures_from_headers + link_dynamic_library) does by reflection; keep the table.
 /// link_libm uses it only when the headers declare nothing for "m" (glibc's __MATHCALL macros): headers first.
 #[cfg(feature = "native")]
-const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 11] = [("fabs", fabs), ("floor", floor), ("ceil", ceil), ("round", round), ("sqrt", sqrt), ("sin", sin), ("cos", cos), ("tan", tan), ("exp", exp), ("log", log), ("log10", log10)];
+const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 21] = [("fabs", fabs), ("floor", floor), ("ceil", ceil), ("round", round), ("sqrt", sqrt), ("sin", sin), ("cos", cos), ("tan", tan), ("exp", exp), ("log", log), ("log10", log10),
+	("asin", asin), ("acos", acos), ("atan", atan), ("sinh", sinh), ("cosh", cosh), ("tanh", tanh), ("log2", log2), ("trunc", trunc), ("log1p", log1p), ("expm1", expm1)];
 #[cfg(feature = "native")]
-const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 4] = [("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow)];
+const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 6] = [("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow), ("atan2", atan2), ("hypot", hypot)];
 
 #[cfg(feature = "native")]
 pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {

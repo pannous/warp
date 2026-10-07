@@ -45,12 +45,28 @@ The shared target dir is `~/.cargo/shared-target.noindex` (renamed from shared-t
 Spotlight's mdworker processes out of ~90 GB of build output (16 of them were busy during a full-suite run).
 Worker copies under probes/ are deleted once their branch is merged; keep one work copy per worker, no extra exports.
 
-## Disk: the shared target dir grows per worktree (2026-10-03)
-Each worktree builds warp under its own version suffix, so every one leaves its own incremental cache (~250 MB, 310 of
-them) and test binaries (5936 files) in the shared target dir: it reached 183 GB and filled the disk. Dependencies are
-shared and small in comparison. `~/dev/bin/prune-cargo-target.sh` (cron, every 6 hours, log in
-~/.companion/logs/prune-cargo-target.log) deletes warp's incremental caches and test/lib binaries untouched for 12
-hours; dependencies stay. After the first cleanup: 80 GB.
+## Shared target sweep (card shared-cargo, 2026-10-07)
+The shared target dir filled the disk twice (183 GB on 2026-10-03, 664 GB on 2026-10-07). The cause is mostly not the
+per-branch dependency builds: macOS keeps every link's object files (`*.rcgu.o`, split-debuginfo=unpacked) next to the
+binary for its debug info, and with several agents linking warp's test binary that is ~30 GB an hour (327 GB of
+439 GB in debug/deps). Each worktree's version suffix adds its own warp/test artifacts on top.
+
+`~/dev/bin/prune-cargo-target.sh` (Python; cron hourly at :17, log ~/.companion/logs/prune-cargo-target.log;
+`--dry-run` prints what each rule would free) deletes, never anything written in the last hour (a running link's
+inputs):
+1. `*.rcgu.o` older than 1 hour: a binary runs without them; only Rust backtraces lose file:line
+2. artifacts of a warp worktree that no longer exists (its `*.d` dep-info names the worktree's sources)
+3. warp's own artifacts (tests-, warp-, libwarp-, warp_runtime-…) untouched for 12 hours
+4. any artifact group (name-hash) not read (atime) for 2 days: old dependency versions
+5. incremental sessions older than 12 hours, then the oldest above a 20 GB cap
+Below 50 GB free afterwards it shows a notification and messages the supervisor session (warp-96) through
+`claude -p` + SendMessage, at most every 6 hours. First run: 384.6 GB freed in 5 s, 512 GB free; a build afterwards
+rebuilds only what rule 4 took (4 min for the test binary with an empty cache).
+
+Open (question for the user, with warp-e9): split-debuginfo for `[profile.dev]`. Measured 2026-10-07 on the test
+binary (touch src/lib.rs, `cargo test --no-run --test tests`, cargo's own time): unpacked 6.1 s, 32 object files kept
+per build (the default, swept hourly); off 6.1 s, no object files, Rust backtraces keep function names but lose
+file:line; packed 47.9 s (dsymutil, a 287 MB .dSYM per test binary), file:line kept.
 
 ## Test-suite wall clock (card suite-wall, 2026-10-05)
 test.sh prints `TIMING: compile N s, run N s; tests summed N s (N s per thread)` and keeps every test's seconds in

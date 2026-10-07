@@ -46,6 +46,7 @@ pub mod result_word;
 pub mod ruby_blocks;
 pub mod run_time_blocks;
 pub mod shared_arrays;
+pub mod serve;
 pub mod soft_keywords;
 pub mod std_aliases;
 pub mod switch;

@@ -188,6 +188,7 @@ function showReport(report) {
 	const printed = report.printed.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join("");
 	$("printed").textContent = printed;
 	$("printed").hidden = printed === "";
+	showRendered(report.html);
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
 	const notes = report.notes ?? [];
@@ -238,6 +239,13 @@ function paintShade(value) {
 	if (!value) return [PAINT_PAPER, PAINT_PAPER, PAINT_PAPER];
 	if (number >= PAINT_COLOR_FROM) return [Math.floor(number / 65536) % 256, Math.floor(number / 256) % 256, number % 256];
 	return [PAINT_INK, PAINT_INK, PAINT_INK];
+}
+
+// a markup value as DOM (src/html.rs, card web-dom), in a shadow root so its own style cannot restyle the page
+function showRendered(html) {
+	const host = $("rendered");
+	host.hidden = !html;
+	(host.shadowRoot ?? host.attachShadow({ mode: "open" })).innerHTML = html ?? "";
 }
 
 function showPaintings(paintings) {
