@@ -911,6 +911,8 @@ PASSED:
   ✓ functions::test_parameter_shapes::test_shaped_parameter_reads_its_fields
   ✓ functions::test_parameter_shapes::test_to_definition_with_a_shaped_parameter
   ✓ functions::test_parameter_shapes::test_wiki_argument_example
+  ✓ functions::test_parens_getter_warning::a_getter_with_parentheses_still_reads_the_current_value
+  ✓ functions::test_parens_getter_warning::written_parentheses_need_no_every_read_warning
   ✓ functions::test_partial_application::a_placeholder_makes_a_partial_application
   ✓ functions::test_partial_application::a_returned_zero_argument_closure_is_called
   ✓ functions::test_passed_through_functions::a_returned_parameter_is_called
@@ -971,7 +973,10 @@ PASSED:
   ✓ functions::test_returned_blocks::it_in_the_body_is_the_parameter
   ✓ functions::test_returned_function_names::calling_the_result_of_a_bare_name_educates
   ✓ functions::test_returned_function_names::the_explicit_forms_work
+  ✓ functions::test_round8_call_forms::a_lambda_parameter_named_it_shadows
   ✓ functions::test_round8_call_forms::cpp_auto_and_lambdas
+  ✓ functions::test_round8_call_forms::cpp_std_function_declaration
+  ✓ functions::test_round8_call_forms::elixir_do_end_def
   ✓ functions::test_round8_call_forms::elixir_one_line_def_and_capture
   ✓ functions::test_round8_call_forms::php_array_functions
   ✓ functions::test_round8_call_forms::ruby_symbol_blocks_methods_and_block_sums
@@ -1267,6 +1272,7 @@ PASSED:
   ✓ lists::test_unpacking::unpack_tuple_values
   ✓ lists::test_where_filter::a_where_condition_without_it_is_an_error
   ✓ lists::test_where_filter::where_filters_by_it
+  ✓ lists::test_where_filter::where_with_an_assignment_binds
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
   ✓ modules::test_folder_scope::inline_code_has_no_folder_scope
   ✓ modules::test_folder_scope::sibling_definitions_are_visible_without_use
@@ -2049,6 +2055,8 @@ PASSED:
   ✓ scope::test_global_constant_words::global_with_every_constant_word
   ✓ scope::test_global_declaration::test_compound_assignment_on_a_global
   ✓ scope::test_global_declaration::test_global_without_initializer
+  ✓ scope::test_global_float_widening::a_function_assigning_a_float_widens_an_exact_global
+  ✓ scope::test_global_float_widening::exact_updates_keep_a_global_exact
   ✓ scope::test_global_modifiers::test_global_with_export
   ✓ scope::test_global_modifiers::test_global_with_modifier_words
   ✓ scope::test_global_modifiers::test_global_with_type_word
@@ -2286,6 +2294,9 @@ PASSED:
   ✓ types::test_class_cases_ported::objects_change_and_copy
   ✓ types::test_class_cases_ported::objects_hold_objects
   ✓ types::test_class_cases_ported::static_members_belong_to_the_class
+  ✓ types::test_class_destructuring::braces_take_fields_by_name
+  ✓ types::test_class_destructuring::match_arms_take_an_instance_apart
+  ✓ types::test_class_destructuring::parentheses_take_fields_in_order
   ✓ types::test_class_extends::a_subclass_adds_fields
   ✓ types::test_class_extends::a_subclass_has_the_fields_and_methods_of_its_parent
   ✓ types::test_class_extends::a_subclass_instance_is_accepted_where_the_parent_is_wanted
@@ -2305,6 +2316,11 @@ PASSED:
   ✓ types::test_class_forms_ported::csharp_auto_properties_and_an_object_initializer
   ✓ types::test_class_interfaces::a_class_method_satisfies_a_trait_operation
   ✓ types::test_class_interfaces::interfaces_as_other_languages_write_them
+  ✓ types::test_class_json::a_roundtrip_through_json
+  ✓ types::test_class_json::an_instance_from_json
+  ✓ types::test_class_json::lists_of_instances_from_json
+  ✓ types::test_class_json::other_languages_serializers_are_to_json
+  ✓ types::test_class_json::to_json_of_an_instance_is_its_fields
   ✓ types::test_class_method_changes::a_change_in_a_branch_keeps
   ✓ types::test_class_method_changes::a_counter_of_texts_from_init
   ✓ types::test_class_method_changes::an_element_of_a_list_field_changes
@@ -2712,6 +2728,7 @@ PASSED:
   ✓ web::test_web_playground::an_acknowledged_warning_is_silent_and_the_value_stays
   ✓ web::test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
   ✓ web::test_web_playground::evaluate_reports_the_value_the_cli_prints
+  ✓ web::test_web_server::a_server_function_is_called_over_http
   ✓ web::test_web_server::serve_answers_routes
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
@@ -3043,4 +3060,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3038 passed, 0 failed, 3038 total tested
+19 ignored, 3055 passed, 0 failed, 3055 total tested
