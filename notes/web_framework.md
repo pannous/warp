@@ -122,8 +122,45 @@ Each step is useful on its own and is what the next ones stand on.
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
   sheet of rules (std/markup.wasp). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
   are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
-- Left: scoping a component's sheet to its own elements (a generated class per component), `.card { … }` written
-  without quotes (the parser stops at `.`), `8px` written as a number with a unit (parses as 8 * px).
+- CSS as CSS (classes-42, src/lowering/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
+  one rule per line (`.card {…}`, `ul > li {…}`, `h1, h2 {…}`, `a:hover {…}`, `p.note {…}`, `ul li {…}`, `#main {…}`),
+  lengths with units (`8px`, `1.5em`, `50%`, `-2px`) and values of several words (`padding: 8px 4px`, `border: 1px
+  solid "red"`; a bare number among several words stays as written: `flex: 1 1 auto`, `margin: 0 auto`). The parser reads `.name` at an atom's start as the symbol `.name`. In a style sheet a blank before
+  `.x` / `#x` is the descendant combinator (`#main .x`, `.a .b #c`; parser flag in_style_sheet), and `.a {…} #main {…}`
+  are two rules on one line (card web-styles-parser). Limits: `50%` followed by another declaration without `;`, and
+  several rules on one line with a comma selector need their own lines.
+- Left: scoping a component's sheet to its own elements (a generated class per component), warp-cd.
+
+## Step 14 (web-testing), what is done and what is left (classes-42, warp-06)
+- `warp::headless::Page` (src/headless.rs, tests/web/test_headless_pages.rs): `Page::render(code)` runs the program
+  and keeps the run; `click("Add")` finds the element showing that text with a `data-wasp-click`, runs its handler
+  (`on·click·N·node` with `[{instance}]` for a component instance) and reads `page·value` anew; `type_into(label,
+  text)` fires `input` on the field found by placeholder, name or id; `text()` (without style/script), `html()`,
+  `markup()`. A missing element is an Err naming the page's HTML.
+- Natively the run is a kept wasmtime instance (wasm_reader::run_main_kept); in the browser suite the same tests run
+  through the new import warp_host.page_event (host.js pageEventOutcome on the last listening run, as worker.js
+  showHandled). Elements and text are read from the rendered HTML (headless.rs `shown`), so html.rs is untouched and a
+  later renderer (std/markup.wasp) keeps working.
+- The playground examples keep their `clicks` / `typed` / `clicked` checks (test_in_browser.py --examples).
+- Tests in wasp (src/page_tests.rs, tests/web/test_page_tests.rs; syntax an undoable default, queued with the
+  Interviewer): `test "counter" { render Counter(1); click "Add"; fill "name" with "Ada"; check text is "Addn 2" }`.
+  A program with a top-level test block that renders runs its tests host-side on headless pages: the code outside the
+  tests is the setup, other lines in a test are its own setup, `check` holds with `text` / `html` bound to the page.
+  Its value is `2 tests passed` or an Error naming each failed test, the check and what the page shows. Source text is
+  used throughout (Node::serialize drops quotes in places). A headless page compiles for a page (pipeline::for_a_page),
+  so its page events draw no warning.
+
+## Step 15 (web-transitions), what is done and what is left
+- `li{ transition: fade 200ms }` (lowering/transitions.rs, right after markup_tags) is the attribute
+  `data-wasp-transition: "fade 200ms"`: its words are data (not variables), durations normalized to ms, a text taken as
+  written; the words end where the children begin. In `style: {…}` transition stays the CSS property.
+- The page (markup.js morphChildren, Web Animations API, no CSS): an element with a transition animates in when
+  inserted and out before removal (marked data-wasp-leaving, skipped by matching, removed when done; a keyed item gone
+  from its list leaves where it stands); a keyed one glides to its new place (FLIP). Kinds fade, scale, slide; default
+  fade 200ms ease; any other word is the easing. Nothing animates on the first render or with prefers-reduced-motion.
+  Tour example transitions (`animated` check of test_in_browser.py); probes/transitions/leave_check.py.
+- Left: separate enter / leave kinds (`enter: slide leave: fade`), custom keyframes as data, `0.3s` (card
+  fractional-durations), leaving items still take their space until removed (no absolute positioning while leaving).
 
 ## Built sites (card web-ssr, 2026-10-07; split agreed with warp-cd, renderer decided by warp-96)
 - `warp build --site app.wasp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,

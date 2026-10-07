@@ -3,6 +3,7 @@
 use super::*;
 
 const VOID_WORD: &str = "void";
+const STYLE_WORD: &str = "style";
 /// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
 const CAPTURED_ARGUMENT: &str = "$0";
 
@@ -83,6 +84,14 @@ impl WaspParser {
 				other => other,
 			},
 			'*' if self.is_identifier_start(1) => self.parse_starred(1),
+			// `.card { … }`: a leading-dot name, a class selector in a style block (style_rules.rs)
+			'.' if self.is_identifier_start(1) => {
+				self.advance();
+				match self.parse_symbol() {
+					Ok(name) => Node::Symbol(format!(".{name}")),
+					Err(message) => error(&message),
+				}
+			}
 			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
@@ -1024,12 +1033,14 @@ impl WaspParser {
 				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
 				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
 				let outer_data_literal = std::mem::replace(&mut self.in_data_literal, op == Op::Colon);
+				let outer_style_sheet = std::mem::replace(&mut self.in_style_sheet, op == Op::Colon && symbol == STYLE_WORD);
 				let mut blocks = vec![self.parse_bracketed('{')];
 				// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`
 				while self.current_char() == '{' {
 					blocks.push(self.parse_bracketed('{'));
 				}
 				self.in_data_literal = outer_data_literal;
+				self.in_style_sheet = outer_style_sheet;
 				let block = match blocks.len() {
 					1 => blocks.remove(0),
 					_ => Node::List(blocks, Bracket::None, Separator::None),

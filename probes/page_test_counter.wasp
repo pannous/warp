@@ -1,0 +1,16 @@
+def Counter(start) {
+	count = start
+	div{ button{ on click { count += 1 } "Add" } p{ "n " + count } }
+}
+test "counter" {
+	render Counter(1)
+	click "Add"
+	click "Add"
+	check text is "Addn 3"
+}
+test "form" {
+	name = ""
+	render div{ input{ placeholder: "name" bind: name } p{ "hi " + name } }
+	fill "name" with "Ada"
+	check html.ends_with("<p>hi Ada</p></div>")
+}
