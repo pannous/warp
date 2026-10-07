@@ -15,7 +15,21 @@ const ARITHMETIC: [Op; 7] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Re
 
 pub fn lower(node: Node) -> Node {
 	let words = suffix_words(&node);
-	lower_node(node, &words)
+	operator_values(lower_node(node, &words))
+}
+
+/// The parameter of the function an operator word stands for
+const OPERAND_NAME: &str = "value";
+
+/// `f = abs`, `xs.map(sqrt)`: an operator word left without an operand is the function `value => abs value`
+fn operator_values(node: Node) -> Node {
+	match operator_reference(&node) {
+		Some(op) => {
+			let operand = || Box::new(Node::Symbol(OPERAND_NAME.to_string()));
+			Node::Key(operand(), Op::FatArrow, Box::new(Node::Key(Box::new(Node::Empty), op, operand())))
+		}
+		None => node.map_children(operator_values),
+	}
 }
 
 /// The suffix words of the program's functions with the function each applies, `squared` → `square`; a name the
@@ -110,13 +124,40 @@ fn bare_list_assignment(items: &[Node], bracket: &Bracket, separator: &Separator
 	Some(ask(&question).map(|chosen| if chosen == 0 { list } else { statements }))
 }
 
-/// The function a suffix word applies: `squared` → `square`
-fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<String> {
-	let Node::Symbol(word) = word.drop_meta() else { return None };
-	functions.get(word).cloned()
+/// What a suffix word applies: a function (`squared` → `square`) or an operator word after its value (`-7 abs`)
+enum Suffix {
+	Function(String),
+	Operator(Op),
 }
 
-fn call(function: &str, argument: Node) -> Node {
+/// The function a suffix word applies: `squared` → `square`; `abs` with no operand (the parser's `‖ø`) → ‖
+fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<Suffix> {
+	if let Some(op) = operator_reference(word) {
+		return Some(Suffix::Operator(op));
+	}
+	let Node::Symbol(word) = word.drop_meta() else { return None };
+	functions.get(word).cloned().map(Suffix::Function)
+}
+
+/// The word as written: `sqrt` for the parser's `√ø`
+fn written_word(word: &Node) -> Node {
+	let spelling = operator_reference(word).and_then(|op| crate::wasp_parser::PREFIX_OPERATOR_WORDS.into_iter().find(|(_, known)| *known == op));
+	spelling.map_or_else(|| word.clone(), |(spelling, _)| Node::Symbol(spelling.to_string()))
+}
+
+/// `abs`, `sqrt`, `cbrt` written without an operand: the operator itself
+fn operator_reference(node: &Node) -> Option<Op> {
+	match node.drop_meta() {
+		Node::Key(nothing, op @ (Op::Abs | Op::Sqrt | Op::Cbrt), operand) if nothing.is_nothing() && operand.is_nothing() => Some(*op),
+		_ => None,
+	}
+}
+
+fn call(suffix: &Suffix, argument: Node) -> Node {
+	let function = match suffix {
+		Suffix::Operator(op) => return Node::Key(Box::new(Node::Empty), *op, Box::new(argument)),
+		Suffix::Function(function) => function,
+	};
 	match function.strip_prefix(POWER_MARK) {
 		Some(power) => {
 			let exponent = if power == "square" { 2 } else { 3 };
@@ -145,7 +186,7 @@ fn with_rightmost(node: Node, replace: impl FnOnce(Node) -> Node) -> Node {
 }
 
 /// The suffix word heading `item`: `squared` or `squared+1`
-fn heading_suffix_word(item: &Node, functions: &SuffixWords) -> Option<(Node, String)> {
+fn heading_suffix_word(item: &Node, functions: &SuffixWords) -> Option<(Node, Suffix)> {
 	let mut leftmost = None;
 	with_leftmost(item.clone(), |leaf| {
 		leftmost = Some(leaf.clone());
@@ -171,7 +212,10 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 	let item_count = items.len();
 	let mut applied: Vec<Node> = Vec::new();
 	for item in items {
-		let (Some(operand), Some((word, function))) = (applied.last(), heading_suffix_word(&item, functions)) else {
+		let suffix = heading_suffix_word(&item, functions);
+		// `map xs abs` passes abs to map: an operator word applies only to a whole first operand (`-7 abs`, `x = -7 abs`)
+		let suffix = suffix.filter(|(_, suffix)| matches!(suffix, Suffix::Function(_)) || applied.len() == 1);
+		let (Some(operand), Some((word, function))) = (applied.last(), suffix) else {
 			applied.push(item);
 			continue;
 		};
@@ -186,13 +230,13 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 }
 
 /// `operand item`, where `item` heads with the suffix word: `x = 7 squared + 1` squares the assigned value, `x = 49 + 1`
-fn suffix_applied(operand: Node, item: Node, word: &Node, function: &str) -> Node {
+fn suffix_applied(operand: Node, item: Node, word: &Node, function: &Suffix) -> Node {
 	match operand {
 		Node::Meta { node, data } if is_assignment(&node) => Node::Meta { node: Box::new(suffix_applied(*node, item, word, function)), data },
 		Node::Key(target, op, value) if is_assignment_op(&op) => Node::Key(target, op, Box::new(suffix_applied(*value, item, word, function))),
 		operand => {
 			let argument = match is_infix_arithmetic(&operand) {
-				true => match suffix_precedence(&operand, word) {
+				true => match suffix_precedence(&operand, &written_word(word)) {
 					Ok(true) => with_rightmost(operand, |leaf| call(function, leaf)),
 					Ok(false) => call(function, operand),
 					Err(error) => error,

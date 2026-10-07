@@ -21,3 +21,12 @@ fn a_trailing_percent_is_a_hundredth() {
 	is!("7 % 5", 2);
 	is!("x = 7; x %= 5; x", 2);
 }
+
+#[test] // card operator-word-reference
+fn an_operator_word_without_operand_is_a_function() {
+	is!("f = abs; f(-2)", 2);
+	is!("g = sqrt; g(16) + 1", 5.0);
+	is!("xs = [1, -2]; xs.map(abs)", warp::ints(vec![1, 2]));
+	is!("xs = [1, -2]; map xs abs", warp::ints(vec![1, 2]));
+	crate::common::fails_with("1 + 16 sqrt", "does `sqrt` in `1+16 sqrt`");
+}
