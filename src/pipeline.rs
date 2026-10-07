@@ -105,6 +105,24 @@ fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnO
 	result
 }
 
+thread_local! {
+	/// whether the program compiled on this thread is for a page (`warp build --site`), where page events happen
+	static FOR_A_PAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// `run` compiling a program for a page: its page event handlers are expected, not warned about
+pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
+	let before = FOR_A_PAGE.with(|page| page.replace(true));
+	let result = run();
+	FOR_A_PAGE.with(|page| page.set(before));
+	result
+}
+
+/// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
+pub fn is_for_a_page() -> bool {
+	FOR_A_PAGE.with(|page| page.get())
+}
+
 /// A compiled program and the host capabilities its imports need.
 #[cfg_attr(not(feature = "native"), allow(dead_code))] // the browser host links every import itself
 #[derive(Clone)]
