@@ -47,3 +47,11 @@ def from_utf8(bytes) {
 }
 // only spaces, tabs and line breaks, or nothing
 is_blank(t) := trim(t) == ""
+// has letters, all upper (or lower) case
+is_upper(t) := upper(t) == t and lower(t) != t
+is_lower(t) := lower(t) == t and upper(t) != t
+remove_prefix(t, prefix) := if starts_with(t, prefix) then t[count(prefix):] else t
+remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0:count(t) - count(suffix)] else t
+// how often part occurs, not overlapping: count_of("banana", "an") is 2
+count_of(t, part) := count(split(t, part)) - 1
+is_palindrome(t) := { s = lower(join([c for c in chars(t) if is_alphanumeric(c)], "")); s == reverse(s) }

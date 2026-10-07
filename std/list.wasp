@@ -34,3 +34,14 @@ drop_while(xs, f) := { out = []; dropping = true; for x in xs { if not (dropping
 // the index (from 0, like index_of) of the greatest element, the first of equal ones
 argmax(xs) := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best - 1 }
 argmin(xs) := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best - 1 }
+// the neighbours: pairwise([1, 2, 3]) is [[1 2] [2 3]]
+pairwise(xs) := { out = []; for i in 1 to count(xs) - 1 { out = out + [[xs#i, xs#(i+1)]] }; out }
+// [the first n, the rest]
+split_at(xs, n) := [take(xs, n), drop(xs, n)]
+// every pair of an element of a and one of b
+cartesian(a, b) := { out = []; for x in a { for y in b { out = out + [[x, y]] } }; out }
+// the most frequent element, the first of equally frequent ones
+mode(xs) := { best = xs#1; most = 0; for x in xs { n = count_by(xs, y => y == x); if n > most { best = x; most = n } }; best }
+// the population variance and standard deviation
+variance(xs) := { m = mean(xs); sum_by(xs, x => (x - m) * (x - m)) / count(xs) }
+stdev(xs) := sqrt(variance(xs))

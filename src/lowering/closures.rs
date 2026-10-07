@@ -137,25 +137,34 @@ pub fn lower(program: Node) -> Node {
 	hoist_captures(lift_closures(program))
 }
 
+/// The variables a lambda captures by value: those the program assigns and its loop variables (`for n in xs`, what
+/// `xs.map(n => …)` lowers to), not a `global`, which the closure reads and changes as the one variable
+pub(crate) fn captured_variables_of(program: &Node) -> HashSet<String> {
+	let mut variables = HashSet::new();
+	collect_assigned_names(program, &mut variables);
+	let globals = crate::analyzer::declared_globals(program);
+	variables.retain(|name| !globals.contains_key(name));
+	program.visit(&mut |node| if let Some((variable, _)) = for_loop_parts(node) {
+		variables.insert(variable.to_string());
+	});
+	variables
+}
+
+/// `for variable in list {…}`: the variable and the list
+fn for_loop_parts(node: &Node) -> Option<(&str, &Node)> {
+	let Node::List(items, _, _) = node else { return None };
+	let [keyword, variable, in_word, list, _body] = items.as_slice() else { return None };
+	let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
+	match variable.drop_meta() {
+		Node::Symbol(variable) if is_word(keyword, FOR_WORD) && is_word(in_word, IN_WORD) => Some((variable, list)),
+		_ => None,
+	}
+}
+
 fn lift_closures(program: Node) -> Node {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &program);
-	let mut variables = HashSet::new();
-	collect_assigned_names(&program, &mut variables);
-	// a `global` is no capture: the closure reads and changes the one variable
-	let globals = crate::analyzer::declared_globals(&program);
-	variables.retain(|name| !globals.contains_key(name));
-	// a loop variable (`for n in xs`, what `xs.map(n => …)` lowers to) is captured by value like any variable
-	program.visit(&mut |node| {
-		if let Node::List(items, _, _) = node {
-			if let [keyword, variable, in_word, _, _] = items.as_slice() {
-				let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
-				if let (true, Node::Symbol(name)) = (is_word(keyword, FOR_WORD) && is_word(in_word, IN_WORD), variable.drop_meta()) {
-					variables.insert(name.clone());
-				}
-			}
-		}
-	});
+	let variables = captured_variables_of(&program);
 	let functions: HashSet<String> = context.user_functions.keys().cloned().collect();
 	// `g = x => x`: the parameter a function hands back, so `g(y => y*2)(4)` calls what it was given
 	let passing_through: HashMap<String, usize> = context.user_functions.values()
@@ -337,13 +346,7 @@ impl FunctionValues {
 
 	/// `for f in fs {…}` over a list of function values: f holds one
 	fn loop_variable_over_functions<'a>(&self, node: &'a Node) -> Option<&'a str> {
-		let Node::List(items, _, _) = node else { return None };
-		let [keyword, variable, in_word, list, _body] = items.as_slice() else { return None };
-		let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
-		match variable.drop_meta() {
-			Node::Symbol(variable) if is_word(keyword, FOR_WORD) && is_word(in_word, IN_WORD) && self.is_function_list(list) => Some(variable),
-			_ => None,
-		}
+		for_loop_parts(node).filter(|(_, list)| self.is_function_list(list)).map(|(variable, _)| variable)
 	}
 
 	fn settle(&mut self, context: &Context, program: &Node) {
@@ -786,17 +789,10 @@ fn settle_closure_variable_targets(context: &Context, program: &Node) -> HashMap
 		let mut next = held.clone();
 		for body in &bodies {
 			body.visit(&mut |node| {
-				if let Node::List(items, _, _) = node {
-					if let [keyword, variable, in_word, list, _] = items.as_slice() {
-						let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
-						if is_word(keyword, FOR_WORD) && is_word(in_word, IN_WORD) {
-							if let Node::Symbol(name) = variable.drop_meta() {
-								let targets = closure_targets_of_value(list, &held, &returning);
-								if !targets.is_empty() {
-									next.entry(name.clone()).or_default().extend(targets);
-								}
-							}
-						}
+				if let Some((name, list)) = for_loop_parts(node) {
+					let targets = closure_targets_of_value(list, &held, &returning);
+					if !targets.is_empty() {
+						next.entry(name.to_string()).or_default().extend(targets);
 					}
 				}
 				let Node::Key(target, Op::Assign | Op::Define, value) = node else { return };

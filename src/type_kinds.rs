@@ -474,7 +474,10 @@ pub fn named_field_type(type_name: &str) -> &str {
 
 pub fn field_storage(type_name: &str) -> FieldStorage {
 	let word = type_name.trim_end_matches(OPTIONAL_SUFFIX);
+	let optional = word.len() < type_name.len();
 	match word {
+		// `age: int?` may be ø: a number has no room for it, a Node does (card optional-int)
+		"Int" | "i64" | "long" | "Float" | "f64" | "double" | "i32" | "int" | "f32" | "float" if optional => FieldStorage::Node,
 		"Int" | "i64" | "long" => FieldStorage::I64,
 		"Float" | "f64" | "double" => FieldStorage::F64,
 		"i32" | "int" => FieldStorage::I32,

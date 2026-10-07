@@ -322,6 +322,7 @@ PASSED:
   ✓ control::test_system_values::method_arguments_read_system_values
   ✓ control::test_system_values::not_dark_mode_is_the_opposite_reading
   ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
+  ✓ control::test_system_values::the_mouse_is_a_system_value_of_the_page
   ✓ control::test_system_values::yes_no_values_read_the_machine
   ✓ control::test_task_closures::a_capturing_text_lambda_runs_in_a_task
   ✓ control::test_task_closures::a_parameter_named_like_a_unit_is_the_parameter
@@ -441,6 +442,9 @@ PASSED:
   ✓ control::test_variable_signals::once_runs_the_first_time_the_condition_holds
   ✓ control::test_variable_signals::the_wiki_countdown
   ✓ control::test_variable_signals::whenever_runs_each_time_the_condition_holds
+  ✓ control::test_web_sockets::a_web_socket_is_a_channel
+  ✓ control::test_web_sockets::an_unreachable_server_is_a_loud_error
+  ✓ control::test_web_sockets::data_goes_as_json
   ✓ control::test_welcome_forms::loop_runs_until_break
   ✓ control::test_welcome_forms::match_cases_may_be_written_with_fat_arrows
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body
@@ -665,6 +669,7 @@ PASSED:
   ✓ functions::test_charged_getters::an_effectful_getter_warns_at_the_definition
   ✓ functions::test_charged_getters::an_object_getter_runs_at_every_read
   ✓ functions::test_charged_getters::assigning_a_getter_is_an_error_naming_the_definition
+  ✓ functions::test_closure_value_arguments::a_lambda_of_the_loop_variable_given_to_a_function_sees_each_turn
   ✓ functions::test_closure_value_arguments::test_a_closure_in_a_list_takes_a_text
   ✓ functions::test_closure_value_arguments::test_a_returned_closure_takes_a_text
   ✓ functions::test_closure_value_arguments::test_a_returned_closure_takes_numbers_and_lists
@@ -1346,19 +1351,23 @@ PASSED:
   ✓ modules::test_std_list::chunk_window_median
   ✓ modules::test_std_list::use_list_brings_its_words
   ✓ modules::test_std_list::use_list_groups_partitions_and_picks_by
+  ✓ modules::test_std_list::use_list_pairs_splits_crosses_and_measures_spread
   ✓ modules::test_std_list::use_list_scans_takes_and_drops_while_finds_argmax
   ✓ modules::test_std_list::use_list_zips_with_sums_by_rotates_interleaves_dedupes
   ✓ modules::test_std_map::a_one_entry_map_merges_too
   ✓ modules::test_std_map::use_map_brings_merge_and_map_values
+  ✓ modules::test_std_map::use_map_gets_with_a_fallback
   ✓ modules::test_std_map::use_map_inverts_picks_and_builds_from_pairs
   ✓ modules::test_std_map::use_map_lists_its_entries
   ✓ modules::test_std_map::use_map_omits_and_filters_values
   ✓ modules::test_std_math_text::comprehensions_in_module_and_program_ask_nothing
   ✓ modules::test_std_math_text::use_math_brings_libm_and_the_module
+  ✓ modules::test_std_math_text::use_math_parity_digits_choose_mod_pow
   ✓ modules::test_std_math_text::use_math_rounds_to_places_factorial_is_prime_lerp
   ✓ modules::test_std_math_text::use_text_brings_its_words
   ✓ modules::test_std_math_text::use_text_brings_title_slug_truncate
   ✓ modules::test_std_math_text::use_text_brings_words_lines_capitalize_center
+  ✓ modules::test_std_math_text::use_text_cases_prefixes_counts_palindromes
   ✓ modules::test_std_math_text::use_text_formats_a_template
   ✓ modules::test_std_matrix::a_matrix_element_is_written
   ✓ modules::test_std_matrix::numpy_names_are_matrix_words
@@ -1380,6 +1389,7 @@ PASSED:
   ✓ modules::test_std_time::format_duration_in_the_largest_units
   ✓ modules::test_std_time::today_is_a_date_after_2025
   ✓ modules::test_std_time::use_time_formats_dates_and_times
+  ✓ modules::test_std_time::use_time_knows_leap_years_and_month_lengths
   ✓ modules::test_std_time::use_time_parses_dates
   ✓ modules::test_use_modules::module_function_locals_are_not_the_programs_variables
   ✓ modules::test_use_modules::test_module_statements_are_not_imported
@@ -2029,6 +2039,7 @@ PASSED:
   ✓ programs::test_draw::a_color_with_alpha_mixes_with_what_is_below
   ✓ programs::test_draw::colors_are_numbers_with_an_alpha_byte
   ✓ programs::test_draw::shapes_set_the_pixels_they_cover
+  ✓ programs::test_draw::with_alpha_is_a_method_of_a_color
   ✓ programs::test_json_parser_fixes::test_field_of_a_call_result
   ✓ programs::test_json_parser_fixes::test_mixed_returns_are_nodes
   ✓ programs::test_json_parser_fixes::test_text_of_a_run_time_value
@@ -2158,6 +2169,8 @@ PASSED:
   ✓ text::test_backtick_templates::a_backtick_template_interpolates
   ✓ text::test_backtick_templates::a_backtick_text_is_text
   ✓ text::test_backtick_templates::an_unclosed_backtick_says_so
+  ✓ text::test_case_table::every_cased_code_point_maps_as_rust_does
+  ✓ text::test_case_table::upper_and_lower_map_as_rust_does
   ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ text::test_cast_to_string::an_object_literal_as_string_is_its_text
@@ -2457,6 +2470,8 @@ PASSED:
   ✓ types::test_mutating_methods::a_method_setting_an_element_of_a_list_field_changes_its_object
   ✓ types::test_mutating_methods::pop_on_a_list_field
   ✓ types::test_mutating_methods::the_call_gives_the_changed_object
+  ✓ types::test_optional_number_fields::a_given_optional_number_is_the_number
+  ✓ types::test_optional_number_fields::an_omitted_optional_number_is_empty
   ✓ types::test_person_struct::test_person_struct_roundtrip
   ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
   ✓ types::test_printable::print_and_interpolation_call_the_printable_operation
@@ -2635,6 +2650,11 @@ PASSED:
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_keys_on_the_engine_settings
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_recompiles_a_damaged_entry
   ✓ wasm::test_compiled_module_cache::test_gc_engine_is_shared
+  ✓ wasm::test_component_worlds::a_built_component_is_used_by_another_program
+  ✓ wasm::test_component_worlds::a_component_declaration_does_nothing_at_run_time
+  ✓ wasm::test_component_worlds::a_program_without_component_has_no_world
+  ✓ wasm::test_component_worlds::an_unknown_interface_is_named
+  ✓ wasm::test_component_worlds::the_world_as_wit
   ✓ wasm::test_dead_functions::a_module_without_dead_functions_stays_as_it_is
   ✓ wasm::test_dead_functions::compiled_programs_carry_no_dead_functions
   ✓ wasm::test_dead_functions::unreachable_functions_are_dropped_and_the_rest_renumbered
@@ -2758,12 +2778,15 @@ PASSED:
   ✓ wasm::wasm_optimizer_test::test_no_optimization
   ✓ wasm::wasm_optimizer_test::test_tools_availability
   ✓ web::test_accessibility::accessible_markup_draws_no_warning
+  ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
   ✓ web::test_async_data::on_change_sees_the_arrived_value
   ✓ web::test_async_data::the_parsed_json_arrives_later
+  ✓ web::test_bundle_budget::a_hello_world_site_stays_within_its_budget
+  ✓ web::test_bundle_budget::a_site_script_is_compacted
   ✓ web::test_class_components::an_instance_as_the_programs_value_renders
   ✓ web::test_class_components::an_instance_in_markup_renders
   ✓ web::test_class_components::an_instance_outside_markup_stays_an_instance
@@ -2785,8 +2808,13 @@ PASSED:
   ✓ web::test_headless_pages::a_missing_button_is_a_loud_error
   ✓ web::test_headless_pages::each_component_instance_counts_on_its_own
   ✓ web::test_headless_pages::typing_into_a_bound_field_sets_its_variable
+  ✓ web::test_host_parts::a_hello_world_page_ships_no_part_of_the_host
+  ✓ web::test_host_parts::a_page_ships_the_parts_its_module_imports
+  ✓ web::test_host_parts::each_part_is_chosen_by_the_words_it_gives
+  ✓ web::test_host_parts::the_sites_parts_are_the_playgrounds_parts
   ✓ web::test_html_render::a_computed_child_next_to_an_attribute
   ✓ web::test_html_render::a_for_loop_inside_markup
+  ✓ web::test_html_render::a_for_loop_nested_in_html
   ✓ web::test_html_render::a_whole_page
   ✓ web::test_html_render::other_values_are_no_markup
   ✓ web::test_html_render::tags_attributes_and_text
@@ -2837,6 +2865,7 @@ PASSED:
   ✓ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
   ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_wasp
+  ✓ web::test_web_apis::notify_is_a_host_word
   ✓ web::test_web_playground::a_returned_value_has_its_own_kind_on_every_platform
   ✓ web::test_web_playground::a_trap_in_the_page_names_the_runtime_error
   ✓ web::test_web_playground::a_tree_from_the_page_reads_like_from_gc_object
@@ -2856,6 +2885,9 @@ PASSED:
   ✓ welcoming::test_constant_shadowing::a_constant_word_still_reads_and_names_fields
   ✓ welcoming::test_constant_shadowing::a_field_named_like_a_constant_is_read_by_the_methods
   ✓ welcoming::test_constant_shadowing::an_assigned_constant_word_is_an_error
+  ✓ welcoming::test_count_shadowed::a_global_count_does_not_hide_the_word_in_functions
+  ✓ welcoming::test_count_shadowed::a_variable_named_count_applied_to_a_value_is_an_error
+  ✓ welcoming::test_count_shadowed::count_stays_a_word_and_a_variable_name
   ✓ welcoming::test_english_operator_words::a_function_of_an_operator_word_stays_callable
   ✓ welcoming::test_english_operator_words::membership_ranges_and_loops
   ✓ welcoming::test_english_operator_words::operator_words
@@ -3051,6 +3083,7 @@ PASSED:
   ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
   ✓ welcoming::test_style_dont_care::any_axis_can_stop_caring
   ✓ welcoming::test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
+  ✓ welcoming::test_undefined_in_text_sum::an_undefined_name_in_a_text_sum_is_an_undefined_variable
   ✓ welcoming::test_unknown_prefix_word::an_unknown_word_applied_to_a_value_warns
   ✓ welcoming::test_unknown_prefix_word::known_words_and_plain_data_do_not_warn
   ✓ welcoming::test_unknown_prefix_word::the_call_form_stays_an_error
@@ -3178,4 +3211,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3173 passed, 0 failed, 3173 total tested
+19 ignored, 3206 passed, 0 failed, 3206 total tested

@@ -60,9 +60,12 @@ impl Element<'_> {
 	}
 }
 
-/// `div{…}` or `h1: "Hi"`: the tag and content of an element as written
+/// `div{…}` or `h1: "Hi"`: the tag and content of an element as written; `a: i32` (a typed parameter or field) is none
 fn element_parts(node: &Node) -> Option<(&str, &Node)> {
 	let Node::Key(tag, Op::Colon, content) = node.drop_meta() else { return None };
+	if matches!(content.drop_meta(), Node::Type { .. }) || matches!(content.drop_meta(), Node::Symbol(word) if crate::analyzer::type_word_kind(word).is_some()) {
+		return None;
+	}
 	match tag.drop_meta() {
 		Node::Symbol(tag) if crate::markup::is_element_tag(tag) => Some((tag.as_str(), content.as_ref())),
 		_ => None,
@@ -120,6 +123,8 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 	}
 	match node.drop_meta() {
 		Node::List(items, _, _) => items.iter().for_each(|item| collect(item, inside_label, found)),
+		// the head of `add(a: i32) := …` holds parameters, not markup
+		Node::Key(_, Op::Define, body) => collect(body, inside_label, found),
 		Node::Key(left, _, right) => {
 			collect(left, inside_label, found);
 			collect(right, inside_label, found);

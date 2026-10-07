@@ -61,3 +61,13 @@ fn use_list_scans_takes_and_drops_while_finds_argmax() {
 	is!("use list; argmax([1, 5, 2])", 1);
 	is!("use list; argmin([3, 1, 2])", 1);
 }
+
+#[test]
+fn use_list_pairs_splits_crosses_and_measures_spread() {
+	is!("use list; pairwise([1, 2, 3])", parse("[[1 2] [2 3]]"));
+	is!("use list; split_at([1, 2, 3, 4], 1)", parse("[[1] [2 3 4]]"));
+	is!("use list; cartesian([1, 2], [3, 4])", parse("[[1 3] [1 4] [2 3] [2 4]]"));
+	is!("use list; mode([1, 2, 2, 3])", 2);
+	is!("use list; variance([1, 2, 3, 4])", 1.25);
+	is!("use list; stdev([2, 4, 4, 4, 5, 5, 7, 9])", 2);
+}

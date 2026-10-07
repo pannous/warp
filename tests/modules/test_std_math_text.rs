@@ -58,3 +58,21 @@ fn use_math_rounds_to_places_factorial_is_prime_lerp() {
 	is!("use math; lerp(0, 10, 0.25)", 2.5);
 	is!("use text; [is_blank(\"  \"), is_blank(\" a\")]", warp::ints(vec![1, 0]));
 }
+
+#[test]
+fn use_math_parity_digits_choose_mod_pow() {
+	is!("use math; [is_even(4), is_odd(4), is_odd(-3)]", warp::ints(vec![1, 0, 1]));
+	is!("use math; digits(1234)", warp::ints(vec![1, 2, 3, 4]));
+	is!("use math; [choose(5, 2), choose(10, 3), choose(3, 5)]", warp::ints(vec![10, 120, 0]));
+	is!("use math; mod_pow(2, 10, 1000)", 24);
+}
+
+#[test]
+fn use_text_cases_prefixes_counts_palindromes() {
+	is!("use text; [is_upper(\"AB\"), is_upper(\"Ab\"), is_lower(\"ab1\"), is_upper(\"12\")]", warp::ints(vec![1, 0, 1, 0]));
+	is!("use text; remove_prefix(\"foobar\", \"foo\")", "bar");
+	is!("use text; remove_suffix(\"foobar\", \"bar\")", "foo");
+	is!("use text; remove_prefix(\"foobar\", \"x\")", "foobar");
+	is!("use text; count_of(\"banana\", \"an\")", 2);
+	is!("use text; [is_palindrome(\"A man, a plan, a canal: Panama\"), is_palindrome(\"abc\")]", warp::ints(vec![1, 0]));
+}

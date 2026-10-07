@@ -242,10 +242,11 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// Check for introspection and math functions; `[count, a]` lists two items, and a variable `count` heads no call
+		// Check for introspection and math functions; `[count, a]` lists two items; a global `count` does not hide the word
+		// (std/markup.wasp's count(items) under a program's `count = 0`), a local one is an error (emit_shadowed_counting)
 		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Colon) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.is_unbound(fn_name) && self.emit_introspection_fn(func, fn_name, &items[1]) {
+				if self.emit_shadowed_counting(func, fn_name, &items[1]) || (self.scope.lookup(fn_name).is_none() && self.emit_introspection_fn(func, fn_name, &items[1])) {
 					return;
 				}
 			}
@@ -426,6 +427,18 @@ impl WasmGcEmitter {
 
 	/// Emit introspection functions: type, count, length, size, ceil, floor, round
 	/// Returns true if the function was handled
+	/// `count = 0; count(users)`: a local variable named like a counting word, applied to a value, neither counts nor
+	/// lists quietly; the error names the variable (card count-shadowed). A global of that name leaves the word to the
+	/// functions, which call it (std/markup.wasp's count(items))
+	pub(super) fn emit_shadowed_counting(&mut self, func: &mut Function, name: &str, argument: &Node) -> bool {
+		let shadowed = self.scope.lookup(name).is_some() && !self.ctx.user_functions.contains_key(name) && crate::analyzer::counting_function(name, &self.ctx).is_some();
+		if shadowed {
+			let argument = crate::normalize::operand_text(argument);
+			self.emit_type_error(func, format!("`{name}` is a variable here, so {name}({argument}) cannot count: rename the variable"));
+		}
+		shadowed
+	}
+
 	pub(super) fn emit_introspection_fn(&mut self, func: &mut Function, fn_name: &str, arg: &Node) -> bool {
 		if let Some(counter) = crate::analyzer::counting_function(fn_name, &self.ctx) {
 			// count, length, size: elements, or graphemes of a text
