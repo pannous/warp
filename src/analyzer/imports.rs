@@ -306,6 +306,10 @@ pub(super) fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 								func_names.iter().for_each(|func_name| add_ffi_import(ctx, func_name, &lib));
 								return;
 							}
+						} else if first_sym == "use" && items.len() >= 4 && items[2].name() == "from" {
+							let lib = library_name(&items[3]);
+							imported_names(&items[1]).iter().for_each(|name| add_named_import(ctx, name, &lib));
+							return;
 						} else if first_sym == "use" && items.len() >= 2 {
 							let lib = library_name(&items[1]);
 							add_ffi_lib(ctx, &lib);
@@ -411,6 +415,15 @@ pub(super) fn imported_names(names: &Node) -> Vec<String> {
 	match names.drop_meta() {
 		Node::List(items, _, _) => items.iter().map(Node::name).collect(),
 		single => vec![single.name()],
+	}
+}
+
+/// `use { memory, table, puts } from "env"`: the module's memory and table are imported (crate::wasm_emitter::IMPORTABLE_ENTITIES),
+/// any other name is a function of the library
+fn add_named_import(ctx: &mut Context, name: &str, library: &str) {
+	match crate::wasm_emitter::IMPORTABLE_ENTITIES.contains(&name) {
+		true => ctx.imported_entities.push((library.to_string(), name.to_string())),
+		false => add_ffi_import(ctx, name, library),
 	}
 }
 

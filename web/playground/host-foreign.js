@@ -8,6 +8,7 @@ const LIBC_URL = new URL("lib/libc.wasm", self.location.href).href; // libc for 
 const MODULE_PATH = /\.(wasm|wat)$/; // src/wasm_modules.rs MODULE_EXTENSIONS
 const SETTER_PREFIX = "set "; // src/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
 const C_CALLS_SECTION = "warp.c_calls"; // src/wasm_modules.rs C_CALLS_SECTION
+const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
 
 // the runtimes foreign_call reaches in the page, by their name in `use <runtime> …`: call(module, member, arguments,
 // hooks) gives the member's plain value (arguments null: a read, no call); prepare(code), when given, readies the runtime
@@ -188,6 +189,11 @@ addHostPart({
 		m: new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] }),
 		// the pure part of libc (ffi "c"): numbers, and C strings read up to their zero byte
 		c: libcImports(holder),
+		// `use { memory, table } from "env"` (src/wasm_reader.rs define_imported_entities): a fresh memory and table
+		env: {
+			get memory() { return new WebAssembly.Memory({ initial: IMPORTED_MEMORY_PAGES }); },
+			get table() { return new WebAssembly.Table({ initial: 0, element: "anyfunc" }); },
+		},
 	}),
 	importModule: (holder, hooks, name) => MODULE_PATH.test(name) ? moduleImports(holder, hooks, name) : undefined,
 });

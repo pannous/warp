@@ -15,6 +15,9 @@ mod test_site;
 mod test_bundle_budget;
 #[cfg(feature = "native")] // src/site.rs is native
 mod test_host_parts; // the parts of host.js a site ships
+#[cfg(feature = "native")] // builds a site natively
+mod test_site_tasks; // card site-tasks
+#[cfg(feature = "native")] // std/markup.wasp against src/html.rs, natively
 mod test_html_render;
 mod test_markup_renderer;
 mod test_element_events;

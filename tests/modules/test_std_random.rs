@@ -9,3 +9,10 @@ fn use_random_brings_choice_shuffle_sample() {
 	is!("use random; count(sample([1, 2, 3, 4], 2))", 2);
 	is!("use random; count(sample([1, 2], 5))", 2);
 }
+
+/// `seed(n)`: the same numbers after the same seed, natively and in the browser (the same xorshift64*)
+#[test]
+fn use_random_seed_repeats_the_numbers() {
+	is!("use random; seed(42); [random_below(100), random_below(100)]", warp::ints(vec![15, 64]));
+	is!("use random; seed(42); a = shuffle([1, 2, 3, 4, 5]); seed(42); a == shuffle([1, 2, 3, 4, 5])", true);
+}

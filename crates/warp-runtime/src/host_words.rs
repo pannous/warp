@@ -7,6 +7,8 @@ pub const HOST_LIBRARY: &str = "host";
 pub const SLEEP: &str = "sleep";
 pub const RANDOM: &str = "random";
 pub const RANDOM_BELOW: &str = "random_below";
+/// `random_seed(n)`: random and random_below give the same numbers after the same seed (natively and in the browser)
+pub const RANDOM_SEED: &str = "random_seed";
 pub const CLOCK: &str = "clock";
 pub const SIGNAL_POLL: &str = "signal_poll";
 pub const SIGNAL_EVERY: &str = "signal_every";
@@ -51,7 +53,7 @@ pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
-pub const BASIC_HOST_WORDS: [&str; 11] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT];
+pub const BASIC_HOST_WORDS: [&str; 12] = [SLEEP, RANDOM, RANDOM_BELOW, RANDOM_SEED, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT];
 
 #[cfg(feature = "engine")]
 pub use linking::*;
@@ -66,12 +68,14 @@ mod linking {
 	/// Link sleep, random, random_below and clock, for a store of any state
 	pub fn link_host_words<T: 'static>(linker: &mut Linker<T>) -> Result<()> {
 		system_signals::forget_timers(); // each run links anew, on its own thread
+		RANDOM_STATE.set(0); // and starts unseeded
 		linker.func_wrap(HOST_LIBRARY, SLEEP, |mut caller: Caller<'_, T>, milliseconds: i64| {
 			system_signals::sleep_with_handlers(&mut caller, Duration::from_millis(milliseconds.max(0) as u64), exported)
 		})?;
 		// the top 53 bits make a uniform f64 in [0, 1)
 		linker.func_wrap(HOST_LIBRARY, RANDOM, || (next_random() >> 11) as f64 / (1u64 << 53) as f64)?;
 		linker.func_wrap(HOST_LIBRARY, RANDOM_BELOW, |bound: i64| if bound <= 0 { 0 } else { (next_random() % bound as u64) as i64 })?;
+		linker.func_wrap(HOST_LIBRARY, RANDOM_SEED, |seed: i64| RANDOM_STATE.set(seeded_state(seed as u64)))?;
 		linker.func_wrap(HOST_LIBRARY, CLOCK, milliseconds_since_epoch)?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_POLL, |mut caller: Caller<'_, T>| system_signals::run_due_handlers(&mut caller, exported))?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_EVERY, system_signals::start_timer)?;
@@ -103,18 +107,31 @@ mod linking {
 		caller.get_export(name).and_then(|export| export.into_func())
 	}
 
-	/// xorshift64*, seeded from the clock once per process: random enough for games and samples, not for secrets
+	thread_local! {
+		/// per run: a seeded run is not disturbed by the runs of other threads
+		static RANDOM_STATE: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+	}
+
+	/// Runs that started unseeded, so two in the same millisecond differ
+	static UNSEEDED_RUNS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+	/// The generator's state after `random_seed(seed)`, never 0 (web/playground/host.js seedRandom does the same)
+	fn seeded_state(seed: u64) -> u64 {
+		seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1
+	}
+
+	/// xorshift64*, seeded from the clock once per run unless random_seed set it: random enough for games and
+	/// samples, not for secrets
 	fn next_random() -> u64 {
-		use std::sync::atomic::{AtomicU64, Ordering};
-		static STATE: AtomicU64 = AtomicU64::new(0);
-		let mut x = STATE.load(Ordering::Relaxed);
+		let mut x = RANDOM_STATE.get();
 		if x == 0 {
-			x = (milliseconds_since_epoch() as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
+			let run = UNSEEDED_RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+			x = seeded_state(milliseconds_since_epoch() as u64 ^ run.wrapping_mul(0xD1B5_4A32_D192_ED03));
 		}
 		x ^= x >> 12;
 		x ^= x << 25;
 		x ^= x >> 27;
-		STATE.store(x, Ordering::Relaxed);
+		RANDOM_STATE.set(x);
 		x.wrapping_mul(0x2545_F491_4F6C_DD1D)
 	}
 

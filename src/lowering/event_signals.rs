@@ -141,7 +141,7 @@ pub fn lower(program: Node) -> Node {
 	let statements: Vec<Node> = flags.iter().map(|(flag, initial)| assign(flag, initial.clone())).chain(statements).collect();
 	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
 	#[cfg(feature = "native")]
-	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| is_page_event(name) && !raised.contains(name) && !crate::pipeline::is_for_a_page()) {
+	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| is_page_event(name) && !raised.contains(name) && !crate::pipeline::is_for_a_page() && !serves_its_page(&statements)) {
 		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
 		if let Err(error) = crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning)]) {
 			return error;
@@ -623,6 +623,12 @@ pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Nod
 	let name = Node::Symbol(name.to_string());
 	let head = crate::law::substitute(&head, &HashMap::from([(TEMPLATE_NAME.to_string(), name)]));
 	Node::Key(Box::new(head), op, Box::new(Node::List(statements, Bracket::Curly, Separator::Semicolon)))
+}
+
+/// A program serving (serve_routes, lowering/serve.rs) serves its page too: the page raises its events
+#[cfg(feature = "native")]
+fn serves_its_page(statements: &[Node]) -> bool {
+	statements.iter().any(|statement| matches!(statement.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == crate::host::SERVE_ROUTES)))
 }
 
 /// `global n` for each main-level variable the bodies mention, except the `parameters` of the function they become

@@ -9,6 +9,22 @@ const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its che
 const PAGE_BITS = 16;
 const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
+// random_seed (crates/warp-runtime host_words.rs): after a seed, xorshift64* as natively, so a seeded program gives the
+// same numbers in both; unseeded, Math.random
+const U64 = (1n << 64n) - 1n;
+let seededRandom = null;
+const seedRandom = seed => { seededRandom = (BigInt.asUintN(64, seed) * 0x9E3779B97F4A7C15n & U64) | 1n; };
+function nextSeeded() {
+	let x = seededRandom;
+	x ^= x >> 12n;
+	x = (x ^ (x << 25n)) & U64;
+	x ^= x >> 27n;
+	seededRandom = x;
+	return x * 0x2545F4914F6CDD1Dn & U64;
+}
+const randomFloat = () => seededRandom === null ? Math.random() : Number(nextSeeded() >> 11n) / 2 ** 53;
+const randomBelow = bound => bound <= 0n ? 0n : seededRandom === null ? BigInt(Math.floor(Math.random() * Number(bound))) : nextSeeded() % bound;
+
 // the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add theirs (host-files.js file and net)
 const STD_ADAPTERS = {
@@ -79,6 +95,7 @@ const eachHostPart = (step, ...values) => hostParts.map(part => part[step]?.(...
 
 // hooks: print(text, fd), module(bytes) (each compiled module), panicked(message) (the compiler's)
 function programImports(holder, hooks) {
+	seededRandom = null; // each run starts unseeded
 	const program = () => holder.exports;
 	const text = (pointer, length) => readText(program(), pointer, length);
 	const cString = pointer => {
@@ -125,8 +142,9 @@ function programImports(holder, hooks) {
 				}
 				checkPoint();
 			},
-			random: () => Math.random(),
-			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
+			random: randomFloat,
+			random_below: randomBelow,
+			random_seed: seedRandom,
 			clock: () => BigInt(Date.now()),
 			// a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md); shared listeners do
 			signal_poll: checkPoint,

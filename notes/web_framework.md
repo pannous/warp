@@ -195,7 +195,17 @@ Each step is useful on its own and is what the next ones stand on.
   inside it with `[data-wasp-scope="Card"] `; src/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
 - Timers in a built page: site.js starts them after main (host.js startTimers, shared with the playground worker),
   each handler morphs the page; a failing handler stops them (probes/site/ticker.wasp).
-- Open: `serve` programs serving their own page.
+- A program serving its own page: `warp run app.wasp` with `serve 8080 {…}` and a page as its last line answers GET /
+  with the page rendered when the server starts (src/site.rs render, the page build without the serve statement) and
+  /app.wasm, /site.js … beside it; a route wins over a file of the same path. The page hydrates and fetches the
+  program's own routes (probes/site/served.wasp). Page events draw no "never raises it" warning there. Only program
+  files serve a page (the host builds it from modules::program_file).
+- Open: the page is rendered once at start (per request later); a relative `fetch "/api/…"` fails during that render
+  (no server yet), so the first HTML shows the error state until the page fetches; `server def` bodies still run in the
+  page (the RPC stub of the page build is not done).
+- Routes (web-router, agreed with warp-cf for web-bundle): `route "/x" { Page() }` lowers to page·route·<N>, the table
+  is the export page·routes (paths in order), site.js sets page·path, page·html stays the one export; warp-cf splits
+  page·route·<N> into app·<N>.wasm and site.js loads it on first navigation.
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
