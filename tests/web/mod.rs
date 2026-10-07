@@ -8,3 +8,4 @@ mod test_html_render;
 mod test_element_events;
 mod test_components;
 mod test_keyed_lists;
+mod test_markup_holes;

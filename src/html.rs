@@ -62,12 +62,81 @@ fn element_parts(node: &Node) -> Option<(&str, &Node)> {
 
 /// `class:"box"` inside an element: an attribute when its name is one and its value plain
 fn attribute_parts<'a>(node: &'a Node, parent: &str) -> Option<(&'a str, &'a Node)> {
+	let (name, value) = named_attribute(node, parent)?;
+	let plain = matches!(value.drop_meta(), Node::Text(_) | Node::Char(_) | Node::Symbol(_) | Node::Number(_) | Node::True | Node::False)
+		|| matches!(value.drop_meta(), Node::List(_, Bracket::Square, _));
+	plain.then_some((name, value))
+}
+
+/// `class: …` inside an element, its value plain or still to be computed
+fn named_attribute<'a>(node: &'a Node, parent: &str) -> Option<(&'a str, &'a Node)> {
 	let Node::Key(name, Op::Colon, value) = node.drop_meta() else { return None };
 	let Node::Symbol(name) = name.drop_meta() else { return None };
 	let is_attribute = name.starts_with(DATA_ATTRIBUTE_PREFIX) || name == KEY || (ATTRIBUTES.contains(&name.as_str()) && !(parent == HEAD && ELEMENTS.contains(&name.as_str())));
-	let plain = matches!(value.drop_meta(), Node::Text(_) | Node::Char(_) | Node::Symbol(_) | Node::Number(_) | Node::True | Node::False)
-		|| matches!(value.drop_meta(), Node::List(_, Bracket::Square, _));
-	(is_attribute && plain).then_some((name.as_str(), value.as_ref()))
+	is_attribute.then_some((name.as_str(), value.as_ref()))
+}
+
+/// The items of an element's content: its attributes and children in order
+fn content_items(content: &Node) -> Vec<&Node> {
+	match content.drop_meta() {
+		Node::List(items, Bracket::Curly | Bracket::None, _) => items.iter().collect(),
+		Node::Empty => vec![],
+		single => vec![single],
+	}
+}
+
+/// The holes of markup as written (card web-fine-holes, notes/web_framework.md step 3): the outermost elements holding
+/// a computed text, attribute or child directly, each with its path, the element indices from the root down (as the
+/// page's `children` count them). The other elements are fixed. Empty when the root itself holds one.
+pub fn holes(markup: &Node) -> Vec<(Vec<usize>, Node)> {
+	let mut holes = vec![];
+	collect_holes(markup, &mut vec![], &mut holes);
+	if holes.iter().any(|(path, _)| path.is_empty()) {
+		return vec![];
+	}
+	holes
+}
+
+fn collect_holes(element: &Node, path: &mut Vec<usize>, holes: &mut Vec<(Vec<usize>, Node)>) {
+	let Some((tag, content)) = element_parts(element) else { return };
+	let items = content_items(content);
+	let computed = |item: &&Node| match named_attribute(item, tag) {
+		Some((_, value)) => !is_literal(value),
+		None => !is_fixed(item),
+	};
+	if items.iter().any(computed) {
+		return holes.push((path.clone(), element.clone()));
+	}
+	let children = items.into_iter().filter(|item| named_attribute(item, tag).is_none());
+	for (index, child) in children.flat_map(child_elements).enumerate() {
+		path.push(index);
+		collect_holes(child, path, holes);
+		path.pop();
+	}
+}
+
+/// The elements a fixed child shows: itself, or those of a literal list
+fn child_elements(child: &Node) -> Vec<&Node> {
+	match child.drop_meta() {
+		Node::List(items, Bracket::Square, _) => items.iter().flat_map(child_elements).collect(),
+		_ if element_parts(child).is_some() => vec![child],
+		_ => vec![],
+	}
+}
+
+/// A child the page shows the same after any change: a literal, an element, or a list of them
+fn is_fixed(child: &Node) -> bool {
+	match child.drop_meta() {
+		Node::List(items, Bracket::Square, _) => items.iter().all(is_fixed),
+		_ => element_parts(child).is_some() || is_literal(child),
+	}
+}
+
+fn is_literal(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Square, _) => items.iter().all(is_literal),
+		other => matches!(other, Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::True | Node::False | Node::Empty),
+	}
 }
 
 fn write_node(node: &Node, parent: &str, html: &mut String) {
@@ -82,11 +151,7 @@ fn write_node(node: &Node, parent: &str, html: &mut String) {
 }
 
 fn write_element(tag: &str, content: &Node, html: &mut String) {
-	let items: Vec<&Node> = match content.drop_meta() {
-		Node::List(items, Bracket::Curly | Bracket::None, _) => items.iter().collect(),
-		Node::Empty => vec![],
-		single => vec![single],
-	};
+	let items = content_items(content);
 	let (attributes, children): (Vec<&Node>, Vec<&Node>) = items.into_iter().partition(|item| attribute_parts(item, tag).is_some());
 	html.push('<');
 	html.push_str(tag);

@@ -58,9 +58,13 @@ Each step is useful on its own and is what the next ones stand on.
   playground.js `morphChildren` changes only the text nodes and attributes that differ, matching nodes by position;
   a node of another kind or tag is replaced. Elements keep their identity, focus, input and scroll state. Tour example
   "fine updates" checks it (`clicks`, `clicked`, `kept` in examples.js, test_in_browser.py --examples).
-- Left (compute side, card web-fine-holes): the markup is still evaluated whole after each handler. Per-hole updates
-  (each signal-reading text or attribute its own derived binding, only the changed ones sent) need the lowering to
-  mark the holes; worth it once markup gets large (web-components).
+- Done (compute side, card web-fine-holes): the holes of shown markup are the outermost elements holding a computed
+  text, attribute or child directly (html.rs `holes`); each is its own binding `page·hole·<path>` (event_signals.rs),
+  the path its element indices from the root, which the fixed elements above it keep stable. After a handler worker.js
+  reads only the holes and sends `patches` for those whose HTML changed; playground.js morphs just those elements. The
+  value text follows once events pause (50 ms). Falls back to the whole markup when the root itself holds a computed
+  part, when the last line is a name (components: `page·markup`), or when a hole fails.
+- Left: holes inside components (an instance's elements by instance), text-node granularity (a hole is an element).
 - Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
 
 ## Step 4 (web-components), what is done and what is left

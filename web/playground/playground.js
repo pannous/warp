@@ -335,11 +335,24 @@ function showEventOutput(data) {
 		$("printed").hidden = false;
 	}
 	if (data.type === "paint") showPaintings([data]);
-	if (data.type === "handled") {
+	if (data.type !== "handled") return;
+	if (data.value !== undefined) {
 		$("value").textContent = data.value;
 		$("value").classList.toggle("error", data.error);
-		showRendered(data.html);
 	}
+	if (data.html !== undefined) showRendered(data.html);
+	(data.patches ?? []).forEach(showPatch);
+}
+
+// one element of the shown markup anew (card web-fine-holes): `path` its element indices from the root down
+function showPatch({ path, html }) {
+	const root = $("rendered").shadowRoot;
+	const shown = path.reduce((element, index) => element?.children[index], root?.children[0]);
+	const template = document.createElement("template");
+	template.innerHTML = html;
+	const wanted = template.content.children[0];
+	if (shown && wanted && shown.nodeName === wanted.nodeName) morphElement(shown, wanted);
+	else console.error(`markup hole ${path.join("·")}: no ${wanted?.nodeName} there to update`, shown);
 }
 
 async function show(code) {

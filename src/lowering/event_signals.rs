@@ -69,6 +69,8 @@ pub fn is_page_event(name: &str) -> bool {
 }
 /// The output binding of a program with page events: its last line when that is a name, read anew after each handler
 pub const PAGE_VALUE: &str = "page·value";
+/// The bindings of the elements of shown markup that hold computed parts, `page·hole·<path>` (card web-fine-holes)
+const PAGE_HOLE: &str = "page·hole";
 /// The events the system raises: the runtime calls their handlers (notes/system_signals.md)
 pub const SYSTEM_EVENTS: [&str; 2] = ["interrupt", "exit"];
 
@@ -199,10 +201,18 @@ fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<Strin
 	// a name, or markup (`div{ p{ "clicked " + count } }`, card web-element), which the page shows anew
 	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::html::is_markup(last)).cloned();
 	if let Some(shown) = shown {
-		let binding = function_with_globals(PAGE_VALUE, false, &[shown], main_variables);
-		statements.insert(statements.len() - 1, binding);
+		// markup: each element holding a computed part is read on its own too, the page changes only those that differ
+		let holes = crate::html::holes(&shown).into_iter().map(|(path, element)| function_with_globals(&hole_name(&path), false, &[element], main_variables));
+		let bindings: Vec<Node> = holes.chain([function_with_globals(PAGE_VALUE, false, &[shown], main_variables)]).collect();
+		let last = statements.len() - 1;
+		statements.splice(last..last, bindings);
 	}
 	statements
+}
+
+/// `page·hole·1·0`: the binding of the element at that path of the shown markup (worker.js reads the path back)
+fn hole_name(path: &[usize]) -> String {
+	path.iter().fold(PAGE_HOLE.to_string(), |name, index| format!("{name}{NAME_JOINER}{index}"))
 }
 
 /// `(on·every·0) := {…}`, the handler of a timer or channel listener system_signals.rs made
