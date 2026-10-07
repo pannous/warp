@@ -198,3 +198,15 @@ Each step is useful on its own and is what the next ones stand on.
   module contributes: kept in the store of the program that uses it (probes/stores/app.wasp, tests/modules/
   test_module_signals.rs). Context (a value for a subtree of components without props): question with the
   Interviewer; default until then: main-level variables, which every component reads.
+
+## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
+- No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`
+  connects at once (natively an unreachable server is a loud error there) and hears what the server sends;
+  `broadcast value on "wss://…"` sends over the same connection (or opens one). A text goes as it is, any other value
+  as JSON; an arriving JSON object or array is data, any other message a text (web_server.rs value_of_body).
+- Natively src/web_sockets.rs (tungstenite 0.30 with rustls webpki roots): a thread per connection reads with a 20 ms
+  timeout and writes what the program sent; channels.rs / host.rs channel_next ask it first. Listeners on one address
+  share its connection. Tests: tests/control/test_web_sockets.rs against a local tungstenite server that answers.
+- Playground: host.js webSocket / sendOnSocket, a browser WebSocket per address in the run, closed with the run
+  (stopListening); messages are handled when the worker is idle, as for BroadcastChannel channels. Checked by hand
+  against wss://echo.websocket.org (text and JSON).
