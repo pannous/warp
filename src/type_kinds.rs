@@ -411,6 +411,11 @@ impl TypeRegistry {
 			Node::Key(target, crate::operators::Op::Assign, _) if matches!(target.drop_meta(), Node::Key(_, crate::operators::Op::Colon, _)) => {
 				Self::extract_field(target)
 			}
+			// `email?: text` parses as the elvis `email ? email : text`; in a type body it is the optional typed field
+			Node::Key(name_node, crate::operators::Op::Question, rest) if matches!(rest.drop_meta(), Node::Key(same, crate::operators::Op::Colon, _) if same == name_node) => {
+				let field = Self::extract_field(rest)?;
+				Some(FieldDef { type_name: format!("{}{OPTIONAL_SUFFIX}", field.type_name), ..field })
+			}
 			Node::Key(name_node, _, type_node) => {
 				let name = match name_node.drop_meta() {
 					Node::Symbol(s) | Node::Text(s) => s.clone(),

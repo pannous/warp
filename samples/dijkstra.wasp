@@ -9,8 +9,8 @@ graph = {
 }
 
 fun dijkstra(graph, start) {
-    dist = {}
-    prev = {}
+    var dist = {}
+    var prev = {}
     for node in graph.keys() {
         dist[node] = 999999
     }

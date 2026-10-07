@@ -17,7 +17,7 @@ def factorial(n) {
 
 // Higher-order functions
 def map(list, fn) {
-    result = []
+    var result = []
     for item in list {
         result.push(fn(item))
     }
@@ -25,7 +25,7 @@ def map(list, fn) {
 }
 
 def filter(list, predicate) {
-    result = []
+    var result = []
     for item in list {
         if predicate(item) {
             result.push(item)
