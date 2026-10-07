@@ -136,10 +136,11 @@ fn is_declarations(value: &Node) -> bool {
 }
 
 /// The HTML of a markup value, any other value as escaped text, by std/markup.wasp's to_html; a failed rendering is
-/// its error, shown, never an empty page
+/// its error, shown, never an empty page. Quietly: the program that made the value already warned about it, and the
+/// renderer's positions are not the program's
 pub fn to_html(node: &Node) -> String {
 	let program = crate::law::substitute(&crate::wasp_parser::parse(RENDER_PROGRAM), &HashMap::from([(RENDERED.to_string(), node.clone())]));
-	match crate::pipeline::eval_parsed(program, RENDER_PROGRAM).drop_meta() {
+	match crate::diagnostic::quietly(|| crate::pipeline::eval_parsed(program, RENDER_PROGRAM)).drop_meta() {
 		Node::Text(html) => html.clone(),
 		failed => format!("<pre>{}</pre>", failed.serialize().replace('&', "&amp;").replace('<', "&lt;")),
 	}
