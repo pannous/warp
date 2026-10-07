@@ -32,7 +32,6 @@ from_base(t, base) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; out = 
 // P169/P191: descriptive names; they forward to the C library (use cmath) until wasp has its own implementations.
 // The C names still work after `use math`, each with a note naming the word here (modules STD_ALIASES)
 square(x) := x * x
-cube(x) := x * x * x
 square_root(x) := sqrt(x)
 cube_root(x) := ∛x
 power(base, exponent) := base ^ exponent

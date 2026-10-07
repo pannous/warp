@@ -105,7 +105,7 @@ fn use_text_cases_wraps_and_cuts() {
 #[test]
 fn use_math_brings_descriptive_names_and_cmath_the_c_library() {
 	let calls = [
-		("square(3)", 9), ("cube(2)", 8), ("square_root(16)", 4), ("cube_root(27)", 3), ("cube_root(-8)", -2),
+		("square(3)", 9), ("square_root(16)", 4), ("cube_root(27)", 3), ("cube_root(-8)", -2),
 		("power(2, 10)", 1024), ("exponential(0)", 1), ("natural_log(1)", 0), ("binary_log(8)", 3), ("decimal_log(1000)", 3),
 		("logarithm(8, 2)", 3), ("sine(0)", 0), ("cosine(0)", 1), ("tangent(0)", 0), ("arc_sine(0)", 0), ("arc_tangent(0)", 0),
 		("angle(1, 0)", 0), ("hypotenuse(3, 4)", 5), ("ceiling(2.1)", 3), ("whole_part(-2.5)", -2), ("remainder(7, 3)", 1),
