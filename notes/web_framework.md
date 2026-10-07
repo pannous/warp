@@ -77,9 +77,13 @@ Each step is useful on its own and is what the next ones stand on.
   playground.js `morphChildren` changes only the text nodes and attributes that differ, matching nodes by position;
   a node of another kind or tag is replaced. Elements keep their identity, focus, input and scroll state. Tour example
   "fine updates" checks it (`clicks`, `clicked`, `kept` in examples.js, test_in_browser.py --examples).
-- Left (compute side, card web-fine-holes): the markup is still evaluated whole after each handler. Per-hole updates
-  (each signal-reading text or attribute its own derived binding, only the changed ones sent) need the lowering to
-  mark the holes; worth it once markup gets large (web-components).
+- Done (compute side, card web-fine-holes): the holes of shown markup are the outermost elements holding a computed
+  text, attribute or child directly (src/markup.rs `holes`); each is its own binding `page·hole·<path>` (event_signals.rs),
+  the path its element indices from the root, which the fixed elements above it keep stable. After a handler worker.js
+  reads only the holes and sends `patches` for those whose HTML changed; playground.js morphs just those elements. The
+  value text follows once events pause (50 ms). Falls back to the whole markup when the root itself holds a computed
+  part, when the last line is a name (components: `page·markup`), or when a hole fails.
+- Left: holes inside components (an instance's elements by instance), text-node granularity (a hole is an element).
 - Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
 
 ## Step 4 (web-components), what is done and what is left
@@ -152,7 +156,9 @@ Each step is useful on its own and is what the next ones stand on.
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
   `stored` are soft keywords.
-- Shared stores: a used module's main-level variables are already shared (`use settings` reads and writes its theme),
-  but a program's `on change theme` misses writes made by the module's functions: card module-signal-writes
-  (probes/stores/app.wasp). Context (a value for a subtree of components without props): question with the
+- Shared stores: a used module's main-level variables are the program's shared state (`use settings` reads and writes
+  its theme), and the program's `on change theme` sees the writes of the module's functions (modules::resolve runs
+  before the signal passes, card module-signal-writes). `stored theme = "dark"` in a module is a declaration the
+  module contributes: kept in the store of the program that uses it (probes/stores/app.wasp, tests/modules/
+  test_module_signals.rs). Context (a value for a subtree of components without props): question with the
   Interviewer; default until then: main-level variables, which every component reads.

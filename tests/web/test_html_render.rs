@@ -41,3 +41,10 @@ fn the_page_gets_the_html_of_markup() {
 	assert_eq!(report["html"], "<ul><li>a</li></ul>");
 	assert!(warp::web::evaluate("3", Default::default())["html"].is_null());
 }
+
+// an element's computed child next to an attribute is a child, not part of one sum (card markup-arithmetic)
+#[test]
+fn a_computed_child_next_to_an_attribute() {
+	assert_eq!(html_of("count = 3\np{ class: \"x\" \"c\" + count }"), "<p class=\"x\">c3</p>");
+	assert_eq!(html_of("count = 3\ndiv{ p{ style: { fontSize: 12 } \"c\" + count } }"), "<div><p style=\"font-size: 12px\">c3</p></div>");
+}

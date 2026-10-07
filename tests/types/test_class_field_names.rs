@@ -14,3 +14,11 @@ fn field_beside_function_of_its_name() {
 	is!("class Line{start:int end:int}; start(l) := l.start * 10; start(Line(3,4))", 30);
 	is!("class Line{start:int end:int}; start(l:Line) := l.start * 10; x = Line(3,4); start(x) + x.start", 33);
 }
+
+// card classes-function: without any class, `p.name` inside the function name(p) would call itself with the same
+// argument forever, so it reads the field
+#[test]
+fn own_parameter_field_inside_function_of_its_name() {
+	is!("start(l) := l.start * 10; start({start:3})", 30);
+	is!("def size(box) { box.size + 1 }; size({size:4})", 5);
+}

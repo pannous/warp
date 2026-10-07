@@ -11,6 +11,10 @@ self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same comp
 let compiler; // the compiler instance's exports
 let live; // the run whose page events are handled (host.js runProgram), until the next run
 const PAGE_VALUE = "page·value";
+const PAGE_HOLE = "page·hole";
+const PATH_JOINER = "·";
+// after a handler that patched holes, the value text waits this long for the next event before it is read whole
+const VALUE_DELAY_MILLISECONDS = 50;
 let panicMessage; // the compiler's last panic message
 
 const post = message => self.postMessage(message);
@@ -94,12 +98,45 @@ function handleEvent({ event, detail }) {
 function showHandled(holder, handled, timer = false) {
 	const binding = holder.exports[PAGE_VALUE];
 	if (timer && !binding && handled.result) return;
+	if (handled.result && binding && showHoles(holder)) return;
 	const outcome = handled.result && binding ? outcomeOf(holder, hooks, binding) : handled;
+	const { value, html } = shownOf(outcome);
+	post({ type: "handled", value, html, error: outcome.result === undefined });
+}
+
+// the value and HTML the compiler shows for a run outcome (src/web.rs shown)
+function shownOf(outcome) {
 	const outcomeText = passText(JSON.stringify(outcome));
 	const length = compiler.web_show(...outcomeText);
-	const { value, html } = JSON.parse(compilerText(compiler.web_report(), length));
+	const shown = JSON.parse(compilerText(compiler.web_report(), length));
 	compiler.web_free(...outcomeText);
-	post({ type: "handled", value, html, error: outcome.result === undefined });
+	return shown;
+}
+
+// markup with holes (PAGE_HOLE·<path>, src/lowering/event_signals.rs, card web-fine-holes): only the elements holding
+// computed parts are read, the page gets those whose HTML changed; the whole value follows once the events pause.
+// False when there are none, or one fails (the whole value then shows the error)
+function showHoles(holder) {
+	const holes = Object.keys(holder.exports).filter(name => name.startsWith(PAGE_HOLE + PATH_JOINER));
+	if (!holes.length) return false;
+	holder.holeHtml ??= new Map();
+	const patches = [];
+	for (const name of holes) {
+		const outcome = outcomeOf(holder, hooks, holder.exports[name]);
+		if (outcome.result === undefined) return false;
+		const { html } = shownOf(outcome);
+		if (holder.holeHtml.get(name) === html) continue;
+		holder.holeHtml.set(name, html);
+		patches.push({ path: name.split(PATH_JOINER).slice(PAGE_HOLE.split(PATH_JOINER).length).map(Number), html });
+	}
+	post({ type: "handled", patches });
+	clearTimeout(holder.valueTimer);
+	holder.valueTimer = setTimeout(() => {
+		if (live !== holder) return;
+		const outcome = outcomeOf(holder, hooks, holder.exports[PAGE_VALUE]);
+		post({ type: "handled", value: shownOf(outcome).value, error: outcome.result === undefined });
+	}, VALUE_DELAY_MILLISECONDS);
+	return true;
 }
 
 // a timer's or fetch's handler run and its outcome shown; a failing handler stops the timers

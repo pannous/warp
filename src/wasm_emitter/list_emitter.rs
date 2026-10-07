@@ -348,7 +348,9 @@ impl WasmGcEmitter {
 			// Check for pure numeric expressions; a square list and a comma tuple `(h + 1, 2)` keep all their items,
 			// whatever they compute
 			let is_tuple = *separator == Separator::Colon && items.len() > 1;
-			let has_arithmetic = *bracket != Bracket::Square && !is_tuple && items.iter().any(|item| {
+			// a block with a field (`p{ class: "x" "c" + n }`) is a structure whose items stay items
+			let has_field = items.len() > 1 && items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
+			let has_arithmetic = *bracket != Bracket::Square && !is_tuple && !has_field && items.iter().any(|item| {
 				matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic())
 			});
 			if has_arithmetic {
