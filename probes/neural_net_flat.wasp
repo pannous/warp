@@ -1,0 +1,76 @@
+// Simple Neural Network
+// XOR problem solver
+
+def sigmoid(x) := 1.0 / (1.0 + exp(-x))
+def sigmoid_derivative(x) := x * (1.0 - x)
+
+// 2 inputs, 4 hidden, 1 output; the weight from input i to hidden j is hidden_weights[i * 4 + j]
+hidden_weights = [random() * 2 - 1 for k in 0..8]
+output_weights = [random() * 2 - 1 for j in 0..4]
+hidden_bias = [random() * 2 - 1 for j in 0..4]
+output_bias = random() * 2 - 1
+
+def forward(input) {
+    hidden = []
+    for j in 0..4 {
+        total = hidden_bias[j]
+        for i in 0..2 {
+            total = total + input[i] * hidden_weights[i * 4 + j]
+        }
+        hidden.push(sigmoid(total))
+    }
+
+    output_sum = output_bias
+    for j in 0..4 {
+        output_sum = output_sum + hidden[j] * output_weights[j]
+    }
+    return (hidden, sigmoid(output_sum))
+}
+
+def train(input, target, learning_rate) {
+    global hidden_weights, output_weights, hidden_bias, output_bias
+    (hidden, output) = forward(input)
+
+    output_error = target - output
+    output_delta = output_error * sigmoid_derivative(output)
+
+    hidden_errors = []
+    for j in 0..4 {
+        hidden_errors.push(output_delta * output_weights[j])
+    }
+
+    for j in 0..4 {
+        output_weights[j] = output_weights[j] + learning_rate * output_delta * hidden[j]
+    }
+    output_bias = output_bias + learning_rate * output_delta
+
+    for j in 0..4 {
+        delta = hidden_errors[j] * sigmoid_derivative(hidden[j])
+        for i in 0..2 {
+            hidden_weights[i * 4 + j] = hidden_weights[i * 4 + j] + learning_rate * delta * input[i]
+        }
+        hidden_bias[j] = hidden_bias[j] + learning_rate * delta
+    }
+}
+
+// XOR training data
+examples = [
+    ([0, 0], 0)
+    ([0, 1], 1)
+    ([1, 0], 1)
+    ([1, 1], 0)
+]
+
+// Train
+for epoch in 0..10000 {
+    for (input, target) in examples {
+        train(input, target, 0.5)
+    }
+}
+
+// Test
+print "XOR Neural Network Results:"
+for (input, expected) in examples {
+    (_, output) = forward(input)
+    print "\(input) => \(output.round(3)) (expected \(expected))"
+}
