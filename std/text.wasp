@@ -11,3 +11,28 @@ format(template, values) := {
 	}
 	result
 }
+// UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
+def to_utf8(t) {
+	out = []
+	for c in t {
+		n = ord(c)
+		if n < 128 { out = out + [n] }
+		else if n < 2048 { out = out + [192 + n//64, 128 + n % 64] }
+		else if n < 65536 { out = out + [224 + n//4096, 128 + n//64 % 64, 128 + n % 64] }
+		else { out = out + [240 + n//262144, 128 + n//4096 % 64, 128 + n//64 % 64, 128 + n % 64] }
+	}
+	out
+}
+def from_utf8(bytes) {
+	out = ""
+	i = 0
+	while i < count(bytes) {
+		b = bytes[i]
+		length = if b < 128 then 1 else if b < 224 then 2 else if b < 240 then 3 else 4
+		n = if length == 1 then b else if length == 2 then b % 32 else if length == 3 then b % 16 else b % 8
+		for k in 1 to length - 1 { n = n * 64 + bytes[i + k] % 64 }
+		out = out + chr(n)
+		i = i + length
+	}
+	out
+}

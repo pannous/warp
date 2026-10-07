@@ -67,13 +67,15 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 		return program;
 	}
 	let mut needed: Vec<Node> = vec![];
-	let mut mentioned: HashSet<String> = mentioned_names(std::slice::from_ref(&program)).into_iter().collect();
+	// a standard word called as a method (`"hé".to_utf8()`) is needed too
+	let mentioned_or_called = |statements: &[Node]| mentioned_names(statements).into_iter().chain(method_names(statements));
+	let mut mentioned: HashSet<String> = mentioned_or_called(std::slice::from_ref(&program)).collect();
 	loop {
 		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name))).cloned().collect();
 		if now_needed.len() == needed.len() {
 			break;
 		}
-		mentioned.extend(mentioned_names(&now_needed));
+		mentioned.extend(mentioned_or_called(&now_needed));
 		needed = now_needed;
 	}
 	if needed.is_empty() {
@@ -876,6 +878,23 @@ fn same_definitions(first: &[Node], second: &[Node]) -> bool {
 }
 
 /// Every word the statements mention
+/// The methods called in statements: `f` of `x.f(…)` and of `x.f`
+fn method_names(statements: &[Node]) -> Vec<String> {
+	let mut names = Vec::new();
+	for statement in statements {
+		statement.visit(&mut |node| {
+			if let Node::Key(_, Op::Dot | Op::SafeDot, member) = node {
+				match member.drop_meta() {
+					Node::Symbol(name) => names.push(name.clone()),
+					Node::List(call, _, _) => names.extend(call.first().map(|name| name.drop_meta().name())),
+					_ => {}
+				}
+			}
+		});
+	}
+	names
+}
+
 fn mentioned_names(statements: &[Node]) -> Vec<String> {
 	fn collect(node: &Node, names: &mut Vec<String>) {
 		match node {
