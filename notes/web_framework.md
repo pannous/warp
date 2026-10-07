@@ -210,8 +210,16 @@ Each step is useful on its own and is what the next ones stand on.
 - Not taken: wasm-opt -Oz on app.wasm (11 KB smaller raw, 0.6 KB larger gzipped).
 - What is left in app.wasm is the runtime std/markup.wasp's to_html reaches (texts, lists, equality, floats): a shared
   runtime module, cached across pages, would help sites with several pages, not the first load.
-- Next: host.js split by the module's imports (tasks and channels, files, foreign libraries, hashes: a site ships
-  only what it imports); lazy loading per route, agreed with warp-89 (web-router): routes lower to functions
+- host.js split (2026-10-07, 32.1 → 21.9 KB, host.js 16.7 → 6.1): the core keeps what every page runs (run, outcome,
+  page events, timers, values between JS and wasp, std json/os/store/regex); the parts add themselves with addHostPart:
+  host-files.js (fetch, read, std file and net), host-hashes.js (std hash), host-tasks.js (tasks, channels,
+  BroadcastChannel and WebSocket, shared arrays, fetch_start), host-foreign.js (foreign_call, libm, libc.wasm, .wasm
+  imports; needs files), host-compiler.js (warpHost, run_block; needs files). A part hooks into a run through its
+  steps (started, poll, finished, ended, stopped). src/site.rs HOST_PARTS ships a part when the module imports one of
+  its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
+  a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the
+  std module's name is a runtime text; a custom section naming the std modules a program uses would refine it).
+- Next: lazy loading per route, agreed with warp-89 (web-router): routes lower to functions
   page·route·<N> with the table exported as page·routes; the splitter moves a route's function and what only it reaches
   into app·<N>.wasm, which site.js loads on the first navigation there.
 
