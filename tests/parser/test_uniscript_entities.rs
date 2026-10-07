@@ -30,11 +30,11 @@ fn an_unknown_entity_is_an_error() {
 	crate::common::fails_with("\\alpha = 1", "\\:alpha");
 }
 
-// card unknown-entity (user, 2026-10-07: an unknown entity must not stop the program): `\:world` stays as written and
+// card unknown-entity (user, 2026-10-07: an unknown entity must not stop the program): `\:xyzzy` stays as written and
 // warns, in a text and outside one
 #[test]
 fn an_unknown_entity_stays_as_written_and_warns() {
-	crate::common::warns_with("\"hello \\:world:\"", "hello \\:world:", "unknown entity \\:world");
-	crate::common::warns_with("\"\\:alpha and \\:world\"", "α and \\:world", "unknown entity \\:world");
-	crate::common::warns_with("x = \\:world; x", "\\:world", "unknown entity \\:world");
+	crate::common::warns_with("\"hello \\:xyzzy:\"", "hello \\:xyzzy:", "unknown entity \\:xyzzy");
+	crate::common::warns_with("\"\\:alpha and \\:xyzzy\"", "α and \\:xyzzy", "unknown entity \\:xyzzy");
+	crate::common::warns_with("x = \\:xyzzy; x", "\\:xyzzy", "unknown entity \\:xyzzy");
 }

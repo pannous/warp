@@ -135,7 +135,7 @@ impl WaspParser {
 				match escaped {
 					':' if interpolates && self.peek_char(1).is_ascii_alphabetic() => {
 						let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos - 1) else { unreachable!("a letter follows") };
-						let Some(character) = crate::uniscript_entities::entity(&name) else {
+						let Some(characters) = crate::uniscript_entities::entity(&name) else {
 							if let Err(strict) = self.warn_unknown_entity(&name, self.column - 1) {
 								return strict;
 							}
@@ -143,8 +143,10 @@ impl WaspParser {
 							template.push('\\');
 							continue; // the name follows as written
 						};
-						(0..length - 2).for_each(|_| self.advance());
-						character
+						(0..length - 1).for_each(|_| self.advance());
+						s.push_str(characters);
+						template.push_str(characters);
+						continue;
 					}
 					'n' => '\n',
 					't' => '\t',
@@ -167,7 +169,7 @@ impl WaspParser {
 		}
 	}
 
-	/// `\:world` names no entity: it stays as written and warns; in strict mode the warning is the error
+	/// `\:xyzzy` names no entity: it stays as written and warns; in strict mode the warning is the error
 	pub(super) fn warn_unknown_entity(&self, name: &str, column: usize) -> Result<(), Node> {
 		let message = crate::uniscript_entities::unknown_entity(name);
 		crate::diagnostic::report(&[Diagnostic { message, line: self.line_nr, column, ..Default::default() }])
