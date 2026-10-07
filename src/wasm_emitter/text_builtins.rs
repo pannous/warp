@@ -131,7 +131,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert(super::INT_RUNTIME);
 	}
 	if required.contains(super::list_ops::NODE_ADD) {
-		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF]); // two lists added are concatenated, two texts too
+		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::library_ops::LIST_JOIN]); // two lists added are concatenated, two texts too, a text and a number joined
 	}
 	if super::list_ops::NODE_ARITHMETIC.iter().any(|(name, _, _)| required.contains(name)) {
 		required.extend([super::list_ops::TEXT_AS_FLOAT, super::INT_RUNTIME, "exact_add", "exact_sub", "exact_mul", "exact_div", "new_float"]);

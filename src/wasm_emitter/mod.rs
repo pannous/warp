@@ -899,10 +899,10 @@ impl WasmGcEmitter {
 		}
 		self.emit_math_helpers();
 		self.emit_text_builtins();
-		self.emit_node_arithmetic(); // after text_as_float, get_int_value and text_concat, which it calls
 		self.emit_map_get(); // after the text builtins: map keys are compared by text_of
 		self.emit_node_map_runtime();
 		self.emit_library_ops(); // after the text builtins: the library words call text_of
+		self.emit_node_arithmetic(); // after text_as_float, get_int_value, text_concat and list_join, which it calls
 	}
 
 	fn emit_getters(&mut self) {
