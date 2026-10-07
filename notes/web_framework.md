@@ -303,5 +303,5 @@ Each step is useful on its own and is what the next ones stand on.
   placeholder alone gets its own warning; hidden/submit/button/reset/image inputs need none); button or a with no text
   and no aria-label/title; a without href; a heading skipping a level (h1 → h3); an id used twice; html without lang.
   Each points at the element and names a fix; `use strict` / `--strict` make them errors like every warning.
-- Not here: focus on route change and live regions for async content (warp-89, web-router / web-async); translations
-  as data (i18n) later. Markup built at run time (strings, computed tags) is not checked.
+- Translations as data: `use i18n`, translate(messages, language, key, values) with CLDR plural forms (notes/i18n.md).
+- Not here: focus on route change and live regions for async content (warp-89, web-router / web-async). Markup built at run time (strings, computed tags) is not checked.
