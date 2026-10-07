@@ -117,3 +117,4 @@ mod test_braceless_call_in_branch;
 mod test_event_handler_lists;
 mod test_for_underscore;
 mod test_await_any_values;
+mod test_constant_listener;
