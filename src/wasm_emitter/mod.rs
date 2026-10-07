@@ -60,6 +60,11 @@ const FALSY_TEXTS: [&str; 8] = ["", "0", "false", "no", "ø", "nil", "null", "no
 const ENGINE_DIVIDE_BY_ZERO: &str = "integer divide by zero";
 /// The position a diagnostic without a recorded one names (diagnostic::Diagnostic::at)
 const UNKNOWN_POSITION: &str = " at 0:0";
+/// What `use { memory, table } from "env"` imports instead of defining: the linear memory and a function table
+pub const MEMORY_ENTITY: &str = "memory";
+pub const TABLE_ENTITY: &str = "table";
+pub const IMPORTABLE_ENTITIES: [&str; 2] = [MEMORY_ENTITY, TABLE_ENTITY];
+const MEMORY: MemoryType = MemoryType { minimum: 1, maximum: None, memory64: false, shared: false, page_size_log2: None };
 /// Between a diagnostic's message and its fix
 const FIX_SEPARATOR: &str = "; fix: ";
 /// Builtins that write their argument and give it back: `puti i` as a statement of a loop body
@@ -483,20 +488,29 @@ impl WasmGcEmitter {
 		func.instruction(&I::I64ExtendI32U);
 	}
 
+	/// The linear memory, exported as `memory`: defined, or imported with a function table by `use { memory, table } from "env"`
+	fn emit_memory(&mut self) {
+		let imported = |emitter: &Self, entity: &str| emitter.ctx.imported_entities.iter().find(|(_, name)| name == entity).map(|(module, _)| module.clone());
+		match imported(self, MEMORY_ENTITY) {
+			Some(module) => self.import_manager.import_entity(&module, MEMORY_ENTITY, EntityType::Memory(MEMORY)),
+			None => {
+				self.memory.memory(MEMORY);
+			}
+		}
+		if let Some(module) = imported(self, TABLE_ENTITY) {
+			let table = TableType { element_type: RefType::FUNCREF, minimum: 0, maximum: None, table64: false, shared: false };
+			self.import_manager.import_entity(&module, TABLE_ENTITY, EntityType::Table(table));
+		}
+		self.exports.export(MEMORY_ENTITY, ExportKind::Memory, 0);
+	}
+
 	fn should_emit_function(&self, name: &str) -> bool {
 		self.config.emit_all_functions || self.ctx.required_functions.contains(name)
 	}
 
 	/// Generate all type definitions and functions
 	pub fn emit(&mut self) {
-		self.memory.memory(MemoryType {
-			minimum: 1,
-			maximum: None,
-			memory64: false,
-			shared: false,
-			page_size_log2: None,
-		});
-		self.exports.export("memory", ExportKind::Memory, 0);
+		self.emit_memory();
 		// Host imports must come before GC types (imports section comes before types in WASM)
 		self.import_manager
 			.emit_imports(&self.config, &mut self.type_manager, &mut self.ctx);
@@ -693,10 +707,10 @@ impl WasmGcEmitter {
 		found
 	}
 
-	/// Does the node read a variable (key names and other symbols of a data literal are not variables)
+	/// Does the node read a variable or global (key names and other symbols of a data literal are not variables)
 	fn mentions_variable(&self, node: &Node) -> bool {
 		let mut found = false;
-		node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if self.scope.lookup(name).is_some()));
+		node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name)));
 		found
 	}
 
@@ -792,14 +806,7 @@ impl WasmGcEmitter {
 	/// Order: memory, gc_types, user_types, kind_globals, constructors, user_constructors
 	pub fn emit_with_types(&mut self, registry: &TypeRegistry) {
 		// Memory
-		self.memory.memory(MemoryType {
-			minimum: 1,
-			maximum: None,
-			memory64: false,
-			shared: false,
-			page_size_log2: None,
-		});
-		self.exports.export("memory", ExportKind::Memory, 0);
+		self.emit_memory();
 
 		// Core GC types (String, Node, i64box, f64box)
 		self.emit_gc_types();
@@ -1283,7 +1290,7 @@ impl WasmGcEmitter {
 	pub fn try_finish(mut self) -> Result<Vec<u8>, String> {
 		// WASM section order: types, imports, functions, memory, globals, exports, code, data, names
 		self.module.section(self.type_manager.types());
-		if self.ctx.func_registry.import_count() > 0 {
+		if self.ctx.func_registry.import_count() > 0 || !self.ctx.imported_entities.is_empty() {
 			self.module.section(self.import_manager.imports());
 		}
 		self.module.section(&self.functions);

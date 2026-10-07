@@ -26,3 +26,13 @@ fn use_map_omits_and_filters_values() {
 	is!("use map; m = omit({a:1 b:2 c:3}, [\"b\"]); count(keys(m)) * 10 + m.get(\"c\")", 23);
 	is!("use map; m = filter_values({a:1 b:5 c:7}, v => v > 2); count(keys(m)) * 10 + m.get(\"b\")", 25);
 }
+
+#[test]
+fn use_map_lists_its_entries() {
+	is!("use map; entries({ab:1, cd:2})", parse(r#"[["ab" 1] ["cd" 2]]"#));
+}
+
+#[test]
+fn use_map_gets_with_a_fallback() {
+	is!("use map; [get_or({ab:1}, \"cd\", 0), get_or({ab:1}, \"ab\", 0)]", warp::ints(vec![0, 1]));
+}

@@ -5,12 +5,14 @@
 //! value as JSON (as std json's to_json writes it); no route is 404, a failing route 500 with its message.
 
 use crate::node::Node;
+use crate::site::SiteFile;
 use std::cell::Cell;
 
 const JSON_TYPE: &str = "application/json";
 const TEXT_TYPE: &str = "text/plain; charset=utf-8";
 const NOT_FOUND: u16 = 404;
 const FAILED: u16 = 500;
+const SITE_METHOD: &str = "GET";
 
 thread_local! {
 	/// How many requests this thread's next serve answers before it returns: 0 serves on (tests stop it so)
@@ -38,21 +40,21 @@ pub struct Route {
 pub struct Answer {
 	pub status: u16,
 	pub content_type: &'static str,
-	pub body: String,
+	pub body: Vec<u8>,
 }
 
 impl Answer {
 	pub fn of(value: &Node) -> Answer {
 		match value.drop_meta() {
-			Node::Text(text) => Answer { status: 200, content_type: TEXT_TYPE, body: text.clone() },
-			Node::Char(character) => Answer { status: 200, content_type: TEXT_TYPE, body: character.to_string() },
+			Node::Text(text) => Answer { status: 200, content_type: TEXT_TYPE, body: text.clone().into_bytes() },
+			Node::Char(character) => Answer { status: 200, content_type: TEXT_TYPE, body: character.to_string().into_bytes() },
 			Node::Error(message) => Answer::failed(&message.to_string()),
-			other => Answer { status: 200, content_type: JSON_TYPE, body: crate::foreign::json_of(other).to_string() },
+			other => Answer { status: 200, content_type: JSON_TYPE, body: crate::foreign::json_of(other).to_string().into_bytes() },
 		}
 	}
 
 	pub fn failed(message: &str) -> Answer {
-		Answer { status: FAILED, content_type: TEXT_TYPE, body: message.to_string() }
+		Answer { status: FAILED, content_type: TEXT_TYPE, body: message.as_bytes().to_vec() }
 	}
 }
 
@@ -73,8 +75,9 @@ fn text_of(node: &Node) -> String {
 	}
 }
 
-/// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function
-pub fn serve(port: u16, routes: &[Route], mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
+/// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function; a GET no route
+/// takes is a file of the program's `site` (src/site.rs), its page at /
+pub fn serve(port: u16, routes: &[Route], site: &[SiteFile], mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
 	let server = tiny_http::Server::http(("0.0.0.0", port)).map_err(|problem| format!("serve {port}: {problem}"))?;
 	let limit = take_request_limit();
 	let mut served = 0;
@@ -85,16 +88,22 @@ pub fn serve(port: u16, routes: &[Route], mut answer: impl FnMut(&Route, Node) -
 		let _ = request.as_reader().read_to_string(&mut body);
 		let answered = match routes.iter().find(|route| route.method == method && route.path == path) {
 			Some(route) => answer(route, request_node(&method, &path, &query, body)),
-			None => Answer { status: NOT_FOUND, content_type: TEXT_TYPE, body: format!("no route {method} {path}") },
+			None => site_file(site, &method, &path).unwrap_or_else(|| Answer { status: NOT_FOUND, content_type: TEXT_TYPE, body: format!("no route {method} {path}").into_bytes() }),
 		};
 		let header = tiny_http::Header::from_bytes("Content-Type", answered.content_type).expect("a valid header");
-		let _ = request.respond(tiny_http::Response::from_string(answered.body).with_status_code(answered.status).with_header(header));
+		let _ = request.respond(tiny_http::Response::from_data(answered.body).with_status_code(answered.status).with_header(header));
 		served += 1;
 		if limit > 0 && served >= limit {
 			break;
 		}
 	}
 	Ok(())
+}
+
+/// `GET /` is the site's page, `GET /app.wasm` its module and so on
+fn site_file(site: &[SiteFile], method: &str, path: &str) -> Option<Answer> {
+	let (name, bytes) = crate::site::file_at(site, path).filter(|_| method == SITE_METHOD)?;
+	Some(Answer { status: 200, content_type: crate::site::content_type(name), body: bytes.clone() })
 }
 
 /// An HTTP body as a value: a JSON object or array parsed into its map or list, any other body the text

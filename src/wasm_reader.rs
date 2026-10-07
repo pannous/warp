@@ -303,6 +303,7 @@ fn run_main<S: 'static>(
 	let module = crate::run::module_cache::compiled_module(&engine, bytes)?;
 	let mut linker = Linker::new(&engine);
 	link(&mut linker, &engine, &module)?;
+	define_imported_entities(&mut linker, &mut store, &module)?;
 	let instance = linker.instantiate(&mut store, &module)?;
 	let main = ENTRY_POINTS
 		.iter()
@@ -322,6 +323,23 @@ fn run_main<S: 'static>(
 		Some(()) => Ok((results.first().copied().unwrap_or(Val::AnyRef(None)), store, instance)),
 		None => Ok((Val::AnyRef(None), store, instance)), // `exit` (P121): the run's value is ø
 	}
+}
+
+/// The memories and tables a module imports (`use { memory, table } from "env"`) that nothing linked provides: fresh
+/// ones, as the embedder of a run of its own
+fn define_imported_entities<S>(linker: &mut Linker<S>, store: &mut Store<S>, module: &Module) -> Result<()> {
+	for import in module.imports() {
+		if linker.get_by_import(&mut *store, &import).is_some() {
+			continue;
+		}
+		let entity: wasmtime::Extern = match import.ty() {
+			wasmtime::ExternType::Memory(memory) => wasmtime::Memory::new(&mut *store, memory)?.into(),
+			wasmtime::ExternType::Table(table) => wasmtime::Table::new(&mut *store, table, wasmtime::Ref::Func(None))?.into(),
+			_ => continue,
+		};
+		linker.define(&*store, import.module(), import.name(), entity)?;
+	}
+	Ok(())
 }
 
 /// Instantiates `bytes` with the import families it needs and runs `main`, keeping the instance for later calls of its
@@ -406,33 +424,43 @@ fn family_linker(engine: &wasmtime::Engine, imports: Imports) -> Result<Linker<c
 /// A program that starts tasks (`go f(x)`) gets the task words; the tasks nobody awaited finish before the result.
 pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 	let mut tasks = None;
-	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| {
-		link_imports(linker, engine, module, imports)?;
-		// the shared arrays of the run: the program's and every task's instance reach the same ones
-		let shared = crate::shared::imports_shared(module).then(|| std::sync::Arc::new(crate::shared::SharedArrays::default()));
-		if let Some(shared) = &shared {
-			shared.link_into(linker)?;
-		}
-		if crate::tasks::imports_tasks(module) {
-			tasks = Some(crate::tasks::link(linker, engine, module, imports, shared)?);
-		}
-		Ok(())
-	});
-	let unread_failure = tasks.as_ref().map_or(Ok(()), |tasks| tasks.join_all());
+	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_run(linker, engine, module, imports, &mut tasks));
+	let (result, mut store, instance) = finish_tasks(outcome, tasks.as_deref())?;
+	val_to_node(&result, &mut store, &instance)
+}
+
+/// Link a run's imports, with the shared arrays and the task words when the module uses them (`tasks` gets the run's)
+fn link_run(linker: &mut Linker<crate::host::HostState>, engine: &wasmtime::Engine, module: &Module, imports: Imports, tasks: &mut Option<std::sync::Arc<crate::tasks::TaskTable>>) -> Result<()> {
+	link_imports(linker, engine, module, imports)?;
+	// the shared arrays of the run: the program's and every task's instance reach the same ones
+	let shared = crate::shared::imports_shared(module).then(|| std::sync::Arc::new(crate::shared::SharedArrays::default()));
+	if let Some(shared) = &shared {
+		shared.link_into(linker)?;
+	}
+	if crate::tasks::imports_tasks(module) {
+		*tasks = Some(crate::tasks::link(linker, engine, module, imports, shared)?);
+	}
+	Ok(())
+}
+
+/// After main: the tasks nobody awaited finish (their unread failure ends the run), their raises run their handlers
+/// and the listeners on shared values see what the tasks left
+fn finish_tasks<R>(outcome: Result<(R, Store<crate::host::HostState>, Instance)>, tasks: Option<&crate::tasks::TaskTable>) -> Result<(R, Store<crate::host::HostState>, Instance)> {
+	let unread_failure = tasks.map_or(Ok(()), |tasks| tasks.join_all());
 	let (result, mut store, instance) = outcome?;
-	// the raises of tasks nobody awaited run their handlers before the run ends, and the listeners on shared values
-	// see what the tasks left
-	if let Some(tasks) = &tasks {
+	if let Some(tasks) = tasks {
 		tasks.deliver(&mut store, &mut |store, name| instance.get_export(&mut *store, name))?;
 		warp_runtime::system_signals::run_due_handlers(&mut store, |store, name| instance.get_func(&mut *store, name))?;
 	}
 	unread_failure?;
-	val_to_node(&result, &mut store, &instance)
+	Ok((result, store, instance))
 }
 
 /// Run main, then call the parameterless export `name` (a page's page·html, src/site.rs): its value
 pub fn read_export_after_main(bytes: &[u8], imports: Imports, name: &str) -> Result<Node> {
-	let (_, mut store, instance) = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_imports(linker, engine, module, imports))?;
+	let mut tasks = None;
+	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_run(linker, engine, module, imports, &mut tasks));
+	let (_, mut store, instance) = finish_tasks(outcome, tasks.as_deref())?;
 	let export = instance.get_func(&mut store, name).ok_or_else(|| anyhow!("the module exports no {name}"))?;
 	let mut results = vec![Val::AnyRef(None); export.ty(&store).results().len()];
 	let outcome = export.call(&mut store, &[], &mut results);

@@ -57,3 +57,9 @@ fn a_for_loop_inside_markup() {
 	assert_eq!(html_of("items = [\"a\"]\nul { for item in items { li: item } }"), "<ul><li>a</li></ul>");
 }
 
+
+// the loop nested in html{ ul{ … } } over numbers (card markup-index: it was 'undefined variable: i·index')
+#[test]
+fn a_for_loop_nested_in_html() {
+	assert_eq!(html_of("items = [1, 2]; html{ lang: \"en\"; ul{ for i in items { li{ i } } } }"), "<html lang=\"en\"><ul><li>1</li><li>2</li></ul></html>");
+}
