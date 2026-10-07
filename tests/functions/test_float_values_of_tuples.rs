@@ -17,3 +17,12 @@ fn a_function_changes_a_float_global() {
 	is!("b = random(); def bump() { global b; b += 0.5; 1 }; bump(); b >= 0.5", true);
 	is!(&format!("{SIGMOID_PAIR}; b = sigmoid(0); def t() {{ global b; (h, o) = pair(0); b = b + o }}; t(); b"), 1.0);
 }
+
+/// a value held as a Node (a parameter fed only loop items, `for (i, t) in examples`) added into a float variable keeps
+/// its float: it was read as an Int ('not an int')
+#[test]
+fn a_held_value_adds_into_a_float() {
+	let loop_calls = "ex = [([0, 0], 0)]; for (i, t) in ex { f(t) }";
+	is!(&format!("b = random(); def f(t) {{ global b; d = t - random(); b = b + 0.5 * d }}; {loop_calls}; b < 3"), true);
+	is!(&format!("def f(t) {{ b = 0.25 + random() * 0; d = t + 0.5 + random() * 0; b = b + d; print b }}; {loop_calls}"), 1);
+}
