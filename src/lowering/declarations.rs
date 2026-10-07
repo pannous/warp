@@ -754,6 +754,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 	}
 	let mut context = crate::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, &node);
+	crate::analyzer::note_bool_functions(context.user_functions.values());
 	let int_starts = int_starts(&node, &crate::analyzer::literal_variable_kinds(&node, &context));
 	let path = |function: &str| {
 		let Some(definition) = context.user_functions.get(function) else { return TaskPath::Inline };
@@ -976,10 +977,18 @@ const BODY_PLACEHOLDER: &str = "handler_body_placeholder";
 
 /// `task·check(task_join(job), task_failure(job)); task_await(job)`: a failed task raises its error from wasm, which
 /// `try` catches, before the result is read
-fn checked_await(await_word: &str, job: &Node) -> Node {
+fn checked_await(await_word: &str, job: &Node, bools: bool) -> Node {
 	use crate::host::{TASK_CHECK, TASK_FAILURE, TASK_JOIN};
 	let check = marker(TASK_CHECK, vec![marker(TASK_JOIN, vec![job.clone()]), marker(TASK_FAILURE, vec![job.clone()])]);
-	Node::List(vec![check, marker(await_word, vec![job.clone()])], Bracket::None, Separator::Semicolon)
+	let result = marker(await_word, vec![job.clone()]);
+	// a bool crosses as 1/0: comparing it makes it a bool again (card bool-crossing)
+	let result = if bools { Node::Key(Box::new(result), Op::Ne, Box::new(Node::Number(crate::extensions::numbers::Number::Int(0)))) } else { result };
+	Node::List(vec![check, result], Bracket::None, Separator::Semicolon)
+}
+
+/// Whether every started function gives a bool (analyzer::note_bool_functions)
+fn gives_bools(functions: &[Node]) -> bool {
+	!functions.is_empty() && functions.iter().all(|function| crate::analyzer::is_bool_function(&word(function)))
 }
 
 /// `try f(a, b) else Y` of a user function f: the guarded call goes through the host, `guarded_call("f·node", [a, b])`,
@@ -1010,10 +1019,10 @@ fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static 
 }
 
 /// Every result of a job list: `jobs.map(awaited_job => <checked await of awaited_job>)`
-fn awaited_jobs(list: &Node) -> Node {
+fn awaited_jobs(list: &Node, bools: bool) -> Node {
 	use crate::host::TASK_AWAIT_VALUE;
 	let template = crate::wasp_parser::parse(&format!("{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"));
-	let awaited = checked_await(TASK_AWAIT_VALUE, &Node::Symbol(AWAITED_JOB.to_string()));
+	let awaited = checked_await(TASK_AWAIT_VALUE, &Node::Symbol(AWAITED_JOB.to_string()), bools);
 	let template = crate::library_words::substitute(template, TASK_LIST_PLACEHOLDER, list);
 	crate::library_words::substitute(template, AWAITED_PLACEHOLDER, &awaited)
 }
@@ -1054,17 +1063,21 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 						TaskPath::Inline => Node::List(items[1..].to_vec(), Bracket::Round, Separator::None),
 					}
 				}
-				TASK_VALUE => match path(&word(&items[2])) {
-					TaskPath::Ints => checked_await(TASK_AWAIT, &items[1]),
-					TaskPath::Values(_) => checked_await(TASK_AWAIT_VALUE, &items[1]),
-					TaskPath::Inline => items[1].clone(),
-				},
+				TASK_VALUE => {
+					let bools = gives_bools(&items[2..3]);
+					match path(&word(&items[2])) {
+						TaskPath::Ints => checked_await(TASK_AWAIT, &items[1], bools),
+						TaskPath::Values(_) => checked_await(TASK_AWAIT_VALUE, &items[1], bools),
+						TaskPath::Inline => items[1].clone(),
+					}
+				}
 				TASK_LIST | TASK_ELEMENT => {
 					let threaded = items[2..].iter().all(|function| path(&word(function)) != TaskPath::Inline);
+					let bools = gives_bools(&items[2..]);
 					match (threaded, read == TASK_LIST) {
 						(false, _) => items[1].clone(),
-						(true, false) => checked_await(TASK_AWAIT_VALUE, &items[1]),
-						(true, true) => awaited_jobs(&items[1]),
+						(true, false) => checked_await(TASK_AWAIT_VALUE, &items[1], bools),
+						(true, true) => awaited_jobs(&items[1], bools),
 					}
 				}
 				TASK_CONTROL_MARK => match path(&word(&items[2])) {

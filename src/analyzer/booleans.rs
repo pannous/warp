@@ -25,7 +25,7 @@ pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::contex
 	}
 }
 
-fn is_bool_function(name: &str) -> bool {
+pub fn is_bool_function(name: &str) -> bool {
 	BOOL_FUNCTIONS.with(|known| known.borrow().contains(name))
 }
 
