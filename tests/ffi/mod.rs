@@ -1,4 +1,5 @@
 mod test_download;
+mod test_fetch_computed_url;
 mod test_ffi_import_group;
 mod test_ffi_warning_once;
 mod test_ffi;

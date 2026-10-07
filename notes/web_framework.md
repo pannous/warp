@@ -69,6 +69,11 @@ Each step is useful on its own and is what the next ones stand on.
 - A markup value is any key whose name is an HTML tag (`div`, `p`, `ul`, `li`, `a`, `button`, … the HTML element list)
   with a block; `name: "text"` is the element with that text, `name{ key: value … }` attributes for keys that are HTML
   attributes, other children nested in order. Unknown names stay data (no custom elements yet).
+- Repeated keys (user decision P176, card g-_bGo): in a named tag's block, glued `ul{…}` or spaced `ul {…}`, a repeated
+  `key: value` is a child (`ul{ li: "First" li: "Second" }` is two li), as repeated elements in XML/HTML; a plain `{…}`
+  stays a map whose repeated key is the error "duplicate key", also inside a tag, and so does a declared type's
+  constructor `Point{ x: 1 x: 2 }`. The parser's one-shot flag tag_block (wasp_parser/mod.rs) skips the check for the
+  tag's own block only.
 - Natively the value serializes as HTML (`to_html`), text escaped. In the page the program's value, when it is markup, is
   shown as DOM in the output pane instead of its wasp text; `show(markup)` places it explicitly.
 
@@ -227,9 +232,17 @@ Each step is useful on its own and is what the next ones stand on.
   ("/users/:id:int") whose function is the layout with page·part·N() at the outlet (page·part·N: the inner block, its
   parameters, the outer ones too, bound by `let`); after them the outer route itself with an empty outlet, so an inner
   "/" route answers the outer path first. page·routes lists the whole patterns.
-- Open: a built site
-  prerendering each static route (index.html is "/" only; a deep link needs the serve program to render it), the serve
-  program rendering per request path. `outlet` is the canonical word (aliases such as slot on demand).
+- A serve program with routes (card serve-route): src/site.rs ServedSite keeps the compiled module; a GET that is no
+  serve route and no file of the site renders the page at that path (main + page·html under host::with_page_path), so
+  GET /users/2 is that route's HTML, hydrated by site.js at the same path. A path no route takes gets the "*" route's
+  page (status 200; without one the "no page at <path>" text). Fixture tests/fixtures/served_routes.wasp.
+- Prerendered routes (card route-prerender): `warp build --site` (and `warp dev`) also writes <path>/index.html for
+  each route without parameters but "/" (src/site.rs prerendered, patterns from page·routes), rendered at that path,
+  finding the site's files through <base href="../"> per level (a page served for a deeper path has <base href="/">;
+  no script grows, card web-bundle's budget), so the page hydrates at /about/. An in-page "#anchor" link on such a
+  deep page resolves against the root. site::file_at finds "/about" as about/index.html (warp dev, serve). Routes with parameters and "*" are
+  rendered by the page itself (a static host needs a fallback to index.html for them).
+- `outlet` is the canonical word (aliases such as slot on demand).
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the

@@ -63,7 +63,8 @@ Below 50 GB free afterwards it shows a notification and messages the supervisor 
 `claude -p` + SendMessage, at most every 6 hours. First run: 384.6 GB freed in 5 s, 512 GB free; a build afterwards
 rebuilds only what rule 4 took (4 min for the test binary with an empty cache).
 
-Open (question for the user, with warp-e9): split-debuginfo for `[profile.dev]`. Measured 2026-10-07 on the test
+Decided (user, P180, 2026-10-07): split-debuginfo for `[profile.dev]` stays "unpacked" (the default, keeps file:line
+in backtraces) and the hourly sweep above removes the kept object files; "off" was the recommendation. Measured 2026-10-07 on the test
 binary (touch src/lib.rs, `cargo test --no-run --test tests`, cargo's own time): unpacked 6.1 s, 32 object files kept
 per build (the default, swept hourly); off 6.1 s, no object files, Rust backtraces keep function names but lose
 file:line; packed 47.9 s (dsymutil, a 287 MB .dSYM per test binary), file:line kept.

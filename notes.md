@@ -50,3 +50,7 @@
   text_concat before node arithmetic.
 - node_in read lists recursively (stack overflow at ~100k items); now a loop.
 - A Pratt-parser hook like try_parse_return is the cheap way to give a keyword unary-minus binding (`await`).
+- Wiki sweep 2026-10-07: `WARP=<private copy> probes/wiki_blocks.py` (fenced blocks) and probes/wiki_examples.py (`a` → `b`)
+  run from the main checkout (worktrees have no wiki/). Most → diffs are fragments needing the sentence's context.
+  A parameter's kind is guessed from body usage before calls are seen (user_functions::with_usage_kinds): counting
+  guessed List, so an uncalled text helper failed; joining it to a text literal now says Text.
