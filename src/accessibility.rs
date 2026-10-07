@@ -64,7 +64,7 @@ impl Element<'_> {
 fn element_parts(node: &Node) -> Option<(&str, &Node)> {
 	let Node::Key(tag, Op::Colon, content) = node.drop_meta() else { return None };
 	match tag.drop_meta() {
-		Node::Symbol(tag) if crate::html::is_element_tag(tag) => Some((tag.as_str(), content.as_ref())),
+		Node::Symbol(tag) if crate::markup::is_element_tag(tag) => Some((tag.as_str(), content.as_ref())),
 		_ => None,
 	}
 }
@@ -81,7 +81,7 @@ fn content_items(content: &Node) -> Vec<&Node> {
 fn attribute_parts(item: &Node) -> Option<(String, Option<String>)> {
 	let Node::Key(name, Op::Colon, value) = item.drop_meta() else { return None };
 	let Node::Symbol(name) = name.drop_meta() else { return None };
-	if crate::html::is_element_tag(name) {
+	if crate::markup::is_element_tag(name) {
 		return None;
 	}
 	let value = match value.drop_meta() {

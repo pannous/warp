@@ -38,7 +38,7 @@ fn outside_tags(node: Node, defined: &HashSet<String>) -> Node {
 fn spaced_element(node: Node, defined: &HashSet<String>) -> Node {
 	if let Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() {
 		if let [name, body] = items.as_slice() {
-			let is_element = matches!(name.drop_meta(), Node::Symbol(tag) if crate::html::is_element_tag(tag) && !defined.contains(tag));
+			let is_element = matches!(name.drop_meta(), Node::Symbol(tag) if crate::markup::is_element_tag(tag) && !defined.contains(tag));
 			if is_element && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 				return Node::Key(Box::new(name.drop_meta().clone()), Op::Colon, Box::new(body.drop_meta().clone()));
 			}
