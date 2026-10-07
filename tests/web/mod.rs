@@ -6,3 +6,4 @@ mod test_markup_tags;
 mod test_web_playground;
 mod test_html_render;
 mod test_element_events;
+mod test_components;
