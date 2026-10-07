@@ -198,19 +198,6 @@ fn zero_fill_parts(value: &Node) -> Option<(&Node, &Node)> {
 	}
 }
 
-/// Whether `body` assigns or updates the variable `name` itself or a field of it (`name.x = v`), not its items
-fn replaces(body: &Node, name: &str) -> bool {
-	let mut found = false;
-	body.visit(&mut |part| if let Node::Key(target, op, _) = part {
-		let target = match target.drop_meta() {
-			Node::Key(owner, Op::Dot, _) => owner.drop_meta(),
-			other => other,
-		};
-		found |= (matches!(op, Op::Assign | Op::Define) || is_update(op)) && matches!(target, Node::Symbol(assigned) if assigned == name);
-	});
-	found
-}
-
 /// `x = (t = x; …; t)`, an inlined call (inlining.rs) handing x back: the temporary t, which may share x's array; only
 /// the inliner's temporaries, which nothing else reads, and only when the block hands back the very variable it got
 fn moved_through(owner: &str, statements: &[Node], last: &Node) -> Option<String> {
@@ -463,7 +450,7 @@ impl WasmGcEmitter {
 		for (params, body) in functions {
 			let scope = crate::analyzer::function_body_scope(&params, &body, &function_kinds, &main.globals, &self.ctx.closure_variable_targets);
 			let saved = std::mem::replace(&mut self.scope, scope);
-			found.retain(|name, list| !replaces(&body, name) && self.item_writes_fit(&body, name, list));
+			found.retain(|name, list| !self.replaces(&body, name, list.element) && self.item_writes_fit(&body, name, list));
 			self.scope = saved;
 		}
 		found
@@ -475,6 +462,21 @@ impl WasmGcEmitter {
 			Node::List(items, bracket, separator) => Node::List(items.iter().filter(|item| !self.is_definition(item)).cloned().collect(), bracket.clone(), separator.clone()),
 			other => other.clone(),
 		}
+	}
+
+	/// Whether `body` assigns or updates the typed list `name` itself or a field of it (`name.x = v`), other than with a
+	/// new array of its element type (`canvas_pixels = int[w * h]`); its items are item_writes_fit's
+	fn replaces(&self, body: &Node, name: &str, element: ElementType) -> bool {
+		let mut found = false;
+		body.visit(&mut |part| if let Node::Key(target, op, value) = part {
+			let target = match target.drop_meta() {
+				Node::Key(owner, Op::Dot, _) => owner.drop_meta(),
+				other => other,
+			};
+			let new_array = *op == Op::Assign && zero_fill_parts(value).is_some_and(|(_, zero)| self.items_element(std::slice::from_ref(zero)) == Some(element));
+			found |= (matches!(op, Op::Assign | Op::Define) || is_update(op)) && !new_array && matches!(target, Node::Symbol(assigned) if assigned == name);
+		});
+		found
 	}
 
 	/// Whether every item write of `body` to the typed list `name` stores a value of its element type at an index (not a
