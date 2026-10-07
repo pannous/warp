@@ -50,3 +50,18 @@ fn a_bool_of_unknown_static_type_is_tested_at_run_time() {
 	is!("h(value:any) := value == 0; h(false)", true);
 	is!("h(value:any) := value == true; h(1)", true);
 }
+
+#[test]
+fn a_literal_bool_counts_in_arithmetic() {
+	is!("true + 1", 2); // P195 (user)
+	is!("true + true", 2);
+}
+
+#[test]
+fn strict_equality_compares_the_full_type() {
+	// P196 (user): same value and same type
+	assert_eq!(text_of("1 === 1.5"), "no");
+	assert_eq!(text_of("1 === (1.0 as float)"), "no");
+	assert_eq!(text_of("\"a\" === \"a\""), "yes");
+	assert_eq!(text_of("1 !== 1.5"), "yes");
+}

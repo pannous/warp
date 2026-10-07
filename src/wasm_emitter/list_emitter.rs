@@ -370,7 +370,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The name `type(x)` reports: `int`, `rational`, `text`, `list of int` …
-	fn static_type_name(&self, arg: &Node) -> String {
+	pub(super) fn static_type_name(&self, arg: &Node) -> String {
 		if crate::analyzer::is_boolean(arg, &self.scope) {
 			return crate::analyzer::BOOL_TYPE.to_string();
 		}
