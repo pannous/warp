@@ -38,6 +38,9 @@ PASSED:
   ✓ control::test_broadcast::a_broadcast_reaches_another_program
   ✓ control::test_broadcast::a_program_hears_its_own_broadcast
   ✓ control::test_broadcast::nobody_listening_is_no_error
+  ✓ control::test_catch_binding::a_caught_error_reads_as_its_message_in_text
+  ✓ control::test_catch_binding::a_raised_value_is_caught_as_its_text
+  ✓ control::test_catch_binding::an_interpolation_reads_the_caught_error
   ✓ control::test_catch_binding::catch_binds_the_error
   ✓ control::test_catch_binding::except_as_binds_the_error
   ✓ control::test_cell_truth::a_cell_value_as_a_condition
@@ -1049,6 +1052,7 @@ PASSED:
   ✓ functions::test_suffix_word_spellings::test_suffix_form_calls_a_user_function
   ✓ functions::test_suffix_word_spellings::test_suffix_forms_chain_and_mix_like_before
   ✓ functions::test_suffix_words::a_function_name_with_ed_is_its_suffix_form
+  ✓ functions::test_suffix_words::a_suffix_word_applies_to_the_assigned_value
   ✓ functions::test_suffix_words::a_user_function_or_variable_takes_the_suffix_word
   ✓ functions::test_suffix_words::a_variable_is_no_suffix_form
   ✓ functions::test_suffix_words::an_ungrouped_mix_asks
@@ -1847,6 +1851,7 @@ PASSED:
   ✓ operators::test_pipeline::a_pipeline_over_several_lines
   ✓ operators::test_postfix_words::a_trailing_percent_is_a_hundredth
   ✓ operators::test_postfix_words::an_operator_word_after_its_value_applies_to_it
+  ✓ operators::test_postfix_words::an_operator_word_without_operand_is_a_function
   ✓ operators::test_root_word::a_defined_root_wins
   ✓ operators::test_root_word::root_is_sqrt
   ✓ operators::test_structural_equality::a_float_equals_the_same_exact_number
@@ -3339,4 +3344,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3334 passed, 0 failed, 3334 total tested
+19 ignored, 3339 passed, 0 failed, 3339 total tested
