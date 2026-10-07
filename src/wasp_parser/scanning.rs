@@ -20,6 +20,17 @@ impl WaspParser {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}
 
+	/// The operator a block holds alone, the cursor at its start: `{++}`, `{ * }`, and its length up to the `}`
+	pub(super) fn bare_operator_in_block(&self) -> Option<(String, usize)> {
+		const OPERATOR_CHARS: &str = "+-*/%^<>=!&|";
+		let is_blank = |ch: &char| matches!(ch, ' ' | '\t');
+		let opened = self.chars[..self.pos].iter().rev().find(|ch| !is_blank(ch)) == Some(&'{');
+		let rest = &self.chars[self.pos..];
+		let operator: String = rest.iter().take_while(|ch| OPERATOR_CHARS.contains(**ch)).collect();
+		let length = operator.chars().count() + rest[operator.chars().count()..].iter().take_while(|ch| is_blank(ch)).count();
+		(opened && !operator.is_empty() && rest.get(length) == Some(&'}')).then_some((operator, length))
+	}
+
 	/// Do blanks, an identifier, optional blanks and a `{` follow the cursor: `record point {…}`
 	pub(super) fn name_and_block_follow(&self) -> bool {
 		self.name_then('{')
@@ -171,6 +182,14 @@ impl WaspParser {
 	fn follows_operand_on_its_line(&self) -> bool {
 		let last = self.chars[..self.pos].iter().rev().take_while(|&&c| c != '\n').find(|c| !c.is_whitespace());
 		last.is_some_and(|&c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
+	}
+
+	/// The `//` at the cursor is followed by what a divisor could be: one word (`// 2`, `// n`) or an expression
+	/// (`// n + 1`), not prose (`// property with value list`)
+	fn comment_reads_like_divisor(&self) -> bool {
+		let rest: String = self.chars[self.pos + 2..].iter().take_while(|&&c| c != '\n').collect();
+		let rest = rest.trim();
+		!rest.contains(char::is_whitespace) || rest.contains(['+', '-', '*', '/', '%', '(', '^'])
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -357,7 +376,7 @@ impl WaspParser {
 			}
 			// // line comment (but not :// URL scheme)
 			if c1 == '/' && c2 == '/' && self.prev_char() != ':' && !self.at_floor_division() {
-				if self.follows_operand_on_its_line() {
+				if self.follows_operand_on_its_line() && self.comment_reads_like_divisor() {
 					self.set_hint_pos();
 					crate::diagnostic::educate_once(SLASH_COMMENT_TOPIC, "a // b", "a//b", "`// …` after code is a comment; floor division is written glued: a//b");
 				}

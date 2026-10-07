@@ -3,6 +3,8 @@
 use super::*;
 
 const VOID_WORD: &str = "void";
+/// `none(xs, f)` (Kotlin), the opposite of `any`: a call, while a bare `none` is the null
+const NONE_WORD: &str = "none";
 const STYLE_WORD: &str = "style";
 /// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
 const CAPTURED_ARGUMENT: &str = "$0";
@@ -148,6 +150,10 @@ impl WaspParser {
 			'\\' if let Some(name) = crate::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
 				(0..=name.len()).for_each(|_| self.advance());
 				error(&format!("a uniscript entity is written \\:{name}, not \\{name}"))
+			}
+			_ if let Some((operator, length)) = self.bare_operator_in_block() => {
+				(0..length).for_each(|_| self.advance());
+				error(&format!("{{{operator}}} is an operator without operands, no function: write them, e.g. map xs {{it + 1}}"))
 			}
 			ch => {
 				warn!(
@@ -324,6 +330,9 @@ impl WaspParser {
 	}
 
 	fn closing_end_follows_from(&self, start: usize, openers: &[&str]) -> bool {
+		if self.names_end() {
+			return false;
+		}
 		let mut open = 1;
 		let mut position = start;
 		while position < self.chars.len() {
@@ -350,6 +359,40 @@ impl WaspParser {
 				_ => {}
 			}
 			if open == 0 {
+				return true;
+			}
+		}
+		false
+	}
+
+	/// Whether the source uses `end` as a name: a parameter or argument between separators (`f(a, end)`) or an assigned variable
+	/// (`end = 3`). Then no `end` closes a block: `if a == 0 then 1 else end` hands back the variable
+	fn names_end(&self) -> bool {
+		let next_visible = |from: usize| self.chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
+		let previous_visible = |before: usize| self.chars[..before].iter().rposition(|ch| !ch.is_whitespace());
+		let mut position = 0;
+		while position < self.chars.len() {
+			let ch = self.chars[position];
+			if ch == '"' || ch == '\'' {
+				position += 2 + self.chars[position + 1..].iter().position(|quoted| *quoted == ch).unwrap_or(self.chars.len());
+				continue;
+			}
+			if !is_identifier_char(ch) {
+				position += 1;
+				continue;
+			}
+			let word_start = position;
+			while position < self.chars.len() && is_identifier_char(self.chars[position]) {
+				position += 1;
+			}
+			if self.chars[word_start..position].iter().copied().ne(END_KEYWORD.chars()) {
+				continue;
+			}
+			let before = previous_visible(word_start).map(|index| self.chars[index]);
+			let after = next_visible(position);
+			let assigned = after.is_some_and(|index| self.chars[index] == '=' && self.chars.get(index + 1) != Some(&'='));
+			// `(…, end)` both sides: `foo(if c then 1 else 2 end)` closes a block
+			if matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(self.chars[index], ',' | ')')) || assigned {
 				return true;
 			}
 		}
@@ -537,6 +580,15 @@ impl WaspParser {
 		blanks > 0 && name > 0 && self.is_identifier_start(blanks) && self.peek_char(blanks + name) == '('
 	}
 
+	/// ` () {` after a name
+	fn empty_parameters_and_block_follow(&self) -> bool {
+		let blanks_from = |start: usize| (start..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = blanks_from(0);
+		let inner = blanks_from(blanks + 1);
+		let closed = blanks + 1 + inner;
+		blanks > 0 && self.peek_char(blanks) == '(' && self.peek_char(closed) == ')' && self.peek_char(closed + 1 + blanks_from(closed + 1)) == '{'
+	}
+
 	pub(super) fn parameters_follow_after_blanks(&self) -> bool {
 		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		blanks > 0 && self.peek_char(blanks) == '('
@@ -577,7 +629,9 @@ impl WaspParser {
 
 		// `def square (n) {…}` names its function like `def square(n) {…}`
 		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && !self.options.wit_mode && !self.options.data_mode);
-		if names_function && self.parameters_follow_after_blanks() {
+		// C's `int boom () { -1 }` (wiki/type.md): a name, `()` and a block are a definition like `boom() {…}`
+		let spaced_definition = !self.options.wit_mode && !self.options.data_mode && self.empty_parameters_and_block_follow();
+		if (names_function && self.parameters_follow_after_blanks()) || spaced_definition {
 			self.skip_spaces();
 		}
 		// Rust's and C#'s `fn apply<F: Fn(i32) -> i32>(f: F)`, `id<T>(x: T)`: the type parameters say nothing wasp needs
@@ -602,7 +656,8 @@ impl WaspParser {
 			return Node::Symbol(symbol);
 		}
 
-		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count())) {
+		let none_call = symbol == NONE_WORD && self.peek_char(0) == '(';
+		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !none_call && !self.at_member_name(symbol.chars().count())) {
 			if !self.names_field(&symbol, &constant) {
 				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
 			}
@@ -795,9 +850,11 @@ impl WaspParser {
 	}
 
 	/// `class Name {…}`, `struct`, `type Name {…}`, `record Name {…}`; `class:"btn"`, `type:email` (html attributes),
-	/// `x.class` and `type(x)` are no declarations
+	/// `class="btn"`, `type = "text"` (html attributes, P188), `x.class` and `type(x)` are no declarations
 	pub(super) fn declares_type(&self, symbol: &str) -> bool {
-		let is_key = self.current_char() == ':' && self.peek_char(1) != '=';
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let is_assigned = self.peek_char(blanks) == '=' && self.peek_char(blanks + 1) != '=';
+		let is_key = (self.current_char() == ':' && self.peek_char(1) != '=') || is_assigned;
 		let start = self.pos.saturating_sub(symbol.chars().count());
 		let is_field = start > 0 && self.chars[start - 1] == '.';
 		!is_key && !is_field && (TYPE_DECLARATION_WORDS.contains(&symbol)
@@ -900,7 +957,7 @@ impl WaspParser {
 			}
 		}
 		self.skip_struct_words();
-		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
+		let body = if self.current_char() == '{' { Self::class_body(self.parse_bracketed('{')) } else { Empty };
 		// Python's `class Point:` and the lines indented below it
 		let body = match (python_body, body) {
 			(true, Empty) => {
@@ -909,7 +966,7 @@ impl WaspParser {
 				self.skip_struct_words();
 				// `type Point: {` and its fields on the lines below: the braces are the body, as in `type Point {`
 				match self.current_char() == '{' {
-					true => Self::transform_fields_to_types(self.parse_bracketed('{')),
+					true => Self::class_body(self.parse_bracketed('{')),
 					false => self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty),
 				}
 			}
@@ -936,7 +993,12 @@ impl WaspParser {
 		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
 		// Kotlin's `sealed class Shape`, Swift's `class Marker`: a class without fields, when its line ends after the name
 		// (`type of x` goes on: no declaration)
-		let body = if matches!(body, Empty) && ends_statement { Node::List(vec![], Bracket::Curly, Separator::None) } else { body };
+		let bodyless = matches!(body, Empty) && ends_statement;
+		let body = if bodyless { Node::List(vec![], Bracket::Curly, Separator::None) } else { body };
+		// C#'s file-scoped `class Foo;` takes in the definitions after it (file_declarations.rs)
+		if bodyless && self.current_char() == ';' {
+			name = name.with_attribute(crate::lowering::file_declarations::FILE_CLASS_MARK, Node::True);
+		}
 		Node::Type { name: Box::new(name), body: Box::new(body) }
 	}
 
@@ -1063,7 +1125,8 @@ impl WaspParser {
 	/// a variant without payload is its name, a symbol (`None` stays ø)
 	fn parse_sum_type(&mut self, type_name: String, type_parameters: &[String], start: usize) -> Node {
 		self.advance_by(start);
-		let mut declarations = vec![Node::Type { name: Box::new(Symbol(type_name.clone())), body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)) }];
+		let mut declarations = vec![];
+		let mut bare_variants = vec![];
 		loop {
 			self.skip_spaces();
 			let variant = match self.parse_symbol() {
@@ -1077,12 +1140,16 @@ impl WaspParser {
 				payload.extend(self.parse_symbol().ok().map(Symbol));
 				self.skip_spaces();
 			}
-			if !payload.is_empty() {
-				declarations.push(self.variant_class(&type_name, variant, payload, type_parameters));
+			match payload.is_empty() {
+				true => bare_variants.push(Symbol(variant)),
+				false => declarations.push(self.variant_class(&type_name, variant, payload, type_parameters)),
 			}
 			let blanks = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
 			if self.peek_char(blanks) != '|' {
-				return Node::List(declarations, Bracket::None, Separator::Semicolon);
+				// `red is Color`: the variants without payload stay symbols, members of the type by name (P179)
+				let name = Symbol(type_name).with_attribute(crate::lowering::sum_variants::VARIANTS_MARK, Node::List(bare_variants, Bracket::None, Separator::Space));
+				let sum_type = Node::Type { name: Box::new(name), body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)) };
+				return Node::List([vec![sum_type], declarations].concat(), Bracket::None, Separator::Semicolon);
 			}
 			self.advance_by(blanks + 1);
 		}
@@ -1096,14 +1163,22 @@ impl WaspParser {
 			Node::List(items, _, _) if items.len() == 1 => items[0].clone(),
 			_ => field,
 		};
-		let fields = payload.into_iter().map(sole).enumerate().map(|(index, field)| match field.drop_meta() {
+		// P179: `rgb(r, g, b)` names its fields; `Some(T)`, `rgb(int, int, int)` and `Pair(Point, Point)` give types
+		let is_type = |name: &str| crate::analyzer::builtin_type_kind(name).is_some() || type_parameters.iter().any(|parameter| parameter == name)
+			|| self.declared_types.contains(name) || name.starts_with(char::is_uppercase);
+		let mut untyped = type_parameters.to_vec();
+		let fields: Vec<Node> = payload.into_iter().map(sole).enumerate().map(|(index, field)| match field.drop_meta() {
 			Node::Key(_, Op::Colon, _) => field,
+			Node::Symbol(name) if !is_type(name) => {
+				untyped.push(name.clone());
+				Node::Key(Box::new(Symbol(name.clone())), Op::Colon, Box::new(field))
+			}
 			_ => Node::Key(Box::new(Symbol(field_name(index))), Op::Colon, Box::new(field)),
-		});
-		let body = Self::transform_fields_to_types(Node::List(fields.collect(), Bracket::Curly, Separator::Semicolon));
+		}).collect();
+		let body = Self::transform_fields_to_types(Node::List(fields, Bracket::Curly, Separator::Semicolon));
 		self.declared_types.insert(variant.clone());
 		let name = Symbol(variant).with_attribute(EXTENDS_KEYWORD, Symbol(type_name.to_string()));
-		Node::Type { name: Box::new(name), body: Box::new(any_for_type_parameters(body, type_parameters)) }
+		Node::Type { name: Box::new(name), body: Box::new(any_for_type_parameters(body, &untyped)) }
 	}
 
 	/// `<T>`, `<A, B>`, `[T]`: the names of the type parameters of a declared type
@@ -1135,6 +1210,7 @@ impl WaspParser {
 				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
 				let outer_data_literal = std::mem::replace(&mut self.in_data_literal, op == Op::Colon);
 				let outer_style_sheet = std::mem::replace(&mut self.in_style_sheet, op == Op::Colon && symbol == STYLE_WORD);
+				self.tag_block = op == Op::Colon;
 				let mut blocks = vec![self.parse_bracketed('{')];
 				// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`
 				while self.current_char() == '{' {

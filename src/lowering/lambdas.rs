@@ -38,8 +38,8 @@ const SHORTHAND_MARK: char = '$';
 const MAX_SHORTHAND_ARGUMENTS: usize = 10;
 const SORT_WORD: &str = "sort";
 const REDUCE_WORD: &str = "reduce";
-/// `any(xs)`, `all(xs)` without a function test the items themselves
-const TRUTH_WORDS: [&str; 2] = ["any", "all"];
+/// `any(xs)`, `all(xs)`, `none(xs)` without a function test the items themselves
+const TRUTH_WORDS: [&str; 3] = ["any", "all", "none"];
 const TRUTH_ITEM: &str = "truth_item";
 const FOLD_WORD: &str = "fold";
 const EACH_WORD: &str = "each";
@@ -53,7 +53,7 @@ const ITERATION_SPELLINGS: [(&str, &[&str]); 2] = [
 const SORT_LABELS: [&str; 2] = ["by", "key"];
 const COMPARISONS: [Op; 4] = [Op::Lt, Op::Gt, Op::Le, Op::Ge];
 
-const ITERATIONS: [Iteration; 9] = [
+const ITERATIONS: [Iteration; 10] = [
 	Iteration { word: "map", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { out = out + [loop_call] }; out)" },
 	Iteration { word: "filter", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { if loop_call { out = out + [item] } }; out)" },
 	Iteration { word: EACH_WORD, extra_arguments: 0, function_arguments: 1, template: "(value=ø; for item in loop_list { value = loop_call }; value)" },
@@ -61,6 +61,8 @@ const ITERATIONS: [Iteration; 9] = [
 	Iteration { word: "find", extra_arguments: 0, function_arguments: 1, template: "(found=ø; searching=1; for item in loop_list { if searching and loop_call { found = item; searching = 0 } }; found)" },
 	Iteration { word: "any", extra_arguments: 0, function_arguments: 1, template: "(hit=0; for item in loop_list { if loop_call { hit = 1 } }; hit)" },
 	Iteration { word: "all", extra_arguments: 0, function_arguments: 1, template: "(held=1; for item in loop_list { if not loop_call { held = 0 } }; held)" },
+	// Kotlin's none: the opposite of any
+	Iteration { word: "none", extra_arguments: 0, function_arguments: 1, template: "(clear=1; for item in loop_list { if loop_call { clear = 0 } }; clear)" },
 	Iteration {
 		word: "reduce",
 		extra_arguments: 0,

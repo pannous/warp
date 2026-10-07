@@ -55,3 +55,17 @@ remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0:count(t) - count(su
 // how often part occurs, not overlapping: count_of("banana", "an") is 2
 count_of(t, part) := count(split(t, part)) - 1
 is_palindrome(t) := { s = lower(join([c for c in chars(t) if is_alphanumeric(c)], "")); s == reverse(s) }
+word_count(t) := count(words(t))
+// "helloWorld", "Hello World", "hello-world" → "hello_world"
+snake_case(t) := { out = ""; for c in chars(t) { if is_alphanumeric(c) { if upper(c) == c and lower(c) != c and out != "" and last(out) != "_" { out = out + "_" }; out = out + lower(c) } else if out != "" and last(out) != "_" { out = out + "_" } }; out }
+kebab_case(t) := join(split(snake_case(t), "_"), "-")
+// "hello_world" → "helloWorld"
+camel_case(t) := { out = ""; for p in split(snake_case(t), "_") { if p != "" { out = if out == "" then p else out + capitalize(p) } }; out }
+// each line indented by n spaces
+indent(t, n) := join([n times " " + line for line in lines(t)], "\n")
+// a whole or decimal number, optionally signed: "12.5", "-3"
+is_numeric(t) := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p == "" { return false }; for c in chars(p) { if not is_digit(c) { return false } } }; true }
+// the text between the first opening and the next closing after it, "" when either is missing
+between(t, opening, closing) := { from = index_of(t, opening); if from == 0 { return "" }; rest = t[from - 1 + count(opening):]; to = index_of(rest, closing); if to == 0 then "" else rest[0:to - 1] }
+// the words in lines of at most width characters
+wrap(t, width) := { out = []; line = ""; for w in words(t) { if line == "" { line = w } else if count(line) + 1 + count(w) <= width { line = line + " " + w } else { out = out + [line]; line = w } }; if line != "" { out = out + [line] }; join(out, "\n") }

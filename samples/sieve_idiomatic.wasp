@@ -17,7 +17,7 @@ fun sieve(limit) {
         }
         i += 1
     }
-    primes = []
+    var primes = []
     for n in 0...(limit) {
         if is_prime[n] { primes.push(n) }
     }
@@ -28,7 +28,7 @@ fun binary_search(list, target) := {
     low = 0
     high = list.length - 1
     while low <= high {
-        mid = (low + high) / 2 as int
+        mid = ((low + high) / 2) as int
         if list[mid] == target { return mid }
         if list[mid] < target { low = mid + 1 } else { high = mid - 1 }
     }

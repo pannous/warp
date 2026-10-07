@@ -54,14 +54,15 @@ interface calculator {
     mul: (i32, i32) -> i32
 }
 
-// Component model: a component's world is declared like this (card wasm-interop-sketch); today wasp uses components
-// with `use name.wasm` (the tour's wasm components example)
-// component my_component {
-//     import host: {
-//         print: (string) -> ()
-//         time: () -> i64
-//     }
-//     export api: calculator
-// }
+// Component model: the world of this program as a component; `warp build --wit` writes it as WIT, `warp build
+// --component` builds the component, which other programs use with `use name.wasm`. Its code calls what the world
+// imports as `host.time()`; warp's host serves a component's `host` import (print, time, read)
+component my_component {
+    import host: {
+        print: (string) -> ()
+        time: () -> i64
+    }
+    export api: calculator
+}
 
 [add(2, 3), compute(3.0, 4.0), round_trip("wasm ✓"), tree.value + tree.left.value]

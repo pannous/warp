@@ -36,8 +36,13 @@ pub const SYSTEM_VALUES: [(&str, bool); 8] = [(BATTERY, false), (CHARGING, true)
 /// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
 pub const CLIPBOARD: &str = "clipboard";
 pub const CLIPBOARD_TEXT: &str = "clipboard_text";
+/// The path of the page shown ("/users/7"), which picks its route (lowering/routes.rs); "/" natively
+pub const PAGE_PATH: &str = "page_path";
 /// `notify "text"`: a desktop notification (system_values.rs notify; the playground: the browser's Notification)
 pub const NOTIFY: &str = "notify";
+/// `gpu_compute(shader, numbers, workgroups)`: a WGSL compute shader run over the numbers on the GPU (WebGPU in the
+/// browser, web/playground/host-gpu.js), the numbers it left (card web-apis, notes/web_framework.md "web-apis: WebGPU")
+pub const GPU_COMPUTE: &str = "gpu_compute";
 /// `on·file·0`: the handler of the first `on file "x" change {…}`
 pub const FILE_HANDLER_PREFIX: &str = "on·file·";
 /// `exit(code)` ends the run, not the process (P121, system_signals.rs ExitRequest)

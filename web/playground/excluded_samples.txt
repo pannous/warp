@@ -15,7 +15,6 @@ sdl_red_square	undefined function: SDL_Init at 17:10
 errors	`}` is missing: the group opened at 4:9 runs to the end of the input (deliberately malformed: input for the forgiving parser, never meant to run)
 life_kotlin_ranges	index out of range (does the loop bound `..size-1` include the end? at 23:13) (fails on purpose: tests/welcoming/test_welcoming_ask.rs checks the explanation)
 modules	`}` is missing: the group opened at 22:15 runs to the end of the input (sketches a module system: card module-manager)
-natural	undefined: one in `one plus two` (number words and the list phrases keep only / sort by / take first wait for the user: card natural-phrases)
+natural	undefined: one in `one plus two` (number words wait for the user: card natural-phrases)
 netbase	undefined: query in `query "all cities with population > 100000"` (needs a netbase package: card netbase-package)
-types	undefined function: Ok at 29:24 (variant types: card sum-types)
 webgpu	undefined: vec4 of f32 in `vec4 of f32 (in#uv+1, …)` (WGSL in a webgpu block: cards web-apis, gpu-map)

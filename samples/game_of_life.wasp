@@ -58,7 +58,7 @@ def render() {
 // Main loop: a few generations instead of forever
 for generation in 1 to generations {
     step()
-    sleep(10)
+    sleep 10 ms
 }
 render()
 

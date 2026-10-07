@@ -20,6 +20,7 @@ const WIT_TYPES: [(&str, &str); 16] = [
 const INDENT: &str = "  ";
 
 /// A function of an interface: its name, parameter types and result type (None for `()`), in WIT
+#[derive(Clone)]
 pub struct Signature {
 	pub name: String,
 	pub parameters: Vec<String>,
@@ -41,16 +42,68 @@ pub struct World {
 }
 
 pub const EXPORT_DIRECTION: &str = "export";
+pub const WIT_STRING: &str = "string";
 
-/// The program without its component declarations
+/// The functions a component exports and imports, each with the name of its export or import (`api`, `host`)
+#[derive(Clone, Default)]
+pub struct WorldFunctions {
+	pub exports: Vec<(String, Signature)>,
+	pub imports: Vec<(String, Signature)>,
+}
+
+impl World {
+	pub fn functions(&self) -> WorldFunctions {
+		let of = |direction: &str| self.items.iter().filter(|item| item.direction == direction)
+			.flat_map(|item| item.functions.iter().map(|function| (item.name.clone(), function.clone()))).collect();
+		WorldFunctions { exports: of(EXPORT_DIRECTION), imports: of(IMPORT_WORD) }
+	}
+}
+
+/// The program without its component declarations; compiled as a component, a call of a function its world imports
+/// (`host.time()`) is the call of that import (`host.time`, a core import of the module `host`)
 pub fn lower(node: Node) -> Node {
+	let imports = crate::pipeline::component_imports();
+	let program = without_components(node);
+	match imports.is_empty() {
+		true => program,
+		false => import_calls(program, &imports),
+	}
+}
+
+fn without_components(node: Node) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
-			Node::List(items.into_iter().filter(|item| component(item).is_none()).map(lower).collect(), bracket, separator)
+			Node::List(items.into_iter().filter(|item| component(item).is_none()).map(without_components).collect(), bracket, separator)
 		}
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
+		Node::Meta { node, data } => Node::Meta { node: Box::new(without_components(*node)), data },
 		other => other,
 	}
+}
+
+/// The name of the import `function` of the world's import `interface`, as the program calls it and the emitter
+/// keys it: `host.time`
+pub fn import_name(interface: &str, function: &str) -> String {
+	format!("{interface}.{function}")
+}
+
+/// `interface.function(arguments)` of an imported function: the call `(interface.function arguments)`
+fn import_calls(node: Node, imports: &[(String, Signature)]) -> Node {
+	if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
+		let (function, arguments) = match member.drop_meta() {
+			Node::List(items, Bracket::Round, _) => match items.split_first() {
+				Some((Node::Symbol(function), arguments)) => (function.clone(), arguments.to_vec()),
+				_ => (String::new(), vec![]),
+			},
+			_ => (String::new(), vec![]),
+		};
+		let interface = kebab(&receiver.drop_meta().name());
+		if imports.iter().any(|(imported, signature)| *imported == interface && signature.name == kebab(&function)) {
+			let arguments = arguments.into_iter().map(|argument| import_calls(argument, imports));
+			let callee = Node::Symbol(import_name(&interface, &kebab(&function)));
+			return Node::List(std::iter::once(callee).chain(arguments).collect(), Bracket::Round, crate::node::Separator::None);
+		}
+	}
+	node.map_children(|child| import_calls(child, imports))
 }
 
 /// The world of the program's one component declaration

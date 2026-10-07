@@ -650,6 +650,8 @@ pub struct WaspParser {
 	in_for_header: bool,
 	/// The variables of the enclosing `for k in keys(m)` loops: `m[k]` looks a key up, so no indexing hint
 	key_variables: Vec<String>,
+	/// Names assigned a text or typed text (`l = "en"`, `k:text`): `m[l]` looks a key up too (card text-key)
+	text_variables: std::collections::HashSet<String>,
 	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
 	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
@@ -675,6 +677,10 @@ pub struct WaspParser {
 	/// Parsing the block of a data literal (`a{ … }`, not a declared type's constructor): a spaced child `c { d:3 }` there
 	/// is the child node of the glued `c{ d:3 }`, as no call with a block can be meant (card spaced-child)
 	in_data_literal: bool,
+	/// The next `{…}` is the block of a named tag (`ul{…}`, `ul {…}`): a repeated `key: value` there is a child, as
+	/// repeated elements in XML/HTML (`ul{ li: "a" li: "b" }`), no duplicate key; a plain `{…}` is a map that reports
+	/// one (user decision P176, card g-_bGo). Taken by the list it opens, so blocks inside it are not tag blocks
+	tag_block: bool,
 	/// Parsing the rules of a style sheet `style{ … }`: a blank before `.x` or `#x` is CSS's descendant combinator, which
 	/// starts the next part of a selector instead of a member access (`#main .x`, card web-styles-parser)
 	in_style_sheet: bool,
@@ -948,6 +954,7 @@ impl WaspParser {
 			equals_compares: false,
 			in_for_header: false,
 			key_variables: vec![],
+			text_variables: Default::default(),
 			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,
@@ -959,6 +966,7 @@ impl WaspParser {
 			generic_names: None,
 			in_command: false,
 			in_data_literal: false,
+			tag_block: false,
 			in_style_sheet: false,
 			pipe_takes_call: false,
 			times_loops: 0,

@@ -69,6 +69,11 @@ Each step is useful on its own and is what the next ones stand on.
 - A markup value is any key whose name is an HTML tag (`div`, `p`, `ul`, `li`, `a`, `button`, … the HTML element list)
   with a block; `name: "text"` is the element with that text, `name{ key: value … }` attributes for keys that are HTML
   attributes, other children nested in order. Unknown names stay data (no custom elements yet).
+- Repeated keys (user decision P176, card g-_bGo): in a named tag's block, glued `ul{…}` or spaced `ul {…}`, a repeated
+  `key: value` is a child (`ul{ li: "First" li: "Second" }` is two li), as repeated elements in XML/HTML; a plain `{…}`
+  stays a map whose repeated key is the error "duplicate key", also inside a tag, and so does a declared type's
+  constructor `Point{ x: 1 x: 2 }`. The parser's one-shot flag tag_block (wasp_parser/mod.rs) skips the check for the
+  tag's own block only.
 - Natively the value serializes as HTML (`to_html`), text escaped. In the page the program's value, when it is markup, is
   shown as DOM in the output pane instead of its wasp text; `show(markup)` places it explicitly.
 
@@ -157,15 +162,24 @@ Each step is useful on its own and is what the next ones stand on.
   so its page events draw no warning.
 
 ## Step 15 (web-transitions), what is done and what is left
-- `li{ transition: fade 200ms }` (lowering/transitions.rs, right after markup_tags) is the attribute
-  `data-wasp-transition: "fade 200ms"`: its words are data (not variables), durations normalized to ms, a text taken as
-  written; the words end where the children begin. In `style: {…}` transition stays the CSS property.
-- The page (markup.js morphChildren, Web Animations API, no CSS): an element with a transition animates in when
-  inserted and out before removal (marked data-wasp-leaving, skipped by matching, removed when done; a keyed item gone
-  from its list leaves where it stands); a keyed one glides to its new place (FLIP). Kinds fade, scale, slide; default
-  fade 200ms ease; any other word is the easing. Nothing animates on the first render or with prefers-reduced-motion.
-  Tour example transitions (`animated` check of test_in_browser.py); probes/transitions/leave_check.py.
-- Left: separate enter / leave kinds (`enter: slide leave: fade`), custom keyframes as data, `0.3s` (card
+- CSS form (P188, card web-css; lowering/transitions.rs, right after markup_tags): `li{ transition: opacity 200ms }` is
+  the element's inline CSS transition, joined to its own `style`; `starting-style: { opacity: 0 }` (CSS's
+  @starting-style, which an inline style cannot hold) is the attribute `data-wasp-starting-style`, rendered as
+  declarations by std/markup.wasp. Words are data (not variables), durations normalized to ms, a text taken as written,
+  timing words (`ease-out`) join the transition; the words end where the children begin. In `style: {…}` transition
+  stays the CSS property as written.
+- The kinds before CSS, `transition: fade 200ms` (also scale, slide), lower to that CSS (opacity, and transform for
+  scale/slide, plus their starting style) with an advise hint naming the CSS form.
+- The page: web/playground/markup-transitions.js, loaded after markup.js only by sites whose module mentions
+  "transition" (site.rs scripts_of; playground index.html and pages.yml SITE_FILES list it), replaces markup.js's
+  defaults transitionPlaces, enter, leave, moveFrom (hello-world budget stays small). Web Animations API from the
+  computed CSS transition: an element with a starting style animates in from it when inserted and towards it before
+  removal (marked data-wasp-leaving, skipped by matching, removed when done; a keyed item gone from its list leaves
+  where it stands); a keyed one whose transition covers transform (or all) glides to its new place (FLIP). Nothing
+  animates on the first render or with prefers-reduced-motion. Tests: tests/web/test_css_transitions.rs,
+  test_transitions.rs; tour example transitions (`animated` check of test_in_browser.py);
+  probes/transitions/leave_check.py.
+- Left: custom keyframes as data, `0.3s` (card
   fractional-durations), leaving items still take their space until removed (no absolute positioning while leaving).
 - Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
   (`data-wasp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
@@ -203,9 +217,41 @@ Each step is useful on its own and is what the next ones stand on.
 - Open: the page is rendered once at start (per request later); a relative `fetch "/api/…"` fails during that render
   (no server yet), so the first HTML shows the error state until the page fetches; `server def` bodies still run in the
   page (the RPC stub of the page build is not done).
-- Routes (web-router, agreed with warp-cf for web-bundle): `route "/x" { Page() }` lowers to page·route·<N>, the table
-  is the export page·routes (paths in order), site.js sets page·path, page·html stays the one export; warp-cf splits
-  page·route·<N> into app·<N>.wasm and site.js loads it on first navigation.
+## Routes (card web-router, 2026-10-07; split agreed with warp-cf (web-bundle) and warp-34 (playground, fetch-cancel))
+- `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, std/router.wasp): each route is the function page·route·N,
+  `id` bound by `let` to that part of the path (a number when it is digits, else the text), page·routes gives the
+  patterns in order (exported, for warp-cf's per-route modules), page·routed() is the first route matching the page's
+  path, else "no page at <path>"; `route "*"` matches any path (the not-found page). A layout shows page·routed() where
+  it says `outlet`; else a program ending with a route shows it as its last line.
+- Typed parameters (card route-typed): `route "/users/:id:int" { p{ "next " + (id + 1) } }`. A parameter declaring
+  int, float, text or string is `let id:int = route_segment(…) as int`, so its block type-checks; the route matches
+  only a part of that type (std/router.wasp route_fits: int digits, float digits with one dot), else the next route or
+  not found. An untyped one stays a run-time value of any kind (`"a" + (id + 1)` is a type error: declare the type).
+  An unknown type is an error naming the known ones. Casts use `as`: float(text) is broken (card float-of-text), and a
+  std function returning int, float or text mixed came back int-typed (card return-type-mixed).
+- The path is the host word page_path(): natively "/" (host::with_page_path for a render at another path), in a built
+  site location.pathname (site.js hooks.pagePath), in the playground "/" until a link is followed. host.js
+  navigate(holder, hooks, path) sets it and calls hooks.navigated (warp-34: drop pending fetches there).
+- Links: site.js follows same-origin `a[href]` clicks without modifier keys with pushState and shows page·html anew;
+  popstate does the same. The playground sends {navigate: path} to the worker (playground.js followLink), which shows
+  page·value, else page·routed. A routes program stays listening for that. Tour example routes.
+- Nested routes (card route-nested): `route "/users" { div{ h1{ "Users" } outlet } route "/" {…} route ":id:int" {…} }`.
+  Inner patterns are relative to the outer one, the outer block's other items are its layout, showing the inner route
+  at `outlet`. Flattened in lowering/routes.rs: each inner route is a page route with the whole pattern
+  ("/users/:id:int") whose function is the layout with page·part·N() at the outlet (page·part·N: the inner block, its
+  parameters, the outer ones too, bound by `let`); after them the outer route itself with an empty outlet, so an inner
+  "/" route answers the outer path first. page·routes lists the whole patterns.
+- A serve program with routes (card serve-route): src/site.rs ServedSite keeps the compiled module; a GET that is no
+  serve route and no file of the site renders the page at that path (main + page·html under host::with_page_path), so
+  GET /users/2 is that route's HTML, hydrated by site.js at the same path. A path no route takes gets the "*" route's
+  page (status 200; without one the "no page at <path>" text). Fixture tests/fixtures/served_routes.wasp.
+- Prerendered routes (card route-prerender): `warp build --site` (and `warp dev`) also writes <path>/index.html for
+  each route without parameters but "/" (src/site.rs prerendered, patterns from page·routes), rendered at that path,
+  finding the site's files through <base href="../"> per level (a page served for a deeper path has <base href="/">;
+  no script grows, card web-bundle's budget), so the page hydrates at /about/. An in-page "#anchor" link on such a
+  deep page resolves against the root. site::file_at finds "/about" as about/index.html (warp dev, serve). Routes with parameters and "*" are
+  rendered by the page itself (a static host needs a fallback to index.html for them).
+- `outlet` is the canonical word (aliases such as slot on demand).
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
@@ -214,6 +260,10 @@ Each step is useful on its own and is what the next ones stand on.
   localStorage (`wasp stored <name>`): the worker gets them at start and sends each save back (host.js
   STD_ADAPTERS.store, markup.js keptValues / keepValue, shared with built sites: site.js). Values cross as JSON
   (std_adapters, as foreign calls).
+- Runtime keys (card web-apis, storage): `storage` is the same store as a map: `storage[k] = v`, `storage[k]` (ø when
+  absent), `delete storage[k]`, `keys(storage)`, `storage.k`; the store words remove and names beside load and save.
+  A program defining its own `storage` keeps it. The word is a default (question queued with the Interviewer: `local[…]`
+  / `session[…]`, or `stored` as a map). IndexedDB for values beyond localStorage's ~5 MB is left.
 - Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
@@ -237,14 +287,23 @@ Each step is useful on its own and is what the next ones stand on.
   page events, timers, values between JS and wasp, std json/os/store/regex); the parts add themselves with addHostPart:
   host-files.js (fetch, read, std file and net), host-hashes.js (std hash), host-tasks.js (tasks, channels,
   BroadcastChannel and WebSocket, shared arrays, fetch_start), host-foreign.js (foreign_call, libm, libc.wasm, .wasm
-  imports; needs files), host-compiler.js (warpHost, run_block; needs files). A part hooks into a run through its
+  imports; needs files), host-compiler.js (warpHost, run_block; needs files), host-routes.js (page_path, navigate, a site's links and back button). A part hooks into a run through its
   steps (started, poll, finished, ended, stopped). src/site.rs HOST_PARTS ships a part when the module imports one of
   its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
   a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the
   std module's name is a runtime text; a custom section naming the std modules a program uses would refine it).
-- Next: lazy loading per route, agreed with warp-89 (web-router): routes lower to functions
-  page·route·<N> with the table exported as page·routes; the splitter moves a route's function and what only it reaches
-  into app·<N>.wasm, which site.js loads on the first navigation there.
+- Lazy loading per route (2026-10-07, src/route_split.rs, tests/web/test_route_modules.rs, browser probe
+  probes/lazy_routes/check_in_browser.sh): `warp build --site` moves each route's function page·route·N and the
+  functions only it reaches into app-route-N.wasm with binaryen's `wasm-split --multi-split` (features named one by one,
+  src/binaryen.rs: --all-features would emit exact imports no browser takes). app.wasm keeps a table slot and a
+  placeholder import (`placeholder.app-route-N`) per moved function. site.js instantiates app.wasm (host.js
+  instantiateProgram), loads the module of the route the path picks (host-routes.js loadRouteModule: page·route_index,
+  instantiated with app.wasm's exports as `primary`), then runs main (runMain); each navigation loads the next route's
+  module once. Without wasm-split on PATH the site ships one module with a note; a dev site never splits.
+  Limits: functions the module exports (every user function, the runtime) stay in app.wasm, so a route's module holds
+  its body (markup, its text constants' code), not the helpers it calls; data segments stay too. Next: let user
+  functions only one route reaches move as well (wasm-split keeps their exports as thunks), once nothing on the host
+  calls them before the route loads.
 
 ## web-apis: animation frames (card drawing-frames, first piece of web-apis)
 - In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`
@@ -267,6 +326,22 @@ Each step is useful on its own and is what the next ones stand on.
   compiled import (tests/web/test_web_apis.rs): a test run shows no notification.
 - Next pieces: clipboard write (the word waits for the user: `copy` already means clone; question at the Interviewer),
   WebSocket (card web-websocket), frames and pointer in built sites (site.js, after warp-89's timers).
+
+## web-apis: WebGPU (2026-10-07, warp-d2; host parts agreed with warp-34)
+- `gpu_compute(shader, numbers, workgroups)` (host word, warp-runtime host_words.rs GPU_COMPUTE): a WGSL compute
+  shader whose entry point `main` reads and writes the numbers as `array<f32>` at @group(0) @binding(0), dispatched
+  over `workgroups` workgroups; the value is the list of floats it left (f32: WGSL has no f64). Example:
+  probes/webgpu/double.wasp; tests/web/test_webgpu.rs (browser suite: real GPU, skips loudly without an adapter).
+- Browser: host part web/playground/host-gpu.js (site.rs HOST_PARTS, needs host-tasks.js). WebGPU only answers
+  asynchronously, so a task Worker (task-worker.js `data.gpu`) asks for the device once, runs the job and writes
+  {values} or {error} with writeShared; the program's worker blocks in host-tasks.js readShared (shared by tasks,
+  fetches and the GPU). A shader that does not compile fails loudly with its line:column. Without task Workers (a page
+  that is not cross-origin isolated, e.g. a built site) it is a loud error.
+- Natively (2026-10-07, warp-12): src/gpu.rs runs the same shader through wgpu 30 (Metal, Vulkan or DX12; the
+  `native` feature; pollster blocks on its futures), one device per process; errors in the browser's form, `1:10:
+  expected identifier…` or wgpu's innermost cause. A machine without an adapter says "no WebGPU adapter" (tests skip).
+  Cost: 69 more crates in Cargo.lock, a first build of about a minute. Not a sample yet.
+- Next: more buffers and uniforms (a map of named arrays), typed results (ints as array<i32>), render to a canvas.
 
 ## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
 - No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`
@@ -303,5 +378,8 @@ Each step is useful on its own and is what the next ones stand on.
   placeholder alone gets its own warning; hidden/submit/button/reset/image inputs need none); button or a with no text
   and no aria-label/title; a without href; a heading skipping a level (h1 → h3); an id used twice; html without lang.
   Each points at the element and names a fix; `use strict` / `--strict` make them errors like every warning.
-- Not here: focus on route change and live regions for async content (warp-89, web-router / web-async); translations
-  as data (i18n) later. Markup built at run time (strings, computed tags) is not checked.
+- Translations as data: `use i18n`, translate(messages, language, key, values) with CLDR plural forms (notes/i18n.md).
+- Focus on route change (card web-i18n): after a link or the back button shows another route, host-routes.js
+  focusRoute moves the focus to the route's main heading (`main h1`, else `h1`), else `main`, else the page's root, made
+  focusable with tabindex -1, so a screen reader reads the new page (probes/lazy_routes/check_in_browser.sh).
+- Not here: live regions for async content (web-async). Markup built at run time (strings, computed tags) is not checked.

@@ -134,6 +134,12 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "string" | "str" | "text") => Kind::Text,
 		// `v as float` is an f64; `as int`, `as exact` stay exact Ints
 		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Kind::Float,
+		// `a or b`, `a and b` of a text or another Node give one of their operands (`"" or "d"` is "d"); of numbers an
+		// Int, a float operand refused in that exact context
+		Node::Key(left, Op::And | Op::Or, right) => match (infer_type(left, scope), infer_type(right, scope)) {
+			(left, right) if [left, right].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) => branches_kind(left, right),
+			_ => Kind::Int,
+		},
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
 		// √x is irrational in general: an f64
@@ -258,6 +264,12 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		}
 		if name == PRINT_CALL && (items.len() >= 2 || *bracket == Bracket::Round) {
 			return Kind::Empty; // `print x` writes x and gives nothing (user, issue #18)
+		}
+	}
+	// a call of a function the component being compiled imports (`host.time()`)
+	if let Some(Node::Symbol(callee)) = items.first().map(Node::drop_meta) {
+		if let Some(kind) = crate::wasm_emitter::component_adapters::imported_kind(callee) {
+			return kind;
 		}
 	}
 	// Check for function calls: (funcname args...) where first item is a symbol

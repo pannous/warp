@@ -34,17 +34,28 @@ fn outside_tags(node: Node, defined: &HashSet<String>) -> Node {
 }
 
 /// `ul { … }` with a blank, as a statement: the element `ul{ … }` when the program does not define the name, so its
-/// children read as the glued tag's do (`ul { for item in items { li: item } }`, samples/html_dsl.wasp)
+/// children read as the glued tag's do (`ul { for item in items { li: item } }`, samples/html_dsl.wasp);
+/// glued `html(lang: "en"){ … }` (a round list) the element `html{ lang: "en" … }`, its attributes before its children
+/// (card markup-attribute)
 fn spaced_element(node: Node, defined: &HashSet<String>) -> Node {
-	if let Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() {
-		if let [name, body] = items.as_slice() {
-			let is_element = matches!(name.drop_meta(), Node::Symbol(tag) if crate::markup::is_element_tag(tag) && !defined.contains(tag));
-			if is_element && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
-				return Node::Key(Box::new(name.drop_meta().clone()), Op::Colon, Box::new(body.drop_meta().clone()));
+	if let Node::List(items, Bracket::None | Bracket::Round, _) = node.drop_meta() {
+		if let [head, body] = items.as_slice() {
+			if let (Some((tag, mut content)), Node::List(children, Bracket::Curly, separator)) = (element_head(head, defined), body.drop_meta()) {
+				content.extend(children.iter().cloned());
+				return Node::Key(Box::new(Node::Symbol(tag)), Op::Colon, Box::new(Node::List(content, Bracket::Curly, separator.clone())));
 			}
 		}
 	}
 	node
+}
+
+/// `ul` or `html(lang: "en")` naming an element the program does not define: its tag and attributes
+fn element_head(head: &Node, defined: &HashSet<String>) -> Option<(String, Vec<Node>)> {
+	let parts = match head.drop_meta() {
+		Node::Symbol(tag) => Some((tag.clone(), vec![])),
+		_ => attributes(head, defined),
+	};
+	parts.filter(|(tag, _)| crate::markup::is_element_tag(tag) && !defined.contains(tag))
 }
 
 /// `name{…}` of a name the program does not define: its body items
@@ -90,13 +101,59 @@ fn attributed_tag(item: Node, defined: &HashSet<String>) -> Node {
 	item
 }
 
-/// `name(key:value…)` of a name the program does not define: the name and the key-value pairs
+/// `name(key:value…)` of a name the program does not define: the name and the key-value pairs, also when they come
+/// grouped in their parentheses (a statement's `html(lang: "en")`)
 fn attributes(node: &Node, defined: &HashSet<String>) -> Option<(String, Vec<Node>)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
 	let (name, pairs) = items.split_first()?;
+	let pairs = match pairs {
+		[group] => match group.drop_meta() {
+			Node::List(grouped, Bracket::Round, _) => grouped.as_slice(),
+			_ => pairs,
+		},
+		_ => pairs,
+	};
 	let Node::Symbol(name) = name.drop_meta() else { return None };
 	let all_pairs = !pairs.is_empty() && pairs.iter().all(|pair| matches!(pair.drop_meta(), Node::Key(_, Op::Colon, _)));
 	(all_pairs && !defined.contains(name)).then(|| (name.clone(), pairs.to_vec()))
+}
+
+/// HTML's own attribute form (P188): `input{type="text"}`, `label(for="pwd")` and `p {class="note"}` are
+/// `input{type:"text"}`, `label(for:"pwd")` and `p {class:"note"}`, before soft_keywords reads `class = …` as a
+/// definition; in an element any other `name = value` stays the assignment
+pub fn lower_html_attributes(node: Node) -> Node {
+	match node {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_html_attributes(*node)), data },
+		Node::Key(tag, Op::Colon, body) if is_element_name(&tag) => Node::Key(tag, Op::Colon, Box::new(lower_html_attributes(attributes_of_group(*body)))),
+		Node::List(items, bracket, separator) if items.first().is_some_and(is_element_name) && items.len() > 1 => {
+			let mut items = items.into_iter();
+			let tag = items.next().into_iter();
+			let parts = items.map(|item| lower_html_attributes(attributes_of_group(html_attribute(item))));
+			Node::List(tag.chain(parts).collect(), bracket, separator)
+		}
+		other => other.map_children(lower_html_attributes),
+	}
+}
+
+fn is_element_name(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(tag) if crate::markup::is_element_tag(tag))
+}
+
+/// The items of an element's `{…}` or `(…)`, `name = value` of an attribute as `name: value`
+fn attributes_of_group(group: Node) -> Node {
+	match group {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(attributes_of_group(*node)), data },
+		Node::List(items, bracket @ (Bracket::Curly | Bracket::Round), separator) => Node::List(items.into_iter().map(html_attribute).collect(), bracket, separator),
+		other => other,
+	}
+}
+
+fn html_attribute(item: Node) -> Node {
+	match item {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(html_attribute(*node)), data },
+		Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Node::Symbol(word) if crate::markup::names_attribute(word)) => Node::Key(name, Op::Colon, value),
+		other => other,
+	}
 }
 
 /// `[li{t} for t in ts]`, `ts.map(…)` or `(if c then a else b)` among an element's children: its items are children, so it stays a list

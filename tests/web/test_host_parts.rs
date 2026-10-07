@@ -24,6 +24,15 @@ fn a_page_ships_the_parts_its_module_imports() {
 	assert_eq!(part_files("use js Math\np{ Math.floor(2.5) }"), ["host-files.js", "host-foreign.js"]);
 }
 
+// card web-apis: the store adapter (`stored`, `storage[k]`, std_io) lives in host-files.js, so a hello-world site sends none of it
+#[test]
+fn a_page_keeping_values_ships_the_store() {
+	assert_eq!(part_files("stored visits = 0\np{ visits }"), ["host-files.js"]);
+	assert_eq!(part_files("storage[\"theme\"] = \"dark\"\np{ storage[\"theme\"] }"), ["host-files.js"]);
+	let files_part = HOST_PARTS.iter().find(|part| part.script.0 == "host-files.js").expect("the files part").script.1;
+	assert!(files_part.contains("store: {") && !HOST_SCRIPT.contains("store: {"));
+}
+
 // the host words a part gives (its `words` object), as each part's selection must recognize them
 fn words_of(part: &str) -> Vec<String> {
 	let start = part.find("addHostPart({").expect("the part adds itself");
@@ -53,4 +62,10 @@ fn the_sites_parts_are_the_playgrounds_parts() {
 	let listed = HOST_SCRIPT.lines().find(|line| line.starts_with("const HOST_PART_FILES")).expect("host.js lists its parts");
 	let files: Vec<&str> = HOST_PARTS.iter().map(|part| part.script.0).collect();
 	assert_eq!(listed, format!("const HOST_PART_FILES = [{}];", files.iter().map(|file| format!("\"{file}\"")).collect::<Vec<_>>().join(", ")));
+}
+
+// card web-router: a page with routes reads its path (page_path), which ships the routes part; a page without routes does not
+#[test]
+fn a_page_with_routes_ships_the_routes_part() {
+	assert_eq!(part_files("route \"/\" { p{ \"home\" } }\nroute \"*\" { p{ \"no such page\" } }"), ["host-routes.js"]);
 }

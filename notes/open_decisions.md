@@ -32,6 +32,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   message on hover. Hints aren't underlined yet because their positions lag behind (card hint-positions).
 - P168 detail (warp-64, branch functions 152ddabd4): `p = {phone: 7}; number = 2; p.phone-number` → 5. When p's
   fields aren't known at compile time, the field read `p.phone-number` stays.
+- Char as Text (warp-90, card char-text): an untyped parameter called with a one-character text takes it as Text:
+  `g(t) := t as float; g("3")` → 3 (was 51, the code point); `id('x'); id('xy')` agree. `ord` still works.
 
 ## User to-dos (not questions)
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to

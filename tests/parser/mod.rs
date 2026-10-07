@@ -37,3 +37,5 @@ mod test_trailing_annotation;
 mod test_spaced_children;
 mod test_glued_pair_value;
 mod test_time_unit_keys;
+mod test_end_word;
+mod test_bare_operator_block;

@@ -215,6 +215,7 @@ pub(crate) fn signature_kind(signature: &crate::ffi::FfiSignature) -> Kind {
 /// Extract FFI imports from "import X from Y" and "use Y" statements, and the libm functions called without one
 pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 	extract_declared_ffi_imports(ctx, node);
+	ctx.ffi_imports.extend(crate::wasm_emitter::component_adapters::imported_signatures());
 	add_implicit_libm_imports(ctx, node);
 	// `use c` makes every libc function the program calls importable (getenv, toupper), not only the built-in few
 	if uses_library(node, "c") {

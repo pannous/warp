@@ -19,8 +19,9 @@ const VALUE_DELAY_MILLISECONDS = 50;
 let panicMessage; // the compiler's last panic message
 
 const post = message => self.postMessage(message);
-self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host.js STD_ADAPTERS.store
+self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 const hooks = {
+	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
@@ -30,7 +31,7 @@ const hooks = {
 		live = holder;
 		startTimers(holder, handler => runHandler(holder, handler));
 		const fetches = [...(holder.fetches?.values() ?? [])].map(({ url }) => `fetch ${url}`);
-		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches] });
+		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches], address: addressOf(holder) });
 	},
 	// a fetch's reply arrived (host.js startFetch): its handler runs like a timer's, and the page shows the outcome
 	arrived: (holder, handler) => holder === live && runHandler(holder, handler),
@@ -91,6 +92,17 @@ registerForeignRuntime("python", {
 	prepare: code => USES_PYTHON.test(code) && loadPython().catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),
 });
 
+// a link in the shown markup was followed (playground.js followLink): the live run shows the page at that path
+function handleNavigation(path) {
+	if (!live) return;
+	navigate(live, hooks, path);
+	post({ type: "address", path: addressOf(live) });
+	showHandled(live, { result: true });
+}
+
+// the page's path for the playground's address bar: only a program with routes has one (lowering/routes.rs)
+const addressOf = holder => holder.exports[PAGE_ROUTES_EXPORT] ? holder.pagePath ?? ROOT_PATH : undefined;
+
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
 	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
@@ -99,7 +111,7 @@ function handleEvent({ event, detail }) {
 // what a handler gave, shown as the compiler shows a program's value: the output binding (src/lowering/event_signals.rs
 // PAGE_VALUE), the program's last name read anew, else the handler's own value (a timer's only when it failed)
 function showHandled(holder, handled, timer = false) {
-	const binding = holder.exports[PAGE_VALUE];
+	const binding = holder.exports[PAGE_VALUE] ?? holder.exports[PAGE_ROUTED_EXPORT];
 	if (timer && !binding && handled.result) return;
 	if (handled.result && binding && showHoles(holder)) return;
 	const outcome = handled.result && binding ? outcomeOf(holder, hooks, binding) : handled;
@@ -127,7 +139,7 @@ function showHoles(holder) {
 	for (const name of holes) {
 		const outcome = outcomeOf(holder, hooks, holder.exports[name]);
 		if (outcome.result === undefined) return false;
-		const { html } = shownOf(outcome);
+		const html = outcome.html ?? shownOf(outcome).html;
 		if (holder.holeHtml.get(name) === html) continue;
 		holder.holeHtml.set(name, html);
 		patches.push({ path: name.split(PATH_JOINER).slice(PAGE_HOLE.split(PATH_JOINER).length).map(Number), html });
@@ -153,9 +165,10 @@ function runHandler(holder, handler) {
 self.onmessage = async ({ data }) => {
 	if (data.pointer) return self.pagePointer = { values: new Int32Array(data.pointer.buffer), names: data.pointer.names }; // host.js system_value
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
-	if (data.stored) return Object.assign(storedValues, data.stored); // host.js STD_ADAPTERS.store
+	if (data.stored) return Object.assign(storedValues, data.stored); // host-files.js STD_ADAPTERS.store
 	await ready;
 	if (data.event) return handleEvent(data);
+	if (data.navigate) return handleNavigation(data.navigate);
 	if (live) stopListening(live);
 	live = undefined;
 	if (!compiler) await loadCompiler();

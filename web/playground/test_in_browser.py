@@ -25,7 +25,7 @@ INCLUDE_PREFIX = "/__include__/"
 HEADER_NAME = re.compile(r"^[\w.+-]+(/[\w.+-]+)*\.h$")
 RESULTS_PATH = "/__results__"
 LISTING_QUERY = "listing"
-STUB_PATH = "/__stub__"  # answers with the status and body its query names: the fetch tests' HTTP stub (tests/common serve)
+STUB_PATH = "/__stub__"  # answers with the status and body its query names, after `delay` milliseconds: the fetch tests' HTTP stub (tests/common serve)
 CLICK_MILLISECONDS = 300  # a click's handler runs in the worker and its markup comes back
 ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its service worker
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
@@ -70,6 +70,7 @@ def serve(binary):
 			query = urllib.parse.parse_qs(split.query, keep_blank_values=True)
 			body = query.get("body", [""])[0].encode()
 			code, _, reason = query.get("status", ["200 OK"])[0].partition(" ")
+			time.sleep(int(query.get("delay", ["0"])[0]) / 1000)  # milliseconds before the reply: one still pending
 			self.send_response(int(code), reason)
 			self.send_header("Content-Length", str(len(body)))
 			self.end_headers()
@@ -142,7 +143,7 @@ def browser(*arguments):
 
 def show_example(name):
 	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
-	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`)"""
+	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons or links, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`) and the address bar's path (`address`)"""
 	script = f"""(async () => {{
 		const name = {json.dumps(name)};
 		await playground.chooseExample(name);
@@ -151,6 +152,7 @@ def show_example(name):
 		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent,
 			canvases: document.querySelectorAll("#paintings canvas").length }};
 		const clicks = EXAMPLES[name].clicks ?? [];
+		const shownAddress = () => document.getElementById("address").hidden ? "" : document.getElementById("address").value;
 		const typed = EXAMPLES[name].typed;
 		if (!clicks.length && typed === undefined) return JSON.stringify(shown);
 		const rendered = document.getElementById("rendered").shadowRoot;
@@ -166,14 +168,14 @@ def show_example(name):
 			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
 		}}
 		for (const text of clicks) {{
-			[...rendered.querySelectorAll("button")].find(button => button.textContent === text)?.click();
+			[...rendered.querySelectorAll("button, a")].find(element => element.textContent === text)?.click();
 			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
 		}}
 		Element.prototype.animate = animate;
 		const kept = elements.every(element => element.isConnected);
 		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-wasp-key") === keys[index]);
 		const clickedPrinted = document.getElementById("printed").textContent;
-		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0 }});
+		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0, address: shownAddress() }});
 	}})()"""
 	shown = browser("eval", script)
 	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
@@ -203,7 +205,7 @@ def check_examples(names, page_url=None):
 	names = names or list(examples)
 	for name in names:
 		expected, shown = examples[name], show_example(name)
-		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated") if part in expected and shown[part] != expected[part]]
+		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
 		if wrong:
 			failures.append(name)

@@ -48,6 +48,8 @@ static COMPILED: Mutex<Option<HashMap<String, Component>>> = Mutex::new(None);
 /// A handle's id and the path of its component, keys of the record warp holds
 const HANDLE_KEY: &str = "$handle";
 const COMPONENT_KEY: &str = "component";
+/// The import of a component that warp's host serves (serve_host_imports)
+const HOST_IMPORT: &str = "host";
 
 fn engine() -> &'static Engine {
 	static ENGINE: OnceLock<Engine> = OnceLock::new();
@@ -101,6 +103,7 @@ fn load(path: &str) -> Result<Loaded, String> {
 	let component = compiled(path)?;
 	let mut linker = Linker::new(engine());
 	wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|failure| failure.to_string())?;
+	serve_host_imports(&mut linker, &component).map_err(|failure| format!("{path}: {failure:#}"))?;
 	let state = ComponentState { wasi: WasiCtx::builder().inherit_stdio().build(), table: ResourceTable::new() };
 	let mut store = Store::new(engine(), state);
 	let instance = linker.instantiate(&mut store, &component).map_err(|failure| format!("cannot instantiate {path}: {failure:#}"))?;
@@ -124,6 +127,22 @@ fn load(path: &str) -> Result<Loaded, String> {
 		}
 	}
 	Ok(Loaded { store, instance, functions, kinds, held: vec![] })
+}
+
+/// What warp's host gives a component importing `host` (a wasp component's world, `import host: { time: () -> i64 }`,
+/// component_worlds.rs): its words print, time (milliseconds since 1970) and read (a file's text); any other function
+/// of the import traps when called, naming itself
+fn serve_host_imports(linker: &mut Linker<ComponentState>, component: &Component) -> wasmtime::Result<()> {
+	if component.component_type().imports(engine()).any(|(name, _)| name == HOST_IMPORT) {
+		let mut host = linker.instance(HOST_IMPORT)?;
+		host.func_wrap("print", |_, (text,): (String,)| {
+			println!("{text}");
+			Ok(())
+		})?;
+		host.func_wrap("time", |_, (): ()| Ok((std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis() as i64,)))?;
+		host.func_wrap("read", |_, (path,): (String,)| Ok((std::fs::read_to_string(&path).map_err(|failure| wasmtime::format_err!("read {path}: {failure}"))?,)))?;
+	}
+	linker.define_unknown_imports_as_traps(component)
 }
 
 impl Loaded {
