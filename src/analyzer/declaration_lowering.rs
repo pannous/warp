@@ -463,6 +463,9 @@ pub(super) const POP_METHOD: &str = "pop";
 /// The list a pop template takes from, replaced by the variable or field popped
 const POP_PLACE: &str = "pop_place";
 pub(super) const REMOVE_METHOD: &str = "remove";
+/// Pseudo-call `removed_value(collection, k)`: what `collection.remove(k)` gives, by the collection's kind: of a map the
+/// value of the key (P35, Python's dict.pop), of a list the list without the first element equal to k
+pub const REMOVED_VALUE_CALL: &str = "removed_value";
 pub(super) const POP_TEMPORARY: &str = "pop_tmp";
 pub(super) const INSERT_METHOD: &str = "insert";
 
@@ -526,7 +529,8 @@ pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 	}
 }
 
-/// `m.remove(k)` when m is a variable: the value of k, its entry removed from m (P35 default, Python's dict.pop)
+/// `m.remove(k)` when m is a variable: the value of k, its entry removed from m (P35 default, Python's dict.pop); of a
+/// list variable the first element equal to k removed, and the list it gives (REMOVED_VALUE_CALL)
 pub(super) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let Node::Symbol(name) = map.drop_meta() else { return None };
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
@@ -536,7 +540,7 @@ pub(super) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	}
 	let call = |word: &str, arguments: Vec<Node>| Node::List([vec![Node::Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None);
 	let removed = Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}removed"));
-	let value = call(crate::library_words::MAP_GET_OR, vec![map.clone(), key.clone(), Node::Empty]);
+	let value = call(REMOVED_VALUE_CALL, vec![map.clone(), key.clone()]);
 	let without = call(crate::library_words::MAP_WITHOUT, vec![map.clone(), key.clone()]);
 	Some(Node::List(vec![
 		Node::Key(Box::new(removed.clone()), Op::Assign, Box::new(value)),
