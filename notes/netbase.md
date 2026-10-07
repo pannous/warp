@@ -1,4 +1,4 @@
-# `use netbase` (card netbase-package, samples/netbase.wasp): plan, not built
+# `use netbase` (card netbase-package, samples/netbase.wasp)
 
 ```wasp
 use netbase
@@ -44,3 +44,18 @@ debug results where country is germany
 ## Open (for the user via the Interviewer)
 - Which backend: revive netbase.pannous.com (a), a local small netbase (b), or Wikidata SPARQL (c)?
 - Where the package lives: its own repository netbase-wasp, or netbase.wasp inside pannous/netbase?
+
+## Built so far (default (b) of warp-03, 2026-10-07)
+- `lib/netbase.wasp`: `query(q)` / `query_at(server, q)` fetch `<server>/json/query/<q>` and parse the JSON; the server is
+  env NETBASE, else http://localhost:8181. Without a server the error names the URL (tests/modules/test_netbase_package.rs).
+  `load wikidata` is not defined: loading is the server's import.
+- Writing it found two compiler bugs, fixed: `f() := a or "d"` (inference of or/and) and fetch of a computed URL.
+- The local server is NOT running yet. ~/dev/netbase's arm64 binary (2023) runs, but:
+  - the SysV shared-memory mode needs kern.sysv.shmmax above macOS's 4 MB (even the context segment asks 8 MB):
+    `sudo sysctl -w kern.sysv.shmmax=4294967296 kern.sysv.shmall=1048576` (the user's sudo; not persistent);
+  - the file mmap mode (`USE_MMAP=1` in netbase.config) only loads an existing import ("WRONG IMPORT" on fresh files)
+    and never grows its files on macOS (file_allocate is a no-op there: SIGBUS on 0-byte maps);
+  - the binary puts its data in `<binary dir>/data/` whatever data_path says: run a copy (scratch/netbase/netbase).
+  - Docker (netbase.docker/) would need a Linux build of the C++ sources.
+  Recommended next step: the user runs the sysctl line once, then `./netbase :import cities` and `./netbase :server`
+  from a copy in scratch/netbase with a small netbase.config (SERVER_PORT=8181, maxNodes=2000000).
