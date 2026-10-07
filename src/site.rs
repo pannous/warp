@@ -116,7 +116,14 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>
 	};
 	let scripts = scripts_of(&module.bytes, dev)?;
 	let page = page(title, html, &scripts);
-	let mut files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), module.bytes)];
+	// each route's own functions in a module the page loads when it shows the route; a dev page reloads whole anyway
+	let split = if dev { None } else { crate::route_split::split_by_route(&module.bytes)? };
+	let (primary, route_modules) = match split {
+		Some(split) => (split.primary, split.routes),
+		None => (module.bytes, vec![]),
+	};
+	let mut files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), primary)];
+	files.extend(route_modules);
 	files.extend(scripts.iter().map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
 	Ok(Some(files))
 }

@@ -21,14 +21,14 @@ pub fn without_dead_functions(module: &[u8]) -> Result<Vec<u8>, String> {
 
 /// The functions each defined function reaches directly, and the roots
 #[derive(Default)]
-struct CallGraph {
-	imported: u32,
+pub(crate) struct CallGraph {
+	pub imported: u32,
 	callees: Vec<Vec<u32>>,
-	roots: Vec<u32>,
+	pub roots: Vec<u32>,
 }
 
 impl CallGraph {
-	fn of(module: &[u8]) -> wasmparser::Result<CallGraph> {
+	pub fn of(module: &[u8]) -> wasmparser::Result<CallGraph> {
 		let mut graph = CallGraph::default();
 		for payload in Parser::new(0).parse_all(module) {
 			match payload? {
@@ -84,15 +84,23 @@ impl CallGraph {
 
 	/// Per defined function: whether a root reaches it
 	fn live(&self) -> Vec<bool> {
-		let mut live = vec![false; self.callees.len()];
-		let mut pending = self.roots.clone();
+		self.reached(&self.roots, &[])
+	}
+
+	/// Per defined function: whether `starts` reach it through calls and references, never entering `blocked`
+	pub fn reached(&self, starts: &[u32], blocked: &[u32]) -> Vec<bool> {
+		let mut reached = vec![false; self.callees.len()];
+		let mut pending = starts.to_vec();
 		while let Some(function) = pending.pop() {
 			let Some(defined) = function.checked_sub(self.imported) else { continue };
-			if !std::mem::replace(&mut live[defined as usize], true) {
+			if blocked.contains(&function) && !starts.contains(&function) {
+				continue;
+			}
+			if !std::mem::replace(&mut reached[defined as usize], true) {
 				pending.extend(&self.callees[defined as usize]);
 			}
 		}
-		live
+		reached
 	}
 }
 

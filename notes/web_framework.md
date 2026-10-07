@@ -209,13 +209,25 @@ Each step is useful on its own and is what the next ones stand on.
   patterns in order (exported, for warp-cf's per-route modules), page·routed() is the first route matching the page's
   path, else "no page at <path>"; `route "*"` matches any path (the not-found page). A layout shows page·routed() where
   it says `outlet`; else a program ending with a route shows it as its last line.
+- Typed parameters (card route-typed): `route "/users/:id:int" { p{ "next " + (id + 1) } }`. A parameter declaring
+  int, float, text or string is `let id:int = route_segment(…) as int`, so its block type-checks; the route matches
+  only a part of that type (std/router.wasp route_fits: int digits, float digits with one dot), else the next route or
+  not found. An untyped one stays a run-time value of any kind (`"a" + (id + 1)` is a type error: declare the type).
+  An unknown type is an error naming the known ones. Casts use `as`: float(text) is broken (card float-of-text), and a
+  std function returning int, float or text mixed came back int-typed (card return-type-mixed).
 - The path is the host word page_path(): natively "/" (host::with_page_path for a render at another path), in a built
   site location.pathname (site.js hooks.pagePath), in the playground "/" until a link is followed. host.js
   navigate(holder, hooks, path) sets it and calls hooks.navigated (warp-34: drop pending fetches there).
 - Links: site.js follows same-origin `a[href]` clicks without modifier keys with pushState and shows page·html anew;
   popstate does the same. The playground sends {navigate: path} to the worker (playground.js followLink), which shows
   page·value, else page·routed. A routes program stays listening for that. Tour example routes.
-- Open: typed parameters (card route-typed), nested route blocks (`route "/users" { route ":id" {…} }`), a built site
+- Nested routes (card route-nested): `route "/users" { div{ h1{ "Users" } outlet } route "/" {…} route ":id:int" {…} }`.
+  Inner patterns are relative to the outer one, the outer block's other items are its layout, showing the inner route
+  at `outlet`. Flattened in lowering/routes.rs: each inner route is a page route with the whole pattern
+  ("/users/:id:int") whose function is the layout with page·part·N() at the outlet (page·part·N: the inner block, its
+  parameters, the outer ones too, bound by `let`); after them the outer route itself with an empty outlet, so an inner
+  "/" route answers the outer path first. page·routes lists the whole patterns.
+- Open: a built site
   prerendering each static route (index.html is "/" only; a deep link needs the serve program to render it), the serve
   program rendering per request path. `outlet` is the canonical word (aliases such as slot on demand).
 
@@ -254,9 +266,18 @@ Each step is useful on its own and is what the next ones stand on.
   its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
   a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the
   std module's name is a runtime text; a custom section naming the std modules a program uses would refine it).
-- Next: lazy loading per route, agreed with warp-89 (web-router): routes lower to functions
-  page·route·<N> with the table exported as page·routes; the splitter moves a route's function and what only it reaches
-  into app·<N>.wasm, which site.js loads on the first navigation there.
+- Lazy loading per route (2026-10-07, src/route_split.rs, tests/web/test_route_modules.rs, browser probe
+  probes/lazy_routes/check_in_browser.sh): `warp build --site` moves each route's function page·route·N and the
+  functions only it reaches into app-route-N.wasm with binaryen's `wasm-split --multi-split` (features named one by one,
+  src/binaryen.rs: --all-features would emit exact imports no browser takes). app.wasm keeps a table slot and a
+  placeholder import (`placeholder.app-route-N`) per moved function. site.js instantiates app.wasm (host.js
+  instantiateProgram), loads the module of the route the path picks (host-routes.js loadRouteModule: page·route_index,
+  instantiated with app.wasm's exports as `primary`), then runs main (runMain); each navigation loads the next route's
+  module once. Without wasm-split on PATH the site ships one module with a note; a dev site never splits.
+  Limits: functions the module exports (every user function, the runtime) stay in app.wasm, so a route's module holds
+  its body (markup, its text constants' code), not the helpers it calls; data segments stay too. Next: let user
+  functions only one route reaches move as well (wasm-split keeps their exports as thunks), once nothing on the host
+  calls them before the route loads.
 
 ## web-apis: animation frames (card drawing-frames, first piece of web-apis)
 - In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`

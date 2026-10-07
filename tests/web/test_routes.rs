@@ -40,3 +40,36 @@ fn the_route_index_names_the_route_the_path_picks() {
 	assert!(lowered.contains("(page·route_index):="), "{lowered}");
 	assert!(lowered.contains("routed_index=(page·route_index)"), "{lowered}");
 }
+
+// card route-typed: a parameter declares its type in the pattern (":id:int", ":price:float", ":name:text"), so the route's
+// block computes with it; a path whose part does not fit the type matches no such route (the next one, else not found)
+#[test]
+fn a_typed_route_parameter_computes_with_its_type() {
+	let program = "route \"/users/:id:int\" { p{ \"next \" + (id + 1) } }\nroute \"/tags/:name:text\" { p{ name + \"!\" } }\nroute \"/prices/:price:float\" { p{ \"twice \" + price * 2 } }\nroute \"*\" { p{ \"not found\" } }";
+	assert_eq!(page_at("/users/7", program), "<p>next 8</p>");
+	assert_eq!(page_at("/tags/42", program), "<p>42!</p>");
+	assert_eq!(page_at("/prices/1.5", program), "<p>twice 3</p>");
+	assert_eq!(page_at("/users/bo", program), "<p>not found</p>");
+}
+
+// card route-nested: a route's block may hold routes, their patterns relative to it; the block's other items are its
+// layout, which shows the inner route at its `outlet`; at the route's own path an inner "/" route shows, else nothing
+#[test]
+fn nested_routes_show_inside_their_layout() {
+	let program = "users = [\"Ann\", \"Bo\"]
+route \"/users\" {
+	div{ h1{ \"Users\" } outlet }
+	route \"/\" { p{ \"pick one\" } }
+	route \":id:int\" { p{ users#id } }
+}
+route \"/teams/:team\" {
+	section{ outlet }
+	route \"members/:id:int\" { p{ team + \" \" + id } }
+}
+route \"*\" { p{ \"not found\" } }";
+	assert_eq!(page_at("/users", program), "<div><h1>Users</h1><p>pick one</p></div>");
+	assert_eq!(page_at("/users/2", program), "<div><h1>Users</h1><p>Bo</p></div>");
+	assert_eq!(page_at("/teams/red/members/3", program), "<section><p>red 3</p></section>");
+	assert_eq!(page_at("/teams/red", program), "<section></section>");
+	assert_eq!(page_at("/users/2/more", program), "<p>not found</p>");
+}
