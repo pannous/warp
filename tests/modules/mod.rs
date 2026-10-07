@@ -27,4 +27,5 @@ mod test_versions;
 mod test_wasm_modules;
 mod test_std_aliases;
 mod test_std_named_program; // card cli-std
+mod test_std_file_copy; // card std-file
 mod test_netbase_package;
