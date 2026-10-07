@@ -331,13 +331,23 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				_ => MAP_TYPE.to_string(),
 			}
 		}
-		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`
-		Node::Key(map, Op::Hash, _) => match list_type_name(map, scope).strip_prefix(MAP_TYPE_PREFIX) {
-			Some(value_type) if value_type.starts_with(PLAIN) => value_type.to_string(),
-			_ => PLAIN.to_string(),
-		},
+		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`; an element of a `list of list of int`
+		// a `list of int`; an element of a `list of list` (`[("a", 2)]`, tuples of mixed items) holds its items as Nodes
+		Node::Key(map, Op::Hash, _) => {
+			let outer = list_type_name(map, scope);
+			match outer.strip_prefix(MAP_TYPE_PREFIX).or_else(|| outer.strip_prefix(LIST_OF_PREFIX)) {
+				Some(PLAIN) if outer.starts_with(LIST_OF_PREFIX) => NODE_LIST_TYPE.to_string(),
+				Some(value_type) if value_type.starts_with(PLAIN) => value_type.to_string(),
+				_ => PLAIN.to_string(),
+			}
+		}
 		Node::List(items, _, separator) => {
-			let words: Vec<String> = items.iter().map(|item| element_type_word(item, scope)).collect();
+			// an item that is a list keeps its own element type: `[(0, 1), (1, 2)]` is a `list of list of int`
+			let item_word = |item: &Node| match infer_type(item, scope) {
+				Kind::List => list_type_name(item, scope),
+				_ => element_type_word(item, scope),
+			};
+			let words: Vec<String> = items.iter().map(item_word).collect();
 			let is_block = matches!(separator, Separator::Semicolon | Separator::Newline);
 			match common_type_word(&words) {
 				Some(word) => format!("{PLAIN} of {word}"),

@@ -29,6 +29,7 @@ mod test_node_lists;
 mod test_list_of_objects;
 mod test_dynamic_range;
 mod test_range_values;
+mod test_tuple_items_of_lists;
 mod test_down_and_letter_ranges;
 mod test_range_arguments;
 mod test_remove_and_index_of;
