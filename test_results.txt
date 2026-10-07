@@ -78,6 +78,7 @@ PASSED:
   ✓ control::test_empty_block_binding::an_empty_block_can_be_bound
   ✓ control::test_empty_bodies::an_empty_function_body_returns_nothing
   ✓ control::test_empty_bodies::an_empty_timer_body_does_nothing
+  ✓ control::test_empty_reset_in_if::an_if_resetting_a_list_to_empty_runs
   ✓ control::test_error_branch_kind::test_an_error_branch_keeps_the_other_branch_kind
   ✓ control::test_error_branch_kind::test_an_error_value_stays_a_value
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
@@ -286,6 +287,10 @@ PASSED:
   ✓ control::test_signal_values::two_subscriptions_both_run_in_order
   ✓ control::test_signal_values::writes_before_the_subscription_are_not_seen
   ✓ control::test_signal_values::writes_in_loops_and_functions_notify
+  ✓ control::test_stored_signals::a_change_of_a_stored_value_is_kept_for_the_next_run
+  ✓ control::test_stored_signals::a_local_named_stored_keeps_the_word
+  ✓ control::test_stored_signals::a_program_keeps_its_stored_values_in_a_file_beside_it
+  ✓ control::test_stored_signals::a_stored_value_starts_with_its_default
   ✓ control::test_structural_patterns::test_a_subject_that_is_no_list_does_not_match
   ✓ control::test_structural_patterns::test_list_patterns_bind_names
   ✓ control::test_structural_patterns::test_nested_lists_and_pairs
@@ -411,6 +416,9 @@ PASSED:
   ✓ control::test_uncharged_blocks::test_data_is_the_expression_as_written
   ✓ control::test_uncharged_blocks::test_literals_and_objects_after_colon_keep_their_meaning
   ✓ control::test_uncharged_blocks::test_names_in_a_block_resolve_where_it_runs
+  ✓ control::test_undo_history::any_value_and_any_writer_has_a_history
+  ✓ control::test_undo_history::redo_takes_back_an_undo_until_a_new_change
+  ✓ control::test_undo_history::undo_steps_back_through_the_changes
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
   ✓ control::test_unwrap::test_unwrap_gives_the_value
   ✓ control::test_unwrap::test_unwrap_of_nothing_or_an_error_is_loud
@@ -646,6 +654,7 @@ PASSED:
   ✓ functions::test_call_result_fields::counting_words_of_a_call_result_stay_counts
   ✓ functions::test_captured_containers::test_a_captured_list_element_keeps_its_kind
   ✓ functions::test_captured_containers::test_a_captured_object_field_keeps_its_kind
+  ✓ functions::test_captured_copy_of_global::a_lambda_captures_a_local_copied_from_main
   ✓ functions::test_character_results::a_returned_character_stays_a_character
   ✓ functions::test_charged_getters::a_function_factory_gets_no_hint_of_lowered_code
   ✓ functions::test_charged_getters::a_getter_of_now_reads_the_clock_at_every_use
@@ -1294,6 +1303,8 @@ PASSED:
   ✓ modules::test_module_cache::test_module_cache_reuse
   ✓ modules::test_module_classes::a_used_modules_class_has_its_methods
   ✓ modules::test_module_classes::the_programs_own_class_wins
+  ✓ modules::test_module_signals::a_listener_sees_the_writes_of_a_used_module
+  ✓ modules::test_module_signals::a_stored_value_of_a_used_module_is_kept_by_the_program
   ✓ modules::test_package_pin::a_changed_clone_stands_in_for_the_pin
   ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
   ✓ modules::test_package_pin::a_pinned_package_links_its_cached_version
@@ -2064,6 +2075,7 @@ PASSED:
   ✓ scope::test_export_declaration::test_export_without_initializer_is_zero
   ✓ scope::test_export_declaration::test_exported_variable_can_be_assigned
   ✓ scope::test_export_declaration::test_type_words_come_from_the_analyzer
+  ✓ scope::test_global_assignment_in_function::global_with_a_value_in_a_function_changes_main
   ✓ scope::test_global_constant_words::global_with_every_constant_word
   ✓ scope::test_global_declaration::test_compound_assignment_on_a_global
   ✓ scope::test_global_declaration::test_global_without_initializer
@@ -2316,6 +2328,7 @@ PASSED:
   ✓ types::test_class_extends::a_subclass_overrides_a_method
   ✓ types::test_class_field_names::field_beside_function_of_its_name
   ✓ types::test_class_field_names::operator_words_name_fields
+  ✓ types::test_class_field_names::own_parameter_field_inside_function_of_its_name
   ✓ types::test_class_forms_ported::a_copy_with_changed_fields
   ✓ types::test_class_forms_ported::a_csharp_record_declares_its_fields
   ✓ types::test_class_forms_ported::a_go_struct_with_methods
@@ -2733,6 +2746,8 @@ PASSED:
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
+  ✓ web::test_html_module::to_html_writes_markup_as_html_rs_does
+  ✓ web::test_html_render::a_computed_child_next_to_an_attribute
   ✓ web::test_html_render::a_whole_page
   ✓ web::test_html_render::other_values_are_no_markup
   ✓ web::test_html_render::tags_attributes_and_text
@@ -2740,9 +2755,15 @@ PASSED:
   ✓ web::test_html_render::void_elements_and_attribute_lists
   ✓ web::test_keyed_lists::a_key_names_the_element_of_an_item
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
+  ✓ web::test_markup_holes::a_page_binds_each_hole
+  ✓ web::test_markup_holes::fixed_markup_or_a_computed_root_has_no_holes
+  ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
   ✓ web::test_markup_tags::a_call_outside_tags_or_of_a_function_stays_a_call
   ✓ web::test_markup_tags::a_tag_takes_its_attributes_in_parentheses
   ✓ web::test_markup_tags::the_html_dsl_sample_runs
+  ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
+  ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
+  ✓ web::test_site::a_static_page_is_its_last_line_rendered
   ✓ web::test_styles::a_style_sheet_is_a_block_of_rules
   ✓ web::test_styles::an_inline_style_is_a_block_of_properties
   ✓ web::test_uniscript::an_unknown_entity_is_an_error
@@ -3100,4 +3121,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3095 passed, 0 failed, 3095 total tested
+19 ignored, 3116 passed, 0 failed, 3116 total tested

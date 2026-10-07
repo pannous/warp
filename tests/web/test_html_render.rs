@@ -1,6 +1,6 @@
 //! A markup value renders as HTML (card web-dom, notes/web_framework.md): tags with their attributes, text escaped,
 //! children in order, void elements without a closing tag; anything else is no markup
-use warp::html::{is_markup, to_html};
+use warp::markup::{is_markup, to_html};
 use warp::wasm_emitter::eval;
 
 fn html_of(code: &str) -> String {
@@ -40,4 +40,11 @@ fn the_page_gets_the_html_of_markup() {
 	let report = warp::web::evaluate("ul{ li{ \"a\" } }", Default::default());
 	assert_eq!(report["html"], "<ul><li>a</li></ul>");
 	assert!(warp::web::evaluate("3", Default::default())["html"].is_null());
+}
+
+// an element's computed child next to an attribute is a child, not part of one sum (card markup-arithmetic)
+#[test]
+fn a_computed_child_next_to_an_attribute() {
+	assert_eq!(html_of("count = 3\np{ class: \"x\" \"c\" + count }"), "<p class=\"x\">c3</p>");
+	assert_eq!(html_of("count = 3\ndiv{ p{ style: { fontSize: 12 } \"c\" + count } }"), "<div><p style=\"font-size: 12px\">c3</p></div>");
 }

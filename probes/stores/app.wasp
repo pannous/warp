@@ -1,0 +1,6 @@
+// card web-stores: a used module's stored theme is kept in app.stored.json; each run toggles it
+// (prints "theme is light", then "theme is dark" on the next run)
+use settings
+on change theme { print "theme is " + value }
+toggle()
+theme

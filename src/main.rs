@@ -1,5 +1,5 @@
 #![cfg_attr(test, allow(unused))] // main() is not compiled under test
-use warp::{diagnostic, extensions, html, law, package_tools, run, util, wasm_emitter, wasm_reader, wasp_parser};
+use warp::{diagnostic, extensions, markup, law, package_tools, run, util, wasm_emitter, wasm_reader, wasp_parser};
 use warp::node;
 use std::env;
 use std::fs;
@@ -17,7 +17,12 @@ const AOT_FLAG: &str = "--aot";
 /// (and `--aot`) write the module instead
 const EXE_FLAG: &str = "--exe";
 const WASM_FLAG: &str = "--wasm";
-const COMPILE_FLAGS: [&str; 3] = [EXE_FLAG, WASM_FLAG, AOT_FLAG];
+/// `warp build --site app.wasp`: the directory app-site/ a web server serves (src/site.rs, card web-ssr)
+const SITE_FLAG: &str = "--site";
+const SITE_SUFFIX: &str = "-site";
+/// The site of inline code
+const DEFAULT_SITE_NAME: &str = "site";
+const COMPILE_FLAGS: [&str; 4] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG];
 const MACHINE_CODE_EXTENSION: &str = "cwasm";
 /// The name of an executable built from inline code (plus the platform's extension)
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
@@ -144,6 +149,9 @@ fn run_command(args: &[String]) {
         let ahead_of_time = flags.contains(&AOT_FLAG);
         let standalone = flags.contains(&EXE_FLAG) || !(flags.contains(&WASM_FLAG) || ahead_of_time);
         let code = source_of(&target);
+        if flags.contains(&SITE_FLAG) {
+            return write_site(&code, &target);
+        }
         if standalone {
             match write_standalone_executable(&code, &target) {
                 Ok(report) => println!("{report}"),
@@ -268,7 +276,7 @@ fn print_and_exit(result: Node) -> ! {
 fn show(result: &Node, mark: &str) {
     if result.drop_meta() != &Node::Empty {
         // markup (`html{ body{ … } }`) is printed as HTML: `warp run page.wasp > page.html` (card web-dom)
-        let shown = if html::is_markup(result) { html::to_html(result) } else { result.serialize() };
+        let shown = if markup::is_markup(result) { markup::to_html(result) } else { result.serialize() };
         println!("{mark}{shown}");
     }
     if let Some(excerpt) = diagnostic::error_position(result).and_then(|(line, column)| diagnostic::shown_excerpt(line, column)) {
@@ -385,6 +393,22 @@ fn feature_of(module: &str, name: &str) -> String {
         _ => return format!("{module}.{name}"),
     };
     feature.to_string()
+}
+
+/// `warp build --site`: the site next to the program file, its report or failure
+fn write_site(code: &str, target: &str) {
+    let file = std::path::Path::new(target);
+    let (name, directory) = match file.file_stem().filter(|_| file_exists(target)) {
+        Some(stem) => (stem.to_string_lossy().into_owned(), file.with_file_name(format!("{}{SITE_SUFFIX}", stem.to_string_lossy()))),
+        None => (DEFAULT_SITE_NAME.to_string(), std::path::PathBuf::from(DEFAULT_SITE_NAME)),
+    };
+    match warp::site::build(code, &name, &directory) {
+        Ok(site) => println!("built the site {} ({})", site.directory.display(), site.files.join(", ")),
+        Err(failure) => {
+            eprintln!("warp build --site: {failure}");
+            std::process::exit(1);
+        }
+    }
 }
 
 fn standalone_output_path(target: &str) -> std::path::PathBuf {

@@ -1,0 +1,2 @@
+def size(box) { box.size + 1 }
+size({size:4})

@@ -77,9 +77,13 @@ Each step is useful on its own and is what the next ones stand on.
   playground.js `morphChildren` changes only the text nodes and attributes that differ, matching nodes by position;
   a node of another kind or tag is replaced. Elements keep their identity, focus, input and scroll state. Tour example
   "fine updates" checks it (`clicks`, `clicked`, `kept` in examples.js, test_in_browser.py --examples).
-- Left (compute side, card web-fine-holes): the markup is still evaluated whole after each handler. Per-hole updates
-  (each signal-reading text or attribute its own derived binding, only the changed ones sent) need the lowering to
-  mark the holes; worth it once markup gets large (web-components).
+- Done (compute side, card web-fine-holes): the holes of shown markup are the outermost elements holding a computed
+  text, attribute or child directly (src/markup.rs `holes`); each is its own binding `page·hole·<path>` (event_signals.rs),
+  the path its element indices from the root, which the fixed elements above it keep stable. After a handler worker.js
+  reads only the holes and sends `patches` for those whose HTML changed; playground.js morphs just those elements. The
+  value text follows once events pause (50 ms). Falls back to the whole markup when the root itself holds a computed
+  part, when the last line is a name (components: `page·markup`), or when a hole fails.
+- Left: holes inside components (an instance's elements by instance), text-node granularity (a hole is an element).
 - Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
 
 ## Step 4 (web-components), what is done and what is left
@@ -113,14 +117,14 @@ Each step is useful on its own and is what the next ones stand on.
 - `input{ bind: name }` is `input{ value: name on input { name = event.value } }` (element_events.rs); a checkbox or
   radio binds `checked`. `input` is a page event (PAGE_EVENTS); the page sends {value, checked} (a number from a
   number or range field) and sets a changed field's value/checked when the markup comes back (morphElement).
-- Boolean attributes (checked, disabled, …) are present or absent (html.rs; true arrives from a run as 1).
+- Boolean attributes (checked, disabled, …) are present or absent (std/markup.wasp; true arrives from a run as 1).
 - Tour example "form binding" (`typed` field of examples.js).
 - Left: `select{ bind: choice }` (its first render shows the first option), `bind:` inside a component's state
   (component_state.rs sees only handlers), form submit as an event with the fields as an object, validation from types.
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
-  sheet of rules (html.rs). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
+  sheet of rules (std/markup.wasp). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
   are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
 - Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
   (`data-wasp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
@@ -128,3 +132,41 @@ Each step is useful on its own and is what the next ones stand on.
   component's elements still match).
 - Left (warp-06 takes the parser bits): `.card { … }` written
   without quotes (the parser stops at `.`), `8px` written as a number with a unit (parses as 8 * px).
+
+## Built sites (card web-ssr, 2026-10-07; split agreed with warp-cd, renderer decided by warp-96)
+- `warp build --site app.wasp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
+  host.js, markup.js, site.js, carried in the warp binary (src/site.rs include_str!, one source with the playground).
+- One renderer, written in wasp (warp-96: "Wasp is wasm-first"): std/markup.wasp's to_html (`use markup`; not `html`,
+  which samples/html.wasp would shadow) is the one renderer: the CLI and the playground render a markup value with it
+  too (src/markup.rs to_html runs `use markup; to_html(value)`; src/html.rs is gone). A program
+  compiled for a page (pipeline::for_a_page) exports page·html := to_html(page·value) (lowering/page_html.rs); its
+  page·value is event_signals' output binding, else the last line when that is an expression (no assignment,
+  definition, print, use). `warp build --site` runs main and page·html natively (wasm_reader::read_export_after_main)
+  for index.html, so the page reads without JavaScript; the page calls the same export after each handler. Page builds also export the reflection getters
+  the browser host needs and draw no "a native run never raises it" warning for page events.
+- Hydration (web/playground/site.js): the loader runs app.wasm with host.js in the page; main runs once as it ran at
+  build time, so the component instances count alike. The DOM stays; click and input on the root find their element's
+  handler (markup.js elementEvent), and after a handler (or a fetch reply) the page morphs (markup.js morphChildren) in
+  the HTML of page·html.
+- std/markup.wasp cannot tell a square list from a curly one at run time: a list value whose items hold pairs is
+  inline CSS (for style) or children (`style{ ".x": {…} }`), any other list the joined attribute value (`class:["a" "b"]`).
+- Scoped style sheets (card web-scoped): an element with data-wasp-scope:"Card" prefixes the selectors of the sheets
+  inside it with `[data-wasp-scope="Card"] `; src/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
+- Open: timers in a built page (site.js has no timer loop yet); `serve` programs serving their own page.
+
+## Step 12 (web-stores), what is done and what is left
+- Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
+  value an earlier run kept under its name, else the default; `on change theme` keeps each change. Natively the values
+  are JSON in `<program>.stored.json` beside the program (in memory for inline code), in the playground the page's
+  localStorage (`wasp stored <name>`): the worker gets them at start and sends each save back (host.js
+  STD_ADAPTERS.store, playground.js keepStored). Values cross as JSON (std_adapters, as foreign calls).
+- Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
+  main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
+  old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
+  `stored` are soft keywords.
+- Shared stores: a used module's main-level variables are the program's shared state (`use settings` reads and writes
+  its theme), and the program's `on change theme` sees the writes of the module's functions (modules::resolve runs
+  before the signal passes, card module-signal-writes). `stored theme = "dark"` in a module is a declaration the
+  module contributes: kept in the store of the program that uses it (probes/stores/app.wasp, tests/modules/
+  test_module_signals.rs). Context (a value for a subtree of components without props): question with the
+  Interviewer; default until then: main-level variables, which every component reads.

@@ -35,7 +35,8 @@ const SCOPE_WORDS: [(&str, Scope); 3] = [("folder", Scope::Folder), ("package", 
 /// Folders a package or project scope never looks into, besides hidden ones and nested repositories
 const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
 const PROJECT_MARKER: &str = ".git";
-const DECLARATION_KEYWORDS: [&str; 5] = ["use", "import", "let", "var", "global"];
+/// `stored x = v` too: a used module's persisted signal is the program's (card web-stores)
+const DECLARATION_KEYWORDS: [&str; 6] = ["use", "import", "let", "var", "global", crate::stored_values::STORED_WORD];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
 	DECLARATION_KEYWORDS.contains(&keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
@@ -179,6 +180,11 @@ pub fn beside_program(path: &str) -> String {
 		Some(folder) if Path::new(path).is_relative() => folder.join(path).to_string_lossy().into_owned(),
 		_ => path.to_string(),
 	}
+}
+
+/// The file being compiled, None for inline code
+pub fn program_file() -> Option<PathBuf> {
+	PROGRAM_FILE.with(|current| current.borrow().clone())
 }
 
 /// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
@@ -552,7 +558,7 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 15] = [
+const STD_MODULES: [(&str, &str); 16] = [
 	("net", include_str!("../std/net.wasp")),
 	("collections", include_str!("../std/collections.wasp")),
 	("hash", include_str!("../std/hash.wasp")),
@@ -568,6 +574,7 @@ const STD_MODULES: [(&str, &str); 15] = [
 	("time", include_str!("../std/time.wasp")),
 	("matrix", include_str!("../std/matrix.wasp")),
 	("draw", include_str!("../std/draw.wasp")),
+	("markup", include_str!("../std/markup.wasp")),
 ];
 const STD_FOLDER: &str = "std";
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
@@ -597,6 +604,22 @@ pub fn std_module_defining(word: &str) -> Option<&'static str> {
 	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
 	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(declared_name).collect())).collect());
 	defined.iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
+}
+
+/// The texts of a list a standard module assigns at its top: `html_elements = ["html", …]` of markup; empty if missing
+pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
+	let source = std_module(module).unwrap_or_default();
+	statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().find_map(|statement| match statement.drop_meta() {
+		Node::Key(name, Op::Assign, items) if name.drop_meta().name() == list => match items.drop_meta() {
+			// "p" parses as a character
+			Node::List(items, _, _) => Some(items.iter().map(|item| match item.drop_meta() {
+				Node::Char(character) => character.to_string(),
+				other => other.name(),
+			}).collect()),
+			_ => None,
+		},
+		_ => None,
+	}).unwrap_or_default()
 }
 
 fn is_builtin_library(name: &str) -> bool {

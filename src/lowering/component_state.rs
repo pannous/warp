@@ -127,14 +127,14 @@ fn stateful_component(statement: &Node) -> Option<StatefulComponent> {
 /// `def Card(t) = div{ style{ "h2": {…} } h2{t} }`: the definition with its root element naming the component
 fn scoped_component(statement: &Node) -> Option<Node> {
 	let mut has_sheet = false;
-	statement.visit(&mut |part| has_sheet |= crate::html::is_style_sheet(part));
+	statement.visit(&mut |part| has_sheet |= crate::markup::is_style_sheet(part));
 	if !has_sheet {
 		return None;
 	}
 	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = crate::declarations::lower_c_functions(statement.clone()).drop_meta().clone() else { return None };
 	let Node::List(parts, Bracket::Round, _) = head.drop_meta() else { return None };
 	let name = parts.first()?.name();
-	let attribute = Node::Key(Box::new(Node::Symbol(crate::html::SCOPE_ATTRIBUTE.into())), Op::Colon, Box::new(Node::Text(name)));
+	let attribute = Node::Key(Box::new(Node::Symbol(crate::markup::SCOPE_ATTRIBUTE.into())), Op::Colon, Box::new(Node::Text(name)));
 	let body = match *body {
 		Node::List(mut items, Bracket::Curly, separator) => {
 			let root = with_attribute(items.pop()?, attribute)?;
@@ -149,7 +149,7 @@ fn scoped_component(statement: &Node) -> Option<Node> {
 /// The element with the attribute first among its items
 fn with_attribute(element: Node, attribute: Node) -> Option<Node> {
 	let Node::Key(tag, op, content) = element.drop_meta().clone() else { return None };
-	if !crate::html::is_element_tag(&tag.drop_meta().name()) {
+	if !crate::markup::is_element_tag(&tag.drop_meta().name()) {
 		return None;
 	}
 	let items = match *content {

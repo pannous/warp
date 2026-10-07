@@ -69,6 +69,8 @@ pub fn is_page_event(name: &str) -> bool {
 }
 /// The output binding of a program with page events: its last line when that is a name, read anew after each handler
 pub const PAGE_VALUE: &str = "page·value";
+/// The bindings of the elements of shown markup that hold computed parts, `page·hole·<path>` (card web-fine-holes)
+const PAGE_HOLE: &str = "page·hole";
 /// The events the system raises: the runtime calls their handlers (notes/system_signals.md)
 pub const SYSTEM_EVENTS: [&str; 2] = ["interrupt", "exit"];
 
@@ -139,7 +141,7 @@ pub fn lower(program: Node) -> Node {
 	let statements: Vec<Node> = flags.iter().map(|(flag, initial)| assign(flag, initial.clone())).chain(statements).collect();
 	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
 	#[cfg(feature = "native")]
-	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| is_page_event(name) && !raised.contains(name)) {
+	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| is_page_event(name) && !raised.contains(name) && !crate::pipeline::is_for_a_page()) {
 		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
 		if let Err(error) = crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning)]) {
 			return error;
@@ -198,12 +200,20 @@ fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &H
 fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<String>) -> Vec<Node> {
 	// a name, markup (`div{ p{ "clicked " + count } }`, card web-element), or a choice between such
 	// (`if users.loading then "Loading…" else users`, card web-async), which the page shows anew
-	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::html::is_markup(last) || is_shown_choice(last)).cloned();
+	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::markup::is_markup(last) || is_shown_choice(last)).cloned();
 	if let Some(shown) = shown {
-		let binding = function_with_globals(PAGE_VALUE, false, &[shown], main_variables);
-		statements.insert(statements.len() - 1, binding);
+		// markup: each element holding a computed part is read on its own too, the page changes only those that differ
+		let holes = crate::markup::holes(&shown).into_iter().map(|(path, element)| function_with_globals(&hole_name(&path), false, &[element], main_variables));
+		let bindings: Vec<Node> = holes.chain([function_with_globals(PAGE_VALUE, false, &[shown], main_variables)]).collect();
+		let last = statements.len() - 1;
+		statements.splice(last..last, bindings);
 	}
 	statements
+}
+
+/// `page·hole·1·0`: the binding of the element at that path of the shown markup (worker.js reads the path back)
+fn hole_name(path: &[usize]) -> String {
+	path.iter().fold(PAGE_HOLE.to_string(), |name, index| format!("{name}{NAME_JOINER}{index}"))
 }
 
 /// `if c then a else b`, `c ? a : b`, `a ?? b`: a choice whose parts only read (no call, no write), so reading it anew
@@ -216,7 +226,7 @@ fn is_shown_choice(node: &Node) -> bool {
 fn only_reads(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty | Node::True | Node::False => true,
-		markup if crate::html::is_markup(markup) => true,
+		markup if crate::markup::is_markup(markup) => true,
 		Node::Key(left, op, right) => !matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec | Op::While | Op::Do) && !op.is_compound_assign() && only_reads(left) && only_reads(right),
 		Node::List(items, Bracket::Square | Bracket::Curly, _) => items.iter().all(only_reads),
 		_ => false,

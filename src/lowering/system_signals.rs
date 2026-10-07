@@ -211,7 +211,8 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 	}
 }
 
-fn call(function: &str, arguments: Vec<Node>) -> Node {
+/// `function(arguments…)`
+pub(crate) fn call(function: &str, arguments: Vec<Node>) -> Node {
 	Node::List([vec![Node::Symbol(function.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
 
