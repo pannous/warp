@@ -315,6 +315,18 @@ impl WaspParser {
 		}
 	}
 
+	/// A class body's members with their field types: `{x: int; double() := …}`. A body of one C-style method
+	/// (`{int bar(){ 42 }}`) groups as the words `int` and `bar(){…}`: it is one member, not two fields
+	pub(crate) fn class_body(block: Node) -> Node {
+		let block = match block {
+			Node::List(items, Bracket::Curly, Separator::Space) if is_typed_method(&items) => {
+				Node::List(vec![Node::List(items, Bracket::None, Separator::Space)], Bracket::Curly, Separator::Semicolon)
+			}
+			other => other,
+		};
+		Self::transform_fields_to_types(block)
+	}
+
 	/// Transform field definitions: Key(name, op, Symbol) -> Key(name, op, Type)
 	/// Used for class/struct definitions to convert type names to Type nodes
 	pub(super) fn transform_fields_to_types(node: Node) -> Node {
@@ -414,6 +426,12 @@ fn is_parameter_word(node: &Node) -> bool {
 }
 
 /// The first word of a class-body item that is code: a function keyword, or the constructor call `init(n)`
+/// `int bar(){ 42 }` as words: a type word and a call with its block
+fn is_typed_method(words: &[Node]) -> bool {
+	matches!(words, [type_word, head] if matches!(type_word.drop_meta(), Node::Symbol(word) if crate::analyzer::builtin_type_kind(word).is_some())
+		&& matches!(head.drop_meta(), Node::List(parts, _, _) if matches!(parts.last().map(Node::drop_meta), Some(Node::List(_, Bracket::Curly, _)))))
+}
+
 fn starts_code(first: &Node) -> bool {
 	match first.drop_meta() {
 		Node::Symbol(word) => crate::operators::is_function_keyword(word) || super::ACCESSOR_WORDS.contains(&word.as_str()) || super::MEMBER_MODIFIERS.contains(&word.as_str()),
