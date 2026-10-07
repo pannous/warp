@@ -25,3 +25,16 @@ fn match_arms_take_an_instance_apart() {
 	is!(&format!("{shapes}area(s) := match s {{ Circle{{r}} => 3 * r * r; Rect{{w, h}} => w * h }}; area(Rect(2, 3)) + area(Circle(1))"), 9);
 	is!(&format!("{shapes}area(s) := match s {{ Circle(r) => 3 * r * r; Rect(w, h) => w * h }}; area(Rect(2, 5))"), 10);
 }
+
+#[test]
+fn nested_patterns_and_constants() {
+	let classes = "class Point{x:int y:int}; class Line{start:Point end:Point}; ";
+	let kind = "kind(p) := match p { Point{x: 0, y} => y; Point(x, 0) => x * 10; Point{x, y} => x + y + 100 }; ";
+	is!(&format!("{classes}{kind}kind(Point(0, 7))"), 7);
+	is!(&format!("{classes}{kind}kind(Point(4, 0))"), 40);
+	is!(&format!("{classes}{kind}kind(Point(1, 2))"), 103);
+	let start = "first_y(l) := match l { Line{start: Point{x: 0, y}, end} => y + end.x; Line(Point(a, _), _) => a }; ";
+	is!(&format!("{classes}{start}first_y(Line(Point(0, 2), Point(5, 6)))"), 7);
+	is!(&format!("{classes}{start}first_y(Line(Point(3, 2), Point(5, 6)))"), 3);
+	is!(&format!("{classes}l = Line(Point(1, 2), Point(3, 4)); {{start: Point{{x, y}}, end}} = l; x + y + end.y"), 7);
+}

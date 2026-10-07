@@ -284,19 +284,21 @@ fn destructurings(node: Node) -> Node {
 
 fn taken_apart(node: Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>, class_of: &dyn Fn(&Node) -> Option<String>) -> Node {
 	let recurse = |child: Node| taken_apart(child, fields, class_of);
+	let subject = Node::Symbol(PARTS_WORD.to_string());
 	match node {
-		Node::Key(target, Op::Assign, value) if named_parts(&target).is_some() => {
-			let parts = named_parts(&target).expect("guarded");
-			bound_parts(recurse(*value), &parts, None)
+		// `{x, start: Point{x: a}} = l`: names only, no constant to test (a class in it is no test either)
+		Node::Key(target, Op::Assign, value) if matched_fields(&target, &subject, fields).is_some_and(|matched| matched.tests.is_empty()) => {
+			let matched = matched_fields(&target, &subject, fields).expect("guarded");
+			bound_parts(recurse(*value), &matched.bindings, None)
 		}
 		Node::Key(target, Op::Assign, value) if positional_names(&target).is_some() && class_of(&value).is_some() => {
 			let names = positional_names(&target).expect("guarded");
 			let class = class_of(&value).expect("guarded");
-			let field_names: Vec<String> = fields[&class].iter().map(|(field, _)| field.clone()).collect();
-			if field_names.len() != names.len() {
+			if fields[&class].len() != names.len() {
 				return Node::Key(target, Op::Assign, value);
 			}
-			bound_parts(recurse(*value), &field_names.into_iter().zip(names).collect::<Vec<_>>(), None)
+			let bindings = fields[&class].iter().zip(names).map(|((field, _), name)| (field_of(&subject, field), name)).collect::<Vec<_>>();
+			bound_parts(recurse(*value), &bindings, None)
 		}
 		// Python's `a, b = p`: the parser reads `a, (b = p)`
 		Node::List(items, bracket, separator) if separator == Separator::Colon && last_assigns_instance(&items, class_of) => {
@@ -305,47 +307,99 @@ fn taken_apart(node: Node, fields: &std::collections::HashMap<String, Vec<(Strin
 			let target = Node::List(names, Bracket::Round, Separator::Colon);
 			recurse(Node::Key(Box::new(target), Op::Assign, value))
 		}
-		Node::Key(pattern, Op::FatArrow, body) if class_pattern(&pattern, fields).is_some() => {
-			let (class, parts) = class_pattern(&pattern, fields).expect("guarded");
-			let subject = Node::Symbol(PARTS_WORD.to_string());
-			// `parts·from if parts·from is Point` (`is` compares like ==, a class name tests the type)
-			let test = Node::Key(Box::new(subject.clone()), Op::Eq, Box::new(Node::Symbol(class.clone())));
+		Node::Key(pattern, Op::FatArrow, body) if is_class_pattern(&pattern, fields) => {
+			let mut matched = Matched::default();
+			if matched_pattern(&pattern, &subject, fields, &mut matched).is_none() {
+				return Node::Key(pattern, Op::FatArrow, Box::new(recurse(*body)));
+			}
+			// `parts·from if parts·from is Point and parts·from.x == 0` (`is` compares like ==, a class name tests the type)
+			let test = matched.class_tests.into_iter().chain(matched.tests).reduce(|all, test| Node::Key(Box::new(all), Op::And, Box::new(test))).expect("a class pattern tests its class");
 			let guard = Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::If, Box::new(test))), Op::Then, Box::new(subject.clone()));
-			Node::Key(Box::new(guard), Op::FatArrow, Box::new(bound_parts(subject, &parts, Some(recurse(*body)))))
+			Node::Key(Box::new(guard), Op::FatArrow, Box::new(bound_parts(subject, &matched.bindings, Some(recurse(*body)))))
 		}
 		other => other.map_children(recurse),
 	}
 }
 
-/// `(parts·from = value; x = parts·from.x; …; body)`
-fn bound_parts(value: Node, parts: &[(String, String)], body: Option<Node>) -> Node {
-	let subject = Node::Symbol(PARTS_WORD.to_string());
-	let mut statements = match value.drop_meta() {
-		Node::Symbol(name) if name == PARTS_WORD => vec![],
-		_ => vec![Node::Key(Box::new(subject.clone()), Op::Assign, Box::new(value))],
-	};
-	statements.extend(parts.iter().map(|(field, name)| {
-		let read = Node::Key(Box::new(subject.clone()), Op::Dot, Box::new(Node::Symbol(field.clone())));
-		Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(read))
-	}));
-	statements.extend(body);
-	Node::List(statements, Bracket::Round, Separator::Semicolon)
+/// What a pattern asks of its subject: class tests (`p is Point`), value tests (`p.x == 0`) and the variables it
+/// binds, each with its path
+#[derive(Default)]
+struct Matched {
+	class_tests: Vec<Node>,
+	tests: Vec<Node>,
+	bindings: Vec<(Node, String)>,
 }
 
-/// `{x, y}`, `{x: a, y}`: each field with the variable it goes to
-fn named_parts(target: &Node) -> Option<Vec<(String, String)>> {
-	let Node::List(items, Bracket::Curly, _) = target.drop_meta() else { return None };
+fn field_of(path: &Node, field: &str) -> Node {
+	Node::Key(Box::new(path.clone()), Op::Dot, Box::new(Node::Symbol(field.to_string())))
+}
+
+/// `Point{…}` or `Point(…)` of a declared class
+fn is_class_pattern(pattern: &Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> bool {
+	match pattern.drop_meta() {
+		Node::Key(class, Op::Colon | Op::None, parts) => fields.contains_key(&class.drop_meta().name()) && matches!(parts.drop_meta(), Node::List(_, Bracket::Curly, _)),
+		Node::List(items, Bracket::Round, _) => items.len() > 1 && fields.contains_key(&items[0].drop_meta().name()),
+		_ => false,
+	}
+}
+
+/// A pattern at `path`: `_` matches anything, a name binds, a number or text is compared, `Point{x, y: b}` and
+/// `Point(a, 0)` test the class and match each field; None for anything else (the arm stays as written)
+fn matched_pattern(pattern: &Node, path: &Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>, matched: &mut Matched) -> Option<()> {
+	let class_test = |class: &str| Node::Key(Box::new(path.clone()), Op::Eq, Box::new(Node::Symbol(class.to_string())));
+	match pattern.drop_meta() {
+		Node::Symbol(name) if name == "_" => {}
+		Node::Symbol(name) if !fields.contains_key(name) => matched.bindings.push((path.clone(), name.clone())),
+		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => matched.tests.push(Node::Key(Box::new(path.clone()), Op::Eq, Box::new(pattern.drop_meta().clone()))),
+		Node::Key(class, Op::Colon | Op::None, parts) if fields.contains_key(&class.drop_meta().name()) => {
+			matched.class_tests.push(class_test(&class.drop_meta().name()));
+			let inner = matched_fields(parts, path, fields)?;
+			matched.class_tests.extend(inner.class_tests);
+			matched.tests.extend(inner.tests);
+			matched.bindings.extend(inner.bindings);
+		}
+		Node::List(items, Bracket::Round, _) if items.len() > 1 && fields.contains_key(&items[0].drop_meta().name()) => {
+			let class = items[0].drop_meta().name();
+			if items.len() - 1 != fields[&class].len() {
+				return None;
+			}
+			matched.class_tests.push(class_test(&class));
+			for ((field, _), part) in fields[&class].iter().zip(&items[1..]) {
+				matched_pattern(part, &field_of(path, field), fields, matched)?;
+			}
+		}
+		_ => return None,
+	}
+	Some(())
+}
+
+/// `{x, y: b, from: Point{…}}` at `path`: each field by name, a field with a pattern after its colon matched by it
+fn matched_fields(parts: &Node, path: &Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Option<Matched> {
+	let Node::List(items, Bracket::Curly, _) = parts.drop_meta() else { return None };
 	if items.is_empty() {
 		return None;
 	}
-	items.iter().map(|item| match item.drop_meta() {
-		Node::Symbol(name) => Some((name.clone(), name.clone())),
-		Node::Key(field, Op::Colon, variable) => match (field.drop_meta(), variable.drop_meta()) {
-			(Node::Symbol(field), Node::Symbol(variable)) => Some((field.clone(), variable.clone())),
-			_ => None,
-		},
-		_ => None,
-	}).collect()
+	let mut matched = Matched::default();
+	for item in items {
+		match item.drop_meta() {
+			Node::Symbol(name) => matched.bindings.push((field_of(path, name), name.clone())),
+			Node::Key(field, Op::Colon, part) if matches!(field.drop_meta(), Node::Symbol(_)) => matched_pattern(part, &field_of(path, &field.drop_meta().name()), fields, &mut matched)?,
+			_ => return None,
+		}
+	}
+	Some(matched)
+}
+
+/// `(parts·from = value; x = parts·from.x; …; body)`
+fn bound_parts(value: Node, bindings: &[(Node, String)], body: Option<Node>) -> Node {
+	let subject = Node::Symbol(PARTS_WORD.to_string());
+	let mut statements = match value.drop_meta() {
+		Node::Symbol(name) if name == PARTS_WORD => vec![],
+		_ => vec![Node::Key(Box::new(subject), Op::Assign, Box::new(value))],
+	};
+	statements.extend(bindings.iter().map(|(path, name)| Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(path.clone()))));
+	statements.extend(body);
+	Node::List(statements, Bracket::Round, Separator::Semicolon)
 }
 
 /// `(a, b)`: the names in order
@@ -364,22 +418,6 @@ fn last_assigns_instance(items: &[Node], class_of: &dyn Fn(&Node) -> Option<Stri
 	leading_names && items.len() > 1 && matches!(items.last().map(Node::drop_meta), Some(Node::Key(name, Op::Assign, value)) if matches!(name.drop_meta(), Node::Symbol(_)) && class_of(value).is_some())
 }
 
-/// `Point{x, y}`, `Point{x: a}`, `Point(x, y)` of a class: the class and each field with its variable
-fn class_pattern(pattern: &Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Option<(String, Vec<(String, String)>)> {
-	match pattern.drop_meta() {
-		Node::Key(class, Op::Colon | Op::None, parts) if fields.contains_key(&class.drop_meta().name()) => Some((class.drop_meta().name(), named_parts(parts)?)),
-		Node::List(items, Bracket::Round, _) if items.len() > 1 && fields.contains_key(&items[0].drop_meta().name()) => {
-			let class = items[0].drop_meta().name();
-			let names: Option<Vec<String>> = items[1..].iter().map(|item| match item.drop_meta() {
-				Node::Symbol(name) => Some(name.clone()),
-				_ => None,
-			}).collect();
-			let names = names.filter(|names| names.len() == fields[&class].len())?;
-			Some((class.clone(), fields[&class].iter().map(|(field, _)| field.clone()).zip(names).collect()))
-		}
-		_ => None,
-	}
-}
 
 /// A map literal `{x:1 y:2}` or parsed json `parse_json(t)`: what `as Point` builds an instance from
 fn is_plain_object(object: &Node) -> bool {
@@ -1180,6 +1218,8 @@ fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 			let arguments = items.into_iter().map(|item| constructed_from_braces(item, classes));
 			Node::List([vec![*class]].into_iter().flatten().chain(arguments).collect(), Bracket::Round, Separator::None)
 		}
+		// a match arm's `Point{x, y} =>` is a pattern (destructurings), no construction
+		Node::Key(pattern, Op::FatArrow, body) => Node::Key(pattern, Op::FatArrow, Box::new(constructed_from_braces(*body, classes))),
 		other => other.map_children(|child| constructed_from_braces(child, classes)),
 	}
 }
