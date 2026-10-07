@@ -12,6 +12,7 @@ const PLACEHOLDER_PREFIX = "placeholder."; // wasm-split's import module of the 
 // fetch is dropped there); the caller shows the page anew (site.js, worker.js)
 function navigate(holder, hooks, path) {
 	holder.pagePath = path;
+	eachHostPart("navigated", holder);
 	hooks.navigated?.(holder, path);
 }
 

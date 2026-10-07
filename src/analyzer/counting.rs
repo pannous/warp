@@ -15,7 +15,7 @@ pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
 }
 
 /// `count`, `length`, `size`, `len`: a word counting its argument (`number x` is a cast)
-pub(super) fn is_counting_word(name: &str) -> bool {
+pub(crate) fn is_counting_word(name: &str) -> bool {
 	is_counting_property(name) && !TYPE_WORDS_AMONG_COUNTING.contains(&name)
 }
 

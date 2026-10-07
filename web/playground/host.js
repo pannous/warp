@@ -85,7 +85,7 @@ function writeBytes(program, bytes) {
 // name) an import module by its name (a .wasm path), else undefined; adapters, std modules for STD_ADAPTERS;
 // started(run) as a run begins; poll(holder) at each check point (sleep, signal_poll); finished(holder, hooks) after a
 // call into the run returned, a failure nobody read or nothing; ended(holder) after the call failed; stopped(holder)
-// when the page drops the run (stopListening)
+// when the page drops the run (stopListening); navigated(holder) when the page goes to another path (navigate)
 const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js"];
 const hostParts = [];
 function addHostPart(part) {

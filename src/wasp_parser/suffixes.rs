@@ -336,8 +336,7 @@ impl WaspParser {
 		}
 		// `int[n]` is n zeros of the type unless int is a variable (analyzer lower_declarations): no indexing hint
 		let names_a_type = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::zero_list(Empty, word).is_some());
-		let is_key_variable = matches!(indices[0].drop_meta(), Node::Symbol(index) if self.key_variables.contains(index));
-		if slice_bounds(&indices[0]).is_none() && !names_a_type && !is_key_variable {
+		if slice_bounds(&indices[0]).is_none() && !names_a_type && !self.names_a_key(&indices[0]) {
 			crate::normalize::set_position_of(lhs);
 			norm::index_operator(&crate::normalize::operand_text(lhs), &crate::normalize::operand_text(&indices[0]), true);
 		}

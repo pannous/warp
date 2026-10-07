@@ -1144,6 +1144,7 @@ PASSED:
   ✓ lists::test_key_lookup::test_object_variable_is_looked_up_by_key
   ✓ lists::test_key_lookup::test_text_value_is_looked_up
   ✓ lists::test_key_subscript_hint::a_text_key_subscript_gets_no_index_hint
+  ✓ lists::test_key_subscript_hint::a_text_variable_subscript_gets_no_index_hint
   ✓ lists::test_lazy_range::a_big_range_variable_compiles
   ✓ lists::test_lazy_range::a_range_bound_of_arithmetic_stays_a_descriptor
   ✓ lists::test_lazy_range::a_range_is_read_from_its_bounds
@@ -2830,6 +2831,9 @@ PASSED:
   ✓ web::test_html_render::tags_attributes_and_text
   ✓ web::test_html_render::the_page_gets_the_html_of_markup
   ✓ web::test_html_render::void_elements_and_attribute_lists
+  ✓ web::test_i18n::a_message_takes_its_values_and_plural_form
+  ✓ web::test_i18n::a_missing_translation_comes_from_the_first_language
+  ✓ web::test_i18n::plural_categories_follow_cldr
   ✓ web::test_keyed_lists::a_key_names_the_element_of_an_item
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
@@ -3089,6 +3093,11 @@ PASSED:
   ✓ welcoming::test_left_arrow::a_spaced_less_than_compares
   ✓ welcoming::test_let_const_changes::a_constant_assigned_its_own_value_again
   ✓ welcoming::test_let_const_changes::a_let_variable_changes
+  ✓ welcoming::test_list_phrases::a_chain_of_phrases
+  ✓ welcoming::test_list_phrases::a_method_of_a_parenthesized_filter
+  ✓ welcoming::test_list_phrases::keep_only_a_property
+  ✓ welcoming::test_list_phrases::sort_by_a_key
+  ✓ welcoming::test_list_phrases::take_first_n
   ✓ welcoming::test_lone_words::test_a_lone_word_is_a_symbol
   ✓ welcoming::test_lone_words::test_a_word_applied_to_an_argument_is_an_error
   ✓ welcoming::test_lone_words::test_a_word_close_to_a_name_warns
@@ -3230,4 +3239,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3225 passed, 0 failed, 3225 total tested
+19 ignored, 3234 passed, 0 failed, 3234 total tested

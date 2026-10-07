@@ -31,7 +31,7 @@ const hooks = {
 		live = holder;
 		startTimers(holder, handler => runHandler(holder, handler));
 		const fetches = [...(holder.fetches?.values() ?? [])].map(({ url }) => `fetch ${url}`);
-		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches] });
+		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches], address: addressOf(holder) });
 	},
 	// a fetch's reply arrived (host.js startFetch): its handler runs like a timer's, and the page shows the outcome
 	arrived: (holder, handler) => holder === live && runHandler(holder, handler),
@@ -96,8 +96,12 @@ registerForeignRuntime("python", {
 function handleNavigation(path) {
 	if (!live) return;
 	navigate(live, hooks, path);
+	post({ type: "address", path: addressOf(live) });
 	showHandled(live, { result: true });
 }
+
+// the page's path for the playground's address bar: only a program with routes has one (lowering/routes.rs)
+const addressOf = holder => holder.exports[PAGE_ROUTES_EXPORT] ? holder.pagePath ?? ROOT_PATH : undefined;
 
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
