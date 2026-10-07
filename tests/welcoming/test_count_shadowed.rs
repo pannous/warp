@@ -20,7 +20,7 @@ fn count_stays_a_word_and_a_variable_name() {
 	is!("counter = 0; users = [\"a\"]; \"users: \" + count(users)", "users: 1");
 }
 
-// a global `count` (a function reads it) leaves the word to the functions: std/markup.wasp's count(items) under a
+// a global `count` (a function reads it) leaves the word to the functions: lib/markup.wasp's count(items) under a
 // program's `count = 0`
 #[test]
 fn a_global_count_does_not_hide_the_word_in_functions() {

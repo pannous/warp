@@ -1,4 +1,4 @@
-//! The standard library module list (notes/stdlib.md): `use list` loads std/list.wasp, embedded in warp
+//! The standard library module list (notes/stdlib.md): `use list` loads lib/list.wasp, embedded in warp
 use crate::is;
 use warp::wasp_parser::parse;
 

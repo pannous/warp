@@ -192,7 +192,7 @@ fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String,
 	}
 }
 
-/// json's word for a program with classes (std/json.wasp): the classes' names go along, so an instance is its fields
+/// json's word for a program with classes (lib/json.wasp): the classes' names go along, so an instance is its fields
 const TO_JSON_WORD: &str = "to_json";
 const TO_JSON_OF_CLASSES_WORD: &str = "to_json_of_classes";
 /// Other languages' calls giving an instance's json or its fields: Kotlin's `Json.encodeToString(p)` is to_json(p),

@@ -25,7 +25,7 @@ debug results where country is germany
 1. **The package (small, warp side)**: a repository `pannous/netbase-wasp` (or a `netbase.wasp` in pannous/netbase),
    listed in warp's `packages.wasp`, made of wasp code over what warp already has (`fetch`, `json`):
    - `netbase_server = env("NETBASE") or "https://netbase.pannous.com"`
-   - `query(q) := parse_json(fetch(netbase_server + "/json/query/" + q))` (std/json, std/os `env`; URL-encoding the query is a missing small word): a list of records
+   - `query(q) := parse_json(fetch(netbase_server + "/json/query/" + q))` (lib/json, lib/os `env`; URL-encoding the query is a missing small word): a list of records
      (id, name, statements as fields), so `first 10 of results` and `results where it.country == "germany"` are plain
      list words.
    - `load wikidata`: a request to the server to have that dataset (it is the server's import; a public server already
@@ -46,7 +46,7 @@ debug results where country is germany
 - Where the package lives: its own repository netbase-wasp, or netbase.wasp inside pannous/netbase?
 
 ## Built so far (default (b) of warp-03, 2026-10-07)
-- `lib/netbase.wasp`: `query(q)` / `query_at(server, q)` fetch `<server>/json/query/<q>` and parse the JSON; the server is
+- `lib/extra/netbase.wasp`: `query(q)` / `query_at(server, q)` fetch `<server>/json/query/<q>` and parse the JSON; the server is
   env NETBASE, else http://localhost:8181. Without a server the error names the URL (tests/modules/test_netbase_package.rs).
   `load wikidata` is not defined: loading is the server's import.
 - Writing it found two compiler bugs, fixed: `f() := a or "d"` (inference of or/and) and fetch of a computed URL.

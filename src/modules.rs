@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 
-/// Where modules are looked for, in this order: the current directory, the samples, the library
-pub const SEARCH_DIRECTORIES: [&str; 6] = [".", "include", "lib", "src", "source", "samples"];
+/// Where modules are looked for, in this order: the current directory, the samples, the library (lib/extra: modules
+/// that are not standard, like netbase, P194)
+pub const SEARCH_DIRECTORIES: [&str; 7] = [".", "include", "lib", "lib/extra", "src", "source", "samples"];
 pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 /// `use x`, and its aliases `require x` and `import x`: the declarations of the file x
 pub(crate) const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
@@ -425,7 +426,7 @@ impl<'a> Loader<'a> {
 			_ => {}
 		});
 		if file_url {
-			self.use_std_module("file", std_module("file").expect("std/file.wasp is embedded"))?;
+			self.use_std_module("file", std_module("file").expect("lib/file.wasp is embedded"))?;
 		}
 		// a program's own `write(x, y)` wins
 		let own: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
@@ -494,11 +495,12 @@ impl<'a> Loader<'a> {
 		self.find_with(name, &MODULE_EXTENSIONS)
 	}
 
-	/// never the program's own file: hash.wasp saying `use hash` means the standard module
+	/// never the program's own file: hash.wasp saying `use hash` means the standard module; nor warp's own lib/hash.wasp,
+	/// which is the embedded standard module itself (found in lib when a program runs in warp's repository)
 	fn find_with(&self, name: &str, extensions: &[&str]) -> Option<PathBuf> {
 		let program = program_file().and_then(|file| file.canonicalize().ok());
 		let is_program = |path: &PathBuf| program.is_some() && path.canonicalize().ok() == program;
-		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path) && !is_program(path))
+		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path) && !is_program(path) && !is_embedded_std_file(path))
 	}
 
 	fn candidates(&self, name: &str) -> Vec<PathBuf> {
@@ -606,27 +608,28 @@ impl<'a> Loader<'a> {
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
 const STD_MODULES: [(&str, &str); 19] = [
-	("memory", include_str!("../std/memory.wasp")),
-	("net", include_str!("../std/net.wasp")),
-	("collections", include_str!("../std/collections.wasp")),
-	("hash", include_str!("../std/hash.wasp")),
-	("regex", include_str!("../std/regex.wasp")),
-	("file", include_str!("../std/file.wasp")),
-	("json", include_str!("../std/json.wasp")),
-	("os", include_str!("../std/os.wasp")),
-	("list", include_str!("../std/list.wasp")),
-	("math", include_str!("../std/math.wasp")),
-	("text", include_str!("../std/text.wasp")),
-	("random", include_str!("../std/random.wasp")),
-	("map", include_str!("../std/map.wasp")),
-	("time", include_str!("../std/time.wasp")),
-	("matrix", include_str!("../std/matrix.wasp")),
-	("draw", include_str!("../std/draw.wasp")),
-	("markup", include_str!("../std/markup.wasp")),
-	("router", include_str!("../std/router.wasp")),
-	("i18n", include_str!("../std/i18n.wasp")),
+	("memory", include_str!("../lib/memory.wasp")),
+	("net", include_str!("../lib/net.wasp")),
+	("collections", include_str!("../lib/collections.wasp")),
+	("hash", include_str!("../lib/hash.wasp")),
+	("regex", include_str!("../lib/regex.wasp")),
+	("file", include_str!("../lib/file.wasp")),
+	("json", include_str!("../lib/json.wasp")),
+	("os", include_str!("../lib/os.wasp")),
+	("list", include_str!("../lib/list.wasp")),
+	("math", include_str!("../lib/math.wasp")),
+	("text", include_str!("../lib/text.wasp")),
+	("random", include_str!("../lib/random.wasp")),
+	("map", include_str!("../lib/map.wasp")),
+	("time", include_str!("../lib/time.wasp")),
+	("matrix", include_str!("../lib/matrix.wasp")),
+	("draw", include_str!("../lib/draw.wasp")),
+	("markup", include_str!("../lib/markup.wasp")),
+	("router", include_str!("../lib/router.wasp")),
+	("i18n", include_str!("../lib/i18n.wasp")),
 ];
-const STD_FOLDER: &str = "std";
+/// The standard modules' folder (P194: std/ merged into lib/), embedded in the binary
+const STD_FOLDER: &str = "lib";
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along
 const PRELUDE_WORDS: [(&str, &[&str]); 1] = [("file", &["write", "exists"])];
 /// P183: a file URL in the program loads the file module, no `use file` needed
@@ -645,6 +648,21 @@ const STD_ALIASES: [(&str, &str); 27] = [
 	("tanh", "hyperbolic_tangent"), ("hypot", "hypotenuse"), ("ceil", "ceiling"), ("trunc", "whole_part"),
 	("fmod", "remainder"), ("ln", "natural_log"),
 ];
+
+/// warp's own lib/<module>.wasp of a standard module: the source the binary embeds (natively the lib folder of the
+/// repository it was built from; in the browser lib/ of the served repository, the page's file root)
+fn is_embedded_std_file(path: &Path) -> bool {
+	let stem = path.file_stem().and_then(|stem| stem.to_str());
+	if !stem.is_some_and(|stem| std_module(stem).is_some()) {
+		return false;
+	}
+	let folder = path.parent().unwrap_or(Path::new(""));
+	if !cfg!(feature = "native") {
+		return folder == Path::new(STD_FOLDER);
+	}
+	let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER).canonicalize().ok();
+	standard_folder.is_some() && folder.canonicalize().ok() == standard_folder
+}
 
 /// The name an embedded module is loaded under, once per program
 fn std_path(name: &str) -> PathBuf {

@@ -1,5 +1,5 @@
 // fetch of a URL computed at run time: a variable, a parameter, a concatenation (it fetched the variable's name,
-// `fetch u failed: bad uri: u is missing scheme`; found writing lib/netbase.wasp, card netbase-package)
+// `fetch u failed: bad uri: u is missing scheme`; found writing lib/extra/netbase.wasp, card netbase-package)
 use crate::common::serve;
 use crate::is;
 

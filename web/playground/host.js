@@ -121,7 +121,7 @@ function programImports(holder, hooks) {
 					return module.error_of(module.new_text(pointer, length));
 				}
 			},
-			// std_pure / std_io(module, member, arguments): a word of std/<module>.wasp (src/std_adapters.rs)
+			// std_pure / std_io(module, member, arguments): a word of lib/<module>.wasp (src/std_adapters.rs)
 			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
 			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
@@ -405,7 +405,7 @@ function runMain(holder, hooks) {
 	const events = pageEvents(exports);
 	// a program with routes stays for its links (lowering/routes.rs page·routes)
 	if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
-	// a run without page events (std/markup.wasp rendering the page's HTML, src/markup.rs) keeps the page's run
+	// a run without page events (lib/markup.wasp rendering the page's HTML, src/markup.rs) keeps the page's run
 	if (events.length > 0 && outcome.result) listeningRun = holder;
 	return outcome;
 }
@@ -415,7 +415,7 @@ let listeningRun;
 const PAGE_VALUE_EXPORT = "page·value";
 const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/page_html.rs PAGE_RENDER
 
-// the HTML of a value by the program's own renderer (std/markup.wasp's to_html, exported as page·render by a program
+// the HTML of a value by the program's own renderer (lib/markup.wasp's to_html, exported as page·render by a program
 // holding markup): undefined for a number, a program without one, or a rendering that failed (the compiler then
 // renders the value itself, src/web.rs html_of)
 function renderedHtml(exports, value) {

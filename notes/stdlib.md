@@ -19,7 +19,7 @@ Draft by functions (warp-64), adapters section by async (warp-f0). Defaults belo
   → Process. `eval_untrusted` gets math, text, list, map, json, random-with-seed only.
 
 ## 2. Module layout
-Each module is `std/<name>.wasp` in the warp repository, embedded in the binary (`include_str!`), so `use <name>`
+Each module is `lib/<name>.wasp` in the warp repository, embedded in the binary (`include_str!`), so `use <name>`
 needs no files on disk and works in the browser.
 
 | module | content | built as |
@@ -36,7 +36,7 @@ needs no files on disk and works in the browser.
 | os / process | args env exit exec | host words (exit exists), Process capability |
 | regex | matches find find_all replace_all | adapter (Rust regex as host word natively, JS RegExp in the browser) |
 | hash | hash sha256 md5 crc32 | adapter (xxHash/zlib C modules exist, notes/wasm_modules.md) |
-| collections | classes Stack Queue Deque Set Counter, OrderedMap; HashSet TreeSet frozenset ArrayDeque VecDeque deque as aliases | wasp classes over a list field (std/collections.wasp, classes side warp-41) |
+| collections | classes Stack Queue Deque Set Counter, OrderedMap; HashSet TreeSet frozenset ArrayDeque VecDeque deque as aliases | wasp classes over a list field (lib/collections.wasp, classes side warp-41) |
 
 ## 3. Prelude (global without `use`)
 Everything that works today (section 4) plus the language forms (print, type, int/text/float/as, error/raise/try,
@@ -57,28 +57,30 @@ Missing (probe gives "undefined function"): `unique zip enumerate product mean w
 matches format pad json parse`; `today` and `args` read as symbols; `exec sh "…"` is undefined outside its capability.
 
 ## 5. How a module is loaded
-- `use math` resolves: a local `math.wasp` (the file wins) → the embedded `std/math.wasp` → an FFI library (`m`) →
-  the package registry. std/math.wasp forwards to libm (P169), whose C names still work with a note; `use cmath` is
+- `use math` resolves: a local `math.wasp` (the file wins) → the embedded `lib/math.wasp` → an FFI library (`m`) →
+  the package registry. lib/math.wasp forwards to libm (P169), whose C names still work with a note; `use cmath` is
   libm alone.
 - Names: after `use list`, `zip(a, b)` and `list.zip(a, b)` both work; a program's own `zip` wins (as for prelude words).
 - A module word used without its `use`: the loud error naming the module, with the fix `use list`.
 
 ## 6. Steps (functions)
 Done (branch functions, 2026-10-07):
-1. `std/<name>.wasp` embedded in warp (modules.rs STD_MODULES); a local file of the same name wins. The loader keeps a
+1. `lib/<name>.wasp` embedded in warp (modules.rs STD_MODULES; std/ until P194 merged it into lib/, non-standard
+   modules like netbase live in lib/extra/); a local file of the same name wins, except warp's own lib/<name>.wasp,
+   which is the embedded module itself (modules.rs is_embedded_std_file). The loader keeps a
    std module's definitions aside and gives the program only those it calls, and those they call
    (`with_needed_definitions`): an unused word would compile with parameters of no kind.
    `use list`: unique zip enumerate product mean take drop flatten (tests/modules/test_std_list.rs).
 2. A std word without its `use`: "zip is in the standard module list: write `use list`" (ffi::undefined_function_message,
    also for the braceless call).
-3. `use math` = libm (as before) + std/math.wasp: gcd lcm clamp sign; `use text`: repeat pad_left pad_right
+3. `use math` = libm (as before) + lib/math.wasp: gcd lcm clamp sign; `use text`: repeat pad_left pad_right
    (tests/modules/test_std_math_text.rs). pi, e, tau already exist as exact symbols.
 4. Qualified `list.zip(…)`, `math.gcd(…)`, JS's `Math.sqrt(16)`: the bare word with a note (welcome_forms
    module_calls); a program's own variable `text`/`list` keeps its methods (tests/modules/test_std_qualified.rs).
 5. `use random`: choice shuffle sample; `use map`: merge map_values (tests/modules/test_std_random.rs, test_std_map.rs).
    A std module's source shows no style hints (parsed under normalize::without_hints).
 Bugs met (cards over-keys, inside-loop, index-hint): `for k in keys(m)` / `m[k]` in a loop over a one-entry map
-parameter; std/map.wasp uses `ks = keys(m)` and `m.get(k)` until they are fixed.
+parameter; lib/map.wasp uses `ks = keys(m)` and `m.get(k)` until they are fixed.
 6. `use time`: date_of(ms) {year month day}, weekday(ms) (ISO, Monday 1), day_number(ms), today()
    (tests/modules/test_std_time.rs). Fixed on the way: `{year:1970 month:1}` read `1970 month` as a duration
    (card key-unit), and the map parameter bug above (cards over-keys, inside-loop: no list copy for a map parameter).
@@ -121,7 +123,7 @@ Next:
    power (analyzer inference constant_value); one held in a variable still traps. sqrt/cbrt have no alias: they are the operators √ ∛ (∛ of a run-time value calls libm cbrt, Math.cbrt in the browser).
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
-Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:
+Collections (classes, branch classes-36): `use collections` = lib/collections.wasp, classes over a list field:
 Stack push pop peek size, Queue enqueue dequeue peek size, Deque push_back push_front pop_back pop_front size,
 Set(xs) add has remove size, Counter(xs) add get most_common (tests/modules/test_std_collections.rs). Module only,
 not prelude (prelude question queued with warp-e9). A used module's classes go in before class_methods
@@ -151,7 +153,7 @@ notes/wasm_modules.md); the question per module is which one ships with warp.
 
 Rule for the standard library (default): **a std module must work in every host without anything installed.** So it
 uses wasp, A (a Rust crate already in warp's dependencies natively, the browser's built-in API in host.js) or B (a C
-library compiled to wasm once, embedded in warp like std/*.wasp). C, E and F need a library, python3 or node on the
+library compiled to wasm once, embedded in warp like lib/*.wasp). C, E and F need a library, python3 or node on the
 machine: they stay the user's `use python numpy`, `use js lodash`, `use sqlite3`, never a std module's backing. D is
 for Rust crates without a host word (a crate built to a component) once a std module needs one.
 
@@ -176,12 +178,12 @@ engine has is a loud error in both, never a different result.
 ### How an adapter word is built (A)
 Two host words carry every adapter: `std_pure(module, member, arguments)` for words without effects (json, hash,
 regex: capability like libm's) and `std_io(…)` for words that touch the outside (file, os, net: Host, IO). A std module
-defines its words over them, `parse_json(text) := std_pure("json", "parse", [text])` (std/json.wasp); natively
+defines its words over them, `parse_json(text) := std_pure("json", "parse", [text])` (lib/json.wasp); natively
 src/std_adapters.rs answers by (module, member), in the browser host.js STD_ADAPTERS. Values cross as for the foreign
 runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain). Their results are any Node (analyzer
 ANY_VALUE_WORDS). The wrappers' parameters are annotated `any` (`to_json(value:any)`): an unannotated parameter fed
 only by such values would default to an int ("not an int" for `parse_json(post(…))`).
-Adding a word: one match arm in std_adapters.rs, one function in STD_ADAPTERS, one line in std/<module>.wasp, a test
+Adding a word: one match arm in std_adapters.rs, one function in STD_ADAPTERS, one line in lib/<module>.wasp, a test
 run natively and in the browser.
 
 ### First adapter steps (async)

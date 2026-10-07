@@ -1,4 +1,4 @@
-// card web-ssr: std/markup.wasp's to_html is the one renderer: the CLI and the playground render a markup value with
+// card web-ssr: lib/markup.wasp's to_html is the one renderer: the CLI and the playground render a markup value with
 // it too (src/markup.rs), as a page renders itself (page·html)
 use warp::markup::to_html;
 use warp::wasm_emitter::eval;

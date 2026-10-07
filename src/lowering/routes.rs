@@ -5,7 +5,7 @@
 //! page·route·N, the exported page·routes gives the patterns in order, page·route_index() the index of the first route matching the path (-1 when none; the site
 //! loads that route's module first, card web-bundle), and page·routed() that route's value, else "no page at <path>"; `route "*"`
 //! matches any path (the not-found page). The program shows page·routed() where it says `outlet` (a layout around the
-//! routes), else as its last line when that is a route. The matching is std/router.wasp's; the browser's URLPattern
+//! routes), else as its last line when that is a route. The matching is lib/router.wasp's; the browser's URLPattern
 //! syntax works too (card route-urlpattern): ":tab?", ":path*", ":path+", "*" as the last part, and ":id(\\d+)", whose
 //! regular expression page·route_index checks with std regex.
 //! A route's block may hold routes (card route-nested), their patterns relative to it: the block's other items are its
@@ -32,7 +32,7 @@ const REGEX_MODULE_USE: &str = "use regex";
 /// Where a layout shows the matched route
 const OUTLET: &str = "outlet";
 const PARAMETER_MARK: &str = ":";
-/// The types a parameter may declare (std/router.wasp route_fits)
+/// The types a parameter may declare (lib/router.wasp route_fits)
 const PARAMETER_TYPES: [&str; 4] = ["int", "float", "text", "string"];
 /// URLPattern (card route-urlpattern): how often the last part may come ("?", "*", "+"), a regular expression "(…)"
 const PART_MARKS: [char; 3] = ['?', '*', '+'];
@@ -125,7 +125,7 @@ fn joined(outer: &str, inner: &str) -> String {
 }
 
 /// A parameter of a pattern part: ":id:int" → id, its type int; ":id(\\d+)?" → id, its regular expression (a URLPattern
-/// mark or group leaves it untyped, as std/router.wasp route_part_type)
+/// mark or group leaves it untyped, as lib/router.wasp route_part_type)
 struct Parameter<'a> {
 	name: &'a str,
 	kind: Option<&'a str>,
