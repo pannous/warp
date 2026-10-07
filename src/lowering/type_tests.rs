@@ -1,6 +1,6 @@
 //! Type tests: `x is int`, `x is a number`, `[1 2] is list of int`, `[1 2] is ints`, `x is pair`, `p is friend` (a declared
 //! type) lower to `is_type(x, "spec")`, which the emitter answers in any position from the static type name of `x` (the same
-//! as `type(x)`) when it is known, else from the value's kind at run time (`runtime_kinds`, node_kind_in) or, for a
+//! as `type(x)`) when it is known, else from the value's kind at run time (`runtime_kind_mask`, node_kind_in) or, for a
 //! declared type, its instance type (instance_of). `type of x` is `type(x)`.
 //! A type word on the right of `is` switches from equality to a type test; `x is y` with a variable stays equality.
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
@@ -31,6 +31,7 @@ fn canonical_spec_word(word: &str) -> &str {
 		"double" | "f64" | "f32" | "fast" => "float",
 		"exact" => "rational",
 		"pair" => "key",
+		"boolean" => "bool",
 		other => other,
 	}
 }
@@ -55,13 +56,15 @@ pub fn type_matches(actual: &str, spec: &str) -> bool {
 	}
 }
 
-/// The run-time kinds of a value of type `spec`, for a value whose static type is unknown (an item of a mixed list, a Node);
-/// None for a spec only the static type answers. The empty list ø is a list, as `count` takes it
-pub fn runtime_kinds(spec: &str) -> Option<Vec<crate::type_kinds::Kind>> {
+/// The run-time kinds of a value of type `spec` as a mask of their bits (node_kind_in), for a value whose static type is
+/// unknown (an item of a mixed list, a Node); None for a spec only the static type answers. The empty list ø is a list,
+/// as `count` takes it; a bool is an Int marked bool and has a bit of its own (BOOL_MASK_BIT): no int, no number
+pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
 	use crate::type_kinds::Kind;
 	let spec = canonical_spec_word(spec);
-	Some(match spec {
+	let kinds = match spec {
 		_ if spec == LIST_WORD || spec.starts_with("list of ") => vec![Kind::List, Kind::Block, Kind::Empty],
+		crate::analyzer::BOOL_TYPE => return Some(1 << crate::type_kinds::BOOL_MASK_BIT),
 		"int" => vec![Kind::Int],
 		"float" => vec![Kind::Float],
 		"number" | "real" | "rational" => vec![Kind::Int, Kind::Float],
@@ -70,7 +73,8 @@ pub fn runtime_kinds(spec: &str) -> Option<Vec<crate::type_kinds::Kind>> {
 		"symbol" => vec![Kind::Symbol],
 		"key" => vec![Kind::Key],
 		_ => return None,
-	})
+	};
+	Some(kinds.iter().fold(0, |mask, kind| mask | 1 << (*kind as i64)))
 }
 
 /// The program's variables (a name of one is no type in a test) and its declared types (`class friend`: `x is friend`)

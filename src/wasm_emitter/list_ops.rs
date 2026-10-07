@@ -104,12 +104,16 @@ impl WasmGcEmitter {
 	/// node_count and node_bytes
 	fn emit_node_kind_test(&mut self) {
 		let node_ref = self.node_ref(false);
-		// node_kind_in(node, mask) -> i64: 1 when bit `kind` of the mask is set (type tests of values of unknown static type)
+		// node_kind_in(node, mask) -> i64: 1 when bit `kind` of the mask is set (type tests of values of unknown static type);
+		// a bool's bit is BOOL_MASK_BIT, not its Int's
 		if self.should_emit_function(crate::type_tests::NODE_KIND_IN) {
-			self.runtime_function(crate::type_tests::NODE_KIND_IN, vec![Ref(node_ref), ValType::I64], vec![ValType::I64], vec![], |s, f| {
+			self.runtime_function(crate::type_tests::NODE_KIND_IN, vec![Ref(node_ref), ValType::I64], vec![ValType::I64], vec![ValType::I64], |s, f| {
+				let kind = 2;
 				f.instruction(&I::LocalGet(1));
 				s.emit_field(f, 0, 0);
-				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64ShrU, I::I64Const(1), I::I64And]);
+				Self::emit_list(f, &[I::LocalTee(kind), I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq, I::If(BlockType::Result(ValType::I64)),
+					I::I64Const(crate::type_kinds::BOOL_MASK_BIT), I::Else, I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::End]);
+				Self::emit_list(f, &[I::I64ShrU, I::I64Const(1), I::I64And]);
 			});
 		}
 	}

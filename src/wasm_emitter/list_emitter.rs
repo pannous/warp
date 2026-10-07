@@ -370,7 +370,10 @@ impl WasmGcEmitter {
 	}
 
 	/// The name `type(x)` reports: `int`, `rational`, `text`, `list of int` …
-	fn static_type_name(&self, arg: &Node) -> String {
+	pub(super) fn static_type_name(&self, arg: &Node) -> String {
+		if crate::analyzer::is_boolean(arg, &self.scope) {
+			return crate::analyzer::BOOL_TYPE.to_string();
+		}
 		let kind = match arg.drop_meta() {
 			literal @ Node::Number(_) => literal.kind(),
 			_ => self.get_type(arg),
@@ -403,9 +406,8 @@ impl WasmGcEmitter {
 		let Node::Text(spec) = spec.drop_meta() else { return false };
 		let unknown = !matches!(subject.drop_meta(), Node::Number(_)) && matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
-		match crate::type_tests::runtime_kinds(spec).filter(|_| unknown && !declared_type) {
-			Some(kinds) => {
-				let mask = kinds.iter().fold(0i64, |mask, kind| mask | 1 << (*kind as i64));
+		match crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type) {
+			Some(mask) => {
 				self.emit_node_instructions(func, subject);
 				func.instruction(&I::RefAsNonNull);
 				func.instruction(&I::I64Const(mask));

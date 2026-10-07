@@ -296,7 +296,7 @@ fn print_and_exit(result: Node) -> ! {
 /// A program's value after what it printed, behind `mark`; nothing for ø, the value of `print` (issue #18) and of a
 /// program that only acts, as Python's console shows nothing for None
 fn show(result: &Node, mark: &str) {
-    if result.drop_meta() != &Node::Empty {
+    if !matches!(result.drop_meta(), Node::Empty) {
         // markup (`html{ body{ … } }`) is printed as HTML: `warp run page.wasp > page.html` (card web-dom)
         let shown = if markup::is_markup(result) { markup::to_html(result) } else { result.serialize() };
         println!("{mark}{shown}");

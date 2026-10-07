@@ -73,6 +73,23 @@ impl WasmGcEmitter {
 		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right) || by_value(left) || by_value(right))
 	}
 
+	/// `a === b`: `a == b` of two values of the same type, else false (`!==` true): `0 === false` and `1 === 1.5` are
+	/// false (P196, card zero-false). A side whose static type is unknown (`value:any`) is told apart by its boolness only
+	pub(super) fn identity_as_equality(&self, node: &Node) -> Option<Node> {
+		let Node::Key(left, op @ (Op::Identical | Op::NotIdentical), right) = node.drop_meta() else { return None };
+		let known_type = |side: &Node| Some(self.static_type_name(side)).filter(|name| name != "empty" || matches!(side.drop_meta(), Node::Empty));
+		let same_type = match (known_type(left), known_type(right)) {
+			(Some(left_type), Some(right_type)) => left_type == right_type,
+			_ => crate::analyzer::is_boolean(left, &self.scope) == crate::analyzer::is_boolean(right, &self.scope),
+		};
+		let identical = *op == Op::Identical;
+		if !same_type {
+			return Some(if identical { Node::False } else { Node::True });
+		}
+		let equality = if identical { Op::Eq } else { Op::Ne };
+		Some(Node::Key(left.clone(), equality, right.clone()))
+	}
+
 	/// `cell_get(c)`: a cell's value, a Node of any kind
 	fn is_held_cell_value(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == super::cells::CELL_GET))
@@ -266,13 +283,17 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// An Int, a Float or a bool (an Int marked bool: `false == 0`, card bool-type)
 	fn is_number_kind(func: &mut Function, kind_local: u32) {
-		for kind in [Kind::Int, Kind::Float] {
+		let kinds = [Kind::Int as i64, Kind::Float as i64, crate::type_kinds::BOOL_KIND];
+		for kind in kinds {
 			func.instruction(&I::LocalGet(kind_local));
-			func.instruction(&I::I64Const(kind as i64));
+			func.instruction(&I::I64Const(kind));
 			func.instruction(&I::I64Eq);
 		}
-		func.instruction(&I::I32Or);
+		for _ in 1..kinds.len() {
+			func.instruction(&I::I32Or);
+		}
 	}
 
 	/// Returns from values_equal: two lists are equal as sets of entries when every entry of each has an equal entry in the other.

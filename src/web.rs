@@ -275,6 +275,9 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 	let value_node = || value.clone().unwrap_or(Node::Empty);
 	match kind & KIND_MASK {
 		tag if tag == Kind::Empty as i64 => Node::Empty,
+		tag if tag == Kind::Int as i64 && info == crate::type_kinds::BOOL_INFO => {
+			if matches!(payload_number(data), Some(Number::Int(0))) { Node::False } else { Node::True }
+		}
 		tag if tag == Kind::Int as i64 => payload_number(data).map_or_else(|| crate::node::error("unreadable Int"), Node::Number),
 		tag if tag == Kind::Float as i64 => Node::Number(Number::Float(payload_float(data).unwrap_or(0.0))),
 		tag if tag == Kind::Text as i64 => Node::Text(text()),

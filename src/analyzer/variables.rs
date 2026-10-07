@@ -35,7 +35,12 @@ pub(super) fn global_binding(declaration: &Node, scope: &Scope) -> Option<Local>
 /// Kind and type of a variable bound to `value` without a declared type; a list keeps its element type
 pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<Node>>) {
 	let kind = binding_kind(value, scope);
-	(kind, (kind == Kind::List).then(|| Box::new(Node::Symbol(list_type_name(value, scope)))))
+	let type_name = match kind {
+		Kind::List => Some(list_type_name(value, scope)),
+		Kind::Int if is_boolean(value, scope) => Some(BOOL_TYPE.to_string()),
+		_ => None,
+	};
+	(kind, type_name.map(|name| Box::new(Node::Symbol(name))))
 }
 
 /// The body of a function definition `f(x) = …`, `f(x) := …`, `def f(x) {…}`: its variables are the function's own

@@ -85,6 +85,8 @@ pub enum Op {
 	Ge,  // >=  ≥
 	Eq,  // ==
 	Ne,  // !=  ≠
+	Identical,    // ===  equal and of the same type: 0 === false is false (card zero-false)
+	NotIdentical, // !==
 	Similar, // ≈  ~  circa  approximately: equal within the relative `tolerance` (default 1e-9)
 
 	// Logical operators
@@ -174,7 +176,7 @@ impl Op {
 			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
 
 			// Equality binds weaker and never chains: a<b == c<d compares the two results, a==b==c is ambiguous
-			Op::Eq | Op::Ne | Op::Similar => (115, 116),
+			Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Similar => (115, 116),
 
 			// Logical not binds weaker than comparison: not a==b → not (a==b)
 			Op::Not => (0, 105),
@@ -262,6 +264,8 @@ impl Op {
 			Op::Ge => ">=",
 			Op::Eq => "==",
 			Op::Ne => "!=",
+			Op::Identical => "===",
+			Op::NotIdentical => "!==",
 			Op::Similar => "≈",
 
 			// Logical
@@ -341,7 +345,7 @@ impl Op {
 
 	/// Check if this is a comparison operator
 	pub fn is_comparison(&self) -> bool {
-		matches!(self, Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge)
+		matches!(self, Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Lt | Op::Gt | Op::Le | Op::Ge)
 	}
 
 	/// Ordering comparisons chain (a<b<c), equality does not
@@ -392,14 +396,14 @@ impl fmt::Display for Op {
 
 /// Every operator by its code in the kind field of a Key node (`(code << 8) | Kind::Key`); the first five are the
 /// codes earlier modules stored, the rest follow, so a quoted expression (`data 1+2`) reads back with its operator
-const OP_CODES: [Op; 58] = [
+const OP_CODES: [Op; 60] = [
 	Op::None, Op::Colon, Op::Assign, Op::Define, Op::Dot,
 	Op::SafeDot, Op::Scope, Op::Arrow, Op::FatArrow, Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Rem, Op::Pow,
 	Op::Shl, Op::Shr, Op::AddAssign, Op::SubAssign, Op::MulAssign, Op::DivAssign, Op::ModAssign, Op::PowAssign,
 	Op::AndAssign, Op::OrAssign, Op::XorAssign, Op::Lt, Op::Gt, Op::Le, Op::Ge, Op::Eq, Op::Ne, Op::Similar, Op::And,
 	Op::Or, Op::Xor, Op::Not, Op::Neg, Op::Sqrt, Op::Cbrt, Op::Abs, Op::Inc, Op::Dec, Op::Square, Op::Cube,
 	Op::Question, Op::If, Op::Then, Op::Else, Op::While, Op::Do, Op::Hash, Op::Range, Op::To, Op::As, Op::PlusMinus,
-	Op::Coalesce,
+	Op::Coalesce, Op::Identical, Op::NotIdentical,
 ];
 
 /// Encode Op as i64 for storage in kind field
