@@ -2,7 +2,8 @@
 // of the program's module, and its result (or failure) and printed output go back as JSON in the shared buffer the
 // starting program waits on with Atomics.wait.
 
-importScripts("reader.js", "host.js", "components.js");
+importScripts("reader.js", "host.js");
+importScripts(...HOST_PART_FILES, "components.js");
 self.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host.js prepareTaskPool)
 
 self.onmessage = ({ data }) => data.fetch ? fetchInto(data) : runTaskInto(data);

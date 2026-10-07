@@ -2,19 +2,50 @@
 //! serves as it is. index.html holds the HTML of what the program shows, rendered at build time by the program itself
 //! (its export page·html, lowering/page_html.rs, run natively after main), so the page reads without JavaScript; app.wasm is the program, which the loader (web/playground/site.js)
 //! runs in the page to hydrate it: the DOM stays, the handlers of its elements run, and what they change is shown anew.
-//! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary.
+//! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary, and the parts of
+//! host.js its module imports words of (HOST_PARTS, card web-bundle).
 
+use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, HOST_LIBRARY, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
 use crate::node::Node;
 use std::path::{Path, PathBuf};
 
 const PAGE_FILE: &str = "index.html";
 const MODULE_FILE: &str = "app.wasm";
-/// The scripts of the page, in load order, with their text
-const SCRIPTS: [(&str, &str); 4] = [
-	("reader.js", include_str!("../web/playground/reader.js")),
-	("host.js", include_str!("../web/playground/host.js")),
-	("markup.js", include_str!("../web/playground/markup.js")),
-	("site.js", include_str!("../web/playground/site.js")),
+/// The scripts every page loads before the parts of the host, with their text
+const HOST_SCRIPTS: [Script; 2] = [("reader.js", include_str!("../web/playground/reader.js")), ("host.js", include_str!("../web/playground/host.js"))];
+/// The scripts every page loads after them
+const PAGE_SCRIPTS: [Script; 2] = [("markup.js", include_str!("../web/playground/markup.js")), ("site.js", include_str!("../web/playground/site.js"))];
+type Script = (&'static str, &'static str);
+const WASI_LIBRARY: &str = "wasi_snapshot_preview1";
+const TASK_WORD_PREFIXES: [&str; 3] = ["task_", "channel_", "shared_"];
+
+/// A part of host.js (its addHostPart): shipped when the module imports a word it gives, with the parts it needs
+pub struct HostPart {
+	pub script: Script,
+	pub gives: fn(module: &str, name: &str) -> bool,
+	pub needs: &'static [&'static str],
+}
+
+/// The parts of host.js, in load order (host.js HOST_PART_FILES). std_pure and std_io are coarse: they carry every std
+/// module's words, so a program using json (std_pure) also gets the hashes
+pub const HOST_PARTS: [HostPart; 5] = [
+	HostPart {
+		script: ("host-files.js", include_str!("../web/playground/host-files.js")),
+		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", STD_IO].contains(&name),
+		needs: &[],
+	},
+	HostPart { script: ("host-hashes.js", include_str!("../web/playground/host-hashes.js")), gives: |module, name| module == HOST_LIBRARY && name == STD_PURE, needs: &[] },
+	HostPart {
+		script: ("host-tasks.js", include_str!("../web/playground/host-tasks.js")),
+		gives: |module, name| module == HOST_LIBRARY && (TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)) || [FETCH_START, FETCH_REPLY, SIGNAL_SEND].contains(&name)),
+		needs: &[],
+	},
+	HostPart {
+		script: ("host-foreign.js", include_str!("../web/playground/host-foreign.js")),
+		gives: |module, name| (module == HOST_LIBRARY && name == FOREIGN_CALL) || ![HOST_LIBRARY, WASI_LIBRARY].contains(&module),
+		needs: &["host-files.js"],
+	},
+	HostPart { script: ("host-compiler.js", include_str!("../web/playground/host-compiler.js")), gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK, needs: &["host-files.js"] },
 ];
 const LINE_COMMENT: &str = "//";
 /// The element holding the program's markup (site.js SITE_ROOT)
@@ -49,17 +80,41 @@ pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, Str
 	};
 	std::fs::create_dir_all(directory).map_err(|failure| format!("cannot make {}: {failure}", directory.display()))?;
 	let write = |name: &str, bytes: &[u8]| std::fs::write(directory.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"));
-	write(PAGE_FILE, page(title, html).as_bytes())?;
 	write(MODULE_FILE, &module.bytes)?;
-	for (name, text) in SCRIPTS {
+	let scripts = scripts_of(&module.bytes)?;
+	write(PAGE_FILE, page(title, html, &scripts).as_bytes())?;
+	for (name, text) in &scripts {
 		write(name, compacted(text).as_bytes())?;
 	}
-	let files = [PAGE_FILE, MODULE_FILE].into_iter().chain(SCRIPTS.map(|(name, _)| name)).map(str::to_string).collect();
+	let files = [PAGE_FILE, MODULE_FILE].into_iter().chain(scripts.iter().map(|(name, _)| *name)).map(str::to_string).collect();
 	Ok(BuiltSite { directory: directory.to_path_buf(), files })
 }
 
-fn page(title: &str, body: &str) -> String {
-	let scripts: String = SCRIPTS.iter().map(|(name, _)| format!("<script src=\"{name}\"></script>\n")).collect();
+/// The scripts of the page of a module, in load order: the parts of the host it imports words of, with the parts they need
+pub fn scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
+	let imports = imports_of(module)?;
+	let imported = |part: &HostPart| imports.iter().any(|(module, name)| (part.gives)(module, name));
+	let needed: Vec<&str> = HOST_PARTS.iter().filter(|part| imported(part)).flat_map(|part| part.needs.iter().copied().chain([part.script.0])).collect();
+	let parts = HOST_PARTS.iter().map(|part| part.script).filter(|(name, _)| needed.contains(name));
+	Ok(HOST_SCRIPTS.into_iter().chain(parts).chain(PAGE_SCRIPTS).collect())
+}
+
+/// The (module, name) of each import of a module
+fn imports_of(module: &[u8]) -> Result<Vec<(String, String)>, String> {
+	let mut imports = Vec::new();
+	for payload in wasmparser::Parser::new(0).parse_all(module) {
+		if let wasmparser::Payload::ImportSection(section) = payload.map_err(|failure| failure.to_string())? {
+			for import in section.into_imports() {
+				let import = import.map_err(|failure| failure.to_string())?;
+				imports.push((import.module.to_string(), import.name.to_string()));
+			}
+		}
+	}
+	Ok(imports)
+}
+
+fn page(title: &str, body: &str, scripts: &[Script]) -> String {
+	let scripts: String = scripts.iter().map(|(name, _)| format!("<script src=\"{name}\"></script>\n")).collect();
 	// the program's texts last, so nothing in them is read as a placeholder
 	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
 }

@@ -1,7 +1,8 @@
 // The warp compiler (warp.wasm, built by build.sh) and the programs it compiles (host.js), run off the page's thread:
 // a worker may compile any module synchronously and block on a synchronous fetch, which the host calls need.
 
-importScripts("reader.js", "host.js", "components.js");
+importScripts("reader.js", "host.js");
+importScripts(...HOST_PART_FILES, "components.js");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 // warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)
