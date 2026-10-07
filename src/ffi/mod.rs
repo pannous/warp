@@ -25,9 +25,12 @@ use wasmtime::{Engine, FuncType, Linker, Val, ValType};
 
 /// libm f64 functions linked by link_ffi_functions, with their arity.
 /// Fallback when system headers declare them via macros (glibc __MATHCALL).
-pub const LIBM_F64_FUNCTIONS: [(&str, usize); 15] = [
+/// A libm name missing here compiled to its last argument (`hypot(3, 4)` was 4): the browser host takes them from Math.
+pub const LIBM_F64_FUNCTIONS: [(&str, usize); 27] = [
     ("fmin", 2), ("fmax", 2), ("fabs", 1), ("floor", 1), ("ceil", 1), ("round", 1), ("sqrt", 1),
     ("sin", 1), ("cos", 1), ("tan", 1), ("fmod", 2), ("pow", 2), ("exp", 1), ("log", 1), ("log10", 1),
+    ("asin", 1), ("acos", 1), ("atan", 1), ("atan2", 2), ("sinh", 1), ("cosh", 1), ("tanh", 1), ("hypot", 2),
+    ("log2", 1), ("trunc", 1), ("log1p", 1), ("expm1", 1),
 ];
 
 /// FFI function signature descriptor

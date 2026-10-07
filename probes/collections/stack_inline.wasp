@@ -1,0 +1,10 @@
+class Stack { items: list
+  push(x) := { items = items + [x] }
+  pop() := { top = last(items); items = take(items, count(items) - 1); top }
+  peek() := last(items)
+  size() := count(items)
+}
+s = Stack([])
+s.push(3)
+s.push(4)
+s.pop() * 10 + s.size()

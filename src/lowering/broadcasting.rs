@@ -311,10 +311,13 @@ fn takes_a_scalar(param: &Node, body: &Node) -> bool {
 
 fn is_arithmetic_operand(body: &Node, name: &str) -> bool {
 	let is_param = |node: &Node| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == name);
+	let is_list_literal = |node: &Node| matches!(node.drop_meta(), Node::List(_, Bracket::Square, _));
 	let mut found = false;
 	body.visit(&mut |node| {
 		if let Node::Key(left, op, right) = node {
-			found |= ARITHMETIC.contains(op) && (is_param(left) || is_param(right));
+			// `ys + [x]` concatenates: ys is a list
+			let concatenates = *op == Op::Add && (is_list_literal(left) || is_list_literal(right));
+			found |= ARITHMETIC.contains(op) && !concatenates && (is_param(left) || is_param(right));
 		}
 	});
 	found

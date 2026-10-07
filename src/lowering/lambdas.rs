@@ -186,7 +186,7 @@ fn dangling_operator(node: &Node) -> Option<(Node, Node)> {
 	Some((operand.as_ref().clone(), operator_symbol(*op)?))
 }
 
-fn mentions(node: &Node, name: &str) -> bool {
+pub(crate) fn mentions(node: &Node, name: &str) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(symbol) => symbol == name,
 		Node::Key(left, _, right) => mentions(left, name) || mentions(right, name),

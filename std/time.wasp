@@ -29,3 +29,29 @@ format_time(ms) := {
 	s = (ms % 86400000)//1000
 	two_digits(s//3600) + ":" + two_digits(s % 3600//60) + ":" + two_digits(s % 60)
 }
+// Howard Hinnant's days_from_civil: the day number of a proleptic Gregorian date
+days_from_date(year, month, day) := {
+	y = if month <= 2 then year - 1 else year
+	era = y//400
+	yoe = y - era * 400
+	mp = if month > 2 then month - 3 else month + 9
+	doy = (153 * mp + 2)//5 + day - 1
+	doe = yoe * 365 + yoe//4 - yoe//100 + doy
+	era * 146097 + doe - 719468
+}
+// "2026-10-07" → milliseconds since 1970 at midnight UTC
+parse_date(t) := {
+	parts = split(t, "-")
+	days_from_date(int(parts#1), int(parts#2), int(parts#3)) * 86400000
+}
+// milliseconds as the largest units: 5430000 → "1h 30m 30s", 250 → "250ms"
+format_duration(ms) := {
+	if ms < 1000 then return "" + ms + "ms"
+	s = ms//1000
+	parts = []
+	if s >= 86400 { parts = parts + ["" + s//86400 + "d"] }
+	if s % 86400 >= 3600 { parts = parts + ["" + s % 86400//3600 + "h"] }
+	if s % 3600 >= 60 { parts = parts + ["" + s % 3600//60 + "m"] }
+	if s % 60 > 0 { parts = parts + ["" + s % 60 + "s"] }
+	join(parts, " ")
+}
