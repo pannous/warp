@@ -4,6 +4,46 @@ Answered decisions, newest first; moved out of notes/open_decisions.md on 2026-1
 answered questions to a new file"). Older references to "notes/open_decisions.md" + a Decided section, P-number,
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
+## Decided 2026-10-07 (user, multiple-choice interview, as recommended unless quoted)
+- P169 `use math` loads a NEW wasp math module (to be designed) with beautiful names, not the historic C names: "we
+  need to educate people about beautiful names". The raw C library stays available as `use cmath`. Owner warp-67.
+- P170 after `use list` its words work bare `zip(a, b)` and qualified `list.zip(a, b)`.
+- P171 new words (zip, enumerate, unique, …) stay in their modules; a bare use without `use` is an error naming the
+  module. Exceptions: `write` and `exists` are global (prelude). The file module also loads automatically when the
+  program contains a file URL.
+- Standard library released (to warp-03/warp-96): see the roadmap rule in notes/open_decisions.md.
+- P172 alias words (`fire`, `trigger`, `signal` for `emit`) are not soft keywords: a program's own definition wins
+  and the alias stops; the test `fire(x) := x * 2; fire(3)` → 6 stays.
+- P173 an unannotated parameter called with several kinds silently becomes `any` (chosen over the recommended error
+  "annotate it, e.g. want:any"). Card parameter-takes.
+- P174 `mk(k) := { it * k }`: `it` stays the single parameter (mk(3) = 9), plus a warning when the body is a lone
+  `{ … it … }` naming both readings and the lambda forms `return {it * k}` / `x => x * k`.
+- P175 `xs where it > 1` is a filter with `it` only; a condition without `it` is an error naming the fix.
+- P176 in a named tag block repeated `key: value` are children: `ul{ li: "First" li: "Second" }` has two li; a plain
+  `{…}` stays a map with the duplicate-key error. Card g-_bGo.
+- P177 `class Square implements Shape` / `struct Square: Shape` is a checked claim: compile error if Square lacks an
+  operation of Shape.
+- P178 enum cases with values are sealed classes: `Shape::Circle(r)` in a match is the type test plus binding.
+- P179 sum types: the same mechanism as optional, auto-unwrapping (`a:int = Some(3)` gives 3). Payload fields by
+  1-based position `rgb(1,2,3)#1`, with Rust-style `rgb.0`, `.1` as a fallback. A payload-free variant stays its
+  symbol (`red`), and `red is Color` is true (membership in the variant list).
+- P180 split-debuginfo stays "unpacked" plus the hourly sweep (chosen over the recommended "off"). Card shared-cargo.
+- P181 the Integrator may merge branch write-hook-d2 (caf229b10, claudeignore-hook.sh: reason on stderr, printf).
+  The Integrator wants the user's word directly (hook rule); warp-03 arranges that.
+- P182 Set, Stack, Queue, Deque, Counter: module `collections` only; without `use collections` the error names it.
+- P183 std modules are backed only by wasp, host words or C compiled to wasm (never python3, node or system
+  libraries); regex is the common subset of Rust regex and JS RegExp with a loud error for the rest; file append is
+  `file.append(path, text)`, bare `append` stays the list method. argmax/argmin not switched: stay 0-based.
+- P184 English number words are numbers (`one plus two` = 3) when no variable of that name exists, with a hint to
+  replace them by digit literals.
+- P185 `none(xs, f)` (the null spelling called with arguments) is an error naming the null (chosen over "no element
+  matches").
+- P186/P187 web defaults (DOM morph now with per-hole updates later, component identity by order, no separate
+  context, wasm-split when on PATH; live update of the last line only for names, markup and choices): the user
+  "is not wise enough to answer" / "idk": the defaults stand, not re-asked.
+- P188 web rule (to warp-03): "Stay close to HTML and CSS; don't reinvent the web, only the basic machinery. HTML and
+  CSS in our own syntax is fine." Triggered by the invented `li{ transition: fade 200ms }`. Applies to all web work.
+
 ## Decided 2026-10-06 (user, multiple-choice interview, as recommended unless quoted)
 - P165b soft keywords vs tests: strict P165. tests/functions/test_named_arguments.rs:22 renames `fun` → `g`
   (`fun` is a hard keyword); tests/operators/test_root_word.rs:14-15 top-level `root = 5` / `root(x) := …` expect the
