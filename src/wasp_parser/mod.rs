@@ -93,6 +93,16 @@ const PYTHON_ROOT_CLASS: &str = "object";
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
+/// English operator words (samples/natural.wasp, wiki/operator.md lists `plus` and `equals` as aliases): the longer
+/// phrases first, so `is greater than` is no `is`
+const WORD_OPERATORS: [(&str, Op); 11] = [
+	("is greater than", Op::Gt), ("is less than", Op::Lt), ("is at least", Op::Ge), ("is at most", Op::Le),
+	("greater than", Op::Gt), ("less than", Op::Lt), ("divided by", Op::Div), ("plus", Op::Add), ("minus", Op::Sub),
+	("equals", Op::Eq), ("through", Op::To),
+];
+const IS_IN_PHRASE: &str = "is in";
+/// `for each item in basket` is `for item in basket`
+const EACH_WORD: &str = "each";
 /// `10 down to 1` is `reverse(1 to 10)`
 const DOWN_WORD: &str = "down";
 const REVERSE_WORD: &str = "reverse";

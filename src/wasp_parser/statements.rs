@@ -159,6 +159,10 @@ impl WaspParser {
 		if let Some(filtered) = self.try_parse_condition_loop() {
 			return Some(filtered);
 		}
+		if self.matches_keyword(EACH_WORD) && self.word_at(EACH_WORD.len() + 1) != "in" {
+			self.advance_by(EACH_WORD.len());
+			self.skip_spaces();
+		}
 		let variable = self.parse_loop_variable();
 		self.skip_spaces();
 		let named = variable.filter(|_| self.matches_keyword("in"));

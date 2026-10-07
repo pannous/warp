@@ -128,6 +128,10 @@ impl WaspParser {
 			('|', '|') => return Some((Op::Or, 2)),
 			_ => {}
 		}
+		// a blank after it: `plus(a, b)` stays a call of the function plus
+		if let Some((phrase, op)) = WORD_OPERATORS.iter().find(|(phrase, _)| self.matches_keyword(phrase) && matches!(self.peek_char(phrase.len()), ' ' | '\t')) {
+			return Some((*op, phrase.len()));
+		}
 		// Keywords (2-char)
 		if self.matches_keyword("or") { return Some((Op::Or, 2)); }
 		if self.matches_keyword("is") { return Some((Op::Eq, 2)); } // wiki/equality.md: `is` compares by value like ==
