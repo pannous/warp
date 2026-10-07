@@ -70,6 +70,10 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P56 revised (user's card unknown-entity, 2026-10-07: "must not stop the program"): an unknown entity `\:name` stays
   as written, in texts and outside them, with a compile-time warning; an error only with --strict. A bare `\alpha`
   stays the error "write \:alpha". Branch unknown-entity ecc9c2fcf (warp-ad).
+- Bool type (user, card bool-type, via warp-84): "Yes is 1, no is 0", but true/false (yes/no) become a shallow type
+  of their own: they act like 1/0 in arithmetic and comparisons, `type(true)` is bool, they print as true/false.
+  Replaces the rule that True/False are encoded as Int 1/0. Default following from it (card zero-false, class):
+  `0 == false` is true, `0 === false` is false (strict identity compares the type too).
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
   compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
