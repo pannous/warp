@@ -173,6 +173,14 @@ impl WaspParser {
 		last.is_some_and(|&c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
 	}
 
+	/// The `//` at the cursor is followed by what a divisor could be: one word (`// 2`, `// n`) or an expression
+	/// (`// n + 1`), not prose (`// property with value list`)
+	fn comment_reads_like_divisor(&self) -> bool {
+		let rest: String = self.chars[self.pos + 2..].iter().take_while(|&&c| c != '\n').collect();
+		let rest = rest.trim();
+		!rest.contains(char::is_whitespace) || rest.contains(['+', '-', '*', '/', '%', '(', '^'])
+	}
+
 	pub(super) fn is_at_line_start(&self) -> bool {
 		// Check if we're at the very beginning or right after whitespace/newline
 		self.pos == 0 || self.prev_char().is_whitespace()
@@ -357,7 +365,7 @@ impl WaspParser {
 			}
 			// // line comment (but not :// URL scheme)
 			if c1 == '/' && c2 == '/' && self.prev_char() != ':' && !self.at_floor_division() {
-				if self.follows_operand_on_its_line() {
+				if self.follows_operand_on_its_line() && self.comment_reads_like_divisor() {
 					self.set_hint_pos();
 					crate::diagnostic::educate_once(SLASH_COMMENT_TOPIC, "a // b", "a//b", "`// …` after code is a comment; floor division is written glued: a//b");
 				}
