@@ -377,7 +377,8 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 	let blocks = block_function_names(&program);
 	let mut outside_blocks = Scope::new(); // a variable a block binds for itself is no outer variable
 	collect_variables(&without_block_bodies(program.clone(), &blocks), &mut outside_blocks);
-	for function in functions {
+	// a used module's functions never see the program's variables (card module-locals)
+	for function in functions.into_iter().filter(|function| !crate::modules::is_module_definition(&function.name)) {
 		let is_main_variable = |name: &String| main.lookup(name).is_some() && !main.is_global(name)
 			&& !function.params.iter().any(|param| param.name == *name) && !declares_local(&function.body, name);
 		let mut decided: HashSet<&String> = HashSet::new();
