@@ -36,3 +36,4 @@ mod test_page_tests;
 mod test_transitions;
 mod test_web_apis;
 mod test_accessibility;
+mod test_i18n;
