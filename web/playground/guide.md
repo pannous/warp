@@ -553,9 +553,9 @@ div{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
 
 A list of values makes a list of tags.
 
-```wasp => ul:[[li:"apple" li:"pear"]]
+```wasp => ul{li:"apple" li:"pear"}
 fruits = ["apple" "pear"]
-ul{ [li{ fruit } for fruit in fruits] }
+ul{ li all fruits }
 ```
 
 `on click { … }` inside a button makes it do something. `local["key"]` remembers a value in the browser.
