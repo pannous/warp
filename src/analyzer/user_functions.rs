@@ -351,6 +351,9 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 	ctx.field_kinds = program_field_kinds(node);
 	let globals = with_closure_captures(ctx, node, globals);
 	refine_return_kinds(ctx, &globals);
+	// a global assigned the program's calls (`xs = [w(), w()]` of a float w) has its kind once the return kinds are known
+	let globals = with_closure_captures(ctx, node, declared_globals(node));
+	refine_return_kinds(ctx, &globals);
 	// a widened parameter can make the arguments it passes on floats too: until nothing changes (each round widens one)
 	let parameter_count: usize = ctx.user_functions.values().map(|function| function.params.len()).sum();
 	for _ in 0..parameter_count {
@@ -445,7 +448,8 @@ pub(super) fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, 
 /// two calls traps (g-rT0c). Closures need the same (`t = "!"; shout = s => s + t`). Kinds are merged only where no
 /// declared global of that name exists.
 pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: HashMap<String, Local>) -> HashMap<String, Local> {
-	let mut outer = Scope::new();
+	// the main-level variables, calls of the program's functions typed by the return kinds known so far
+	let mut outer = Scope::with_function_kinds(ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect());
 	collect_variables(program, &mut outer);
 	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	functions.sort_by(|a, b| a.name.cmp(&b.name));
