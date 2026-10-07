@@ -279,13 +279,17 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// An Int, a Float or a bool (an Int marked bool: `false == 0`, card bool-type)
 	fn is_number_kind(func: &mut Function, kind_local: u32) {
-		for kind in [Kind::Int, Kind::Float] {
+		let kinds = [Kind::Int as i64, Kind::Float as i64, crate::type_kinds::BOOL_KIND];
+		for kind in kinds {
 			func.instruction(&I::LocalGet(kind_local));
-			func.instruction(&I::I64Const(kind as i64));
+			func.instruction(&I::I64Const(kind));
 			func.instruction(&I::I64Eq);
 		}
-		func.instruction(&I::I32Or);
+		for _ in 1..kinds.len() {
+			func.instruction(&I::I32Or);
+		}
 	}
 
 	/// Returns from values_equal: two lists are equal as sets of entries when every entry of each has an equal entry in the other.

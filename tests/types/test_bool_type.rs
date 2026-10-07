@@ -41,3 +41,12 @@ fn test_strict_equality_compares_the_type() {
 	assert_eq!(text_of("0 !== false"), "true");
 	assert_eq!(text_of("1 !== 1"), "false");
 }
+
+#[test]
+fn a_bool_of_unknown_static_type_is_tested_at_run_time() {
+	is!("h(value:any) := value is int; h(false)", false);
+	is!("h(value:any) := value is bool; h(false)", true);
+	is!("h(value:any) := value is int; h(3)", true);
+	is!("h(value:any) := value == 0; h(false)", true);
+	is!("h(value:any) := value == true; h(1)", true);
+}
