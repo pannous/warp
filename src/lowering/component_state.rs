@@ -6,6 +6,8 @@
 //! of a handler carries `data-wasp-instance`, which the page passes as `event.instance` (playground.js), so the handler
 //! (element_events.rs makes it main-level) changes its own instance's entry. The program's last line becomes the
 //! getter `page·markup`, which starts each render at the first instance.
+//! `on mount {…}` in a component runs when an instance first renders, `on cleanup {…}` when a render has fewer instances
+//! than the one before (the last ones left; card web-cleanup); their state entries go with them.
 //! A component whose markup holds a style sheet names itself on its root element (`data-wasp-scope: "Card"`), so the
 //! sheet styles only its own elements (html.rs, card web-scoped).
 
@@ -31,31 +33,71 @@ const FIRST_SET: &str = "if #STATE < KEY { STATE.push(INITIAL) }";
 const READ: &str = "STATE#KEY";
 const HANDLER_READ: &str = "STATE#(event.instance)";
 const RESET: &str = "COUNTER = 0";
+const SEEN_DECLARATION: &str = "global SEEN = 0";
+const FIRST_RENDER: &str = "SEEN < KEY";
+const CLEANED_FROM: &str = "CLEANED = COUNTER + 1";
+const CLEANUP_LOOP: &str = "while CLEANED <= SEEN { CLEANUP(CLEANED); CLEANED += 1 }";
+const TRUNCATED: &str = "if #STATE > COUNTER { STATE = STATE[0..COUNTER] }";
+const SEEN_SET: &str = "SEEN = COUNTER";
+const SHOWN: &str = "page·shown";
+const ON_WORD: &str = "on";
+const MOUNT: &str = "mount";
+const CLEANUP: &str = "cleanup";
+const SEEN: &str = "seen";
+const CLEANED: &str = "cleaned";
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program else { return program };
 	let statements: Vec<Node> = statements.into_iter().map(|statement| scoped_component(&statement).unwrap_or(statement)).collect();
-	if !statements.iter().any(has_element_handler) {
+	if !statements.iter().any(|statement| has_element_handler(statement) || has_lifecycle(statement)) {
 		return Node::List(statements, bracket, separator);
 	}
 	let mut declarations = vec![];
-	let mut counters = vec![];
+	let mut components = vec![];
 	let mut lowered: Vec<Node> = statements.into_iter().map(|statement| match stateful_component(&statement) {
 		Some((head, body, state)) => {
-			let component = Component::new(&head, state);
+			let component = Component::new(&head, state, &body);
 			declarations.extend(component.declarations());
-			counters.push(component.counter.clone());
-			Node::Key(Box::new(head), Op::Define, Box::new(component.body(body)))
+			let definition = Node::Key(Box::new(head), Op::Define, Box::new(component.body(body)));
+			components.push(component);
+			definition
 		}
 		None => statement,
 	}).collect();
-	if counters.is_empty() {
+	if components.is_empty() {
 		return Node::List(lowered, bracket, separator);
 	}
 	let shown = lowered.pop().expect("a program with a component has a last line");
-	let resets = counters.iter().map(|counter| filled(RESET, &[("COUNTER", counter)]));
-	let render = Node::Key(Box::new(Node::Symbol(RENDER.into())), Op::Define, Box::new(Node::List(resets.chain([shown]).collect(), Bracket::Curly, Separator::Semicolon)));
-	Node::List(declarations.into_iter().chain(lowered).chain([render, Node::Symbol(RENDER.into())]).collect(), bracket, separator)
+	let resets = components.iter().map(|component| filled(RESET, &[("COUNTER", &component.counter)]));
+	let rendered = crate::variable_signals::assign(SHOWN, shown);
+	let after = components.iter().flat_map(Component::after_render);
+	let render_body = resets.chain([rendered]).chain(after).chain([Node::Symbol(SHOWN.into())]).collect();
+	let render = Node::Key(Box::new(Node::Symbol(RENDER.into())), Op::Define, Box::new(Node::List(render_body, Bracket::Curly, Separator::Semicolon)));
+	let cleanups = components.iter().filter_map(Component::cleanup_function);
+	Node::List(declarations.into_iter().chain(cleanups).chain(lowered).chain([render, Node::Symbol(RENDER.into())]).collect(), bracket, separator)
+}
+
+/// `on mount {…}` or `on cleanup {…}` among a component's statements: the word and the body
+fn lifecycle(statement: &Node) -> Option<(String, Node)> {
+	let Node::List(words, _, Separator::Space | Separator::None) = statement.drop_meta() else { return None };
+	if !matches!(words.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == ON_WORD) {
+		return None;
+	}
+	let (word, body) = match &words[1..] {
+		[word, body] => (word.drop_meta().name(), body.clone()),
+		[pair] => match pair.drop_meta() {
+			Node::Key(word, Op::Colon, body) => (word.drop_meta().name(), body.as_ref().clone()),
+			_ => return None,
+		},
+		_ => return None,
+	};
+	[MOUNT, CLEANUP].contains(&word.as_str()).then_some((word, body))
+}
+
+fn has_lifecycle(statement: &Node) -> bool {
+	let mut found = false;
+	statement.visit(&mut |part| found |= lifecycle(part).is_some());
+	found
 }
 
 /// A component's head, its statements and its state: each variable its handlers mention, with its first value
@@ -63,7 +105,7 @@ type StatefulComponent = (Node, Vec<Node>, Vec<(String, Node)>);
 
 /// `def F(p) { x = … markup with handlers }`
 fn stateful_component(statement: &Node) -> Option<StatefulComponent> {
-	if !has_element_handler(statement) {
+	if !has_element_handler(statement) && !has_lifecycle(statement) {
 		return None;
 	}
 	let Node::Key(head, Op::Define | Op::Assign, body) = crate::declarations::lower_c_functions(statement.clone()).drop_meta().clone() else { return None };
@@ -75,9 +117,11 @@ fn stateful_component(statement: &Node) -> Option<StatefulComponent> {
 		Node::List(items, Bracket::Curly, _) => items.clone(),
 		single => vec![single.clone()],
 	};
-	let mentioned = handler_symbols(&statements);
+	// what its handlers and its cleanup read is kept per instance
+	let cleanups = statements.iter().filter_map(lifecycle).filter(|(word, _)| word == CLEANUP).flat_map(|(_, body)| crate::variable_signals::symbols(&body));
+	let mentioned: Vec<String> = handler_symbols(&statements).into_iter().chain(cleanups).collect();
 	let state: Vec<(String, Node)> = statements.iter().filter_map(assignment).filter(|(name, _)| mentioned.contains(name)).collect();
-	(!state.is_empty()).then_some((*head, statements, state))
+	(!state.is_empty() || statements.iter().any(|statement| lifecycle(statement).is_some())).then_some((*head, statements, state))
 }
 
 /// `def Card(t) = div{ style{ "h2": {…} } h2{t} }`: the definition with its root element naming the component
@@ -154,26 +198,62 @@ struct Component {
 	key: String,
 	/// each state variable and its first value, with its list `Counter·count`
 	state: Vec<(String, Node, String)>,
+	/// `Counter·seen`: the instances of the render before; `Counter·cleanup`, `Counter·cleaned`
+	seen: String,
+	cleanup: String,
+	cleaned: String,
+	/// the bodies of `on cleanup {…}`
+	cleanups: Vec<Node>,
 }
 
 impl Component {
-	fn new(head: &Node, state: Vec<(String, Node)>) -> Self {
+	fn new(head: &Node, state: Vec<(String, Node)>, statements: &[Node]) -> Self {
 		let Node::List(parts, _, _) = head.drop_meta() else { unreachable!("a function head") };
 		let name = parts[0].name();
-		let state = state.into_iter().map(|(variable, initial)| { let list = format!("{name}{JOINER}{variable}"); (variable, initial, list) }).collect();
-		Component { counter: format!("{name}{JOINER}{INSTANCES}"), key: format!("{name}{JOINER}{INSTANCE}"), state }
+		let named = |part: &str| format!("{name}{JOINER}{part}");
+		let state = state.into_iter().map(|(variable, initial)| { let list = named(&variable); (variable, initial, list) }).collect();
+		let cleanups = statements.iter().filter_map(lifecycle).filter(|(word, _)| word == CLEANUP).map(|(_, body)| body).collect();
+		Component { counter: named(INSTANCES), key: named(INSTANCE), state, seen: named(SEEN), cleanup: named(CLEANUP), cleaned: named(CLEANED), cleanups }
 	}
 
-	/// The main-level lists of the state and the instance counter
+	/// The main-level lists of the state, the instance counter and the instances of the render before
 	fn declarations(&self) -> Vec<Node> {
 		let lists = self.state.iter().map(|(_, _, list)| filled(STATE_DECLARATION, &[("STATE", list)]));
-		std::iter::once(filled(COUNTER_DECLARATION, &[("COUNTER", &self.counter)])).chain(lists).collect()
+		[filled(COUNTER_DECLARATION, &[("COUNTER", &self.counter)]), filled(SEEN_DECLARATION, &[("SEEN", &self.seen)])].into_iter().chain(lists).collect()
+	}
+
+	/// `Counter·cleanup(Counter·instance) := { the cleanup bodies }`, reading that instance's state
+	fn cleanup_function(&self) -> Option<Node> {
+		if self.cleanups.is_empty() {
+			return None;
+		}
+		let head = Node::List(vec![Node::Symbol(self.cleanup.clone()), Node::Symbol(self.key.clone())], Bracket::Round, Separator::None);
+		let body = self.cleanups.iter().cloned().map(|body| self.read(body)).collect();
+		Some(Node::Key(Box::new(head), Op::Define, Box::new(Node::List(body, Bracket::Curly, Separator::Semicolon))))
+	}
+
+	/// After a render: the instances it left are cleaned up, their state dropped, its count kept for the next
+	fn after_render(&self) -> Vec<Node> {
+		let names = [("COUNTER", self.counter.as_str()), ("SEEN", &self.seen), ("CLEANED", &self.cleaned), ("CLEANUP", &self.cleanup)];
+		let cleaning = match self.cleanups.is_empty() {
+			true => vec![],
+			false => vec![filled(CLEANED_FROM, &names), filled(CLEANUP_LOOP, &names)],
+		};
+		let truncations = self.state.iter().map(|(_, _, list)| filled(TRUNCATED, &[("STATE", list), ("COUNTER", &self.counter)]));
+		cleaning.into_iter().chain(truncations).chain([filled(SEEN_SET, &names)]).collect()
 	}
 
 	/// The body counting its instance, setting the state at the first render, reading the instance's entries
 	fn body(&self, statements: Vec<Node>) -> Node {
 		let mut lowered = vec![filled(COUNTED, &[("COUNTER", &self.counter)]), filled(KEYED, &[("KEY", &self.key), ("COUNTER", &self.counter)])];
 		for statement in statements {
+			if let Some((word, body)) = lifecycle(&statement) {
+				if word == MOUNT {
+					let condition = filled(FIRST_RENDER, &[("SEEN", &self.seen), ("KEY", &self.key)]);
+					lowered.push(crate::variable_signals::if_then(condition, self.read(body)));
+				}
+				continue;
+			}
 			let first_set = assignment(&statement).and_then(|(name, initial)| self.state.iter().find(|(variable, _, _)| *variable == name).map(|(_, _, list)| (list.clone(), initial)));
 			lowered.push(match first_set {
 				Some((list, initial)) => with(FIRST_SET, vec![("STATE", Node::Symbol(list)), ("KEY", Node::Symbol(self.key.clone())), ("INITIAL", self.read(initial))]),

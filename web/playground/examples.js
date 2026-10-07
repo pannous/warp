@@ -3,7 +3,7 @@
 // `wait`: milliseconds of timers and listeners before checking; `clicks`: the shown buttons, by text, clicked after
 // that, `clicked` the value then and `kept` that every element shown stays: only its text and attributes change;
 // `keyed` that every element with a key keeps it: a list item's element moves with its item; `typed`: the text typed
-// into the first input before the clicks).
+// into the first input before the clicks; `clickedPrinted`: all printed text after the clicks).
 // samples.js (made by build.sh) adds samples/*.wasp.
 const EXAMPLES = {
 	welcome: { value: '[[1 4 9] 3 "reading"]', printed: "Alice turns 42\n", code: `// wasp is data and code in one notation, compiled to WebAssembly as you type: edit me
@@ -31,6 +31,15 @@ def Counter(label, start) {
 	div{ button{ on click { count += 1 } "+" } p{ label + ": " + count } }
 }
 div{ Counter("Apples", 1) Counter("Pears", 5) }` },
+	cleanup: { value: 'div{button{data-wasp-click:"1" "hide pears"} span:"apples " [span:"pears "]}', printed: "hello apples\nhello pears\n", clicks: ["hide pears"], clicked: 'div{button{data-wasp-click:"1" "hide pears"} span:"apples " [ø]}', clickedPrinted: "hello apples\nhello pears\nbye pears\n", code: `// on mount runs when a component first shows, on cleanup when it leaves the page
+def Fruit(label) {
+	name = label
+	on mount { print "hello " + name }
+	on cleanup { print "bye " + name }
+	span{ name + " " }
+}
+pears = true
+div{ button{ on click { pears = false } "hide pears" } Fruit("apples") (if pears then Fruit("pears") else []) }` },
 	"keyed list": { value: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:1 "milk"} li{key:2 "eggs"} li{key:3 "tea"}]]}', clicks: ["rotate"], clicked: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:2 "eggs"} li{key:3 "tea"} li{key:1 "milk"}]]}', kept: true, keyed: true, code: `// a list in markup: with a key, each item keeps its element when the list changes (it moves, nothing is rewritten)
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{ button{ on click { todos = todos[1..] + [todos#1] } "rotate" } ul{ [li{ key: todo.id todo.text } for todo in todos] } }` },

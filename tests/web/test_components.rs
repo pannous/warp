@@ -37,3 +37,11 @@ fn each_instance_of_a_component_has_its_own_state() {
 fn a_trailing_block_fills_a_function_parameter() {
 	assert_eq!(eval("def apply(x, f) = f(x)\napply(3) { it * 2 }").serialize(), "6");
 }
+
+// `on mount {…}` runs when an instance first renders, `on cleanup {…}` when a later render leaves it out (card
+// web-cleanup; tour example "cleanup" removes one)
+#[test]
+fn on_mount_runs_once_per_new_instance() {
+	let code = "mounted = 0\ndef Tag(label) {\n\ton mount { mounted += 1 }\n\ton cleanup { mounted -= 1 }\n\tspan{ label }\n}\ndiv{ Tag(\"a\") Tag(\"b\") p{ \"mounted \" + mounted } }";
+	assert_eq!(html_of(code), "<div><span>a</span><span>b</span><p>mounted 2</p></div>");
+}
