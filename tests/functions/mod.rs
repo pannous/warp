@@ -127,3 +127,4 @@ mod test_all_calls;
 mod test_builtin_clash;
 mod test_parameter_any;
 mod test_captured_copy_of_global;
+mod test_braced_it_warning;

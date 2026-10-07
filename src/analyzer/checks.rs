@@ -559,6 +559,41 @@ pub fn lint(program: &Node) -> Vec<Diagnostic> {
 	warnings
 }
 
+/// The warnings of the program as written, before the passes rewrite `it` (P174 braced_it_body)
+pub fn source_warnings(program: &Node) -> Vec<Diagnostic> {
+	let mut warnings = vec![];
+	program.visit(&mut |node| {
+		if let Node::Key(head, Op::Define, body) = node {
+			warnings.extend(braced_it_body(head, body));
+		}
+	});
+	warnings
+}
+
+/// P174: `mk(k) := { it * k }`, a body that is one braced block reading `it`: it is the parameter k (mk(3) is 9), though
+/// Kotlin/Swift readers see a returned lambda; both readings are offered
+fn braced_it_body(head: &Node, body: &Node) -> Option<Diagnostic> {
+	let Node::List(items, _, _) = head.drop_meta() else { return None };
+	let [name, parameter] = items.as_slice() else { return None };
+	let (Node::Symbol(name), Node::Symbol(parameter)) = (name.drop_meta(), parameter.drop_meta()) else { return None };
+	if !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) || !uses_it_outside_loops(body) {
+		return None;
+	}
+	// a one-statement block reads without its braces: `x => x*k`
+	let statement = match body.drop_meta() {
+		Node::List(items, _, _) if items.len() == 1 => items[0].clone(),
+		other => other.clone(),
+	};
+	let substituted = |word: &str| crate::library_words::substitute(statement.clone(), "it", &Node::Symbol(word.to_string()));
+	let written = format!("{name}({parameter}) := {}", body.serialize().trim());
+	let as_parameter = format!("{name}({parameter}) := {}", substituted(parameter).serialize().trim());
+	let as_lambda = format!("{name}({parameter}) := x => {}", substituted("x").serialize().trim());
+	Some(Diagnostic::at(body, format!("`it` in {name}'s braced body is its parameter {parameter}, not the parameter of a returned lambda"))
+		.fix(format!("{as_parameter} or {as_lambda}"))
+		.offer(format!("it is the parameter {parameter}"), &written, as_parameter)
+		.offer("a lambda that the function returns", &written, as_lambda))
+}
+
 /// `for 1..4 {…}`: a loop that binds the implicit `it`
 /// `for 1..4 {…}` and `for i in xs {…}`: loops that bind the implicit `it` (to the item); their iterable and body
 pub(super) fn it_loop(items: &[Node]) -> Option<(&Node, &Node)> {
