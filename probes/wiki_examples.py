@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Run the `code` → `value` examples of wiki pages through `warp eval` and list those whose result differs.
-Usage: probes/wiki_examples.py [wiki/Footguns.md …]   (default: every wiki page)"""
+Usage: [WARP=path/to/warp] probes/wiki_examples.py [wiki/Footguns.md …]   (default: every wiki page)"""
 import glob
+import os
 import re
 import subprocess
 import sys
 
-WARP = "/Users/me/.cargo/shared-target.noindex/debug/warp"
+# a private copy (env WARP) keeps other worktrees' builds of the shared debug/warp out of the run
+WARP = os.environ.get("WARP", "/Users/me/.cargo/shared-target.noindex/debug/warp")
 EXAMPLE = re.compile(r"`([^`]+)`\s*→\s*`([^`]+)`")
 TIMEOUT_SECONDS = 20
 NEWLINE_MARK = "⏎"  # the wiki writes a line break inside inline code as ⏎
