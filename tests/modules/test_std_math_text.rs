@@ -32,3 +32,11 @@ fn use_text_brings_words_lines_capitalize_center() {
 	is!("use text; capitalize(\"abc\")", "Abc");
 	is!("use text; \"[\" + center(\"ab\", 6) + \"]\"", "[  ab  ]");
 }
+
+#[test]
+fn use_text_brings_title_slug_truncate() {
+	is!("use text; title(\"hello big world\")", "Hello Big World");
+	is!("use text; slug(\"Hello, Big World!\")", "hello-big-world");
+	is!("use text; truncate(\"abcdef\", 4)", "abc…");
+	is!("use text; truncate(\"abc\", 4)", "abc");
+}

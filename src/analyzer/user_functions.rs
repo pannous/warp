@@ -380,8 +380,10 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 	let mut changed = false;
 	for ((name, index), kinds) in passed {
 		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
-		// passed only values held as Nodes (a loop variable over a list parameter): a Node, no int
-		if kinds.len() == 1 && kinds.contains(&Kind::Empty) && param.used_as.is_none() && param.annotation.is_none() && param.default.is_none() {
+		// passed only values held as Nodes (a loop variable over a list parameter): a Node, no int, and no list guessed
+		// from indexing (capitalize(w) for the elements of a function's list result)
+		let unknown = matches!(param.used_as, None | Some(Kind::List));
+		if kinds.len() == 1 && kinds.contains(&Kind::Empty) && unknown && param.annotation.is_none() && param.default.is_none() {
 			param.used_as = Some(Kind::Empty);
 			changed = true;
 			continue;

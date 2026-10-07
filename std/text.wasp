@@ -16,3 +16,7 @@ words(t) := [w for w in split(t, " ") if w != ""]
 lines(t) := split(t, "\n")
 capitalize(t) := if t == "" then t else upper(t[0]) + t[1..]
 center(t, width) := pad_right(pad_left(t, (width + count(t))//2), width)
+title(t) := join([capitalize(w) for w in words(t)], " ")
+// lower case letters and digits, the rest as single dashes: "Hello, World!" → "hello-world"
+slug(t) := join(words(join([if is_alphanumeric(c) then c else " " for c in chars(lower(t))], "")), "-")
+truncate(t, width) := if count(t) <= width then t else t[0 ..< width - 1] + "…"
