@@ -755,6 +755,10 @@ impl WaspParser {
 				return head;
 			}
 		}
+		// P178: `enum Shape { Circle(r), Rect(w, h), Dot }`, cases with values: the sum type `Circle(r) | Rect(w, h) | Dot`
+		if symbol == ENUM_WORD && !self.options.wit_mode && !self.options.data_mode && self.enum_with_values_ahead() {
+			return self.parse_enum_with_values();
+		}
 		// Kotlin's `enum class Color {…}`: the enum
 		if symbol == ENUM_WORD && !self.options.wit_mode && self.class_keyword_after_blanks() == Some("class") {
 			while matches!(self.current_char(), ' ' | '\t') {
@@ -1146,13 +1150,60 @@ impl WaspParser {
 			}
 			let blanks = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
 			if self.peek_char(blanks) != '|' {
-				// `red is Color`: the variants without payload stay symbols, members of the type by name (P179)
-				let name = Symbol(type_name).with_attribute(crate::lowering::sum_variants::VARIANTS_MARK, Node::List(bare_variants, Bracket::None, Separator::Space));
-				let sum_type = Node::Type { name: Box::new(name), body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)) };
-				return Node::List([vec![sum_type], declarations].concat(), Bracket::None, Separator::Semicolon);
+				return sum_type(type_name, bare_variants, declarations);
 			}
 			self.advance_by(blanks + 1);
 		}
+	}
+
+	/// ` Shape { Circle(r), … }` after `enum`: a case followed by its values in parentheses
+	fn enum_with_values_ahead(&self) -> bool {
+		let mut offset = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let name_length = (offset..).take_while(|&at| is_identifier_char(self.peek_char(at))).count();
+		if name_length == 0 {
+			return false;
+		}
+		offset += name_length;
+		offset += (offset..).take_while(|&at| self.peek_char(at).is_whitespace()).count();
+		if self.peek_char(offset) != '{' {
+			return false;
+		}
+		let mut depth = 0;
+		loop {
+			match self.peek_char(offset) {
+				'\0' => return false,
+				'(' if depth == 1 && is_identifier_char(self.peek_char(offset - 1)) => return true,
+				'(' | '[' | '{' => depth += 1,
+				')' | ']' | '}' if depth == 1 => return false,
+				')' | ']' | '}' => depth -= 1,
+				_ => {}
+			}
+			offset += 1;
+		}
+	}
+
+	/// `enum Shape { Circle(r), Rect(w, h), Dot }`, Swift's `case circle(radius: Double)` lines: each case with values a
+	/// class extending Shape, the others its variants by name, as the sum type `Circle(r) | Rect(w, h) | Dot`
+	fn parse_enum_with_values(&mut self) -> Node {
+		self.skip_spaces();
+		let type_name = match self.parse_symbol() {
+			Ok(name) => name,
+			Err(message) => return error(&message),
+		};
+		self.skip_whitespace();
+		let Node::List(cases, _, _) = self.parse_bracketed('{').drop_meta().clone() else { return error(&format!("enum {type_name} needs its cases in braces")) };
+		let mut bare_variants = vec![];
+		let mut declarations = vec![];
+		for case in cases.iter().map(without_case_keyword) {
+			match case.drop_meta() {
+				Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+					declarations.push(self.variant_class(&type_name, items[0].drop_meta().name(), items[1..].to_vec(), &[]));
+				}
+				Node::Symbol(_) => bare_variants.push(case.drop_meta().clone()),
+				other => return error(&format!("a case of enum {type_name} is a name with optional values, got {}", other.serialize())),
+			}
+		}
+		sum_type(type_name, bare_variants, declarations)
 	}
 
 	fn variant_class(&mut self, type_name: &str, variant: String, payload: Vec<Node>, type_parameters: &[String]) -> Node {
@@ -1346,6 +1397,22 @@ fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> bool) -> Node 
 }
 
 /// The items of a block or parameter list `{a; b}`, `(a, b)`; a block of one statement `{fun sum() = x}` is that one
+/// The sum type's declarations: the type itself, its variants without payload stay symbols, members of the type by name
+/// (`red is Color`, P179), then the classes of the variants with payload
+fn sum_type(type_name: String, bare_variants: Vec<Node>, declarations: Vec<Node>) -> Node {
+	let name = Symbol(type_name).with_attribute(crate::lowering::sum_variants::VARIANTS_MARK, Node::List(bare_variants, Bracket::None, Separator::Space));
+	let sum_type = Node::Type { name: Box::new(name), body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)) };
+	Node::List([vec![sum_type], declarations].concat(), Bracket::None, Separator::Semicolon)
+}
+
+/// Swift's `case circle(radius: Double)`: the case without its keyword
+fn without_case_keyword(case: &Node) -> Node {
+	match case.drop_meta() {
+		Node::List(words, _, _) if words.len() == 2 && words[0].drop_meta().name() == CASE_KEYWORD => words[1].clone(),
+		_ => case.clone(),
+	}
+}
+
 fn statements(block: Node) -> Vec<Node> {
 	match block {
 		Node::List(items, _, Separator::Colon | Separator::Semicolon | Separator::Newline) => items,

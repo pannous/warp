@@ -78,6 +78,8 @@ const IMPLEMENTS_WORD: &str = "implements";
 const CONFORMANCE_TOPIC: &str = "conformance-list";
 /// `enum Color {red, green}` (declarations::enum_object), Kotlin's `enum class`
 const ENUM_WORD: &str = "enum";
+/// Swift's `enum Shape { case circle(radius: Double) }`
+const CASE_KEYWORD: &str = "case";
 /// Go's `type Shape interface {…}` declares the trait Shape
 const GO_INTERFACE_WORD: &str = "interface";
 /// Go's `type Point struct {…}` declares the class Point
