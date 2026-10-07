@@ -149,7 +149,15 @@ fn site_of(code: &str, title: &str, dev: bool) -> Result<Option<Site>, String> {
 	let scripts = scripts_of(&module.bytes, dev)?;
 	let mut site = Site { module: module.bytes, imports, scripts, files: vec![] };
 	let page = rendered_page(code, title, &site, BESIDE)?;
-	site.files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), site.module.clone())];
+	// each route's own functions in a module the page loads when it shows the route; a dev page reloads whole anyway.
+	// The site keeps the whole module, which renders its pages natively
+	let split = if dev { None } else { crate::route_split::split_by_route(&site.module)? };
+	let (primary, route_modules) = match split {
+		Some(split) => (split.primary, split.routes),
+		None => (site.module.clone(), vec![]),
+	};
+	site.files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), primary)];
+	site.files.extend(route_modules);
 	site.files.extend(site.scripts.iter().map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
 	Ok(Some(site))
 }

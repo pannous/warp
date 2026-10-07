@@ -70,7 +70,8 @@ fn where_reassociated(node: Node) -> Node {
 		Node::Key(left, op, right) if !matches!(op, Op::Assign | Op::Define | Op::Colon) && !op.is_compound_assign() => {
 			let (left, right) = (where_reassociated(*left), where_reassociated(*right));
 			match left.drop_meta() {
-				Node::List(items, bracket, separator) if where_position(items).is_some() => {
+				// a parenthesized filter is closed: `(xs where it > 0).slice(0, 1)` slices the filtered list
+				Node::List(items, bracket, separator) if *bracket != Bracket::Round && where_position(items).is_some() => {
 					let mut items = items.clone();
 					let condition = items.pop().expect("where has a condition");
 					items.push(Node::Key(Box::new(condition), op, Box::new(right)));

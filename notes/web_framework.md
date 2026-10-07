@@ -269,9 +269,18 @@ Each step is useful on its own and is what the next ones stand on.
   its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
   a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the
   std module's name is a runtime text; a custom section naming the std modules a program uses would refine it).
-- Next: lazy loading per route, agreed with warp-89 (web-router): routes lower to functions
-  page·route·<N> with the table exported as page·routes; the splitter moves a route's function and what only it reaches
-  into app·<N>.wasm, which site.js loads on the first navigation there.
+- Lazy loading per route (2026-10-07, src/route_split.rs, tests/web/test_route_modules.rs, browser probe
+  probes/lazy_routes/check_in_browser.sh): `warp build --site` moves each route's function page·route·N and the
+  functions only it reaches into app-route-N.wasm with binaryen's `wasm-split --multi-split` (features named one by one,
+  src/binaryen.rs: --all-features would emit exact imports no browser takes). app.wasm keeps a table slot and a
+  placeholder import (`placeholder.app-route-N`) per moved function. site.js instantiates app.wasm (host.js
+  instantiateProgram), loads the module of the route the path picks (host-routes.js loadRouteModule: page·route_index,
+  instantiated with app.wasm's exports as `primary`), then runs main (runMain); each navigation loads the next route's
+  module once. Without wasm-split on PATH the site ships one module with a note; a dev site never splits.
+  Limits: functions the module exports (every user function, the runtime) stay in app.wasm, so a route's module holds
+  its body (markup, its text constants' code), not the helpers it calls; data segments stay too. Next: let user
+  functions only one route reaches move as well (wasm-split keeps their exports as thunks), once nothing on the host
+  calls them before the route loads.
 
 ## web-apis: animation frames (card drawing-frames, first piece of web-apis)
 - In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`
@@ -330,5 +339,5 @@ Each step is useful on its own and is what the next ones stand on.
   placeholder alone gets its own warning; hidden/submit/button/reset/image inputs need none); button or a with no text
   and no aria-label/title; a without href; a heading skipping a level (h1 → h3); an id used twice; html without lang.
   Each points at the element and names a fix; `use strict` / `--strict` make them errors like every warning.
-- Not here: focus on route change and live regions for async content (warp-89, web-router / web-async); translations
-  as data (i18n) later. Markup built at run time (strings, computed tags) is not checked.
+- Translations as data: `use i18n`, translate(messages, language, key, values) with CLDR plural forms (notes/i18n.md).
+- Not here: focus on route change and live regions for async content (warp-89, web-router / web-async). Markup built at run time (strings, computed tags) is not checked.

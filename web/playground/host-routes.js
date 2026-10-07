@@ -1,13 +1,20 @@
 // The routes of a page (a part of host.js, which says how parts work): the path that picks its route (page_path),
-// going to another path (navigate) and, in a built site, its links and the back button (followSiteLinks)
+// going to another path (navigate) and, in a built site, its links and the back button (followSiteLinks) and the module
+// of each route (loadRouteModule)
 
 const ROOT_PATH = "/"; // the page path before any navigation (page_path)
 const PAGE_ROUTED_EXPORT = "page·routed"; // the value of the route the path picks
+const ROUTE_INDEX_EXPORT = "page·route_index"; // the index of the route the path picks
+const ROUTE_MODULE_PREFIX = "app-route-"; // src/route_split.rs: the module of route N is app-route-N.wasm
+const PLACEHOLDER_PREFIX = "placeholder."; // wasm-split's import module of the functions a route's module fills in
+// the route modules lie beside this script, which a page at a deeper path (/users/2) names from the site's root
+const ROUTES_SCRIPT = globalThis.document?.currentScript?.src ?? location.href;
 
 // the page goes to `path` (a link, the back button): page_path() gives it from now on, hooks.navigated hears it (a pending
 // fetch is dropped there); the caller shows the page anew (site.js, worker.js)
 function navigate(holder, hooks, path) {
 	holder.pagePath = path;
+	eachHostPart("navigated", holder);
 	hooks.navigated?.(holder, path);
 }
 
@@ -25,6 +32,19 @@ function followSiteLinks(goTo) {
 		goTo(url.pathname);
 	});
 	addEventListener("popstate", () => goTo(location.pathname));
+}
+
+const loadedRoutes = new Map(); // a route module's name → its loading
+// a built site split by route (src/route_split.rs): the module of the route the path picks, unless loaded already; it
+// fills the program's table slots of that route's functions, instantiated with the program's exports as `primary`
+function loadRouteModule(holder) {
+	const name = ROUTE_MODULE_PREFIX + holder.exports[ROUTE_INDEX_EXPORT]?.();
+	if (!WebAssembly.Module.imports(holder.run.module).some(entry => entry.module === PLACEHOLDER_PREFIX + name)) return;
+	if (!loadedRoutes.has(name)) {
+		loadedRoutes.set(name, fetch(new URL(`${name}.wasm`, ROUTES_SCRIPT)).then(response => response.arrayBuffer())
+			.then(bytes => WebAssembly.instantiate(bytes, { primary: holder.exports })));
+	}
+	return loadedRoutes.get(name);
 }
 
 addHostPart({
