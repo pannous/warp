@@ -326,7 +326,7 @@ impl WaspParser {
 		let blanks = |from: usize| (from..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
 		let word_start = AND_KEYWORD.len() + blanks(AND_KEYWORD.len());
 		let word = self.word_at(word_start);
-		if word.is_empty() || CONTINUING_WORDS.contains(&word.as_str()) || !self.peek_char(word_start).is_alphabetic() {
+		if word.is_empty() || CONTINUING_WORDS.contains(&word.as_str()) || OPERAND_PREFIX_WORDS.contains(&word.as_str()) || !self.peek_char(word_start).is_alphabetic() {
 			return false;
 		}
 		let word_end = word_start + word.chars().count();
