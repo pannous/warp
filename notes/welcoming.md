@@ -112,3 +112,10 @@ Control flow as other languages write it (samples/control_flow.wasp, tests/contr
 - `try … catch/else/except … finally {Z}` (Java, Python): `(finally·N = try…; Z; finally·N)`, Z runs either way and
   the value stays the try's or the catch's. lookahead.rs with_finally. `try X finally Z` without a catch is not parsed.
 - `global a, b` (Python) declares both; several `global` lines in a block are no duplicate key.
+- English operator words are aliases (samples/natural.wasp, wiki/operator.md): `plus`, `minus`, `divided by`,
+  `equals`, `is greater than`, `greater than`, `is less than`, `less than`, `is at least`, `is at most`, `through`
+  (= `to`), `is in` (= `in`), `for each x in xs`; a word operator needs a blank after it, so `plus(a, b)` stays a call.
+  `10 down to 1` is `reverse(1 to 10)`; letters make ranges (`'a' to 'e'`, `c to 'z'` counts codepoints).
+  Open (asked): number words (`one plus two`), list phrases `keep only`, `sort by`, `take first`.
+- a comparison without its left side is a relational pattern in a match arm (`> 100 => "big"`, C#), elsewhere the
+  error "`> 100` compares nothing".
