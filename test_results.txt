@@ -1689,6 +1689,9 @@ PASSED:
   ✓ numbers::test_sum_of_decimals::the_sum_of_decimal_elements
   ✓ numbers::test_superscript_variables::test_a_negative_superscript_variable_exponent
   ✓ numbers::test_superscript_variables::test_a_superscript_variable_exponent
+  ✓ numbers::test_time_of_day::a_program_naming_time_keeps_its_own
+  ✓ numbers::test_time_of_day::constant_quantities_compare_in_a_condition
+  ✓ numbers::test_time_of_day::time_is_the_time_of_day
   ✓ numbers::test_unbounded_int::test_big_division_and_remainder
   ✓ numbers::test_unbounded_int::test_big_int_to_float
   ✓ numbers::test_unbounded_int::test_big_literal_round_trip
@@ -3346,4 +3349,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3341 passed, 0 failed, 3341 total tested
+19 ignored, 3344 passed, 0 failed, 3344 total tested
