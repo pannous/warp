@@ -55,6 +55,8 @@ const LONG_NAMES: [(&str, &str); 12] = [
 ];
 /// `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
 const IN_WORD: &str = "in";
+/// The local time of day, unless the program names something so (card time-day-value)
+const TIME_WORD: &str = "time";
 
 fn unit_named(name: &str) -> Option<&'static Unit> {
 	UNITS.iter().find(|unit| unit.name == name)
@@ -270,6 +272,109 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 	}
 	let shadowed = defined_unit_names(&program);
 	lower(program, &shadowed)
+}
+
+/// Comparisons of quantities where the rest of the program runs (card time-day-value): a comparison of constant
+/// quantities, also of a main-level variable assigned one once (`x = 2 km; if x > 1500 m : …`), is its answer 1 or 0,
+/// and such a variable no other statement reads is dropped; the word `time` of a program that names nothing so is the
+/// local time of day, compared with a constant duration in milliseconds: `time < 24h` is
+/// `system·time of day < 86400000` (lowering/system_values.rs reads it, so `whenever time > 18h {…}` listens too)
+pub fn lower_quantity_comparisons(program: Node) -> Node {
+	if defines_unit_name(&program) || !(needs_quantities(&program) || mentions_clock(&program)) {
+		return program;
+	}
+	let bound = crate::system_values::bound_names(&program);
+	let constants = constant_quantities(&program);
+	let clock = !bound.contains(TIME_WORD);
+	let folded = fold_comparisons(program, &constants, clock);
+	without_unread_constants(folded, &constants)
+}
+
+fn mentions_clock(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if name == TIME_WORD));
+	found
+}
+
+/// The main-level variables assigned a quantity once, and nowhere else: `x = 2 km`
+fn constant_quantities(program: &Node) -> Variables {
+	let mut assignments: HashMap<String, usize> = HashMap::new();
+	program.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, _) | Node::Key(target, Op::AddAssign | Op::SubAssign | Op::MulAssign | Op::DivAssign, _) = part {
+		crate::variable_signals::symbols(target).into_iter().for_each(|name| *assignments.entry(name).or_default() += 1);
+	});
+	let mut constants = Variables::new();
+	for statement in crate::variable_signals::main_statements(program).0 {
+		let Node::Key(target, Op::Assign, value) = statement.drop_meta() else { continue };
+		let Node::Symbol(name) = target.drop_meta() else { continue };
+		if assignments.get(name) == Some(&1) && needs_quantities(value) {
+			if let Ok(quantity @ Value::Quantity(_)) = evaluate_in(value, &mut constants.clone()) {
+				constants.insert(name.clone(), quantity);
+			}
+		}
+	}
+	constants
+}
+
+fn fold_comparisons(node: Node, constants: &Variables, clock: bool) -> Node {
+	let Node::Key(left, op, right) = node.drop_meta() else { return node.map_children(|child| fold_comparisons(child, constants, clock)) };
+	if !op.is_comparison() {
+		return node.map_children(|child| fold_comparisons(child, constants, clock));
+	}
+	let is_clock = |side: &Node| clock && matches!(side.drop_meta(), Node::Symbol(name) if name == TIME_WORD);
+	if is_clock(left) || is_clock(right) {
+		let (duration, clock_left) = if is_clock(left) { (right, true) } else { (left, false) };
+		return match clock_milliseconds(duration, constants) {
+			Ok(Some(amount)) => {
+				let time_of_day = Node::Symbol(format!("{}{}", crate::system_values::SYSTEM_PREFIX, warp_runtime::host_words::TIME_OF_DAY));
+				let (left, right) = if clock_left { (time_of_day, Node::int(amount)) } else { (Node::int(amount), time_of_day) };
+				Node::Key(Box::new(left), *op, Box::new(right))
+			}
+			Ok(None) => node,
+			Err(message) => error(&message),
+		};
+	}
+	let reads_quantities = needs_quantities(&node) || constants.keys().any(|name| crate::wasp_parser::mentions(&node, name));
+	match evaluate_in(&node, &mut constants.clone()).ok().filter(|_| reads_quantities) {
+		Some(Value::Number(answer)) => Node::int(answer),
+		_ => match evaluate_in(&node, &mut constants.clone()) {
+			Err(Stop::Error(message)) if reads_quantities => error(&message),
+			_ => node.map_children(|child| fold_comparisons(child, constants, clock)),
+		},
+	}
+}
+
+/// What the time of day is compared with, in milliseconds; None when it is no constant (left as written, loud later)
+fn clock_milliseconds(duration: &Node, constants: &Variables) -> Result<Option<i64>, String> {
+	if let Some(amount) = milliseconds(duration) {
+		return Ok(Some(amount));
+	}
+	match evaluate_in(duration, &mut constants.clone()) {
+		Ok(Value::Quantity(quantity)) => match quantity.factors.as_slice() {
+			[factor] if factor.unit.dimension == Dimension::Time && factor.power == 1 => Ok(whole(&quantity.amount.mul(&Rational::integer(factor.unit.factor)))),
+			_ => Err(format!("DimensionError: the time of day is a duration, {quantity} is none")),
+		},
+		Ok(Value::Number(amount)) => Err(format!("the time of day is a duration: compare it with one, e.g. time < {amount}h")),
+		_ => Ok(None),
+	}
+}
+
+/// The program without the assignments of constant quantities no other statement reads (all compared away); the last
+/// statement stays, it is the program's value
+fn without_unread_constants(program: Node, constants: &Variables) -> Node {
+	if constants.is_empty() {
+		return program;
+	}
+	let (statements, bracket, separator) = crate::variable_signals::main_statements(&program);
+	let assigns = |statement: &Node, name: &str| matches!(statement.drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(assigned) if assigned == name));
+	let unread = |name: &str| statements.iter().all(|statement| assigns(statement, name) || !crate::wasp_parser::mentions(statement, name));
+	let last = statements.len().saturating_sub(1);
+	let kept: Vec<Node> = statements.iter().enumerate()
+		.filter(|(index, statement)| *index == last || !constants.keys().any(|name| assigns(statement, name) && unread(name)))
+		.map(|(_, statement)| statement.clone()).collect();
+	if kept.len() == statements.len() {
+		return program;
+	}
+	Node::List(kept, bracket, separator)
 }
 
 /// User #17: `sleep(1)` reads as milliseconds but says nothing; a bare number gets the warning that names the units

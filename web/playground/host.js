@@ -153,6 +153,7 @@ function programImports(holder, hooks) {
 			system_value: name => {
 				const value = decode(cString(name));
 				if (value === "online") return BigInt(navigator.onLine);
+				if (value === "time of day") { const now = new Date(); return BigInt(now - new Date(now).setHours(0, 0, 0, 0)); }
 				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // playground.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)

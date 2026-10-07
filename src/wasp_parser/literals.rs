@@ -281,13 +281,15 @@ impl WaspParser {
 	}
 
 	/// `2 km` multiplies only when `km` is a known unit; any other spaced word keeps the list `[2 foo]`, and so does a
-	/// unit word that starts the next entry or assignment: `{w:2 h:3}`
+	/// unit word that starts the next entry or assignment: `{w:2 h:3}`; a spaced colon ends a condition instead:
+	/// `if x > 1500 m : "far"`
 	pub(super) fn at_spaced_unit(&self) -> bool {
 		let rest = &self.chars[self.pos..];
 		let spaces = rest.iter().take_while(|c| **c == ' ').count();
 		let word: String = rest[spaces..].iter().take_while(|c| is_identifier_char(**c)).collect();
-		let after_word: String = rest[spaces + word.chars().count()..].iter().skip_while(|c| **c == ' ').take(2).collect();
-		let starts_entry = after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==");
+		let after_word = &rest[spaces + word.chars().count()..];
+		let next_two: String = after_word.iter().skip_while(|c| **c == ' ').take(2).collect();
+		let starts_entry = after_word.first() == Some(&':') || (next_two.starts_with('=') && next_two != "==");
 		// `2 m²`: the power is no part of the unit's name
 		let unit = word.trim_end_matches(|c: char| superscript_digit(c).is_some());
 		spaces > 0 && crate::units::is_unit(unit) && !starts_entry
