@@ -71,6 +71,10 @@ const DEV_SCRIPT: (&str, &str) = ("dev.js", include_str!("../web/playground/dev.
 const CONTENT_TYPES: [(&str, &str); 3] = [("html", "text/html; charset=utf-8"), ("js", "text/javascript; charset=utf-8"), ("wasm", "application/wasm")];
 const OTHER_CONTENT: &str = "application/octet-stream";
 const INDEX_PATH: &str = "/";
+/// Where the page at a path finds the site's files: a page beside them names them as they are, one a server renders for
+/// a deeper path ("/users/2") from the server's root
+const BESIDE: &str = "";
+const SERVER_ROOT: &str = "/";
 
 /// What `warp build --site` wrote
 pub struct BuiltSite {
@@ -117,7 +121,7 @@ impl ServedSite {
 		if let Some(file) = file_at(&self.site.files, path) {
 			return Some(Ok(file.clone()));
 		}
-		let rendered = || crate::host::with_page_path(path, || rendered_page(&self.code, &self.title, &self.site));
+		let rendered = || crate::host::with_page_path(path, || rendered_page(&self.code, &self.title, &self.site, SERVER_ROOT));
 		self.routed.then(|| rendered().map(|page| (PAGE_FILE.to_string(), page.into_bytes())))
 	}
 }
@@ -144,20 +148,21 @@ fn site_of(code: &str, title: &str, dev: bool) -> Result<Option<Site>, String> {
 	let imports = crate::wasm_reader::Imports { host: module.needs_host, wasi: module.needs_wasi, ffi: module.needs_ffi };
 	let scripts = scripts_of(&module.bytes, dev)?;
 	let mut site = Site { module: module.bytes, imports, scripts, files: vec![] };
-	let page = rendered_page(code, title, &site)?;
+	let page = rendered_page(code, title, &site, BESIDE)?;
 	site.files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), site.module.clone())];
 	site.files.extend(site.scripts.iter().map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
 	Ok(Some(site))
 }
 
-/// The page of the program, its markup rendered after main at the page path set now (host::with_page_path)
-fn rendered_page(code: &str, title: &str, site: &Site) -> Result<String, String> {
+/// The page of the program, its markup rendered after main at the page path set now (host::with_page_path), its scripts
+/// found at `root`
+fn rendered_page(code: &str, title: &str, site: &Site, root: &str) -> Result<String, String> {
 	let rendered = crate::wasm_reader::read_export_after_main(&site.module, site.imports, crate::page_html::PAGE_HTML)
 		.map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))?;
 	let Node::Text(html) = rendered.drop_meta() else {
 		return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, rendered.serialize()));
 	};
-	Ok(page(title, html, &site.scripts))
+	Ok(page(title, html, &site.scripts, root))
 }
 
 /// The file of a site a request path names: "/" is the page, "/app.wasm" the module, …
@@ -182,7 +187,7 @@ fn exports(module: &[u8], name: &str) -> bool {
 
 /// The page `warp dev` shows before any build succeeded: only dev.js, which shows the failure
 pub fn dev_shell(title: &str) -> Vec<SiteFile> {
-	let page = page(title, "", &[DEV_SCRIPT]);
+	let page = page(title, "", &[DEV_SCRIPT], BESIDE);
 	vec![(PAGE_FILE.to_string(), page.into_bytes()), (DEV_SCRIPT.0.to_string(), DEV_SCRIPT.1.as_bytes().to_vec())]
 }
 
@@ -227,8 +232,8 @@ fn with_excerpt(code: &str, message: String) -> String {
 	[message].into_iter().chain(excerpt).collect::<Vec<_>>().join("\n")
 }
 
-fn page(title: &str, body: &str, scripts: &[(&str, &str)]) -> String {
-	let scripts: String = scripts.iter().map(|(name, _)| format!("<script src=\"{name}\"></script>\n")).collect();
+fn page(title: &str, body: &str, scripts: &[(&str, &str)], root: &str) -> String {
+	let scripts: String = scripts.iter().map(|(name, _)| format!("<script src=\"{root}{name}\"></script>\n")).collect();
 	// the program's texts last, so nothing in them is read as a placeholder
 	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
 }
