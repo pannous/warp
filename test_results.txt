@@ -1167,6 +1167,7 @@ PASSED:
   ✓ lists::test_index_assignment::test_index_assign_in_while_with_increment
   ✓ lists::test_index_assignment::test_index_assign_with_variable
   ✓ lists::test_index_assignment::test_simple_index_assign
+  ✓ lists::test_index_out_of_range::an_index_out_of_range_names_the_range
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -1350,8 +1351,6 @@ PASSED:
   ✓ modules::test_netbase_package::a_query_is_a_url_path
   ✓ modules::test_netbase_package::without_a_server_the_failure_names_it
   ✓ modules::test_package_pin::a_changed_clone_stands_in_for_the_pin
-  ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
-  ✓ modules::test_package_pin::a_pinned_package_links_its_cached_version
   ✓ modules::test_package_pin::header_signatures_are_parsed_once
   ✓ modules::test_package_tools::a_package_tool_lives_in_the_package_build_directory
   ✓ modules::test_package_tools::a_package_tool_runs_in_the_package_directory
@@ -2354,7 +2353,6 @@ PASSED:
   ✓ text::test_text_functions::an_if_with_text_branches_makes_a_text_function
   ✓ text::test_text_functions::error_makes_an_error_value_of_a_text
   ✓ text::test_text_functions::return_from_a_statement_gives_back_the_node
-  ✓ text::test_text_getters::compiled_uniscript_converts_like_the_browser_page
   ✓ text::test_text_getters::text_getters_read_texts_and_errors
   ✓ text::test_text_plus_float_call::a_float_call_joins_a_text_by_its_value
   ✓ text::test_text_repeat::n_times_text_is_the_explicit_repeat
@@ -2662,10 +2660,12 @@ PASSED:
   ✓ types::test_type_name_matching::test_type_word_is_the_parameter_name
   ✓ types::test_type_of::test_type_as_a_method
   ✓ types::test_type_of::test_type_inside_a_function_body
+  ✓ types::test_type_of::test_type_of_a_name_without_parentheses
   ✓ types::test_type_of::test_type_symbol
   ✓ types::test_type_of::test_type_typed_variable
   ✓ types::test_type_of::test_type_without_parentheses
   ✓ types::test_type_of_real_variable::a_variable_holding_pi_is_real
+  ✓ types::test_type_of_real_variable::an_expression_of_pi_is_real
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
   ✓ types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is
   ✓ types::test_type_test_is_only::is_tests_types
@@ -2977,20 +2977,14 @@ PASSED:
   ✓ web::test_transitions::a_transition_ends_before_the_children
   ✓ web::test_transitions::a_transition_is_data_on_its_element
   ✓ web::test_uniscript::an_unknown_entity_is_an_error
-  ✓ web::test_uniscript::block_types_style_their_operands
   ✓ web::test_uniscript::colors_and_geometry_are_suffix_controls
-  ✓ web::test_uniscript::effect_words_stack_on_one_operand
   ✓ web::test_uniscript::entities_become_characters
-  ✓ web::test_uniscript::full_blocks_keep_their_spaces
-  ✓ web::test_uniscript::greek_is_transliterated_phonetically
   ✓ web::test_uniscript::groups_join_hieroglyphs_and_compose_ideographs
   ✓ web::test_uniscript::spelling_back_round_trips
   ✓ web::test_uniscript::the_header_declares_uniscript_and_its_version
   ✓ web::test_uniscript::the_index_matches_the_readable_entities
   ✓ web::test_uniscript::the_marker_is_escaped_by_single_character_entities
-  ✓ web::test_uniscript::unicode_spells_back_as_uniscript
   ✓ web::test_uniscript::unsupported_characters_and_combinations_warn
-  ✓ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
   ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_wasp
   ✓ web::test_web_apis::notify_is_a_host_word
@@ -3350,6 +3344,15 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
+  ✗ modules::test_package_pin::a_pinned_package_links_its_cached_version
+  ✗ text::test_text_getters::compiled_uniscript_converts_like_the_browser_page
+  ✗ web::test_uniscript::block_types_style_their_operands
+  ✗ web::test_uniscript::effect_words_stack_on_one_operand
+  ✗ web::test_uniscript::full_blocks_keep_their_spaces
+  ✗ web::test_uniscript::greek_is_transliterated_phonetically
+  ✗ web::test_uniscript::unicode_spells_back_as_uniscript
+  ✗ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
 
 SUMMARY:
-19 ignored, 3347 passed, 0 failed, 3347 total tested
+19 ignored, 3341 passed, 9 failed, 3350 total tested
