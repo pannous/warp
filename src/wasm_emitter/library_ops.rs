@@ -421,6 +421,8 @@ impl WasmGcEmitter {
 		let map_texts = [self.allocate_string("{"), self.allocate_string("}"), self.allocate_string(":")];
 		let no_text = self.allocate_string("");
 		let empty_text = self.allocate_string(EMPTY_TEXT);
+		let bool_texts = [self.allocate_string("false"), self.allocate_string("true")];
+		let i64_box = self.type_manager.i64_box_type;
 		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
@@ -445,6 +447,17 @@ impl WasmGcEmitter {
 					s.call(f, TEXT_QUOTED);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
+				// a bool joins as true or false (card bool-type)
+				s.emit_field(f, element, 0);
+				Self::emit_list(f, &[I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq, I::If(BlockType::Empty)]);
+				s.emit_field(f, element, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(i64_box)), I::StructGet { struct_type_index: i64_box, field_index: 0 }, I::I64Eqz, I::If(BlockType::Result(node_ref))]);
+				Self::emit_list(f, &[I32Const(bool_texts[0].0 as i32), I32Const(bool_texts[0].1 as i32)]);
+				s.call(f, "new_text");
+				f.instruction(&I::Else);
+				Self::emit_list(f, &[I32Const(bool_texts[1].0 as i32), I32Const(bool_texts[1].1 as i32)]);
+				s.call(f, "new_text");
+				Self::emit_list(f, &[I::End, I::LocalSet(element), I::End]);
 				// list_text: a nested list as its literal, "[" + list_text(item, " ") + "]", a map in braces
 				if nested {
 					let [open, close, space] = texts;

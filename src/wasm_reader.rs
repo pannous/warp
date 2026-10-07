@@ -517,6 +517,10 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 	let mut node = |val: &Val| node_in(val, store, memory);
 	match tag {
 		t if t == Kind::Empty as u8 => Node::Empty,
+		t if t == Kind::Int as u8 && high_byte == crate::type_kinds::BOOL_INFO => match read_payload(store, &data) {
+			Ok(Number::Int(0)) => Node::False,
+			_ => Node::True,
+		},
 		t if t == Kind::Int as u8 => match read_payload(store, &data) {
 			Ok(number) => Node::Number(number),
 			Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),

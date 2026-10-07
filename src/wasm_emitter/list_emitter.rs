@@ -372,6 +372,9 @@ impl WasmGcEmitter {
 
 	/// The name `type(x)` reports: `int`, `rational`, `text`, `list of int` …
 	fn static_type_name(&self, arg: &Node) -> String {
+		if crate::analyzer::is_boolean(arg, &self.scope) {
+			return crate::analyzer::BOOL_TYPE.to_string();
+		}
 		let kind = match arg.drop_meta() {
 			literal @ Node::Number(_) => literal.kind(),
 			_ => self.get_type(arg),

@@ -31,6 +31,7 @@ fn canonical_spec_word(word: &str) -> &str {
 		"double" | "f64" | "f32" | "fast" => "float",
 		"exact" => "rational",
 		"pair" => "key",
+		"boolean" => "bool",
 		other => other,
 	}
 }

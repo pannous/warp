@@ -610,6 +610,7 @@ impl WasmGcEmitter {
 		crate::analyzer::extract_signal_polls(&mut self.ctx);
 		self.type_errors.append(&mut self.ctx.parameter_conflicts);
 		self.scope.function_kinds = self.user_function_kinds();
+		crate::analyzer::note_bool_functions(self.ctx.user_functions.values());
 		self.derive_imports_from_effects(node);
 		analyze_required_functions(&mut self.ctx, node);
 		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
@@ -1138,6 +1139,14 @@ impl WasmGcEmitter {
 
 	/// Emit instructions to construct a Node
 	fn emit_node_instructions(&mut self, func: &mut Function, node: &Node) {
+		self.emit_node_value(func, node);
+		// a comparison, `not`, a bool variable…: its Int 1/0 as the bool it is (card bool-type)
+		if !matches!(node.drop_meta(), Node::True | Node::False) && crate::analyzer::is_boolean(node, &self.scope) {
+			self.emit_call(func, constructors::AS_BOOL);
+		}
+	}
+
+	fn emit_node_value(&mut self, func: &mut Function, node: &Node) {
 		self.note_position(node);
 		if self.emit_undefined_comparison(func, node) {
 			return;
@@ -1253,11 +1262,11 @@ impl WasmGcEmitter {
 			}
 			&Node::False => {
 				func.instruction(&I::I64Const(0));
-				self.emit_call(func, "new_int");
+				self.emit_call(func, constructors::NEW_BOOL);
 			}
 			&Node::True => {
 				func.instruction(&I::I64Const(1));
-				self.emit_call(func, "new_int");
+				self.emit_call(func, constructors::NEW_BOOL);
 			}
 		}
 	}

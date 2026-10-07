@@ -87,6 +87,8 @@ impl Context {
             required_functions: HashSet::from([
                 "new_empty",
                 "new_int",
+                "new_bool",
+                "as_bool",
                 "new_float",
                 "new_text",
                 "new_symbol",
