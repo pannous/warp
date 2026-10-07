@@ -338,20 +338,34 @@ fn is_start(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() > 1 && words[0].name() == TASK_WORDS[0])
 }
 
-/// The list variables that collect started tasks, `jobs.add(go f(i))` (P47), with the functions they start
+/// The list variables that collect started tasks, `jobs.add(go f(i))` (P47) or `jobs = [go f(3), go f(1)]`, with the
+/// functions they start
 fn job_lists(node: &Node, functions: &std::collections::HashSet<String>) -> std::collections::HashMap<String, Vec<String>> {
 	let mut lists: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-	node.visit(&mut |part| if let Node::Key(receiver, Op::Dot, method) = part {
-		if let (Node::Symbol(list), Some((function, _))) = (receiver.drop_meta(), added_start(method)) {
-			if functions.contains(&function) {
-				let started = lists.entry(list.clone()).or_default();
-				if !started.contains(&function) {
-					started.push(function);
-				}
+	node.visit(&mut |part| {
+		let (list, started_functions) = match part {
+			Node::Key(receiver, Op::Dot, method) => (receiver, added_start(method).map(|(function, _)| function).into_iter().collect()),
+			Node::Key(target, Op::Assign | Op::Define, value) => (target, listed_starts(value)),
+			_ => return,
+		};
+		let Node::Symbol(list) = list.drop_meta() else { return };
+		for function in started_functions.into_iter().filter(|function| functions.contains(function)) {
+			let started = lists.entry(list.clone()).or_default();
+			if !started.contains(&function) {
+				started.push(function);
 			}
 		}
 	});
 	lists
+}
+
+/// `[go f(3), go g(1)]`: the functions its items start
+fn listed_starts(value: &Node) -> Vec<String> {
+	let Node::List(items, Bracket::Square, _) = value.drop_meta() else { return vec![] };
+	items.iter().filter(|item| is_start(item)).filter_map(|item| match item.drop_meta() {
+		Node::List(words, _, _) => started_call(&words[1..]).map(|(function, _)| function),
+		_ => None,
+	}).collect()
 }
 
 /// `add(go f(x))`, `add go f(x)`: the `go …` items after `add`
