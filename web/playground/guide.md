@@ -151,13 +151,13 @@ Examples: constants
 
 Some questions have a yes-or-no answer.
 
-```wasp => 1
+```wasp => yes
 3 > 2
 ```
 
 `==` asks "equal?".
 
-```wasp => 0
+```wasp => no
 2 == 3
 ```
 
