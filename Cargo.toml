@@ -46,7 +46,7 @@ deprecated = "warn"
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
 default = ["native", "validate"]
-native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http"]
 # validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
@@ -72,7 +72,8 @@ num-bigint = { version = "0.4.8", features = ["serde"] }
 num-traits = "0.2"
 num-integer = "0.1"
 ureq = { version = "3.1.4", optional = true }
-regex = { version = "1.12", optional = true } # the stdlib module regex natively (src/std_adapters.rs); JS RegExp in the browser
+regex = { version = "1.12", optional = true }
+tiny_http = { version = "0.12", optional = true } # `serve 8080 { get "/" { … } }` natively (src/web_server.rs) # the stdlib module regex natively (src/std_adapters.rs); JS RegExp in the browser
 paste = "1.0"
 rustyline = { version = "18", optional = true }
 libloading = { version = "0.9", optional = true }  # Dynamic library loading for FFI (raylib, SDL2, etc.)
