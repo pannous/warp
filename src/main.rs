@@ -22,7 +22,10 @@ const SITE_FLAG: &str = "--site";
 const SITE_SUFFIX: &str = "-site";
 /// The site of inline code
 const DEFAULT_SITE_NAME: &str = "site";
-const COMPILE_FLAGS: [&str; 4] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG];
+/// `warp build --wit app.wasp`: the WIT world of the program's `component` declaration, app.wit (card wasm-interop-rest)
+const WIT_FLAG: &str = "--wit";
+const WIT_EXTENSION: &str = "wit";
+const COMPILE_FLAGS: [&str; 5] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG];
 const MACHINE_CODE_EXTENSION: &str = "cwasm";
 /// The name of an executable built from inline code (plus the platform's extension)
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
@@ -161,6 +164,9 @@ fn run_command(args: &[String]) {
         let code = source_of(&target);
         if flags.contains(&SITE_FLAG) {
             return write_site(&code, &target);
+        }
+        if flags.contains(&WIT_FLAG) {
+            return write_wit(&code, &target);
         }
         if standalone {
             match write_standalone_executable(&code, &target) {
@@ -404,6 +410,21 @@ fn feature_of(module: &str, name: &str) -> String {
         _ => return format!("{module}.{name}"),
     };
     feature.to_string()
+}
+
+/// `warp build --wit`: the component's WIT world next to the program file (out.wit for inline code)
+fn write_wit(code: &str, target: &str) {
+    let path = std::path::Path::new(&compiled_output_path(target)).with_extension(WIT_EXTENSION);
+    match warp::component_worlds::world_wit(&wasp_parser::parse(code)) {
+        Ok(wit) => {
+            fs::write(&path, wit).expect("could not write the WIT world");
+            println!("wrote {}", path.display());
+        }
+        Err(failure) => {
+            eprintln!("warp build --wit: {failure}");
+            std::process::exit(1);
+        }
+    }
 }
 
 /// `warp build --site`: the site next to the program file, its report or failure
