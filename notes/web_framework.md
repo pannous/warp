@@ -209,13 +209,19 @@ Each step is useful on its own and is what the next ones stand on.
   patterns in order (exported, for warp-cf's per-route modules), page·routed() is the first route matching the page's
   path, else "no page at <path>"; `route "*"` matches any path (the not-found page). A layout shows page·routed() where
   it says `outlet`; else a program ending with a route shows it as its last line.
+- Typed parameters (card route-typed): `route "/users/:id:int" { p{ "next " + (id + 1) } }`. A parameter declaring
+  int, float, text or string is `let id:int = route_segment(…) as int`, so its block type-checks; the route matches
+  only a part of that type (std/router.wasp route_fits: int digits, float digits with one dot), else the next route or
+  not found. An untyped one stays a run-time value of any kind (`"a" + (id + 1)` is a type error: declare the type).
+  An unknown type is an error naming the known ones. Casts use `as`: float(text) is broken (card float-of-text), and a
+  std function returning int, float or text mixed came back int-typed (card return-type-mixed).
 - The path is the host word page_path(): natively "/" (host::with_page_path for a render at another path), in a built
   site location.pathname (site.js hooks.pagePath), in the playground "/" until a link is followed. host.js
   navigate(holder, hooks, path) sets it and calls hooks.navigated (warp-34: drop pending fetches there).
 - Links: site.js follows same-origin `a[href]` clicks without modifier keys with pushState and shows page·html anew;
   popstate does the same. The playground sends {navigate: path} to the worker (playground.js followLink), which shows
   page·value, else page·routed. A routes program stays listening for that. Tour example routes.
-- Open: typed parameters (card route-typed), nested route blocks (`route "/users" { route ":id" {…} }`), a built site
+- Open: nested route blocks (`route "/users" { route ":id" {…} }`), a built site
   prerendering each static route (index.html is "/" only; a deep link needs the serve program to render it), the serve
   program rendering per request path. `outlet` is the canonical word (aliases such as slot on demand).
 

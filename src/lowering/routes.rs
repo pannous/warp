@@ -1,7 +1,8 @@
 //! Routes of a page (card web-router, notes/web_framework.md "Routes"): `route "/users/:id" { UserPage(id) }` shows its
 //! block when the page's path (the host word page_path(), "/" natively) matches the pattern, `id` bound to that part of
-//! the path (a number when it is digits). Each route becomes the function page·route·N, the exported page·routes gives
-//! the patterns in order, page·route_index() the index of the first route matching the path (-1 when none; the site
+//! the path (a number when it is digits; `:id:int`, `:price:float` or `:name:text` declare its type, card route-typed:
+//! the route then matches only a part of that type, and its block computes with it). Each route becomes the function
+//! page·route·N, the exported page·routes gives the patterns in order, page·route_index() the index of the first route matching the path (-1 when none; the site
 //! loads that route's module first, card web-bundle), and page·routed() that route's value, else "no page at <path>"; `route "*"`
 //! matches any path (the not-found page). The program shows page·routed() where it says `outlet` (a layout around the
 //! routes), else as its last line when that is a route. The matching is std/router.wasp's.
@@ -21,8 +22,12 @@ const ROUTER_MODULE_USE: &str = "use router";
 /// Where a layout shows the matched route
 const OUTLET: &str = "outlet";
 const PARAMETER_MARK: &str = ":";
-/// `id` of the pattern bound in the route's function
-const PARAMETER_TEMPLATE: &str = "let parameter = route_parameter(pattern, page_path(), parameter_name)";
+/// The types a parameter may declare (std/router.wasp route_fits)
+const PARAMETER_TYPES: [&str; 4] = ["int", "float", "text", "string"];
+/// `id` of the pattern bound in the route's function: without a type a number when it is digits, else its text
+const PARAMETER_CALL: &str = "route_parameter(pattern, page_path(), parameter_name)";
+/// the text of a typed one, which the `let` casts to its type (`as`: float(text) is card float-of-text)
+const SEGMENT_CALL: &str = "route_segment(pattern, page_path(), parameter_name)";
 const PATH_TEMPLATE: &str = "let routed_path = page_path()";
 const MATCH_TEMPLATE: &str = "if route_matches(pattern, routed_path) { return index }";
 const NO_ROUTE: &str = "-1";
@@ -68,11 +73,19 @@ fn route(statement: &Node) -> Option<Route> {
 	(word.drop_meta().name() == ROUTE_WORD).then(|| (pattern, body.clone()))
 }
 
-/// The route's block after a `let` for each parameter of its pattern
+/// The route's block after a `let` for each parameter of its pattern, typed when the parameter declares its type
 fn route_body(pattern: &str, body: &[Node]) -> Vec<Node> {
 	let parameters = pattern.split('/').filter_map(|segment| segment.strip_prefix(PARAMETER_MARK));
-	parameters.map(|name| template(PARAMETER_TEMPLATE, [("parameter", Node::Symbol(name.to_string())), ("pattern", text(pattern)), ("parameter_name", text(name))]))
-		.chain(body.iter().cloned()).collect()
+	let bindings = parameters.map(|parameter| {
+		let (name, kind) = parameter.split_once(PARAMETER_MARK).map_or((parameter, None), |(name, kind)| (name, Some(kind)));
+		let value = match kind {
+			None => format!("let {name} = {PARAMETER_CALL}"),
+			Some(kind) if PARAMETER_TYPES.contains(&kind) => format!("let {name}:{kind} = {SEGMENT_CALL} as {kind}"),
+			Some(_) => return crate::node::error(&format!("route \"{pattern}\": :{parameter} declares no type a path part has, write one of {}", PARAMETER_TYPES.join(", "))),
+		};
+		template(&value, [("pattern", text(pattern)), ("parameter_name", text(name))])
+	});
+	bindings.chain(body.iter().cloned()).collect()
 }
 
 /// `["/", "/users/:id"]`
