@@ -1246,7 +1246,21 @@ function runProgram(bytes, hooks) {
 	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, instance.exports, () => instance.exports.main()));
 	const events = pageEvents(instance.exports);
 	if ((events.length > 0 || holder.timers || holder.fetches) && outcome.result) hooks.listen?.(holder, events);
+	listeningRun = events.length > 0 && outcome.result ? holder : undefined;
 	return outcome;
+}
+
+// the last run that handles page events, for the compiler's warp_host.page_event (src/headless.rs in the browser tests)
+let listeningRun;
+const PAGE_VALUE_EXPORT = "page·value";
+
+// a page event in the last listening run: the page value its handler leaves, else the handler's own outcome (worker.js
+// showHandled shows the same)
+function pageEventOutcome(hooks, event, detail) {
+	if (!listeningRun) return { failure: `no running page handles ${event}` };
+	const handled = runPageEvent(listeningRun, hooks, event, detail);
+	const binding = listeningRun.exports[PAGE_VALUE_EXPORT];
+	return handled.result && binding ? outcomeOf(listeningRun, hooks, binding) : handled;
 }
 
 // `on exit {…}` (src/lowering/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
@@ -1375,6 +1389,11 @@ function warpHost(memory, hooks) {
 			return pendingOutcome.length;
 		},
 		take: into => new Uint8Array(memory().buffer, into, pendingOutcome.length).set(pendingOutcome),
+		page_event: (eventPointer, eventLength, detailPointer, detailLength) => {
+			const text = (pointer, length) => utf8Decoder.decode(new Uint8Array(memory().buffer, pointer, length));
+			pendingOutcome = utf8.encode(JSON.stringify(pageEventOutcome(hooks, text(eventPointer, eventLength), JSON.parse(text(detailPointer, detailLength)))));
+			return pendingOutcome.length;
+		},
 		now_ms: () => Date.now(),
 		panicked: (pointer, length) => hooks.panicked(utf8Decoder.decode(new Uint8Array(memory().buffer, pointer, length))),
 		// a file for the compiler (module, package source, C header): a path of the served repository, of the page, or a URL

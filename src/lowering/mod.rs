@@ -26,6 +26,7 @@ pub mod foreign_modules;
 pub mod nonlocal_cells;
 pub mod library_words;
 pub mod markup_tags;
+pub mod style_rules;
 pub mod meta_entries;
 pub mod min_max;
 pub mod mutation;

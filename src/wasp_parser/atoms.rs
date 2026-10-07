@@ -83,6 +83,14 @@ impl WaspParser {
 				other => other,
 			},
 			'*' if self.is_identifier_start(1) => self.parse_starred(1),
+			// `.card { … }`: a leading-dot name, a class selector in a style block (style_rules.rs)
+			'.' if self.is_identifier_start(1) => {
+				self.advance();
+				match self.parse_symbol() {
+					Ok(name) => Node::Symbol(format!(".{name}")),
+					Err(message) => error(&message),
+				}
+			}
 			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
