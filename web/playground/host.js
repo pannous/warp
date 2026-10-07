@@ -248,6 +248,8 @@ function programImports(holder, hooks) {
 			// std_pure / std_io(module, member, arguments): a word of std/<module>.wasp (src/std_adapters.rs)
 			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
 			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
+			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
+			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
 			// a module of another runtime (src/foreign.rs), run by the runtime registered under its name
 			foreign_call: (runtime, module, member, call, argumentList) => {
 				const program_ = program();

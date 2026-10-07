@@ -85,6 +85,8 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap:
 
 .output-pane { padding: 12px 14px; overflow-x: auto; }
 code, .result, .printed { font-family: ui-monospace, Menlo, Consolas, monospace; }
+/* a markup value shown as DOM (playground.js showRendered) */
+.rendered { margin: 10px 0 0; padding: 8px 10px; background: #fff; color: #111; border-radius: 6px; max-height: 50vh; overflow: auto; }
 code { background: var(--code-ground); padding: 0 4px; border-radius: 4px; }
 
 .result { font-size: 1.15em; white-space: pre-wrap; word-break: break-word; }

@@ -105,7 +105,10 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert(super::list_ops::STRUCT_BODY); // an instance keeps its type
 	}
 	if required.contains(super::list_ops::NODE_WITH_KEY) {
-		required.extend(["node_with_at", crate::library_words::FIELD_WITH]);
+		required.extend([super::list_ops::NODE_WITH_NODE_AT, crate::library_words::FIELD_WITH]);
+	}
+	if required.contains(super::list_ops::NODE_WITH_NODE_AT) {
+		required.extend(["node_with_at", "get_int_value"]);
 	}
 	// a map variable held as a hash table names its keys by map_key_name, emitted with map_get
 	if super::map_backend::NODE_MAP_FUNCTIONS.iter().any(|name| required.contains(name)) {

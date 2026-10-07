@@ -232,21 +232,38 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
+	/// The f64 of a number payload: a float's value, an Int converted (an exact one, a ratio too, by exact_to_f64)
 	fn number_as_f64(&self, func: &mut Function, local: u32) {
 		let (i64_box, f64_box) = (self.type_manager.i64_box_type, self.type_manager.f64_box_type);
 		Self::test(func, local, HeapType::Concrete(f64_box));
 		func.instruction(&I::If(BlockType::Result(ValType::F64)));
 		Self::field(func, local, f64_box, 0);
 		func.instruction(&I::Else);
-		Self::field(func, local, i64_box, 0);
-		func.instruction(&I::F64ConvertI64S);
+		if self.int_runtime() {
+			func.instruction(&I::LocalGet(local));
+			self.call(func, "int_from_payload");
+			self.call(func, "exact_to_f64");
+		} else {
+			Self::field(func, local, i64_box, 0);
+			func.instruction(&I::F64ConvertI64S);
+		}
 		func.instruction(&I::End);
 	}
 
+	/// The payload heap types of numbers: boxed ints and floats, with the int runtime also big ints and ratios
+	fn number_payload_types(&self) -> Vec<u32> {
+		let types = &self.type_manager;
+		let exact = if self.int_runtime() { vec![types.big_int_type, types.ratio_type] } else { vec![] };
+		[vec![types.i64_box_type, types.f64_box_type], exact].concat()
+	}
+
 	fn is_number_payload(&self, func: &mut Function, local: u32) {
-		Self::test(func, local, HeapType::Concrete(self.type_manager.i64_box_type));
-		Self::test(func, local, HeapType::Concrete(self.type_manager.f64_box_type));
-		func.instruction(&I::I32Or);
+		for (index, heap) in self.number_payload_types().into_iter().enumerate() {
+			Self::test(func, local, HeapType::Concrete(heap));
+			if index > 0 {
+				func.instruction(&I::I32Or);
+			}
+		}
 	}
 
 	fn is_number_kind(func: &mut Function, kind_local: u32) {
@@ -320,7 +337,7 @@ impl WasmGcEmitter {
 		let recurse = self.next_func_idx;
 		let node = self.type_manager.node_type;
 		let string = self.type_manager.string_type;
-		let (i64_box, big_int) = (self.type_manager.i64_box_type, self.type_manager.big_int_type);
+		let (i64_box, f64_box, big_int) = (self.type_manager.i64_box_type, self.type_manager.f64_box_type, self.type_manager.big_int_type);
 		let ratio = self.type_manager.ratio_type;
 		let int_runtime = self.int_runtime();
 		let (i64t, i32t) = (ValType::I64, ValType::I32);
@@ -450,16 +467,6 @@ impl WasmGcEmitter {
 			f.instruction(&I::I64Eq);
 			f.instruction(&I::Return);
 			f.instruction(&I::End);
-			s.is_number_payload(f, 0);
-			s.is_number_payload(f, 1);
-			f.instruction(&I::I32And);
-			f.instruction(&I::If(BlockType::Empty));
-			s.number_as_f64(f, 0);
-			s.number_as_f64(f, 1);
-			f.instruction(&I::F64Eq);
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
-
 			// BigInts and ratios are normalized (a ratio is never integral), so only two of the same kind can be equal
 			if int_runtime {
 				for heap in [big_int, ratio] {
@@ -477,6 +484,17 @@ impl WasmGcEmitter {
 					f.instruction(&I::End);
 				}
 			}
+			// a float and any number numerically: 0.5 equals the exact 1/2
+			s.is_number_payload(f, 0);
+			s.is_number_payload(f, 1);
+			f.instruction(&I::I32And);
+			for local in [0, 1] {
+				Self::test(f, local, HeapType::Concrete(f64_box));
+			}
+			Self::emit_list(f, &[I::I32Or, I::I32And, I::If(BlockType::Empty)]);
+			s.number_as_f64(f, 0);
+			s.number_as_f64(f, 1);
+			Self::emit_list(f, &[I::F64Eq, I::Return, I::End]);
 			f.instruction(&I::I32Const(0));
 		});
 		let idx = self.func_index(VALUES_EQUAL);

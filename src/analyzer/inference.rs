@@ -282,8 +282,12 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 	if *bracket == Bracket::Round && items.len() >= 2 && *separator != Separator::Colon {
 		if let Node::Symbol(name) = items[0].drop_meta() {
 			if name == crate::library_words::SLICE || name == "reverse" {
-				// a slice or reversal of a text is a text, of anything else a list
-				return if matches!(infer_type(&items[1], scope), Kind::Text | Kind::Codepoint) { Kind::Text } else { Kind::List };
+				// a slice or reversal of a text is a text, of a Node (known at runtime only) a Node, of anything else a list
+				return match infer_type(&items[1], scope) {
+					Kind::Text | Kind::Codepoint => Kind::Text,
+					Kind::Empty => Kind::Empty,
+					_ => Kind::List,
+				};
 			}
 			if name == crate::library_words::FIELD_WITH {
 				// a copy of the object with one field set: a Node, whatever the object's kind is known as

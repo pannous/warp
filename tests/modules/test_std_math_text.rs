@@ -32,3 +32,20 @@ fn use_text_brings_words_lines_capitalize_center() {
 	is!("use text; capitalize(\"abc\")", "Abc");
 	is!("use text; \"[\" + center(\"ab\", 6) + \"]\"", "[  ab  ]");
 }
+
+#[test]
+fn use_text_brings_title_slug_truncate() {
+	is!("use text; title(\"hello big world\")", "Hello Big World");
+	is!("use text; slug(\"Hello, Big World!\")", "hello-big-world");
+	is!("use text; truncate(\"abcdef\", 4)", "abc…");
+	is!("use text; truncate(\"abc\", 4)", "abc");
+}
+
+#[test]
+fn comprehensions_in_module_and_program_ask_nothing() {
+	warp::diagnostic::take_warnings();
+	let value = warp::wasm_emitter::eval("use text; [capitalize(w) for w in words(\"ab cd\")]#2");
+	let warnings: Vec<String> = warp::diagnostic::take_warnings().iter().map(|warning| warning.to_string()).collect();
+	assert_eq!(value, warp::Node::text("Cd"));
+	assert!(warnings.iter().all(|warning| !warning.contains("new local")), "{warnings:?}");
+}

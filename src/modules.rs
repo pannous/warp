@@ -142,13 +142,15 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 		return program;
 	}
 	let mut needed: Vec<Node> = vec![];
-	let mut mentioned: HashSet<String> = mentioned_names(std::slice::from_ref(&program)).into_iter().collect();
+	// a standard word called as a method (`"hé".to_utf8()`) is needed too
+	let mentioned_or_called = |statements: &[Node]| mentioned_names(statements).into_iter().chain(method_names(statements));
+	let mut mentioned: HashSet<String> = mentioned_or_called(std::slice::from_ref(&program)).collect();
 	loop {
 		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name))).cloned().collect();
 		if now_needed.len() == needed.len() {
 			break;
 		}
-		mentioned.extend(mentioned_names(&now_needed));
+		mentioned.extend(mentioned_or_called(&now_needed));
 		needed = now_needed;
 	}
 	if needed.is_empty() {
@@ -550,7 +552,7 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 13] = [
+const STD_MODULES: [(&str, &str); 14] = [
 	("net", include_str!("../std/net.wasp")),
 	("collections", include_str!("../std/collections.wasp")),
 	("hash", include_str!("../std/hash.wasp")),
@@ -564,6 +566,7 @@ const STD_MODULES: [(&str, &str); 13] = [
 	("random", include_str!("../std/random.wasp")),
 	("map", include_str!("../std/map.wasp")),
 	("time", include_str!("../std/time.wasp")),
+	("draw", include_str!("../std/draw.wasp")),
 ];
 const STD_FOLDER: &str = "std";
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
@@ -906,6 +909,8 @@ fn declared_name(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
 		Node::Type { name, .. } => leftmost_symbol(name),
 		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
+		// `global x = 0`, as the parser reads it: `global: (x = 0)`
+		Node::Key(keyword, Op::Colon, declared) if matches!(keyword.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword)) => declared_name(declared),
 		Node::List(items, _, _) if items.len() >= 2 => leftmost_symbol(&items[1]),
 		_ => None,
 	}
@@ -968,6 +973,23 @@ fn same_definitions(first: &[Node], second: &[Node]) -> bool {
 }
 
 /// Every word the statements mention
+/// The methods called in statements: `f` of `x.f(…)` and of `x.f`
+fn method_names(statements: &[Node]) -> Vec<String> {
+	let mut names = Vec::new();
+	for statement in statements {
+		statement.visit(&mut |node| {
+			if let Node::Key(_, Op::Dot | Op::SafeDot, member) = node {
+				match member.drop_meta() {
+					Node::Symbol(name) => names.push(name.clone()),
+					Node::List(call, _, _) => names.extend(call.first().map(|name| name.drop_meta().name())),
+					_ => {}
+				}
+			}
+		});
+	}
+	names
+}
+
 fn mentioned_names(statements: &[Node]) -> Vec<String> {
 	fn collect(node: &Node, names: &mut Vec<String>) {
 		match node {

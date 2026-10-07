@@ -91,6 +91,15 @@ Next:
    the program (a second getters pass after modules::resolve); a parameter guessed a list takes text when the calls
    pass only texts (pad_right(pad_left(…))).
    map: invert pick from_pairs; time: parse_date("2026-10-07"), days_from_date(y, m, d).
+   list: flat_map partition max_by min_by group_by ({"1": [1 3] "0": [2 4]}, keys are texts) tally. Fixed on the
+   way: m.get(k) had no value kind (a list value + [x] was 'int + list'); `xs where it > 1` filters (was silently
+   nothing). Built in, no module: sort_by any all find first last index_of; libm now also links asin acos atan atan2
+   sinh cosh tanh hypot log2 trunc log1p expm1 (they compiled to their last argument). Still missing in math: hypot
+   etc. in the glibc fallback table (card call-name).
+   list: zip_with sum_by count_by rotate interleave dedupe; text: title slug truncate; time: format_duration(ms)
+   ("1h 30m 30s", "250ms"; plain milliseconds: units don't reach functions yet); map: omit filter_values. Fixed on
+   the way: a slice of a Node is a Node (capitalize(w) for the elements of words(t) was 'text + list'); a
+   comprehension's list is a `let` local (one in a module and one in the program asked "new local or main-level?").
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:
