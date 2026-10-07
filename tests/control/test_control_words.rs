@@ -43,3 +43,15 @@ fn bang_evaluates_a_block() {
 	is!("a=6; {a*a}!", 36);
 	is!("f:={1+2}; f!", 3);
 }
+
+// card return-type: `if a {x} if b {y}` on one line is two if statements, not the first guarded by a trailing `if b`
+#[test]
+fn an_if_with_a_block_after_a_statement_starts_a_statement() {
+	let mixed = "f(k:any) := { if k == 1 { return 2.5 } if k == 2 { return 3 } \"sx\" }";
+	is!(&format!("{mixed}; let p:float = f(1); p * 2"), 5.0);
+	is!(&format!("{mixed}; f(2)"), 3);
+	is!(&format!("{mixed}; f(3)"), "sx");
+	is!("x=0; if 1 { x+=1 } if 1 { x+=10 }; x", 11);
+	is!("x=0; if 0 { x+=1 } unless 0 { x+=10 }; x", 10);
+	is!("a=1; a = 2 if 1 == 1; a", 2); // a trailing if without a block still guards
+}

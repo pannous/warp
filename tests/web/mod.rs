@@ -39,3 +39,4 @@ mod test_transitions;
 mod test_web_apis;
 mod test_accessibility;
 mod test_i18n;
+mod test_webgpu;

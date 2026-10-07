@@ -38,9 +38,14 @@ impl WasmGcEmitter {
 	/// Returns a Text node with the body, or an Error node with the reason: the host marks a failure by a negative length
 	pub(super) fn emit_fetch_call(&mut self, func: &mut Function, url_node: &Node, timeout: Option<std::time::Duration>) {
 		let url = self.extract_url_string(url_node);
-		let (url_ptr, url_len) = self.allocate_string(&url);
-		func.instruction(&I32Const(url_ptr as i32));
-		func.instruction(&I32Const(url_len as i32));
+		// a URL known only at run time (a text variable, a parameter, a concatenation), else the URL as written
+		if self.is_runtime_text(url_node) {
+			self.emit_string_ptr_len(func, url_node);
+		} else {
+			let (url_ptr, url_len) = self.allocate_string(&url);
+			func.instruction(&I32Const(url_ptr as i32));
+			func.instruction(&I32Const(url_len as i32));
+		}
 		let import = match timeout {
 			Some(timeout) => {
 				func.instruction(&I::I64Const(timeout.as_millis().min(i64::MAX as u128) as i64));

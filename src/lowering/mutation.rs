@@ -5,11 +5,74 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::diagnostic::Diagnostic;
 
 /// Meta key on a name written `x!`
 const MUTATED_MARK: &str = "mutated";
 /// `x!` that changes nothing unwraps x (library_words: ø is a loud error)
 pub const UNWRAP: &str = "unwrap";
+
+/// Pure words whose result is a changed copy of their argument: dropping it changes nothing
+const COPY_WORDS: [&str; 11] = ["upper", "uppercase", "lower", "lowercase", "trim", "strip", "reverse", "sort", "sorted", "replace", "capitalize"];
+
+/// wiki/mutable.md: a statement dropping a copy word's result (`uppercase x`), and an assignment of a mutating call
+/// (`y = x.upper!`, which changes x too), warn with the forms meant
+pub fn warn_discarded(program: Node) -> Node {
+	let mut warnings = vec![];
+	program.visit(&mut |node| match node.drop_meta() {
+		Node::List(statements, _, Separator::Semicolon | Separator::Newline) => {
+			for statement in &statements[..statements.len().saturating_sub(1)] {
+				if let Some((word, variable)) = copy_call(statement) {
+					warnings.push(Diagnostic::at(statement, format!("unused value of {word} {variable}: assign it (y = {word} {variable}) or write {variable}.{word}! to change {variable}")));
+				}
+			}
+		}
+		Node::Key(target, Op::Assign | Op::Define, value) => {
+			if let Some(variable) = mutating_call(value) {
+				let target = crate::normalize::operand_text(target);
+				warnings.push(Diagnostic::at(node, format!("{target} = …! changes {variable} too: assign the copy without `!`, or mutate {variable} first and then write {target} = {variable}")));
+			}
+		}
+		_ => {}
+	});
+	match crate::diagnostic::report(&warnings) {
+		Err(error) => error,
+		Ok(()) => program,
+	}
+}
+
+/// A copy word called on a variable, as written (`upper x`, `upper(x)`, `x.upper`, `x.upper()`), and whether a `!`
+/// marks it as mutating (`upper x!`, `x.upper!`)
+fn copy_word_call(call: &Node) -> Option<(&str, &str, bool)> {
+	let (word, variable) = match call.drop_meta() {
+		Node::Key(receiver, Op::Dot, method) => (method.as_ref(), receiver.as_ref()),
+		Node::List(items, _, _) if items.len() == 2 => (&items[0], &items[1]),
+		_ => return None,
+	};
+	let called = match word.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].drop_meta(),
+		other => other,
+	};
+	match (called, variable.drop_meta()) {
+		(Node::Symbol(called), Node::Symbol(name)) if COPY_WORDS.contains(&called.as_str()) => Some((called, name, is_marked(call) || is_marked(variable))),
+		_ => None,
+	}
+}
+
+fn copy_call(call: &Node) -> Option<(&str, &str)> {
+	copy_word_call(call).and_then(|(word, variable, mutating)| (!mutating).then_some((word, variable)))
+}
+
+/// The variable a mutating call assigns: `x.upper!` and `upper x!` as marked, `x = x.upper` as the parser wrote `upper(x)!`
+fn mutating_call(value: &Node) -> Option<&str> {
+	match value.drop_meta() {
+		Node::Key(variable, Op::Assign, call) => match (variable.drop_meta(), copy_call(call)) {
+			(Node::Symbol(name), Some((_, called))) if name == called => Some(name),
+			_ => None,
+		},
+		_ => copy_word_call(value).and_then(|(_, variable, mutating)| mutating.then_some(variable)),
+	}
+}
 
 /// The variable a call written before `!` changes: x in `x.upper`, `x.upper()` and `upper(x)`
 pub fn mutated_variable(call: &Node) -> Option<&Node> {

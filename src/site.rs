@@ -5,7 +5,7 @@
 //! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary, and the parts of
 //! host.js its module imports words of (HOST_PARTS, card web-bundle).
 
-use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
+use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
 use crate::node::Node;
 use std::path::{Path, PathBuf};
 
@@ -28,7 +28,7 @@ pub struct HostPart {
 
 /// The parts of host.js, in load order (host.js HOST_PART_FILES). std_pure and std_io are coarse: they carry every std
 /// module's words, so a program using json (std_pure) also gets the hashes
-pub const HOST_PARTS: [HostPart; 6] = [
+pub const HOST_PARTS: [HostPart; 7] = [
 	HostPart {
 		script: ("host-files.js", include_str!("../web/playground/host-files.js")),
 		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", STD_IO].contains(&name),
@@ -47,6 +47,7 @@ pub const HOST_PARTS: [HostPart; 6] = [
 	},
 	HostPart { script: ("host-compiler.js", include_str!("../web/playground/host-compiler.js")), gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK, needs: &["host-files.js"] },
 	HostPart { script: ("host-routes.js", include_str!("../web/playground/host-routes.js")), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
+	HostPart { script: ("host-gpu.js", include_str!("../web/playground/host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && name == GPU_COMPUTE, needs: &["host-tasks.js"] },
 ];
 const LINE_COMMENT: &str = "//";
 /// The element holding the program's markup (site.js SITE_ROOT)
@@ -57,7 +58,7 @@ const PAGE_TEMPLATE: &str = r#"<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{title}}</title>
-</head>
+{{base}}</head>
 <body>
 <div id="{{root}}">{{body}}</div>
 {{scripts}}</body>
@@ -71,6 +72,15 @@ const DEV_SCRIPT: (&str, &str) = ("dev.js", include_str!("../web/playground/dev.
 const CONTENT_TYPES: [(&str, &str); 3] = [("html", "text/html; charset=utf-8"), ("js", "text/javascript; charset=utf-8"), ("wasm", "application/wasm")];
 const OTHER_CONTENT: &str = "application/octet-stream";
 const INDEX_PATH: &str = "/";
+/// Where the page at a path finds the site's files: a page beside them names them as they are, one a server renders for
+/// a deeper path ("/users/2") from the server's root
+const BESIDE: &str = "";
+const SERVER_ROOT: &str = "/";
+/// A prerendered page one folder deeper than the site's files names them from its parent
+const PARENT: &str = "../";
+/// The pattern of the route of any path (the not-found page), which no file stands for
+const ANY_PATH: &str = "*";
+const PATH_SEPARATOR: &str = "/";
 
 /// What `warp build --site` wrote
 pub struct BuiltSite {
@@ -86,22 +96,83 @@ pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, Str
 	let files = files(code, title, false)?;
 	std::fs::create_dir_all(directory).map_err(|failure| format!("cannot make {}: {failure}", directory.display()))?;
 	for (name, bytes) in &files {
-		std::fs::write(directory.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"))?;
+		let file = directory.join(name);
+		let folder = file.parent().unwrap_or(directory);
+		std::fs::create_dir_all(folder).map_err(|failure| format!("cannot make {}: {failure}", folder.display()))?;
+		std::fs::write(&file, bytes).map_err(|failure| format!("cannot write {name}: {failure}"))?;
 	}
 	Ok(BuiltSite { directory: directory.to_path_buf(), files: files.into_iter().map(|(name, _)| name).collect() })
 }
 
 /// The files of the site of `code`; `dev` adds dev.js. A failure names its position with the source line
 pub fn files(code: &str, title: &str, dev: bool) -> Result<Vec<SiteFile>, String> {
-	site_files(code, title, dev)?.ok_or_else(|| format!("the program shows no page: it exports no {}", crate::page_html::PAGE_HTML))
+	let site = site_of(code, title, dev)?.ok_or_else(|| format!("the program shows no page: it exports no {}", crate::page_html::PAGE_HTML))?;
+	let prerendered = prerendered(code, title, &site)?;
+	Ok(site.files.into_iter().chain(prerendered).collect())
 }
 
-/// The files of the site a program serving its page serves (src/web_server.rs), none when its last line shows nothing
-pub fn served_files(code: &str, title: &str) -> Result<Option<Vec<SiteFile>>, String> {
-	site_files(code, title, false)
+/// The page of each route without parameters but "/" (card route-prerender), as <path>/index.html: a deep link reads
+/// without JavaScript, and the page names the site's files from its depth
+fn prerendered(code: &str, title: &str, site: &Site) -> Result<Vec<SiteFile>, String> {
+	if !exports(&site.module, crate::routes::PAGE_ROUTES) {
+		return Ok(vec![]);
+	}
+	let patterns = crate::wasm_reader::read_export_after_main(&site.module, site.imports, crate::routes::PAGE_ROUTES).map_err(|failure| failure.to_string())?;
+	let mut paths: Vec<Vec<String>> = vec![];
+	for folders in patterns.drop_meta().iter().filter_map(|pattern| static_folders(&pattern.name())) {
+		if !paths.contains(&folders) {
+			paths.push(folders);
+		}
+	}
+	paths.into_iter().map(|folders| {
+		let folder = folders.join(PATH_SEPARATOR);
+		let page = crate::host::with_page_path(&format!("{PATH_SEPARATOR}{folder}"), || rendered_page(code, title, site, &PARENT.repeat(folders.len())))?;
+		Ok((format!("{folder}{PATH_SEPARATOR}{PAGE_FILE}"), page.into_bytes()))
+	}).collect()
 }
 
-fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>>, String> {
+/// The folders of a route's path when it has no parameter and is not "/" ("/docs/intro" → docs, intro)
+fn static_folders(pattern: &str) -> Option<Vec<String>> {
+	let folders: Vec<String> = pattern.split(PATH_SEPARATOR).filter(|folder| !folder.is_empty()).map(str::to_string).collect();
+	let is_static = pattern != ANY_PATH && !folders.is_empty() && !folders.iter().any(|folder| folder.starts_with(crate::routes::PARAMETER_MARK));
+	is_static.then_some(folders)
+}
+
+/// The site a program serving its page serves (src/web_server.rs), none when its last line shows nothing
+pub fn served_site(code: &str, title: &str) -> Result<Option<ServedSite>, String> {
+	let routed = |site: &Site| exports(&site.module, crate::routes::PAGE_ROUTES);
+	Ok(site_of(code, title, false)?.map(|site| ServedSite { code: code.to_string(), title: title.to_string(), routed: routed(&site), site }))
+}
+
+/// The site a program serving its page serves: its files, and for a program with routes the page of any other path,
+/// rendered when it is asked for (card serve-route)
+pub struct ServedSite {
+	code: String,
+	title: String,
+	site: Site,
+	routed: bool,
+}
+
+impl ServedSite {
+	/// What a GET of `path` gets: a file of the site ("/" the page), else the page at that path of a program with routes
+	pub fn file(&self, path: &str) -> Option<Result<SiteFile, String>> {
+		if let Some(file) = file_at(&self.site.files, path) {
+			return Some(Ok(file.clone()));
+		}
+		let rendered = || crate::host::with_page_path(path, || rendered_page(&self.code, &self.title, &self.site, SERVER_ROOT));
+		self.routed.then(|| rendered().map(|page| (PAGE_FILE.to_string(), page.into_bytes())))
+	}
+}
+
+/// A program's page: its module with the imports it needs, the scripts it loads and the files (its page at /)
+struct Site {
+	module: Vec<u8>,
+	imports: crate::wasm_reader::Imports,
+	scripts: Vec<Script>,
+	files: Vec<SiteFile>,
+}
+
+fn site_of(code: &str, title: &str, dev: bool) -> Result<Option<Site>, String> {
 	let compile = || crate::pipeline::for_a_page(|| crate::pipeline::compile(code));
 	let module = if dev { crate::pipeline::for_dev(compile) } else { compile() };
 	let module = module.map_err(|value| format!("nothing to compile: {}", with_excerpt(code, message_of(&value))))?;
@@ -109,29 +180,39 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>
 		return Ok(None);
 	}
 	let imports = crate::wasm_reader::Imports { host: module.needs_host, wasi: module.needs_wasi, ffi: module.needs_ffi };
-	let rendered = crate::wasm_reader::read_export_after_main(&module.bytes, imports, crate::page_html::PAGE_HTML)
+	let scripts = scripts_of(&module.bytes, dev)?;
+	let mut site = Site { module: module.bytes, imports, scripts, files: vec![] };
+	let page = rendered_page(code, title, &site, BESIDE)?;
+	// each route's own functions in a module the page loads when it shows the route; a dev page reloads whole anyway.
+	// The site keeps the whole module, which renders its pages natively
+	let split = if dev { None } else { crate::route_split::split_by_route(&site.module)? };
+	let (primary, route_modules) = match split {
+		Some(split) => (split.primary, split.routes),
+		None => (site.module.clone(), vec![]),
+	};
+	site.files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), primary)];
+	site.files.extend(route_modules);
+	site.files.extend(site.scripts.iter().map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
+	Ok(Some(site))
+}
+
+/// The page of the program, its markup rendered after main at the page path set now (host::with_page_path), its scripts
+/// found at `root`
+fn rendered_page(code: &str, title: &str, site: &Site, root: &str) -> Result<String, String> {
+	let rendered = crate::wasm_reader::read_export_after_main(&site.module, site.imports, crate::page_html::PAGE_HTML)
 		.map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))?;
 	let Node::Text(html) = rendered.drop_meta() else {
 		return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, rendered.serialize()));
 	};
-	let scripts = scripts_of(&module.bytes, dev)?;
-	let page = page(title, html, &scripts);
-	// each route's own functions in a module the page loads when it shows the route; a dev page reloads whole anyway
-	let split = if dev { None } else { crate::route_split::split_by_route(&module.bytes)? };
-	let (primary, route_modules) = match split {
-		Some(split) => (split.primary, split.routes),
-		None => (module.bytes, vec![]),
-	};
-	let mut files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), primary)];
-	files.extend(route_modules);
-	files.extend(scripts.iter().map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
-	Ok(Some(files))
+	Ok(page(title, html, &site.scripts, root))
 }
 
-/// The file of a site a request path names: "/" is the page, "/app.wasm" the module, …
+/// The file of a site a request path names: "/" is the page, "/app.wasm" the module, "/about" a prerendered
+/// about/index.html, …
 pub fn file_at<'a>(files: &'a [SiteFile], path: &str) -> Option<&'a SiteFile> {
-	let name = if path == INDEX_PATH { PAGE_FILE } else { path.trim_start_matches('/') };
-	files.iter().find(|(file, _)| file == name)
+	let name = if path == INDEX_PATH { PAGE_FILE } else { path.trim_start_matches(PATH_SEPARATOR) };
+	let folder_page = format!("{}{PATH_SEPARATOR}{PAGE_FILE}", name.trim_end_matches(PATH_SEPARATOR));
+	files.iter().find(|(file, _)| file == name).or_else(|| files.iter().find(|(file, _)| *file == folder_page))
 }
 
 /// The content type of a site's file, by its extension
@@ -150,7 +231,7 @@ fn exports(module: &[u8], name: &str) -> bool {
 
 /// The page `warp dev` shows before any build succeeded: only dev.js, which shows the failure
 pub fn dev_shell(title: &str) -> Vec<SiteFile> {
-	let page = page(title, "", &[DEV_SCRIPT]);
+	let page = page(title, "", &[DEV_SCRIPT], BESIDE);
 	vec![(PAGE_FILE.to_string(), page.into_bytes()), (DEV_SCRIPT.0.to_string(), DEV_SCRIPT.1.as_bytes().to_vec())]
 }
 
@@ -195,10 +276,13 @@ fn with_excerpt(code: &str, message: String) -> String {
 	[message].into_iter().chain(excerpt).collect::<Vec<_>>().join("\n")
 }
 
-fn page(title: &str, body: &str, scripts: &[(&str, &str)]) -> String {
+/// A page at a deeper path than the site's files finds them, and the module and route modules they load, through its
+/// <base> (`root`); an in-page "#anchor" link there resolves against the root too
+fn page(title: &str, body: &str, scripts: &[(&str, &str)], root: &str) -> String {
 	let scripts: String = scripts.iter().map(|(name, _)| format!("<script src=\"{name}\"></script>\n")).collect();
+	let base = if root == BESIDE { String::new() } else { format!("<base href=\"{root}\">\n") };
 	// the program's texts last, so nothing in them is read as a placeholder
-	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
+	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{base}}", &base).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
 }
 
 /// A script without its comment lines, blank lines and indentation (card web-bundle: host.js gzipped 24 → 17 KB); the

@@ -37,3 +37,21 @@ fn a_static_page_is_its_last_line_rendered() {
 	assert!(page.contains(r#"<div id="wasp-root"><article><h1>Docs</h1><p>1 &lt; 2</p></article></div>"#), "{page}");
 	std::fs::remove_dir_all(directory).unwrap();
 }
+
+// card route-prerender: each route without parameters is rendered at build time into its own <path>/index.html, which
+// finds the site's files through <base href> from its depth, so a deep link reads without JavaScript and hydrates; routes with parameters
+// and "*" are rendered by the page itself
+#[test]
+fn a_site_prerenders_each_static_route() {
+	let directory = scratch_directory("routes-site");
+	let program = "route \"/\" { h1{ \"Home\" } }\nroute \"/about\" { p{ \"About us\" } }\nroute \"/docs/intro\" { p{ \"Intro\" } }\nroute \"/users/:id:int\" { p{ \"User \" + id } }\nroute \"*\" { p{ \"no such page\" } }";
+	let site = warp::site::build(program, "routes", &directory).expect("the site is built");
+	assert!(site.files.contains(&"about/index.html".to_string()) && site.files.contains(&"docs/intro/index.html".to_string()), "{:?}", site.files);
+	assert!(!site.files.iter().any(|file| file.contains(':') || file.contains('*')), "{:?}", site.files);
+	let page = |file: &str| std::fs::read_to_string(directory.join(file)).unwrap();
+	assert!(page("index.html").contains("<h1>Home</h1>"));
+	assert!(page("about/index.html").contains("<p>About us</p>") && page("about/index.html").contains(r#"<base href="../">"#), "{}", page("about/index.html"));
+	assert!(page("docs/intro/index.html").contains(r#"<base href="../../">"#));
+	assert!(!page("index.html").contains("<base"));
+	std::fs::remove_dir_all(directory).unwrap();
+}

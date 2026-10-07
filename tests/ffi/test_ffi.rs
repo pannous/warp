@@ -310,7 +310,6 @@ fn test_c_type_mapping() {
 // ============================================================================
 
 #[test]
-#[ignore = "requires SDL2 library and wasp files"]
 fn test_ffi_sdl_init() {
 	// Test: SDL_Init - Initialize SDL with timer subsystem (works headless);
 	// Returns 0 on success, non-zero on error
@@ -321,13 +320,11 @@ fn test_ffi_sdl_init() {
 }
 
 #[test]
-#[ignore = "requires SDL2 library and FFI signatures"]
 fn test_ffi_sdl_window() {
 	is!("tests/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
 }
 
 #[test]
-#[ignore = "requires SDL2 library and FFI signatures"]
 fn test_ffi_sdl_version() {
 	// Test: SDL_GetVersion - Get SDL version info
 	// This tests struct parameter passing via FFI
@@ -335,7 +332,6 @@ fn test_ffi_sdl_version() {
 }
 
 #[test]
-#[ignore = "requires SDL2 library and FFI signatures"]
 fn test_ffi_sdl_combined() {
 	// Combined test: Multiple SDL function imports
 	// Tests that we can import multiple SDL functions in one program

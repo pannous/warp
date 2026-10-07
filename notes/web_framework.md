@@ -69,6 +69,11 @@ Each step is useful on its own and is what the next ones stand on.
 - A markup value is any key whose name is an HTML tag (`div`, `p`, `ul`, `li`, `a`, `button`, … the HTML element list)
   with a block; `name: "text"` is the element with that text, `name{ key: value … }` attributes for keys that are HTML
   attributes, other children nested in order. Unknown names stay data (no custom elements yet).
+- Repeated keys (user decision P176, card g-_bGo): in a named tag's block, glued `ul{…}` or spaced `ul {…}`, a repeated
+  `key: value` is a child (`ul{ li: "First" li: "Second" }` is two li), as repeated elements in XML/HTML; a plain `{…}`
+  stays a map whose repeated key is the error "duplicate key", also inside a tag, and so does a declared type's
+  constructor `Point{ x: 1 x: 2 }`. The parser's one-shot flag tag_block (wasp_parser/mod.rs) skips the check for the
+  tag's own block only.
 - Natively the value serializes as HTML (`to_html`), text escaped. In the page the program's value, when it is markup, is
   shown as DOM in the output pane instead of its wasp text; `show(markup)` places it explicitly.
 
@@ -227,9 +232,17 @@ Each step is useful on its own and is what the next ones stand on.
   ("/users/:id:int") whose function is the layout with page·part·N() at the outlet (page·part·N: the inner block, its
   parameters, the outer ones too, bound by `let`); after them the outer route itself with an empty outlet, so an inner
   "/" route answers the outer path first. page·routes lists the whole patterns.
-- Open: a built site
-  prerendering each static route (index.html is "/" only; a deep link needs the serve program to render it), the serve
-  program rendering per request path. `outlet` is the canonical word (aliases such as slot on demand).
+- A serve program with routes (card serve-route): src/site.rs ServedSite keeps the compiled module; a GET that is no
+  serve route and no file of the site renders the page at that path (main + page·html under host::with_page_path), so
+  GET /users/2 is that route's HTML, hydrated by site.js at the same path. A path no route takes gets the "*" route's
+  page (status 200; without one the "no page at <path>" text). Fixture tests/fixtures/served_routes.wasp.
+- Prerendered routes (card route-prerender): `warp build --site` (and `warp dev`) also writes <path>/index.html for
+  each route without parameters but "/" (src/site.rs prerendered, patterns from page·routes), rendered at that path,
+  finding the site's files through <base href="../"> per level (a page served for a deeper path has <base href="/">;
+  no script grows, card web-bundle's budget), so the page hydrates at /about/. An in-page "#anchor" link on such a
+  deep page resolves against the root. site::file_at finds "/about" as about/index.html (warp dev, serve). Routes with parameters and "*" are
+  rendered by the page itself (a static host needs a fallback to index.html for them).
+- `outlet` is the canonical word (aliases such as slot on demand).
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
@@ -301,6 +314,20 @@ Each step is useful on its own and is what the next ones stand on.
 - Next pieces: clipboard write (the word waits for the user: `copy` already means clone; question at the Interviewer),
   WebSocket (card web-websocket), frames and pointer in built sites (site.js, after warp-89's timers).
 
+## web-apis: WebGPU (2026-10-07, warp-d2; host parts agreed with warp-34)
+- `gpu_compute(shader, numbers, workgroups)` (host word, warp-runtime host_words.rs GPU_COMPUTE): a WGSL compute
+  shader whose entry point `main` reads and writes the numbers as `array<f32>` at @group(0) @binding(0), dispatched
+  over `workgroups` workgroups; the value is the list of floats it left (f32: WGSL has no f64). Example:
+  probes/webgpu/double.wasp; tests/web/test_webgpu.rs (browser suite: real GPU, skips loudly without an adapter).
+- Browser: host part web/playground/host-gpu.js (site.rs HOST_PARTS, needs host-tasks.js). WebGPU only answers
+  asynchronously, so a task Worker (task-worker.js `data.gpu`) asks for the device once, runs the job and writes
+  {values} or {error} with writeShared; the program's worker blocks in host-tasks.js readShared (shared by tasks,
+  fetches and the GPU). A shader that does not compile fails loudly with its line:column. Without task Workers (a page
+  that is not cross-origin isolated, e.g. a built site) it is a loud error.
+- Natively a loud error ("gpu_compute needs WebGPU"): wgpu would be a dependency of its own (open question, card
+  simd-map). Not a sample yet: samples run natively in tests/programs/test_playground_samples.rs.
+- Next: more buffers and uniforms (a map of named arrays), typed results (ints as array<i32>), render to a canvas.
+
 ## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
 - No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`
   connects at once (natively an unreachable server is a loud error there) and hears what the server sends;
@@ -337,4 +364,7 @@ Each step is useful on its own and is what the next ones stand on.
   and no aria-label/title; a without href; a heading skipping a level (h1 → h3); an id used twice; html without lang.
   Each points at the element and names a fix; `use strict` / `--strict` make them errors like every warning.
 - Translations as data: `use i18n`, translate(messages, language, key, values) with CLDR plural forms (notes/i18n.md).
-- Not here: focus on route change and live regions for async content (warp-89, web-router / web-async). Markup built at run time (strings, computed tags) is not checked.
+- Focus on route change (card web-i18n): after a link or the back button shows another route, host-routes.js
+  focusRoute moves the focus to the route's main heading (`main h1`, else `h1`), else `main`, else the page's root, made
+  focusable with tabindex -1, so a screen reader reads the new page (probes/lazy_routes/check_in_browser.sh).
+- Not here: live regions for async content (web-async). Markup built at run time (strings, computed tags) is not checked.
