@@ -11,12 +11,9 @@ use std::time::SystemTime;
 pub const DEV_PORT: u16 = 8008;
 const STATE_PATH: &str = "/wasp-dev/state";
 const INDEX_PATH: &str = "/";
-const PAGE_FILE: &str = "index.html";
 const NOT_FOUND: u16 = 404;
 const JSON_TYPE: &str = "application/json";
 const TEXT_TYPE: &str = "text/plain; charset=utf-8";
-const CONTENT_TYPES: [(&str, &str); 3] = [("html", "text/html; charset=utf-8"), ("js", "text/javascript; charset=utf-8"), ("wasm", "application/wasm")];
-const OTHER_CONTENT: &str = "application/octet-stream";
 
 /// The program's latest build: the files of the last good one, the failure of the latest if it failed
 struct DevSite {
@@ -55,8 +52,7 @@ impl DevSite {
 	}
 
 	fn file(&self, path: &str) -> Option<&SiteFile> {
-		let name = if path == INDEX_PATH { PAGE_FILE } else { path.trim_start_matches('/') };
-		self.files.iter().find(|(file, _)| file == name)
+		crate::site::file_at(&self.files, path)
 	}
 }
 
@@ -72,7 +68,7 @@ pub fn serve(program: &Path, port: u16) -> Result<(), String> {
 		let path = request.url().split('?').next().unwrap_or(INDEX_PATH).to_string();
 		let response = match (path.as_str(), site.file(&path)) {
 			(STATE_PATH, _) => answer(site.state().into_bytes(), JSON_TYPE),
-			(_, Some((name, bytes))) => answer(bytes.clone(), content_type(name)),
+			(_, Some((name, bytes))) => answer(bytes.clone(), crate::site::content_type(name)),
 			(_, None) => answer(format!("warp dev: no file {path}").into_bytes(), TEXT_TYPE).with_status_code(NOT_FOUND),
 		};
 		let _ = request.respond(response);
@@ -86,9 +82,4 @@ pub fn serve(program: &Path, port: u16) -> Result<(), String> {
 fn answer(body: Vec<u8>, content_type: &str) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
 	let header = tiny_http::Header::from_bytes("Content-Type", content_type).expect("a valid header");
 	tiny_http::Response::from_data(body).with_header(header)
-}
-
-fn content_type(name: &str) -> &'static str {
-	let extension = Path::new(name).extension().and_then(|extension| extension.to_str()).unwrap_or_default();
-	CONTENT_TYPES.iter().find(|(known, _)| *known == extension).map_or(OTHER_CONTENT, |(_, content_type)| content_type)
 }

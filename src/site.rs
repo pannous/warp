@@ -34,6 +34,11 @@ const PAGE_TEMPLATE: &str = r#"<!doctype html>
 /// `warp dev` adds the script asking the dev server for new builds (src/dev_server.rs)
 const DEV_SCRIPT: (&str, &str) = ("dev.js", include_str!("../web/playground/dev.js"));
 
+/// The content types of a site's files, by their extension
+const CONTENT_TYPES: [(&str, &str); 3] = [("html", "text/html; charset=utf-8"), ("js", "text/javascript; charset=utf-8"), ("wasm", "application/wasm")];
+const OTHER_CONTENT: &str = "application/octet-stream";
+const INDEX_PATH: &str = "/";
+
 /// What `warp build --site` wrote
 pub struct BuiltSite {
 	pub directory: PathBuf,
@@ -55,9 +60,21 @@ pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, Str
 
 /// The files of the site of `code`; `dev` adds dev.js. A failure names its position with the source line
 pub fn files(code: &str, title: &str, dev: bool) -> Result<Vec<SiteFile>, String> {
+	site_files(code, title, dev)?.ok_or_else(|| format!("the program shows no page: it exports no {}", crate::page_html::PAGE_HTML))
+}
+
+/// The files of the site a program serving its page serves (src/web_server.rs), none when its last line shows nothing
+pub fn served_files(code: &str, title: &str) -> Result<Option<Vec<SiteFile>>, String> {
+	site_files(code, title, false)
+}
+
+fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>>, String> {
 	let compile = || crate::pipeline::for_a_page(|| crate::pipeline::compile(code));
 	let module = if dev { crate::pipeline::for_dev(compile) } else { compile() };
 	let module = module.map_err(|value| format!("nothing to compile: {}", with_excerpt(code, message_of(&value))))?;
+	if !exports(&module.bytes, crate::page_html::PAGE_HTML) {
+		return Ok(None);
+	}
 	let imports = crate::wasm_reader::Imports { host: module.needs_host, wasi: module.needs_wasi, ffi: module.needs_ffi };
 	let rendered = crate::wasm_reader::read_export_after_main(&module.bytes, imports, crate::page_html::PAGE_HTML)
 		.map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))?;
@@ -68,7 +85,27 @@ pub fn files(code: &str, title: &str, dev: bool) -> Result<Vec<SiteFile>, String
 	let page = page(title, html, &scripts);
 	let mut files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), module.bytes)];
 	files.extend(scripts.iter().map(|(name, text)| (name.to_string(), text.as_bytes().to_vec())));
-	Ok(files)
+	Ok(Some(files))
+}
+
+/// The file of a site a request path names: "/" is the page, "/app.wasm" the module, …
+pub fn file_at<'a>(files: &'a [SiteFile], path: &str) -> Option<&'a SiteFile> {
+	let name = if path == INDEX_PATH { PAGE_FILE } else { path.trim_start_matches('/') };
+	files.iter().find(|(file, _)| file == name)
+}
+
+/// The content type of a site's file, by its extension
+pub fn content_type(name: &str) -> &'static str {
+	let extension = Path::new(name).extension().and_then(|extension| extension.to_str()).unwrap_or_default();
+	CONTENT_TYPES.iter().find(|(known, _)| *known == extension).map_or(OTHER_CONTENT, |(_, content_type)| content_type)
+}
+
+/// Does the module export a function of this name
+fn exports(module: &[u8], name: &str) -> bool {
+	wasmparser::Parser::new(0).parse_all(module).any(|payload| match payload {
+		Ok(wasmparser::Payload::ExportSection(exports)) => exports.into_iter().flatten().any(|export| export.name == name),
+		_ => false,
+	})
 }
 
 /// The page `warp dev` shows before any build succeeded: only dev.js, which shows the failure

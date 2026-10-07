@@ -1,0 +1,6 @@
+// a program serving its own page (card web-ssr, tests/web/test_web_server.rs): its routes and, at /, its page
+users = ["Ann", "Bo"]
+serve 18433 {
+	get "/api/users" { users }
+}
+ul{ li{ "users: " + count(users) } }
