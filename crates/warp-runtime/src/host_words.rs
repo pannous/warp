@@ -31,6 +31,8 @@ pub const CLIPBOARD_COUNT: &str = "clipboard count";
 pub const MOUSE_X: &str = "mouse_x";
 pub const MOUSE_Y: &str = "mouse_y";
 pub const MOUSE_DOWN: &str = "mouse_down";
+/// The local time of day in milliseconds since midnight, what the word `time` is compared with a duration (src/units.rs)
+pub const TIME_OF_DAY: &str = "time of day";
 pub const SYSTEM_VALUES: [(&str, bool); 8] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true), (CLIPBOARD_COUNT, false),
 	(MOUSE_X, false), (MOUSE_Y, false), (MOUSE_DOWN, true)];
 /// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)

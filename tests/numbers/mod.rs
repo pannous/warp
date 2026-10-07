@@ -47,3 +47,4 @@ mod test_norm;
 mod test_nan_observed;
 mod test_decimal_units;
 mod test_number_words;
+mod test_time_of_day;

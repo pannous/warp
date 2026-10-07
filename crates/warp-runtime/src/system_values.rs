@@ -9,7 +9,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES};
+use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY};
 
 const NOTIFICATION_TITLE: &str = "wasp";
 const READING_LIFETIME: Duration = Duration::from_secs(1);
@@ -22,6 +22,10 @@ thread_local! {
 
 /// The current value of a system value, read anew at most once per READING_LIFETIME
 pub fn read(name: &str) -> Result<i64, String> {
+	// the clock moves on: never a kept reading
+	if name == TIME_OF_DAY {
+		return Ok(crate::system_signals::millisecond_of_day());
+	}
 	let kept = READINGS.with(|readings| readings.borrow().get(name).filter(|(when, _)| when.elapsed() < READING_LIFETIME).map(|(_, value)| *value));
 	if let Some(value) = kept {
 		return Ok(value);

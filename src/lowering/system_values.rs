@@ -75,7 +75,7 @@ fn first_word(statement: &Node) -> String {
 }
 
 /// The names the program binds: assigned, defined, parameters of functions and lambdas
-fn bound_names(program: &Node) -> HashSet<String> {
+pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 	let mut bound = HashSet::new();
 	program.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, _) = part {
 		bound.extend(crate::variable_signals::symbols(target));
