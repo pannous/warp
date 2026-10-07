@@ -58,6 +58,9 @@ fn is_symbol(node: &Node, name: &str) -> bool {
 fn mentions_time(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(name) => name == "now",
+		// a key or member named now (`{now: 5}`, `interface c { now: () -> i64 }`, `x.now`) is no read of the time
+		Node::Key(key, Op::Colon, value) if matches!(key.drop_meta(), Node::Symbol(_)) => mentions_time(value),
+		Node::Key(owner, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => mentions_time(owner),
 		Node::Key(left, _, right) => mentions_time(left) || mentions_time(right),
 		Node::List(items, _, _) => {
 			items.first().is_some_and(|head| is_symbol(head, "date")) || items.iter().any(mentions_time)
