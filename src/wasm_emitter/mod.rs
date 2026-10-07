@@ -1,7 +1,7 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
 mod user_function_calls;
-mod component_adapters;
+pub(crate) mod component_adapters;
 mod arithmetic;
 mod globals;
 mod control_flow;

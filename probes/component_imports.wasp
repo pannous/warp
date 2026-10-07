@@ -1,0 +1,17 @@
+interface clock {
+    later: (i64) -> i64
+    shout: (string) -> string
+    say: (string) -> i32
+}
+component clocked {
+    import host: {
+        print: (string) -> ()
+        time: () -> i64
+        read: (string) -> string
+    }
+    export api: clock
+}
+export def later(x: i64) -> i64 { host.time() + x }
+export def shout(t: string) -> string { host.read(t) + "!" }
+export def say(t: string) -> i32 { host.print(t); count(t) }
+0
