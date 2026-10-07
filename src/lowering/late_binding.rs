@@ -288,6 +288,26 @@ pub(crate) fn functions_in(statement: &Node) -> Vec<UserFunctionDef> {
 	context.user_functions.into_values().collect()
 }
 
+/// `global n = 5` as a statement of a block (a function body) is `global n; n = 5`: n is main's, then set
+/// (card global-function-inside: the passes that read `global n` saw no name and n stayed the function's own)
+pub fn split_global_assignments(node: Node) -> Node {
+	let node = node.map_children(split_global_assignments);
+	let Node::List(items, Bracket::Curly, separator) = node else { return node };
+	let split = |item: Node| match item.drop_meta() {
+		Node::Key(keyword, Op::Colon, assignment) if matches!(keyword.drop_meta(), Node::Symbol(word) if word == GLOBAL) => match assignment.drop_meta() {
+			Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)) => {
+				vec![Node::Key(keyword.clone(), Op::Colon, name.clone()), assignment.as_ref().clone()]
+			}
+			_ => vec![item],
+		},
+		_ => vec![item],
+	};
+	let count = items.len();
+	let items: Vec<Node> = items.into_iter().flat_map(split).collect();
+	let separator = if items.len() > count && separator == Separator::None { Separator::Semicolon } else { separator };
+	Node::List(items, Bracket::Curly, separator)
+}
+
 /// `global y` (no value) as a statement of a function body: the function reads main's current y
 fn global_read(node: &Node) -> Option<&String> {
 	match node.drop_meta() {

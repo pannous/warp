@@ -30,7 +30,7 @@ impl WasmGcEmitter {
 		self.scope = saved_scope;
 		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values().cloned().collect();
 		for function in functions {
-			let enclosing = self.enclosing_scope(&function.name);
+			let enclosing = self.enclosing_scope(&function.name, &outer);
 			let captured: Vec<(String, Kind)> = match &enclosing {
 				// `outer·inner` reads outer's parameters and variables, main's where outer has none of that name
 				Some(enclosing) => {
@@ -92,10 +92,12 @@ impl WasmGcEmitter {
 	}
 
 	/// The parameters and variables of the function whose body defines `function` (`outer` for `outer·inner`), with the
-	/// kinds its compiled body gives them (compile_user_function_body)
-	pub(super) fn enclosing_scope(&self, function: &str) -> Option<Scope> {
+	/// kinds its compiled body gives them (compile_user_function_body); main's variables behind them, which outer reads
+	/// too (`under = paper` copies main's kind, card captured-copy)
+	pub(super) fn enclosing_scope(&self, function: &str, main: &Scope) -> Option<Scope> {
 		let enclosing = self.ctx.enclosing_functions.get(function).and_then(|name| self.ctx.user_functions.get(name))?;
 		let mut scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
+		scope.parent = Some(Box::new(main.clone()));
 		scope.globals = self.ctx.declared_globals.clone();
 		for (index, param) in enclosing.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(&enclosing.name, index) { Kind::List } else { param_kind(param) };
