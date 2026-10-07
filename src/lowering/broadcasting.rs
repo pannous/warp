@@ -103,7 +103,7 @@ fn all_marked(argument: &Node) -> Option<&Node> {
 }
 
 /// The function and the list of `f all xs`, also as the parser nests a known function's argument, `f (all xs)`
-fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
+pub(crate) fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
 	let is_all = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == ALL_WORD);
 	match items {
 		[function, all, list] if is_all(all) => Some((function, list)),
