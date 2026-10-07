@@ -1950,14 +1950,18 @@ impl WasmGcEmitter {
 			s.call(f, "map_find");
 			Self::emit_list(f, &[I::BrOnNonNull(0), I::LocalGet(2), I::End]);
 		});
-		// map_without_cells(cells, key): the cells without the key's entry, the cells before it copied, the rest shared
+		// map_without_cells(cells, key): the cells without the key's entry (or, of a list, the first element equal to the
+		// key: `xs.remove(v)`), the cells before it copied, the rest shared
 		let without_cells = next_index(self);
 		self.runtime_function(MAP_WITHOUT_CELLS, vec![nullable, node_ref], vec![nullable], vec![], |s, f| {
 			Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
 			s.emit_field(f, 0, 1);
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(1)]);
 			s.call(f, "map_entry_has_key");
-			f.instruction(&I::If(BlockType::Empty));
+			s.emit_field(f, 0, 1);
+			f.instruction(&I::LocalGet(1));
+			s.call(f, VALUES_EQUAL);
+			Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
 			s.emit_field(f, 0, 2);
 			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_field(f, 0, 0);
@@ -1976,6 +1980,18 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::End, I::Else, I::Block(BlockType::Result(node_ref)), I::LocalGet(0), I::LocalGet(1), I::Call(without_cells), I::BrOnNonNull(0)]);
 			s.call(f, "new_empty");
 			Self::emit_list(f, &[I::End, I::End]);
+		});
+		// removed_value(collection, key): what `collection.remove(key)` gives, of a map the key's value (ø if absent), of
+		// a list the list without the first element equal to the key (the static kinds don't tell a map from a list)
+		self.runtime_function(crate::analyzer::REMOVED_VALUE_CALL, vec![node_ref, node_ref], vec![node_ref], vec![], |s, f| {
+			f.instruction(&I::LocalGet(0));
+			s.call(f, IS_MAP);
+			Self::emit_list(f, &[I::If(BlockType::Result(node_ref)), I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "new_empty");
+			s.call(f, MAP_GET_OR);
+			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, MAP_WITHOUT);
+			f.instruction(&I::End);
 		});
 	}
 }

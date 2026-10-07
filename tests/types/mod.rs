@@ -6,6 +6,8 @@ mod test_generic_types;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_person_struct;
 mod test_records_classes;
+mod test_class_destructuring;
+mod test_class_json;
 mod test_class_methods;
 mod test_class_method_changes;
 mod test_mutating_methods;
@@ -67,3 +69,7 @@ mod test_block_data_paths;
 mod test_int_declaration_stays_whole;
 mod test_collection_declarations;
 mod test_type_colon_block;
+mod test_recursive_fields;
+mod test_interface_signatures;
+mod test_class_field_names;
+mod test_list_annotations;

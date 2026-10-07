@@ -9,10 +9,10 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 17] = [
+const BUILTIN_CALLS: [&str; 18] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
-	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF,
+	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
 ];
 
 const PRINT: &str = "print";
@@ -66,7 +66,7 @@ impl WasmGcEmitter {
 			|| super::text_builtins::is_text_builtin(name)
 			// a C function resolves once imported (`use c`, `import f from "c"`, libm's implicit imports): known but not
 			// imported it is an error that says so (ffi::undefined_function_message), never data
-			|| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c")
+			|| crate::ffi::get_ffi_signature(name).is_some_and(|signature| !matches!(signature.library, "c" | "m"))
 	}
 
 	/// `reverse(xs)`, `split(text, separator)` …: the library words with a runtime function; returns whether it was one
@@ -304,6 +304,14 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, count);
 				self.emit_node_instructions(func, zero);
 				self.emit_call(func, crate::analyzer::ZERO_FILL_CALL);
+				return;
+			}
+		}
+		if let [Node::Symbol(call), collection, key] = items {
+			if call == crate::analyzer::REMOVED_VALUE_CALL {
+				self.emit_node_instructions(func, collection);
+				self.emit_node_instructions(func, key);
+				self.emit_call(func, crate::analyzer::REMOVED_VALUE_CALL);
 				return;
 			}
 		}
@@ -720,11 +728,12 @@ impl WasmGcEmitter {
 		if self.emit_discarded_branches(func, item) {
 			return;
 		}
+		let destructured = self.destructured_kind(item);
 		if let Some((name, value)) = self.typed_list_store(item) {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
-		} else if self.is_float_assignment(item) || self.is_float_call(item) {
+		} else if self.is_float_assignment(item) || self.is_float_call(item) || destructured.is_some_and(|kind| kind.is_float()) {
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
-		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) || matches!(item.drop_meta(), Node::Empty) {
+		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) || matches!(item.drop_meta(), Node::Empty) || destructured.is_some_and(|kind| kind.is_ref()) {
 			self.emit_node_instructions(func, item);
 		} else {
 			emit(self, func, item);

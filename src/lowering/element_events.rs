@@ -2,12 +2,21 @@
 //! becomes the main-level handler `on click·1 { count += 1 }` (a page event of its own, event_signals.rs) and the element
 //! the attribute `data-wasp-click: "1"`. The page calls handler 1 on a click inside that element and shows the
 //! program's markup anew (playground.js, worker.js showHandled).
+//! `input{ bind: name }` (card web-bind) is `input{ value: name on input { name = event.value } }`; a checkbox or radio
+//! binds `checked` to `event.checked`.
 
 use crate::event_signals::{ELEMENT_EVENT_JOINER, PAGE_EVENTS};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 const ON_WORD: &str = "on";
+const BIND_WORD: &str = "bind";
+const INPUT_EVENT: &str = "input";
+const TYPE_ATTRIBUTE: &str = "type";
+/// input types whose binding is `checked`, not `value`
+const CHECKED_TYPES: [&str; 2] = ["checkbox", "radio"];
+const VALUE: &str = "value";
+const CHECKED: &str = "checked";
 /// `data-wasp-click`: the attribute naming an element's handler of an event
 pub const HANDLER_ATTRIBUTE_PREFIX: &str = "data-wasp-";
 
@@ -29,8 +38,31 @@ pub fn lower(program: Node) -> Node {
 
 pub(crate) fn has_element_handler(node: &Node) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= element_items(part).is_some_and(|items| (0..items.len()).any(|index| handler_at(items, index).is_some())));
+	node.visit(&mut |part| found |= element_items(part).is_some_and(|items| (0..items.len()).any(|index| handler_at(items, index).is_some() || bound_at(items, index).is_some())));
 	found
+}
+
+/// `bind: name` at `index` of an element's items: the bound variable
+fn bound_at(items: &[Node], index: usize) -> Option<Node> {
+	match items.get(index)?.drop_meta() {
+		Node::Key(word, Op::Colon, variable) if matches!(word.drop_meta(), Node::Symbol(word) if word == BIND_WORD) => Some(variable.as_ref().clone()),
+		_ => None,
+	}
+}
+
+/// `value`, or `checked` for a checkbox or radio (`type: "checkbox"`)
+fn bound_property(items: &[Node]) -> &'static str {
+	let checks = items.iter().any(|item| matches!(item.drop_meta(), Node::Key(name, Op::Colon, kind)
+		if name.drop_meta().name() == TYPE_ATTRIBUTE && CHECKED_TYPES.contains(&kind.drop_meta().name().as_str())));
+	if checks { CHECKED } else { VALUE }
+}
+
+/// `bind: name` as the attribute `value: name` and the handler `on input { name = event.value }`
+fn bound(variable: Node, property: &str) -> [Node; 4] {
+	let attribute = Node::Key(Box::new(Node::Symbol(property.to_string())), Op::Colon, Box::new(variable.clone()));
+	let read = Node::Key(Box::new(Node::Symbol(crate::event_signals::EVENT_WORD.to_string())), Op::Dot, Box::new(Node::Symbol(property.to_string())));
+	let update = Node::List(vec![Node::Key(Box::new(variable), Op::Assign, Box::new(read))], Bracket::Curly, Separator::Semicolon);
+	[attribute, Node::Symbol(ON_WORD.to_string()), Node::Symbol(INPUT_EVENT.to_string()), update]
 }
 
 /// The items of an element's block: `button{ … }` (a block of anything else is code, its `on click` page-wide)
@@ -77,6 +109,11 @@ impl Marker {
 
 	/// An element's items with its handlers taken out and the element marked with their numbers
 	fn marked_items(&mut self, items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
+		let property = bound_property(&items);
+		let items: Vec<Node> = items.iter().enumerate().flat_map(|(index, item)| match bound_at(&items, index) {
+			Some(variable) => bound(variable, property).to_vec(),
+			None => vec![item.clone()],
+		}).collect();
 		let mut kept = vec![];
 		let mut index = 0;
 		while index < items.len() {

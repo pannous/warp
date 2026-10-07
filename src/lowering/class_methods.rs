@@ -105,6 +105,7 @@ pub fn lower(node: Node) -> Node {
 	let node = with_witness_methods(node);
 	let node = with_members(node);
 	let node = with_class_attributes(class_typed_declarations(node));
+	let node = rendered_components(destructurings(from_objects(node)));
 	let node = operator_calls(node);
 	let node = match with_mixins(node) {
 		Ok(node) => node,
@@ -189,6 +190,400 @@ fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String,
 		}
 		other => other.map_children(|child| with_method_aliases(child, instances)),
 	}
+}
+
+/// json's word for a program with classes (std/json.wasp): the classes' names go along, so an instance is its fields
+const TO_JSON_WORD: &str = "to_json";
+const TO_JSON_OF_CLASSES_WORD: &str = "to_json_of_classes";
+/// Other languages' calls giving an instance's json or its fields: Kotlin's `Json.encodeToString(p)` is to_json(p),
+/// Python's `dataclasses.asdict(p)` the instance itself (its fields read like a map's entries)
+const SERIALIZER_ALIASES: [(&str, &str, &str); 2] = [("Json", "encodeToString", TO_JSON_WORD), ("dataclasses", "asdict", "")];
+
+/// `to_json(p)` in a program declaring classes: `to_json_of_classes(p, ["Point", …])`, after std_aliases made
+/// `JSON.stringify(p)` and `json.dumps(p)` to_json
+pub fn lower_json_classes(node: Node) -> Node {
+	let mut classes = vec![];
+	node.visit(&mut |part| if let Node::Type { name, .. } = part {
+		classes.push(Node::Text(name.drop_meta().name()));
+	});
+	if classes.is_empty() {
+		return node;
+	}
+	with_json_classes(node, &Node::List(classes, Bracket::Square, Separator::Space))
+}
+
+fn with_json_classes(node: Node, classes: &Node) -> Node {
+	let serializer = |module: &Node, member: &Node| SERIALIZER_ALIASES.iter().find(|(written_module, written_member, _)| module.drop_meta().name() == *written_module && leading_name(member) == *written_member);
+	match node {
+		Node::Key(module, Op::Dot, member) if serializer(&module, &member).is_some() => {
+			let (written_module, written_member, word) = serializer(&module, &member).expect("guarded");
+			let Node::List(items, Bracket::Round, _) = member.drop_meta() else { return Node::Key(module, Op::Dot, member) };
+			let argument = items.get(1).cloned().unwrap_or(Node::Empty);
+			crate::diagnostic::note_alias(&format!("{written_module}.{written_member}"), if word.is_empty() { "the instance" } else { word });
+			match word.is_empty() {
+				true => with_json_classes(argument, classes),
+				false => with_json_classes(Node::List(vec![Node::Symbol(word.to_string()), argument], Bracket::Round, Separator::None), classes),
+			}
+		}
+		Node::List(items, Bracket::Round, separator) if items.len() == 2 && items[0].drop_meta().name() == TO_JSON_WORD => {
+			let value = with_json_classes(items[1].clone(), classes);
+			Node::List(vec![Node::Symbol(TO_JSON_OF_CLASSES_WORD.to_string()), value, classes.clone()], Bracket::Round, separator)
+		}
+		other => other.map_children(|child| with_json_classes(child, classes)),
+	}
+}
+
+/// A class component's method giving its markup (Lit, React classes); other frameworks' names for it, with a note:
+/// Backbone's and Mithril's `view`, Angular's `template`, Flutter's `build`
+const RENDER_WORD: &str = "render";
+const RENDER_ALIASES: [&str; 3] = ["view", "template", "build"];
+
+/// Class components (notes/web_framework.md step 4): an instance of a class with a render() method is its markup where
+/// markup is expected, a child of an element (`div{ Greeting("Ann") }`) or the program's value; anywhere else it stays
+/// an instance
+fn rendered_components(node: Node) -> Node {
+	let node = with_render_aliases(node);
+	let mut components = vec![];
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		if class_items(body).iter().filter_map(method_parts).any(|(method, _, _)| method == RENDER_WORD) {
+			components.push(name.drop_meta().name());
+		}
+	});
+	if components.is_empty() {
+		return node;
+	}
+	let node = with_rendered_children(node, &components);
+	match node {
+		Node::List(mut statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			if let Some(last) = statements.pop() {
+				statements.push(rendered(last, &components));
+			}
+			Node::List(statements, Bracket::None, separator)
+		}
+		single => rendered(single, &components),
+	}
+}
+
+/// `view() := …` in a class without its own render: `render() := …`
+fn with_render_aliases(node: Node) -> Node {
+	match node {
+		Node::Type { name, body } => {
+			let items = class_items(&body);
+			let methods: Vec<String> = items.iter().filter_map(method_parts).map(|(method, _, _)| method).collect();
+			let alias = RENDER_ALIASES.iter().find(|alias| methods.iter().any(|method| method == *alias));
+			match alias.filter(|_| !methods.iter().any(|method| method == RENDER_WORD)) {
+				Some(alias) => {
+					crate::diagnostic::note_alias(alias, RENDER_WORD);
+					let items = items.into_iter().map(|item| match method_parts(&item) {
+						Some((method, _, _)) if method == *alias => renamed(&item, RENDER_WORD),
+						_ => item,
+					}).collect();
+					Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
+				}
+				None => Node::Type { name, body },
+			}
+		}
+		other => other.map_children(with_render_aliases),
+	}
+}
+
+/// The children of each element rendered
+fn with_rendered_children(node: Node, components: &[String]) -> Node {
+	match node {
+		Node::Key(tag, op @ (Op::None | Op::Colon), children) if crate::html::is_element_tag(&tag.drop_meta().name()) && matches!(children.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			let Node::List(items, bracket, separator) = children.drop_meta().clone() else { unreachable!("guarded") };
+			let items = items.into_iter().map(|item| rendered(with_rendered_children(item, components), components)).collect();
+			Node::Key(tag, op, Box::new(Node::List(items, bracket, separator)))
+		}
+		other => other.map_children(|child| with_rendered_children(child, components)),
+	}
+}
+
+/// A construction of a component as `Greeting("Ann").render()`
+fn rendered(node: Node, components: &[String]) -> Node {
+	let is_construction = matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|class| components.contains(&class.drop_meta().name())));
+	match is_construction {
+		true => Node::Key(Box::new(node), Op::Dot, Box::new(Node::List(vec![Node::Symbol(RENDER_WORD.to_string())], Bracket::Round, Separator::None))),
+		false => node,
+	}
+}
+
+/// `Point.from_json(t)` reads the json, as `parse_json(t) as Point` (std json)
+const FROM_JSON_WORD: &str = "from_json";
+const PARSE_JSON_WORD: &str = "parse_json";
+/// The variable holding the object an instance is built from: `Point·from`
+const FROM_SUFFIX: &str = "·from";
+/// The element of a list of instances built from objects: `Point·element`
+const ELEMENT_SUFFIX: &str = "·element";
+const MAP_WORD: &str = "map";
+/// The variable of a list of instances built before its construction: `elements·1`
+const ELEMENTS_WORD: &str = "elements";
+
+/// `object as Point`, `parse_json(t) as Point`, `Point.from_json(t)`: the instance of the object's fields,
+/// `(Point·from = object; Point(Point·from.x, Point·from.y))`; a field of a class type is built from its path
+/// (`Line(Point(Line·from.a.x, …), …)`: a construction's arguments are its fields' data, no statements)
+fn from_objects(node: Node) -> Node {
+	let fields = class_fields(&node);
+	if fields.is_empty() {
+		return node;
+	}
+	with_objects_as_instances(node, &fields)
+}
+
+/// Each class's fields in order, with their type names
+fn class_fields(node: &Node) -> std::collections::HashMap<String, Vec<(String, String)>> {
+	let mut fields = std::collections::HashMap::new();
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		let typed = class_items(body).iter().filter(|item| method_parts(item).is_none()).filter_map(|item| Some((field_name(item)?, field_type_name(item)))).collect();
+		fields.insert(name.drop_meta().name(), typed);
+	});
+	fields
+}
+
+/// The variable holding what is taken apart: `{x, y} = p` is `(parts·from = p; x = parts·from.x; y = parts·from.y)`
+const PARTS_WORD: &str = "parts·from";
+
+/// Destructuring (JS, Python, Rust, Kotlin): `{x, y} = p` and `{x: a} = p` by field name (maps too); `(a, b) = p` and
+/// `a, b = p` of an instance in field order; match arms `Point{x, y} => …` and `Point(x, y) => …` a type test binding
+/// the fields
+fn destructurings(node: Node) -> Node {
+	let fields = class_fields(&node);
+	let classes: Vec<String> = fields.keys().cloned().collect();
+	let instances = instance_classes(&node, &classes);
+	let class_of = |value: &Node| match value.drop_meta() {
+		Node::Symbol(variable) => instances.get(variable).cloned(),
+		other => constructed_class(other).filter(|class| fields.contains_key(class)),
+	};
+	taken_apart(node, &fields, &class_of)
+}
+
+fn taken_apart(node: Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>, class_of: &dyn Fn(&Node) -> Option<String>) -> Node {
+	let recurse = |child: Node| taken_apart(child, fields, class_of);
+	let subject = Node::Symbol(PARTS_WORD.to_string());
+	match node {
+		// `{x, start: Point{x: a}} = l`: names only, no constant to test (a class in it is no test either)
+		Node::Key(target, Op::Assign, value) if matched_fields(&target, &subject, fields).is_some_and(|matched| matched.tests.is_empty()) => {
+			let matched = matched_fields(&target, &subject, fields).expect("guarded");
+			bound_parts(recurse(*value), &matched.bindings, None)
+		}
+		Node::Key(target, Op::Assign, value) if positional_names(&target).is_some() && class_of(&value).is_some() => {
+			let names = positional_names(&target).expect("guarded");
+			let class = class_of(&value).expect("guarded");
+			if fields[&class].len() != names.len() {
+				return Node::Key(target, Op::Assign, value);
+			}
+			let bindings = fields[&class].iter().zip(names).map(|((field, _), name)| (field_of(&subject, field), name)).collect::<Vec<_>>();
+			bound_parts(recurse(*value), &bindings, None)
+		}
+		// Python's `a, b = p`: the parser reads `a, (b = p)`
+		Node::List(items, bracket, separator) if separator == Separator::Colon && last_assigns_instance(&items, class_of) => {
+			let Some(Node::Key(last, Op::Assign, value)) = items.last().map(|item| item.drop_meta().clone()) else { return Node::List(items, bracket, separator) };
+			let names = [&items[..items.len() - 1], &[*last]].concat();
+			let target = Node::List(names, Bracket::Round, Separator::Colon);
+			recurse(Node::Key(Box::new(target), Op::Assign, value))
+		}
+		Node::Key(pattern, Op::FatArrow, body) if is_class_pattern(&pattern, fields) => {
+			let mut matched = Matched::default();
+			if matched_pattern(&pattern, &subject, fields, &mut matched).is_none() {
+				return Node::Key(pattern, Op::FatArrow, Box::new(recurse(*body)));
+			}
+			// `parts·from if parts·from is Point and parts·from.x == 0` (`is` compares like ==, a class name tests the type)
+			let test = matched.class_tests.into_iter().chain(matched.tests).reduce(|all, test| Node::Key(Box::new(all), Op::And, Box::new(test))).expect("a class pattern tests its class");
+			let guard = Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::If, Box::new(test))), Op::Then, Box::new(subject.clone()));
+			Node::Key(Box::new(guard), Op::FatArrow, Box::new(bound_parts(subject, &matched.bindings, Some(recurse(*body)))))
+		}
+		other => other.map_children(recurse),
+	}
+}
+
+/// What a pattern asks of its subject: class tests (`p is Point`), value tests (`p.x == 0`) and the variables it
+/// binds, each with its path
+#[derive(Default)]
+struct Matched {
+	class_tests: Vec<Node>,
+	tests: Vec<Node>,
+	bindings: Vec<(Node, String)>,
+}
+
+fn field_of(path: &Node, field: &str) -> Node {
+	Node::Key(Box::new(path.clone()), Op::Dot, Box::new(Node::Symbol(field.to_string())))
+}
+
+/// `Point{…}` or `Point(…)` of a declared class
+fn is_class_pattern(pattern: &Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> bool {
+	match pattern.drop_meta() {
+		Node::Key(class, Op::Colon | Op::None, parts) => fields.contains_key(&class.drop_meta().name()) && matches!(parts.drop_meta(), Node::List(_, Bracket::Curly, _)),
+		Node::List(items, Bracket::Round, _) => items.len() > 1 && fields.contains_key(&items[0].drop_meta().name()),
+		_ => false,
+	}
+}
+
+/// A pattern at `path`: `_` matches anything, a name binds, a number or text is compared, `Point{x, y: b}` and
+/// `Point(a, 0)` test the class and match each field; None for anything else (the arm stays as written)
+fn matched_pattern(pattern: &Node, path: &Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>, matched: &mut Matched) -> Option<()> {
+	let class_test = |class: &str| Node::Key(Box::new(path.clone()), Op::Eq, Box::new(Node::Symbol(class.to_string())));
+	match pattern.drop_meta() {
+		Node::Symbol(name) if name == "_" => {}
+		Node::Symbol(name) if !fields.contains_key(name) => matched.bindings.push((path.clone(), name.clone())),
+		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => matched.tests.push(Node::Key(Box::new(path.clone()), Op::Eq, Box::new(pattern.drop_meta().clone()))),
+		Node::Key(class, Op::Colon | Op::None, parts) if fields.contains_key(&class.drop_meta().name()) => {
+			matched.class_tests.push(class_test(&class.drop_meta().name()));
+			let inner = matched_fields(parts, path, fields)?;
+			matched.class_tests.extend(inner.class_tests);
+			matched.tests.extend(inner.tests);
+			matched.bindings.extend(inner.bindings);
+		}
+		Node::List(items, Bracket::Round, _) if items.len() > 1 && fields.contains_key(&items[0].drop_meta().name()) => {
+			let class = items[0].drop_meta().name();
+			if items.len() - 1 != fields[&class].len() {
+				return None;
+			}
+			matched.class_tests.push(class_test(&class));
+			for ((field, _), part) in fields[&class].iter().zip(&items[1..]) {
+				matched_pattern(part, &field_of(path, field), fields, matched)?;
+			}
+		}
+		_ => return None,
+	}
+	Some(())
+}
+
+/// `{x, y: b, from: Point{…}}` at `path`: each field by name, a field with a pattern after its colon matched by it
+fn matched_fields(parts: &Node, path: &Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Option<Matched> {
+	let Node::List(items, Bracket::Curly, _) = parts.drop_meta() else { return None };
+	if items.is_empty() {
+		return None;
+	}
+	let mut matched = Matched::default();
+	for item in items {
+		match item.drop_meta() {
+			Node::Symbol(name) => matched.bindings.push((field_of(path, name), name.clone())),
+			Node::Key(field, Op::Colon, part) if matches!(field.drop_meta(), Node::Symbol(_)) => matched_pattern(part, &field_of(path, &field.drop_meta().name()), fields, &mut matched)?,
+			_ => return None,
+		}
+	}
+	Some(matched)
+}
+
+/// `(parts·from = value; x = parts·from.x; …; body)`
+fn bound_parts(value: Node, bindings: &[(Node, String)], body: Option<Node>) -> Node {
+	let subject = Node::Symbol(PARTS_WORD.to_string());
+	let mut statements = match value.drop_meta() {
+		Node::Symbol(name) if name == PARTS_WORD => vec![],
+		_ => vec![Node::Key(Box::new(subject), Op::Assign, Box::new(value))],
+	};
+	statements.extend(bindings.iter().map(|(path, name)| Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(path.clone()))));
+	statements.extend(body);
+	Node::List(statements, Bracket::Round, Separator::Semicolon)
+}
+
+/// `(a, b)`: the names in order
+fn positional_names(target: &Node) -> Option<Vec<String>> {
+	let Node::List(items, Bracket::Round, _) = target.drop_meta() else { return None };
+	(items.len() > 1).then_some(())?;
+	items.iter().map(|item| match item.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		_ => None,
+	}).collect()
+}
+
+/// `a, (b = p)` with p an instance
+fn last_assigns_instance(items: &[Node], class_of: &dyn Fn(&Node) -> Option<String>) -> bool {
+	let leading_names = items[..items.len().saturating_sub(1)].iter().all(|item| matches!(item.drop_meta(), Node::Symbol(_)));
+	leading_names && items.len() > 1 && matches!(items.last().map(Node::drop_meta), Some(Node::Key(name, Op::Assign, value)) if matches!(name.drop_meta(), Node::Symbol(_)) && class_of(value).is_some())
+}
+
+
+/// A map literal `{x:1 y:2}` or parsed json `parse_json(t)`: what `as Point` builds an instance from
+fn is_plain_object(object: &Node) -> bool {
+	match object.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => true,
+		Node::List(items, Bracket::Round, _) => items.first().is_some_and(|word| word.drop_meta().name() == PARSE_JSON_WORD),
+		_ => false,
+	}
+}
+
+/// `int` of `x:int`, `[Point]` of `points:[Point]`, the empty name for an untyped field
+fn field_type_name(item: &Node) -> String {
+	match item.drop_meta() {
+		Node::Key(_, Op::Colon, field_type) => match field_type.drop_meta() {
+			Node::Type { name, .. } => name.drop_meta().name(),
+			Node::List(items, Bracket::Square, _) if items.len() == 1 => format!("[{}]", items[0].drop_meta().name()),
+			other => other.name(),
+		},
+		Node::Key(field, Op::Assign, _) => field_type_name(field),
+		_ => String::new(),
+	}
+}
+
+fn with_objects_as_instances(node: Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+	let class_of = |node: &Node| Some(node.drop_meta().name()).filter(|name| fields.contains_key(name));
+	match node {
+		// `parse_json(t) as [Point]`: each element an instance
+		Node::Key(object, Op::As, list) if matches!(list.drop_meta(), Node::List(items, Bracket::Square, _) if items.len() == 1 && class_of(&items[0]).is_some()) => {
+			let class = list.drop_meta().children()[0].drop_meta().name();
+			instances_of(with_objects_as_instances(*object, fields), &class, fields)
+		}
+		// only an object that is no instance yet: `render(t) as docx` picks render's overload (overloads.rs)
+		Node::Key(object, Op::As, class) if class_of(&class).is_some() && is_plain_object(&object) => {
+			let class = class.drop_meta().name();
+			instance_from(with_objects_as_instances(*object, fields), &class, fields)
+		}
+		Node::Key(class, Op::Dot, member) if class_of(&class).is_some() && leading_name(&member) == FROM_JSON_WORD => {
+			let arguments = match member.drop_meta() {
+				Node::List(items, Bracket::Round, _) => items[1..].iter().cloned().map(|argument| with_objects_as_instances(argument, fields)).collect(),
+				_ => vec![],
+			};
+			let parsed = Node::List([vec![Node::Symbol(PARSE_JSON_WORD.to_string())], arguments].concat(), Bracket::Round, Separator::None);
+			let class = class.drop_meta().name();
+			instance_from(parsed, &class, fields)
+		}
+		other => other.map_children(|child| with_objects_as_instances(child, fields)),
+	}
+}
+
+fn instance_from(object: Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+	let source = Node::Symbol(format!("{class}{FROM_SUFFIX}"));
+	let mut statements = vec![Node::Key(Box::new(source.clone()), Op::Assign, Box::new(object))];
+	statements.extend(statements_of(built_instance(&source, class, fields)));
+	Node::List(statements, Bracket::Round, Separator::Semicolon)
+}
+
+/// The construction of `instance_of`, after the lists of instances it takes (a construction's arguments are data:
+/// the `map` building a list runs before, into `elements·1`, …)
+fn built_instance(path: &Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+	let mut lists = vec![];
+	let construction = instance_of(path, class, fields, &mut lists);
+	match lists.is_empty() {
+		true => construction,
+		false => Node::List([lists, vec![construction]].concat(), Bracket::Round, Separator::Semicolon),
+	}
+}
+
+/// `Point(path.x, path.y)`, a field of a class type by its own path, a list of instances by its variable in `lists`
+fn instance_of(path: &Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>, lists: &mut Vec<Node>) -> Node {
+	let mut values = vec![];
+	for (field, field_type) in &fields[class] {
+		let value = Node::Key(Box::new(path.clone()), Op::Dot, Box::new(Node::Symbol(field.clone())));
+		let element_class = field_type.strip_prefix('[').and_then(|inner| inner.strip_suffix(']')).filter(|inner| fields.contains_key(*inner));
+		values.push(match (fields.contains_key(field_type), element_class) {
+			(true, _) => instance_of(&value, field_type, fields, lists),
+			(false, Some(element_class)) => {
+				let elements = Node::Symbol(format!("{ELEMENTS_WORD}·{}", lists.len() + 1));
+				lists.push(Node::Key(Box::new(elements.clone()), Op::Assign, Box::new(instances_of(value, element_class, fields))));
+				elements
+			}
+			(false, None) => value,
+		});
+	}
+	Node::List(std::iter::once(Node::Symbol(class.to_string())).chain(values).collect(), Bracket::Round, Separator::None)
+}
+
+/// `list.map(Point·element => Point(Point·element.x, …))`
+fn instances_of(list: Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+	let element = Node::Symbol(format!("{class}{ELEMENT_SUFFIX}"));
+	let lambda = Node::Key(Box::new(element.clone()), Op::FatArrow, Box::new(built_instance(&element, class, fields)));
+	Node::Key(Box::new(list), Op::Dot, Box::new(Node::List(vec![Node::Symbol(MAP_WORD.to_string()), lambda], Bracket::Round, Separator::None)))
 }
 
 /// A method named like a type word (`double() := x*2`, P142: class methods are always allowed) or like a list
@@ -898,6 +1293,8 @@ fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 			let arguments = items.into_iter().map(|item| constructed_from_braces(item, classes));
 			Node::List([vec![*class]].into_iter().flatten().chain(arguments).collect(), Bracket::Round, Separator::None)
 		}
+		// a match arm's `Point{x, y} =>` is a pattern (destructurings), no construction
+		Node::Key(pattern, Op::FatArrow, body) => Node::Key(pattern, Op::FatArrow, Box::new(constructed_from_braces(*body, classes))),
 		other => other.map_children(|child| constructed_from_braces(child, classes)),
 	}
 }
@@ -1546,6 +1943,8 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 	let getters: Vec<&String> = members.methods.iter().filter(|(_, getter)| *getter).map(|(name, _)| name).filter(|name| unshadowed(name)).collect();
 	let statics: Vec<&String> = members.statics.iter().filter(|name| unshadowed(name)).collect();
 	let readable = Readable { class, fields: [fields, getters].concat(), methods, statics };
+	// the holes of `"#\(n)"` as code first, so a field in one is read from self too
+	let body = crate::injection::lower_templates(body).map(crate::interpolation::lower).unwrap_or_else(|error| error);
 	let body = receiver_reads(body, &readable);
 	let receiver = Node::Symbol(RECEIVER.to_string());
 	let changes = match changes_receiver(&body) {

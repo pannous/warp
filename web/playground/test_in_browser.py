@@ -11,7 +11,8 @@ Besides the repository it serves /__stub__?status=…&body=… (that response, f
 src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
 import functools, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse
 
-PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "8733"))
+# a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
+PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", "2")
 PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
 # one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
@@ -95,9 +96,21 @@ def serve(binary):
 			pass
 	class Server(http.server.ThreadingHTTPServer):
 		request_queue_size = 512  # every worker fetches the binary at once
-	server = Server(("127.0.0.1", PORT), functools.partial(Handler, directory=REPOSITORY))
+	global PORT
+	try:
+		server = Server(("127.0.0.1", PORT), functools.partial(Handler, directory=REPOSITORY))
+	except OSError as busy:
+		sys.exit(f"error: port {PORT} (WARP_BROWSER_TEST_PORT) is taken{port_holder(PORT)}: {busy.strerror}; unset it for a free port")
+	PORT = server.server_address[1]
 	threading.Thread(target=server.serve_forever, daemon=True).start()
 	return server
+
+
+def port_holder(port):
+	"""` by PID 123 (python3 …)`: the process listening on the port, as lsof names it"""
+	found = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-Fpc"], capture_output=True, text=True).stdout.split()
+	fields = {line[0]: line[1:] for line in found if line[:1] in ("p", "c")}
+	return f" by PID {fields['p']} ({fields.get('c', '?')})" if "p" in fields else ""
 
 
 def open_page(url):
@@ -129,7 +142,7 @@ def browser(*arguments):
 
 def show_example(name):
 	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
-	`clicks` also the value after clicking those buttons, whether every element shown stayed (`kept`) and kept its key (`keyed`)"""
+	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons, whether every element shown stayed (`kept`) and kept its key (`keyed`)"""
 	script = f"""(async () => {{
 		const name = {json.dumps(name)};
 		await playground.chooseExample(name);
@@ -137,10 +150,17 @@ def show_example(name):
 		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
 		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent }};
 		const clicks = EXAMPLES[name].clicks ?? [];
-		if (!clicks.length) return JSON.stringify(shown);
+		const typed = EXAMPLES[name].typed;
+		if (!clicks.length && typed === undefined) return JSON.stringify(shown);
 		const rendered = document.getElementById("rendered").shadowRoot;
 		const elements = [...rendered.querySelectorAll("*")];
 		const keys = elements.map(element => element.getAttribute("data-wasp-key"));
+		const field = rendered.querySelector("input");
+		if (typed !== undefined && field) {{
+			field.value = typed;
+			field.dispatchEvent(new Event("input", {{ bubbles: true, composed: true }}));
+			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
+		}}
 		for (const text of clicks) {{
 			[...rendered.querySelectorAll("button")].find(button => button.textContent === text)?.click();
 			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));

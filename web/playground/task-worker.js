@@ -3,18 +3,21 @@
 // starting program waits on with Atomics.wait.
 
 importScripts("reader.js", "host.js", "components.js");
-self.postMessage("ready"); // the pool takes this Worker only once it has loaded (host.js prepareTaskPool)
+self.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host.js prepareTaskPool)
 
-self.onmessage = ({ data: { module, name, ints, values, shared, arrays, captured, control, channels } }) => {
+self.onmessage = ({ data }) => data.fetch ? fetchInto(data) : runTaskInto(data);
+
+function runTaskInto({ module, name, ints, values, shared, arrays, captured, control, channels }) {
 	let output = "";
 	const hooks = { print: text => { output += text; }, panicked: text => { output += text; } };
 	const record = runTask(module, hooks, [], name, ints, values, arrays, captured, control, channels);
 	if (typeof record.value === "bigint") record.ints = true; // a function of Ints: its Int result as a tree
-	const reply = utf8.encode(JSON.stringify({ ...record, value: taskTree(record.value), output }));
-	if (TASK_HEADER + reply.length > shared.byteLength) shared.grow(TASK_HEADER + reply.length);
-	new Uint8Array(shared, TASK_HEADER, reply.length).set(reply);
-	const header = new Int32Array(shared, 0, 2);
-	header[1] = reply.length;
-	Atomics.store(header, 0, 1);
-	Atomics.notify(header, 0);
-};
+	writeShared(shared, { ...record, value: taskTree(record.value), output });
+}
+
+// `users := fetch url` of a running program (host.js startFetch): the reply goes into shared memory, which the program
+// reads at its check points, and a message tells the program's Worker once it is back in its event loop
+async function fetchInto({ fetch: url, shared }) {
+	writeShared(shared, await fetchReplyOf(url));
+	self.postMessage(FETCH_DONE);
+}

@@ -19,13 +19,19 @@ const ELEMENTS: [&str; 74] = [
 /// Elements without content or closing tag
 const VOID_ELEMENTS: [&str; 9] = ["br", "hr", "img", "input", "meta", "link", "base", "source", "col"];
 /// Names that are attributes when their value is plain (`title` is the element only in head)
-const ATTRIBUTES: [&str; 40] = [
+const ATTRIBUTES: [&str; 42] = [
 	"class", "id", "href", "src", "alt", "title", "style", "type", "name", "value", "for", "rel", "charset", "content",
 	"lang", "dir", "width", "height", "placeholder", "action", "method", "target", "disabled", "checked", "selected",
-	"readonly", "required", "min", "max", "step", "rows", "cols", "colspan", "rowspan", "role", "tabindex", "hidden",
+	"readonly", "required", "multiple", "autofocus", "min", "max", "step", "rows", "cols", "colspan", "rowspan", "role", "tabindex", "hidden",
 	"download", "label", "media",
 ];
+/// Attributes that are present or absent: `checked: done` (true arrives as 1 from a run)
+const BOOLEAN_ATTRIBUTES: [&str; 8] = ["checked", "disabled", "selected", "readonly", "required", "hidden", "multiple", "autofocus"];
 const HEAD: &str = "head";
+/// the element of a style sheet and the attribute of an inline style (card web-styles)
+const STYLE: &str = "style";
+/// CSS properties whose number has no unit; any other number is pixels
+const UNITLESS_PROPERTIES: [&str; 10] = ["opacity", "z-index", "font-weight", "line-height", "flex", "flex-grow", "flex-shrink", "order", "zoom", "tab-size"];
 /// `data-wasp-click` (element_events.rs) and any other data attribute
 const DATA_ATTRIBUTE_PREFIX: &str = "data-";
 /// `li{ key: todo.id … }` names a list item: the attribute data-wasp-key, by which the page moves its element (card web-keyed)
@@ -45,7 +51,7 @@ pub fn is_markup(node: &Node) -> bool {
 /// The HTML of a markup value; any other value as escaped text
 pub fn to_html(node: &Node) -> String {
 	let mut html = String::new();
-	write_node(node, "", &mut html);
+	write_node(node, &mut html);
 	html
 }
 
@@ -65,7 +71,8 @@ fn attribute_parts<'a>(node: &'a Node, parent: &str) -> Option<(&'a str, &'a Nod
 	let (name, value) = named_attribute(node, parent)?;
 	let plain = matches!(value.drop_meta(), Node::Text(_) | Node::Char(_) | Node::Symbol(_) | Node::Number(_) | Node::True | Node::False)
 		|| matches!(value.drop_meta(), Node::List(_, Bracket::Square, _));
-	plain.then_some((name, value))
+	let inline_style = name == STYLE && parent != HEAD && declarations(value).is_some();
+	(plain || inline_style).then_some((name, value))
 }
 
 /// `class: …` inside an element, its value plain or still to be computed
@@ -139,12 +146,12 @@ fn is_literal(node: &Node) -> bool {
 	}
 }
 
-fn write_node(node: &Node, parent: &str, html: &mut String) {
+fn write_node(node: &Node, html: &mut String) {
 	if let Some((tag, content)) = element_parts(node) {
 		return write_element(tag, content, html);
 	}
 	match node.drop_meta() {
-		Node::List(items, _, _) => items.iter().for_each(|item| write_node(item, parent, html)),
+		Node::List(items, _, _) => items.iter().for_each(|item| write_node(item, html)),
 		Node::Empty => {}
 		other => html.push_str(&escaped(&plain_text(other))),
 	}
@@ -158,14 +165,74 @@ fn write_element(tag: &str, content: &Node, html: &mut String) {
 	for attribute in attributes {
 		let (name, value) = attribute_parts(attribute, tag).expect("partitioned");
 		let name = if name == KEY { KEY_ATTRIBUTE } else { name };
-		html.push_str(&format!(" {name}=\"{}\"", escaped(&attribute_value(value))));
+		if let Some(declarations) = declarations(value) {
+			html.push_str(&format!(" {name}=\"{}\"", escaped(&css_declarations(&declarations))));
+			continue;
+		}
+		match BOOLEAN_ATTRIBUTES.contains(&name) {
+			true if is_true(value) => html.push_str(&format!(" {name}")),
+			true => {}
+			false => html.push_str(&format!(" {name}=\"{}\"", escaped(&attribute_value(value)))),
+		}
 	}
 	html.push('>');
 	if VOID_ELEMENTS.contains(&tag) {
 		return;
 	}
-	children.into_iter().for_each(|child| write_node(child, tag, html));
+	match tag {
+		STYLE => html.push_str(&style_sheet(&children).replace("</", "<\\/")),
+		_ => children.into_iter().for_each(|child| write_node(child, html)),
+	}
 	html.push_str(&format!("</{tag}>"));
+}
+
+/// The items of a block, or the one item a block of one is parsed as
+fn block_items(node: &Node) -> Vec<&Node> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Curly | Bracket::None, _) => items.iter().collect(),
+		single => vec![single],
+	}
+}
+
+/// `{ color: theme padding: 8 }`: CSS properties with plain values, by name
+fn declarations(value: &Node) -> Option<Vec<(String, &Node)>> {
+	block_items(value).into_iter().map(|item| match item.drop_meta() {
+		Node::Key(name, Op::Colon, value) if !matches!(value.drop_meta(), Node::Key(..) | Node::List(_, Bracket::Curly, _)) => match name.drop_meta() {
+			Node::Symbol(name) | Node::Text(name) => Some((name.clone(), value.as_ref())),
+			_ => None,
+		},
+		_ => None,
+	}).collect()
+}
+
+/// `color: red; padding: 8px`: camelCase names in kebab-case, numbers in pixels unless the property has no unit
+fn css_declarations(declarations: &[(String, &Node)]) -> String {
+	declarations.iter().map(|(name, value)| {
+		let property = kebab_case(name);
+		let value = match value.drop_meta() {
+			Node::Number(number) if !UNITLESS_PROPERTIES.contains(&property.as_str()) => format!("{}px", number),
+			other => attribute_value(other),
+		};
+		format!("{property}: {value}")
+	}).collect::<Vec<_>>().join("; ")
+}
+
+/// `style{ ".card": { padding: 8 } }`: each rule `selector { declarations }`; a text is CSS as written
+fn style_sheet(rules: &[&Node]) -> String {
+	rules.iter().map(|rule| match rule.drop_meta() {
+		Node::Key(selector, Op::Colon, body) => match declarations(body) {
+			Some(declarations) => format!("{} {{ {} }}", plain_text(selector), css_declarations(&declarations)),
+			None => format!("{} {{ {} }}", plain_text(selector), style_sheet(&block_items(body))),
+		},
+		other => plain_text(other),
+	}).collect::<Vec<_>>().join(" ")
+}
+
+fn kebab_case(name: &str) -> String {
+	name.chars().flat_map(|character| match character.is_ascii_uppercase() {
+		true => vec!['-', character.to_ascii_lowercase()],
+		false => vec![character],
+	}).collect()
 }
 
 /// `class:['btn' 'btn-info']` is the attribute `btn btn-info`
@@ -183,6 +250,10 @@ fn plain_text(node: &Node) -> String {
 		Node::Char(character) => character.to_string(),
 		other => other.serialize(),
 	}
+}
+
+fn is_true(value: &Node) -> bool {
+	matches!(value.drop_meta(), Node::True) || matches!(value.drop_meta(), Node::Number(number) if *number != crate::Number::Int(0))
 }
 
 fn escaped(text: &str) -> String {

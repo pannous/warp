@@ -34,11 +34,7 @@ pub fn name(program: Node) -> Node {
 	if marked_names(&marked).is_empty() {
 		return marked;
 	}
-	// a program of one statement (`whenever dark mode {…}`) is a list of that one
-	let (statements, bracket, separator) = match marked.drop_meta() {
-		Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(bracket, separator) => (items.clone(), bracket.clone(), separator.clone()),
-		single => (vec![single.clone()], Bracket::None, Separator::Newline),
-	};
+	let (statements, bracket, separator) = crate::variable_signals::main_statements(&marked);
 	let listens = |statement: &Node| LISTENER_WORDS.contains(&first_word(statement).as_str()) && !marked_names(statement).is_empty();
 	let Some(first_listener) = statements.iter().position(listens) else { return marked };
 	// right after the first listener: the program's last statement stays its value

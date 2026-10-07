@@ -55,11 +55,11 @@ const NAME_JOINER: &str = "·";
 const FUNCTION_TEMPLATE: &str = "handler(event) := {}";
 const PARAMETERLESS_TEMPLATE: &str = "handler() := {}";
 const TEMPLATE_NAME: &str = "handler";
-const EVENT_WORD: &str = "event";
+pub(crate) const EVENT_WORD: &str = "event";
 /// The event as raised, kept while a handler that changes its `event` runs before the next one
 const RAISED_EVENT: &str = "raised_event";
 /// The events of the page that call their handlers from outside the program
-pub const PAGE_EVENTS: [&str; 2] = ["click", "key"];
+pub const PAGE_EVENTS: [&str; 3] = ["click", "key", "input"];
 /// `click·1`: the page event of one element's handler (element_events.rs), the page event and the element's number
 pub const ELEMENT_EVENT_JOINER: char = '·';
 
@@ -198,8 +198,9 @@ fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &H
 /// The output binding of a program the page keeps running (page events, timers): its last line, when that is a name,
 /// is the function PAGE_VALUE too, which the page reads anew after each handler
 fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<String>) -> Vec<Node> {
-	// a name, or markup (`div{ p{ "clicked " + count } }`, card web-element), which the page shows anew
-	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::html::is_markup(last)).cloned();
+	// a name, markup (`div{ p{ "clicked " + count } }`, card web-element), or a choice between such
+	// (`if users.loading then "Loading…" else users`, card web-async), which the page shows anew
+	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::html::is_markup(last) || is_shown_choice(last)).cloned();
 	if let Some(shown) = shown {
 		// markup: each element holding a computed part is read on its own too, the page changes only those that differ
 		let holes = crate::html::holes(&shown).into_iter().map(|(path, element)| function_with_globals(&hole_name(&path), false, &[element], main_variables));
@@ -215,14 +216,32 @@ fn hole_name(path: &[usize]) -> String {
 	path.iter().fold(PAGE_HOLE.to_string(), |name, index| format!("{name}{NAME_JOINER}{index}"))
 }
 
-/// `(on·every·0) := {…}`, the handler of a timer or channel listener system_signals.rs made
+/// `if c then a else b`, `c ? a : b`, `a ?? b`: a choice whose parts only read (no call, no write), so reading it anew
+/// changes nothing
+fn is_shown_choice(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, Op::Else | Op::Question | Op::Coalesce, _)) && only_reads(node)
+}
+
+/// Names, literals, markup, operators that compute (no assignment, no ++), and data lists of these
+fn only_reads(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty | Node::True | Node::False => true,
+		markup if crate::html::is_markup(markup) => true,
+		Node::Key(left, op, right) => !matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec | Op::While | Op::Do) && !op.is_compound_assign() && only_reads(left) && only_reads(right),
+		Node::List(items, Bracket::Square | Bracket::Curly, _) => items.iter().all(only_reads),
+		_ => false,
+	}
+}
+
+/// `(on·every·0) := {…}`, the handler of a timer or channel listener system_signals.rs made, or `(on·fetch·0) := {…}`
+/// of an async fetch (fetch_signals.rs)
 fn defines_timer(statement: &Node) -> bool {
 	let Node::Key(head, _, _) = statement.drop_meta() else { return false };
 	let name = match head.drop_meta() {
 		Node::List(items, _, _) => items.first().map(Node::drop_meta),
 		other => Some(other),
 	};
-	matches!(name, Some(Node::Symbol(name)) if name.starts_with(crate::host::TIMER_HANDLER_PREFIX))
+	matches!(name, Some(Node::Symbol(name)) if name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FETCH_HANDLER_PREFIX))
 }
 
 /// The body guarded by a fresh flag: `if once_fired_0 == false { once_fired_0 = true; body }`
@@ -611,7 +630,12 @@ pub(crate) fn global_declarations(bodies: &[Node], main_variables: &HashSet<Stri
 	let mut mentioned: Vec<String> = bodies.iter().flat_map(symbols).filter(|name| main_variables.contains(name) && !parameters.contains(&name.as_str())).collect();
 	mentioned.sort();
 	mentioned.dedup();
-	mentioned.iter().map(|name| parse(&format!("global {name}"))).collect()
+	mentioned.iter().map(|name| global_declaration(name)).collect()
+}
+
+/// `global name`, built rather than parsed: a generated name (`users·loading`) parses as a product
+pub(crate) fn global_declaration(name: &str) -> Node {
+	crate::law::substitute(&parse(&format!("global {TEMPLATE_NAME}")), &HashMap::from([(TEMPLATE_NAME.to_string(), Node::Symbol(name.to_string()))]))
 }
 
 /// Each handler gets the event as raised (the DOM hands one mutable event object down the listeners): when a body

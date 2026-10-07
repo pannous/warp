@@ -82,6 +82,10 @@ const ENUM_WORD: &str = "enum";
 const GO_INTERFACE_WORD: &str = "interface";
 /// Go's `type Point struct {…}` declares the class Point
 const GO_STRUCT_WORD: &str = "struct";
+/// `type Node: gc struct {…}` (WebAssembly's GC structs): every wasp class is one, the word adds nothing
+const GC_WORD: &str = "gc";
+/// `left: ref Node?`: WebAssembly's reference type word before a field's type
+const REF_TYPE_WORD: &str = "ref";
 /// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
 const OPERATOR_WORD: &str = "operator";
 /// Words before a member of a class body that change nothing in wasp: Swift's `mutating func`, visibility, `override`
@@ -101,6 +105,8 @@ const WORD_OPERATORS: [(&str, Op); 11] = [
 	("equals", Op::Eq), ("through", Op::To),
 ];
 const IS_IN_PHRASE: &str = "is in";
+/// `xs contains x` (and its synonyms, lowering/library_words.rs COLLECTION_CONTAINS): `x in xs` the other way round
+const CONTAINMENT_WORDS: [&str; 3] = ["contains", "has", "includes"];
 /// `for each item in basket` is `for item in basket`
 const EACH_WORD: &str = "each";
 /// `10 down to 1` is `reverse(1 to 10)`
@@ -267,8 +273,8 @@ enum SpecialInfix {
 	Pipeline,
 	/// `xs .+ 4`
 	ElementWise(Op),
-	/// `x in xs`
-	Membership,
+	/// `x in xs` and `xs contains x`: the list [lhs word operand]
+	Membership(&'static str),
 	/// Julia's dot call `f.(xs)`, `add.(xs, 10)`: f mapped over the first argument
 	DotCall,
 }
@@ -288,7 +294,7 @@ impl SpecialInfix {
 				lhs
 			}
 			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
-			SpecialInfix::Membership => Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), operand], Bracket::None, Separator::Space),
+			SpecialInfix::Membership(word) => Node::List(vec![lhs, Symbol(word.to_string()), operand], Bracket::None, Separator::Space),
 			SpecialInfix::DotCall => dot_call(lhs, operand),
 		}
 	}

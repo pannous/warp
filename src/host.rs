@@ -17,7 +17,7 @@ const HOST_ALIASES: [(&str, Option<usize>, &str); 2] = [("download", None, "fetc
 
 /// The words of the program's environment, imported from the "host" module and called like C functions (ffi.rs);
 /// sleep, random, random_below and clock need no compiler and live in warp-runtime (runtime/src/host_words.rs)
-pub use warp_runtime::host_words::{CLOCK, EXIT, FILE_HANDLER_PREFIX, HOST_LIBRARY, SIGNAL_WATCH, INTERRUPT_HANDLER, RANDOM, RANDOM_BELOW, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_POLL, SLEEP, SYSTEM_VALUE, CLIPBOARD_TEXT, TIMER_HANDLER_PREFIX};
+pub use warp_runtime::host_words::{CLOCK, EXIT, FILE_HANDLER_PREFIX, HOST_LIBRARY, SIGNAL_WATCH, INTERRUPT_HANDLER, RANDOM, RANDOM_BELOW, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_POLL, SLEEP, SYSTEM_VALUE, CLIPBOARD_TEXT, TIMER_HANDLER_PREFIX, FETCH_HANDLER_PREFIX};
 /// `go f(x)` on a thread (tasks.rs): task_spawn(function name, up to four Int arguments) → task id, task_await(id) → result
 pub const TASK_SPAWN: &str = "task_spawn";
 pub const TASK_AWAIT: &str = "task_await";
@@ -87,23 +87,30 @@ pub const CHANNEL_SEND: &str = "channel_send";
 /// called by the words of std/<module>.wasp; std_pure's words have no effect (json), std_io's touch the outside
 pub const STD_PURE: &str = "std_pure";
 pub const STD_IO: &str = "std_io";
+/// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web_server.rs), blocks while
+/// it serves; ø once it stops
+pub const SERVE_ROUTES: &str = "serve_routes";
+/// `users := fetch url` (src/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
+/// the reply arrived, fetch_reply(id) → [value, error]: the parsed JSON (else the text) and ø, or ø and the failure
+pub const FETCH_START: &str = "fetch_start";
+pub const FETCH_REPLY: &str = "fetch_reply";
 /// The host words whose result is any Node, its kind decided at run time (held like a map value)
-pub const ANY_VALUE_WORDS: [&str; 3] = [FOREIGN_CALL, STD_PURE, STD_IO];
+pub const ANY_VALUE_WORDS: [&str; 4] = [FETCH_REPLY, FOREIGN_CALL, STD_PURE, STD_IO];
 /// Channels inside one run (P155, notes/channels.md, tasks.rs Channels), Go's unbuffered channel: channel_new() → id,
 /// channel_put(id, value) waits until a receiver took it, channel_take(id) waits for a value (ø once closed and empty),
 /// channel_more(id) waits until a value is offered (1) or the channel is closed (0), channel_close(id)
 pub const CHANNEL_WORDS: [&str; 5] = ["channel_new", "channel_put", "channel_take", "channel_more", "channel_close"];
 /// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
-pub const VALUE_GIVING_WORDS: [&str; 8] = [RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE, CHANNEL_NEXT, CLIPBOARD_TEXT, CHANNEL_WORDS[2], STD_PURE, STD_IO];
-pub const HOST_WORDS: [&str; 48] = [STD_PURE, STD_IO, CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, CLIPBOARD_TEXT, GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
+pub const VALUE_GIVING_WORDS: [&str; 10] = [FETCH_REPLY, RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE, CHANNEL_NEXT, CLIPBOARD_TEXT, CHANNEL_WORDS[2], STD_PURE, STD_IO, SERVE_ROUTES];
+pub const HOST_WORDS: [&str; 51] = [FETCH_START, FETCH_REPLY, SERVE_ROUTES, STD_PURE, STD_IO, CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, CLIPBOARD_TEXT, GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
 	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_WRITES, SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2],
 	CHANNEL_WORDS[0], CHANNEL_WORDS[1], CHANNEL_WORDS[2], CHANNEL_WORDS[3], CHANNEL_WORDS[4]];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 48] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 51] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (CHANNEL_SEND, vec![node, node], vec![]),
+	[(FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (CHANNEL_SEND, vec![node, node], vec![]),
 		(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_DAILY, vec![I64, I64, I64], vec![]), (SIGNAL_AT, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (SYSTEM_VALUE, vec![I32], vec![I64]), (EXIT, vec![I64], vec![]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
@@ -443,6 +450,9 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, FOREIGN_CALL, foreign_call)?;
 	linker.func_wrap(HOST_LIBRARY, STD_PURE, std_call)?;
 	linker.func_wrap(HOST_LIBRARY, STD_IO, std_call)?;
+	linker.func_wrap(HOST_LIBRARY, SERVE_ROUTES, serve_routes)?;
+	linker.func_wrap(HOST_LIBRARY, FETCH_START, fetch_start)?;
+	linker.func_wrap(HOST_LIBRARY, FETCH_REPLY, fetch_reply)?;
 	crate::channels::forget_listeners(); // each run links anew, on its own thread
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_LISTEN, channel_listen)?;
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_PENDING, crate::channels::pending)?;
@@ -538,7 +548,7 @@ fn pixel_value(pixel: &crate::node::Node) -> u64 {
 	use crate::node::Node;
 	match pixel.drop_meta() {
 		Node::False | Node::Empty => 0,
-		Node::Number(number) => f64::from(number.clone()).abs() as u64,
+		Node::Number(number) => f64::from(*number).abs() as u64,
 		_ => 1,
 	}
 }
@@ -605,6 +615,37 @@ fn foreign_call(mut caller: Caller<'_, HostState>, runtime: Option<wasmtime::Roo
 #[cfg(feature = "native")]
 type HostNode = Option<wasmtime::Rooted<wasmtime::AnyRef>>;
 
+/// serve_routes(port, routes): HTTP on the port, each request answered by its route's function (src/web_server.rs)
+#[cfg(feature = "native")]
+fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) -> wasmtime::Result<HostNode> {
+	use crate::web_server::{routes_of, serve, Answer};
+	let routes = routes_of(&given_node(&mut caller, routes)?);
+	let port = u16::try_from(port).map_err(|_| wasmtime::Error::new(crate::tasks::TaskFailure(format!("serve {port}: no port number"))))?;
+	serve(port, &routes, |route, request| match route_value(&mut caller, &route.function, &request) {
+		Ok(value) => Answer::of(&value),
+		Err(problem) => Answer::failed(&problem.to_string()),
+	}).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?;
+	built_in_program(&mut caller, &Node::Empty, SERVE_ROUTES)
+}
+
+/// The value of a route's function called with the request (if it takes one), as a Node
+#[cfg(feature = "native")]
+fn route_value(caller: &mut Caller<'_, HostState>, function: &str, request: &Node) -> wasmtime::Result<Node> {
+	let Some(Extern::Func(route)) = caller.get_export(function) else { return Err(wasmtime::Error::msg(format!("no route function {function}"))) };
+	let arguments = match route.ty(&*caller).params().len() {
+		0 => vec![],
+		_ => vec![Val::AnyRef(built_in_program(caller, request, function)?)],
+	};
+	let mut results = vec![Val::I64(0); route.ty(&*caller).results().len()];
+	route.call(&mut *caller, &arguments, &mut results)?;
+	Ok(match results.first() {
+		Some(Val::I64(integer)) => Node::int(*integer),
+		Some(Val::F64(bits)) => Node::Number(crate::extensions::numbers::Number::Float(f64::from_bits(*bits))),
+		Some(Val::AnyRef(value)) => given_node(caller, *value)?,
+		_ => Node::Empty,
+	})
+}
+
 /// std_pure / std_io(module, member, arguments): a word of the standard library's adapters (src/std_adapters.rs)
 #[cfg(feature = "native")]
 fn std_call(mut caller: Caller<'_, HostState>, module: HostNode, member: HostNode, arguments: HostNode) -> wasmtime::Result<HostNode> {
@@ -626,6 +667,20 @@ fn given_node(caller: &mut Caller<'_, HostState>, value: HostNode) -> wasmtime::
 fn channel_listen(mut caller: Caller<'_, HostState>, id: i64, channel: HostNode) -> wasmtime::Result<()> {
 	let channel = given_node(&mut caller, channel)?;
 	crate::channels::listen(id, &channel.name()).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))
+}
+
+/// `users := fetch url` starts the fetch (src/fetches.rs)
+#[cfg(feature = "native")]
+fn fetch_start(mut caller: Caller<'_, HostState>, id: i64, url: HostNode) -> wasmtime::Result<()> {
+	let url = given_node(&mut caller, url)?;
+	crate::fetches::start(id, url.name(), FETCH_TIMEOUT);
+	Ok(())
+}
+
+/// [value, error] of the fetch's reply (src/fetches.rs)
+#[cfg(feature = "native")]
+fn fetch_reply(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<HostNode> {
+	built_in_program(&mut caller, &crate::fetches::reply(id), "fetch")
 }
 
 /// The oldest message the listener got, as the value it was sent as (ø when none waits)

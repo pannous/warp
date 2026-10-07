@@ -1,0 +1,4 @@
+class Point{x:int y:int}
+class Line{from:Point to:Point}
+l = Line(Point(1,2), Point(3,4))
+l.from.x + l.to.y

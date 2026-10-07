@@ -46,6 +46,25 @@ Each step is useful on its own and is what the next ones stand on.
   `POST /rpc/<name>` with the arguments as a JSON array and the result as JSON; the page build replaces its body with a
   stub making that call (synchronous in the worker, like fetch). `/rpc/` is reserved for this.
 
+## Async data (card web-async, 2026-10-07)
+- `users := fetch "/api/users"` at the main level does not wait: `users` is ø with `users.loading` true and
+  `users.error` ø; once the reply is in, `users.loading` is false, then `users.error` (the failure text, "fetch … failed:
+  HTTP status 404") or `users` (the parsed JSON, any other body the text) is set, so `on change users {…}` and a page
+  whose last line is `users` show it. A fetch with `timeout` keeps the old meaning (fetched on each read).
+- A URL reading main-level variables (`"/api/users?page=" + page`) is fetched anew when one changes; a reply of an
+  older fetch of the same name is dropped.
+- Lowering (src/lowering/fetch_signals.rs): the variables users, users·loading, users·error, the call
+  `fetch_start(0, url)` and the handler `on·fetch·0`, which takes `fetch_reply(0)` = [value, error]. Natively
+  (src/fetches.rs) a thread fetches and the runtime runs the handler at the next check point (warp-runtime
+  system_signals await_ready; `warp run` stays until the reply arrived); in the page a task Worker fetches into shared
+  memory, which the running main reads at its check points (sleep, loop starts) as natively, so
+  `while users.loading { sleep 5 ms }` ends there too; a reply after main returned runs the handler like a timer's
+  (worker.js hooks.arrived), then the page re-renders. Without cross-origin isolation (no task Workers) the reply
+  only arrives after main.
+- Open: cancel on navigation; the page re-renders only a last line that is a name (event_signals with_output_binding),
+  so `if users.loading then "Loading…" else users` does not update yet (branch page-binding); diagnostics name
+  users·error.
+
 ## Defaults for step 1 (web-dom), undoable
 - A markup value is any key whose name is an HTML tag (`div`, `p`, `ul`, `li`, `a`, `button`, … the HTML element list)
   with a block; `name: "text"` is the element with that text, `name{ key: value … }` attributes for keys that are HTML
@@ -76,6 +95,8 @@ Each step is useful on its own and is what the next ones stand on.
   call of that component in a render (React's hooks rule, undoable default, question queued with the Interviewer); the
   handler's element carries `data-wasp-instance`, the page passes it as `event.instance`. The program's last line
   becomes the getter `page·markup`, which resets the instance counters before each render.
+- Class components (warp-41, branch classes-40, notes/classes.md): a class with render() (aliases view, template,
+  build) constructed as an element's child or as the program's value renders through render().
 - Left: cleanup of listeners when an instance is removed (onMount/onCleanup), instances that move (web-keyed),
   state of a component read by a handler outside it.
 
@@ -87,3 +108,19 @@ Each step is useful on its own and is what the next ones stand on.
   key into place instead of rewriting elements by position. Tour example "keyed list" (`keyed` check).
 - Not yet: `for t in ts { li{t} }` inside a block (the parser reads `ts { … }` as the tag ts; card markup-for),
   transitions (web-transitions).
+
+## Step 6 (web-bind), what is done and what is left
+- `input{ bind: name }` is `input{ value: name on input { name = event.value } }` (element_events.rs); a checkbox or
+  radio binds `checked`. `input` is a page event (PAGE_EVENTS); the page sends {value, checked} (a number from a
+  number or range field) and sets a changed field's value/checked when the markup comes back (morphElement).
+- Boolean attributes (checked, disabled, …) are present or absent (html.rs; true arrives from a run as 1).
+- Tour example "form binding" (`typed` field of examples.js).
+- Left: `select{ bind: choice }` (its first render shows the first option), `bind:` inside a component's state
+  (component_state.rs sees only handlers), form submit as an event with the fields as an object, validation from types.
+
+## Step 7 (web-styles), what is done and what is left
+- `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
+  sheet of rules (html.rs). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
+  are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
+- Left: scoping a component's sheet to its own elements (a generated class per component), `.card { … }` written
+  without quotes (the parser stops at `.`), `8px` written as a number with a unit (parses as 8 * px).

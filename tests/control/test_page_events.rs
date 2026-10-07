@@ -48,6 +48,17 @@ fn the_last_name_of_a_program_with_timers_is_its_output_binding() {
 	assert!(!exports_of("ticks = 0; ticks").iter().any(|name| name == "page·value"));
 }
 
+// card web-async: a last line choosing between values that only read (`if users.loading then "Loading…" else users`)
+// is shown anew too; one that calls a function is not (reading it again could act)
+#[test]
+fn a_choice_that_only_reads_is_the_output_binding() {
+	let binds = |code: &str| exports_of(code).iter().any(|name| name == "page·value");
+	assert!(binds("n = 0; on every 1 second { n += 1 }; if n > 2 then \"many\" else n"));
+	assert!(binds("n = 0; on every 1 second { n += 1 }; n > 2 ? \"many\" : n"));
+	assert!(!binds("f() := 3; n = 0; on every 1 second { n += 1 }; if n > 2 then f() else n"));
+	is!("n = 0; on click { n += 1 }; emit click; if n > 0 then \"clicked\" else \"waiting\"", "clicked");
+}
+
 // a handler that never reads `event` takes no parameter, so the page can call it (an unread one would be typed Int)
 #[test]
 fn a_handler_without_event_runs_through_its_wrapper() {

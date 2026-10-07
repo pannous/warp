@@ -1,9 +1,9 @@
 // WebAssembly interop
 // wasp compiles to wasm and interoperates seamlessly
 
-// Import from wasm module
-use { memory, table } from "env"
-use { log } from "console"
+// Import from wasm module: a core module's functions with `import name` (counter.wasm), a component's with
+// `use name.wasm`; importing its memory and table by name (`use { memory, table } from "env"`): card wasm-interop-sketch
+use text
 
 // Export function for wasm
 export def add(a: i32, b: i32) -> i32 {
@@ -15,18 +15,16 @@ export def compute(x: f64, y: f64) -> f64 {
     return sqrt(x * x + y * y)
 }
 
-// Memory operations
-def read_string(ptr: i32, len: i32) -> string {
-    bytes = memory.slice(ptr, ptr + len)
+// Strings as bytes, the way they lie in linear memory (memory.slice and memory.copy themselves: card wasm-interop-sketch)
+def read_string(bytes) -> string {
     return string.from_utf8(bytes)
 }
 
-def write_string(s: string, ptr: i32) {
-    bytes = s.to_utf8()
-    memory.copy(bytes, ptr)
+def write_string(s: string) {
+    s.to_utf8()
 }
 
-// GC types (wasm-gc)
+// GC types (wasm-gc): every wasp class is a GC struct, its own type a nullable reference
 type Node: gc struct {
     tag: i32
     value: i64
@@ -35,10 +33,10 @@ type Node: gc struct {
 }
 
 // Create GC object
-root = Node {
+tree = Node {
     tag: 1
     value: 42
-    left: None
+    left: Node { tag: 2 value: 8 left: None right: None }
     right: None
 }
 
@@ -47,15 +45,16 @@ interface calculator {
     add: (i32, i32) -> i32
     sub: (i32, i32) -> i32
     mul: (i32, i32) -> i32
-    div: (i32, i32) -> Result[i32, string]
 }
 
-// Component model
-component my_component {
-    import host: {
-        print: (string) -> ()
-        time: () -> i64
-    }
+// Component model: a component's world is declared like this (card wasm-interop-sketch); today wasp uses components
+// with `use name.wasm` (the tour's wasm components example)
+// component my_component {
+//     import host: {
+//         print: (string) -> ()
+//         time: () -> i64
+//     }
+//     export api: calculator
+// }
 
-    export api: calculator
-}
+[add(2, 3), compute(3.0, 4.0), read_string(write_string("wasm ✓")), tree.value + tree.left.value]

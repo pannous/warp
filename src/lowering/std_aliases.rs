@@ -22,7 +22,7 @@ const fn alias(module: &'static str, member: &'static str, std_module: &'static 
 	StdAlias { module, member, std_module, word, order }
 }
 
-const STD_ALIASES: [StdAlias; 12] = [
+const STD_ALIASES: [StdAlias; 21] = [
 	alias("JSON", "parse", "json", "parse_json", &[0]),
 	alias("JSON", "stringify", "json", "to_json", &[0]),
 	alias("json", "loads", "json", "parse_json", &[0]),
@@ -35,6 +35,15 @@ const STD_ALIASES: [StdAlias; 12] = [
 	alias("fs", "existsSync", "file", "exists", &[0]),
 	alias("os", "getenv", "os", "env", &[0]),
 	alias("process", "exit", "", "exit", &[0]),
+	alias("np", "zeros", "matrix", "zeros", &[0, 1]),
+	alias("np", "ones", "matrix", "ones", &[0, 1]),
+	alias("np", "eye", "matrix", "identity", &[0]),
+	alias("np", "identity", "matrix", "identity", &[0]),
+	alias("np", "transpose", "matrix", "transpose", &[0]),
+	alias("np", "matmul", "matrix", "matmul", &[0, 1]),
+	alias("np", "dot", "matrix", "dot", &[0, 1]),
+	alias("String", "from_utf8", "text", "from_utf8", &[0]),
+	alias("string", "from_utf8", "text", "from_utf8", &[0]),
 ];
 const USE_WORD: &str = "use";
 
@@ -60,15 +69,23 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 	}
 }
 
-/// `module.member(arguments…)` of a known alias with as many arguments as it takes
+/// `module.member(arguments…)` of a known alias with as many arguments as it takes; a shape tuple stands for its items
+/// (`np.zeros((2, 3))` is zeros(2, 3))
 fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'a [Node])> {
 	let Node::Key(module, Op::Dot, call) = node.drop_meta() else { return None };
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let (member, arguments) = items.split_first()?;
 	let (module, member) = (module.drop_meta().name(), member.drop_meta().name());
+	let shape_items = |arguments: &'a [Node]| match arguments {
+		[tuple] => match tuple.drop_meta() {
+			Node::List(items, Bracket::Round, Separator::Colon) => items.as_slice(),
+			_ => arguments,
+		},
+		_ => arguments,
+	};
 	STD_ALIASES.iter()
-		.find(|alias| alias.module == module && alias.member == member && alias.order.len() == arguments.len() && !kept.contains(&alias.module))
-		.map(|alias| (alias, arguments))
+		.filter(|alias| alias.module == module && alias.member == member && !kept.contains(&alias.module))
+		.find_map(|alias| [arguments, shape_items(arguments)].into_iter().find(|given| given.len() == alias.order.len()).map(|given| (alias, given)))
 }
 
 /// The program with `use module` first for each module an alias brought

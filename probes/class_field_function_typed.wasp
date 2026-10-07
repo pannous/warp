@@ -1,0 +1,4 @@
+class Line{start:int end:int}
+start(l:Line) := l.start * 10
+x = Line(3,4)
+start(x) + x.start

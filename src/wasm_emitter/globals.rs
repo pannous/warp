@@ -190,6 +190,7 @@ impl WasmGcEmitter {
 	pub(super) fn allocate_declared_globals(&mut self, program: &Node) {
 		let mut main = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone()); // `global g = vec(1, 2)` holds what vec returns
 		collect_variables(program, &mut main);
+		_ = crate::analyzer::widen_globals_by_functions(&mut main.globals, self.ctx.user_functions.values(), &self.user_function_kinds(), &self.ctx.closure_variable_targets);
 		let mut names: Vec<&String> = main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
 		names.sort();
 		let typed = self.find_typed_globals(program, &main);
