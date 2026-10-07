@@ -21,6 +21,7 @@ let panicMessage; // the compiler's last panic message
 const post = message => self.postMessage(message);
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host.js STD_ADAPTERS.store
 const hooks = {
+	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
@@ -127,7 +128,7 @@ function showHoles(holder) {
 	for (const name of holes) {
 		const outcome = outcomeOf(holder, hooks, holder.exports[name]);
 		if (outcome.result === undefined) return false;
-		const { html } = shownOf(outcome);
+		const html = outcome.html ?? shownOf(outcome).html;
 		if (holder.holeHtml.get(name) === html) continue;
 		holder.holeHtml.set(name, html);
 		patches.push({ path: name.split(PATH_JOINER).slice(PAGE_HOLE.split(PATH_JOINER).length).map(Number), html });

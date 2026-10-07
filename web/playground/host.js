@@ -402,6 +402,20 @@ function runProgram(bytes, hooks) {
 // the last run that handles page events, for the compiler's warp_host.page_event (src/headless.rs in the browser tests)
 let listeningRun;
 const PAGE_VALUE_EXPORT = "page·value";
+const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/page_html.rs PAGE_RENDER
+
+// the HTML of a value by the program's own renderer (std/markup.wasp's to_html, exported as page·render by a program
+// holding markup): undefined for a number, a program without one, or a rendering that failed (the compiler then
+// renders the value itself, src/web.rs html_of)
+function renderedHtml(exports, value) {
+	const render = exports[PAGE_RENDER_EXPORT];
+	if (!render || value === null || typeof value !== "object") return undefined;
+	try {
+		return plainOfTree(readNode(exports, render(value)));
+	} catch {
+		return undefined;
+	}
+}
 
 // `on exit {…}` (src/lowering/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
 // main returns or `exit(code)` ends it, never after a failure
@@ -437,7 +451,7 @@ function outcomeOf(holder, hooks, call) {
 		const result = call();
 		const unread = eachHostPart("finished", holder, hooks).find(Boolean);
 		if (unread) return { failure: unread, warnings };
-		return { result: readResult(exports, result), warnings };
+		return { result: readResult(exports, result), html: hooks.renders ? renderedHtml(exports, result) : undefined, warnings };
 	} catch (trap) {
 		eachHostPart("ended", holder);
 		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, warnings };

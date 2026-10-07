@@ -16,6 +16,12 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use crate::type_kinds::KIND_BITS;
 
+thread_local! {
+	/// The HTML the last run rendered inside its own module (host.js outcomeOf by page·render): html_of shows it instead
+	/// of compiling the renderer as a program of its own (card playground-render)
+	static RENDERED: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
 /// The topics and expressions (`topic@expression`) the page already said "got it" to; every other warning or note shown
 /// is recorded for its "got it" buttons: the topic and the key of its expression
 struct PageAcknowledger {
@@ -47,7 +53,7 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	diagnostic::take_warnings();
 	diagnostic::take_error_diagnostics();
 	diagnostic::take_runtime_warnings();
-	let (result, hints) = diagnostic::with_acknowledger(acknowledger, || crate::normalize::capture_hints(|| crate::wasm_emitter::eval(code)));
+	let (result, hints) = diagnostic::with_acknowledger(acknowledger, || crate::normalize::capture_hints(|| run_shown(code)));
 	let warnings: Vec<Value> = diagnostic::take_warnings().iter().map(|warning| diagnostic_json(code, warning)).collect();
 	let is_error = matches!(result.drop_meta(), Node::Error(_));
 	let errors: Vec<Value> = unique(diagnostic::take_error_diagnostics()).iter().filter(|_| is_error).map(|error| diagnostic_json(code, error)).collect();
@@ -74,9 +80,27 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	report
 }
 
-/// Markup the page shows as DOM (card web-dom), rendered by std/markup.wasp
+/// Markup the page shows as DOM (card web-dom), rendered by std/markup.wasp: inside the program's module when it renders
+/// itself, else by the renderer compiled on its own
 fn html_of(value: &Node) -> Value {
-	json!(crate::markup::is_markup(value).then(|| crate::markup::to_html(value)))
+	let rendered = RENDERED.with(|rendered| rendered.borrow_mut().take());
+	json!(crate::markup::is_markup(value).then(|| rendered.unwrap_or_else(|| crate::markup::to_html(value))))
+}
+
+/// `code` compiled and run; a program holding markup renders itself (pipeline::rendering_itself)
+fn run_shown(code: &str) -> Node {
+	match renders_itself(code) {
+		true => crate::pipeline::rendering_itself(|| crate::wasm_emitter::eval(code)),
+		false => crate::wasm_emitter::eval(code),
+	}
+}
+
+/// Does the program hold markup (`div{…}`): only then it carries the renderer, which a plain program does not need
+pub fn renders_itself(code: &str) -> bool {
+	let mut holds_markup = false;
+	// quietly: the compile that follows says what the parse finds
+	diagnostic::quietly(|| crate::wasp_parser::parse(code)).visit(&mut |part| holds_markup |= crate::markup::is_markup(part));
+	holds_markup
 }
 
 /// A warning or error for the page: its words, position, "got it" topic and the fixes it offers
@@ -133,6 +157,7 @@ pub fn acknowledged_topics(json: &str) -> HashSet<String> {
 /// (a runtime error; the stack names the wasm functions, `detail` is the module's trap_detail global) or
 /// `{"failure": message}` (the module did not compile, link or instantiate)
 pub fn run_outcome(outcome: &Value) -> Node {
+	RENDERED.with(|rendered| *rendered.borrow_mut() = outcome.get("html").and_then(Value::as_str).map(str::to_string));
 	for warning in outcome.get("warnings").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
 		diagnostic::report_runtime_warning(warning);
 	}
