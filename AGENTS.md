@@ -191,7 +191,7 @@ Current spec lives in `src/wasm_emitter/type_manager.rs` and `src/wasm_emitter/c
    - Key: `data = left node`, `value = right node`
    - List/Block: `data = first node`, `value = rest list node` (cons cells)
    - TypeDef: `data = name node`, `value = body node`
-   - True/False: encoded as Int 1/0
+   - True/False: a bool, the Int 1/0 marked BOOL_INFO above the kind bits (kind = BOOL_KIND); prints yes/no (notes/bool_type.md)
    - Meta is dropped during emission; Error currently emits the inner node
    - Data nodes currently serialize as `Symbol(type_name)` in the emitter
 
