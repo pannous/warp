@@ -25,6 +25,7 @@ HEADER_NAME = re.compile(r"^[\w.+-]+(/[\w.+-]+)*\.h$")
 RESULTS_PATH = "/__results__"
 LISTING_QUERY = "listing"
 STUB_PATH = "/__stub__"  # answers with the status and body its query names: the fetch tests' HTTP stub (tests/common serve)
+CLICK_MILLISECONDS = 300  # a click's handler runs in the worker and its markup comes back
 ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its service worker
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -127,13 +128,26 @@ def browser(*arguments):
 
 
 def show_example(name):
-	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds"""
+	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
+	`clicks` also the value after clicking those buttons, whether every element shown stayed (`kept`) and kept its key (`keyed`)"""
 	script = f"""(async () => {{
 		const name = {json.dumps(name)};
 		await playground.chooseExample(name);
 		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
 		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
-		return JSON.stringify({{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent }});
+		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent }};
+		const clicks = EXAMPLES[name].clicks ?? [];
+		if (!clicks.length) return JSON.stringify(shown);
+		const rendered = document.getElementById("rendered").shadowRoot;
+		const elements = [...rendered.querySelectorAll("*")];
+		const keys = elements.map(element => element.getAttribute("data-wasp-key"));
+		for (const text of clicks) {{
+			[...rendered.querySelectorAll("button")].find(button => button.textContent === text)?.click();
+			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
+		}}
+		const kept = elements.every(element => element.isConnected);
+		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-wasp-key") === keys[index]);
+		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, kept, keyed }});
 	}})()"""
 	shown = browser("eval", script)
 	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
@@ -163,7 +177,7 @@ def check_examples(names, page_url=None):
 	names = names or list(examples)
 	for name in names:
 		expected, shown = examples[name], show_example(name)
-		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed") if part in expected and shown[part] != expected[part]]
+		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "clicked", "kept", "keyed") if part in expected and shown[part] != expected[part]]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
 		if wrong:
 			failures.append(name)
