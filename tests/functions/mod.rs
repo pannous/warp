@@ -5,6 +5,7 @@ mod test_bare_function_name;
 mod test_call_result_fields;
 mod test_charged_getters;
 mod test_getter_warning_text;
+mod test_parens_getter_warning;
 mod test_block_function;
 mod test_body_statement;
 mod test_c_style_definitions;

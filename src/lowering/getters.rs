@@ -9,6 +9,9 @@ use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
+/// marks the `name()` that `name := e` became: written without parentheses, read as a value (late_binding warns of effects)
+const BARE_GETTER_MARK: &str = "getter·bare";
+
 pub fn lower(program: Node) -> Node {
 	lower_in(program, &[])
 }
@@ -142,15 +145,23 @@ fn call(name: &str) -> Node {
 	Node::List(vec![Node::Symbol(name.to_string())], Bracket::Round, Separator::None)
 }
 
-/// `z := e` → `z() := e`
+/// `z := e` → `z() := e`, the `z()` marked as written bare
 fn getter_definition(statement: Node) -> Node {
 	match statement {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(getter_definition(*node)), data },
 		Node::Key(left, Op::Define, body) => match left.drop_meta() {
-			Node::Symbol(name) => Node::Key(Box::new(call(name)), Op::Define, body),
+			Node::Symbol(name) => Node::Key(Box::new(Node::meta(call(name), Node::Symbol(BARE_GETTER_MARK.to_string()))), Op::Define, body),
 			_ => Node::Key(left, Op::Define, body),
 		},
 		other => other,
+	}
+}
+
+/// `z()` of a getter written `z := e`, not `z() := e`
+pub(crate) fn is_written_bare(left: &Node) -> bool {
+	match left {
+		Node::Meta { node, data } => matches!(data.drop_meta(), Node::Symbol(mark) if mark == BARE_GETTER_MARK) || is_written_bare(node),
+		_ => false,
 	}
 }
 
