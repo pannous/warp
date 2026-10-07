@@ -1,5 +1,5 @@
 // card web-apis (WebGPU): gpu_compute(shader, numbers, workgroups) runs a WGSL compute shader over the numbers in the
-// browser (web/playground/host-gpu.js, on a task Worker) and gives back what it left; natively it is a loud failure
+// browser (web/playground/host-gpu.js, on a task Worker) and natively (src/gpu.rs, wgpu) and gives back what it left
 use warp::wasm_emitter::eval;
 use warp::Node;
 
@@ -12,10 +12,6 @@ gpu_compute(shader, [1.5, 2.25, 3.0], 1)";
 #[test]
 fn a_compute_shader_runs_over_the_numbers() {
 	let computed = eval(DOUBLING);
-	if cfg!(feature = "native") {
-		assert!(matches!(&computed, Node::Error(message) if message.to_string().contains("gpu_compute needs WebGPU")), "{computed:?}");
-		return;
-	}
 	if matches!(&computed, Node::Error(message) if message.to_string().contains("no WebGPU adapter")) {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
@@ -25,9 +21,6 @@ fn a_compute_shader_runs_over_the_numbers() {
 
 #[test]
 fn a_shader_that_does_not_compile_says_where() {
-	if cfg!(feature = "native") {
-		return;
-	}
 	let failed = eval("gpu_compute(\"fn main( {\", [1.0], 1)");
 	assert!(matches!(&failed, Node::Error(message) if message.to_string().contains("gpu_compute")), "{failed:?}");
 }
