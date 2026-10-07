@@ -16,6 +16,7 @@ const SCRIPTS: [(&str, &str); 4] = [
 	("markup.js", include_str!("../web/playground/markup.js")),
 	("site.js", include_str!("../web/playground/site.js")),
 ];
+const LINE_COMMENT: &str = "//";
 /// The element holding the program's markup (site.js SITE_ROOT)
 const ROOT_ID: &str = "wasp-root";
 const PAGE_TEMPLATE: &str = r#"<!doctype html>
@@ -51,7 +52,7 @@ pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, Str
 	write(PAGE_FILE, page(title, html).as_bytes())?;
 	write(MODULE_FILE, &module.bytes)?;
 	for (name, text) in SCRIPTS {
-		write(name, text.as_bytes())?;
+		write(name, compacted(text).as_bytes())?;
 	}
 	let files = [PAGE_FILE, MODULE_FILE].into_iter().chain(SCRIPTS.map(|(name, _)| name)).map(str::to_string).collect();
 	Ok(BuiltSite { directory: directory.to_path_buf(), files })
@@ -61,6 +62,22 @@ fn page(title: &str, body: &str) -> String {
 	let scripts: String = SCRIPTS.iter().map(|(name, _)| format!("<script src=\"{name}\"></script>\n")).collect();
 	// the program's texts last, so nothing in them is read as a placeholder
 	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
+}
+
+/// A script without its comment lines, blank lines and indentation (card web-bundle: host.js gzipped 24 → 17 KB); the
+/// lines of a template literal stay as written
+pub fn compacted(script: &str) -> String {
+	let mut in_template = false;
+	let mut kept = String::new();
+	for line in script.lines() {
+		let shown = if in_template { line } else { line.trim_start() };
+		if in_template || !(shown.is_empty() || shown.starts_with(LINE_COMMENT)) {
+			kept.push_str(shown);
+			kept.push('\n');
+		}
+		in_template ^= line.matches('`').count() % 2 == 1;
+	}
+	kept
 }
 
 fn escaped(text: &str) -> String {
