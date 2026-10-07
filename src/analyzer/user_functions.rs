@@ -382,12 +382,21 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 	crate::closures::type_closure_calls(ctx);
 }
 
+/// The kinds the user functions are known to give: each one's return kind and each value of a tuple function
+/// (`(h, o) = f()` reads o's kind as `f#1`)
+fn known_function_kinds(ctx: &Context) -> HashMap<String, Kind> {
+	ctx.user_functions.iter().flat_map(|(name, function)| {
+		let values = function.tuple_kinds.iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(name, index), *kind));
+		std::iter::once((name.clone(), function.return_kind)).chain(values)
+	}).collect()
+}
+
 /// A parameter that the calls pass one kind other than Int takes that kind: `mul(v, 1.0 / length(v))` with length
 /// returning a float, `print_tree(tree.left, prefix + "│ ")` passing a text. infer_parameters_from_calls knows only
 /// literal arguments; this pass runs once the return kinds are known. It only changes undeclared Int parameters (and
 /// those guessed a list that get only texts), and leaves a parameter alone when calls disagree. True when a parameter changed.
 pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String, Local>) -> bool {
-	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
+	let mut function_kinds = known_function_kinds(ctx);
 	function_kinds.extend(ctx.field_kinds.clone());
 	let mut passed: HashMap<(String, usize), HashSet<Kind>> = HashMap::new();
 	let mut main = Scope::with_function_kinds(function_kinds.clone()).with_closure_targets(ctx.closure_variable_targets.clone());
@@ -476,7 +485,7 @@ pub(super) fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, 
 /// declared global of that name exists.
 pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: HashMap<String, Local>) -> HashMap<String, Local> {
 	// `xs = [w(), w()]` holds what w returns, as the emitter's capture globals do (card float-calls)
-	let mut outer = Scope::with_function_kinds(ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect());
+	let mut outer = Scope::with_function_kinds(known_function_kinds(ctx));
 	collect_variables(program, &mut outer);
 	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	functions.sort_by(|a, b| a.name.cmp(&b.name));
