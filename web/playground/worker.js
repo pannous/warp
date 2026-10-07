@@ -92,6 +92,13 @@ registerForeignRuntime("python", {
 	prepare: code => USES_PYTHON.test(code) && loadPython().catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),
 });
 
+// a link in the shown markup was followed (playground.js followLink): the live run shows the page at that path
+function handleNavigation(path) {
+	if (!live) return;
+	navigate(live, hooks, path);
+	showHandled(live, { result: true });
+}
+
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
 	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
@@ -100,7 +107,7 @@ function handleEvent({ event, detail }) {
 // what a handler gave, shown as the compiler shows a program's value: the output binding (src/lowering/event_signals.rs
 // PAGE_VALUE), the program's last name read anew, else the handler's own value (a timer's only when it failed)
 function showHandled(holder, handled, timer = false) {
-	const binding = holder.exports[PAGE_VALUE];
+	const binding = holder.exports[PAGE_VALUE] ?? holder.exports[PAGE_ROUTED_EXPORT];
 	if (timer && !binding && handled.result) return;
 	if (handled.result && binding && showHoles(holder)) return;
 	const outcome = handled.result && binding ? outcomeOf(holder, hooks, binding) : handled;
@@ -157,6 +164,7 @@ self.onmessage = async ({ data }) => {
 	if (data.stored) return Object.assign(storedValues, data.stored); // host.js STD_ADAPTERS.store
 	await ready;
 	if (data.event) return handleEvent(data);
+	if (data.navigate) return handleNavigation(data.navigate);
 	if (live) stopListening(live);
 	live = undefined;
 	if (!compiler) await loadCompiler();

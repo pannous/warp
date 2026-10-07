@@ -142,7 +142,7 @@ def browser(*arguments):
 
 def show_example(name):
 	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
-	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`)"""
+	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons or links, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`)"""
 	script = f"""(async () => {{
 		const name = {json.dumps(name)};
 		await playground.chooseExample(name);
@@ -166,7 +166,7 @@ def show_example(name):
 			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
 		}}
 		for (const text of clicks) {{
-			[...rendered.querySelectorAll("button")].find(button => button.textContent === text)?.click();
+			[...rendered.querySelectorAll("button, a")].find(element => element.textContent === text)?.click();
 			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
 		}}
 		Element.prototype.animate = animate;

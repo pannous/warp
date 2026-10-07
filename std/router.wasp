@@ -1,0 +1,36 @@
+// The standard library module router (card web-router, notes/web_framework.md "Routes"): a route pattern
+// "/users/:id" matches the path "/users/7" with the parameter id = "7"; "*" matches any path (the not-found page).
+// lowering/routes.rs makes each `route "…" {…}` of a page a function and picks the first one matching page_path().
+
+route_segments(path:any) := [segment for segment in split(path, "/") if segment != ""]
+
+route_matches(pattern:any, path:any) := {
+	if pattern == "*" { return true }
+	let wanted = route_segments(pattern)
+	let given = route_segments(path)
+	if count(wanted) != count(given) { return false }
+	var index = 0
+	for part in wanted {
+		index = index + 1
+		if not starts_with(part, ":") and part != given#index { return false }
+	}
+	true
+}
+
+// the text of the parameter `:name` of the pattern in the path, ø when the pattern has none
+route_parameter(pattern:any, path:any, name:any) := {
+	let wanted = route_segments(pattern)
+	let given = route_segments(path)
+	var index = 0
+	for part in wanted {
+		index = index + 1
+		if part == ":" + name and index <= count(given) { return route_value(given#index) }
+	}
+	ø
+}
+
+// a parameter is a number when it is digits ("/users/7" gives id 7), else its text
+route_value(segment:any) := {
+	for character in chars(segment) { if not contains("0123456789", character) { return segment } }
+	int(segment)
+}

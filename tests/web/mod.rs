@@ -21,6 +21,8 @@ mod test_rendering_itself; // card playground-render
 #[cfg(feature = "native")] // std/markup.wasp against src/html.rs, natively
 mod test_html_render;
 mod test_markup_renderer;
+#[cfg(feature = "native")] // the page path of a native render (host::with_page_path)
+mod test_routes;
 mod test_element_events;
 mod test_class_components;
 mod test_components;
