@@ -94,6 +94,7 @@ mod test_after;
 mod test_parallel_map;
 mod test_implicit_await;
 mod test_task_parameter_shadows;
+mod test_task_name_scope;
 mod test_task_signals;
 mod test_empty_reset_in_if;
 mod test_signal_values;

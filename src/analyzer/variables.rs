@@ -350,6 +350,9 @@ pub fn captured_variables(function: &UserFunctionDef, outer: &Scope) -> Vec<(Str
 		own.define(param.name.clone(), None, param_kind(param));
 	}
 	collect_variables(&function.body, &mut own);
+	for variable in crate::lowering::for_loop::loop_variables(&function.body) {
+		own.define(variable, None, Kind::Empty);
+	}
 	let mut captured: Vec<(String, Kind)> = vec![];
 	function.body.visit(&mut |node| {
 		if let Node::Symbol(name) = node {
@@ -379,8 +382,9 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 	collect_variables(&without_block_bodies(program.clone(), &blocks), &mut outside_blocks);
 	// a used module's functions never see the program's variables (card module-locals)
 	for function in functions.into_iter().filter(|function| !crate::modules::is_module_definition(&function.name)) {
+		let looped = crate::lowering::for_loop::loop_variables(&function.body);
 		let is_main_variable = |name: &String| main.lookup(name).is_some() && !main.is_global(name)
-			&& !function.params.iter().any(|param| param.name == *name) && !declares_local(&function.body, name);
+			&& !function.params.iter().any(|param| param.name == *name) && !declares_local(&function.body, name) && !looped.contains(name);
 		let mut decided: HashSet<&String> = HashSet::new();
 		for (node, name) in find_assignments(&function.body, &is_main_variable) {
 			if !decided.insert(name) {

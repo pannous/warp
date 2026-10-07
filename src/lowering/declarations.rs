@@ -220,18 +220,16 @@ pub fn lower_tasks(node: Node) -> Node {
 	let mut functions = std::collections::HashSet::new();
 	let mut tasks = std::collections::HashSet::new();
 	let mut started = std::collections::HashMap::new();
-	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, value) = part {
+	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, _) = part {
 		let name = match head.drop_meta() {
 			Node::List(items, Bracket::Round, _) => items.first().map(|name| name.drop_meta().name()),
 			Node::Symbol(name) => Some(name.clone()),
 			_ => None,
 		};
-		if let (Node::Symbol(variable), Node::List(items, _, _)) = (head.drop_meta(), value.drop_meta()) {
-			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == TASK_WORDS[0]) {
-				tasks.insert(variable.clone());
-				if let Some((function, _)) = started_call(&items[1..]) {
-					started.insert(variable.clone(), function);
-				}
+		if let Some((variable, items)) = task_start(part) {
+			tasks.insert(variable.clone());
+			if let Some((function, _)) = started_call(&items[1..]) {
+				started.insert(variable.clone(), function);
 			}
 		}
 		if matches!(head.drop_meta(), Node::List(..)) {
@@ -262,6 +260,15 @@ pub fn lower_tasks(node: Node) -> Node {
 	started.retain(|_, function| functions.contains(function));
 	let job_lists = job_lists(&node, &functions);
 	Tasks { words, tasks, started, functions, job_lists }.lower(node)
+}
+
+/// `job = go f(x)`: the task variable and the words of its start
+fn task_start(node: &Node) -> Option<(&String, &Vec<Node>)> {
+	let Node::Key(head, Op::Define | Op::Assign, value) = node else { return None };
+	match (head.drop_meta(), value.drop_meta()) {
+		(Node::Symbol(variable), Node::List(items, _, _)) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == TASK_WORDS[0]) => Some((variable, items)),
+		_ => None,
+	}
 }
 
 /// The words of a statement the parser paired, flat: `(await any) [a, b]`, `await (all [go f(1), …])`
@@ -404,6 +411,7 @@ fn marker(word: &str, parts: Vec<Node>) -> Node {
 	Node::List([vec![Node::Symbol(word.to_string())], parts].concat(), Bracket::Round, Separator::None)
 }
 
+#[derive(Clone)]
 struct Tasks<'a> {
 	words: Vec<&'a str>,
 	/// task variables and the functions `go` starts
@@ -460,7 +468,26 @@ impl Tasks<'_> {
 		marker(marker_word, [vec![read], functions.collect()].concat())
 	}
 
+	/// Inside a function that binds a task variable's name itself (a parameter, a local, a loop variable: a joined
+	/// module's `for c in …` under a main-level `c = go f()`) other than by starting a task, that name is its own (card
+	/// task-name)
 	fn lower(&self, node: Node) -> Node {
+		let mut own_tasks = vec![];
+		node.visit(&mut |part| own_tasks.extend(task_start(part).map(|(variable, _)| variable.clone())));
+		let shadowed: Vec<String> = crate::lowering::getters::shadowed_names(&node).into_iter().filter(|name| !own_tasks.contains(name)).collect();
+		if !shadowed.iter().any(|name| self.started.contains_key(name) || self.job_lists.contains_key(name)) {
+			return self.lower_unshadowed(node);
+		}
+		let mut narrowed = self.clone();
+		for name in &shadowed {
+			narrowed.started.remove(name);
+			narrowed.job_lists.remove(name);
+			narrowed.tasks.remove(name);
+		}
+		narrowed.lower_unshadowed(node)
+	}
+
+	fn lower_unshadowed(&self, node: Node) -> Node {
 		match node {
 			Node::Symbol(name) if self.started.contains_key(&name) => self.value_of(&name).expect("a started task"),
 			Node::Symbol(name) if self.job_lists.contains_key(&name) => self.job_list_read(&name, Node::Symbol(name.clone()), TASK_LIST),

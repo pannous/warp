@@ -32,7 +32,7 @@ mod map_backend;
 mod struct_backend;
 pub use map_backend::MAP_COPY_SUFFIX;
 mod loop_control;
-pub(crate) use loop_control::mark_step;
+pub(crate) use loop_control::{is_step, mark_step};
 pub(crate) mod text_builtins;
 mod reflection;
 mod string_table;

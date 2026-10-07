@@ -46,7 +46,7 @@ pub(crate) fn mark_step(step: Node) -> Node {
 	Node::meta(step, Node::Symbol(STEP_MARKER.to_string()))
 }
 
-fn is_step(node: &Node) -> bool {
+pub(crate) fn is_step(node: &Node) -> bool {
 	matches!(node, Node::Meta { data, .. } if matches!(data.drop_meta(), Node::Symbol(marker) if marker == STEP_MARKER))
 }
 
