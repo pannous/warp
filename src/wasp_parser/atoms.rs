@@ -11,6 +11,8 @@ const STYLE_WORD: &str = "style";
 const TYPE_BODY_STARTS: [char; 4] = ['{', '=', ':', '<'];
 /// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
 const CAPTURED_ARGUMENT: &str = "$0";
+/// The most code points an emoji in code may have (a family ZWJ sequence has 7 to 11, a subdivision flag 7)
+const LONGEST_EMOJI: usize = 32;
 
 /// `T, F: Fn(i32) -> i32` → `T F`: the names before each bound
 fn type_parameter_names(written: &str) -> Vec<String> {
@@ -159,6 +161,7 @@ impl WaspParser {
 				(0..length).for_each(|_| self.advance());
 				error(&format!("{{{operator}}} is an operator without operands, no function: write them, e.g. map xs {{it + 1}}"))
 			}
+			ch if crate::extensions::strings::starts_an_emoji(ch) => self.parse_emoji(),
 			ch => {
 				warn!(
 					"Unexpected character '{}' at line {}, column {}",
@@ -481,6 +484,18 @@ impl WaspParser {
 		let body = self.parse_expr(Op::Assign.binding_power().1);
 		let body = self.continue_expr(body, 0);
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
+	}
+
+	/// `🌍`, `🇩🇪`, `👍🏽` in code, one user-perceived character: one code point is a codepoint, several a symbol
+	fn parse_emoji(&mut self) -> Node {
+		let ahead: String = self.chars[self.pos..].iter().take(LONGEST_EMOJI).collect();
+		let emoji = crate::extensions::strings::grapheme_clusters(&ahead)[0].to_string();
+		self.advance_by(emoji.chars().count());
+		let mut code_points = emoji.chars();
+		match (code_points.next(), code_points.next()) {
+			(Some(single), None) => Node::Char(single),
+			_ => Node::Symbol(emoji),
+		}
 	}
 
 	/// MATLAB's anonymous function `@(x) x.^2`: the lambda `x => x^2`

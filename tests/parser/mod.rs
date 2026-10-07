@@ -40,3 +40,4 @@ mod test_glued_pair_value;
 mod test_time_unit_keys;
 mod test_end_word;
 mod test_bare_operator_block;
+mod test_emoji_atoms;
