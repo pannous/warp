@@ -311,3 +311,10 @@ class_methods destructurings: `{x, y} = p` and `{x: a} = p` by field name (maps 
 count other than the fields' left as it was; match arms `Point{x, y} => …` and `Point(x, y) => …` the guard
 `parts·from if parts·from is Point` binding the fields before the body. All go through `parts·from`. Not built: nested
 patterns, constants inside a pattern (`Point(0, y)`), rest patterns.
+
+## Field names that are words (classes-41, card classes-field, tests/types/test_class_field_names.rs)
+- An operator word directly before a key colon names the key: `{from:a to:b}`, `{is:1 or:2}` (parser
+  `word_names_key` in wasp_parser/lookahead.rs); `then:`, `else:`, `do:` stay operators (BLOCK_COLON_WORDS).
+- `l.start` beside a user function `start` reads the field when start is a declared class field and l is a parameter
+  or of known instance shape (library_words::method_call); before, it became `start(l)` and recursed forever.
+- Still open: a plain map parameter without any class (`start(l) := l.start; start({start:3})`) still calls start.

@@ -5,6 +5,8 @@ use super::*;
 /// `abs x`, `norm x`: the absolute value (card g-1pvQ: norm is a synonym)
 /// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x`
 pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("norm", Op::Abs)];
+/// Operator words that stay operators before a colon: `if c then: a else: b`, `defp f(x), do: x`
+const BLOCK_COLON_WORDS: [&str; 3] = ["then", "else", "do"];
 
 impl WaspParser {
 	/// Check if current character can start an atom (for implicit application)
@@ -83,12 +85,23 @@ impl WaspParser {
 			|| ch == '"' || ch == '\'' || ch == ',' || ch == '«'
 	}
 
+	/// `{from:1 to:2}`: an operator word directly before a key colon names the key; `else:` and `then:` open blocks
+	fn word_names_key(&self) -> bool {
+		let word: String = (0..).map(|offset| self.peek_char(offset)).take_while(|&c| is_identifier_char(c)).collect();
+		let after = word.chars().count();
+		!word.is_empty() && !BLOCK_COLON_WORDS.contains(&word.as_str())
+			&& self.peek_char(after) == ':' && !matches!(self.peek_char(after + 1), ':' | '=')
+	}
+
 	/// Peek ahead for an infix operator, returns (Op, chars_to_consume) if found
 	/// Checks longer operators first (greedy matching)
 	pub(super) fn peek_operator(&self) -> Option<(Op, usize)> {
 		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
 		if (c1, c2) == ('?', ':') {
 			return None; // the elvis `?:` is no ternary, `try_parse_elvis` takes it
+		}
+		if self.word_names_key() {
+			return None;
 		}
 
 		if let Some(word) = SIMILARITY_WORDS.iter().find(|word| self.matches_keyword(word)) {
