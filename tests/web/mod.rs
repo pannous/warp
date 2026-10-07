@@ -6,6 +6,5 @@ mod test_markup_tags;
 mod test_web_playground;
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_web_server;
-#[cfg(feature = "native")] // a main waiting for a reply: the browser delivers it only after main returned
-mod test_async_data;
+mod test_async_data; // the browser: a task Worker fetches into shared memory, read at the check points
 mod test_html_render;
