@@ -66,3 +66,4 @@ mod test_block_data_paths;
 mod test_int_declaration_stays_whole;
 mod test_collection_declarations;
 mod test_type_colon_block;
+mod test_recursive_fields;

@@ -325,7 +325,7 @@ impl WaspParser {
 				Node::List(items, bracket, sep)
 			}
 			Node::List(items, bracket, sep) => {
-				let transformed: Vec<Node> = items.into_iter().map(Self::transform_fields_to_types).collect();
+				let transformed: Vec<Node> = without_ref_words(items).into_iter().map(Self::transform_fields_to_types).collect();
 				Node::List(transformed, bracket, sep)
 			}
 			// a method in a class body (`greet() := …`): its body is code, no field type
@@ -354,6 +354,23 @@ impl WaspParser {
 			other => other,
 		}
 	}
+}
+
+/// `left: ref Node?` (WebAssembly's reference types): the field's type is the word after `ref`; every class value is a
+/// reference already
+fn without_ref_words(items: Vec<Node>) -> Vec<Node> {
+	let mut fields: Vec<Node> = Vec::with_capacity(items.len());
+	for item in items {
+		let after_ref = matches!(fields.last().map(Node::drop_meta), Some(Node::Key(_, Op::Colon, value)) if matches!(value.drop_meta(), Node::Symbol(word) if word == REF_TYPE_WORD));
+		match (after_ref, item.drop_meta()) {
+			(true, Node::Symbol(_)) => {
+				let Some(Node::Key(name, op, _)) = fields.pop().map(|field| field.drop_meta().clone()) else { unreachable!("checked") };
+				fields.push(Node::Key(name, op, Box::new(item)));
+			}
+			_ => fields.push(item),
+		}
+	}
+	fields
 }
 
 /// `{f: x => x * 2}`: `:` binds tighter than `=>`, so the entry parses as the lambda `(f:x) => x*2` with a parameter f of

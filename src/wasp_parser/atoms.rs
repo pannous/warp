@@ -850,17 +850,14 @@ impl WaspParser {
 				return Node::List(vec![Symbol(GO_INTERFACE_WORD.to_string()), name, block], Bracket::None, Separator::Space);
 			}
 		}
-		// Go's `type Point struct {…}`
-		if self.matches_keyword(GO_STRUCT_WORD) {
-			self.advance_by(GO_STRUCT_WORD.len());
-			self.skip_whitespace();
-		}
+		self.skip_struct_words();
 		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
 		// Python's `class Point:` and the lines indented below it
 		let body = match (python_body, body) {
 			(true, Empty) => {
 				self.advance(); // :
 				self.skip_spaces();
+				self.skip_struct_words();
 				// `type Point: {` and its fields on the lines below: the braces are the body, as in `type Point {`
 				match self.current_char() == '{' {
 					true => Self::transform_fields_to_types(self.parse_bracketed('{')),
@@ -892,6 +889,16 @@ impl WaspParser {
 		// (`type of x` goes on: no declaration)
 		let body = if matches!(body, Empty) && ends_statement { Node::List(vec![], Bracket::Curly, Separator::None) } else { body };
 		Node::Type { name: Box::new(name), body: Box::new(body) }
+	}
+
+	/// Go's `type Point struct {…}`, WebAssembly's `type Node: gc struct {…}`: the words before the fields
+	fn skip_struct_words(&mut self) {
+		for word in [GC_WORD, GO_STRUCT_WORD] {
+			if self.matches_keyword(word) {
+				self.advance_by(word.len());
+				self.skip_spaces();
+			}
+		}
 	}
 
 	/// The traits a class names before its body, Java's and TypeScript's `implements Shape, Named {`, Swift's
