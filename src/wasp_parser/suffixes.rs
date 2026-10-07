@@ -4,6 +4,9 @@ use super::*;
 
 /// The word between a condition and its branch: `if c then x`
 const THEN_WORD: &str = "then";
+/// An operator word after its value binds tighter than arithmetic, `2 * 16 sqrt + 1` is `2 * (16 sqrt) + 1`, and looser
+/// than a unary minus: `-7 abs` is `abs(-7)`
+const SUFFIX_WORD_BP: u8 = Op::Neg.binding_power().1 - 1;
 
 impl WaspParser {
 	/// The exponent written in superscript digits and signs at the cursor, its length in characters and whether it has a sign:
@@ -89,6 +92,9 @@ impl WaspParser {
 		if let Some(power) = self.try_parse_superscript_power(lhs, min_bp) {
 			return Some(power);
 		}
+		if let Some(applied) = self.try_parse_operator_word_suffix(lhs, min_bp) {
+			return Some(applied);
+		}
 		let (op, chars) = self.peek_suffix_operator()?;
 		let (l_bp, _) = op.binding_power();
 		if l_bp < min_bp {
@@ -96,6 +102,19 @@ impl WaspParser {
 		}
 		self.advance_by(chars);
 		Some(Node::Key(Box::new(lhs.clone()), op, Box::new(Empty)))
+	}
+
+	/// `-7 abs`, `16 sqrt`: an operator word with nothing after it applies to the value before it, as `abs -7` does
+	fn try_parse_operator_word_suffix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		if self.options.data_mode || min_bp > SUFFIX_WORD_BP || matches!(lhs.drop_meta(), Empty) {
+			return None;
+		}
+		let (word, op) = super::lookahead::PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word))?;
+		if !self.expression_ends_after(word.len()) {
+			return None;
+		}
+		self.advance_by(word.len());
+		Some(Node::Key(Box::new(Empty), op, Box::new(lhs.clone())))
 	}
 
 	/// `{a*a}!` and `f!` at the end of a statement evaluate the block or name, which a block does on the spot anyway.

@@ -1,5 +1,5 @@
 //! Asks about written forms the analyzer sees whole (notes/welcoming.md): unbracketed list assignments (D12)
-//! and suffix words mixed with infix arithmetic (D9)
+//! and suffix words mixed with infix arithmetic (D9); a trailing percent `10%` is read as `10/100` here too
 
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{Bracket, Node, Separator};
@@ -10,6 +10,7 @@ const BARE_LIST_TOPIC: &str = "bare-list";
 const SUFFIX_PRECEDENCE_TOPIC: &str = "suffix-precedence";
 /// `squared` is the suffix form of `square`, `sorted` of `sort` (wiki/function.md: every function generates a suffix operator)
 const SUFFIX_WORD_ENDINGS: [&str; 2] = ["d", "ed"];
+const PERCENT: i64 = 100;
 const ARITHMETIC: [Op; 7] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Rem, Op::Pow];
 
 pub fn lower(node: Node) -> Node {
@@ -67,6 +68,8 @@ type SuffixWords = HashMap<String, String>;
 fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 	match node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_node(*node, functions)), data },
+		// `10%`: a percent is a hundredth, `10/100`
+		Node::Key(left, Op::Mod, right) if matches!(right.drop_meta(), Node::Empty) => Node::Key(Box::new(lower_node(*left, functions)), Op::Div, Box::new(Node::int(PERCENT))),
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_node(*left, functions)), op, Box::new(lower_node(*right, functions))),
 		Node::List(items, bracket, separator) => {
 			if let Some(asked) = bare_list_assignment(&items, &bracket, &separator) {
