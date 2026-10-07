@@ -96,7 +96,7 @@ fn word_fixes() {
 
 #[test]
 fn operator_ambiguity_fixes() {
-	assert_fix("true + true", "count true", "2");
+	assert_eq!(eval("true + true"), 2); // P195 (user): no fix needed, a bool counts as 1/0
 	assert_fix("2==2==1", "both equalities", "no");
 	assert_fix("3 & 4 == 4", "comparison first", "1");
 	assert_fix("\"a\" as int", "code point", "97");

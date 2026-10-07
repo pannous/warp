@@ -774,11 +774,12 @@ fn test_rounding_mode_is_named() {
 }
 
 #[test]
-fn test_booleans_are_not_numbers() {
-	fails_with("true + true", "arithmetic on a boolean"); // Python True + True → 2
-	fails_with("false * 3", "fix: int(false) * 3");
-	fails_with("(1<2) + 1", "arithmetic on a boolean");
-	fails_with("(not 1) + 2", "arithmetic on a boolean");
+fn test_booleans_count_as_numbers() {
+	// P195 (user): a bool counts as 1/0 in arithmetic, a literal like a variable (was the error "arithmetic on a boolean")
+	is!("true + true", 2); // Python True + True → 2
+	is!("false * 3", 0);
+	is!("(1<2) + 1", 2);
+	is!("(not 1) + 2", 2);
 	let accepted = |code: &str| warp::analyzer::diagnose(&warp::parse(code)).is_none();
 	assert!(accepted("int(true) + int(true)"));
 	assert!(accepted("x = 1 < 2; if x {1} else {2}"));
