@@ -2890,6 +2890,8 @@ PASSED:
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
+  ✓ web::test_guide::every_example_a_chapter_links_exists
+  ✓ web::test_guide::every_guide_snippet_shows_its_value
   ✓ web::test_headless_pages::a_click_runs_the_handler_and_shows_the_page_anew
   ✓ web::test_headless_pages::a_missing_button_is_a_loud_error
   ✓ web::test_headless_pages::each_component_instance_counts_on_its_own
@@ -3333,4 +3335,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3328 passed, 0 failed, 3328 total tested
+19 ignored, 3330 passed, 0 failed, 3330 total tested
