@@ -381,23 +381,34 @@ function stopListening(holder) {
 
 // run a compiled program: the outcome src/web.rs run_outcome reads
 function runProgram(bytes, hooks) {
-	let instance;
+	const holder = instantiateProgram(bytes, hooks);
+	return holder.failure ? holder : runMain(holder, hooks);
+}
+
+// the program's instance, its main not run yet (a built site first loads the module of the route it shows, site.js);
+// { failure } when it cannot be instantiated
+function instantiateProgram(bytes, hooks) {
 	// the runtime warnings go back to the compiler, which reports them (src/web.rs); the page's path is the page's own
 	const holder = { warnings: [], pagePath: hooks.pagePath?.() };
 	try {
 		const module = new WebAssembly.Module(bytes);
 		holder.run = { module };
 		eachHostPart("started", holder.run);
-		instance = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks));
-		holder.exports = instance.exports;
+		holder.exports = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks)).exports;
 		hooks.instantiated?.(holder);
 	} catch (failure) {
 		return { failure: String(failure.message ?? failure) };
 	}
-	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, instance.exports, () => instance.exports.main()));
-	const events = pageEvents(instance.exports);
+	return holder;
+}
+
+// main of an instantiated program, and what it left
+function runMain(holder, hooks) {
+	const { exports } = holder;
+	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, exports, () => exports.main()));
+	const events = pageEvents(exports);
 	// a program with routes stays for its links (lowering/routes.rs page·routes)
-	if ((events.length > 0 || holder.timers || holder.fetches || instance.exports[PAGE_ROUTES_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
+	if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
 	// a run without page events (std/markup.wasp rendering the page's HTML, src/markup.rs) keeps the page's run
 	if (events.length > 0 && outcome.result) listeningRun = holder;
 	return outcome;
