@@ -205,6 +205,7 @@ PASSED:
   ✓ control::test_on_error_of_function::a_failing_call_has_the_handler_value
   ✓ control::test_on_error_of_function::an_unknown_function_is_named
   ✓ control::test_on_error_of_function::every_definition_and_handler_form
+  ✓ control::test_page_events::a_choice_that_only_reads_is_the_output_binding
   ✓ control::test_page_events::a_handler_without_event_runs_through_its_wrapper
   ✓ control::test_page_events::a_page_event_handler_in_a_program_with_tasks_has_one_wrapper
   ✓ control::test_page_events::a_page_event_handler_is_exported_without_a_raise
@@ -735,6 +736,9 @@ PASSED:
   ✓ functions::test_field_function_values::test_function_list_in_object_field
   ✓ functions::test_float_to_int_parameter::a_float_for_an_int_parameter_is_refused
   ✓ functions::test_float_to_int_parameter::an_explicit_cast_or_an_int_passes
+  ✓ functions::test_float_values_of_tuples::a_destructured_float_stays_a_float
+  ✓ functions::test_float_values_of_tuples::a_function_changes_a_float_global
+  ✓ functions::test_float_values_of_tuples::a_held_value_adds_into_a_float
   ✓ functions::test_folding_in_bodies::a_call_on_a_parameter_stays
   ✓ functions::test_folding_in_bodies::a_constant_call_in_a_body_is_folded
   ✓ functions::test_folding_in_bodies::a_constant_call_in_a_loop_is_folded
@@ -1337,6 +1341,10 @@ PASSED:
   ✓ modules::test_std_math_text::use_text_brings_title_slug_truncate
   ✓ modules::test_std_math_text::use_text_brings_words_lines_capitalize_center
   ✓ modules::test_std_math_text::use_text_formats_a_template
+  ✓ modules::test_std_matrix::a_matrix_element_is_written
+  ✓ modules::test_std_matrix::numpy_names_are_matrix_words
+  ✓ modules::test_std_matrix::use_matrix_computes
+  ✓ modules::test_std_matrix::use_matrix_makes_matrices
   ✓ modules::test_std_net::use_net_posts_a_text
   ✓ modules::test_std_qualified::a_qualified_module_word_is_the_word
   ✓ modules::test_std_qualified::a_qualified_word_without_its_use_names_the_module
@@ -2296,6 +2304,7 @@ PASSED:
   ✓ types::test_class_cases_ported::static_members_belong_to_the_class
   ✓ types::test_class_destructuring::braces_take_fields_by_name
   ✓ types::test_class_destructuring::match_arms_take_an_instance_apart
+  ✓ types::test_class_destructuring::nested_patterns_and_constants
   ✓ types::test_class_destructuring::parentheses_take_fields_in_order
   ✓ types::test_class_extends::a_subclass_adds_fields
   ✓ types::test_class_extends::a_subclass_has_the_fields_and_methods_of_its_parent
@@ -2697,11 +2706,25 @@ PASSED:
   ✓ wasm::wasm_optimizer_test::test_library_optimization
   ✓ wasm::wasm_optimizer_test::test_no_optimization
   ✓ wasm::wasm_optimizer_test::test_tools_availability
+  ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
+  ✓ web::test_async_data::a_changed_url_variable_fetches_anew
+  ✓ web::test_async_data::a_failed_fetch_is_the_error
+  ✓ web::test_async_data::on_change_sees_the_arrived_value
+  ✓ web::test_async_data::the_parsed_json_arrives_later
+  ✓ web::test_components::a_component_is_a_function_returning_markup
+  ✓ web::test_components::a_trailing_block_fills_a_function_parameter
+  ✓ web::test_components::each_instance_of_a_component_has_its_own_state
+  ✓ web::test_components::the_block_after_the_call_is_the_children
+  ✓ web::test_element_events::an_element_handler_marks_its_element
+  ✓ web::test_element_events::each_element_handler_has_its_number
+  ✓ web::test_element_events::the_page_shows_the_markup_after_a_handler
   ✓ web::test_html_render::a_whole_page
   ✓ web::test_html_render::other_values_are_no_markup
   ✓ web::test_html_render::tags_attributes_and_text
   ✓ web::test_html_render::the_page_gets_the_html_of_markup
   ✓ web::test_html_render::void_elements_and_attribute_lists
+  ✓ web::test_keyed_lists::a_key_names_the_element_of_an_item
+  ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
   ✓ web::test_markup_tags::a_call_outside_tags_or_of_a_function_stays_a_call
   ✓ web::test_markup_tags::a_tag_takes_its_attributes_in_parentheses
   ✓ web::test_markup_tags::the_html_dsl_sample_runs
@@ -3060,4 +3083,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3055 passed, 0 failed, 3055 total tested
+19 ignored, 3078 passed, 0 failed, 3078 total tested
