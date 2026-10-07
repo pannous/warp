@@ -61,8 +61,23 @@ fn server_definition(statement: &Node) -> Option<Node> {
 		[single] => single.clone(),
 		several => Node::List(several.to_vec(), bracket.clone(), separator.clone()),
 	};
+	// one definition form (`def f(a) {…}` is `f(a) := {…}`), its parameters taking any value from the JSON arguments
+	let definition = with_any_parameters(crate::declarations::lower_c_functions(definition));
 	// only a definition: a call of a word named server stays one
 	rpc_route(&definition).map(|_| definition)
+}
+
+/// `f(a, b:int) := …` as `f(a:any, b:int) := …`: an RPC's arguments are JSON values of any kind
+fn with_any_parameters(definition: Node) -> Node {
+	let Node::Key(head, Op::Define, body) = definition.drop_meta().clone() else { return definition };
+	let Node::List(items, bracket, separator) = head.drop_meta().clone() else { return definition };
+	let any = |parameter: Node| match parameter.drop_meta() {
+		Node::Symbol(_) => Node::Key(Box::new(parameter), Op::Colon, Box::new(Node::Symbol(ANY_TYPE.to_string()))),
+		_ => parameter,
+	};
+	let mut items = items.into_iter();
+	let head: Vec<Node> = items.next().into_iter().chain(items.map(any)).collect();
+	Node::Key(Box::new(Node::List(head, bracket, separator)), Op::Define, body)
 }
 
 /// POST /rpc/f of a function marked `server`: f called with the items of the request's JSON array
