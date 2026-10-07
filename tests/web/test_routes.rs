@@ -51,3 +51,25 @@ fn a_typed_route_parameter_computes_with_its_type() {
 	assert_eq!(page_at("/prices/1.5", program), "<p>twice 3</p>");
 	assert_eq!(page_at("/users/bo", program), "<p>not found</p>");
 }
+
+// card route-nested: a route's block may hold routes, their patterns relative to it; the block's other items are its
+// layout, which shows the inner route at its `outlet`; at the route's own path an inner "/" route shows, else nothing
+#[test]
+fn nested_routes_show_inside_their_layout() {
+	let program = "users = [\"Ann\", \"Bo\"]
+route \"/users\" {
+	div{ h1{ \"Users\" } outlet }
+	route \"/\" { p{ \"pick one\" } }
+	route \":id:int\" { p{ users#id } }
+}
+route \"/teams/:team\" {
+	section{ outlet }
+	route \"members/:id:int\" { p{ team + \" \" + id } }
+}
+route \"*\" { p{ \"not found\" } }";
+	assert_eq!(page_at("/users", program), "<div><h1>Users</h1><p>pick one</p></div>");
+	assert_eq!(page_at("/users/2", program), "<div><h1>Users</h1><p>Bo</p></div>");
+	assert_eq!(page_at("/teams/red/members/3", program), "<section><p>red 3</p></section>");
+	assert_eq!(page_at("/teams/red", program), "<section></section>");
+	assert_eq!(page_at("/users/2/more", program), "<p>not found</p>");
+}

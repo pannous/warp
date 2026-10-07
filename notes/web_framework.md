@@ -221,7 +221,13 @@ Each step is useful on its own and is what the next ones stand on.
 - Links: site.js follows same-origin `a[href]` clicks without modifier keys with pushState and shows page·html anew;
   popstate does the same. The playground sends {navigate: path} to the worker (playground.js followLink), which shows
   page·value, else page·routed. A routes program stays listening for that. Tour example routes.
-- Open: nested route blocks (`route "/users" { route ":id" {…} }`), a built site
+- Nested routes (card route-nested): `route "/users" { div{ h1{ "Users" } outlet } route "/" {…} route ":id:int" {…} }`.
+  Inner patterns are relative to the outer one, the outer block's other items are its layout, showing the inner route
+  at `outlet`. Flattened in lowering/routes.rs: each inner route is a page route with the whole pattern
+  ("/users/:id:int") whose function is the layout with page·part·N() at the outlet (page·part·N: the inner block, its
+  parameters, the outer ones too, bound by `let`); after them the outer route itself with an empty outlet, so an inner
+  "/" route answers the outer path first. page·routes lists the whole patterns.
+- Open: a built site
   prerendering each static route (index.html is "/" only; a deep link needs the serve program to render it), the serve
   program rendering per request path. `outlet` is the canonical word (aliases such as slot on demand).
 
