@@ -50,6 +50,8 @@ pub mod std_adapters;
 #[cfg(feature = "native")]
 pub mod web_server;
 #[cfg(feature = "native")]
+pub mod site;
+#[cfg(feature = "native")]
 pub mod fetches;
 #[cfg(feature = "native")]
 pub mod components;

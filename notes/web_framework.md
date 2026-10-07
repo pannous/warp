@@ -120,3 +120,20 @@ Each step is useful on its own and is what the next ones stand on.
   are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
 - Left: scoping a component's sheet to its own elements (a generated class per component), `.card { … }` written
   without quotes (the parser stops at `.`), `8px` written as a number with a unit (parses as 8 * px).
+
+## Built sites (card web-ssr, 2026-10-07; split agreed with warp-cd, renderer decided by warp-96)
+- `warp build --site app.wasp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
+  host.js, markup.js, site.js, carried in the warp binary (src/site.rs include_str!, one source with the playground).
+  index.html holds the program's value as HTML, rendered at build time (server-side rendering): the page reads
+  without JavaScript. Pages are compiled with the reflection getters the browser host needs (pipeline::for_a_page),
+  and their page event handlers draw no "a native run never raises it" warning.
+- Hydration (web/playground/site.js): the loader runs app.wasm with host.js in the page; main runs once as it ran at
+  build time, so the component instances count alike. The DOM stays; click and input on the root find their element's
+  handler (markup.js elementEvent), and after a handler the page morphs (markup.js morphChildren) the HTML the program
+  renders itself.
+- One renderer (warp-96: "Wasp is wasm-first"): the HTML of the live updates comes from the program, an export
+  page·html that the emitter builds, reusing how print renders Nodes inside wasm; no second renderer in JS, no
+  compiler shipped with the site. Once page·html exists, the build-time rendering runs that same export natively and
+  src/html.rs no longer renders sites. Until then a built page is static after load (site.js warns on the console).
+- Open: page·html (next step); timers and fetch replies in a built page (site.js has the hooks, no timer loop yet);
+  `serve` programs serving their own page.

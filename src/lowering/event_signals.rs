@@ -139,7 +139,7 @@ pub fn lower(program: Node) -> Node {
 	let statements: Vec<Node> = flags.iter().map(|(flag, initial)| assign(flag, initial.clone())).chain(statements).collect();
 	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
 	#[cfg(feature = "native")]
-	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| is_page_event(name) && !raised.contains(name)) {
+	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| is_page_event(name) && !raised.contains(name) && !crate::pipeline::is_for_a_page()) {
 		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
 		if let Err(error) = crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning)]) {
 			return error;
