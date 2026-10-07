@@ -89,6 +89,7 @@ impl WaspParser {
 	}
 
 	pub(super) fn parse_list_with_separators(&mut self, close: Option<char>, bracket: Bracket) -> Node {
+		let tag_block = std::mem::take(&mut self.tag_block);
 		// Collect all items with their following separators
 		let mut items_with_seps: Vec<(Node, Separator)> = Vec::new();
 
@@ -127,7 +128,10 @@ impl WaspParser {
 			let calls_function = in_command && items_with_seps.len() == statement_start + 1
 				&& matches!(items_with_seps[statement_start].0.drop_meta(), Symbol(name) if crate::type_name_matching::names_a_function(name));
 			let outer_pipe = std::mem::replace(&mut self.pipe_takes_call, calls_function);
+			// `ul { li: "a" li: "b" }`: a block after a name and a blank is that tag's block
+			self.tag_block = ch == '{' && matches!(items_with_seps.last(), Some((previous, Separator::Space)) if matches!(previous.drop_meta(), Symbol(_)));
 			let item = self.parse_value();
+			self.tag_block = false;
 			self.pipe_takes_call = outer_pipe;
 			self.in_command = outer_command;
 			let item = if calls_function && { self.skip_spaces_and_inline_comments(); self.at_pipeline() } {
@@ -216,7 +220,7 @@ impl WaspParser {
 
 		self.pending_comment = None; // a comment closing a list documents nothing after it
 		let list = self.group_by_separators(items_with_seps, bracket);
-		match list.duplicate_key() {
+		match list.duplicate_key().filter(|_| !tag_block) {
 			Some(key) => error(&format!("duplicate key '{}'", key)),
 			None => list,
 		}
@@ -313,6 +317,18 @@ impl WaspParser {
 		} else {
 			grouped_list(grouped_nodes, bracket, split_sep)
 		}
+	}
+
+	/// A class body's members with their field types: `{x: int; double() := …}`. A body of one C-style method
+	/// (`{int bar(){ 42 }}`) groups as the words `int` and `bar(){…}`: it is one member, not two fields
+	pub(crate) fn class_body(block: Node) -> Node {
+		let block = match block {
+			Node::List(items, Bracket::Curly, Separator::Space) if is_typed_method(&items) => {
+				Node::List(vec![Node::List(items, Bracket::None, Separator::Space)], Bracket::Curly, Separator::Semicolon)
+			}
+			other => other,
+		};
+		Self::transform_fields_to_types(block)
 	}
 
 	/// Transform field definitions: Key(name, op, Symbol) -> Key(name, op, Type)
@@ -414,6 +430,12 @@ fn is_parameter_word(node: &Node) -> bool {
 }
 
 /// The first word of a class-body item that is code: a function keyword, or the constructor call `init(n)`
+/// `int bar(){ 42 }` as words: a type word and a call with its block
+fn is_typed_method(words: &[Node]) -> bool {
+	matches!(words, [type_word, head] if matches!(type_word.drop_meta(), Node::Symbol(word) if crate::analyzer::builtin_type_kind(word).is_some())
+		&& matches!(head.drop_meta(), Node::List(parts, _, _) if matches!(parts.last().map(Node::drop_meta), Some(Node::List(_, Bracket::Curly, _)))))
+}
+
 fn starts_code(first: &Node) -> bool {
 	match first.drop_meta() {
 		Node::Symbol(word) => crate::operators::is_function_keyword(word) || super::ACCESSOR_WORDS.contains(&word.as_str()) || super::MEMBER_MODIFIERS.contains(&word.as_str()),

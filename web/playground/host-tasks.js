@@ -267,9 +267,7 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 function finishedTask(run, hooks, id) {
 	const task = run.tasks.get(id);
 	if (!task.worker) return queuedSignals(run, task);
-	const header = new Int32Array(task.shared, 0, 2);
-	Atomics.wait(header, 0, 0);
-	let record = JSON.parse(decode(new Uint8Array(task.shared, TASK_HEADER, header[1]).slice()));
+	let record = readShared(task.shared, true);
 	if (record.output) hooks.print(record.output, 1);
 	taskPool.push(task.worker); // free for the next task
 	if (record.value?.kind === KIND_INT && record.ints) record.value = BigInt(record.value.data.int);
@@ -461,11 +459,20 @@ function writeShared(shared, record) {
 	Atomics.notify(header, 0);
 }
 
+// the record a task Worker wrote into a shared buffer (writeShared): waited for when `wait`, else undefined while none is
+// there yet
+function readShared(shared, wait = false) {
+	const header = new Int32Array(shared, 0, 2);
+	if (wait) Atomics.wait(header, 0, 0);
+	if (Atomics.load(header, 0) === 0) return undefined;
+	return JSON.parse(decode(new Uint8Array(shared, TASK_HEADER, header[1]).slice()));
+}
+
 // the reply a task Worker wrote into the fetch's shared buffer, once: undefined while none is there or it was taken
 function sharedFetchReply(started) {
-	const header = new Int32Array(started.shared, 0, 2);
-	if (started.reply || Atomics.load(header, 0) === 0) return undefined;
-	const { body, error } = JSON.parse(decode(new Uint8Array(started.shared, TASK_HEADER, header[1]).slice()));
+	const answer = started.reply ? undefined : readShared(started.shared);
+	if (!answer) return undefined;
+	const { body, error } = answer;
 	return error ? started.failed(error) : { body };
 }
 

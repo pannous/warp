@@ -43,3 +43,29 @@ fn rendering_markup_warns_nothing_more() {
 	assert_eq!(warp::markup::to_html(&shown), "<html><p>x</p></html>");
 	assert_eq!(warp::diagnostic::take_warnings().len(), 0);
 }
+
+// card g-_bGo, user decision P176: in a named tag's block a repeated `key: value` is a child, as repeated elements in
+// XML/HTML (`ul{ li: "First" li: "Second" }` holds two li), glued or spaced; a plain `{…}` stays a map whose
+// repeated key is an error, also inside a tag, and so does a declared type's constructor
+#[test]
+fn repeated_keys_in_a_tag_block_are_children() {
+	eq!(eval("ul{ li: \"First\" li: \"Second\" }"), eval("ul{ li{ \"First\" } li{ \"Second\" } }"));
+	eq!(eval("ul { li: \"First\" li: \"Second\" }"), eval("ul{ li{ \"First\" } li{ \"Second\" } }"));
+	eq!(eval("div{ class: \"x\" p: \"a\" p: \"b\" }"), eval("div{ class: \"x\" p{ \"a\" } p{ \"b\" } }"));
+	fails_with("{ a: 1 a: 2 }", "duplicate key 'a'");
+	fails_with("ul{ li: \"a\" data: { b: 1 b: 2 } }", "duplicate key 'b'");
+	fails_with("class Point { x: int y: int }; Point{ x: 1 x: 2 }", "duplicate key 'x'");
+}
+
+
+// P188 (stay close to HTML): HTML's own attribute form name="value" inside a tag's block is the attribute name:"value",
+// also for the keywords type and class and in parentheses; a name that is no attribute stays an assignment
+#[test]
+fn a_tag_takes_html_attributes_with_equals() {
+	let html_of = |code: &str| warp::markup::to_html(&eval(code));
+	assert_eq!(html_of("label{\"Name\" input{type=\"text\" style=\"color: blue\"}}"), "<label>Name<input type=\"text\" style=\"color: blue\"></label>");
+	assert_eq!(html_of("p{class=\"card\" id=\"main\" \"x\"}"), "<p class=\"card\" id=\"main\">x</p>");
+	assert_eq!(html_of("a{href=\"/about\" data-page=\"about\" \"About\"}"), "<a href=\"/about\" data-page=\"about\">About</a>");
+	assert_eq!(html_of("div{ label(for=\"pwd\"):\"Password\" }"), "<div><label for=\"pwd\">Password</label></div>");
+	assert_eq!(html_of("p{ shown = \"seen\" }"), "<p>seen</p>");
+}

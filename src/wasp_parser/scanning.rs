@@ -20,6 +20,17 @@ impl WaspParser {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}
 
+	/// The operator a block holds alone, the cursor at its start: `{++}`, `{ * }`, and its length up to the `}`
+	pub(super) fn bare_operator_in_block(&self) -> Option<(String, usize)> {
+		const OPERATOR_CHARS: &str = "+-*/%^<>=!&|";
+		let is_blank = |ch: &char| matches!(ch, ' ' | '\t');
+		let opened = self.chars[..self.pos].iter().rev().find(|ch| !is_blank(ch)) == Some(&'{');
+		let rest = &self.chars[self.pos..];
+		let operator: String = rest.iter().take_while(|ch| OPERATOR_CHARS.contains(**ch)).collect();
+		let length = operator.chars().count() + rest[operator.chars().count()..].iter().take_while(|ch| is_blank(ch)).count();
+		(opened && !operator.is_empty() && rest.get(length) == Some(&'}')).then_some((operator, length))
+	}
+
 	/// Do blanks, an identifier, optional blanks and a `{` follow the cursor: `record point {…}`
 	pub(super) fn name_and_block_follow(&self) -> bool {
 		self.name_then('{')

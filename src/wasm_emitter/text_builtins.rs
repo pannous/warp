@@ -169,6 +169,10 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
 		required.extend([super::exact::EXACT_TEXT, TEXT_CONCAT]);
 	}
+	// codepoint_of reads a one-character text as its character
+	if required.contains(super::library_ops::CODEPOINT_OF) {
+		required.extend(["string_char_at", "text_grapheme_count"]);
+	}
 	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, TEXT_TRIM, C_STRING, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
