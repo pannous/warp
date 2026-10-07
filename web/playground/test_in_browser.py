@@ -11,7 +11,8 @@ Besides the repository it serves /__stub__?status=…&body=… (that response, f
 src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
 import functools, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse
 
-PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "8733"))
+# a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
+PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", "2")
 PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
 # one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
@@ -94,9 +95,21 @@ def serve(binary):
 			pass
 	class Server(http.server.ThreadingHTTPServer):
 		request_queue_size = 512  # every worker fetches the binary at once
-	server = Server(("127.0.0.1", PORT), functools.partial(Handler, directory=REPOSITORY))
+	global PORT
+	try:
+		server = Server(("127.0.0.1", PORT), functools.partial(Handler, directory=REPOSITORY))
+	except OSError as busy:
+		sys.exit(f"error: port {PORT} (WARP_BROWSER_TEST_PORT) is taken{port_holder(PORT)}: {busy.strerror}; unset it for a free port")
+	PORT = server.server_address[1]
 	threading.Thread(target=server.serve_forever, daemon=True).start()
 	return server
+
+
+def port_holder(port):
+	"""` by PID 123 (python3 …)`: the process listening on the port, as lsof names it"""
+	found = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-Fpc"], capture_output=True, text=True).stdout.split()
+	fields = {line[0]: line[1:] for line in found if line[:1] in ("p", "c")}
+	return f" by PID {fields['p']} ({fields.get('c', '?')})" if "p" in fields else ""
 
 
 def open_page(url):

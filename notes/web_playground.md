@@ -48,7 +48,7 @@ in the page and compares value and printed text; pages.yml runs it before deploy
 One configuration (.cargo/config.toml): the alias builds tests/main.rs for wasm32-wasip1 with `--no-default-features`,
 and the wasm32-wasip1 runner web/playground/test_in_browser.py serves the repository root plus the binary, opens
 web/playground/tests.html in headless Chrome (agent-browser, session warp-browser-tests) and prints a libtest summary
-(exit 101 on a failure). `WARP_BROWSER_TEST_WORKERS` (default 2) and `WARP_BROWSER_TEST_PORT` (8733) tune it.
+(exit 101 on a failure). `WARP_BROWSER_TEST_WORKERS` (default 2) and `WARP_BROWSER_TEST_PORT` (default: a free port per run; a taken one fails naming its PID) tune it.
   `WARP_BROWSER_TEST_PER_WORKER` (tests.js TESTS_PER_WORKER, 100) is how many tests a worker runs before it is replaced.
 - Wasm memory (card browser-memory, 2026-10-06): Chrome holds ~124 live Wasm memories per page, all Workers together,
   and an isolate that runs out collects only its own dead instances (probes/wasm_memory_limit.html), so another
