@@ -337,4 +337,7 @@ Each step is useful on its own and is what the next ones stand on.
   and no aria-label/title; a without href; a heading skipping a level (h1 → h3); an id used twice; html without lang.
   Each points at the element and names a fix; `use strict` / `--strict` make them errors like every warning.
 - Translations as data: `use i18n`, translate(messages, language, key, values) with CLDR plural forms (notes/i18n.md).
-- Not here: focus on route change and live regions for async content (warp-89, web-router / web-async). Markup built at run time (strings, computed tags) is not checked.
+- Focus on route change (card web-i18n): after a link or the back button shows another route, host-routes.js
+  focusRoute moves the focus to the route's main heading (`main h1`, else `h1`), else `main`, else the page's root, made
+  focusable with tabindex -1, so a screen reader reads the new page (probes/lazy_routes/check_in_browser.sh).
+- Not here: live regions for async content (web-async). Markup built at run time (strings, computed tags) is not checked.
