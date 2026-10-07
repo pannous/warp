@@ -23,6 +23,16 @@ fn is_template_mark(data: &Node) -> bool {
 	matches!(data, Node::Key(name, _, _) if matches!(name.as_ref(), Node::Symbol(mark) | Node::Text(mark) if mark == TEMPLATE_MARK))
 }
 
+/// Does a hole of a template mention a name (`"caught: \(e)"` mentions e), as `mentions` tells of each hole
+pub fn template_mentions(node: &Node, mentions: impl Fn(&Node) -> bool) -> bool {
+	let Node::Meta { node, data } = node else { return false };
+	if !is_template_mark(data) {
+		return template_mentions(node, mentions);
+	}
+	let Node::Text(template) = node.drop_meta() else { return false };
+	parts_with(template, false).is_ok_and(|parts| parts.iter().any(|part| matches!(part, Part::Hole(expression) if mentions(expression))))
+}
+
 /// Every template left after the sql/sh lowering becomes the concatenation of its pieces
 pub fn lower(node: Node) -> Node {
 	match node {

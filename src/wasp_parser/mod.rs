@@ -1061,6 +1061,9 @@ fn is_minus_one(end: &Node) -> bool {
 }
 
 pub(crate) fn mentions(node: &Node, name: &str) -> bool {
+	if crate::interpolation::template_mentions(node, |hole| mentions(hole, name)) {
+		return true;
+	}
 	match node.drop_meta() {
 		Node::Symbol(symbol) => symbol == name,
 		Node::Key(left, _, right) => mentions(left, name) || mentions(right, name),
