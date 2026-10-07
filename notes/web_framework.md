@@ -106,3 +106,16 @@ Each step is useful on its own and is what the next ones stand on.
   of a descendant class (`#main .x` reads as `#main.x`, quote it); `#id` after a rule on the same line, `50%` followed
   by another declaration without `;`, and several rules on one line with a comma selector need their own lines.
 - Left: scoping a component's sheet to its own elements (a generated class per component), warp-cd.
+
+## Step 14 (web-testing), what is done and what is left (classes-42, warp-06)
+- `warp::headless::Page` (src/headless.rs, tests/web/test_headless_pages.rs): `Page::render(code)` runs the program
+  and keeps the run; `click("Add")` finds the element showing that text with a `data-wasp-click`, runs its handler
+  (`on·click·N·node` with `[{instance}]` for a component instance) and reads `page·value` anew; `type_into(label,
+  text)` fires `input` on the field found by placeholder, name or id; `text()` (without style/script), `html()`,
+  `markup()`. A missing element is an Err naming the page's HTML.
+- Natively the run is a kept wasmtime instance (wasm_reader::run_main_kept); in the browser suite the same tests run
+  through the new import warp_host.page_event (host.js pageEventOutcome on the last listening run, as worker.js
+  showHandled). html.rs gained `elements()` / `text_content()`.
+- The playground examples keep their `clicks` / `typed` / `clicked` checks (test_in_browser.py --examples).
+- Left: tests written in wasp itself (`test "counter" { page = render(Counter()); click page "Add"; … }`) need a
+  run-time handler lookup inside the module; not started.

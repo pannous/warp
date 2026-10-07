@@ -324,6 +324,12 @@ fn run_main<S: 'static>(
 	}
 }
 
+/// Instantiates `bytes` with the import families it needs and runs `main`, keeping the instance for later calls of its
+/// exports (headless.rs: a page's handlers)
+pub(crate) fn run_main_kept(bytes: &[u8], imports: Imports) -> Result<(Val, Store<crate::host::HostState>, Instance)> {
+	run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_imports(linker, engine, module, imports))
+}
+
 /// Load WASM bytes with host function support and return Node
 /// Use this for modules that import host.fetch or host.run
 pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
@@ -441,7 +447,7 @@ pub(crate) fn with_trap_detail<T, R>(outcome: wasmtime::Result<R>, store: &mut S
 }
 
 /// Convert a `main` result (primitive or GC Node struct) into a Node, for any store state
-fn val_to_node<T>(result: &Val, store: &mut Store<T>, instance: &Instance) -> Result<Node> {
+pub(crate) fn val_to_node<T>(result: &Val, store: &mut Store<T>, instance: &Instance) -> Result<Node> {
 	match result {
 		Val::I64(n) => Ok(Node::Number(Number::Int(*n))),
 		Val::I32(n) => Ok(Node::Number(Number::Int(*n as i64))),
