@@ -202,6 +202,7 @@ impl WasmGcEmitter {
 		// node_bytes(node) -> i64: the bytes of a text, 8 bytes per element otherwise
 		if self.should_emit_function("node_bytes") {
 			self.runtime_function("node_bytes", vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, f| {
+				s.emit_fail_if_error(f, 0); // the bytes of an Error are none of its message's (card byte-slice)
 				s.emit_is_text(f);
 				f.instruction(&I::If(BlockType::Result(ValType::I64)));
 				f.instruction(&I::LocalGet(0));
@@ -707,12 +708,8 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &[I::Return, I::End]);
 				}
 				// an Error value fails with its own message (`x!` of ø is "unwrapped ø"), never as "not a number"
-				let trap_detail = s.trap_detail_global();
 				for operand in [0, 1] {
-					s.emit_field(f, operand, 0);
-					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(operand), I::GlobalSet(trap_detail)]);
-					s.call(f, RETURNED_ERROR);
-					f.instruction(&I::End);
+					s.emit_fail_if_error(f, operand);
 				}
 				// a text, a character or a list is no number here: "x" * 2 is no 240
 				for operand in [0, 1] {
@@ -888,6 +885,15 @@ impl WasmGcEmitter {
 	pub(super) fn emit_runtime_error(&mut self, func: &mut Function, error: &'static str) {
 		self.emit_call(func, error);
 		func.instruction(&I::Unreachable);
+	}
+
+	/// Fail with the Error in Node local `local` as it is (its own message, the trap detail), when it holds one
+	pub(super) fn emit_fail_if_error(&mut self, func: &mut Function, local: u32) {
+		let trap_detail = self.trap_detail_global();
+		self.emit_field(func, local, 0);
+		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(local), I::GlobalSet(trap_detail)]);
+		self.call(func, RETURNED_ERROR);
+		func.instruction(&I::End);
 	}
 
 	/// Trap when the i32 condition on the stack is true
