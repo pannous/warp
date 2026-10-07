@@ -65,3 +65,10 @@ fn strict_equality_compares_the_full_type() {
 	assert_eq!(text_of("\"a\" === \"a\""), "yes");
 	assert_eq!(text_of("1 !== 1.5"), "yes");
 }
+
+#[test]
+fn a_list_starting_with_a_bool_is_a_list() {
+	// card true-lowers: `[true, 2]` was taken for a law (`law 2`) and lowered to ø
+	assert_eq!(text_of("[true, 2]"), "[yes 2]");
+	assert_eq!(text_of("[yes 2]"), "[yes 2]");
+}
