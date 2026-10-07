@@ -151,7 +151,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A text (or one-character text) whose letters exist only at run time: a list element, a text variable
-	fn is_runtime_text(&self, node: &Node) -> bool {
+	pub(super) fn is_runtime_text(&self, node: &Node) -> bool {
 		!matches!(node.drop_meta(), Node::Text(_) | Node::Char(_)) && matches!(self.get_type(node), Kind::Text | Kind::Codepoint)
 	}
 
