@@ -2,6 +2,7 @@ mod test_folder_scope;
 mod test_header_search;
 mod test_include;
 mod test_module_classes;
+mod test_module_signals;
 mod test_module_cache;
 mod test_package_pin;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build

@@ -1,0 +1,5 @@
+// repro of card module-signal-writes: should print "theme is light" (a module function writes the shared theme)
+use settings
+on change theme { print "theme is " + value }
+toggle()
+theme

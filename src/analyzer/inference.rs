@@ -103,10 +103,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(left, op, right) if op.is_arithmetic() => {
 			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), right)
 		}
-		// Assignment/definition: type comes from value
-		Node::Key(_left, Op::Define | Op::Assign, right) => {
-			infer_type(right, scope)
-		}
+		// Assignment/definition: type comes from value, ø as the Node a variable holding it is (`if c { f = [] }`)
+		Node::Key(_left, Op::Define | Op::Assign, right) => held_kind(right, || infer_type(right, scope)),
 		// Compound assignment: upgrade if either side is Float
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			let left_kind = infer_type(left, scope);

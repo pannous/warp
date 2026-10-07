@@ -7,6 +7,8 @@ mod test_web_playground;
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_web_server;
 mod test_async_data; // the browser: a task Worker fetches into shared memory, read at the check points
+#[cfg(feature = "native")] // warp build --site writes files with the native compiler
+mod test_site;
 mod test_html_render;
 mod test_element_events;
 mod test_class_components;
