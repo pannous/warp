@@ -7,3 +7,7 @@ invert(m) := { out = {}; ks = keys(m); for k in ks { out["" + m.get(k)] = k }; o
 pick(m, wanted) := { out = {}; for k in wanted { if m.has(k) { out[k] = m.get(k) } }; out }
 // [["a", 1] ["b", 2]] → {a:1 b:2}
 from_pairs(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
+// the entries of m without the given keys
+omit(m, unwanted) := { out = {}; ks = keys(m); for k in ks { if not (k in unwanted) { out[k] = m.get(k) } }; out }
+// the entries whose value f holds for
+filter_values(m, f) := { out = {}; ks = keys(m); for k in ks { if f(m.get(k)) { out[k] = m.get(k) } }; out }

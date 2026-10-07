@@ -44,3 +44,14 @@ parse_date(t) := {
 	parts = split(t, "-")
 	days_from_date(int(parts#1), int(parts#2), int(parts#3)) * 86400000
 }
+// milliseconds as the largest units: 5430000 → "1h 30m 30s", 250 → "250ms"
+format_duration(ms) := {
+	if ms < 1000 then return "" + ms + "ms"
+	s = ms//1000
+	parts = []
+	if s >= 86400 { parts = parts + ["" + s//86400 + "d"] }
+	if s % 86400 >= 3600 { parts = parts + ["" + s % 86400//3600 + "h"] }
+	if s % 3600 >= 60 { parts = parts + ["" + s % 3600//60 + "m"] }
+	if s % 60 > 0 { parts = parts + ["" + s % 60 + "s"] }
+	join(parts, " ")
+}
