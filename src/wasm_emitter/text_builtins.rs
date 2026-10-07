@@ -18,6 +18,10 @@ pub const TEXT_OF: &str = "text_of";
 pub const C_STRING: &str = "c_string";
 const BYTE_AT: &str = "byte_at";
 const BYTE_SLICE: &str = "byte_slice";
+/// `memory_byte(address)`, `memory_set_byte(address, value)`: one byte of linear memory, what std/memory.wasp's
+/// `memory.slice` and `memory.copy` are made of (samples/wasm_interop.wasp)
+const MEMORY_BYTE: &str = "memory_byte";
+const MEMORY_SET_BYTE: &str = "memory_set_byte";
 /// `trim(text)`: the text without the whitespace at either end, sharing its memory
 const TRIM: &str = "trim";
 const TEXT_TRIM: &str = "text_trim";
@@ -53,7 +57,8 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 17] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 19] = [
+	(MEMORY_BYTE, 1, Kind::Int), (MEMORY_SET_BYTE, 2, Kind::Int),
 	(crate::memoization::MEMO_KNOWN, 2, Kind::Int), (crate::memoization::MEMO_VALUE, 2, Kind::Int), (crate::memoization::MEMO_STORE, 3, Kind::Int),
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (RAISE, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
 	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
@@ -218,7 +223,7 @@ impl WasmGcEmitter {
 				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
 				_ => self.emit_runtime_text_cast(func, value),
 			},
-			(BYTE_AT | IS_ERROR | RAN_WITHOUT_ERROR | STARTS_WITH | ENDS_WITH | crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE, _) => {
+			(BYTE_AT | MEMORY_BYTE | MEMORY_SET_BYTE | IS_ERROR | RAN_WITHOUT_ERROR | STARTS_WITH | ENDS_WITH | crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE, _) => {
 				self.emit_integer_text_builtin(func, name, arguments);
 				self.emit_call(func, "new_int");
 			}
@@ -256,6 +261,18 @@ impl WasmGcEmitter {
 				self.emit_text_argument(func, text);
 				self.emit_numeric_value(func, offset);
 				self.emit_call(func, BYTE_AT);
+			}
+			(MEMORY_BYTE, [address]) => {
+				self.emit_numeric_value(func, address);
+				Self::emit_list(func, &[I::I32WrapI64, I::I32Load8U(BYTE), I::I64ExtendI32U]);
+			}
+			// the value written, as `x = v` is v
+			(MEMORY_SET_BYTE, [address, value]) => {
+				let written = self.scratch(0);
+				self.emit_numeric_value(func, address);
+				func.instruction(&I::I32WrapI64);
+				self.emit_numeric_value(func, value);
+				Self::emit_list(func, &[I::LocalTee(written), I::I32WrapI64, I::I32Store8(BYTE), I::LocalGet(written)]);
 			}
 			(IS_ERROR, [value]) => {
 				self.emit_node_instructions(func, value);
