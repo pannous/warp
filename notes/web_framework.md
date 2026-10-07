@@ -217,3 +217,13 @@ Each step is useful on its own and is what the next ones stand on.
   probes/dev/stored_check.py.
 - Left: watching used modules (only the program's file counts), component instance state (`Counter·count` lists) and
   the playground editor's error marks in the overlay; a failure's source line is that of the program, not of a module.
+
+## Step 16 (web-a11y), what is done and what is left (classes-44, warp-06; split agreed with warp-90)
+- Welcoming warnings over the markup as written (src/accessibility.rs, run on the parsed program at the start of
+  pipeline lower_for_emission, tests/web/test_accessibility.rs): img without alt (alt:"" marks a decoration); input /
+  select / textarea without a label (label{for}, a label around it, aria-label, aria-labelledby or title count; a
+  placeholder alone gets its own warning; hidden/submit/button/reset/image inputs need none); button or a with no text
+  and no aria-label/title; a without href; a heading skipping a level (h1 → h3); an id used twice; html without lang.
+  Each points at the element and names a fix; `use strict` / `--strict` make them errors like every warning.
+- Not here: focus on route change and live regions for async content (warp-89, web-router / web-async); translations
+  as data (i18n) later. Markup built at run time (strings, computed tags) is not checked.

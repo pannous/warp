@@ -71,6 +71,7 @@ pub mod diagnostic;
 pub mod html;
 pub mod headless;
 pub mod page_tests;
+pub mod accessibility;
 pub mod fixits;
 pub mod time;
 pub mod real;
