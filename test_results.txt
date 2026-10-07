@@ -1910,6 +1910,8 @@ PASSED:
   ✓ parser::test_dollar_names::dollar_digit_stays_a_parameter_reference
   ✓ parser::test_dollar_names::dollar_names_keep_their_sigil
   ✓ parser::test_dollar_names::dollar_names_survive_eval
+  ✓ parser::test_emoji_atoms::an_emoji_is_a_codepoint
+  ✓ parser::test_emoji_atoms::an_emoji_sequence_is_one_atom
   ✓ parser::test_end_word::a_name_end_stays_a_name
   ✓ parser::test_end_word::end_still_closes_blocks
   ✓ parser::test_entity_table::hello_world_is_the_uniscript_world
@@ -3387,4 +3389,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3382 passed, 0 failed, 3382 total tested
+19 ignored, 3384 passed, 0 failed, 3384 total tested
