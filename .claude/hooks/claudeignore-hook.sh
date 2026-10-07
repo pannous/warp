@@ -4,11 +4,15 @@
 
 set -e
 
-# Read JSON input from stdin
+# Read JSON input from stdin. printf, not echo: in POSIX mode macOS bash's echo expands the backslashes of the JSON
+# (a Write of code with regexes or "\n"), and jq then fails on it (card write-hook)
 INPUT=$(cat)
 
-TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
-TOOL_INPUT=$(echo "$INPUT" | jq -r '.tool_input // empty')
+input_field() {
+    printf '%s' "$INPUT" | jq -r "$1 // empty"
+}
+
+TOOL_NAME=$(input_field '.tool_name')
 
 # Find .claudeignore (walk up from cwd)
 find_claudeignore() {
@@ -28,14 +32,14 @@ IGNORE_FILE=$(find_claudeignore 2>/dev/null) || exit 0
 # Extract path from tool input based on tool type
 case "$TOOL_NAME" in
     Read|Edit|Write)
-        TARGET_PATH=$(echo "$TOOL_INPUT" | jq -r '.file_path // empty')
+        TARGET_PATH=$(input_field '.tool_input.file_path')
         ;;
     Glob)
-        TARGET_PATH=$(echo "$TOOL_INPUT" | jq -r '.path // empty')
-        PATTERN=$(echo "$TOOL_INPUT" | jq -r '.pattern // empty')
+        TARGET_PATH=$(input_field '.tool_input.path')
+        PATTERN=$(input_field '.tool_input.pattern')
         ;;
     Grep)
-        TARGET_PATH=$(echo "$TOOL_INPUT" | jq -r '.path // empty')
+        TARGET_PATH=$(input_field '.tool_input.path')
         ;;
     *)
         exit 0
@@ -45,6 +49,7 @@ esac
 # If no target path, allow (can't check)
 [[ -z "$TARGET_PATH" && -z "$PATTERN" ]] && exit 0
 
+# A block's reason goes to stderr: with exit 2 Claude Code shows only stderr ("No stderr output" otherwise)
 # Read ignore patterns (skip comments and empty lines)
 while IFS= read -r pattern || [[ -n "$pattern" ]]; do
     # Skip comments and empty lines
@@ -55,13 +60,13 @@ while IFS= read -r pattern || [[ -n "$pattern" ]]; do
 
     # Check if target path contains the ignored pattern
     if [[ -n "$TARGET_PATH" && "$TARGET_PATH" == *"$pattern"* ]]; then
-        echo "Blocked: path matches .claudeignore pattern '$pattern'"
+        echo "Blocked: path matches .claudeignore pattern '$pattern'" >&2
         exit 2
     fi
 
     # For Glob, also check if pattern would match ignored dirs
     if [[ "$TOOL_NAME" == "Glob" && -n "$PATTERN" && "$PATTERN" == *"$pattern"* ]]; then
-        echo "Blocked: glob pattern matches .claudeignore pattern '$pattern'"
+        echo "Blocked: glob pattern matches .claudeignore pattern '$pattern'" >&2
         exit 2
     fi
 done < "$IGNORE_FILE"
