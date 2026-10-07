@@ -96,8 +96,8 @@ fn unsupported_characters_and_combinations_warn() {
 
 #[test]
 fn use_strict_makes_uniscript_warnings_errors() {
-	// self-closed: a bare <:greek c> reads as an opening tag (uniscript 1.0.2), which strict makes the error
-	is!("use strict; use uniscript; uniscript(\"<:greek c/>\")", error("uniscript: no greek form of c at byte 0"));
+	// the first problem is the error, not the opening-tag warning a bare tag would add (uniscript 1.0.3)
+	is!("use strict; use uniscript; uniscript(\"<:greek c>\")", error("uniscript: no greek form of c at byte 0"));
 	is!("use strict; use uniscript; uniscript(\"<:greek a/>\")", "α");
 }
 
