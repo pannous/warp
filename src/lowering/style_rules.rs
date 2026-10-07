@@ -4,8 +4,6 @@
 //! where wasp would read `8px` as `8 * px`. A value after a declaration continues it: `padding: 8px 4px`.
 //! Limit: the parser drops the blank of a descendant class, `#main .x` reads as `#main.x`; write it quoted.
 
-use crate::extensions::numbers::Number;
-use crate::html::is_unitless_property;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -41,8 +39,8 @@ fn styled(items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 		} else if let Some((name, value)) = declaration_value(&item) {
 			let value = css_length(value).map(Node::Text).unwrap_or_else(|| value.clone());
 			output.push(Node::Key(Box::new(name.clone()), Op::Colon, Box::new(value)));
-		} else if let Some(Node::Key(name, Op::Colon, value)) = output.last_mut().filter(|last| declaration_value(last).is_some()) {
-			match continued_value(&name.name(), value, &item) {
+		} else if let Some(Node::Key(_, Op::Colon, value)) = output.last_mut().filter(|last| declaration_value(last).is_some()) {
+			match continued_value(value, &item) {
 				Some(joined) => **value = Node::Text(joined),
 				None => output.push(item),
 			}
@@ -95,15 +93,14 @@ fn declaration_value(node: &Node) -> Option<(&Node, &Node)> {
 	(is_name && !matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _))).then_some((name.as_ref(), value.as_ref()))
 }
 
-/// `padding: 8px` followed by `4px`: the value `8px 4px`, when both parts are constants
-fn continued_value(property: &str, value: &Node, next: &Node) -> Option<String> {
-	Some(format!("{} {}", value_piece(property, value)?, value_piece(property, next)?))
+/// `padding: 8px` followed by `4px`: the value `8px 4px`, when both parts are constants; a bare number in a value of
+/// several words stays as written, as CSS reads it (`flex: 1 1 auto`, `margin: 0 auto`)
+fn continued_value(value: &Node, next: &Node) -> Option<String> {
+	Some(format!("{} {}", value_piece(value)?, value_piece(next)?))
 }
 
-fn value_piece(property: &str, node: &Node) -> Option<String> {
+fn value_piece(node: &Node) -> Option<String> {
 	match node.drop_meta() {
-		Node::Number(Number::Int(0)) => Some("0".to_string()),
-		Node::Number(number) if !is_unitless_property(property) => Some(format!("{number}px")),
 		Node::Number(number) => Some(number.to_string()),
 		Node::Text(text) | Node::Symbol(text) => Some(text.clone()),
 		other => css_length(other),

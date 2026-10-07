@@ -30,7 +30,6 @@ const BOOLEAN_ATTRIBUTES: [&str; 8] = ["checked", "disabled", "selected", "reado
 const HEAD: &str = "head";
 /// the element of a style sheet and the attribute of an inline style (card web-styles)
 const STYLE: &str = "style";
-const SCRIPT: &str = "script";
 /// CSS properties whose number has no unit; any other number is pixels
 const UNITLESS_PROPERTIES: [&str; 10] = ["opacity", "z-index", "font-weight", "line-height", "flex", "flex-grow", "flex-shrink", "order", "zoom", "tab-size"];
 /// `data-wasp-click` (element_events.rs) and any other data attribute
@@ -38,11 +37,6 @@ const DATA_ATTRIBUTE_PREFIX: &str = "data-";
 /// `li{ key: todo.id … }` names a list item: the attribute data-wasp-key, by which the page moves its element (card web-keyed)
 const KEY: &str = "key";
 const KEY_ATTRIBUTE: &str = "data-wasp-key";
-
-/// A CSS property whose number has no unit (`opacity`, `z-index`)
-pub fn is_unitless_property(property: &str) -> bool {
-	UNITLESS_PROPERTIES.contains(&property)
-}
 
 /// Does the word name an HTML element
 pub fn is_element_tag(word: &str) -> bool {
@@ -94,68 +88,13 @@ fn write_node(node: &Node, html: &mut String) {
 	}
 }
 
-/// An element's attributes and its children
-fn element_items<'a>(tag: &str, content: &'a Node) -> (Vec<&'a Node>, Vec<&'a Node>) {
+fn write_element(tag: &str, content: &Node, html: &mut String) {
 	let items: Vec<&Node> = match content.drop_meta() {
 		Node::List(items, Bracket::Curly | Bracket::None, _) => items.iter().collect(),
 		Node::Empty => vec![],
 		single => vec![single],
 	};
-	items.into_iter().partition(|item| attribute_parts(item, tag).is_some())
-}
-
-/// An element of a markup value as a page shows it: its tag, its attributes as written in HTML and its text (card
-/// web-testing, headless.rs)
-pub struct Element {
-	pub tag: String,
-	pub attributes: Vec<(String, String)>,
-	pub text: String,
-}
-
-impl Element {
-	pub fn attribute(&self, name: &str) -> Option<&str> {
-		self.attributes.iter().find(|(attribute, _)| attribute == name).map(|(_, value)| value.as_str())
-	}
-}
-
-/// The elements of a markup value in document order
-pub fn elements(node: &Node) -> Vec<Element> {
-	let mut found = vec![];
-	collect_elements(node, &mut found);
-	found
-}
-
-fn collect_elements(node: &Node, found: &mut Vec<Element>) {
-	match element_parts(node) {
-		Some((tag, content)) => {
-			let (attributes, children) = element_items(tag, content);
-			let attributes = attributes.into_iter().filter_map(|attribute| attribute_parts(attribute, tag)).map(|(name, value)| (name.to_string(), attribute_value(value))).collect();
-			found.push(Element { tag: tag.to_string(), attributes, text: text_content(node) });
-			children.into_iter().for_each(|child| collect_elements(child, found));
-		}
-		None => if let Node::List(items, _, _) = node.drop_meta() {
-			items.iter().for_each(|item| collect_elements(item, found));
-		},
-	}
-}
-
-/// The text a markup value shows, without its style sheets and scripts
-pub fn text_content(node: &Node) -> String {
-	if let Some((tag, content)) = element_parts(node) {
-		return match tag {
-			STYLE | SCRIPT => String::new(),
-			_ => element_items(tag, content).1.into_iter().map(text_content).collect(),
-		};
-	}
-	match node.drop_meta() {
-		Node::List(items, _, _) => items.iter().map(text_content).collect(),
-		Node::Empty => String::new(),
-		other => plain_text(other),
-	}
-}
-
-fn write_element(tag: &str, content: &Node, html: &mut String) {
-	let (attributes, children) = element_items(tag, content);
+	let (attributes, children): (Vec<&Node>, Vec<&Node>) = items.into_iter().partition(|item| attribute_parts(item, tag).is_some());
 	html.push('<');
 	html.push_str(tag);
 	for attribute in attributes {

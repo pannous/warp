@@ -12,7 +12,7 @@
 //! ```
 
 use crate::element_events::HANDLER_ATTRIBUTE_PREFIX;
-use crate::html::{elements, text_content, to_html, Element};
+use crate::html::to_html;
 use crate::node::Node;
 use serde_json::{json, Map, Value};
 
@@ -23,6 +23,11 @@ const CLICK: &str = "click";
 const INPUT: &str = "input";
 /// the labels a form field is found by besides its text
 const FIELD_LABELS: [&str; 3] = ["placeholder", "name", "id"];
+/// elements without content or closing tag
+const VOID_ELEMENTS: [&str; 13] = ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"];
+/// elements whose content the page does not show as text
+const HIDDEN_CONTENT: [&str; 2] = ["style", "script"];
+const ENTITIES: [(&str, &str); 5] = [("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&amp;", "&")];
 
 pub struct Page {
 	markup: Node,
@@ -55,7 +60,7 @@ impl Page {
 
 	/// The text the page shows, without style sheets and scripts
 	pub fn text(&self) -> String {
-		text_content(&self.markup)
+		shown(&self.html()).1
 	}
 
 	/// A click on the element showing `label` (its text) with a click handler
@@ -73,7 +78,7 @@ impl Page {
 	fn fire(&mut self, event: &str, label: &str, mut detail: Map<String, Value>) -> Result<(), String> {
 		let handler_attribute = format!("{HANDLER_ATTRIBUTE_PREFIX}{event}");
 		let shows = |element: &Element| element.text.trim() == label || FIELD_LABELS.iter().any(|name| element.attribute(name) == Some(label));
-		let element = elements(&self.markup).into_iter().find(|element| element.attribute(&handler_attribute).is_some() && shows(element))
+		let element = shown(&self.html()).0.into_iter().find(|element| element.attribute(&handler_attribute).is_some() && shows(element))
 			.ok_or_else(|| format!("no element showing {label:?} handles {event}; the page: {}", self.html()))?;
 		if let Some(instance) = element.attribute(INSTANCE_ATTRIBUTE).and_then(|instance| instance.parse::<i64>().ok()) {
 			detail.insert(INSTANCE.to_string(), json!(instance));
@@ -99,6 +104,78 @@ impl Page {
 	#[cfg(not(any(target_arch = "wasm32", feature = "native")))]
 	fn handled(&mut self, _page_event: &str, _detail: &Value) -> Result<Node, String> {
 		Err("this build of warp has no runner".to_string())
+	}
+}
+
+/// An element as the page shows it: its attributes and its text
+struct Element {
+	attributes: Vec<(String, String)>,
+	text: String,
+}
+
+impl Element {
+	fn attribute(&self, name: &str) -> Option<&str> {
+		self.attributes.iter().find(|(attribute, _)| attribute == name).map(|(_, value)| value.as_str())
+	}
+}
+
+/// The elements of the page's HTML in document order, and the text the whole page shows
+fn shown(html: &str) -> (Vec<Element>, String) {
+	let (mut found, mut open, mut text) = (Vec::<Element>::new(), Vec::<usize>::new(), String::new());
+	let mut rest = html;
+	while !rest.is_empty() {
+		let Some(tag_start) = rest.find('<') else {
+			add_text(&mut found, &open, &mut text, rest);
+			break;
+		};
+		add_text(&mut found, &open, &mut text, &rest[..tag_start]);
+		let tag_end = rest[tag_start..].find('>').map_or(rest.len(), |end| tag_start + end);
+		let tag = &rest[tag_start + 1..tag_end];
+		rest = rest.get(tag_end + 1..).unwrap_or_default();
+		if tag.starts_with('/') {
+			open.pop();
+			continue;
+		}
+		let name = tag.split_whitespace().next().unwrap_or_default().to_string();
+		if HIDDEN_CONTENT.contains(&name.as_str()) {
+			let closing = format!("</{name}>");
+			rest = rest.find(&closing).map_or("", |end| &rest[end + closing.len()..]);
+			continue;
+		}
+		found.push(Element { attributes: attributes(&tag[name.len()..]), text: String::new() });
+		if !VOID_ELEMENTS.contains(&name.as_str()) {
+			open.push(found.len() - 1);
+		}
+	}
+	(found, text)
+}
+
+fn add_text(found: &mut [Element], open: &[usize], text: &mut String, html: &str) {
+	let plain = ENTITIES.iter().fold(html.to_string(), |plain, (entity, character)| plain.replace(entity, character));
+	open.iter().for_each(|&element| found[element].text.push_str(&plain));
+	text.push_str(&plain);
+}
+
+/// ` data-wasp-click="1" checked`: the attributes of a start tag, a bare one with an empty value
+fn attributes(mut rest: &str) -> Vec<(String, String)> {
+	let mut found = vec![];
+	loop {
+		rest = rest.trim_start();
+		let name_end = rest.find(|character: char| character == '=' || character.is_whitespace()).unwrap_or(rest.len());
+		if name_end == 0 {
+			return found;
+		}
+		let name = rest[..name_end].to_string();
+		rest = &rest[name_end..];
+		let value = match rest.strip_prefix("=\"") {
+			Some(quoted) => {
+				let end = quoted.find('"').unwrap_or(quoted.len());
+				rest = quoted.get(end + 1..).unwrap_or_default();
+				quoted[..end].to_string()
+			}
+			None => String::new(),
+		};
+		found.push((name, value));
 	}
 }
 

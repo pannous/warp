@@ -121,7 +121,7 @@ Each step is useful on its own and is what the next ones stand on.
 - CSS as CSS (classes-42, src/lowering/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
   one rule per line (`.card {…}`, `ul > li {…}`, `h1, h2 {…}`, `a:hover {…}`, `p.note {…}`, `ul li {…}`, `#main {…}`),
   lengths with units (`8px`, `1.5em`, `50%`, `-2px`) and values of several words (`padding: 8px 4px`, `border: 1px
-  solid "red"`). The parser reads `.name` at an atom's start as the symbol `.name`. Limits: the parser drops the blank
+  solid "red"`; a bare number among several words stays as written: `flex: 1 1 auto`, `margin: 0 auto`). The parser reads `.name` at an atom's start as the symbol `.name`. Limits: the parser drops the blank
   of a descendant class (`#main .x` reads as `#main.x`, quote it); `#id` after a rule on the same line, `50%` followed
   by another declaration without `;`, and several rules on one line with a comma selector need their own lines.
 - Left: scoping a component's sheet to its own elements (a generated class per component), warp-cd.
@@ -134,7 +134,8 @@ Each step is useful on its own and is what the next ones stand on.
   `markup()`. A missing element is an Err naming the page's HTML.
 - Natively the run is a kept wasmtime instance (wasm_reader::run_main_kept); in the browser suite the same tests run
   through the new import warp_host.page_event (host.js pageEventOutcome on the last listening run, as worker.js
-  showHandled). html.rs gained `elements()` / `text_content()`.
+  showHandled). Elements and text are read from the rendered HTML (headless.rs `shown`), so html.rs is untouched and a
+  later renderer (std/markup.wasp) keeps working.
 - The playground examples keep their `clicks` / `typed` / `clicked` checks (test_in_browser.py --examples).
 - Left: tests written in wasp itself (`test "counter" { page = render(Counter()); click page "Add"; … }`) need a
   run-time handler lookup inside the module; not started.
