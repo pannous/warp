@@ -1,0 +1,13 @@
+div{
+	style{
+		.card { padding: 8px 4px; color: "navy" }
+		ul > li { margin: 0 auto }
+		h1, h2 { fontSize: 1.5em }
+		a:hover { color: "red" }
+		p.note { border: 1px solid "red" }
+		ul li { margin: -2px }
+		.a.b { width: 50% }
+		#main { margin: 1em }
+	}
+	p{ class: "card" "x" }
+}
