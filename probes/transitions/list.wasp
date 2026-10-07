@@ -1,0 +1,7 @@
+// transitions are data: a removed item fades out, the others glide to their new places
+todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
+div{
+	button{ on click { todos = todos[1..] + [todos#1] } "rotate" }
+	button{ on click { todos = todos[1..] } "remove" }
+	ul{ [li{ key: todo.id transition: fade 150ms todo.text } for todo in todos] }
+}

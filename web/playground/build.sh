@@ -31,7 +31,7 @@ target_dir="$(cargo metadata $offline --format-version 1 --no-deps | python3 -c 
 compile() {
 	local profile=$1; shift
 	RUSTFLAGS="-C link-arg=-zstack-size=$STACK_BYTES" cargo rustc $offline --lib --crate-type cdylib --profile "$profile" \
-		--target wasm32-unknown-unknown --no-default-features "$@" >&2
+		--target wasm32-unknown-unknown --no-default-features "$@" >&2 || return # set -e stops nothing inside $(compile …)
 	echo "$target_dir/wasm32-unknown-unknown/$profile/warp.wasm"
 }
 
