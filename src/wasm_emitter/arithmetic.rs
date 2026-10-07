@@ -136,8 +136,13 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// A local holding a float, or a global (`global b` in a function) that no local of the same name shadows
 	pub(super) fn is_float_variable(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_float()))
+		let Node::Symbol(name) = node.drop_meta() else { return false };
+		match self.scope.lookup(name) {
+			Some(local) => local.kind.is_float(),
+			None => self.ctx.user_globals.get(name).is_some_and(|(_, kind)| kind.is_float()),
+		}
 	}
 
 	pub(super) fn emit_compound_assign(
@@ -317,8 +322,7 @@ impl WasmGcEmitter {
 		} else if let Some(local) = self.scope.lookup(name) {
 			func.instruction(&I::LocalGet(local.position));
 			if local.kind.is_ref() {
-				self.emit_call(func, "get_int_value");
-				self.emit_int_to_f64(func, None);
+				self.emit_held_node_as_f64(func); // a Node of run-time kind: a Float stays one
 			} else if !local.kind.is_float() {
 				self.emit_int_to_f64(func, None);
 			}
@@ -736,8 +740,13 @@ impl WasmGcEmitter {
 
 	/// The f64 of a number Node computed at run time: a Float's value, an Int converted
 	pub(super) fn emit_node_as_f64(&mut self, func: &mut Function, node: &Node) {
-		let (held, node_type, float_box) = (self.node_scratch(), self.type_manager.node_type, self.type_manager.f64_box_type);
 		self.emit_node_instructions(func, node);
+		self.emit_held_node_as_f64(func);
+	}
+
+	/// The Node on the stack as f64: a Float's value, an Int's converted
+	pub(super) fn emit_held_node_as_f64(&mut self, func: &mut Function) {
+		let (held, node_type, float_box) = (self.node_scratch(), self.type_manager.node_type, self.type_manager.f64_box_type);
 		Self::emit_list(func, &[I::LocalTee(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
 		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Float as i64), I::I64Eq]);
 		Self::emit_list(func, &[I::If(BlockType::Result(ValType::F64)), I::LocalGet(held), I::RefAsNonNull]);

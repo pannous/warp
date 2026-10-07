@@ -291,3 +291,28 @@ the other instance `o:P`; they are no type-word methods). Aliases with a note: t
 String (Go) → text; Equals, __eq__, equal → equals (`==` is no operator method any more: Equatable dispatches it);
 compareTo, CompareTo, cmp → compare. `P·init(P{…}, 3)` has P's shape for the trait passes (traits::shape).
 Not ported: hashCode/__hash__ (wasp has no hash witness; they stay plain methods), Swift's `description` property.
+
+## Instances and json (classes-37, tests/types/test_class_json.rs)
+- `to_json(p)` in a program declaring classes is `to_json_of_classes(p, ["Point", …])` (class_methods
+  lower_json_classes, after std_aliases so `JSON.stringify(p)` / `json.dumps(p)` count): both adapters (std_adapters.rs
+  without_class_tags, host.js withoutClassTags) turn an object `{"Point": {…}}` of a class name into its fields, also
+  nested and in lists. At run time an instance and tagged data `html{…}` look alike, hence the names; a map entry named
+  like a class (`{Point: {…}}`) loses its key too. Kotlin `Json.encodeToString(p)` is to_json, `@Serializable` is
+  ignored, Python `dataclasses.asdict(p)` is p itself (its fields read like entries), each with a note.
+- `object as Point`, `parse_json(t) as Point`, `Point.from_json(t)`: `(Point·from = object; Point(Point·from.x, …))`,
+  a field of a class type built from its path `Line(Point(Line·from.a.x, …), …)` (class_methods from_objects); a
+  statement sequence as a construction argument is data, so no temporaries below the top. `parse_json(t) as [Point]`
+  and a field `points:[Point]` map each element (`list.map(Point·element => Point(…))`); such a list is built before
+  the construction, into `elements·1`, … (built_instance).
+
+## Destructuring instances (classes-38, tests/types/test_class_destructuring.rs)
+class_methods destructurings: `{x, y} = p` and `{x: a} = p` by field name (maps too); `(a, b) = p` and Python's
+`a, b = p` of a known instance (a variable assigned a construction, `p:Point`, or a construction) in field order, a
+count other than the fields' left as it was; match arms `Point{x, y} => …` and `Point(x, y) => …` the guard
+`parts·from if parts·from is Point` binding the fields before the body. All go through `parts·from`. Not built: nested
+patterns, constants inside a pattern (`Point(0, y)`), rest patterns.
+Nested and constants (classes-39): a pattern is matched by matched_pattern into class tests (`p is Point`), value
+tests (`p.x == 0`) and bindings with paths (`y = parts·from.start.y`): `_` matches anything, a name binds, a number or
+text is compared, `Point{x: 0, y}`, `Point(a, 0)`, `Line{start: Point{x, y}, end}` nest. The arm's guard is all tests
+joined with `and`; an assignment takes names only (a class in it no test, a constant leaves it as written).
+positional_braces leaves an arm's pattern alone (no "prefer Point(x, y)" hint there). Still not built: rest patterns.

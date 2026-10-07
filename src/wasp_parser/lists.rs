@@ -26,7 +26,7 @@ impl WaspParser {
 	}
 
 	/// `tuple<s64, list<node>>` → `tuple` followed by the angle-bracketed argument list
-	/// Length of the `<int>`, `<list<int>>`, `<text, int>` directly at the cursor when everything inside is a type word;
+	/// Length of the `<int>`, `<list<int>>`, `<text, int>`, `<int(int)>` directly at the cursor when everything inside is a type word;
 	/// `a<b`, `a<<b` and `a<b>c` are not type applications
 	pub(super) fn type_application_length(&self) -> Option<usize> {
 		let mut depth = 0;
@@ -41,7 +41,7 @@ impl WaspParser {
 					word.push(ch);
 					continue;
 				}
-				',' | ' ' => {}
+				',' | ' ' | '(' | ')' => {} // C++'s function type `function<int(int)>`
 				_ => return None,
 			}
 			if !word.is_empty() {

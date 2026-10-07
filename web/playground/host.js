@@ -66,7 +66,7 @@ const crc32Of = bytes => (bytes.reduce((crc, byte) => CRC32_TABLE[(crc ^ byte) &
 // the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (plainOfTree / treeOfPlain, as for foreign_call)
 const STD_ADAPTERS = {
-	json: { parse: text => JSON.parse(text), to_json: value => JSON.stringify(value) },
+	json: { parse: text => JSON.parse(text), to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
 	file: {
 		write: (path, content) => { writtenFiles.set(filePath(path), contentText(content)); return null; },
 		append: (path, content) => { writtenFiles.set(filePath(path), textOfFile(path) + contentText(content)); return null; },
@@ -86,6 +86,14 @@ const STD_ADAPTERS = {
 		replace: (subject, pattern, replacement) => subject.replace(regexOf(pattern, "g"), replacement),
 	},
 };
+// an instance of one of the program's classes is its fields: {Point: {x: 1}} is {x: 1} (src/std_adapters.rs)
+function withoutClassTags(value, classes) {
+	if (Array.isArray(value)) return value.map(item => withoutClassTags(item, classes));
+	if (value === null || typeof value !== "object") return value;
+	const keys = Object.keys(value);
+	if (keys.length === 1 && classes.has(keys[0]) && value[keys[0]] !== null && typeof value[keys[0]] === "object" && !Array.isArray(value[keys[0]])) return withoutClassTags(value[keys[0]], classes);
+	return Object.fromEntries(keys.map(key => [key, withoutClassTags(value[key], classes)]));
+}
 // what Rust's regex lacks is refused here too, so a pattern means the same in both hosts (src/std_adapters.rs regex_of)
 function regexOf(pattern, flags = "") {
 	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
@@ -291,6 +299,8 @@ function programImports(holder, hooks) {
 			signal_daily: (id, minute, weekdays) => addTimer(holder, hooks, id, { minute: Number(minute), weekdays: Number(weekdays) }, "on every day at …"),
 			signal_at: (id, minute) => addTimer(holder, hooks, id, { minute: Number(minute), once: true }, "at 9:00 {…}"),
 			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
+			fetch_start: (id, url) => startFetch(holder, hooks, Number(id), plainOfTree(readNode(program(), url))),
+			fetch_reply: id => buildValue(program(), treeOfPlain(fetchReply(holder, Number(id)))),
 			// system values (crates/warp-runtime/src/system_values.rs): what the browser tells, a loud error for the rest
 			system_value: name => {
 				const value = decode(cString(name));
@@ -1112,6 +1122,35 @@ function timerLabel(holder, { id, every, minute, once }) {
 	return once ? `at ${time}` : `every day at ${time}`;
 }
 
+// `users := fetch url` (src/fetches.rs, src/lowering/fetch_signals.rs): fetch_start fetches without waiting; once the
+// reply arrived the page runs on·fetch·<id> (worker.js hooks.arrived), whose fetch_reply takes it. A fetch started
+// anew drops the reply of the one before; a run that ended drops all.
+const FETCH_HANDLER_PREFIX = "on·fetch·";
+function startFetch(holder, hooks, id, url) {
+	if (!hooks.arrived) return holder.warnings.push(`fetch ${url}: replies arriving later are not handled here`);
+	const started = { url };
+	(holder.fetches ??= new Map()).set(id, started);
+	const failed = reason => ({ error: `fetch ${url} failed: ${reason}` });
+	fetch(url).then(async response => response.ok ? { body: await response.text() } : failed(`HTTP status ${response.status}`), failure => failed(failure.message))
+		.then(reply => {
+			if (holder.fetches.get(id) !== started || holder.stopped) return;
+			started.reply = reply;
+			hooks.arrived(holder, FETCH_HANDLER_PREFIX + id);
+		});
+}
+
+// [value, error] as src/fetches.rs reply gives it: a JSON object or array parsed, any other body the text
+function fetchReply(holder, id) {
+	const { reply } = holder.fetches?.get(id) ?? {};
+	if (!reply) return [null, `fetch ${id} has no reply yet`];
+	if (reply.error) return [null, reply.error];
+	try {
+		const value = JSON.parse(reply.body);
+		if (value !== null && typeof value === "object") return [value, null];
+	} catch {} // not JSON: the text
+	return [reply.body.endsWith("\n") ? reply.body : reply.body + "\n", null]; // wasp convention (src/host.rs fetch)
+}
+
 // `on message from "chat" {…}`: what arrives waits in the listener's queue until its timer asks
 function listenOnChannel(holder, hooks, id, name) {
 	if (!hooks.listen) return holder.warnings.push(`on message from "${name}": channels are not received here`);
@@ -1123,6 +1162,7 @@ function listenOnChannel(holder, hooks, id, name) {
 
 // a run's timers and channels end with it (the next run, worker.js)
 function stopListening(holder) {
+	holder.stopped = true;
 	holder.channels?.forEach(({ channel }) => channel.close());
 	holder.stopTimers?.();
 }
@@ -1141,7 +1181,7 @@ function runProgram(bytes, hooks) {
 	}
 	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, instance.exports, () => instance.exports.main()));
 	const events = pageEvents(instance.exports);
-	if ((events.length > 0 || holder.timers) && outcome.result) hooks.listen?.(holder, events);
+	if ((events.length > 0 || holder.timers || holder.fetches) && outcome.result) hooks.listen?.(holder, events);
 	return outcome;
 }
 

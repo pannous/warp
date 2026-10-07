@@ -39,6 +39,8 @@ pub const INTERRUPT_HANDLER: &str = "on·interrupt";
 pub const EXIT_HANDLER: &str = "on·exit";
 /// `on·every·0`: the handler of the first `on every … {…}`
 pub const TIMER_HANDLER_PREFIX: &str = "on·every·";
+/// `on·fetch·0`: the handler run when the reply of the first `users := fetch url` arrived (src/fetches.rs)
+pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides

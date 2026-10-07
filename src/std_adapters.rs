@@ -24,6 +24,11 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			Ok(crate::foreign::node_of(&parsed))
 		}
 		("json", "to_json", [value]) => Ok(Node::Text(crate::foreign::json_of(value).to_string())),
+		// an instance of one of the program's classes is its fields: `{"Point": {"x": 1}}` is `{"x": 1}` (as host.js)
+		("json", "to_json", [value, classes]) => {
+			let classes: Vec<String> = classes.children().iter().filter_map(|class| text_of(class).ok()).collect();
+			Ok(Node::Text(without_class_tags(crate::foreign::json_of(value), &classes).to_string()))
+		}
 		("file", "write", [path, text]) => std::fs::write(text_of(path)?, content_of(text)?).map(|_| Node::Empty).map_err(|problem| failure(problem.to_string())),
 		("file", "append", [path, text]) => {
 			use std::io::Write;
@@ -89,5 +94,18 @@ fn arguments_of(arguments: &Node) -> Vec<Node> {
 		Node::List(items, _, _) => items.clone(),
 		Node::Empty => vec![],
 		single => vec![single.clone()],
+	}
+}
+
+/// The json with each object `{"Point": {…}}` of a class named in `classes` as its fields `{…}`
+fn without_class_tags(value: serde_json::Value, classes: &[String]) -> serde_json::Value {
+	use serde_json::Value;
+	match value {
+		Value::Array(items) => Value::Array(items.into_iter().map(|item| without_class_tags(item, classes)).collect()),
+		Value::Object(entries) => match entries.len() == 1 && entries.iter().next().is_some_and(|(key, fields)| classes.contains(key) && fields.is_object()) {
+			true => without_class_tags(entries.into_iter().next().map(|(_, fields)| fields).unwrap_or_default(), classes),
+			false => Value::Object(entries.into_iter().map(|(key, entry)| (key, without_class_tags(entry, classes))).collect()),
+		},
+		other => other,
 	}
 }

@@ -424,21 +424,34 @@ fn ruby_method(method: &Node) -> Option<&'static str> {
 	RUBY_METHODS.iter().find(|(ruby, _)| *ruby == word).map(|(_, wasp_word)| *wasp_word)
 }
 
-/// Elixir's one-line `def sq(x), do: x * x`, parsed as `def sq(x)`, `do: x * x`: the definition `sq(x) := x * x`
+/// Elixir's one-line `def sq(x), do: x * x`, parsed as `def sq(x)`, `do: x * x`: the definition `sq(x) := x * x`.
+/// Its block form `def sq(x) do x * x end` is parsed as `def`, `sq(x) do {x * x}`
 fn elixir_definition(items: &[Node]) -> Option<Node> {
-	let [head, body] = items else { return None };
-	let Node::List(words, _, _) = head.drop_meta() else { return None };
-	let [keyword, call] = words.as_slice() else { return None };
-	let Node::Key(do_word, Op::Colon, body) = body.drop_meta() else { return None };
+	let (keyword, call, body) = match items {
+		[head, body] => match (head.drop_meta(), body.drop_meta()) {
+			(Node::List(words, _, _), Node::Key(do_word, Op::Colon, body)) if is_word(do_word, ELIXIR_DO_WORD) => match words.as_slice() {
+				[keyword, call] => (keyword, call, body.as_ref()),
+				_ => return None,
+			},
+			(_, Node::Key(call, Op::Do, body)) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => (head, call.as_ref(), body.as_ref()),
+			_ => return None,
+		},
+		_ => return None,
+	};
 	let is_call = matches!(call.drop_meta(), Node::List(_, Bracket::Round, _));
 	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word) || word == ELIXIR_PRIVATE_DEF);
-	(is_keyword && is_call && is_word(do_word, ELIXIR_DO_WORD)).then(|| Node::Key(Box::new(call.clone()), Op::Define, Box::new(forms(body.as_ref().clone()))))
+	(is_keyword && is_call).then(|| Node::Key(Box::new(call.clone()), Op::Define, Box::new(forms(body.clone()))))
 }
 
 /// C++'s `sq = [](int x) { return x * x; }`, parsed as `sq = []`, `(int x)`, `{…}`, the capture list `[]`, `[&]` or
 /// `[=]` is the value assigned: the assignment of the lambda `x => {…}` (a wasp closure captures what it reads)
+/// A declared type before it, `std::function<int(int)> sq = …` or `function<int(int)> sq = …`, is dropped like `auto`
 fn cpp_lambda(items: &[Node]) -> Option<Node> {
-	let [assignment, parameters, body] = items else { return None };
+	let (assignment, parameters, body) = match items {
+		[assignment, parameters, body] => (assignment, parameters, body),
+		[declared, assignment, parameters, body] if is_cpp_type(declared) => (assignment, parameters, body),
+		_ => return None,
+	};
 	let Node::Key(name, Op::Assign, capture) = assignment.drop_meta() else { return None };
 	let is_capture = matches!(capture.drop_meta(), Node::Empty | Node::List(_, Bracket::Square, _));
 	let Node::List(declared, Bracket::Round, separator) = parameters.drop_meta() else { return None };
@@ -459,6 +472,11 @@ fn cpp_lambda(items: &[Node]) -> Option<Node> {
 		_ => Node::List(names, Bracket::Round, Separator::Colon),
 	};
 	Some(Node::Key(name.clone(), Op::Assign, Box::new(lambda(parameters, forms(body.clone())))))
+}
+
+/// `std::function<int(int)>` (a namespaced name) or `function<int(int)>` (by now the one symbol `function of int(int)`)
+fn is_cpp_type(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, Op::Scope, _) | Node::Symbol(_))
 }
 
 /// `[xs.sum, {block}]` as the parser groups `xs.sum { |x| x * 2 }`: `sum(map(xs, {block}))` (BLOCK_REDUCTIONS)

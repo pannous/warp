@@ -46,6 +46,22 @@ Each step is useful on its own and is what the next ones stand on.
   `POST /rpc/<name>` with the arguments as a JSON array and the result as JSON; the page build replaces its body with a
   stub making that call (synchronous in the worker, like fetch). `/rpc/` is reserved for this.
 
+## Async data (card web-async, 2026-10-07)
+- `users := fetch "/api/users"` at the main level does not wait: `users` is ø with `users.loading` true and
+  `users.error` ø; once the reply is in, `users.loading` is false, then `users.error` (the failure text, "fetch … failed:
+  HTTP status 404") or `users` (the parsed JSON, any other body the text) is set, so `on change users {…}` and a page
+  whose last line is `users` show it. A fetch with `timeout` keeps the old meaning (fetched on each read).
+- A URL reading main-level variables (`"/api/users?page=" + page`) is fetched anew when one changes; a reply of an
+  older fetch of the same name is dropped.
+- Lowering (src/lowering/fetch_signals.rs): the variables users, users·loading, users·error, the call
+  `fetch_start(0, url)` and the handler `on·fetch·0`, which takes `fetch_reply(0)` = [value, error]. Natively
+  (src/fetches.rs) a thread fetches and the runtime runs the handler at the next check point (warp-runtime
+  system_signals await_ready; `warp run` stays until the reply arrived); in the page host.js fetches and worker.js runs
+  the handler like a timer's, then re-renders.
+- Open: cancel on navigation; the page re-renders only a last line that is a name (event_signals with_output_binding),
+  so `if users.loading then "Loading…" else users` does not update yet; a main that waits (`while users.loading {sleep…}`)
+  never ends in the browser, whose worker delivers the reply only after main returned; diagnostics name users·error.
+
 ## Defaults for step 1 (web-dom), undoable
 - A markup value is any key whose name is an HTML tag (`div`, `p`, `ul`, `li`, `a`, `button`, … the HTML element list)
   with a block; `name: "text"` is the element with that text, `name{ key: value … }` attributes for keys that are HTML
