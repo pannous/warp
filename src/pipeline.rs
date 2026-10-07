@@ -111,19 +111,35 @@ fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnO
 thread_local! {
 	/// whether the program compiled on this thread is for a page (`warp build --site`), where page events happen
 	static FOR_A_PAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
+	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// `run` with `flag` set on this thread
+fn with_flag<T>(flag: &'static std::thread::LocalKey<std::cell::Cell<bool>>, run: impl FnOnce() -> T) -> T {
+	let before = flag.with(|set| set.replace(true));
+	let result = run();
+	flag.with(|set| set.set(before));
+	result
 }
 
 /// `run` compiling a program for a page: its page event handlers are expected, not warned about
 pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
-	let before = FOR_A_PAGE.with(|page| page.replace(true));
-	let result = run();
-	FOR_A_PAGE.with(|page| page.set(before));
-	result
+	with_flag(&FOR_A_PAGE, run)
 }
 
 /// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
 pub fn is_for_a_page() -> bool {
 	FOR_A_PAGE.with(|page| page.get())
+}
+
+/// `run` compiling a program for `warp dev`: the main-level variables it changes are kept (lowering/stored_values.rs)
+pub fn for_dev<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_DEV, run)
+}
+
+pub fn is_for_dev() -> bool {
+	FOR_DEV.with(|dev| dev.get())
 }
 
 /// A compiled program and the host capabilities its imports need.
@@ -138,7 +154,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 70] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 71] = [
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
 	crate::channel_words::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
@@ -168,6 +184,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 70] = [
 	crate::pipes::lower,
 	// the classes of used modules (`use shapes`, `use collections`) before class_methods lowers them with the program's
 	crate::modules::insert_module_classes,
+	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
+	crate::type_aliases::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::traits::lower_trait_parameters,
 	// methods in a class body become functions over the class before any pass reads the body as fields
@@ -221,6 +239,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());
 	}
+	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
 	let node = run_passes(node, &SOURCE_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());

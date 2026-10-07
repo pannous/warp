@@ -4,7 +4,7 @@
 //! variables: names (fade, slide, scale, an easing like ease-out) and durations, normalized to milliseconds; a text is
 //! taken as written. The words end where the element's children begin (`p{ transition: fade 200ms "text" }`).
 
-use crate::element_events::element_items;
+use crate::element_events::with_element_items;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 
@@ -15,12 +15,10 @@ pub const TRANSITION_ATTRIBUTE: &str = "data-wasp-transition";
 pub fn lower(node: Node) -> Node {
 	let node = node.map_children(lower);
 	// `style: { transition: "opacity 1s" }` is an inline style, its transition the CSS property
-	if element_items(&node).is_none() || node.drop_meta().name() == STYLE {
+	if node.drop_meta().name() == STYLE {
 		return node;
 	}
-	let Node::Key(tag, op, content) = node else { unreachable!("an element") };
-	let Node::List(items, bracket, separator) = content.drop_meta().clone() else { unreachable!("an element's block") };
-	Node::Key(tag, op, Box::new(Node::List(items.into_iter().flat_map(with_transition_attribute).collect(), bracket, separator)))
+	with_element_items(node, |items| items.into_iter().flat_map(with_transition_attribute).collect())
 }
 
 /// An element's item: `transition: …` (alone, or leading a line of words) as the attribute and the children after it

@@ -74,3 +74,14 @@ fn test_module_using_module_imports_transitively_and_survives_cycles() {
 	let resolved = resolved_text("use ping;1", &directory);
 	assert!(resolved.contains("ping") && resolved.contains("pong"), "{resolved}");
 }
+
+/// card module-locals: a used module's functions never see the program's variables, so their own locals ask nothing
+/// (`items` of markup's html_element in a page)
+#[test]
+fn module_function_locals_are_not_the_programs_variables() {
+	warp::diagnostic::take_warnings();
+	let compiled = warp::pipeline::for_a_page(|| warp::pipeline::compile("use markup\nlet items = 3\nhtml{ p{ \"x\" } }"));
+	let warnings: Vec<String> = warp::diagnostic::take_warnings().iter().map(|warning| warning.to_string()).collect();
+	assert!(compiled.is_ok());
+	assert!(warnings.iter().all(|warning| !warning.contains("new local")), "{warnings:?}");
+}

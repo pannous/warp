@@ -13,8 +13,6 @@ const TEXT_TYPE: &str = "text/plain; charset=utf-8";
 const NOT_FOUND: u16 = 404;
 const FAILED: u16 = 500;
 const SITE_METHOD: &str = "GET";
-/// The content types of a site's files, by their extension
-const CONTENT_TYPES: [(&str, &str); 3] = [(".html", "text/html; charset=utf-8"), (".wasm", "application/wasm"), (".js", "text/javascript; charset=utf-8")];
 
 thread_local! {
 	/// How many requests this thread's next serve answers before it returns: 0 serves on (tests stop it so)
@@ -24,6 +22,11 @@ thread_local! {
 /// The next serve on this thread returns after `requests` requests (a test's server ends)
 pub fn stop_after(requests: usize) {
 	REQUEST_LIMIT.with(|limit| limit.set(requests));
+}
+
+/// The request limit stop_after set for this serve, 0 serving on; the next serve starts unlimited
+pub(crate) fn take_request_limit() -> usize {
+	REQUEST_LIMIT.with(|limit| limit.replace(0))
 }
 
 /// A route of the program: method, path and the function answering it
@@ -76,7 +79,7 @@ fn text_of(node: &Node) -> String {
 /// takes is a file of the program's `site` (src/site.rs), its page at /
 pub fn serve(port: u16, routes: &[Route], site: &[SiteFile], mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
 	let server = tiny_http::Server::http(("0.0.0.0", port)).map_err(|problem| format!("serve {port}: {problem}"))?;
-	let limit = REQUEST_LIMIT.with(|limit| limit.replace(0));
+	let limit = take_request_limit();
 	let mut served = 0;
 	for mut request in server.incoming_requests() {
 		let method = request.method().as_str().to_uppercase();
@@ -99,10 +102,8 @@ pub fn serve(port: u16, routes: &[Route], site: &[SiteFile], mut answer: impl Fn
 
 /// `GET /` is the site's page, `GET /app.wasm` its module and so on
 fn site_file(site: &[SiteFile], method: &str, path: &str) -> Option<Answer> {
-	let name = path.strip_prefix('/')?;
-	let (name, bytes) = site.iter().enumerate().find(|(index, (file, _))| (name.is_empty() && *index == 0) || *file == name).map(|(_, file)| file)?;
-	let content_type = CONTENT_TYPES.iter().find(|(extension, _)| name.ends_with(extension)).map_or(TEXT_TYPE, |(_, content_type)| content_type);
-	(method == SITE_METHOD).then(|| Answer { status: 200, content_type, body: bytes.clone() })
+	let (name, bytes) = crate::site::file_at(site, path).filter(|_| method == SITE_METHOD)?;
+	Some(Answer { status: 200, content_type: crate::site::content_type(name), body: bytes.clone() })
 }
 
 /// An HTTP body as a value: a JSON object or array parsed into its map or list, any other body the text

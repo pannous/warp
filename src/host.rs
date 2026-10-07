@@ -635,7 +635,7 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 fn served_site(port: u16) -> Vec<crate::site::SiteFile> {
 	let Some(file) = crate::modules::program_file() else { return vec![] };
 	let title = file.file_stem().map_or(String::new(), |stem| stem.to_string_lossy().to_string());
-	let rendered = std::fs::read_to_string(&file).map_err(|failure| failure.to_string()).and_then(|code| crate::site::render(&code, &title));
+	let rendered = std::fs::read_to_string(&file).map_err(|failure| failure.to_string()).and_then(|code| crate::site::served_files(&code, &title));
 	rendered.unwrap_or_else(|failure| {
 		eprintln!("warning: serve {port} serves no page: {failure}");
 		None
