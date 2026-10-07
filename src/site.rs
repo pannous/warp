@@ -15,6 +15,9 @@ const MODULE_FILE: &str = "app.wasm";
 const HOST_SCRIPTS: [Script; 2] = [("reader.js", include_str!("../web/playground/reader.js")), ("host.js", include_str!("../web/playground/host.js"))];
 /// The scripts every page loads after them
 const PAGE_SCRIPTS: [Script; 2] = [("markup.js", include_str!("../web/playground/markup.js")), ("site.js", include_str!("../web/playground/site.js"))];
+/// The part of markup.js for elements with a CSS transition, after it: only a module that names a transition has them
+const TRANSITIONS_SCRIPT: Script = ("markup-transitions.js", include_str!("../web/playground/markup-transitions.js"));
+const TRANSITION_WORD: &[u8] = b"transition";
 type Script = (&'static str, &'static str);
 const WASI_LIBRARY: &str = "wasi_snapshot_preview1";
 const TASK_WORD_PREFIXES: [&str; 3] = ["task_", "channel_", "shared_"];
@@ -156,13 +159,15 @@ pub fn dev_shell(title: &str) -> Vec<SiteFile> {
 }
 
 /// The scripts of the page of a module, in load order: the parts of the host it imports words of, with the parts they
-/// need; `dev` adds dev.js
+/// need, and markup-transitions.js when it names a transition; `dev` adds dev.js
 pub fn scripts_of(module: &[u8], dev: bool) -> Result<Vec<Script>, String> {
 	let imports = imports_of(module)?;
 	let imported = |part: &HostPart| imports.iter().any(|(module, name)| (part.gives)(module, name));
 	let needed: Vec<&str> = HOST_PARTS.iter().filter(|part| imported(part)).flat_map(|part| part.needs.iter().copied().chain([part.script.0])).collect();
 	let parts = HOST_PARTS.iter().map(|part| part.script).filter(|(name, _)| needed.contains(name));
-	Ok(HOST_SCRIPTS.into_iter().chain(parts).chain(PAGE_SCRIPTS).chain(dev.then_some(DEV_SCRIPT)).collect())
+	let [markup, site] = PAGE_SCRIPTS;
+	let transitions = module.windows(TRANSITION_WORD.len()).any(|window| window == TRANSITION_WORD).then_some(TRANSITIONS_SCRIPT);
+	Ok(HOST_SCRIPTS.into_iter().chain(parts).chain([markup]).chain(transitions).chain([site]).chain(dev.then_some(DEV_SCRIPT)).collect())
 }
 
 /// The (module, name) of each import of a module

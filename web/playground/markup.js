@@ -5,23 +5,15 @@
 const INSTANCE_ATTRIBUTE = "data-wasp-instance"; // a component instance's elements (src/lowering/element_events.rs)
 const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (std/markup.wasp)
 const NUMBER_FIELDS = ["number", "range"]; // fields whose bound value is a number
-const TRANSITION_ATTRIBUTE = "data-wasp-transition"; // `li{ transition: fade 200ms }` (src/lowering/transitions.rs)
 const LEAVING_ATTRIBUTE = "data-wasp-leaving"; // an element animating out: no longer matched, removed when done
-const TRANSITION_DEFAULTS = { kind: "fade", duration: 200, easing: "ease" };
-// the start of each kind of transition: an element enters from it and leaves towards it
-const TRANSITION_FRAMES = {
-	fade: { opacity: 0 },
-	scale: { opacity: 0, transform: "scale(0.8)" },
-	slide: { opacity: 0, transform: "translateY(-1em)" },
-};
 const DEV_STORE = "wasp-dev"; // the store of the values a `warp dev` page keeps (src/lowering/stored_values.rs DEV_STORE)
 const STORED_PREFIX = "wasp stored "; // a stored value in localStorage, kept across visits
 const DEV_PREFIX = "wasp dev "; // a value a `warp dev` page keeps in sessionStorage, across its reloads
 
 // the children of shown become those of wanted: an element with a key (data-wasp-key, card web-keyed) is the shown one
 // of that key, moved into place; any other node is matched by position; a node of another kind or tag is replaced.
-// An element with a transition (card web-transitions) animates in, out and, keyed, to its new place; nothing animates
-// when shown was empty (the first render)
+// An element with a transition (card web-transitions, markup-transitions.js) animates in, out and, keyed, to its new
+// place; nothing animates when shown was empty (the first render)
 function morphChildren(shown, wanted, animated = shown.hasChildNodes()) {
 	const keyOf = node => node.getAttribute?.(KEY_ATTRIBUTE) ?? null;
 	const keyed = new Map([...shown.children].filter(child => keyOf(child) !== null && isLive(child)).map(child => [keyOf(child), child]));
@@ -54,42 +46,12 @@ function nextLive(node) {
 	return node;
 }
 
-// `fade 200ms ease-out` as its kind, duration and easing; null without a transition or when motion is unwanted
-function transitionOf(node) {
-	const spec = node.getAttribute?.(TRANSITION_ATTRIBUTE);
-	if (spec == null || matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
-	return spec.split(/\s+/).filter(Boolean).reduce((transition, word) => {
-		if (/^\d+ms$/.test(word)) return { ...transition, duration: parseInt(word) };
-		if (word in TRANSITION_FRAMES) return { ...transition, kind: word };
-		return { ...transition, easing: word };
-	}, TRANSITION_DEFAULTS);
-}
-
-function enter(node) {
-	const transition = transitionOf(node);
-	if (transition) node.animate([TRANSITION_FRAMES[transition.kind], {}], transition);
-}
-
-// a node gone from the markup: with a transition it stays in place, unmatched, until it has animated out
-function leave(node) {
-	const transition = transitionOf(node);
-	if (!transition) return node.remove();
-	node.setAttribute(LEAVING_ATTRIBUTE, "");
-	node.animate([{}, TRANSITION_FRAMES[transition.kind]], { ...transition, fill: "forwards" }).finished.then(() => node.remove(), () => node.remove());
-}
-
-// where each keyed element with a transition is shown now: after the morph a moved one glides from there (FLIP)
-function transitionPlaces(shown) {
-	return new Map([...shown.children].filter(child => isLive(child) && child.hasAttribute(KEY_ATTRIBUTE) && transitionOf(child)).map(child => [child, child.getBoundingClientRect()]));
-}
-
-function moveFrom(element, before) {
-	const transition = transitionOf(element);
-	if (!element.isConnected || !isLive(element) || !transition) return;
-	const after = element.getBoundingClientRect();
-	const [x, y] = [before.left - after.left, before.top - after.top];
-	if (x || y) element.animate([{ transform: `translate(${x}px, ${y}px)` }, {}], transition);
-}
+// without transitions an element just comes and goes; markup-transitions.js, loaded after this script by pages whose
+// elements have a CSS transition (src/site.rs), replaces these four
+function transitionPlaces() { return new Map(); }
+function enter() {}
+function leave(node) { node.remove(); }
+function moveFrom() {}
 
 function morphElement(shown, wanted) {
 	[...shown.attributes].filter(({ name }) => !wanted.hasAttribute(name)).forEach(({ name }) => shown.removeAttribute(name));
