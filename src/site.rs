@@ -15,6 +15,18 @@ const MODULE_FILE: &str = "app.wasm";
 const HOST_SCRIPTS: [Script; 2] = [("reader.js", include_str!("../web/playground/reader.js")), ("host.js", include_str!("../web/playground/host.js"))];
 /// The scripts every page loads after them
 const PAGE_SCRIPTS: [Script; 2] = [("markup.js", include_str!("../web/playground/markup.js")), ("site.js", include_str!("../web/playground/site.js"))];
+/// A page whose program runs in a Worker (card site-worker) loads this before them, and site.js hands over to it
+const THREAD_SCRIPT: Script = ("site-thread.js", include_str!("../web/playground/site-thread.js"));
+/// What such a site ships besides: the program's Worker, the task Workers it starts, and the service worker that gives a
+/// static host's page the cross-origin isolation shared memory needs
+const WORKER_FILES: [Script; 3] = [
+	("site-worker.js", include_str!("../web/playground/site-worker.js")),
+	("task-worker.js", include_str!("../web/playground/task-worker.js")),
+	("coi-serviceworker.js", include_str!("../web/playground/coi-serviceworker.js")),
+];
+/// The root's attribute listing the scripts of the program's Worker (site-thread.js WORKER_ATTRIBUTE)
+const WORKER_ATTRIBUTE: &str = "data-wasp-worker";
+const LIST_SEPARATOR: &str = ",";
 type Script = (&'static str, &'static str);
 const WASI_LIBRARY: &str = "wasi_snapshot_preview1";
 const TASK_WORD_PREFIXES: [&str; 3] = ["task_", "channel_", "shared_"];
@@ -60,7 +72,7 @@ const PAGE_TEMPLATE: &str = r#"<!doctype html>
 <title>{{title}}</title>
 {{base}}</head>
 <body>
-<div id="{{root}}">{{body}}</div>
+<div id="{{root}}"{{worker}}>{{body}}</div>
 {{scripts}}</body>
 </html>
 "#;
@@ -164,11 +176,13 @@ impl ServedSite {
 	}
 }
 
-/// A program's page: its module with the imports it needs, the scripts it loads and the files (its page at /)
+/// A program's page: its module with the imports it needs, the scripts it loads, those of the Worker its program runs in
+/// (none: it runs in the page) and the files (its page at /)
 struct Site {
 	module: Vec<u8>,
 	imports: crate::wasm_reader::Imports,
 	scripts: Vec<Script>,
+	worker_scripts: Vec<Script>,
 	files: Vec<SiteFile>,
 }
 
@@ -180,8 +194,14 @@ fn site_of(code: &str, title: &str, dev: bool) -> Result<Option<Site>, String> {
 		return Ok(None);
 	}
 	let imports = crate::wasm_reader::Imports { host: module.needs_host, wasi: module.needs_wasi, ffi: module.needs_ffi };
-	let scripts = scripts_of(&module.bytes, dev)?;
-	let mut site = Site { module: module.bytes, imports, scripts, files: vec![] };
+	let host_scripts = host_scripts_of(&module.bytes)?;
+	let dev_script = dev.then_some(DEV_SCRIPT);
+	let (scripts, worker_scripts): (Vec<Script>, Vec<Script>) = if runs_in_a_worker(&imports_of(&module.bytes)?) {
+		([THREAD_SCRIPT].into_iter().chain(PAGE_SCRIPTS).chain(dev_script).collect(), host_scripts)
+	} else {
+		(host_scripts.into_iter().chain(PAGE_SCRIPTS).chain(dev_script).collect(), vec![])
+	};
+	let mut site = Site { module: module.bytes, imports, scripts, worker_scripts, files: vec![] };
 	let page = rendered_page(code, title, &site, BESIDE)?;
 	// each route's own functions in a module the page loads when it shows the route; a dev page reloads whole anyway.
 	// The site keeps the whole module, which renders its pages natively
@@ -192,7 +212,9 @@ fn site_of(code: &str, title: &str, dev: bool) -> Result<Option<Site>, String> {
 	};
 	site.files = vec![(PAGE_FILE.to_string(), page.into_bytes()), (MODULE_FILE.to_string(), primary)];
 	site.files.extend(route_modules);
-	site.files.extend(site.scripts.iter().map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
+	let worker_files = if site.worker_scripts.is_empty() { &[][..] } else { &WORKER_FILES[..] };
+	let shipped = site.scripts.iter().chain(&site.worker_scripts).chain(worker_files);
+	site.files.extend(shipped.map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
 	Ok(Some(site))
 }
 
@@ -204,7 +226,7 @@ fn rendered_page(code: &str, title: &str, site: &Site, root: &str) -> Result<Str
 	let Node::Text(html) = rendered.drop_meta() else {
 		return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, rendered.serialize()));
 	};
-	Ok(page(title, html, &site.scripts, root))
+	Ok(page(title, html, &site.scripts, &site.worker_scripts, root))
 }
 
 /// The file of a site a request path names: "/" is the page, "/app.wasm" the module, "/about" a prerendered
@@ -231,18 +253,31 @@ fn exports(module: &[u8], name: &str) -> bool {
 
 /// The page `warp dev` shows before any build succeeded: only dev.js, which shows the failure
 pub fn dev_shell(title: &str) -> Vec<SiteFile> {
-	let page = page(title, "", &[DEV_SCRIPT], BESIDE);
+	let page = page(title, "", &[DEV_SCRIPT], &[], BESIDE);
 	vec![(PAGE_FILE.to_string(), page.into_bytes()), (DEV_SCRIPT.0.to_string(), DEV_SCRIPT.1.as_bytes().to_vec())]
 }
 
 /// The scripts of the page of a module, in load order: the parts of the host it imports words of, with the parts they
 /// need; `dev` adds dev.js
 pub fn scripts_of(module: &[u8], dev: bool) -> Result<Vec<Script>, String> {
+	Ok(host_scripts_of(module)?.into_iter().chain(PAGE_SCRIPTS).chain(dev.then_some(DEV_SCRIPT)).collect())
+}
+
+/// host.js with reader.js and the parts of the host a module imports words of, with the parts they need
+fn host_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
 	let imports = imports_of(module)?;
 	let imported = |part: &HostPart| imports.iter().any(|(module, name)| (part.gives)(module, name));
 	let needed: Vec<&str> = HOST_PARTS.iter().filter(|part| imported(part)).flat_map(|part| part.needs.iter().copied().chain([part.script.0])).collect();
 	let parts = HOST_PARTS.iter().map(|part| part.script).filter(|(name, _)| needed.contains(name));
-	Ok(HOST_SCRIPTS.into_iter().chain(parts).chain(PAGE_SCRIPTS).chain(dev.then_some(DEV_SCRIPT)).collect())
+	Ok(HOST_SCRIPTS.into_iter().chain(parts).collect())
+}
+
+/// A module that starts tasks, uses channels or shared memory runs in a Worker, where a blocking `await` may wait and
+/// its tasks run together (card site-worker); a plain page stays on the page's thread. A program with routes stays
+/// there too for now: following a link reaches the program through the page (host-routes.js followSiteLinks)
+fn runs_in_a_worker(imports: &[(String, String)]) -> bool {
+	let imports_word = |wanted: &dyn Fn(&str) -> bool| imports.iter().any(|(module, name)| module == HOST_LIBRARY && wanted(name));
+	imports_word(&|name| TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix))) && !imports_word(&|name| name == PAGE_PATH)
 }
 
 /// The (module, name) of each import of a module
@@ -278,11 +313,13 @@ fn with_excerpt(code: &str, message: String) -> String {
 
 /// A page at a deeper path than the site's files finds them, and the module and route modules they load, through its
 /// <base> (`root`); an in-page "#anchor" link there resolves against the root too
-fn page(title: &str, body: &str, scripts: &[(&str, &str)], root: &str) -> String {
+fn page(title: &str, body: &str, scripts: &[Script], worker_scripts: &[Script], root: &str) -> String {
 	let scripts: String = scripts.iter().map(|(name, _)| format!("<script src=\"{name}\"></script>\n")).collect();
+	let worker_list: Vec<&str> = worker_scripts.iter().map(|(name, _)| *name).collect();
+	let worker = if worker_list.is_empty() { String::new() } else { format!(" {WORKER_ATTRIBUTE}=\"{}\"", worker_list.join(LIST_SEPARATOR)) };
 	let base = if root == BESIDE { String::new() } else { format!("<base href=\"{root}\">\n") };
 	// the program's texts last, so nothing in them is read as a placeholder
-	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{base}}", &base).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
+	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{worker}}", &worker).replace("{{base}}", &base).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
 }
 
 /// A script without its comment lines, blank lines and indentation (card web-bundle: host.js gzipped 24 → 17 KB); the

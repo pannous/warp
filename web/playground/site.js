@@ -57,12 +57,13 @@ async function hydrate() {
 	globalThis.followSiteLinks?.(goTo);
 	// kept values may differ from those the page was built with: show what main left
 	if (site) showAfter(outcome);
-	const root = document.getElementById(SITE_ROOT);
+	listenToElements(found => found && site.exports[`on·${found.event}·node`] && showAfter(runPageEvent(site, siteHooks, found.event, found.detail)));
+}
+
+// each event of the page to `handle`: its element's {event, detail} (markup.js elementEvent), else nothing
+function listenToElements(handle) {
 	for (const [event, detail] of Object.entries(SITE_EVENTS)) {
-		root.addEventListener(event, happened => {
-			const found = site && elementEvent(event, happened, detail(happened));
-			if (found && site.exports[`on·${found.event}·node`]) showAfter(runPageEvent(site, siteHooks, found.event, found.detail));
-		});
+		document.getElementById(SITE_ROOT).addEventListener(event, happened => handle(elementEvent(event, happened, detail(happened))));
 	}
 }
 
@@ -74,4 +75,5 @@ async function goTo(path) {
 	focusRoute(document.getElementById(SITE_ROOT));
 }
 
-hydrate();
+// a module that starts tasks runs in a Worker (site-thread.js, shipped only then)
+(globalThis.startSiteWorker ?? hydrate)();
