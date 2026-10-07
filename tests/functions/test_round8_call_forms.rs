@@ -33,3 +33,10 @@ fn ruby_symbol_blocks_methods_and_block_sums() {
 	is!("[1, 2, 3].count { |x| x > 1 }", 2);
 	is!("xs = [1, 2, 3]; xs.sumOf { it * 2 }", 12);
 }
+
+/// card elixir-block: Elixir's block form `def sq(x) do … end`
+#[test]
+fn elixir_do_end_def() {
+	is!("def sq(x) do x * x end; sq(3)", 9);
+	is!("defp add(a, b) do\n  a + b\nend\nadd(2, 3)", 5);
+}
