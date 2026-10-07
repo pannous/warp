@@ -31,9 +31,9 @@ dedupe(xs) := { out = []; for x in xs { if count(out) == 0 or last(out) != x { o
 scan(xs, start, f) := { out = []; acc = start; for x in xs { acc = f(acc, x); out = out + [acc] }; out }
 take_while(xs, f) := { out = []; for x in xs { if not f(x) { break }; out = out + [x] }; out }
 drop_while(xs, f) := { out = []; dropping = true; for x in xs { if not (dropping and f(x)) { dropping = false; out = out + [x] } }; out }
-// the position (from 1, like index_of and #) of the greatest element, the first of equal ones
-argmax(xs) := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best }
-argmin(xs) := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best }
+// the index (from 0, like xs[i]) of the greatest element, the first of equal ones
+argmax(xs) := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best - 1 }
+argmin(xs) := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best - 1 }
 // the neighbours: pairwise([1, 2, 3]) is [[1 2] [2 3]]
 pairwise(xs) := { out = []; for i in 1 to count(xs) - 1 { out = out + [[xs#i, xs#(i+1)]] }; out }
 // [the first n, the rest]

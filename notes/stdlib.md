@@ -100,7 +100,7 @@ Next:
    ("1h 30m 30s", "250ms"; plain milliseconds: units don't reach functions yet); map: omit filter_values. Fixed on
    the way: a slice of a Node is a Node (capitalize(w) for the elements of words(t) was 'text + list'); a
    comprehension's list is a `let` local (one in a module and one in the program asked "new local or main-level?").
-   math: round_to factorial is_prime lerp; list: scan take_while drop_while argmax argmin (from 1, like index_of);
+   math: round_to factorial is_prime lerp; list: scan take_while drop_while argmax argmin (from 0, like xs[i]; 1-based like index_of asked at warp-e9);
    map: entries; text: is_blank; random: seed(n) (host word random_seed: xorshift64* natively and in host.js, per run).
    math: is_even is_odd digits choose mod_pow; list: pairwise split_at cartesian mode variance stdev; text: is_upper
    is_lower remove_prefix remove_suffix count_of is_palindrome; map: get_or; time: is_leap_year days_in_month. Fixed on
