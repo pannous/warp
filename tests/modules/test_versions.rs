@@ -29,7 +29,7 @@ fn use_requires_a_version_of_a_package() {
 	is!("use uniscript >= 1.0; uniscript(\"<:alpha>\")", "α");
 	is!("use uniscript from 0.1.5; uniscript(\"<:alpha>\")", "α");
 	is!("use uniscript version 1.0.0; uniscript(\"<:alpha>\")", "α");
-	is!("use uniscript >= 9.0.0; 1", error("package uniscript has no version >= 9.0.0 (tagged: 0.1.0, 1.0.0)"));
+	is!("use uniscript >= 9.0.0; 1", error("package uniscript has no version >= 9.0.0 (tagged: 0.1.0, 1.0.0, 1.0.1)"));
 }
 
 /// a version the default branch does not have comes from the git tag `v0.1.0`, into packages/uniscript@0.1.0
