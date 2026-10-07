@@ -148,6 +148,13 @@ pub fn run_outcome(outcome: &Value) -> Node {
 	crate::node::error(&format!("could not run the program: {failure}"))
 }
 
+/// What the page shows after a page event's handler (worker.js showHandled): the value as the compiler writes it, and
+/// its HTML when it is markup (card web-element)
+pub fn shown(outcome: &Value) -> Value {
+	let value = run_outcome(outcome);
+	json!({ "value": value.serialize(), "html": crate::html::is_markup(&value).then(|| crate::html::to_html(&value)) })
+}
+
 /// The page's run_block (host.js; src/host.rs natively): the block and what it sees as trees (`{block, names, values,
 /// definitions}`), its value as a tree back (`{"result": tree}`) or `{"error": message}`
 pub fn eval_block_report(request: &Value) -> Value {
@@ -461,7 +468,7 @@ mod exports {
 	#[no_mangle]
 	pub extern "C" fn web_show(outcome: *const u8, outcome_length: usize) -> usize {
 		let outcome = serde_json::from_str::<Value>(text(outcome, outcome_length)).unwrap_or_default();
-		let shown = super::run_outcome(&outcome).serialize().into_bytes();
+		let shown = super::shown(&outcome).to_string().into_bytes();
 		REPORT.with(|kept| {
 			*kept.borrow_mut() = shown;
 			kept.borrow().len()

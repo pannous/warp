@@ -46,12 +46,59 @@ Each step is useful on its own and is what the next ones stand on.
   `POST /rpc/<name>` with the arguments as a JSON array and the result as JSON; the page build replaces its body with a
   stub making that call (synchronous in the worker, like fetch). `/rpc/` is reserved for this.
 
+## Async data (card web-async, 2026-10-07)
+- `users := fetch "/api/users"` at the main level does not wait: `users` is ø with `users.loading` true and
+  `users.error` ø; once the reply is in, `users.loading` is false, then `users.error` (the failure text, "fetch … failed:
+  HTTP status 404") or `users` (the parsed JSON, any other body the text) is set, so `on change users {…}` and a page
+  whose last line is `users` show it. A fetch with `timeout` keeps the old meaning (fetched on each read).
+- A URL reading main-level variables (`"/api/users?page=" + page`) is fetched anew when one changes; a reply of an
+  older fetch of the same name is dropped.
+- Lowering (src/lowering/fetch_signals.rs): the variables users, users·loading, users·error, the call
+  `fetch_start(0, url)` and the handler `on·fetch·0`, which takes `fetch_reply(0)` = [value, error]. Natively
+  (src/fetches.rs) a thread fetches and the runtime runs the handler at the next check point (warp-runtime
+  system_signals await_ready; `warp run` stays until the reply arrived); in the page host.js fetches and worker.js runs
+  the handler like a timer's, then re-renders.
+- Open: cancel on navigation; the page re-renders only a last line that is a name (event_signals with_output_binding),
+  so `if users.loading then "Loading…" else users` does not update yet; a main that waits (`while users.loading {sleep…}`)
+  never ends in the browser, whose worker delivers the reply only after main returned; diagnostics name users·error.
+
 ## Defaults for step 1 (web-dom), undoable
 - A markup value is any key whose name is an HTML tag (`div`, `p`, `ul`, `li`, `a`, `button`, … the HTML element list)
   with a block; `name: "text"` is the element with that text, `name{ key: value … }` attributes for keys that are HTML
   attributes, other children nested in order. Unknown names stay data (no custom elements yet).
 - Natively the value serializes as HTML (`to_html`), text escaped. In the page the program's value, when it is markup, is
   shown as DOM in the output pane instead of its wasp text; `show(markup)` places it explicitly.
+
+## Step 3 (web-fine), what is done and what is left
+- Done (DOM side): after a handler the page receives the whole markup again (the output binding, event_signals.rs) and
+  playground.js `morphChildren` changes only the text nodes and attributes that differ, matching nodes by position;
+  a node of another kind or tag is replaced. Elements keep their identity, focus, input and scroll state. Tour example
+  "fine updates" checks it (`clicks`, `clicked`, `kept` in examples.js, test_in_browser.py --examples).
+- Left (compute side, card web-fine-holes): the markup is still evaluated whole after each handler. Per-hole updates
+  (each signal-reading text or attribute its own derived binding, only the changed ones sent) need the lowering to
+  mark the holes; worth it once markup gets large (web-components).
+- Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
+
+## Step 4 (web-components), what is done and what is left
+- A component is a function returning markup; props are its parameters, positional or named (`Card(title:"Hi")`).
+- Children: a block after a call that leaves a parameter without its value is that argument, for any function
+  (trailing closure, lowering/ruby_blocks.rs): `Card("Hi") { p:"text" }`, `apply(3) { it*2 }`.
+- Own state per instance (lowering/component_state.rs, before element_events): a variable of a component that one of
+  its element handlers mentions is the main-level list `Counter·count`, one entry per instance; an instance is the n-th
+  call of that component in a render (React's hooks rule, undoable default, question queued with the Interviewer); the
+  handler's element carries `data-wasp-instance`, the page passes it as `event.instance`. The program's last line
+  becomes the getter `page·markup`, which resets the instance counters before each render.
+- Left: cleanup of listeners when an instance is removed (onMount/onCleanup), instances that move (web-keyed),
+  state of a component read by a handler outside it.
+
+## Step 5 (web-keyed), what is done and what is left
+- A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,
+  `ul{ ts.map(t => li{t}) }` (markup_tags.rs keeps it a `[…]`, which the analyzer and emitter take as an item, not as
+  statements to run; analyzer/variables.rs: a statement group in a structure declares its locals).
+- `li{ key: todo.id … }` is the attribute data-wasp-key; playground.js morphChildren moves the shown element of that
+  key into place instead of rewriting elements by position. Tour example "keyed list" (`keyed` check).
+- Not yet: `for t in ts { li{t} }` inside a block (the parser reads `ts { … }` as the tag ts; card markup-for),
+  transitions (web-transitions).
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the

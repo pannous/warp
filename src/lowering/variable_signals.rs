@@ -663,6 +663,15 @@ pub(crate) fn is_statement_list(bracket: &Bracket, separator: &Separator) -> boo
 	*bracket == Bracket::Curly || matches!(separator, Separator::Semicolon | Separator::Newline)
 }
 
+/// The main-level statements of a program and its bracket and separator: a program of one statement
+/// (`on every day at 9:00 {…}`) is a list of that one
+pub(crate) fn main_statements(program: &Node) -> (Vec<Node>, Bracket, Separator) {
+	match program.drop_meta() {
+		Node::List(items, bracket, separator) if is_statement_list(bracket, separator) => (items.clone(), bracket.clone(), separator.clone()),
+		single => (vec![single.clone()], Bracket::None, Separator::Newline),
+	}
+}
+
 fn watches(listeners: &[Listener], name: &str) -> bool {
 	listeners.iter().any(|listener| listener.watches(name))
 }

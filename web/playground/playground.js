@@ -13,7 +13,10 @@ const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
-const PAGE_EVENT = /^on (click|key)$/;
+const INSTANCE_ATTRIBUTE = "data-wasp-instance"; // a component instance's elements (src/lowering/element_events.rs)
+const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (src/html.rs)
+// a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
+const PAGE_EVENT = /^on ((?:click|key)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
 // (src/paint.rs shade, std/draw.wasp)
@@ -263,11 +266,39 @@ function paintShade(value) {
 	return [PAINT_INK, PAINT_INK, PAINT_INK];
 }
 
-// a markup value as DOM (src/html.rs, card web-dom), in a shadow root so its own style cannot restyle the page
+// a markup value as DOM (src/html.rs, card web-dom), in a shadow root so its own style cannot restyle the page.
+// Markup shown anew after a handler changes only the text nodes and attributes that differ (card web-fine): the
+// elements stay, with their focus, input and scroll state.
 function showRendered(html) {
 	const host = $("rendered");
 	host.hidden = !html;
-	(host.shadowRoot ?? host.attachShadow({ mode: "open" })).innerHTML = html ?? "";
+	const template = document.createElement("template");
+	template.innerHTML = html ?? "";
+	morphChildren(host.shadowRoot ?? host.attachShadow({ mode: "open" }), template.content);
+}
+
+// the children of shown become those of wanted: an element with a key (data-wasp-key, card web-keyed) is the shown one
+// of that key, moved into place; any other node is matched by position; a node of another kind or tag is replaced
+function morphChildren(shown, wanted) {
+	const keyOf = node => node.getAttribute?.(KEY_ATTRIBUTE) ?? null;
+	const keyed = new Map([...shown.children].filter(child => keyOf(child) !== null).map(child => [keyOf(child), child]));
+	const wantedNodes = [...wanted.childNodes];
+	wantedNodes.forEach((node, index) => {
+		const current = shown.childNodes[index] ?? null;
+		const old = keyOf(node) !== null ? keyed.get(keyOf(node)) : current && keyOf(current) === null ? current : undefined;
+		if (!old) return shown.insertBefore(node, current);
+		if (old !== current) shown.insertBefore(old, current);
+		if (old.nodeName !== node.nodeName) old.replaceWith(node);
+		else if (old.nodeType === Node.ELEMENT_NODE) morphElement(old, node);
+		else if (old.nodeValue !== node.nodeValue) old.nodeValue = node.nodeValue;
+	});
+	[...shown.childNodes].slice(wantedNodes.length).forEach(node => node.remove());
+}
+
+function morphElement(shown, wanted) {
+	[...shown.attributes].filter(({ name }) => !wanted.hasAttribute(name)).forEach(({ name }) => shown.removeAttribute(name));
+	[...wanted.attributes].filter(({ name, value }) => shown.getAttribute(name) !== value).forEach(({ name, value }) => shown.setAttribute(name, value));
+	morphChildren(shown, wanted);
 }
 
 function showPaintings(paintings) {
@@ -302,6 +333,16 @@ function sendPageEvent(event, detail) {
 	if (listening.has(event)) worker.postMessage({ event, detail });
 }
 
+// an event inside the shown markup, for the handler of the element it happened in (data-wasp-click="1": click·1); in
+// a component (data-wasp-instance="2", element_events.rs) the event names its instance
+function sendElementEvent(event, happened, detail) {
+	const attribute = `data-wasp-${event}`;
+	const path = happened.composedPath();
+	const element = path.find(node => node.getAttribute?.(attribute));
+	const instance = path.find(node => node.getAttribute?.(INSTANCE_ATTRIBUTE))?.getAttribute(INSTANCE_ATTRIBUTE);
+	if (element) sendPageEvent(`${event}·${element.getAttribute(attribute)}`, instance ? { ...detail, instance: Number(instance) } : detail);
+}
+
 function clickDetail(click) {
 	const target = click.target.closest("canvas") ?? $("output");
 	const bounds = target.getBoundingClientRect();
@@ -319,6 +360,7 @@ function showEventOutput(data) {
 	if (data.type === "handled") {
 		$("value").textContent = data.value;
 		$("value").classList.toggle("error", data.error);
+		showRendered(data.html);
 	}
 }
 
@@ -395,6 +437,7 @@ function initialize() {
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
 	$("run").onclick = runNow;
+	$("rendered").onclick = click => sendElementEvent("click", click, clickDetail(click));
 	$("output").onclick = click => sendPageEvent("click", clickDetail(click));
 	$("output").onkeydown = key => sendPageEvent("key", { key: key.key });
 	$("download").onclick = downloadModule;

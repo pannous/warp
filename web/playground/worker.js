@@ -22,8 +22,11 @@ const hooks = {
 	listen: (holder, events) => {
 		live = holder;
 		startTimers(holder);
-		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer))] });
+		const fetches = [...(holder.fetches?.values() ?? [])].map(({ url }) => `fetch ${url}`);
+		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches] });
 	},
+	// a fetch's reply arrived (host.js startFetch): its handler runs like a timer's, and the page shows the outcome
+	arrived: (holder, handler) => holder === live && runHandler(holder, handler),
 	panicked: message => { panicMessage = message; },
 };
 
@@ -94,19 +97,22 @@ function showHandled(holder, handled, timer = false) {
 	const outcome = handled.result && binding ? outcomeOf(holder, hooks, binding) : handled;
 	const outcomeText = passText(JSON.stringify(outcome));
 	const length = compiler.web_show(...outcomeText);
-	const value = compilerText(compiler.web_report(), length);
+	const { value, html } = JSON.parse(compilerText(compiler.web_report(), length));
 	compiler.web_free(...outcomeText);
-	post({ type: "handled", value, error: outcome.result === undefined });
+	post({ type: "handled", value, html, error: outcome.result === undefined });
 }
 
-// the run's timers (host.js addTimer), each running its handler until the next run; a failing handler stops them
+// a timer's or fetch's handler run and its outcome shown; a failing handler stops the timers
+function runHandler(holder, handler) {
+	const handled = runTimer(holder, hooks, handler);
+	showHandled(holder, handled, true);
+	if (handled.result === undefined) holder.stopTimers();
+}
+
+// the run's timers (host.js addTimer), each running its handler until the next run
 function startTimers(holder) {
 	const handles = [];
-	const fire = timer => {
-		const handled = runTimer(holder, hooks, timer.handler);
-		showHandled(holder, handled, true);
-		if (handled.result === undefined) holder.stopTimers();
-	};
+	const fire = timer => runHandler(holder, timer.handler);
 	const atClock = timer => handles.push(setTimeout(() => {
 		fire(timer);
 		if (!timer.once) atClock(timer);
