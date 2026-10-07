@@ -131,6 +131,9 @@ fn task_phrases(node: Node, phrases: &Phrases) -> Node {
 	if let Some((list, function)) = crate::parallel::parallel_map(&node) {
 		return crate::parallel::map_in_tasks(task_phrases(list, phrases), task_phrases(function, phrases), phrases.next_parallel());
 	}
+	if let Some(error) = crate::parallel::sequential_warning(&node) {
+		return error;
+	}
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = items.into_iter().map(|item| task_phrases(item, phrases)).collect();
