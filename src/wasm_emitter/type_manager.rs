@@ -237,7 +237,7 @@ impl TypeManager {
 			let fields: Vec<FieldType> = type_def
 				.fields
 				.iter()
-				.map(|f| self.field_def_to_wasm_field(f))
+				.map(|f| self.field_def_to_wasm_field(f, &type_def.name))
 				.collect();
 
 			self.types.ty().struct_(fields);
@@ -251,7 +251,7 @@ impl TypeManager {
 		let fields: Vec<FieldType> = type_def
 			.fields
 			.iter()
-			.map(|f| self.field_def_to_wasm_field(f))
+			.map(|f| self.field_def_to_wasm_field(f, &type_def.name))
 			.collect();
 
 		self.types.ty().struct_(fields);
@@ -259,8 +259,9 @@ impl TypeManager {
 		self.next_type_idx += 1;
 	}
 
-	/// Convert a FieldDef to a WASM FieldType
-	pub fn field_def_to_wasm_field(&mut self, field: &FieldDef) -> FieldType {
+	/// Convert a FieldDef to a WASM FieldType; a field of the class itself (`left: Node?` in Node) refers to the index the
+	/// class is getting
+	pub fn field_def_to_wasm_field(&mut self, field: &FieldDef, class_name: &str) -> FieldType {
 		use crate::type_kinds::FieldStorage;
 		let reference = |heap_type| Val(Ref(RefType { nullable: true, heap_type }));
 		let element_type = match crate::type_kinds::field_storage(&field.type_name) {
@@ -270,8 +271,9 @@ impl TypeManager {
 			FieldStorage::F32 => Val(ValType::F32),
 			FieldStorage::Text => reference(HeapType::Concrete(self.string_type)),
 			FieldStorage::Node => reference(HeapType::Concrete(self.node_type)),
-			FieldStorage::Named => match self.user_type_indices.get(&field.type_name) {
+			FieldStorage::Named => match self.user_type_indices.get(crate::type_kinds::named_field_type(&field.type_name)) {
 				Some(&type_idx) => reference(HeapType::Concrete(type_idx)),
+				None if crate::type_kinds::named_field_type(&field.type_name) == class_name => reference(HeapType::Concrete(self.next_type_idx)),
 				None => {
 					self.type_errors.push(format!("unknown type: {} of field {}", field.type_name, field.name));
 					Val(Ref(self.node_ref(true)))

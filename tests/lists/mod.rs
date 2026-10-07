@@ -1,3 +1,5 @@
+mod test_map_get_kind;
+mod test_where_filter;
 mod test_bare_list_assignment;
 mod test_decimal_list_elements;
 mod test_empty_list_argument;
@@ -55,4 +57,6 @@ mod test_global_typed_lists;
 mod test_list_compound_add;
 mod test_one_entry_map_text;
 mod test_type_word_items;
+mod test_global_comprehension;
 mod test_captured_call_lists;
+mod test_nested_index_assignment;

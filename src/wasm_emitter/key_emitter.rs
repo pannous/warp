@@ -108,6 +108,9 @@ impl WasmGcEmitter {
 		// Handle index assignment: node#index = value
 		if *op == Op::Assign {
 			if let Node::Key(node_expr, Op::Hash, index_expr) = left.drop_meta() {
+				if !self.is_exact_int_element(node_expr, right) {
+					return self.emit_index_assignment_read_back(func, left, right, Self::emit_node_instructions);
+				}
 				self.emit_index_assignment(func, node_expr, index_expr, right);
 				self.emit_call(func, "new_int");
 				return;

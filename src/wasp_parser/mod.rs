@@ -82,6 +82,10 @@ const ENUM_WORD: &str = "enum";
 const GO_INTERFACE_WORD: &str = "interface";
 /// Go's `type Point struct {…}` declares the class Point
 const GO_STRUCT_WORD: &str = "struct";
+/// `type Node: gc struct {…}` (WebAssembly's GC structs): every wasp class is one, the word adds nothing
+const GC_WORD: &str = "gc";
+/// `left: ref Node?`: WebAssembly's reference type word before a field's type
+const REF_TYPE_WORD: &str = "ref";
 /// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
 const OPERATOR_WORD: &str = "operator";
 /// Words before a member of a class body that change nothing in wasp: Swift's `mutating func`, visibility, `override`
@@ -673,6 +677,8 @@ pub struct WaspParser {
 	pending_comment: Option<String>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
 	after_function_keyword: bool,
+	/// inside Elixir's capture `&(…)`, where `&1` is its first argument
+	in_capture: bool,
 	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
 	elvis_operands: usize,
 	/// `try … catch … finally {…}` parsed so far, numbering the variables holding their values
@@ -948,6 +954,7 @@ impl WaspParser {
 			times_loops: 0,
 			pending_comment: None,
 			after_function_keyword: false,
+			in_capture: false,
 			elvis_operands: 0,
 			finally_blocks: 0,
 			functions: Default::default(),

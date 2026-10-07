@@ -36,6 +36,7 @@ needs no files on disk and works in the browser.
 | os / process | args env exit exec | host words (exit exists), Process capability |
 | regex | matches find find_all replace_all | adapter (Rust regex as host word natively, JS RegExp in the browser) |
 | hash | hash sha256 md5 crc32 | adapter (xxHash/zlib C modules exist, notes/wasm_modules.md) |
+| collections | classes Stack Queue Deque Set Counter, OrderedMap; HashSet TreeSet frozenset ArrayDeque VecDeque deque as aliases | wasp classes over a list field (std/collections.wasp, classes side warp-41) |
 
 ## 3. Prelude (global without `use`)
 Everything that works today (section 4) plus the language forms (print, type, int/text/float/as, error/raise/try,
@@ -85,8 +86,35 @@ Next:
 7. Done: list chunk window median; time add_days days_between, format_date (ISO 2026-10-07), format_time (UTC
    13:05:09), two_digits; text format("{} has {} items", ["cart", 3]). Fixed on the way: `"" + 7` passed to a counted
    parameter made it a list; the elements of split and chars had no kind (`p[0] + 3` added numbers).
-   Next: more map words, text words (center, words, lines), time parsing.
+   Then: text words lines capitalize center. Fixed on the way: a module's source now gets the program's early
+   passes (pipeline::lower_module_source; a comprehension in a module was read as a list), its getters lowered with
+   the program (a second getters pass after modules::resolve); a parameter guessed a list takes text when the calls
+   pass only texts (pad_right(pad_left(…))).
+   map: invert pick from_pairs; time: parse_date("2026-10-07"), days_from_date(y, m, d).
+   list: flat_map partition max_by min_by group_by ({"1": [1 3] "0": [2 4]}, keys are texts) tally. Fixed on the
+   way: m.get(k) had no value kind (a list value + [x] was 'int + list'); `xs where it > 1` filters (was silently
+   nothing). Built in, no module: sort_by any all find first last index_of; libm now also links asin acos atan atan2
+   sinh cosh tanh hypot log2 trunc log1p expm1 (they compiled to their last argument). Still missing in math: hypot
+   etc. in the glibc fallback table (card call-name).
+   list: zip_with sum_by count_by rotate interleave dedupe; text: title slug truncate; time: format_duration(ms)
+   ("1h 30m 30s", "250ms"; plain milliseconds: units don't reach functions yet); map: omit filter_values. Fixed on
+   the way: a slice of a Node is a Node (capitalize(w) for the elements of words(t) was 'text + list'); a
+   comprehension's list is a `let` local (one in a module and one in the program asked "new local or main-level?").
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
+
+Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:
+Stack push pop peek size, Queue enqueue dequeue peek size, Deque push_back push_front pop_back pop_front size,
+Set(xs) add has remove size, Counter(xs) add get most_common (tests/modules/test_std_collections.rs). Module only,
+not prelude (prelude question queued with warp-e9). A used module's classes go in before class_methods
+(modules::insert_module_classes, its own source pass), since modules::resolve runs after class_methods; the loader
+leaves those modules' classes out (EARLY_CLASS_MODULES). Same for a file module's classes (`use shapes`, all its
+classes; a std module's only those the program names); a class the program declares itself wins. A module used only
+inside another module still loads its classes late (their methods unlowered). `new Set(xs)`, `collections.Counter(xs)` and the foreign class names (STD_CLASS_ALIASES) work with a
+note. Other languages' method names (append appendleft popleft offer poll addFirst pollLast contains delete shift …,
+class_methods METHOD_ALIASES) are the class's methods with a note, on a class not defining that name; `len(s)`,
+`count(s)`, `s.len()` of an instance are its size method. OrderedMap() is `{}` (wasp maps keep insertion order),
+OrderedDict and LinkedHashMap its aliases (modules STD_ALIASES). Not yet: `from collections import Counter` (no
+`from … import` form at all).
 
 ## 7. Adapters (async, warp-f0)
 How a module word is backed when wasp alone cannot do it. All six mechanisms exist (notes/stdlib_connectors.md,

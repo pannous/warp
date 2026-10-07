@@ -3,6 +3,8 @@
 use super::*;
 
 const VOID_WORD: &str = "void";
+/// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
+const CAPTURED_ARGUMENT: &str = "$0";
 
 /// `T, F: Fn(i32) -> i32` → `T F`: the names before each bound
 fn type_parameter_names(written: &str) -> Vec<String> {
@@ -39,6 +41,35 @@ impl WaspParser {
 				self.advance();
 				match self.parse_symbol() {
 					Ok(name) => crate::closures::function_reference(name),
+					Err(message) => error(&message),
+				}
+			}
+			// Elixir's capture `&(&1 * 2)`: the block `{$0 * 2}`; its `&1`, `&2` are `$0`, `$1`
+			'&' if self.starts_capture() => {
+				self.advance();
+				let outer = std::mem::replace(&mut self.in_capture, true);
+				let group = self.parse_bracketed('(');
+				self.in_capture = outer;
+				match group {
+					Node::List(items, Bracket::Round, separator) => Node::List(items, Bracket::Curly, separator),
+					other => Node::List(vec![other], Bracket::Curly, Separator::None),
+				}
+			}
+			'&' if self.peek_char(1).is_ascii_digit() && self.in_capture => {
+				self.advance();
+				let position: String = (0..).map(|at| self.peek_char(at)).take_while(char::is_ascii_digit).collect();
+				self.advance_by(position.len());
+				let position: usize = position.parse().unwrap_or(1);
+				Node::Symbol(format!("${}", position.saturating_sub(1)))
+			}
+			// Ruby's `&:to_s`: the block `{$0.to_s}`, the method called on each element
+			'&' if self.peek_char(1) == ':' && self.peek_char(2).is_alphabetic() => {
+				self.advance_by(2);
+				match self.parse_symbol() {
+					Ok(method) => {
+						let call = Node::Key(Box::new(Node::Symbol(CAPTURED_ARGUMENT.to_string())), Op::Dot, Box::new(Node::Symbol(method)));
+						Node::List(vec![call], Bracket::Curly, Separator::None)
+					}
 					Err(message) => error(&message),
 				}
 			}
@@ -850,17 +881,19 @@ impl WaspParser {
 				return Node::List(vec![Symbol(GO_INTERFACE_WORD.to_string()), name, block], Bracket::None, Separator::Space);
 			}
 		}
-		// Go's `type Point struct {…}`
-		if self.matches_keyword(GO_STRUCT_WORD) {
-			self.advance_by(GO_STRUCT_WORD.len());
-			self.skip_whitespace();
-		}
+		self.skip_struct_words();
 		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
 		// Python's `class Point:` and the lines indented below it
 		let body = match (python_body, body) {
 			(true, Empty) => {
 				self.advance(); // :
-				self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty)
+				self.skip_spaces();
+				self.skip_struct_words();
+				// `type Point: {` and its fields on the lines below: the braces are the body, as in `type Point {`
+				match self.current_char() == '{' {
+					true => Self::transform_fields_to_types(self.parse_bracketed('{')),
+					false => self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty),
+				}
 			}
 			// Ruby's `class Point` and the lines indented below it, up to its `end`
 			(false, Empty) if self.pos > before_body.0 && self.closing_end_follows(&RUBY_END_OPENERS) => {
@@ -887,6 +920,16 @@ impl WaspParser {
 		// (`type of x` goes on: no declaration)
 		let body = if matches!(body, Empty) && ends_statement { Node::List(vec![], Bracket::Curly, Separator::None) } else { body };
 		Node::Type { name: Box::new(name), body: Box::new(body) }
+	}
+
+	/// Go's `type Point struct {…}`, WebAssembly's `type Node: gc struct {…}`: the words before the fields
+	fn skip_struct_words(&mut self) {
+		for word in [GC_WORD, GO_STRUCT_WORD] {
+			if self.matches_keyword(word) {
+				self.advance_by(word.len());
+				self.skip_spaces();
+			}
+		}
 	}
 
 	/// The traits a class names before its body, Java's and TypeScript's `implements Shape, Named {`, Swift's

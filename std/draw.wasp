@@ -1,0 +1,90 @@
+// The standard library module draw (notes/stdlib.md, card drawing-words): `use draw`, a canvas of colored pixels shown by
+// paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: rgb, hsv, the named colors, with_alpha
+use math
+global canvas_width = 0
+global canvas_height = 0
+global canvas_pixels = [0]
+// paper: the canvas before anything is drawn, as paint shows 0 (src/paint.rs PAPER)
+paper = 0xFFFAFAFA
+black = 0xFF000000
+white = 0xFFFFFFFF
+gray = 0xFF808080
+red = 0xFFFF0000
+green = 0xFF00A000
+blue = 0xFF0000FF
+yellow = 0xFFFFD700
+orange = 0xFFFF8C00
+purple = 0xFF8000C0
+
+// the pixel a coordinate falls in
+cell(v) := floor(v) as int
+// r, g, b from 0 to 255
+rgb(r, g, b) := 0xFF000000 + (round(r) as int) * 65536 + (round(g) as int) * 256 + (round(b) as int)
+// hue in degrees, saturation and value from 0 to 1
+def hsv(h, s, v) {
+	hue = (h % 360) / 60.0
+	c = v * s
+	x = c * (1 - abs(hue % 2 - 1))
+	m = v - c
+	sector = cell(hue)
+	r = if sector == 0 or sector == 5 then c else if sector == 1 or sector == 4 then x else 0.0
+	g = if sector == 1 or sector == 2 then c else if sector == 0 or sector == 3 then x else 0.0
+	b = if sector == 3 or sector == 4 then c else if sector == 2 or sector == 5 then x else 0.0
+	rgb((r + m) * 255, (g + m) * 255, (b + m) * 255)
+}
+// alpha from 0 (invisible) to 1 (opaque)
+with_alpha(color, alpha) := (round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216
+alpha_of(color) := color//16777216
+
+def canvas(width, height) {
+	canvas_width = width
+	canvas_height = height
+	canvas_pixels = int[width * height]
+}
+
+def clear(color) {
+	for i in 0..canvas_width * canvas_height { canvas_pixels[i] = color }
+}
+
+// the color over what is there, mixed by its alpha
+def mixed(below, color) {
+	a = alpha_of(color)
+	under = if below == 0 then paper else below
+	if a >= 255 { return color }
+	if a <= 0 { return under }
+	0xFF000000 + channel_mix(color, under, a, 65536) * 65536 + channel_mix(color, under, a, 256) * 256 + channel_mix(color, under, a, 1)
+}
+
+// one channel (its place 65536, 256 or 1) of color over under, by alpha a from 0 to 255
+channel_mix(color, under, a, place) := ((color//place % 256) * a + (under//place % 256) * (255 - a))//255
+
+def dot(x, y, color) {
+	col = cell(x)
+	row = cell(y)
+	if col >= 0 and row >= 0 and col < canvas_width and row < canvas_height {
+		at = row * canvas_width + col
+		canvas_pixels[at] = mixed(canvas_pixels[at], color)
+	}
+}
+
+def rect(x, y, width, height, color) {
+	for row in cell(y)..cell(y + height) { for col in cell(x)..cell(x + width) { dot(col, row, color) } }
+}
+
+// a filled circle around x, y
+def circle(x, y, radius, color) {
+	for row in cell(y - radius)..cell(y + radius) + 1 {
+		for col in cell(x - radius)..cell(x + radius) + 1 {
+			if (col + 0.5 - x)^2 + (row + 0.5 - y)^2 <= radius^2 { dot(col, row, color) }
+		}
+	}
+}
+
+def line(x1, y1, x2, y2, color) {
+	steps = max(abs(x2 - x1), abs(y2 - y1), 1)
+	for i in 0 to cell(steps) { dot(x1 + (x2 - x1) * i / steps, y1 + (y2 - y1) * i / steps, color) }
+}
+
+def show() {
+	paint(canvas_pixels, canvas_width, canvas_height)
+}

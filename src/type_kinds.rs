@@ -467,6 +467,11 @@ pub enum FieldStorage {
 	Named,
 }
 
+/// The class a field of a class type names: `Node` of `Node?`
+pub fn named_field_type(type_name: &str) -> &str {
+	type_name.trim_end_matches(OPTIONAL_SUFFIX)
+}
+
 pub fn field_storage(type_name: &str) -> FieldStorage {
 	let word = type_name.trim_end_matches(OPTIONAL_SUFFIX);
 	match word {
@@ -491,7 +496,7 @@ pub fn field_def_to_val_type(field: &FieldDef, emitter: &WasmGcEmitter) -> ValTy
 		FieldStorage::F32 => ValType::F32,
 		FieldStorage::Text => reference(HeapType::Concrete(emitter.type_manager.string_type)),
 		FieldStorage::Node => reference(HeapType::Concrete(emitter.type_manager.node_type)),
-		FieldStorage::Named => match emitter.ctx.user_type_indices.get(&field.type_name) {
+		FieldStorage::Named => match emitter.ctx.user_type_indices.get(named_field_type(&field.type_name)) {
 			Some(&type_idx) => reference(HeapType::Concrete(type_idx)),
 			None => reference(any_heap_type()),
 		},

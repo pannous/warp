@@ -117,11 +117,13 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 54] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 59] = [
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
 	crate::channel_words::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
+	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
+	crate::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
 	crate::go_blocks::lower,
 	// `$a` / `$1` references of data literals (references.rs) before a pass takes `{ parent=$1 }` for a Swift closure
@@ -135,6 +137,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 54] = [
 	crate::word_operators::lower,
 	// `x | f` (pipes.rs) before any pass reads the or
 	crate::pipes::lower,
+	// the classes of used modules (`use shapes`, `use collections`) before class_methods lowers them with the program's
+	crate::modules::insert_module_classes,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::traits::lower_trait_parameters,
 	// methods in a class body become functions over the class before any pass reads the body as fields
@@ -146,7 +150,9 @@ const SOURCE_PASSES: [fn(Node) -> Node; 54] = [
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)
 	crate::object_groups::lower,
 	crate::units::lower_sleep_durations, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::system_signals::lower, crate::event_signals::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
-	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::lower, crate::host::lower_aliases, crate::modules::resolve,
+	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases, crate::modules::resolve,
+	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
+	crate::getters::lower,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
 	crate::analyzer::lower_negated_calls,
 ];
@@ -161,6 +167,16 @@ const MEANING_PASSES: [fn(Node) -> Node; 28] = [
 	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower,
 	crate::traits::lower_dispatch, crate::memoization::lower,
 ];
+
+/// A module's source after the passes the program ran before its `use` was resolved (those before modules::resolve):
+/// its definitions join the program in the same forms (`[w for w in ws if …]` is lowered, not read as a list).
+/// Not getters::lower: a getter `answer := 42` is lowered with the program, whose reads of it become calls.
+pub(crate) fn lower_module_source(module: Node) -> Node {
+	type Pass = fn(Node) -> Node;
+	let (resolve, getters): (Pass, Pass) = (crate::modules::resolve, crate::getters::lower);
+	let resolved_at = SOURCE_PASSES.iter().position(|pass| std::ptr::fn_addr_eq(*pass, resolve)).expect("modules::resolve is a source pass");
+	SOURCE_PASSES[..resolved_at].iter().filter(|pass| !std::ptr::fn_addr_eq(**pass, getters)).fold(module, |module, pass| pass(module))
+}
 
 fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
 	passes.iter().fold(node, |node, pass| pass(node))
