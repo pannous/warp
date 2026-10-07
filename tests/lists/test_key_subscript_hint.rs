@@ -23,9 +23,9 @@ fn a_text_variable_subscript_gets_no_index_hint() {
 	assert_eq!(index_hints("xs=[1,2]; i=0; xs[i]"), vec!["xs#(i+1)".to_string()]);
 }
 
-// card index-hint-parens: the second index of a chain keeps the first one's parentheses (was graph#current+1#(j+1),
-// which reads as graph#current + 1#(j+1))
+// card index-hint-parens: in a chain the shifted left index keeps its parentheses, `g#(i+1)#(j+1)`, not `g#i+1#(j+1)`
 #[test]
 fn a_chained_index_hint_keeps_its_parentheses() {
-	assert_eq!(index_hints("graph=[[1,2],[3,4]]; current=1; j=0; graph[current][j]"), vec!["graph#(current+1)".to_string(), "graph#(current+1)#(j+1)".to_string()]);
+	let hints = index_hints("g=[[1,2],[3,4]]; i=0; j=1; g[i][j]");
+	assert_eq!(hints, vec!["g#(i+1)".to_string(), "g#(i+1)#(j+1)".to_string()]);
 }

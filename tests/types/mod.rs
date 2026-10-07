@@ -76,3 +76,5 @@ mod test_list_annotations;
 mod test_sum_types;
 mod test_type_alias_fields;
 mod test_optional_number_fields;
+mod test_variant_payloads;
+mod test_file_declarations;

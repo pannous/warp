@@ -625,7 +625,7 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 	let routes = routes_of(&given_node(&mut caller, routes)?);
 	let port = u16::try_from(port).map_err(|_| wasmtime::Error::new(crate::tasks::TaskFailure(format!("serve {port}: no port number"))))?;
 	let site = served_site(port);
-	serve(port, &routes, &site, |route, request| match route_value(&mut caller, &route.function, &request) {
+	serve(port, &routes, site.as_ref(), |route, request| match route_value(&mut caller, &route.function, &request) {
 		Ok(value) => Answer::of(&value),
 		Err(problem) => Answer::failed(&problem.to_string()),
 	}).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?;
@@ -635,14 +635,14 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 /// The site of the program file being run, which a program whose last line shows a page serves at / (src/site.rs); a
 /// page that fails to build is said, and the routes are served without it
 #[cfg(feature = "native")]
-fn served_site(port: u16) -> Vec<crate::site::SiteFile> {
-	let Some(file) = crate::modules::program_file() else { return vec![] };
+fn served_site(port: u16) -> Option<crate::site::ServedSite> {
+	let file = crate::modules::program_file()?;
 	let title = file.file_stem().map_or(String::new(), |stem| stem.to_string_lossy().to_string());
-	let rendered = std::fs::read_to_string(&file).map_err(|failure| failure.to_string()).and_then(|code| crate::site::served_files(&code, &title));
-	rendered.unwrap_or_else(|failure| {
+	let site = std::fs::read_to_string(&file).map_err(|failure| failure.to_string()).and_then(|code| crate::site::served_site(&code, &title));
+	site.unwrap_or_else(|failure| {
 		eprintln!("warning: serve {port} serves no page: {failure}");
 		None
-	}).unwrap_or_default()
+	})
 }
 
 /// The value of a route's function called with the request (if it takes one), as a Node
@@ -769,10 +769,24 @@ fn notify(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Result
 	warp_runtime::system_values::notify(&text).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))
 }
 
-/// Natively there is no GPU yet (wgpu would be a dependency of its own): a loud failure naming where it runs
+/// `gpu_compute(shader, numbers, workgroups)` through wgpu (src/gpu.rs): the floats the shader left
 #[cfg(feature = "native")]
-fn gpu_compute(_caller: Caller<'_, HostState>, _shader: HostNode, _numbers: HostNode, _workgroups: i64) -> wasmtime::Result<HostNode> {
-	Err(wasmtime::Error::new(crate::tasks::TaskFailure(format!("{GPU_COMPUTE} needs WebGPU: run it in the browser (the playground)"))))
+fn gpu_compute(mut caller: Caller<'_, HostState>, shader: HostNode, numbers: HostNode, workgroups: i64) -> wasmtime::Result<HostNode> {
+	let failure = |problem: String| wasmtime::Error::new(crate::tasks::TaskFailure(format!("{GPU_COMPUTE}: {problem}")));
+	let shader = match given_node(&mut caller, shader)? {
+		Node::Text(shader) => shader,
+		Node::Char(letter) => letter.to_string(), // a one-letter text reads as a code point
+		other => return Err(failure(format!("the shader is a text of WGSL, got {}", other.serialize()))),
+	};
+	let numbers = given_node(&mut caller, numbers)?;
+	let floats = numbers.iter().map(|number| match number.drop_meta() {
+		Node::Number(number) => Ok(f64::from(*number) as f32),
+		other => Err(failure(format!("it computes over numbers, got {}", other.serialize()))),
+	}).collect::<wasmtime::Result<Vec<f32>>>()?;
+	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
+	let left = crate::gpu::compute(&shader, &floats, workgroups).map_err(failure)?;
+	let left = left.into_iter().map(|float| Node::Number(Number::Float(float as f64))).collect();
+	built_in_program(&mut caller, &Node::List(left, crate::node::Bracket::Square, crate::node::Separator::Space), GPU_COMPUTE)
 }
 
 #[cfg(feature = "native")]

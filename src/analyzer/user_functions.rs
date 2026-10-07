@@ -247,6 +247,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	let mut indexed: HashSet<String> = HashSet::new();
 	let mut called: HashSet<String> = HashSet::new();
 	let mut celled: HashSet<String> = HashSet::new();
+	let mut texted: HashSet<String> = HashSet::new();
 	let mut aliases: Vec<(String, String)> = vec![];
 	body.visit(&mut |node| {
 		if let Some(name) = crate::closures::called_closure(node) {
@@ -267,6 +268,9 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		if let Some(Node::Symbol(name)) = used_sequence(node).map(Node::drop_meta) {
 			indexed.insert(name.clone());
 		}
+		if let Some(name) = joined_to_text(node) {
+			texted.insert(name.to_string());
+		}
 		if let Node::Key(alias, Op::Assign | Op::Define, source) = node {
 			if let (Node::Symbol(alias), Node::Symbol(source)) = (alias.drop_meta(), source.drop_meta()) {
 				aliases.push((alias.clone(), source.clone()));
@@ -283,12 +287,41 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		} else if celled.contains(&param.name) {
 			Some(Kind::Data)
 		} else if indexed.contains(&param.name) {
-			Some(Kind::List)
+			// a counted sequence joined to a text is a text; joined alone it may be any value (`"set " + value`)
+			Some(if texted.contains(&param.name) { Kind::Text } else { Kind::List })
 		} else {
 			None
 		};
 		Param { used_as, ..param }
 	}).collect()
+}
+
+/// The name `+` joins to a text: `" " + t`, `t + "!"`, `n times " " + t`, `t[0 ..< n] + "…"`; a list never
+/// concatenates with a text
+fn joined_to_text(node: &Node) -> Option<&str> {
+	fn call_of(node: &Node, word: &str) -> bool {
+		matches!(node, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == word))
+	}
+	fn is_text(node: &Node) -> bool {
+		matches!(node, Node::Text(_) | Node::Char(_)) || call_of(node, crate::wasp_parser::TEXT_TIMES)
+	}
+	fn joined_name(node: &Node) -> Option<&str> {
+		match node {
+			Node::Symbol(name) => Some(name),
+			Node::List(items, _, _) if call_of(node, crate::library_words::SLICE) => match items.get(1).map(Node::drop_meta) {
+				Some(Node::Symbol(name)) => Some(name),
+				_ => None,
+			},
+			_ => None,
+		}
+	}
+	let Node::Key(left, Op::Add, right) = node else { return None };
+	let (left, right) = (left.drop_meta(), right.drop_meta());
+	match (is_text(left), is_text(right)) {
+		(true, false) => joined_name(right),
+		(false, true) => joined_name(left),
+		_ => None,
+	}
 }
 
 /// The sequence a node uses: indexed `xs#2`, counted `#xs`, `count xs`, `xs.length`

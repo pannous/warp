@@ -5,7 +5,7 @@
 //! value as JSON (as std json's to_json writes it); no route is 404, a failing route 500 with its message.
 
 use crate::node::Node;
-use crate::site::SiteFile;
+use crate::site::ServedSite;
 use std::cell::Cell;
 
 const JSON_TYPE: &str = "application/json";
@@ -76,8 +76,8 @@ fn text_of(node: &Node) -> String {
 }
 
 /// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function; a GET no route
-/// takes is a file of the program's `site` (src/site.rs), its page at /
-pub fn serve(port: u16, routes: &[Route], site: &[SiteFile], mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
+/// takes is a file of the program's `site` (src/site.rs), its page at / (with routes the page at any path)
+pub fn serve(port: u16, routes: &[Route], site: Option<&ServedSite>, mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
 	let server = tiny_http::Server::http(("0.0.0.0", port)).map_err(|problem| format!("serve {port}: {problem}"))?;
 	let limit = take_request_limit();
 	let mut served = 0;
@@ -100,10 +100,13 @@ pub fn serve(port: u16, routes: &[Route], site: &[SiteFile], mut answer: impl Fn
 	Ok(())
 }
 
-/// `GET /` is the site's page, `GET /app.wasm` its module and so on
-fn site_file(site: &[SiteFile], method: &str, path: &str) -> Option<Answer> {
-	let (name, bytes) = crate::site::file_at(site, path).filter(|_| method == SITE_METHOD)?;
-	Some(Answer { status: 200, content_type: crate::site::content_type(name), body: bytes.clone() })
+/// `GET /` is the site's page, `GET /app.wasm` its module and so on; a page that fails to render is said
+fn site_file(site: Option<&ServedSite>, method: &str, path: &str) -> Option<Answer> {
+	let file = site.filter(|_| method == SITE_METHOD)?.file(path)?;
+	Some(match file {
+		Ok((name, bytes)) => Answer { status: 200, content_type: crate::site::content_type(&name), body: bytes },
+		Err(failure) => Answer::failed(&format!("the page at {path}: {failure}")),
+	})
 }
 
 /// An HTTP body as a value: a JSON object or array parsed into its map or list, any other body the text

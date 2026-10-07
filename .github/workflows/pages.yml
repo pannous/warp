@@ -24,7 +24,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_NET_OFFLINE: false
-  SITE_FILES: index.html playground.css playground.js markup.js worker.js task-worker.js coi-serviceworker.js host.js components.js components foreign_python.py reader.js examples.js codemirror-wasp-mode.js codemirror lib warp.wasm warp.debug.wasm samples.js keywords.js
+  SITE_FILES: index.html playground.css playground.js markup.js markup-transitions.js worker.js task-worker.js coi-serviceworker.js host.js host-*.js components.js components foreign_python.py reader.js examples.js codemirror-wasp-mode.js codemirror lib warp.wasm warp.debug.wasm samples.js keywords.js
 
 jobs:
   build:
@@ -59,6 +59,8 @@ jobs:
       run: |
         mkdir _site
         (cd web/playground && cp -r $SITE_FILES ../../_site/)
+        # every host part the worker imports (host.js HOST_PART_FILES) is shipped, else no deploy
+        for part in $(grep -o '"host-[a-z]*\.js"' web/playground/host.js | tr -d '"'); do test -f _site/$part || { echo "::error::$part missing from the site"; exit 1; }; done
         # the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
         mkdir -p _site/tests/fixtures/wasm && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h _site/tests/fixtures/wasm/
         echo "warp.pannous.com" > _site/CNAME

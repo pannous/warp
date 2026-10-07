@@ -13,7 +13,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashSet;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{Bracket, Node};
 use crate::operators::{glyph_operator, Op};
 
 // ============================================================================
@@ -743,10 +743,6 @@ fn as_written(node: Node) -> Node {
             }
             _ => Node::List(items.into_iter().map(as_written).collect(), bracket, separator),
         },
-        // `graph#(current+1)`, the index of a chain `graph[current][j]` already hinted: its parentheses stay
-        Node::Key(owner, Op::Hash, index) if matches!(index.drop_meta(), Node::Key(..)) => {
-            Node::Key(Box::new(as_written(*owner)), Op::Hash, Box::new(Node::List(vec![as_written(*index)], Bracket::Round, Separator::None)))
-        }
         Node::Key(left, op, right) => Node::Key(Box::new(as_written(*left)), op, Box::new(as_written(*right))),
         Node::Meta { node, data } => Node::Meta { node: Box::new(as_written(*node)), data },
         // a witness `area·square` was written `area`
