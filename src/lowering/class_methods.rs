@@ -872,12 +872,14 @@ fn with_init_constructors(node: Node, called: &std::collections::HashSet<String>
 	match node {
 		Node::Type { name, body } => {
 			let class = name.drop_meta().name();
-			let is_alias = |item: &Node| constructor_alias(item).filter(|alias| *alias == class || (CONSTRUCTOR_ALIASES.contains(&alias.as_str()) && !called.contains(alias)));
+			let is_alias = |item: &Node| constructor_alias(item).filter(|alias| *alias == class || ((CONSTRUCTOR_ALIASES.contains(&alias.as_str()) || *alias == CONSTRUCTOR_WORD) && !called.contains(alias)));
 			let items: Vec<Node> = class_items(&body);
 			if !items.iter().any(|item| is_alias(item).is_some()) {
 				return Node::Type { name, body };
 			}
 			let items = items.into_iter().map(|item| match is_alias(&item) {
+				// `init(xs) := {…}` is the constructor too, without a note
+				Some(alias) if alias == CONSTRUCTOR_WORD => as_init(item),
 				Some(alias) => {
 					crate::normalize::set_position_of(&item);
 					crate::diagnostic::note_alias(&alias, CONSTRUCTOR_WORD);
@@ -1488,6 +1490,9 @@ fn gives_value(body: &Node) -> bool {
 		Node::Key(_, op, _) if matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign() => false,
 		// a body giving its object back already (a constructor)
 		Node::Symbol(name) if name == RECEIVER => false,
+		// `if c { items.add(x) }`: as its branches
+		Node::Key(_, Op::Then, branch) => gives_value(branch),
+		Node::Key(then_part, Op::Else, branch) => gives_value(then_part) || gives_value(branch),
 		Node::Key(_, Op::Dot, call) => !mutating_call(call) || matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| GIVING_MUTATIONS.contains(&word.drop_meta().name().as_str()))),
 		_ => true,
 	}
@@ -1537,10 +1542,11 @@ fn changes_receiver(body: &Node) -> bool {
 	changes
 }
 
-/// `self.items`, `self.stack.items`
+/// `self.items`, `self.stack.items`, an element `self.counts#i`
 fn is_receiver_field(target: &Node) -> bool {
 	match target.drop_meta() {
 		Node::Key(object, Op::Dot, _) => matches!(object.drop_meta(), Node::Symbol(name) if name == RECEIVER) || is_receiver_field(object),
+		Node::Key(list, Op::Hash, _) => is_receiver_field(list),
 		_ => false,
 	}
 }

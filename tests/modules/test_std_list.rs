@@ -32,3 +32,13 @@ fn chunk_window_median() {
 	is!("use list; median([3, 1, 2])", 2);
 	is!("use list; median([4, 1, 3, 2])", 2.5);
 }
+
+#[test]
+fn use_list_groups_partitions_and_picks_by() {
+	is!("use list; count(flat_map([1, 2], x => [x, x * 10]))", 4);
+	is!("use list; p = partition([1, 2, 3, 4], x => x > 2); count(p#1) * 10 + count(p#2)", 22);
+	is!("use list; max_by([\"a\", \"ccc\", \"bb\"], w => count(w))", "ccc");
+	is!("use list; min_by([3, -5, 2], x => x * x)", 2);
+	is!("use list; g = group_by([\"ab\", \"c\", \"de\"], w => count(w)); count(g.get(\"2\"))", 2);
+	is!("use list; t = tally([\"a\", \"b\", \"a\"]); t.get(\"a\")", 2);
+}

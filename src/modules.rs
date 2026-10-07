@@ -338,7 +338,7 @@ impl Loader<'_> {
 			return Err(failure.clone());
 		}
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
-		let module = with_module_directory(module, &directory);
+		let module = with_module_directory(crate::pipeline::lower_module_source(module), &directory);
 		let outer_directory = self.including_directory.replace(directory);
 		let module = self.resolve(module);
 		self.including_directory = outer_directory;
@@ -496,7 +496,7 @@ fn std_module(name: &str) -> Option<&'static str> {
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
 pub fn std_module_defining(word: &str) -> Option<&'static str> {
 	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
-	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(WaspParser::parse(source)).iter().filter_map(declared_name).collect())).collect());
+	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(declared_name).collect())).collect());
 	defined.iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
 }
 

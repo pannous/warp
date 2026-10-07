@@ -3,6 +3,8 @@
 use super::*;
 
 const VOID_WORD: &str = "void";
+/// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
+const CAPTURED_ARGUMENT: &str = "$0";
 
 /// `T, F: Fn(i32) -> i32` → `T F`: the names before each bound
 fn type_parameter_names(written: &str) -> Vec<String> {
@@ -39,6 +41,35 @@ impl WaspParser {
 				self.advance();
 				match self.parse_symbol() {
 					Ok(name) => crate::closures::function_reference(name),
+					Err(message) => error(&message),
+				}
+			}
+			// Elixir's capture `&(&1 * 2)`: the block `{$0 * 2}`; its `&1`, `&2` are `$0`, `$1`
+			'&' if self.starts_capture() => {
+				self.advance();
+				let outer = std::mem::replace(&mut self.in_capture, true);
+				let group = self.parse_bracketed('(');
+				self.in_capture = outer;
+				match group {
+					Node::List(items, Bracket::Round, separator) => Node::List(items, Bracket::Curly, separator),
+					other => Node::List(vec![other], Bracket::Curly, Separator::None),
+				}
+			}
+			'&' if self.peek_char(1).is_ascii_digit() && self.in_capture => {
+				self.advance();
+				let position: String = (0..).map(|at| self.peek_char(at)).take_while(char::is_ascii_digit).collect();
+				self.advance_by(position.len());
+				let position: usize = position.parse().unwrap_or(1);
+				Node::Symbol(format!("${}", position.saturating_sub(1)))
+			}
+			// Ruby's `&:to_s`: the block `{$0.to_s}`, the method called on each element
+			'&' if self.peek_char(1) == ':' && self.peek_char(2).is_alphabetic() => {
+				self.advance_by(2);
+				match self.parse_symbol() {
+					Ok(method) => {
+						let call = Node::Key(Box::new(Node::Symbol(CAPTURED_ARGUMENT.to_string())), Op::Dot, Box::new(Node::Symbol(method)));
+						Node::List(vec![call], Bracket::Curly, Separator::None)
+					}
 					Err(message) => error(&message),
 				}
 			}

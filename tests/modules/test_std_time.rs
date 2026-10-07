@@ -27,3 +27,11 @@ fn use_time_formats_dates_and_times() {
 	is!("use time; format_time(1791331509000)", "00:05:09");
 	is!("use time; two_digits(7) + two_digits(12)", "0712");
 }
+
+#[test]
+fn use_time_parses_dates() {
+	is!("use time; parse_date(\"1970-01-01\")", 0);
+	is!("use time; parse_date(\"2026-10-07\")", 1791331200000i64);
+	is!("use time; format_date(parse_date(\"2000-02-29\"))", "2000-02-29");
+	is!("use time; days_between(parse_date(\"2026-01-01\"), parse_date(\"2026-12-25\"))", 358);
+}

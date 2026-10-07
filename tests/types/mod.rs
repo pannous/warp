@@ -7,6 +7,7 @@ mod test_generic_types;
 mod test_person_struct;
 mod test_records_classes;
 mod test_class_methods;
+mod test_class_method_changes;
 mod test_mutating_methods;
 mod test_class_extends;
 mod test_class_cases_ported;
