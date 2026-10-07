@@ -219,6 +219,12 @@ impl WaspParser {
 		self.peek_char(after + gap) == '{'
 	}
 
+	/// Does an operand follow, after blanks, the `width` characters at the cursor (not the line's end or a closing bracket)
+	pub(super) fn operand_after(&self, width: usize) -> bool {
+		let gap = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		gap > 0 && !matches!(self.peek_char(width + gap), '\n' | '\r' | '\0' | ')' | ']' | '}' | ';' | ',')
+	}
+
 	/// The identifier starting `offset` characters ahead
 	pub(super) fn word_at(&self, offset: usize) -> String {
 		(offset..).map(|at| self.peek_char(at)).take_while(|c| is_identifier_char(*c)).collect()

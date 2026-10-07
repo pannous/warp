@@ -56,11 +56,14 @@ Each step is useful on its own and is what the next ones stand on.
 - Lowering (src/lowering/fetch_signals.rs): the variables users, users·loading, users·error, the call
   `fetch_start(0, url)` and the handler `on·fetch·0`, which takes `fetch_reply(0)` = [value, error]. Natively
   (src/fetches.rs) a thread fetches and the runtime runs the handler at the next check point (warp-runtime
-  system_signals await_ready; `warp run` stays until the reply arrived); in the page host.js fetches and worker.js runs
-  the handler like a timer's, then re-renders.
+  system_signals await_ready; `warp run` stays until the reply arrived); in the page a task Worker fetches into shared
+  memory, which the running main reads at its check points (sleep, loop starts) as natively, so
+  `while users.loading { sleep 5 ms }` ends there too; a reply after main returned runs the handler like a timer's
+  (worker.js hooks.arrived), then the page re-renders. Without cross-origin isolation (no task Workers) the reply
+  only arrives after main.
 - Open: cancel on navigation; the page re-renders only a last line that is a name (event_signals with_output_binding),
-  so `if users.loading then "Loading…" else users` does not update yet; a main that waits (`while users.loading {sleep…}`)
-  never ends in the browser, whose worker delivers the reply only after main returned; diagnostics name users·error.
+  so `if users.loading then "Loading…" else users` does not update yet (branch page-binding); diagnostics name
+  users·error.
 
 ## Defaults for step 1 (web-dom), undoable
 - A markup value is any key whose name is an HTML tag (`div`, `p`, `ul`, `li`, `a`, `button`, … the HTML element list)
@@ -137,3 +140,18 @@ Each step is useful on its own and is what the next ones stand on.
   all pairs is inline CSS, any other list the joined attribute value (`class:["a" "b"]`).
 - Open: timers in a built page (site.js has no timer loop yet); `serve` programs serving their own page; switching the
   playground and CLI to std/markup.wasp too, retiring src/html.rs.
+
+## Step 12 (web-stores), what is done and what is left
+- Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
+  value an earlier run kept under its name, else the default; `on change theme` keeps each change. Natively the values
+  are JSON in `<program>.stored.json` beside the program (in memory for inline code), in the playground the page's
+  localStorage (`wasp stored <name>`): the worker gets them at start and sends each save back (host.js
+  STD_ADAPTERS.store, playground.js keepStored). Values cross as JSON (std_adapters, as foreign calls).
+- Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
+  main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
+  old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
+  `stored` are soft keywords.
+- Shared stores: a used module's main-level variables are already shared (`use settings` reads and writes its theme),
+  but a program's `on change theme` misses writes made by the module's functions: card module-signal-writes
+  (probes/stores/app.wasp). Context (a value for a subtree of components without props): question with the
+  Interviewer; default until then: main-level variables, which every component reads.

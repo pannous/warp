@@ -37,3 +37,5 @@ data/
 !tests/fixtures/**/*.wasm
 # libc.wasm is the browser's `use c` (P147), served with the playground; build_libc.sh rebuilds it
 !web/playground/lib/libc.wasm
+# `stored x = v` keeps its values beside the program (src/lowering/stored_values.rs)
+*.stored.json

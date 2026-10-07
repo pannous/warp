@@ -316,3 +316,17 @@ tests (`p.x == 0`) and bindings with paths (`y = parts·from.start.y`): `_` matc
 text is compared, `Point{x: 0, y}`, `Point(a, 0)`, `Line{start: Point{x, y}, end}` nest. The arm's guard is all tests
 joined with `and`; an assignment takes names only (a class in it no test, a constant leaves it as written).
 positional_braces leaves an arm's pattern alone (no "prefer Point(x, y)" hint there). Still not built: rest patterns.
+
+## Class components (classes-40, tests/web/test_class_components.rs; notes/web_framework.md step 4)
+A class with a `render()` method (aliases `view`, `template`, `build` with a note) is a component: its construction
+as a child of an element (`div{ Greeting("Ann") }`) or as the program's value is `Greeting("Ann").render()`
+(class_methods rendered_components); anywhere else it stays an instance. Function components, props, the trailing
+block as children and per-instance state are web's (ruby_blocks.rs, component_state.rs). A method body's templates
+(`"#\(n)"`) are lowered before receiver_reads, so a field in a hole is read from self.
+
+## Field names that are words (classes-41, card classes-field, tests/types/test_class_field_names.rs)
+- An operator word directly before a key colon names the key: `{from:a to:b}`, `{is:1 or:2}` (parser
+  `word_names_key` in wasp_parser/lookahead.rs); `then:`, `else:`, `do:` stay operators (BLOCK_COLON_WORDS).
+- `l.start` beside a user function `start` reads the field when start is a declared class field and l is a parameter
+  or of known instance shape (library_words::method_call); before, it became `start(l)` and recursed forever.
+- Still open: a plain map parameter without any class (`start(l) := l.start; start({start:3})`) still calls start.

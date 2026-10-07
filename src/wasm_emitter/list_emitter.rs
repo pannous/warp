@@ -9,10 +9,10 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 17] = [
+const BUILTIN_CALLS: [&str; 18] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
-	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF,
+	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
 ];
 
 const PRINT: &str = "print";
@@ -304,6 +304,14 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, count);
 				self.emit_node_instructions(func, zero);
 				self.emit_call(func, crate::analyzer::ZERO_FILL_CALL);
+				return;
+			}
+		}
+		if let [Node::Symbol(call), collection, key] = items {
+			if call == crate::analyzer::REMOVED_VALUE_CALL {
+				self.emit_node_instructions(func, collection);
+				self.emit_node_instructions(func, key);
+				self.emit_call(func, crate::analyzer::REMOVED_VALUE_CALL);
 				return;
 			}
 		}

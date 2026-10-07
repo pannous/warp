@@ -1,0 +1,2 @@
+theme = "dark"
+def toggle() { global theme; theme = theme == "dark" ? "light" : "dark" }

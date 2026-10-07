@@ -27,6 +27,15 @@ pub fn lower(program: Node) -> Node {
 	}
 	let rendered = call(TO_HTML, vec![call(PAGE_VALUE, vec![])]);
 	statements.insert(statements.len() - 1, function_with_globals(PAGE_HTML, false, &[rendered], &main_variables));
+	Node::List(statements, bracket, separator)
+}
+
+/// A page uses std/markup.wasp for its to_html, before modules::resolve joins the used modules
+pub fn use_markup(program: Node) -> Node {
+	if !crate::pipeline::is_for_a_page() {
+		return program;
+	}
+	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
 	statements.insert(0, crate::wasp_parser::parse(MARKUP_MODULE_USE));
 	Node::List(statements, bracket, separator)
 }
