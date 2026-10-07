@@ -87,7 +87,7 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 	match node {
 		Node::Symbol(name) => marked(&name).unwrap_or(Node::Symbol(name)),
 		Node::Key(left, op @ (Op::Colon | Op::Dot), right) => {
-			let right = if op == Op::Dot { *right } else { mark(*right, names) };
+			let right = if op == Op::Dot { method_arguments_marked(*right, names) } else { mark(*right, names) };
 			Node::Key(left, op, Box::new(right))
 		}
 		Node::List(items, bracket, separator) => {
@@ -113,6 +113,19 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 			}
 		}
 		other => other.map_children(|child| mark(child, names)),
+	}
+}
+
+/// After a dot: the method name stays, its arguments are reads (`seen.push(online)` is `(. seen (push online))`)
+fn method_arguments_marked(member: Node, names: &[(&str, bool)]) -> Node {
+	match member {
+		Node::List(items, bracket, separator) if items.len() > 1 => {
+			let mut items = items.into_iter();
+			let method = items.next().expect("a method name");
+			Node::List(std::iter::once(method).chain(items.map(|argument| mark(argument, names))).collect(), bracket, separator)
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(method_arguments_marked(*node, names)), data },
+		field => field,
 	}
 }
 

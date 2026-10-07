@@ -18,14 +18,14 @@ const VALUE_DELAY_MILLISECONDS = 50;
 let panicMessage; // the compiler's last panic message
 
 const post = message => self.postMessage(message);
-self.keepStored = (name, value) => post({ type: "stored", name, value }); // host.js STD_ADAPTERS.store
+self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host.js STD_ADAPTERS.store
 const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
 	listen: (holder, events) => {
 		live = holder;
-		startTimers(holder);
+		startTimers(holder, handler => runHandler(holder, handler));
 		const fetches = [...(holder.fetches?.values() ?? [])].map(({ url }) => `fetch ${url}`);
 		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches] });
 	},
@@ -147,20 +147,6 @@ function runHandler(holder, handler) {
 }
 
 // the run's timers (host.js addTimer), each running its handler until the next run
-function startTimers(holder) {
-	const handles = [];
-	const fire = timer => runHandler(holder, timer.handler);
-	const atClock = timer => handles.push(setTimeout(() => {
-		fire(timer);
-		if (!timer.once) atClock(timer);
-	}, millisecondsUntil(timer.minute, timer.weekdays)));
-	for (const timer of holder.timers ?? []) {
-		if (timer.every !== undefined) handles.push(setInterval(() => fire(timer), timer.every));
-		else atClock(timer);
-	}
-	holder.stopTimers = () => handles.forEach(handle => { clearTimeout(handle); clearInterval(handle); });
-}
-
 self.onmessage = async ({ data }) => {
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.stored) return Object.assign(storedValues, data.stored); // host.js STD_ADAPTERS.store

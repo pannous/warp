@@ -53,6 +53,12 @@ slowest() { durations | head -$SLOWEST_COUNT; }
 TOTAL_PASSED=$(results ok | wc -l | tr -d ' ')
 TOTAL_FAILED=$(results FAILED | wc -l | tr -d ' ')
 TOTAL_IGNORED=$(results ignored | wc -l | tr -d ' ')
+# a test binary that crashed or was killed (a hang ended by hand) prints no `test result:` line: its unfinished tests
+# would just be missing from the counts, so each such binary counts as a failure
+STARTED=$(grep -a -c -E '^ +(Running|Doc-tests) ' "$TEMP_FILE")
+FINISHED=$(grep -a -c '^test result:' "$TEMP_FILE")
+INCOMPLETE=$((STARTED > FINISHED ? STARTED - FINISHED : 0))
+TOTAL_FAILED=$((TOTAL_FAILED + INCOMPLETE))
 TOTAL=$((TOTAL_PASSED + TOTAL_FAILED + TOTAL_IGNORED))
 TOTAL_TESTED=$((TOTAL_PASSED + TOTAL_FAILED))
 
@@ -67,6 +73,7 @@ TOTAL_TESTED=$((TOTAL_PASSED + TOTAL_FAILED))
 	echo ""
 	echo "FAILED:"
 	results FAILED | sed 's/test /  ✗ /' | sed 's/ \.\.\. FAILED$//' | sort
+	[ "$INCOMPLETE" -gt 0 ] && echo "  ✗ INCOMPLETE: $INCOMPLETE test binaries ended without a result (crashed or killed)"
 
 	echo ""
 	echo "SUMMARY:"

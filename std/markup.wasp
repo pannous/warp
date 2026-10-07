@@ -21,11 +21,14 @@ html_boolean_attributes = ["checked", "disabled", "selected", "readonly", "requi
 // CSS properties whose number has no unit; any other number is pixels
 html_unitless_properties = ["opacity", "z-index", "font-weight", "line-height", "flex", "flex-grow", "flex-shrink", "order", "zoom", "tab-size"]
 
-to_html(value:any) := {
-	if html_is_element(value) { return html_element(keys(value)#1, values(value)#1) }
+to_html(value:any) := html_render(value, ø)
+
+// `scope`: the component whose elements a style sheet styles (data-wasp-scope, card web-scoped)
+html_render(value:any, scope:any) := {
+	if html_is_element(value) { return html_element(keys(value)#1, values(value)#1, scope) }
 	if value is list {
-		out = ""
-		for item in value { out = out + to_html(item) }
+		var out = ""
+		for item in value { out = out + html_render(item, scope) }
 		return out
 	}
 	if value == ø { return "" }
@@ -34,14 +37,18 @@ to_html(value:any) := {
 
 html_is_element(value:any) := value is pair and contains(html_elements, keys(value)#1)
 
-html_element(tag:any, content:any) := {
-	items = html_items(content)
-	attributes = ""
-	children = ""
+html_element(tag:any, content:any, scope:any) := {
+	let items = html_items(content)
+	var own_scope = scope
+	for item in items {
+		if html_is_attribute(item, tag) and keys(item)#1 == "data-wasp-scope" { own_scope = html_plain(values(item)#1) }
+	}
+	var attributes = ""
+	var children = ""
 	for item in items {
 		if html_is_attribute(item, tag) { attributes = attributes + html_attribute(item) }
-		else if tag == "style" { children = children + html_style_rule(item) + " " }
-		else { children = children + to_html(item) }
+		else if tag == "style" { children = children + html_style_rule(item, scope) + " " }
+		else { children = children + html_render(item, own_scope) }
 	}
 	if contains(html_void_elements, tag) { return "<" + tag + attributes + ">" }
 	if tag == "style" { children = replace(trim(children), "</", "<\\/") }
@@ -58,31 +65,39 @@ html_items(content:any) := {
 // `class:"box"` inside an element: an attribute when its name is one and its value plain (or inline CSS for style)
 html_is_attribute(item:any, tag:any) := {
 	if not (item is pair) { return false }
-	name = keys(item)#1
-	value = values(item)#1
+	let name = keys(item)#1
+	let value = values(item)#1
 	named = starts_with(name, "data-") or name == "key" or (contains(html_attributes, name) and not (tag == "head" and contains(html_elements, name)))
 	if not named { return false }
 	if name == "style" and tag != "head" and html_is_declarations(value) { return true }
-	not (value is pair) and (not (value is list) or not html_is_declarations(value))
+	not (value is pair) and (not (value is list) or not html_holds_pairs(value))
+}
+
+// `class:["btn" "btn-info"]` is an attribute, `style{ ".card": {…} }` an element: its items are rules
+html_holds_pairs(value:any) := {
+	for item in value { if item is pair { return true } }
+	false
 }
 
 html_attribute(item:any) := {
-	name = keys(item)#1
-	value = values(item)#1
-	if name == "key" { name = "data-wasp-key" }
+	let name = html_attribute_name(keys(item)#1)
+	let value = values(item)#1
 	if html_is_declarations(value) { return " " + name + "=\"" + html_escaped(html_css(value)) + "\"" }
 	if contains(html_boolean_attributes, name) { return if html_is_true(value) then " " + name else "" }
 	" " + name + "=\"" + html_escaped(html_attribute_value(value)) + "\""
 }
 
+// `li{ key: todo.id … }` names a list item: the attribute data-wasp-key, by which the page moves its element
+html_attribute_name(name:any) := if name == "key" then "data-wasp-key" else name
+
 // `{ color: theme padding: 8 }`: a block of CSS properties with plain values
 html_is_declarations(value:any) := {
 	if html_is_element(value) { return false }
-	items = html_items(value)
+	let items = html_items(value)
 	if count(items) == 0 { return false }
 	for item in items {
 		if not (item is pair) { return false }
-		inner = values(item)#1
+		let inner = values(item)#1
 		if inner is pair or inner is list { return false }
 	}
 	true
@@ -90,28 +105,39 @@ html_is_declarations(value:any) := {
 
 // `color: red; padding: 8px`: camelCase names in kebab-case, numbers in pixels unless the property has no unit
 html_css(value:any) := {
-	out = ""
+	var out = ""
 	for item in html_items(value) {
-		property = html_kebab(keys(item)#1)
-		inner = values(item)#1
-		shown = if (inner is int or inner is float) and not contains(html_unitless_properties, property) then str(inner) + "px" else html_attribute_value(inner)
-		out = if out == "" then property + ": " + shown else out + "; " + property + ": " + shown
+		let property = html_kebab(keys(item)#1)
+		let declared = html_css_value(property, values(item)#1)
+		out = if out == "" then property + ": " + declared else out + "; " + property + ": " + declared
 	}
 	out
 }
 
+// a number in pixels unless the property has no unit
+html_css_value(property:any, value:any) := {
+	if (value is int or value is float) and not contains(html_unitless_properties, property) { return str(value) + "px" }
+	html_attribute_value(value)
+}
+
 // `style{ ".card": { padding: 8 } }`: a rule `selector { declarations }`; a text is CSS as written
-html_style_rule(rule:any) := {
+html_style_rule(rule:any, scope:any) := {
 	if not (rule is pair) { return html_plain(rule) }
-	body = values(rule)#1
-	if html_is_declarations(body) { return keys(rule)#1 + " { " + html_css(body) + " }" }
-	nested = ""
-	for inner in html_items(body) { nested = nested + html_style_rule(inner) + " " }
+	let body = values(rule)#1
+	if html_is_declarations(body) { return html_scoped(keys(rule)#1, scope) + " { " + html_css(body) + " }" }
+	var nested = ""
+	for inner in html_items(body) { nested = nested + html_style_rule(inner, scope) + " " }
 	keys(rule)#1 + " { " + trim(nested) + " }"
 }
 
+// `h2, p` in the component Card: `[data-wasp-scope="Card"] h2, [data-wasp-scope="Card"] p`
+html_scoped(selectors:any, scope:any) := {
+	if scope == ø { return selectors }
+	join(["[data-wasp-scope=\"" + scope + "\"] " + trim(selector) for selector in split(selectors, ",")], ", ")
+}
+
 html_kebab(name:any) := {
-	out = ""
+	var out = ""
 	for c in chars(name) { out = if c != lower(c) then out + "-" + lower(c) else out + c }
 	out
 }

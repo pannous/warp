@@ -1,7 +1,7 @@
 //! Transitions declared as data (card web-transitions, notes/web_framework.md step 15): `li{ transition: fade 200ms }`
 //! is the attribute data-wasp-transition, by which the page animates the element in when it appears, out when it goes
 //! and, in a keyed list, to its new place (markup.js, FLIP)
-use warp::html::to_html;
+use warp::markup::to_html;
 use warp::wasm_emitter::eval;
 
 fn html_of(code: &str) -> String {

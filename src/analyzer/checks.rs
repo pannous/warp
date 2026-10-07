@@ -298,7 +298,11 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 			match map_word(&items[0]) {
 				Some(MAP_KEYS) => format!("{PLAIN} of text"), // the keys of a map are read as texts
 				Some(MAP_ENTRIES) => list_type_name(&items[1], scope),
-				_ => list_type_name(&items[1], scope).replacen(MAP_TYPE_PREFIX, &format!("{PLAIN} of "), 1), // the values
+				// the values of a map of known values; of anything else (a pair `a: {b: 8}`) Nodes of any type
+				_ => match list_type_name(&items[1], scope) {
+					map if map.starts_with(MAP_TYPE) => map.replacen(MAP_TYPE_PREFIX, &format!("{PLAIN} of "), 1),
+					_ => NODE_LIST_TYPE.to_string(),
+				},
 			}
 		}
 		// `sort(xs)`, `reverse(xs)`: the same elements

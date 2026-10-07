@@ -6,12 +6,13 @@ mod test_markup_tags;
 mod test_web_playground;
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_web_server;
+#[cfg(feature = "native")] // `warp dev` serves HTTP on a port
+mod test_dev_server;
 mod test_async_data; // the browser: a task Worker fetches into shared memory, read at the check points
 #[cfg(feature = "native")] // warp build --site writes files with the native compiler
 mod test_site;
-#[cfg(feature = "native")] // std/markup.wasp against src/html.rs, natively
-mod test_html_module;
 mod test_html_render;
+mod test_markup_renderer;
 mod test_element_events;
 mod test_class_components;
 mod test_components;
@@ -23,3 +24,4 @@ mod test_style_rules;
 mod test_headless_pages;
 mod test_page_tests;
 mod test_transitions;
+mod test_accessibility;

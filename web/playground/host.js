@@ -93,10 +93,11 @@ const STD_ADAPTERS = {
 		},
 	},
 	os: { env: () => null }, // a page has no environment
-	// `stored theme = "dark"` (src/lowering/stored_values.rs): the page's values (worker.js), each save sent back to it
+	// `stored theme = "dark"` (src/lowering/stored_values.rs): the page's values (markup.js keptValues), each save sent
+	// back to it with its store (the dev store of a `warp dev` page, else the program's)
 	store: {
 		load: (name, fallback) => name in storedValues ? storedValues[name] : fallback,
-		save: (name, value) => { storedValues[name] = value; self.keepStored?.(name, value); return null; },
+		save: (name, value, file) => { storedValues[name] = value; self.keepStored?.(name, value, file); return null; },
 	},
 	net: { post: (url, body) => postSync(url, contentText(body)) },
 	hash: { sha256: subject => sha256Hex(utf8.encode(contentText(subject))), crc32: subject => crc32Of(utf8.encode(contentText(subject))) },
@@ -1123,8 +1124,8 @@ function moduleImports(holder, hooks, path) {
 	});
 }
 
-// Timers (crates/warp-runtime/src/system_signals.rs): main records them, the page starts them after it (worker.js
-// startTimers runs the handler on·every·<id>); a host without a page that stays (test-worker.js) only warns
+// Timers (crates/warp-runtime/src/system_signals.rs): main records them, the page starts them after it (startTimers,
+// in the playground's worker.js and a built site's site.js); a host without a page that stays (test-worker.js) only warns
 const TIMER_HANDLER_PREFIX = "on·every·";
 function addTimer(holder, hooks, id, timer, written) {
 	if (!hooks.listen) return holder.warnings.push(`${written}: timers do not run here`);
@@ -1141,6 +1142,20 @@ function millisecondsUntil(minuteOfDay, weekdays = EVERY_DAY, now = new Date()) 
 		if (due > now && (weekdays || EVERY_DAY) & (1 << due.getDay())) return due - now;
 	}
 	return 7 * DAY_MILLISECONDS;
+}
+
+// a run's timers started: `fire(handler)` runs the handler on·every·<id> of each when it is due; stopTimers ends them
+function startTimers(holder, fire) {
+	const handles = [];
+	const atClock = timer => handles.push(setTimeout(() => {
+		fire(timer.handler);
+		if (!timer.once) atClock(timer);
+	}, millisecondsUntil(timer.minute, timer.weekdays)));
+	for (const timer of holder.timers ?? []) {
+		if (timer.every !== undefined) handles.push(setInterval(() => fire(timer.handler), timer.every));
+		else atClock(timer);
+	}
+	holder.stopTimers = () => handles.forEach(handle => { clearTimeout(handle); clearInterval(handle); });
 }
 
 // what a timer says in the page: "every 500 ms", "at 09:00", "every day at 09:00", or the channel its listener reads
@@ -1264,7 +1279,8 @@ function runProgram(bytes, hooks) {
 	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, instance.exports, () => instance.exports.main()));
 	const events = pageEvents(instance.exports);
 	if ((events.length > 0 || holder.timers || holder.fetches) && outcome.result) hooks.listen?.(holder, events);
-	listeningRun = events.length > 0 && outcome.result ? holder : undefined;
+	// a run without page events (std/markup.wasp rendering the page's HTML, src/markup.rs) keeps the page's run
+	if (events.length > 0 && outcome.result) listeningRun = holder;
 	return outcome;
 }
 

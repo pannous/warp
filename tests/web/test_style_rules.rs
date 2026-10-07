@@ -1,6 +1,6 @@
 //! CSS written as CSS in a style block (card web-styles, src/lowering/style_rules.rs): selectors without quotes and
 //! lengths with units, one rule per line
-use warp::html::to_html;
+use warp::markup::to_html;
 use warp::wasm_emitter::eval;
 
 fn html_of(code: &str) -> String {

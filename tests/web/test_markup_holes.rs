@@ -1,7 +1,7 @@
 //! Card web-fine-holes (notes/web_framework.md step 3): the elements of a page's markup that hold a computed text,
 //! attribute or child are read on their own after a handler (`page·hole·<path>`, the element indices from the root),
 //! and the page changes only the ones whose HTML differs
-use warp::html::holes;
+use warp::markup::holes;
 use warp::wasp_parser::parse;
 
 const TOGGLE: &str = "done = false\ntoggles = 0\ndiv{ button{ on click { done = not done; toggles += 1 } \"toggle\" } p{ class: done ? \"done\" : \"open\" \"state\" } ul{ li{ \"toggled \" + toggles + \" times\" } } }";

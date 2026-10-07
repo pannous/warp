@@ -39,6 +39,14 @@ impl Rational {
 		Rational { numerator: numerator / &divisor, denominator: denominator / &divisor }
 	}
 
+	/// The decimal a float was written as, exact: 0.3 is 3/10 (its shortest text, which reads back as the same float)
+	pub fn of_decimal(value: f64) -> Option<Rational> {
+		let text = format!("{value}");
+		let (whole, fraction) = text.split_once('.').unwrap_or((&text, ""));
+		let numerator: BigInt = format!("{whole}{fraction}").parse().ok()?;
+		Some(Rational::new(numerator, BigInt::from(10).pow(fraction.len() as u32)))
+	}
+
 	pub fn integer(value: impl Into<BigInt>) -> Rational {
 		Rational { numerator: value.into(), denominator: BigInt::one() }
 	}

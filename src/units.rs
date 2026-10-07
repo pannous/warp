@@ -378,6 +378,7 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 			arithmetic(evaluate_in(base, variables)?, Op::Pow, Value::Number(exponent))
 		}
 		Node::Key(quantity, Op::As, unit) if unit_expression(unit).is_some() => convert(evaluate_in(quantity, variables)?, unit_expression(unit).expect("guarded")),
+		Node::Key(amount, Op::Mul, unit) if is_unit_word(unit) => amount_times(amount, evaluate_in(unit, variables)?, variables),
 		Node::Key(left, op, right) => arithmetic(evaluate_in(left, variables)?, *op, evaluate_in(right, variables)?),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => evaluate_in(&items[0], variables),
 		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) if items.len() > 1 => {
@@ -385,11 +386,11 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 		}
 		Node::List(items, Bracket::None, _) => match items.as_slice() {
 			[single] => evaluate_in(single, variables),
-			[count, unit] if is_unit_word(unit) => arithmetic(evaluate_in(count, variables)?, Op::Mul, evaluate_in(unit, variables)?),
+			[count, unit] if is_unit_word(unit) => amount_times(count, evaluate_in(unit, variables)?, variables),
 			// `3010 meters`, and a unit after an expression belongs to its last amount: `3km+10m == 3010 meters`
 			[amount, unit] if target_unit(unit).is_some() => match amount.drop_meta() {
 				Node::Key(..) => evaluate_in(&with_unit(amount, unit), variables),
-				_ => arithmetic(evaluate_in(amount, variables)?, Op::Mul, Value::Quantity(Quantity::of(1, target_unit(unit).expect("guarded")))),
+				_ => amount_times(amount, Value::Quantity(Quantity::of(1, target_unit(unit).expect("guarded"))), variables),
 			},
 			[quantity, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == IN_WORD) && unit_expression(unit).is_some() => {
 				convert(evaluate_in(quantity, variables)?, unit_expression(unit).expect("guarded"))
@@ -397,6 +398,18 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 			_ => Err(Stop::Unsupported),
 		},
 		_ => Err(Stop::Unsupported),
+	}
+}
+
+/// `amount unit`: a decimal amount is exact (`0.3 s` is 3/10 s, card fractional-durations), any other computes as usual
+fn amount_times(amount: &Node, unit: Value, variables: &mut Variables) -> Evaluated {
+	let decimal = match amount.drop_meta() {
+		Node::Number(Number::Float(value)) => Rational::of_decimal(*value),
+		_ => None,
+	};
+	match (decimal, unit) {
+		(Some(exact), Value::Quantity(quantity)) => Ok(Value::Quantity(quantity.with_amount(quantity.amount.mul(&exact)))),
+		(_, unit) => arithmetic(evaluate_in(amount, variables)?, Op::Mul, unit),
 	}
 }
 

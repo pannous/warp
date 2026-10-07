@@ -1,6 +1,6 @@
 //! Two-way bindings for forms (card web-bind, notes/web_framework.md step 6): `input{ bind: name }` shows name as its
 //! value and sets name from what is typed (its handler of the page event input); a checkbox binds `checked`
-use warp::html::to_html;
+use warp::markup::to_html;
 use warp::wasm_emitter::eval;
 
 fn html_of(code: &str) -> String {

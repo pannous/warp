@@ -45,3 +45,4 @@ mod test_superscript_variables;
 mod test_mixed_number_arithmetic;
 mod test_norm;
 mod test_nan_observed;
+mod test_decimal_units;
