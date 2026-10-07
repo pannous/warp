@@ -1195,6 +1195,7 @@ impl WaspParser {
 				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
 				let outer_data_literal = std::mem::replace(&mut self.in_data_literal, op == Op::Colon);
 				let outer_style_sheet = std::mem::replace(&mut self.in_style_sheet, op == Op::Colon && symbol == STYLE_WORD);
+				self.tag_block = op == Op::Colon;
 				let mut blocks = vec![self.parse_bracketed('{')];
 				// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`
 				while self.current_char() == '{' {

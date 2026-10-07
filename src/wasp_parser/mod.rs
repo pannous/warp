@@ -677,6 +677,10 @@ pub struct WaspParser {
 	/// Parsing the block of a data literal (`a{ … }`, not a declared type's constructor): a spaced child `c { d:3 }` there
 	/// is the child node of the glued `c{ d:3 }`, as no call with a block can be meant (card spaced-child)
 	in_data_literal: bool,
+	/// The next `{…}` is the block of a named tag (`ul{…}`, `ul {…}`): a repeated `key: value` there is a child, as
+	/// repeated elements in XML/HTML (`ul{ li: "a" li: "b" }`), no duplicate key; a plain `{…}` is a map that reports
+	/// one (user decision P176, card g-_bGo). Taken by the list it opens, so blocks inside it are not tag blocks
+	tag_block: bool,
 	/// Parsing the rules of a style sheet `style{ … }`: a blank before `.x` or `#x` is CSS's descendant combinator, which
 	/// starts the next part of a selector instead of a member access (`#main .x`, card web-styles-parser)
 	in_style_sheet: bool,
@@ -962,6 +966,7 @@ impl WaspParser {
 			generic_names: None,
 			in_command: false,
 			in_data_literal: false,
+			tag_block: false,
 			in_style_sheet: false,
 			pipe_takes_call: false,
 			times_loops: 0,

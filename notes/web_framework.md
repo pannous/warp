@@ -69,6 +69,11 @@ Each step is useful on its own and is what the next ones stand on.
 - A markup value is any key whose name is an HTML tag (`div`, `p`, `ul`, `li`, `a`, `button`, … the HTML element list)
   with a block; `name: "text"` is the element with that text, `name{ key: value … }` attributes for keys that are HTML
   attributes, other children nested in order. Unknown names stay data (no custom elements yet).
+- Repeated keys (user decision P176, card g-_bGo): in a named tag's block, glued `ul{…}` or spaced `ul {…}`, a repeated
+  `key: value` is a child (`ul{ li: "First" li: "Second" }` is two li), as repeated elements in XML/HTML; a plain `{…}`
+  stays a map whose repeated key is the error "duplicate key", also inside a tag, and so does a declared type's
+  constructor `Point{ x: 1 x: 2 }`. The parser's one-shot flag tag_block (wasp_parser/mod.rs) skips the check for the
+  tag's own block only.
 - Natively the value serializes as HTML (`to_html`), text escaped. In the page the program's value, when it is markup, is
   shown as DOM in the output pane instead of its wasp text; `show(markup)` places it explicitly.
 
