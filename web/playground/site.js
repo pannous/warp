@@ -72,6 +72,7 @@ async function goTo(path) {
 	navigate(site, siteHooks, path);
 	await loadRouteModule(site);
 	show();
+	focusRoute(document.getElementById(SITE_ROOT));
 }
 
 hydrate();

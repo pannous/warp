@@ -5,7 +5,7 @@
 //! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary, and the parts of
 //! host.js its module imports words of (HOST_PARTS, card web-bundle).
 
-use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
+use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
 use crate::node::Node;
 use std::path::{Path, PathBuf};
 
@@ -28,7 +28,7 @@ pub struct HostPart {
 
 /// The parts of host.js, in load order (host.js HOST_PART_FILES). std_pure and std_io are coarse: they carry every std
 /// module's words, so a program using json (std_pure) also gets the hashes
-pub const HOST_PARTS: [HostPart; 6] = [
+pub const HOST_PARTS: [HostPart; 7] = [
 	HostPart {
 		script: ("host-files.js", include_str!("../web/playground/host-files.js")),
 		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", STD_IO].contains(&name),
@@ -47,6 +47,7 @@ pub const HOST_PARTS: [HostPart; 6] = [
 	},
 	HostPart { script: ("host-compiler.js", include_str!("../web/playground/host-compiler.js")), gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK, needs: &["host-files.js"] },
 	HostPart { script: ("host-routes.js", include_str!("../web/playground/host-routes.js")), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
+	HostPart { script: ("host-gpu.js", include_str!("../web/playground/host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && name == GPU_COMPUTE, needs: &["host-tasks.js"] },
 ];
 const LINE_COMMENT: &str = "//";
 /// The element holding the program's markup (site.js SITE_ROOT)

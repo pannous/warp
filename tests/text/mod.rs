@@ -2,6 +2,7 @@ mod test_cast_to_string;
 mod test_character_comparison;
 mod test_constant_expression_text;
 mod test_declared_text_one_character;
+mod test_one_character_argument;
 mod test_interpolation;
 mod test_backtick_templates;
 mod test_library_unicode;
