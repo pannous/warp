@@ -220,6 +220,8 @@ PASSED:
   ✓ control::test_page_events::a_raised_page_event_runs_its_handler_as_any_event
   ✓ control::test_page_events::the_last_name_of_a_program_with_page_events_is_its_output_binding
   ✓ control::test_page_events::the_last_name_of_a_program_with_timers_is_its_output_binding
+  ✓ control::test_parallel_map::a_parallel_all_call_runs_its_items_at_once
+  ✓ control::test_parallel_map::a_parallel_form_that_runs_sequentially_warns
   ✓ control::test_parallel_map::a_parallel_loop_updating_a_copy_warns
   ✓ control::test_parallel_map::a_parallel_map_gives_the_results_in_order
   ✓ control::test_parallel_map::a_parallel_map_runs_its_items_at_once
@@ -663,6 +665,7 @@ PASSED:
   ✓ functions::test_braced_it_warning::other_bodies_do_not_warn
   ✓ functions::test_broadcasting::a_broadcast_inside_a_library_word_and_a_lambda_variable
   ✓ functions::test_broadcasting::a_function_of_several_values_broadcasts_over_its_list_argument
+  ✓ functions::test_broadcasting::a_range_broadcasts_like_a_list
   ✓ functions::test_broadcasting::julia_dot_call_broadcasts
   ✓ functions::test_broadcasting::library_words_and_math_operators_broadcast
   ✓ functions::test_broadcasting::max_and_min_without_parentheses
@@ -2918,7 +2921,6 @@ PASSED:
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
   ✓ web::test_guide::every_example_a_chapter_links_exists
   ✓ web::test_guide::every_guide_snippet_prints_what_the_guide_shows
-  ✓ web::test_guide::every_guide_snippet_shows_its_value
   ✓ web::test_headless_pages::a_click_runs_the_handler_and_shows_the_page_anew
   ✓ web::test_headless_pages::a_missing_button_is_a_loud_error
   ✓ web::test_headless_pages::each_component_instance_counts_on_its_own
@@ -3362,6 +3364,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ web::test_guide::every_guide_snippet_shows_its_value
 
 SUMMARY:
-19 ignored, 3359 passed, 0 failed, 3359 total tested
+19 ignored, 3361 passed, 1 failed, 3362 total tested
