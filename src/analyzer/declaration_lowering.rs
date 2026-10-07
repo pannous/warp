@@ -282,6 +282,9 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Node::List(items, bracket, separator) if of_type_declaration(&items, &bracket, &separator).is_some() => {
 			lower(of_type_declaration(&items, &bracket, &separator).expect("guarded"))
 		}
+		Node::List(items, bracket, separator) if postfix_list_declaration(&items, &bracket, &separator).is_some() => {
+			lower(postfix_list_declaration(&items, &bracket, &separator).expect("guarded"))
+		}
 		Node::List(items, _, _) if hashed_unit_count(&items).is_some() => {
 			lower(hashed_unit_count(&items).expect("guarded"))
 		}
@@ -405,6 +408,23 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
 		other => other,
 	}
+}
+
+/// `xs:float list = [0.5]` (parsed as the items `xs:float`, `list = [0.5]`) is `xs:"list of float" = [0.5]`
+fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+	let [declaration, list, rest @ ..] = items else { return None };
+	let Node::Key(name, Op::Colon, element) = declaration.drop_meta() else { return None };
+	let Node::Symbol(element) = element.drop_meta() else { return None };
+	let typed_name = |name: &Node| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(Node::Symbol(format!("{LIST_OF_PREFIX}{element}"))));
+	let declared = match list.drop_meta() {
+		Node::Symbol(word) if word == LIST_WORD => typed_name(name),
+		Node::Key(word, op @ (Op::Assign | Op::Define), value) if is_word(word, LIST_WORD) => Node::Key(Box::new(typed_name(name)), *op, value.clone()),
+		_ => return None,
+	};
+	Some(match rest {
+		[] => declared,
+		rest => Node::List([vec![declared], rest.to_vec()].concat(), bracket.clone(), separator.clone()),
+	})
 }
 
 /// `x:list of int=[1 2]` (parsed as the items `x:list`, `of`, `int=[1 2]`) is `x:"list of int"=[1 2]`, the same type as `x:list<int>`;
