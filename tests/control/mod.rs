@@ -118,3 +118,4 @@ mod test_event_handler_lists;
 mod test_for_underscore;
 mod test_await_any_values;
 mod test_constant_listener;
+mod test_task_bools;
