@@ -2,7 +2,8 @@
 //! function `route·N(request:any) := body` and the statement the host call `serve_routes(8080, [["GET",
 //! "/api/users", "route·0"] …])`, which serves until it is stopped (src/web_server.rs natively; the playground says
 //! loudly that it cannot serve). `server def f(a, b) {…}` (typed RPC, notes/web_framework.md "Server and page") is f,
-//! and also the route POST /rpc/f calling it with the request's JSON array of arguments.
+//! and also the route POST /rpc/f calling it with the request's JSON array of arguments. A program file whose last line
+//! shows a page serves that page too, at / (src/site.rs); its page build leaves the serving out.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -20,6 +21,9 @@ const RPC_METHOD: &str = "POST";
 type Route = (String, Node, Node);
 
 pub fn lower(program: Node) -> Node {
+	if crate::pipeline::is_for_a_page() {
+		return without_serving(program);
+	}
 	match program {
 		Node::List(statements, bracket, separator) if statements.iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some()) => {
 			let statements: Vec<Node> = statements.into_iter().map(|statement| server_definition(&statement).unwrap_or(statement)).collect();
@@ -38,6 +42,16 @@ pub fn lower(program: Node) -> Node {
 			let (port, routed) = served(&single).expect("checked");
 			Node::List(serving(port, routed, &mut 0), Bracket::None, Separator::Semicolon)
 		}
+		other => other,
+	}
+}
+
+/// A program compiled for its page (pipeline::for_a_page) does not serve: the server runs it natively, the page in the
+/// browser (notes/web_framework.md "Built sites")
+fn without_serving(program: Node) -> Node {
+	match program {
+		Node::List(statements, bracket, separator) => Node::List(statements.into_iter().filter(|statement| served(statement).is_none()).collect(), bracket, separator),
+		single if served(&single).is_some() => Node::Empty,
 		other => other,
 	}
 }

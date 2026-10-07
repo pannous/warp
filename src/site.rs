@@ -37,24 +37,41 @@ pub struct BuiltSite {
 	pub files: Vec<String>,
 }
 
+/// A file of a site: its name and bytes
+pub type SiteFile = (&'static str, Vec<u8>);
+
 /// The site of the program `code` in `directory`, titled `title`: the page, the module and the scripts
 pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, String> {
+	let site = render(code, title)?.ok_or_else(|| format!("the program shows no page: it exports no {}", crate::page_html::PAGE_HTML))?;
+	std::fs::create_dir_all(directory).map_err(|failure| format!("cannot make {}: {failure}", directory.display()))?;
+	for (name, bytes) in &site {
+		std::fs::write(directory.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"))?;
+	}
+	Ok(BuiltSite { directory: directory.to_path_buf(), files: site.iter().map(|(name, _)| name.to_string()).collect() })
+}
+
+/// The files of the site of the program `code` (index.html first), none when its last line shows nothing
+pub fn render(code: &str, title: &str) -> Result<Option<Vec<SiteFile>>, String> {
 	let module = crate::pipeline::for_a_page(|| crate::pipeline::compile(code)).map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
+	if !exports(&module.bytes, crate::page_html::PAGE_HTML) {
+		return Ok(None);
+	}
 	let imports = crate::wasm_reader::Imports { host: module.needs_host, wasi: module.needs_wasi, ffi: module.needs_ffi };
 	let rendered = crate::wasm_reader::read_export_after_main(&module.bytes, imports, crate::page_html::PAGE_HTML)
 		.map_err(|failure| format!("the program failed at build time: {failure}"))?;
 	let Node::Text(html) = rendered.drop_meta() else {
 		return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, rendered.serialize()));
 	};
-	std::fs::create_dir_all(directory).map_err(|failure| format!("cannot make {}: {failure}", directory.display()))?;
-	let write = |name: &str, bytes: &[u8]| std::fs::write(directory.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"));
-	write(PAGE_FILE, page(title, html).as_bytes())?;
-	write(MODULE_FILE, &module.bytes)?;
-	for (name, text) in SCRIPTS {
-		write(name, text.as_bytes())?;
-	}
-	let files = [PAGE_FILE, MODULE_FILE].into_iter().chain(SCRIPTS.map(|(name, _)| name)).map(str::to_string).collect();
-	Ok(BuiltSite { directory: directory.to_path_buf(), files })
+	let pages = [(PAGE_FILE, page(title, html).into_bytes()), (MODULE_FILE, module.bytes)];
+	Ok(Some(pages.into_iter().chain(SCRIPTS.map(|(name, text)| (name, text.as_bytes().to_vec()))).collect()))
+}
+
+/// Does the module export a function of this name
+fn exports(module: &[u8], name: &str) -> bool {
+	wasmparser::Parser::new(0).parse_all(module).any(|payload| match payload {
+		Ok(wasmparser::Payload::ExportSection(exports)) => exports.into_iter().flatten().any(|export| export.name == name),
+		_ => false,
+	})
 }
 
 fn page(title: &str, body: &str) -> String {
