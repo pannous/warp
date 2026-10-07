@@ -87,6 +87,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P198 names HTML and LaTeX define differently: as recommended, HTML for letter names (ocirc ô, oslash ø), LaTeX for
   operators (asymp ≍, circ ∘). The user: context-dependent "is probably ugly but the best we can do"; list in
   notes/footguns.md how many such names there are.
+  Follow-up default (warp-84): "letter names" means Latin letters with diacritics (ocirc ô, oslash ø, imath ı, jmath
+  ȷ); cdot ⋅, varepsilon ε, varphi φ take LaTeX as exceptions. 36 names differ, listed in notes/footguns.md.
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
   compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
