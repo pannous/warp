@@ -11,3 +11,7 @@ from_pairs(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out
 omit(m, unwanted) := { out = {}; ks = keys(m); for k in ks { if not (k in unwanted) { out[k] = m.get(k) } }; out }
 // the entries whose value f holds for
 filter_values(m, f) := { out = {}; ks = keys(m); for k in ks { if f(m.get(k)) { out[k] = m.get(k) } }; out }
+// {a:1 b:2} → [["a", 1] ["b", 2]], the opposite of from_pairs
+entries(m) := { out = []; ks = keys(m); for k in ks { out = out + [[k, m.get(k)]] }; out }
+// the value of key, or fallback when m has none
+get_or(m, key, fallback) := if m.has(key) then m.get(key) else fallback

@@ -3,3 +3,17 @@ gcd(a, b) := if b == 0 then a else gcd(b, a % b)
 lcm(a, b) := a / gcd(a, b) * b
 clamp(x, low, high) := if x < low then low else if x > high then high else x
 sign(x) := if x > 0 then 1 else if x < 0 then -1 else 0
+// x rounded to the given number of decimal places: round_to(3.14159, 2) is 3.14
+round_to(x, digits) := round(x * 10^digits) / 10^digits
+factorial(n) := { out = 1; for i in 2 to n { out = out * i }; out }
+is_prime(n) := { if n < 2 { return false }; i = 2; while i * i <= n { if n % i == 0 { return false }; i++ }; true }
+// the value a fraction t of the way from a to b
+lerp(a, b, t) := a + (b - a) * t
+is_even(n) := n % 2 == 0
+is_odd(n) := n % 2 != 0
+// the decimal digits of a whole number: digits(1234) is [1 2 3 4]
+digits(n) := { out = []; rest = abs(n); while rest >= 10 { out = [rest % 10] + out; rest = rest//10 }; [rest] + out }
+// the number of ways to choose k of n (the binomial coefficient)
+choose(n, k) := { if k < 0 or k > n { return 0 }; out = 1; for i in 1 to min(k, n - k) { out = out * (n - min(k, n - k) + i)//i }; out }
+// base^exponent % modulus without the huge power
+mod_pow(base, exponent, modulus) := { out = 1; b = base % modulus; e = exponent; while e > 0 { if e % 2 == 1 { out = out * b % modulus }; b = b * b % modulus; e = e//2 }; out }

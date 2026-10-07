@@ -2,3 +2,5 @@
 // adapter std_pure parses and writes it (serde_json natively, JSON.parse / JSON.stringify in the browser)
 parse_json(text:any) := std_pure("json", "parse", [text])
 to_json(value:any) := std_pure("json", "to_json", [value])
+// to_json in a program with classes (class_methods lower_json_classes): an instance is its fields
+to_json_of_classes(value:any, classes:any) := std_pure("json", "to_json", [value, classes])

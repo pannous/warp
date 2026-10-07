@@ -26,7 +26,7 @@ impl WaspParser {
 	}
 
 	/// `tuple<s64, list<node>>` → `tuple` followed by the angle-bracketed argument list
-	/// Length of the `<int>`, `<list<int>>`, `<text, int>` directly at the cursor when everything inside is a type word;
+	/// Length of the `<int>`, `<list<int>>`, `<text, int>`, `<int(int)>` directly at the cursor when everything inside is a type word;
 	/// `a<b`, `a<<b` and `a<b>c` are not type applications
 	pub(super) fn type_application_length(&self) -> Option<usize> {
 		let mut depth = 0;
@@ -41,7 +41,7 @@ impl WaspParser {
 					word.push(ch);
 					continue;
 				}
-				',' | ' ' => {}
+				',' | ' ' | '(' | ')' => {} // C++'s function type `function<int(int)>`
 				_ => return None,
 			}
 			if !word.is_empty() {
@@ -329,6 +329,16 @@ impl WaspParser {
 				// the line `left: ref Node?` is the one field once its `ref` is read
 				if bracket == Bracket::None && transformed.len() == 1 && matches!(transformed[0].drop_meta(), Node::Key(_, Op::Colon, _)) {
 					return transformed.remove(0);
+				}
+				// the line `left: ref Node? right: ref Node?` among others: its fields are fields of the body
+				// a typed field, not a property with its block (`age:{2026 - birthday} set{…}`)
+				let is_field = |item: &Node| matches!(item.drop_meta(), Node::Key(_, Op::Colon, value) if !matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _)));
+				let row_of_fields = |item: &Node| matches!(item.drop_meta(), Node::List(row, Bracket::None, Separator::Space) if row.iter().all(is_field));
+				if sep != Separator::Space && transformed.iter().any(row_of_fields) {
+					transformed = transformed.into_iter().flat_map(|item| match item.drop_meta() {
+						Node::List(row, Bracket::None, Separator::Space) if row.iter().all(is_field) => row.clone(),
+						_ => vec![item],
+					}).collect();
 				}
 				Node::List(transformed, bracket, sep)
 			}

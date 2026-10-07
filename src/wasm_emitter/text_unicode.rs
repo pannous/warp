@@ -1,8 +1,10 @@
 //! Texts as Unicode: `upper` and `lower` with the case mapping of Rust's `char::to_uppercase` / `to_lowercase` for every
 //! code point (user decision #26), `reverse` of a text and `chars` (the list of characters) by code points.
 //!
-//! The case mapping is a table in linear memory with one entry per code point that changes, sorted by code point and
-//! binary searched: the code point, then up to three mapped code points (`ß` is `SS`), zeros for unused slots.
+//! The case mapping is a table in linear memory of ranges, sorted by their first code point and binary searched (card
+//! web-bundle: a twelfth of a table with an entry per code point, 1.2 KB gzipped for lower): `[start, last, stride,
+//! delta, second, third]` maps each code point from start to last a stride apart (1, or 2 for alternating pairs like
+//! Āā) to itself plus delta; a mapping to several code points (`ß` is `SS`) is a range of one with the others after it.
 
 use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
@@ -16,7 +18,16 @@ const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 
 /// The longest mapping of one code point (`ΐ` upper is three)
 const MAPPED_SLOTS: u32 = 3;
-const ENTRY_BYTES: u32 = (1 + MAPPED_SLOTS) * 4;
+/// The fields of a range, each a little-endian u32: start, last, stride, delta, then the second and third mapped code points
+const START: usize = 0;
+const LAST: usize = 1;
+const STRIDE: usize = 2;
+const DELTA: usize = 3;
+const SECOND: usize = 4;
+const ENTRY_FIELDS: usize = 6;
+const ENTRY_BYTES: u32 = ENTRY_FIELDS as u32 * 4;
+/// The strides a range may have: every code point, or every second (a lower and an upper alternating)
+const STRIDES: [u32; 2] = [1, 2];
 /// A code point takes at most this many bytes more after its mapping than before it (2 bytes → 3 × 2 bytes)
 const OUTPUT_FACTOR: i32 = 3;
 
@@ -28,20 +39,39 @@ fn cached_case_table(is_upper: bool) -> &'static [u8] {
 	(if is_upper { &UPPER } else { &LOWER }).get_or_init(|| case_table(is_upper))
 }
 
-/// The code points whose case mapping changes them, each as little-endian u32: the code point, then `MAPPED_SLOTS` mapped ones
+/// The ranges of code points whose case mapping changes them (module doc), as little-endian u32
 fn case_table(is_upper: bool) -> Vec<u8> {
-	let mut table = vec![];
+	let mut ranges: Vec<[u32; ENTRY_FIELDS]> = vec![];
 	for letter in (0..=char::MAX as u32).filter_map(char::from_u32) {
 		let mapped: Vec<u32> = if is_upper { letter.to_uppercase().map(u32::from).collect() } else { letter.to_lowercase().map(u32::from).collect() };
-		if mapped == [u32::from(letter)] {
+		let code = u32::from(letter);
+		if mapped == [code] {
 			continue;
 		}
-		table.extend(u32::from(letter).to_le_bytes());
-		for slot in 0..MAPPED_SLOTS as usize {
-			table.extend(mapped.get(slot).copied().unwrap_or(0).to_le_bytes());
+		let delta = mapped[0].wrapping_sub(code);
+		if let Some(range) = ranges.last_mut().filter(|range| mapped.len() == 1 && extends(range, code, delta)) {
+			// a range of one takes its stride here; a longer one keeps it (extends checked the step)
+			range[STRIDE] = code - range[LAST];
+			range[LAST] = code;
+			continue;
 		}
+		let more = |slot: usize| mapped.get(slot).copied().unwrap_or(0);
+		ranges.push([code, code, 1, delta, more(1), more(2)]);
 	}
-	table
+	ranges.iter().flatten().flat_map(|field| field.to_le_bytes()).collect()
+}
+
+/// The instructions loading field `index` of the range at the address in local `entry`
+fn range_field(entry: u32, index: usize) -> [I<'static>; 4] {
+	[I::LocalGet(entry), I32Const(index as i32 * 4), I::I32Add, I::I32Load(WORD)]
+}
+
+/// Whether `code` mapped by `delta` continues `range`: the same delta, one stride after its last code point (a range of
+/// one takes the stride from it), and the range maps to one code point
+fn extends(range: &[u32; ENTRY_FIELDS], code: u32, delta: u32) -> bool {
+	let step = code - range[LAST];
+	let stride_fits = if range[LAST] == range[START] { STRIDES.contains(&step) } else { step == range[STRIDE] };
+	range[DELTA] == delta && range[SECOND] == 0 && stride_fits
 }
 
 impl WasmGcEmitter {
@@ -126,20 +156,31 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(index), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
 			s.emit_decode_at(f, index, first_byte, code_point, step);
 			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(step), I::I32Add, I::LocalSet(index)]);
-			// binary search for the entry of the code point, -1 when it does not change
+			// binary search for the last range starting at or before the code point
 			Self::emit_list(f, &[I32Const(0), I::LocalSet(low), I32Const(entries), I::LocalSet(high)]);
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(low), I::LocalGet(high), I::I32GeU, I::BrIf(1)]);
 			Self::emit_list(f, &[I::LocalGet(low), I::LocalGet(high), I::I32Add, I32Const(1), I::I32ShrU, I::LocalTee(middle)]);
-			Self::emit_list(f, &[I32Const(ENTRY_BYTES as i32), I::I32Mul, I32Const(table), I::I32Add, I::I32Load(WORD), I::LocalGet(code_point), I::I32LtU]);
+			Self::emit_list(f, &[I32Const(ENTRY_BYTES as i32), I::I32Mul, I32Const(table), I::I32Add, I::LocalSet(entry)]);
+			Self::emit_list(f, &range_field(entry, START));
+			Self::emit_list(f, &[I::LocalGet(code_point), I::I32LeU]);
 			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(middle), I32Const(1), I::I32Add, I::LocalSet(low), I::Else, I::LocalGet(middle), I::LocalSet(high), I::End]);
 			Self::emit_list(f, &[I::Br(0), I::End, I::End]);
-			Self::emit_list(f, &[I32Const(-1), I::LocalSet(entry), I::LocalGet(low), I32Const(entries), I::I32LtU, I::If(BlockType::Empty)]);
-			Self::emit_list(f, &[I::LocalGet(low), I32Const(ENTRY_BYTES as i32), I::I32Mul, I32Const(table), I::I32Add, I::I32Load(WORD), I::LocalGet(code_point), I::I32Eq]);
-			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(low), I::LocalSet(entry), I::End, I::End]);
-			// write the mapped code points, or the code point itself when the entry is empty or missing
+			// entry: the address of that range when it maps the code point (up to its last, a stride apart), else -1
+			Self::emit_list(f, &[I32Const(-1), I::LocalSet(mapped), I::LocalGet(low), I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(low), I32Const(1), I::I32Sub, I32Const(ENTRY_BYTES as i32), I::I32Mul, I32Const(table), I::I32Add, I::LocalSet(entry)]);
+			Self::emit_list(f, &[I::LocalGet(code_point)]);
+			Self::emit_list(f, &range_field(entry, LAST));
+			Self::emit_list(f, &[I::I32LeU, I::LocalGet(code_point)]);
+			Self::emit_list(f, &range_field(entry, START));
+			Self::emit_list(f, &[I::I32Sub]);
+			Self::emit_list(f, &range_field(entry, STRIDE));
+			Self::emit_list(f, &[I32Const(1), I::I32Sub, I::I32And, I::I32Eqz, I::I32And, I::If(BlockType::Empty), I::LocalGet(entry), I::LocalSet(mapped), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(mapped), I::LocalSet(entry)]);
+			// write the mapped code points (the first is the code point plus delta), or the code point itself without a range
 			Self::emit_list(f, &[I32Const(0), I::LocalSet(slot), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			Self::emit_list(f, &[I::LocalGet(entry), I32Const(0), I::I32GeS, I::If(BlockType::Result(ValType::I32))]);
-			Self::emit_list(f, &[I::LocalGet(entry), I32Const(ENTRY_BYTES as i32), I::I32Mul, I::LocalGet(slot), I32Const(1), I::I32Add, I32Const(4), I::I32Mul, I::I32Add, I32Const(table), I::I32Add, I::I32Load(WORD)]);
+			Self::emit_list(f, &[I::LocalGet(entry), I::LocalGet(slot), I32Const(DELTA as i32), I::I32Add, I32Const(4), I::I32Mul, I::I32Add, I::I32Load(WORD)]);
+			Self::emit_list(f, &[I::LocalGet(code_point), I32Const(0), I::LocalGet(slot), I::I32Eqz, I::Select, I::I32Add]);
 			Self::emit_list(f, &[I::Else, I32Const(0), I::End, I::LocalSet(mapped)]);
 			Self::emit_list(f, &[I::LocalGet(mapped), I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(slot), I::BrIf(2)]);
 			Self::emit_list(f, &[I::LocalGet(code_point), I::LocalSet(mapped), I::End]);

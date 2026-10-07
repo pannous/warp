@@ -9,10 +9,10 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 17] = [
+const BUILTIN_CALLS: [&str; 18] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
-	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF,
+	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
 ];
 
 const PRINT: &str = "print";
@@ -66,7 +66,7 @@ impl WasmGcEmitter {
 			|| super::text_builtins::is_text_builtin(name)
 			// a C function resolves once imported (`use c`, `import f from "c"`, libm's implicit imports): known but not
 			// imported it is an error that says so (ffi::undefined_function_message), never data
-			|| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c")
+			|| crate::ffi::get_ffi_signature(name).is_some_and(|signature| !matches!(signature.library, "c" | "m"))
 	}
 
 	/// `reverse(xs)`, `split(text, separator)` …: the library words with a runtime function; returns whether it was one
@@ -242,10 +242,11 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// Check for introspection and math functions; `[count, a]` lists two items, and a variable `count` heads no call
+		// Check for introspection and math functions; `[count, a]` lists two items; a global `count` does not hide the word
+		// (std/markup.wasp's count(items) under a program's `count = 0`), a local one is an error (emit_shadowed_counting)
 		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Colon) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.is_unbound(fn_name) && self.emit_introspection_fn(func, fn_name, &items[1]) {
+				if self.emit_shadowed_counting(func, fn_name, &items[1]) || (self.scope.lookup(fn_name).is_none() && self.emit_introspection_fn(func, fn_name, &items[1])) {
 					return;
 				}
 			}
@@ -307,6 +308,14 @@ impl WasmGcEmitter {
 				return;
 			}
 		}
+		if let [Node::Symbol(call), collection, key] = items {
+			if call == crate::analyzer::REMOVED_VALUE_CALL {
+				self.emit_node_instructions(func, collection);
+				self.emit_node_instructions(func, key);
+				self.emit_call(func, crate::analyzer::REMOVED_VALUE_CALL);
+				return;
+			}
+		}
 		if let [Node::Symbol(call), list, first, second] = items {
 			if call == crate::analyzer::INSERT_AT_CALL || call == crate::analyzer::INSERT_EITHER_CALL {
 				let Some((position, value)) = self.insert_position_and_value(func, call, first, second) else { return };
@@ -340,7 +349,9 @@ impl WasmGcEmitter {
 			// Check for pure numeric expressions; a square list and a comma tuple `(h + 1, 2)` keep all their items,
 			// whatever they compute
 			let is_tuple = *separator == Separator::Colon && items.len() > 1;
-			let has_arithmetic = *bracket != Bracket::Square && !is_tuple && items.iter().any(|item| {
+			// a block with a field (`p{ class: "x" "c" + n }`) is a structure whose items stay items
+			let has_field = items.len() > 1 && items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
+			let has_arithmetic = *bracket != Bracket::Square && !is_tuple && !has_field && items.iter().any(|item| {
 				matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic())
 			});
 			if has_arithmetic {
@@ -416,6 +427,18 @@ impl WasmGcEmitter {
 
 	/// Emit introspection functions: type, count, length, size, ceil, floor, round
 	/// Returns true if the function was handled
+	/// `count = 0; count(users)`: a local variable named like a counting word, applied to a value, neither counts nor
+	/// lists quietly; the error names the variable (card count-shadowed). A global of that name leaves the word to the
+	/// functions, which call it (std/markup.wasp's count(items))
+	pub(super) fn emit_shadowed_counting(&mut self, func: &mut Function, name: &str, argument: &Node) -> bool {
+		let shadowed = self.scope.lookup(name).is_some() && !self.ctx.user_functions.contains_key(name) && crate::analyzer::counting_function(name, &self.ctx).is_some();
+		if shadowed {
+			let argument = crate::normalize::operand_text(argument);
+			self.emit_type_error(func, format!("`{name}` is a variable here, so {name}({argument}) cannot count: rename the variable"));
+		}
+		shadowed
+	}
+
 	pub(super) fn emit_introspection_fn(&mut self, func: &mut Function, fn_name: &str, arg: &Node) -> bool {
 		if let Some(counter) = crate::analyzer::counting_function(fn_name, &self.ctx) {
 			// count, length, size: elements, or graphemes of a text
@@ -720,11 +743,12 @@ impl WasmGcEmitter {
 		if self.emit_discarded_branches(func, item) {
 			return;
 		}
+		let destructured = self.destructured_kind(item);
 		if let Some((name, value)) = self.typed_list_store(item) {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
-		} else if self.is_float_assignment(item) || self.is_float_call(item) {
+		} else if self.is_float_assignment(item) || self.is_float_call(item) || destructured.is_some_and(|kind| kind.is_float()) {
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
-		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) || matches!(item.drop_meta(), Node::Empty) {
+		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) || matches!(item.drop_meta(), Node::Empty) || destructured.is_some_and(|kind| kind.is_ref()) {
 			self.emit_node_instructions(func, item);
 		} else {
 			emit(self, func, item);

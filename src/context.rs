@@ -43,6 +43,8 @@ pub struct Context {
     pub used_functions: HashSet<&'static str>,
     pub required_functions: HashSet<&'static str>,
     pub ffi_imports: HashMap<String, FfiSignature>,
+    /// `use { memory, table } from "env"`: the memory and table the module imports instead of defining, (module, name)
+    pub imported_entities: Vec<(String, String)>,
     pub kind_global_indices: HashMap<Kind, u32>,
     pub string_table: HashMap<String, u32>,
     pub user_type_indices: HashMap<String, u32>,
@@ -93,6 +95,7 @@ impl Context {
                 "new_list",
             ]),
             ffi_imports: HashMap::new(),
+            imported_entities: Vec::new(),
             kind_global_indices: HashMap::new(),
             string_table: HashMap::new(),
             user_type_indices: HashMap::new(),

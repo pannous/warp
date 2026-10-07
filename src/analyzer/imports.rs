@@ -108,6 +108,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if let Some(word) = crate::wasm_emitter::cells::CELL_WORDS.iter().find(|word| **word == fn_name) {
 					ctx.required_functions.insert(word);
 				}
+				if fn_name == REMOVED_VALUE_CALL {
+					ctx.required_functions.extend([crate::library_words::MAP_GET_OR, crate::library_words::MAP_WITHOUT]);
+				}
 				if fn_name == INSERT_AT_CALL || fn_name == INSERT_EITHER_CALL {
 					ctx.required_functions.insert(INSERT_AT_CALL);
 				}
@@ -238,7 +241,16 @@ pub(super) fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
 	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == "sqrt";
 	let mut implicit: Vec<&str> = crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_builtin(name)).collect();
 	implicit.push(LIBM_LN); // ffi.rs signs it as libm's log
-	add_called_library_imports(ctx, node, "m", &|name| implicit.contains(&name));
+	add_called_library_imports(ctx, node, "m", &|name| implicit.contains(&name) || (!is_builtin(name) && is_f64_header_function(name)));
+}
+
+/// A function math.h declares with f64 parameters and an f64 result (exp2, cbrt, erf): it links from libm like the
+/// listed ones (card call-name: it compiled to its last argument)
+fn is_f64_header_function(name: &str) -> bool {
+	use wasm_encoder::ValType::F64;
+	crate::ffi::get_signatures_from_headers("m").get(name).is_some_and(|signature| {
+		!signature.params.is_empty() && signature.params.iter().all(|param| *param == F64) && signature.results == [F64]
+	})
 }
 
 /// Import from `library` every function the program calls that `is_candidate` accepts, unless the program imports or
@@ -294,6 +306,10 @@ pub(super) fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 								func_names.iter().for_each(|func_name| add_ffi_import(ctx, func_name, &lib));
 								return;
 							}
+						} else if first_sym == "use" && items.len() >= 4 && items[2].name() == "from" {
+							let lib = library_name(&items[3]);
+							imported_names(&items[1]).iter().for_each(|name| add_named_import(ctx, name, &lib));
+							return;
 						} else if first_sym == "use" && items.len() >= 2 {
 							let lib = library_name(&items[1]);
 							add_ffi_lib(ctx, &lib);
@@ -383,7 +399,7 @@ pub fn extract_signal_polls(ctx: &mut Context) {
 }
 
 pub fn handles_system_signals(ctx: &Context) -> bool {
-	ctx.user_functions.keys().any(|name| name == crate::host::INTERRUPT_HANDLER || name == crate::host::SHARED_HANDLER || name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FILE_HANDLER_PREFIX))
+	ctx.user_functions.keys().any(|name| name == crate::host::INTERRUPT_HANDLER || name == crate::host::SHARED_HANDLER || name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FILE_HANDLER_PREFIX) || name.starts_with(crate::host::FETCH_HANDLER_PREFIX))
 }
 
 /// The library an import names: `"z"` and `'m'` are one-character texts, which parse as characters
@@ -399,6 +415,15 @@ pub(super) fn imported_names(names: &Node) -> Vec<String> {
 	match names.drop_meta() {
 		Node::List(items, _, _) => items.iter().map(Node::name).collect(),
 		single => vec![single.name()],
+	}
+}
+
+/// `use { memory, table, puts } from "env"`: the module's memory and table are imported (crate::wasm_emitter::IMPORTABLE_ENTITIES),
+/// any other name is a function of the library
+fn add_named_import(ctx: &mut Context, name: &str, library: &str) {
+	match crate::wasm_emitter::IMPORTABLE_ENTITIES.contains(&name) {
+		true => ctx.imported_entities.push((library.to_string(), name.to_string())),
+		false => add_ffi_import(ctx, name, library),
 	}
 }
 

@@ -105,6 +105,8 @@ const WORD_OPERATORS: [(&str, Op); 11] = [
 	("equals", Op::Eq), ("through", Op::To),
 ];
 const IS_IN_PHRASE: &str = "is in";
+/// `xs contains x` (and its synonyms, lowering/library_words.rs COLLECTION_CONTAINS): `x in xs` the other way round
+const CONTAINMENT_WORDS: [&str; 3] = ["contains", "has", "includes"];
 /// `for each item in basket` is `for item in basket`
 const EACH_WORD: &str = "each";
 /// `10 down to 1` is `reverse(1 to 10)`
@@ -271,8 +273,8 @@ enum SpecialInfix {
 	Pipeline,
 	/// `xs .+ 4`
 	ElementWise(Op),
-	/// `x in xs`
-	Membership,
+	/// `x in xs` and `xs contains x`: the list [lhs word operand]
+	Membership(&'static str),
 	/// Julia's dot call `f.(xs)`, `add.(xs, 10)`: f mapped over the first argument
 	DotCall,
 }
@@ -292,7 +294,7 @@ impl SpecialInfix {
 				lhs
 			}
 			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
-			SpecialInfix::Membership => Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), operand], Bracket::None, Separator::Space),
+			SpecialInfix::Membership(word) => Node::List(vec![lhs, Symbol(word.to_string()), operand], Bracket::None, Separator::Space),
 			SpecialInfix::DotCall => dot_call(lhs, operand),
 		}
 	}
@@ -334,6 +336,8 @@ pub const TRY_MARKER: &str = "try·else";
 pub const AFTER_MARKER: &str = "after·return";
 /// `class dog extends animal {…}`: the class named on the right is the parent (P117)
 pub const EXTENDS_KEYWORD: &str = "extends";
+/// The field of a sum type's variant with one unnamed payload, `Some(T)`: `Some(3).value`; several are value1, value2…
+const VARIANT_FIELD: &str = "value";
 /// `mixin Walker{…}` declares fields and methods classes take in: `class Duck with Walker, Swimmer {…}`
 pub const MIXIN_WORD: &str = "mixin";
 pub const WITH_KEYWORD: &str = "with";
@@ -348,6 +352,8 @@ const AFTER_KEYWORD: &str = "after";
 const AND_KEYWORD: &str = "and";
 /// Words after `and` that continue an expression rather than start a statement: `a and b or c`
 const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
+/// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
+const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
@@ -669,6 +675,9 @@ pub struct WaspParser {
 	/// Parsing the block of a data literal (`a{ … }`, not a declared type's constructor): a spaced child `c { d:3 }` there
 	/// is the child node of the glued `c{ d:3 }`, as no call with a block can be meant (card spaced-child)
 	in_data_literal: bool,
+	/// Parsing the rules of a style sheet `style{ … }`: a blank before `.x` or `#x` is CSS's descendant combinator, which
+	/// starts the next part of a selector instead of a member access (`#main .x`, card web-styles-parser)
+	in_style_sheet: bool,
 	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
 	pipe_takes_call: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
@@ -762,7 +771,7 @@ fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 		.filter_map(|pair| {
 			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch)).collect();
 			let rest = &pair[1][name.len()..];
-			(rest.is_empty() || rest.starts_with(['(', '{', '<', ':', ';'])).then_some(name)
+			(rest.is_empty() || rest.starts_with(['(', '{', '<', '[', ':', ';'])).then_some(name)
 		})
 		.filter(|name| is_plain_name(name))
 		.collect()
@@ -950,6 +959,7 @@ impl WaspParser {
 			generic_names: None,
 			in_command: false,
 			in_data_literal: false,
+			in_style_sheet: false,
 			pipe_takes_call: false,
 			times_loops: 0,
 			pending_comment: None,

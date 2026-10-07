@@ -5,6 +5,8 @@ use super::*;
 /// `abs x`, `norm x`: the absolute value (card g-1pvQ: norm is a synonym)
 /// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x`
 pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("norm", Op::Abs)];
+/// Operator words that stay operators before a colon: `if c then: a else: b`, `defp f(x), do: x`
+const BLOCK_COLON_WORDS: [&str; 3] = ["then", "else", "do"];
 
 impl WaspParser {
 	/// Check if current character can start an atom (for implicit application)
@@ -83,12 +85,23 @@ impl WaspParser {
 			|| ch == '"' || ch == '\'' || ch == ',' || ch == '«'
 	}
 
+	/// `{from:1 to:2}`: an operator word directly before a key colon names the key; `else:` and `then:` open blocks
+	fn word_names_key(&self) -> bool {
+		let word: String = (0..).map(|offset| self.peek_char(offset)).take_while(|&c| is_identifier_char(c)).collect();
+		let after = word.chars().count();
+		!word.is_empty() && !BLOCK_COLON_WORDS.contains(&word.as_str())
+			&& self.peek_char(after) == ':' && !matches!(self.peek_char(after + 1), ':' | '=')
+	}
+
 	/// Peek ahead for an infix operator, returns (Op, chars_to_consume) if found
 	/// Checks longer operators first (greedy matching)
 	pub(super) fn peek_operator(&self) -> Option<(Op, usize)> {
 		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
 		if (c1, c2) == ('?', ':') {
 			return None; // the elvis `?:` is no ternary, `try_parse_elvis` takes it
+		}
+		if self.word_names_key() {
+			return None;
 		}
 
 		if let Some(word) = SIMILARITY_WORDS.iter().find(|word| self.matches_keyword(word)) {
@@ -163,6 +176,9 @@ impl WaspParser {
 		// Kotlin's `for i in 0 until n`; elsewhere `until` guards a statement: `i++ until c`
 		if self.in_for_header && self.matches_keyword("until") { return Some((Op::Range, 5)); }
 
+		if self.in_style_sheet && matches!(c1, '.' | '#') && self.prev_char().is_whitespace() && self.is_identifier_start(1) {
+			return None; // `#main .x`: the descendant selector's next part
+		}
 		// 1-char operators
 		match c1 {
 			':' => Some((Op::Colon, 1)),
@@ -313,7 +329,7 @@ impl WaspParser {
 		let blanks = |from: usize| (from..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
 		let word_start = AND_KEYWORD.len() + blanks(AND_KEYWORD.len());
 		let word = self.word_at(word_start);
-		if word.is_empty() || CONTINUING_WORDS.contains(&word.as_str()) || !self.peek_char(word_start).is_alphabetic() {
+		if word.is_empty() || CONTINUING_WORDS.contains(&word.as_str()) || OPERAND_PREFIX_WORDS.contains(&word.as_str()) || !self.peek_char(word_start).is_alphabetic() {
 			return false;
 		}
 		let word_end = word_start + word.chars().count();

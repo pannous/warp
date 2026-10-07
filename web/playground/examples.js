@@ -1,6 +1,11 @@
 // The tour, from basics to wow: each example's first line says what it shows; `value` is what the page shows for it,
 // `printed` what it prints (test_in_browser.py --examples checks both in the page, so a broken example fails CI;
-// `wait`: milliseconds of timers and listeners before checking). samples.js (made by build.sh) adds samples/*.wasp.
+// `wait`: milliseconds of timers and listeners before checking; `clicks`: the shown buttons, by text, clicked after
+// that, `clicked` the value then and `kept` that every element shown stays: only its text and attributes change;
+// `keyed` that every element with a key keeps it: a list item's element moves with its item; `typed`: the text typed
+// into the first input before the clicks; `animated` that the clicks started an animation; `clickedPrinted`: all
+// printed text after the clicks).
+// samples.js (made by build.sh) adds samples/*.wasp.
 const EXAMPLES = {
 	welcome: { value: '[[1 4 9] 3 "reading"]', printed: "Alice turns 42\n", code: `// wasp is data and code in one notation, compiled to WebAssembly as you type: edit me
 alice = { name: "Alice" age: 30 hobbies: ["reading" "hiking" "coding"] }
@@ -12,6 +17,50 @@ alice.age = 42
 	data: { value: '"hiking"', code: `// wasp is a data notation first: this object is a value, and code reads it
 alice = { name: "Alice" age: 30 hobbies: ["reading" "hiking" "coding"] }
 alice.hobbies#2` },
+	markup: { value: 'div{h2:"Alice" p:"30 years, likes:" ul{li:"reading" li:"hiking"}}', code: `// markup is wasp data too: a value made of HTML tags shows as a page (warp prints it as HTML)
+div{ h2{ "Alice" } p{ "30 years, likes:" } ul{ li{ "reading" } li{ "hiking" } } }` },
+	"element events": { value: 'div{button{data-wasp-click:"1" "+1"} button{data-wasp-click:"2" "reset"} p:"count: 0"}', code: `// handlers on elements: click the buttons, the page shows the markup anew
+count = 0
+div{ button{ on click { count += 1 } "+1" } button{ on click { count = 0 } "reset" } p{ "count: " + count } }` },
+	"fine updates": { value: 'div{button{data-wasp-click:"1" "toggle"} p{class:"open" "state"} ul:li:"toggled 0 times"}', clicks: ["toggle", "toggle", "toggle"], clicked: 'div{button{data-wasp-click:"1" "toggle"} p{class:"done" "state"} ul:li:"toggled 3 times"}', kept: true, code: `// after a handler only what changed changes on the page: this p keeps its element, only its class flips
+done = false
+toggles = 0
+div{ button{ on click { done = not done; toggles += 1 } "toggle" } p{ class: done ? "done" : "open" "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
+	components: { value: 'div{div{button{data-wasp-instance:1 data-wasp-click:"1" \'+\'} p:"Apples: 1"} div{button{data-wasp-instance:2 data-wasp-click:"1" \'+\'} p:"Pears: 5"}}', clicks: ["+"], clicked: 'div{div{button{data-wasp-instance:1 data-wasp-click:"1" \'+\'} p:"Apples: 2"} div{button{data-wasp-instance:2 data-wasp-click:"1" \'+\'} p:"Pears: 5"}}', kept: true, code: `// a component is a function returning markup; each one on the page keeps its own count
+def Counter(label, start) {
+	count = start
+	div{ button{ on click { count += 1 } "+" } p{ label + ": " + count } }
+}
+div{ Counter("Apples", 1) Counter("Pears", 5) }` },
+	cleanup: { value: 'div{button{data-wasp-click:"1" "hide pears"} span:"apples " [span:"pears "]}', printed: "hello apples\nhello pears\n", clicks: ["hide pears"], clicked: 'div{button{data-wasp-click:"1" "hide pears"} span:"apples " [ø]}', clickedPrinted: "hello apples\nhello pears\nbye pears\n", code: `// on mount runs when a component first shows, on cleanup when it leaves the page
+def Fruit(label) {
+	name = label
+	on mount { print "hello " + name }
+	on cleanup { print "bye " + name }
+	span{ name + " " }
+}
+pears = true
+div{ button{ on click { pears = false } "hide pears" } Fruit("apples") (if pears then Fruit("pears") else []) }` },
+	"keyed list": { value: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:1 "milk"} li{key:2 "eggs"} li{key:3 "tea"}]]}', clicks: ["rotate"], clicked: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:2 "eggs"} li{key:3 "tea"} li{key:1 "milk"}]]}', kept: true, keyed: true, code: `// a list in markup: with a key, each item keeps its element when the list changes (it moves, nothing is rewritten)
+todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
+div{ button{ on click { todos = todos[1..] + [todos#1] } "rotate" } ul{ [li{ key: todo.id todo.text } for todo in todos] } }` },
+	transitions: { value: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:1 data-wasp-transition:"fade 150ms" "milk"} li{key:2 data-wasp-transition:"fade 150ms" "eggs"} li{key:3 data-wasp-transition:"fade 150ms" "tea"}]]}', clicks: ["rotate", "remove"], clicked: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:3 data-wasp-transition:"fade 150ms" "tea"} li{key:1 data-wasp-transition:"fade 150ms" "milk"}]]}', keyed: true, animated: true, code: `// transitions are data: a removed item fades out, the others glide to their new places
+todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
+div{
+	button{ on click { todos = todos[1..] + [todos#1] } "rotate" }
+	button{ on click { todos = todos[1..] } "remove" }
+	ul{ [li{ key: todo.id transition: fade 150ms todo.text } for todo in todos] }
+}` },
+	"form binding": { value: 'div{label{"Name " input{value:"Ann" data-wasp-input:"1"}} p:"Hello Ann"}', typed: "Bob", clicked: 'div{label{"Name " input{value:"Bob" data-wasp-input:"1"}} p:"Hello Bob"}', kept: true, code: `// bind: ties a field to a variable both ways: type a name, the greeting follows
+name = "Ann"
+div{ label{ "Name " input{ bind: name } } p{ "Hello " + name } }` },
+	styles: { value: 'div{style:.card{padding:8 border:"1px solid gray"} button{data-wasp-click:"1" "dark"} p{class:"card" style{color:"black" background:"white"} "a themed card"}}', clicks: ["dark"], clicked: 'div{style:.card{padding:8 border:"1px solid gray"} button{data-wasp-click:"1" "dark"} p{class:"card" style{color:"white" background:"black"} "a themed card"}}', kept: true, code: `// styles are wasp data: a style sheet of rules, an inline style of properties; values may read variables
+dark = false
+div{
+	style{ ".card": { padding: 8 border: "1px solid gray" } }
+	button{ on click { dark = not dark } "dark" }
+	p{ class: "card" style: { color: dark ? "white" : "black" background: dark ? "black" : "white" } "a themed card" }
+}` },
 	functions: { value: "25", code: `// a function, called with or without parentheses
 def square(x) = x*x
 square(4) + square 3` },
@@ -89,6 +138,26 @@ ticks = 0
 on every 1 second { ticks += 1; if ticks <= 3 { print "tick " + ticks } }
 at 9:00 { print "good morning" }
 ticks` },
+	animation: { value: '"done"', canvases: 1, code: `// an animation: a show() after a sleep is the next frame, drawn in place of the last one
+use draw
+canvas(32, 16)
+for x in 0..32 {
+  clear(paper)
+  circle(x, 8, 4, orange)
+  show()
+  sleep(30)
+}
+"done"` },
+	mouse: { value: '"done"', canvases: 1, code: `// move the mouse over the canvas: the dot follows it, red while a button is down (for six seconds)
+use draw
+canvas(48, 24)
+for frame in 0..200 {
+  clear(paper)
+  circle(mouse_x, mouse_y, 3, if mouse_down then red else blue)
+  show()
+  sleep(30)
+}
+"done"` },
 	"game of life": { value: "15", wait: 1200, code: `// Conway's Game of Life, live: a step every half second on the canvas; three gliders keep 15 cells alive
 width = 24
 height = 12

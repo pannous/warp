@@ -25,6 +25,18 @@ extern "C" {
 	fn exp(x: f64) -> f64;
 	fn log(x: f64) -> f64;
 	fn log10(x: f64) -> f64;
+	fn asin(x: f64) -> f64;
+	fn acos(x: f64) -> f64;
+	fn atan(x: f64) -> f64;
+	fn atan2(y: f64, x: f64) -> f64;
+	fn sinh(x: f64) -> f64;
+	fn cosh(x: f64) -> f64;
+	fn tanh(x: f64) -> f64;
+	fn hypot(x: f64, y: f64) -> f64;
+	fn log2(x: f64) -> f64;
+	fn trunc(x: f64) -> f64;
+	fn log1p(x: f64) -> f64;
+	fn expm1(x: f64) -> f64;
 
 	// libc functions
 	fn abs(x: i32) -> i32;
@@ -41,9 +53,10 @@ extern "C" {
 /// the header-driven path (get_signatures_from_headers + link_dynamic_library) does by reflection; keep the table.
 /// link_libm uses it only when the headers declare nothing for "m" (glibc's __MATHCALL macros): headers first.
 #[cfg(feature = "native")]
-const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 11] = [("fabs", fabs), ("floor", floor), ("ceil", ceil), ("round", round), ("sqrt", sqrt), ("sin", sin), ("cos", cos), ("tan", tan), ("exp", exp), ("log", log), ("log10", log10)];
+const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 21] = [("fabs", fabs), ("floor", floor), ("ceil", ceil), ("round", round), ("sqrt", sqrt), ("sin", sin), ("cos", cos), ("tan", tan), ("exp", exp), ("log", log), ("log10", log10),
+	("asin", asin), ("acos", acos), ("atan", atan), ("sinh", sinh), ("cosh", cosh), ("tanh", tanh), ("log2", log2), ("trunc", trunc), ("log1p", log1p), ("expm1", expm1)];
 #[cfg(feature = "native")]
-const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 4] = [("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow)];
+const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 6] = [("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow), ("atan2", atan2), ("hypot", hypot)];
 
 #[cfg(feature = "native")]
 pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
@@ -784,14 +797,10 @@ fn create_generic_ffi_wrapper(
 ) -> Result<()> {
     let param_types = param_types.to_vec();
 
-    // For generic case, we pack all args into an array and use assembly/platform-specific calling
-    // This is a simplified version that handles up to 8 args (enough for most APIs)
     linker.func_new(lib_name, func_name, func_type, move |mut caller, params, results| {
         let args = native_arguments(&mut caller, "", params, &param_types, &mut 0)?;
 
-        // Call using platform-specific calling convention
-        // ARM64 and x86_64 use similar conventions for first 8 integer/pointer args
-        let ret = unsafe { call_native_function(func_ptr, &args, params.len()) };
+        let ret = unsafe { call_native_function(func_ptr, &args, ret_type) };
 
         if let Some(result) = results.first_mut() {
             *result = native_result(ret, ret_type);
@@ -803,31 +812,50 @@ fn create_generic_ffi_wrapper(
     Ok(())
 }
 
-/// The raw arguments of a native call (up to 8), one per C parameter: numbers as they are, a memory pointer as the
-/// address of its text in linear memory, a handle id as its C pointer; the first out-pointer gets `out_slot`, others NULL
+/// The raw arguments of a native call: up to 8 integers and pointers, and up to 8 floats, each kind in the order of the
+/// C parameters (the ARM64 and x86-64 conventions give them separate registers: `ldexp(double, int)` takes d0 and x0)
 #[cfg(feature = "native")]
-fn native_arguments(caller: &mut wasmtime::Caller<'_, FfiState>, name: &str, params: &[Val], param_types: &[ParamType], out_slot: &mut usize) -> wasmtime::Result<[u64; 8]> {
-    let mut args: [u64; 8] = [0; 8];
+#[derive(Default)]
+struct NativeArguments {
+    integers: [u64; 8],
+    floats: [f64; 8],
+}
+
+/// The arguments of a native call, one per C parameter: numbers as they are (a `float` in the low half of its
+/// register), a memory pointer as the address of its text in linear memory, a handle id as its C pointer; the first
+/// out-pointer gets `out_slot`, others NULL
+#[cfg(feature = "native")]
+fn native_arguments(caller: &mut wasmtime::Caller<'_, FfiState>, name: &str, params: &[Val], param_types: &[ParamType], out_slot: &mut usize) -> wasmtime::Result<NativeArguments> {
+    let mut args = NativeArguments::default();
+    let (mut integer, mut float) = (0, 0);
     let mut wasp_params = params.iter();
     let mut out_slot = Some(out_slot);
-    for (i, ptype) in param_types.iter().enumerate().take(8) {
-        if *ptype == ParamType::Out {
-            args[i] = out_slot.take().map_or(0, |slot| slot as *mut usize as u64);
-            continue;
-        }
-        let Some(param) = wasp_params.next() else { break };
-        args[i] = match ptype {
-            ParamType::I32 => param.unwrap_i32() as u64,
-            ParamType::I64 => param.unwrap_i64() as u64,
-            ParamType::F32 => (param.unwrap_f32() as f64).to_bits(),
-            ParamType::F64 => warp_runtime::floats::canonical_nan(param.unwrap_f64()).to_bits(),
-            ParamType::Ptr => get_memory_ptr(caller, param.unwrap_i32() as usize) as u64,
-            ParamType::Handle => {
-                let id = param.unwrap_i32();
-                caller.data().c_handles.pointer(id).ok_or_else(|| wasmtime::Error::msg(format!("{name}: {id} is no C handle of this run")))? as u64
+    for ptype in param_types {
+        let value = if *ptype == ParamType::Out {
+            Some(out_slot.take().map_or(0, |slot| slot as *mut usize as u64))
+        } else {
+            let Some(param) = wasp_params.next() else { break };
+            match ptype {
+                ParamType::I32 => Some(param.unwrap_i32() as u64),
+                ParamType::I64 => Some(param.unwrap_i64() as u64),
+                ParamType::Ptr => Some(get_memory_ptr(caller, param.unwrap_i32() as usize) as u64),
+                ParamType::Handle => {
+                    let id = param.unwrap_i32();
+                    Some(caller.data().c_handles.pointer(id).ok_or_else(|| wasmtime::Error::msg(format!("{name}: {id} is no C handle of this run")))? as u64)
+                }
+                ParamType::F32 | ParamType::F64 => {
+                    let bits = if *ptype == ParamType::F32 { param.unwrap_f32().to_bits() as u64 } else { warp_runtime::floats::canonical_nan(param.unwrap_f64()).to_bits() };
+                    *args.floats.get_mut(float).ok_or_else(|| wasmtime::Error::msg(format!("{name}: more than 8 float parameters")))? = f64::from_bits(bits);
+                    float += 1;
+                    None
+                }
+                ParamType::Out => unreachable!("out-pointers are filled above"),
             }
-            ParamType::Out => unreachable!("out-pointers are filled above"),
         };
+        if let Some(value) = value {
+            *args.integers.get_mut(integer).ok_or_else(|| wasmtime::Error::msg(format!("{name}: more than 8 integer or pointer parameters")))? = value;
+            integer += 1;
+        }
     }
     Ok(args)
 }
@@ -884,7 +912,7 @@ fn create_pointer_wrapper(linker: &mut Linker<FfiState>, lib_name: &str, func_ty
     linker.func_new(lib_name, &name, func_type, move |mut caller, params, results| {
         let mut out_slot: usize = 0;
         let args = native_arguments(&mut caller, &call.name, params, &call.param_types, &mut out_slot)?;
-        let returned = unsafe { call_native_function(call.func_ptr, &args, call.param_types.len()) };
+        let returned = unsafe { call_native_function(call.func_ptr, &args, call.ret_type) };
         if let Some(pointee) = &call.out_pointee {
             if out_slot == 0 {
                 return Err(wasmtime::Error::msg(format!("{} gave no {pointee} (C status {})", call.name, returned as i32)));
@@ -913,7 +941,7 @@ fn native_result(returned: u64, ret_type: RetType) -> Val {
     match ret_type {
         RetType::Void | RetType::I32 => Val::I32(returned as i32),
         RetType::I64 => Val::I64(returned as i64),
-        RetType::F32 => Val::F32((returned as f32).to_bits()),
+        RetType::F32 => Val::F32(returned as u32), // the low half of the float register
         RetType::F64 => Val::F64(returned),
         RetType::Bool => Val::I32(if returned != 0 { 1 } else { 0 }),
     }
@@ -947,49 +975,18 @@ fn get_memory_ptr(caller: &mut wasmtime::Caller<'_, FfiState>, offset: usize) ->
     }
 }
 
-/// Call native function with up to 8 arguments
-/// Uses platform calling convention (ARM64/x86_64)
+/// Call a native function with its integer and float arguments in their registers: a C function reads only the ones
+/// its parameters name. Its result: the integer register, or the bits of the float register for a float result
 #[cfg(feature = "native")]
 #[inline(never)]
-unsafe fn call_native_function(func_ptr: usize, args: &[u64; 8], arg_count: usize) -> u64 {
-    // Cast to function pointer type based on arg count
-    // Both ARM64 and x86_64 pass first 6-8 integer args in registers
-    match arg_count {
-        0 => {
-            let f: extern "C" fn() -> u64 = std::mem::transmute(func_ptr);
-            f()
-        }
-        1 => {
-            let f: extern "C" fn(u64) -> u64 = std::mem::transmute(func_ptr);
-            f(args[0])
-        }
-        2 => {
-            let f: extern "C" fn(u64, u64) -> u64 = std::mem::transmute(func_ptr);
-            f(args[0], args[1])
-        }
-        3 => {
-            let f: extern "C" fn(u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
-            f(args[0], args[1], args[2])
-        }
-        4 => {
-            let f: extern "C" fn(u64, u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
-            f(args[0], args[1], args[2], args[3])
-        }
-        5 => {
-            let f: extern "C" fn(u64, u64, u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
-            f(args[0], args[1], args[2], args[3], args[4])
-        }
-        6 => {
-            let f: extern "C" fn(u64, u64, u64, u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
-            f(args[0], args[1], args[2], args[3], args[4], args[5])
-        }
-        7 => {
-            let f: extern "C" fn(u64, u64, u64, u64, u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
-            f(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
-        }
-        _ => {
-            let f: extern "C" fn(u64, u64, u64, u64, u64, u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
-            f(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7])
-        }
+unsafe fn call_native_function(func_ptr: usize, args: &NativeArguments, ret_type: RetType) -> u64 {
+    let [i0, i1, i2, i3, i4, i5, i6, i7] = args.integers;
+    let [f0, f1, f2, f3, f4, f5, f6, f7] = args.floats;
+    if matches!(ret_type, RetType::F32 | RetType::F64) {
+        let f: extern "C" fn(u64, u64, u64, u64, u64, u64, u64, u64, f64, f64, f64, f64, f64, f64, f64, f64) -> f64 = std::mem::transmute(func_ptr);
+        f(i0, i1, i2, i3, i4, i5, i6, i7, f0, f1, f2, f3, f4, f5, f6, f7).to_bits()
+    } else {
+        let f: extern "C" fn(u64, u64, u64, u64, u64, u64, u64, u64, f64, f64, f64, f64, f64, f64, f64, f64) -> u64 = std::mem::transmute(func_ptr);
+        f(i0, i1, i2, i3, i4, i5, i6, i7, f0, f1, f2, f3, f4, f5, f6, f7)
     }
 }

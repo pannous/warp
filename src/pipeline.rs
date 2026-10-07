@@ -27,6 +27,9 @@ pub fn eval(code: &str) -> Node {
 }
 
 fn eval_source(code: &str) -> Node {
+	if let Some(outcome) = crate::page_tests::answer(code) {
+		return outcome;
+	}
 	crate::diagnostic::begin_program(); // only the guesses made for this program explain its errors
 	match lawful_program(code) {
 		Ok(program) => {
@@ -105,6 +108,40 @@ fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnO
 	result
 }
 
+thread_local! {
+	/// whether the program compiled on this thread is for a page (`warp build --site`), where page events happen
+	static FOR_A_PAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
+	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// `run` with `flag` set on this thread
+fn with_flag<T>(flag: &'static std::thread::LocalKey<std::cell::Cell<bool>>, run: impl FnOnce() -> T) -> T {
+	let before = flag.with(|set| set.replace(true));
+	let result = run();
+	flag.with(|set| set.set(before));
+	result
+}
+
+/// `run` compiling a program for a page: its page event handlers are expected, not warned about
+pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_A_PAGE, run)
+}
+
+/// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
+pub fn is_for_a_page() -> bool {
+	FOR_A_PAGE.with(|page| page.get())
+}
+
+/// `run` compiling a program for `warp dev`: the main-level variables it changes are kept (lowering/stored_values.rs)
+pub fn for_dev<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_DEV, run)
+}
+
+pub fn is_for_dev() -> bool {
+	FOR_DEV.with(|dev| dev.get())
+}
+
 /// A compiled program and the host capabilities its imports need.
 #[cfg_attr(not(feature = "native"), allow(dead_code))] // the browser host links every import itself
 #[derive(Clone)]
@@ -117,11 +154,15 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 59] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 72] = [
+	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
+	crate::component_worlds::lower,
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
 	crate::channel_words::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
+	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
+	crate::late_binding::split_global_assignments,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
 	crate::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
@@ -130,15 +171,23 @@ const SOURCE_PASSES: [fn(Node) -> Node; 59] = [
 	crate::references::lower,
 	// `serve 8080 { get "/" {…} }`: route functions and the serving call (serve.rs), before any pass reads `get` as a call
 	crate::serve::lower,
+	// `.card { padding: 8px }` in a style block: the selector and the length as texts (style_rules.rs), before markup_tags
+	// reads `p.note{…}` as a tag
+	crate::style_rules::lower,
 	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
 	// reads it as a call
 	crate::markup_tags::lower,
+	// `li{ transition: fade 200ms }`: words as data, the attribute data-wasp-transition (transitions.rs), before any pass
+	// reads fade as a variable
+	crate::transitions::lower,
 	// `root` is sqrt (word_operators.rs), before pipes.rs reads `2|square|root`
 	crate::word_operators::lower,
 	// `x | f` (pipes.rs) before any pass reads the or
 	crate::pipes::lower,
 	// the classes of used modules (`use shapes`, `use collections`) before class_methods lowers them with the program's
 	crate::modules::insert_module_classes,
+	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
+	crate::type_aliases::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::traits::lower_trait_parameters,
 	// methods in a class body become functions over the class before any pass reads the body as fields
@@ -146,11 +195,13 @@ const SOURCE_PASSES: [fn(Node) -> Node; 59] = [
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
 	crate::foreign_modules::lower,
 	crate::phrase_calls::lower,
-	crate::std_aliases::lower, crate::welcome_forms::lower, crate::analyzer::lower_kebab_members, crate::number_keys::lower,
+	crate::std_aliases::lower, crate::class_methods::lower_json_classes, crate::welcome_forms::lower, crate::analyzer::lower_kebab_members, crate::number_keys::lower,
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)
 	crate::object_groups::lower,
-	crate::units::lower_sleep_durations, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::system_signals::lower, crate::event_signals::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
-	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases, crate::modules::resolve,
+	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
+	crate::page_html::use_markup, crate::modules::resolve,
+	crate::units::lower_sleep_durations, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,
+	crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
 	crate::getters::lower,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
@@ -190,6 +241,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());
 	}
+	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
 	let node = run_passes(node, &SOURCE_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());

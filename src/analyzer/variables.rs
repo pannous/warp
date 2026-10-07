@@ -168,6 +168,10 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 		Node::Key(left, _, right) => {
 			collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
 		}
+		// a group of statements in a structure is code: `ul{ (made = ø; for … ; made) }`, a lowered `[li{t} for t in ts]`
+		Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => {
+			items.iter().map(|item| collect_variables_inner(item, scope, false, false)).sum()
+		}
 		Node::List(items, _, _) => {
 			items.iter().map(|item| collect_variables_inner(item, scope, false, in_structure)).sum()
 		}
@@ -206,10 +210,15 @@ pub(super) fn widen_element_type(scope: &mut Scope, list: &Node, value: &Node) {
 }
 
 /// An exact variable that is later assigned an f64 (`x=10; x=floor(2.5)` with libm's floor) holds an f64 throughout,
-/// as an expression mixing in an f64 is one; a declared type is kept (and checked elsewhere)
+/// as an expression mixing in an f64 is one; a declared type is kept (and checked elsewhere). A global too: `b = 0.5`
+/// changed by a function's `global b; b = b + random()`
 pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 	let float_value = infer_type(value, scope).is_float();
-	if let Some(local) = scope.locals.get_mut(name).filter(|local| local.kind == Kind::Int && local.type_node.is_none()) {
+	let binding = match scope.locals.contains_key(name) {
+		true => scope.locals.get_mut(name),
+		false => scope.globals.get_mut(name),
+	};
+	if let Some(local) = binding.filter(|local| local.kind == Kind::Int && local.type_node.is_none()) {
 		if float_value {
 			local.kind = Kind::Float;
 		}
@@ -368,7 +377,8 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 	let blocks = block_function_names(&program);
 	let mut outside_blocks = Scope::new(); // a variable a block binds for itself is no outer variable
 	collect_variables(&without_block_bodies(program.clone(), &blocks), &mut outside_blocks);
-	for function in functions {
+	// a used module's functions never see the program's variables (card module-locals)
+	for function in functions.into_iter().filter(|function| !crate::modules::is_module_definition(&function.name)) {
 		let is_main_variable = |name: &String| main.lookup(name).is_some() && !main.is_global(name)
 			&& !function.params.iter().any(|param| param.name == *name) && !declares_local(&function.body, name);
 		let mut decided: HashSet<&String> = HashSet::new();

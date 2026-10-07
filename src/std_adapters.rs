@@ -24,6 +24,11 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			Ok(crate::foreign::node_of(&parsed))
 		}
 		("json", "to_json", [value]) => Ok(Node::Text(crate::foreign::json_of(value).to_string())),
+		// an instance of one of the program's classes is its fields: `{"Point": {"x": 1}}` is `{"x": 1}` (as host.js)
+		("json", "to_json", [value, classes]) => {
+			let classes: Vec<String> = classes.children().iter().filter_map(|class| text_of(class).ok()).collect();
+			Ok(Node::Text(without_class_tags(crate::foreign::json_of(value), &classes).to_string()))
+		}
 		("file", "write", [path, text]) => std::fs::write(text_of(path)?, content_of(text)?).map(|_| Node::Empty).map_err(|problem| failure(problem.to_string())),
 		("file", "append", [path, text]) => {
 			use std::io::Write;
@@ -55,8 +60,52 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		}
 		("net", "post", [url, body]) => crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, crate::host::FETCH_TIMEOUT).map(Node::Text).map_err(failure),
 		("os", "env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
+		// `stored theme = "dark"` (lowering/stored_values.rs): the value kept under its name, or the default
+		("store", "load", [name, default, file]) => {
+			let kept = stored_values(&text_of(file)?).map_err(failure)?.remove(&text_of(name)?);
+			Ok(kept.map_or_else(|| default.clone(), |value| crate::foreign::node_of(&value)))
+		}
+		("store", "save", [name, value, file]) => {
+			let file = text_of(file)?;
+			let mut values = stored_values(&file).map_err(failure)?;
+			values.insert(text_of(name)?, crate::foreign::json_of(value));
+			save_stored_values(&file, values).map(|_| Node::Empty).map_err(failure)
+		}
 		_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
 	}
+}
+
+type StoredValues = serde_json::Map<String, serde_json::Value>;
+
+thread_local! {
+	/// The stored values of a program run without a file (`warp eval`, tests): kept while the process runs
+	static UNFILED_STORE: std::cell::RefCell<StoredValues> = std::cell::RefCell::new(StoredValues::new());
+}
+
+/// Values kept in memory: of a program without a file, and those a `warp dev` page keeps itself (its sessionStorage)
+fn is_unfiled(file: &str) -> bool {
+	file.is_empty() || file == crate::stored_values::DEV_STORE
+}
+
+/// The stored values in the program's store file (a JSON object by name), none when it does not exist yet
+fn stored_values(file: &str) -> Result<StoredValues, String> {
+	if is_unfiled(file) {
+		return Ok(UNFILED_STORE.with(|store| store.borrow().clone()));
+	}
+	match std::fs::read_to_string(file) {
+		Ok(text) => serde_json::from_str(&text).map_err(|problem| format!("{file} holds no stored values: {problem}")),
+		Err(problem) if problem.kind() == std::io::ErrorKind::NotFound => Ok(StoredValues::new()),
+		Err(problem) => Err(format!("{file}: {problem}")),
+	}
+}
+
+fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
+	if is_unfiled(file) {
+		UNFILED_STORE.with(|store| *store.borrow_mut() = values);
+		return Ok(());
+	}
+	let text = serde_json::to_string_pretty(&values).map_err(|problem| problem.to_string())?;
+	std::fs::write(file, text).map_err(|problem| format!("{file}: {problem}"))
 }
 
 /// A list of texts
@@ -89,5 +138,18 @@ fn arguments_of(arguments: &Node) -> Vec<Node> {
 		Node::List(items, _, _) => items.clone(),
 		Node::Empty => vec![],
 		single => vec![single.clone()],
+	}
+}
+
+/// The json with each object `{"Point": {…}}` of a class named in `classes` as its fields `{…}`
+fn without_class_tags(value: serde_json::Value, classes: &[String]) -> serde_json::Value {
+	use serde_json::Value;
+	match value {
+		Value::Array(items) => Value::Array(items.into_iter().map(|item| without_class_tags(item, classes)).collect()),
+		Value::Object(entries) => match entries.len() == 1 && entries.iter().next().is_some_and(|(key, fields)| classes.contains(key) && fields.is_object()) {
+			true => without_class_tags(entries.into_iter().next().map(|(_, fields)| fields).unwrap_or_default(), classes),
+			false => Value::Object(entries.into_iter().map(|(key, entry)| (key, without_class_tags(entry, classes))).collect()),
+		},
+		other => other,
 	}
 }

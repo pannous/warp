@@ -9,8 +9,9 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, ONLINE, SYSTEM_VALUES};
+use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES};
 
+const NOTIFICATION_TITLE: &str = "wasp";
 const READING_LIFETIME: Duration = Duration::from_secs(1);
 /// Any public address: connecting a UDP socket only asks the routing table
 const INTERNET_ADDRESS: &str = "1.1.1.1:53";
@@ -37,6 +38,7 @@ fn read_now(name: &str) -> Result<i64, String> {
 		ONLINE => Ok(online() as i64),
 		DARK_MODE => dark_mode().map(|dark| dark as i64),
 		CLIPBOARD_COUNT => clipboard_count(),
+		MOUSE_X | MOUSE_Y | MOUSE_DOWN => Err(format!("{name}: the pointer over the playground's canvas; a native run has no canvas")),
 		other => Err(format!("{other} is no system value; known: {}", SYSTEM_VALUES.map(|(name, _)| name).join(", "))),
 	}
 }
@@ -124,6 +126,21 @@ fn clipboard_count() -> Result<i64, String> {
 	let mut hasher = std::collections::hash_map::DefaultHasher::new();
 	clipboard_text()?.hash(&mut hasher);
 	Ok(hasher.finish() as i64)
+}
+
+/// `notify "text"`: a desktop notification, macOS through osascript, Linux notify-send; the text goes as an argument,
+/// so no quoting can break it
+pub fn notify(text: &str) -> Result<(), String> {
+	#[cfg(target_os = "macos")]
+	let shown = std::process::Command::new("osascript")
+		.args(["-e", "on run argv", "-e", &format!("display notification (item 1 of argv) with title \"{NOTIFICATION_TITLE}\""), "-e", "end run", text]).output();
+	#[cfg(not(target_os = "macos"))]
+	let shown = std::process::Command::new("notify-send").args([NOTIFICATION_TITLE, text]).output();
+	match shown {
+		Ok(output) if output.status.success() => Ok(()),
+		Ok(output) => Err(format!("notify: {}", String::from_utf8_lossy(&output.stderr).trim())),
+		Err(problem) => Err(format!("notify: no notifier on this machine ({problem})")),
+	}
 }
 
 /// The clipboard's text: macOS `pbpaste`, Linux `wl-paste` or `xclip`

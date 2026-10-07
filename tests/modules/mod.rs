@@ -2,6 +2,7 @@ mod test_folder_scope;
 mod test_header_search;
 mod test_include;
 mod test_module_classes;
+mod test_module_signals;
 mod test_module_cache;
 mod test_package_pin;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
@@ -19,8 +20,10 @@ mod test_std_time;
 mod test_std_qualified;
 mod test_std_net;
 mod test_std_regex;
+mod test_std_matrix;
 mod test_use_modules;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_versions;
 mod test_wasm_modules;
 mod test_std_aliases;
+mod test_std_named_program; // card cli-std

@@ -58,7 +58,7 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 			"fixes": fixes_json(code, line, column, &hint.fix().into_iter().collect::<Vec<_>>()),
 		})
 	}).collect();
-	json!({
+	let mut report = json!({
 		"value": result.serialize(),
 		"error": is_error,
 		"errors": errors,
@@ -69,7 +69,14 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 		"asks": [], // no Asks any more (every ambiguity is a warning or an error); kept until the page stops reading it
 		"notes": notes.borrow().iter().map(|(topic, _)| topic).collect::<Vec<_>>(),
 		"got_it": notes.borrow().iter().map(|(topic, expression)| json!({"topic": topic, "expression": expression})).collect::<Vec<_>>(),
-	})
+	});
+	report["html"] = html_of(&result); // after the program's diagnostics are taken: the renderer is a program too
+	report
+}
+
+/// Markup the page shows as DOM (card web-dom), rendered by std/markup.wasp
+fn html_of(value: &Node) -> Value {
+	json!(crate::markup::is_markup(value).then(|| crate::markup::to_html(value)))
 }
 
 /// A warning or error for the page: its words, position, "got it" topic and the fixes it offers
@@ -144,6 +151,13 @@ pub fn run_outcome(outcome: &Value) -> Node {
 	}
 	let failure = outcome.get("failure").and_then(Value::as_str).unwrap_or("the page sent no outcome");
 	crate::node::error(&format!("could not run the program: {failure}"))
+}
+
+/// What the page shows after a page event's handler (worker.js showHandled): the value as the compiler writes it, and
+/// its HTML when it is markup (card web-element)
+pub fn shown(outcome: &Value) -> Value {
+	let value = run_outcome(outcome);
+	json!({ "value": value.serialize(), "html": html_of(&value) })
 }
 
 /// The page's run_block (host.js; src/host.rs natively): the block and what it sees as trees (`{block, names, values,
@@ -315,6 +329,9 @@ mod page {
 		pub fn run(wasm: *const u8, length: usize) -> usize;
 		/// Copy the kept outcome JSON to `into`
 		pub fn take(into: *mut u8);
+		/// Run the handler of page event `event` (`click·1`) with `detail` (JSON) in the last run that listens, then read its
+		/// page·value; keep that outcome JSON, returns its length in bytes (headless.rs)
+		pub fn page_event(event: *const u8, event_length: usize, detail: *const u8, detail_length: usize) -> usize;
 		/// Milliseconds since the epoch (Date.now)
 		pub fn now_ms() -> f64;
 		/// A panic message of the compiler, shown instead of a bare `unreachable`
@@ -389,6 +406,18 @@ pub fn run_in_host(wasm: &[u8]) -> Node {
 	}
 }
 
+/// A page event in the embedding host's last listening run: what the page shows after its handler (headless.rs)
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+pub fn page_event_in_host(event: &str, detail: &Value) -> Node {
+	let detail = detail.to_string();
+	let mut outcome = vec![0u8; unsafe { page::page_event(event.as_ptr(), event.len(), detail.as_ptr(), detail.len()) }];
+	unsafe { page::take(outcome.as_mut_ptr()) };
+	match serde_json::from_slice::<Value>(&outcome) {
+		Ok(outcome) => run_outcome(&outcome),
+		Err(problem) => crate::node::error(&format!("could not read the outcome of the page event: {problem}")),
+	}
+}
+
 #[cfg(not(any(target_arch = "wasm32", feature = "native")))]
 pub fn run_in_host(_wasm: &[u8]) -> Node {
 	crate::node::error("this build of warp has no runner: build it with the native feature or run it in web/playground")
@@ -459,7 +488,7 @@ mod exports {
 	#[no_mangle]
 	pub extern "C" fn web_show(outcome: *const u8, outcome_length: usize) -> usize {
 		let outcome = serde_json::from_str::<Value>(text(outcome, outcome_length)).unwrap_or_default();
-		let shown = super::run_outcome(&outcome).serialize().into_bytes();
+		let shown = super::shown(&outcome).to_string().into_bytes();
 		REPORT.with(|kept| {
 			*kept.borrow_mut() = shown;
 			kept.borrow().len()

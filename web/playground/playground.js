@@ -13,7 +13,10 @@ const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
-const PAGE_EVENT = /^on (click|key)$/;
+const STDOUT = 1;
+const NOTIFICATION_TITLE = "wasp";
+// a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
+const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
 // (src/paint.rs shade, std/draw.wasp)
@@ -77,24 +80,62 @@ function startWorker() {
 	worker = new Worker(debugBuild ? `worker.js?compiler=${DEBUG_COMPILER}` : "worker.js");
 	workerReady = new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
+			if (data.type === "notify") data = notification(data.text);
+			if (!data) return;
 			if (data.type === "ready") return resolve();
+			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "failed") return reject(new Error(data.message));
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") pending.listening = data.events;
 			if (data.type === "print") pending.printed.push(data);
-			if (data.type === "paint") pending.paintings.push(data);
+			if (data.type === "sleep") pending.slept = true;
+			if (data.type === "paint") painted(pending, data);
 			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], milliseconds: data.milliseconds });
 		};
 	});
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
 	tellSystemValues();
+	sharePointer();
+	worker.postMessage({ stored: keptValues() });
+}
+
+// `notify "text"`: the browser's notification once the page may show them; until then (or when refused) a printed
+// line, so the text never goes missing; the first one asks for the permission
+function notification(text) {
+	if (globalThis.Notification?.permission === "granted") return void new Notification(NOTIFICATION_TITLE, { body: text });
+	globalThis.Notification?.requestPermission?.();
+	return { type: "print", text: `notification: ${text}\n`, stream: STDOUT };
 }
 
 // the system values a Worker cannot read itself (host.js system_value), sent again when they change
 const darkMode = matchMedia(DARK_MODE_QUERY);
 const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches } });
 darkMode.addEventListener("change", tellSystemValues);
+
+// `loop { …; show(); sleep(16) }`: a paint after a sleep is an animation's next frame, shown at once in place of the
+// last one; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (card drawing-frames)
+function painted(run, painting) {
+	if (!run.slept) return run.paintings.push(painting);
+	run.slept = false;
+	run.animating = true;
+	run.paintings = [painting];
+	showFrame(painting);
+	stopAfterTimeout(run);
+}
+
+function stopAfterTimeout(run) {
+	clearTimeout(run.timer);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`), RUN_TIMEOUT_MS);
+}
+
+// a program that does not stop blocks the worker: replace it
+function stopRun(run, message) {
+	worker.terminate();
+	startWorker();
+	finish(run, { value: message, error: !run.animating, printed: run.printed, paintings: run.paintings,
+		warnings: [], runtime_warnings: [], hints: [], notes: [] });
+}
 
 function finish(run, report) {
 	clearTimeout(run.timer);
@@ -114,12 +155,7 @@ async function runInWorker(code) {
 	await workerReady;
 	return new Promise(resolve => {
 		const run = { id: ++nextRunId, resolve, printed: [], paintings: [] };
-		run.timer = setTimeout(() => {
-			worker.terminate(); // a program that does not stop blocks the worker: replace it
-			startWorker();
-			finish(run, { value: `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`, error: true, printed: run.printed,
-				warnings: [], runtime_warnings: [], hints: [], notes: [] });
-		}, RUN_TIMEOUT_MS);
+		stopAfterTimeout(run);
 		pending = run;
 		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
 	});
@@ -188,6 +224,7 @@ function showReport(report) {
 	const printed = report.printed.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join("");
 	$("printed").textContent = printed;
 	$("printed").hidden = printed === "";
+	showRendered(report.html);
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
 	const notes = report.notes ?? [];
@@ -240,17 +277,40 @@ function paintShade(value) {
 	return [PAINT_INK, PAINT_INK, PAINT_INK];
 }
 
+// a markup value as DOM (std/markup.wasp, card web-dom), in a shadow root so its own style cannot restyle the page.
+// Markup shown anew after a handler changes only the text nodes and attributes that differ (card web-fine): the
+// elements stay, with their focus, input and scroll state.
+function showRendered(html) {
+	const host = $("rendered");
+	host.hidden = !html;
+	const template = document.createElement("template");
+	template.innerHTML = html ?? "";
+	morphChildren(host.shadowRoot ?? host.attachShadow({ mode: "open" }), template.content);
+}
+
 function showPaintings(paintings) {
-	$("paintings").replaceChildren(...paintings.map(({ pixels, width, height }) => {
-		const canvas = element("canvas", { width, height, className: "painting" });
-		canvas.style.width = `${width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(width, height, 1)))}px`;
-		const image = canvas.getContext("2d").createImageData(width, height);
-		for (let index = 0; index < width * height; index++) {
-			image.data.set([...paintShade(pixels[index]), 255], index * 4);
-		}
-		canvas.getContext("2d").putImageData(image, 0, 0);
-		return canvas;
+	$("paintings").replaceChildren(...paintings.map(painting => {
+		const canvas = element("canvas", { width: painting.width, height: painting.height, className: "painting" });
+		canvas.style.width = `${painting.width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(painting.width, painting.height, 1)))}px`;
+		return drawn(canvas, painting);
 	}));
+}
+
+// an animation's next frame drawn into the canvas shown, which keeps the pointer over it; another size is a new canvas
+function showFrame(painting) {
+	const shown = $("paintings").querySelectorAll("canvas");
+	const [canvas] = shown;
+	if (shown.length === 1 && canvas.width === painting.width && canvas.height === painting.height) drawn(canvas, painting);
+	else showPaintings([painting]);
+}
+
+function drawn(canvas, { pixels, width, height }) {
+	const image = canvas.getContext("2d").createImageData(width, height);
+	for (let index = 0; index < width * height; index++) {
+		image.data.set([...paintShade(pixels[index]), 255], index * 4);
+	}
+	canvas.getContext("2d").putImageData(image, 0, 0);
+	return canvas;
 }
 
 // ---- page events (notes/signals.md phase 7): `on click {…}`, `on key {…}` of the program shown --------------------
@@ -272,6 +332,24 @@ function sendPageEvent(event, detail) {
 	if (listening.has(event)) worker.postMessage({ event, detail });
 }
 
+// an event inside the shown markup, for its element's handler (markup.js elementEvent)
+function sendElementEvent(event, happened, detail) {
+	const found = elementEvent(event, happened, detail);
+	if (found) sendPageEvent(found.event, found.detail);
+}
+
+// mouse_x, mouse_y, mouse_down (host.js system_value): the pointer over a canvas in shared memory, which a running
+// animation reads at once (its worker takes no message while it runs); the worker gets the buffer and these names
+const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down"];
+const pointer = globalThis.SharedArrayBuffer ? new Int32Array(new SharedArrayBuffer(POINTER_NAMES.length * Int32Array.BYTES_PER_ELEMENT)) : undefined;
+const sharePointer = () => pointer && worker.postMessage({ pointer: { buffer: pointer.buffer, names: POINTER_NAMES } });
+
+function trackPointer(event) {
+	if (!pointer || !event.target.closest?.("canvas")) return;
+	const { x, y } = clickDetail(event);
+	[x, y, event.buttons & 1].forEach((value, index) => Atomics.store(pointer, index, value));
+}
+
 function clickDetail(click) {
 	const target = click.target.closest("canvas") ?? $("output");
 	const bounds = target.getBoundingClientRect();
@@ -286,15 +364,30 @@ function showEventOutput(data) {
 		$("printed").hidden = false;
 	}
 	if (data.type === "paint") showPaintings([data]);
-	if (data.type === "handled") {
+	if (data.type !== "handled") return;
+	if (data.value !== undefined) {
 		$("value").textContent = data.value;
 		$("value").classList.toggle("error", data.error);
 	}
+	if (data.html !== undefined) showRendered(data.html);
+	(data.patches ?? []).forEach(showPatch);
+}
+
+// one element of the shown markup anew (card web-fine-holes): `path` its element indices from the root down
+function showPatch({ path, html }) {
+	const root = $("rendered").shadowRoot;
+	const shown = path.reduce((element, index) => element?.children[index], root?.children[0]);
+	const template = document.createElement("template");
+	template.innerHTML = html;
+	const wanted = template.content.children[0];
+	if (shown && wanted && shown.nodeName === wanted.nodeName) morphElement(shown, wanted);
+	else console.error(`markup hole ${path.join("·")}: no ${wanted?.nodeName} there to update`, shown);
 }
 
 async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
+		if (pending?.animating) stopRun(pending, "animation stopped");
 		return;
 	}
 	showing = true;
@@ -365,8 +458,12 @@ function initialize() {
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
 	$("run").onclick = runNow;
+	$("rendered").onclick = click => sendElementEvent("click", click, clickDetail(click));
+	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
 	$("output").onclick = click => sendPageEvent("click", clickDetail(click));
 	$("output").onkeydown = key => sendPageEvent("key", { key: key.key });
+	for (const event of ["pointermove", "pointerdown", "pointerup"]) $("output").addEventListener(event, trackPointer);
+	document.addEventListener("pointerup", () => pointer && Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), 0));
 	$("download").onclick = downloadModule;
 	showBuildSwitch();
 	fillExamples();

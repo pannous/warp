@@ -35,7 +35,8 @@ const SCOPE_WORDS: [(&str, Scope); 3] = [("folder", Scope::Folder), ("package", 
 /// Folders a package or project scope never looks into, besides hidden ones and nested repositories
 const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
 const PROJECT_MARKER: &str = ".git";
-const DECLARATION_KEYWORDS: [&str; 5] = ["use", "import", "let", "var", "global"];
+/// `stored x = v` too: a used module's persisted signal is the program's (card web-stores)
+const DECLARATION_KEYWORDS: [&str; 6] = ["use", "import", "let", "var", "global", crate::stored_values::STORED_WORD];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
 	DECLARATION_KEYWORDS.contains(&keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
@@ -48,6 +49,8 @@ pub fn resolve(program: Node) -> Node {
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
+	MODULE_DEFINITIONS.with(|names| names.borrow_mut().clear());
+	let own_names: Vec<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
 	let folder = loader.including_directory.clone();
@@ -58,6 +61,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
 		.map(|program| with_needed_definitions(program, loader.std_definitions));
 	EARLY_CLASS_MODULES.with(|modules| modules.borrow_mut().clear()); // for this program only
+	MODULE_DEFINITIONS.with(|names| own_names.iter().for_each(|own| { names.borrow_mut().remove(own); })); // the program's own word wins
 	resolved.unwrap_or_else(|failure| failure)
 }
 
@@ -169,6 +173,13 @@ thread_local! {
 	static PROGRAM_FILE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
 	/// The modules whose classes insert_module_classes put in front of the program: the loader leaves them out
 	static EARLY_CLASS_MODULES: std::cell::RefCell<HashSet<PathBuf>> = std::cell::RefCell::new(HashSet::new());
+	/// The names a used module defines for the program being compiled: their bodies never see the program's variables
+	static MODULE_DEFINITIONS: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
+}
+
+/// Whether `name` is defined by a module the program uses (`use markup`'s html_element), not by the program
+pub fn is_module_definition(name: &str) -> bool {
+	MODULE_DEFINITIONS.with(|names| names.borrow().contains(name))
 }
 
 /// `path` as written in the program: a relative path is next to the program's file, or in the working directory for
@@ -179,6 +190,11 @@ pub fn beside_program(path: &str) -> String {
 		Some(folder) if Path::new(path).is_relative() => folder.join(path).to_string_lossy().into_owned(),
 		_ => path.to_string(),
 	}
+}
+
+/// The file being compiled, None for inline code
+pub fn program_file() -> Option<PathBuf> {
+	PROGRAM_FILE.with(|current| current.borrow().clone())
 }
 
 /// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
@@ -433,7 +449,11 @@ impl<'a> Loader<'a> {
 		self.including_directory = outer_directory;
 		let statements = statements(module?);
 		Ok(match import {
-			Import::Use => statements.into_iter().filter(is_declaration).collect(),
+			Import::Use => {
+				let declarations: Vec<Node> = statements.into_iter().filter(is_declaration).collect();
+				MODULE_DEFINITIONS.with(|names| names.borrow_mut().extend(declarations.iter().filter_map(declared_name)));
+				declarations
+			}
 			Import::Include => statements,
 		})
 	}
@@ -444,8 +464,11 @@ impl<'a> Loader<'a> {
 		self.find_with(name, &MODULE_EXTENSIONS)
 	}
 
+	/// never the program's own file: hash.wasp saying `use hash` means the standard module
 	fn find_with(&self, name: &str, extensions: &[&str]) -> Option<PathBuf> {
-		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path))
+		let program = program_file().and_then(|file| file.canonicalize().ok());
+		let is_program = |path: &PathBuf| program.is_some() && path.canonicalize().ok() == program;
+		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path) && !is_program(path))
 	}
 
 	fn candidates(&self, name: &str) -> Vec<PathBuf> {
@@ -552,7 +575,8 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 14] = [
+const STD_MODULES: [(&str, &str); 17] = [
+	("memory", include_str!("../std/memory.wasp")),
 	("net", include_str!("../std/net.wasp")),
 	("collections", include_str!("../std/collections.wasp")),
 	("hash", include_str!("../std/hash.wasp")),
@@ -566,7 +590,9 @@ const STD_MODULES: [(&str, &str); 14] = [
 	("random", include_str!("../std/random.wasp")),
 	("map", include_str!("../std/map.wasp")),
 	("time", include_str!("../std/time.wasp")),
+	("matrix", include_str!("../std/matrix.wasp")),
 	("draw", include_str!("../std/draw.wasp")),
+	("markup", include_str!("../std/markup.wasp")),
 ];
 const STD_FOLDER: &str = "std";
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
@@ -596,6 +622,29 @@ pub fn std_module_defining(word: &str) -> Option<&'static str> {
 	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
 	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(declared_name).collect())).collect());
 	defined.iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
+}
+
+/// The texts of a list a standard module assigns at its top: `html_elements = ["html", …]` of markup; empty if missing
+pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
+	let source = std_module(module).unwrap_or_default();
+	statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().find_map(|statement| match statement.drop_meta() {
+		Node::Key(name, Op::Assign, items) if name.drop_meta().name() == list => match items.drop_meta() {
+			// "p" parses as a character
+			Node::List(items, _, _) => Some(items.iter().map(|item| match item.drop_meta() {
+				Node::Char(character) => character.to_string(),
+				other => other.name(),
+			}).collect()),
+			_ => None,
+		},
+		_ => None,
+	}).unwrap_or_default()
+}
+
+/// The file of the program's folder or search directories that `use module` finds before the standard module of
+/// that name (a local file wins)
+pub fn module_file_shadowing(module: &str) -> Option<PathBuf> {
+	let folder = program_file().as_deref().map(folder_of);
+	Loader::new(&SEARCH_DIRECTORIES, folder).find(module)
 }
 
 fn is_builtin_library(name: &str) -> bool {

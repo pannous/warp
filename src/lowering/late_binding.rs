@@ -240,6 +240,8 @@ struct Definition {
 	line: usize,
 	/// `z() := y*y` from `z := y*y` (getters.rs): reads its free variables as they are at each use
 	getter: bool,
+	/// a getter written `z := y*y`, without the parentheses of a function: read like a value
+	bare: bool,
 }
 
 /// A change of a variable: the statement it is in and the assignment
@@ -284,6 +286,26 @@ pub(crate) fn functions_in(statement: &Node) -> Vec<UserFunctionDef> {
 	let mut context = Context::new();
 	crate::analyzer::defined_functions(&mut context, statement);
 	context.user_functions.into_values().collect()
+}
+
+/// `global n = 5` as a statement of a block (a function body) is `global n; n = 5`: n is main's, then set
+/// (card global-function-inside: the passes that read `global n` saw no name and n stayed the function's own)
+pub fn split_global_assignments(node: Node) -> Node {
+	let node = node.map_children(split_global_assignments);
+	let Node::List(items, Bracket::Curly, separator) = node else { return node };
+	let split = |item: Node| match item.drop_meta() {
+		Node::Key(keyword, Op::Colon, assignment) if matches!(keyword.drop_meta(), Node::Symbol(word) if word == GLOBAL) => match assignment.drop_meta() {
+			Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)) => {
+				vec![Node::Key(keyword.clone(), Op::Colon, name.clone()), assignment.as_ref().clone()]
+			}
+			_ => vec![item],
+		},
+		_ => vec![item],
+	};
+	let count = items.len();
+	let items: Vec<Node> = items.into_iter().flat_map(split).collect();
+	let separator = if items.len() > count && separator == Separator::None { Separator::Semicolon } else { separator };
+	Node::List(items, Bracket::Curly, separator)
 }
 
 /// `global y` (no value) as a statement of a function body: the function reads main's current y
@@ -386,10 +408,15 @@ fn note_charging(definition: &Definition, statements: &[Node], main: &Scope, rep
 	}
 	let value = written_text(&function.body);
 	let name = &function.name;
-	let written = if is_def { format!("def {name}(): {value}") } else { format!("{name} := {value}") };
+	let written = match (is_def, definition.bare) {
+		(true, _) => format!("def {name}(): {value}"),
+		(false, true) => format!("{name} := {value}"),
+		(false, false) => format!("{name}() := {value}"),
+	};
 	let pure = report.effects_of(name).is_some_and(|effects| effects.is_pure());
 	if !pure {
-		return match definition.getter {
+		// `w() := random()` says by its parentheses that it runs at every call
+		return match definition.bare {
 			true => warn_effectful_getter(name, &value, &written, statement),
 			false => Ok(()),
 		};
@@ -421,22 +448,24 @@ fn definitions(statements: &[Node]) -> Vec<Definition> {
 	let line_of = |statement: &Node| Diagnostic::at(statement, "").line;
 	statements.iter().enumerate()
 		.flat_map(|(index, statement)| functions_in(statement).into_iter().map(move |function| {
-			let getter = function.params.is_empty() && is_getter_definition(statement, &function.name);
-			Definition { index, function, line: line_of(statement), getter }
+			let getter_left = getter_definition_left(statement, &function.name).filter(|_| function.params.is_empty());
+			let bare = getter_left.is_some_and(crate::getters::is_written_bare);
+			Definition { index, function, line: line_of(statement), getter: getter_left.is_some(), bare }
 		}))
 		.collect()
 }
 
 /// `name() := expr` with expr not in braces, in the statement: a getter, whether written so or as `name := expr` (P71);
-/// `def name(){…}` keeps its braces. An object's getter entry is one of the definitions before the object (blocks.rs)
-fn is_getter_definition(statement: &Node, name: &str) -> bool {
+/// `def name(){…}` keeps its braces. An object's getter entry is one of the definitions before the object (blocks.rs).
+/// Its `name()` as written, with the mark of a bare getter
+fn getter_definition_left<'a>(statement: &'a Node, name: &str) -> Option<&'a Node> {
 	match statement.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Semicolon) => items.iter().any(|item| is_getter_definition(item, name)),
-		Node::Key(left, Op::Define, body) => !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) && match left.drop_meta() {
-			Node::List(items, Bracket::Round, _) => items.len() == 1 && matches!(items[0].drop_meta(), Node::Symbol(head) if head == name),
-			_ => false,
+		Node::List(items, Bracket::None, Separator::Semicolon) => items.iter().find_map(|item| getter_definition_left(item, name)),
+		Node::Key(left, Op::Define, body) if !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => match left.drop_meta() {
+			Node::List(items, Bracket::Round, _) if items.len() == 1 && matches!(items[0].drop_meta(), Node::Symbol(head) if head == name) => Some(left),
+			_ => None,
 		},
-		_ => false,
+		_ => None,
 	}
 }
 

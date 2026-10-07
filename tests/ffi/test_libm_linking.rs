@@ -26,5 +26,5 @@ fn libm_comes_from_the_headers_when_they_declare_it() {
 fn the_table_serves_libm_when_the_headers_declare_nothing() {
 	let (source, found) = linked(&[], &["sin", "pow", "fmin", "hypot"]);
 	assert_eq!(source, LibmSource::Table);
-	assert_eq!(found, [true, true, true, false]);
+	assert_eq!(found, [true, true, true, true]);
 }

@@ -69,3 +69,9 @@ fn a_library_word_method_dispatches_at_run_time() {
 	is!(&format!("{stack}size(x) := x.count(); size(Stack([1])) + size([1, 2, 3])"), 45);
 	is!("class Bag{items:list; sum() := 42}; total(x) := x.sum(); total([1, 2, 3]) + total(Bag([1]))", 48);
 }
+
+#[test]
+fn a_field_in_an_interpolated_text_of_a_method() {
+	is!("class B{n:int; f() := \"#\\(n)\"}; B(3).f()", "#3");
+	is!("class B{n:int; f() := \"${n * 2}!\"}; B(3).f()", "6!");
+}

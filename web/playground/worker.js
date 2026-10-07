@@ -1,7 +1,8 @@
 // The warp compiler (warp.wasm, built by build.sh) and the programs it compiles (host.js), run off the page's thread:
 // a worker may compile any module synchronously and block on a synchronous fetch, which the host calls need.
 
-importScripts("reader.js", "host.js", "components.js");
+importScripts("reader.js", "host.js");
+importScripts(...HOST_PART_FILES, "components.js");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 // warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)
@@ -11,18 +12,28 @@ self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same comp
 let compiler; // the compiler instance's exports
 let live; // the run whose page events are handled (host.js runProgram), until the next run
 const PAGE_VALUE = "page·value";
+const PAGE_HOLE = "page·hole";
+const PATH_JOINER = "·";
+// after a handler that patched holes, the value text waits this long for the next event before it is read whole
+const VALUE_DELAY_MILLISECONDS = 50;
 let panicMessage; // the compiler's last panic message
 
 const post = message => self.postMessage(message);
+self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host.js STD_ADAPTERS.store
 const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
+	sleeping: () => post({ type: "sleep" }),
+	notify: text => post({ type: "notify", text }),
 	listen: (holder, events) => {
 		live = holder;
-		startTimers(holder);
-		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer))] });
+		startTimers(holder, handler => runHandler(holder, handler));
+		const fetches = [...(holder.fetches?.values() ?? [])].map(({ url }) => `fetch ${url}`);
+		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches] });
 	},
+	// a fetch's reply arrived (host.js startFetch): its handler runs like a timer's, and the page shows the outcome
+	arrived: (holder, handler) => holder === live && runHandler(holder, handler),
 	panicked: message => { panicMessage = message; },
 };
 
@@ -90,35 +101,59 @@ function handleEvent({ event, detail }) {
 function showHandled(holder, handled, timer = false) {
 	const binding = holder.exports[PAGE_VALUE];
 	if (timer && !binding && handled.result) return;
+	if (handled.result && binding && showHoles(holder)) return;
 	const outcome = handled.result && binding ? outcomeOf(holder, hooks, binding) : handled;
+	const { value, html } = shownOf(outcome);
+	post({ type: "handled", value, html, error: outcome.result === undefined });
+}
+
+// the value and HTML the compiler shows for a run outcome (src/web.rs shown)
+function shownOf(outcome) {
 	const outcomeText = passText(JSON.stringify(outcome));
 	const length = compiler.web_show(...outcomeText);
-	const value = compilerText(compiler.web_report(), length);
+	const shown = JSON.parse(compilerText(compiler.web_report(), length));
 	compiler.web_free(...outcomeText);
-	post({ type: "handled", value, error: outcome.result === undefined });
+	return shown;
 }
 
-// the run's timers (host.js addTimer), each running its handler until the next run; a failing handler stops them
-function startTimers(holder) {
-	const handles = [];
-	const fire = timer => {
-		const handled = runTimer(holder, hooks, timer.handler);
-		showHandled(holder, handled, true);
-		if (handled.result === undefined) holder.stopTimers();
-	};
-	const atClock = timer => handles.push(setTimeout(() => {
-		fire(timer);
-		if (!timer.once) atClock(timer);
-	}, millisecondsUntil(timer.minute, timer.weekdays)));
-	for (const timer of holder.timers ?? []) {
-		if (timer.every !== undefined) handles.push(setInterval(() => fire(timer), timer.every));
-		else atClock(timer);
+// markup with holes (PAGE_HOLE·<path>, src/lowering/event_signals.rs, card web-fine-holes): only the elements holding
+// computed parts are read, the page gets those whose HTML changed; the whole value follows once the events pause.
+// False when there are none, or one fails (the whole value then shows the error)
+function showHoles(holder) {
+	const holes = Object.keys(holder.exports).filter(name => name.startsWith(PAGE_HOLE + PATH_JOINER));
+	if (!holes.length) return false;
+	holder.holeHtml ??= new Map();
+	const patches = [];
+	for (const name of holes) {
+		const outcome = outcomeOf(holder, hooks, holder.exports[name]);
+		if (outcome.result === undefined) return false;
+		const { html } = shownOf(outcome);
+		if (holder.holeHtml.get(name) === html) continue;
+		holder.holeHtml.set(name, html);
+		patches.push({ path: name.split(PATH_JOINER).slice(PAGE_HOLE.split(PATH_JOINER).length).map(Number), html });
 	}
-	holder.stopTimers = () => handles.forEach(handle => { clearTimeout(handle); clearInterval(handle); });
+	post({ type: "handled", patches });
+	clearTimeout(holder.valueTimer);
+	holder.valueTimer = setTimeout(() => {
+		if (live !== holder) return;
+		const outcome = outcomeOf(holder, hooks, holder.exports[PAGE_VALUE]);
+		post({ type: "handled", value: shownOf(outcome).value, error: outcome.result === undefined });
+	}, VALUE_DELAY_MILLISECONDS);
+	return true;
 }
 
+// a timer's or fetch's handler run and its outcome shown; a failing handler stops the timers
+function runHandler(holder, handler) {
+	const handled = runTimer(holder, hooks, handler);
+	showHandled(holder, handled, true);
+	if (handled.result === undefined) holder.stopTimers();
+}
+
+// the run's timers (host.js addTimer), each running its handler until the next run
 self.onmessage = async ({ data }) => {
+	if (data.pointer) return self.pagePointer = { values: new Int32Array(data.pointer.buffer), names: data.pointer.names }; // host.js system_value
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
+	if (data.stored) return Object.assign(storedValues, data.stored); // host.js STD_ADAPTERS.store
 	await ready;
 	if (data.event) return handleEvent(data);
 	if (live) stopListening(live);

@@ -11,7 +11,8 @@ Besides the repository it serves /__stub__?status=…&body=… (that response, f
 src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
 import functools, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse
 
-PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "8733"))
+# a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
+PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", "2")
 PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
 # one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
@@ -25,6 +26,7 @@ HEADER_NAME = re.compile(r"^[\w.+-]+(/[\w.+-]+)*\.h$")
 RESULTS_PATH = "/__results__"
 LISTING_QUERY = "listing"
 STUB_PATH = "/__stub__"  # answers with the status and body its query names: the fetch tests' HTTP stub (tests/common serve)
+CLICK_MILLISECONDS = 300  # a click's handler runs in the worker and its markup comes back
 ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its service worker
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -94,9 +96,21 @@ def serve(binary):
 			pass
 	class Server(http.server.ThreadingHTTPServer):
 		request_queue_size = 512  # every worker fetches the binary at once
-	server = Server(("127.0.0.1", PORT), functools.partial(Handler, directory=REPOSITORY))
+	global PORT
+	try:
+		server = Server(("127.0.0.1", PORT), functools.partial(Handler, directory=REPOSITORY))
+	except OSError as busy:
+		sys.exit(f"error: port {PORT} (WARP_BROWSER_TEST_PORT) is taken{port_holder(PORT)}: {busy.strerror}; unset it for a free port")
+	PORT = server.server_address[1]
 	threading.Thread(target=server.serve_forever, daemon=True).start()
 	return server
+
+
+def port_holder(port):
+	"""` by PID 123 (python3 …)`: the process listening on the port, as lsof names it"""
+	found = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-Fpc"], capture_output=True, text=True).stdout.split()
+	fields = {line[0]: line[1:] for line in found if line[:1] in ("p", "c")}
+	return f" by PID {fields['p']} ({fields.get('c', '?')})" if "p" in fields else ""
 
 
 def open_page(url):
@@ -127,13 +141,39 @@ def browser(*arguments):
 
 
 def show_example(name):
-	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds"""
+	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
+	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`)"""
 	script = f"""(async () => {{
 		const name = {json.dumps(name)};
 		await playground.chooseExample(name);
 		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
 		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
-		return JSON.stringify({{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent }});
+		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent,
+			canvases: document.querySelectorAll("#paintings canvas").length }};
+		const clicks = EXAMPLES[name].clicks ?? [];
+		const typed = EXAMPLES[name].typed;
+		if (!clicks.length && typed === undefined) return JSON.stringify(shown);
+		const rendered = document.getElementById("rendered").shadowRoot;
+		const elements = [...rendered.querySelectorAll("*")];
+		const keys = elements.map(element => element.getAttribute("data-wasp-key"));
+		const field = rendered.querySelector("input");
+		let animations = 0;
+		const animate = Element.prototype.animate;
+		Element.prototype.animate = function (...options) {{ animations += 1; return animate.apply(this, options); }};
+		if (typed !== undefined && field) {{
+			field.value = typed;
+			field.dispatchEvent(new Event("input", {{ bubbles: true, composed: true }}));
+			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
+		}}
+		for (const text of clicks) {{
+			[...rendered.querySelectorAll("button")].find(button => button.textContent === text)?.click();
+			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
+		}}
+		Element.prototype.animate = animate;
+		const kept = elements.every(element => element.isConnected);
+		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-wasp-key") === keys[index]);
+		const clickedPrinted = document.getElementById("printed").textContent;
+		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0 }});
 	}})()"""
 	shown = browser("eval", script)
 	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
@@ -163,7 +203,7 @@ def check_examples(names, page_url=None):
 	names = names or list(examples)
 	for name in names:
 		expected, shown = examples[name], show_example(name)
-		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed") if part in expected and shown[part] != expected[part]]
+		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated") if part in expected and shown[part] != expected[part]]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
 		if wrong:
 			failures.append(name)

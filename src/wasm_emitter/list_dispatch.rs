@@ -198,19 +198,6 @@ fn zero_fill_parts(value: &Node) -> Option<(&Node, &Node)> {
 	}
 }
 
-/// Whether `body` assigns or updates the variable `name` or its items
-fn assigns(body: &Node, name: &str) -> bool {
-	let mut found = false;
-	body.visit(&mut |part| if let Node::Key(target, op, _) = part {
-		let target = match target.drop_meta() {
-			Node::Key(owner, Op::Hash | Op::Dot, _) => owner.drop_meta(),
-			other => other,
-		};
-		found |= (matches!(op, Op::Assign | Op::Define) || is_update(op)) && matches!(target, Node::Symbol(assigned) if assigned == name);
-	});
-	found
-}
-
 /// `x = (t = x; …; t)`, an inlined call (inlining.rs) handing x back: the temporary t, which may share x's array; only
 /// the inliner's temporaries, which nothing else reads, and only when the block hands back the very variable it got
 fn moved_through(owner: &str, statements: &[Node], last: &Node) -> Option<String> {
@@ -444,7 +431,8 @@ impl WasmGcEmitter {
 	}
 
 	/// The globals (main's variables that functions read, `global` ones) held as typed arrays: what find_typed_lists finds
-	/// for them as main's locals, when no function assigns them, so all their sources are main's
+	/// for them as main's locals, when no function replaces them, so all their sources are main's. A function may write
+	/// their items (`s#i = v`) with values of the element type: `global s = int[n]; def f() { s#i = 1 }` keeps the array
 	pub(super) fn find_typed_globals(&mut self, program: &Node, main: &crate::analyzer::Scope) -> HashMap<String, TypedList> {
 		if main.globals.is_empty() {
 			return HashMap::new();
@@ -454,10 +442,64 @@ impl WasmGcEmitter {
 			as_locals.locals.entry(name.clone()).or_insert_with(|| crate::local::Local { is_param: false, ..global.clone() });
 		}
 		let saved = std::mem::replace(&mut self.scope, as_locals);
-		let found = self.find_typed_lists(program);
+		let main_code = self.without_definitions(program); // function bodies are checked below, each in its own scope
+		let mut found: HashMap<String, TypedList> = self.find_typed_lists(&main_code).into_iter().filter(|(name, _)| main.globals.contains_key(name)).collect();
 		self.scope = saved;
-		let functions: Vec<&Node> = self.ctx.user_functions.values().map(|function| function.body.as_ref()).collect();
-		found.into_iter().filter(|(name, _)| main.globals.contains_key(name) && !functions.iter().any(|body| assigns(body, name))).collect()
+		let function_kinds = self.user_function_kinds();
+		let functions: Vec<_> = self.ctx.user_functions.values().map(|function| (function.params.clone(), function.body.clone())).collect();
+		for (params, body) in functions {
+			let scope = crate::analyzer::function_body_scope(&params, &body, &function_kinds, &main.globals, &self.ctx.closure_variable_targets);
+			let saved = std::mem::replace(&mut self.scope, scope);
+			found.retain(|name, list| !self.replaces(&body, name, list.element) && self.item_writes_fit(&body, name, list));
+			self.scope = saved;
+		}
+		found
+	}
+
+	/// The program's statements without its function definitions and imports
+	fn without_definitions(&self, program: &Node) -> Node {
+		match program.drop_meta() {
+			Node::List(items, bracket, separator) => Node::List(items.iter().filter(|item| !self.is_definition(item)).cloned().collect(), bracket.clone(), separator.clone()),
+			other => other.clone(),
+		}
+	}
+
+	/// Whether `body` assigns or updates the typed list `name` itself or a field of it (`name.x = v`), other than with a
+	/// new array of its element type (`canvas_pixels = int[w * h]`); its items are item_writes_fit's
+	fn replaces(&self, body: &Node, name: &str, element: ElementType) -> bool {
+		let mut found = false;
+		body.visit(&mut |part| if let Node::Key(target, op, value) = part {
+			let target = match target.drop_meta() {
+				Node::Key(owner, Op::Dot, _) => owner.drop_meta(),
+				other => other,
+			};
+			let new_array = *op == Op::Assign && zero_fill_parts(value).is_some_and(|(_, zero)| self.items_element(std::slice::from_ref(zero)) == Some(element));
+			found |= (matches!(op, Op::Assign | Op::Define) || is_update(op)) && !new_array && matches!(target, Node::Symbol(assigned) if assigned == name);
+		});
+		found
+	}
+
+	/// Whether every item write of `body` to the typed list `name` stores a value of its element type at an index (not a
+	/// map key); marks the list updated when there is one
+	fn item_writes_fit(&self, body: &Node, name: &str, list: &mut TypedList) -> bool {
+		let mut fits = true;
+		body.visit(&mut |part| {
+			let Node::Key(target, op, value) = part else { return };
+			let Node::Key(owner, Op::Hash, index) = target.drop_meta() else { return };
+			if !(matches!(op, Op::Assign | Op::Define) || is_update(op)) || !matches!(owner.drop_meta(), Node::Symbol(written) if written == name) {
+				return;
+			}
+			list.updated = true;
+			let assigned = if is_update(op) { Node::Key(target.clone(), op.base_op(), value.clone()) } else { value.as_ref().clone() };
+			let kind = self.get_type(&assigned);
+			let stored = match list.element {
+				ElementType::Float => kind == Kind::Float,
+				ElementType::Int => kind == Kind::Int,
+				ElementType::Node => true,
+			};
+			fits &= stored && self.map_key(index).is_none() && self.dynamic_key(index).is_none();
+		});
+		fits
 	}
 
 	/// The slot and element type of `target` when it is a list variable held as a typed array: a local of the body, else

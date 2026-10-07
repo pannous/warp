@@ -1,0 +1,2 @@
+stored theme = "dark"
+def toggle() { global theme; theme = if theme == "dark" then "light" else "dark" }

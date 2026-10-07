@@ -214,7 +214,8 @@ impl WasmGcEmitter {
 	fn emit_field_value(&mut self, func: &mut Function, class: &str, field_index: usize, value: &Node, kind: Kind) {
 		self.emit_value_of_kind(func, value, kind);
 		let field = self.ctx.type_registry.get_by_name(class).and_then(|type_def| type_def.fields.get(field_index));
-		if field.is_some_and(|field| crate::analyzer::is_whole_type(&field.type_name)) {
+		// an optional int is stored as a Node (ø or the number): no whole check there
+		if kind == Kind::Int && field.is_some_and(|field| crate::analyzer::is_whole_type(&field.type_name)) {
 			self.emit_whole_check(func);
 		}
 	}

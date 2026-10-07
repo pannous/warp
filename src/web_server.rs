@@ -5,12 +5,14 @@
 //! value as JSON (as std json's to_json writes it); no route is 404, a failing route 500 with its message.
 
 use crate::node::Node;
+use crate::site::SiteFile;
 use std::cell::Cell;
 
 const JSON_TYPE: &str = "application/json";
 const TEXT_TYPE: &str = "text/plain; charset=utf-8";
 const NOT_FOUND: u16 = 404;
 const FAILED: u16 = 500;
+const SITE_METHOD: &str = "GET";
 
 thread_local! {
 	/// How many requests this thread's next serve answers before it returns: 0 serves on (tests stop it so)
@@ -20,6 +22,11 @@ thread_local! {
 /// The next serve on this thread returns after `requests` requests (a test's server ends)
 pub fn stop_after(requests: usize) {
 	REQUEST_LIMIT.with(|limit| limit.set(requests));
+}
+
+/// The request limit stop_after set for this serve, 0 serving on; the next serve starts unlimited
+pub(crate) fn take_request_limit() -> usize {
+	REQUEST_LIMIT.with(|limit| limit.replace(0))
 }
 
 /// A route of the program: method, path and the function answering it
@@ -33,21 +40,21 @@ pub struct Route {
 pub struct Answer {
 	pub status: u16,
 	pub content_type: &'static str,
-	pub body: String,
+	pub body: Vec<u8>,
 }
 
 impl Answer {
 	pub fn of(value: &Node) -> Answer {
 		match value.drop_meta() {
-			Node::Text(text) => Answer { status: 200, content_type: TEXT_TYPE, body: text.clone() },
-			Node::Char(character) => Answer { status: 200, content_type: TEXT_TYPE, body: character.to_string() },
+			Node::Text(text) => Answer { status: 200, content_type: TEXT_TYPE, body: text.clone().into_bytes() },
+			Node::Char(character) => Answer { status: 200, content_type: TEXT_TYPE, body: character.to_string().into_bytes() },
 			Node::Error(message) => Answer::failed(&message.to_string()),
-			other => Answer { status: 200, content_type: JSON_TYPE, body: crate::foreign::json_of(other).to_string() },
+			other => Answer { status: 200, content_type: JSON_TYPE, body: crate::foreign::json_of(other).to_string().into_bytes() },
 		}
 	}
 
 	pub fn failed(message: &str) -> Answer {
-		Answer { status: FAILED, content_type: TEXT_TYPE, body: message.to_string() }
+		Answer { status: FAILED, content_type: TEXT_TYPE, body: message.as_bytes().to_vec() }
 	}
 }
 
@@ -55,15 +62,24 @@ impl Answer {
 pub fn routes_of(routes: &Node) -> Vec<Route> {
 	let Node::List(items, _, _) = routes.drop_meta() else { return vec![] };
 	items.iter().filter_map(|route| match route.drop_meta() {
-		Node::List(parts, _, _) if parts.len() == 3 => Some(Route { method: parts[0].name(), path: parts[1].name(), function: parts[2].name() }),
+		Node::List(parts, _, _) if parts.len() == 3 => Some(Route { method: text_of(&parts[0]), path: text_of(&parts[1]), function: text_of(&parts[2]) }),
 		_ => None,
 	}).collect()
 }
 
-/// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function
-pub fn serve(port: u16, routes: &[Route], mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
+/// A text of the route table; the path "/" arrives as a one-character Char
+fn text_of(node: &Node) -> String {
+	match node.drop_meta() {
+		Node::Char(character) => character.to_string(),
+		other => other.name(),
+	}
+}
+
+/// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function; a GET no route
+/// takes is a file of the program's `site` (src/site.rs), its page at /
+pub fn serve(port: u16, routes: &[Route], site: &[SiteFile], mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
 	let server = tiny_http::Server::http(("0.0.0.0", port)).map_err(|problem| format!("serve {port}: {problem}"))?;
-	let limit = REQUEST_LIMIT.with(|limit| limit.replace(0));
+	let limit = take_request_limit();
 	let mut served = 0;
 	for mut request in server.incoming_requests() {
 		let method = request.method().as_str().to_uppercase();
@@ -72,10 +88,10 @@ pub fn serve(port: u16, routes: &[Route], mut answer: impl FnMut(&Route, Node) -
 		let _ = request.as_reader().read_to_string(&mut body);
 		let answered = match routes.iter().find(|route| route.method == method && route.path == path) {
 			Some(route) => answer(route, request_node(&method, &path, &query, body)),
-			None => Answer { status: NOT_FOUND, content_type: TEXT_TYPE, body: format!("no route {method} {path}") },
+			None => site_file(site, &method, &path).unwrap_or_else(|| Answer { status: NOT_FOUND, content_type: TEXT_TYPE, body: format!("no route {method} {path}").into_bytes() }),
 		};
 		let header = tiny_http::Header::from_bytes("Content-Type", answered.content_type).expect("a valid header");
-		let _ = request.respond(tiny_http::Response::from_string(answered.body).with_status_code(answered.status).with_header(header));
+		let _ = request.respond(tiny_http::Response::from_data(answered.body).with_status_code(answered.status).with_header(header));
 		served += 1;
 		if limit > 0 && served >= limit {
 			break;
@@ -84,10 +100,21 @@ pub fn serve(port: u16, routes: &[Route], mut answer: impl FnMut(&Route, Node) -
 	Ok(())
 }
 
+/// `GET /` is the site's page, `GET /app.wasm` its module and so on
+fn site_file(site: &[SiteFile], method: &str, path: &str) -> Option<Answer> {
+	let (name, bytes) = crate::site::file_at(site, path).filter(|_| method == SITE_METHOD)?;
+	Some(Answer { status: 200, content_type: crate::site::content_type(name), body: bytes.clone() })
+}
+
+/// An HTTP body as a value: a JSON object or array parsed into its map or list, any other body the text
+pub fn value_of_body(body: String) -> Node {
+	serde_json::from_str::<serde_json::Value>(&body).ok().filter(|value| value.is_object() || value.is_array())
+		.map_or(Node::Text(body), |value| crate::foreign::node_of(&value))
+}
+
 /// The request as the route's `request`: {method, path, query, body}, a JSON body parsed into its value
 fn request_node(method: &str, path: &str, query: &str, body: String) -> Node {
-	let body = serde_json::from_str::<serde_json::Value>(&body).ok().filter(|value| value.is_object() || value.is_array())
-		.map_or(Node::Text(body), |value| crate::foreign::node_of(&value));
+	let body = value_of_body(body);
 	let query = query.split('&').filter(|pair| !pair.is_empty()).map(|pair| {
 		let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
 		entry(key, Node::Text(value.replace('+', " ")))

@@ -6,7 +6,7 @@
 
 use crate::closures::may_be_function_value;
 use crate::lambdas::lambda_definition;
-use crate::library_words::{collect_assigned_names, substitute};
+use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -467,8 +467,8 @@ pub fn lower(program: Node) -> Node {
 	if higher_order.is_empty() {
 		return program;
 	}
-	let mut variables = HashSet::new();
-	collect_assigned_names(&program, &mut variables);
+	// a lambda reading one of these (a loop variable too) is a closure, not a function of its own
+	let variables = crate::closures::captured_variables_of(&program);
 	let definitions_by_name: HashMap<String, Definition> = found.into_iter().map(|definition| (definition.name.clone(), definition)).collect();
 	let mut specialising = Specialising {
 		definitions: definitions_by_name,
