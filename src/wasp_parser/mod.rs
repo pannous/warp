@@ -350,6 +350,8 @@ const AFTER_KEYWORD: &str = "after";
 const AND_KEYWORD: &str = "and";
 /// Words after `and` that continue an expression rather than start a statement: `a and b or c`
 const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
+/// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
+const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
