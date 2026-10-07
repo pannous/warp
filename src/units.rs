@@ -240,7 +240,9 @@ pub fn answer(program: &Node) -> Option<Node> {
 /// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`: a constant duration is its milliseconds, what the host word takes
 /// (async agent, 2026-10-06: quantities do not reach run time yet, notes/units_runtime.md)
 pub fn lower_sleep_durations(program: Node) -> Node {
-	fn lower(node: Node) -> Node {
+	// a duration whose unit word is one of the program's names (`s = 1; sleep 5 s`) stays as written; `m = 2` leaves
+	// `sleep 5 ms` a duration (card sleep-unit)
+	fn lower(node: Node, shadowed: &std::collections::HashSet<String>) -> Node {
 		match node {
 			// the word itself: `(sleep 300); 1` is a statement list whose first item merely starts with sleep
 			Node::List(items, bracket, separator) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == crate::host::SLEEP) => {
@@ -248,23 +250,26 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 					[single] => single.clone(),
 					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 				};
-				match milliseconds(&duration) {
+				let names_shadowed = |node: &Node| {
+					let mut found = false;
+					node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if shadowed.contains(name)));
+					found
+				};
+				match milliseconds(&duration).filter(|_| !names_shadowed(&duration)) {
 					Some(amount) => Node::List(vec![items[0].clone(), Node::int(amount)], Bracket::Round, Separator::None),
 					None => {
 						if let Err(error) = warn_bare_duration(&duration) {
 							return error;
 						}
-						Node::List(items.into_iter().map(lower).collect(), bracket, separator)
+						Node::List(items.into_iter().map(|item| lower(item, shadowed)).collect(), bracket, separator)
 					}
 				}
 			}
-			other => other.map_children(lower),
+			other => other.map_children(|child| lower(child, shadowed)),
 		}
 	}
-	match defines_unit_name(&program) {
-		true => program,
-		false => lower(program),
-	}
+	let shadowed = defined_unit_names(&program);
+	lower(program, &shadowed)
 }
 
 /// User #17: `sleep(1)` reads as milliseconds but says nothing; a bare number gets the warning that names the units
@@ -310,18 +315,36 @@ fn needs_quantities(node: &Node) -> bool {
 
 /// `m=5;3m`: a variable of that name shadows the unit, and so does a parameter: `s => s + t`, `f(s) := …`
 fn defines_unit_name(node: &Node) -> bool {
-	let names_unit = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if unit_named(name).is_some());
-	let names_parameter = |head: &Node| match head.drop_meta() {
-		Node::List(items, _, _) => items.iter().any(|item| names_unit(item) || matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if names_unit(name))),
-		other => names_unit(other),
+	!defined_unit_names(node).is_empty()
+}
+
+/// The unit words the program defines as variables, parameters or functions (`m = 2`, `f(s) := …`)
+fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
+	let mut names = std::collections::HashSet::new();
+	collect_defined_unit_names(node, &mut names);
+	names
+}
+
+fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet<String>) {
+	let mut add_unit = |node: &Node| if let Node::Symbol(name) = node.drop_meta() {
+		if unit_named(name).is_some() {
+			names.insert(name.clone());
+		}
 	};
-	let defines = match node.drop_meta() {
-		Node::Key(head, Op::Assign | Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => names_parameter(head),
-		Node::Key(target, Op::Assign | Op::Define | Op::Colon, _) => names_unit(target),
-		Node::Key(parameters, Op::Arrow | Op::FatArrow, _) => names_parameter(parameters),
-		_ => false,
+	let mut add_parameters = |head: &Node| match head.drop_meta() {
+		Node::List(items, _, _) => items.iter().for_each(|item| match item.drop_meta() {
+			Node::Key(name, Op::Colon, _) => add_unit(name),
+			_ => add_unit(item),
+		}),
+		other => add_unit(other),
 	};
-	defines || children(node).into_iter().any(defines_unit_name)
+	match node.drop_meta() {
+		Node::Key(head, Op::Assign | Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => add_parameters(head),
+		Node::Key(target, Op::Assign | Op::Define | Op::Colon, _) => add_parameters(target),
+		Node::Key(parameters, Op::Arrow | Op::FatArrow, _) => add_parameters(parameters),
+		_ => {}
+	}
+	children(node).into_iter().for_each(|child| collect_defined_unit_names(child, names));
 }
 
 /// Quantities assigned to variables earlier in the program: `x = 2 km; x + 1 m`
