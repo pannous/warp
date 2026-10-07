@@ -331,3 +331,25 @@ block as children and per-instance state are web's (ruby_blocks.rs, component_st
   or of known instance shape (library_words::method_call); before, it became `start(l)` and recursed forever.
 - Without any class (card classes-function): `p.name` inside the function `name(p)` reads the field, since the call
   would recurse with the same argument forever (library_words `defining`, `reads_own_parameter_field`).
+
+## Sum types and enum cases (P179, P178; tests/types/test_variant_payloads.rs, test_enum_cases.rs)
+- `type Color = red | rgb(int, int, int)` (parser parse_sum_type): Color is a class without fields carrying
+  `@variants(red …)`, each variant with payload a class `@extends(Color)` with fields value / value1… or named
+  `rgb(r, g, b)`. Positional fields `c#1` (1-based) or `c.0` (Rust) work on any class instance.
+- lowering/sum_variants.rs (SOURCE pass after soft_keywords): `x is Color` → `is_type(x, Color) or x == red …`,
+  `red is Color` is true; `Shape::Circle(2)` → `Circle(2)` for any variant, also in match patterns.
+- `enum Shape { Circle(r), Rect(w, h), Dot }` and Swift's `case circle(radius: Double)` lines: as soon as one case has
+  values the enum IS that sum type (parser parse_enum_with_values, same sum_type builder). An enum without values
+  stays the numbered object `Color={red:0 green:1}` (declarations::enum_object).
+- Open: a match on a subject statically known as a bare variant (`s = Dot; match s {Circle(r) => r*r …}`) types the
+  dead arm and fails (card match-static); inside a function it works.
+- Emitter fix found on the way: `((a) or b) or c` took the parenthesized operation as a truthy literal and dropped c
+  (arithmetic.rs is_operation).
+
+## Checked conformance claims (P177; tests/types/test_conformance_claims.rs)
+`class Square implements Shape, Named {…}`, Swift's `struct Square: Shape {…}`, Kotlin's `class Square(…) : Shape {…}`:
+the parser (skip_conformances) puts the named traits on the type's name as `@implements(Shape Named)`; traits.rs
+named_claims checks each declared trait like the claim `class Square{…} is Shape`: a missing operation is the compile
+error "Square claims Shape but defines no area(s:Square)". A name that is no declared trait (a parent class written
+`: Base`) is not checked. The old "wasp needs no list of them" note is gone. Found on the way: a trait written
+`interface Shape { fun area(): Int }` on one line took `fun` as an operation; function keywords are dropped there.
