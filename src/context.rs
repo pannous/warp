@@ -52,7 +52,7 @@ pub struct Context {
     pub declared_globals: HashMap<String, crate::local::Local>,
     /// Declared kinds of the fields of the program's types, keyed by analyzer::field_kind_key (`.x` → Float)
     pub field_kinds: HashMap<String, Kind>,
-    pub user_functions: HashMap<String, UserFunctionDef>,
+    pub user_functions: std::collections::BTreeMap<String, UserFunctionDef>,
     /// Per function: captured outer variable → (global holding its value at definition time, kind)
     pub captures: HashMap<String, Vec<Capture>>,
     /// Per function: the captured variables' bindings with their types (`k = {a: 10}`: `k.a` is an Int in the body)
@@ -103,7 +103,7 @@ impl Context {
             captures: HashMap::new(),
             capture_bindings: HashMap::new(),
             enclosing_functions: HashMap::new(),
-            user_functions: HashMap::new(),
+            user_functions: std::collections::BTreeMap::new(),
             parameter_conflicts: Vec::new(),
             closure_targets: Vec::new(),
             closure_variable_targets: HashMap::new(),

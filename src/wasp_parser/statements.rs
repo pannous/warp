@@ -18,7 +18,18 @@ impl WaspParser {
 		if keyword == "export" && defines_function {
 			return Some(declaration);
 		}
-		Some(Node::Key(Box::new(Symbol("global".to_string())), Op::Colon, Box::new(declaration)))
+		let global = |declaration: Node| Node::Key(Box::new(Symbol(crate::node::GLOBAL_DECLARATION.to_string())), Op::Colon, Box::new(declaration));
+		// `global a, b` (Python): one declaration per name
+		let mut names = vec![declaration];
+		while keyword == crate::node::GLOBAL_DECLARATION && matches!(names.last().map(Node::drop_meta), Some(Symbol(_))) && self.current_char() == ',' {
+			self.advance();
+			self.skip_spaces();
+			names.push(self.parse_atom());
+		}
+		Some(match names.len() {
+			1 => global(names.remove(0)),
+			_ => Node::List(names.into_iter().map(global).collect(), Bracket::None, Separator::Semicolon),
+		})
 	}
 
 	/// A name follows after at least one blank: `nonlocal y`, not `nonlocal = 3` or `nonlocal(…)`
@@ -148,6 +159,10 @@ impl WaspParser {
 		if let Some(filtered) = self.try_parse_condition_loop() {
 			return Some(filtered);
 		}
+		if self.matches_keyword(EACH_WORD) && self.word_at(EACH_WORD.len() + 1) != "in" {
+			self.advance_by(EACH_WORD.len());
+			self.skip_spaces();
+		}
 		let variable = self.parse_loop_variable();
 		self.skip_spaces();
 		let named = variable.filter(|_| self.matches_keyword("in"));
@@ -176,10 +191,18 @@ impl WaspParser {
 			let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
 			return Some(Node::List(vec![Symbol("for".to_string()), iterable, block], Bracket::None, Separator::Space));
 		};
+		let key_variable = match variable.drop_meta() {
+			Symbol(name) if iterates_keys(&iterable) => Some(name.clone()),
+			_ => None,
+		};
+		self.key_variables.extend(key_variable.clone());
 		let body = match body_word {
 			Some(word) => self.colon_body(word), // `for i in 0..n: body`, `for i in 0..n do body`
 			None => self.parse_atom(),
 		};
+		if key_variable.is_some() {
+			self.key_variables.pop();
+		}
 		// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the item
 		// (P46), a call `friend(…)` still constructs
 		let (variable, body) = match variable.drop_meta() {

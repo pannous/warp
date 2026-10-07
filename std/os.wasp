@@ -1,3 +1,3 @@
 // The standard library module os (notes/stdlib.md section 7): `use os`, through the adapter std_io; the browser has no
 // environment (env gives ø)
-env(name) := std_io("os", "env", [name])
+env(name:any) := std_io("os", "env", [name])

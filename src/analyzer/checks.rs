@@ -305,6 +305,10 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		Node::List(items, Bracket::Round, Separator::None) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if ORDER_WORDS.contains(&word.as_str())) => {
 			list_type_name(&items[1], scope)
 		}
+		// `split(t, sep)`, `chars(t)`: texts
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if TEXT_LIST_WORDS.contains(&word.as_str())) => {
+			format!("{PLAIN} of text")
+		}
 		// the result of a call `f(x)` (no list literal of `f` and `x`): its elements are held as Nodes, of any type
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => NODE_LIST_TYPE.to_string(),
 		// a `{key:value …}` map, `map of int` when all its values are ints
@@ -327,17 +331,23 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				_ => MAP_TYPE.to_string(),
 			}
 		}
-		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`; an item of a list of lists likewise
-		// (`c#2` of a `list of list of list of int` is a `list of list of int`, card nested-index)
+		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`; an element of a `list of list of int`
+		// a `list of int`; an element of a `list of list` (`[("a", 2)]`, tuples of mixed items) holds its items as Nodes
 		Node::Key(map, Op::Hash, _) => {
 			let outer = list_type_name(map, scope);
-			match outer.strip_prefix(MAP_TYPE_PREFIX).or_else(|| outer.strip_prefix(&format!("{PLAIN} of "))) {
+			match outer.strip_prefix(MAP_TYPE_PREFIX).or_else(|| outer.strip_prefix(LIST_OF_PREFIX)) {
+				Some(PLAIN) if outer.starts_with(LIST_OF_PREFIX) => NODE_LIST_TYPE.to_string(),
 				Some(value_type) if value_type.starts_with(PLAIN) => value_type.to_string(),
 				_ => PLAIN.to_string(),
 			}
 		}
 		Node::List(items, _, separator) => {
-			let words: Vec<String> = items.iter().map(|item| element_type_word(item, scope)).collect();
+			// an item that is a list keeps its own element type: `[(0, 1), (1, 2)]` is a `list of list of int`
+			let item_word = |item: &Node| match infer_type(item, scope) {
+				Kind::List => list_type_name(item, scope),
+				_ => element_type_word(item, scope),
+			};
+			let words: Vec<String> = items.iter().map(item_word).collect();
 			let is_block = matches!(separator, Separator::Semicolon | Separator::Newline);
 			match common_type_word(&words) {
 				Some(word) => format!("{PLAIN} of {word}"),
@@ -356,6 +366,8 @@ const LET_CHANGES_TOPIC: &str = "let changes";
 pub(super) const MAP_TYPE: &str = "map";
 /// Library words whose list result has the elements of their list argument
 pub(super) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
+/// Library words whose result is a list of texts
+const TEXT_LIST_WORDS: [&str; 2] = ["split", "chars"];
 pub(super) const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 pub(super) const NODE_LIST_TYPE: &str = "list of node";
@@ -409,13 +421,8 @@ pub fn literal_number_type_word(node: &Node) -> Option<&'static str> {
 	}
 }
 
-/// A list item's word keeps its own elements: `[[1 2]]` is a `list of int` item, so `[[[1 2]]]` is a
-/// `list of list of list of int` and `c#1#1` a `list of int` (card nested-index)
 pub(super) fn element_type_word(item: &Node, scope: &Scope) -> String {
-	literal_number_type_word(item).map(str::to_string).unwrap_or_else(|| match infer_type(item, scope) {
-		Kind::List if matches!(item.drop_meta(), Node::List(_, Bracket::Square, _)) => list_type_name(item, scope),
-		kind => kind.to_string(),
-	})
+	literal_number_type_word(item).map(str::to_string).unwrap_or_else(|| infer_type(item, scope).to_string())
 }
 
 /// The one type word all element words fit: the same word, `rational` for a mix of `int` and `rational` (int is a special
@@ -441,6 +448,7 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 		.or_else(|| check_constants(program, &mut HashMap::new()))
 		.or_else(|| check_null_use(program, &mut HashMap::new()))
 		.or_else(|| check_boolean_arithmetic(program))
+		.or_else(|| check_subjectless_comparison(program))
 		.or_else(|| check_ambiguous_calls(program))
 		.or_else(|| check_call_arity(program))
 		.map(Diagnostic::into_error)
@@ -920,6 +928,19 @@ pub(super) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
 }
 
 /// Booleans are not numbers: `true + true` is rejected, not 2 (the runtime still encodes them as Int 1/0)
+/// `> 100` outside a match arm compares nothing (card leading-gt: it was dropped silently, leaving 100)
+pub(super) fn check_subjectless_comparison(node: &Node) -> Option<Diagnostic> {
+	match node.drop_meta() {
+		Node::Key(left, op, right) if op.is_ordering() && matches!(left.drop_meta(), Node::Empty) => {
+			let written = format!("{} {}", op.as_str(), right.serialize());
+			Some(Diagnostic::at(node, format!("`{written}` compares nothing: write what is compared, `x {written}` (in a match arm it compares the subject)")))
+		}
+		Node::Key(left, _, right) => check_subjectless_comparison(left).or_else(|| check_subjectless_comparison(right)),
+		Node::List(items, _, _) => items.iter().find_map(check_subjectless_comparison),
+		_ => None,
+	}
+}
+
 pub(super) fn check_boolean_arithmetic(node: &Node) -> Option<Diagnostic> {
 	fn is_boolean(operand: &Node) -> bool {
 		match operand.drop_meta() {

@@ -18,3 +18,29 @@ weekday(ms) := (day_number(ms) + 3) % 7 + 1
 today() := date_of(clock())
 add_days(ms, n) := ms + n * 86400000
 days_between(from, to) := day_number(to) - day_number(from)
+two_digits(n) := if n < 10 then "0" + n else "" + n
+// ISO 8601: 2026-10-07
+format_date(ms) := {
+	d = date_of(ms)
+	"" + d.year + "-" + two_digits(d.month) + "-" + two_digits(d.day)
+}
+// the time of day, UTC: 13:05:09
+format_time(ms) := {
+	s = (ms % 86400000)//1000
+	two_digits(s//3600) + ":" + two_digits(s % 3600//60) + ":" + two_digits(s % 60)
+}
+// Howard Hinnant's days_from_civil: the day number of a proleptic Gregorian date
+days_from_date(year, month, day) := {
+	y = if month <= 2 then year - 1 else year
+	era = y//400
+	yoe = y - era * 400
+	mp = if month > 2 then month - 3 else month + 9
+	doy = (153 * mp + 2)//5 + day - 1
+	doe = yoe * 365 + yoe//4 - yoe//100 + doy
+	era * 146097 + doe - 719468
+}
+// "2026-10-07" → milliseconds since 1970 at midnight UTC
+parse_date(t) := {
+	parts = split(t, "-")
+	days_from_date(int(parts#1), int(parts#2), int(parts#3)) * 86400000
+}

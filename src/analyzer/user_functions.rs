@@ -364,8 +364,8 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 
 /// A parameter that the calls pass one kind other than Int takes that kind: `mul(v, 1.0 / length(v))` with length
 /// returning a float, `print_tree(tree.left, prefix + "│ ")` passing a text. infer_parameters_from_calls knows only
-/// literal arguments; this pass runs once the return kinds are known. It only changes undeclared Int parameters, and
-/// leaves a parameter alone when calls disagree. True when a parameter changed.
+/// literal arguments; this pass runs once the return kinds are known. It only changes undeclared Int parameters (and
+/// those guessed a list that get only texts), and leaves a parameter alone when calls disagree. True when a parameter changed.
 pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String, Local>) -> bool {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
 	function_kinds.extend(ctx.field_kinds.clone());
@@ -379,10 +379,18 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 	}
 	let mut changed = false;
 	for ((name, index), kinds) in passed {
+		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
+		// passed only values held as Nodes (a loop variable over a list parameter): a Node, no int
+		if kinds.len() == 1 && kinds.contains(&Kind::Empty) && param.used_as.is_none() && param.annotation.is_none() && param.default.is_none() {
+			param.used_as = Some(Kind::Empty);
+			changed = true;
+			continue;
+		}
 		let kinds: Vec<Kind> = kinds.into_iter().filter(|kind| *kind != Kind::Int && *kind != Kind::Empty).collect();
 		let [kind] = kinds.as_slice() else { continue };
-		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
-		if param.annotation.is_none() && param.default.is_none() && matches!(param.used_as, None | Some(Kind::Int)) {
+		// a parameter the body counts or indexes is guessed a list, until the calls pass it only texts
+		let guessed = matches!(param.used_as, None | Some(Kind::Int)) || (param.used_as == Some(Kind::List) && *kind == Kind::Text);
+		if param.annotation.is_none() && param.default.is_none() && guessed {
 			param.used_as = Some(*kind);
 			changed = true;
 		}
@@ -445,7 +453,8 @@ pub(super) fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, 
 /// two calls traps (g-rT0c). Closures need the same (`t = "!"; shout = s => s + t`). Kinds are merged only where no
 /// declared global of that name exists.
 pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: HashMap<String, Local>) -> HashMap<String, Local> {
-	let mut outer = Scope::new();
+	// `xs = [w(), w()]` holds what w returns, as the emitter's capture globals do (card float-calls)
+	let mut outer = Scope::with_function_kinds(ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect());
 	collect_variables(program, &mut outer);
 	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	functions.sort_by(|a, b| a.name.cmp(&b.name));
@@ -502,7 +511,7 @@ pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 	user_functions.chain(crate::real::FUNCTIONS.iter().map(|name| name.to_string())).collect()
 }
 
-pub(super) fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
+pub(super) fn negate_calls(node: Node, functions: &std::collections::BTreeMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
 	let is_function = |operand: &Node| match operand.drop_meta() {
 		Node::Symbol(name) => functions.get(name).is_some_and(|function| !function.params.is_empty())
 			|| (crate::real::FUNCTIONS.contains(&name.as_str()) && !bound.contains(name)),
@@ -580,6 +589,8 @@ pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
 		Node::Empty => Some(Kind::List),
+		// `"" + n`, `"#" + x + y`: a concatenation with a text is a text
+		Node::Key(_, Op::Add, _) if super::declaration_lowering::is_text(argument) => Some(Kind::Text),
 		// `1.5 as float`, `x as float`: the kind the conversion names
 		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Some(Kind::Float),
 		_ if crate::closures::as_closure_new(argument).is_some() => Some(Kind::Function),
@@ -661,7 +672,8 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 			}
 			let Some(function) = ctx.user_functions.get(&name) else { continue };
 			for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
-				let declared_int = function.params[index].annotation.is_some() && param_kind(&function.params[index]) == Kind::Int;
+				// `real`, `exact` are Ints that may hold a ratio: only a whole type loses a decimal's digits
+				let declared_int = function.params[index].annotation.as_ref().is_some_and(|annotation| crate::analyzer::checks::is_whole_type(&annotation.name()));
 				if declared_int && has_digits_an_int_loses(argument) {
 					// a whole float serializes as `2`; its decimal point is what makes it no int
 					let written = match argument.drop_meta() {
@@ -690,8 +702,8 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 			[Kind::Int] => {}
 			[kind] => param.used_as = Some(*kind),
 			[first, second, ..] => ctx.parameter_conflicts.push(format!(
-				"{name} is called with {} and {} for parameter {}: annotate it",
-				kind_with_article(*first), kind_with_article(*second), param.name)),
+				"{name} is called with {} and {} for parameter {}: annotate it, e.g. {}:any",
+				kind_with_article(*first), kind_with_article(*second), param.name, param.name)),
 			[] => {}
 		}
 	}

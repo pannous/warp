@@ -85,3 +85,25 @@ fn positional_braces_build_a_known_class() {
 	is!(code, 3);
 	assert_alias(code, "P{3, 4}", "P(3, 4)");
 }
+
+#[test]
+fn init_defined_with_colon_equals_is_the_constructor() {
+	is!("class S{n:int; init(k) := { n = k * 2 }}; S(4).n", 8);
+	is!("class S{items:list; init(xs) := { items = []; for x in xs { if not (x in items) { items.add(x) } } }}; count(S([1 2 2 3]).items)", 3);
+}
+
+#[test]
+fn a_loop_in_init_keeps_its_variables_local() {
+	// `i` and `x` of init's loop are no fields: another method may use `i` for its own loop
+	let counter = "class C{keys=[]; init(xs) := { for x in xs { i = x in keys; if not i { keys.add(x) } } }; last() := { best = 0; for i in 1 to count(keys) { best = keys#i }; best }}; ";
+	is!(&format!("{counter}C([7 8 8]).last()"), 8);
+	is!(&format!("{counter}count(C([7 8 8]).keys)"), 2);
+}
+
+/// P157: a ported type parameter `class Box<T>` compiles untyped, with a note that wasp infers types
+#[test]
+fn a_type_parameter_of_a_class_is_noted() {
+	let code = "class Box<T> { item: T }\nBox(3).item";
+	is!(code, 3);
+	assert_alias(code, "Box<T>", "Box");
+}

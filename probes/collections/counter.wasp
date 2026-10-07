@@ -1,0 +1,5 @@
+class Counter { keys = []; counts = []
+  init(xs) := { for x in xs { i = x in keys; if i { counts#i += 1 } else { keys.add(x); counts.add(1) } } }
+  most_common() := { best = 1; for i in 1 to count(counts) { if counts#i > counts#best { best = i } }; keys#best }
+}
+c = Counter([7 8 8]); c.most_common()

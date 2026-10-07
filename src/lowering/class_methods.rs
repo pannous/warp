@@ -30,6 +30,20 @@ const SETTER_SUFFIX: &str = "·set";
 const VALUE_SUFFIX: &str = "·value";
 const RESULT_SUFFIX: &str = "·result";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
+/// Other languages' method names (Python's deque, Java's Deque and Queue, JS's Array and Set) and the wasp methods they
+/// mean, the first one the class defines taken, with a note; only on a class that does not define the name itself
+const METHOD_ALIASES: [(&str, &[&str]); 22] = [
+	("append", &["push_back", "push", "enqueue", "add"]), ("addLast", &["push_back", "enqueue"]), ("offerLast", &["push_back", "enqueue"]),
+	("offer", &["enqueue", "push_back"]), ("push", &["push_back", "enqueue"]),
+	("appendleft", &["push_front"]), ("addFirst", &["push_front"]), ("offerFirst", &["push_front"]), ("unshift", &["push_front"]),
+	("popleft", &["pop_front", "dequeue"]), ("pollFirst", &["pop_front", "dequeue"]), ("removeFirst", &["pop_front", "dequeue"]),
+	("shift", &["pop_front", "dequeue"]), ("poll", &["dequeue", "pop_front"]),
+	("pollLast", &["pop_back", "pop"]), ("removeLast", &["pop_back", "pop"]), ("pop", &["pop_back"]),
+	("contains", &["has"]), ("includes", &["has"]), ("delete", &["remove"]), ("discard", &["remove"]),
+	("len", &["size"]),
+];
+/// `len(s)`, `count(s)`, `s.count()` of an instance whose class defines its size under another of these names
+const SIZE_WORDS: [&str; 4] = ["size", "count", "len", "length"];
 /// The keywords of a field: Swift's `var count = 0`, `let`, Kotlin's `val`
 const FIELD_KEYWORDS: [&str; 3] = ["var", "let", "val"];
 /// Member modifiers that may mean something in wasp, so they get no note that wasp needs them not
@@ -37,6 +51,13 @@ const SILENT_MODIFIERS: [&str; 1] = ["async"];
 /// The constructor names of other languages, aliases of `init` (P162): wasp's old `value`, JavaScript, Python, Ruby,
 /// PHP, VB.NET, Delphi, Rust; besides a method named like its class (C++, Java, C#)
 const CONSTRUCTOR_ALIASES: [&str; 8] = ["value", "constructor", "__init__", "initialize", "__construct", "New", "Create", "new"];
+/// The methods that give a class its text, equality and order (the witnesses of Printable, Equatable, Comparable),
+/// and how other languages name them
+const WITNESS_METHODS: [(&str, &[&str]); 3] = [
+	("text", &["toString", "to_s", "__str__", "ToString", "String"]),
+	(crate::traits::EQUALS, &["Equals", "__eq__", "equal"]),
+	(crate::traits::COMPARE, &["compareTo", "CompareTo", "cmp"]),
+];
 /// Ruby's construction `Point.new(1, 2)`
 const RUBY_NEW_WORD: &str = "new";
 /// Go's function keyword, also of a method `func (p Point) Sum() int {…}`
@@ -46,7 +67,7 @@ const IMPL_WORD: &str = "impl";
 /// Kotlin's `p.copy(y = 5)`
 const COPY_WORD: &str = "copy";
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
-const OPERATOR_METHODS: [(Op, [&str; 3]); 8] = [
+const OPERATOR_METHODS: [(Op, [&str; 3]); 7] = [
 	(Op::Add, ["plus", "add", "__add__"]),
 	(Op::Sub, ["minus", "subtract", "__sub__"]),
 	(Op::Mul, ["times", "multiply", "__mul__"]),
@@ -54,7 +75,6 @@ const OPERATOR_METHODS: [(Op, [&str; 3]); 8] = [
 	(Op::Mod, ["mod", "modulo", "__mod__"]),
 	(Op::Lt, ["less", "smaller", "__lt__"]),
 	(Op::Gt, ["more", "bigger", "__gt__"]),
-	(Op::Eq, ["equals", "equal", "__eq__"]),
 ];
 /// The run-time choice of a library-word method by the receiver's class (dispatched_by_class)
 const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then METHOD else OTHERWISE";
@@ -82,6 +102,7 @@ pub fn constructor_name(class: &str) -> String {
 pub fn lower(node: Node) -> Node {
 	let node = positional_braces(ruby_constructions(copies(with_impls(node))));
 	let node = with_init_constructors(node.clone(), &method_calls_named(&node));
+	let node = with_witness_methods(node);
 	let node = with_members(node);
 	let node = with_class_attributes(class_typed_declarations(node));
 	let node = operator_calls(node);
@@ -89,6 +110,7 @@ pub fn lower(node: Node) -> Node {
 		Ok(node) => node,
 		Err(error) => return error,
 	};
+	let node = method_aliases(node);
 	let node = renamed_type_word_methods(node);
 	let (node, likenesses) = match inherit(node) {
 		Ok(inherited) => inherited,
@@ -112,6 +134,63 @@ pub fn lower(node: Node) -> Node {
 	}
 }
 
+/// `d.append(1)` of a deque, `s.contains(2)` of a set, `len(s)`: the class's own method when it does not define that
+/// name (METHOD_ALIASES, SIZE_WORDS), with a note
+fn method_aliases(node: Node) -> Node {
+	let mut methods: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		methods.insert(name.drop_meta().name(), class_items(body).iter().filter_map(method_parts).map(|(method, _, _)| method).collect());
+	});
+	if methods.is_empty() {
+		return node;
+	}
+	let classes: Vec<String> = methods.keys().cloned().collect();
+	let instances: std::collections::HashMap<String, Vec<String>> = instance_classes(&node, &classes).into_iter().map(|(variable, class)| (variable, methods[&class].clone())).collect();
+	with_method_aliases(node, &instances)
+}
+
+/// The method of the class for `written`: the name itself, or the alias's wasp method, or for a size word the size
+/// method the class defines
+fn aliased_method(written: &str, defined: &[String]) -> Option<String> {
+	if defined.iter().any(|method| method == written) {
+		return None;
+	}
+	let candidates: Vec<&str> = match SIZE_WORDS.contains(&written) {
+		true => SIZE_WORDS.to_vec(),
+		false => METHOD_ALIASES.iter().find(|(alias, _)| *alias == written).map(|(_, methods)| methods.to_vec()).unwrap_or_default(),
+	};
+	let method = candidates.into_iter().find(|candidate| defined.iter().any(|method| method == candidate))?;
+	crate::diagnostic::note_alias(written, method);
+	Some(method.to_string())
+}
+
+fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String, Vec<String>>) -> Node {
+	let defined_by = |receiver: &Node| match receiver.drop_meta() {
+		Node::Symbol(variable) => instances.get(variable),
+		_ => None,
+	};
+	match node {
+		Node::Key(receiver, Op::Dot, member) if defined_by(&receiver).is_some() => {
+			let member = match member.drop_meta() {
+				Node::List(items, Bracket::Round, separator) if !items.is_empty() => match aliased_method(&items[0].drop_meta().name(), defined_by(&receiver).expect("guarded")) {
+					Some(method) => Node::List([vec![Node::Symbol(method)], items[1..].iter().cloned().map(|item| with_method_aliases(item, instances)).collect()].concat(), Bracket::Round, separator.clone()),
+					None => with_method_aliases(*member, instances),
+				},
+				_ => *member,
+			};
+			Node::Key(receiver, Op::Dot, Box::new(member))
+		}
+		// `len(s)`: `s.size()`
+		Node::List(items, Bracket::Round, separator) if matches!(items.as_slice(), [word, argument] if SIZE_WORDS.contains(&word.drop_meta().name().as_str()) && defined_by(argument).is_some()) => {
+			match aliased_method(&items[0].drop_meta().name(), defined_by(&items[1]).expect("guarded")) {
+				Some(method) => Node::Key(Box::new(items[1].clone()), Op::Dot, Box::new(Node::List(vec![Node::Symbol(method)], Bracket::Round, Separator::None))),
+				None => Node::List(items, Bracket::Round, separator),
+			}
+		}
+		other => other.map_children(|child| with_method_aliases(child, instances)),
+	}
+}
+
 /// A method named like a type word (`double() := x*2`, P142: class methods are always allowed) or like a list
 /// mutation (`pop() := items.pop()`) under the name `method·double`, so its calls never read as the conversion
 /// `double(c)` or the list's own `xs.pop()`. A type word is renamed wherever it is called as a method; a list word only
@@ -121,7 +200,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 	let (mut names, mut classes, mut defined_by) = (vec![], vec![], vec![]);
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
 		let clashing: Vec<String> = class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name)
-			.filter(|name| crate::analyzer::type_word_kind(name).is_some() || is_library_method(name)).collect();
+			.filter(|name| !is_witness_method(name) && (crate::analyzer::type_word_kind(name).is_some() || is_library_method(name))).collect();
 		if !clashing.is_empty() {
 			classes.push(name.drop_meta().name());
 		}
@@ -771,8 +850,15 @@ fn ruby_constructions(node: Node) -> Node {
 	constructed_by_new(node, &classes)
 }
 
+/// Ruby's `Point.new(1, 2)` and Java's `new Set(xs)` of a class the parser did not see (a standard module's): the
+/// construction, with a note
 fn constructed_by_new(node: Node, classes: &[String]) -> Node {
 	match node {
+		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [new, call] if new.drop_meta().name() == RUBY_NEW_WORD && classes.contains(&leading_name(call))) => {
+			let call = items[1].clone();
+			crate::diagnostic::note_alias(&format!("{RUBY_NEW_WORD} {}", leading_name(&call)), &leading_name(&call));
+			constructed_by_new(call, classes)
+		}
 		Node::Key(class, Op::Dot, member) if classes.contains(&class.drop_meta().name()) && matches!(class.drop_meta(), Node::Symbol(_)) && leading_name(&member) == RUBY_NEW_WORD => {
 			let class_name = class.drop_meta().name();
 			crate::normalize::set_position_of(&class);
@@ -816,6 +902,48 @@ fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 	}
 }
 
+fn is_witness_method(name: &str) -> bool {
+	WITNESS_METHODS.iter().any(|(witness, _)| *witness == name)
+}
+
+/// A class's `text()`, `equals(o)` and `compare(o)` (Java's `toString()`, `compareTo(o)`, Python's `__str__`, `__eq__`…,
+/// with a note) as the witnesses of its text, equality and order: the other instance typed by the class,
+/// `equals(o:P)`, so the method is `equals(self:P, o:P)`, which traits makes equals·P
+fn with_witness_methods(node: Node) -> Node {
+	match node {
+		Node::Type { name, body } => {
+			let class = name.drop_meta().name();
+			let items: Vec<Node> = class_items(&body);
+			if !items.iter().filter_map(method_parts).any(|(method, _, _)| WITNESS_METHODS.iter().any(|(witness, aliases)| *witness == method || aliases.contains(&method.as_str()))) {
+				return Node::Type { name, body };
+			}
+			let items = items.into_iter().map(|item| witness_method(item, &class)).collect();
+			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
+		}
+		other => other.map_children(with_witness_methods),
+	}
+}
+
+fn witness_method(item: Node, class: &str) -> Node {
+	let Some((method, parameters, _)) = method_parts(&item) else { return item };
+	let Some((witness, _)) = WITNESS_METHODS.iter().find(|(witness, aliases)| *witness == method || aliases.contains(&method.as_str())) else { return item };
+	if *witness != method {
+		crate::diagnostic::note_alias(&method, witness);
+	}
+	let typed = |parameter: Node| match parameter.drop_meta() {
+		Node::Symbol(_) if *witness != "text" => Node::Key(Box::new(parameter), Op::Colon, Box::new(Node::Symbol(class.to_string()))),
+		_ => parameter,
+	};
+	let head = Node::List([vec![Node::Symbol(witness.to_string())], parameters.into_iter().map(typed).collect()].concat(), Bracket::Round, Separator::None);
+	match item.drop_meta().clone() {
+		Node::Key(old_head, Op::Define, body) => match old_head.drop_meta() {
+			Node::Key(_, Op::Colon, result) if result_type(&item).is_some() => Node::Key(Box::new(Node::Key(Box::new(head), Op::Colon, result.clone())), Op::Define, body),
+			_ => Node::Key(Box::new(head), Op::Define, body),
+		},
+		_ => item,
+	}
+}
+
 /// Every class's constructor as `init(…){…}` (P162): one named by another language (`constructor(x)`, `__init__`,
 /// CONSTRUCTOR_ALIASES) or like its class (Java's `Point(int x, int y) {…}`), with a got-it note; an alias the program
 /// also calls as a method (`p.new(2)`) stays a method
@@ -823,12 +951,14 @@ fn with_init_constructors(node: Node, called: &std::collections::HashSet<String>
 	match node {
 		Node::Type { name, body } => {
 			let class = name.drop_meta().name();
-			let is_alias = |item: &Node| constructor_alias(item).filter(|alias| *alias == class || (CONSTRUCTOR_ALIASES.contains(&alias.as_str()) && !called.contains(alias)));
+			let is_alias = |item: &Node| constructor_alias(item).filter(|alias| *alias == class || ((CONSTRUCTOR_ALIASES.contains(&alias.as_str()) || *alias == CONSTRUCTOR_WORD) && !called.contains(alias)));
 			let items: Vec<Node> = class_items(&body);
 			if !items.iter().any(|item| is_alias(item).is_some()) {
 				return Node::Type { name, body };
 			}
 			let items = items.into_iter().map(|item| match is_alias(&item) {
+				// `init(xs) := {…}` is the constructor too, without a note
+				Some(alias) if alias == CONSTRUCTOR_WORD => as_init(item),
 				Some(alias) => {
 					crate::normalize::set_position_of(&item);
 					crate::diagnostic::note_alias(&alias, CONSTRUCTOR_WORD);
@@ -1015,15 +1145,32 @@ fn constructor_body(item: &Node) -> Option<&Node> {
 /// (`this.x = x` sets the field x also when a parameter is called x; a bare `n = …` of a parameter n sets the parameter)
 fn fields_set(body: &Node, parameters: &[String]) -> Vec<String> {
 	let mut names = vec![];
-	body.visit(&mut |part| if let Node::Key(target, Op::Assign, _) = part {
-		let name = match target.drop_meta() {
-			Node::Symbol(name) if !parameters.contains(name) => Some(name.clone()),
-			Node::Key(receiver, Op::Dot, field) if RECEIVER_ALIASES.contains(&receiver.drop_meta().name().as_str()) || receiver.drop_meta().name() == RECEIVER => Some(field.drop_meta().name()),
-			_ => None,
-		};
-		names.extend(name.filter(|name| !names.contains(name)));
-	});
+	collect_fields_set(body, parameters, &mut names);
 	names
+}
+
+/// The fields `fields_set` finds; what a loop sets (`for x in xs { i = … }`) stays local to the constructor
+fn collect_fields_set(node: &Node, parameters: &[String], names: &mut Vec<String>) {
+	if crate::event_signals::is_loop(node) {
+		return;
+	}
+	match node.drop_meta() {
+		Node::Key(target, op, value) => {
+			let name = match target.drop_meta() {
+				_ if *op != Op::Assign => None,
+				Node::Symbol(name) if !parameters.contains(name) => Some(name.clone()),
+				Node::Key(receiver, Op::Dot, field) if RECEIVER_ALIASES.contains(&receiver.drop_meta().name().as_str()) || receiver.drop_meta().name() == RECEIVER => Some(field.drop_meta().name()),
+				_ => None,
+			};
+			if let Some(name) = name.filter(|name| !names.contains(name)) {
+				names.push(name);
+			}
+			collect_fields_set(target, parameters, names);
+			collect_fields_set(value, parameters, names);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_fields_set(item, parameters, names)),
+		_ => {}
+	}
 }
 
 /// The result type a method declares: `area():int := …`
@@ -1410,9 +1557,13 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 		Change::None => body,
 		Change::Itself => Node::List(vec![body, receiver], Bracket::None, Separator::Semicolon),
 		Change::GivingValue => {
+			// the statements before the value run first: `x = items#1; items = …; x` gives x, not the block
+			let mut statements = statements_of(body);
+			let value = statements.pop().unwrap_or(Node::Empty);
 			let result = Node::Symbol(format!("{method}{VALUE_SUFFIX}"));
 			let pair = Node::List(vec![result.clone(), receiver], Bracket::Square, Separator::Space);
-			Node::List(vec![Node::Key(Box::new(result), Op::Assign, Box::new(body)), pair], Bracket::None, Separator::Semicolon)
+			statements.extend([Node::Key(Box::new(result), Op::Assign, Box::new(value)), pair]);
+			Node::List(statements, Bracket::None, Separator::Semicolon)
 		}
 	};
 	let receiver = Node::Key(Box::new(Node::Symbol(RECEIVER.to_string())), Op::Colon, Box::new(Node::Symbol(class.to_string())));
@@ -1430,17 +1581,26 @@ enum Change {
 
 /// Does a method body that changes its object end in a value of its own: `items.pop()`, not `n += 1` or `items.add(x)`
 fn gives_value(body: &Node) -> bool {
-	let last = match body.drop_meta() {
-		Node::List(statements, Bracket::Curly, _) | Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements.last(),
-		_ => Some(body),
-	};
-	let Some(last) = last else { return false };
+	let Some(last) = statements_of(body.clone()).pop() else { return false };
 	match last.drop_meta() {
+		// `if c {items.add(x)}`: a branch gives what its last statement gives
+		Node::Key(_, Op::Then, branch) => gives_value(branch),
+		Node::Key(then, Op::Else, otherwise) => gives_value(then) || gives_value(otherwise),
+		// a nested sequence gives what its last statement gives
+		Node::List(_, Bracket::Round, Separator::Semicolon) | Node::List(_, Bracket::Curly, _) => gives_value(&last),
 		Node::Key(_, op, _) if matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign() => false,
 		// a body giving its object back already (a constructor)
 		Node::Symbol(name) if name == RECEIVER => false,
 		Node::Key(_, Op::Dot, call) => !mutating_call(call) || matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| GIVING_MUTATIONS.contains(&word.drop_meta().name().as_str()))),
 		_ => true,
+	}
+}
+
+/// The statements of a block `{a; b}` or sequence `a; b`, or the one statement of any other body
+fn statements_of(body: Node) -> Vec<Node> {
+	match body.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) | Node::List(statements, Bracket::None | Bracket::Round, Separator::Semicolon | Separator::Newline) => statements.clone(),
+		_ => vec![body],
 	}
 }
 
@@ -1488,10 +1648,11 @@ fn changes_receiver(body: &Node) -> bool {
 	changes
 }
 
-/// `self.items`, `self.stack.items`
+/// `self.items`, `self.stack.items`, an element `self.counts#i`
 fn is_receiver_field(target: &Node) -> bool {
 	match target.drop_meta() {
 		Node::Key(object, Op::Dot, _) => matches!(object.drop_meta(), Node::Symbol(name) if name == RECEIVER) || is_receiver_field(object),
+		Node::Key(list, Op::Hash, _) => is_receiver_field(list),
 		_ => false,
 	}
 }

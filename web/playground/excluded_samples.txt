@@ -1,0 +1,24 @@
+# samples/*.wasp left out of the playground menu (build.sh), each with why; tests/programs/test_playground_samples.rs
+# checks that every other sample runs without an error. Fix one, delete its line, and it is in the menu again
+# (card playground-excluded-samples, 2026-10-07).
+# needs a window: native only
+raylib_circle	module not found: raylib
+raylib_circle_forever	module not found: raylib
+raylib_debug	undefined function: InitWindow at 19:12
+raylib_demo	undefined function: InitWindow at 24:12
+raylib_mouse_circle	module not found: raylib
+raylib_simple	undefined function: InitWindow at 18:12
+raylib_simple_use	module not found: raylib
+raylib_sleep	module not found: raylib
+sdl_red_square	undefined function: SDL_Init at 17:10
+# errors to fix
+errors	`}` is missing: the group opened at 4:9 runs to the end of the input (deliberately malformed: input for the forgiving parser, never meant to run)
+life_kotlin_ranges	index out of range (does the loop bound `..size-1` include the end? at 23:13) (fails on purpose: tests/welcoming/test_welcoming_ask.rs checks the explanation)
+modules	`}` is missing: the group opened at 22:15 runs to the end of the input (sketches a module system: card module-manager)
+natural	undefined: one in `one plus two` (number words and the list phrases keep only / sort by / take first wait for the user: card natural-phrases)
+netbase	undefined: query in `query "all cities with population > 100000"` (needs a netbase package: card netbase-package)
+neural_net	undefined function: Matrix (no Matrix/Array constructors; written with flat lists in probes/neural_net_flat.wasp it waits for cards global-comprehension, nested-index, float-calls)
+particles	Particle{…} takes fields as name:value, got  x:x, y:y (sketches a drawing API: card drawing-words)
+types	undefined function: Ok at 29:24 (variant types: card sum-types)
+wasm_interop	Empty symbol (sketches export, memory and interface declarations: card wasm-interop-sketch)
+webgpu	undefined: vec4 of f32 in `vec4 of f32 (in#uv+1, …)` (WGSL in a webgpu block: cards web-apis, gpu-map)

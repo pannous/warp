@@ -3,6 +3,8 @@
 use super::*;
 
 const VOID_WORD: &str = "void";
+/// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
+const CAPTURED_ARGUMENT: &str = "$0";
 
 /// `T, F: Fn(i32) -> i32` → `T F`: the names before each bound
 fn type_parameter_names(written: &str) -> Vec<String> {
@@ -39,6 +41,35 @@ impl WaspParser {
 				self.advance();
 				match self.parse_symbol() {
 					Ok(name) => crate::closures::function_reference(name),
+					Err(message) => error(&message),
+				}
+			}
+			// Elixir's capture `&(&1 * 2)`: the block `{$0 * 2}`; its `&1`, `&2` are `$0`, `$1`
+			'&' if self.starts_capture() => {
+				self.advance();
+				let outer = std::mem::replace(&mut self.in_capture, true);
+				let group = self.parse_bracketed('(');
+				self.in_capture = outer;
+				match group {
+					Node::List(items, Bracket::Round, separator) => Node::List(items, Bracket::Curly, separator),
+					other => Node::List(vec![other], Bracket::Curly, Separator::None),
+				}
+			}
+			'&' if self.peek_char(1).is_ascii_digit() && self.in_capture => {
+				self.advance();
+				let position: String = (0..).map(|at| self.peek_char(at)).take_while(char::is_ascii_digit).collect();
+				self.advance_by(position.len());
+				let position: usize = position.parse().unwrap_or(1);
+				Node::Symbol(format!("${}", position.saturating_sub(1)))
+			}
+			// Ruby's `&:to_s`: the block `{$0.to_s}`, the method called on each element
+			'&' if self.peek_char(1) == ':' && self.peek_char(2).is_alphabetic() => {
+				self.advance_by(2);
+				match self.parse_symbol() {
+					Ok(method) => {
+						let call = Node::Key(Box::new(Node::Symbol(CAPTURED_ARGUMENT.to_string())), Op::Dot, Box::new(Node::Symbol(method)));
+						Node::List(vec![call], Bracket::Curly, Separator::None)
+					}
 					Err(message) => error(&message),
 				}
 			}
@@ -189,8 +220,8 @@ impl WaspParser {
 		let is_known_type = |word: &str| {
 			crate::analyzer::type_word_kind(word).is_some() || crate::analyzer::plural_element_type(word).is_some() || declared_types.contains(word)
 		};
-		let parameters = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
-			Ok(parameters) => parameters,
+		let (parameters, body) = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
+			Ok(slots) => slots,
 			Err(message) => return Some(error(&message)),
 		};
 		let parameters: Vec<Node> = parameters.into_iter().map(|parameter| match shapes.iter().find(|(name, _)| *name == parameter.name()) {
@@ -660,6 +691,15 @@ impl WaspParser {
 				return head;
 			}
 		}
+		// Kotlin's `enum class Color {…}`: the enum
+		if symbol == ENUM_WORD && !self.options.wit_mode && self.class_keyword_after_blanks() == Some("class") {
+			while matches!(self.current_char(), ' ' | '\t') {
+				self.advance();
+			}
+			self.advance_by("class".len());
+			crate::diagnostic::note_alias(&format!("{ENUM_WORD} class"), ENUM_WORD);
+			return Symbol(symbol);
+		}
 		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
 		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol.as_str()) {
 			if let Some(keyword) = self.class_keyword_after_blanks() {
@@ -771,20 +811,25 @@ impl WaspParser {
 		};
 		// `class Box<T>{item:T}`: a field or parameter of a type parameter holds any value
 		let type_parameters = match self.current_char() {
+			// P157: wasp has no generic syntax, a ported `class Box<T>` compiles untyped, with a note
 			'<' => match self.parse_type_parameters() {
-				Ok(parameters) => parameters,
+				Ok(parameters) => {
+					crate::normalize::hint(&format!("{type_name}<{}>", parameters.join(", ")), &type_name, "wasp infers types: write the class without type parameters");
+					parameters
+				}
 				Err(message) => return error(&message),
 			},
 			_ => vec![],
 		};
 		let mut constructor_fields = if self.current_char() == '(' { self.parse_primary_constructor() } else { vec![] };
-		self.skip_conformances();
+		let kotlin_parent = self.skip_conformances();
 		// Python's `class Dog(Animal):` names its parents in the parentheses, `object` the root of all
 		let python_body = self.current_char() == ':' && self.peek_char(1) != '=';
 		let python_parent = match python_body {
 			true => std::mem::take(&mut constructor_fields).into_iter().map(|parent| parent.drop_meta().name()).find(|parent| parent != PYTHON_ROOT_CLASS),
 			false => None,
 		};
+		let ends_statement = matches!(self.peek_char((0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()), '\n' | ';' | '}' | '\0');
 		let before_body = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		// `class P(val x: Int)` ends at its line when no body follows on it
 		match constructor_fields.is_empty() {
@@ -797,7 +842,7 @@ impl WaspParser {
 		}
 		// `class dog extends animal {…}` (P117): the parent rides on the name, class_methods copies its fields and methods
 		let mut name = Symbol(type_name);
-		if let Some(parent) = python_parent {
+		if let Some(parent) = python_parent.or(kotlin_parent) {
 			name = name.with_attribute(EXTENDS_KEYWORD, Symbol(parent));
 		}
 		if self.matches_keyword(EXTENDS_KEYWORD) {
@@ -869,29 +914,42 @@ impl WaspParser {
 			}
 		};
 		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
+		// Kotlin's `sealed class Shape`, Swift's `class Marker`: a class without fields, when its line ends after the name
+		// (`type of x` goes on: no declaration)
+		let body = if matches!(body, Empty) && ends_statement { Node::List(vec![], Bracket::Curly, Separator::None) } else { body };
 		Node::Type { name: Box::new(name), body: Box::new(body) }
 	}
 
 	/// The traits a class names before its body, Java's and TypeScript's `implements Shape, Named {`, Swift's
 	/// `struct Square: Shape {`, Kotlin's `class Square(…) : Shape {`: skipped with a note, since a type conforms to a
-	/// trait by defining its operations (notes/traits.md T2)
-	fn skip_conformances(&mut self) {
+	/// trait by defining its operations (notes/traits.md T2). Kotlin's superclass `: Shape()` (its constructor called)
+	/// is the parent, as `extends Shape`
+	fn skip_conformances(&mut self) -> Option<String> {
 		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		let start = if self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) != '=' {
 			blanks + 1
 		} else if (0..IMPLEMENTS_WORD.len()).all(|i| self.peek_char(blanks + i) == IMPLEMENTS_WORD.as_bytes()[i] as char) && !is_identifier_char(self.peek_char(blanks + IMPLEMENTS_WORD.len())) {
 			blanks + IMPLEMENTS_WORD.len()
 		} else {
-			return;
+			return None;
 		};
 		let names: String = (start..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '{' | '\n' | '\0')).collect();
-		let are_names = names.split(',').all(|name| !name.trim().is_empty() && name.trim().chars().all(is_identifier_char));
-		if !are_names || self.peek_char(start + names.chars().count()) != '{' {
-			return;
+		let names_list: Vec<&str> = names.split(',').map(str::trim).collect();
+		let is_name = |name: &str| !name.is_empty() && name.chars().all(is_identifier_char);
+		let parent = names_list.iter().find_map(|name| name.strip_suffix("()").filter(|parent| is_name(parent)));
+		let are_names = names_list.iter().all(|name| is_name(name.strip_suffix("()").unwrap_or(name)));
+		let ends_well = self.peek_char(start + names.chars().count()) == '{' || parent.is_some();
+		if !are_names || !ends_well {
+			return None;
 		}
-		let written: String = (blanks..start).map(|offset| self.peek_char(offset)).collect::<String>() + names.trim_end();
-		crate::diagnostic::educate_once(CONFORMANCE_TOPIC, written.trim(), "", "a type conforms to a trait by defining its operations: wasp needs no list of them");
-		self.advance_by(start + names.chars().count());
+		let parent = parent.map(str::to_string);
+		let traits: Vec<&str> = names_list.iter().filter(|name| !name.ends_with("()")).copied().collect();
+		if !traits.is_empty() {
+			let written: String = (blanks..start).map(|offset| self.peek_char(offset)).collect::<String>() + names.trim_end();
+			crate::diagnostic::educate_once(CONFORMANCE_TOPIC, written.trim(), "", "a type conforms to a trait by defining its operations: wasp needs no list of them");
+		}
+		self.advance_by(start + names.trim_end().chars().count());
+		parent
 	}
 
 	/// The name of a declared type after blanks: `new Point(…)`

@@ -1,0 +1,3 @@
+// The standard library module net (notes/stdlib.md section 7): `use net`; fetch (GET) is a prelude word. post sends a
+// text through the adapter std_io and gives the answer's text (ureq natively, a synchronous request in the browser)
+post(url:any, body:any) := std_io("net", "post", [url, body])

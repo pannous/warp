@@ -36,6 +36,7 @@ needs no files on disk and works in the browser.
 | os / process | args env exit exec | host words (exit exists), Process capability |
 | regex | matches find find_all replace_all | adapter (Rust regex as host word natively, JS RegExp in the browser) |
 | hash | hash sha256 md5 crc32 | adapter (xxHash/zlib C modules exist, notes/wasm_modules.md) |
+| collections | classes Stack Queue Deque Set Counter, OrderedMap; HashSet TreeSet frozenset ArrayDeque VecDeque deque as aliases | wasp classes over a list field (std/collections.wasp, classes side warp-41) |
 
 ## 3. Prelude (global without `use`)
 Everything that works today (section 4) plus the language forms (print, type, int/text/float/as, error/raise/try,
@@ -82,8 +83,29 @@ parameter; std/map.wasp uses `ks = keys(m)` and `m.get(k)` until they are fixed.
    (tests/modules/test_std_time.rs). Fixed on the way: `{year:1970 month:1}` read `1970 month` as a duration
    (card key-unit), and the map parameter bug above (cards over-keys, inside-loop: no list copy for a map parameter).
 Next:
-7. More list words (chunk, window, median), text format; time: date arithmetic (add days, difference), formatting.
+7. Done: list chunk window median; time add_days days_between, format_date (ISO 2026-10-07), format_time (UTC
+   13:05:09), two_digits; text format("{} has {} items", ["cart", 3]). Fixed on the way: `"" + 7` passed to a counted
+   parameter made it a list; the elements of split and chars had no kind (`p[0] + 3` added numbers).
+   Then: text words lines capitalize center. Fixed on the way: a module's source now gets the program's early
+   passes (pipeline::lower_module_source; a comprehension in a module was read as a list), its getters lowered with
+   the program (a second getters pass after modules::resolve); a parameter guessed a list takes text when the calls
+   pass only texts (pad_right(pad_left(…))).
+   map: invert pick from_pairs; time: parse_date("2026-10-07"), days_from_date(y, m, d).
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
+
+Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:
+Stack push pop peek size, Queue enqueue dequeue peek size, Deque push_back push_front pop_back pop_front size,
+Set(xs) add has remove size, Counter(xs) add get most_common (tests/modules/test_std_collections.rs). Module only,
+not prelude (prelude question queued with warp-e9). A used module's classes go in before class_methods
+(modules::insert_module_classes, its own source pass), since modules::resolve runs after class_methods; the loader
+leaves those modules' classes out (EARLY_CLASS_MODULES). Same for a file module's classes (`use shapes`, all its
+classes; a std module's only those the program names); a class the program declares itself wins. A module used only
+inside another module still loads its classes late (their methods unlowered). `new Set(xs)`, `collections.Counter(xs)` and the foreign class names (STD_CLASS_ALIASES) work with a
+note. Other languages' method names (append appendleft popleft offer poll addFirst pollLast contains delete shift …,
+class_methods METHOD_ALIASES) are the class's methods with a note, on a class not defining that name; `len(s)`,
+`count(s)`, `s.len()` of an instance are its size method. OrderedMap() is `{}` (wasp maps keep insertion order),
+OrderedDict and LinkedHashMap its aliases (modules STD_ALIASES). Not yet: `from collections import Counter` (no
+`from … import` form at all).
 
 ## 7. Adapters (async, warp-f0)
 How a module word is backed when wasp alone cannot do it. All six mechanisms exist (notes/stdlib_connectors.md,
@@ -129,7 +151,8 @@ regex: capability like libm's) and `std_io(…)` for words that touch the outsid
 defines its words over them, `parse_json(text) := std_pure("json", "parse", [text])` (std/json.wasp); natively
 src/std_adapters.rs answers by (module, member), in the browser host.js STD_ADAPTERS. Values cross as for the foreign
 runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain). Their results are any Node (analyzer
-ANY_VALUE_WORDS); a parameter that takes any value is annotated `any` (`to_json(value:any)`).
+ANY_VALUE_WORDS). The wrappers' parameters are annotated `any` (`to_json(value:any)`): an unannotated parameter fed
+only by such values would default to an int ("not an int" for `parse_json(post(…))`).
 Adding a word: one match arm in std_adapters.rs, one function in STD_ADAPTERS, one line in std/<module>.wasp, a test
 run natively and in the browser.
 
@@ -140,8 +163,23 @@ run natively and in the browser.
    the browser host.js keeps written files in memory while the page is open (read sees them first, then the served
    repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
    method `xs.append(v)` a program using `use file` still needs (question Q6). args waits for a CLI way to pass them.
-2. hash (B): embed zlib.wasm/xxhash.wasm and a sha256.wasm in warp, `use hash` resolves to them in both hosts.
-3. regex (A): Rust regex + JS RegExp behind matches/find/find_all/replace_all, with the common-subset check.
+2. Done as A instead of B: hash: `use hash` brings sha256 (lowercase hex) and crc32 (a number) of a text's UTF-8
+   bytes: sha2 and crc32fast natively (both already warp dependencies), a synchronous JS twin in host.js (crypto.subtle
+   is asynchronous, a host call cannot wait); same values in both hosts (tests/modules/test_std_hash.rs). B (C modules
+   compiled to wasm) stays the way for xxhash, compression and other libraries without a Rust/JS pair.
+3. Done: regex (A): `use regex` brings matches, first_match, find_all, replace_all (`$1` groups in the replacement);
+   Rust's regex natively, JS RegExp (flag u) in the browser; look-around and backreferences are the error "… is not
+   in wasp's regex (one engine lacks it)" in both (tests/modules/test_std_regex.rs). `first_match`, since `find` is
+   the list word find(xs, predicate).
+3b. Done: net (A, std_io): `use net` brings post(url, body), the body sent as UTF-8 text, the answer's text (ureq
+   natively, a synchronous XMLHttpRequest in the browser; tests/modules/test_std_net.rs against httpbin.org).
+3c. Done: other ecosystems' names (src/lowering/std_aliases.rs, the source pass before welcome_forms): `JSON.parse` /
+   `json.loads` → parse_json, `JSON.stringify` / `json.dumps` → to_json, `re.findall(p, t)` → find_all(t, p),
+   `re.sub(p, r, t)` → replace_all(t, p, r), `fs.readFileSync` → read, `fs.writeFileSync` / `appendFileSync` /
+   `existsSync` → write / append_file / exists, `os.getenv` → env, `process.exit` → exit: the got-it note names wasp's
+   word, and the alias brings its module as `use json` would. A program that names the module (`re = 3`) or imports
+   the real one (`use python "json"`) keeps it (tests/modules/test_std_aliases.rs). A name not in the table goes
+   through the foreign bridges (notes/stdlib_connectors.md).
 4. Later: the AOT stub linking B modules (they need no compiler), then hash and compress work in executables.
 
 ## Open questions (to warp-e9, defaults in force)

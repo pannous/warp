@@ -1,0 +1,5 @@
+use boxes
+b = Box()
+b.put(3)
+b.put(4)
+b.take() * 10 + b.size()

@@ -76,6 +76,8 @@ const NEW_WORD: &str = "new";
 const IMPLEMENTS_WORD: &str = "implements";
 /// The got-it topic of a class naming its traits (`implements Shape`, Swift's `: Shape`)
 const CONFORMANCE_TOPIC: &str = "conformance-list";
+/// `enum Color {red, green}` (declarations::enum_object), Kotlin's `enum class`
+const ENUM_WORD: &str = "enum";
 /// Go's `type Shape interface {…}` declares the trait Shape
 const GO_INTERFACE_WORD: &str = "interface";
 /// Go's `type Point struct {…}` declares the class Point
@@ -91,6 +93,19 @@ const PYTHON_ROOT_CLASS: &str = "object";
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
+/// English operator words (samples/natural.wasp, wiki/operator.md lists `plus` and `equals` as aliases): the longer
+/// phrases first, so `is greater than` is no `is`
+const WORD_OPERATORS: [(&str, Op); 11] = [
+	("is greater than", Op::Gt), ("is less than", Op::Lt), ("is at least", Op::Ge), ("is at most", Op::Le),
+	("greater than", Op::Gt), ("less than", Op::Lt), ("divided by", Op::Div), ("plus", Op::Add), ("minus", Op::Sub),
+	("equals", Op::Eq), ("through", Op::To),
+];
+const IS_IN_PHRASE: &str = "is in";
+/// `for each item in basket` is `for item in basket`
+const EACH_WORD: &str = "each";
+/// `10 down to 1` is `reverse(1 to 10)`
+const DOWN_WORD: &str = "down";
+const REVERSE_WORD: &str = "reverse";
 /// Word spellings of `≈` (wiki/operator.md): equal within the relative `tolerance`
 const SIMILARITY_WORDS: [&str; 2] = ["circa", "approximately"];
 const EXCLUSIVE_DOTS: &str = "..";
@@ -332,6 +347,8 @@ const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
+/// `try X catch Y finally Z`: Z runs after either, the value stays X's or Y's
+const FINALLY_KEYWORD: &str = "finally";
 const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
 /// `nand` and its glyph pair, both `not (a and b)`
 /// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
@@ -355,6 +372,16 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) => crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec),
 		_ => false,
 	})
+}
+
+/// `keys(m)`, `m.keys`, `m.keys()`: an iterable whose items are a map's keys
+fn iterates_keys(iterable: &Node) -> bool {
+	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::library_words::MAP_KEYS);
+	let is_keys_call = |call: &Node| is_keys_word(call) || matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_keys_word));
+	match iterable.drop_meta() {
+		Node::Key(_, Op::Dot, method) => is_keys_call(method),
+		call => is_keys_call(call),
+	}
 }
 
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
@@ -611,6 +638,8 @@ pub struct WaspParser {
 	equals_compares: bool,
 	/// Inside the iterable of `for x in …` a block is the loop body, never an argument: `for i in 0..n {…}`
 	in_for_header: bool,
+	/// The variables of the enclosing `for k in keys(m)` loops: `m[k]` looks a key up, so no indexing hint
+	key_variables: Vec<String>,
 	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
 	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
@@ -644,8 +673,12 @@ pub struct WaspParser {
 	pending_comment: Option<String>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
 	after_function_keyword: bool,
+	/// inside Elixir's capture `&(…)`, where `&1` is its first argument
+	in_capture: bool,
 	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
 	elvis_operands: usize,
+	/// `try … catch … finally {…}` parsed so far, numbering the variables holding their values
+	finally_blocks: usize,
 	/// Names defined with `:=` so far: a braceless call of one may take an identifier argument anywhere (`fac it-1`)
 	functions: std::collections::HashSet<String>,
 	/// Those of them declared with named parameters (`f x y := …`), the rest take the implicit `it`
@@ -901,6 +934,7 @@ impl WaspParser {
 			options,
 			equals_compares: false,
 			in_for_header: false,
+			key_variables: vec![],
 			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,
@@ -916,7 +950,9 @@ impl WaspParser {
 			times_loops: 0,
 			pending_comment: None,
 			after_function_keyword: false,
+			in_capture: false,
 			elvis_operands: 0,
+			finally_blocks: 0,
 			functions: Default::default(),
 			functions_with_parameters: Default::default(),
 		}
