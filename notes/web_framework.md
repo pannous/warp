@@ -314,7 +314,7 @@ Each step is useful on its own and is what the next ones stand on.
 - Natively (2026-10-07, warp-12): src/gpu.rs runs the same shader through wgpu 30 (Metal, Vulkan or DX12; the
   `native` feature; pollster blocks on its futures), one device per process; errors in the browser's form, `1:10:
   expected identifier…` or wgpu's innermost cause. A machine without an adapter says "no WebGPU adapter" (tests skip).
-  Cost: ~110 more crates in Cargo.lock, a first build of about a minute. Not a sample yet.
+  Cost: 69 more crates in Cargo.lock, a first build of about a minute. Not a sample yet.
 - Next: more buffers and uniforms (a map of named arrays), typed results (ints as array<i32>), render to a canvas.
 
 ## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
