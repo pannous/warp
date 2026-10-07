@@ -83,3 +83,12 @@ Each step is useful on its own and is what the next ones stand on.
   key into place instead of rewriting elements by position. Tour example "keyed list" (`keyed` check).
 - Not yet: `for t in ts { li{t} }` inside a block (the parser reads `ts { … }` as the tag ts; card markup-for),
   transitions (web-transitions).
+
+## Step 6 (web-bind), what is done and what is left
+- `input{ bind: name }` is `input{ value: name on input { name = event.value } }` (element_events.rs); a checkbox or
+  radio binds `checked`. `input` is a page event (PAGE_EVENTS); the page sends {value, checked} (a number from a
+  number or range field) and sets a changed field's value/checked when the markup comes back (morphElement).
+- Boolean attributes (checked, disabled, …) are present or absent (html.rs; true arrives from a run as 1).
+- Tour example "form binding" (`typed` field of examples.js).
+- Left: `select{ bind: choice }` (its first render shows the first option), `bind:` inside a component's state
+  (component_state.rs sees only handlers), form submit as an event with the fields as an object, validation from types.

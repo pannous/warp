@@ -15,8 +15,9 @@ const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
 const INSTANCE_ATTRIBUTE = "data-wasp-instance"; // a component instance's elements (src/lowering/element_events.rs)
 const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (src/html.rs)
+const NUMBER_FIELDS = ["number", "range"]; // fields whose bound value is a number
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
-const PAGE_EVENT = /^on ((?:click|key)(?:·\d+)?)$/;
+const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
 // (src/paint.rs shade, std/draw.wasp)
@@ -276,6 +277,9 @@ function morphChildren(shown, wanted) {
 function morphElement(shown, wanted) {
 	[...shown.attributes].filter(({ name }) => !wanted.hasAttribute(name)).forEach(({ name }) => shown.removeAttribute(name));
 	[...wanted.attributes].filter(({ name, value }) => shown.getAttribute(name) !== value).forEach(({ name, value }) => shown.setAttribute(name, value));
+	// a field the user changed no longer follows its attributes: what it holds is set (card web-bind)
+	if ("value" in shown && wanted.hasAttribute("value") && shown.value !== wanted.getAttribute("value")) shown.value = wanted.getAttribute("value");
+	if ("checked" in shown) shown.checked = wanted.hasAttribute("checked");
 	morphChildren(shown, wanted);
 }
 
@@ -319,6 +323,11 @@ function sendElementEvent(event, happened, detail) {
 	const element = path.find(node => node.getAttribute?.(attribute));
 	const instance = path.find(node => node.getAttribute?.(INSTANCE_ATTRIBUTE))?.getAttribute(INSTANCE_ATTRIBUTE);
 	if (element) sendPageEvent(`${event}·${element.getAttribute(attribute)}`, instance ? { ...detail, instance: Number(instance) } : detail);
+}
+
+// what a form field holds now: `input{ bind: name }` sets name to event.value (a number from a number or range field)
+function inputDetail(field) {
+	return { value: NUMBER_FIELDS.includes(field.type) ? field.valueAsNumber : field.value, checked: field.checked ?? false };
 }
 
 function clickDetail(click) {
@@ -416,6 +425,7 @@ function initialize() {
 	});
 	$("run").onclick = runNow;
 	$("rendered").onclick = click => sendElementEvent("click", click, clickDetail(click));
+	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
 	$("output").onclick = click => sendPageEvent("click", clickDetail(click));
 	$("output").onkeydown = key => sendPageEvent("key", { key: key.key });
 	$("download").onclick = downloadModule;

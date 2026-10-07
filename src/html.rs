@@ -19,12 +19,14 @@ const ELEMENTS: [&str; 74] = [
 /// Elements without content or closing tag
 const VOID_ELEMENTS: [&str; 9] = ["br", "hr", "img", "input", "meta", "link", "base", "source", "col"];
 /// Names that are attributes when their value is plain (`title` is the element only in head)
-const ATTRIBUTES: [&str; 40] = [
+const ATTRIBUTES: [&str; 42] = [
 	"class", "id", "href", "src", "alt", "title", "style", "type", "name", "value", "for", "rel", "charset", "content",
 	"lang", "dir", "width", "height", "placeholder", "action", "method", "target", "disabled", "checked", "selected",
-	"readonly", "required", "min", "max", "step", "rows", "cols", "colspan", "rowspan", "role", "tabindex", "hidden",
+	"readonly", "required", "multiple", "autofocus", "min", "max", "step", "rows", "cols", "colspan", "rowspan", "role", "tabindex", "hidden",
 	"download", "label", "media",
 ];
+/// Attributes that are present or absent: `checked: done` (true arrives as 1 from a run)
+const BOOLEAN_ATTRIBUTES: [&str; 8] = ["checked", "disabled", "selected", "readonly", "required", "hidden", "multiple", "autofocus"];
 const HEAD: &str = "head";
 /// `data-wasp-click` (element_events.rs) and any other data attribute
 const DATA_ATTRIBUTE_PREFIX: &str = "data-";
@@ -93,7 +95,11 @@ fn write_element(tag: &str, content: &Node, html: &mut String) {
 	for attribute in attributes {
 		let (name, value) = attribute_parts(attribute, tag).expect("partitioned");
 		let name = if name == KEY { KEY_ATTRIBUTE } else { name };
-		html.push_str(&format!(" {name}=\"{}\"", escaped(&attribute_value(value))));
+		match BOOLEAN_ATTRIBUTES.contains(&name) {
+			true if is_true(value) => html.push_str(&format!(" {name}")),
+			true => {}
+			false => html.push_str(&format!(" {name}=\"{}\"", escaped(&attribute_value(value)))),
+		}
 	}
 	html.push('>');
 	if VOID_ELEMENTS.contains(&tag) {
@@ -118,6 +124,10 @@ fn plain_text(node: &Node) -> String {
 		Node::Char(character) => character.to_string(),
 		other => other.serialize(),
 	}
+}
+
+fn is_true(value: &Node) -> bool {
+	matches!(value.drop_meta(), Node::True) || matches!(value.drop_meta(), Node::Number(number) if *number != crate::Number::Int(0))
 }
 
 fn escaped(text: &str) -> String {
