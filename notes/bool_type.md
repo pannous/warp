@@ -21,13 +21,16 @@ bool variables (Local.type_node `bool`), blocks ending in one, type tests, bool-
 
 ## `===` / `!==`
 Op::Identical / Op::NotIdentical (appended to OP_CODES). The emitter rewrites `a === b` (equality.rs
-identity_as_equality): `a == b` when both sides are bools or neither is, else the constant false (`!==` true).
-Only boolness counts so far: `1 === 1.0` is true.
+identity_as_equality, P196): `a == b` when both static type names agree, else the constant false (`!==` true). A side of
+unknown static type (`value:any`) is told apart by boolness only. `1.0` is lowered to the exact int 1, so
+`1 === 1.0` is yes (`1 === (1.0 as float)` is no).
+
+## Arithmetic
+P195: `true + 1` is 2, literal or variable (the analyzer error "arithmetic on a boolean" is gone).
 
 ## Rust side
 `Node::True == 1` and `Node::False == 0` (PartialEq<i64>), so `is!(…, 1)` tests keep passing; serialized output
 changed to true/false (tests upgraded in their own commit).
 
 ## Open
-- Literal `true + 1` keeps the analyzer error "arithmetic on a boolean" (older decision, notes/footguns.md).
 - Cards true-lowers (`[true, 2]` lowers to ø) and bool-crossing (a task's bool result arrives as 1).

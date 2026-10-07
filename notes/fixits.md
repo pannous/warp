@@ -48,7 +48,6 @@ in case the user did indeed intend something different". Builds the "Later: chan
 | `render "hi"` with variants (overloads) | overloads.rs | first declared | `render "hi" as pdf`, `… as docx` |
 | `pirnt` names nothing (near-miss) | list_emitter `warn_near_miss` | the symbol | `data pirnt`, `print` |
 | `square 3 + square 4` (error) | analyzer `check_ambiguous_calls` | none | `square(3) + square(4)`, `square(3 + square(4))` |
-| `true + true` (error) | analyzer `check_boolean_arithmetic` | none | `int(true) + int(true)` |
 | `1==1==1` (error) | wasp_parser `chained_equality` | none | `1==1 and 1 == 1`, `(1==1) == 1` |
 | `3 & 4 == 4` (error) | wasp_parser `logic_mixed_with_comparison` | none | `3 & (4 == 4)`, `(3 & 4) == 4` |
 | `"a" as int` (error) | wasp_parser string literal | none | `codepoint('a') as int` (P74) |
