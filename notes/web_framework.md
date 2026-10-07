@@ -231,8 +231,12 @@ Each step is useful on its own and is what the next ones stand on.
   serve route and no file of the site renders the page at that path (main + page·html under host::with_page_path), so
   GET /users/2 is that route's HTML, hydrated by site.js at the same path. A path no route takes gets the "*" route's
   page (status 200; without one the "no page at <path>" text). Fixture tests/fixtures/served_routes.wasp.
-- Open: a built site prerendering each static route (index.html is "/" only; card route-prerender). `outlet` is the
-  canonical word (aliases such as slot on demand).
+- Prerendered routes (card route-prerender): `warp build --site` (and `warp dev`) also writes <path>/index.html for
+  each route without parameters but "/" (src/site.rs prerendered, patterns from page·routes), rendered at that path,
+  its scripts named from its depth ("../site.js"); site.js fetches app.wasm beside itself, so the page hydrates at
+  /about/. site::file_at finds "/about" as about/index.html (warp dev, serve). Routes with parameters and "*" are
+  rendered by the page itself (a static host needs a fallback to index.html for them).
+- `outlet` is the canonical word (aliases such as slot on demand).
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the

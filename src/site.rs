@@ -75,6 +75,11 @@ const INDEX_PATH: &str = "/";
 /// a deeper path ("/users/2") from the server's root
 const BESIDE: &str = "";
 const SERVER_ROOT: &str = "/";
+/// A prerendered page one folder deeper than the site's files names them from its parent
+const PARENT: &str = "../";
+/// The pattern of the route of any path (the not-found page), which no file stands for
+const ANY_PATH: &str = "*";
+const PATH_SEPARATOR: &str = "/";
 
 /// What `warp build --site` wrote
 pub struct BuiltSite {
@@ -90,14 +95,46 @@ pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, Str
 	let files = files(code, title, false)?;
 	std::fs::create_dir_all(directory).map_err(|failure| format!("cannot make {}: {failure}", directory.display()))?;
 	for (name, bytes) in &files {
-		std::fs::write(directory.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"))?;
+		let file = directory.join(name);
+		let folder = file.parent().unwrap_or(directory);
+		std::fs::create_dir_all(folder).map_err(|failure| format!("cannot make {}: {failure}", folder.display()))?;
+		std::fs::write(&file, bytes).map_err(|failure| format!("cannot write {name}: {failure}"))?;
 	}
 	Ok(BuiltSite { directory: directory.to_path_buf(), files: files.into_iter().map(|(name, _)| name).collect() })
 }
 
 /// The files of the site of `code`; `dev` adds dev.js. A failure names its position with the source line
 pub fn files(code: &str, title: &str, dev: bool) -> Result<Vec<SiteFile>, String> {
-	site_files(code, title, dev)?.ok_or_else(|| format!("the program shows no page: it exports no {}", crate::page_html::PAGE_HTML))
+	let site = site_of(code, title, dev)?.ok_or_else(|| format!("the program shows no page: it exports no {}", crate::page_html::PAGE_HTML))?;
+	let prerendered = prerendered(code, title, &site)?;
+	Ok(site.files.into_iter().chain(prerendered).collect())
+}
+
+/// The page of each route without parameters but "/" (card route-prerender), as <path>/index.html: a deep link reads
+/// without JavaScript, and the page names the site's files from its depth
+fn prerendered(code: &str, title: &str, site: &Site) -> Result<Vec<SiteFile>, String> {
+	if !exports(&site.module, crate::routes::PAGE_ROUTES) {
+		return Ok(vec![]);
+	}
+	let patterns = crate::wasm_reader::read_export_after_main(&site.module, site.imports, crate::routes::PAGE_ROUTES).map_err(|failure| failure.to_string())?;
+	let mut paths: Vec<Vec<String>> = vec![];
+	for folders in patterns.drop_meta().iter().filter_map(|pattern| static_folders(&pattern.name())) {
+		if !paths.contains(&folders) {
+			paths.push(folders);
+		}
+	}
+	paths.into_iter().map(|folders| {
+		let folder = folders.join(PATH_SEPARATOR);
+		let page = crate::host::with_page_path(&format!("{PATH_SEPARATOR}{folder}"), || rendered_page(code, title, site, &PARENT.repeat(folders.len())))?;
+		Ok((format!("{folder}{PATH_SEPARATOR}{PAGE_FILE}"), page.into_bytes()))
+	}).collect()
+}
+
+/// The folders of a route's path when it has no parameter and is not "/" ("/docs/intro" → docs, intro)
+fn static_folders(pattern: &str) -> Option<Vec<String>> {
+	let folders: Vec<String> = pattern.split(PATH_SEPARATOR).filter(|folder| !folder.is_empty()).map(str::to_string).collect();
+	let is_static = pattern != ANY_PATH && !folders.is_empty() && !folders.iter().any(|folder| folder.starts_with(crate::routes::PARAMETER_MARK));
+	is_static.then_some(folders)
 }
 
 /// The site a program serving its page serves (src/web_server.rs), none when its last line shows nothing
@@ -134,10 +171,6 @@ struct Site {
 	files: Vec<SiteFile>,
 }
 
-fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>>, String> {
-	Ok(site_of(code, title, dev)?.map(|site| site.files))
-}
-
 fn site_of(code: &str, title: &str, dev: bool) -> Result<Option<Site>, String> {
 	let compile = || crate::pipeline::for_a_page(|| crate::pipeline::compile(code));
 	let module = if dev { crate::pipeline::for_dev(compile) } else { compile() };
@@ -165,10 +198,12 @@ fn rendered_page(code: &str, title: &str, site: &Site, root: &str) -> Result<Str
 	Ok(page(title, html, &site.scripts, root))
 }
 
-/// The file of a site a request path names: "/" is the page, "/app.wasm" the module, …
+/// The file of a site a request path names: "/" is the page, "/app.wasm" the module, "/about" a prerendered
+/// about/index.html, …
 pub fn file_at<'a>(files: &'a [SiteFile], path: &str) -> Option<&'a SiteFile> {
-	let name = if path == INDEX_PATH { PAGE_FILE } else { path.trim_start_matches('/') };
-	files.iter().find(|(file, _)| file == name)
+	let name = if path == INDEX_PATH { PAGE_FILE } else { path.trim_start_matches(PATH_SEPARATOR) };
+	let folder_page = format!("{}{PATH_SEPARATOR}{PAGE_FILE}", name.trim_end_matches(PATH_SEPARATOR));
+	files.iter().find(|(file, _)| file == name).or_else(|| files.iter().find(|(file, _)| *file == folder_page))
 }
 
 /// The content type of a site's file, by its extension
