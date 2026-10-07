@@ -130,3 +130,16 @@ fn test_warp_run_leaves_no_executable() {
 	assert!(!text(&run.stderr).contains("executable"), "{}", text(&run.stderr));
 	assert!(!executable.exists());
 }
+
+/// card cli-running: running a file also compiles it for the executable; that second compile says nothing again
+#[test]
+fn test_running_a_file_shows_its_hints_once() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_hinted.warp");
+	std::fs::write(&source_path, "x = 3\nx > 2 ? 1 : 0").unwrap();
+	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
+	let _ = std::fs::remove_file(&executable);
+	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).arg(&source_path).output().unwrap();
+	let stderr = text(&run.stderr);
+	assert_eq!(stderr.matches("hint").count(), 1, "{stderr}");
+	assert!(executable.exists(), "{stderr}");
+}
