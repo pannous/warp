@@ -37,3 +37,13 @@ fn typed_names_are_no_elements() {
 	assert!(warnings_of("class P { a: int; s: string }\nP(1, \"x\").a").is_empty());
 	assert!(warnings_of("img: \"x\"").iter().any(|warning| warning.contains("img")), "a real element still warns");
 }
+
+/// a ternary's branches (`b == 0 ? a : gcd(b, a % b)`) and a number field (`{a:1}`, `P{a:1}`) are no elements
+/// (sweep of samples/: gcd.wasp, control_flow.wasp warned "a without href")
+#[test]
+fn ternaries_and_number_fields_are_no_elements() {
+	assert!(warnings_of("def gcd(a, b) := b == 0 ? a : gcd(b, a % b)\ngcd(48, 18)").is_empty());
+	assert!(warnings_of("p = {a:1}; p.a").is_empty());
+	assert!(warnings_of("class P{a:int}; p = P{a:1}; p.a").is_empty());
+	assert!(!warnings_of("ok = true\nok ? div{ a{ \"home\" } } : p: \"none\"").is_empty(), "markup in a branch still warns");
+}
