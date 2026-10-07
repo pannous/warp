@@ -8,6 +8,7 @@ use crate::event_signals::{function_with_globals, main_level_variables, PAGE_VAL
 use crate::node::Node;
 use crate::system_signals::call;
 use crate::operators::Op;
+use std::collections::HashSet;
 
 pub const PAGE_HTML: &str = "page·html";
 const MARKUP_MODULE_USE: &str = "use markup";
@@ -15,28 +16,36 @@ const TO_HTML: &str = "to_html";
 /// Words that start a statement, not a value to show
 const STATEMENT_WORDS: [&str; 5] = ["print", "puts", "use", "import", "return"];
 
-pub fn lower(program: Node) -> Node {
-	if !crate::pipeline::is_for_a_page() {
-		return program;
-	}
-	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
-	let main_variables = main_level_variables(&statements);
-	if !statements.iter().any(|statement| defines(statement, PAGE_VALUE)) {
-		let Some(shown) = statements.last().filter(|last| is_shown(last)).cloned() else { return program };
-		statements.insert(statements.len() - 1, function_with_globals(PAGE_VALUE, false, &[shown], &main_variables));
-	}
-	let rendered = call(TO_HTML, vec![call(PAGE_VALUE, vec![])]);
-	statements.insert(statements.len() - 1, function_with_globals(PAGE_HTML, false, &[rendered], &main_variables));
-	Node::List(statements, bracket, separator)
-}
-
-/// A page uses std/markup.wasp for its to_html, before modules::resolve joins the used modules
+/// A page uses std/markup.wasp and exports page·html := to_html(page·value()), before modules::resolve joins the used
+/// modules (it keeps the std definitions the program names)
 pub fn use_markup(program: Node) -> Node {
 	if !crate::pipeline::is_for_a_page() {
 		return program;
 	}
 	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
+	let rendered = call(TO_HTML, vec![call(PAGE_VALUE, vec![])]);
+	statements.insert(statements.len().saturating_sub(1), function_with_globals(PAGE_HTML, false, &[rendered], &HashSet::new()));
 	statements.insert(0, crate::wasp_parser::parse(MARKUP_MODULE_USE));
+	Node::List(statements, bracket, separator)
+}
+
+/// page·value is the output binding event_signals made, else the last line when that is a value; without one the page
+/// shows nothing and page·html goes again
+pub fn lower(program: Node) -> Node {
+	if !crate::pipeline::is_for_a_page() {
+		return program;
+	}
+	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
+	if statements.iter().any(|statement| defines(statement, PAGE_VALUE)) {
+		return program;
+	}
+	match statements.last().filter(|last| is_shown(last)).cloned() {
+		Some(shown) => {
+			let main_variables = main_level_variables(&statements);
+			statements.insert(statements.len() - 1, function_with_globals(PAGE_VALUE, false, &[shown], &main_variables));
+		}
+		None => statements.retain(|statement| !defines(statement, PAGE_HTML)),
+	}
 	Node::List(statements, bracket, separator)
 }
 
