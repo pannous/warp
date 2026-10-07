@@ -167,5 +167,10 @@ Each step is useful on its own and is what the next ones stand on.
   shows each frame at once in place of the last canvas (host.js sleep → worker message "sleep" → playground.js
   painted). Frames keep the run alive past RUN_TIMEOUT_MS; editing the code stops the animation (show → stopRun) and
   runs the new code. Paints without a sleep between them stay one canvas each. Tour example animation (`canvases` check).
-- Natively each show still writes paint-N.png (src/paint.rs). Left of drawing-frames: mouse input over the canvas
-  (event.x/y, mouse_x / mouse_y / mouse_down), color.with_alpha(a) as a method; built sites (site.js) show no frames yet.
+- Frames draw into the canvas shown (showFrame), so the pointer stays over it. `mouse_x`, `mouse_y` (canvas pixels) and
+  `mouse_down` are system values (host_words.rs): the page keeps the pointer over a canvas in a SharedArrayBuffer that
+  the worker reads at once, also in the middle of an animation, when it takes no messages (playground.js
+  trackPointer → worker pagePointer → host.js system_value). `on click` over the canvas gives event.x / event.y.
+  Natively mouse_x is a loud error (no canvas). Tour example mouse.
+- Natively each show still writes paint-N.png (src/paint.rs). Left of drawing-frames: color.with_alpha(a) as a method;
+  built sites (site.js) show no frames and no pointer yet.

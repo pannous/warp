@@ -92,6 +92,7 @@ function startWorker() {
 	});
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
 	tellSystemValues();
+	sharePointer();
 	worker.postMessage({ stored: storedValues() });
 }
 
@@ -127,7 +128,7 @@ function painted(run, painting) {
 	run.slept = false;
 	run.animating = true;
 	run.paintings = [painting];
-	showPaintings(run.paintings);
+	showFrame(painting);
 	stopAfterTimeout(run);
 }
 
@@ -296,16 +297,28 @@ function showRendered(html) {
 }
 
 function showPaintings(paintings) {
-	$("paintings").replaceChildren(...paintings.map(({ pixels, width, height }) => {
-		const canvas = element("canvas", { width, height, className: "painting" });
-		canvas.style.width = `${width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(width, height, 1)))}px`;
-		const image = canvas.getContext("2d").createImageData(width, height);
-		for (let index = 0; index < width * height; index++) {
-			image.data.set([...paintShade(pixels[index]), 255], index * 4);
-		}
-		canvas.getContext("2d").putImageData(image, 0, 0);
-		return canvas;
+	$("paintings").replaceChildren(...paintings.map(painting => {
+		const canvas = element("canvas", { width: painting.width, height: painting.height, className: "painting" });
+		canvas.style.width = `${painting.width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(painting.width, painting.height, 1)))}px`;
+		return drawn(canvas, painting);
 	}));
+}
+
+// an animation's next frame drawn into the canvas shown, which keeps the pointer over it; another size is a new canvas
+function showFrame(painting) {
+	const shown = $("paintings").querySelectorAll("canvas");
+	const [canvas] = shown;
+	if (shown.length === 1 && canvas.width === painting.width && canvas.height === painting.height) drawn(canvas, painting);
+	else showPaintings([painting]);
+}
+
+function drawn(canvas, { pixels, width, height }) {
+	const image = canvas.getContext("2d").createImageData(width, height);
+	for (let index = 0; index < width * height; index++) {
+		image.data.set([...paintShade(pixels[index]), 255], index * 4);
+	}
+	canvas.getContext("2d").putImageData(image, 0, 0);
+	return canvas;
 }
 
 // ---- page events (notes/signals.md phase 7): `on click {…}`, `on key {…}` of the program shown --------------------
@@ -331,6 +344,18 @@ function sendPageEvent(event, detail) {
 function sendElementEvent(event, happened, detail) {
 	const found = elementEvent(event, happened, detail);
 	if (found) sendPageEvent(found.event, found.detail);
+}
+
+// mouse_x, mouse_y, mouse_down (host.js system_value): the pointer over a canvas in shared memory, which a running
+// animation reads at once (its worker takes no message while it runs); the worker gets the buffer and these names
+const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down"];
+const pointer = globalThis.SharedArrayBuffer ? new Int32Array(new SharedArrayBuffer(POINTER_NAMES.length * Int32Array.BYTES_PER_ELEMENT)) : undefined;
+const sharePointer = () => pointer && worker.postMessage({ pointer: { buffer: pointer.buffer, names: POINTER_NAMES } });
+
+function trackPointer(event) {
+	if (!pointer || !event.target.closest?.("canvas")) return;
+	const { x, y } = clickDetail(event);
+	[x, y, event.buttons & 1].forEach((value, index) => Atomics.store(pointer, index, value));
 }
 
 function clickDetail(click) {
@@ -445,6 +470,8 @@ function initialize() {
 	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
 	$("output").onclick = click => sendPageEvent("click", clickDetail(click));
 	$("output").onkeydown = key => sendPageEvent("key", { key: key.key });
+	for (const event of ["pointermove", "pointerdown", "pointerup"]) $("output").addEventListener(event, trackPointer);
+	document.addEventListener("pointerup", () => pointer && Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), 0));
 	$("download").onclick = downloadModule;
 	showBuildSwitch();
 	fillExamples();

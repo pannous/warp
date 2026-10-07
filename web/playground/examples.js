@@ -131,6 +131,16 @@ for x in 0..32 {
   sleep(30)
 }
 "done"` },
+	mouse: { value: '"done"', canvases: 1, code: `// move the mouse over the canvas: the dot follows it, red while a button is down (for six seconds)
+use draw
+canvas(48, 24)
+for frame in 0..200 {
+  clear(paper)
+  circle(mouse_x, mouse_y, 3, if mouse_down then red else blue)
+  show()
+  sleep(30)
+}
+"done"` },
 	"game of life": { value: "15", wait: 1200, code: `// Conway's Game of Life, live: a step every half second on the canvas; three gliders keep 15 cells alive
 width = 24
 height = 12
