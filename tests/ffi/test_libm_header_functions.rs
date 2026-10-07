@@ -24,3 +24,10 @@ fn the_table_serves_every_listed_libm_function() {
 	let missing: Vec<&str> = warp::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| linker.get(&mut store, "m", name).is_err()).collect();
 	assert!(missing.is_empty(), "not in LIBM_UNARY/LIBM_BINARY: {missing:?}");
 }
+
+/// card ffi-mixed: a C function with float and int parameters gets each in its register (ldexp gave its first argument)
+#[test]
+fn a_c_function_with_float_and_int_parameters() {
+	is!("import ldexp from \"m\"; ldexp(1.0, 3)", 8.0);
+	is!("import ldexp from \"m\"; ldexp(3.0, -1)", 1.5);
+}
