@@ -60,6 +60,8 @@ PASSED:
   ✓ control::test_colon_handlers::a_timer_body_after_a_colon_is_the_rest_of_the_line
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
   ✓ control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
+  ✓ control::test_constant_listener::a_listener_on_a_copy_warns_with_the_derived_value
+  ✓ control::test_constant_listener::a_listener_on_a_written_or_derived_value_does_not_warn
   ✓ control::test_control_words::an_if_with_a_block_after_a_statement_starts_a_statement
   ✓ control::test_control_words::bang_evaluates_a_block
   ✓ control::test_control_words::n_times_repeats_its_block
@@ -1351,6 +1353,8 @@ PASSED:
   ✓ modules::test_netbase_package::a_query_is_a_url_path
   ✓ modules::test_netbase_package::without_a_server_the_failure_names_it
   ✓ modules::test_package_pin::a_changed_clone_stands_in_for_the_pin
+  ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
+  ✓ modules::test_package_pin::a_pinned_package_links_its_cached_version
   ✓ modules::test_package_pin::header_signatures_are_parsed_once
   ✓ modules::test_package_tools::a_package_tool_lives_in_the_package_build_directory
   ✓ modules::test_package_tools::a_package_tool_runs_in_the_package_directory
@@ -2142,6 +2146,8 @@ PASSED:
   ✓ programs::test_samples::test_sudoku
   ✓ programs::test_samples::test_sum
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
+  ✓ programs::test_small_samples::error_samples
+  ✓ programs::test_small_samples::text_samples
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
@@ -2353,6 +2359,7 @@ PASSED:
   ✓ text::test_text_functions::an_if_with_text_branches_makes_a_text_function
   ✓ text::test_text_functions::error_makes_an_error_value_of_a_text
   ✓ text::test_text_functions::return_from_a_statement_gives_back_the_node
+  ✓ text::test_text_getters::compiled_uniscript_converts_like_the_browser_page
   ✓ text::test_text_getters::text_getters_read_texts_and_errors
   ✓ text::test_text_plus_float_call::a_float_call_joins_a_text_by_its_value
   ✓ text::test_text_repeat::n_times_text_is_the_explicit_repeat
@@ -2945,6 +2952,8 @@ PASSED:
   ✓ web::test_markup_tags::rendering_markup_warns_nothing_more
   ✓ web::test_markup_tags::repeated_keys_in_a_tag_block_are_children
   ✓ web::test_markup_tags::the_html_dsl_sample_runs
+  ✓ web::test_missing_use::a_missing_use_offers_to_add_it
+  ✓ web::test_missing_use::the_added_use_makes_it_run
   ✓ web::test_page_tests::a_failing_check_names_its_test_and_the_page
   ✓ web::test_page_tests::a_missing_button_fails_the_test
   ✓ web::test_page_tests::passing_page_tests_are_counted
@@ -2977,14 +2986,20 @@ PASSED:
   ✓ web::test_transitions::a_transition_ends_before_the_children
   ✓ web::test_transitions::a_transition_is_data_on_its_element
   ✓ web::test_uniscript::an_unknown_entity_is_an_error
+  ✓ web::test_uniscript::block_types_style_their_operands
   ✓ web::test_uniscript::colors_and_geometry_are_suffix_controls
+  ✓ web::test_uniscript::effect_words_stack_on_one_operand
   ✓ web::test_uniscript::entities_become_characters
+  ✓ web::test_uniscript::full_blocks_keep_their_spaces
+  ✓ web::test_uniscript::greek_is_transliterated_phonetically
   ✓ web::test_uniscript::groups_join_hieroglyphs_and_compose_ideographs
   ✓ web::test_uniscript::spelling_back_round_trips
   ✓ web::test_uniscript::the_header_declares_uniscript_and_its_version
   ✓ web::test_uniscript::the_index_matches_the_readable_entities
   ✓ web::test_uniscript::the_marker_is_escaped_by_single_character_entities
+  ✓ web::test_uniscript::unicode_spells_back_as_uniscript
   ✓ web::test_uniscript::unsupported_characters_and_combinations_warn
+  ✓ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
   ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_wasp
   ✓ web::test_web_apis::notify_is_a_host_word
@@ -3344,15 +3359,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
-  ✗ modules::test_package_pin::a_pinned_package_links_its_cached_version
-  ✗ text::test_text_getters::compiled_uniscript_converts_like_the_browser_page
-  ✗ web::test_uniscript::block_types_style_their_operands
-  ✗ web::test_uniscript::effect_words_stack_on_one_operand
-  ✗ web::test_uniscript::full_blocks_keep_their_spaces
-  ✗ web::test_uniscript::greek_is_transliterated_phonetically
-  ✗ web::test_uniscript::unicode_spells_back_as_uniscript
-  ✗ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
 
 SUMMARY:
-19 ignored, 3341 passed, 9 failed, 3350 total tested
+19 ignored, 3356 passed, 0 failed, 3356 total tested
