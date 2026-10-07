@@ -39,3 +39,18 @@ fn a_parallel_loop_updating_a_copy_warns() {
 	use warp::diagnostic::{with_warning_mode, WarningMode};
 	with_warning_mode(WarningMode::Error, || crate::common::fails_with("t = 0; go for x in [1,2] { t += x }; t", "shared t"));
 }
+
+/// `@parallel square all xs` maps like `@parallel xs.map(square)` (card parallel-square)
+#[test]
+fn a_parallel_all_call_runs_its_items_at_once() {
+	is!("square(x) := x * x; xs = [1, 2, 3]; @parallel square all xs", warp::ints(vec![1, 4, 9]));
+	is!("square(x) := x * x; ys = @parallel square all [1, 2, 3]; ys", warp::ints(vec![1, 4, 9]));
+	is!("slow(x) := { sleep(500 ms); x }; xs = [1, 2, 3]; started = clock(); ys = @parallel slow all xs; clock() - started < 1200", true);
+}
+
+/// `@parallel` on a form it can't split into tasks says so instead of running it sequentially without a word
+#[test]
+fn a_parallel_form_that_runs_sequentially_warns() {
+	use warp::diagnostic::{with_warning_mode, WarningMode};
+	with_warning_mode(WarningMode::Error, || crate::common::fails_with("square(x) := x * x; xs = [1, 2, 3]; @parallel square xs", "@parallel"));
+}

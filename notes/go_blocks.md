@@ -27,6 +27,9 @@ later; the program waits for its tasks before it ends (tasks::TaskTable::join_al
 - Data parallelism (user, 2026-10-06: dual use of `go`, src/lowering/parallel.rs): `go xs.map(f)`, `xs.map(f)
   @parallel` and `go for x in xs { … }` split xs into 8 slices (PARALLEL_CHUNKS), each a go block; a map joins its
   results in order, a loop ends when every slice is done. A loop body updating a non-shared outer variable warns.
+  `@parallel square all xs` is the same map (the parser reads it as `(square all) xs`, so the annotation is found on
+  the head's head); `@parallel` on any other form (`@parallel square xs`) warns that it runs in sequence (card
+  parallel-square): go_blocks runs before broadcasting, so it cannot know whether square broadcasts.
   Later backends (SIMD, GPU via WebGPU/wgpu for pure numeric f over typed arrays) can take the same forms.
 - `await all [go f(1), go f(2)]` (Promise.all, asyncio.gather; declarations::awaited_starts): every task starts first,
   then each is awaited, `(go·job·1 = go f(1); go·job·2 = go f(2); [await go·job·1, await go·job·2])`. It gave the task

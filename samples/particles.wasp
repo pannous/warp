@@ -56,7 +56,7 @@ def moved(p) {
 }
 
 def update() {
-    particles = particles.map(moved)
+    particles = moved all particles
 }
 
 def render() {
