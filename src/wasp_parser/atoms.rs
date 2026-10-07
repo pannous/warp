@@ -7,6 +7,8 @@ const VOID_WORD: &str = "void";
 const NONE_WORD: &str = "none";
 const NONE_CALL_ERROR: &str = "none is the null ø, not a function: for \"no element matches\" write not any(xs, f)";
 const STYLE_WORD: &str = "style";
+/// What follows the name of a lowercase type declaration: `type point {…}`, `type size = u32`, `type pair<T>`
+const TYPE_BODY_STARTS: [char; 4] = ['{', '=', ':', '<'];
 /// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
 const CAPTURED_ARGUMENT: &str = "$0";
 
@@ -866,8 +868,22 @@ impl WaspParser {
 		let is_field = start > 0 && self.chars[start - 1] == '.';
 		!is_key && !is_field && (TYPE_DECLARATION_WORDS.contains(&symbol)
 			|| (symbol == RECORD_WORD && (self.name_and_block_follow() || self.name_and_parameters_follow()))
-			// `type 3.5`, `type "ab"`, `type(x)`: the type of a value, a declaration names its type
-			|| (symbol == "type" && self.name_after_blanks()))
+			// `type 3.5`, `type pi`, `type(x)`: the type of a value; a declaration names its type
+			|| (symbol == "type" && self.type_declaration_follows()))
+	}
+
+	/// After `type`: a capitalized name (`type Point`) or any name with its body (`type point {…}`, `type size = u32`)
+	fn type_declaration_follows(&self) -> bool {
+		if !self.name_after_blanks() {
+			return false;
+		}
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let name_length = (blanks..).take_while(|&offset| is_identifier_char(self.peek_char(offset)) || self.peek_char(offset) == '-').count();
+		let after_name = (blanks + name_length..).find(|&offset| !matches!(self.peek_char(offset), ' ' | '\t')).unwrap_or(blanks + name_length);
+		let body_follows = TYPE_BODY_STARTS.contains(&self.peek_char(after_name)) && self.peek_char(after_name + 1) != '=';
+		// `type of x` arrives as the declaration of `of`, which lowering (type_tests::type_of_word) reads as `type(x)`
+		let of_follows = (blanks..blanks + name_length).map(|offset| self.peek_char(offset)).eq("of".chars());
+		self.peek_char(blanks).is_uppercase() || body_follows || of_follows
 	}
 
 	/// The name and the `{fields}` of a type declaration, after its keyword
