@@ -167,7 +167,7 @@ pub fn run_outcome(outcome: &Value) -> Node {
 	if let Some(message) = outcome.get("trap").and_then(Value::as_str) {
 		let mut trace = outcome.get("trace").and_then(Value::as_str).unwrap_or_default().to_string();
 		if let Some(detail) = outcome.get("detail").filter(|detail| !detail.is_null()) {
-			trace.push_str(&format!("\n{}{}", crate::wasm_emitter::TRAP_DETAIL_PREFIX, node_from_tree(detail).serialize()));
+			trace.push_str(&format!("\n{}", crate::wasm_emitter::trap_detail_line(&node_from_tree(detail))));
 		}
 		return crate::wasm_emitter::trap_error(&trace, engine_words(message));
 	}

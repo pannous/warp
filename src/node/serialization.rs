@@ -2,6 +2,10 @@
 
 use super::*;
 
+/// How a bool prints (user, card bool-type): yes and no; true and false stay accepted as input
+pub const YES: &str = "yes";
+pub const NO: &str = "no";
+
 impl Node {
 	/// An operator in front of its one operand, ø on the left in the tree (`#x`, `-x`)
 	pub(super) fn is_prefix_form(&self) -> bool {
@@ -85,8 +89,8 @@ impl Node {
 			Key(k, op, v) => format!("{}{}{}{}", v.attribute_prefix(), k, op, v.serialize_with(meta, false)),
 			Error(e) => format!("Error({})", e.serialize_recurse(meta)),
 			Empty => "ø".to_string(),
-			True => "true".to_string(),
-			False => "false".to_string(),
+			True => YES.to_string(),
+			False => NO.to_string(),
 			Meta { node, data } => {
 				if let Some(literal) = self.source_literal() {
 					return literal.to_string();

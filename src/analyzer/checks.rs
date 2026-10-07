@@ -451,7 +451,6 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 		.or_else(|| check_declared_types(program, &mut HashMap::new()))
 		.or_else(|| check_constants(program, &mut HashMap::new()))
 		.or_else(|| check_null_use(program, &mut HashMap::new()))
-		.or_else(|| check_boolean_arithmetic(program))
 		.or_else(|| check_subjectless_comparison(program))
 		.or_else(|| check_ambiguous_calls(program))
 		.or_else(|| check_call_arity(program))
@@ -976,29 +975,6 @@ pub(super) fn check_subjectless_comparison(node: &Node) -> Option<Diagnostic> {
 		}
 		Node::Key(left, _, right) => check_subjectless_comparison(left).or_else(|| check_subjectless_comparison(right)),
 		Node::List(items, _, _) => items.iter().find_map(check_subjectless_comparison),
-		_ => None,
-	}
-}
-
-pub(super) fn check_boolean_arithmetic(node: &Node) -> Option<Diagnostic> {
-	fn is_boolean(operand: &Node) -> bool {
-		match operand.drop_meta() {
-			Node::True | Node::False => true,
-			Node::Key(left, op, _) => op.is_comparison() || (*op == Op::Not && matches!(left.drop_meta(), Node::Empty)),
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => is_boolean(&items[0]),
-			_ => false,
-		}
-	}
-	match node.drop_meta() {
-		Node::Key(left, op, right) if op.is_arithmetic() && (is_boolean(left) || is_boolean(right)) => {
-			let expression = node.drop_meta().serialize();
-			let converted = |operand: &Node| if is_boolean(operand) { format!("int({})", operand.serialize()) } else { operand.serialize() };
-			let explicit = format!("{} {} {}", converted(left), op.as_str(), converted(right));
-			Some(Diagnostic::at(node, format!("arithmetic on a boolean: {expression}")).fix(&explicit)
-				.offer("count true as 1 and false as 0", expression.as_str(), explicit))
-		}
-		Node::Key(left, _, right) => check_boolean_arithmetic(left).or_else(|| check_boolean_arithmetic(right)),
-		Node::List(items, _, _) => items.iter().find_map(check_boolean_arithmetic),
 		_ => None,
 	}
 }

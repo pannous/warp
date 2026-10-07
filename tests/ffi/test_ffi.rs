@@ -339,6 +339,20 @@ fn test_ffi_sdl_combined() {
 }
 
 #[test]
+fn test_ffi_sdl_parallel_runs() {
+	// SDL_Init and SDL_Quit are not thread-safe: runs in one process (the test threads) must not call them at once
+	std::thread::scope(|threads| {
+		for _ in 0..8 {
+			threads.spawn(|| {
+				for _ in 0..10 {
+					is!("tests/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
+				}
+			});
+		}
+	});
+}
+
+#[test]
 #[ignore = "requires SDL2 library and FFI signatures"]
 fn test_ffi_sdl_debug() {
 	// print results of SDL functions to debug FFI

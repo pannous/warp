@@ -96,14 +96,14 @@ fn word_fixes() {
 
 #[test]
 fn operator_ambiguity_fixes() {
-	assert_fix("true + true", "count true", "2");
-	assert_fix("2==2==1", "both equalities", "false");
+	assert_eq!(eval("true + true"), 2); // P195 (user): no fix needed, a bool counts as 1/0
+	assert_fix("2==2==1", "both equalities", "no");
 	assert_fix("3 & 4 == 4", "comparison first", "1");
 	assert_fix("\"a\" as int", "code point", "97");
 	assert_fix("c=1; c>0 and 0 or 5", "whenever", "0");
 	assert_fix("2 * 1.5 as int", "convert the whole", "3");
 	assert_fix("-7 % 3", "truncated", "-1");
-	assert_fix("(1, 2) == 1, 2", "all the values", "true");
+	assert_fix("(1, 2) == 1, 2", "all the values", "yes");
 	assert_fix("xs=[2,5,7]; xs#1..3", "the slice", "[2 5]");
 }
 
@@ -196,8 +196,8 @@ fn the_page_gets_every_edit_of_a_fix() {
 
 #[test]
 fn ambiguous_call_comparison_fixes() {
-	assert_fix("say(x) := x\nsay 3 == 4", "the call compared", "false");
+	assert_fix("say(x) := x\nsay 3 == 4", "the call compared", "no");
 	assert_fix("say(x) := x\nsay 3 == 4", "the comparison as the argument", "0");
-	assert_fix("say(x) := x\nsay 3 == 3", "the call compared", "true");
+	assert_fix("say(x) := x\nsay 3 == 3", "the call compared", "yes");
 	assert_eq!(fixed_by("say(x) := x\nsay 3 == 3", "the comparison as the argument"), "say(x) := x\nsay(3 == 3)");
 }

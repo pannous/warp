@@ -14,6 +14,10 @@ use crate::wasm_emitter::layout::BYTE;
 
 pub const TEXT_CONCAT: &str = "text_concat";
 pub const TEXT_OF: &str = "text_of";
+/// text_argument(node): the text a text builtin reads (text_of), but an Error fails with its own message (card byte-slice)
+const TEXT_ARGUMENT: &str = "text_argument";
+/// The builtins that read their text through text_argument
+const TEXT_ARGUMENT_USERS: [&str; 5] = [BYTE_AT, BYTE_SLICE, TEXT_TRIM, TEXT_STARTS_WITH, TEXT_ENDS_WITH];
 /// c_string(text) -> i32: a zero-terminated copy of a text known only at run time, for a C function's `char*`
 pub const C_STRING: &str = "c_string";
 const BYTE_AT: &str = "byte_at";
@@ -174,6 +178,12 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::library_ops::CODEPOINT_OF) {
 		required.extend(["string_char_at", "text_grapheme_count"]);
 	}
+	if TEXT_ARGUMENT_USERS.iter().any(|name| required.contains(name)) {
+		required.insert(TEXT_ARGUMENT);
+	}
+	if required.contains(TEXT_ARGUMENT) {
+		required.insert(TEXT_OF);
+	}
 	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, TEXT_TRIM, C_STRING, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
@@ -255,7 +265,7 @@ impl WasmGcEmitter {
 	fn emit_text_argument(&mut self, func: &mut Function, text: &Node) {
 		self.emit_node_instructions(func, text);
 		if !matches!(text.drop_meta(), Node::Text(_)) {
-			self.emit_call(func, TEXT_OF);
+			self.emit_call(func, TEXT_ARGUMENT);
 		}
 	}
 
@@ -421,6 +431,13 @@ impl WasmGcEmitter {
 			s.call(f, "text_with_char_at");
 			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::End]);
 		});
+		if self.should_emit_function(TEXT_ARGUMENT) {
+			self.runtime_function(TEXT_ARGUMENT, vec![node_ref], vec![node_ref], vec![], |s, f| {
+				s.emit_fail_if_error(f, 0);
+				f.instruction(&I::LocalGet(0));
+				s.call(f, TEXT_OF);
+			});
+		}
 	}
 
 	pub(super) fn emit_text_builtins(&mut self) {

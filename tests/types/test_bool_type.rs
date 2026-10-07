@@ -9,11 +9,11 @@ fn text_of(code: &str) -> String {
 
 #[test]
 fn test_comparisons_print_as_bool() {
-	assert_eq!(text_of("3 > 2"), "true");
-	assert_eq!(text_of("1 > 2"), "false");
-	assert_eq!(text_of("x = 3 > 2; x"), "true");
-	assert_eq!(text_of("not 3"), "false");
-	assert_eq!(text_of("f(x) := x > 2; f(3)"), "true");
+	assert_eq!(text_of("3 > 2"), "yes");
+	assert_eq!(text_of("1 > 2"), "no");
+	assert_eq!(text_of("x = 3 > 2; x"), "yes");
+	assert_eq!(text_of("not 3"), "no");
+	assert_eq!(text_of("f(x) := x > 2; f(3)"), "yes");
 }
 
 #[test]
@@ -33,11 +33,35 @@ fn test_bool_acts_as_one_or_zero() {
 
 #[test]
 fn test_strict_equality_compares_the_type() {
-	assert_eq!(text_of("0 === false"), "false");
-	assert_eq!(text_of("1 === true"), "false");
-	assert_eq!(text_of("1 === 1"), "true");
-	assert_eq!(text_of("true === true"), "true");
-	assert_eq!(text_of("(3 > 2) === true"), "true");
-	assert_eq!(text_of("0 !== false"), "true");
-	assert_eq!(text_of("1 !== 1"), "false");
+	assert_eq!(text_of("0 === false"), "no");
+	assert_eq!(text_of("1 === true"), "no");
+	assert_eq!(text_of("1 === 1"), "yes");
+	assert_eq!(text_of("true === true"), "yes");
+	assert_eq!(text_of("(3 > 2) === true"), "yes");
+	assert_eq!(text_of("0 !== false"), "yes");
+	assert_eq!(text_of("1 !== 1"), "no");
+}
+
+#[test]
+fn a_bool_of_unknown_static_type_is_tested_at_run_time() {
+	is!("h(value:any) := value is int; h(false)", false);
+	is!("h(value:any) := value is bool; h(false)", true);
+	is!("h(value:any) := value is int; h(3)", true);
+	is!("h(value:any) := value == 0; h(false)", true);
+	is!("h(value:any) := value == true; h(1)", true);
+}
+
+#[test]
+fn a_literal_bool_counts_in_arithmetic() {
+	is!("true + 1", 2); // P195 (user)
+	is!("true + true", 2);
+}
+
+#[test]
+fn strict_equality_compares_the_full_type() {
+	// P196 (user): same value and same type
+	assert_eq!(text_of("1 === 1.5"), "no");
+	assert_eq!(text_of("1 === (1.0 as float)"), "no");
+	assert_eq!(text_of("\"a\" === \"a\""), "yes");
+	assert_eq!(text_of("1 !== 1.5"), "yes");
 }

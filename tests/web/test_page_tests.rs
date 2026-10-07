@@ -15,7 +15,7 @@ fn passing_page_tests_are_counted() {
 fn a_failing_check_names_its_test_and_the_page() {
 	let outcome = eval(&format!("{COUNTER}test \"wrong\" {{ render Counter(0); check text is \"Addn 1\" }}"));
 	let Node::Error(problem) = &outcome else { panic!("expected an error, got {}", outcome.serialize()) };
-	assert!(problem.name().contains("test \"wrong\": check text is \"Addn 1\" gave 0; the page shows \"Addn 0\""), "{}", problem.name());
+	assert!(problem.name().contains("test \"wrong\": check text is \"Addn 1\" gave no; the page shows \"Addn 0\""), "{}", problem.name());
 }
 
 #[test]
