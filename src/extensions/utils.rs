@@ -1,6 +1,4 @@
 use std::fs::{create_dir_all, File};
-#[cfg(all(feature = "native", not(test)))]
-use std::io::ErrorKind;
 use std::io::Write;
 use std::path::Path;
 //noinspection ALL
@@ -47,16 +45,35 @@ pub fn download_within(url: &str, _timeout: std::time::Duration) -> Result<Strin
 
 #[cfg(all(feature = "native", not(test)))]
 pub fn download_within(url: &str, timeout: std::time::Duration) -> Result<String, String> {
-	let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(timeout)).build().into();
-	let reason = |error: ureq::Error| match error {
+	let reason = |error| network_reason(error, timeout);
+	let mut response = agent_within(timeout).get(url).call().map_err(reason)?;
+	response.body_mut().read_to_string().map_err(reason)
+}
+
+/// `post(url, body)` of the stdlib module net (src/std_adapters.rs): the body sent as UTF-8 text, the answer's text
+#[cfg(feature = "native")]
+pub fn post_within(url: &str, body: &str, timeout: std::time::Duration) -> Result<String, String> {
+	let reason = |error| network_reason(error, timeout);
+	let mut response = agent_within(timeout).post(url).header("Content-Type", "text/plain; charset=utf-8").send(body).map_err(reason)?;
+	response.body_mut().read_to_string().map_err(reason)
+}
+
+#[cfg(feature = "native")]
+fn agent_within(timeout: std::time::Duration) -> ureq::Agent {
+	ureq::Agent::config_builder().timeout_global(Some(timeout)).build().into()
+}
+
+/// A failed request in a few words: DNS, timeout, HTTP status >= 400, else ureq's own
+#[cfg(feature = "native")]
+fn network_reason(error: ureq::Error, timeout: std::time::Duration) -> String {
+	use std::io::ErrorKind;
+	match error {
 		ureq::Error::StatusCode(status) => format!("HTTP status {status}"),
 		ureq::Error::Timeout(_) => format!("timeout after {} ms", timeout.as_millis()),
 		ureq::Error::Io(io) if matches!(io.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock) => format!("timeout after {} ms", timeout.as_millis()),
 		ureq::Error::HostNotFound => "DNS: host not found".to_string(),
 		other => other.to_string(),
-	};
-	let mut response = agent.get(url).call().map_err(reason)?;
-	response.body_mut().read_to_string().map_err(reason)
+	}
 }
 
 pub trait FileExtensions {

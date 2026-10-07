@@ -120,3 +120,4 @@ mod test_go_functions;
 mod test_generator_arguments;
 mod test_all_calls;
 mod test_builtin_clash;
+mod test_parameter_any;

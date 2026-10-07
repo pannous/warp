@@ -252,15 +252,10 @@ impl WasmGcEmitter {
 		}
 
 		// Check for type constructor calls: int('123'), str(123), char(0x41), etc.
-		if items.len() == 2 {
-			if let Node::Symbol(type_name) = items[0].drop_meta() {
-				let is_typed_decl = matches!(items[1].drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
-				if !is_typed_decl
-					&& type_word_kind(&type_name.to_lowercase()).is_some() {
-						self.emit_cast(func, &items[1], &items[0]);
-						return;
-					}
-			}
+		let is_typed_decl = matches!(items.get(1).map(Node::drop_meta), Some(Node::Key(_, Op::Assign | Op::Define, _)));
+		if !is_typed_decl && crate::analyzer::type_cast_of(items, bracket, separator, &|name| self.scope.lookup(name).is_some()).is_some() {
+			self.emit_cast(func, &items[1], &items[0]);
+			return;
 		}
 
 		if let [word, instance, type_name] = items {

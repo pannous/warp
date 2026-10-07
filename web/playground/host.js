@@ -77,6 +77,7 @@ const STD_ADAPTERS = {
 		},
 	},
 	os: { env: () => null }, // a page has no environment
+	net: { post: (url, body) => postSync(url, contentText(body)) },
 	hash: { sha256: subject => sha256Hex(utf8.encode(contentText(subject))), crc32: subject => crc32Of(utf8.encode(contentText(subject))) },
 	regex: {
 		matches: (subject, pattern) => regexOf(pattern).test(subject),
@@ -130,6 +131,16 @@ function getSync(url, timeout, binary = false) {
 	request.send();
 	if (request.status >= 400 || request.status === 0) throw new Error(request.status ? `HTTP status ${request.status}` : "network error (blocked by CORS?)");
 	return binary ? Uint8Array.from(request.responseText, character => character.charCodeAt(0) & 0xff) : request.responseText;
+}
+
+// a synchronous POST of a text (stdlib net's post, src/extensions/utils.rs post_within), its answer's text
+function postSync(url, body) {
+	const request = new XMLHttpRequest();
+	request.open("POST", url, false);
+	request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
+	request.send(body);
+	if (request.status >= 400 || request.status === 0) throw new Error(request.status ? `HTTP status ${request.status}` : "network error (blocked by CORS?)");
+	return request.responseText;
 }
 
 // a file of the served repository, failing in the words of the native read (src/host.rs)
