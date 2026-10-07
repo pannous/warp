@@ -38,6 +38,11 @@ const DATA_ATTRIBUTE_PREFIX: &str = "data-";
 const KEY: &str = "key";
 const KEY_ATTRIBUTE: &str = "data-wasp-key";
 
+/// A CSS property whose number has no unit (`opacity`, `z-index`)
+pub fn is_unitless_property(property: &str) -> bool {
+	UNITLESS_PROPERTIES.contains(&property)
+}
+
 /// Does the word name an HTML element
 pub fn is_element_tag(word: &str) -> bool {
 	ELEMENTS.contains(&word)

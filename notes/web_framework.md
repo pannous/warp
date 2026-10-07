@@ -99,5 +99,10 @@ Each step is useful on its own and is what the next ones stand on.
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
   sheet of rules (html.rs). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
   are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
-- Left: scoping a component's sheet to its own elements (a generated class per component), `.card { … }` written
-  without quotes (the parser stops at `.`), `8px` written as a number with a unit (parses as 8 * px).
+- CSS as CSS (classes-42, src/lowering/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
+  one rule per line (`.card {…}`, `ul > li {…}`, `h1, h2 {…}`, `a:hover {…}`, `p.note {…}`, `ul li {…}`, `#main {…}`),
+  lengths with units (`8px`, `1.5em`, `50%`, `-2px`) and values of several words (`padding: 8px 4px`, `border: 1px
+  solid "red"`). The parser reads `.name` at an atom's start as the symbol `.name`. Limits: the parser drops the blank
+  of a descendant class (`#main .x` reads as `#main.x`, quote it); `#id` after a rule on the same line, `50%` followed
+  by another declaration without `;`, and several rules on one line with a comma selector need their own lines.
+- Left: scoping a component's sheet to its own elements (a generated class per component), warp-cd.
