@@ -5,5 +5,5 @@
 // ~/.cache/warp/packages/<name>@1.2.3 (a tag never changes) and linked as packages/<name>. Raise the version to update.
 // A local checkout can stand in for a fetch: ln -s ~/dev/uniscript packages/uniscript
 
-// 1.0.2 ships data/entities.idx, the compiled entity index uniscript.wasp reads; its .wasp entity sources are never compiled by warp
-uniscript: {repository: "https://github.com/pannous/uniscript.git", version: 1.0.2}
+// 1.0.3 ships data/entities.idx, the compiled entity index uniscript.wasp reads; its .wasp entity sources are never compiled by warp
+uniscript: {repository: "https://github.com/pannous/uniscript.git", version: 1.0.3}
