@@ -291,3 +291,14 @@ the other instance `o:P`; they are no type-word methods). Aliases with a note: t
 String (Go) → text; Equals, __eq__, equal → equals (`==` is no operator method any more: Equatable dispatches it);
 compareTo, CompareTo, cmp → compare. `P·init(P{…}, 3)` has P's shape for the trait passes (traits::shape).
 Not ported: hashCode/__hash__ (wasp has no hash witness; they stay plain methods), Swift's `description` property.
+
+## Instances and json (classes-37, tests/types/test_class_json.rs)
+- `to_json(p)` in a program declaring classes is `to_json_of_classes(p, ["Point", …])` (class_methods
+  lower_json_classes, after std_aliases so `JSON.stringify(p)` / `json.dumps(p)` count): both adapters (std_adapters.rs
+  without_class_tags, host.js withoutClassTags) turn an object `{"Point": {…}}` of a class name into its fields, also
+  nested and in lists. At run time an instance and tagged data `html{…}` look alike, hence the names; a map entry named
+  like a class (`{Point: {…}}`) loses its key too. Kotlin `Json.encodeToString(p)` is to_json, `@Serializable` is
+  ignored, Python `dataclasses.asdict(p)` is p itself (its fields read like entries), each with a note.
+- `object as Point`, `parse_json(t) as Point`, `Point.from_json(t)`: `(Point·from = object; Point(Point·from.x, …))`,
+  a field of a class type built from its path `Line(Point(Line·from.a.x, …), …)` (class_methods from_objects); a
+  statement sequence as a construction argument is data, so no temporaries below the top.

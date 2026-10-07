@@ -105,6 +105,7 @@ pub fn lower(node: Node) -> Node {
 	let node = with_witness_methods(node);
 	let node = with_members(node);
 	let node = with_class_attributes(class_typed_declarations(node));
+	let node = from_objects(node);
 	let node = operator_calls(node);
 	let node = match with_mixins(node) {
 		Ok(node) => node,
@@ -189,6 +190,118 @@ fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String,
 		}
 		other => other.map_children(|child| with_method_aliases(child, instances)),
 	}
+}
+
+/// json's word for a program with classes (std/json.wasp): the classes' names go along, so an instance is its fields
+const TO_JSON_WORD: &str = "to_json";
+const TO_JSON_OF_CLASSES_WORD: &str = "to_json_of_classes";
+/// Other languages' calls giving an instance's json or its fields: Kotlin's `Json.encodeToString(p)` is to_json(p),
+/// Python's `dataclasses.asdict(p)` the instance itself (its fields read like a map's entries)
+const SERIALIZER_ALIASES: [(&str, &str, &str); 2] = [("Json", "encodeToString", TO_JSON_WORD), ("dataclasses", "asdict", "")];
+
+/// `to_json(p)` in a program declaring classes: `to_json_of_classes(p, ["Point", …])`, after std_aliases made
+/// `JSON.stringify(p)` and `json.dumps(p)` to_json
+pub fn lower_json_classes(node: Node) -> Node {
+	let mut classes = vec![];
+	node.visit(&mut |part| if let Node::Type { name, .. } = part {
+		classes.push(Node::Text(name.drop_meta().name()));
+	});
+	if classes.is_empty() {
+		return node;
+	}
+	with_json_classes(node, &Node::List(classes, Bracket::Square, Separator::Space))
+}
+
+fn with_json_classes(node: Node, classes: &Node) -> Node {
+	let serializer = |module: &Node, member: &Node| SERIALIZER_ALIASES.iter().find(|(written_module, written_member, _)| module.drop_meta().name() == *written_module && leading_name(member) == *written_member);
+	match node {
+		Node::Key(module, Op::Dot, member) if serializer(&module, &member).is_some() => {
+			let (written_module, written_member, word) = serializer(&module, &member).expect("guarded");
+			let Node::List(items, Bracket::Round, _) = member.drop_meta() else { return Node::Key(module, Op::Dot, member) };
+			let argument = items.get(1).cloned().unwrap_or(Node::Empty);
+			crate::diagnostic::note_alias(&format!("{written_module}.{written_member}"), if word.is_empty() { "the instance" } else { word });
+			match word.is_empty() {
+				true => with_json_classes(argument, classes),
+				false => with_json_classes(Node::List(vec![Node::Symbol(word.to_string()), argument], Bracket::Round, Separator::None), classes),
+			}
+		}
+		Node::List(items, Bracket::Round, separator) if items.len() == 2 && items[0].drop_meta().name() == TO_JSON_WORD => {
+			let value = with_json_classes(items[1].clone(), classes);
+			Node::List(vec![Node::Symbol(TO_JSON_OF_CLASSES_WORD.to_string()), value, classes.clone()], Bracket::Round, separator)
+		}
+		other => other.map_children(|child| with_json_classes(child, classes)),
+	}
+}
+
+/// `Point.from_json(t)` reads the json, as `parse_json(t) as Point` (std json)
+const FROM_JSON_WORD: &str = "from_json";
+const PARSE_JSON_WORD: &str = "parse_json";
+/// The variable holding the object an instance is built from: `Point·from`
+const FROM_SUFFIX: &str = "·from";
+
+/// `object as Point`, `parse_json(t) as Point`, `Point.from_json(t)`: the instance of the object's fields,
+/// `(Point·from = object; Point(Point·from.x, Point·from.y))`; a field of a class type is built from its path
+/// (`Line(Point(Line·from.a.x, …), …)`: a construction's arguments are its fields' data, no statements)
+fn from_objects(node: Node) -> Node {
+	let mut fields: std::collections::HashMap<String, Vec<(String, String)>> = std::collections::HashMap::new();
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		let typed = class_items(body).iter().filter(|item| method_parts(item).is_none()).filter_map(|item| Some((field_name(item)?, field_type_name(item)))).collect();
+		fields.insert(name.drop_meta().name(), typed);
+	});
+	if fields.is_empty() {
+		return node;
+	}
+	with_objects_as_instances(node, &fields)
+}
+
+/// `int` of `x:int`, the empty name for an untyped field
+fn field_type_name(item: &Node) -> String {
+	match item.drop_meta() {
+		Node::Key(_, Op::Colon, field_type) => match field_type.drop_meta() {
+			Node::Type { name, .. } => name.drop_meta().name(),
+			other => other.name(),
+		},
+		Node::Key(field, Op::Assign, _) => field_type_name(field),
+		_ => String::new(),
+	}
+}
+
+fn with_objects_as_instances(node: Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+	let class_of = |node: &Node| Some(node.drop_meta().name()).filter(|name| fields.contains_key(name));
+	match node {
+		Node::Key(object, Op::As, class) if class_of(&class).is_some() => {
+			let class = class.drop_meta().name();
+			instance_from(with_objects_as_instances(*object, fields), &class, fields)
+		}
+		Node::Key(class, Op::Dot, member) if class_of(&class).is_some() && leading_name(&member) == FROM_JSON_WORD => {
+			let arguments = match member.drop_meta() {
+				Node::List(items, Bracket::Round, _) => items[1..].iter().cloned().map(|argument| with_objects_as_instances(argument, fields)).collect(),
+				_ => vec![],
+			};
+			let parsed = Node::List([vec![Node::Symbol(PARSE_JSON_WORD.to_string())], arguments].concat(), Bracket::Round, Separator::None);
+			let class = class.drop_meta().name();
+			instance_from(parsed, &class, fields)
+		}
+		other => other.map_children(|child| with_objects_as_instances(child, fields)),
+	}
+}
+
+fn instance_from(object: Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+	let source = Node::Symbol(format!("{class}{FROM_SUFFIX}"));
+	let construction = instance_of(&source, class, fields);
+	Node::List(vec![Node::Key(Box::new(source), Op::Assign, Box::new(object)), construction], Bracket::Round, Separator::Semicolon)
+}
+
+/// `Point(path.x, path.y)`, a field of a class type by its own path
+fn instance_of(path: &Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+	let values = fields[class].iter().map(|(field, field_type)| {
+		let value = Node::Key(Box::new(path.clone()), Op::Dot, Box::new(Node::Symbol(field.clone())));
+		match fields.contains_key(field_type) {
+			true => instance_of(&value, field_type, fields),
+			false => value,
+		}
+	});
+	Node::List(std::iter::once(Node::Symbol(class.to_string())).chain(values).collect(), Bracket::Round, Separator::None)
 }
 
 /// A method named like a type word (`double() := x*2`, P142: class methods are always allowed) or like a list
