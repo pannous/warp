@@ -183,7 +183,9 @@ Each step is useful on its own and is what the next ones stand on.
   inline CSS (for style) or children (`style{ ".x": {…} }`), any other list the joined attribute value (`class:["a" "b"]`).
 - Scoped style sheets (card web-scoped): an element with data-wasp-scope:"Card" prefixes the selectors of the sheets
   inside it with `[data-wasp-scope="Card"] `; src/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
-- Open: timers in a built page (site.js has no timer loop yet); `serve` programs serving their own page.
+- Timers in a built page: site.js starts them after main (host.js startTimers, shared with the playground worker),
+  each handler morphs the page; a failing handler stops them (probes/site/ticker.wasp).
+- Open: `serve` programs serving their own page.
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the

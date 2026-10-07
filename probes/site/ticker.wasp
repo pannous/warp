@@ -1,0 +1,4 @@
+// a built page with a timer (warp build --site probes/site/ticker.wasp): the count rises every 100 ms
+ticks = 0
+on every 100 ms { ticks += 1 }
+div{ p{ "ticks: " + ticks } }
