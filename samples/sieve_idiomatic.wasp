@@ -36,8 +36,7 @@ fun binary_search(list, target) := {
 }
 
 primes = sieve(100)
-total = 0
-for p in primes { total += p }
+total = sum primes
 found = binary_search(primes, 97)
 missing = binary_search(primes, 50)
 total + found + missing
