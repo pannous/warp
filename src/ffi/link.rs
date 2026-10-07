@@ -4,6 +4,16 @@
 #[cfg(feature = "native")]
 use super::*;
 
+/// Takes turns for calls into libraries with global state that is not thread-safe (SDL_Init and SDL_Quit crash when
+/// two runs of one process call them at once): programs running on several threads queue here. Thread-safe
+/// libraries (libm, sqlite with its own connections) are called in parallel
+#[cfg(feature = "native")]
+static NATIVE_CALL_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Lowercase name prefixes of the libraries whose calls take the native call turn
+#[cfg(feature = "native")]
+const NOT_THREAD_SAFE_LIBRARIES: [&str; 2] = ["sdl", "raylib"];
+
 // Extern C Functions and Hardcoded Signatures (Fallback)
 
 #[cfg(feature = "native")]
@@ -784,12 +794,13 @@ pub fn link_module_libraries(
     Ok(())
 }
 
-/// Takes turns for calls into linked libraries: C libraries keep global state that is not thread-safe (SDL_Init and
-/// SDL_Quit crash when two runs of one process call them at once), so programs running on several threads queue here
 #[cfg(feature = "native")]
-static NATIVE_CALL_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+fn is_thread_safe(lib_name: &str) -> bool {
+    let name = lib_name.to_lowercase();
+    !NOT_THREAD_SAFE_LIBRARIES.iter().any(|prefix| name.trim_start_matches("lib").starts_with(prefix))
+}
 
-/// Link a wrapper of a library function that holds the native call turn while it runs
+/// Link a wrapper of a library function; one of a library that is not thread-safe holds the native call turn while it runs
 #[cfg(feature = "native")]
 fn link_native(
     linker: &mut Linker<FfiState>,
@@ -798,6 +809,10 @@ fn link_native(
     func_type: FuncType,
     call: impl Fn(wasmtime::Caller<'_, FfiState>, &[Val], &mut [Val]) -> wasmtime::Result<()> + Send + Sync + 'static,
 ) -> Result<()> {
+    if is_thread_safe(lib_name) {
+        linker.func_new(lib_name, func_name, func_type, call)?;
+        return Ok(());
+    }
     linker.func_new(lib_name, func_name, func_type, move |caller, params, results| {
         let _turn = NATIVE_CALL_TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         call(caller, params, results)
