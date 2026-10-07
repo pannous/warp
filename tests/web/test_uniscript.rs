@@ -45,8 +45,8 @@ fn block_types_style_their_operands() {
 	converts(&[
 		("<:fracture A>", "𝔄"),
 		("<:fracture A b c >", "𝔄𝔟𝔠"),
-		("<:fracture> A b c <:>", " 𝔄 𝔟 𝔠 "),
-		("<:greek> a b g d <:/greek>", " α β γ δ "),
+		("<:fracture> A b c <:>", "𝔄 𝔟 𝔠"), // a block eats one whitespace inside each of its tags
+		("<:greek> a b g d <:/greek>", "α β γ δ"),
 		("<:double d>", "𝕕"),
 		("<:double-d>", "𝕕"),
 		("x<:upper a>", "xᵃ"),
@@ -59,20 +59,22 @@ fn block_types_style_their_operands() {
 #[test]
 fn greek_is_transliterated_phonetically() {
 	converts(&[
-		("<:greek> athos <:/greek>", " αθοσ "), // th is one letter
+		("<:greek> athos <:/greek>", "αθοσ"), // th is one letter
 		("<:greek th ch ps>", "θχψ"),
 		("<:greek eta Omega lambda>", "ηΩλ"),
 	]);
 }
 
-/// Full block tags keep their text as written, spaces and line breaks included; inline tags drop the spaces between operands
+/// Full block tags keep their text as written, spaces and line breaks included, but for one whitespace inside each tag
+/// (uniscript 1.0.2); inline tags drop the spaces between operands
 #[test]
 fn full_blocks_keep_their_spaces() {
 	converts(&[
-		("<:greek> filosofia kosmos<:/greek>", " φιλοσοφια κοσμοσ"),
+		("<:greek> filosofia kosmos<:/greek>", "φιλοσοφια κοσμοσ"),
 		("<:greek a kosmos>", "ακοσμοσ"),
 		("<:greek phi chi>", "φχ"),
-		("<:greek>\\nkosmos\\n<:/greek>", "\nκοσμοσ\n"),
+		("<:greek>\\nkosmos\\n<:/greek>", "κοσμοσ"),
+		("<:greek>\\n\\nkosmos<:/greek>", "\nκοσμοσ"),
 	]);
 }
 
@@ -94,8 +96,9 @@ fn unsupported_characters_and_combinations_warn() {
 
 #[test]
 fn use_strict_makes_uniscript_warnings_errors() {
-	is!("use strict; use uniscript; uniscript(\"<:greek c>\")", error("uniscript: no greek form of c at byte 0"));
-	is!("use strict; use uniscript; uniscript(\"<:greek a>\")", "α");
+	// self-closed: a bare <:greek c> reads as an opening tag (uniscript 1.0.2), which strict makes the error
+	is!("use strict; use uniscript; uniscript(\"<:greek c/>\")", error("uniscript: no greek form of c at byte 0"));
+	is!("use strict; use uniscript; uniscript(\"<:greek a/>\")", "α");
 }
 
 #[test]
@@ -119,7 +122,7 @@ fn effect_words_stack_on_one_operand() {
 		("<:mirror red A b>", "A\u{E0072}\u{E004D}b\u{E0072}\u{E004D}"),
 		("<:mirror red circle>", "🔴\u{E004D}"),
 	]);
-	spells(&[("A\u{E0072}\u{E004D} 🔴\u{E004D}", "<:mirror red A> <:mirror red circle>")]);
+	spells(&[("A\u{E0072}\u{E004D} 🔴\u{E004D}", "\\:mirror-red-A \\:mirror-red-circle")]);
 }
 
 #[test]
@@ -160,8 +163,8 @@ fn an_unknown_entity_is_an_error() {
 #[test]
 fn unicode_spells_back_as_uniscript() {
 	spells(&[
-		("α Ω 𝔄 ∞ ℝ", "<:alpha> <:Omega> <:fracture A> <:infinity> <:double R>"),
-		("A\u{E0072} 🔴 xᵃ", "<:red A> <:red circle> x<:upper a>"),
+		("α Ω 𝔄 ∞ ℝ", "\\:alpha \\:Omega \\:fracture-A \\:infinity \\:double-R"), // the \:name form (uniscript 1.0.2)
+		("A\u{E0072} 🔴 xᵃ", "\\:red-A \\:red-circle x\\:upper-a"),
 		("a <: b", "a <<::> b"),
 	]);
 }
