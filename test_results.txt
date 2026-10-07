@@ -1371,6 +1371,7 @@ PASSED:
   ✓ modules::test_std_time::today_is_a_date_after_2025
   ✓ modules::test_std_time::use_time_formats_dates_and_times
   ✓ modules::test_std_time::use_time_parses_dates
+  ✓ modules::test_use_modules::module_function_locals_are_not_the_programs_variables
   ✓ modules::test_use_modules::test_module_statements_are_not_imported
   ✓ modules::test_use_modules::test_module_using_module_imports_transitively_and_survives_cycles
   ✓ modules::test_use_modules::test_search_order_prefers_earlier_directory
@@ -1487,6 +1488,8 @@ PASSED:
   ✓ numbers::test_big_ratio::test_big_ratio_unit_amounts_stay_exact
   ✓ numbers::test_counting_units::count_unit_of_text
   ✓ numbers::test_counting_units::size_of_text_in_unit
+  ✓ numbers::test_decimal_units::a_decimal_amount_of_a_unit_is_exact
+  ✓ numbers::test_decimal_units::sleep_takes_a_decimal_duration
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_accepts_exact_reals
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_global_accepts_exact_reals
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_parameter_accepts_exact_reals
@@ -1928,6 +1931,7 @@ PASSED:
   ✓ parser::test_statement_phrases::after_without_return_stays_a_call_listener
   ✓ parser::test_statement_phrases::and_after_a_value_stays_logical
   ✓ parser::test_statement_phrases::and_between_statements_sequences_them
+  ✓ parser::test_statement_phrases::and_not_continues_the_condition_after_let
   ✓ parser::test_statement_sequence::test_statement_sequence_with_grouped_list_in_the_middle
   ✓ parser::test_statement_terminators::semicolon_at_line_end_separates_statements_like_the_newline
   ✓ parser::test_statement_terminators::semicolon_inside_a_line_still_groups
@@ -2180,6 +2184,7 @@ PASSED:
   ✓ text::test_map_text::a_map_has_a_text
   ✓ text::test_map_text::a_map_prints
   ✓ text::test_nested_list_text::a_count_takes_the_indexed_element
+  ✓ text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal
   ✓ text::test_nested_list_text::an_index_is_an_atom_so_a_method_applies_to_the_element
   ✓ text::test_print_all_characters::print_all_characters_prints_each
   ✓ text::test_print_arguments::print_joins_its_arguments_with_a_space
@@ -2490,6 +2495,11 @@ PASSED:
   ✓ types::test_struct_types::test_magic_object_roundtrip
   ✓ types::test_struct_types::test_symbol
   ✓ types::test_struct_types::test_text
+  ✓ types::test_sum_types::generic_type_parameters_in_square_brackets
+  ✓ types::test_sum_types::variant_with_payload_constructs_and_matches
+  ✓ types::test_sum_types::variants_are_the_sum_type
+  ✓ types::test_sum_types::variants_on_their_own_lines
+  ✓ types::test_sum_types::variants_with_several_or_named_fields
   ✓ types::test_tagged_objects::a_field_of_a_tagged_object_is_read_from_its_fields
   ✓ types::test_tagged_objects::a_static_counts_constructions_in_the_value_block
   ✓ types::test_trait_constraints::a_constrained_list_parameter_takes_conforming_elements
@@ -2523,6 +2533,9 @@ PASSED:
   ✓ types::test_traits::test_two_user_types_each_have_their_own_compare
   ✓ types::test_tuple_values::a_tuple_with_a_variable_is_assigned_whole
   ✓ types::test_tuple_values::tuples_compare_element_by_element
+  ✓ types::test_type_alias_fields::alias_as_field_type
+  ✓ types::test_type_alias_fields::alias_as_optional_field_and_parameter
+  ✓ types::test_type_alias_fields::types_sample_runs
   ✓ types::test_type_colon_block::a_type_colon_block_declares_its_fields
   ✓ types::test_type_name_definition_forms::test_define_operator_takes_the_same_slots_as_assign
   ✓ types::test_type_name_definition_forms::test_to_phrase_with_a_block_body
@@ -2642,6 +2655,7 @@ PASSED:
   ✓ wasm::test_standalone_executable::test_build_makes_an_executable_by_default
   ✓ wasm::test_standalone_executable::test_machine_code_rides_at_the_end_of_the_executable
   ✓ wasm::test_standalone_executable::test_running_a_file_leaves_its_executable
+  ✓ wasm::test_standalone_executable::test_running_a_file_shows_its_hints_once
   ✓ wasm::test_standalone_executable::test_running_without_a_stub_leaves_no_executable
   ✓ wasm::test_standalone_executable::test_warp_run_leaves_no_executable
   ✓ wasm::test_standalone_needs_runtime::a_program_with_tasks_says_tasks_need_runtime
@@ -2726,6 +2740,8 @@ PASSED:
   ✓ wasm::wasm_optimizer_test::test_library_optimization
   ✓ wasm::wasm_optimizer_test::test_no_optimization
   ✓ wasm::wasm_optimizer_test::test_tools_availability
+  ✓ web::test_accessibility::accessible_markup_draws_no_warning
+  ✓ web::test_accessibility::unusable_markup_is_warned_about
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
@@ -2739,6 +2755,8 @@ PASSED:
   ✓ web::test_components::a_trailing_block_fills_a_function_parameter
   ✓ web::test_components::each_instance_of_a_component_has_its_own_state
   ✓ web::test_components::the_block_after_the_call_is_the_children
+  ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
+  ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
   ✓ web::test_element_events::an_element_handler_marks_its_element
   ✓ web::test_element_events::each_element_handler_has_its_number
   ✓ web::test_element_events::the_page_shows_the_markup_after_a_handler
@@ -2751,12 +2769,14 @@ PASSED:
   ✓ web::test_headless_pages::typing_into_a_bound_field_sets_its_variable
   ✓ web::test_html_module::to_html_writes_markup_as_html_rs_does
   ✓ web::test_html_render::a_computed_child_next_to_an_attribute
+  ✓ web::test_html_render::a_for_loop_inside_markup
   ✓ web::test_html_render::a_whole_page
   ✓ web::test_html_render::other_values_are_no_markup
   ✓ web::test_html_render::tags_attributes_and_text
   ✓ web::test_html_render::the_page_gets_the_html_of_markup
   ✓ web::test_html_render::void_elements_and_attribute_lists
   ✓ web::test_keyed_lists::a_key_names_the_element_of_an_item
+  ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
   ✓ web::test_markup_holes::a_page_binds_each_hole
   ✓ web::test_markup_holes::fixed_markup_or_a_computed_root_has_no_holes
@@ -3134,4 +3154,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3129 passed, 0 failed, 3129 total tested
+19 ignored, 3149 passed, 0 failed, 3149 total tested
