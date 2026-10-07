@@ -220,7 +220,7 @@ pub fn lower_tasks(node: Node) -> Node {
 	let mut functions = std::collections::HashSet::new();
 	let mut tasks = std::collections::HashSet::new();
 	let mut started = std::collections::HashMap::new();
-	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, value) = part {
+	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, _) = part {
 		let name = match head.drop_meta() {
 			Node::List(items, Bracket::Round, _) => items.first().map(|name| name.drop_meta().name()),
 			Node::Symbol(name) => Some(name.clone()),
