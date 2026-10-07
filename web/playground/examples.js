@@ -14,6 +14,9 @@ alice = { name: "Alice" age: 30 hobbies: ["reading" "hiking" "coding"] }
 alice.hobbies#2` },
 	markup: { value: 'div{h2:"Alice" p:"30 years, likes:" ul{li:"reading" li:"hiking"}}', code: `// markup is wasp data too: a value made of HTML tags shows as a page (warp prints it as HTML)
 div{ h2{ "Alice" } p{ "30 years, likes:" } ul{ li{ "reading" } li{ "hiking" } } }` },
+	"element events": { value: 'div{button{data-wasp-click:"1" "+1"} button{data-wasp-click:"2" "reset"} p:"count: 0"}', code: `// handlers on elements: click the buttons, the page shows the markup anew
+count = 0
+div{ button{ on click { count += 1 } "+1" } button{ on click { count = 0 } "reset" } p{ "count: " + count } }` },
 	functions: { value: "25", code: `// a function, called with or without parentheses
 def square(x) = x*x
 square(4) + square 3` },

@@ -13,7 +13,8 @@ const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
-const PAGE_EVENT = /^on (click|key)$/;
+// a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
+const PAGE_EVENT = /^on ((?:click|key)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
 // (src/paint.rs shade, std/draw.wasp)
@@ -280,6 +281,13 @@ function sendPageEvent(event, detail) {
 	if (listening.has(event)) worker.postMessage({ event, detail });
 }
 
+// an event inside the shown markup, for the handler of the element it happened in (data-wasp-click="1": click·1)
+function sendElementEvent(event, happened, detail) {
+	const attribute = `data-wasp-${event}`;
+	const element = happened.composedPath().find(node => node.getAttribute?.(attribute));
+	if (element) sendPageEvent(`${event}·${element.getAttribute(attribute)}`, detail);
+}
+
 function clickDetail(click) {
 	const target = click.target.closest("canvas") ?? $("output");
 	const bounds = target.getBoundingClientRect();
@@ -297,6 +305,7 @@ function showEventOutput(data) {
 	if (data.type === "handled") {
 		$("value").textContent = data.value;
 		$("value").classList.toggle("error", data.error);
+		showRendered(data.html);
 	}
 }
 
@@ -373,6 +382,7 @@ function initialize() {
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
 	$("run").onclick = runNow;
+	$("rendered").onclick = click => sendElementEvent("click", click, clickDetail(click));
 	$("output").onclick = click => sendPageEvent("click", clickDetail(click));
 	$("output").onkeydown = key => sendPageEvent("key", { key: key.key });
 	$("download").onclick = downloadModule;

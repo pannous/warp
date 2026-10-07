@@ -93,9 +93,9 @@ function showHandled(holder, handled, timer = false) {
 	const outcome = handled.result && binding ? outcomeOf(holder, hooks, binding) : handled;
 	const outcomeText = passText(JSON.stringify(outcome));
 	const length = compiler.web_show(...outcomeText);
-	const value = compilerText(compiler.web_report(), length);
+	const { value, html } = JSON.parse(compilerText(compiler.web_report(), length));
 	compiler.web_free(...outcomeText);
-	post({ type: "handled", value, error: outcome.result === undefined });
+	post({ type: "handled", value, html, error: outcome.result === undefined });
 }
 
 // the run's timers (host.js addTimer), each running its handler until the next run; a failing handler stops them
