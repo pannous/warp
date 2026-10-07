@@ -533,7 +533,7 @@ p{ "hello" }
 
 Attributes look like HTML.
 
-```wasp => b{class:"fat" "hello" }
+```wasp => b{class:"fat" "hello"}
 b{class:"fat" "hello" }
 ```
 
