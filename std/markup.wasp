@@ -69,7 +69,7 @@ html_is_attribute(item:any, tag:any) := {
 	let value = values(item)#1
 	named = starts_with(name, "data-") or name == "key" or (contains(html_attributes, name) and not (tag == "head" and contains(html_elements, name)))
 	if not named { return false }
-	if name == "style" and tag != "head" and html_is_declarations(value) { return true }
+	if (name == "style" or name == "data-wasp-starting-style") and tag != "head" and html_is_declarations(value) { return true }
 	not (value is pair) and (not (value is list) or not html_holds_pairs(value))
 }
 

@@ -527,9 +527,11 @@ impl WaspParser {
 		self.peek_char(first) == '}' || (name > 0 && ((self.peek_char(after_name) == ':' && self.peek_char(after_name + 1) != '=') || assigns))
 	}
 
-	/// Do blanks and then a closing bracket, `,`, `;` or the line end follow `offset`: nothing a ternary could be followed by
+	/// Do blanks and then a closing bracket, `,`, `;`, a comment or the line end follow `offset`: nothing a ternary could be followed by
 	pub(super) fn closes_after_blanks(&self, offset: usize) -> bool {
 		let blanks = (offset..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
-		blanks > 0 && matches!(self.peek_char(offset + blanks), ')' | ']' | '}' | ',' | ';' | '\n' | '\r' | '\0')
+		let at = offset + blanks;
+		let comment_starts = self.peek_char(at) == '/' && matches!(self.peek_char(at + 1), '/' | '*');
+		blanks > 0 && (comment_starts || matches!(self.peek_char(at), ')' | ']' | '}' | ',' | ';' | '\n' | '\r' | '\0'))
 	}
 }
