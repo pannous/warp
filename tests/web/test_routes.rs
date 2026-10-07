@@ -40,3 +40,14 @@ fn the_route_index_names_the_route_the_path_picks() {
 	assert!(lowered.contains("(page·route_index):="), "{lowered}");
 	assert!(lowered.contains("routed_index=(page·route_index)"), "{lowered}");
 }
+
+// card route-typed: a parameter declares its type in the pattern (":id:int", ":price:float", ":name:text"), so the route's
+// block computes with it; a path whose part does not fit the type matches no such route (the next one, else not found)
+#[test]
+fn a_typed_route_parameter_computes_with_its_type() {
+	let program = "route \"/users/:id:int\" { p{ \"next \" + (id + 1) } }\nroute \"/tags/:name:text\" { p{ name + \"!\" } }\nroute \"/prices/:price:float\" { p{ \"twice \" + price * 2 } }\nroute \"*\" { p{ \"not found\" } }";
+	assert_eq!(page_at("/users/7", program), "<p>next 8</p>");
+	assert_eq!(page_at("/tags/42", program), "<p>42!</p>");
+	assert_eq!(page_at("/prices/1.5", program), "<p>twice 3</p>");
+	assert_eq!(page_at("/users/bo", program), "<p>not found</p>");
+}

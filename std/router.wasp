@@ -1,5 +1,7 @@
 // The standard library module router (card web-router, notes/web_framework.md "Routes"): a route pattern
-// "/users/:id" matches the path "/users/7" with the parameter id = "7"; "*" matches any path (the not-found page).
+// "/users/:id" matches the path "/users/7" with the parameter id = 7; "*" matches any path (the not-found page).
+// A parameter may declare its type (card route-typed): ":id:int" matches digits only, ":price:float" a decimal
+// number, ":name:text" any part, given as text even when it is digits.
 // lowering/routes.rs makes each `route "…" {…}` of a page a function and picks the first one matching page_path().
 
 route_segments(path:any) := [segment for segment in split(path, "/") if segment != ""]
@@ -13,24 +15,57 @@ route_matches(pattern:any, path:any) := {
 	for part in wanted {
 		index = index + 1
 		if not starts_with(part, ":") and part != given#index { return false }
+		if starts_with(part, ":") and not route_fits(route_part_type(part), given#index) { return false }
 	}
 	true
 }
 
-// the text of the parameter `:name` of the pattern in the path, ø when the pattern has none
-route_parameter(pattern:any, path:any, name:any) := {
+// the part of the path the parameter `:name` of the pattern stands for, as text; ø when the pattern has none
+route_segment(pattern:any, path:any, name:any) := {
 	let wanted = route_segments(pattern)
 	let given = route_segments(path)
 	var index = 0
 	for part in wanted {
 		index = index + 1
-		if part == ":" + name and index <= count(given) { return route_value(given#index) }
+		if route_part_name(part) == name and index <= count(given) { return given#index }
 	}
 	ø
 }
 
-// a parameter is a number when it is digits ("/users/7" gives id 7), else its text
-route_value(segment:any) := {
-	for character in chars(segment) { if not contains("0123456789", character) { return segment } }
-	int(segment)
+// the parameter `:name` without a declared type: a number when it is digits ("/users/7" gives id 7), else its text
+// (lowering/routes.rs converts a typed one itself)
+route_parameter(pattern:any, path:any, name:any) := {
+	let segment = route_segment(pattern, path, name)
+	if segment != ø and route_number(segment, 0) { return int(segment) }
+	segment
+}
+
+// the name of the parameter a pattern part declares (":id:int" → "id"), "" for a fixed part
+route_part_name(part:any) := {
+	if not starts_with(part, ":") { return "" }
+	split(part, ":")#2
+}
+
+// the type a parameter declares (":id:int" → "int"), "" when it declares none
+route_part_type(part:any) := {
+	let pieces = split(part, ":")
+	if count(pieces) > 2 { return pieces#3 }
+	""
+}
+
+// whether a path part is all digits, with at most `dots` decimal points among them
+route_number(segment:any, dots:any) := {
+	if segment == "" { return false }
+	var seen = 0
+	for character in chars(segment) {
+		if character == '.' { seen = seen + 1 } else if not contains("0123456789", character) { return false }
+	}
+	seen <= dots
+}
+
+// whether a path part fits the declared type of its parameter
+route_fits(kind:any, segment:any) := {
+	if kind == "int" { return route_number(segment, 0) }
+	if kind == "float" { return route_number(segment, 1) }
+	true
 }
