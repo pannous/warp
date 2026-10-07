@@ -47,3 +47,10 @@ fn cpp_std_function_declaration() {
 	is!("std::function<int(int)> sq = [](int x) { return x * x; }; sq(3)", 9);
 	is!("function<int(int, int)> add = [](int a, int b) { return a + b; }; add(2, 3)", 5);
 }
+
+/// a lambda's own parameter `it` shadows the `it` of the enclosing one-parameter function (it was k: 4 * 4)
+#[test]
+fn a_lambda_parameter_named_it_shadows() {
+	is!("mk(k) := it => it * k; t = mk(3); t(4)", 12);
+	is!("mk(k) := it => { it * k }; t = mk(3); t(4)", 12);
+}
