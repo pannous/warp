@@ -40,3 +40,10 @@ fn elixir_do_end_def() {
 	is!("def sq(x) do x * x end; sq(3)", 9);
 	is!("defp add(a, b) do\n  a + b\nend\nadd(2, 3)", 5);
 }
+
+/// card std-function: C++'s declared function type before a lambda, `std::function<int(int)> sq = [](int x) {…}`
+#[test]
+fn cpp_std_function_declaration() {
+	is!("std::function<int(int)> sq = [](int x) { return x * x; }; sq(3)", 9);
+	is!("function<int(int, int)> add = [](int a, int b) { return a + b; }; add(2, 3)", 5);
+}

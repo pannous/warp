@@ -445,8 +445,13 @@ fn elixir_definition(items: &[Node]) -> Option<Node> {
 
 /// C++'s `sq = [](int x) { return x * x; }`, parsed as `sq = []`, `(int x)`, `{…}`, the capture list `[]`, `[&]` or
 /// `[=]` is the value assigned: the assignment of the lambda `x => {…}` (a wasp closure captures what it reads)
+/// A declared type before it, `std::function<int(int)> sq = …` or `function<int(int)> sq = …`, is dropped like `auto`
 fn cpp_lambda(items: &[Node]) -> Option<Node> {
-	let [assignment, parameters, body] = items else { return None };
+	let (assignment, parameters, body) = match items {
+		[assignment, parameters, body] => (assignment, parameters, body),
+		[declared, assignment, parameters, body] if is_cpp_type(declared) => (assignment, parameters, body),
+		_ => return None,
+	};
 	let Node::Key(name, Op::Assign, capture) = assignment.drop_meta() else { return None };
 	let is_capture = matches!(capture.drop_meta(), Node::Empty | Node::List(_, Bracket::Square, _));
 	let Node::List(declared, Bracket::Round, separator) = parameters.drop_meta() else { return None };
@@ -467,6 +472,11 @@ fn cpp_lambda(items: &[Node]) -> Option<Node> {
 		_ => Node::List(names, Bracket::Round, Separator::Colon),
 	};
 	Some(Node::Key(name.clone(), Op::Assign, Box::new(lambda(parameters, forms(body.clone())))))
+}
+
+/// `std::function<int(int)>` (a namespaced name) or `function<int(int)>` (by now the one symbol `function of int(int)`)
+fn is_cpp_type(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, Op::Scope, _) | Node::Symbol(_))
 }
 
 /// `[xs.sum, {block}]` as the parser groups `xs.sum { |x| x * 2 }`: `sum(map(xs, {block}))` (BLOCK_REDUCTIONS)
