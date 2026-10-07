@@ -34,7 +34,11 @@ fn where_filters(node: Node) -> Node {
 	let node = node.map_children(where_filters);
 	let Node::List(items, bracket, separator) = node else { return node };
 	let Some(at) = where_position(&items) else { return Node::List(items, bracket, separator) };
-	let filtered = where_comprehension(&items[at - 1], &items[at + 1]);
+	let filtered = match items[at + 1].drop_meta() {
+		// Haskell's binding `x * 2 where x = 3`: the assignment, then the expression
+		Node::Key(_, Op::Assign, _) => Node::List(vec![items[at + 1].clone(), items[at - 1].clone()], Bracket::Round, Separator::Semicolon),
+		_ => where_comprehension(&items[at - 1], &items[at + 1]),
+	};
 	// `xs where c` alone, or the last argument of a call `count(xs where c)`
 	if at == 1 && bracket == Bracket::None {
 		return filtered;
