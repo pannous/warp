@@ -31,3 +31,12 @@ fn a_layout_shows_the_route_at_its_outlet() {
 	let program = "route \"/\" { p{ \"home\" } }\nroute \"/about\" { p{ \"about\" } }\ndiv{ nav{ a{ href: \"/about\" \"About\" } } outlet }";
 	assert_eq!(page_at("/about", program), "<div><nav><a href=\"/about\">About</a></nav><p>about</p></div>");
 }
+
+// a site loads a route's own module before showing it (card web-bundle): page·route_index is the index of the route the
+// path picks, -1 when none
+#[test]
+fn the_route_index_names_the_route_the_path_picks() {
+	let lowered = warp::pipeline::lower(SITE).expect("lowers").serialize();
+	assert!(lowered.contains("(page·route_index):="), "{lowered}");
+	assert!(lowered.contains("routed_index=(page·route_index)"), "{lowered}");
+}
