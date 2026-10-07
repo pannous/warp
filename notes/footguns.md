@@ -543,14 +543,15 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
 
 ## Uniscript names HTML and LaTeX define differently (user decision P198, 2026-10-07)
 - **Elsewhere:** HTML entities and LaTeX commands share many names with different glyphs: `&circ;` is the modifier
-  letter ˆ but `\circ` is the ring operator ∘; HTML swaps `varepsilon`/`varphi` against LaTeX.
-- **Warp/uniscript:** a letter takes the HTML reading (`\:ocirc` ô, `\:oslash` ø), anything else the LaTeX one
-  (`\:asymp` ≍, `\:circ` ∘). The user: "probably ugly but the best we can do". Consequences worth knowing:
-  `\:cdot` is the letter ċ (write `\:sdot` or ⋅ for the dot operator), `\:varepsilon` ϵ and `\:varphi` ϕ are the HTML
-  letters, and a Unicode name ranks above both (`\:tilde` ~, `\:breve` ˘). In uniscript since df067a1 (after
-  v1.0.4); warp reads it once its pin is raised past 1.0.4 (src/uniscript_entities.tsv, tests/parser/test_entity_table.rs).
+  letter ˆ but `\circ` is the ring operator ∘; HTML swaps `varepsilon`/`varphi` against LaTeX; `&cdot;` is the letter ċ.
+- **Warp/uniscript:** the LaTeX reading wins (`\:asymp` ≍, `\:circ` ∘, `\:cdot` ⋅, `\:varepsilon` ε), except for Latin
+  letters with a diacritic, which take the HTML one (`\:ocirc` ô, `\:oslash` ø; also `\:imath` ı, `\:jmath` ȷ). The user:
+  "probably ugly but the best we can do"; the letter names meant letters with diacritics, not math names that happen
+  to be letters (exceptions cdot, varepsilon, varphi). A Unicode name ranks above both (`\:tilde` ~, `\:breve` ˘).
+  In uniscript since 131b627 (after v1.0.4); warp reads it once its pin is raised past 1.0.4 (src/uniscript_entities.tsv,
+  tests/parser/test_entity_table.rs).
 - Generated, not hand-written: `python3 probes/entities_index/html_latex.py ~/dev/uniscript` (latex.wasp keeps the
-  overridden LaTeX readings as `// name: …  // P198` lines).
+  LaTeX readings HTML wins over as commented `// name: …` lines).
 
 36 names differ:
 
@@ -564,7 +565,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
 | blacktriangleright | ▸ (So) | ▶ (So) | LaTeX | ▶ (So) |
 | boxbox | ⧉ (Sm) | ⧈ (Sm) | LaTeX | ⧈ (Sm) |
 | breve | ˘ (Sk) | ◌̆ (Mn) | LaTeX | ˘ (Sk), the Unicode name wins |
-| cdot | ċ (Ll) | ⋅ (Sm) | HTML | ċ (Ll) |
+| cdot | ċ (Ll) | ⋅ (Sm) | LaTeX (exception: a math name) | ⋅ (Sm) |
 | check | ✓ (So) | ◌̌ (Mn) | LaTeX | ◌̌ (Mn) |
 | circ | ˆ (Lm) | ∘ (Sm) | LaTeX | ∘ (Sm) |
 | diamondsuit | ♦ (So) | ♢ (So) | LaTeX | ♢ (So) |
@@ -588,7 +589,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
 | tilde | ˜ (Sk) | ◌̃ (Mn) | LaTeX | ~ (Sm), the Unicode name wins |
 | triangleleft | ◃ (So) | ◁ (Sm) | LaTeX | ◁ (Sm) |
 | triangleright | ▹ (So) | ▷ (Sm) | LaTeX | ▷ (Sm) |
-| varepsilon | ϵ (Ll) | ε (Ll) | HTML | ϵ (Ll) |
-| varphi | ϕ (Ll) | φ (Ll) | HTML | ϕ (Ll) |
+| varepsilon | ϵ (Ll) | ε (Ll) | LaTeX (exception: a math name) | ε (Ll) |
+| varphi | ϕ (Ll) | φ (Ll) | LaTeX (exception: a math name) | φ (Ll) |
 | Vee | ⋁ (Sm) | ⩔ (Sm) | LaTeX | ⩔ (Sm) |
 | Wedge | ⋀ (Sm) | ⩓ (Sm) | LaTeX | ⩓ (Sm) |
