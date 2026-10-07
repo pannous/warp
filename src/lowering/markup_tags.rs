@@ -14,11 +14,19 @@ pub fn lower(node: Node) -> Node {
 	// `label(for:pwd):"Password"` itself would read as a definition: only `:=`, function keywords and assignments define
 	let mut defined = crate::welcome_forms::defined_names(&node);
 	crate::library_words::collect_assigned_names(&node, &mut defined);
-	outside_tags(node, &defined)
+	outside_tags(spaced_elements(node, &defined), &defined)
+}
+
+/// Only whole statements of the main level: deeper `p { … }` is `match p { … }`, a parameter p and its block
+fn spaced_elements(program: Node, defined: &HashSet<String>) -> Node {
+	match program {
+		Node::List(statements, bracket, separator) if crate::variable_signals::is_statement_list(&bracket, &separator) =>
+			Node::List(statements.into_iter().map(|statement| spaced_element(statement, defined)).collect(), bracket, separator),
+		single => spaced_element(single, defined),
+	}
 }
 
 fn outside_tags(node: Node, defined: &HashSet<String>) -> Node {
-	let node = spaced_element(node, defined);
 	match tag(&node, defined) {
 		Some(_) => tag_with_attributes(node, defined),
 		None => node.map_children(|child| outside_tags(child, defined)),
