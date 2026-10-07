@@ -150,7 +150,8 @@ Each step is useful on its own and is what the next ones stand on.
   value an earlier run kept under its name, else the default; `on change theme` keeps each change. Natively the values
   are JSON in `<program>.stored.json` beside the program (in memory for inline code), in the playground the page's
   localStorage (`wasp stored <name>`): the worker gets them at start and sends each save back (host.js
-  STD_ADAPTERS.store, playground.js keepStored). Values cross as JSON (std_adapters, as foreign calls).
+  STD_ADAPTERS.store, markup.js keptValues / keepValue, shared with built sites: site.js). Values cross as JSON
+  (std_adapters, as foreign calls).
 - Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
@@ -161,3 +162,19 @@ Each step is useful on its own and is what the next ones stand on.
   module contributes: kept in the store of the program that uses it (probes/stores/app.wasp, tests/modules/
   test_module_signals.rs). Context (a value for a subtree of components without props): question with the
   Interviewer; default until then: main-level variables, which every component reads.
+
+## Step 13 (web-dev), what is done and what is left
+- `warp dev app.wasp [port]` (src/dev_server.rs, default port 8008) serves the program's site from memory
+  (site::files, the same page `warp build --site` writes, plus web/playground/dev.js). No watcher: a request finding
+  the file's mtime changed builds anew. dev.js polls /wasp-dev/state ({version, error}) every 300 ms: a new version
+  reloads the page; a failure shows as an overlay (message, `line | source`, caret, fix) while the last good build
+  serves on, and the next good build reloads.
+- State across reloads: a dev build (pipeline::for_dev) keeps each main-level variable the program changes later
+  (assigned again or `+=`, stored_values.rs dev_kept) as `stored` keeps it, in the store DEV_STORE: the page's
+  sessionStorage (`wasp dev <name>`), in memory natively. Only a changed value is saved, so a variable never changed
+  takes its new initial value from the edited source; one changed keeps its value (as React Fast Refresh does).
+  site.js hydrate loads the kept values and shows what main left (page·html).
+- Tests: tests/web/test_dev_server.rs; probes/dev/counter.wasp (click, edit the label: the count stays),
+  probes/dev/stored_check.py.
+- Left: watching used modules (only the program's file counts), component instance state (`Counter·count` lists) and
+  the playground editor's error marks in the overlay; a failure's source line is that of the program, not of a module.

@@ -82,9 +82,14 @@ thread_local! {
 	static UNFILED_STORE: std::cell::RefCell<StoredValues> = std::cell::RefCell::new(StoredValues::new());
 }
 
+/// Values kept in memory: of a program without a file, and those a `warp dev` page keeps itself (its sessionStorage)
+fn is_unfiled(file: &str) -> bool {
+	file.is_empty() || file == crate::stored_values::DEV_STORE
+}
+
 /// The stored values in the program's store file (a JSON object by name), none when it does not exist yet
 fn stored_values(file: &str) -> Result<StoredValues, String> {
-	if file.is_empty() {
+	if is_unfiled(file) {
 		return Ok(UNFILED_STORE.with(|store| store.borrow().clone()));
 	}
 	match std::fs::read_to_string(file) {
@@ -95,7 +100,7 @@ fn stored_values(file: &str) -> Result<StoredValues, String> {
 }
 
 fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
-	if file.is_empty() {
+	if is_unfiled(file) {
 		UNFILED_STORE.with(|store| *store.borrow_mut() = values);
 		return Ok(());
 	}

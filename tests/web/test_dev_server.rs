@@ -44,3 +44,15 @@ fn the_dev_server_rebuilds_a_changed_program() {
 	let error = failed["error"].as_str().expect("the failure");
 	assert!(error.contains("y") && error.contains("2 | p{ \"three\" + y }"), "{error}");
 }
+
+// a dev build keeps each main-level variable the program changes (as `stored` does, in the page's sessionStorage), so
+// a reload after an edit shows the same state; one never changed takes its value from the edited source
+#[test]
+fn a_dev_build_keeps_the_values_the_program_changed() {
+	let run = |code: &str| warp::pipeline::for_dev(|| warp::wasm_emitter::eval(code)).serialize();
+	assert_eq!(run("dev_count = 0\ndev_count += 1\ndev_count"), "1");
+	assert_eq!(run("dev_count = 0\ndev_count += 1\ndev_count"), "2");
+	assert_eq!(run("dev_start = 5\ndev_start"), "5");
+	assert_eq!(run("dev_start = 6\ndev_start"), "6");
+	assert_eq!(run("dev_count = 0\ndev_count"), "0", "a variable the program no longer changes takes its new value");
+}

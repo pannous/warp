@@ -55,7 +55,9 @@ pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, Str
 
 /// The files of the site of `code`; `dev` adds dev.js. A failure names its position with the source line
 pub fn files(code: &str, title: &str, dev: bool) -> Result<Vec<SiteFile>, String> {
-	let module = crate::pipeline::for_a_page(|| crate::pipeline::compile(code)).map_err(|value| format!("nothing to compile: {}", with_excerpt(code, message_of(&value))))?;
+	let compile = || crate::pipeline::for_a_page(|| crate::pipeline::compile(code));
+	let module = if dev { crate::pipeline::for_dev(compile) } else { compile() };
+	let module = module.map_err(|value| format!("nothing to compile: {}", with_excerpt(code, message_of(&value))))?;
 	let imports = crate::wasm_reader::Imports { host: module.needs_host, wasi: module.needs_wasi, ffi: module.needs_ffi };
 	let rendered = crate::wasm_reader::read_export_after_main(&module.bytes, imports, crate::page_html::PAGE_HTML)
 		.map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))?;
