@@ -540,3 +540,55 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
   this); `use strict` makes it an error. `let`/`var n = …`, a parameter of the same name, or a local whose name main does
   not use, is the function's own without a question.
 - Tests: tests/welcoming/test_welcoming_globals.rs.
+
+## Uniscript names HTML and LaTeX define differently (user decision P198, 2026-10-07)
+- **Elsewhere:** HTML entities and LaTeX commands share many names with different glyphs: `&circ;` is the modifier
+  letter ˆ but `\circ` is the ring operator ∘; HTML swaps `varepsilon`/`varphi` against LaTeX.
+- **Warp/uniscript:** a letter takes the HTML reading (`\:ocirc` ô, `\:oslash` ø), anything else the LaTeX one
+  (`\:asymp` ≍, `\:circ` ∘). The user: "probably ugly but the best we can do". Consequences worth knowing:
+  `\:cdot` is the letter ċ (write `\:sdot` or ⋅ for the dot operator), `\:varepsilon` ϵ and `\:varphi` ϕ are the HTML
+  letters, and a Unicode name ranks above both (`\:tilde` ~, `\:breve` ˘). In uniscript since df067a1 (after
+  v1.0.4); warp reads it once its pin is raised past 1.0.4 (src/uniscript_entities.tsv, tests/parser/test_entity_table.rs).
+- Generated, not hand-written: `python3 probes/entities_index/html_latex.py ~/dev/uniscript` (latex.wasp keeps the
+  overridden LaTeX readings as `// name: …  // P198` lines).
+
+36 names differ:
+
+| name | HTML | LaTeX | P198 picks | in effect |
+|---|---|---|---|---|
+| acute | ´ (Sk) | ◌́ (Mn) | LaTeX | ◌́ (Mn) |
+| ast | * (Po) | ∗ (Sm) | LaTeX | ∗ (Sm) |
+| asymp | ≈ (Sm) | ≍ (Sm) | LaTeX | ≍ (Sm) |
+| barwedge | ⌅ (So) | ⊼ (Sm) | LaTeX | ⊼ (Sm) |
+| blacktriangleleft | ◂ (So) | ◀ (So) | LaTeX | ◀ (So) |
+| blacktriangleright | ▸ (So) | ▶ (So) | LaTeX | ▶ (So) |
+| boxbox | ⧉ (Sm) | ⧈ (Sm) | LaTeX | ⧈ (Sm) |
+| breve | ˘ (Sk) | ◌̆ (Mn) | LaTeX | ˘ (Sk), the Unicode name wins |
+| cdot | ċ (Ll) | ⋅ (Sm) | HTML | ċ (Ll) |
+| check | ✓ (So) | ◌̌ (Mn) | LaTeX | ◌̌ (Mn) |
+| circ | ˆ (Lm) | ∘ (Sm) | LaTeX | ∘ (Sm) |
+| diamondsuit | ♦ (So) | ♢ (So) | LaTeX | ♢ (So) |
+| dot | ˙ (Sk) | ◌̇ (Mn) | LaTeX | ◌̇ (Mn) |
+| doublebarwedge | ⌆ (So) | ⩞ (Sm) | LaTeX | ⩞ (Sm) |
+| fltns | ▱ (So) | ⏥ (So) | LaTeX | ⏥ (So) |
+| grave | ` (Sk) | ◌̀ (Mn) | LaTeX | ◌̀ (Mn) |
+| Gt | ≫ (Sm) | ⪢ (Sm) | LaTeX | ⪢ (Sm) |
+| heartsuit | ♥ (So) | ♡ (So) | LaTeX | ♡ (So) |
+| imath | ı (Ll) | 𝚤 (Ll) | HTML | ı (Ll) |
+| jmath | ȷ (Ll) | 𝚥 (Ll) | HTML | ȷ (Ll) |
+| Lt | ≪ (Sm) | ⪡ (Sm) | LaTeX | ⪡ (Sm) |
+| nsubset | ⊂⃒ (Sm,Mn) | ⊄ (Sm) | LaTeX | ⊄ (Sm) |
+| nsupset | ⊃⃒ (Sm,Mn) | ⊅ (Sm) | LaTeX | ⊅ (Sm) |
+| ocirc | ô (Ll) | ◌̊ (Mn) | HTML | ô (Ll) |
+| oslash | ø (Ll) | ⊘ (Sm) | HTML | ø (Ll) |
+| perp | ⊥ (Sm) | ⟂ (Sm) | LaTeX | ⟂ (Sm) |
+| rightsquigarrow | ↝ (So) | ⇝ (So) | LaTeX | ⇝ (So) |
+| star | ☆ (So) | ⋆ (Sm) | LaTeX | ⋆ (Sm) |
+| strns | ¯ (Sk) | ⏤ (So) | LaTeX | ⏤ (So) |
+| tilde | ˜ (Sk) | ◌̃ (Mn) | LaTeX | ~ (Sm), the Unicode name wins |
+| triangleleft | ◃ (So) | ◁ (Sm) | LaTeX | ◁ (Sm) |
+| triangleright | ▹ (So) | ▷ (Sm) | LaTeX | ▷ (Sm) |
+| varepsilon | ϵ (Ll) | ε (Ll) | HTML | ϵ (Ll) |
+| varphi | ϕ (Ll) | φ (Ll) | HTML | ϕ (Ll) |
+| Vee | ⋁ (Sm) | ⩔ (Sm) | LaTeX | ⩔ (Sm) |
+| Wedge | ⋀ (Sm) | ⩓ (Sm) | LaTeX | ⩓ (Sm) |
