@@ -32,8 +32,9 @@ const TASK_POOL_WAIT_MS = 10000;
 const TASK_POOL_POLL_MS = 10;
 const hasTaskWorkers = () => self.crossOriginIsolated && self.Worker;
 
+// a built site's task Worker loads the site's scripts (site-worker.js siteScripts), the playground's all of them
 function addTaskWorker() {
-	const worker = new Worker(TASK_WORKER);
+	const worker = new Worker(self.siteScripts ? `${TASK_WORKER}?scripts=${self.siteScripts.join(",")}` : TASK_WORKER);
 	// loaded: it can take tasks; later a fetch it made is done (startFetch)
 	worker.onmessage = ({ data }) => data === FETCH_DONE ? worker.fetched?.() : taskPool.push(worker);
 }
