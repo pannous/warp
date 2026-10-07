@@ -99,12 +99,14 @@ fn attributes(node: &Node, defined: &HashSet<String>) -> Option<(String, Vec<Nod
 	(all_pairs && !defined.contains(name)).then(|| (name.clone(), pairs.to_vec()))
 }
 
-/// `[li{t} for t in ts]` or `ts.map(…)` among an element's children: its items are children, so it stays a list
+/// `[li{t} for t in ts]`, `ts.map(…)` or `(if c then a else b)` among an element's children: its items are children, so it stays a list
 /// (`[…]` around it) when it is lowered to statements, which in a block would run instead of being an item
 fn is_computed_children(item: &Node) -> bool {
 	match item.drop_meta() {
 		Node::List(items, Bracket::Square, _) => items.iter().any(|part| matches!(part.drop_meta(), Node::List(words, _, _) if matches!(words.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == FOR_WORD))),
 		Node::Key(_, Op::Dot, _) => true,
+		// `(if shown then Fruit() else [])`: a condition, which in a block would run as a statement
+		Node::List(items, Bracket::Round, _) => matches!(items.as_slice(), [single] if matches!(single.drop_meta(), Node::Key(_, Op::Then | Op::Else, _))),
 		_ => false,
 	}
 }

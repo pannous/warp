@@ -97,8 +97,12 @@ Each step is useful on its own and is what the next ones stand on.
   becomes the getter `page·markup`, which resets the instance counters before each render.
 - Class components (warp-41, branch classes-40, notes/classes.md): a class with render() (aliases view, template,
   build) constructed as an element's child or as the program's value renders through render().
-- Left: cleanup of listeners when an instance is removed (onMount/onCleanup), instances that move (web-keyed),
-  state of a component read by a handler outside it.
+- Lifecycle (card web-cleanup): `on mount {…}` runs when an instance first renders; `on cleanup {…}` when a render has
+  fewer instances of the component than the one before (the last ones are the ones gone, by the order rule), then
+  their state entries are dropped. What a cleanup reads is kept per instance like handler state. Tour example cleanup.
+- `(if c then A() else [])` among an element's children is a child (markup_tags.rs), not a statement.
+- Left: instances that move or leave from the middle (order identity; a `key:` per instance would fix it), state of a
+  component read by a handler outside it.
 
 ## Step 5 (web-keyed), what is done and what is left
 - A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,
@@ -163,6 +167,12 @@ Each step is useful on its own and is what the next ones stand on.
   Tour example transitions (`animated` check of test_in_browser.py); probes/transitions/leave_check.py.
 - Left: separate enter / leave kinds (`enter: slide leave: fade`), custom keyframes as data, `0.3s` (card
   fractional-durations), leaving items still take their space until removed (no absolute positioning while leaving).
+- Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
+  (`data-wasp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
+  `[data-wasp-scope="Card"] ` (html.rs), so they style only elements inside it (not the root itself; a nested
+  component's elements still match).
+- Left (warp-06 takes the parser bits): `.card { … }` written
+  without quotes (the parser stops at `.`), `8px` written as a number with a unit (parses as 8 * px).
 
 ## Built sites (card web-ssr, 2026-10-07; split agreed with warp-cd, renderer decided by warp-96)
 - `warp build --site app.wasp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
