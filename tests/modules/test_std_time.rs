@@ -42,3 +42,9 @@ fn format_duration_in_the_largest_units() {
 	is!("use time; format_duration(250)", "250ms");
 	is!("use time; format_duration(86400000 + 5000)", "1d 5s");
 }
+
+#[test]
+fn use_time_knows_leap_years_and_month_lengths() {
+	is!("use time; [is_leap_year(2024), is_leap_year(1900), is_leap_year(2000)]", warp::ints(vec![1, 0, 1]));
+	is!("use time; [days_in_month(2024, 2), days_in_month(2023, 2), days_in_month(2024, 4), days_in_month(2024, 12)]", warp::ints(vec![29, 28, 30, 31]));
+}
