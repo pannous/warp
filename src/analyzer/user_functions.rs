@@ -502,7 +502,7 @@ pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 	user_functions.chain(crate::real::FUNCTIONS.iter().map(|name| name.to_string())).collect()
 }
 
-pub(super) fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
+pub(super) fn negate_calls(node: Node, functions: &std::collections::BTreeMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
 	let is_function = |operand: &Node| match operand.drop_meta() {
 		Node::Symbol(name) => functions.get(name).is_some_and(|function| !function.params.is_empty())
 			|| (crate::real::FUNCTIONS.contains(&name.as_str()) && !bound.contains(name)),

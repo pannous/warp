@@ -1356,12 +1356,12 @@ fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
 	let names: Vec<String> = words.iter().map(Node::name).collect();
 	let names: Vec<&str> = names.iter().map(String::as_str).collect();
 	// one parse with type_name_matching: `square of a number := …` takes the same slots as with `=`
-	let parameters = match crate::type_name_matching::spaced_parameters(&names, body) {
-		None => words,
-		Some(Ok(parameters)) => parameters,
+	let (parameters, body) = match crate::type_name_matching::spaced_parameters(&names, body) {
+		None => (words, body.as_ref().clone()),
+		Some(Ok(slots)) => slots,
 		Some(Err(_)) => return None, // type_name_matching reports it
 	};
-	Some((name.drop_meta().clone(), parameters, applied_to_last(body.as_ref().clone(), extra)))
+	Some((name.drop_meta().clone(), parameters, applied_to_last(body, extra)))
 }
 
 /// The one named parameter of a definition head `f(x)` (`f(x:int)`), not `it`

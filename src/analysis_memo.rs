@@ -20,7 +20,7 @@ const REMEMBERED: usize = 256;
 /// What extract_user_functions writes into a fresh Context
 #[derive(Clone)]
 pub struct Analysis {
-	user_functions: HashMap<String, UserFunctionDef>,
+	user_functions: std::collections::BTreeMap<String, UserFunctionDef>,
 	ffi_imports: HashMap<String, FfiSignature>,
 	field_kinds: HashMap<String, crate::type_kinds::Kind>,
 	enclosing_functions: HashMap<String, String>,

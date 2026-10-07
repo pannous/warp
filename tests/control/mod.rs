@@ -20,6 +20,8 @@ mod test_filter_loops;
 mod test_type_word_filter_loops;
 mod test_structural_patterns;
 mod test_switch_match;
+mod test_match_guards_and_finally;
+mod test_relational_arms;
 mod test_block_parameters;
 mod test_charged_fields;
 mod test_object_blocks;

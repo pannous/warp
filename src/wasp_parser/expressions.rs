@@ -194,8 +194,10 @@ impl WaspParser {
 		// membership `x in xs` binds like `==`, kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`;
 		// a unit word stays in the flat counting phrase: `number of chars in t`
 		let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
-		if self.matches_keyword(IN_KEYWORD) && !counts_units {
-			return Some((SpecialInfix::Membership, IN_KEYWORD.len(), Op::Eq.binding_power()));
+		// `item is in basket` reads as `item in basket`
+		let membership = [IS_IN_PHRASE, IN_KEYWORD].into_iter().find(|word| self.matches_keyword(word));
+		if let (Some(word), false) = (membership, counts_units) {
+			return Some((SpecialInfix::Membership, word.len(), Op::Eq.binding_power()));
 		}
 		None
 	}
@@ -449,6 +451,10 @@ impl WaspParser {
 				_ if op == Op::Hash && hash_slice_bounds(&rhs).is_some() => {
 					let (start, end) = hash_slice_bounds(&rhs).expect("guarded");
 					Node::List(vec![Symbol(SLICE_WORD.to_string()), lhs, start, end], Bracket::Round, Separator::None)
+				}
+				_ if op == Op::To && written.starts_with(DOWN_WORD) => {
+					let ascending = Node::Key(Box::new(rhs.clone()), Op::To, Box::new(lhs));
+					Node::List(vec![Symbol(REVERSE_WORD.to_string()), ascending], Bracket::Round, Separator::None)
 				}
 				_ => Node::Key(Box::new(lhs), op, Box::new(rhs.clone())),
 			};
