@@ -343,6 +343,9 @@ PASSED:
   ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
   ✓ control::test_system_values::the_mouse_is_a_system_value_of_the_page
   ✓ control::test_system_values::yes_no_values_read_the_machine
+  ✓ control::test_task_bools::a_bool_given_through_a_value_task_is_a_bool
+  ✓ control::test_task_bools::an_awaited_bool_is_a_bool
+  ✓ control::test_task_bools::bools_of_a_job_list_are_bools
   ✓ control::test_task_closures::a_capturing_text_lambda_runs_in_a_task
   ✓ control::test_task_closures::a_parameter_named_like_a_unit_is_the_parameter
   ✓ control::test_task_exact::a_big_integer_crosses_to_a_task_and_back
@@ -663,6 +666,8 @@ PASSED:
   ✓ functions::test_body_statement::an_undefined_word_in_it_is_an_error
   ✓ functions::test_braced_it_warning::a_braced_it_body_is_the_parameter_and_warns
   ✓ functions::test_braced_it_warning::other_bodies_do_not_warn
+  ✓ functions::test_broadcast_reassigned::a_broadcast_over_a_variable_alone_does_not_make_it_a_list
+  ✓ functions::test_broadcast_reassigned::a_list_reassigned_from_its_own_broadcast_stays_a_list
   ✓ functions::test_broadcasting::a_broadcast_inside_a_library_word_and_a_lambda_variable
   ✓ functions::test_broadcasting::a_function_of_several_values_broadcasts_over_its_list_argument
   ✓ functions::test_broadcasting::a_range_broadcasts_like_a_list
@@ -2395,6 +2400,14 @@ PASSED:
   ✓ types::test_be_definitions::test_be_defines_with_a_type
   ✓ types::test_block_data_paths::test_a_sibling_path_inside_a_block
   ✓ types::test_block_data_paths::test_the_top_level_form_still_reads_it
+  ✓ types::test_bool_type::a_bool_of_unknown_static_type_is_tested_at_run_time
+  ✓ types::test_bool_type::a_list_starting_with_a_bool_is_a_list
+  ✓ types::test_bool_type::a_literal_bool_counts_in_arithmetic
+  ✓ types::test_bool_type::strict_equality_compares_the_full_type
+  ✓ types::test_bool_type::test_bool_acts_as_one_or_zero
+  ✓ types::test_bool_type::test_bool_is_a_type_of_its_own
+  ✓ types::test_bool_type::test_comparisons_print_as_bool
+  ✓ types::test_bool_type::test_strict_equality_compares_the_type
   ✓ types::test_cast_bugs::a_cast_to_char_can_be_stored
   ✓ types::test_cast_bugs::a_one_character_text_can_be_indexed
   ✓ types::test_cast_bugs::a_runtime_value_as_string
@@ -2986,6 +2999,9 @@ PASSED:
   ✓ web::test_styles::a_style_sheet_in_a_component_is_scoped_to_it
   ✓ web::test_styles::a_style_sheet_is_a_block_of_rules
   ✓ web::test_styles::an_inline_style_is_a_block_of_properties
+  ✓ web::test_tag_lists::a_tag_of_one_value_stays_one_tag
+  ✓ web::test_tag_lists::a_tag_over_a_list_literal
+  ✓ web::test_tag_lists::a_tag_over_all_items_of_a_list
   ✓ web::test_transitions::a_keyed_item_keeps_its_transition
   ✓ web::test_transitions::a_style_transition_is_css
   ✓ web::test_transitions::a_transition_ends_before_the_children
@@ -3073,7 +3089,7 @@ PASSED:
   ✓ welcoming::test_footguns::test_approximation_is_marked
   ✓ welcoming::test_footguns::test_as_converts_the_whole_expression
   ✓ welcoming::test_footguns::test_as_float_converts_exact_values
-  ✓ welcoming::test_footguns::test_booleans_are_not_numbers
+  ✓ welcoming::test_footguns::test_booleans_count_as_numbers
   ✓ welcoming::test_footguns::test_braceless_argument_extent_is_consistent
   ✓ welcoming::test_footguns::test_braceless_call_as_operand
   ✓ welcoming::test_footguns::test_braceless_call_in_argument_is_ambiguous
@@ -3367,4 +3383,4 @@ FAILED:
   ✗ web::test_guide::every_guide_snippet_shows_its_value
 
 SUMMARY:
-19 ignored, 3361 passed, 1 failed, 3362 total tested
+19 ignored, 3377 passed, 1 failed, 3378 total tested
