@@ -88,6 +88,8 @@ Each step is useful on its own and is what the next ones stand on.
   call of that component in a render (React's hooks rule, undoable default, question queued with the Interviewer); the
   handler's element carries `data-wasp-instance`, the page passes it as `event.instance`. The program's last line
   becomes the getter `page·markup`, which resets the instance counters before each render.
+- Class components (warp-41, branch classes-40, notes/classes.md): a class with render() (aliases view, template,
+  build) constructed as an element's child or as the program's value renders through render().
 - Left: cleanup of listeners when an instance is removed (onMount/onCleanup), instances that move (web-keyed),
   state of a component read by a handler outside it.
 
@@ -99,3 +101,19 @@ Each step is useful on its own and is what the next ones stand on.
   key into place instead of rewriting elements by position. Tour example "keyed list" (`keyed` check).
 - Not yet: `for t in ts { li{t} }` inside a block (the parser reads `ts { … }` as the tag ts; card markup-for),
   transitions (web-transitions).
+
+## Step 6 (web-bind), what is done and what is left
+- `input{ bind: name }` is `input{ value: name on input { name = event.value } }` (element_events.rs); a checkbox or
+  radio binds `checked`. `input` is a page event (PAGE_EVENTS); the page sends {value, checked} (a number from a
+  number or range field) and sets a changed field's value/checked when the markup comes back (morphElement).
+- Boolean attributes (checked, disabled, …) are present or absent (html.rs; true arrives from a run as 1).
+- Tour example "form binding" (`typed` field of examples.js).
+- Left: `select{ bind: choice }` (its first render shows the first option), `bind:` inside a component's state
+  (component_state.rs sees only handlers), form submit as an event with the fields as an object, validation from types.
+
+## Step 7 (web-styles), what is done and what is left
+- `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
+  sheet of rules (html.rs). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
+  are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
+- Left: scoping a component's sheet to its own elements (a generated class per component), `.card { … }` written
+  without quotes (the parser stops at `.`), `8px` written as a number with a unit (parses as 8 * px).

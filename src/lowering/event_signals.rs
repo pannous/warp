@@ -55,11 +55,11 @@ const NAME_JOINER: &str = "·";
 const FUNCTION_TEMPLATE: &str = "handler(event) := {}";
 const PARAMETERLESS_TEMPLATE: &str = "handler() := {}";
 const TEMPLATE_NAME: &str = "handler";
-const EVENT_WORD: &str = "event";
+pub(crate) const EVENT_WORD: &str = "event";
 /// The event as raised, kept while a handler that changes its `event` runs before the next one
 const RAISED_EVENT: &str = "raised_event";
 /// The events of the page that call their handlers from outside the program
-pub const PAGE_EVENTS: [&str; 2] = ["click", "key"];
+pub const PAGE_EVENTS: [&str; 3] = ["click", "key", "input"];
 /// `click·1`: the page event of one element's handler (element_events.rs), the page event and the element's number
 pub const ELEMENT_EVENT_JOINER: char = '·';
 

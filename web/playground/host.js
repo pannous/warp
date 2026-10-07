@@ -1235,7 +1235,7 @@ function outcomeOf(holder, hooks, call) {
 }
 
 // the page events a program handles (src/lowering/event_signals.rs PAGE_EVENTS): `on click {…}` exports on·click·node
-const PAGE_EVENT_HANDLER = /^on·((?:click|key)(?:·\d+)?)·node$/;
+const PAGE_EVENT_HANDLER = /^on·((?:click|key|input)(?:·\d+)?)·node$/;
 function pageEvents(exports) {
 	return Object.keys(exports).map(name => name.match(PAGE_EVENT_HANDLER)?.[1]).filter(Boolean);
 }
