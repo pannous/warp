@@ -31,3 +31,9 @@ fn other_languages_serializers_are_to_json() {
 	is!(&format!("{POINT}Json.encodeToString(Point(1, 2))"), "{\"x\":1,\"y\":2}");
 	is!("use json; @Serializable data class Point(val x: Int, val y: Int)\nto_json(Point(1, 2))", "{\"x\":1,\"y\":2}");
 }
+
+#[test]
+fn lists_of_instances_from_json() {
+	is!(&format!("{POINT}ps = parse_json(\"[{{\\\"x\\\":1,\\\"y\\\":2}},{{\\\"x\\\":3,\\\"y\\\":4}}]\") as [Point]; ps#2.x"), 3);
+	is!(&format!("{POINT}class Poly{{points:[Point]}}; p = Poly.from_json(to_json(Poly([Point(1, 2), Point(5, 6)]))); p.points#2.y"), 6);
+}

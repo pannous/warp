@@ -301,4 +301,6 @@ Not ported: hashCode/__hash__ (wasp has no hash witness; they stay plain methods
   ignored, Python `dataclasses.asdict(p)` is p itself (its fields read like entries), each with a note.
 - `object as Point`, `parse_json(t) as Point`, `Point.from_json(t)`: `(Point·from = object; Point(Point·from.x, …))`,
   a field of a class type built from its path `Line(Point(Line·from.a.x, …), …)` (class_methods from_objects); a
-  statement sequence as a construction argument is data, so no temporaries below the top.
+  statement sequence as a construction argument is data, so no temporaries below the top. `parse_json(t) as [Point]`
+  and a field `points:[Point]` map each element (`list.map(Point·element => Point(…))`); such a list is built before
+  the construction, into `elements·1`, … (built_instance).

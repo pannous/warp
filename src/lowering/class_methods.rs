@@ -238,6 +238,11 @@ const FROM_JSON_WORD: &str = "from_json";
 const PARSE_JSON_WORD: &str = "parse_json";
 /// The variable holding the object an instance is built from: `Point·from`
 const FROM_SUFFIX: &str = "·from";
+/// The element of a list of instances built from objects: `Point·element`
+const ELEMENT_SUFFIX: &str = "·element";
+const MAP_WORD: &str = "map";
+/// The variable of a list of instances built before its construction: `elements·1`
+const ELEMENTS_WORD: &str = "elements";
 
 /// `object as Point`, `parse_json(t) as Point`, `Point.from_json(t)`: the instance of the object's fields,
 /// `(Point·from = object; Point(Point·from.x, Point·from.y))`; a field of a class type is built from its path
@@ -254,11 +259,12 @@ fn from_objects(node: Node) -> Node {
 	with_objects_as_instances(node, &fields)
 }
 
-/// `int` of `x:int`, the empty name for an untyped field
+/// `int` of `x:int`, `[Point]` of `points:[Point]`, the empty name for an untyped field
 fn field_type_name(item: &Node) -> String {
 	match item.drop_meta() {
 		Node::Key(_, Op::Colon, field_type) => match field_type.drop_meta() {
 			Node::Type { name, .. } => name.drop_meta().name(),
+			Node::List(items, Bracket::Square, _) if items.len() == 1 => format!("[{}]", items[0].drop_meta().name()),
 			other => other.name(),
 		},
 		Node::Key(field, Op::Assign, _) => field_type_name(field),
@@ -269,6 +275,11 @@ fn field_type_name(item: &Node) -> String {
 fn with_objects_as_instances(node: Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
 	let class_of = |node: &Node| Some(node.drop_meta().name()).filter(|name| fields.contains_key(name));
 	match node {
+		// `parse_json(t) as [Point]`: each element an instance
+		Node::Key(object, Op::As, list) if matches!(list.drop_meta(), Node::List(items, Bracket::Square, _) if items.len() == 1 && class_of(&items[0]).is_some()) => {
+			let class = list.drop_meta().children()[0].drop_meta().name();
+			instances_of(with_objects_as_instances(*object, fields), &class, fields)
+		}
 		Node::Key(object, Op::As, class) if class_of(&class).is_some() => {
 			let class = class.drop_meta().name();
 			instance_from(with_objects_as_instances(*object, fields), &class, fields)
@@ -288,20 +299,46 @@ fn with_objects_as_instances(node: Node, fields: &std::collections::HashMap<Stri
 
 fn instance_from(object: Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
 	let source = Node::Symbol(format!("{class}{FROM_SUFFIX}"));
-	let construction = instance_of(&source, class, fields);
-	Node::List(vec![Node::Key(Box::new(source), Op::Assign, Box::new(object)), construction], Bracket::Round, Separator::Semicolon)
+	let mut statements = vec![Node::Key(Box::new(source.clone()), Op::Assign, Box::new(object))];
+	statements.extend(statements_of(built_instance(&source, class, fields)));
+	Node::List(statements, Bracket::Round, Separator::Semicolon)
 }
 
-/// `Point(path.x, path.y)`, a field of a class type by its own path
-fn instance_of(path: &Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
-	let values = fields[class].iter().map(|(field, field_type)| {
+/// The construction of `instance_of`, after the lists of instances it takes (a construction's arguments are data:
+/// the `map` building a list runs before, into `elements·1`, …)
+fn built_instance(path: &Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+	let mut lists = vec![];
+	let construction = instance_of(path, class, fields, &mut lists);
+	match lists.is_empty() {
+		true => construction,
+		false => Node::List([lists, vec![construction]].concat(), Bracket::Round, Separator::Semicolon),
+	}
+}
+
+/// `Point(path.x, path.y)`, a field of a class type by its own path, a list of instances by its variable in `lists`
+fn instance_of(path: &Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>, lists: &mut Vec<Node>) -> Node {
+	let mut values = vec![];
+	for (field, field_type) in &fields[class] {
 		let value = Node::Key(Box::new(path.clone()), Op::Dot, Box::new(Node::Symbol(field.clone())));
-		match fields.contains_key(field_type) {
-			true => instance_of(&value, field_type, fields),
-			false => value,
-		}
-	});
+		let element_class = field_type.strip_prefix('[').and_then(|inner| inner.strip_suffix(']')).filter(|inner| fields.contains_key(*inner));
+		values.push(match (fields.contains_key(field_type), element_class) {
+			(true, _) => instance_of(&value, field_type, fields, lists),
+			(false, Some(element_class)) => {
+				let elements = Node::Symbol(format!("{ELEMENTS_WORD}·{}", lists.len() + 1));
+				lists.push(Node::Key(Box::new(elements.clone()), Op::Assign, Box::new(instances_of(value, element_class, fields))));
+				elements
+			}
+			(false, None) => value,
+		});
+	}
 	Node::List(std::iter::once(Node::Symbol(class.to_string())).chain(values).collect(), Bracket::Round, Separator::None)
+}
+
+/// `list.map(Point·element => Point(Point·element.x, …))`
+fn instances_of(list: Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+	let element = Node::Symbol(format!("{class}{ELEMENT_SUFFIX}"));
+	let lambda = Node::Key(Box::new(element.clone()), Op::FatArrow, Box::new(built_instance(&element, class, fields)));
+	Node::Key(Box::new(list), Op::Dot, Box::new(Node::List(vec![Node::Symbol(MAP_WORD.to_string()), lambda], Bracket::Round, Separator::None)))
 }
 
 /// A method named like a type word (`double() := x*2`, P142: class methods are always allowed) or like a list
