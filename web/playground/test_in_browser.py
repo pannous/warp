@@ -6,6 +6,8 @@ web/playground/tests.html with agent-browser and prints the results like libtest
 `test_in_browser.py --examples [name…]` runs the tour (examples.js) in the playground page itself, built by build.sh:
 each example's value and printed output must be the ones it names (a broken example fails CI, .github/workflows/pages.yml).
 `test_in_browser.py --examples --url https://warp.pannous.com/ [name…]` checks the tour of a deployed playground instead.
+`test_in_browser.py --examples --site _site [name…]` checks it in a collected site (pages.yml), served as its root: a file
+the deploy forgot fails here, not on the live page.
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
 Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
 src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
@@ -45,7 +47,7 @@ def find_header(name):
 	return next((path for path in (os.path.join(directory, name) for directory in include_dirs()) if os.path.isfile(path)), None)
 
 
-def serve(binary):
+def serve(binary, root=REPOSITORY):
 	class Handler(http.server.SimpleHTTPRequestHandler):
 		def translate_path(self, path):
 			path = urllib.parse.unquote(urllib.parse.urlsplit(path).path)
@@ -99,7 +101,7 @@ def serve(binary):
 		request_queue_size = 512  # every worker fetches the binary at once
 	global PORT
 	try:
-		server = Server(("127.0.0.1", PORT), functools.partial(Handler, directory=REPOSITORY))
+		server = Server(("127.0.0.1", PORT), functools.partial(Handler, directory=root))
 	except OSError as busy:
 		sys.exit(f"error: port {PORT} (WARP_BROWSER_TEST_PORT) is taken{port_holder(PORT)}: {busy.strerror}; unset it for a free port")
 	PORT = server.server_address[1]
@@ -189,11 +191,14 @@ def wait_for_isolation():
 		time.sleep(0.5)
 
 
-def check_examples(names, page_url=None):
-	"""every example of the tour shows its value and prints its text in the playground (the local build, or the deployed
-	one at `page_url`); exit code 101 on a difference"""
+def check_examples(names, page_url=None, site=None):
+	"""every example of the tour shows its value and prints its text in the playground (the local build, the collected
+	`site` directory, or the deployed one at `page_url`); exit code 101 on a difference"""
 	server = None
-	if not page_url:
+	if site:
+		server = serve(None, os.path.abspath(site))
+		page_url = f"http://127.0.0.1:{PORT}/"
+	elif not page_url:
 		if not os.path.isfile(os.path.join(REPOSITORY, "web", "playground", "warp.wasm")):
 			sys.exit("error: web/playground/warp.wasm is missing; build it with web/playground/build.sh")
 		server = serve(None)
@@ -227,8 +232,8 @@ def build_components():
 def main():
 	if sys.argv[1:2] == ["--examples"]:
 		names = sys.argv[2:]
-		page_url = names[1] if names[:1] == ["--url"] else None
-		check_examples(names[2:] if page_url else names, page_url)
+		place = {names[0]: names[1]} if names[:1] in (["--url"], ["--site"]) else {}
+		check_examples(names[2:] if place else names, place.get("--url"), place.get("--site"))
 	if sys.argv[1:2] == ["--serve"]:
 		binary = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
 		serve(binary)

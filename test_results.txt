@@ -2919,7 +2919,7 @@ PASSED:
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
-  ✓ web::test_site::a_site_prerenders_each_static_route
+  ✓ web::test_site::a_site_with_routes_is_one_page_for_every_path
   ✓ web::test_site::a_static_page_is_its_last_line_rendered
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
   ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
@@ -2957,8 +2957,8 @@ PASSED:
   ✓ web::test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
   ✓ web::test_web_playground::evaluate_reports_the_value_the_cli_prints
   ✓ web::test_web_server::a_program_serves_its_own_page
-  ✓ web::test_web_server::a_served_page_is_rendered_for_each_route
   ✓ web::test_web_server::a_served_page_s_events_draw_no_warning
+  ✓ web::test_web_server::a_served_page_with_routes_answers_every_path
   ✓ web::test_web_server::a_server_function_is_called_over_http
   ✓ web::test_web_server::serve_answers_routes
   ✓ web::test_webgpu::a_compute_shader_runs_over_the_numbers

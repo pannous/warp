@@ -53,8 +53,6 @@ jobs:
       run: web/playground/build.sh
     - name: Install agent-browser (headless Chrome for the tour check)
       run: npm install -g agent-browser && agent-browser install --with-deps
-    - name: Every tour example shows what it promises (examples.js), else no deploy
-      run: python3 web/playground/test_in_browser.py --examples
     - name: Collect the site
       run: |
         mkdir _site
@@ -64,6 +62,8 @@ jobs:
         # the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
         mkdir -p _site/tests/fixtures/wasm && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h _site/tests/fixtures/wasm/
         echo "warp.pannous.com" > _site/CNAME
+    - name: Every tour example shows what it promises (examples.js) in the collected site, else no deploy
+      run: python3 web/playground/test_in_browser.py --examples --site _site
     - uses: actions/upload-pages-artifact@v3
       with:
         path: _site

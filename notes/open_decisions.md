@@ -7,8 +7,7 @@ words; this file keeps only pending and parked questions, user to-dos and standi
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-(the ones below the user answered "Later"/postponed are parked; reviewed 2026-10-06 evening: P70c and P64 decided,
-P69a and P76 still wait for run-time `!` and narrowed grants (P88), #10 unchanged)
+None open. Parked (user: "Later"):
 - Parked: P150 license: warp (and wasp) have none, so package managers list no license and nobody may legally reuse the
   code. MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). User 2026-10-06: "let's
   postpone the license". Blocks the crates.io upload of P151 (crates.io refuses a crate without license metadata).
@@ -17,23 +16,7 @@ P69a and P76 still wait for run-time `!` and narrowed grants (P88), #10 unchange
 - Parked: P76 grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
   run-time blocks are always pure. Asked by warp-29.
-Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
-Dropped as answered (handover 2026-10-06 "Needs the user" list): eval_untrusted limits (P88 follow-up "Everything,
-untrusted too"), the AGENTS.md paragraph (P93), stash and obsolete tests (cleanup rule, P96), the git hook "line 240"
-fix (superseded: ~/.claude/hooks/git_destructive.py was reworked after that list, 8fc7e6b and a22714f; whoever still
-meets a hook bug files it anew with the exact command).
-Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
-uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
-#24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
-
-## Defaults to show the user (no question, easy to restyle)
-- Error highlighting (warp-7d, card g-_ZNg): the CLI prints `  2 | pi = 4` and carets `    | ^^` under the word on
-  stderr below an error/warning; the web demo underlines errors (red wavy + tint) and warnings (amber wavy), with the
-  message on hover. Hints aren't underlined yet because their positions lag behind (card hint-positions).
-- P168 detail (warp-64, branch functions 152ddabd4): `p = {phone: 7}; number = 2; p.phone-number` → 5. When p's
-  fields aren't known at compile time, the field read `p.phone-number` stays.
-- Char as Text (warp-90, card char-text): an untyped parameter called with a one-character text takes it as Text:
-  `g(t) := t as float; g("3")` → 3 (was 51, the code point); `id('x'); id('xy')` agree. `ord` still works.
+- Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 
 ## User to-dos (not questions)
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
@@ -46,8 +29,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   stdlib-standard, module-manager, package-manager. Nobody takes them until the user releases them.
   Released 2026-10-07 (to warp-96): the standard library, including adapters to other standard libraries. Work starts
   as soon as the board's Now/Next columns are practically empty. stdlib-standard is in Soon; module-manager and
-  package-manager stay in Later. Leads: warp-64 (stdlib modules in wasp), warp-f0 (adapters: C/wasm, JS, Python, Rust
-  components). Design questions come to the Interviewer, each with a default.
+  package-manager stay in Later. Lead: the functions worker (stdlib modules and adapters; decisions P169-P193).
+  Design questions come to the Interviewer, each with a default.
 - Word choices are not questions (2026-10-06): "we have the alias mechanism to generally tell people if they use the
   wrong word what the right word is but still keep the synonym working or replacing". When the alternatives are only
   different words for the same thing, the recommended word is canonical and the others become aliases: they work,

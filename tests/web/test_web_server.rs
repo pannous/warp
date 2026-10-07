@@ -100,9 +100,10 @@ fn a_served_page_s_events_draw_no_warning() {
 	assert!(warnings.iter().all(|warning| !warning.message.contains("never raises it")), "{warnings:?}");
 }
 
-// card serve-route: a served program with routes answers each path with that route's page, rendered for the path
+// card serve-route, made single-page by the user's decision (2026-10-07, via warp-03): a served program with routes
+// answers any other path with its one page, whose router shows that path's route in the browser
 #[test]
-fn a_served_page_is_rendered_for_each_route() {
+fn a_served_page_with_routes_answers_every_path() {
 	const ROUTES_PORT: u16 = 18441;
 	let server = std::thread::spawn(|| {
 		warp::web_server::stop_after(4);
@@ -118,8 +119,8 @@ fn a_served_page_is_rendered_for_each_route() {
 	assert!(page("/").contains("<h1>Users</h1>"), "{}", page("/"));
 	let user = page("/users/2");
 	// its scripts, module and route modules come from the server's root (its <base>), not from /users/
-	assert!(user.contains("<p>User Bo</p>") && user.contains("<base href=\"/\">") && user.contains("<script src=\"site.js\"></script>"), "{user}");
-	assert!(page("/elsewhere").contains("<p>no such page</p>"));
+	assert!(user.contains("<h1>Users</h1>") && user.contains("<base href=\"/\">") && user.contains("<script src=\"site.js\"></script>"), "{user}");
+	assert_eq!(page("/elsewhere"), user);
 	assert_eq!(page("/api/users"), r#"["Ann","Bo"]"#);
 	let (fine, value) = server.join().expect("the server thread");
 	assert!(fine, "{value}");
