@@ -43,3 +43,28 @@ fn a_stored_variable_and_its_key_are_one_entry() {
 fn a_program_variable_named_storage_stays_its_own() {
 	is!("storage = {size: 1}; storage.size", 1);
 }
+
+// P188 (browser API names, warp-03's default): `local[k]` is localStorage, the same store as `storage[k]` (its alias)
+// and `stored x`; `session[k]` is sessionStorage, a store of its own that lasts while the page's tab (natively: the
+// process) does
+#[test]
+fn local_is_the_store_of_storage() {
+	is!("local[\"theme_local\"] = \"dark\"; storage[\"theme_local\"]", "dark");
+	is!("local.color_local = \"red\"; local[\"color_local\"]", "red");
+	is!("local[\"gone_local\"] = 1; delete local[\"gone_local\"]; local[\"gone_local\"]", warp::node::Node::Empty);
+	is!("local[\"listed_local\"] = 1; contains(keys(local), \"listed_local\")", true);
+}
+
+#[test]
+fn session_is_a_store_of_its_own() {
+	is!("session[\"tab_only\"] = \"open\"; session[\"tab_only\"]", "open");
+	is!("session[\"apart\"] = 1; local[\"apart\"] = 2; session[\"apart\"] * 10 + local[\"apart\"]", 12);
+	is!("session[\"session_listed\"] = 1; contains(keys(session), \"session_listed\")", true);
+	is!("session[\"session_only\"] = 1; contains(keys(local), \"session_only\")", false);
+}
+
+#[test]
+fn a_program_variable_named_local_or_session_stays_its_own() {
+	is!("local = {size: 1}; local.size", 1);
+	is!("session = [7 8]; session[1]", 8);
+}

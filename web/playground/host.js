@@ -52,8 +52,10 @@ function regexOf(pattern, flags = "") {
 	if (feature) throw new Error(`${feature} is not in wasp's regex (one engine lacks it): ${pattern}`);
 	return new RegExp(pattern, flags + "u");
 }
-// the stored values of `stored x = v`, by name: the page's localStorage as the worker started (playground.js)
+// the stored values of `stored x = v` and `local[k]`, by name: the page's localStorage as the worker started
+// (playground.js); those of `session[k]`, its sessionStorage
 const storedValues = {};
+const sessionValues = {};
 const contentText = content => typeof content === "string" ? content : JSON.stringify(content);
 const utf8 = new TextEncoder();
 

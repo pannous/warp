@@ -20,6 +20,7 @@ let panicMessage; // the compiler's last panic message
 
 const post = message => self.postMessage(message);
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
+self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
@@ -165,7 +166,7 @@ function runHandler(holder, handler) {
 self.onmessage = async ({ data }) => {
 	if (data.pointer) return self.pagePointer = { values: new Int32Array(data.pointer.buffer), names: data.pointer.names }; // host.js system_value
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
-	if (data.stored) return Object.assign(storedValues, data.stored); // host-files.js STD_ADAPTERS.store
+	if (data.stored) return Object.assign(storedValues, data.stored) && Object.assign(sessionValues, data.session); // host-files.js STD_ADAPTERS.store
 	await ready;
 	if (data.event) return handleEvent(data);
 	if (data.navigate) return handleNavigation(data.navigate);

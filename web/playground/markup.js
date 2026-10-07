@@ -9,6 +9,8 @@ const LEAVING_ATTRIBUTE = "data-wasp-leaving"; // an element animating out: no l
 const DEV_STORE = "wasp-dev"; // the store of the values a `warp dev` page keeps (src/lowering/stored_values.rs DEV_STORE)
 const STORED_PREFIX = "wasp stored "; // a stored value in localStorage, kept across visits
 const DEV_PREFIX = "wasp dev "; // a value a `warp dev` page keeps in sessionStorage, across its reloads
+const SESSION_STORE = "wasp-session"; // the store of `session[k]` (src/lowering/stored_values.rs SESSION_STORE)
+const SESSION_PREFIX = "wasp session "; // a value of `session[k]` in sessionStorage, while the tab lasts
 
 // the children of shown become those of wanted: an element with a key (data-wasp-key, card web-keyed) is the shown one
 // of that key, moved into place; any other node is matched by position; a node of another kind or tag is replaced.
@@ -77,14 +79,21 @@ function inputDetail(field) {
 	return { value: NUMBER_FIELDS.includes(field.type) ? field.valueAsNumber : field.value, checked: field.checked ?? false };
 }
 
-// where a value of a store is kept: the dev store in sessionStorage, any other in localStorage, as JSON
-function keptStorage(file) {
-	return file === DEV_STORE ? [sessionStorage, DEV_PREFIX] : [localStorage, STORED_PREFIX];
+// text on the page's clipboard (`clipboard.write`, host-files.js); the browser refuses it without a recent user action
+// (a click), loudly on the console
+function copyText(text) {
+	navigator.clipboard.writeText(text).catch(failure => console.error("clipboard:", failure));
 }
 
-// the kept values of both stores by name, for host-files.js STD_ADAPTERS.store
-function keptValues() {
-	return Object.assign({}, ...["", DEV_STORE].map(file => {
+// where a value of a store is kept: the dev store and the session's in sessionStorage, any other in localStorage, as JSON
+function keptStorage(file) {
+	return file === DEV_STORE ? [sessionStorage, DEV_PREFIX] : file === SESSION_STORE ? [sessionStorage, SESSION_PREFIX] : [localStorage, STORED_PREFIX];
+}
+
+// the kept values of the stores by name, for host-files.js STD_ADAPTERS.store: the program's and the dev store
+// (storedValues), else those named (the session's: sessionValues)
+function keptValues(files = ["", DEV_STORE]) {
+	return Object.assign({}, ...files.map(file => {
 		try {
 			const [storage, prefix] = keptStorage(file);
 			const keys = Object.keys(storage).filter(key => key.startsWith(prefix));

@@ -8,6 +8,8 @@
 //! `whenever battery < 20% {…}` arrives as `battery < (20 % {…})`: a percent compared with the battery is that number.
 //! The clipboard: `on clipboard change {…}` is `on change` of its change count (`clipboard count`), which reads no
 //! content; `clipboard` is its text, the host call `clipboard_text()` made where the program reads it, never polled.
+//! Browser names (P188): `clipboard.read()` is `clipboard`, `clipboard.write(text)` the std word
+//! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 
 use crate::declarations::word;
 use crate::node::{Bracket, Node, Separator};
@@ -22,6 +24,10 @@ const ON_WORD: &str = "on";
 const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 /// The timer that keeps a listening program and wakes it for the checks
 const KEEP_LISTENING: &str = "on every 1000 ms {}";
+const CLIPBOARD_READ: &str = "read";
+const CLIPBOARD_WRITE: &str = "write";
+/// stands for the text in the template of a clipboard write
+const TEXT_PLACEHOLDER: &str = "clipboard_text_written";
 
 pub fn name(program: Node) -> Node {
 	let bound = bound_names(&program);
@@ -86,6 +92,13 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 	};
 	match node {
 		Node::Symbol(name) => marked(&name).unwrap_or(Node::Symbol(name)),
+		Node::Key(left, Op::Dot, right) if word(&left) == CLIPBOARD && names.iter().any(|(name, _)| *name == CLIPBOARD) && clipboard_method(&right).is_some() => {
+			let (method, arguments) = clipboard_method(&right).expect("a clipboard method");
+			match (method.as_str(), arguments.as_slice()) {
+				(CLIPBOARD_WRITE, [text]) => clipboard_write(mark(text.clone(), names)),
+				_ => marked(CLIPBOARD).expect("the clipboard's read"),
+			}
+		}
 		Node::Key(left, op @ (Op::Colon | Op::Dot), right) => {
 			let right = if op == Op::Dot { method_arguments_marked(*right, names) } else { mark(*right, names) };
 			Node::Key(left, op, Box::new(right))
@@ -189,4 +202,25 @@ fn reading(node: Node) -> Node {
 		}
 		other => other.map_children(reading),
 	}
+}
+
+/// `read()` or `write(text)` after `clipboard.`: the method and its arguments
+fn clipboard_method(call: &Node) -> Option<(String, Vec<Node>)> {
+	let Node::List(items, _, _) = call.drop_meta() else { return None };
+	let (method, arguments) = items.split_first()?;
+	let method = word(method);
+	let arguments: Vec<Node> = match arguments {
+		[Node::List(grouped, Bracket::Round, _)] => grouped.clone(),
+		other => other.to_vec(),
+	};
+	match (method.as_str(), arguments.len()) {
+		(CLIPBOARD_READ, 0) | (CLIPBOARD_WRITE, 1) => Some((method, arguments)),
+		_ => None,
+	}
+}
+
+/// `std_io("clipboard", "write", [text])`
+fn clipboard_write(text: Node) -> Node {
+	let call = crate::wasp_parser::parse(&format!("std_io(\"{CLIPBOARD}\", \"{CLIPBOARD_WRITE}\", [{TEXT_PLACEHOLDER}])"));
+	crate::law::substitute(&call, &[(TEXT_PLACEHOLDER.to_string(), text)].into_iter().collect())
 }

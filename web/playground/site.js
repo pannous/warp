@@ -47,6 +47,7 @@ async function hydrate() {
 	const bytes = new Uint8Array(await (await fetch(SITE_MODULE)).arrayBuffer());
 	// stored values and those a `warp dev` page keeps across reloads (host-files.js STD_ADAPTERS.store, markup.js)
 	Object.assign(storedValues, keptValues());
+	Object.assign(sessionValues, keptValues([SESSION_STORE]));
 	self.keepStored = keepValue;
 	const holder = instantiateProgram(bytes, siteHooks);
 	if (holder.failure) return console.error("wasp:", holder.failure);

@@ -265,8 +265,15 @@ Each step is useful on its own and is what the next ones stand on.
   (std_adapters, as foreign calls).
 - Runtime keys (card web-apis, storage): `storage` is the same store as a map: `storage[k] = v`, `storage[k]` (ø when
   absent), `delete storage[k]`, `keys(storage)`, `storage.k`; the store words remove and names beside load and save.
-  A program defining its own `storage` keeps it. The word is a default (question queued with the Interviewer: `local[…]`
-  / `session[…]`, or `stored` as a map). IndexedDB for values beyond localStorage's ~5 MB is left.
+  Words (P188, browser API names; warp-03's undoable default, no user answer): `local[k]` is that store
+  (localStorage), `storage[k]` its alias; `session[k]` a store of its own (sessionStorage while the tab lasts, natively
+  in memory while the process runs; SESSION_STORE "wasp-session", host.js sessionValues). A program defining its own
+  `storage`, `local` or `session` keeps it. IndexedDB for values beyond localStorage's ~5 MB is left.
+- Clipboard (P188, navigator.clipboard's names; warp-03's default): `clipboard.write(text)` is the std word
+  std_io("clipboard", "write", [text]) (lowering/system_values.rs): pbcopy / wl-copy / xclip natively, in a page
+  markup.js copyText (navigator.clipboard.writeText, which needs a recent click; a refusal goes to the console), from a
+  Worker through its page (self.writeClipboard). `clipboard.read()` is `clipboard` (natively pbpaste; the browser's
+  read is asynchronous, so a page's read stays the loud error).
 - Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
