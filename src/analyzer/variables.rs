@@ -206,10 +206,15 @@ pub(super) fn widen_element_type(scope: &mut Scope, list: &Node, value: &Node) {
 }
 
 /// An exact variable that is later assigned an f64 (`x=10; x=floor(2.5)` with libm's floor) holds an f64 throughout,
-/// as an expression mixing in an f64 is one; a declared type is kept (and checked elsewhere)
+/// as an expression mixing in an f64 is one; a declared type is kept (and checked elsewhere). A global too: `b = 0.5`
+/// changed by a function's `global b; b = b + random()`
 pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 	let float_value = infer_type(value, scope).is_float();
-	if let Some(local) = scope.locals.get_mut(name).filter(|local| local.kind == Kind::Int && local.type_node.is_none()) {
+	let binding = match scope.locals.contains_key(name) {
+		true => scope.locals.get_mut(name),
+		false => scope.globals.get_mut(name),
+	};
+	if let Some(local) = binding.filter(|local| local.kind == Kind::Int && local.type_node.is_none()) {
 		if float_value {
 			local.kind = Kind::Float;
 		}

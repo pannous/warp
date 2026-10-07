@@ -136,8 +136,13 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// A local holding a float, or a global (`global b` in a function) that no local of the same name shadows
 	pub(super) fn is_float_variable(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_float()))
+		let Node::Symbol(name) = node.drop_meta() else { return false };
+		match self.scope.lookup(name) {
+			Some(local) => local.kind.is_float(),
+			None => self.ctx.user_globals.get(name).is_some_and(|(_, kind)| kind.is_float()),
+		}
 	}
 
 	pub(super) fn emit_compound_assign(

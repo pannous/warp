@@ -78,6 +78,22 @@ pub(super) fn function_body_scope(params: &[Param], body: &Node, function_kinds:
 	scope
 }
 
+/// A global started exact (`b = 0.5`) holds an f64 throughout once a function gives it one (`global b; b = b + random()`),
+/// as a main-level assignment widens it (widen_to_float). True when one was widened.
+pub fn widen_globals_by_functions<'a>(globals: &mut HashMap<String, Local>, functions: impl Iterator<Item = &'a UserFunctionDef>, function_kinds: &HashMap<String, Kind>, closure_variable_targets: &HashMap<String, HashSet<String>>) -> bool {
+	let mut widened_any = false;
+	for function in functions {
+		let scope = function_body_scope(&function.params, &function.body, function_kinds, globals, closure_variable_targets);
+		for (name, global) in scope.globals.iter().filter(|(_, global)| global.kind == Kind::Float) {
+			if let Some(widened) = globals.get_mut(name).filter(|known| known.kind != Kind::Float) {
+				widened.kind = global.kind;
+				widened_any = true;
+			}
+		}
+	}
+	widened_any
+}
+
 /// The kinds of the values `return a, b` gives back, position by position over every such return:
 /// one kind when all agree, Float for Int mixed with Float, else a Node
 pub(super) fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>, closure_variable_targets: &HashMap<String, HashSet<String>>) -> Vec<Kind> {
@@ -349,8 +365,12 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 	infer_forwarded_parameters(ctx); // the kinds closures gave their parameters reach the functions that pass them
 	let globals = declared_globals(node);
 	ctx.field_kinds = program_field_kinds(node);
-	let globals = with_closure_captures(ctx, node, globals);
+	let mut globals = with_closure_captures(ctx, node, globals);
 	refine_return_kinds(ctx, &globals);
+	let return_kinds = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
+	if widen_globals_by_functions(&mut globals, ctx.user_functions.values(), &return_kinds, &ctx.closure_variable_targets) {
+		refine_return_kinds(ctx, &globals);
+	}
 	// a widened parameter can make the arguments it passes on floats too: until nothing changes (each round widens one)
 	let parameter_count: usize = ctx.user_functions.values().map(|function| function.params.len()).sum();
 	for _ in 0..parameter_count {
