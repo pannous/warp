@@ -42,3 +42,13 @@ fn use_list_groups_partitions_and_picks_by() {
 	is!("use list; g = group_by([\"ab\", \"c\", \"de\"], w => count(w)); count(g.get(\"2\"))", 2);
 	is!("use list; t = tally([\"a\", \"b\", \"a\"]); t.get(\"a\")", 2);
 }
+
+#[test]
+fn use_list_zips_with_sums_by_rotates_interleaves_dedupes() {
+	is!("use list; zip_with([1, 2, 3], [10, 20], (a, b) => a + b)", parse("[11 22]"));
+	is!("use list; sum_by([\"a\", \"bcd\"], w => count(w))", 4);
+	is!("use list; count_by([1, 2, 3, 4], x => x > 1)", 3);
+	is!("use list; rotate([1, 2, 3, 4], 1)", parse("[2 3 4 1]"));
+	is!("use list; interleave([1, 3, 5], [2, 4])", parse("[1 2 3 4 5]"));
+	is!("use list; dedupe([1, 1, 2, 1, 1])", parse("[1 2 1]"));
+}
