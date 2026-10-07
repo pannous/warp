@@ -329,4 +329,5 @@ block as children and per-instance state are web's (ruby_blocks.rs, component_st
   `word_names_key` in wasp_parser/lookahead.rs); `then:`, `else:`, `do:` stay operators (BLOCK_COLON_WORDS).
 - `l.start` beside a user function `start` reads the field when start is a declared class field and l is a parameter
   or of known instance shape (library_words::method_call); before, it became `start(l)` and recursed forever.
-- Still open: a plain map parameter without any class (`start(l) := l.start; start({start:3})`) still calls start.
+- Without any class (card classes-function): `p.name` inside the function `name(p)` reads the field, since the call
+  would recurse with the same argument forever (library_words `defining`, `reads_own_parameter_field`).

@@ -1,0 +1,2 @@
+start(l) := l.start * 10
+start({start:3})
