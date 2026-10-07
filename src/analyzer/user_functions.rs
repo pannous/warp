@@ -68,7 +68,7 @@ pub(super) fn operand_kind(operand: &Node) -> Option<Kind> {
 /// Extract user-defined functions from the AST into context
 /// Infer return type of a function body given its parameters
 /// The parameters and variables of a function body, typed
-pub(super) fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>, closure_variable_targets: &HashMap<String, HashSet<String>>) -> Scope {
+pub fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>, closure_variable_targets: &HashMap<String, HashSet<String>>) -> Scope {
 	let mut scope = Scope::with_function_kinds(function_kinds.clone()).with_closure_targets(closure_variable_targets.clone());
 	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
