@@ -843,6 +843,9 @@ impl WasmGcEmitter {
 		let items = I::StructGet { struct_type_index: list, field_index: 1 };
 		let kind = I::StructGet { struct_type_index: list, field_index: 2 };
 		let new_list = I::StructNew(list);
+		if self.should_emit_function(NODE_RUNTIME.at) || self.should_emit_function(NODE_RUNTIME.set) {
+			self.ensure_index_out_of_range_of();
+		}
 		if self.should_emit_function(NODE_RUNTIME.at) {
 			self.runtime_function(NODE_RUNTIME.at, vec![list_ref, ValType::I64], vec![node_ref], vec![], |s, f| {
 				s.emit_list_position(f, list);
@@ -966,6 +969,9 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let length = I::StructGet { struct_type_index: list, field_index: 0 };
 		let items = I::StructGet { struct_type_index: list, field_index: 1 };
+		if self.should_emit_function(runtime.at) || self.should_emit_function(runtime.set) {
+			self.ensure_index_out_of_range_of();
+		}
 		// at(list, index) -> element: the element at the 1-based index
 		if self.should_emit_function(runtime.at) {
 			self.runtime_function(runtime.at, vec![list_ref, ValType::I64], vec![value], vec![], |s, f| {
@@ -1116,8 +1122,10 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[
 			I::LocalGet(1), I::I64Const(1), I::I64LtS,
 			I::LocalGet(1), I::LocalGet(0), I::StructGet { struct_type_index: list, field_index: 0 }, I::I64ExtendI32U, I::I64GtS, I::I32Or,
+			I::If(BlockType::Empty), I::LocalGet(1), I::LocalGet(0), I::StructGet { struct_type_index: list, field_index: 0 }, I::I64ExtendI32U,
 		]);
-		self.emit_fail_if(func, "index_out_of_range");
+		self.call(func, super::list_ops::INDEX_OUT_OF_RANGE_OF);
+		func.instruction(&I::End);
 		Self::emit_list(func, &[
 			I::LocalGet(0), I::StructGet { struct_type_index: list, field_index: 1 },
 			I::LocalGet(1), I::I32WrapI64, I::I32Const(1), I::I32Sub,

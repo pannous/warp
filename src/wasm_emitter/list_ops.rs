@@ -55,12 +55,15 @@ impl WasmGcEmitter {
 	fn emit_list_cell_access(&mut self) {
 		let node_ref_nullable = self.node_ref(true);
 		let node_ref = self.node_ref(false);
+		if self.should_emit_function("list_at") || self.should_emit_function("list_node_at") {
+			self.emit_index_out_of_range_in();
+		}
 		// list_at(list: ref $Node, index: i64) -> i64
 		// Get the numeric value of the element at index (1-based)
 		// Traverses linked list: for index N, follow value pointer N-1 times, return data
 		if self.should_emit_function("list_at") {
-			self.exported_function("list_at", vec![Ref(node_ref), ValType::I64], vec![ValType::I64], vec![Ref(node_ref_nullable)], |s, func| {
-				// Locals: 0=list, 1=index, 2=current (loop variable)
+			self.exported_function("list_at", vec![Ref(node_ref), ValType::I64], vec![ValType::I64], vec![Ref(node_ref_nullable), ValType::I64], |s, func| {
+				// Locals: 0=list, 1=index, 2=current (loop variable), 3=the index asked for
 				s.emit_require_integral(func, 1);
 
 				s.emit_list_walk(func, 2);
@@ -80,8 +83,8 @@ impl WasmGcEmitter {
 		// list_node_at(list: ref $Node, index: i64) -> ref $Node
 		// Get the element node at index (1-based), returns the node itself (for symbol/text lists)
 		if self.should_emit_function("list_node_at") {
-			self.exported_function("list_node_at", vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)], vec![Ref(node_ref_nullable)], |s, func| {
-				// Locals: 0=list, 1=index, 2=current (loop variable)
+			self.exported_function("list_node_at", vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)], vec![Ref(node_ref_nullable), ValType::I64], |s, func| {
+				// Locals: 0=list, 1=index, 2=current (loop variable), 3=the index asked for
 				s.emit_require_integral(func, 1);
 
 				s.emit_list_walk(func, 2);
@@ -547,6 +550,12 @@ pub fn runtime_error_message(name: &str) -> String {
 	}
 }
 
+/// index_out_of_range_of(index, count): index_out_of_range with the index and the list's count as the trap detail, which
+/// trap_error turns into "index out of range: 7 not in 1…3" (card index-range)
+pub const INDEX_OUT_OF_RANGE_OF: &str = "index_out_of_range_of";
+/// index_out_of_range_in(list, index): index_out_of_range_of a cons list, counting its cells
+const INDEX_OUT_OF_RANGE_IN: &str = "index_out_of_range_in";
+
 /// `return error("…")` from a function that returns numbers: the run fails, the message is the trap detail
 pub const RETURNED_ERROR: &str = "returned_error";
 
@@ -934,8 +943,54 @@ impl WasmGcEmitter {
 		func.instruction(&I::StructGet { struct_type_index: self.type_manager.string_type, field_index });
 	}
 
-	/// Walk list local 0 to the element at 1-based index local 1 into `current`; trap when out of range
+	/// index_out_of_range_of(index, count): leave `index:count` as the trap detail and fail with index_out_of_range; emitted
+	/// once, before the first runtime function that calls it
+	pub(super) fn ensure_index_out_of_range_of(&mut self) {
+		if self.ctx.func_registry.contains(INDEX_OUT_OF_RANGE_OF) {
+			return;
+		}
+		let trap_detail = self.trap_detail_global();
+		self.runtime_function(INDEX_OUT_OF_RANGE_OF, vec![ValType::I64; 2], vec![], vec![], |s, f| {
+			for number in [0, 1] {
+				f.instruction(&I::LocalGet(number));
+				s.call(f, "new_int");
+			}
+			f.instruction(&I::I64Const(crate::operators::op_to_code(&crate::operators::Op::Colon)));
+			s.call(f, "new_key");
+			f.instruction(&I::GlobalSet(trap_detail));
+			s.call(f, "index_out_of_range");
+		});
+	}
+
+	/// index_out_of_range_in(list, index): index_out_of_range_of with the count of the list's cells
+	fn emit_index_out_of_range_in(&mut self) {
+		self.ensure_index_out_of_range_of();
+		let (node_ref, node_ref_nullable) = (self.node_ref(false), self.node_ref(true));
+		self.runtime_function(INDEX_OUT_OF_RANGE_IN, vec![Ref(node_ref), ValType::I64], vec![], vec![ValType::I64, Ref(node_ref_nullable)], |s, f| {
+			let (count, current) = (2, 3);
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Ne, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(current), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(current), I::RefIsNull, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(count), I::I64Const(1), I::I64Add, I::LocalSet(count)]);
+			s.emit_field(f, current, 2);
+			Self::emit_list(f, &[I::LocalSet(current), I::Br(0), I::End, I::End, I::End, I::LocalGet(1), I::LocalGet(count)]);
+			s.call(f, INDEX_OUT_OF_RANGE_OF);
+		});
+	}
+
+	/// Fail with index_out_of_range_in when the i32 condition on the stack is true (list local 0, index asked for `asked`)
+	fn emit_fail_out_of_range_if(&self, func: &mut Function, asked: u32) {
+		Self::emit_list(func, &[I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(asked)]);
+		self.call(func, INDEX_OUT_OF_RANGE_IN);
+		func.instruction(&I::End);
+	}
+
+	/// Walk list local 0 to the element at 1-based index local 1 into `current`; trap when out of range, naming the index
+	/// asked for (local `current + 1`) and the list's range
 	fn emit_list_walk(&self, func: &mut Function, current: u32) {
+		let asked = current + 1;
+		Self::emit_list(func, &[I::LocalGet(1), I::LocalSet(asked)]);
 		// a number, a character or a text held where a list is indexed (`x=3; x#1`, a parameter): not_a_list, not a cast trap
 		for scalar in [Kind::Int, Kind::Float, Kind::Codepoint, Kind::Text, Kind::Symbol] {
 			self.emit_field(func, 0, 0);
@@ -945,16 +1000,16 @@ impl WasmGcEmitter {
 		// ø is the empty list: it has no item at any index
 		self.emit_field(func, 0, 0);
 		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq]);
-		self.emit_fail_if(func, "index_out_of_range");
+		self.emit_fail_out_of_range_if(func, asked);
 		Self::emit_index_compare(func, I::I64LtS);
-		self.emit_fail_if(func, "index_out_of_range");
+		self.emit_fail_out_of_range_if(func, asked);
 		func.instruction(&I::LocalGet(0));
 		func.instruction(&I::LocalSet(current));
 		func.instruction(&I::Block(BlockType::Empty));
 		func.instruction(&I::Loop(BlockType::Empty));
 		func.instruction(&I::LocalGet(current));
 		func.instruction(&I::RefIsNull);
-		self.emit_fail_if(func, "index_out_of_range");
+		self.emit_fail_out_of_range_if(func, asked);
 		Self::emit_index_compare(func, I::I64LeS);
 		func.instruction(&I::BrIf(1));
 		self.emit_field(func, current, 2);
@@ -967,7 +1022,7 @@ impl WasmGcEmitter {
 		// meta entries `@name:value` sit behind every field (meta_entries.rs, field_with): arriving at one is past the end
 		self.emit_field(func, current, 1);
 		self.call(func, super::equality::IS_META_ENTRY);
-		self.emit_fail_if(func, "index_out_of_range");
+		self.emit_fail_out_of_range_if(func, asked);
 	}
 
 	/// The text heap is exported: the host allocates the texts it returns (`read`, `fetch`) from it too
