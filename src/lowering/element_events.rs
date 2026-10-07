@@ -70,7 +70,7 @@ pub(crate) fn element_items(node: &Node) -> Option<&Vec<Node>> {
 	let Node::Key(tag, Op::Colon | Op::None, content) = node else { return None };
 	let Node::Symbol(tag) = tag.drop_meta() else { return None };
 	match content.drop_meta() {
-		Node::List(items, Bracket::Curly, _) if crate::html::is_element_tag(tag) => Some(items),
+		Node::List(items, Bracket::Curly, _) if crate::markup::is_element_tag(tag) => Some(items),
 		_ => None,
 	}
 }

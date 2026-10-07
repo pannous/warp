@@ -12,7 +12,7 @@
 //! ```
 
 use crate::element_events::HANDLER_ATTRIBUTE_PREFIX;
-use crate::html::to_html;
+use crate::markup::to_html;
 use crate::node::Node;
 use serde_json::{json, Map, Value};
 

@@ -63,7 +63,7 @@ fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(tag_with_attributes(*node, defined)), data },
 		Node::Key(name, Op::Colon, body) => match *body {
 			Node::List(items, Bracket::Curly, separator) => {
-				let is_element = matches!(name.drop_meta(), Node::Symbol(tag) if crate::html::is_element_tag(tag));
+				let is_element = matches!(name.drop_meta(), Node::Symbol(tag) if crate::markup::is_element_tag(tag));
 				let items = items.into_iter().map(|item| tag_with_attributes(attributed_tag(item, defined), defined))
 					.map(|item| if is_element { loop_as_comprehension(item) } else { item })
 					.map(|item| if is_element && is_computed_children(&item) { Node::List(vec![item], Bracket::Square, Separator::None) } else { item })

@@ -200,10 +200,10 @@ fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &H
 fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<String>) -> Vec<Node> {
 	// a name, markup (`div{ p{ "clicked " + count } }`, card web-element), or a choice between such
 	// (`if users.loading then "Loading…" else users`, card web-async), which the page shows anew
-	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::html::is_markup(last) || is_shown_choice(last)).cloned();
+	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::markup::is_markup(last) || is_shown_choice(last)).cloned();
 	if let Some(shown) = shown {
 		// markup: each element holding a computed part is read on its own too, the page changes only those that differ
-		let holes = crate::html::holes(&shown).into_iter().map(|(path, element)| function_with_globals(&hole_name(&path), false, &[element], main_variables));
+		let holes = crate::markup::holes(&shown).into_iter().map(|(path, element)| function_with_globals(&hole_name(&path), false, &[element], main_variables));
 		let bindings: Vec<Node> = holes.chain([function_with_globals(PAGE_VALUE, false, &[shown], main_variables)]).collect();
 		let last = statements.len() - 1;
 		statements.splice(last..last, bindings);
@@ -226,7 +226,7 @@ fn is_shown_choice(node: &Node) -> bool {
 fn only_reads(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty | Node::True | Node::False => true,
-		markup if crate::html::is_markup(markup) => true,
+		markup if crate::markup::is_markup(markup) => true,
 		Node::Key(left, op, right) => !matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec | Op::While | Op::Do) && !op.is_compound_assign() && only_reads(left) && only_reads(right),
 		Node::List(items, Bracket::Square | Bracket::Curly, _) => items.iter().all(only_reads),
 		_ => false,

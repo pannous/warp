@@ -620,6 +620,22 @@ pub fn std_module_defining(word: &str) -> Option<&'static str> {
 	defined.iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
 }
 
+/// The texts of a list a standard module assigns at its top: `html_elements = ["html", …]` of markup; empty if missing
+pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
+	let source = std_module(module).unwrap_or_default();
+	statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().find_map(|statement| match statement.drop_meta() {
+		Node::Key(name, Op::Assign, items) if name.drop_meta().name() == list => match items.drop_meta() {
+			// "p" parses as a character
+			Node::List(items, _, _) => Some(items.iter().map(|item| match item.drop_meta() {
+				Node::Char(character) => character.to_string(),
+				other => other.name(),
+			}).collect()),
+			_ => None,
+		},
+		_ => None,
+	}).unwrap_or_default()
+}
+
 fn is_builtin_library(name: &str) -> bool {
 	matches!(crate::ffi::resolve_library_alias(name), "m" | "c")
 }
