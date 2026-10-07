@@ -1,0 +1,128 @@
+// The language guide beside the editor: guide.md, one chapter per `## title`, chapters from easy to advanced.
+// The open chapter (the page's #anchor) shows its text; `try ▶` runs a snippet, an `Examples:` line links the tour
+// examples and samples/ that show the chapter, and choosing such an example links back to its chapter.
+// Runs after playground.js (both deferred) and uses its $, element and window.playground.
+const GUIDE_FILE = "guide.md";
+const NARROW_SCREEN = "(max-width: 800px)"; // playground.css stacks the panes there: the guide starts closed
+const EXAMPLES_PREFIX = "Examples: ";
+const SAMPLES_SEPARATOR = "; samples: ";
+const SNIPPET_FENCE = /^```wasp(?: => (.*))?$/;
+
+const chapterOfExample = new Map();
+
+const escapeHtml = text => text.replace(/[&<>"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
+const chapterId = title => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+// `code`, **bold** and [text](url) in one line of escaped text
+function inline(text) {
+	return escapeHtml(text)
+		.replace(/`([^`]+)`/g, "<code>$1</code>")
+		.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+		.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
+}
+
+// `welcome, "element events"` → ["welcome", "element events"]
+const exampleNames = list => list.split(", ").map(name => name.trim().replace(/^"|"$/g, "")).filter(Boolean);
+
+function exampleLinks(line, chapter) {
+	const [tour, samples = ""] = line.slice(EXAMPLES_PREFIX.length).split(SAMPLES_SEPARATOR);
+	const link = name => {
+		if (!chapterOfExample.has(name)) chapterOfExample.set(name, chapter);
+		return element("a", { href: `?example=${encodeURIComponent(name)}`, className: "guide-example", onclick: click => {
+			click.preventDefault();
+			window.playground.chooseExample(name);
+			showChapterLink(name);
+		} }, name);
+	};
+	const links = names => names.flatMap((name, index) => index ? [", ", link(name)] : [link(name)]);
+	const parts = [element("strong", {}, "Examples: "), ...links(exampleNames(tour))];
+	if (samples) parts.push(" · samples/: ", ...links(exampleNames(samples)));
+	return element("p", { className: "guide-examples" }, ...parts);
+}
+
+function snippet(code, value) {
+	const run = element("button", { className: "guide-try", title: "load into the editor and run", onclick: () => window.playground.runCode(code) }, "try ▶");
+	const shown = value ? [element("div", { className: "guide-value" }, element("span", { className: "prompt" }, "» "), value)] : [];
+	return element("div", { className: "guide-snippet" }, run, element("pre", {}, element("code", {}, code)), ...shown);
+}
+
+function paragraph(lines) {
+	const block = element("p");
+	block.innerHTML = inline(lines.join(" "));
+	return block;
+}
+
+// the Markdown subset guide.md uses: paragraphs, fences, `Examples:` lines; returns the chapter's elements
+function renderBody(lines, chapter) {
+	const blocks = [];
+	let text = [];
+	const flush = () => { if (text.length) blocks.push(paragraph(text)); text = []; };
+	for (let index = 0; index < lines.length; index++) {
+		const line = lines[index], fence = line.match(SNIPPET_FENCE);
+		if (fence) {
+			flush();
+			const code = [];
+			while (++index < lines.length && lines[index] !== "```") code.push(lines[index]);
+			blocks.push(snippet(code.join("\n"), fence[1]));
+		} else if (line.startsWith(EXAMPLES_PREFIX)) {
+			flush();
+			blocks.push(exampleLinks(line, chapter));
+		} else if (line.trim()) text.push(line);
+		else flush();
+	}
+	flush();
+	return blocks;
+}
+
+// guide.md → the intro and one <details> per chapter, with its anchor
+function renderGuide(markdown) {
+	const [head, ...sections] = markdown.split(/^## /m);
+	const introLines = head.split("\n").filter(line => !line.startsWith("# "));
+	const chapters = sections.map(section => {
+		const [title, ...lines] = section.split("\n");
+		const id = chapterId(title);
+		const summary = element("summary", {}, element("a", { href: `#${id}` }, title));
+		return element("details", { id, className: "guide-chapter", ontoggle: openedChapter }, summary, ...renderBody(lines, title));
+	});
+	$("guide-chapters").replaceChildren(...renderBody(introLines, ""), ...chapters);
+}
+
+function openedChapter(event) {
+	const chapter = event.target;
+	if (!chapter.open) return;
+	for (const other of document.querySelectorAll(".guide-chapter[open]")) if (other !== chapter) other.open = false;
+	if (location.hash !== `#${chapter.id}`) history.replaceState(null, "", `#${chapter.id}`);
+}
+
+function openChapterOfAddress() {
+	const chapter = location.hash && document.getElementById(location.hash.slice(1));
+	if (!chapter?.classList.contains("guide-chapter")) return;
+	$("guide").open = true;
+	chapter.open = true;
+	chapter.scrollIntoView({ block: "nearest" });
+}
+
+// the toolbar's back-link to the chapter that lists the chosen example
+function showChapterLink(name) {
+	const chapter = chapterOfExample.get(name);
+	$("guide-link").hidden = !chapter;
+	if (!chapter) return;
+	$("guide-link").href = `#${chapterId(chapter)}`;
+	$("guide-link").textContent = `guide: ${chapter}`;
+}
+
+async function startGuide() {
+	if (matchMedia(NARROW_SCREEN).matches) $("guide").open = false;
+	try {
+		renderGuide(await (await fetch(GUIDE_FILE)).text());
+	} catch (error) {
+		$("guide-chapters").textContent = `the guide did not load: ${error.message}`;
+		return;
+	}
+	addEventListener("hashchange", openChapterOfAddress);
+	$("examples").addEventListener("change", event => showChapterLink(event.target.value));
+	openChapterOfAddress();
+	showChapterLink($("examples").value);
+}
+
+startGuide();
