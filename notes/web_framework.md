@@ -227,3 +227,12 @@ Each step is useful on its own and is what the next ones stand on.
   Natively mouse_x is a loud error (no canvas). Tour example mouse.
 - Natively each show still writes paint-N.png (src/paint.rs). `color.with_alpha(a)` works as a method (test_draw.rs).
   Left: built sites (site.js) show no frames and no pointer yet.
+
+## web-apis: notify (2026-10-07, warp-90; plan approved by warp-03)
+- `notify "text"` is the host word notify (src/host.rs, warp-runtime system_values.rs notify): natively osascript
+  `display notification` (macOS, the text as an argument, never quoted into the script) or notify-send (Linux); in the
+  playground the page shows the browser's Notification once allowed, and until then, or when refused, the printed line
+  `notification: text` (playground.js notification; the first one asks for the permission). Tests check only the
+  compiled import (tests/web/test_web_apis.rs): a test run shows no notification.
+- Next pieces: clipboard write (the word waits for the user: `copy` already means clone; question at the Interviewer),
+  WebSocket (card web-websocket), frames and pointer in built sites (site.js, after warp-89's timers).

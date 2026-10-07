@@ -24,3 +24,4 @@ mod test_style_rules;
 mod test_headless_pages;
 mod test_page_tests;
 mod test_transitions;
+mod test_web_apis;

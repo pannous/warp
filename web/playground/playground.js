@@ -13,6 +13,8 @@ const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
+const STDOUT = 1;
+const NOTIFICATION_TITLE = "wasp";
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -78,6 +80,8 @@ function startWorker() {
 	worker = new Worker(debugBuild ? `worker.js?compiler=${DEBUG_COMPILER}` : "worker.js");
 	workerReady = new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
+			if (data.type === "notify") data = notification(data.text);
+			if (!data) return;
 			if (data.type === "ready") return resolve();
 			if (data.type === "stored") return keepStored(data.name, data.value);
 			if (data.type === "failed") return reject(new Error(data.message));
@@ -94,6 +98,14 @@ function startWorker() {
 	tellSystemValues();
 	sharePointer();
 	worker.postMessage({ stored: storedValues() });
+}
+
+// `notify "text"`: the browser's notification once the page may show them; until then (or when refused) a printed
+// line, so the text never goes missing; the first one asks for the permission
+function notification(text) {
+	if (globalThis.Notification?.permission === "granted") return void new Notification(NOTIFICATION_TITLE, { body: text });
+	globalThis.Notification?.requestPermission?.();
+	return { type: "print", text: `notification: ${text}\n`, stream: STDOUT };
 }
 
 // `stored theme = "dark"` (src/lowering/stored_values.rs): the page keeps each stored value in localStorage as JSON,

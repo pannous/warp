@@ -24,6 +24,7 @@ const hooks = {
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
 	sleeping: () => post({ type: "sleep" }),
+	notify: text => post({ type: "notify", text }),
 	listen: (holder, events) => {
 		live = holder;
 		startTimers(holder, handler => runHandler(holder, handler));
