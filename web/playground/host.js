@@ -60,6 +60,22 @@ function sha256Hex(bytes) {
 	}
 	return [...hash].map(word => word.toString(16).padStart(8, "0")).join("");
 }
+// random_seed (crates/warp-runtime host_words.rs): after a seed, xorshift64* as natively, so a seeded program gives the
+// same numbers in both; unseeded, Math.random
+const U64 = (1n << 64n) - 1n;
+let seededRandom = null;
+const seedRandom = seed => { seededRandom = (BigInt.asUintN(64, seed) * 0x9E3779B97F4A7C15n & U64) | 1n; };
+function nextSeeded() {
+	let x = seededRandom;
+	x ^= x >> 12n;
+	x = (x ^ (x << 25n)) & U64;
+	x ^= x >> 27n;
+	seededRandom = x;
+	return x * 0x2545F4914F6CDD1Dn & U64;
+}
+const randomFloat = () => seededRandom === null ? Math.random() : Number(nextSeeded() >> 11n) / 2 ** 53;
+const randomBelow = bound => bound <= 0n ? 0n : seededRandom === null ? BigInt(Math.floor(Math.random() * Number(bound))) : nextSeeded() % bound;
+
 const CRC32_TABLE = Uint32Array.from({ length: 256 }, (_, n) => {
 	for (let bit = 0; bit < 8; bit++) n = n & 1 ? 0xedb88320 ^ (n >>> 1) : n >>> 1;
 	return n;
@@ -80,10 +96,11 @@ const STD_ADAPTERS = {
 		},
 	},
 	os: { env: () => null }, // a page has no environment
-	// `stored theme = "dark"` (src/lowering/stored_values.rs): the page's values (worker.js), each save sent back to it
+	// `stored theme = "dark"` (src/lowering/stored_values.rs): the page's values (markup.js keptValues), each save sent
+	// back to it with its store (the dev store of a `warp dev` page, else the program's)
 	store: {
 		load: (name, fallback) => name in storedValues ? storedValues[name] : fallback,
-		save: (name, value) => { storedValues[name] = value; self.keepStored?.(name, value); return null; },
+		save: (name, value, file) => { storedValues[name] = value; self.keepStored?.(name, value, file); return null; },
 	},
 	net: { post: (url, body) => postSync(url, contentText(body)) },
 	hash: { sha256: subject => sha256Hex(utf8.encode(contentText(subject))), crc32: subject => crc32Of(utf8.encode(contentText(subject))) },
@@ -202,6 +219,7 @@ function hostResult(program, action, what) {
 
 // hooks: print(text, fd), module(bytes) (each compiled module), panicked(message) (the compiler's)
 function programImports(holder, hooks) {
+	seededRandom = null; // each run starts unseeded
 	const program = () => holder.exports;
 	const text = (pointer, length) => readText(program(), pointer, length);
 	const cString = pointer => {
@@ -284,8 +302,9 @@ function programImports(holder, hooks) {
 				checkShared(holder);
 				deliverFetches(holder);
 			},
-			random: () => Math.random(),
-			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
+			random: randomFloat,
+			random_below: randomBelow,
+			random_seed: seedRandom,
 			clock: () => BigInt(Date.now()),
 			// a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md); shared listeners do
 			signal_poll: () => { checkShared(holder); deliverFetches(holder); },
@@ -421,6 +440,11 @@ function programImports(holder, hooks) {
 		m: new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] }),
 		// the pure part of libc (ffi "c"): numbers, and C strings read up to their zero byte
 		c: libcImports(holder),
+		// `use { memory, table } from "env"` (src/wasm_reader.rs define_imported_entities): a fresh memory and table
+		env: {
+			get memory() { return new WebAssembly.Memory({ initial: IMPORTED_MEMORY_PAGES }); },
+			get table() { return new WebAssembly.Table({ initial: 0, element: "anyfunc" }); },
+		},
 	};
 	// anything else (native FFI libraries) is missing in the browser: say which, when the program calls it
 	const missing = (module, name) => () => { throw new Error(`${module}.${name} is not available in the browser`); };
@@ -431,6 +455,7 @@ function programImports(holder, hooks) {
 	});
 }
 
+const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
 const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED, TASK_STOPPED, TASK_STOP
 const TASK_FAILED = 2n;
 const TASK_STOPPED_CODE = 3n;

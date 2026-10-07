@@ -43,8 +43,13 @@ function show() {
 
 async function hydrate() {
 	const bytes = new Uint8Array(await (await fetch(SITE_MODULE)).arrayBuffer());
+	// stored values and those a `warp dev` page keeps across reloads (host.js STD_ADAPTERS.store, markup.js)
+	Object.assign(storedValues, keptValues());
+	self.keepStored = keepValue;
 	const outcome = runProgram(bytes, siteHooks);
 	if (outcome.result === undefined) return console.error("wasp:", outcome.failure ?? outcome.trap ?? outcome.error);
+	// kept values may differ from those the page was built with: show what main left (site is set once it listens)
+	if (site) showAfter(outcome);
 	const root = document.getElementById(SITE_ROOT);
 	for (const [event, detail] of Object.entries(SITE_EVENTS)) {
 		root.addEventListener(event, happened => {

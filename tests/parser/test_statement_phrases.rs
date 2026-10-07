@@ -38,3 +38,10 @@ fn after_without_return_stays_a_call_listener() {
 fn after_without_parentheses_waits_for_its_condition() {
 	is!("shared n = 0; go { for i in 1 to 5 { n += 1 } }; five = after n == 5 return n * 2; await five", 10);
 }
+
+/// card let-if: `and not c` continues the condition (`not` is an operator, not a statement), also after `let`
+#[test]
+fn and_not_continues_the_condition_after_let() {
+	is!("a=1;b=0;c=0; let shown = if (a or b) and not c then 7 else 8; shown", 7);
+	is!("a=1;c=1; let shown = if a and not c then 7 else 8; shown", 8);
+}

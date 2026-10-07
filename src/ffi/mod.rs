@@ -88,14 +88,18 @@ pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, Ff
 /// The error of a call nothing resolves: a libc function says how to import it
 pub fn undefined_function_message(name: &str) -> String {
     if let Some(module) = crate::modules::std_module_defining(name) {
+        if let Some(file) = crate::modules::module_file_shadowing(module) {
+            return format!("{name} is in the standard module {module}, but `use {module}` finds the file {} first, which has no {name}: rename that file", file.display());
+        }
         return format!("{name} is in the standard module {module}: write `use {module}`");
     }
     if get_ffi_signature_from_lib(name, "c").is_some() {
         return format!("{name} is a C function: write `use c` or `import {name} from \"c\"`");
     }
     match get_ffi_signature_from_lib(name, "m") {
-        // only f64 functions link by themselves (analyzer imports.rs is_f64_header_function)
-        Some(_) => format!("{name} is a libm function with a parameter other than a float: not supported yet"),
+        // only f64 functions link by themselves (analyzer imports.rs is_f64_header_function): an int parameter may be a
+        // pointer (frexp's int *), which the import's author knows
+        Some(_) => format!("{name} is a libm function with a parameter other than a float: write `import {name} from \"m\"`"),
         None => format!("undefined function: {name}"),
     }
 }

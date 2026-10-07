@@ -45,3 +45,5 @@ def from_utf8(bytes) {
 	}
 	out
 }
+// only spaces, tabs and line breaks, or nothing
+is_blank(t) := trim(t) == ""

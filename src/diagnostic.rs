@@ -185,6 +185,8 @@ pub enum WarningMode {
 	#[default]
 	Warn,
 	Error,
+	/// Neither shown nor errors: a compile repeating one whose warnings were shown already
+	Quiet,
 }
 
 /// `use strict` in wasp source makes warnings errors for that program
@@ -224,6 +226,16 @@ pub fn with_warning_mode<R>(mode: WarningMode, body: impl FnOnce() -> R) -> R {
 	result
 }
 
+/// Run `body` saying nothing (no warnings, hints or "got it?"): the compile of the executable a run leaves repeats the
+/// run's compile, which said it all (card cli-running)
+pub fn quietly<R>(body: impl FnOnce() -> R) -> R {
+	with_warning_mode(WarningMode::Quiet, || crate::normalize::without_hints(body))
+}
+
+fn is_quiet() -> bool {
+	warning_mode() == WarningMode::Quiet
+}
+
 thread_local! {
 	/// How many diagnostics this thread has said (warnings, errors with fixes, assumptions, hints): a step that says
 	/// something must run again to say it again (analysis_memo.rs remembers only silent analyses)
@@ -245,6 +257,7 @@ pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 	}
 	match (warning_mode(), warnings.first()) {
 		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
+		(WarningMode::Quiet, _) => Ok(()),
 		_ => {
 			for warning in warnings {
 				eprintln!("warning: {warning}");
@@ -576,7 +589,7 @@ pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 }
 
 fn noted_once(topic: &str, written: &str, show: impl FnOnce()) {
-	let hints_off = crate::normalize::hint_mode() == crate::normalize::HintMode::Off;
+	let hints_off = crate::normalize::hint_mode() == crate::normalize::HintMode::Off || is_quiet();
 	if hints_off || is_acknowledged(topic, written) || silenced_by_comment(crate::normalize::hint_line()) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic)) {
 		return;
 	}
@@ -609,7 +622,7 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 	}
 	// the expression "got it" for this one remembers: the question names it (`written` is only the replaced word, `upto`)
 	let expression = &question.question;
-	if !is_acknowledged(&question.topic, expression) && !silenced_by_comment(question.line) {
+	if !is_quiet() && !is_acknowledged(&question.topic, expression) && !silenced_by_comment(question.line) {
 		report(&[diagnostic])?;
 		offer_acknowledgement(&question.topic, expression);
 	}

@@ -72,3 +72,11 @@ fn a_negated_system_value() {
 fn not_dark_mode_is_the_opposite_reading() {
 	is!("x = not dark mode; y = dark mode; x != y", true);
 }
+
+// a method call's arguments were taken for a field name: seen.push([online, battery]) pushed the symbols
+#[test]
+fn method_arguments_read_system_values() {
+	assert!(lowered("seen = []; seen.push([online, battery]); seen").contains("(system_value \"battery\")"));
+	assert!(lowered("seen = []; seen.push(online); seen").contains("system_value"));
+	is!("p = {battery: 5}; p.battery", 5);
+}

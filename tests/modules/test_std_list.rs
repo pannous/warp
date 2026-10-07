@@ -52,3 +52,12 @@ fn use_list_zips_with_sums_by_rotates_interleaves_dedupes() {
 	is!("use list; interleave([1, 3, 5], [2, 4])", parse("[1 2 3 4 5]"));
 	is!("use list; dedupe([1, 1, 2, 1, 1])", parse("[1 2 1]"));
 }
+
+#[test]
+fn use_list_scans_takes_and_drops_while_finds_argmax() {
+	is!("use list; scan([1, 2, 3], 0, (a, b) => a + b)", parse("[1 3 6]"));
+	is!("use list; take_while([1, 2, 5, 1], x => x < 3)", parse("[1 2]"));
+	is!("use list; drop_while([1, 2, 5, 1], x => x < 3)", parse("[5 1]"));
+	is!("use list; argmax([1, 5, 2])", 1);
+	is!("use list; argmin([3, 1, 2])", 1);
+}
