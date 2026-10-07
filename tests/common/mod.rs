@@ -245,3 +245,12 @@ pub fn calls_to(code: &str, name: &str) -> usize {
 	}
 	index.map_or(0, |index| calls.iter().filter(|called| **called == index).count())
 }
+
+/// The (module, name) of every import of the module `code` compiles to
+pub fn imports_of(code: &str) -> Vec<(String, String)> {
+	let bytes = warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
+	wasmparser::Parser::new(0).parse_all(&bytes).filter_map(|payload| match payload.expect("valid module") {
+		wasmparser::Payload::ImportSection(section) => Some(section.into_imports().map(|import| import.expect("valid import")).map(|import| (import.module.to_string(), import.name.to_string())).collect::<Vec<_>>()),
+		_ => None,
+	}).flatten().collect()
+}
