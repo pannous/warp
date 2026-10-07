@@ -286,10 +286,9 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 			Some(Kind::Function)
 		} else if celled.contains(&param.name) {
 			Some(Kind::Data)
-		} else if texted.contains(&param.name) {
-			Some(Kind::Text)
 		} else if indexed.contains(&param.name) {
-			Some(Kind::List)
+			// a counted sequence joined to a text is a text; joined alone it may be any value (`"set " + value`)
+			Some(if texted.contains(&param.name) { Kind::Text } else { Kind::List })
 		} else {
 			None
 		};
