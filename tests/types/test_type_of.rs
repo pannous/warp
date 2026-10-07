@@ -30,3 +30,13 @@ fn test_type_as_a_method() {
 	// a field named type stays the field
 	is!("e = {type: \"click\"}; e.type", "click");
 }
+
+#[test] // card type-parentheses: `type 3.5` was read as a type declaration ("index out of range")
+fn test_type_without_parentheses() {
+	let symbol = |name: &str| Node::Symbol(name.to_string());
+	is!("type 3.5", symbol("rational"));
+	is!("type 3", symbol("int"));
+	is!("type \"ab\"", symbol("text"));
+	is!("y = type 3.5; y", symbol("rational"));
+	is!("type Point { x: int }; p = Point(1); p.x", 1);
+}
