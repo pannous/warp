@@ -1,6 +1,6 @@
 // The program of a built site in a Worker (card site-worker): a site whose module starts tasks runs here, off the page's
 // thread, so a blocking `await` may wait (Atomics.wait) and its tasks run on the pool of task Workers (host-tasks.js).
-// The page (site.js) keeps the DOM: it sends the module's URL, the kept values, the page's path and each element event;
+// The page (site.js) keeps the DOM: it sends the module's URL, the kept values (the session's apart), the page's path and each element event;
 // this worker answers with the page's markup anew (its export page·html, as site.js show() renders it) after main, each
 // handler and each timer. Its scripts come as ?scripts=…, resolved against this file, the site's root (src/site.rs).
 
@@ -14,7 +14,8 @@ let site; // the program's run (host.js runProgram's holder)
 let pagePath = "/";
 
 const post = message => self.postMessage(message);
-self.keepStored = (name, value, file) => post({ stored: { name, value, file } }); // host.js STD_ADAPTERS.store
+self.keepStored = (name, value, file) => post({ stored: { name, value, file } }); // host-files.js STD_ADAPTERS.store
+self.writeClipboard = text => post({ clipboard: text }); // host-files.js STD_ADAPTERS.clipboard: the page has the clipboard
 const hooks = {
 	pagePath: () => pagePath,
 	instantiated: holder => { site = holder; },
@@ -34,8 +35,9 @@ function showAfter(outcome) {
 	post({ html: plainOfTree(readNode(site.exports, render())) });
 }
 
-async function start({ module, stored, path }) {
+async function start({ module, stored, session, path }) {
 	Object.assign(storedValues, stored);
+	Object.assign(sessionValues, session);
 	pagePath = path;
 	const bytes = new Uint8Array(await (await fetch(module)).arrayBuffer());
 	await taskPoolReady(); // tasks run on loaded Workers, not inline
