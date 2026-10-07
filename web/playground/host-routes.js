@@ -8,6 +8,7 @@ const PAGE_ROUTED_EXPORT = "page·routed"; // the value of the route the path pi
 // fetch is dropped there); the caller shows the page anew (site.js, worker.js)
 function navigate(holder, hooks, path) {
 	holder.pagePath = path;
+	eachHostPart("navigated", holder);
 	hooks.navigated?.(holder, path);
 }
 
