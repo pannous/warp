@@ -75,6 +75,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
 	let own_names: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) = (vec![], vec![], HashSet::new(), vec![]);
+	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
 	for used in statements(program.clone()).iter().filter_map(used_module).filter(|used| used.import == Import::Use) {
 		let (path, source, is_std) = match loader.find(&used.name) {
 			Some(path) => match crate::web::read_text(&path.to_string_lossy()) {
@@ -91,6 +92,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 			continue; // the loader reports it
 		}
 		let definitions = crate::normalize::without_hints(|| statements(module));
+		defined.extend(definitions.iter().filter_map(declared_name));
 		match is_std {
 			true => {
 				if definitions.iter().any(is_class) {
@@ -104,7 +106,6 @@ pub fn insert_module_classes(program: Node) -> Node {
 	}
 	EARLY_CLASS_MODULES.with(|modules| *modules.borrow_mut() = early);
 	let is_foreign = |class: &Node| declared_name(class).is_none_or(|name| !own_names.contains(&name));
-	let defined: Vec<String> = std_definitions.iter().filter_map(declared_name).collect();
 	let aliases: Vec<(&str, &str)> = STD_ALIASES.into_iter().filter(|(alias, word)| defined.iter().any(|name| name == word) && !own_names.contains(*alias)).collect();
 	// `collections.Counter(xs)`: the bare class before class_methods reads its construction; other qualified calls
 	// (`math.factorial` of `use python math`, `json.loads`) wait for foreign_modules and welcome_forms
