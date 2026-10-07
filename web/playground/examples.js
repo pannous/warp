@@ -4,7 +4,8 @@
 // that, `clicked` the value then and `kept` that every element shown stays: only its text and attributes change;
 // `keyed` that every element with a key keeps it: a list item's element moves with its item; `typed`: the text typed
 // into the first input before the clicks; `animated` that the clicks started an animation; `clickedPrinted`: all
-// printed text after the clicks).
+// printed text after the clicks; `address` the address bar's path after
+// them).
 // samples.js (made by build.sh) adds samples/*.wasp.
 const EXAMPLES = {
 	welcome: { value: '[[1 4 9] 3 "reading"]', printed: "Alice turns 42\n", code: `// wasp is data and code in one notation, compiled to WebAssembly as you type: edit me
@@ -44,7 +45,7 @@ div{ button{ on click { pears = false } "hide pears" } Fruit("apples") (if pears
 	"keyed list": { value: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:1 "milk"} li{key:2 "eggs"} li{key:3 "tea"}]]}', clicks: ["rotate"], clicked: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:2 "eggs"} li{key:3 "tea"} li{key:1 "milk"}]]}', kept: true, keyed: true, code: `// a list in markup: with a key, each item keeps its element when the list changes (it moves, nothing is rewritten)
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{ button{ on click { todos = todos[1..] + [todos#1] } "rotate" } ul{ [li{ key: todo.id todo.text } for todo in todos] } }` },
-	routes: { value: 'div{h1:"Users" a{href:"/users/2" "Bo"}}', clicks: ["Bo"], clicked: 'div{h1:"Bo" a{href:\'/\' "back"}}', code: `// routes: each path of the page shows its block; a link goes to another path, :id is that part of it
+	routes: { value: 'div{h1:"Users" a{href:"/users/2" "Bo"}}', clicks: ["Bo"], clicked: 'div{h1:"Bo" a{href:\'/\' "back"}}', address: "/users/2", code: `// routes: each path of the page shows its block; a link goes to another path, :id is that part of it
 users = ["Ann", "Bo"]
 route "/" { div{ h1{ "Users" } a{ href: "/users/2" "Bo" } } }
 route "/users/:id" { div{ h1{ users#id } a{ href: "/" "back" } } }

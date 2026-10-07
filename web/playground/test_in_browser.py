@@ -142,7 +142,7 @@ def browser(*arguments):
 
 def show_example(name):
 	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
-	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons or links, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`)"""
+	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons or links, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`) and the address bar's path (`address`)"""
 	script = f"""(async () => {{
 		const name = {json.dumps(name)};
 		await playground.chooseExample(name);
@@ -151,6 +151,7 @@ def show_example(name):
 		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent,
 			canvases: document.querySelectorAll("#paintings canvas").length }};
 		const clicks = EXAMPLES[name].clicks ?? [];
+		const shownAddress = () => document.getElementById("address").hidden ? "" : document.getElementById("address").value;
 		const typed = EXAMPLES[name].typed;
 		if (!clicks.length && typed === undefined) return JSON.stringify(shown);
 		const rendered = document.getElementById("rendered").shadowRoot;
@@ -173,7 +174,7 @@ def show_example(name):
 		const kept = elements.every(element => element.isConnected);
 		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-wasp-key") === keys[index]);
 		const clickedPrinted = document.getElementById("printed").textContent;
-		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0 }});
+		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0, address: shownAddress() }});
 	}})()"""
 	shown = browser("eval", script)
 	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
@@ -203,7 +204,7 @@ def check_examples(names, page_url=None):
 	names = names or list(examples)
 	for name in names:
 		expected, shown = examples[name], show_example(name)
-		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated") if part in expected and shown[part] != expected[part]]
+		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
 		if wrong:
 			failures.append(name)
