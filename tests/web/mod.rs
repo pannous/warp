@@ -6,3 +6,4 @@ mod test_markup_tags;
 mod test_web_playground;
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_web_server;
+mod test_html_render;
