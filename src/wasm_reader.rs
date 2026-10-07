@@ -468,7 +468,7 @@ pub fn read_export_after_main(bytes: &[u8], imports: Imports, name: &str) -> Res
 	val_to_node(&results.first().copied().unwrap_or(Val::AnyRef(None)), &mut store, &instance)
 }
 
-pub use crate::wasm_emitter::{TRAP_DETAIL, TRAP_DETAIL_PREFIX};
+pub use crate::wasm_emitter::{trap_detail_line, TRAP_DETAIL, TRAP_DETAIL_PREFIX};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
 pub(crate) fn with_trap_detail<T, R>(outcome: wasmtime::Result<R>, store: &mut Store<T>, instance: &Instance) -> Result<R> {
@@ -476,9 +476,7 @@ pub(crate) fn with_trap_detail<T, R>(outcome: wasmtime::Result<R>, store: &mut S
 		let failure = anyhow::Error::from(failure);
 		let detail = instance.get_global(&mut *store, TRAP_DETAIL).map(|global| global.get(&mut *store));
 		match detail.filter(|value| !matches!(value, Val::AnyRef(None))).and_then(|value| val_to_node(&value, store, instance).ok()) {
-			// an Error value raised as it is (Node arithmetic on an Error) names its message
-			Some(Node::Error(reason)) => failure.context(format!("{TRAP_DETAIL_PREFIX}{}", reason.serialize())),
-			Some(value) => failure.context(format!("{TRAP_DETAIL_PREFIX}{}", value.serialize())),
+			Some(value) => failure.context(trap_detail_line(&value)),
 			None => failure,
 		}
 	})
