@@ -77,10 +77,11 @@ const STD_ADAPTERS = {
 		},
 	},
 	os: { env: () => null }, // a page has no environment
-	// `stored theme = "dark"` (src/lowering/stored_values.rs): the page's values (worker.js), each save sent back to it
+	// `stored theme = "dark"` (src/lowering/stored_values.rs): the page's values (markup.js keptValues), each save sent
+	// back to it with its store (the dev store of a `warp dev` page, else the program's)
 	store: {
 		load: (name, fallback) => name in storedValues ? storedValues[name] : fallback,
-		save: (name, value) => { storedValues[name] = value; self.keepStored?.(name, value); return null; },
+		save: (name, value, file) => { storedValues[name] = value; self.keepStored?.(name, value, file); return null; },
 	},
 	net: { post: (url, body) => postSync(url, contentText(body)) },
 	hash: { sha256: subject => sha256Hex(utf8.encode(contentText(subject))), crc32: subject => crc32Of(utf8.encode(contentText(subject))) },

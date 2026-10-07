@@ -22,6 +22,11 @@ pub fn stop_after(requests: usize) {
 	REQUEST_LIMIT.with(|limit| limit.set(requests));
 }
 
+/// The request limit stop_after set for this serve, 0 serving on; the next serve starts unlimited
+pub(crate) fn take_request_limit() -> usize {
+	REQUEST_LIMIT.with(|limit| limit.replace(0))
+}
+
 /// A route of the program: method, path and the function answering it
 pub struct Route {
 	pub method: String,
@@ -71,7 +76,7 @@ fn text_of(node: &Node) -> String {
 /// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function
 pub fn serve(port: u16, routes: &[Route], mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
 	let server = tiny_http::Server::http(("0.0.0.0", port)).map_err(|problem| format!("serve {port}: {problem}"))?;
-	let limit = REQUEST_LIMIT.with(|limit| limit.replace(0));
+	let limit = take_request_limit();
 	let mut served = 0;
 	for mut request in server.incoming_requests() {
 		let method = request.method().as_str().to_uppercase();

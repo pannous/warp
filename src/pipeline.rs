@@ -111,19 +111,35 @@ fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnO
 thread_local! {
 	/// whether the program compiled on this thread is for a page (`warp build --site`), where page events happen
 	static FOR_A_PAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
+	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// `run` with `flag` set on this thread
+fn with_flag<T>(flag: &'static std::thread::LocalKey<std::cell::Cell<bool>>, run: impl FnOnce() -> T) -> T {
+	let before = flag.with(|set| set.replace(true));
+	let result = run();
+	flag.with(|set| set.set(before));
+	result
 }
 
 /// `run` compiling a program for a page: its page event handlers are expected, not warned about
 pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
-	let before = FOR_A_PAGE.with(|page| page.replace(true));
-	let result = run();
-	FOR_A_PAGE.with(|page| page.set(before));
-	result
+	with_flag(&FOR_A_PAGE, run)
 }
 
 /// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
 pub fn is_for_a_page() -> bool {
 	FOR_A_PAGE.with(|page| page.get())
+}
+
+/// `run` compiling a program for `warp dev`: the main-level variables it changes are kept (lowering/stored_values.rs)
+pub fn for_dev<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_DEV, run)
+}
+
+pub fn is_for_dev() -> bool {
+	FOR_DEV.with(|dev| dev.get())
 }
 
 /// A compiled program and the host capabilities its imports need.

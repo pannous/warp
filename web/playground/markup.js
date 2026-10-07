@@ -1,5 +1,6 @@
 // Markup in the page, shared by the playground and the pages warp builds (card web-ssr): a program's markup shown anew
-// changes only what differs (morphChildren), and an event inside it names its element's handler (elementEvent).
+// changes only what differs (morphChildren), and an event inside it names its element's handler (elementEvent). The page
+// also keeps the values of `stored x = v` and those a `warp dev` page keeps across reloads (keptValues, keepValue).
 
 const INSTANCE_ATTRIBUTE = "data-wasp-instance"; // a component instance's elements (src/lowering/element_events.rs)
 const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (src/html.rs)
@@ -13,6 +14,9 @@ const TRANSITION_FRAMES = {
 	scale: { opacity: 0, transform: "scale(0.8)" },
 	slide: { opacity: 0, transform: "translateY(-1em)" },
 };
+const DEV_STORE = "wasp-dev"; // the store of the values a `warp dev` page keeps (src/lowering/stored_values.rs DEV_STORE)
+const STORED_PREFIX = "wasp stored "; // a stored value in localStorage, kept across visits
+const DEV_PREFIX = "wasp dev "; // a value a `warp dev` page keeps in sessionStorage, across its reloads
 
 // the children of shown become those of wanted: an element with a key (data-wasp-key, card web-keyed) is the shown one
 // of that key, moved into place; any other node is matched by position; a node of another kind or tag is replaced.
@@ -109,4 +113,32 @@ function elementEvent(event, happened, detail) {
 // what a form field holds now: `input{ bind: name }` sets name to event.value (a number from a number or range field)
 function inputDetail(field) {
 	return { value: NUMBER_FIELDS.includes(field.type) ? field.valueAsNumber : field.value, checked: field.checked ?? false };
+}
+
+// where a value of a store is kept: the dev store in sessionStorage, any other in localStorage, as JSON
+function keptStorage(file) {
+	return file === DEV_STORE ? [sessionStorage, DEV_PREFIX] : [localStorage, STORED_PREFIX];
+}
+
+// the kept values of both stores by name, for host.js STD_ADAPTERS.store
+function keptValues() {
+	return Object.assign({}, ...["", DEV_STORE].map(file => {
+		try {
+			const [storage, prefix] = keptStorage(file);
+			const keys = Object.keys(storage).filter(key => key.startsWith(prefix));
+			return Object.fromEntries(keys.map(key => [key.slice(prefix.length), JSON.parse(storage.getItem(key))]));
+		} catch (failure) {
+			console.error("kept values could not be read:", failure);
+			return {};
+		}
+	}));
+}
+
+function keepValue(name, value, file) {
+	try {
+		const [storage, prefix] = keptStorage(file);
+		storage.setItem(prefix + name, JSON.stringify(value));
+	} catch (failure) {
+		console.error(`${name} could not be kept:`, failure);
+	}
 }
