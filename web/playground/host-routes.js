@@ -1,6 +1,6 @@
 // The routes of a page (a part of host.js, which says how parts work): the path that picks its route (page_path),
-// going to another path (navigate) and, in a built site, its links and the back button (followSiteLinks) and the module
-// of each route (loadRouteModule)
+// going to another path (navigate) and, in a built site, its links and the back button (followSiteLinks), the module
+// of each route (loadRouteModule) and the focus after a route change (focusRoute)
 
 const ROOT_PATH = "/"; // the page path before any navigation (page_path)
 const PAGE_ROUTED_EXPORT = "page·routed"; // the value of the route the path picks
@@ -29,6 +29,16 @@ function followSiteLinks(goTo) {
 		goTo(url.pathname);
 	});
 	addEventListener("popstate", () => goTo(location.pathname));
+}
+
+// after going to another route, focus moves to what the route shows (card web-i18n, notes/web_framework.md): its main
+// heading, else its main region, else the page's root, so a screen reader reads the new page instead of staying on
+// the link; made focusable without entering the tab order
+const ROUTE_FOCUS_TARGETS = ["main h1", "h1", "main"];
+function focusRoute(root) {
+	const target = ROUTE_FOCUS_TARGETS.map(selector => root.querySelector(selector)).find(Boolean) ?? root;
+	if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+	target.focus();
 }
 
 const loadedRoutes = new Map(); // a route module's name → its loading
