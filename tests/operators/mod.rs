@@ -27,3 +27,4 @@ mod test_compound_assignment;
 mod test_tuple_comparison_warning;
 mod test_like_known_type_mismatch;
 mod test_logical_values_in_functions;
+mod test_postfix_words;

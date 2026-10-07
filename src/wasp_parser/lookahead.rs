@@ -5,6 +5,8 @@ use super::*;
 /// `abs x`, `norm x`: the absolute value (card g-1pvQ: norm is a synonym)
 /// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x`
 pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("norm", Op::Abs)];
+/// Infix operators that may follow a suffix: `10% + 1`, `x abs * 2`
+const SUFFIX_FOLLOWERS: [char; 6] = ['+', '-', '*', '/', '<', '>'];
 /// Operator words that stay operators before a colon: `if c then: a else: b`, `defp f(x), do: x`
 const BLOCK_COLON_WORDS: [&str; 3] = ["then", "else", "do"];
 
@@ -436,8 +438,21 @@ impl WaspParser {
 		match (self.current_char(), self.peek_char(1)) {
 			('+', '+') => Some((Op::Inc, 2)),
 			('-', '-') => Some((Op::Dec, 2)),
+			// `10%`, `10% + x`: a percent, no remainder, when no operand follows
+			('%', next) if next != '=' && self.expression_ends_after(1) => Some((Op::Mod, 1)),
 			_ => None,
 		}
+	}
+
+	/// After the suffix at offset 0 (`%`, `abs`) of `offset` characters: the end of the expression, or an infix operator
+	/// standing apart (`10% + 1`, never the `-3` of `7 % -3`)
+	pub(super) fn expression_ends_after(&self, offset: usize) -> bool {
+		let mut position = offset;
+		while matches!(self.peek_char(position), ' ' | '\t') {
+			position += 1;
+		}
+		let infix_apart = position > offset && SUFFIX_FOLLOWERS.contains(&self.peek_char(position)) && matches!(self.peek_char(position + 1), ' ' | '\t');
+		!self.operand_follows(offset) || infix_apart
 	}
 
 	/// `$main`, `$ii_i`: names keep their sigil (WAT identifiers, DOM selectors)
