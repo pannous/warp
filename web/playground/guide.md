@@ -6,8 +6,8 @@ Learn wasp one small step at a time. Press **try ▶** to run a snippet, then ch
 
 A program tells the computer what to do. The simplest program is just a value.
 
-```wasp => "Hello, \:world"
-"Hello 🌍"
+```wasp => "Hello, 🌍"
+"Hello, \:world"
 ```
 
 `print` shows a line of text.
