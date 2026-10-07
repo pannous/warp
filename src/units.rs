@@ -73,6 +73,11 @@ pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
 }
 
+/// `meters`, `kilogram`: a long name of a quantity's unit; durations (`2 minutes`) belong to the time module
+pub fn is_long_unit_name(name: &str) -> bool {
+	!is_unit(name) && target_unit(&Node::Symbol(name.to_string())).is_some_and(|unit| unit.dimension != Dimension::Time)
+}
+
 /// A unit to a power within a quantity: km¹, h⁻¹, m²
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Factor {
