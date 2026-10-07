@@ -176,21 +176,40 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 			continue;
 		};
 		let operand = operand.clone();
-		let argument = match is_infix_arithmetic(&operand) {
-			true => match suffix_precedence(&operand, &word) {
-				Ok(true) => with_rightmost(operand, |leaf| call(&function, leaf)),
-				Ok(false) => call(&function, operand),
-				Err(error) => error,
-			},
-			false => call(&function, operand),
-		};
 		applied.pop();
-		applied.push(with_leftmost(item, |_| argument));
+		applied.push(suffix_applied(operand, item, &word, &function));
 	}
 	match applied.len() {
 		1 if applied.len() < item_count => applied.pop().expect("one item"),
 		_ => Node::List(applied, bracket, separator),
 	}
+}
+
+/// `operand item`, where `item` heads with the suffix word: `x = 7 squared + 1` squares the assigned value, `x = 49 + 1`
+fn suffix_applied(operand: Node, item: Node, word: &Node, function: &str) -> Node {
+	match operand {
+		Node::Meta { node, data } if is_assignment(&node) => Node::Meta { node: Box::new(suffix_applied(*node, item, word, function)), data },
+		Node::Key(target, op, value) if is_assignment_op(&op) => Node::Key(target, op, Box::new(suffix_applied(*value, item, word, function))),
+		operand => {
+			let argument = match is_infix_arithmetic(&operand) {
+				true => match suffix_precedence(&operand, word) {
+					Ok(true) => with_rightmost(operand, |leaf| call(function, leaf)),
+					Ok(false) => call(function, operand),
+					Err(error) => error,
+				},
+				false => call(function, operand),
+			};
+			with_leftmost(item, |_| argument)
+		}
+	}
+}
+
+fn is_assignment_op(op: &Op) -> bool {
+	matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()
+}
+
+fn is_assignment(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, op, _) if is_assignment_op(op))
 }
 
 /// `1+2 squared`: does the word bind to the nearest operand (`1+(2 squared)`, true) or apply to the whole (`(1+2) squared`)?

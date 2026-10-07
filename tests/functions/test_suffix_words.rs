@@ -56,3 +56,13 @@ fn a_user_function_or_variable_takes_the_suffix_word() {
 	crate::is!("square(x):=x*x*10; 3 squared", 90);
 	crate::is!("sorted = 3; sorted", 3);
 }
+
+#[test] // card suffix-after-assign: `x = 7 squared` gave 7, the word applied to the whole assignment and was dropped
+fn a_suffix_word_applies_to_the_assigned_value() {
+	is!("x = 7 squared; x", 49);
+	is!("x = 7 squared + 1; x", 50);
+	is!("x := 3 squared; x", 9);
+	is!("xs = [3, 1, 2] sorted; xs", warp::ints(vec![1, 2, 3]));
+	is!("x = 2; x += 3 squared; x", 11);
+	fails_with("x = 1 + 2 squared; x", "does `squared`");
+}
