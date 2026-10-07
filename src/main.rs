@@ -25,7 +25,10 @@ const DEFAULT_SITE_NAME: &str = "site";
 /// `warp build --wit app.wasp`: the WIT world of the program's `component` declaration, app.wit (card wasm-interop-rest)
 const WIT_FLAG: &str = "--wit";
 const WIT_EXTENSION: &str = "wit";
-const COMPILE_FLAGS: [&str; 5] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG];
+/// `warp build --component app.wasp`: app.component.wasm, the component of that world (src/component_builder.rs)
+const COMPONENT_FLAG: &str = "--component";
+const COMPONENT_EXTENSION: &str = "component.wasm";
+const COMPILE_FLAGS: [&str; 6] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG];
 const MACHINE_CODE_EXTENSION: &str = "cwasm";
 /// The name of an executable built from inline code (plus the platform's extension)
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
@@ -167,6 +170,9 @@ fn run_command(args: &[String]) {
         }
         if flags.contains(&WIT_FLAG) {
             return write_wit(&code, &target);
+        }
+        if flags.contains(&COMPONENT_FLAG) {
+            return write_component(&code, &target);
         }
         if standalone {
             match write_standalone_executable(&code, &target) {
@@ -422,6 +428,21 @@ fn write_wit(code: &str, target: &str) {
         }
         Err(failure) => {
             eprintln!("warp build --wit: {failure}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// `warp build --component`: the component next to the program file (out.component.wasm for inline code)
+fn write_component(code: &str, target: &str) {
+    let path = std::path::Path::new(&compiled_output_path(target)).with_extension(COMPONENT_EXTENSION);
+    match warp::component_builder::build(code) {
+        Ok(component) => {
+            fs::write(&path, &component).expect("could not write the component");
+            println!("wrote {} ({} bytes)", path.display(), component.len());
+        }
+        Err(failure) => {
+            eprintln!("warp build --component: {failure}");
             std::process::exit(1);
         }
     }

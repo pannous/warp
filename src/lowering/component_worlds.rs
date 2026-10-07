@@ -19,12 +19,28 @@ const WIT_TYPES: [(&str, &str); 16] = [
 ];
 const INDENT: &str = "  ";
 
-/// A function of an interface: its name, parameter types and result type (None for `()`)
-struct Signature {
-	name: String,
-	parameters: Vec<String>,
-	result: Option<String>,
+/// A function of an interface: its name, parameter types and result type (None for `()`), in WIT
+pub struct Signature {
+	pub name: String,
+	pub parameters: Vec<String>,
+	pub result: Option<String>,
 }
+
+/// What a component imports or exports: the direction, its name and its functions
+pub struct WorldItem {
+	pub direction: &'static str,
+	pub name: String,
+	pub functions: Vec<Signature>,
+}
+
+/// A program's component: its name, the program's interfaces and what it imports and exports, in WIT names
+pub struct World {
+	pub name: String,
+	pub interfaces: Vec<(String, Vec<Signature>)>,
+	pub items: Vec<WorldItem>,
+}
+
+pub const EXPORT_DIRECTION: &str = "export";
 
 /// The program without its component declarations
 pub fn lower(node: Node) -> Node {
@@ -37,8 +53,8 @@ pub fn lower(node: Node) -> Node {
 	}
 }
 
-/// The WIT of the program's component: its package with the program's interfaces, and its world
-pub fn world_wit(program: &Node) -> Result<String, String> {
+/// The world of the program's one component declaration
+pub fn world(program: &Node) -> Result<World, String> {
 	let mut components = vec![];
 	let mut interfaces = vec![];
 	program.visit(&mut |node| {
@@ -46,24 +62,43 @@ pub fn world_wit(program: &Node) -> Result<String, String> {
 		interfaces.extend(declaration(node, INTERFACE_WORD));
 	});
 	let [(name, body)] = components.as_slice() else {
-		return Err(format!("{} component declarations: `warp build --wit` writes the world of one", components.len()));
+		return Err(format!("{} component declarations: a world is declared by one", components.len()));
 	};
-	let interfaces: Vec<(String, Vec<Signature>)> = interfaces.iter().map(|(name, body)| Ok((name.clone(), signatures(body)?))).collect::<Result<_, String>>()?;
-	let world = kebab(name);
-	let mut wit = format!("package {PACKAGE_NAMESPACE}:{world};\n");
-	for (name, functions) in &interfaces {
-		wit += &format!("\n{}\n", block_text(&format!("interface {}", kebab(name)), functions, ""));
-	}
-	wit += &format!("\nworld {world} {{\n");
-	for item in statements(body) {
-		let (direction, name, members) = world_item(&item).ok_or_else(|| format!("a component declares `import name: {{…}}` or `export name: interface`, not {}", item.serialize()))?;
+	let interfaces: Vec<(String, Vec<Signature>)> = interfaces.iter().map(|(name, body)| Ok((kebab(name), signatures(body)?))).collect::<Result<_, String>>()?;
+	let items = statements(body).iter().map(|item| {
+		let (direction, name, members) = world_item(item).ok_or_else(|| format!("a component declares `import name: {{…}}` or `export name: interface`, not {}", item.serialize()))?;
 		let functions = match members.drop_meta() {
-			Node::Symbol(interface) => &interfaces.iter().find(|(declared, _)| declared == interface).ok_or_else(|| format!("{direction} {name}: no interface {interface}"))?.1,
-			block => &signatures(block)?,
+			Node::Symbol(interface) => signatures(&interface_body(program, interface).ok_or_else(|| format!("{direction} {name}: no interface {interface}"))?)?,
+			block => signatures(block)?,
 		};
-		wit += &format!("{INDENT}{}\n", block_text(&format!("{direction} {}: interface", kebab(&name)), functions, INDENT));
+		Ok(WorldItem { direction, name: kebab(&name), functions })
+	}).collect::<Result<_, String>>()?;
+	Ok(World { name: kebab(name), interfaces, items })
+}
+
+/// The WIT of the program's component: its package with the program's interfaces, and its world
+pub fn world_wit(program: &Node) -> Result<String, String> {
+	let world = world(program)?;
+	let mut wit = format!("package {PACKAGE_NAMESPACE}:{};\n", world.name);
+	for (name, functions) in &world.interfaces {
+		wit += &format!("\n{}\n", block_text(&format!("interface {name}"), functions, ""));
+	}
+	wit += &format!("\nworld {} {{\n", world.name);
+	for item in &world.items {
+		wit += &format!("{INDENT}{}\n", block_text(&format!("{} {}: interface", item.direction, item.name), &item.functions, INDENT));
 	}
 	Ok(wit + "}\n")
+}
+
+/// The body of the interface `name` the program declares
+fn interface_body(program: &Node, name: &str) -> Option<Node> {
+	let mut found = None;
+	program.visit(&mut |node| if let Some((declared, body)) = declaration(node, INTERFACE_WORD) {
+		if declared == name {
+			found = Some(body);
+		}
+	});
+	found
 }
 
 /// `component name {…}`: its name and body
@@ -88,7 +123,7 @@ fn world_item(item: &Node) -> Option<(&'static str, String, Node)> {
 	};
 	match item.drop_meta() {
 		Node::List(items, _, _) if items.len() == 2 && items[0].drop_meta().name() == IMPORT_WORD => named(&items[1]).map(|(name, members)| (IMPORT_WORD, name, members)),
-		Node::Key(word, Op::Colon, export) if EXPORT_WORDS.contains(&word.drop_meta().name().as_str()) => named(export).map(|(name, members)| ("export", name, members)),
+		Node::Key(word, Op::Colon, export) if EXPORT_WORDS.contains(&word.drop_meta().name().as_str()) => named(export).map(|(name, members)| (EXPORT_DIRECTION, name, members)),
 		_ => None,
 	}
 }
