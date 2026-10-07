@@ -75,6 +75,16 @@ pub(crate) fn element_items(node: &Node) -> Option<&Vec<Node>> {
 	}
 }
 
+/// An element with its items rewritten; any other node as it is
+pub(crate) fn with_element_items(node: Node, rewrite: impl FnOnce(Vec<Node>) -> Vec<Node>) -> Node {
+	if element_items(&node).is_none() {
+		return node;
+	}
+	let Node::Key(tag, op, content) = node else { unreachable!("an element") };
+	let Node::List(items, bracket, separator) = content.drop_meta().clone() else { unreachable!("an element's block") };
+	Node::Key(tag, op, Box::new(Node::List(rewrite(items), bracket, separator)))
+}
+
 /// `on click {…}` at `index` of a tag's items, as a block reads it (`on`, then `click: {…}`) or as a statement does
 pub(crate) fn handler_at(items: &[Node], index: usize) -> Option<(String, Node, usize)> {
 	if !matches!(items.get(index)?.drop_meta(), Node::Symbol(word) if word == ON_WORD) {
@@ -102,13 +112,11 @@ impl Marker {
 		if element_items(&node).is_none() {
 			return node.map_children(|child| self.marked(child));
 		}
-		let Node::Key(tag, op, content) = node else { unreachable!("an element") };
-		let Node::List(items, bracket, separator) = content.drop_meta().clone() else { unreachable!("an element's block") };
-		Node::Key(tag, op, Box::new(self.marked_items(items, bracket, separator)))
+		with_element_items(node, |items| self.marked_items(items))
 	}
 
 	/// An element's items with its handlers taken out and the element marked with their numbers
-	fn marked_items(&mut self, items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
+	fn marked_items(&mut self, items: Vec<Node>) -> Vec<Node> {
 		let property = bound_property(&items);
 		let items: Vec<Node> = items.iter().enumerate().flat_map(|(index, item)| match bound_at(&items, index) {
 			Some(variable) => bound(variable, property).to_vec(),
@@ -131,6 +139,6 @@ impl Marker {
 				}
 			}
 		}
-		Node::List(kept, bracket, separator)
+		kept
 	}
 }
