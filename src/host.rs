@@ -724,6 +724,7 @@ fn page_path(mut caller: Caller<'_, HostState>) -> wasmtime::Result<HostNode> {
 thread_local! {
 	static NATIVE_PAGE_PATH: std::cell::RefCell<String> = std::cell::RefCell::new(ROOT_PATH.to_string());
 }
+#[cfg(feature = "native")]
 const ROOT_PATH: &str = "/";
 
 /// Run `body` with the page at `path` (a page rendered for a request, src/site.rs)
