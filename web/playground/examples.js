@@ -43,9 +43,9 @@ div{ button{ on click { pears = false } "hide pears" } Fruit("apples") (if pears
 	"keyed list": { value: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:1 "milk"} li{key:2 "eggs"} li{key:3 "tea"}]]}', clicks: ["rotate"], clicked: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:2 "eggs"} li{key:3 "tea"} li{key:1 "milk"}]]}', kept: true, keyed: true, code: `// a list in markup: with a key, each item keeps its element when the list changes (it moves, nothing is rewritten)
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{ button{ on click { todos = todos[1..] + [todos#1] } "rotate" } ul{ [li{ key: todo.id todo.text } for todo in todos] } }` },
-	"form binding": { value: 'div{input{value:"Ann" data-wasp-input:"1"} p:"Hello Ann"}', typed: "Bob", clicked: 'div{input{value:"Bob" data-wasp-input:"1"} p:"Hello Bob"}', kept: true, code: `// bind: ties a field to a variable both ways: type a name, the greeting follows
+	"form binding": { value: 'div{label{"Name " input{value:"Ann" data-wasp-input:"1"}} p:"Hello Ann"}', typed: "Bob", clicked: 'div{label{"Name " input{value:"Bob" data-wasp-input:"1"}} p:"Hello Bob"}', kept: true, code: `// bind: ties a field to a variable both ways: type a name, the greeting follows
 name = "Ann"
-div{ input{ bind: name } p{ "Hello " + name } }` },
+div{ label{ "Name " input{ bind: name } } p{ "Hello " + name } }` },
 	styles: { value: 'div{style:.card{padding:8 border:"1px solid gray"} button{data-wasp-click:"1" "dark"} p{class:"card" style{color:"black" background:"white"} "a themed card"}}', clicks: ["dark"], clicked: 'div{style:.card{padding:8 border:"1px solid gray"} button{data-wasp-click:"1" "dark"} p{class:"card" style{color:"white" background:"black"} "a themed card"}}', kept: true, code: `// styles are wasp data: a style sheet of rules, an inline style of properties; values may read variables
 dark = false
 div{
