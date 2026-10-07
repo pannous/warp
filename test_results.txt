@@ -1223,6 +1223,8 @@ PASSED:
   ✓ lists::test_node_lists::a_node_list_keeps_its_elements_and_values
   ✓ lists::test_node_lists::a_recursive_list_function_passes_its_array
   ✓ lists::test_node_lists::loops_over_a_list_are_linear
+  ✓ lists::test_none_word::a_bare_none_is_null
+  ✓ lists::test_none_word::none_of_a_list_is_the_opposite_of_any
   ✓ lists::test_number_keys::a_list_keeps_its_positions
   ✓ lists::test_number_keys::a_number_subscript_keys_an_empty_map
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
@@ -2853,7 +2855,11 @@ PASSED:
   ✓ web::test_rendering_itself::a_program_with_markup_exports_its_renderer
   ✓ web::test_rendering_itself::only_a_program_with_markup_renders_itself
   ✓ web::test_rendering_itself::the_renderer_inside_the_module_gives_the_html
+  ✓ web::test_route_modules::a_dev_site_and_a_site_without_routes_ship_one_module
+  ✓ web::test_route_modules::each_route_comes_in_a_module_of_its_own
   ✓ web::test_routes::a_layout_shows_the_route_at_its_outlet
+  ✓ web::test_routes::a_typed_route_parameter_computes_with_its_type
+  ✓ web::test_routes::nested_routes_show_inside_their_layout
   ✓ web::test_routes::the_route_index_names_the_route_the_path_picks
   ✓ web::test_routes::the_route_matching_the_path_is_shown
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
@@ -3239,4 +3245,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3234 passed, 0 failed, 3234 total tested
+19 ignored, 3240 passed, 0 failed, 3240 total tested
