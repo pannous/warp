@@ -52,6 +52,8 @@ pub mod web_server;
 #[cfg(feature = "native")]
 pub mod site;
 #[cfg(feature = "native")]
+pub mod dev_server;
+#[cfg(feature = "native")]
 pub mod fetches;
 #[cfg(feature = "native")]
 pub mod components;

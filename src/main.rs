@@ -37,6 +37,8 @@ const EXECUTABLE_MODE: u32 = 0o755;
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
+/// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/dev_server.rs, card web-dev)
+const DEV_COMMAND: &str = "dev";
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
 const ACKNOWLEDGEMENTS_FILE: &str = ".wasp-acknowledged";
@@ -139,6 +141,14 @@ fn run_command(args: &[String]) {
                 eprintln!("{failure}");
                 std::process::exit(1);
             }
+        }
+    } else if args[1] == DEV_COMMAND && args.len() >= 3 {
+        let port = args.get(3).map_or(Ok(warp::dev_server::DEV_PORT), |port| port.parse::<u16>());
+        let served = port.map_err(|_| format!("warp dev: the port is a number, not {}", args[3]))
+            .and_then(|port| warp::dev_server::serve(std::path::Path::new(&args[2]), port));
+        if let Err(failure) = served {
+            eprintln!("{failure}");
+            std::process::exit(1);
         }
     } else if let Some(target) = arg_string.strip_prefix("data ") {
         let text = source_of(target);
@@ -486,6 +496,7 @@ fn usage() {
     println!("  warp verify <file>   Test and prove the laws of a file");
     println!("  warp data <file>     Read untrusted data without evaluating it");
     println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
+    println!("  warp dev <file> [port]  Serve the file's page, reloaded when it changes (port 8008)");
     println!("  warp repl            Start interactive console");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
