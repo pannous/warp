@@ -23,6 +23,7 @@ const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
+	sleeping: () => post({ type: "sleep" }),
 	listen: (holder, events) => {
 		live = holder;
 		startTimers(holder);
@@ -162,6 +163,7 @@ function startTimers(holder) {
 }
 
 self.onmessage = async ({ data }) => {
+	if (data.pointer) return self.pagePointer = { values: new Int32Array(data.pointer.buffer), names: data.pointer.names }; // host.js system_value
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.stored) return Object.assign(storedValues, data.stored); // host.js STD_ADAPTERS.store
 	await ready;

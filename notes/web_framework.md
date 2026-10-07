@@ -211,3 +211,16 @@ Each step is useful on its own and is what the next ones stand on.
   only what it imports); lazy loading per route, agreed with warp-89 (web-router): routes lower to functions
   page·route·<N> with the table exported as page·routes; the splitter moves a route's function and what only it reaches
   into app·<N>.wasm, which site.js loads on the first navigation there.
+
+## web-apis: animation frames (card drawing-frames, first piece of web-apis)
+- In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`
+  shows each frame at once in place of the last canvas (host.js sleep → worker message "sleep" → playground.js
+  painted). Frames keep the run alive past RUN_TIMEOUT_MS; editing the code stops the animation (show → stopRun) and
+  runs the new code. Paints without a sleep between them stay one canvas each. Tour example animation (`canvases` check).
+- Frames draw into the canvas shown (showFrame), so the pointer stays over it. `mouse_x`, `mouse_y` (canvas pixels) and
+  `mouse_down` are system values (host_words.rs): the page keeps the pointer over a canvas in a SharedArrayBuffer that
+  the worker reads at once, also in the middle of an animation, when it takes no messages (playground.js
+  trackPointer → worker pagePointer → host.js system_value). `on click` over the canvas gives event.x / event.y.
+  Natively mouse_x is a loud error (no canvas). Tour example mouse.
+- Natively each show still writes paint-N.png (src/paint.rs). `color.with_alpha(a)` works as a method (test_draw.rs).
+  Left: built sites (site.js) show no frames and no pointer yet.

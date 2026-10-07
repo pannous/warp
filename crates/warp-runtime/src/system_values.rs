@@ -9,7 +9,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, ONLINE, SYSTEM_VALUES};
+use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES};
 
 const READING_LIFETIME: Duration = Duration::from_secs(1);
 /// Any public address: connecting a UDP socket only asks the routing table
@@ -37,6 +37,7 @@ fn read_now(name: &str) -> Result<i64, String> {
 		ONLINE => Ok(online() as i64),
 		DARK_MODE => dark_mode().map(|dark| dark as i64),
 		CLIPBOARD_COUNT => clipboard_count(),
+		MOUSE_X | MOUSE_Y | MOUSE_DOWN => Err(format!("{name}: the pointer over the playground's canvas; a native run has no canvas")),
 		other => Err(format!("{other} is no system value; known: {}", SYSTEM_VALUES.map(|(name, _)| name).join(", "))),
 	}
 }

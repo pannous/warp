@@ -269,6 +269,7 @@ function programImports(holder, hooks) {
 			},
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
 			sleep: milliseconds => {
+				hooks.sleeping?.(); // a paint after a sleep is the next frame of an animation (playground.js)
 				const until = Date.now() + Number(milliseconds);
 				let check = Date.now() + SHARED_CHECK_MILLISECONDS;
 				while (Date.now() < until) {
@@ -314,6 +315,8 @@ function programImports(holder, hooks) {
 			system_value: name => {
 				const value = decode(cString(name));
 				if (value === "online") return BigInt(navigator.onLine);
+				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // playground.js trackPointer
+				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
 				const known = value === "dark mode" && globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : self.pageSystemValues?.[value];
 				if (known !== undefined) return BigInt(known);

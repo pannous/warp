@@ -25,7 +25,12 @@ pub const DARK_MODE: &str = "dark mode";
 /// The system values, and whether each is a yes/no value
 /// How often the clipboard changed since the machine started (macOS NSPasteboard changeCount): `on clipboard change`
 pub const CLIPBOARD_COUNT: &str = "clipboard count";
-pub const SYSTEM_VALUES: [(&str, bool); 5] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true), (CLIPBOARD_COUNT, false)];
+/// The pointer over the page's canvas, in canvas pixels, and whether a button is down (card drawing-frames)
+pub const MOUSE_X: &str = "mouse_x";
+pub const MOUSE_Y: &str = "mouse_y";
+pub const MOUSE_DOWN: &str = "mouse_down";
+pub const SYSTEM_VALUES: [(&str, bool); 8] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true), (CLIPBOARD_COUNT, false),
+	(MOUSE_X, false), (MOUSE_Y, false), (MOUSE_DOWN, true)];
 /// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
 pub const CLIPBOARD: &str = "clipboard";
 pub const CLIPBOARD_TEXT: &str = "clipboard_text";

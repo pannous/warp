@@ -25,3 +25,10 @@ fn a_color_with_alpha_mixes_with_what_is_below() {
 	is!(&format!("{DRAW}canvas(1, 1)\nclear(white)\ndot(0, 0, with_alpha(black, 0.5))\ncanvas_pixels[0] == rgb(127, 127, 127)"), true);
 	is!(&format!("{DRAW}canvas(1, 1)\nclear(red)\ndot(0, 0, with_alpha(blue, 0))\ncanvas_pixels[0] == red"), true);
 }
+
+// a color's methods: blue.with_alpha(0.5) is with_alpha(blue, 0.5) (card drawing-frames)
+#[test]
+fn with_alpha_is_a_method_of_a_color() {
+	is!(&format!("{DRAW}alpha_of(blue.with_alpha(0.5))"), 128);
+	is!(&format!("{DRAW}c = hsv(30, 1, 1)\nc.with_alpha(0.5) == with_alpha(c, 0.5)"), true);
+}
