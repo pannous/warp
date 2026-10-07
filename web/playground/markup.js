@@ -2,7 +2,7 @@
 // changes only what differs (morphChildren), and an event inside it names its element's handler (elementEvent).
 
 const INSTANCE_ATTRIBUTE = "data-wasp-instance"; // a component instance's elements (src/lowering/element_events.rs)
-const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (src/html.rs)
+const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (std/markup.wasp)
 const NUMBER_FIELDS = ["number", "range"]; // fields whose bound value is a number
 
 // the children of shown become those of wanted: an element with a key (data-wasp-key, card web-keyed) is the shown one

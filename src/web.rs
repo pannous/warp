@@ -58,10 +58,8 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 			"fixes": fixes_json(code, line, column, &hint.fix().into_iter().collect::<Vec<_>>()),
 		})
 	}).collect();
-	json!({
+	let mut report = json!({
 		"value": result.serialize(),
-		// markup the page shows as DOM (card web-dom)
-		"html": crate::html::is_markup(&result).then(|| crate::html::to_html(&result)),
 		"error": is_error,
 		"errors": errors,
 		"error_at": diagnostic::error_position(&result).map(|(line, column)| json!({"line": line, "column": column})),
@@ -71,7 +69,14 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 		"asks": [], // no Asks any more (every ambiguity is a warning or an error); kept until the page stops reading it
 		"notes": notes.borrow().iter().map(|(topic, _)| topic).collect::<Vec<_>>(),
 		"got_it": notes.borrow().iter().map(|(topic, expression)| json!({"topic": topic, "expression": expression})).collect::<Vec<_>>(),
-	})
+	});
+	report["html"] = html_of(&result); // after the program's diagnostics are taken: the renderer is a program too
+	report
+}
+
+/// Markup the page shows as DOM (card web-dom), rendered by std/markup.wasp
+fn html_of(value: &Node) -> Value {
+	json!(crate::markup::is_markup(value).then(|| crate::markup::to_html(value)))
 }
 
 /// A warning or error for the page: its words, position, "got it" topic and the fixes it offers
@@ -152,7 +157,7 @@ pub fn run_outcome(outcome: &Value) -> Node {
 /// its HTML when it is markup (card web-element)
 pub fn shown(outcome: &Value) -> Value {
 	let value = run_outcome(outcome);
-	json!({ "value": value.serialize(), "html": crate::html::is_markup(&value).then(|| crate::html::to_html(&value)) })
+	json!({ "value": value.serialize(), "html": html_of(&value) })
 }
 
 /// The page's run_block (host.js; src/host.rs natively): the block and what it sees as trees (`{block, names, values,

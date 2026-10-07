@@ -198,7 +198,7 @@ fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &H
 fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<String>) -> Vec<Node> {
 	// a name, markup (`div{ p{ "clicked " + count } }`, card web-element), or a choice between such
 	// (`if users.loading then "Loading…" else users`, card web-async), which the page shows anew
-	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::html::is_markup(last) || is_shown_choice(last)).cloned();
+	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::markup::is_markup(last) || is_shown_choice(last)).cloned();
 	if let Some(shown) = shown {
 		let binding = function_with_globals(PAGE_VALUE, false, &[shown], main_variables);
 		statements.insert(statements.len() - 1, binding);
@@ -216,7 +216,7 @@ fn is_shown_choice(node: &Node) -> bool {
 fn only_reads(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty | Node::True | Node::False => true,
-		markup if crate::html::is_markup(markup) => true,
+		markup if crate::markup::is_markup(markup) => true,
 		Node::Key(left, op, right) => !matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec | Op::While | Op::Do) && !op.is_compound_assign() && only_reads(left) && only_reads(right),
 		Node::List(items, Bracket::Square | Bracket::Curly, _) => items.iter().all(only_reads),
 		_ => false,

@@ -1,7 +1,7 @@
 //! `button{ on click { count += 1 } "Add" }`: a handler on an element (card web-element, notes/web_framework.md step 2).
 //! The element carries data-wasp-click with its handler's number; the page calls that handler on a click inside it and
 //! shows the program's markup anew
-use warp::html::to_html;
+use warp::markup::to_html;
 use warp::wasm_emitter::eval;
 
 const COUNTER: &str = "count = 0\ndiv{ button{ on click { count += 1 } \"Add\" } p{ \"clicked \" + count } }";

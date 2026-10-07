@@ -1,6 +1,6 @@
 //! A markup value renders as HTML (card web-dom, notes/web_framework.md): tags with their attributes, text escaped,
 //! children in order, void elements without a closing tag; anything else is no markup
-use warp::html::{is_markup, to_html};
+use warp::markup::{is_markup, to_html};
 use warp::wasm_emitter::eval;
 
 fn html_of(code: &str) -> String {
