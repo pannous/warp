@@ -28,7 +28,7 @@ fn a_payload_free_variant_is_its_symbol_and_of_its_type() {
 	is!(&format!("{COLOR}; red"), warp::symbol("red"));
 	is!(&format!("{COLOR}; red is Color"), true);
 	is!(&format!("{COLOR}; x = green; x is Color"), true);
-	is!(&format!("{COLOR}; blue is Color"), false);
+	is!(&format!("{COLOR}; x = blue; x is Color"), false);
 	is!(&format!("{COLOR}; rgb(1, 2, 3) is Color"), true);
 }
 
@@ -40,4 +40,10 @@ fn payload_names_name_the_fields() {
 #[test]
 fn a_typed_variable_unwraps_a_single_payload() {
 	is!(&format!("{OPTION}; a: int = Some(3); a + 1"), 4);
+}
+
+#[test]
+fn an_or_of_a_grouped_operation_keeps_its_right_side() {
+	is!("class rgb{a:int}; x = green; ((x is rgb) or 0) or 5", 5);
+	is!(&format!("{COLOR}; x = green; (x is Color) or true"), true);
 }

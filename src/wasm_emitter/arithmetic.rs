@@ -714,8 +714,8 @@ impl WasmGcEmitter {
 			func.instruction(&I::Else);
 			self.emit_node_instructions(func, right);
 			func.instruction(&I::End);
-		} else if Self::is_run_time_value(left) {
-			// a variable, call or element holding a Node: its truthiness is known at run time only
+		} else if Self::is_run_time_value(left) || Self::is_operation(left) {
+			// a variable, call, element or operation (`a or b`) holding a Node: its truthiness is known at run time only
 			let held = self.node_scratch();
 			self.emit_node_instructions(func, left);
 			func.instruction(&I::LocalTee(held));
@@ -731,6 +731,15 @@ impl WasmGcEmitter {
 			// a literal left is falsy or not at compile time: `[] or 3`, `"a" and 4`
 			let left_is_value = left.is_falsy() == (*op == Op::And);
 			self.emit_node_instructions(func, if left_is_value { left } else { right });
+		}
+	}
+
+	/// `a or b`, `(x is rgb or 0)`: an operation, also in parentheses, computed at run time; a pair `a: 1` is data
+	fn is_operation(node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Key(_, op, _) => *op != Op::Colon,
+			Node::List(items, Bracket::Round, _) => matches!(items.as_slice(), [single] if Self::is_operation(single)),
+			_ => false,
 		}
 	}
 
