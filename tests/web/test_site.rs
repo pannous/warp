@@ -54,3 +54,17 @@ fn a_site_with_routes_is_one_page_for_every_path() {
 	let unrouted = warp::site::files("p{ \"hi\" }", "plain", false).expect("the site is built");
 	assert!(!unrouted.iter().any(|(file, _)| file == "404.html"));
 }
+
+// card site-worker: a module that starts tasks runs in a Worker, where a blocking await may wait and its tasks run
+// together: the page loads site-thread.js instead of the host, whose scripts its root lists for the Worker; a page
+// without tasks (COUNTER) stays on the page's thread
+#[test]
+fn a_site_starting_tasks_runs_its_program_in_a_worker() {
+	let directory = scratch_directory("tasks-site");
+	let site = warp::site::build("nap(ms) := { sleep(ms); 1 }\nfirst = go nap(1)\np{ \"naps: \" + await first }", "tasks", &directory).expect("the site is built");
+	assert_eq!(site.files, ["index.html", "app.wasm", "site-thread.js", "markup.js", "site.js", "reader.js", "host.js", "host-tasks.js", "site-worker.js", "task-worker.js", "coi-serviceworker.js"]);
+	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
+	assert!(page.contains(r#"<div id="wasp-root" data-wasp-worker="reader.js,host.js,host-tasks.js"><p>naps: 1</p></div>"#), "{page}");
+	assert!(page.contains(r#"<script src="site-thread.js"></script>"#) && !page.contains(r#"<script src="host.js">"#), "{page}");
+	std::fs::remove_dir_all(directory).unwrap();
+}

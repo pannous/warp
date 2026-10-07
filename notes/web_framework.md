@@ -217,6 +217,14 @@ Each step is useful on its own and is what the next ones stand on.
 - Open: the page is rendered once at start (per request later); a relative `fetch "/api/…"` fails during that render
   (no server yet), so the first HTML shows the error state until the page fetches; `server def` bodies still run in the
   page (the RPC stub of the page build is not done).
+- Programs in a Worker (card site-worker, step 1): a module importing task words (task_/channel_/shared_, site.rs
+  runs_in_a_worker) runs in site-worker.js, where a blocking await may wait (Atomics.wait) and its tasks run together on
+  the task Workers. The page loads site-thread.js, markup.js and site.js only; its root lists the Worker's scripts
+  (data-wasp-worker="reader.js,host.js,host-tasks.js…"), and site.js calls startSiteWorker instead of hydrate: the page
+  sends the module, kept values, path and element events, the Worker answers html/stored/print/failure. A static host
+  gets cross-origin isolation through coi-serviceworker.js (one reload). A plain page stays on the page's thread (bundle
+  budget); a program with routes too, for now (step 2: following links through messages). Probe: probes/site_worker.py.
+
 ## Routes (card web-router, 2026-10-07; split agreed with warp-cf (web-bundle) and warp-34 (playground, fetch-cancel))
 - `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, std/router.wasp): each route is the function page·route·N,
   `id` bound by `let` to that part of the path (a number when it is digits, else the text), page·routes gives the

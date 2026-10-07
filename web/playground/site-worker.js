@@ -1,0 +1,50 @@
+// The program of a built site in a Worker (card site-worker): a site whose module starts tasks runs here, off the page's
+// thread, so a blocking `await` may wait (Atomics.wait) and its tasks run on the pool of task Workers (host-tasks.js).
+// The page (site.js) keeps the DOM: it sends the module's URL, the kept values, the page's path and each element event;
+// this worker answers with the page's markup anew (its export page·html, as site.js show() renders it) after main, each
+// handler and each timer. Its scripts come as ?scripts=…, resolved against this file, the site's root (src/site.rs).
+
+const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts").split(",");
+importScripts(...SITE_SCRIPTS);
+self.siteScripts = SITE_SCRIPTS; // the task Workers load the same (host-tasks.js addTaskWorker)
+prepareTaskPool();
+
+const PAGE_HTML = "page·html";
+let site; // the program's run (host.js runProgram's holder)
+let pagePath = "/";
+
+const post = message => self.postMessage(message);
+self.keepStored = (name, value, file) => post({ stored: { name, value, file } }); // host.js STD_ADAPTERS.store
+const hooks = {
+	pagePath: () => pagePath,
+	instantiated: holder => { site = holder; },
+	print: (text, stream) => post({ print: { text, stream } }),
+	listen: holder => startTimers(holder, handler => showAfter(runTimer(holder, hooks, handler))),
+	arrived: (holder, handler) => holder === site && showAfter(runTimer(holder, hooks, handler)),
+};
+
+// what main or a handler left: the page's markup anew, or the failure (which stops the timers)
+function showAfter(outcome) {
+	if (outcome.result === undefined) {
+		site?.stopTimers?.();
+		return post({ failure: outcome.failure ?? outcome.trap ?? outcome.error });
+	}
+	const render = site.exports[PAGE_HTML];
+	if (!render) return post({ failure: `app.wasm exports no ${PAGE_HTML}: build it with warp build --site` });
+	post({ html: plainOfTree(readNode(site.exports, render())) });
+}
+
+async function start({ module, stored, path }) {
+	Object.assign(storedValues, stored);
+	pagePath = path;
+	const bytes = new Uint8Array(await (await fetch(module)).arrayBuffer());
+	await taskPoolReady(); // tasks run on loaded Workers, not inline
+	const holder = instantiateProgram(bytes, hooks);
+	if (holder.failure) return post({ failure: holder.failure });
+	showAfter(runMain(holder, hooks));
+}
+
+self.onmessage = ({ data }) => {
+	if (data.start) return start(data.start);
+	if (data.event && site?.exports[`on·${data.event}·node`]) showAfter(runPageEvent(site, hooks, data.event, data.detail));
+};
