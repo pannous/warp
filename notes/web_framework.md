@@ -56,11 +56,14 @@ Each step is useful on its own and is what the next ones stand on.
 - Lowering (src/lowering/fetch_signals.rs): the variables users, users·loading, users·error, the call
   `fetch_start(0, url)` and the handler `on·fetch·0`, which takes `fetch_reply(0)` = [value, error]. Natively
   (src/fetches.rs) a thread fetches and the runtime runs the handler at the next check point (warp-runtime
-  system_signals await_ready; `warp run` stays until the reply arrived); in the page host.js fetches and worker.js runs
-  the handler like a timer's, then re-renders.
+  system_signals await_ready; `warp run` stays until the reply arrived); in the page a task Worker fetches into shared
+  memory, which the running main reads at its check points (sleep, loop starts) as natively, so
+  `while users.loading { sleep 5 ms }` ends there too; a reply after main returned runs the handler like a timer's
+  (worker.js hooks.arrived), then the page re-renders. Without cross-origin isolation (no task Workers) the reply
+  only arrives after main.
 - Open: cancel on navigation; the page re-renders only a last line that is a name (event_signals with_output_binding),
-  so `if users.loading then "Loading…" else users` does not update yet; a main that waits (`while users.loading {sleep…}`)
-  never ends in the browser, whose worker delivers the reply only after main returned; diagnostics name users·error.
+  so `if users.loading then "Loading…" else users` does not update yet (branch page-binding); diagnostics name
+  users·error.
 
 ## Defaults for step 1 (web-dom), undoable
 - A markup value is any key whose name is an HTML tag (`div`, `p`, `ul`, `li`, `a`, `button`, … the HTML element list)

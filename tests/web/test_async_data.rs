@@ -40,6 +40,7 @@ fn a_body_that_is_no_json_is_the_text() {
 #[test]
 fn a_changed_url_variable_fetches_anew() {
 	let url = serve("200 OK", USERS);
-	let code = format!("page = 1\nusers := fetch \"{url}?page=\" + page\n{UNTIL_ARRIVED}\npage = 2\nagain = users.loading\n{UNTIL_ARRIVED}\nagain and count(users) == 2");
+	let separator = if url.contains('?') { '&' } else { '?' }; // the browser's stub URL has a query already
+	let code = format!("page = 1\nusers := fetch \"{url}{separator}page=\" + page\n{UNTIL_ARRIVED}\npage = 2\nagain = users.loading\n{UNTIL_ARRIVED}\nagain and count(users) == 2");
 	crate::is!(&code, true);
 }
