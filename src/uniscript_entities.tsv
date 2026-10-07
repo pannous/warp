@@ -1138,6 +1138,7 @@ carrot	🥕
 castle	⛫
 cat	🐈
 cayleys	ℭ
+cbrt	∛
 ccaps	⩍
 ccaron	č
 ccedil	ç
@@ -1173,7 +1174,7 @@ cinema	🎦
 cir	○
 cirE	⧃
 cirbot	⟟
-circ	ˆ
+circ	∘
 circeq	≗
 circlearrowleft	↺
 circlearrowright	↻
@@ -1242,6 +1243,7 @@ comp	∁
 compass	🧭
 compfn	∘
 complement	∁
+complex	ℂ
 complexes	ℂ
 compression	🗜
 concavediamond	⟡
@@ -1360,6 +1362,7 @@ ddotseq	⩷
 ddownarrow	⟱
 deer	🦌
 deg	°
+degree	°
 del	∇
 delta	δ
 demptyv	⦱
@@ -1426,6 +1429,7 @@ dotequal	≐
 dotequiv	⩧
 dotminus	∸
 dotplus	∔
+dots	…
 dotsim	⩪
 dotsminusdots	∺
 dotsquare	⊡
@@ -1614,6 +1618,7 @@ esim	≂
 estimates	≙
 eta	η
 eth	ð
+euler	ℯ
 eulerconst	ℇ
 euml	ë
 euro	€
@@ -2008,6 +2013,7 @@ ladder	🪜
 laemptyv	⦴
 lagran	ℒ
 lambda	λ
+land	∧
 lang	⟨
 langd	⦑
 langle	⟨
@@ -2055,6 +2061,7 @@ lcub	{
 lcurvyangle	⧼
 lcy	л
 ldca	⤶
+ldots	…
 ldquo	“
 ldquor	„
 ldrdhar	⥧
@@ -2209,6 +2216,7 @@ lnapprox	⪉
 lne	⪇
 lneq	⪇
 lneqq	≨
+lnot	¬
 lnsim	⋦
 loang	⟬
 loarr	⇽
@@ -2230,6 +2238,7 @@ looparrowright	↬
 lopar	⦅
 lopf	𝕝
 loplus	⨭
+lor	∨
 lotimes	⨴
 lotus	🪷
 lowast	∗
@@ -3485,6 +3494,7 @@ napid	≋̸
 napos	ŉ
 napprox	≉
 nasymp	≭
+nat	ℕ
 natur	♮
 natural	♮
 naturals	ℕ
@@ -3514,6 +3524,7 @@ negativeverythinspace	​
 neovnwarrow	⤱
 neovsearrow	⤮
 neptune	♆
+neq	≠
 nequiv	≢
 nesear	⤨
 nesim	≂̸
@@ -4626,6 +4637,7 @@ timesd	⨰
 tint	∭
 tiny	⧾
 tminus	⧿
+to	→
 toea	⤨
 toilet	🚽
 tomato	🍅
@@ -4828,7 +4840,7 @@ varcarriagereturn	⏎
 varclubsuit	♧
 vardiamondsuit	♦
 vardoublebarwedge	⌆
-varepsilon	ϵ
+varepsilon	ε
 varheartsuit	♥
 varhexagon	⬡
 varhexagonblack	⬢
@@ -4841,7 +4853,7 @@ varniobar	⋽
 varnis	⋻
 varnothing	∅
 varointclockwise	∲
-varphi	ϕ
+varphi	φ
 varpi	ϖ
 varpropto	∝
 varr	↕
