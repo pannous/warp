@@ -547,7 +547,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
 - **Warp/uniscript:** a letter takes the HTML reading (`\:ocirc` ô, `\:oslash` ø), anything else the LaTeX one
   (`\:asymp` ≍, `\:circ` ∘). The user: "probably ugly but the best we can do". Consequences worth knowing:
   `\:cdot` is the letter ċ (write `\:sdot` or ⋅ for the dot operator), `\:varepsilon` ϵ and `\:varphi` ϕ are the HTML
-  letters, and a Unicode name ranks above both (`\:tilde` ~, `\:breve` ˘). In uniscript since a640efb (after
+  letters, and a Unicode name ranks above both (`\:tilde` ~, `\:breve` ˘). In uniscript since df067a1 (after
   v1.0.4); warp reads it once its pin is raised past 1.0.4 (src/uniscript_entities.tsv, tests/parser/test_entity_table.rs).
 - Generated, not hand-written: `python3 probes/entities_index/html_latex.py ~/dev/uniscript` (latex.wasp keeps the
   overridden LaTeX readings as `// name: …  // P198` lines).
