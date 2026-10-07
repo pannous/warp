@@ -1,19 +1,31 @@
 // The language guide on the playground page (web/playground/guide.md): every ```wasp => value fence shows that value
-// in the page, and every example a chapter links exists in the tour or samples/
+// in the page, a ```printed fence after a snippet is what it prints, and every example a chapter links exists in the
+// tour or samples/
 use std::collections::HashSet;
 use warp::web::evaluate;
 
 const GUIDE: &str = include_str!("../../web/playground/guide.md");
 const TOUR: &str = include_str!("../../web/playground/examples.js");
 const EXCLUDED_SAMPLES: &str = include_str!("../../web/playground/excluded_samples.txt");
-const FENCE_START: &str = "```wasp => ";
+const FENCE_START: &str = "```wasp";
+const VALUE_MARK: &str = " => ";
 const FENCE_END: &str = "```";
+const PRINTED_FENCE: &str = "```printed\n";
+const RESULT_PROMPT: &str = "» "; // the CLI's result line, after what the program printed
 const EXAMPLES_LINE: &str = "Examples: ";
 
-fn fences() -> Vec<(&'static str, &'static str)> {
+struct Snippet {
+	code: &'static str,
+	value: Option<&'static str>,
+	printed: Option<&'static str>,
+}
+
+fn snippets() -> Vec<Snippet> {
 	GUIDE.split(FENCE_START).skip(1).map(|fence| {
-		let (expected, rest) = fence.split_once('\n').unwrap();
-		(expected, rest.split(FENCE_END).next().unwrap())
+		let (info, rest) = fence.split_once('\n').unwrap();
+		let (code, after) = rest.split_once(FENCE_END).unwrap();
+		let printed = after.strip_prefix('\n').and_then(|next| next.strip_prefix(PRINTED_FENCE)).map(|block| block.split(FENCE_END).next().unwrap());
+		Snippet { code, value: info.strip_prefix(VALUE_MARK), printed }
 	}).collect()
 }
 
@@ -31,11 +43,25 @@ fn linked_examples() -> (Vec<String>, Vec<String>) {
 
 #[test]
 fn every_guide_snippet_shows_its_value() {
-	let failures: Vec<String> = fences().into_iter().filter_map(|(expected, code)| {
+	let failures: Vec<String> = snippets().into_iter().filter_map(|Snippet { code, value, .. }| {
+		let expected = value?;
 		let shown = evaluate(code, HashSet::new())["value"].as_str().unwrap_or_default().to_string();
 		(shown != expected).then(|| format!("{code}  shows {shown}, the guide says {expected}"))
 	}).collect();
-	assert!(fences().len() > 30);
+	assert!(snippets().len() > 30);
+	assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[cfg(feature = "native")] // runs the warp binary
+#[test]
+fn every_guide_snippet_prints_what_the_guide_shows() {
+	let failures: Vec<String> = snippets().into_iter().filter_map(|Snippet { code, printed, .. }| {
+		let expected = printed?;
+		let output = crate::common::printed(code);
+		let shown: String = output.lines().filter(|line| !line.starts_with(RESULT_PROMPT)).map(|line| format!("{line}\n")).collect();
+		(shown != expected).then(|| format!("{code}  prints {shown:?}, the guide says {expected:?}"))
+	}).collect();
+	assert!(snippets().iter().filter(|snippet| snippet.printed.is_some()).count() > 5);
 	assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

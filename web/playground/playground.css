@@ -146,7 +146,7 @@ main.single { grid-template-columns: minmax(0, 1fr); }
 .guide-chapter > summary a { color: inherit; text-decoration: none; }
 .guide-chapter[open] > summary { color: var(--accent); }
 .guide-snippet { position: relative; margin: 8px 0; background: var(--code-ground); border-radius: 6px; padding: 6px 8px; }
-.guide-snippet pre { margin: 0; padding-right: 3.5em; white-space: pre-wrap; word-break: break-word; }
+.guide-snippet pre { margin: 0; tab-size: 2; padding-right: 3.5em; white-space: pre-wrap; word-break: break-word; }
 .guide-snippet code { padding: 0; background: none; }
 .guide-try { position: absolute; top: 4px; right: 4px; padding: 0 6px; font-size: 0.85em; }
 .guide-printed { margin: 4px 0 0; padding-top: 4px; border-top: 1px dashed var(--muted); color: var(--ink); white-space: pre-wrap; font-size: 0.95em; }

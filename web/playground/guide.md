@@ -4,118 +4,138 @@ Learn wasp one small step at a time. Press **try ▶** to run a snippet, then ch
 
 ## Hello, world
 
-The last line of a program is its result.
+A program tells the computer what to do. The simplest program is just a value.
 
 ```wasp => "Hello, world"
 "Hello, world"
 ```
 
-`print` writes a line along the way.
+`print` shows a line of text.
 
-```wasp => 42
-print "Hello"
-42
+```wasp
+print "Hi"
 ```
 ```printed
-Hello
+Hi
 ```
 
-`//` starts a comment. `/* … */` can go anywhere.
+A program can have many lines. The last one is the result.
 
 ```wasp => 3
-// this line is ignored
-1 + /* so is this */ 2
+print "Hi"
+3
+```
+```printed
+Hi
+```
+
+A comment is a note for people. The computer skips it.
+
+```wasp => 3
+3 // a note
 ```
 
 Examples: hello
 
 ## Numbers
 
-Whole numbers never overflow.
+wasp works like a calculator.
+
+```wasp => 3
+1 + 2
+```
+
+Parentheses go first.
+
+```wasp => 8
+2 * (3 + 1)
+```
+
+`/` divides.
+
+```wasp => 2.5
+10 / 4
+```
+
+`^` raises to a power. Numbers never get too big.
 
 ```wasp => 1267650600228229401496703205376
 2 ^ 100
 ```
 
-Division keeps fractions exact.
+Fractions stay exact.
 
 ```wasp => 0.5
 1/3 + 1/6
 ```
 
-Numbers can carry units.
+`mod` gives the remainder.
 
-```wasp => 3200 m
-3 km + 200 m
+```wasp => 1
+7 mod 2
 ```
 
-`mod` gives the remainder, `√` the square root.
+Numbers can have units.
 
-```wasp => [1 4]
-[10 mod 3, √16]
-```
-
-Write big numbers with `_`, hex with `0x`.
-
-```wasp => [1000000 31]
-[1_000_000, 0x1F]
+```wasp => 150 min
+2 h + 30 min
 ```
 
 Examples: numbers; samples: factorial, power, gcd, collatz, quadratic
 
 ## Text
 
-Text goes in double quotes. `+` joins texts.
+Text is anything in double quotes: a word, a name, a sentence.
 
-```wasp => "Hello, world"
-"Hello, " + "world"
+```wasp => "hello"
+"hello"
 ```
 
-`\(…)` puts a value into a text.
+`+` joins texts.
 
-```wasp => "Hi Ada!"
-name = "Ada"
-"Hi \(name)!"
+```wasp => "abcd"
+"ab" + "cd"
 ```
 
-Texts know their length.
+`.length` counts the letters.
 
-```wasp => 5
-"hello".length
+```wasp => 4
+"wasp".length
 ```
 
-`upper` makes capitals.
+`\(…)` puts a value inside a text.
 
-```wasp => "HELLO"
-upper "hello"
+```wasp => "1 + 1 = 2"
+"1 + 1 = \(1 + 1)"
 ```
 
 Examples: text; samples: levenshtein
 
-## Truth
-
-A comparison is true (1) or false (0).
-
-```wasp => 1
-3 > 2
-```
-
-Combine them with `and`, `or` and `not`.
-
-```wasp => 1
-3 > 2 and not 2 > 3
-```
-
 ## Variables
 
-`=` gives a value a name.
+A variable is a name for a value, so you can use it again.
+
+```wasp => 3
+x = 3
+x
+```
+
+Use the name in a calculation.
 
 ```wasp => 4
 x = 3
 x + 1
 ```
 
-`+=` changes it.
+Give it a new value any time.
+
+```wasp => 2
+x = 1
+x = 2
+x
+```
+
+`+=` adds to it.
 
 ```wasp => 4
 x = 3
@@ -123,19 +143,80 @@ x += 1
 x
 ```
 
-A type can follow the name.
-
-```wasp => 3
-x : int = 3
-```
-
-Constants like `pi` never change.
+Some names, like `pi`, are constants. They never change.
 
 Examples: constants
 
+## Truth
+
+Some questions have a yes-or-no answer. Yes is 1, no is 0.
+
+```wasp => 1
+3 > 2
+```
+
+`==` asks "equal?".
+
+```wasp => 0
+2 == 3
+```
+
+`and` is yes only if both are yes.
+
+```wasp => 0
+yes and no
+```
+
+`not` turns yes into no.
+
+```wasp => 0
+not yes
+```
+
+## Conditions
+
+A condition lets the program choose what to do.
+
+`if` runs code only when something is true.
+
+```wasp
+if 3 > 2 : print "yes"
+```
+```printed
+yes
+```
+
+`else` says what to do otherwise.
+
+```wasp => "no"
+if 1 > 2 : "yes" else "no"
+```
+
+Check several things one after another.
+
+```wasp => "medium"
+x = 5
+if x > 9 : "big" else if x > 3 : "medium" else "small"
+```
+
+Braces hold several lines.
+
+```wasp
+if 3 > 2 {
+	print "yes"
+	print "sure"
+}
+```
+```printed
+yes
+sure
+```
+
+Examples: conditions; samples: control_flow, fizzbuzz
+
 ## Lists
 
-A list goes in square brackets.
+A list keeps several values in order, like a shopping list.
 
 ```wasp => [1 2 3]
 [1 2 3]
@@ -144,43 +225,42 @@ A list goes in square brackets.
 `#` counts the items.
 
 ```wasp => 3
-#[10 20 30]
+#[1 2 3]
 ```
 
-`xs#1` is the first item. Counting starts at 1.
+`#1` is the first item.
 
-```wasp => 10
-xs = [10 20 30]
-xs#1
+```wasp => "apple"
+["apple" "pear"]#1
 ```
 
-`sum`, `max` and `min` work on lists.
+`sum` adds them up.
 
 ```wasp => 6
-sum [3 1 2]
+sum [1 2 3]
+```
+
+`sorted` puts them in order.
+
+```wasp => [1 2 3]
+sorted [3 1 2]
 ```
 
 `+=` adds items.
 
-```wasp => [1 2 3 4]
+```wasp => [1 2 3]
 xs = [1 2]
-xs += [3 4]
+xs += [3]
 xs
 ```
 
-`1 to 5` counts to 5. `1..5` stops before 5.
+Make a new list from another one.
 
-```wasp => 15
-sum 1 to 5
+```wasp => [1 4 9]
+[x * x for x in [1 2 3]]
 ```
 
-Build a list from another one.
-
-```wasp => [1 4 9 16]
-[x * x for x in 1..5]
-```
-
-Keep only some items with `where`.
+`where` keeps only some items.
 
 ```wasp => [3 4]
 [1 2 3 4] where it > 2
@@ -190,64 +270,59 @@ Examples: lists, "lazy ranges", "linear arrays"; samples: sorting, quicksort, pr
 
 ## Objects
 
-An object holds named values in curly braces.
+An object keeps values that belong together, each with a name, like a contact card.
 
-```wasp => 36
-person = {name: "Ada" age: 36}
-person.age
+```wasp => {name:"Ada" age:36}
+{name: "Ada" age: 36}
 ```
 
-Change a value like a variable.
+A dot reads one value.
+
+```wasp => "Ada"
+ada = {name: "Ada"}
+ada.name
+```
+
+Change it like a variable.
 
 ```wasp => 37
-person = {name: "Ada" age: 36}
-person.age += 1
-person.age
-```
-
-Objects can hold objects.
-
-```wasp => "London"
-person = {name: "Ada" home: {city: "London"}}
-person.home.city
+ada = {age: 36}
+ada.age += 1
+ada.age
 ```
 
 Examples: data; samples: data_structures, json_parser
 
-## Conditions
-
-`if … then … else` gives a value.
-
-```wasp => "big"
-x = 3
-if x > 2 then "big" else "small"
-```
-
-Use braces for several lines.
-
-```wasp => 10
-x = 5
-if x > 2 { x = x * 2 } else { x = 0 }
-x
-```
-
-Examples: conditions; samples: control_flow, fizzbuzz
-
 ## Loops
 
-`for` repeats for each number or item.
+A loop repeats work, so you write it only once.
 
-```wasp => 10
-n = 0
-for i in 1 to 4 { n += i }
-n
+`for` runs once for each number.
+
+```wasp
+for i in 1 to 3 { print i }
+```
+```printed
+1
+2
+3
 ```
 
-`while` repeats while something is true.
+Or once for each item of a list.
 
-```wasp => 8
-n = 1
-while n < 5 { n = n * 2 }
+```wasp
+for fruit in ["apple" "pear"] { print fruit }
+```
+```printed
+apple
+pear
+```
+
+`while` repeats as long as something is true.
+
+```wasp => 3
+n = 0
+while n < 3 { n += 1 }
 n
 ```
 
@@ -255,7 +330,7 @@ Examples: loops; samples: fizzbuzz, sieve, life, mandelbrot
 
 ## Functions
 
-`def` makes a function.
+A function is a recipe with a name: write it once, use it often.
 
 ```wasp => 9
 def square(x) = x * x
@@ -269,18 +344,18 @@ def square(x) = x * x
 square 3
 ```
 
-`:=` is a short form. The argument is called `it`.
+A function can take several inputs.
 
-```wasp => 16
-square := it * it
-square 4
+```wasp => 5
+def add(a, b) = a + b
+add(2, 3)
 ```
 
-A function can also be a value.
+`:=` is a shortcut. The input is called `it`.
 
-```wasp => 14
-twice = x => x * 2
-twice(7)
+```wasp => 42
+twice := it * 2
+twice 21
 ```
 
 A function can call itself.
@@ -294,7 +369,7 @@ Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci,
 
 ## Whole lists at once
 
-A function on one number also works on a list.
+A function for one number also works on a whole list.
 
 ```wasp => [1 4 9]
 square := it * it
@@ -311,7 +386,7 @@ Examples: broadcasting
 
 ## Closures
 
-A function remembers the values around it.
+A closure is a function that remembers the values around it.
 
 ```wasp => 7
 def adder(k) = x => x + k
@@ -319,42 +394,40 @@ add3 = adder(3)
 add3(4)
 ```
 
-It can also change them.
-
-```wasp => 2
-def counter() { n = 0; () => { n += 1; n } }
-next = counter()
-next(); next()
-```
-
 Examples: closures
 
 ## Types and classes
 
-`is` checks a type.
+Every value has a type: a number, a text, a list.
 
-```wasp => 1
-3 is int
+```wasp => int
+type(3)
 ```
 
-`as` converts.
+`is` checks the type.
+
+```wasp => 1
+"3" is text
+```
+
+`as` converts to another type.
 
 ```wasp => 3
 "3" as int
 ```
 
-A class describes objects with fields and methods.
+A class is a blueprint for objects.
 
-```wasp => 3
-class Point { x: int y: int; def sum() = x + y }
-Point{x: 1 y: 2}.sum()
+```wasp => 1
+class Point { x: int y: int }
+Point{x: 1 y: 2}.x
 ```
 
 Examples: classes, properties; samples: types, polymorphism
 
 ## Errors
 
-An error is a value that says what went wrong.
+Things go wrong sometimes. In wasp an error is a value that says what happened.
 
 ```wasp => Error("divide by zero")
 1 / 0
@@ -372,7 +445,7 @@ Examples: "welcoming errors", ambiguity
 
 ## Modules
 
-`use` loads a module. With `use math`, roots become decimals.
+A module is a ready-made toolbox. `use` opens it.
 
 ```wasp => 1.4142135623730951
 use math
@@ -383,53 +456,88 @@ Examples: "C libraries"; samples: lib
 
 ## Values that follow
 
-With `:=`, a value follows the values it reads.
+Like a spreadsheet cell, a value can follow other values.
+
+`=` copies a value once.
+
+```wasp => 6
+x = 3
+y = x * 2
+x = 4
+y
+```
+
+`:=` keeps following.
 
 ```wasp => 8
 x = 3
-twice := x * 2
+y := x * 2
 x = 4
-twice
+y
 ```
 
 `whenever` runs code each time something becomes true.
+
+```wasp
+x = 1
+whenever x > 2 : print "big"
+x = 3
+```
+```printed
+big
+```
 
 Examples: "derived values", signals, listeners, "signals in lists"
 
 ## Events and timers
 
-`on` handles an event. `emit` sends one. Timers run code later or again and again.
+An event is something that happens: a click, a key, a tick of a clock.
+
+`on` says what to do when it happens. `emit` makes it happen.
+
+```wasp
+on ping : print "pong"
+emit ping
+```
+```printed
+pong
+```
 
 Examples: "emit and on", events, timers, animation, mouse, "game of life", "system values", "on exit"
 
 ## Tasks and channels
 
-Tasks run at the same time. Channels carry messages between programs.
+Tasks do several things at the same time. Channels pass messages between programs.
 
 Examples: channels; samples: async, threads
 
 ## Web pages
 
-Tags with braces make a page. Attributes look like HTML.
+A web page is made of tags. In wasp, tags are values.
+
+```wasp => p:"hello"
+p{ "hello" }
+```
+
+Attributes look like HTML.
 
 ```wasp => p{class:"note" "hello"}
 p{ class="note" "hello" }
 ```
 
-`on click { … }` inside a tag handles clicks. A function that returns tags is a component.
-`local["key"]` and `session["key"]` keep values in the browser. `clipboard.write(text)` copies text.
+`on click { … }` inside a button makes it do something. `local["key"]` remembers a value in the browser.
 
 Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl
 
 ## WebAssembly
 
-warp compiles to WebAssembly. Libraries in Rust or C can be called like wasp functions.
+warp turns wasp into WebAssembly, which runs in every browser. Code from Rust or C can be called like wasp.
 
 Examples: "wasm components"; samples: wasm_interop
 
 ## Laws
 
-A law states something that must always hold. warp checks it.
+A law is a rule that must always hold. warp checks it for you.
 
 ```wasp => 9
 square(x) := x * x
