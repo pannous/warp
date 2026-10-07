@@ -1346,13 +1346,16 @@ PASSED:
   ✓ modules::test_std_list::chunk_window_median
   ✓ modules::test_std_list::use_list_brings_its_words
   ✓ modules::test_std_list::use_list_groups_partitions_and_picks_by
+  ✓ modules::test_std_list::use_list_scans_takes_and_drops_while_finds_argmax
   ✓ modules::test_std_list::use_list_zips_with_sums_by_rotates_interleaves_dedupes
   ✓ modules::test_std_map::a_one_entry_map_merges_too
   ✓ modules::test_std_map::use_map_brings_merge_and_map_values
   ✓ modules::test_std_map::use_map_inverts_picks_and_builds_from_pairs
+  ✓ modules::test_std_map::use_map_lists_its_entries
   ✓ modules::test_std_map::use_map_omits_and_filters_values
   ✓ modules::test_std_math_text::comprehensions_in_module_and_program_ask_nothing
   ✓ modules::test_std_math_text::use_math_brings_libm_and_the_module
+  ✓ modules::test_std_math_text::use_math_rounds_to_places_factorial_is_prime_lerp
   ✓ modules::test_std_math_text::use_text_brings_its_words
   ✓ modules::test_std_math_text::use_text_brings_title_slug_truncate
   ✓ modules::test_std_math_text::use_text_brings_words_lines_capitalize_center
@@ -1369,6 +1372,7 @@ PASSED:
   ✓ modules::test_std_qualified::a_std_word_without_its_use_shows_no_hint_of_the_std_source
   ✓ modules::test_std_qualified::a_variable_of_the_modules_name_keeps_its_methods
   ✓ modules::test_std_random::use_random_brings_choice_shuffle_sample
+  ✓ modules::test_std_random::use_random_seed_repeats_the_numbers
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
   ✓ modules::test_std_time::date_arithmetic
@@ -2168,6 +2172,7 @@ PASSED:
   ✓ text::test_character_comparison::test_ord_is_the_code_point
   ✓ text::test_chr::chr_is_the_inverse_of_ord
   ✓ text::test_constant_expression_text::a_constant_expression_converts_by_its_value
+  ✓ text::test_constant_expression_text::the_text_of_a_global_is_its_value
   ✓ text::test_count_in::count_occurrences
   ✓ text::test_declared_text_one_character::a_declared_text_takes_a_one_character_text
   ✓ text::test_guillemet_strings::guillemets_close_with_the_right_one
@@ -2734,6 +2739,12 @@ PASSED:
   ✓ wasm::test_wasm_emitter::test_node_kind_enum_abi
   ✓ wasm::test_wasm_emitter::test_wasm_roundtrip
   ✓ wasm::test_wasm_emitter::test_wasm_roundtrip_via_is
+  ✓ wasm::test_wasm_interop_rest::a_row_of_fields_among_lines
+  ✓ wasm::test_wasm_interop_rest::imported_memory_and_table
+  ✓ wasm::test_wasm_interop_rest::imported_memory_runs
+  ✓ wasm::test_wasm_interop_rest::linear_memory_by_its_bytes
+  ✓ wasm::test_wasm_interop_rest::optional_fields_on_one_line
+  ✓ wasm::test_wasm_interop_rest::wasm_interop_sample_runs
   ✓ wasm::test_wasm_names_order::name_subsections_and_maps_are_in_order
   ✓ wasm::test_wasm_reader::test_create_wasm_gc_nodes_from_host_concept
   ✓ wasm::test_wasm_reader::test_node_serialization_workflow_design
@@ -2798,6 +2809,7 @@ PASSED:
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
   ✓ web::test_site::a_static_page_is_its_last_line_rendered
+  ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
   ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
   ✓ web::test_style_rules::lengths_keep_their_units
   ✓ web::test_style_rules::selectors_need_no_quotes
@@ -2831,6 +2843,8 @@ PASSED:
   ✓ web::test_web_playground::an_acknowledged_warning_is_silent_and_the_value_stays
   ✓ web::test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
   ✓ web::test_web_playground::evaluate_reports_the_value_the_cli_prints
+  ✓ web::test_web_server::a_program_serves_its_own_page
+  ✓ web::test_web_server::a_served_page_s_events_draw_no_warning
   ✓ web::test_web_server::a_server_function_is_called_over_http
   ✓ web::test_web_server::serve_answers_routes
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
@@ -3164,4 +3178,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3159 passed, 0 failed, 3159 total tested
+19 ignored, 3173 passed, 0 failed, 3173 total tested
