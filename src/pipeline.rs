@@ -117,7 +117,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 58] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 59] = [
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
 	crate::channel_words::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
@@ -128,6 +128,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 58] = [
 	crate::go_blocks::lower,
 	// `$a` / `$1` references of data literals (references.rs) before a pass takes `{ parent=$1 }` for a Swift closure
 	crate::references::lower,
+	// `serve 8080 { get "/" {…} }`: route functions and the serving call (serve.rs), before any pass reads `get` as a call
+	crate::serve::lower,
 	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
 	// reads it as a call
 	crate::markup_tags::lower,
