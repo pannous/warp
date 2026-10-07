@@ -1181,6 +1181,7 @@ PASSED:
   ✓ lists::test_min_max_lists::test_extremum_of_a_list_variable_in_float_arithmetic
   ✓ lists::test_min_max_lists::test_extremum_of_an_empty_list_is_an_error
   ✓ lists::test_min_max_lists::test_several_arguments_still_work
+  ✓ lists::test_nested_index_assignment::a_nested_index_assignment_sets_the_inner_item
   ✓ lists::test_nested_maps::a_map_inside_a_map_keeps_its_braces
   ✓ lists::test_node_lists::a_list_parameter_holds_whatever_elements_its_callers_pass
   ✓ lists::test_node_lists::a_list_parameter_indexed_in_a_loop_is_linear
@@ -2234,6 +2235,7 @@ PASSED:
   ✓ text::test_trim::strip_and_trim_without_parentheses
   ✓ text::test_trim::trim_drops_whitespace_at_both_ends
   ✓ text::test_unicode_escape::a_unicode_escape_is_its_code_point
+  ✓ text::test_utf8_bytes::a_text_and_its_utf8_bytes
   ✓ types::test_array_types::hints::test_bracketed_list_type_hints_the_plural_word
   ✓ types::test_array_types::hints::test_plural_word_needs_no_hint
   ✓ types::test_array_types::test_bracketed_type_is_a_list_of_that_type
@@ -2375,6 +2377,7 @@ PASSED:
   ✓ types::test_int_declaration_stays_whole::a_declared_int_refuses_a_fraction_at_run_time
   ✓ types::test_int_declaration_stays_whole::a_declared_int_takes_whole_results
   ✓ types::test_int_declaration_stays_whole::an_int_field_refuses_a_fraction
+  ✓ types::test_interface_signatures::a_function_typed_member_is_an_operation
   ✓ types::test_is_declaration::is_tests_an_assigned_variable
   ✓ types::test_is_declaration::is_with_a_type_and_a_value_teaches_be
   ✓ types::test_is_teaches_be::is_with_an_undefined_name_teaches_be
@@ -2404,6 +2407,9 @@ PASSED:
   ✓ types::test_records_classes::an_enum_names_its_cases_by_index
   ✓ types::test_records_classes::an_optional_field_defaults_to_null
   ✓ types::test_records_classes::record_stays_usable_as_a_variable_name
+  ✓ types::test_recursive_fields::a_field_of_the_class_itself_holds_an_instance
+  ✓ types::test_recursive_fields::gc_struct_and_ref_are_wasm_spellings
+  ✓ types::test_recursive_fields::ref_fields_on_their_own_lines
   ✓ types::test_repeated_type_parameters::repeated_type_words_number_their_parameters
   ✓ types::test_sized_array_values::a_computed_count_before_a_type_word_is_a_typed_array
   ✓ types::test_spaced_construction::test_entry_named_like_a_variable_keeps_its_name
@@ -2695,6 +2701,7 @@ PASSED:
   ✓ web::test_web_playground::an_acknowledged_warning_is_silent_and_the_value_stays
   ✓ web::test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
   ✓ web::test_web_playground::evaluate_reports_the_value_the_cli_prints
+  ✓ web::test_web_server::serve_answers_routes
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
   ✓ welcoming::test_braceless_call_argument::an_operator_in_a_braceless_argument_warns_with_both_readings
@@ -3025,4 +3032,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3020 passed, 0 failed, 3020 total tested
+19 ignored, 3027 passed, 0 failed, 3027 total tested
