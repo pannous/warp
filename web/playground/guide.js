@@ -37,7 +37,7 @@ function exampleLinks(line, chapter) {
 		return element("a", { href: `?example=${encodeURIComponent(name)}`, className: "guide-example", onclick: click => {
 			click.preventDefault();
 			window.playground.chooseExample(name);
-			showChapterLink(name);
+			showChapterLink(chapterOfExample.get(name));
 		} }, name);
 	};
 	const links = names => names.flatMap((name, index) => index ? [", ", link(name)] : [link(name)]);
@@ -107,6 +107,7 @@ function openedChapter(event) {
 	if (!chapter.open) return;
 	for (const other of document.querySelectorAll(".guide-chapter[open]")) if (other !== chapter) other.open = false;
 	if (location.hash !== `#${chapter.id}`) history.replaceState(null, "", `#${chapter.id}`);
+	showChapterLink(chapter.querySelector("summary").textContent);
 }
 
 // the chapter the address names, else the first one
@@ -129,9 +130,8 @@ function groupExamplesByChapter() {
 	$("examples").value = chosen;
 }
 
-// the toolbar's back-link to the chapter that lists the chosen example
-function showChapterLink(name) {
-	const chapter = chapterOfExample.get(name);
+// the toolbar's link to the chapter last opened or listing the chosen example
+function showChapterLink(chapter) {
 	$("guide-link").hidden = !chapter;
 	if (!chapter) return;
 	$("guide-link").href = `#${chapterId(chapter)}`;
@@ -148,9 +148,9 @@ async function startGuide() {
 	}
 	groupExamplesByChapter();
 	addEventListener("hashchange", openChapterOfAddress);
-	$("examples").addEventListener("change", event => showChapterLink(event.target.value));
+	$("examples").addEventListener("change", event => showChapterLink(chapterOfExample.get(event.target.value)));
 	openChapterOfAddress();
-	showChapterLink($("examples").value);
+	showChapterLink(chapterOfExample.get($("examples").value));
 }
 
 startGuide();
