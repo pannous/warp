@@ -41,3 +41,4 @@ mod test_constant_shadowing;
 mod test_left_arrow;
 mod test_hint_positions;
 mod test_slash_comment_after_value;
+mod test_sleep_unit_shadow;
