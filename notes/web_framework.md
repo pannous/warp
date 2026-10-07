@@ -198,3 +198,16 @@ Each step is useful on its own and is what the next ones stand on.
   module contributes: kept in the store of the program that uses it (probes/stores/app.wasp, tests/modules/
   test_module_signals.rs). Context (a value for a subtree of components without props): question with the
   Interviewer; default until then: main-level variables, which every component reads.
+
+## Step 17 (web-bundle), what is done and what is left
+- Budget: tests/web/test_bundle_budget.rs builds `p{ "hello world" }` as a site and holds its gzipped total under a
+  budget, printing each file (the suite's log tracks it). 2026-10-07: 46.2 KB → 40.5 KB (case table as ranges,
+  wasm_emitter/text_unicode.rs: app.wasm 17.5 → 11.9) → 32.1 KB (site::compacted: shipped scripts without comment
+  lines and indentation, host.js 23.8 → 16.7). Svelte's hello world is about 3 KB, Solid's about 5 KB.
+- Not taken: wasm-opt -Oz on app.wasm (11 KB smaller raw, 0.6 KB larger gzipped).
+- What is left in app.wasm is the runtime std/markup.wasp's to_html reaches (texts, lists, equality, floats): a shared
+  runtime module, cached across pages, would help sites with several pages, not the first load.
+- Next: host.js split by the module's imports (tasks and channels, files, foreign libraries, hashes: a site ships
+  only what it imports); lazy loading per route, agreed with warp-89 (web-router): routes lower to functions
+  page·route·<N> with the table exported as page·routes; the splitter moves a route's function and what only it reaches
+  into app·<N>.wasm, which site.js loads on the first navigation there.
