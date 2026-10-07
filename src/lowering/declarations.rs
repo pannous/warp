@@ -226,12 +226,10 @@ pub fn lower_tasks(node: Node) -> Node {
 			Node::Symbol(name) => Some(name.clone()),
 			_ => None,
 		};
-		if let (Node::Symbol(variable), Node::List(items, _, _)) = (head.drop_meta(), value.drop_meta()) {
-			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == TASK_WORDS[0]) {
-				tasks.insert(variable.clone());
-				if let Some((function, _)) = started_call(&items[1..]) {
-					started.insert(variable.clone(), function);
-				}
+		if let Some((variable, items)) = task_start(part) {
+			tasks.insert(variable.clone());
+			if let Some((function, _)) = started_call(&items[1..]) {
+				started.insert(variable.clone(), function);
 			}
 		}
 		if matches!(head.drop_meta(), Node::List(..)) {
@@ -262,6 +260,15 @@ pub fn lower_tasks(node: Node) -> Node {
 	started.retain(|_, function| functions.contains(function));
 	let job_lists = job_lists(&node, &functions);
 	Tasks { words, tasks, started, functions, job_lists }.lower(node)
+}
+
+/// `job = go f(x)`: the task variable and the words of its start
+fn task_start(node: &Node) -> Option<(&String, &Vec<Node>)> {
+	let Node::Key(head, Op::Define | Op::Assign, value) = node else { return None };
+	match (head.drop_meta(), value.drop_meta()) {
+		(Node::Symbol(variable), Node::List(items, _, _)) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == TASK_WORDS[0]) => Some((variable, items)),
+		_ => None,
+	}
 }
 
 /// The words of a statement the parser paired, flat: `(await any) [a, b]`, `await (all [go f(1), …])`
@@ -462,9 +469,12 @@ impl Tasks<'_> {
 	}
 
 	/// Inside a function that binds a task variable's name itself (a parameter, a local, a loop variable: a joined
-	/// module's `for c in …` under a main-level `c = go f()`), that name is its own (card task-name)
+	/// module's `for c in …` under a main-level `c = go f()`) other than by starting a task, that name is its own (card
+	/// task-name)
 	fn lower(&self, node: Node) -> Node {
-		let shadowed = crate::lowering::getters::shadowed_names(&node);
+		let mut own_tasks = vec![];
+		node.visit(&mut |part| own_tasks.extend(task_start(part).map(|(variable, _)| variable.clone())));
+		let shadowed: Vec<String> = crate::lowering::getters::shadowed_names(&node).into_iter().filter(|name| !own_tasks.contains(name)).collect();
 		if !shadowed.iter().any(|name| self.started.contains_key(name) || self.job_lists.contains_key(name)) {
 			return self.lower_unshadowed(node);
 		}
