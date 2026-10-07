@@ -6,8 +6,8 @@ Learn wasp one small step at a time. Press **try ▶** to run a snippet, then ch
 
 A program tells the computer what to do. The simplest program is just a value.
 
-```wasp => "Hello, world"
-"Hello, world"
+```wasp => "Hello, \:world"
+"Hello 🌍"
 ```
 
 `print` shows a line of text.
@@ -85,7 +85,7 @@ Examples: numbers; samples: factorial, power, gcd, collatz, quadratic
 
 ## Text
 
-Text is anything in double quotes: a word, a name, a sentence.
+Text is anything in quotes: a word, a name, a sentence.
 
 ```wasp => "hello"
 "hello"
@@ -103,20 +103,20 @@ Text is anything in double quotes: a word, a name, a sentence.
 "wasp".length
 ```
 
-`\(…)` puts a value inside a text.
+`$(…)` puts a value inside a text.
 
 ```wasp => "1 + 1 = 2"
-"1 + 1 = \(1 + 1)"
+"1 + 1 = $(1 + 1)"
 ```
 
-Examples: text; samples: levenshtein
+Examples: text; samples: levenshtein TODO: many more! sort!
 
 ## Variables
 
 A variable is a name for a value, so you can use it again.
 
-```wasp => 3
-x = 3
+```wasp => 6
+x = 2 * 3
 x
 ```
 
@@ -149,7 +149,7 @@ Examples: constants
 
 ## Truth
 
-Some questions have a yes-or-no answer. Yes is 1, no is 0.
+Some questions have a yes-or-no answer.
 
 ```wasp => 1
 3 > 2
@@ -161,15 +161,17 @@ Some questions have a yes-or-no answer. Yes is 1, no is 0.
 2 == 3
 ```
 
+### Logic
+
 `and` is yes only if both are yes.
 
-```wasp => 0
+```wasp => no
 yes and no
 ```
 
 `not` turns yes into no.
 
-```wasp => 0
+```wasp => no
 not yes
 ```
 
@@ -224,8 +226,9 @@ A list keeps several values in order, like a shopping list.
 
 `#` counts the items.
 
-```wasp => 3
-#[1 2 3]
+```wasp => 2
+friends = [Alf, Bob]
+#friends
 ```
 
 `#1` is the first item.
@@ -237,13 +240,13 @@ A list keeps several values in order, like a shopping list.
 `sum` adds them up.
 
 ```wasp => 6
-sum [1 2 3]
+sum 1 2 3
 ```
 
-`sorted` puts them in order.
+`sort` puts them in order.
 
 ```wasp => [1 2 3]
-sorted [3 1 2]
+sort [3 1 2]
 ```
 
 `+=` adds items.
@@ -256,8 +259,8 @@ xs
 
 Make a new list from another one.
 
-```wasp => [1 4 9]
-[x * x for x in [1 2 3]]
+```wasp => [1 4 9 16]
+[x² for x in [1 2 3 4]]
 ```
 
 `where` keeps only some items.
@@ -337,7 +340,7 @@ def square(x) = x * x
 square(3)
 ```
 
-Parentheses are optional.
+Parentheses are optional
 
 ```wasp => 9
 def square(x) = x * x
@@ -398,7 +401,7 @@ Examples: closures
 
 ## Types and classes
 
-Every value has a type: a number, a text, a list.
+Every value has a type: a number, a text, a list...
 
 ```wasp => int
 type(3)
@@ -507,7 +510,16 @@ Examples: "emit and on", events, timers, animation, mouse, "game of life", "syst
 
 ## Tasks and channels
 
-Tasks do several things at the same time. Channels pass messages between programs.
+Tasks do several things at the same time. 
+```wasp
+go {
+	sleep(100 ms)
+	print "I'm late;)"
+}
+print("first!")
+```
+
+Channels pass messages between programs.
 
 Examples: channels; samples: async, threads
 
@@ -521,8 +533,8 @@ p{ "hello" }
 
 Attributes look like HTML.
 
-```wasp => p{class:"note" "hello"}
-p{ class="note" "hello" }
+```wasp => b{class:"fat" "hello" }
+b{class:"fat" "hello" }
 ```
 
 `on click { … }` inside a button makes it do something. `local["key"]` remembers a value in the browser.
@@ -531,7 +543,7 @@ Examples: markup, "element events", "fine updates", components, cleanup, "keyed 
 
 ## WebAssembly
 
-warp turns wasp into WebAssembly, which runs in every browser. Code from Rust or C can be called like wasp.
+warp turns wasp into WebAssembly, which runs in every browser. Code from Rust or C can be called alike.
 
 Examples: "wasm components"; samples: wasm_interop
 
@@ -545,4 +557,9 @@ law square(-x) == square(x)
 square(3)
 ```
 
+This way, you can prove that your program always does the correct thing. 
+
 Examples: "kitchen sink"; samples: laws, kitchensink
+
+
+## Advanced

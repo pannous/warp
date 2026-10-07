@@ -71,7 +71,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   as written, in texts and outside them, with a compile-time warning; an error only with --strict. A bare `\alpha`
   stays the error "write \:alpha". Branch unknown-entity ecc9c2fcf (warp-ad).
 - Bool type (user, card bool-type, via warp-84): "Yes is 1, no is 0", but true/false (yes/no) become a shallow type
-  of their own: they act like 1/0 in arithmetic and comparisons, `type(true)` is bool, they print as true/false.
+  of their own: they act like 1/0 in arithmetic and comparisons, `type(yes)` is bool. They print as yes/no (warp-84,
+  correcting the first relay's true/false); true/false stay accepted as input. == stays loose.
   Replaces the rule that True/False are encoded as Int 1/0. Default following from it (card zero-false, class):
   `0 == false` is true, `0 === false` is false (strict identity compares the type too).
 - P195 `true + 1` = 2: a literal bool in arithmetic acts as 1/0 like a bool variable; the analyzer error "arithmetic
