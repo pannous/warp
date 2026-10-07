@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// The word between a condition and its branch: `if c then x`
+const THEN_WORD: &str = "then";
+
 impl WaspParser {
 	/// The exponent written in superscript digits and signs at the cursor, its length in characters and whether it has a sign:
 	/// ⁴ → (4, 1), ¹² → (12, 2), ⁻¹ → (-1, 2), ²⁺³ → (5, 3)
@@ -177,7 +180,7 @@ impl WaspParser {
 			return Some(self.parse_times_loop(lhs.clone()));
 		}
 		let (word, guard, negated) = STATEMENT_MODIFIERS.iter().copied().find(|(word, _, _)| self.matches_keyword(word))?;
-		if min_bp > 0 {
+		if min_bp > 0 || (guard == Op::If && self.condition_has_branch(word.len())) {
 			return None;
 		}
 		self.advance_by(word.len());
@@ -194,6 +197,30 @@ impl WaspParser {
 			Op::While => while_do(condition, lhs.clone()),
 			_ => Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))), Op::Then, Box::new(lhs.clone())),
 		})
+	}
+
+	/// `if b {y}` or `if b then y` after a statement (`if a {x} if b {y}`) starts the next statement: a trailing `if`
+	/// guards without a branch of its own. Scans the condition from `offset` to the end of the statement for a block
+	/// (a spaced `{` outside brackets: `point{x:1}` is data) or `then`
+	pub(super) fn condition_has_branch(&self, offset: usize) -> bool {
+		let mut depth = 0usize;
+		let mut quote = None;
+		for at in offset.. {
+			let character = self.peek_char(at);
+			match (quote, character) {
+				(_, '\0') => return false,
+				(Some(open), _) => quote = (character != open).then_some(open),
+				(None, '"' | '\'') => quote = Some(character),
+				(None, '(' | '[') => depth += 1,
+				(None, ')' | ']') if depth == 0 => return false,
+				(None, ')' | ']') => depth -= 1,
+				(None, '{') if depth == 0 && matches!(self.peek_char(at - 1), ' ' | '\t') => return true,
+				(None, '\n' | ';' | '}') if depth == 0 => return false,
+				(None, 't') if depth == 0 && !is_identifier_char(self.peek_char(at - 1)) && self.word_at(at) == THEN_WORD => return true,
+				_ => {}
+			}
+		}
+		false
 	}
 
 	/// `a nand b` and `a ¬& b` are `not (a and b)`

@@ -168,7 +168,7 @@ impl WaspParser {
 		if self.matches_keyword("or") { return Some((Op::Or, 2)); }
 		if self.matches_keyword("is") { return Some((Op::Eq, 2)); } // wiki/equality.md: `is` compares by value like ==
 		if self.matches_keyword("be") { return Some((Op::Define, 2)); } // wiki/be.md
-		if self.matches_keyword("if") { return Some((Op::If, 2)); }
+		if self.matches_keyword("if") && !self.condition_has_branch(2) { return Some((Op::If, 2)); }
 		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
 		if self.matches_keyword("to") { return Some((Op::To, 2)); }
 		if self.matches_keyword("upto") { return Some((Op::Range, 4)); } // wiki/range.md: `1 upto 10` excludes 10
