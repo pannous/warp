@@ -52,3 +52,34 @@ Each step is useful on its own and is what the next ones stand on.
   attributes, other children nested in order. Unknown names stay data (no custom elements yet).
 - Natively the value serializes as HTML (`to_html`), text escaped. In the page the program's value, when it is markup, is
   shown as DOM in the output pane instead of its wasp text; `show(markup)` places it explicitly.
+
+## Step 3 (web-fine), what is done and what is left
+- Done (DOM side): after a handler the page receives the whole markup again (the output binding, event_signals.rs) and
+  playground.js `morphChildren` changes only the text nodes and attributes that differ, matching nodes by position;
+  a node of another kind or tag is replaced. Elements keep their identity, focus, input and scroll state. Tour example
+  "fine updates" checks it (`clicks`, `clicked`, `kept` in examples.js, test_in_browser.py --examples).
+- Left (compute side, card web-fine-holes): the markup is still evaluated whole after each handler. Per-hole updates
+  (each signal-reading text or attribute its own derived binding, only the changed ones sent) need the lowering to
+  mark the holes; worth it once markup gets large (web-components).
+- Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
+
+## Step 4 (web-components), what is done and what is left
+- A component is a function returning markup; props are its parameters, positional or named (`Card(title:"Hi")`).
+- Children: a block after a call that leaves a parameter without its value is that argument, for any function
+  (trailing closure, lowering/ruby_blocks.rs): `Card("Hi") { p:"text" }`, `apply(3) { it*2 }`.
+- Own state per instance (lowering/component_state.rs, before element_events): a variable of a component that one of
+  its element handlers mentions is the main-level list `Counter·count`, one entry per instance; an instance is the n-th
+  call of that component in a render (React's hooks rule, undoable default, question queued with the Interviewer); the
+  handler's element carries `data-wasp-instance`, the page passes it as `event.instance`. The program's last line
+  becomes the getter `page·markup`, which resets the instance counters before each render.
+- Left: cleanup of listeners when an instance is removed (onMount/onCleanup), instances that move (web-keyed),
+  state of a component read by a handler outside it.
+
+## Step 5 (web-keyed), what is done and what is left
+- A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,
+  `ul{ ts.map(t => li{t}) }` (markup_tags.rs keeps it a `[…]`, which the analyzer and emitter take as an item, not as
+  statements to run; analyzer/variables.rs: a statement group in a structure declares its locals).
+- `li{ key: todo.id … }` is the attribute data-wasp-key; playground.js morphChildren moves the shown element of that
+  key into place instead of rewriting elements by position. Tour example "keyed list" (`keyed` check).
+- Not yet: `for t in ts { li{t} }` inside a block (the parser reads `ts { … }` as the tag ts; card markup-for),
+  transitions (web-transitions).

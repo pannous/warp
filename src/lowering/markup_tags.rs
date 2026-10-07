@@ -1,11 +1,13 @@
 //! wiki/mark.md: inside a tag's block `div(class:"form-group")` is the tag `div{class:"form-group"}`, and
 //! `label(for:pwd):"Password"` the tag `label{for:pwd "Password"}` (samples/html.wasp, card g-_alg). Only data takes
 //! this reading: a name the program defines stays its call, and outside a tag block a call of an unbound name stays
-//! the loud error (P92).
+//! the loud error (P92). A comprehension or method call among an element's children gives children (card web-keyed).
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
+
+const FOR_WORD: &str = "for";
 
 pub fn lower(node: Node) -> Node {
 	// `label(for:pwd):"Password"` itself would read as a definition: only `:=`, function keywords and assignments define
@@ -37,7 +39,10 @@ fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(tag_with_attributes(*node, defined)), data },
 		Node::Key(name, Op::Colon, body) => match *body {
 			Node::List(items, Bracket::Curly, separator) => {
-				let items = items.into_iter().map(|item| tag_with_attributes(attributed_tag(item, defined), defined)).collect();
+				let is_element = matches!(name.drop_meta(), Node::Symbol(tag) if crate::html::is_element_tag(tag));
+				let items = items.into_iter().map(|item| tag_with_attributes(attributed_tag(item, defined), defined))
+					.map(|item| if is_element && is_computed_children(&item) { Node::List(vec![item], Bracket::Square, Separator::None) } else { item })
+					.collect();
 				Node::Key(name, Op::Colon, Box::new(Node::List(items, Bracket::Curly, separator)))
 			}
 			body => Node::Key(name, Op::Colon, Box::new(body)),
@@ -67,6 +72,16 @@ fn attributes(node: &Node, defined: &HashSet<String>) -> Option<(String, Vec<Nod
 	let Node::Symbol(name) = name.drop_meta() else { return None };
 	let all_pairs = !pairs.is_empty() && pairs.iter().all(|pair| matches!(pair.drop_meta(), Node::Key(_, Op::Colon, _)));
 	(all_pairs && !defined.contains(name)).then(|| (name.clone(), pairs.to_vec()))
+}
+
+/// `[li{t} for t in ts]` or `ts.map(…)` among an element's children: its items are children, so it stays a list
+/// (`[…]` around it) when it is lowered to statements, which in a block would run instead of being an item
+fn is_computed_children(item: &Node) -> bool {
+	match item.drop_meta() {
+		Node::List(items, Bracket::Square, _) => items.iter().any(|part| matches!(part.drop_meta(), Node::List(words, _, _) if matches!(words.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == FOR_WORD))),
+		Node::Key(_, Op::Dot, _) => true,
+		_ => false,
+	}
 }
 
 fn tag_node(name: String, items: Vec<Node>) -> Node {

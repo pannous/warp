@@ -168,6 +168,10 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 		Node::Key(left, _, right) => {
 			collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
 		}
+		// a group of statements in a structure is code: `ul{ (made = ø; for … ; made) }`, a lowered `[li{t} for t in ts]`
+		Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => {
+			items.iter().map(|item| collect_variables_inner(item, scope, false, false)).sum()
+		}
 		Node::List(items, _, _) => {
 			items.iter().map(|item| collect_variables_inner(item, scope, false, in_structure)).sum()
 		}
