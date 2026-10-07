@@ -1,93 +1,103 @@
 # The wasp guide
 
-wasp is a data notation that is also a programming language. Everything you write is a value: a number, a text, a
-list, an object, a piece of markup, a function. warp compiles it to WebAssembly while you type. Each chapter starts
-easy and ends with the details; press **try ▶** next to a snippet to load it into the editor.
+Learn wasp one small step at a time. Press **try ▶** to run a snippet, then change it.
 
-## Hello and comments
+## Hello, world
 
-A program is a list of expressions; the page shows the value of the last one. `print` writes a line on the way.
-`//` starts a comment to the end of the line, `/* … */` a comment anywhere.
+The last line of a program is its result.
 
 ```wasp => "Hello, world"
-print "starting" // a comment
-/* a block comment */
 "Hello, world"
 ```
 
-Separate expressions with new lines or `;`.
+`print` writes a line along the way.
 
-```wasp => 6
-x = 3; x * 2
+```wasp => 42
+print "Hello"
+42
 ```
 
-Examples: welcome; samples: hello
+`//` starts a comment. `/* … */` can go anywhere.
+
+```wasp => 3
+// this line is ignored
+1 + /* so is this */ 2
+```
+
+Examples: hello; samples: hello
 
 ## Numbers
 
-Integers are exact and unbounded, division gives an exact fraction where it can, and units travel with their numbers.
+Whole numbers never overflow.
 
 ```wasp => 1267650600228229401496703205376
 2 ^ 100
 ```
 
-```wasp => 3.5
-7 / 2
-```
+Division keeps fractions exact.
 
 ```wasp => 0.5
 1/3 + 1/6
 ```
 
+Numbers can carry units.
+
 ```wasp => 3200 m
 3 km + 200 m
 ```
 
-`mod` is the remainder, `√` the root (`**` works as a power too, `^` is preferred). Hexadecimal, underscores and
-exponents are written as usual:
+`mod` gives the remainder, `√` the square root.
 
-```wasp => [256 1 4 31 1000000 1500]
-[2 ^ 8, 10 mod 3, √16, 0x1F, 1_000_000, 1.5e3]
+```wasp => [1 4]
+[10 mod 3, √16]
 ```
 
-`0.1 + 0.2` is `0.3`. `as int` converts, `round` and `abs` are words:
+Write big numbers with `_`, hex with `0x`.
 
-```wasp => [3 2 7]
-[(22 / 7) as int, round 2.5, abs -7]
+```wasp => [1000000 31]
+[1_000_000, 0x1F]
 ```
 
-Examples: constants; samples: factorial, power, gcd, collatz, quadratic
+Examples: numbers; samples: factorial, power, gcd, collatz, quadratic
 
 ## Text
 
-Texts are written in double quotes and joined with `+`. `\(…)` puts a value into a text (`${…}` works too).
+Text goes in double quotes. `+` joins texts.
+
+```wasp => "Hello, world"
+"Hello, " + "world"
+```
+
+`\(…)` puts a value into a text.
 
 ```wasp => "Hi Ada!"
 name = "Ada"
-"Hi \(name)" + "!"
+"Hi \(name)!"
 ```
 
-```wasp => [5 'h' "HELLO"]
-["hello".length, "hello"#1, upper "hello"]
+Texts know their length.
+
+```wasp => 5
+"hello".length
 ```
 
-A text of one character is a codepoint, printed in single quotes. `split` and `join` take a text apart and back:
+`upper` makes capitals.
 
-```wasp => "a, b, c"
-join "a b c".split(" ") ", "
+```wasp => "HELLO"
+upper "hello"
 ```
 
-Examples: arguments; samples: levenshtein, json_parser
+Examples: text; samples: levenshtein
 
 ## Truth
 
-`true` and `false` are the numbers 1 and 0, so every comparison is a number too.
+A comparison is true (1) or false (0).
 
-```wasp => [1 1 0]
-[3 > 2, "a" < "b", 2 == 3]
+```wasp => 1
+3 > 2
 ```
 
-`and`, `or` and `not` combine them.
+Combine them with `and`, `or` and `not`.
 
 ```wasp => 1
 3 > 2 and not 2 > 3
@@ -95,7 +105,14 @@ Examples: arguments; samples: levenshtein, json_parser
 
 ## Variables
 
-`=` names a value, `+=` and friends change it. `:` adds a type.
+`=` gives a value a name.
+
+```wasp => 4
+x = 3
+x + 1
+```
+
+`+=` changes it.
 
 ```wasp => 4
 x = 3
@@ -103,28 +120,44 @@ x += 1
 x
 ```
 
+A type can follow the name.
+
 ```wasp => 3
 x : int = 3
 ```
 
-Constants such as `pi` cannot be changed: `pi = 3` is an error.
+Constants like `pi` never change.
 
 Examples: constants
 
 ## Lists
 
-A list is written in square brackets, its items separated by spaces or commas. `#` counts, and `xs#1` is the first
-item, counting from 1 (`xs[0]` counts from 0, `#` is preferred).
+A list goes in square brackets.
 
-```wasp => [3 10 30]
+```wasp => [1 2 3]
+[1 2 3]
+```
+
+`#` counts the items.
+
+```wasp => 3
+#[10 20 30]
+```
+
+`xs#1` is the first item. Counting starts at 1.
+
+```wasp => 10
 xs = [10 20 30]
-[#xs, xs#1, xs#3]
+xs#1
 ```
 
-```wasp => [6 3 1]
-xs = [3 1 2]
-[sum xs, max xs, min xs]
+`sum`, `max` and `min` work on lists.
+
+```wasp => 6
+sum [3 1 2]
 ```
+
+`+=` adds items.
 
 ```wasp => [1 2 3 4]
 xs = [1 2]
@@ -132,26 +165,36 @@ xs += [3 4]
 xs
 ```
 
-A range `1..5` stops before 5, `1 to 5` includes it. Comprehensions and `where` build new lists:
+`1 to 5` counts to 5. `1..5` stops before 5.
+
+```wasp => 15
+sum 1 to 5
+```
+
+Build a list from another one.
 
 ```wasp => [1 4 9 16]
 [x * x for x in 1..5]
 ```
 
+Keep only some items with `where`.
+
 ```wasp => [3 4]
 [1 2 3 4] where it > 2
 ```
 
-```wasp => 4950
-sum 1..100
-```
-
 Examples: lists, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve
 
-## Data
+## Objects
 
-Objects are written in curly braces with `key: value` pairs. A dot or brackets read a field, and fields change like
-variables.
+An object holds named values in curly braces.
+
+```wasp => 36
+person = {name: "Ada" age: 36}
+person.age
+```
+
+Change a value like a variable.
 
 ```wasp => 37
 person = {name: "Ada" age: 36}
@@ -159,35 +202,25 @@ person.age += 1
 person.age
 ```
 
-```wasp => "Ada"
-person = {name: "Ada" age: 36}
-person["name"]
-```
-
-Objects nest, and the path reads straight through:
+Objects can hold objects.
 
 ```wasp => "London"
-person = {name: "Ada" address: {city: "London"}}
-person.address.city
+person = {name: "Ada" home: {city: "London"}}
+person.home.city
 ```
 
-Examples: data, welcome; samples: data_structures, json_parser
+Examples: data; samples: data_structures, json_parser
 
 ## Conditions
 
-`if … then … else` is an expression with a value; `x ? a : b` is a short form, though `if` reads better.
+`if … then … else` gives a value.
 
 ```wasp => "big"
 x = 3
 if x > 2 then "big" else "small"
 ```
 
-```wasp => "small"
-x = 1
-if x > 2 then "big" else "small"
-```
-
-Blocks in braces hold several lines:
+Use braces for several lines.
 
 ```wasp => 10
 x = 5
@@ -195,11 +228,11 @@ if x > 2 { x = x * 2 } else { x = 0 }
 x
 ```
 
-Examples: ambiguity; samples: control_flow, fizzbuzz
+Examples: conditions; samples: control_flow, fizzbuzz
 
 ## Loops
 
-`for` walks a range or a list, `while` repeats while its condition holds.
+`for` repeats for each number or item.
 
 ```wasp => 10
 n = 0
@@ -207,66 +240,83 @@ for i in 1 to 4 { n += i }
 n
 ```
 
+`while` repeats while something is true.
+
 ```wasp => 8
 n = 1
 while n < 5 { n = n * 2 }
 n
 ```
 
-Examples: "game of life"; samples: fizzbuzz, sieve, life, mandelbrot
+Examples: loops; samples: fizzbuzz, sieve, life, mandelbrot
 
 ## Functions
 
-`def` defines a function. A definition with `:=` takes its argument as `it`, and `=>` writes a function as a value.
+`def` makes a function.
 
 ```wasp => 9
 def square(x) = x * x
 square(3)
 ```
 
+Parentheses are optional.
+
+```wasp => 9
+def square(x) = x * x
+square 3
+```
+
+`:=` is a short form. The argument is called `it`.
+
 ```wasp => 16
 square := it * it
 square 4
 ```
+
+A function can also be a value.
 
 ```wasp => 14
 twice = x => x * 2
 twice(7)
 ```
 
-Functions call themselves:
+A function can call itself.
 
 ```wasp => 55
 def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2)
 fib(10)
 ```
 
-Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, factorial
+Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann
 
-## Broadcasting
+## Whole lists at once
 
-A function of one number applied to a list applies to each item.
+A function on one number also works on a list.
 
 ```wasp => [1 4 9]
 square := it * it
 square [1 2 3]
 ```
 
+`map` does the same with any function.
+
 ```wasp => [2 4 6]
 [1 2 3].map(x => x * 2)
 ```
 
-Examples: broadcasting, welcome
+Examples: broadcasting
 
 ## Closures
 
-A function keeps the variables it was made with.
+A function remembers the values around it.
 
 ```wasp => 7
 def adder(k) = x => x + k
 add3 = adder(3)
 add3(4)
 ```
+
+It can also change them.
 
 ```wasp => 2
 def counter() { n = 0; () => { n += 1; n } }
@@ -276,15 +326,21 @@ next(); next()
 
 Examples: closures
 
-## Classes and types
+## Types and classes
 
-`type` tells the type of a value, `is` checks it and `as` converts.
+`is` checks a type.
 
-```wasp => [1 3 43]
-[3 is int, "3" as int, int("42") + 1]
+```wasp => 1
+3 is int
 ```
 
-A class names the fields its objects have; its functions see them.
+`as` converts.
+
+```wasp => 3
+"3" as int
+```
+
+A class describes objects with fields and methods.
 
 ```wasp => 3
 class Point { x: int y: int; def sum() = x + y }
@@ -295,23 +351,25 @@ Examples: classes, properties; samples: types, polymorphism
 
 ## Errors
 
-An error is a value: it says what went wrong and where. `raise` makes one.
+An error is a value that says what went wrong.
 
 ```wasp => Error("divide by zero")
 1 / 0
 ```
 
+`raise` makes your own error.
+
 ```wasp => Error("boom")
 raise "boom"
 ```
 
-When code could mean two things, warp warns and says which one it took; the page offers the fix.
+When a line could mean two things, warp asks which one you meant.
 
 Examples: "welcoming errors", ambiguity
 
 ## Modules
 
-`use` brings a module in. `sqrt 2` stays the exact `√2`; with `use math` it is a decimal number.
+`use` loads a module. With `use math`, roots become decimals.
 
 ```wasp => 1.4142135623730951
 use math
@@ -320,10 +378,9 @@ sqrt 2
 
 Examples: "C libraries"; samples: lib
 
-## Signals
+## Values that follow
 
-A variable that a definition with `:=` reads is a signal: the definition follows it. `whenever` runs a block each
-time its condition becomes true.
+With `:=`, a value follows the values it reads.
 
 ```wasp => 8
 x = 3
@@ -332,46 +389,44 @@ x = 4
 twice
 ```
 
-Examples: signals, "signals in lists", welcome
+`whenever` runs code each time something becomes true.
+
+Examples: "derived values", signals, listeners, "signals in lists"
 
 ## Events and timers
 
-`on` listens to an event, `emit` sends one; timers run code later or repeatedly, and the page's mouse and keys
-are events too.
+`on` handles an event. `emit` sends one. Timers run code later or again and again.
 
-Examples: "emit and on", listeners, events, timers, animation, mouse, "on exit", "system values"
+Examples: "emit and on", events, timers, animation, mouse, "game of life", "system values", "on exit"
 
 ## Tasks and channels
 
-Tasks run at the same time; a channel passes values between them.
+Tasks run at the same time. Channels carry messages between programs.
 
 Examples: channels; samples: async, threads
 
-## Markup and the web
+## Web pages
 
-Markup is wasp data: tags with braces hold their content, and a value made of tags shows as a page. Attributes are
-written as in HTML, `name="value"`, and styles as in CSS.
+Tags with braces make a page. Attributes look like HTML.
 
 ```wasp => p{class:"note" "hello"}
 p{ class="note" "hello" }
 ```
 
-`on click { … }` inside an element handles its clicks; after a handler only what changed changes on the page.
-A function that returns markup is a component. Inputs bind to variables, routes map addresses to pages, and
-`local["key"]` and `session["key"]` keep values in the browser; `clipboard.write(text)` copies.
+`on click { … }` inside a tag handles clicks. A function that returns tags is a component.
+`local["key"]` and `session["key"]` keep values in the browser. `clipboard.write(text)` copies text.
 
 Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl
 
-## WebAssembly and foreign code
+## WebAssembly
 
-warp compiles to WebAssembly GC. Modules written in other languages, WebAssembly components and C libraries are
-called like wasp functions.
+warp compiles to WebAssembly. Libraries in Rust or C can be called like wasp functions.
 
-Examples: "wasm components", "C libraries", "polyglot calls"; samples: wasm_interop
+Examples: "wasm components"; samples: wasm_interop
 
 ## Laws
 
-A law states what must always hold; warp checks it.
+A law states something that must always hold. warp checks it.
 
 ```wasp => 9
 square(x) := x * x

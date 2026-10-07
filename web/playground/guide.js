@@ -3,12 +3,14 @@
 // examples and samples/ that show the chapter, and choosing such an example links back to its chapter.
 // Runs after playground.js (both deferred) and uses its $, element and window.playground.
 const GUIDE_FILE = "guide.md";
-const NARROW_SCREEN = "(max-width: 800px)"; // playground.css stacks the panes there: the guide starts closed
+const NARROW_SCREEN = "(max-width: 900px)"; // playground.css stacks the panes there: the guide starts closed
 const EXAMPLES_PREFIX = "Examples: ";
 const SAMPLES_SEPARATOR = "; samples: ";
 const SNIPPET_FENCE = /^```wasp(?: => (.*))?$/;
 
 const chapterOfExample = new Map();
+const examplesOfChapter = new Map(); // in the guide's order: the example menu's groups
+const MORE_SAMPLES = "more samples";
 
 const escapeHtml = text => text.replace(/[&<>"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
 const chapterId = title => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -27,7 +29,10 @@ const exampleNames = list => list.split(", ").map(name => name.trim().replace(/^
 function exampleLinks(line, chapter) {
 	const [tour, samples = ""] = line.slice(EXAMPLES_PREFIX.length).split(SAMPLES_SEPARATOR);
 	const link = name => {
-		if (!chapterOfExample.has(name)) chapterOfExample.set(name, chapter);
+		if (!chapterOfExample.has(name)) {
+			chapterOfExample.set(name, chapter);
+			examplesOfChapter.set(chapter, [...examplesOfChapter.get(chapter) ?? [], name]);
+		}
 		return element("a", { href: `?example=${encodeURIComponent(name)}`, className: "guide-example", onclick: click => {
 			click.preventDefault();
 			window.playground.chooseExample(name);
@@ -94,12 +99,24 @@ function openedChapter(event) {
 	if (location.hash !== `#${chapter.id}`) history.replaceState(null, "", `#${chapter.id}`);
 }
 
+// the chapter the address names, else the first one
 function openChapterOfAddress() {
-	const chapter = location.hash && document.getElementById(location.hash.slice(1));
+	const chapter = location.hash ? document.getElementById(location.hash.slice(1)) : document.querySelector(".guide-chapter");
 	if (!chapter?.classList.contains("guide-chapter")) return;
-	$("guide").open = true;
+	if (location.hash) $("guide").open = true;
 	chapter.open = true;
-	chapter.scrollIntoView({ block: "nearest" });
+	if (location.hash) chapter.scrollIntoView({ block: "nearest" });
+}
+
+// the example menu in the guide's order: a group per chapter with its examples and samples, then the other samples
+function groupExamplesByChapter() {
+	const option = name => element("option", { value: name }, name);
+	const group = (label, names) => element("optgroup", { label }, ...names.map(option));
+	const chosen = $("examples").value;
+	const others = [...Object.keys(EXAMPLES), ...Object.keys(SAMPLES).sort()].filter(name => !chapterOfExample.has(name));
+	const chapters = [...examplesOfChapter].map(([chapter, names]) => group(chapter, names.filter(name => exampleSource(name) !== undefined)));
+	$("examples").replaceChildren(...chapters, group(MORE_SAMPLES, others));
+	$("examples").value = chosen;
 }
 
 // the toolbar's back-link to the chapter that lists the chosen example
@@ -119,6 +136,7 @@ async function startGuide() {
 		$("guide-chapters").textContent = `the guide did not load: ${error.message}`;
 		return;
 	}
+	groupExamplesByChapter();
 	addEventListener("hashchange", openChapterOfAddress);
 	$("examples").addEventListener("change", event => showChapterLink(event.target.value));
 	openChapterOfAddress();
