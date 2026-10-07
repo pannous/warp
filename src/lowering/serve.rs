@@ -1,7 +1,8 @@
 //! `serve 8080 { get "/api/users" { users } post "/echo" { request.body } }` (card web-server): each route becomes the
 //! function `route·N(request:any) := body` and the statement the host call `serve_routes(8080, [["GET",
 //! "/api/users", "route·0"] …])`, which serves until it is stopped (src/web_server.rs natively; the playground says
-//! loudly that it cannot serve).
+//! loudly that it cannot serve). `server def f(a, b) {…}` (typed RPC, notes/web_framework.md "Server and page") is f,
+//! and also the route POST /rpc/f calling it with the request's JSON array of arguments.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -11,16 +12,24 @@ const ROUTE_PREFIX: &str = "route·";
 const REQUEST_WORD: &str = "request";
 const ANY_TYPE: &str = "any";
 const METHODS: [&str; 5] = ["get", "post", "put", "delete", "patch"];
+const SERVER_WORD: &str = "server";
+const RPC_PREFIX: &str = "/rpc/";
+const RPC_METHOD: &str = "POST";
 
 /// A route as written: its method (upper case), path and body
 type Route = (String, Node, Node);
 
 pub fn lower(program: Node) -> Node {
 	match program {
-		Node::List(statements, bracket, separator) if statements.iter().any(|statement| served(statement).is_some()) => {
+		Node::List(statements, bracket, separator) if statements.iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some()) => {
+			let statements: Vec<Node> = statements.into_iter().map(|statement| server_definition(&statement).unwrap_or(statement)).collect();
+			let calls: Vec<Route> = statements.iter().filter_map(rpc_route).collect();
 			let mut routes = 0;
 			let statements = statements.into_iter().flat_map(|statement| match served(&statement) {
-				Some((port, routed)) => serving(port, routed, &mut routes),
+				Some((port, mut routed)) => {
+					routed.extend(calls.iter().cloned());
+					serving(port, routed, &mut routes)
+				}
 				None => vec![statement],
 			}).collect();
 			Node::List(statements, bracket, separator)
@@ -39,6 +48,31 @@ fn served(statement: &Node) -> Option<(Node, Vec<Route>)> {
 	let [serve, port, block] = items.as_slice() else { return None };
 	let Node::List(routes, Bracket::Curly, _) = block.drop_meta() else { return None };
 	(serve.drop_meta().name() == SERVE_WORD).then(|| (port.clone(), routes_in(routes)))
+}
+
+/// `server def f(…) {…}` / `server f(…) := …`: the definition itself
+fn server_definition(statement: &Node) -> Option<Node> {
+	let Node::List(items, bracket, separator) = statement.drop_meta() else { return None };
+	let (word, definition) = items.split_first()?;
+	if word.drop_meta().name() != SERVER_WORD || definition.is_empty() {
+		return None;
+	}
+	let definition = match definition {
+		[single] => single.clone(),
+		several => Node::List(several.to_vec(), bracket.clone(), separator.clone()),
+	};
+	// only a definition: a call of a word named server stays one
+	rpc_route(&definition).map(|_| definition)
+}
+
+/// POST /rpc/f of a function marked `server`: f called with the items of the request's JSON array
+fn rpc_route(definition: &Node) -> Option<Route> {
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, definition);
+	let function = context.user_functions.into_values().next()?;
+	let arguments: Vec<String> = (1..=function.params.len()).map(|index| format!("{REQUEST_WORD}.body#{index}")).collect();
+	let call = crate::wasp_parser::parse(&format!("{}({})", function.name, arguments.join(", ")));
+	Some((RPC_METHOD.to_string(), Node::Text(format!("{RPC_PREFIX}{}", function.name)), Node::List(vec![call], Bracket::Curly, Separator::None)))
 }
 
 /// The routes of a block, one per line (`get "/" {…}` each) or in a row

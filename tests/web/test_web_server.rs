@@ -35,3 +35,28 @@ fn serve_answers_routes() {
 	let (fine, value) = server.join().expect("the server thread");
 	assert!(fine, "{value}");
 }
+
+// typed RPC (notes/web_framework.md "Server and page"): `server def f(…)` is also POST /rpc/f, the arguments a JSON
+// array, the result JSON
+// open (card rpc-arguments): the RPC route's call of f fails (500) while f's parameters, fed only by JSON values of
+// unknown kind, default to Int; to be annotated any
+#[test]
+#[ignore = "next"]
+fn a_server_function_is_called_over_http() {
+	const RPC_PORT: u16 = 18432;
+	let server = std::thread::spawn(|| {
+		warp::web_server::stop_after(2);
+		let value = warp::wasm_emitter::eval("server def add(a, b) { a + b }\nserver greet(name) := \"hi \" + name\nserve 18432 { get \"/\" { \"ok\" } }");
+		(value.first_error().is_none(), value.serialize())
+	});
+	let started = std::time::Instant::now();
+	while std::net::TcpStream::connect(("127.0.0.1", RPC_PORT)).is_err() {
+		assert!(started.elapsed() < Duration::from_secs(60), "the server did not start");
+		std::thread::sleep(Duration::from_millis(50));
+	}
+	let call = |name: &str, arguments: &str| ureq::post(&format!("http://127.0.0.1:{RPC_PORT}/rpc/{name}")).send(arguments).expect("an answer").body_mut().read_to_string().expect("a text");
+	assert_eq!(call("add", "[2, 3]"), "5");
+	assert_eq!(call("greet", "[\"Ann\"]"), "hi Ann");
+	let (fine, value) = server.join().expect("the server thread");
+	assert!(fine, "{value}");
+}
