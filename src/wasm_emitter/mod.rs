@@ -1147,6 +1147,9 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_node_value(&mut self, func: &mut Function, node: &Node) {
+		if let Some(equality) = self.identity_as_equality(node) {
+			return self.emit_node_value(func, &equality);
+		}
 		self.note_position(node);
 		if self.emit_undefined_comparison(func, node) {
 			return;

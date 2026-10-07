@@ -73,6 +73,19 @@ impl WasmGcEmitter {
 		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right) || by_value(left) || by_value(right))
 	}
 
+	/// `a === b`: `a == b` when both sides are bools or neither is, else false (`!==` true): `0 === false` is false
+	/// (card zero-false, notes/decisions.md)
+	pub(super) fn identity_as_equality(&self, node: &Node) -> Option<Node> {
+		let Node::Key(left, op @ (Op::Identical | Op::NotIdentical), right) = node.drop_meta() else { return None };
+		let is_bool = |side: &Node| crate::analyzer::is_boolean(side, &self.scope);
+		let identical = *op == Op::Identical;
+		if is_bool(left) != is_bool(right) {
+			return Some(if identical { Node::False } else { Node::True });
+		}
+		let equality = if identical { Op::Eq } else { Op::Ne };
+		Some(Node::Key(left.clone(), equality, right.clone()))
+	}
+
 	/// `cell_get(c)`: a cell's value, a Node of any kind
 	fn is_held_cell_value(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == super::cells::CELL_GET))

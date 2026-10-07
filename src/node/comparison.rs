@@ -129,6 +129,8 @@ impl PartialEq<i64> for Node {
 impl PartialEq<bool> for Node {
 	fn eq(&self, other: &bool) -> bool {
 		match self {
+			True => *other,
+			False => !*other,
 			// todo 2 == true? NO only in truthy if(2) …
 			Node::Number(n) => n == &if *other { 1 } else { 0 },
 			// Node::Number(Number::Int(n)) => n == &if *other { 1 } else { 0 },

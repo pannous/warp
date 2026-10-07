@@ -116,6 +116,8 @@ impl WaspParser {
 		// 3-char operators
 		match (c1, c2, c3) {
 			('.', '.', '.') => return Some((Op::To, 3)),
+			('=', '=', '=') => return Some((Op::Identical, 3)),
+			('!', '=', '=') => return Some((Op::NotIdentical, 3)),
 			('.', '.', '<') => return Some((Op::Range, 3)), // Swift-style exclusive range
 			('&', '&', '=') => return Some((Op::AndAssign, 3)),
 			('|', '|', '=') => return Some((Op::OrAssign, 3)),

@@ -4,7 +4,7 @@ use super::*;
 
 impl WasmGcEmitter {
 	pub(super) fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
-		if let Some(product) = self.numeric_times(node) {
+		if let Some(product) = self.numeric_times(node).or_else(|| self.identity_as_equality(node)) {
 			return self.emit_numeric_value(func, &product);
 		}
 		self.note_position(node);
