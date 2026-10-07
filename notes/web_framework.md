@@ -97,8 +97,12 @@ Each step is useful on its own and is what the next ones stand on.
   becomes the getter `page·markup`, which resets the instance counters before each render.
 - Class components (warp-41, branch classes-40, notes/classes.md): a class with render() (aliases view, template,
   build) constructed as an element's child or as the program's value renders through render().
-- Left: cleanup of listeners when an instance is removed (onMount/onCleanup), instances that move (web-keyed),
-  state of a component read by a handler outside it.
+- Lifecycle (card web-cleanup): `on mount {…}` runs when an instance first renders; `on cleanup {…}` when a render has
+  fewer instances of the component than the one before (the last ones are the ones gone, by the order rule), then
+  their state entries are dropped. What a cleanup reads is kept per instance like handler state. Tour example cleanup.
+- `(if c then A() else [])` among an element's children is a child (markup_tags.rs), not a statement.
+- Left: instances that move or leave from the middle (order identity; a `key:` per instance would fix it), state of a
+  component read by a handler outside it.
 
 ## Step 5 (web-keyed), what is done and what is left
 - A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,
@@ -106,8 +110,10 @@ Each step is useful on its own and is what the next ones stand on.
   statements to run; analyzer/variables.rs: a statement group in a structure declares its locals).
 - `li{ key: todo.id … }` is the attribute data-wasp-key; playground.js morphChildren moves the shown element of that
   key into place instead of rewriting elements by position. Tour example "keyed list" (`keyed` check).
-- Not yet: `for t in ts { li{t} }` inside a block (the parser reads `ts { … }` as the tag ts; card markup-for),
-  transitions (web-transitions).
+- A for loop among an element's children, `ul{ for t in ts { li{t} } }`, is the comprehension `[li{t} for t in ts]`
+  (markup_tags.rs loop_as_comprehension; in a for header the parser no longer reads `ts { … }` as the child tag ts).
+  A spaced element statement `ul { … }` reads as the glued `ul{ … }` (card markup-ul).
+- Not yet: transitions (web-transitions).
 
 ## Step 6 (web-bind), what is done and what is left
 - `input{ bind: name }` is `input{ value: name on input { name = event.value } }` (element_events.rs); a checkbox or
@@ -161,6 +167,12 @@ Each step is useful on its own and is what the next ones stand on.
   Tour example transitions (`animated` check of test_in_browser.py); probes/transitions/leave_check.py.
 - Left: separate enter / leave kinds (`enter: slide leave: fade`), custom keyframes as data, `0.3s` (card
   fractional-durations), leaving items still take their space until removed (no absolute positioning while leaving).
+- Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
+  (`data-wasp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
+  `[data-wasp-scope="Card"] ` (html.rs), so they style only elements inside it (not the root itself; a nested
+  component's elements still match).
+- Left (warp-06 takes the parser bits): `.card { … }` written
+  without quotes (the parser stops at `.`), `8px` written as a number with a unit (parses as 8 * px).
 
 ## Built sites (card web-ssr, 2026-10-07; split agreed with warp-cd, renderer decided by warp-96)
 - `warp build --site app.wasp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
@@ -212,7 +224,8 @@ Each step is useful on its own and is what the next ones stand on.
   value an earlier run kept under its name, else the default; `on change theme` keeps each change. Natively the values
   are JSON in `<program>.stored.json` beside the program (in memory for inline code), in the playground the page's
   localStorage (`wasp stored <name>`): the worker gets them at start and sends each save back (host.js
-  STD_ADAPTERS.store, playground.js keepStored). Values cross as JSON (std_adapters, as foreign calls).
+  STD_ADAPTERS.store, markup.js keptValues / keepValue, shared with built sites: site.js). Values cross as JSON
+  (std_adapters, as foreign calls).
 - Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
@@ -223,3 +236,84 @@ Each step is useful on its own and is what the next ones stand on.
   module contributes: kept in the store of the program that uses it (probes/stores/app.wasp, tests/modules/
   test_module_signals.rs). Context (a value for a subtree of components without props): question with the
   Interviewer; default until then: main-level variables, which every component reads.
+
+## Step 17 (web-bundle), what is done and what is left
+- Budget: tests/web/test_bundle_budget.rs builds `p{ "hello world" }` as a site and holds its gzipped total under a
+  budget, printing each file (the suite's log tracks it). 2026-10-07: 46.2 KB → 40.5 KB (case table as ranges,
+  wasm_emitter/text_unicode.rs: app.wasm 17.5 → 11.9) → 32.1 KB (site::compacted: shipped scripts without comment
+  lines and indentation, host.js 23.8 → 16.7). Svelte's hello world is about 3 KB, Solid's about 5 KB.
+- Not taken: wasm-opt -Oz on app.wasm (11 KB smaller raw, 0.6 KB larger gzipped).
+- What is left in app.wasm is the runtime std/markup.wasp's to_html reaches (texts, lists, equality, floats): a shared
+  runtime module, cached across pages, would help sites with several pages, not the first load.
+- host.js split (2026-10-07, 32.1 → 21.9 KB, host.js 16.7 → 6.1): the core keeps what every page runs (run, outcome,
+  page events, timers, values between JS and wasp, std json/os/store/regex); the parts add themselves with addHostPart:
+  host-files.js (fetch, read, std file and net), host-hashes.js (std hash), host-tasks.js (tasks, channels,
+  BroadcastChannel and WebSocket, shared arrays, fetch_start), host-foreign.js (foreign_call, libm, libc.wasm, .wasm
+  imports; needs files), host-compiler.js (warpHost, run_block; needs files), host-routes.js (page_path, navigate, a site's links and back button). A part hooks into a run through its
+  steps (started, poll, finished, ended, stopped). src/site.rs HOST_PARTS ships a part when the module imports one of
+  its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
+  a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the
+  std module's name is a runtime text; a custom section naming the std modules a program uses would refine it).
+- Next: lazy loading per route, agreed with warp-89 (web-router): routes lower to functions
+  page·route·<N> with the table exported as page·routes; the splitter moves a route's function and what only it reaches
+  into app·<N>.wasm, which site.js loads on the first navigation there.
+
+## web-apis: animation frames (card drawing-frames, first piece of web-apis)
+- In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`
+  shows each frame at once in place of the last canvas (host.js sleep → worker message "sleep" → playground.js
+  painted). Frames keep the run alive past RUN_TIMEOUT_MS; editing the code stops the animation (show → stopRun) and
+  runs the new code. Paints without a sleep between them stay one canvas each. Tour example animation (`canvases` check).
+- Frames draw into the canvas shown (showFrame), so the pointer stays over it. `mouse_x`, `mouse_y` (canvas pixels) and
+  `mouse_down` are system values (host_words.rs): the page keeps the pointer over a canvas in a SharedArrayBuffer that
+  the worker reads at once, also in the middle of an animation, when it takes no messages (playground.js
+  trackPointer → worker pagePointer → host.js system_value). `on click` over the canvas gives event.x / event.y.
+  Natively mouse_x is a loud error (no canvas). Tour example mouse.
+- Natively each show still writes paint-N.png (src/paint.rs). `color.with_alpha(a)` works as a method (test_draw.rs).
+  Left: built sites (site.js) show no frames and no pointer yet.
+
+## web-apis: notify (2026-10-07, warp-90; plan approved by warp-03)
+- `notify "text"` is the host word notify (src/host.rs, warp-runtime system_values.rs notify): natively osascript
+  `display notification` (macOS, the text as an argument, never quoted into the script) or notify-send (Linux); in the
+  playground the page shows the browser's Notification once allowed, and until then, or when refused, the printed line
+  `notification: text` (playground.js notification; the first one asks for the permission). Tests check only the
+  compiled import (tests/web/test_web_apis.rs): a test run shows no notification.
+- Next pieces: clipboard write (the word waits for the user: `copy` already means clone; question at the Interviewer),
+  WebSocket (card web-websocket), frames and pointer in built sites (site.js, after warp-89's timers).
+
+## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
+- No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`
+  connects at once (natively an unreachable server is a loud error there) and hears what the server sends;
+  `broadcast value on "wss://…"` sends over the same connection (or opens one). A text goes as it is, any other value
+  as JSON; an arriving JSON object or array is data, any other message a text (web_server.rs value_of_body).
+- Natively src/web_sockets.rs (tungstenite 0.30 with rustls webpki roots): a thread per connection reads with a 20 ms
+  timeout and writes what the program sent; channels.rs / host.rs channel_next ask it first. Listeners on one address
+  share its connection. Tests: tests/control/test_web_sockets.rs against a local tungstenite server that answers.
+- Playground: host.js webSocket / sendOnSocket, a browser WebSocket per address in the run, closed with the run
+  (stopListening); messages are handled when the worker is idle, as for BroadcastChannel channels. Checked by hand
+  against wss://echo.websocket.org (text and JSON).
+
+## Step 13 (web-dev), what is done and what is left
+- `warp dev app.wasp [port]` (src/dev_server.rs, default port 8008) serves the program's site from memory
+  (site::files, the same page `warp build --site` writes, plus web/playground/dev.js). No watcher: a request finding
+  the file's mtime changed builds anew. dev.js polls /wasp-dev/state ({version, error}) every 300 ms: a new version
+  reloads the page; a failure shows as an overlay (message, `line | source`, caret, fix) while the last good build
+  serves on, and the next good build reloads.
+- State across reloads: a dev build (pipeline::for_dev) keeps each main-level variable the program changes later
+  (assigned again or `+=`, stored_values.rs dev_kept) as `stored` keeps it, in the store DEV_STORE: the page's
+  sessionStorage (`wasp dev <name>`), in memory natively. Only a changed value is saved, so a variable never changed
+  takes its new initial value from the edited source; one changed keeps its value (as React Fast Refresh does).
+  site.js hydrate loads the kept values and shows what main left (page·html).
+- Tests: tests/web/test_dev_server.rs; probes/dev/counter.wasp (click, edit the label: the count stays),
+  probes/dev/stored_check.py.
+- Left: watching used modules (only the program's file counts), component instance state (`Counter·count` lists) and
+  the playground editor's error marks in the overlay; a failure's source line is that of the program, not of a module.
+
+## Step 16 (web-a11y), what is done and what is left (classes-44, warp-06; split agreed with warp-90)
+- Welcoming warnings over the markup as written (src/accessibility.rs, run on the parsed program at the start of
+  pipeline lower_for_emission, tests/web/test_accessibility.rs): img without alt (alt:"" marks a decoration); input /
+  select / textarea without a label (label{for}, a label around it, aria-label, aria-labelledby or title count; a
+  placeholder alone gets its own warning; hidden/submit/button/reset/image inputs need none); button or a with no text
+  and no aria-label/title; a without href; a heading skipping a level (h1 → h3); an id used twice; html without lang.
+  Each points at the element and names a fix; `use strict` / `--strict` make them errors like every warning.
+- Not here: focus on route change and live regions for async content (warp-89, web-router / web-async); translations
+  as data (i18n) later. Markup built at run time (strings, computed tags) is not checked.

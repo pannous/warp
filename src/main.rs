@@ -22,7 +22,13 @@ const SITE_FLAG: &str = "--site";
 const SITE_SUFFIX: &str = "-site";
 /// The site of inline code
 const DEFAULT_SITE_NAME: &str = "site";
-const COMPILE_FLAGS: [&str; 4] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG];
+/// `warp build --wit app.wasp`: the WIT world of the program's `component` declaration, app.wit (card wasm-interop-rest)
+const WIT_FLAG: &str = "--wit";
+const WIT_EXTENSION: &str = "wit";
+/// `warp build --component app.wasp`: app.component.wasm, the component of that world (src/component_builder.rs)
+const COMPONENT_FLAG: &str = "--component";
+const COMPONENT_EXTENSION: &str = "component.wasm";
+const COMPILE_FLAGS: [&str; 6] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG];
 const MACHINE_CODE_EXTENSION: &str = "cwasm";
 /// The name of an executable built from inline code (plus the platform's extension)
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
@@ -37,6 +43,8 @@ const EXECUTABLE_MODE: u32 = 0o755;
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
+/// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/dev_server.rs, card web-dev)
+const DEV_COMMAND: &str = "dev";
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
 const ACKNOWLEDGEMENTS_FILE: &str = ".wasp-acknowledged";
@@ -140,6 +148,14 @@ fn run_command(args: &[String]) {
                 std::process::exit(1);
             }
         }
+    } else if args[1] == DEV_COMMAND && args.len() >= 3 {
+        let port = args.get(3).map_or(Ok(warp::dev_server::DEV_PORT), |port| port.parse::<u16>());
+        let served = port.map_err(|_| format!("warp dev: the port is a number, not {}", args[3]))
+            .and_then(|port| warp::dev_server::serve(std::path::Path::new(&args[2]), port));
+        if let Err(failure) = served {
+            eprintln!("{failure}");
+            std::process::exit(1);
+        }
     } else if let Some(target) = arg_string.strip_prefix("data ") {
         let text = source_of(target);
         println!("{}", wasp_parser::parse_data(&text).serialize());
@@ -151,6 +167,12 @@ fn run_command(args: &[String]) {
         let code = source_of(&target);
         if flags.contains(&SITE_FLAG) {
             return write_site(&code, &target);
+        }
+        if flags.contains(&WIT_FLAG) {
+            return write_wit(&code, &target);
+        }
+        if flags.contains(&COMPONENT_FLAG) {
+            return write_component(&code, &target);
         }
         if standalone {
             match write_standalone_executable(&code, &target) {
@@ -335,7 +357,8 @@ fn leave_executable(path: &str) {
         return;
     }
     let program_file = std::path::Path::new(path);
-    if let Err(failure) = warp::modules::with_program_file(program_file, || write_standalone_executable(&load_file(path), path)) {
+    let written = diagnostic::quietly(|| warp::modules::with_program_file(program_file, || write_standalone_executable(&load_file(path), path)));
+    if let Err(failure) = written {
         eprintln!("note: no executable {}: {failure}", executable.display());
     }
 }
@@ -393,6 +416,36 @@ fn feature_of(module: &str, name: &str) -> String {
         _ => return format!("{module}.{name}"),
     };
     feature.to_string()
+}
+
+/// `warp build --wit`: the component's WIT world next to the program file (out.wit for inline code)
+fn write_wit(code: &str, target: &str) {
+    let path = std::path::Path::new(&compiled_output_path(target)).with_extension(WIT_EXTENSION);
+    match warp::component_worlds::world_wit(&wasp_parser::parse(code)) {
+        Ok(wit) => {
+            fs::write(&path, wit).expect("could not write the WIT world");
+            println!("wrote {}", path.display());
+        }
+        Err(failure) => {
+            eprintln!("warp build --wit: {failure}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// `warp build --component`: the component next to the program file (out.component.wasm for inline code)
+fn write_component(code: &str, target: &str) {
+    let path = std::path::Path::new(&compiled_output_path(target)).with_extension(COMPONENT_EXTENSION);
+    match warp::component_builder::build(code) {
+        Ok(component) => {
+            fs::write(&path, &component).expect("could not write the component");
+            println!("wrote {} ({} bytes)", path.display(), component.len());
+        }
+        Err(failure) => {
+            eprintln!("warp build --component: {failure}");
+            std::process::exit(1);
+        }
+    }
 }
 
 /// `warp build --site`: the site next to the program file, its report or failure
@@ -486,6 +539,7 @@ fn usage() {
     println!("  warp verify <file>   Test and prove the laws of a file");
     println!("  warp data <file>     Read untrusted data without evaluating it");
     println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
+    println!("  warp dev <file> [port]  Serve the file's page, reloaded when it changes (port 8008)");
     println!("  warp repl            Start interactive console");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");

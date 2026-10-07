@@ -60,6 +60,11 @@ impl ImportManager {
 		self.next_func_idx = ctx.func_registry.import_count();
 	}
 
+	/// An import that is no function (`env.memory`, `env.table`): function indices stay as they are
+	pub fn import_entity(&mut self, module: &str, name: &str, entity: EntityType) {
+		self.imports.import(module, name, entity);
+	}
+
 	/// Emit host function imports: fetch(url) -> string, run(wasm) -> i64
 	fn emit_host_imports(&mut self, type_manager: &mut TypeManager, ctx: &mut Context) {
 		// Type for fetch: (i32, i32) -> (i32, i32)

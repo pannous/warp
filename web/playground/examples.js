@@ -3,8 +3,9 @@
 // `wait`: milliseconds of timers and listeners before checking; `clicks`: the shown buttons, by text, clicked after
 // that, `clicked` the value then and `kept` that every element shown stays: only its text and attributes change;
 // `keyed` that every element with a key keeps it: a list item's element moves with its item; `typed`: the text typed
-// into the first input before the clicks; `animated` that the clicks started an animation; `address` the address
-// bar's path after them).
+// into the first input before the clicks; `animated` that the clicks started an animation; `clickedPrinted`: all
+// printed text after the clicks; `address` the address bar's path after
+// them).
 // samples.js (made by build.sh) adds samples/*.wasp.
 const EXAMPLES = {
 	welcome: { value: '[[1 4 9] 3 "reading"]', printed: "Alice turns 42\n", code: `// wasp is data and code in one notation, compiled to WebAssembly as you type: edit me
@@ -32,6 +33,15 @@ def Counter(label, start) {
 	div{ button{ on click { count += 1 } "+" } p{ label + ": " + count } }
 }
 div{ Counter("Apples", 1) Counter("Pears", 5) }` },
+	cleanup: { value: 'div{button{data-wasp-click:"1" "hide pears"} span:"apples " [span:"pears "]}', printed: "hello apples\nhello pears\n", clicks: ["hide pears"], clicked: 'div{button{data-wasp-click:"1" "hide pears"} span:"apples " [ø]}', clickedPrinted: "hello apples\nhello pears\nbye pears\n", code: `// on mount runs when a component first shows, on cleanup when it leaves the page
+def Fruit(label) {
+	name = label
+	on mount { print "hello " + name }
+	on cleanup { print "bye " + name }
+	span{ name + " " }
+}
+pears = true
+div{ button{ on click { pears = false } "hide pears" } Fruit("apples") (if pears then Fruit("pears") else []) }` },
 	"keyed list": { value: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:1 "milk"} li{key:2 "eggs"} li{key:3 "tea"}]]}', clicks: ["rotate"], clicked: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:2 "eggs"} li{key:3 "tea"} li{key:1 "milk"}]]}', kept: true, keyed: true, code: `// a list in markup: with a key, each item keeps its element when the list changes (it moves, nothing is rewritten)
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{ button{ on click { todos = todos[1..] + [todos#1] } "rotate" } ul{ [li{ key: todo.id todo.text } for todo in todos] } }` },
@@ -47,9 +57,9 @@ div{
 	button{ on click { todos = todos[1..] } "remove" }
 	ul{ [li{ key: todo.id transition: fade 150ms todo.text } for todo in todos] }
 }` },
-	"form binding": { value: 'div{input{value:"Ann" data-wasp-input:"1"} p:"Hello Ann"}', typed: "Bob", clicked: 'div{input{value:"Bob" data-wasp-input:"1"} p:"Hello Bob"}', kept: true, code: `// bind: ties a field to a variable both ways: type a name, the greeting follows
+	"form binding": { value: 'div{label{"Name " input{value:"Ann" data-wasp-input:"1"}} p:"Hello Ann"}', typed: "Bob", clicked: 'div{label{"Name " input{value:"Bob" data-wasp-input:"1"}} p:"Hello Bob"}', kept: true, code: `// bind: ties a field to a variable both ways: type a name, the greeting follows
 name = "Ann"
-div{ input{ bind: name } p{ "Hello " + name } }` },
+div{ label{ "Name " input{ bind: name } } p{ "Hello " + name } }` },
 	styles: { value: 'div{style:.card{padding:8 border:"1px solid gray"} button{data-wasp-click:"1" "dark"} p{class:"card" style{color:"black" background:"white"} "a themed card"}}', clicks: ["dark"], clicked: 'div{style:.card{padding:8 border:"1px solid gray"} button{data-wasp-click:"1" "dark"} p{class:"card" style{color:"white" background:"black"} "a themed card"}}', kept: true, code: `// styles are wasp data: a style sheet of rules, an inline style of properties; values may read variables
 dark = false
 div{
@@ -134,6 +144,26 @@ ticks = 0
 on every 1 second { ticks += 1; if ticks <= 3 { print "tick " + ticks } }
 at 9:00 { print "good morning" }
 ticks` },
+	animation: { value: '"done"', canvases: 1, code: `// an animation: a show() after a sleep is the next frame, drawn in place of the last one
+use draw
+canvas(32, 16)
+for x in 0..32 {
+  clear(paper)
+  circle(x, 8, 4, orange)
+  show()
+  sleep(30)
+}
+"done"` },
+	mouse: { value: '"done"', canvases: 1, code: `// move the mouse over the canvas: the dot follows it, red while a button is down (for six seconds)
+use draw
+canvas(48, 24)
+for frame in 0..200 {
+  clear(paper)
+  circle(mouse_x, mouse_y, 3, if mouse_down then red else blue)
+  show()
+  sleep(30)
+}
+"done"` },
 	"game of life": { value: "15", wait: 1200, code: `// Conway's Game of Life, live: a step every half second on the canvas; three gliders keep 15 cells alive
 width = 24
 height = 12

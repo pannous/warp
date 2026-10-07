@@ -186,6 +186,9 @@ impl WasmGcEmitter {
 		}
 		let [word, argument] = items else { return false };
 		let Node::Symbol(fn_name) = word.drop_meta() else { return false }; // `count xs` without parentheses keeps its position
+		if self.emit_shadowed_counting(func, fn_name, argument) {
+			return true;
+		}
 		let integer_builtin = ROUNDING_FUNCTIONS.contains(&fn_name.as_str())
 			|| fn_name == crate::min_max::EMPTY_EXTREMUM_CALL
 			|| fn_name == crate::switch::NO_CASE_CALL

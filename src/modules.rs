@@ -49,6 +49,8 @@ pub fn resolve(program: Node) -> Node {
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
+	MODULE_DEFINITIONS.with(|names| names.borrow_mut().clear());
+	let own_names: Vec<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
 	let folder = loader.including_directory.clone();
@@ -59,6 +61,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
 		.map(|program| with_needed_definitions(program, loader.std_definitions));
 	EARLY_CLASS_MODULES.with(|modules| modules.borrow_mut().clear()); // for this program only
+	MODULE_DEFINITIONS.with(|names| own_names.iter().for_each(|own| { names.borrow_mut().remove(own); })); // the program's own word wins
 	resolved.unwrap_or_else(|failure| failure)
 }
 
@@ -170,6 +173,13 @@ thread_local! {
 	static PROGRAM_FILE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
 	/// The modules whose classes insert_module_classes put in front of the program: the loader leaves them out
 	static EARLY_CLASS_MODULES: std::cell::RefCell<HashSet<PathBuf>> = std::cell::RefCell::new(HashSet::new());
+	/// The names a used module defines for the program being compiled: their bodies never see the program's variables
+	static MODULE_DEFINITIONS: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
+}
+
+/// Whether `name` is defined by a module the program uses (`use markup`'s html_element), not by the program
+pub fn is_module_definition(name: &str) -> bool {
+	MODULE_DEFINITIONS.with(|names| names.borrow().contains(name))
 }
 
 /// `path` as written in the program: a relative path is next to the program's file, or in the working directory for
@@ -439,7 +449,11 @@ impl<'a> Loader<'a> {
 		self.including_directory = outer_directory;
 		let statements = statements(module?);
 		Ok(match import {
-			Import::Use => statements.into_iter().filter(is_declaration).collect(),
+			Import::Use => {
+				let declarations: Vec<Node> = statements.into_iter().filter(is_declaration).collect();
+				MODULE_DEFINITIONS.with(|names| names.borrow_mut().extend(declarations.iter().filter_map(declared_name)));
+				declarations
+			}
 			Import::Include => statements,
 		})
 	}
@@ -450,8 +464,11 @@ impl<'a> Loader<'a> {
 		self.find_with(name, &MODULE_EXTENSIONS)
 	}
 
+	/// never the program's own file: hash.wasp saying `use hash` means the standard module
 	fn find_with(&self, name: &str, extensions: &[&str]) -> Option<PathBuf> {
-		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path))
+		let program = program_file().and_then(|file| file.canonicalize().ok());
+		let is_program = |path: &PathBuf| program.is_some() && path.canonicalize().ok() == program;
+		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path) && !is_program(path))
 	}
 
 	fn candidates(&self, name: &str) -> Vec<PathBuf> {
@@ -558,7 +575,8 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 17] = [
+const STD_MODULES: [(&str, &str); 18] = [
+	("memory", include_str!("../std/memory.wasp")),
 	("net", include_str!("../std/net.wasp")),
 	("collections", include_str!("../std/collections.wasp")),
 	("hash", include_str!("../std/hash.wasp")),
@@ -621,6 +639,13 @@ pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
 		},
 		_ => None,
 	}).unwrap_or_default()
+}
+
+/// The file of the program's folder or search directories that `use module` finds before the standard module of
+/// that name (a local file wins)
+pub fn module_file_shadowing(module: &str) -> Option<PathBuf> {
+	let folder = program_file().as_deref().map(folder_of);
+	Loader::new(&SEARCH_DIRECTORIES, folder).find(module)
 }
 
 fn is_builtin_library(name: &str) -> bool {
