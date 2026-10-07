@@ -125,9 +125,10 @@ Each step is useful on its own and is what the next ones stand on.
 - CSS as CSS (classes-42, src/lowering/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
   one rule per line (`.card {…}`, `ul > li {…}`, `h1, h2 {…}`, `a:hover {…}`, `p.note {…}`, `ul li {…}`, `#main {…}`),
   lengths with units (`8px`, `1.5em`, `50%`, `-2px`) and values of several words (`padding: 8px 4px`, `border: 1px
-  solid "red"`; a bare number among several words stays as written: `flex: 1 1 auto`, `margin: 0 auto`). The parser reads `.name` at an atom's start as the symbol `.name`. Limits: the parser drops the blank
-  of a descendant class (`#main .x` reads as `#main.x`, quote it); `#id` after a rule on the same line, `50%` followed
-  by another declaration without `;`, and several rules on one line with a comma selector need their own lines.
+  solid "red"`; a bare number among several words stays as written: `flex: 1 1 auto`, `margin: 0 auto`). The parser reads `.name` at an atom's start as the symbol `.name`. In a style sheet a blank before
+  `.x` / `#x` is the descendant combinator (`#main .x`, `.a .b #c`; parser flag in_style_sheet), and `.a {…} #main {…}`
+  are two rules on one line (card web-styles-parser). Limits: `50%` followed by another declaration without `;`, and
+  several rules on one line with a comma selector need their own lines.
 - Left: scoping a component's sheet to its own elements (a generated class per component), warp-cd.
 
 ## Step 14 (web-testing), what is done and what is left (classes-42, warp-06)

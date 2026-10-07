@@ -2,7 +2,7 @@
 //! quotes (`.card { … }`, `ul > li { … }`, `h1, h2 { … }`, `a:hover { … }`, `#main { … }`) become the text keys
 //! html.rs renders (`".card": { … }`), and lengths with a unit (`8px`, `1.5em`, `50%`, `-2px`) the texts they are,
 //! where wasp would read `8px` as `8 * px`. A value after a declaration continues it: `padding: 8px 4px`.
-//! Limit: the parser drops the blank of a descendant class, `#main .x` reads as `#main.x`; write it quoted.
+//! In a style sheet the parser keeps a blank before `.x` or `#x` (`#main .x`, the descendant combinator) as the next item.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;

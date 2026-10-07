@@ -3,6 +3,7 @@
 use super::*;
 
 const VOID_WORD: &str = "void";
+const STYLE_WORD: &str = "style";
 /// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
 const CAPTURED_ARGUMENT: &str = "$0";
 
@@ -1032,12 +1033,14 @@ impl WaspParser {
 				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
 				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
 				let outer_data_literal = std::mem::replace(&mut self.in_data_literal, op == Op::Colon);
+				let outer_style_sheet = std::mem::replace(&mut self.in_style_sheet, op == Op::Colon && symbol == STYLE_WORD);
 				let mut blocks = vec![self.parse_bracketed('{')];
 				// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`
 				while self.current_char() == '{' {
 					blocks.push(self.parse_bracketed('{'));
 				}
 				self.in_data_literal = outer_data_literal;
+				self.in_style_sheet = outer_style_sheet;
 				let block = match blocks.len() {
 					1 => blocks.remove(0),
 					_ => Node::List(blocks, Bracket::None, Separator::None),
