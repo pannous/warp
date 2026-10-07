@@ -45,3 +45,4 @@ mod test_slash_comment_after_value;
 mod test_sleep_unit_shadow;
 mod test_undefined_in_text_sum; // card compile-path
 mod test_count_shadowed; // card count-shadowed
+mod test_discarded_pure_warning;
