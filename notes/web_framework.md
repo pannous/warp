@@ -233,8 +233,9 @@ Each step is useful on its own and is what the next ones stand on.
   page (status 200; without one the "no page at <path>" text). Fixture tests/fixtures/served_routes.wasp.
 - Prerendered routes (card route-prerender): `warp build --site` (and `warp dev`) also writes <path>/index.html for
   each route without parameters but "/" (src/site.rs prerendered, patterns from page·routes), rendered at that path,
-  its scripts named from its depth ("../site.js"); site.js fetches app.wasm beside itself, so the page hydrates at
-  /about/. site::file_at finds "/about" as about/index.html (warp dev, serve). Routes with parameters and "*" are
+  finding the site's files through <base href="../"> per level (a page served for a deeper path has <base href="/">;
+  no script grows, card web-bundle's budget), so the page hydrates at /about/. An in-page "#anchor" link on such a
+  deep page resolves against the root. site::file_at finds "/about" as about/index.html (warp dev, serve). Routes with parameters and "*" are
   rendered by the page itself (a static host needs a fallback to index.html for them).
 - `outlet` is the canonical word (aliases such as slot on demand).
 

@@ -39,7 +39,7 @@ fn a_static_page_is_its_last_line_rendered() {
 }
 
 // card route-prerender: each route without parameters is rendered at build time into its own <path>/index.html, which
-// names the site's files from its depth, so a deep link reads without JavaScript and hydrates; routes with parameters
+// finds the site's files through <base href> from its depth, so a deep link reads without JavaScript and hydrates; routes with parameters
 // and "*" are rendered by the page itself
 #[test]
 fn a_site_prerenders_each_static_route() {
@@ -50,7 +50,8 @@ fn a_site_prerenders_each_static_route() {
 	assert!(!site.files.iter().any(|file| file.contains(':') || file.contains('*')), "{:?}", site.files);
 	let page = |file: &str| std::fs::read_to_string(directory.join(file)).unwrap();
 	assert!(page("index.html").contains("<h1>Home</h1>"));
-	assert!(page("about/index.html").contains("<p>About us</p>") && page("about/index.html").contains(r#"<script src="../site.js"></script>"#), "{}", page("about/index.html"));
-	assert!(page("docs/intro/index.html").contains(r#"<script src="../../site.js"></script>"#));
+	assert!(page("about/index.html").contains("<p>About us</p>") && page("about/index.html").contains(r#"<base href="../">"#), "{}", page("about/index.html"));
+	assert!(page("docs/intro/index.html").contains(r#"<base href="../../">"#));
+	assert!(!page("index.html").contains("<base"));
 	std::fs::remove_dir_all(directory).unwrap();
 }
