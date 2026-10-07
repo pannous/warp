@@ -136,8 +136,13 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// A local holding a float, or a global (`global b` in a function) that no local of the same name shadows
 	pub(super) fn is_float_variable(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_float()))
+		let Node::Symbol(name) = node.drop_meta() else { return false };
+		match self.scope.lookup(name) {
+			Some(local) => local.kind.is_float(),
+			None => self.ctx.user_globals.get(name).is_some_and(|(_, kind)| kind.is_float()),
+		}
 	}
 
 	pub(super) fn emit_compound_assign(
@@ -624,10 +629,8 @@ impl WasmGcEmitter {
 	pub(super) fn emit_int_operands_op(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		// `s < "b"`, `c >= "0"` with a text: ordered by code points (node_order, as sort orders them); a value held as a
 		// Node (a cell's, another runtime's: `time.time() > 0`) by its value, an Int or a Float decided at run time
-		// (an element `x#2` of what may be a text keeps its own path: a character there compares by code point, `x#2 > 50`;
-		// an element of a list held as Nodes, `f()#1 < 0.5`, is a held value)
-		let of_maybe_text = |side: &Node| matches!(side.drop_meta(), Node::Key(owner, Op::Hash, _) if self.get_type(owner) != Kind::List);
-		let held_node = |side: &&Node| matches!(self.get_type(side), Kind::Empty | Kind::Data) && !of_maybe_text(side);
+		// (an element `xs#2` keeps its own path: a character there compares by code point, `x#2 > 50`)
+		let held_node = |side: &&Node| matches!(self.get_type(side), Kind::Empty | Kind::Data) && !matches!(side.drop_meta(), Node::Key(_, Op::Hash, _));
 		if op.is_ordering() && [left, right].iter().any(|side| self.get_type(side) == Kind::Text || held_node(side)) {
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);
