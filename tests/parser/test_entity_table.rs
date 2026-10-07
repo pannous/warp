@@ -39,3 +39,10 @@ fn entity_table(index: &[u8]) -> String {
 	entities.sort();
 	entities.iter().map(|(name, characters)| format!("{name}\t{characters}\n")).collect()
 }
+
+// uniscript 1.0.4: LaTeX glyphs win over the HTML entities, and the short math names of warp's former table are back
+#[test]
+fn latex_names_of_uniscript_1_0_4() {
+	is!("\"\\:circ \\:neq\"", "∘ ≠"); // in texts: ∘ and ≠ are no operators of code yet (card emoji-code)
+	is!("\"\\:nat \\:to \\:varepsilon\"", "ℕ → ε");
+}
