@@ -33,10 +33,16 @@ impl WaspParser {
 			head
 		} else if let Some((op, chars)) = self.peek_prefix_operator().filter(|_| !self.at_member_name(0)) {
 			let (prefix_line, prefix_column) = self.get_position();
+			// `-7 abs`, `f = abs`, `x abs + 1`: an operator word without its operand is the operator itself, which
+			// lowering (ambiguous_forms) applies to the value before it or makes a function
+			let operator_word = chars > 1 && matches!(op, Op::Abs | Op::Sqrt | Op::Cbrt);
+			let bare = operator_word && self.expression_ends_after(chars);
 			self.hint_operator(chars, true);
 			self.advance_by(chars);
 			self.skip_spaces();
-			if chars == 1 && op == Op::Abs {
+			if bare {
+				Node::Key(Box::new(Empty), op, Box::new(Empty))
+			} else if chars == 1 && op == Op::Abs {
 				self.parse_norm_bars()
 			} else {
 				let rhs = self.parse_prefix_operand(op);
