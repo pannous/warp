@@ -1,0 +1,7 @@
+// card web-bundle (lazy loading): three routes, each with code only it uses
+def primes(n) { [k for k in 2..n if all([k % d != 0 for d in 2..<k])] }
+def fib(n) { if n < 2 then n else fib(n - 1) + fib(n - 2) }
+route "/" { h1{ "Home" } }
+route "/primes" { p{ "primes: " + join([str(p) for p in primes(30)], " ") } }
+route "/fib" { p{ "fib 15 = " + str(fib(15)) } }
+div{ nav{ a{ href: "/" "Home" } a{ href: "/primes" "Primes" } a{ href: "/fib" "Fib" } } outlet }

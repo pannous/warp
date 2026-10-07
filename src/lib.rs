@@ -14,6 +14,7 @@ pub use util::gc_engine;
 pub mod analyzer;
 pub mod analysis_memo;
 pub mod dead_functions;
+pub mod binaryen;
 pub mod node;
 #[cfg(feature = "native")]
 pub mod run;
@@ -53,6 +54,8 @@ pub mod std_adapters;
 pub mod web_server;
 #[cfg(feature = "native")]
 pub mod site;
+#[cfg(feature = "native")]
+pub mod route_split;
 #[cfg(feature = "native")]
 pub mod dev_server;
 #[cfg(feature = "native")]
