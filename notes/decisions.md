@@ -77,7 +77,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   `0 == false` is true, `0 === false` is false (strict identity compares the type too).
 - P195 `true + 1` = 2: a literal bool in arithmetic acts as 1/0 like a bool variable; the analyzer error "arithmetic
   on a boolean" goes.
-- P196 `===` compares the full type: `1 === 1.0` and `0 === false` are false.
+- P196 `===` compares the full (static) type: `0 === false` is false. P196b: `1.0` is the exact int 1, so `1 === 1.0`
+  stays yes; `1 === 1.5` and `1 === (1.0 as float)` are no.
 - P197 warp-ee (class) updates AGENTS.md "True/False: encoded as Int 1/0" to the bool type once bool is on main.
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
