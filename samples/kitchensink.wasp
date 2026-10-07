@@ -69,10 +69,10 @@ checks.add(switch 3 {1: "one" 3: "three" default: "many"} == "three")
 checks.add(5 is int)
 
 // ---- classes and inheritance
-class Animal { name: "?"; speak() := "..." }
-class Dog extends Animal { speak() := name + " barks" }
+class Animal { name: "?"; speak := "..." }
+class Dog extends Animal { speak := name + " barks" }
 rex = Dog{name: "Rex"}
-checks.add(rex.speak() == "Rex barks")
+checks.add(rex.speak == "Rex barks")
 
 // ---- events: emit and on (P163), handlers get the event
 alarms = 0
