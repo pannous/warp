@@ -71,3 +71,4 @@ mod test_collection_declarations;
 mod test_type_colon_block;
 mod test_recursive_fields;
 mod test_interface_signatures;
+mod test_class_field_names;

@@ -808,7 +808,12 @@ impl Lowering {
 		if let Some(word) = self.library_word_for(name, arguments.len() + 1).filter(|_| is_called || counting_method(name, &self.context).is_none()) {
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
-		// `x.square` and `x.add(y)` call the user function with the receiver as first argument
+		// `x.square` and `x.add(y)` call the user function with the receiver as first argument; `l.start` of an object
+		// with a field start reads the field, even beside a function start (`start(l) := l.start`)
+		let reads_declared_field = !is_called && self.instances.is_declared_field(name) && (self.is_parameter(receiver) || self.instances.shape(receiver).is_some());
+		if reads_declared_field {
+			return Some(field_lookup(receiver, name, word_node));
+		}
 		if self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty()) {
 			let call = [vec![word_node.clone(), receiver.clone()], arguments].concat();
 			return Some(Node::List(call, Bracket::Round, Separator::None));
