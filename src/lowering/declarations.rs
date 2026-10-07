@@ -404,6 +404,7 @@ fn marker(word: &str, parts: Vec<Node>) -> Node {
 	Node::List([vec![Node::Symbol(word.to_string())], parts].concat(), Bracket::Round, Separator::None)
 }
 
+#[derive(Clone)]
 struct Tasks<'a> {
 	words: Vec<&'a str>,
 	/// task variables and the functions `go` starts
@@ -460,7 +461,23 @@ impl Tasks<'_> {
 		marker(marker_word, [vec![read], functions.collect()].concat())
 	}
 
+	/// Inside a function that binds a task variable's name itself (a parameter, a local, a loop variable: a joined
+	/// module's `for c in …` under a main-level `c = go f()`), that name is its own (card task-name)
 	fn lower(&self, node: Node) -> Node {
+		let shadowed = crate::lowering::getters::shadowed_names(&node);
+		if !shadowed.iter().any(|name| self.started.contains_key(name) || self.job_lists.contains_key(name)) {
+			return self.lower_unshadowed(node);
+		}
+		let mut narrowed = self.clone();
+		for name in &shadowed {
+			narrowed.started.remove(name);
+			narrowed.job_lists.remove(name);
+			narrowed.tasks.remove(name);
+		}
+		narrowed.lower_unshadowed(node)
+	}
+
+	fn lower_unshadowed(&self, node: Node) -> Node {
 		match node {
 			Node::Symbol(name) if self.started.contains_key(&name) => self.value_of(&name).expect("a started task"),
 			Node::Symbol(name) if self.job_lists.contains_key(&name) => self.job_list_read(&name, Node::Symbol(name.clone()), TASK_LIST),

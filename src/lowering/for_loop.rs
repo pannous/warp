@@ -6,7 +6,7 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasm_emitter::mark_step;
+use crate::wasm_emitter::{is_step, mark_step};
 use crate::wasp_parser::while_do;
 
 const FOR_KEYWORD: &str = "for";
@@ -52,6 +52,26 @@ fn key(left: Node, op: Op, right: Node) -> Node {
 
 fn block(statements: Vec<Node>, bracket: Bracket) -> Node {
 	Node::List(statements, bracket, Separator::Semicolon)
+}
+
+/// The loop variables of every `for … in` in `body`, written or already lowered (its marked step `x++`, `x·index++`, of a
+/// destructuring `k·v·index++`): the loop's own names, never an outer variable
+pub(crate) fn loop_variables(body: &Node) -> Vec<String> {
+	let mut variables = vec![];
+	body.visit(&mut |part| if let Node::List(items, _, _) = part {
+		if let [keyword, Node::Symbol(variable), within, ..] = items.iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice() {
+			if is_word(keyword, FOR_KEYWORD) && is_word(within, IN_KEYWORD) {
+				variables.push(variable.clone());
+			}
+		}
+		for step in items.iter().filter(|item| is_step(item)) {
+			if let Node::Key(counter, Op::Inc, _) = step.drop_meta() {
+				let counter = counter.name();
+				variables.extend(counter.strip_suffix(INDEX_SUFFIX).unwrap_or(&counter).split('·').map(str::to_string));
+			}
+		}
+	});
+	variables
 }
 
 fn is_word(node: &Node, word: &str) -> bool {

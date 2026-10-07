@@ -1,0 +1,5 @@
+// card task-name: a main-level task variable `c` must not rewrite a function's own `c`
+nap(ms) := ms
+letters(name) := { n = 0; for c in chars(name) { n += 1 }; n }
+c = go nap(5)
+letters("abc") + await c

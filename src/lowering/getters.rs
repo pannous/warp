@@ -107,9 +107,9 @@ fn mentions_define(node: &Node) -> bool {
 	found
 }
 
-/// The names a lambda or a function definition binds itself: its parameters, and the variables its body assigns
-/// (locals, wiki/charged.md §3)
-fn shadowed_names(node: &Node) -> Vec<String> {
+/// The names a lambda or a function definition binds itself: its parameters, the variables its body assigns and its loop
+/// variables (locals, wiki/charged.md §3)
+pub(crate) fn shadowed_names(node: &Node) -> Vec<String> {
 	match node.drop_meta() {
 		Node::Key(parameters, Op::FatArrow, _) => {
 			let mut names = vec![];
@@ -126,7 +126,8 @@ fn locals_of(definition: &Node) -> Vec<String> {
 	crate::late_binding::functions_in(definition).into_iter()
 		.flat_map(|function| {
 			let assigned: Vec<String> = crate::analyzer::find_assignments(&function.body, &|_| true).into_iter().map(|(_, name)| name.clone()).collect();
-			function.params.into_iter().map(|param| param.name).chain(assigned).collect::<Vec<_>>()
+			let looped = crate::lowering::for_loop::loop_variables(&function.body);
+			function.params.into_iter().map(|param| param.name).chain(assigned).chain(looped).collect::<Vec<_>>()
 		})
 		.collect()
 }
