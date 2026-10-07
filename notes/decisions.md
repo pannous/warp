@@ -52,9 +52,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P192 netbase backend: later, as a first external-module experiment (Later card); if the server is revived, a
   smaller version, not the full multi-GB one.
 - P193 the netbase wasp package lives inside pannous/netbase.
-- P194 (to warp-84): the std/ folder is renamed library/, and lib/netbase.wasp moves into it. Rule: long, readable
-  names, as long as they don't get too long. Card library-rename (worker session). P193 still names pannous/netbase
-  as netbase's eventual home (card netbase-first); library/netbase.wasp is where it lives until then.
+- P194 (to warp-84): std/ merges into lib/ ("it would be libraries plural, so lib is probably better"; the user first
+  said library/). netbase.wasp stays at lib/netbase.wasp until it moves to pannous/netbase (P193, card netbase-first).
+  Rule: long, readable names, as long as they don't get too long. Card lib-rename (worker session).
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
   compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
