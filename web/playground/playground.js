@@ -84,11 +84,11 @@ function startWorker() {
 			if (data.type === "stored") return keepStored(data.name, data.value);
 			if (data.type === "failed") return reject(new Error(data.message));
 			if (!pending) return showEventOutput(data);
-			if (data.type === "listening") pending.listening = data.events;
+			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") pending.printed.push(data);
 			if (data.type === "paint") pending.paintings.push(data);
 			if (data.type === "module") lastModule = data.bytes;
-			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], milliseconds: data.milliseconds });
+			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
@@ -216,6 +216,7 @@ function showReport(report) {
 	showRendered(report.html);
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
+	showAddress(report.address);
 	const notes = report.notes ?? [];
 	const inline = new Set((report.warnings ?? []).map(warning => warning.topic).filter(topic => notes.includes(topic)));
 	const expressionOf = topic => (report.got_it ?? []).find(offer => offer.topic === topic)?.expression;
@@ -326,6 +327,17 @@ function followLink(click) {
 	return true;
 }
 
+// the address bar shows the path of a program with routes (worker.js addressOf); a path typed there goes to that page
+function showAddress(path) {
+	$("address").hidden = path === undefined;
+	$("address").value = path ?? "";
+}
+
+function goToAddress(key) {
+	if (key.key !== "Enter") return;
+	worker.postMessage({ navigate: new URL($("address").value, PROGRAM_ORIGIN).pathname });
+}
+
 function clickDetail(click) {
 	const target = click.target.closest("canvas") ?? $("output");
 	const bounds = target.getBoundingClientRect();
@@ -340,6 +352,7 @@ function showEventOutput(data) {
 		$("printed").hidden = false;
 	}
 	if (data.type === "paint") showPaintings([data]);
+	if (data.type === "address") showAddress(data.path);
 	if (data.type !== "handled") return;
 	if (data.value !== undefined) {
 		$("value").textContent = data.value;
@@ -433,6 +446,7 @@ function initialize() {
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
 	$("run").onclick = runNow;
+	$("address").onkeydown = goToAddress;
 	$("rendered").onclick = click => followLink(click) || sendElementEvent("click", click, clickDetail(click));
 	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
 	$("output").onclick = click => sendPageEvent("click", clickDetail(click));
