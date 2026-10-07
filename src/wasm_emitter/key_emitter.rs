@@ -342,6 +342,9 @@ impl WasmGcEmitter {
 			let outer = std::mem::replace(&mut self.data_context, true);
 			self.emit_node_instructions(func, right_node);
 			self.data_context = outer;
+			if has_list_children(left, right_node) {
+				self.emit_call(func, super::list_ops::ELEMENT_BODY);
+			}
 		} else {
 			self.emit_node_instructions(func, right_node);
 		}
@@ -349,4 +352,10 @@ impl WasmGcEmitter {
 		func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
 		self.emit_call(func, "new_key");
 	}
+}
+
+/// `ul{ h2{…} [li{f} for f in fruits] }`: an element whose children hold a list, spliced into them at run time
+fn has_list_children(tag: &Node, children: &Node) -> bool {
+	let is_element = matches!(tag.drop_meta(), Node::Symbol(name) if crate::markup::is_element_tag(name));
+	is_element && matches!(children, Node::List(items, Bracket::Curly, _) if items.iter().any(|item| matches!(item.drop_meta(), Node::List(_, Bracket::Square, _))))
 }

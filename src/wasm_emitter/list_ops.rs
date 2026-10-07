@@ -13,6 +13,8 @@ use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONA
 
 /// An ASCII letter with this bit set is lowercase: `byte | ASCII_LOWERCASE_BIT == 'e'` takes e and E
 const ASCII_LOWERCASE_BIT: i32 = 0x20;
+pub(super) const ELEMENT_CHILDREN: &str = "element_children";
+pub(super) const ELEMENT_BODY: &str = "element_body";
 /// Runtime functions that read text by one of its units (byte, code point, grapheme)
 const TEXT_UNIT_USERS: [&str; 7] =
 	["node_count", "node_bytes", "string_char_at", "node_with_at", "text_byte_count", "text_codepoint_count", "text_grapheme_count"];
@@ -48,6 +50,8 @@ impl WasmGcEmitter {
 		self.emit_with_at_functions();
 		self.emit_typed_list_runtime();
 		self.emit_list_concat();
+		self.emit_element_children();
+		self.emit_element_body();
 		self.emit_list_insert_at();
 	}
 
@@ -1341,6 +1345,62 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(second), I::LocalSet(copy.result)]);
 			s.emit_rebuild_cells(f, &copy);
 			f.instruction(&I::LocalGet(copy.result));
+		});
+	}
+
+	/// element_children(children, tail): an element's `{…}` with each `[…]` among them spliced in, recursively, as its
+	/// own children in front of tail: `ul{ h2 [[li li]] }` is `ul{ h2 li li }` (card ul-li-fruit); empty items vanish
+	fn emit_element_children(&mut self) {
+		if !self.should_emit_function(ELEMENT_CHILDREN) {
+			return;
+		}
+		let node = self.type_manager.node_type;
+		let node_ref_nullable = Ref(self.node_ref(true));
+		let own_index = self.next_func_idx;
+		let (children, tail, item) = (0, 1, 2);
+		self.runtime_function(ELEMENT_CHILDREN, vec![node_ref_nullable, node_ref_nullable], vec![node_ref_nullable], vec![node_ref_nullable], |s, f| {
+			let kind_is = |s: &Self, f: &mut Function, local: u32, kind: i64| {
+				s.emit_field(f, local, 0);
+				Self::emit_list(f, &[I::I64Const(kind), I::I64Eq]);
+			};
+			// no children (null or ø): the tail
+			Self::emit_list(f, &[I::LocalGet(children), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
+			kind_is(s, f, children, Kind::Empty as i64);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
+			// the rest first, so each cell is built once
+			s.emit_field(f, children, 2);
+			Self::emit_list(f, &[I::LocalGet(tail), I::Call(own_index), I::LocalSet(tail)]);
+			s.emit_field(f, children, 1);
+			Self::emit_list(f, &[I::RefCastNullable(HeapType::Concrete(node)), I::LocalSet(item),
+				I::LocalGet(item), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
+			kind_is(s, f, item, Kind::Empty as i64);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
+			kind_is(s, f, item, SQUARE_LIST_KIND);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(item), I::LocalGet(tail), I::Call(own_index), I::Return, I::End,
+				I::LocalGet(item), I::LocalGet(tail), I::I64Const(super::bracket_info(&crate::node::Bracket::Curly))]);
+			s.call(f, "new_list");
+		});
+	}
+
+	/// element_body(children): the spliced children as a literal element holds them: ø for none, the child itself for
+	/// one (`ul:h2:"Fruit"`), else the list
+	fn emit_element_body(&mut self) {
+		if !self.should_emit_function(ELEMENT_BODY) {
+			return;
+		}
+		let node = self.type_manager.node_type;
+		let (node_ref, node_ref_nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
+		let (children, spliced) = (0, 1);
+		self.runtime_function(ELEMENT_BODY, vec![node_ref_nullable], vec![node_ref], vec![node_ref_nullable], |s, f| {
+			Self::emit_list(f, &[I::LocalGet(children), I::RefNull(HeapType::Concrete(node))]);
+			s.call(f, ELEMENT_CHILDREN);
+			Self::emit_list(f, &[I::LocalTee(spliced), I::RefIsNull, I::If(BlockType::Empty)]);
+			s.call(f, "new_empty");
+			Self::emit_list(f, &[I::Return, I::End]);
+			s.emit_field(f, spliced, 2);
+			Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty)]);
+			s.emit_field(f, spliced, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::Return, I::End, I::LocalGet(spliced), I::RefAsNonNull]);
 		});
 	}
 
