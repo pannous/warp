@@ -860,7 +860,12 @@ impl WaspParser {
 		let body = match (python_body, body) {
 			(true, Empty) => {
 				self.advance(); // :
-				self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty)
+				self.skip_spaces();
+				// `type Point: {` and its fields on the lines below: the braces are the body, as in `type Point {`
+				match self.current_char() == '{' {
+					true => Self::transform_fields_to_types(self.parse_bracketed('{')),
+					false => self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty),
+				}
 			}
 			// Ruby's `class Point` and the lines indented below it, up to its `end`
 			(false, Empty) if self.pos > before_body.0 && self.closing_end_follows(&RUBY_END_OPENERS) => {
