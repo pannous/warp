@@ -163,7 +163,7 @@ pub fn compared_text(subject: &Node) -> Option<String> {
 	}
 }
 
-fn is_equality_operand(node: &Node) -> bool {
+pub fn is_equality_operand(node: &Node) -> bool {
 	matches!(node, Node::Meta { data, .. } if matches!(data.as_ref(), Node::Key(key, _, _) if key.name() == EQUALITY_OPERAND))
 }
 
