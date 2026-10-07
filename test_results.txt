@@ -1970,6 +1970,7 @@ PASSED:
   ✓ parser::test_symbol_hyphen::test_decrement_inside_a_loop_body
   ✓ parser::test_symbol_hyphen::test_hyphen_between_words_stays_kebab_case
   ✓ parser::test_symbol_hyphen::test_trailing_decrement_is_not_part_of_the_name
+  ✓ parser::test_time_unit_keys::a_key_or_member_named_now_is_no_time
   ✓ parser::test_time_unit_keys::a_unit_word_after_a_number_is_still_a_unit
   ✓ parser::test_time_unit_keys::a_unit_word_before_a_colon_is_a_key
   ✓ parser::test_trailing_annotation::a_leading_annotation_still_marks_what_follows
@@ -2654,6 +2655,7 @@ PASSED:
   ✓ wasm::test_component_worlds::a_component_declaration_does_nothing_at_run_time
   ✓ wasm::test_component_worlds::a_program_without_component_has_no_world
   ✓ wasm::test_component_worlds::an_unknown_interface_is_named
+  ✓ wasm::test_component_worlds::texts_cross_the_component_boundary
   ✓ wasm::test_component_worlds::the_world_as_wit
   ✓ wasm::test_dead_functions::a_module_without_dead_functions_stays_as_it_is
   ✓ wasm::test_dead_functions::compiled_programs_carry_no_dead_functions
@@ -3211,4 +3213,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3206 passed, 0 failed, 3206 total tested
+19 ignored, 3208 passed, 0 failed, 3208 total tested
