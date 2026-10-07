@@ -27,6 +27,9 @@ pub fn eval(code: &str) -> Node {
 }
 
 fn eval_source(code: &str) -> Node {
+	if let Some(outcome) = crate::page_tests::answer(code) {
+		return outcome;
+	}
 	crate::diagnostic::begin_program(); // only the guesses made for this program explain its errors
 	match lawful_program(code) {
 		Ok(program) => {
@@ -135,7 +138,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 68] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 70] = [
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
 	crate::channel_words::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
@@ -150,9 +153,15 @@ const SOURCE_PASSES: [fn(Node) -> Node; 68] = [
 	crate::references::lower,
 	// `serve 8080 { get "/" {…} }`: route functions and the serving call (serve.rs), before any pass reads `get` as a call
 	crate::serve::lower,
+	// `.card { padding: 8px }` in a style block: the selector and the length as texts (style_rules.rs), before markup_tags
+	// reads `p.note{…}` as a tag
+	crate::style_rules::lower,
 	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
 	// reads it as a call
 	crate::markup_tags::lower,
+	// `li{ transition: fade 200ms }`: words as data, the attribute data-wasp-transition (transitions.rs), before any pass
+	// reads fade as a variable
+	crate::transitions::lower,
 	// `root` is sqrt (word_operators.rs), before pipes.rs reads `2|square|root`
 	crate::word_operators::lower,
 	// `x | f` (pipes.rs) before any pass reads the or

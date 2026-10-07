@@ -3,7 +3,8 @@
 // `wait`: milliseconds of timers and listeners before checking; `clicks`: the shown buttons, by text, clicked after
 // that, `clicked` the value then and `kept` that every element shown stays: only its text and attributes change;
 // `keyed` that every element with a key keeps it: a list item's element moves with its item; `typed`: the text typed
-// into the first input before the clicks; `clickedPrinted`: all printed text after the clicks).
+// into the first input before the clicks; `animated` that the clicks started an animation; `clickedPrinted`: all
+// printed text after the clicks).
 // samples.js (made by build.sh) adds samples/*.wasp.
 const EXAMPLES = {
 	welcome: { value: '[[1 4 9] 3 "reading"]', printed: "Alice turns 42\n", code: `// wasp is data and code in one notation, compiled to WebAssembly as you type: edit me
@@ -43,6 +44,13 @@ div{ button{ on click { pears = false } "hide pears" } Fruit("apples") (if pears
 	"keyed list": { value: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:1 "milk"} li{key:2 "eggs"} li{key:3 "tea"}]]}', clicks: ["rotate"], clicked: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:2 "eggs"} li{key:3 "tea"} li{key:1 "milk"}]]}', kept: true, keyed: true, code: `// a list in markup: with a key, each item keeps its element when the list changes (it moves, nothing is rewritten)
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{ button{ on click { todos = todos[1..] + [todos#1] } "rotate" } ul{ [li{ key: todo.id todo.text } for todo in todos] } }` },
+	transitions: { value: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:1 data-wasp-transition:"fade 150ms" "milk"} li{key:2 data-wasp-transition:"fade 150ms" "eggs"} li{key:3 data-wasp-transition:"fade 150ms" "tea"}]]}', clicks: ["rotate", "remove"], clicked: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:3 data-wasp-transition:"fade 150ms" "tea"} li{key:1 data-wasp-transition:"fade 150ms" "milk"}]]}', keyed: true, animated: true, code: `// transitions are data: a removed item fades out, the others glide to their new places
+todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
+div{
+	button{ on click { todos = todos[1..] + [todos#1] } "rotate" }
+	button{ on click { todos = todos[1..] } "remove" }
+	ul{ [li{ key: todo.id transition: fade 150ms todo.text } for todo in todos] }
+}` },
 	"form binding": { value: 'div{label{"Name " input{value:"Ann" data-wasp-input:"1"}} p:"Hello Ann"}', typed: "Bob", clicked: 'div{label{"Name " input{value:"Bob" data-wasp-input:"1"}} p:"Hello Bob"}', kept: true, code: `// bind: ties a field to a variable both ways: type a name, the greeting follows
 name = "Ann"
 div{ label{ "Name " input{ bind: name } } p{ "Hello " + name } }` },

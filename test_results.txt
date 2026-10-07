@@ -2180,7 +2180,6 @@ PASSED:
   ✓ text::test_map_text::a_map_has_a_text
   ✓ text::test_map_text::a_map_prints
   ✓ text::test_nested_list_text::a_count_takes_the_indexed_element
-  ✓ text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal
   ✓ text::test_nested_list_text::an_index_is_an_atom_so_a_method_applies_to_the_element
   ✓ text::test_print_all_characters::print_all_characters_prints_each
   ✓ text::test_print_arguments::print_joins_its_arguments_with_a_space
@@ -2746,6 +2745,10 @@ PASSED:
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
+  ✓ web::test_headless_pages::a_click_runs_the_handler_and_shows_the_page_anew
+  ✓ web::test_headless_pages::a_missing_button_is_a_loud_error
+  ✓ web::test_headless_pages::each_component_instance_counts_on_its_own
+  ✓ web::test_headless_pages::typing_into_a_bound_field_sets_its_variable
   ✓ web::test_html_module::to_html_writes_markup_as_html_rs_does
   ✓ web::test_html_render::a_computed_child_next_to_an_attribute
   ✓ web::test_html_render::a_whole_page
@@ -2761,11 +2764,21 @@ PASSED:
   ✓ web::test_markup_tags::a_call_outside_tags_or_of_a_function_stays_a_call
   ✓ web::test_markup_tags::a_tag_takes_its_attributes_in_parentheses
   ✓ web::test_markup_tags::the_html_dsl_sample_runs
+  ✓ web::test_page_tests::a_failing_check_names_its_test_and_the_page
+  ✓ web::test_page_tests::a_missing_button_fails_the_test
+  ✓ web::test_page_tests::passing_page_tests_are_counted
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
   ✓ web::test_site::a_static_page_is_its_last_line_rendered
+  ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
+  ✓ web::test_style_rules::lengths_keep_their_units
+  ✓ web::test_style_rules::selectors_need_no_quotes
   ✓ web::test_styles::a_style_sheet_is_a_block_of_rules
   ✓ web::test_styles::an_inline_style_is_a_block_of_properties
+  ✓ web::test_transitions::a_keyed_item_keeps_its_transition
+  ✓ web::test_transitions::a_style_transition_is_css
+  ✓ web::test_transitions::a_transition_ends_before_the_children
+  ✓ web::test_transitions::a_transition_is_data_on_its_element
   ✓ web::test_uniscript::an_unknown_entity_is_an_error
   ✓ web::test_uniscript::block_types_style_their_operands
   ✓ web::test_uniscript::colors_and_geometry_are_suffix_controls
@@ -3121,4 +3134,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3116 passed, 0 failed, 3116 total tested
+19 ignored, 3129 passed, 0 failed, 3129 total tested
