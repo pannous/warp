@@ -1125,7 +1125,8 @@ impl WaspParser {
 	/// a variant without payload is its name, a symbol (`None` stays ø)
 	fn parse_sum_type(&mut self, type_name: String, type_parameters: &[String], start: usize) -> Node {
 		self.advance_by(start);
-		let mut declarations = vec![Node::Type { name: Box::new(Symbol(type_name.clone())), body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)) }];
+		let mut declarations = vec![];
+		let mut bare_variants = vec![];
 		loop {
 			self.skip_spaces();
 			let variant = match self.parse_symbol() {
@@ -1139,12 +1140,16 @@ impl WaspParser {
 				payload.extend(self.parse_symbol().ok().map(Symbol));
 				self.skip_spaces();
 			}
-			if !payload.is_empty() {
-				declarations.push(self.variant_class(&type_name, variant, payload, type_parameters));
+			match payload.is_empty() {
+				true => bare_variants.push(Symbol(variant)),
+				false => declarations.push(self.variant_class(&type_name, variant, payload, type_parameters)),
 			}
 			let blanks = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
 			if self.peek_char(blanks) != '|' {
-				return Node::List(declarations, Bracket::None, Separator::Semicolon);
+				// `red is Color`: the variants without payload stay symbols, members of the type by name (P179)
+				let name = Symbol(type_name).with_attribute(crate::lowering::sum_variants::VARIANTS_MARK, Node::List(bare_variants, Bracket::None, Separator::Space));
+				let sum_type = Node::Type { name: Box::new(name), body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)) };
+				return Node::List([vec![sum_type], declarations].concat(), Bracket::None, Separator::Semicolon);
 			}
 			self.advance_by(blanks + 1);
 		}
@@ -1158,14 +1163,22 @@ impl WaspParser {
 			Node::List(items, _, _) if items.len() == 1 => items[0].clone(),
 			_ => field,
 		};
-		let fields = payload.into_iter().map(sole).enumerate().map(|(index, field)| match field.drop_meta() {
+		// P179: `rgb(r, g, b)` names its fields; `Some(T)`, `rgb(int, int, int)` and `Pair(Point, Point)` give types
+		let is_type = |name: &str| crate::analyzer::builtin_type_kind(name).is_some() || type_parameters.iter().any(|parameter| parameter == name)
+			|| self.declared_types.contains(name) || name.starts_with(char::is_uppercase);
+		let mut untyped = type_parameters.to_vec();
+		let fields: Vec<Node> = payload.into_iter().map(sole).enumerate().map(|(index, field)| match field.drop_meta() {
 			Node::Key(_, Op::Colon, _) => field,
+			Node::Symbol(name) if !is_type(name) => {
+				untyped.push(name.clone());
+				Node::Key(Box::new(Symbol(name.clone())), Op::Colon, Box::new(field))
+			}
 			_ => Node::Key(Box::new(Symbol(field_name(index))), Op::Colon, Box::new(field)),
-		});
-		let body = Self::transform_fields_to_types(Node::List(fields.collect(), Bracket::Curly, Separator::Semicolon));
+		}).collect();
+		let body = Self::transform_fields_to_types(Node::List(fields, Bracket::Curly, Separator::Semicolon));
 		self.declared_types.insert(variant.clone());
 		let name = Symbol(variant).with_attribute(EXTENDS_KEYWORD, Symbol(type_name.to_string()));
-		Node::Type { name: Box::new(name), body: Box::new(any_for_type_parameters(body, type_parameters)) }
+		Node::Type { name: Box::new(name), body: Box::new(any_for_type_parameters(body, &untyped)) }
 	}
 
 	/// `<T>`, `<A, B>`, `[T]`: the names of the type parameters of a declared type

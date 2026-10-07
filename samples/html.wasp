@@ -1,5 +1,5 @@
 #!/usr/bin/env wasp
-html{
+html{ lang:"en"
   body{
     form{
       div{ class:"form-group" // free form values need to be quoted

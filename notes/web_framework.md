@@ -162,15 +162,24 @@ Each step is useful on its own and is what the next ones stand on.
   so its page events draw no warning.
 
 ## Step 15 (web-transitions), what is done and what is left
-- `li{ transition: fade 200ms }` (lowering/transitions.rs, right after markup_tags) is the attribute
-  `data-wasp-transition: "fade 200ms"`: its words are data (not variables), durations normalized to ms, a text taken as
-  written; the words end where the children begin. In `style: {…}` transition stays the CSS property.
-- The page (markup.js morphChildren, Web Animations API, no CSS): an element with a transition animates in when
-  inserted and out before removal (marked data-wasp-leaving, skipped by matching, removed when done; a keyed item gone
-  from its list leaves where it stands); a keyed one glides to its new place (FLIP). Kinds fade, scale, slide; default
-  fade 200ms ease; any other word is the easing. Nothing animates on the first render or with prefers-reduced-motion.
-  Tour example transitions (`animated` check of test_in_browser.py); probes/transitions/leave_check.py.
-- Left: separate enter / leave kinds (`enter: slide leave: fade`), custom keyframes as data, `0.3s` (card
+- CSS form (P188, card web-css; lowering/transitions.rs, right after markup_tags): `li{ transition: opacity 200ms }` is
+  the element's inline CSS transition, joined to its own `style`; `starting-style: { opacity: 0 }` (CSS's
+  @starting-style, which an inline style cannot hold) is the attribute `data-wasp-starting-style`, rendered as
+  declarations by std/markup.wasp. Words are data (not variables), durations normalized to ms, a text taken as written,
+  timing words (`ease-out`) join the transition; the words end where the children begin. In `style: {…}` transition
+  stays the CSS property as written.
+- The kinds before CSS, `transition: fade 200ms` (also scale, slide), lower to that CSS (opacity, and transform for
+  scale/slide, plus their starting style) with an advise hint naming the CSS form.
+- The page: web/playground/markup-transitions.js, loaded after markup.js only by sites whose module mentions
+  "transition" (site.rs scripts_of; playground index.html and pages.yml SITE_FILES list it), replaces markup.js's
+  defaults transitionPlaces, enter, leave, moveFrom (hello-world budget stays small). Web Animations API from the
+  computed CSS transition: an element with a starting style animates in from it when inserted and towards it before
+  removal (marked data-wasp-leaving, skipped by matching, removed when done; a keyed item gone from its list leaves
+  where it stands); a keyed one whose transition covers transform (or all) glides to its new place (FLIP). Nothing
+  animates on the first render or with prefers-reduced-motion. Tests: tests/web/test_css_transitions.rs,
+  test_transitions.rs; tour example transitions (`animated` check of test_in_browser.py);
+  probes/transitions/leave_check.py.
+- Left: custom keyframes as data, `0.3s` (card
   fractional-durations), leaving items still take their space until removed (no absolute positioning while leaving).
 - Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
   (`data-wasp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
@@ -259,6 +268,10 @@ Each step is useful on its own and is what the next ones stand on.
   localStorage (`wasp stored <name>`): the worker gets them at start and sends each save back (host.js
   STD_ADAPTERS.store, markup.js keptValues / keepValue, shared with built sites: site.js). Values cross as JSON
   (std_adapters, as foreign calls).
+- Runtime keys (card web-apis, storage): `storage` is the same store as a map: `storage[k] = v`, `storage[k]` (ø when
+  absent), `delete storage[k]`, `keys(storage)`, `storage.k`; the store words remove and names beside load and save.
+  A program defining its own `storage` keeps it. The word is a default (question queued with the Interviewer: `local[…]`
+  / `session[…]`, or `stored` as a map). IndexedDB for values beyond localStorage's ~5 MB is left.
 - Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
@@ -332,8 +345,10 @@ Each step is useful on its own and is what the next ones stand on.
   {values} or {error} with writeShared; the program's worker blocks in host-tasks.js readShared (shared by tasks,
   fetches and the GPU). A shader that does not compile fails loudly with its line:column. Without task Workers (a page
   that is not cross-origin isolated, e.g. a built site) it is a loud error.
-- Natively a loud error ("gpu_compute needs WebGPU"): wgpu would be a dependency of its own (open question, card
-  simd-map). Not a sample yet: samples run natively in tests/programs/test_playground_samples.rs.
+- Natively (2026-10-07, warp-12): src/gpu.rs runs the same shader through wgpu 30 (Metal, Vulkan or DX12; the
+  `native` feature; pollster blocks on its futures), one device per process; errors in the browser's form, `1:10:
+  expected identifier…` or wgpu's innermost cause. A machine without an adapter says "no WebGPU adapter" (tests skip).
+  Cost: 69 more crates in Cargo.lock, a first build of about a minute. Not a sample yet.
 - Next: more buffers and uniforms (a map of named arrays), typed results (ints as array<i32>), render to a canvas.
 
 ## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)

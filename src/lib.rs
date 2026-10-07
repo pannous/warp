@@ -36,6 +36,8 @@ pub mod channels;
 #[cfg(feature = "native")]
 pub mod web_sockets;
 #[cfg(feature = "native")]
+pub mod gpu;
+#[cfg(feature = "native")]
 pub mod shared;
 #[cfg(feature = "native")]
 pub mod paint;

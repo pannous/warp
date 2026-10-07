@@ -27,6 +27,9 @@ const WORKER_FILES: [Script; 3] = [
 /// The root's attribute listing the scripts of the program's Worker (site-thread.js WORKER_ATTRIBUTE)
 const WORKER_ATTRIBUTE: &str = "data-wasp-worker";
 const LIST_SEPARATOR: &str = ",";
+/// The part of markup.js for elements with a CSS transition, after it: only a module that names a transition has them
+const TRANSITIONS_SCRIPT: Script = ("markup-transitions.js", include_str!("../web/playground/markup-transitions.js"));
+const TRANSITION_WORD: &[u8] = b"transition";
 type Script = (&'static str, &'static str);
 const WASI_LIBRARY: &str = "wasi_snapshot_preview1";
 const TASK_WORD_PREFIXES: [&str; 3] = ["task_", "channel_", "shared_"];
@@ -197,9 +200,9 @@ fn site_of(code: &str, title: &str, dev: bool) -> Result<Option<Site>, String> {
 	let host_scripts = host_scripts_of(&module.bytes)?;
 	let dev_script = dev.then_some(DEV_SCRIPT);
 	let (scripts, worker_scripts): (Vec<Script>, Vec<Script>) = if runs_in_a_worker(&imports_of(&module.bytes)?) {
-		([THREAD_SCRIPT].into_iter().chain(PAGE_SCRIPTS).chain(dev_script).collect(), host_scripts)
+		([THREAD_SCRIPT].into_iter().chain(page_scripts_of(&module.bytes)).chain(dev_script).collect(), host_scripts)
 	} else {
-		(host_scripts.into_iter().chain(PAGE_SCRIPTS).chain(dev_script).collect(), vec![])
+		(host_scripts.into_iter().chain(page_scripts_of(&module.bytes)).chain(dev_script).collect(), vec![])
 	};
 	let mut site = Site { module: module.bytes, imports, scripts, worker_scripts, files: vec![] };
 	let page = rendered_page(code, title, &site, BESIDE)?;
@@ -258,9 +261,16 @@ pub fn dev_shell(title: &str) -> Vec<SiteFile> {
 }
 
 /// The scripts of the page of a module, in load order: the parts of the host it imports words of, with the parts they
-/// need; `dev` adds dev.js
+/// need, and markup-transitions.js when it names a transition; `dev` adds dev.js
 pub fn scripts_of(module: &[u8], dev: bool) -> Result<Vec<Script>, String> {
-	Ok(host_scripts_of(module)?.into_iter().chain(PAGE_SCRIPTS).chain(dev.then_some(DEV_SCRIPT)).collect())
+	Ok(host_scripts_of(module)?.into_iter().chain(page_scripts_of(module)).chain(dev.then_some(DEV_SCRIPT)).collect())
+}
+
+/// markup.js, its transitions part when the module names a transition, and site.js
+fn page_scripts_of(module: &[u8]) -> Vec<Script> {
+	let [markup, site] = PAGE_SCRIPTS;
+	let transitions = module.windows(TRANSITION_WORD.len()).any(|window| window == TRANSITION_WORD).then_some(TRANSITIONS_SCRIPT);
+	[markup].into_iter().chain(transitions).chain([site]).collect()
 }
 
 /// host.js with reader.js and the parts of the host a module imports words of, with the parts they need
