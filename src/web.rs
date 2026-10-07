@@ -324,6 +324,9 @@ mod page {
 		pub fn run(wasm: *const u8, length: usize) -> usize;
 		/// Copy the kept outcome JSON to `into`
 		pub fn take(into: *mut u8);
+		/// Run the handler of page event `event` (`click·1`) with `detail` (JSON) in the last run that listens, then read its
+		/// page·value; keep that outcome JSON, returns its length in bytes (headless.rs)
+		pub fn page_event(event: *const u8, event_length: usize, detail: *const u8, detail_length: usize) -> usize;
 		/// Milliseconds since the epoch (Date.now)
 		pub fn now_ms() -> f64;
 		/// A panic message of the compiler, shown instead of a bare `unreachable`
@@ -395,6 +398,18 @@ pub fn run_in_host(wasm: &[u8]) -> Node {
 	match serde_json::from_slice::<Value>(&outcome) {
 		Ok(outcome) => run_outcome(&outcome),
 		Err(problem) => crate::node::error(&format!("could not read the outcome of the run: {problem}")),
+	}
+}
+
+/// A page event in the embedding host's last listening run: what the page shows after its handler (headless.rs)
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+pub fn page_event_in_host(event: &str, detail: &Value) -> Node {
+	let detail = detail.to_string();
+	let mut outcome = vec![0u8; unsafe { page::page_event(event.as_ptr(), event.len(), detail.as_ptr(), detail.len()) }];
+	unsafe { page::take(outcome.as_mut_ptr()) };
+	match serde_json::from_slice::<Value>(&outcome) {
+		Ok(outcome) => run_outcome(&outcome),
+		Err(problem) => crate::node::error(&format!("could not read the outcome of the page event: {problem}")),
 	}
 }
 
