@@ -66,7 +66,7 @@ const crc32Of = bytes => (bytes.reduce((crc, byte) => CRC32_TABLE[(crc ^ byte) &
 // the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (plainOfTree / treeOfPlain, as for foreign_call)
 const STD_ADAPTERS = {
-	json: { parse: text => JSON.parse(text), to_json: value => JSON.stringify(value) },
+	json: { parse: text => JSON.parse(text), to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
 	file: {
 		write: (path, content) => { writtenFiles.set(filePath(path), contentText(content)); return null; },
 		append: (path, content) => { writtenFiles.set(filePath(path), textOfFile(path) + contentText(content)); return null; },
@@ -86,6 +86,14 @@ const STD_ADAPTERS = {
 		replace: (subject, pattern, replacement) => subject.replace(regexOf(pattern, "g"), replacement),
 	},
 };
+// an instance of one of the program's classes is its fields: {Point: {x: 1}} is {x: 1} (src/std_adapters.rs)
+function withoutClassTags(value, classes) {
+	if (Array.isArray(value)) return value.map(item => withoutClassTags(item, classes));
+	if (value === null || typeof value !== "object") return value;
+	const keys = Object.keys(value);
+	if (keys.length === 1 && classes.has(keys[0]) && value[keys[0]] !== null && typeof value[keys[0]] === "object" && !Array.isArray(value[keys[0]])) return withoutClassTags(value[keys[0]], classes);
+	return Object.fromEntries(keys.map(key => [key, withoutClassTags(value[key], classes)]));
+}
 // what Rust's regex lacks is refused here too, so a pattern means the same in both hosts (src/std_adapters.rs regex_of)
 function regexOf(pattern, flags = "") {
 	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
