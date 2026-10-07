@@ -109,7 +109,7 @@ Text is anything in quotes: a word, a name, a sentence.
 "1 + 1 = $(1 + 1)"
 ```
 
-Examples: text; samples: levenshtein TODO: many more! sort!
+Examples: text; samples: levenshtein, palindrome, word_count, sort_words, word_lengths, replace_word, find_text
 
 ## Variables
 
@@ -201,6 +201,12 @@ x = 5
 if x > 9 : "big" else if x > 3 : "medium" else "small"
 ```
 
+`time` is the time of day, so the answer depends on when you run it.
+
+```wasp
+if time < 12h : "morning" else "later"
+```
+
 Braces hold several lines.
 
 ```wasp
@@ -262,6 +268,8 @@ Make a new list from another one.
 ```wasp => [1 4 9 16]
 [x² for x in [1 2 3 4]]
 ```
+
+With a function, `square [1 2 3 4]` does the same: see "Whole lists at once".
 
 `where` keeps only some items.
 
@@ -444,7 +452,7 @@ raise "boom"
 
 When a line could mean two things, warp asks which one you meant.
 
-Examples: "welcoming errors", ambiguity
+Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions
 
 ## Modules
 
@@ -535,6 +543,19 @@ Attributes look like HTML.
 
 ```wasp => b{class:"fat" "hello" }
 b{class:"fat" "hello" }
+```
+
+Tags hold other tags, like a page does.
+
+```wasp => div{h1:"Fruit" p{"Fresh " b:"pears" " today"}}
+div{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
+```
+
+A list of values makes a list of tags.
+
+```wasp => ul:[[li:"apple" li:"pear"]]
+fruits = ["apple" "pear"]
+ul{ [li{ fruit } for fruit in fruits] }
 ```
 
 `on click { … }` inside a button makes it do something. `local["key"]` remembers a value in the browser.
