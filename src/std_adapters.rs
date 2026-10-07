@@ -86,19 +86,25 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 type StoredValues = serde_json::Map<String, serde_json::Value>;
 
 thread_local! {
-	/// The stored values of a program run without a file (`warp eval`, tests): kept while the process runs
-	static UNFILED_STORE: std::cell::RefCell<StoredValues> = std::cell::RefCell::new(StoredValues::new());
+	/// The stored values kept in memory while the process runs, by store: of a program without a file (`warp eval`,
+	/// tests) and a dev page's under "", the session's (`session[k]`) under its own
+	static UNFILED_STORES: std::cell::RefCell<std::collections::HashMap<&'static str, StoredValues>> = Default::default();
 }
 
-/// Values kept in memory: of a program without a file, and those a `warp dev` page keeps itself (its sessionStorage)
-fn is_unfiled(file: &str) -> bool {
-	file.is_empty() || file == crate::stored_values::DEV_STORE
+/// The store in memory a file stands for: of a program without a file, those a `warp dev` page keeps itself (its
+/// sessionStorage), the session's; none for a store file
+fn unfiled_store(file: &str) -> Option<&'static str> {
+	match file {
+		"" | crate::stored_values::DEV_STORE => Some(""),
+		crate::stored_values::SESSION_STORE => Some(crate::stored_values::SESSION_STORE),
+		_ => None,
+	}
 }
 
 /// The stored values in the program's store file (a JSON object by name), none when it does not exist yet
 fn stored_values(file: &str) -> Result<StoredValues, String> {
-	if is_unfiled(file) {
-		return Ok(UNFILED_STORE.with(|store| store.borrow().clone()));
+	if let Some(store) = unfiled_store(file) {
+		return Ok(UNFILED_STORES.with(|stores| stores.borrow().get(store).cloned().unwrap_or_default()));
 	}
 	match std::fs::read_to_string(file) {
 		Ok(text) => serde_json::from_str(&text).map_err(|problem| format!("{file} holds no stored values: {problem}")),
@@ -108,8 +114,8 @@ fn stored_values(file: &str) -> Result<StoredValues, String> {
 }
 
 fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
-	if is_unfiled(file) {
-		UNFILED_STORE.with(|store| *store.borrow_mut() = values);
+	if let Some(store) = unfiled_store(file) {
+		UNFILED_STORES.with(|stores| stores.borrow_mut().insert(store, values));
 		return Ok(());
 	}
 	let text = serde_json::to_string_pretty(&values).map_err(|problem| problem.to_string())?;

@@ -99,7 +99,7 @@ function startWorker() {
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
 	tellSystemValues();
 	sharePointer();
-	worker.postMessage({ stored: keptValues() });
+	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
 }
 
 // `notify "text"`: the browser's notification once the page may show them; until then (or when refused) a printed

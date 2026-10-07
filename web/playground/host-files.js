@@ -81,6 +81,9 @@ function hostResult(program, action, what) {
 	}
 }
 
+// the values of a store: the session's (markup.js SESSION_STORE), else the program's
+const valuesOf = file => file === "wasp-session" ? sessionValues : storedValues;
+
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
 		const fetchUrl = (pointer, length, timeout) => {
@@ -103,14 +106,15 @@ addHostPart({
 		};
 	},
 	adapters: {
-		// `stored theme = "dark"`, `storage[k]` (src/lowering/stored_values.rs, std_io): the page's values (markup.js
-		// keptValues), each save sent back to it with its store (the dev store of a `warp dev` page, else the program's)
+		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/stored_values.rs, std_io): the page's values
+		// (markup.js keptValues), each save sent back to it with its store (the dev store of a `warp dev` page, the
+		// session's, else the program's)
 		store: {
-			load: (name, fallback) => name in storedValues ? storedValues[name] : fallback,
-			save: (name, value, file) => { storedValues[name] = value; self.keepStored?.(name, value, file); return null; },
-			// `delete storage[k]` (kept as undefined: markup.js keepValue drops it), `keys(storage)`
-			remove: (name, file) => { delete storedValues[name]; self.keepStored?.(name, undefined, file); return null; },
-			names: () => Object.keys(storedValues),
+			load: (name, fallback, file) => name in valuesOf(file) ? valuesOf(file)[name] : fallback,
+			save: (name, value, file) => { valuesOf(file)[name] = value; self.keepStored?.(name, value, file); return null; },
+			// `delete local[k]` (kept as undefined: markup.js keepValue drops it), `keys(local)`
+			remove: (name, file) => { delete valuesOf(file)[name]; self.keepStored?.(name, undefined, file); return null; },
+			names: file => Object.keys(valuesOf(file)),
 		},
 		file: {
 			write: (path, content) => { writtenFiles.set(filePath(path), contentText(content)); return null; },
