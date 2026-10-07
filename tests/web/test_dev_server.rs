@@ -2,7 +2,7 @@
 // build's version and its failure, which the page shows as an overlay; a change of the file makes a new version
 use std::time::Duration;
 
-const PORT: u16 = 18432;
+const PORT: u16 = 18439; // not 18432: test_web_server's RPC server listens there, and parallel tests met each other's server
 const FOLDER: &str = "scratch/dev_server";
 
 fn get(path: &str) -> String {
