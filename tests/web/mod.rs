@@ -11,3 +11,4 @@ mod test_element_events;
 mod test_components;
 mod test_keyed_lists;
 mod test_form_bindings;
+mod test_styles;

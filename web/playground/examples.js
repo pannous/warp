@@ -37,6 +37,13 @@ div{ button{ on click { todos = todos[1..] + [todos#1] } "rotate" } ul{ [li{ key
 	"form binding": { value: 'div{input{value:"Ann" data-wasp-input:"1"} p:"Hello Ann"}', typed: "Bob", clicked: 'div{input{value:"Bob" data-wasp-input:"1"} p:"Hello Bob"}', kept: true, code: `// bind: ties a field to a variable both ways: type a name, the greeting follows
 name = "Ann"
 div{ input{ bind: name } p{ "Hello " + name } }` },
+	styles: { value: 'div{style:.card{padding:8 border:"1px solid gray"} button{data-wasp-click:"1" "dark"} p{class:"card" style{color:"black" background:"white"} "a themed card"}}', clicks: ["dark"], clicked: 'div{style:.card{padding:8 border:"1px solid gray"} button{data-wasp-click:"1" "dark"} p{class:"card" style{color:"white" background:"black"} "a themed card"}}', kept: true, code: `// styles are wasp data: a style sheet of rules, an inline style of properties; values may read variables
+dark = false
+div{
+	style{ ".card": { padding: 8 border: "1px solid gray" } }
+	button{ on click { dark = not dark } "dark" }
+	p{ class: "card" style: { color: dark ? "white" : "black" background: dark ? "black" : "white" } "a themed card" }
+}` },
 	functions: { value: "25", code: `// a function, called with or without parentheses
 def square(x) = x*x
 square(4) + square 3` },
