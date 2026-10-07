@@ -151,6 +151,10 @@ impl WaspParser {
 				(0..=name.len()).for_each(|_| self.advance());
 				error(&format!("a uniscript entity is written \\:{name}, not \\{name}"))
 			}
+			_ if let Some((operator, length)) = self.bare_operator_in_block() => {
+				(0..length).for_each(|_| self.advance());
+				error(&format!("{{{operator}}} is an operator without operands, no function: write them, e.g. map xs {{it + 1}}"))
+			}
 			ch => {
 				warn!(
 					"Unexpected character '{}' at line {}, column {}",
@@ -576,6 +580,15 @@ impl WaspParser {
 		blanks > 0 && name > 0 && self.is_identifier_start(blanks) && self.peek_char(blanks + name) == '('
 	}
 
+	/// ` () {` after a name
+	fn empty_parameters_and_block_follow(&self) -> bool {
+		let blanks_from = |start: usize| (start..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = blanks_from(0);
+		let inner = blanks_from(blanks + 1);
+		let closed = blanks + 1 + inner;
+		blanks > 0 && self.peek_char(blanks) == '(' && self.peek_char(closed) == ')' && self.peek_char(closed + 1 + blanks_from(closed + 1)) == '{'
+	}
+
 	pub(super) fn parameters_follow_after_blanks(&self) -> bool {
 		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		blanks > 0 && self.peek_char(blanks) == '('
@@ -616,7 +629,9 @@ impl WaspParser {
 
 		// `def square (n) {…}` names its function like `def square(n) {…}`
 		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && !self.options.wit_mode && !self.options.data_mode);
-		if names_function && self.parameters_follow_after_blanks() {
+		// C's `int boom () { -1 }` (wiki/type.md): a name, `()` and a block are a definition like `boom() {…}`
+		let spaced_definition = !self.options.wit_mode && !self.options.data_mode && self.empty_parameters_and_block_follow();
+		if (names_function && self.parameters_follow_after_blanks()) || spaced_definition {
 			self.skip_spaces();
 		}
 		// Rust's and C#'s `fn apply<F: Fn(i32) -> i32>(f: F)`, `id<T>(x: T)`: the type parameters say nothing wasp needs
@@ -940,7 +955,7 @@ impl WaspParser {
 			}
 		}
 		self.skip_struct_words();
-		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
+		let body = if self.current_char() == '{' { Self::class_body(self.parse_bracketed('{')) } else { Empty };
 		// Python's `class Point:` and the lines indented below it
 		let body = match (python_body, body) {
 			(true, Empty) => {
@@ -949,7 +964,7 @@ impl WaspParser {
 				self.skip_struct_words();
 				// `type Point: {` and its fields on the lines below: the braces are the body, as in `type Point {`
 				match self.current_char() == '{' {
-					true => Self::transform_fields_to_types(self.parse_bracketed('{')),
+					true => Self::class_body(self.parse_bracketed('{')),
 					false => self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty),
 				}
 			}
@@ -976,7 +991,12 @@ impl WaspParser {
 		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
 		// Kotlin's `sealed class Shape`, Swift's `class Marker`: a class without fields, when its line ends after the name
 		// (`type of x` goes on: no declaration)
-		let body = if matches!(body, Empty) && ends_statement { Node::List(vec![], Bracket::Curly, Separator::None) } else { body };
+		let bodyless = matches!(body, Empty) && ends_statement;
+		let body = if bodyless { Node::List(vec![], Bracket::Curly, Separator::None) } else { body };
+		// C#'s file-scoped `class Foo;` takes in the definitions after it (file_declarations.rs)
+		if bodyless && self.current_char() == ';' {
+			name = name.with_attribute(crate::lowering::file_declarations::FILE_CLASS_MARK, Node::True);
+		}
 		Node::Type { name: Box::new(name), body: Box::new(body) }
 	}
 
