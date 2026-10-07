@@ -123,6 +123,10 @@ pub fn insert_module_classes(program: Node) -> Node {
 
 /// `HashSet(xs)` as `Set(xs)`, with a note
 fn with_std_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
+	// a note points at the innermost positioned node around the written word
+	if node.get_lineinfo().is_some() {
+		crate::normalize::set_position_of(&node);
+	}
 	match node {
 		Node::Symbol(name) => match aliases.iter().find(|(alias, _)| *alias == name) {
 			Some((alias, class)) => {
@@ -629,10 +633,17 @@ const PRELUDE_WORDS: [(&str, &[&str]); 1] = [("file", &["write", "exists"])];
 const FILE_URL_PREFIX: &str = "file://";
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
 /// a note, when a used module defines that word
-const STD_ALIASES: [(&str, &str); 9] = [
+const STD_ALIASES: [(&str, &str); 27] = [
 	("HashSet", "Set"), ("TreeSet", "Set"), ("LinkedHashSet", "Set"), ("frozenset", "Set"),
 	("ArrayDeque", "Deque"), ("VecDeque", "Deque"), ("deque", "Deque"),
 	("OrderedDict", "OrderedMap"), ("LinkedHashMap", "OrderedMap"),
+	// P169: the C library's historic names of `use math`'s words (atan2 takes y first, angle(x, y) does not: no alias)
+	// sqrt and cbrt are the operators √ and ∛ already
+	("pow", "power"), ("exp", "exponential"), ("log2", "binary_log"),
+	("log10", "decimal_log"), ("sin", "sine"), ("cos", "cosine"), ("tan", "tangent"), ("asin", "arc_sine"),
+	("acos", "arc_cosine"), ("atan", "arc_tangent"), ("sinh", "hyperbolic_sine"), ("cosh", "hyperbolic_cosine"),
+	("tanh", "hyperbolic_tangent"), ("hypot", "hypotenuse"), ("ceil", "ceiling"), ("trunc", "whole_part"),
+	("fmod", "remainder"), ("ln", "natural_log"),
 ];
 
 /// The name an embedded module is loaded under, once per program

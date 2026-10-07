@@ -114,6 +114,11 @@ Next:
    P171: write and exists are prelude words (modules PRELUDE_WORDS: only their definitions come along, a program's own
    word wins); P183: a "file://…" text loads the whole file module; file.append(path, text) is the qualified-only word
    (welcome_forms QUALIFIED_WORDS → append_file), bare append stays the list method.
+   P169/P191: `use math` adds descriptive names forwarding to C (square cube square_root cube_root power exponential
+   natural_log binary_log decimal_log logarithm sine … hyperbolic_tangent angle hypotenuse ceiling whole_part
+   remainder); the C names still work with a note (modules STD_ALIASES, positioned at the nearest positioned node);
+   `use cmath` is the raw C library. cube_root uses a float exponent: `x ^ (1/3)` traps ("an exact power needs an
+   integer exponent", 1/3 is exact). sqrt/cbrt have no alias: they are the operators √ ∛.
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:

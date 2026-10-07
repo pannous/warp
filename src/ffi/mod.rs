@@ -392,7 +392,7 @@ pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignat
 /// Resolve library alias to canonical name
 pub fn resolve_library_alias(alias: &str) -> &'static str {
     match alias {
-        "m" | "math" | "libm" => "m",
+        "m" | "math" | "cmath" | "libm" => "m",
         "c" | "libc" => "c",
         "SDL2" | "sdl2" | "sdl" => "SDL2",
         "z" | "zlib" => "z",
