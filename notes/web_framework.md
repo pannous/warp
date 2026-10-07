@@ -191,9 +191,21 @@ Each step is useful on its own and is what the next ones stand on.
 - Open: the page is rendered once at start (per request later); a relative `fetch "/api/…"` fails during that render
   (no server yet), so the first HTML shows the error state until the page fetches; `server def` bodies still run in the
   page (the RPC stub of the page build is not done).
-- Routes (web-router, agreed with warp-cf for web-bundle): `route "/x" { Page() }` lowers to page·route·<N>, the table
-  is the export page·routes (paths in order), site.js sets page·path, page·html stays the one export; warp-cf splits
-  page·route·<N> into app·<N>.wasm and site.js loads it on first navigation.
+## Routes (card web-router, 2026-10-07; split agreed with warp-cf (web-bundle) and warp-34 (playground, fetch-cancel))
+- `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, std/router.wasp): each route is the function page·route·N,
+  `id` bound by `let` to that part of the path (a number when it is digits, else the text), page·routes gives the
+  patterns in order (exported, for warp-cf's per-route modules), page·routed() is the first route matching the page's
+  path, else "no page at <path>"; `route "*"` matches any path (the not-found page). A layout shows page·routed() where
+  it says `outlet`; else a program ending with a route shows it as its last line.
+- The path is the host word page_path(): natively "/" (host::with_page_path for a render at another path), in a built
+  site location.pathname (site.js hooks.pagePath), in the playground "/" until a link is followed. host.js
+  navigate(holder, hooks, path) sets it and calls hooks.navigated (warp-34: drop pending fetches there).
+- Links: site.js follows same-origin `a[href]` clicks without modifier keys with pushState and shows page·html anew;
+  popstate does the same. The playground sends {navigate: path} to the worker (playground.js followLink), which shows
+  page·value, else page·routed. A routes program stays listening for that. Tour example routes.
+- Open: typed parameters (card route-typed), nested route blocks (`route "/users" { route ":id" {…} }`), a built site
+  prerendering each static route (index.html is "/" only; a deep link needs the serve program to render it), the serve
+  program rendering per request path, `outlet` as the name (question to the Interviewer).
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the

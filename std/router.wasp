@@ -24,7 +24,13 @@ route_parameter(pattern:any, path:any, name:any) := {
 	var index = 0
 	for part in wanted {
 		index = index + 1
-		if part == ":" + name and index <= count(given) { return given#index }
+		if part == ":" + name and index <= count(given) { return route_value(given#index) }
 	}
 	ø
+}
+
+// a parameter is a number when it is digits ("/users/7" gives id 7), else its text
+route_value(segment:any) := {
+	for character in chars(segment) { if not contains("0123456789", character) { return segment } }
+	int(segment)
 }

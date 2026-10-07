@@ -11,6 +11,8 @@ mod test_async_data; // the browser: a task Worker fetches into shared memory, r
 mod test_site;
 mod test_html_render;
 mod test_markup_renderer;
+#[cfg(feature = "native")] // the page path of a native render (host::with_page_path)
+mod test_routes;
 mod test_element_events;
 mod test_class_components;
 mod test_components;

@@ -1,0 +1,5 @@
+// routes (card web-router): the page at "/" natively; warp build --site and follow the links in a browser
+users = ["Ann", "Bo"]
+route "/" { div{ h1{ "Home" } a{ href: "/users/2" "Bo" } } }
+route "/users/:id" { div{ h1{ "User " + users#id } a{ href: "/" "home" } } }
+route "*" { p{ "not found" } }

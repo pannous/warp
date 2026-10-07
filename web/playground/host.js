@@ -7,6 +7,8 @@ const TRAP_DETAIL_EXPORT = "trap_detail";
 // the checks of the listeners on shared values (src/lowering/signal_values.rs), run at every check point
 const SHARED_HANDLER = "on·shared";
 const ROOT_PATH = "/"; // the page path before any navigation (page_path)
+const PAGE_ROUTES_EXPORT = "page·routes";
+const PAGE_ROUTED_EXPORT = "page·routed"; // the value of the route the path picks
 const SHARED_CHECK_MILLISECONDS = 10;
 const PAGE_BITS = 16;
 const STDERR = 2;
@@ -1258,18 +1260,21 @@ function stopListening(holder) {
 // run a compiled program: the outcome src/web.rs run_outcome reads
 function runProgram(bytes, hooks) {
 	let instance;
-	const holder = { warnings: [] }; // the runtime warnings go back to the compiler, which reports them (src/web.rs)
+	// the runtime warnings go back to the compiler, which reports them (src/web.rs); the page's path is the page's own
+	const holder = { warnings: [], pagePath: hooks.pagePath?.() };
 	try {
 		const module = new WebAssembly.Module(bytes);
 		holder.run = { module, tasks: new Map(), shared: [], channels: channelTable(module) };
 		instance = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks));
 		holder.exports = instance.exports;
+		hooks.instantiated?.(holder);
 	} catch (failure) {
 		return { failure: String(failure.message ?? failure) };
 	}
 	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, instance.exports, () => instance.exports.main()));
 	const events = pageEvents(instance.exports);
-	if ((events.length > 0 || holder.timers || holder.fetches) && outcome.result) hooks.listen?.(holder, events);
+	// a program with routes stays for its links (lowering/routes.rs page·routes)
+	if ((events.length > 0 || holder.timers || holder.fetches || instance.exports[PAGE_ROUTES_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
 	// a run without page events (std/markup.wasp rendering the page's HTML, src/markup.rs) keeps the page's run
 	if (events.length > 0 && outcome.result) listeningRun = holder;
 	return outcome;

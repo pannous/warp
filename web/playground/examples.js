@@ -34,6 +34,11 @@ div{ Counter("Apples", 1) Counter("Pears", 5) }` },
 	"keyed list": { value: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:1 "milk"} li{key:2 "eggs"} li{key:3 "tea"}]]}', clicks: ["rotate"], clicked: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:2 "eggs"} li{key:3 "tea"} li{key:1 "milk"}]]}', kept: true, keyed: true, code: `// a list in markup: with a key, each item keeps its element when the list changes (it moves, nothing is rewritten)
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{ button{ on click { todos = todos[1..] + [todos#1] } "rotate" } ul{ [li{ key: todo.id todo.text } for todo in todos] } }` },
+	routes: { value: 'div{h1:"Users" a{href:"/users/2" "Bo"}}', clicks: ["Bo"], clicked: 'div{h1:"Bo" a{href:\'/\' "back"}}', code: `// routes: each path of the page shows its block; a link goes to another path, :id is that part of it
+users = ["Ann", "Bo"]
+route "/" { div{ h1{ "Users" } a{ href: "/users/2" "Bo" } } }
+route "/users/:id" { div{ h1{ users#id } a{ href: "/" "back" } } }
+route "*" { p{ "no such page" } }` },
 	transitions: { value: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:1 data-wasp-transition:"fade 150ms" "milk"} li{key:2 data-wasp-transition:"fade 150ms" "eggs"} li{key:3 data-wasp-transition:"fade 150ms" "tea"}]]}', clicks: ["rotate", "remove"], clicked: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:3 data-wasp-transition:"fade 150ms" "tea"} li{key:1 data-wasp-transition:"fade 150ms" "milk"}]]}', keyed: true, animated: true, code: `// transitions are data: a removed item fades out, the others glide to their new places
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{
