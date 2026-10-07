@@ -60,17 +60,21 @@ impl Element<'_> {
 	}
 }
 
-/// `div{…}` or `h1: "Hi"`: the tag and content of an element as written; `a: i32` (a typed parameter or field) and
-/// `a: 1` (a number field) are none
-fn element_parts(node: &Node) -> Option<(&str, &Node)> {
+/// `div{…}`, `h1: "Hi"` or `label(for:pwd): "Password"`: the tag, content and head attributes of an element as written;
+/// `a: i32` (a typed parameter or field) and `a: 1` (a number field) are none
+fn element_parts(node: &Node) -> Option<(&str, &Node, &[Node])> {
 	let Node::Key(tag, Op::Colon, content) = node.drop_meta() else { return None };
 	match content.drop_meta() {
 		Node::Type { .. } | Node::Number(_) => return None,
 		Node::Symbol(word) if crate::analyzer::type_word_kind(word).is_some() => return None,
 		_ => {}
 	}
+	let (tag, head_attributes) = match tag.drop_meta() {
+		Node::List(items, _, _) => (items.first()?, &items[1..]),
+		tag => (tag, &[][..]),
+	};
 	match tag.drop_meta() {
-		Node::Symbol(tag) if crate::markup::is_element_tag(tag) => Some((tag.as_str(), content.as_ref())),
+		Node::Symbol(tag) if crate::markup::is_element_tag(tag) => Some((tag.as_str(), content.as_ref(), head_attributes)),
 		_ => None,
 	}
 }
@@ -106,18 +110,18 @@ fn is_handler(item: &Node) -> bool {
 /// Does an item say something: a text, a value computed at run time, or an element that does
 fn says_something(item: &Node) -> bool {
 	match element_parts(item) {
-		Some((_, content)) => content_items(content).into_iter().any(|child| attribute_parts(child).is_none() && !is_handler(child) && says_something(child)),
+		Some((_, content, _)) => content_items(content).into_iter().any(|child| attribute_parts(child).is_none() && !is_handler(child) && says_something(child)),
 		None => !matches!(item.drop_meta(), Node::Empty) && attribute_parts(item).is_none() && !is_handler(item) && !matches!(item.drop_meta(), Node::Text(text) if text.trim().is_empty()),
 	}
 }
 
 fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>) {
-	if let Some((tag, content)) = element_parts(node) {
+	if let Some((tag, content, head_attributes)) = element_parts(node) {
 		let items = content_items(content);
 		found.push(Element {
 			node,
 			tag: tag.to_string(),
-			attributes: items.iter().filter_map(|item| attribute_parts(item)).collect(),
+			attributes: head_attributes.iter().chain(items.iter().copied()).filter_map(attribute_parts).collect(),
 			has_content: items.iter().any(|item| attribute_parts(item).is_none() && !is_handler(item) && says_something(item)),
 			inside_label,
 		});

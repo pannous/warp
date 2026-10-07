@@ -47,3 +47,9 @@ fn ternaries_and_number_fields_are_no_elements() {
 	assert!(warnings_of("class P{a:int}; p = P{a:1}; p.a").is_empty());
 	assert!(!warnings_of("ok = true\nok ? div{ a{ \"home\" } } : p: \"none\"").is_empty(), "markup in a branch still warns");
 }
+
+/// attributes in the head, `label(for:pwd): "Password"` (samples/html.wasp), label the field like `label{ for:pwd … }`
+#[test]
+fn head_attributes_count() {
+	assert!(warnings_of("html{ lang:\"en\" body{ label(for:pwd):\"Password\"\n input{ id:pwd type:password } } }").is_empty());
+}
