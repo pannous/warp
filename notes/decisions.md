@@ -80,6 +80,13 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P196 `===` compares the full (static) type: `0 === false` is false. P196b: `1.0` is the exact int 1, so `1 === 1.0`
   stays yes; `1 === 1.5` and `1 === (1.0 as float)` are no.
 - P197 warp-ee (class) updates AGENTS.md "True/False: encoded as Int 1/0" to the bool type once bool is on main.
+- uniscript v1.0.4 released (user, via warp-84): restored LaTeX names (circ = ∘, varepsilon ε, varphi φ, plus to,
+  neq, land, lor, lnot, ldots, dots, nat, complex, euler, degree, cbrt) and the algorithmic Unicode names; warp pins it.
+- Emoji in code (user, via warp-84): a single emoji is a codepoint; multi-codepoint emoji (flags, skin tones, ZWJ)
+  are texts, equal to their quoted form and not assignable names.
+- P198 names HTML and LaTeX define differently: as recommended, HTML for letter names (ocirc ô, oslash ø), LaTeX for
+  operators (asymp ≍, circ ∘). The user: context-dependent "is probably ugly but the best we can do"; list in
+  notes/footguns.md how many such names there are.
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
   compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
