@@ -7,6 +7,7 @@ mod test_global_constant_words;
 mod test_global_declaration;
 mod test_global_modifiers;
 mod test_globals;
+mod test_several_globals;
 mod test_prefixed_declarations;
 mod test_undefined_variable;
 mod test_use_scopes;

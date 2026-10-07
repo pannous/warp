@@ -8,6 +8,9 @@ use crate::operators::{is_function_keyword, Op};
 
 /// The receiver of an extension method, as Kotlin (`this`) and Swift (`self`) name it
 const THIS_WORD: &str = "this";
+/// `map data = {…}`: the collection words a typed declaration takes, as the annotation they mean (type() answers map,
+/// list, tuple); dict and array are other languages' words for map and list (card declaration-type)
+const COLLECTION_DECLARATION_WORDS: [(&str, &str); 5] = [("map", "map"), ("list", "list"), ("tuple", "tuple"), ("dict", "map"), ("array", "list")];
 const SELF_WORD: &str = "self";
 /// Swift's block of methods added to a type: `extension Int {…}`
 const EXTENSION_WORD: &str = "extension";
@@ -637,7 +640,11 @@ impl Tasks<'_> {
 		};
 		let winner = format!("{RACE_PREFIX}{}", RACES.with(|races| races.replace(races.get() + 1)));
 		let winner_is = |index: usize| Node::Key(Box::new(Node::Symbol(winner.clone())), Op::Eq, Box::new(crate::node::int(index as i64)));
+		// `go 1+1` is computed right away, no task is started: it has ended (card await-hang)
 		let ended = |job: &Node| {
+			if !self.started.contains_key(&word(&job_of(job))) {
+				return Node::True;
+			}
 			let status = marker(crate::host::TASK_STATUS, vec![job_of(job)]);
 			let is = |code: i64| Node::Key(Box::new(status.clone()), Op::Eq, Box::new(crate::node::int(code)));
 			Node::Key(Box::new(is(crate::host::TASK_FINISHED)), Op::Or, Box::new(is(crate::host::TASK_FAILED)))
@@ -1123,10 +1130,40 @@ fn never_happens(located: &Node, message: &str) -> Node {
 /// P28 (user, 2026-10-05: "Zero value (Go)"): `real x;` declares x with the zero value of its type, `x:real = 0.0`.
 /// Only a fresh name: after `x = "5"`, `int x` is the conversion of x
 pub fn lower_bare_declarations(program: Node) -> Node {
+	let named: Vec<&str> = COLLECTION_DECLARATION_WORDS.iter().map(|(word, _)| *word).filter(|word| crate::soft_keywords::program_names(&program, word)).collect();
+	let program = collection_declarations(program, &named);
 	// a program of only `int n` is one statement
 	match zero_declaration(&program, &std::collections::HashSet::new()) {
 		Some(declaration) => declaration,
 		None => declarations_in(program),
+	}
+}
+
+/// `map data = {key: "v"}` is `data:map = {key: "v"}`, `dict d = …` `d:map = …` with a note; a word the program names
+/// itself keeps its meaning
+fn collection_declarations(node: Node, named: &[&str]) -> Node {
+	let declared = match node.drop_meta() {
+		Node::List(items, _, _) => match items.as_slice() {
+			[word, assignment] => match assignment.drop_meta() {
+				Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Node::Symbol(_)) => COLLECTION_DECLARATION_WORDS.iter()
+					.find(|(written, _)| word.drop_meta().name() == *written && !named.contains(written))
+					.map(|(written, meaning)| (*written, *meaning, name.clone(), value.clone())),
+				_ => None,
+			},
+			_ => None,
+		},
+		_ => None,
+	};
+	match declared {
+		Some((written, meaning, name, value)) => {
+			if written != meaning {
+				crate::normalize::set_position_of(&node);
+				crate::diagnostic::note_alias(written, meaning);
+			}
+			let target = Node::Key(name, Op::Colon, Box::new(Node::Symbol(meaning.to_string())));
+			Node::Key(Box::new(target), Op::Assign, Box::new(collection_declarations(*value, named)))
+		}
+		None => node.map_children(|child| collection_declarations(child, named)),
 	}
 }
 
@@ -1323,12 +1360,12 @@ fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
 	let names: Vec<String> = words.iter().map(Node::name).collect();
 	let names: Vec<&str> = names.iter().map(String::as_str).collect();
 	// one parse with type_name_matching: `square of a number := …` takes the same slots as with `=`
-	let parameters = match crate::type_name_matching::spaced_parameters(&names, body) {
-		None => words,
-		Some(Ok(parameters)) => parameters,
+	let (parameters, body) = match crate::type_name_matching::spaced_parameters(&names, body) {
+		None => (words, body.as_ref().clone()),
+		Some(Ok(slots)) => slots,
 		Some(Err(_)) => return None, // type_name_matching reports it
 	};
-	Some((name.drop_meta().clone(), parameters, applied_to_last(body.as_ref().clone(), extra)))
+	Some((name.drop_meta().clone(), parameters, applied_to_last(body, extra)))
 }
 
 /// The one named parameter of a definition head `f(x)` (`f(x:int)`), not `it`
@@ -1442,7 +1479,11 @@ fn ends_in_block(node: &Node) -> bool {
 
 /// `add(1, _)`: a call with placeholders is the lambda of the missing arguments, `partial_1 => add(1, partial_1)`
 fn partial_application(items: &[Node]) -> Option<Node> {
-	let [Node::Symbol(_), arguments @ ..] = items else { return None };
+	let [Node::Symbol(head), arguments @ ..] = items else { return None };
+	// `for _ in 0..3 {…}`: a keyword is no call, its `_` an unused loop variable
+	if crate::soft_keywords::HARD_KEYWORDS.contains(&head.as_str()) {
+		return None;
+	}
 	let is_placeholder = |argument: &Node| matches!(argument.drop_meta(), Node::Symbol(name) if name == PLACEHOLDER);
 	if !arguments.iter().any(is_placeholder) {
 		return None;

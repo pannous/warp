@@ -386,11 +386,15 @@ impl WasmGcEmitter {
 		let appended = |name: &String| sources[name].iter().any(|source| matches!(source, Source::Append(_)));
 		let is_list_local = |name: &String| self.scope.lookup(name).is_some_and(|local| !local.is_param && (local.kind == Kind::List || (local.kind == Kind::Empty && appended(name))));
 		let has_start = |name: &String| sources[name].iter().any(|source| !matches!(source, Source::Append(_)));
-		// an index assignment stores what node_with_at would: any number into an int list, only floats into a float list,
-		// any number into a declared float array (converted)
+		// an index assignment stores what node_with_node_at would: any exact number into an int list, only floats into a
+		// float list, any number into a declared float array (converted)
 		let takes_assignments = |name: &String, element: ElementType| {
-			let takes = |kind: &Kind| *kind == Kind::Float || (*kind == Kind::Int && declared_floats.contains(name));
-			element != ElementType::Float || assigned_kinds.get(name).is_none_or(|kinds| kinds.iter().all(takes))
+			let takes = |kind: &Kind| match element {
+				ElementType::Float => *kind == Kind::Float || (*kind == Kind::Int && declared_floats.contains(name)),
+				ElementType::Int => *kind == Kind::Int,
+				ElementType::Node => true,
+			};
+			assigned_kinds.get(name).is_none_or(|kinds| kinds.iter().all(takes))
 		};
 		let mut typed: HashMap<String, Option<ElementType>> = sources.keys()
 			.filter(|name| is_list_local(name) && has_start(name) && !excluded.contains(*name))

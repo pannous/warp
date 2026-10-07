@@ -49,15 +49,90 @@ pub fn resolve(program: Node) -> Node {
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
-	let folder = file.as_deref().map(folder_of);
-	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone(), scope: None, wasm_modules: vec![], std_definitions: vec![] };
+	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
+	let folder = loader.including_directory.clone();
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader.resolve(program).and_then(|program| match loader.scope {
 		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 		None => Ok(program),
 	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
 		.map(|program| with_needed_definitions(program, loader.std_definitions));
+	EARLY_CLASS_MODULES.with(|modules| modules.borrow_mut().clear()); // for this program only
 	resolved.unwrap_or_else(|failure| failure)
+}
+
+/// The classes of the modules the program uses, in front of it: those of a file (`use shapes`) all, those of a standard
+/// module the program names (`use collections; s = Stack()`). class_methods, which turns a class's methods into
+/// functions and its method calls into theirs, runs before `resolve` loads a module's other definitions; the loader
+/// then leaves these modules' classes out (EARLY_CLASS_MODULES). A class the program declares itself wins.
+pub fn insert_module_classes(program: Node) -> Node {
+	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
+	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
+	let own_names: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
+	let (mut std_definitions, mut file_classes, mut early, mut class_modules) = (vec![], vec![], HashSet::new(), vec![]);
+	for used in statements(program.clone()).iter().filter_map(used_module).filter(|used| used.import == Import::Use) {
+		let (path, source, is_std) = match loader.find(&used.name) {
+			Some(path) => match crate::web::read_text(&path.to_string_lossy()) {
+				Some(source) => (path, source, false),
+				None => continue,
+			},
+			None => match std_module(&used.name) {
+				Some(source) => (std_path(&used.name), source.to_string(), true),
+				None => continue,
+			},
+		};
+		let module = WaspParser::parse(&source);
+		if module.first_error().is_some() {
+			continue; // the loader reports it
+		}
+		let definitions = crate::normalize::without_hints(|| statements(module));
+		match is_std {
+			true => {
+				if definitions.iter().any(is_class) {
+					class_modules.push(used.name.clone());
+				}
+				std_definitions.extend(definitions)
+			}
+			false => file_classes.extend(definitions.into_iter().filter(is_class)),
+		}
+		early.insert(path.canonicalize().unwrap_or(path));
+	}
+	EARLY_CLASS_MODULES.with(|modules| *modules.borrow_mut() = early);
+	let is_foreign = |class: &Node| declared_name(class).is_none_or(|name| !own_names.contains(&name));
+	let defined: Vec<String> = std_definitions.iter().filter_map(declared_name).collect();
+	let aliases: Vec<(&str, &str)> = STD_ALIASES.into_iter().filter(|(alias, word)| defined.iter().any(|name| name == word) && !own_names.contains(*alias)).collect();
+	// `collections.Counter(xs)`: the bare class before class_methods reads its construction; other qualified calls
+	// (`math.factorial` of `use python math`, `json.loads`) wait for foreign_modules and welcome_forms
+	let class_modules: Vec<&str> = class_modules.iter().map(String::as_str).collect();
+	let program = with_std_aliases(crate::welcome_forms::module_calls(program, &class_modules), &aliases);
+	let std_classes = std_definitions.into_iter().filter(|definition| is_class(definition) && is_foreign(definition)).collect();
+	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
+	let program = with_needed_definitions(program, std_classes);
+	match file_classes.is_empty() {
+		true => program,
+		false => match program {
+			Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List([file_classes, statements].concat(), Bracket::None, separator),
+			single => Node::List([file_classes, vec![single]].concat(), Bracket::None, Separator::Semicolon),
+		},
+	}
+}
+
+/// `HashSet(xs)` as `Set(xs)`, with a note
+fn with_std_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
+	match node {
+		Node::Symbol(name) => match aliases.iter().find(|(alias, _)| *alias == name) {
+			Some((alias, class)) => {
+				crate::diagnostic::note_alias(alias, class);
+				Node::Symbol(class.to_string())
+			}
+			None => Node::Symbol(name),
+		},
+		other => other.map_children(|child| with_std_aliases(child, aliases)),
+	}
+}
+
+fn is_class(statement: &Node) -> bool {
+	matches!(statement.drop_meta(), Node::Type { .. })
 }
 
 /// The program with the standard modules' definitions it calls, and those they call, in front: a word nobody calls
@@ -67,13 +142,15 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 		return program;
 	}
 	let mut needed: Vec<Node> = vec![];
-	let mut mentioned: HashSet<String> = mentioned_names(std::slice::from_ref(&program)).into_iter().collect();
+	// a standard word called as a method (`"hé".to_utf8()`) is needed too
+	let mentioned_or_called = |statements: &[Node]| mentioned_names(statements).into_iter().chain(method_names(statements));
+	let mut mentioned: HashSet<String> = mentioned_or_called(std::slice::from_ref(&program)).collect();
 	loop {
 		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name))).cloned().collect();
 		if now_needed.len() == needed.len() {
 			break;
 		}
-		mentioned.extend(mentioned_names(&now_needed));
+		mentioned.extend(mentioned_or_called(&now_needed));
 		needed = now_needed;
 	}
 	if needed.is_empty() {
@@ -90,6 +167,8 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 thread_local! {
 	/// The file being compiled; its folder is in scope (D15). None for inline code
 	static PROGRAM_FILE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+	/// The modules whose classes insert_module_classes put in front of the program: the loader leaves them out
+	static EARLY_CLASS_MODULES: std::cell::RefCell<HashSet<PathBuf>> = std::cell::RefCell::new(HashSet::new());
 }
 
 /// `path` as written in the program: a relative path is next to the program's file, or in the working directory for
@@ -235,7 +314,11 @@ struct Loader<'a> {
 	std_definitions: Vec<Node>,
 }
 
-impl Loader<'_> {
+impl<'a> Loader<'a> {
+	fn new(directories: &'a [&'a str], including_directory: Option<PathBuf>) -> Self {
+		Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory, scope: None, wasm_modules: vec![], std_definitions: vec![] }
+	}
+
 	fn resolve(&mut self, node: Node) -> Result<Node, Node> {
 		if let Some(used) = used_module(&node) {
 			return Ok(match self.import(&used, &node)? {
@@ -337,8 +420,14 @@ impl Loader<'_> {
 		if let Some(failure) = module.first_error() {
 			return Err(failure.clone());
 		}
+		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
+		let classes_early = import == Import::Use && EARLY_CLASS_MODULES.with(|modules| modules.borrow().contains(&path.canonicalize().unwrap_or_else(|_| path.clone())));
+		let module = match classes_early {
+			true => Node::List(statements(module).into_iter().filter(|statement| !is_class(statement)).collect(), Bracket::None, Separator::Semicolon),
+			false => module,
+		};
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
-		let module = with_module_directory(module, &directory);
+		let module = with_module_directory(crate::pipeline::lower_module_source(module), &directory);
 		let outer_directory = self.including_directory.replace(directory);
 		let module = self.resolve(module);
 		self.including_directory = outer_directory;
@@ -463,7 +552,9 @@ impl Loader<'_> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 11] = [
+const STD_MODULES: [(&str, &str); 14] = [
+	("net", include_str!("../std/net.wasp")),
+	("collections", include_str!("../std/collections.wasp")),
 	("hash", include_str!("../std/hash.wasp")),
 	("regex", include_str!("../std/regex.wasp")),
 	("file", include_str!("../std/file.wasp")),
@@ -475,8 +566,16 @@ const STD_MODULES: [(&str, &str); 11] = [
 	("random", include_str!("../std/random.wasp")),
 	("map", include_str!("../std/map.wasp")),
 	("time", include_str!("../std/time.wasp")),
+	("draw", include_str!("../std/draw.wasp")),
 ];
 const STD_FOLDER: &str = "std";
+/// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
+/// a note, when a used module defines that word
+const STD_ALIASES: [(&str, &str); 9] = [
+	("HashSet", "Set"), ("TreeSet", "Set"), ("LinkedHashSet", "Set"), ("frozenset", "Set"),
+	("ArrayDeque", "Deque"), ("VecDeque", "Deque"), ("deque", "Deque"),
+	("OrderedDict", "OrderedMap"), ("LinkedHashMap", "OrderedMap"),
+];
 
 /// The name an embedded module is loaded under, once per program
 fn std_path(name: &str) -> PathBuf {
@@ -495,7 +594,7 @@ fn std_module(name: &str) -> Option<&'static str> {
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
 pub fn std_module_defining(word: &str) -> Option<&'static str> {
 	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
-	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(WaspParser::parse(source)).iter().filter_map(declared_name).collect())).collect());
+	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(declared_name).collect())).collect());
 	defined.iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
 }
 
@@ -810,6 +909,8 @@ fn declared_name(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
 		Node::Type { name, .. } => leftmost_symbol(name),
 		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
+		// `global x = 0`, as the parser reads it: `global: (x = 0)`
+		Node::Key(keyword, Op::Colon, declared) if matches!(keyword.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword)) => declared_name(declared),
 		Node::List(items, _, _) if items.len() >= 2 => leftmost_symbol(&items[1]),
 		_ => None,
 	}
@@ -872,6 +973,23 @@ fn same_definitions(first: &[Node], second: &[Node]) -> bool {
 }
 
 /// Every word the statements mention
+/// The methods called in statements: `f` of `x.f(…)` and of `x.f`
+fn method_names(statements: &[Node]) -> Vec<String> {
+	let mut names = Vec::new();
+	for statement in statements {
+		statement.visit(&mut |node| {
+			if let Node::Key(_, Op::Dot | Op::SafeDot, member) = node {
+				match member.drop_meta() {
+					Node::Symbol(name) => names.push(name.clone()),
+					Node::List(call, _, _) => names.extend(call.first().map(|name| name.drop_meta().name())),
+					_ => {}
+				}
+			}
+		});
+	}
+	names
+}
+
 fn mentioned_names(statements: &[Node]) -> Vec<String> {
 	fn collect(node: &Node, names: &mut Vec<String>) {
 		match node {

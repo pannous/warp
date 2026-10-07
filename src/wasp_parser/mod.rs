@@ -82,6 +82,10 @@ const ENUM_WORD: &str = "enum";
 const GO_INTERFACE_WORD: &str = "interface";
 /// Go's `type Point struct {…}` declares the class Point
 const GO_STRUCT_WORD: &str = "struct";
+/// `type Node: gc struct {…}` (WebAssembly's GC structs): every wasp class is one, the word adds nothing
+const GC_WORD: &str = "gc";
+/// `left: ref Node?`: WebAssembly's reference type word before a field's type
+const REF_TYPE_WORD: &str = "ref";
 /// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
 const OPERATOR_WORD: &str = "operator";
 /// Words before a member of a class body that change nothing in wasp: Swift's `mutating func`, visibility, `override`
@@ -93,6 +97,19 @@ const PYTHON_ROOT_CLASS: &str = "object";
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
+/// English operator words (samples/natural.wasp, wiki/operator.md lists `plus` and `equals` as aliases): the longer
+/// phrases first, so `is greater than` is no `is`
+const WORD_OPERATORS: [(&str, Op); 11] = [
+	("is greater than", Op::Gt), ("is less than", Op::Lt), ("is at least", Op::Ge), ("is at most", Op::Le),
+	("greater than", Op::Gt), ("less than", Op::Lt), ("divided by", Op::Div), ("plus", Op::Add), ("minus", Op::Sub),
+	("equals", Op::Eq), ("through", Op::To),
+];
+const IS_IN_PHRASE: &str = "is in";
+/// `for each item in basket` is `for item in basket`
+const EACH_WORD: &str = "each";
+/// `10 down to 1` is `reverse(1 to 10)`
+const DOWN_WORD: &str = "down";
+const REVERSE_WORD: &str = "reverse";
 /// Word spellings of `≈` (wiki/operator.md): equal within the relative `tolerance`
 const SIMILARITY_WORDS: [&str; 2] = ["circa", "approximately"];
 const EXCLUSIVE_DOTS: &str = "..";
@@ -334,6 +351,8 @@ const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
+/// `try X catch Y finally Z`: Z runs after either, the value stays X's or Y's
+const FINALLY_KEYWORD: &str = "finally";
 const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
 /// `nand` and its glyph pair, both `not (a and b)`
 /// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
@@ -658,8 +677,12 @@ pub struct WaspParser {
 	pending_comment: Option<String>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
 	after_function_keyword: bool,
+	/// inside Elixir's capture `&(…)`, where `&1` is its first argument
+	in_capture: bool,
 	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
 	elvis_operands: usize,
+	/// `try … catch … finally {…}` parsed so far, numbering the variables holding their values
+	finally_blocks: usize,
 	/// Names defined with `:=` so far: a braceless call of one may take an identifier argument anywhere (`fac it-1`)
 	functions: std::collections::HashSet<String>,
 	/// Those of them declared with named parameters (`f x y := …`), the rest take the implicit `it`
@@ -931,7 +954,9 @@ impl WaspParser {
 			times_loops: 0,
 			pending_comment: None,
 			after_function_keyword: false,
+			in_capture: false,
 			elvis_operands: 0,
+			finally_blocks: 0,
 			functions: Default::default(),
 			functions_with_parameters: Default::default(),
 		}

@@ -18,7 +18,18 @@ impl WaspParser {
 		if keyword == "export" && defines_function {
 			return Some(declaration);
 		}
-		Some(Node::Key(Box::new(Symbol("global".to_string())), Op::Colon, Box::new(declaration)))
+		let global = |declaration: Node| Node::Key(Box::new(Symbol(crate::node::GLOBAL_DECLARATION.to_string())), Op::Colon, Box::new(declaration));
+		// `global a, b` (Python): one declaration per name
+		let mut names = vec![declaration];
+		while keyword == crate::node::GLOBAL_DECLARATION && matches!(names.last().map(Node::drop_meta), Some(Symbol(_))) && self.current_char() == ',' {
+			self.advance();
+			self.skip_spaces();
+			names.push(self.parse_atom());
+		}
+		Some(match names.len() {
+			1 => global(names.remove(0)),
+			_ => Node::List(names.into_iter().map(global).collect(), Bracket::None, Separator::Semicolon),
+		})
 	}
 
 	/// A name follows after at least one blank: `nonlocal y`, not `nonlocal = 3` or `nonlocal(…)`
@@ -147,6 +158,10 @@ impl WaspParser {
 		self.skip_spaces();
 		if let Some(filtered) = self.try_parse_condition_loop() {
 			return Some(filtered);
+		}
+		if self.matches_keyword(EACH_WORD) && self.word_at(EACH_WORD.len() + 1) != "in" {
+			self.advance_by(EACH_WORD.len());
+			self.skip_spaces();
 		}
 		let variable = self.parse_loop_variable();
 		self.skip_spaces();

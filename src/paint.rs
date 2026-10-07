@@ -1,4 +1,4 @@
-//! paint(pixels, width, height) natively (card native-paint): the pixels as a grayscale PNG in the system's temporary
+//! paint(pixels, width, height) natively (card native-paint): the pixels as a PNG in the system's temporary
 //! folder (warp-paint/paint.png, then paint-2.png … within one run; the next run overwrites them, so no project folder
 //! collects images), named on stderr and opened in the system viewer when stderr is a terminal (never in tests or pipes). The playground draws the same pixels on a canvas (web/playground/playground.js showPaintings).
 
@@ -9,26 +9,39 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// The gray levels of a nonzero pixel and of a zero one, as the playground draws them
 pub const INK: u8 = 29;
 pub const PAPER: u8 = 250;
+/// A pixel value from here on carries an alpha byte, 0xAARRGGBB: it is that color (std/draw.wasp), any smaller nonzero
+/// value is ink (playground.js COLOR_FROM)
+pub const COLOR_FROM: u64 = 1 << 24;
 const FILE_STEM: &str = "paint";
 const FOLDER: &str = "warp-paint";
 /// The paint calls of this run so far
 static PAINTED: AtomicUsize = AtomicUsize::new(0);
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 const GRAYSCALE_8_BIT: [u8; 5] = [8, 0, 0, 0, 0]; // bit depth, color type gray, deflate, filter method, no interlace
+const RGB_8_BIT: [u8; 5] = [8, 2, 0, 0, 0]; // color type truecolor
 #[cfg(target_os = "macos")]
 const VIEWER: &str = "open";
 #[cfg(not(target_os = "macos"))]
 const VIEWER: &str = "xdg-open";
 
+/// What a pixel value shows: paper for 0, its color for a value with an alpha byte, else ink
+pub fn shade(value: u64) -> [u8; 3] {
+	match value {
+		0 => [PAPER; 3],
+		color if color >= COLOR_FROM => [(color >> 16) as u8, (color >> 8) as u8, color as u8],
+		_ => [INK; 3],
+	}
+}
+
 /// Write the image, say where, show it on a terminal
-pub fn paint(ink: &[bool], width: usize, height: usize) -> Result<PathBuf, String> {
-	if ink.len() < width * height {
-		return Err(format!("paint: {width}×{height} needs {} pixels, got {}", width * height, ink.len()));
+pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<PathBuf, String> {
+	if pixels.len() < width * height {
+		return Err(format!("paint: {width}×{height} needs {} pixels, got {}", width * height, pixels.len()));
 	}
 	let folder = std::env::temp_dir().join(FOLDER);
 	std::fs::create_dir_all(&folder).map_err(|failure| format!("paint: cannot create {}: {failure}", folder.display()))?;
 	let path = folder.join(file_name(PAINTED.fetch_add(1, Ordering::Relaxed) + 1));
-	std::fs::write(&path, png(ink, width, height)).map_err(|failure| format!("paint: cannot write {}: {failure}", path.display()))?;
+	std::fs::write(&path, png(pixels, width, height)).map_err(|failure| format!("paint: cannot write {}: {failure}", path.display()))?;
 	eprintln!("painted {width}×{height}: {}", path.display());
 	if std::io::stderr().is_terminal() {
 		let _ = std::process::Command::new(VIEWER).arg(&path).spawn();
@@ -41,15 +54,22 @@ fn file_name(call: usize) -> String {
 	if call == 1 { format!("{FILE_STEM}.png") } else { format!("{FILE_STEM}-{call}.png") }
 }
 
-fn png(ink: &[bool], width: usize, height: usize) -> Vec<u8> {
-	let mut rows = Vec::with_capacity((width + 1) * height);
-	for row in ink.chunks(width).take(height) {
+/// A grayscale PNG of ink and paper, a truecolor one when a pixel has a color
+fn png(pixels: &[u64], width: usize, height: usize) -> Vec<u8> {
+	let colored = pixels.iter().any(|&value| value >= COLOR_FROM);
+	let mut rows = Vec::with_capacity((width * if colored { 3 } else { 1 } + 1) * height);
+	for row in pixels.chunks(width).take(height) {
 		rows.push(0); // filter: none
-		rows.extend(row.iter().map(|&dark| if dark { INK } else { PAPER }));
+		for &value in row {
+			match colored {
+				true => rows.extend(shade(value)),
+				false => rows.push(shade(value)[0]),
+			}
+		}
 	}
 	let mut deflated = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
 	deflated.write_all(&rows).expect("writing to memory");
-	let header = [(width as u32).to_be_bytes().as_slice(), &(height as u32).to_be_bytes(), &GRAYSCALE_8_BIT].concat();
+	let header = [(width as u32).to_be_bytes().as_slice(), &(height as u32).to_be_bytes(), if colored { &RGB_8_BIT } else { &GRAYSCALE_8_BIT }].concat();
 	let mut file = PNG_SIGNATURE.to_vec();
 	for (kind, data) in [(b"IHDR", header), (b"IDAT", deflated.finish().expect("writing to memory")), (b"IEND", vec![])] {
 		file.extend((data.len() as u32).to_be_bytes());

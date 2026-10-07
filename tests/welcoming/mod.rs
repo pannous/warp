@@ -36,6 +36,7 @@ mod test_quiet_hints;
 mod test_sleep_unit_warning;
 mod test_index_hint_simple;
 mod test_keys_of_a_map_parameter;
+mod test_english_operator_words;
 mod test_constant_shadowing;
 mod test_left_arrow;
 mod test_hint_positions;

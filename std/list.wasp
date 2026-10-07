@@ -10,3 +10,20 @@ flatten(xs) := { out = []; for x in xs { out = out + x }; out }
 chunk(xs, n) := { out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
 window(xs, n) := { out = []; for i in 1 to count(xs) - n + 1 { part = []; for j in i to i + n - 1 { part = part + [xs#j] }; out = out + [part] }; out }
 median(xs) := { s = sort(xs); n = count(s); if n % 2 == 1 then s#(n//2 + 1) else (s#(n//2) + s#(n//2 + 1)) / 2 }
+flat_map(xs, f) := { out = []; for x in xs { out = out + f(x) }; out }
+// [kept, rest]: the elements f holds for, and the others
+partition(xs, f) := { kept = []; rest = []; for x in xs { if f(x) { kept = kept + [x] } else { rest = rest + [x] } }; [kept, rest] }
+max_by(xs, f) := { best = xs#1; for x in xs { if f(x) > f(best) { best = x } }; best }
+min_by(xs, f) := { best = xs#1; for x in xs { if f(x) < f(best) { best = x } }; best }
+// {key: [elements]}: the elements by the text of f's value
+group_by(xs, f) := { out = {}; for x in xs { k = "" + f(x); if out.has(k) { out[k] = out.get(k) + [x] } else { out[k] = [x] } }; out }
+// {element: how often}
+tally(xs) := { out = {}; for x in xs { k = "" + x; if out.has(k) { out[k] = out.get(k) + 1 } else { out[k] = 1 } }; out }
+zip_with(a, b, f) := { out = []; for i in 1 to min(count(a), count(b)) { out = out + [f(a#i, b#i)] }; out }
+sum_by(xs, f) := { out = 0; for x in xs { out = out + f(x) }; out }
+count_by(xs, f) := { out = 0; for x in xs { if f(x) { out = out + 1 } }; out }
+// the elements moved n places to the left
+rotate(xs, n) := { k = n % count(xs); out = []; for i in k+1 to count(xs) { out = out + [xs#i] }; for i in 1 to k { out = out + [xs#i] }; out }
+interleave(a, b) := { out = []; for i in 1 to max(count(a), count(b)) { if i <= count(a) { out = out + [a#i] }; if i <= count(b) { out = out + [b#i] } }; out }
+// without runs of equal neighbours
+dedupe(xs) := { out = []; for x in xs { if count(out) == 0 or last(out) != x { out = out + [x] } }; out }

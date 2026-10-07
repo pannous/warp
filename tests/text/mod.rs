@@ -42,3 +42,4 @@ mod test_print_gives_nothing;
 mod test_guillemet_strings;
 mod test_quoted_container_texts;
 mod test_print_runtime_number;
+mod test_utf8_bytes;
