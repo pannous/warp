@@ -571,6 +571,10 @@ impl Blocks {
 				}
 			}
 		}
+		// an element's block holds attributes and children, not statements: `li{ key: todo.id⏎ todo.text }` names its item
+		if crate::element_events::element_items(&node).is_some() {
+			return crate::element_events::with_element_items(node, |items| items.into_iter().map(|item| self.rewrite(item)).collect());
+		}
 		match node {
 			Node::Symbol(name) if self.blocks.contains_key(&name) => {
 				Node::List(vec![Node::Symbol(DATA_WORD.to_string()), self.blocks[&name].clone()], Bracket::None, Separator::Space)
