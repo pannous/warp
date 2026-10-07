@@ -60,6 +60,13 @@ const EVENT_WORD: &str = "event";
 const RAISED_EVENT: &str = "raised_event";
 /// The events of the page that call their handlers from outside the program
 pub const PAGE_EVENTS: [&str; 2] = ["click", "key"];
+/// `click·1`: the page event of one element's handler (element_events.rs), the page event and the element's number
+pub const ELEMENT_EVENT_JOINER: char = '·';
+
+/// A page event (`click`), or one element's (`click·1`)
+pub fn is_page_event(name: &str) -> bool {
+	PAGE_EVENTS.contains(&name.split(ELEMENT_EVENT_JOINER).next().unwrap_or(name))
+}
 /// The output binding of a program with page events: its last line when that is a name, read anew after each handler
 pub const PAGE_VALUE: &str = "page·value";
 /// The events the system raises: the runtime calls their handlers (notes/system_signals.md)
@@ -92,7 +99,7 @@ pub fn lower(program: Node) -> Node {
 	let mut user_named: Vec<(String, String)> = vec![];
 	let handlers: Vec<(usize, String, Node)> = statements.iter().enumerate()
 		.filter_map(|(index, statement)| named_handler(statement).map(|(listener, (name, body, once))| (index, listener, name, body, once)))
-		.filter(|(_, _, name, _, _)| raised.contains(name) || PAGE_EVENTS.contains(&name.as_str()) || SYSTEM_EVENTS.contains(&name.as_str()))
+		.filter(|(_, _, name, _, _)| raised.contains(name) || is_page_event(name) || SYSTEM_EVENTS.contains(&name.as_str()))
 		.map(|(index, listener, name, body, once)| {
 			let body = if once { run_once(body, &mut flags) } else { body };
 			user_named.extend(listener.iter().map(|listener| (listener.clone(), name.clone())));
@@ -132,7 +139,7 @@ pub fn lower(program: Node) -> Node {
 	let statements: Vec<Node> = flags.iter().map(|(flag, initial)| assign(flag, initial.clone())).chain(statements).collect();
 	let handlers: Vec<(usize, String, Node)> = handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
 	#[cfg(feature = "native")]
-	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| PAGE_EVENTS.contains(&name.as_str()) && !raised.contains(name)) {
+	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| is_page_event(name) && !raised.contains(name)) {
 		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
 		if let Err(error) = crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning)]) {
 			return error;
@@ -160,7 +167,7 @@ pub fn lower(program: Node) -> Node {
 		None => Some(statement),
 	});
 	let lowered: Vec<Node> = lowered.map(|statement| emits_as_calls(statement, &bodies, &verbs)).collect();
-	let page_handlers: std::collections::BTreeMap<String, usize> = PAGE_EVENTS.iter().filter(|event| bodies.contains_key(**event)).map(|event| (handler_function_name(event), usize::from(reads_event(&bodies[*event])))).collect();
+	let page_handlers: std::collections::BTreeMap<String, usize> = bodies.iter().filter(|(event, _)| is_page_event(event)).map(|(event, body)| (handler_function_name(event), usize::from(reads_event(body)))).collect();
 	let stays = !page_handlers.is_empty() || lowered.iter().any(defines_timer);
 	let lowered = if stays { with_output_binding(lowered, &main_variables) } else { lowered };
 	crate::declarations::with_node_wrappers(Node::List(lowered, bracket, separator), &page_handlers)
@@ -171,7 +178,7 @@ pub fn lower(program: Node) -> Node {
 /// events come from outside the program
 fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &HashSet<String>, errors: &HashSet<String>) -> Result<Vec<Node>, Node> {
 	// `once ready {…}` of a variable is a variable listener (variable_signals.rs)
-	let from_outside = |name: &str| PAGE_EVENTS.contains(&name) || SYSTEM_EVENTS.contains(&name) || variables.contains(name);
+	let from_outside = |name: &str| is_page_event(name) || SYSTEM_EVENTS.contains(&name) || variables.contains(name);
 	let unraised = |statement: &Node| named_handler(statement).map(|(_, (name, _, _))| name).filter(|name| !raised.contains(name) && !from_outside(name));
 	let warnings: Vec<crate::diagnostic::Diagnostic> = statements.iter().filter_map(|statement| unraised(statement).map(|name| {
 		let hint = match errors.contains(&name) {
@@ -189,8 +196,10 @@ fn without_unraised(statements: &[Node], raised: &HashSet<String>, variables: &H
 /// The output binding of a program the page keeps running (page events, timers): its last line, when that is a name,
 /// is the function PAGE_VALUE too, which the page reads anew after each handler
 fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<String>) -> Vec<Node> {
-	if let Some(Node::Symbol(name)) = statements.last().map(Node::drop_meta) {
-		let binding = function_with_globals(PAGE_VALUE, false, &[Node::Symbol(name.clone())], main_variables);
+	// a name, or markup (`div{ p{ "clicked " + count } }`, card web-element), which the page shows anew
+	let shown = statements.last().map(Node::drop_meta).filter(|last| matches!(last, Node::Symbol(_)) || crate::html::is_markup(last)).cloned();
+	if let Some(shown) = shown {
+		let binding = function_with_globals(PAGE_VALUE, false, &[shown], main_variables);
 		statements.insert(statements.len() - 1, binding);
 	}
 	statements

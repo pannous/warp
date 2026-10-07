@@ -26,6 +26,13 @@ const ATTRIBUTES: [&str; 40] = [
 	"download", "label", "media",
 ];
 const HEAD: &str = "head";
+/// `data-wasp-click` (element_events.rs) and any other data attribute
+const DATA_ATTRIBUTE_PREFIX: &str = "data-";
+
+/// Does the word name an HTML element
+pub fn is_element_tag(word: &str) -> bool {
+	ELEMENTS.contains(&word)
+}
 
 /// Is the value an element (or a list of them): what the CLI prints as HTML and the page shows as DOM
 pub fn is_markup(node: &Node) -> bool {
@@ -54,7 +61,7 @@ fn element_parts(node: &Node) -> Option<(&str, &Node)> {
 fn attribute_parts<'a>(node: &'a Node, parent: &str) -> Option<(&'a str, &'a Node)> {
 	let Node::Key(name, Op::Colon, value) = node.drop_meta() else { return None };
 	let Node::Symbol(name) = name.drop_meta() else { return None };
-	let is_attribute = ATTRIBUTES.contains(&name.as_str()) && !(parent == HEAD && ELEMENTS.contains(&name.as_str()));
+	let is_attribute = name.starts_with(DATA_ATTRIBUTE_PREFIX) || (ATTRIBUTES.contains(&name.as_str()) && !(parent == HEAD && ELEMENTS.contains(&name.as_str())));
 	let plain = matches!(value.drop_meta(), Node::Text(_) | Node::Char(_) | Node::Symbol(_) | Node::Number(_) | Node::True | Node::False)
 		|| matches!(value.drop_meta(), Node::List(_, Bracket::Square, _));
 	(is_attribute && plain).then_some((name.as_str(), value.as_ref()))
