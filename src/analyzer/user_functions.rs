@@ -701,8 +701,8 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 			[Kind::Int] => {}
 			[kind] => param.used_as = Some(*kind),
 			[first, second, ..] => ctx.parameter_conflicts.push(format!(
-				"{name} is called with {} and {} for parameter {}: annotate it",
-				kind_with_article(*first), kind_with_article(*second), param.name)),
+				"{name} is called with {} and {} for parameter {}: annotate it, e.g. {}:any",
+				kind_with_article(*first), kind_with_article(*second), param.name, param.name)),
 			[] => {}
 		}
 	}

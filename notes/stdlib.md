@@ -151,7 +151,8 @@ regex: capability like libm's) and `std_io(…)` for words that touch the outsid
 defines its words over them, `parse_json(text) := std_pure("json", "parse", [text])` (std/json.wasp); natively
 src/std_adapters.rs answers by (module, member), in the browser host.js STD_ADAPTERS. Values cross as for the foreign
 runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain). Their results are any Node (analyzer
-ANY_VALUE_WORDS); a parameter that takes any value is annotated `any` (`to_json(value:any)`).
+ANY_VALUE_WORDS). The wrappers' parameters are annotated `any` (`to_json(value:any)`): an unannotated parameter fed
+only by such values would default to an int ("not an int" for `parse_json(post(…))`).
 Adding a word: one match arm in std_adapters.rs, one function in STD_ADAPTERS, one line in std/<module>.wasp, a test
 run natively and in the browser.
 
@@ -170,6 +171,15 @@ run natively and in the browser.
    Rust's regex natively, JS RegExp (flag u) in the browser; look-around and backreferences are the error "… is not
    in wasp's regex (one engine lacks it)" in both (tests/modules/test_std_regex.rs). `first_match`, since `find` is
    the list word find(xs, predicate).
+3b. Done: net (A, std_io): `use net` brings post(url, body), the body sent as UTF-8 text, the answer's text (ureq
+   natively, a synchronous XMLHttpRequest in the browser; tests/modules/test_std_net.rs against httpbin.org).
+3c. Done: other ecosystems' names (src/lowering/std_aliases.rs, the source pass before welcome_forms): `JSON.parse` /
+   `json.loads` → parse_json, `JSON.stringify` / `json.dumps` → to_json, `re.findall(p, t)` → find_all(t, p),
+   `re.sub(p, r, t)` → replace_all(t, p, r), `fs.readFileSync` → read, `fs.writeFileSync` / `appendFileSync` /
+   `existsSync` → write / append_file / exists, `os.getenv` → env, `process.exit` → exit: the got-it note names wasp's
+   word, and the alias brings its module as `use json` would. A program that names the module (`re = 3`) or imports
+   the real one (`use python "json"`) keeps it (tests/modules/test_std_aliases.rs). A name not in the table goes
+   through the foreign bridges (notes/stdlib_connectors.md).
 4. Later: the AOT stub linking B modules (they need no compiler), then hash and compress work in executables.
 
 ## Open questions (to warp-e9, defaults in force)

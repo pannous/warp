@@ -42,6 +42,25 @@ impl WaspParser {
 		self.current_char() == '&' && self.peek_char(1).is_alphabetic() && !is_identifier_char(self.prev_char())
 	}
 
+	/// Elixir's capture `&(&1 * 2)`: an `&(` not glued to a word before it, whose group reads an `&1`
+	pub(super) fn starts_capture(&self) -> bool {
+		if self.current_char() != '&' || self.peek_char(1) != '(' || is_identifier_char(self.prev_char()) {
+			return false;
+		}
+		let mut depth = 0;
+		for at in 1.. {
+			match self.peek_char(at) {
+				'(' => depth += 1,
+				')' if depth == 1 => return false,
+				')' => depth -= 1,
+				'&' if self.peek_char(at + 1).is_ascii_digit() => return true,
+				'\0' => return false,
+				_ => {}
+			}
+		}
+		false
+	}
+
 	/// A digit, or a leading-dot decimal like `.5`
 	pub(super) fn number_starts_at(&self, offset: usize) -> bool {
 		let ch = self.peek_char(offset);

@@ -10,3 +10,12 @@ flatten(xs) := { out = []; for x in xs { out = out + x }; out }
 chunk(xs, n) := { out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
 window(xs, n) := { out = []; for i in 1 to count(xs) - n + 1 { part = []; for j in i to i + n - 1 { part = part + [xs#j] }; out = out + [part] }; out }
 median(xs) := { s = sort(xs); n = count(s); if n % 2 == 1 then s#(n//2 + 1) else (s#(n//2) + s#(n//2 + 1)) / 2 }
+flat_map(xs, f) := { out = []; for x in xs { out = out + f(x) }; out }
+// [kept, rest]: the elements f holds for, and the others
+partition(xs, f) := { kept = []; rest = []; for x in xs { if f(x) { kept = kept + [x] } else { rest = rest + [x] } }; [kept, rest] }
+max_by(xs, f) := { best = xs#1; for x in xs { if f(x) > f(best) { best = x } }; best }
+min_by(xs, f) := { best = xs#1; for x in xs { if f(x) < f(best) { best = x } }; best }
+// {key: [elements]}: the elements by the text of f's value
+group_by(xs, f) := { out = {}; for x in xs { k = "" + f(x); if out.has(k) { out[k] = out.get(k) + [x] } else { out[k] = [x] } }; out }
+// {element: how often}
+tally(xs) := { out = {}; for x in xs { k = "" + x; if out.has(k) { out[k] = out.get(k) + 1 } else { out[k] = 1 } }; out }

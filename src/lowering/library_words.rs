@@ -121,6 +121,8 @@ const EXPANDED_WORDS: [(&str, usize, &str); 10] = [
 ];
 const IS_DIGIT: &str = "is_digit";
 const LIST_WORD: &str = "list";
+/// Conversions a method may name, `x.string` being `string(x)`
+const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float"];
 const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arrayListOf"];
 /// `round(x, 3)`, `x.round(3)`: x rounded to 3 digits after the point; `round(x)` stays the builtin
 const ROUND_TO: &str = "round_to";
@@ -806,6 +808,11 @@ impl Lowering {
 		if is_called && crate::wasm_emitter::text_builtins::text_builtin_kind(name, arguments.len() + 1).is_some() {
 			let call = [vec![word_node.clone(), receiver.clone()], arguments].concat();
 			return Some(Node::List(call, Bracket::Round, Separator::None));
+		}
+		// `x.string`, `t.int`, `x.float()`: the conversion `string(x)`, as written in call form
+		// (not `xs.number`, a count, nor `e.text`, a common field)
+		if CONVERSION_METHODS.contains(&name.as_str()) && arguments.is_empty() && !self.instances.is_declared_field(name) {
+			return Some(Node::List(vec![word_node.clone(), receiver.clone()], Bracket::Round, Separator::None));
 		}
 		let is_known = counting_method(name, &self.context).is_some() || is_list_mutating_method(name) || self.context.user_functions.contains_key(name);
 		let is_call_result = matches!(receiver.drop_meta(), Node::Symbol(variable) if self.call_results.contains(variable));

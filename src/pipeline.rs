@@ -117,11 +117,13 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 55] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 57] = [
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
 	crate::channel_words::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
+	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
+	crate::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
 	crate::go_blocks::lower,
 	// `$a` / `$1` references of data literals (references.rs) before a pass takes `{ parent=$1 }` for a Swift closure
@@ -142,7 +144,7 @@ const SOURCE_PASSES: [fn(Node) -> Node; 55] = [
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
 	crate::foreign_modules::lower,
 	crate::phrase_calls::lower,
-	crate::welcome_forms::lower, crate::analyzer::lower_kebab_members, crate::number_keys::lower,
+	crate::std_aliases::lower, crate::welcome_forms::lower, crate::analyzer::lower_kebab_members, crate::number_keys::lower,
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)
 	crate::object_groups::lower,
 	crate::units::lower_sleep_durations, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::system_signals::lower, crate::event_signals::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods,

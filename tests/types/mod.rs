@@ -64,3 +64,4 @@ mod test_flags;
 mod test_declared_int_of_float_expression;
 mod test_block_data_paths;
 mod test_int_declaration_stays_whole;
+mod test_collection_declarations;

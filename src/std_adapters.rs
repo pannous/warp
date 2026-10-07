@@ -53,6 +53,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 				_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
 			}
 		}
+		("net", "post", [url, body]) => crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, crate::host::FETCH_TIMEOUT).map(Node::Text).map_err(failure),
 		("os", "env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
 		_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
 	}

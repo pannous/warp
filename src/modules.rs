@@ -66,11 +66,10 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 /// functions and its method calls into theirs, runs before `resolve` loads a module's other definitions; the loader
 /// then leaves these modules' classes out (EARLY_CLASS_MODULES). A class the program declares itself wins.
 pub fn insert_module_classes(program: Node) -> Node {
-	let program = crate::welcome_forms::qualified_module_calls(program);
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
 	let own_names: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
-	let (mut std_definitions, mut file_classes, mut early) = (vec![], vec![], HashSet::new());
+	let (mut std_definitions, mut file_classes, mut early, mut class_modules) = (vec![], vec![], HashSet::new(), vec![]);
 	for used in statements(program.clone()).iter().filter_map(used_module).filter(|used| used.import == Import::Use) {
 		let (path, source, is_std) = match loader.find(&used.name) {
 			Some(path) => match crate::web::read_text(&path.to_string_lossy()) {
@@ -88,7 +87,12 @@ pub fn insert_module_classes(program: Node) -> Node {
 		}
 		let definitions = crate::normalize::without_hints(|| statements(module));
 		match is_std {
-			true => std_definitions.extend(definitions),
+			true => {
+				if definitions.iter().any(is_class) {
+					class_modules.push(used.name.clone());
+				}
+				std_definitions.extend(definitions)
+			}
 			false => file_classes.extend(definitions.into_iter().filter(is_class)),
 		}
 		early.insert(path.canonicalize().unwrap_or(path));
@@ -97,7 +101,10 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let is_foreign = |class: &Node| declared_name(class).is_none_or(|name| !own_names.contains(&name));
 	let defined: Vec<String> = std_definitions.iter().filter_map(declared_name).collect();
 	let aliases: Vec<(&str, &str)> = STD_ALIASES.into_iter().filter(|(alias, word)| defined.iter().any(|name| name == word) && !own_names.contains(*alias)).collect();
-	let program = with_std_aliases(program, &aliases);
+	// `collections.Counter(xs)`: the bare class before class_methods reads its construction; other qualified calls
+	// (`math.factorial` of `use python math`, `json.loads`) wait for foreign_modules and welcome_forms
+	let class_modules: Vec<&str> = class_modules.iter().map(String::as_str).collect();
+	let program = with_std_aliases(crate::welcome_forms::module_calls(program, &class_modules), &aliases);
 	let std_classes = std_definitions.into_iter().filter(|definition| is_class(definition) && is_foreign(definition)).collect();
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
 	let program = with_needed_definitions(program, std_classes);
@@ -543,7 +550,8 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 12] = [
+const STD_MODULES: [(&str, &str); 13] = [
+	("net", include_str!("../std/net.wasp")),
 	("collections", include_str!("../std/collections.wasp")),
 	("hash", include_str!("../std/hash.wasp")),
 	("regex", include_str!("../std/regex.wasp")),
