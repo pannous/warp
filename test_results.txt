@@ -170,6 +170,7 @@ PASSED:
   ✓ control::test_iteration_words::test_reduce
   ✓ control::test_iteration_words::test_reduce_of_an_empty_list_is_an_error
   ✓ control::test_iteration_words::test_words_a_program_defines_win
+  ✓ control::test_job_lists::a_job_list_literal_gives_the_results
   ✓ control::test_job_lists::a_list_of_jobs_gives_their_results_when_used
   ✓ control::test_job_lists::counting_jobs_does_not_await_them
   ✓ control::test_job_lists::jobs_in_a_list_run_at_the_same_time
@@ -1911,6 +1912,8 @@ PASSED:
   ✓ parser::test_dollar_names::dollar_names_survive_eval
   ✓ parser::test_end_word::a_name_end_stays_a_name
   ✓ parser::test_end_word::end_still_closes_blocks
+  ✓ parser::test_entity_table::hello_world_is_the_uniscript_world
+  ✓ parser::test_entity_table::the_entity_table_is_the_pinned_uniscript_index
   ✓ parser::test_glued_method_block::a_glued_block_after_a_dot_is_a_call
   ✓ parser::test_glued_method_block::a_glued_block_starting_an_item_stays_data
   ✓ parser::test_glued_pair_value::a_glued_pair_ends_at_its_word
@@ -3383,4 +3386,4 @@ FAILED:
   ✗ web::test_guide::every_guide_snippet_shows_its_value
 
 SUMMARY:
-19 ignored, 3377 passed, 1 failed, 3378 total tested
+19 ignored, 3380 passed, 1 failed, 3381 total tested
