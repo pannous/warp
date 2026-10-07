@@ -349,6 +349,7 @@ fn collect_list_variables(node: &Node, assigned: &mut HashMap<String, bool>) {
 			if let Node::Symbol(name) = target.drop_meta() {
 				let is_list = match value.drop_meta() {
 					Node::List(items, Bracket::Square, _) => !items.iter().any(is_pair),
+					_ if is_range(value) => true,
 					Node::Empty => appended.contains(name),
 					// `xs = xs + [i]`
 					Node::Key(left, Op::Add, right) => matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)),
@@ -358,6 +359,15 @@ fn collect_list_variables(node: &Node, assigned: &mut HashMap<String, bool>) {
 			}
 		}
 	});
+}
+
+/// `1 to 4`, `(1 to 4)`, `1..4`
+fn is_range(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(_, Op::Range | Op::To, _) => true,
+		Node::List(items, Bracket::Round, _) => matches!(items.as_slice(), [only] if is_range(only)),
+		_ => false,
+	}
 }
 
 fn is_pair(node: &Node) -> bool {
@@ -414,9 +424,14 @@ impl Broadcast {
 				let applied = elements.iter().map(|element| self.apply(name, element.clone())).collect();
 				Some(Node::List(applied, Bracket::Square, element_separator.clone()))
 			}
-			Node::Symbol(variable) if self.list_variables.contains(variable) => Some(each_item(argument.clone(), |item| call(name, item))),
+			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), |item| call(name, item))),
 			_ => None,
 		}
+	}
+
+	/// A list variable or a range: `sqrt xs`, `sqrt (1 to 4)` map over its items
+	fn is_list_value(&self, node: &Node) -> bool {
+		is_range(node) || matches!(node.drop_meta(), Node::Symbol(variable) if self.list_variables.contains(variable))
 	}
 
 	/// `add [1 2] 10`, `add(10, xs)`, `add(all xs, 10)`, `square(all xs)`: a call whose one list argument goes to a
@@ -450,8 +465,7 @@ impl Broadcast {
 	fn is_list(&self, node: &Node) -> bool {
 		match node.drop_meta() {
 			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_pair),
-			Node::Symbol(variable) => self.list_variables.contains(variable),
-			_ => false,
+			_ => self.is_list_value(node),
 		}
 	}
 
@@ -462,7 +476,7 @@ impl Broadcast {
 			Node::List(elements, Bracket::Square, separator) if !elements.is_empty() && !elements.iter().any(is_pair) => {
 				Some(Node::List(elements.iter().cloned().map(applied).collect(), Bracket::Square, separator.clone()))
 			}
-			Node::Symbol(variable) if self.list_variables.contains(variable) => Some(each_item(argument.clone(), applied)),
+			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), applied)),
 			_ => None,
 		}
 	}
