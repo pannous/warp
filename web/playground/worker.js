@@ -20,6 +20,7 @@ let panicMessage; // the compiler's last panic message
 
 const post = message => self.postMessage(message);
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
+self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),

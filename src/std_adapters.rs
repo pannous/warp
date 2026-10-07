@@ -59,6 +59,9 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			}
 		}
 		("net", "post", [url, body]) => crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, crate::host::FETCH_TIMEOUT).map(Node::Text).map_err(failure),
+		// `clipboard.write(text)` (lowering/system_values.rs)
+		#[cfg(feature = "native")]
+		("clipboard", "write", [text]) => warp_runtime::system_values::write_clipboard(&text_of(text)?).map(|_| Node::Empty).map_err(failure),
 		("os", "env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
 		// `stored theme = "dark"` (lowering/stored_values.rs): the value kept under its name, or the default
 		("store", "load", [name, default, file]) => {

@@ -126,5 +126,8 @@ addHostPart({
 			},
 		},
 		net: { post: (url, body) => postSync(url, contentText(body)) },
+		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
+		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
+		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },
 	},
 });

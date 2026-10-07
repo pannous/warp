@@ -143,6 +143,24 @@ pub fn notify(text: &str) -> Result<(), String> {
 	}
 }
 
+/// Puts text on the clipboard: macOS `pbcopy`, Linux `wl-copy` or `xclip`
+pub fn write_clipboard(text: &str) -> Result<(), String> {
+	#[cfg(target_os = "macos")]
+	return input("pbcopy", &[], text);
+	#[cfg(not(target_os = "macos"))]
+	input("wl-copy", &[], text).or_else(|_| input("xclip", &["-selection", "clipboard", "-i"], text))
+		.map_err(|problem| format!("clipboard: needs wl-copy or xclip ({problem})"))
+}
+
+/// Runs a program with `text` as its input
+fn input(program: &str, arguments: &[&str], text: &str) -> Result<(), String> {
+	use std::io::Write;
+	let mut child = std::process::Command::new(program).args(arguments).stdin(std::process::Stdio::piped()).spawn().map_err(|problem| format!("{program}: {problem}"))?;
+	child.stdin.take().expect("a piped input").write_all(text.as_bytes()).map_err(|problem| format!("{program}: {problem}"))?;
+	let status = child.wait().map_err(|problem| format!("{program}: {problem}"))?;
+	status.success().then_some(()).ok_or_else(|| format!("{program} failed: {status}"))
+}
+
 /// The clipboard's text: macOS `pbpaste`, Linux `wl-paste` or `xclip`
 pub fn clipboard_text() -> Result<String, String> {
 	#[cfg(target_os = "macos")]

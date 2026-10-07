@@ -86,6 +86,7 @@ function startWorker() {
 			if (!data) return;
 			if (data.type === "ready") return resolve();
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
+			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "failed") return reject(new Error(data.message));
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });

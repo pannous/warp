@@ -79,6 +79,12 @@ function inputDetail(field) {
 	return { value: NUMBER_FIELDS.includes(field.type) ? field.valueAsNumber : field.value, checked: field.checked ?? false };
 }
 
+// text on the page's clipboard (`clipboard.write`, host-files.js); the browser refuses it without a recent user action
+// (a click), loudly on the console
+function copyText(text) {
+	navigator.clipboard.writeText(text).catch(failure => console.error("clipboard:", failure));
+}
+
 // where a value of a store is kept: the dev store and the session's in sessionStorage, any other in localStorage, as JSON
 function keptStorage(file) {
 	return file === DEV_STORE ? [sessionStorage, DEV_PREFIX] : file === SESSION_STORE ? [sessionStorage, SESSION_PREFIX] : [localStorage, STORED_PREFIX];
