@@ -733,9 +733,8 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 		match kinds.as_slice() {
 			[Kind::Int] => {}
 			[kind] => param.used_as = Some(*kind),
-			[first, second, ..] => ctx.parameter_conflicts.push(format!(
-				"{name} is called with {} and {} for parameter {}: annotate it, e.g. {}:any",
-				kind_with_article(*first), kind_with_article(*second), param.name, param.name)),
+			// called with several kinds, it takes any value, as if written `x:any` (P173: silently, no annotation asked)
+			[_, _, ..] => param.annotation = Some(Node::Symbol(crate::type_kinds::UNTYPED_FIELD.to_string())),
 			[] => {}
 		}
 	}

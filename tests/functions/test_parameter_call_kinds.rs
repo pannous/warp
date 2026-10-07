@@ -22,11 +22,11 @@ fn untyped_parameter_with_int_calls_or_none_stays_int() {
 	is!("inc(x):=x+1;inc(2) + inc(5)", 9);
 }
 
+/// P173 (user, 2026-10-07): calls that disagree make the parameter take any value (was a loud "annotate it" error)
 #[test]
-fn disagreeing_calls_are_a_loud_error_naming_both_kinds() {
-	let message = error_text("id(x):=x;id([1 2 3]);id(2)");
-	assert!(message.contains("id is called with a List and an Int for parameter x"), "{message}");
-	assert!(message.contains("annotate it"), "{message}");
+fn disagreeing_calls_make_the_parameter_any() {
+	is!("id(x):=x;id([1 2 3]);id(2)", 2);
+	is!("id(x):=x;id([1 2 3])#2 + id(2)", 4);
 }
 
 #[test]
