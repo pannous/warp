@@ -1,5 +1,5 @@
 #![cfg_attr(test, allow(unused))] // main() is not compiled under test
-use warp::{diagnostic, extensions, law, package_tools, run, util, wasm_emitter, wasm_reader, wasp_parser};
+use warp::{diagnostic, extensions, html, law, package_tools, run, util, wasm_emitter, wasm_reader, wasp_parser};
 use warp::node;
 use std::env;
 use std::fs;
@@ -267,7 +267,9 @@ fn print_and_exit(result: Node) -> ! {
 /// program that only acts, as Python's console shows nothing for None
 fn show(result: &Node, mark: &str) {
     if result.drop_meta() != &Node::Empty {
-        println!("{mark}{}", result.serialize());
+        // markup (`html{ body{ … } }`) is printed as HTML: `warp run page.wasp > page.html` (card web-dom)
+        let shown = if html::is_markup(result) { html::to_html(result) } else { result.serialize() };
+        println!("{mark}{shown}");
     }
     if let Some(excerpt) = diagnostic::error_position(result).and_then(|(line, column)| diagnostic::shown_excerpt(line, column)) {
         let _ = io::stdout().flush();

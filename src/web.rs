@@ -60,6 +60,8 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	}).collect();
 	json!({
 		"value": result.serialize(),
+		// markup the page shows as DOM (card web-dom)
+		"html": crate::html::is_markup(&result).then(|| crate::html::to_html(&result)),
 		"error": is_error,
 		"errors": errors,
 		"error_at": diagnostic::error_position(&result).map(|(line, column)| json!({"line": line, "column": column})),

@@ -60,6 +60,7 @@ pub mod effects;
 pub mod injection;
 pub mod interpolation;
 pub mod diagnostic;
+pub mod html;
 pub mod fixits;
 pub mod time;
 pub mod real;

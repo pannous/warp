@@ -1,0 +1,43 @@
+//! A markup value renders as HTML (card web-dom, notes/web_framework.md): tags with their attributes, text escaped,
+//! children in order, void elements without a closing tag; anything else is no markup
+use warp::html::{is_markup, to_html};
+use warp::wasm_emitter::eval;
+
+fn html_of(code: &str) -> String {
+	let value = eval(code);
+	assert!(is_markup(&value), "no markup: {}", value.serialize());
+	to_html(&value)
+}
+
+#[test]
+fn tags_attributes_and_text() {
+	assert_eq!(html_of("div{ class:\"box\" h1{ \"Hi\" } p{ \"x < y & z\" } }"), "<div class=\"box\"><h1>Hi</h1><p>x &lt; y &amp; z</p></div>");
+	assert_eq!(html_of("ul{ li{ \"a\" } li{ \"b\" } }"), "<ul><li>a</li><li>b</li></ul>");
+	assert_eq!(html_of("p{ a{ href:\"/home\" \"Home\" } \" and more\" }"), "<p><a href=\"/home\">Home</a> and more</p>");
+}
+
+#[test]
+fn void_elements_and_attribute_lists() {
+	assert_eq!(html_of("div{ input{ type:email id:email } br{} button{ class:['btn' 'btn-info'] \"Go\" } }"),
+		"<div><input type=\"email\" id=\"email\"><br><button class=\"btn btn-info\">Go</button></div>");
+}
+
+#[test]
+fn a_whole_page() {
+	let page = html_of("html{ head{ title: \"My Page\" meta{ charset: \"utf-8\" } } body{ h1: \"Welcome\" } }");
+	assert_eq!(page, "<html><head><title>My Page</title><meta charset=\"utf-8\"></head><body><h1>Welcome</h1></body></html>");
+}
+
+#[test]
+fn other_values_are_no_markup() {
+	for code in ["3", "\"div\"", "{name: \"Alice\"}", "person{ name: \"Alice\" }"] {
+		assert!(!is_markup(&eval(code)), "{code}");
+	}
+}
+
+#[test]
+fn the_page_gets_the_html_of_markup() {
+	let report = warp::web::evaluate("ul{ li{ \"a\" } }", Default::default());
+	assert_eq!(report["html"], "<ul><li>a</li></ul>");
+	assert!(warp::web::evaluate("3", Default::default())["html"].is_null());
+}
