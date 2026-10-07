@@ -311,3 +311,8 @@ class_methods destructurings: `{x, y} = p` and `{x: a} = p` by field name (maps 
 count other than the fields' left as it was; match arms `Point{x, y} => …` and `Point(x, y) => …` the guard
 `parts·from if parts·from is Point` binding the fields before the body. All go through `parts·from`. Not built: nested
 patterns, constants inside a pattern (`Point(0, y)`), rest patterns.
+Nested and constants (classes-39): a pattern is matched by matched_pattern into class tests (`p is Point`), value
+tests (`p.x == 0`) and bindings with paths (`y = parts·from.start.y`): `_` matches anything, a name binds, a number or
+text is compared, `Point{x: 0, y}`, `Point(a, 0)`, `Line{start: Point{x, y}, end}` nest. The arm's guard is all tests
+joined with `and`; an assignment takes names only (a class in it no test, a constant leaves it as written).
+positional_braces leaves an arm's pattern alone (no "prefer Point(x, y)" hint there). Still not built: rest patterns.
