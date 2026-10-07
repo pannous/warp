@@ -50,12 +50,12 @@ users = ["Ann", "Bo"]
 route "/" { div{ h1{ "Users" } a{ href: "/users/2" "Bo" } } }
 route "/users/:id:int" { div{ h1{ users#id } a{ href: "/" "back" } } }
 route "*" { p{ "no such page" } }` },
-	transitions: { value: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:1 data-wasp-transition:"fade 150ms" "milk"} li{key:2 data-wasp-transition:"fade 150ms" "eggs"} li{key:3 data-wasp-transition:"fade 150ms" "tea"}]]}', clicks: ["rotate", "remove"], clicked: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:3 data-wasp-transition:"fade 150ms" "tea"} li{key:1 data-wasp-transition:"fade 150ms" "milk"}]]}', keyed: true, animated: true, code: `// transitions are data: a removed item fades out, the others glide to their new places
+	transitions: { value: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:1 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "milk"} li{key:2 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "eggs"} li{key:3 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "tea"}]]}', clicks: ["rotate", "remove"], clicked: 'div{button{data-wasp-click:"1" "rotate"} button{data-wasp-click:"2" "remove"} ul:[[li{key:3 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "tea"} li{key:1 data-wasp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "milk"}]]}', keyed: true, animated: true, code: `// transitions are CSS: a removed item fades out to its starting style, the others glide (transform) to their new places
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{
 	button{ on click { todos = todos[1..] + [todos#1] } "rotate" }
 	button{ on click { todos = todos[1..] } "remove" }
-	ul{ [li{ key: todo.id transition: fade 150ms todo.text } for todo in todos] }
+	ul{ [li{ key: todo.id starting-style: { opacity: 0 } transition: "opacity 150ms, transform 150ms" todo.text } for todo in todos] }
 }` },
 	"form binding": { value: 'div{label{"Name " input{value:"Ann" data-wasp-input:"1"}} p:"Hello Ann"}', typed: "Bob", clicked: 'div{label{"Name " input{value:"Bob" data-wasp-input:"1"}} p:"Hello Bob"}', kept: true, code: `// bind: ties a field to a variable both ways: type a name, the greeting follows
 name = "Ann"

@@ -162,15 +162,24 @@ Each step is useful on its own and is what the next ones stand on.
   so its page events draw no warning.
 
 ## Step 15 (web-transitions), what is done and what is left
-- `li{ transition: fade 200ms }` (lowering/transitions.rs, right after markup_tags) is the attribute
-  `data-wasp-transition: "fade 200ms"`: its words are data (not variables), durations normalized to ms, a text taken as
-  written; the words end where the children begin. In `style: {…}` transition stays the CSS property.
-- The page (markup.js morphChildren, Web Animations API, no CSS): an element with a transition animates in when
-  inserted and out before removal (marked data-wasp-leaving, skipped by matching, removed when done; a keyed item gone
-  from its list leaves where it stands); a keyed one glides to its new place (FLIP). Kinds fade, scale, slide; default
-  fade 200ms ease; any other word is the easing. Nothing animates on the first render or with prefers-reduced-motion.
-  Tour example transitions (`animated` check of test_in_browser.py); probes/transitions/leave_check.py.
-- Left: separate enter / leave kinds (`enter: slide leave: fade`), custom keyframes as data, `0.3s` (card
+- CSS form (P188, card web-css; lowering/transitions.rs, right after markup_tags): `li{ transition: opacity 200ms }` is
+  the element's inline CSS transition, joined to its own `style`; `starting-style: { opacity: 0 }` (CSS's
+  @starting-style, which an inline style cannot hold) is the attribute `data-wasp-starting-style`, rendered as
+  declarations by std/markup.wasp. Words are data (not variables), durations normalized to ms, a text taken as written,
+  timing words (`ease-out`) join the transition; the words end where the children begin. In `style: {…}` transition
+  stays the CSS property as written.
+- The kinds before CSS, `transition: fade 200ms` (also scale, slide), lower to that CSS (opacity, and transform for
+  scale/slide, plus their starting style) with an advise hint naming the CSS form.
+- The page: web/playground/markup-transitions.js, loaded after markup.js only by sites whose module mentions
+  "transition" (site.rs scripts_of; playground index.html and pages.yml SITE_FILES list it), replaces markup.js's
+  defaults transitionPlaces, enter, leave, moveFrom (hello-world budget stays small). Web Animations API from the
+  computed CSS transition: an element with a starting style animates in from it when inserted and towards it before
+  removal (marked data-wasp-leaving, skipped by matching, removed when done; a keyed item gone from its list leaves
+  where it stands); a keyed one whose transition covers transform (or all) glides to its new place (FLIP). Nothing
+  animates on the first render or with prefers-reduced-motion. Tests: tests/web/test_css_transitions.rs,
+  test_transitions.rs; tour example transitions (`animated` check of test_in_browser.py);
+  probes/transitions/leave_check.py.
+- Left: custom keyframes as data, `0.3s` (card
   fractional-durations), leaving items still take their space until removed (no absolute positioning while leaving).
 - Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
   (`data-wasp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
