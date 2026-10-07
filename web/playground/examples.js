@@ -1,7 +1,8 @@
 // The tour, from basics to wow: each example's first line says what it shows; `value` is what the page shows for it,
 // `printed` what it prints (test_in_browser.py --examples checks both in the page, so a broken example fails CI;
 // `wait`: milliseconds of timers and listeners before checking; `clicks`: the shown buttons, by text, clicked after
-// that, `clicked` the value then and `kept` that every element shown stays: only its text and attributes change).
+// that, `clicked` the value then and `kept` that every element shown stays: only its text and attributes change;
+// `keyed` that every element with a key keeps it: a list item's element moves with its item).
 // samples.js (made by build.sh) adds samples/*.wasp.
 const EXAMPLES = {
 	welcome: { value: '[[1 4 9] 3 "reading"]', printed: "Alice turns 42\n", code: `// wasp is data and code in one notation, compiled to WebAssembly as you type: edit me
@@ -29,6 +30,9 @@ def Counter(label, start) {
 	div{ button{ on click { count += 1 } "+" } p{ label + ": " + count } }
 }
 div{ Counter("Apples", 1) Counter("Pears", 5) }` },
+	"keyed list": { value: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:1 "milk"} li{key:2 "eggs"} li{key:3 "tea"}]]}', clicks: ["rotate"], clicked: 'div{button{data-wasp-click:"1" "rotate"} ul:[[li{key:2 "eggs"} li{key:3 "tea"} li{key:1 "milk"}]]}', kept: true, keyed: true, code: `// a list in markup: with a key, each item keeps its element when the list changes (it moves, nothing is rewritten)
+todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
+div{ button{ on click { todos = todos[1..] + [todos#1] } "rotate" } ul{ [li{ key: todo.id todo.text } for todo in todos] } }` },
 	functions: { value: "25", code: `// a function, called with or without parentheses
 def square(x) = x*x
 square(4) + square 3` },

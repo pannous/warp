@@ -14,6 +14,7 @@ const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
 const INSTANCE_ATTRIBUTE = "data-wasp-instance"; // a component instance's elements (src/lowering/element_events.rs)
+const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (src/html.rs)
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -254,17 +255,22 @@ function showRendered(html) {
 	morphChildren(host.shadowRoot ?? host.attachShadow({ mode: "open" }), template.content);
 }
 
-// the children of shown become those of wanted, matched by position; a node of another kind or tag is replaced
+// the children of shown become those of wanted: an element with a key (data-wasp-key, card web-keyed) is the shown one
+// of that key, moved into place; any other node is matched by position; a node of another kind or tag is replaced
 function morphChildren(shown, wanted) {
+	const keyOf = node => node.getAttribute?.(KEY_ATTRIBUTE) ?? null;
+	const keyed = new Map([...shown.children].filter(child => keyOf(child) !== null).map(child => [keyOf(child), child]));
 	const wantedNodes = [...wanted.childNodes];
-	[...shown.childNodes].slice(wantedNodes.length).forEach(node => node.remove());
 	wantedNodes.forEach((node, index) => {
-		const old = shown.childNodes[index];
-		if (!old) shown.appendChild(node);
-		else if (old.nodeName !== node.nodeName) old.replaceWith(node);
+		const current = shown.childNodes[index] ?? null;
+		const old = keyOf(node) !== null ? keyed.get(keyOf(node)) : current && keyOf(current) === null ? current : undefined;
+		if (!old) return shown.insertBefore(node, current);
+		if (old !== current) shown.insertBefore(old, current);
+		if (old.nodeName !== node.nodeName) old.replaceWith(node);
 		else if (old.nodeType === Node.ELEMENT_NODE) morphElement(old, node);
 		else if (old.nodeValue !== node.nodeValue) old.nodeValue = node.nodeValue;
 	});
+	[...shown.childNodes].slice(wantedNodes.length).forEach(node => node.remove());
 }
 
 function morphElement(shown, wanted) {

@@ -74,3 +74,12 @@ Each step is useful on its own and is what the next ones stand on.
   becomes the getter `page·markup`, which resets the instance counters before each render.
 - Left: cleanup of listeners when an instance is removed (onMount/onCleanup), instances that move (web-keyed),
   state of a component read by a handler outside it.
+
+## Step 5 (web-keyed), what is done and what is left
+- A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,
+  `ul{ ts.map(t => li{t}) }` (markup_tags.rs keeps it a `[…]`, which the analyzer and emitter take as an item, not as
+  statements to run; analyzer/variables.rs: a statement group in a structure declares its locals).
+- `li{ key: todo.id … }` is the attribute data-wasp-key; playground.js morphChildren moves the shown element of that
+  key into place instead of rewriting elements by position. Tour example "keyed list" (`keyed` check).
+- Not yet: `for t in ts { li{t} }` inside a block (the parser reads `ts { … }` as the tag ts; card markup-for),
+  transitions (web-transitions).

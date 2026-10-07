@@ -28,6 +28,9 @@ const ATTRIBUTES: [&str; 40] = [
 const HEAD: &str = "head";
 /// `data-wasp-click` (element_events.rs) and any other data attribute
 const DATA_ATTRIBUTE_PREFIX: &str = "data-";
+/// `li{ key: todo.id … }` names a list item: the attribute data-wasp-key, by which the page moves its element (card web-keyed)
+const KEY: &str = "key";
+const KEY_ATTRIBUTE: &str = "data-wasp-key";
 
 /// Does the word name an HTML element
 pub fn is_element_tag(word: &str) -> bool {
@@ -61,7 +64,7 @@ fn element_parts(node: &Node) -> Option<(&str, &Node)> {
 fn attribute_parts<'a>(node: &'a Node, parent: &str) -> Option<(&'a str, &'a Node)> {
 	let Node::Key(name, Op::Colon, value) = node.drop_meta() else { return None };
 	let Node::Symbol(name) = name.drop_meta() else { return None };
-	let is_attribute = name.starts_with(DATA_ATTRIBUTE_PREFIX) || (ATTRIBUTES.contains(&name.as_str()) && !(parent == HEAD && ELEMENTS.contains(&name.as_str())));
+	let is_attribute = name.starts_with(DATA_ATTRIBUTE_PREFIX) || name == KEY || (ATTRIBUTES.contains(&name.as_str()) && !(parent == HEAD && ELEMENTS.contains(&name.as_str())));
 	let plain = matches!(value.drop_meta(), Node::Text(_) | Node::Char(_) | Node::Symbol(_) | Node::Number(_) | Node::True | Node::False)
 		|| matches!(value.drop_meta(), Node::List(_, Bracket::Square, _));
 	(is_attribute && plain).then_some((name.as_str(), value.as_ref()))
@@ -89,6 +92,7 @@ fn write_element(tag: &str, content: &Node, html: &mut String) {
 	html.push_str(tag);
 	for attribute in attributes {
 		let (name, value) = attribute_parts(attribute, tag).expect("partitioned");
+		let name = if name == KEY { KEY_ATTRIBUTE } else { name };
 		html.push_str(&format!(" {name}=\"{}\"", escaped(&attribute_value(value))));
 	}
 	html.push('>');

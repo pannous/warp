@@ -129,7 +129,7 @@ def browser(*arguments):
 
 def show_example(name):
 	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
-	`clicks` also the value after clicking those buttons and whether every element shown stayed (`kept`)"""
+	`clicks` also the value after clicking those buttons, whether every element shown stayed (`kept`) and kept its key (`keyed`)"""
 	script = f"""(async () => {{
 		const name = {json.dumps(name)};
 		await playground.chooseExample(name);
@@ -140,12 +140,14 @@ def show_example(name):
 		if (!clicks.length) return JSON.stringify(shown);
 		const rendered = document.getElementById("rendered").shadowRoot;
 		const elements = [...rendered.querySelectorAll("*")];
+		const keys = elements.map(element => element.getAttribute("data-wasp-key"));
 		for (const text of clicks) {{
 			[...rendered.querySelectorAll("button")].find(button => button.textContent === text)?.click();
 			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
 		}}
 		const kept = elements.every(element => element.isConnected);
-		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, kept }});
+		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-wasp-key") === keys[index]);
+		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, kept, keyed }});
 	}})()"""
 	shown = browser("eval", script)
 	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
@@ -175,7 +177,7 @@ def check_examples(names, page_url=None):
 	names = names or list(examples)
 	for name in names:
 		expected, shown = examples[name], show_example(name)
-		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "clicked", "kept") if part in expected and shown[part] != expected[part]]
+		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "clicked", "kept", "keyed") if part in expected and shown[part] != expected[part]]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
 		if wrong:
 			failures.append(name)
