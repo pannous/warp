@@ -17,6 +17,7 @@ mod test_std_time;
 mod test_std_qualified;
 mod test_std_net;
 mod test_std_regex;
+mod test_std_matrix;
 mod test_use_modules;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_versions;
