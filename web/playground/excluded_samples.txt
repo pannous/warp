@@ -17,7 +17,7 @@ life_kotlin_ranges	index out of range (does the loop bound `..size-1` include th
 modules	`}` is missing: the group opened at 22:15 runs to the end of the input (sketches a module system: card module-manager)
 natural	`n times x` repeats a text (or a list: `n times [x]`), four is a Symbol at 6:21 (sketches English phrasing: card natural-phrases)
 netbase	undefined: query in `query "all cities with population > 100000"` (needs a netbase package: card netbase-package)
-neural_net	not an int (destructuring a returned pair in a function: cards destructure-return, destructure-exp)
+neural_net	undefined function: Matrix (no Matrix/Array constructors; written with flat lists in probes/neural_net_flat.wasp it waits for cards global-comprehension, nested-index, float-calls)
 particles	Particle{…} takes fields as name:value, got  x:x, y:y (sketches a drawing API: card drawing-words)
 types	undefined function: Ok at 29:24 (variant types: card sum-types)
 wasm_interop	Empty symbol (sketches export, memory and interface declarations: card wasm-interop-sketch)
