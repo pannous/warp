@@ -24,6 +24,15 @@ fn a_page_ships_the_parts_its_module_imports() {
 	assert_eq!(part_files("use js Math\np{ Math.floor(2.5) }"), ["host-files.js", "host-foreign.js"]);
 }
 
+// card web-apis: the store adapter (`stored`, `storage[k]`, std_io) lives in host-files.js, so a hello-world site sends none of it
+#[test]
+fn a_page_keeping_values_ships_the_store() {
+	assert_eq!(part_files("stored visits = 0\np{ visits }"), ["host-files.js"]);
+	assert_eq!(part_files("storage[\"theme\"] = \"dark\"\np{ storage[\"theme\"] }"), ["host-files.js"]);
+	let files_part = HOST_PARTS.iter().find(|part| part.script.0 == "host-files.js").expect("the files part").script.1;
+	assert!(files_part.contains("store: {") && !HOST_SCRIPT.contains("store: {"));
+}
+
 // the host words a part gives (its `words` object), as each part's selection must recognize them
 fn words_of(part: &str) -> Vec<String> {
 	let start = part.find("addHostPart({").expect("the part adds itself");
