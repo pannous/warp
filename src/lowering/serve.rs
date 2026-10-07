@@ -12,6 +12,9 @@ const REQUEST_WORD: &str = "request";
 const ANY_TYPE: &str = "any";
 const METHODS: [&str; 5] = ["get", "post", "put", "delete", "patch"];
 
+/// A route as written: its method (upper case), path and body
+type Route = (String, Node, Node);
+
 pub fn lower(program: Node) -> Node {
 	match program {
 		Node::List(statements, bracket, separator) if statements.iter().any(|statement| served(statement).is_some()) => {
@@ -31,7 +34,7 @@ pub fn lower(program: Node) -> Node {
 }
 
 /// `serve port {routes}`: the port and each route's method, path and body
-fn served(statement: &Node) -> Option<(Node, Vec<(String, Node, Node)>)> {
+fn served(statement: &Node) -> Option<(Node, Vec<Route>)> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };
 	let [serve, port, block] = items.as_slice() else { return None };
 	let Node::List(routes, Bracket::Curly, _) = block.drop_meta() else { return None };
@@ -39,7 +42,7 @@ fn served(statement: &Node) -> Option<(Node, Vec<(String, Node, Node)>)> {
 }
 
 /// The routes of a block, one per line (`get "/" {…}` each) or in a row
-fn routes_in(items: &[Node]) -> Vec<(String, Node, Node)> {
+fn routes_in(items: &[Node]) -> Vec<Route> {
 	let words: Vec<Node> = items.iter().flat_map(|item| match item.drop_meta() {
 		Node::List(parts, Bracket::None, _) => parts.clone(),
 		other => vec![other.clone()],
@@ -51,7 +54,7 @@ fn routes_in(items: &[Node]) -> Vec<(String, Node, Node)> {
 }
 
 /// The route functions, then the call that serves them
-fn serving(port: Node, routes: Vec<(String, Node, Node)>, count: &mut usize) -> Vec<Node> {
+fn serving(port: Node, routes: Vec<Route>, count: &mut usize) -> Vec<Node> {
 	let mut statements = vec![];
 	let mut table = vec![];
 	for (method, path, body) in routes {
