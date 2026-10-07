@@ -43,6 +43,6 @@ fn matching_arguments_still_pass() {
 fn an_unknown_word_returned_or_cast_is_an_error() {
 	// card functions-unknown: these trapped or gave back the data `cube 3`
 	for code in ["def g(n: str) -> str: return cube \"x\"; g(\"a\")", "def g(n) { return cube 3 }; g(1)", "def g(n) -> int { cube 3 }; g(1)", "cube 3 as int"] {
-		crate::common::fails_with(code, "undefined: cube");
+		crate::common::fails_with(code, "cube is in the standard module math: write `use math`");
 	}
 }
