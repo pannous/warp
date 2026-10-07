@@ -671,7 +671,8 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 			}
 			let Some(function) = ctx.user_functions.get(&name) else { continue };
 			for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
-				let declared_int = function.params[index].annotation.is_some() && param_kind(&function.params[index]) == Kind::Int;
+				// `real`, `exact` are Ints that may hold a ratio: only a whole type loses a decimal's digits
+				let declared_int = function.params[index].annotation.as_ref().is_some_and(|annotation| crate::analyzer::checks::is_whole_type(&annotation.name()));
 				if declared_int && has_digits_an_int_loses(argument) {
 					// a whole float serializes as `2`; its decimal point is what makes it no int
 					let written = match argument.drop_meta() {
@@ -700,8 +701,8 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 			[Kind::Int] => {}
 			[kind] => param.used_as = Some(*kind),
 			[first, second, ..] => ctx.parameter_conflicts.push(format!(
-				"{name} is called with {} and {} for parameter {}: annotate it",
-				kind_with_article(*first), kind_with_article(*second), param.name)),
+				"{name} is called with {} and {} for parameter {}: annotate it, e.g. {}:any",
+				kind_with_article(*first), kind_with_article(*second), param.name, param.name)),
 			[] => {}
 		}
 	}

@@ -136,7 +136,8 @@ regex: capability like libm's) and `std_io(…)` for words that touch the outsid
 defines its words over them, `parse_json(text) := std_pure("json", "parse", [text])` (std/json.wasp); natively
 src/std_adapters.rs answers by (module, member), in the browser host.js STD_ADAPTERS. Values cross as for the foreign
 runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain). Their results are any Node (analyzer
-ANY_VALUE_WORDS); a parameter that takes any value is annotated `any` (`to_json(value:any)`).
+ANY_VALUE_WORDS). The wrappers' parameters are annotated `any` (`to_json(value:any)`): an unannotated parameter fed
+only by such values would default to an int ("not an int" for `parse_json(post(…))`).
 Adding a word: one match arm in std_adapters.rs, one function in STD_ADAPTERS, one line in std/<module>.wasp, a test
 run natively and in the browser.
 
@@ -147,8 +148,23 @@ run natively and in the browser.
    the browser host.js keeps written files in memory while the page is open (read sees them first, then the served
    repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
    method `xs.append(v)` a program using `use file` still needs (question Q6). args waits for a CLI way to pass them.
-2. hash (B): embed zlib.wasm/xxhash.wasm and a sha256.wasm in warp, `use hash` resolves to them in both hosts.
-3. regex (A): Rust regex + JS RegExp behind matches/find/find_all/replace_all, with the common-subset check.
+2. Done as A instead of B: hash: `use hash` brings sha256 (lowercase hex) and crc32 (a number) of a text's UTF-8
+   bytes: sha2 and crc32fast natively (both already warp dependencies), a synchronous JS twin in host.js (crypto.subtle
+   is asynchronous, a host call cannot wait); same values in both hosts (tests/modules/test_std_hash.rs). B (C modules
+   compiled to wasm) stays the way for xxhash, compression and other libraries without a Rust/JS pair.
+3. Done: regex (A): `use regex` brings matches, first_match, find_all, replace_all (`$1` groups in the replacement);
+   Rust's regex natively, JS RegExp (flag u) in the browser; look-around and backreferences are the error "… is not
+   in wasp's regex (one engine lacks it)" in both (tests/modules/test_std_regex.rs). `first_match`, since `find` is
+   the list word find(xs, predicate).
+3b. Done: net (A, std_io): `use net` brings post(url, body), the body sent as UTF-8 text, the answer's text (ureq
+   natively, a synchronous XMLHttpRequest in the browser; tests/modules/test_std_net.rs against httpbin.org).
+3c. Done: other ecosystems' names (src/lowering/std_aliases.rs, the source pass before welcome_forms): `JSON.parse` /
+   `json.loads` → parse_json, `JSON.stringify` / `json.dumps` → to_json, `re.findall(p, t)` → find_all(t, p),
+   `re.sub(p, r, t)` → replace_all(t, p, r), `fs.readFileSync` → read, `fs.writeFileSync` / `appendFileSync` /
+   `existsSync` → write / append_file / exists, `os.getenv` → env, `process.exit` → exit: the got-it note names wasp's
+   word, and the alias brings its module as `use json` would. A program that names the module (`re = 3`) or imports
+   the real one (`use python "json"`) keeps it (tests/modules/test_std_aliases.rs). A name not in the table goes
+   through the foreign bridges (notes/stdlib_connectors.md).
 4. Later: the AOT stub linking B modules (they need no compiler), then hash and compress work in executables.
 
 ## Open questions (to warp-e9, defaults in force)

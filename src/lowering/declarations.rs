@@ -8,6 +8,9 @@ use crate::operators::{is_function_keyword, Op};
 
 /// The receiver of an extension method, as Kotlin (`this`) and Swift (`self`) name it
 const THIS_WORD: &str = "this";
+/// `map data = {…}`: the collection words a typed declaration takes, as the annotation they mean (type() answers map,
+/// list, tuple); dict and array are other languages' words for map and list (card declaration-type)
+const COLLECTION_DECLARATION_WORDS: [(&str, &str); 5] = [("map", "map"), ("list", "list"), ("tuple", "tuple"), ("dict", "map"), ("array", "list")];
 const SELF_WORD: &str = "self";
 /// Swift's block of methods added to a type: `extension Int {…}`
 const EXTENSION_WORD: &str = "extension";
@@ -18,6 +21,8 @@ const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
 const IT_PARAMETER: &str = "it";
 const RETURN_WORD: &str = "return";
 const ENUM_WORD: &str = "enum";
+/// Swift's `enum Direction { case north, south }`
+const CASE_WORD: &str = "case";
 /// Ruby's `def f(x) … end`
 const END_WORD: &str = "end";
 const FLAGS_WORD: &str = "flags";
@@ -80,7 +85,48 @@ const FINISH_EVENT: &str = "finishes";
 const HANDLED_PREFIX: &str = "handled·";
 
 pub fn lower(node: Node) -> Node {
+	let mut enums = vec![];
+	node.visit(&mut |part| if let Node::List(items, _, _) = part {
+		enums.extend(enum_cases(items));
+	});
+	let node = if enums.is_empty() { node } else { enum_paths(node, &enums) };
 	lower_lists(lower_flags(node), enum_object)
+}
+
+/// Rust's `Color::Green` and Swift's `.green` (where one enum has the case): the case `Color.green`
+fn enum_paths(node: Node, enums: &[(String, Vec<String>)]) -> Node {
+	let is_enum = |name: &Node| matches!(name.drop_meta(), Node::Symbol(name) if enums.iter().any(|(declared, _)| declared == name));
+	let enum_of = |case: &Node| {
+		let case = case.drop_meta().name();
+		let owners: Vec<&String> = enums.iter().filter(|(_, cases)| cases.contains(&case)).map(|(name, _)| name).collect();
+		(owners.len() == 1).then(|| owners[0].clone())
+	};
+	match node {
+		Node::Key(name, Op::Scope, case) if is_enum(&name) => Node::Key(name, Op::Dot, case),
+		Node::Key(empty, Op::Dot, case) if matches!(empty.drop_meta(), Node::Empty) && enum_of(&case).is_some() => {
+			Node::Key(Box::new(Node::Symbol(enum_of(&case).expect("guarded"))), Op::Dot, case)
+		}
+		other => other.map_children(|child| enum_paths(child, enums)),
+	}
+}
+
+/// The name and cases of an enum declaration `enum Color {red, green}` (Swift's `{ case north, south }`)
+fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
+	let [word, name, cases] = items else { return None };
+	let is_enum = matches!(word.drop_meta(), Node::Symbol(word) if word == ENUM_WORD);
+	let Node::Symbol(name) = name.drop_meta() else { return None };
+	let Node::List(cases, Bracket::Curly, _) = cases.drop_meta() else { return None };
+	let names: Option<Vec<String>> = cases.iter().map(case_name).collect();
+	is_enum.then_some((name.clone(), names?))
+}
+
+/// A case of an enum, `north` of Swift's `case north`
+fn case_name(case: &Node) -> Option<String> {
+	match case.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::List(words, _, _) if matches!(words.as_slice(), [keyword, name] if keyword.drop_meta().name() == CASE_WORD && matches!(name.drop_meta(), Node::Symbol(_))) => Some(words[1].drop_meta().name()),
+		_ => None,
+	}
 }
 
 /// The flags types the program declares (`flags virtues={fast, safe}`), their declarations as the empty set, and the
@@ -1080,10 +1126,40 @@ fn never_happens(located: &Node, message: &str) -> Node {
 /// P28 (user, 2026-10-05: "Zero value (Go)"): `real x;` declares x with the zero value of its type, `x:real = 0.0`.
 /// Only a fresh name: after `x = "5"`, `int x` is the conversion of x
 pub fn lower_bare_declarations(program: Node) -> Node {
+	let named: Vec<&str> = COLLECTION_DECLARATION_WORDS.iter().map(|(word, _)| *word).filter(|word| crate::soft_keywords::program_names(&program, word)).collect();
+	let program = collection_declarations(program, &named);
 	// a program of only `int n` is one statement
 	match zero_declaration(&program, &std::collections::HashSet::new()) {
 		Some(declaration) => declaration,
 		None => declarations_in(program),
+	}
+}
+
+/// `map data = {key: "v"}` is `data:map = {key: "v"}`, `dict d = …` `d:map = …` with a note; a word the program names
+/// itself keeps its meaning
+fn collection_declarations(node: Node, named: &[&str]) -> Node {
+	let declared = match node.drop_meta() {
+		Node::List(items, _, _) => match items.as_slice() {
+			[word, assignment] => match assignment.drop_meta() {
+				Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Node::Symbol(_)) => COLLECTION_DECLARATION_WORDS.iter()
+					.find(|(written, _)| word.drop_meta().name() == *written && !named.contains(written))
+					.map(|(written, meaning)| (*written, *meaning, name.clone(), value.clone())),
+				_ => None,
+			},
+			_ => None,
+		},
+		_ => None,
+	};
+	match declared {
+		Some((written, meaning, name, value)) => {
+			if written != meaning {
+				crate::normalize::set_position_of(&node);
+				crate::diagnostic::note_alias(written, meaning);
+			}
+			let target = Node::Key(name, Op::Colon, Box::new(Node::Symbol(meaning.to_string())));
+			Node::Key(Box::new(target), Op::Assign, Box::new(collection_declarations(*value, named)))
+		}
+		None => node.map_children(|child| collection_declarations(child, named)),
 	}
 }
 
@@ -1858,17 +1934,12 @@ fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) ->
 
 /// The assignment `name={case:index …}` of the items `enum name {case …}`
 fn enum_object(items: &[Node]) -> Option<Node> {
-	let [word, name, cases] = items else { return None };
-	let is_enum = matches!(word.drop_meta(), Node::Symbol(word) if word == ENUM_WORD);
-	let Node::Symbol(_) = name.drop_meta() else { return None };
-	let Node::List(case_names, Bracket::Curly, _) = cases.drop_meta() else { return None };
-	if !is_enum || case_names.iter().any(|case| !matches!(case.drop_meta(), Node::Symbol(_))) {
-		return None;
-	}
+	let (_, case_names) = enum_cases(items)?;
+	let name = &items[1];
 	let entries = case_names
-		.iter()
+		.into_iter()
 		.zip(FIRST_CASE_INDEX..)
-		.map(|(case, index)| Node::Key(Box::new(case.clone()), Op::Colon, Box::new(Node::int(index))))
+		.map(|(case, index)| Node::Key(Box::new(Node::Symbol(case)), Op::Colon, Box::new(Node::int(index))))
 		.collect();
 	let object = Node::List(entries, Bracket::Curly, Separator::Space);
 	Some(Node::Key(Box::new(name.clone()), Op::Assign, Box::new(object)))

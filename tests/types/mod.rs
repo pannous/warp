@@ -22,6 +22,8 @@ mod test_class_forms_ported;
 mod test_class_operators;
 mod test_class_aliases;
 mod test_class_interfaces;
+mod test_enums_ported;
+mod test_class_witnesses;
 mod test_construction_checks;
 mod test_struct_field_of_constructor;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
@@ -62,3 +64,4 @@ mod test_flags;
 mod test_declared_int_of_float_expression;
 mod test_block_data_paths;
 mod test_int_declaration_stays_whole;
+mod test_collection_declarations;

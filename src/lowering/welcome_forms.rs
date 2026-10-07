@@ -25,6 +25,15 @@ const DESTRUCTURED_OBJECT: &str = "object·";
 pub const GENERIC_MARK: &str = "generic";
 const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
 const CALL_METHOD: &str = "call";
+/// Swift's and C's case label `case .north:` in a switch
+const CASE_WORD: &str = "case";
+/// Kotlin's `when (x) { a -> 1; is T -> 2; else -> 3 }`, an if chain
+const WHEN_WORD: &str = "when";
+const ELSE_WORD: &str = "else";
+const IS_WORD: &str = "is";
+/// The if chain a `when` arm adds, its conditions joined by `or`
+const WHEN_ARM: &str = "if CONDITION then VALUE else OTHERWISE";
+const LAST_WHEN_ARM: &str = "if CONDITION then VALUE";
 const OCAML_FUNCTION_KEYWORD: &str = "fun";
 /// F#/OCaml (and Elixir's Enum) modules whose iteration functions are wasp's words: `List.map f xs` is `map f xs`
 const ITERATION_MODULES: [&str; 4] = ["List", "Seq", "Array", "Enum"];
@@ -122,6 +131,9 @@ fn forms(node: Node) -> Node {
 				return binding;
 			}
 			let items = go_destructuring(items, &separator);
+			if let Some(chain) = when_chain(&items) {
+				return chain;
+			}
 			endless_loop(&items).unwrap_or_else(|| Node::List(arrow_cases(items), bracket, separator))
 		}
 		Node::Key(left, Op::Colon, body) if lambda_parameters(&left).is_some() => lambda(lambda_parameters(&left).expect("guarded"), forms(*body)),
@@ -220,6 +232,12 @@ fn arrow_cases(mut items: Vec<Node>) -> Vec<Node> {
 	}
 	if let Node::List(cases, Bracket::Curly, separator) = items[2].drop_meta() {
 		let cases = cases.iter().map(|case| match case.drop_meta() {
+			// Swift's `case .north: 1` (read as the member `case.north`) and `case Direction.north: 1`
+			Node::Key(label, Op::Colon, body) if matches!(label.drop_meta(), Node::Key(word, Op::Dot, _) if is_word(word, CASE_WORD)) => {
+				let Node::Key(_, _, member) = label.drop_meta() else { unreachable!("guarded") };
+				Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::Dot, member.clone())), Op::Colon, body.clone())
+			}
+			Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if is_word(word, CASE_WORD)) => words[1].clone(),
 			Node::Key(pattern, Op::FatArrow, body) => {
 				let pattern = if is_word(pattern, WILDCARD) { Node::Symbol(DEFAULT_CASE.to_string()) } else { pattern.as_ref().clone() };
 				Node::Key(Box::new(pattern), Op::Colon, body.clone())
@@ -229,6 +247,58 @@ fn arrow_cases(mut items: Vec<Node>) -> Vec<Node> {
 		items[2] = Node::List(cases.collect(), Bracket::Curly, separator.clone());
 	}
 	items
+}
+
+/// Kotlin's `when (x) { 1, 2 -> a; is Circle -> b; else -> c }` (or `when { x > 0 -> a … }` without a subject): the
+/// chain `if x == 1 or x == 2 then a else if x is Circle then b else c`
+fn when_chain(items: &[Node]) -> Option<Node> {
+	// `= when (s) {…}` after a definition arrives as the group `when (s)` and the arms
+	if let [head, arms] = items {
+		if let Node::List(words, _, Separator::Space) = head.drop_meta() {
+			if words.len() == 2 && is_word(&words[0], WHEN_WORD) {
+				return when_chain(&[words[0].clone(), words[1].clone(), arms.clone()]);
+			}
+		}
+	}
+	let (subject, arms) = match items {
+		[word, subject, arms] if is_word(word, WHEN_WORD) => (Some(match subject.drop_meta() {
+			Node::List(inner, Bracket::Round, _) if inner.len() == 1 => inner[0].clone(),
+			_ => subject.clone(),
+		}), arms),
+		[word, arms] if is_word(word, WHEN_WORD) => (None, arms),
+		_ => return None,
+	};
+	let Node::List(arms, Bracket::Curly, _) = arms.drop_meta() else { return None };
+	let arms: Vec<(Vec<Node>, Node)> = arms.iter().map(when_arm).collect::<Option<_>>()?;
+	let condition = |pattern: Node| match (&subject, pattern) {
+		(_, pattern) if is_word(&pattern, ELSE_WORD) => Node::True,
+		(Some(subject), pattern) => Node::Key(Box::new(subject.clone()), Op::Eq, Box::new(pattern)),
+		(None, pattern) => pattern,
+	};
+	let chain = arms.into_iter().rev().fold(None, |otherwise: Option<Node>, (patterns, value)| {
+		let condition = patterns.into_iter().map(condition).reduce(|left, right| Node::Key(Box::new(left), Op::Or, Box::new(right)))?;
+		let template = if otherwise.is_some() { WHEN_ARM } else { LAST_WHEN_ARM };
+		let bindings = [("CONDITION", condition), ("VALUE", forms(value)), ("OTHERWISE", otherwise.unwrap_or(Node::Empty))];
+		let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
+		Some(crate::law::substitute(&crate::wasp_parser::parse(template), &bindings).drop_meta().clone())
+	});
+	chain
+}
+
+/// The patterns and value of a `when` arm: `5 -> 50`, `1, 2 -> 10`, `is Circle -> 3`, `else -> 0`
+fn when_arm(arm: &Node) -> Option<(Vec<Node>, Node)> {
+	match arm.drop_meta() {
+		Node::Key(pattern, Op::Arrow, value) => Some((vec![pattern.as_ref().clone()], value.as_ref().clone())),
+		// `is Circle -> 3`: the type test `x is Circle`, as `is` reads
+		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [word, _] if is_word(word, IS_WORD)) => when_arm(&words[1]),
+		Node::List(patterns, _, _) if !patterns.is_empty() => {
+			let (last, first) = patterns.split_last()?;
+			let (mut all, value) = when_arm(last)?;
+			all.splice(0..0, first.iter().cloned());
+			Some((all, value))
+		}
+		_ => None,
+	}
 }
 
 /// `loop { body }`

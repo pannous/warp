@@ -1,0 +1,4 @@
+// The standard library module hash (notes/stdlib.md section 7): `use hash`, through the adapter std_pure, of a text's
+// UTF-8 bytes: sha256 as lowercase hex, crc32 as a number
+sha256(subject:any) := std_pure("hash", "sha256", [subject])
+crc32(subject:any) := std_pure("hash", "crc32", [subject])
