@@ -53,7 +53,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   smaller version, not the full multi-GB one.
 - P193 the netbase wasp package lives inside pannous/netbase.
 - P194 (to warp-84): std/ merges into lib/ ("it would be libraries plural, so lib is probably better"; the user first
-  said library/). netbase.wasp stays at lib/netbase.wasp until it moves to pannous/netbase (P193, card netbase-first).
+  said library/). netbase does not belong among the standard modules: "lib/extra/ or just a completely external
+  module". Now lib/extra/netbase.wasp; later an external module in pannous/netbase (P193, card netbase-first).
   Rule: long, readable names, as long as they don't get too long. Card lib-rename (worker session).
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
