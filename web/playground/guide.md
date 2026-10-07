@@ -409,7 +409,7 @@ type(3)
 
 `is` checks the type.
 
-```wasp => 1
+```wasp => yes
 "3" is text
 ```
 
