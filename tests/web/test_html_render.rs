@@ -41,3 +41,12 @@ fn the_page_gets_the_html_of_markup() {
 	assert_eq!(report["html"], "<ul><li>a</li></ul>");
 	assert!(warp::web::evaluate("3", Default::default())["html"].is_null());
 }
+
+// a for loop among an element's children gives its items as children, as [li{t} for t in todos] does (card markup-ul)
+#[test]
+fn a_for_loop_inside_markup() {
+	assert_eq!(html_of("todos = [\"a\", \"b\"]\nul{ for t in todos { li{ t } } }"), "<ul><li>a</li><li>b</li></ul>");
+	assert_eq!(html_of("todos = [\"a\", \"b\"]\ndiv{ p:\"y\" for t in todos { span{ t } } }"), "<div><p>y</p><span>a</span><span>b</span></div>");
+	assert_eq!(html_of("items = [\"a\"]\nul { for item in items { li: item } }"), "<ul><li>a</li></ul>");
+}
+

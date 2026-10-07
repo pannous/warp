@@ -43,7 +43,4 @@ html {
 // Dynamic content with interpolation
 items = ["Apple", "Banana", "Cherry"]
 
-// repeated `li: "…"` keys and a for loop inside ul{…} wait for the map versus data decision (cards g-_bGo, loop-inside):
-// ul { for item in items { li: item } }
-list = items.map(item => li{item})
-ul{ list }
+ul { for item in items { li: item } }
