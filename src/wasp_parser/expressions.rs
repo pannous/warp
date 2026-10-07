@@ -4,6 +4,8 @@ use super::*;
 
 /// Characters that end a statement: a body cannot start with them
 const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
+/// The type words of a text: `k:text` names a key in `m[k]` (card text-key)
+const TEXT_TYPE_WORDS: [&str; 3] = ["text", "string", "str"];
 
 impl WaspParser {
 	/// Pratt parser: parse expression with given minimum binding power
@@ -417,7 +419,7 @@ impl WaspParser {
 				}
 			};
 
-			if op == Op::Hash && !matches!(rhs.drop_meta(), Node::Symbol(index) if self.key_variables.contains(index)) {
+			if op == Op::Hash && !self.names_a_key(&rhs) {
 				crate::normalize::set_position_of(&lhs);
 				norm::index_operator(&crate::normalize::operand_text(&lhs), &crate::normalize::operand_text(&rhs), false);
 			}
@@ -439,6 +441,7 @@ impl WaspParser {
 			} else {
 				op
 			};
+			self.note_text_variable(&lhs, op, &rhs);
 			if let Some(warning) = hash_range_warning(&lhs, op, &written, &rhs) {
 				if let Err(strict) = crate::diagnostic::report(&[warning]) {
 					lhs = strict;
@@ -590,5 +593,25 @@ impl WaspParser {
 	/// A statement body follows: not a separator, closing bracket, end of input or the `do` keyword
 	pub(super) fn at_body_start(&self) -> bool {
 		!BODY_ENDS.contains(&self.current_char()) && !self.matches_keyword("do")
+	}
+}
+
+impl WaspParser {
+	/// A loop's key variable (`for k in keys(m)`) or a name holding a text: `m[k]` looks a key up, no indexing hint
+	pub(super) fn names_a_key(&self, index: &Node) -> bool {
+		matches!(index.drop_meta(), Node::Symbol(name) if self.key_variables.contains(name) || self.text_variables.contains(name))
+	}
+
+	/// `l = "en"` or `k:text` (a typed parameter or declaration) makes l, k text variables
+	fn note_text_variable(&mut self, lhs: &Node, op: Op, rhs: &Node) {
+		let Node::Symbol(name) = lhs.drop_meta() else { return };
+		let holds_text = match (op, rhs.drop_meta()) {
+			(Op::Assign | Op::Define, Node::Text(_)) => true,
+			(Op::Colon, Node::Symbol(type_word)) => TEXT_TYPE_WORDS.contains(&type_word.as_str()),
+			_ => false,
+		};
+		if holds_text {
+			self.text_variables.insert(name.clone());
+		}
 	}
 }
