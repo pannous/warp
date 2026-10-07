@@ -1,6 +1,8 @@
 // The tour, from basics to wow: each example's first line says what it shows; `value` is what the page shows for it,
 // `printed` what it prints (test_in_browser.py --examples checks both in the page, so a broken example fails CI;
-// `wait`: milliseconds of timers and listeners before checking). samples.js (made by build.sh) adds samples/*.wasp.
+// `wait`: milliseconds of timers and listeners before checking; `clicks`: the shown buttons, by text, clicked after
+// that, `clicked` the value then and `kept` that every element shown stays: only its text and attributes change).
+// samples.js (made by build.sh) adds samples/*.wasp.
 const EXAMPLES = {
 	welcome: { value: '[[1 4 9] 3 "reading"]', printed: "Alice turns 42\n", code: `// wasp is data and code in one notation, compiled to WebAssembly as you type: edit me
 alice = { name: "Alice" age: 30 hobbies: ["reading" "hiking" "coding"] }
@@ -17,6 +19,10 @@ div{ h2{ "Alice" } p{ "30 years, likes:" } ul{ li{ "reading" } li{ "hiking" } } 
 	"element events": { value: 'div{button{data-wasp-click:"1" "+1"} button{data-wasp-click:"2" "reset"} p:"count: 0"}', code: `// handlers on elements: click the buttons, the page shows the markup anew
 count = 0
 div{ button{ on click { count += 1 } "+1" } button{ on click { count = 0 } "reset" } p{ "count: " + count } }` },
+	"fine updates": { value: 'div{button{data-wasp-click:"1" "toggle"} p{class:"open" "state"} ul:li:"toggled 0 times"}', clicks: ["toggle", "toggle", "toggle"], clicked: 'div{button{data-wasp-click:"1" "toggle"} p{class:"done" "state"} ul:li:"toggled 3 times"}', kept: true, code: `// after a handler only what changed changes on the page: this p keeps its element, only its class flips
+done = false
+toggles = 0
+div{ button{ on click { done = not done; toggles += 1 } "toggle" } p{ class: done ? "done" : "open" "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
 	functions: { value: "25", code: `// a function, called with or without parentheses
 def square(x) = x*x
 square(4) + square 3` },

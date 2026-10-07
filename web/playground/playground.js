@@ -242,11 +242,34 @@ function paintShade(value) {
 	return [PAINT_INK, PAINT_INK, PAINT_INK];
 }
 
-// a markup value as DOM (src/html.rs, card web-dom), in a shadow root so its own style cannot restyle the page
+// a markup value as DOM (src/html.rs, card web-dom), in a shadow root so its own style cannot restyle the page.
+// Markup shown anew after a handler changes only the text nodes and attributes that differ (card web-fine): the
+// elements stay, with their focus, input and scroll state.
 function showRendered(html) {
 	const host = $("rendered");
 	host.hidden = !html;
-	(host.shadowRoot ?? host.attachShadow({ mode: "open" })).innerHTML = html ?? "";
+	const template = document.createElement("template");
+	template.innerHTML = html ?? "";
+	morphChildren(host.shadowRoot ?? host.attachShadow({ mode: "open" }), template.content);
+}
+
+// the children of shown become those of wanted, matched by position; a node of another kind or tag is replaced
+function morphChildren(shown, wanted) {
+	const wantedNodes = [...wanted.childNodes];
+	[...shown.childNodes].slice(wantedNodes.length).forEach(node => node.remove());
+	wantedNodes.forEach((node, index) => {
+		const old = shown.childNodes[index];
+		if (!old) shown.appendChild(node);
+		else if (old.nodeName !== node.nodeName) old.replaceWith(node);
+		else if (old.nodeType === Node.ELEMENT_NODE) morphElement(old, node);
+		else if (old.nodeValue !== node.nodeValue) old.nodeValue = node.nodeValue;
+	});
+}
+
+function morphElement(shown, wanted) {
+	[...shown.attributes].filter(({ name }) => !wanted.hasAttribute(name)).forEach(({ name }) => shown.removeAttribute(name));
+	[...wanted.attributes].filter(({ name, value }) => shown.getAttribute(name) !== value).forEach(({ name, value }) => shown.setAttribute(name, value));
+	morphChildren(shown, wanted);
 }
 
 function showPaintings(paintings) {

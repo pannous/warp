@@ -52,3 +52,13 @@ Each step is useful on its own and is what the next ones stand on.
   attributes, other children nested in order. Unknown names stay data (no custom elements yet).
 - Natively the value serializes as HTML (`to_html`), text escaped. In the page the program's value, when it is markup, is
   shown as DOM in the output pane instead of its wasp text; `show(markup)` places it explicitly.
+
+## Step 3 (web-fine), what is done and what is left
+- Done (DOM side): after a handler the page receives the whole markup again (the output binding, event_signals.rs) and
+  playground.js `morphChildren` changes only the text nodes and attributes that differ, matching nodes by position;
+  a node of another kind or tag is replaced. Elements keep their identity, focus, input and scroll state. Tour example
+  "fine updates" checks it (`clicks`, `clicked`, `kept` in examples.js, test_in_browser.py --examples).
+- Left (compute side, card web-fine-holes): the markup is still evaluated whole after each handler. Per-hole updates
+  (each signal-reading text or attribute its own derived binding, only the changed ones sent) need the lowering to
+  mark the holes; worth it once markup gets large (web-components).
+- Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
