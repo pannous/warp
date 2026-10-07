@@ -201,9 +201,9 @@ impl WasmGcEmitter {
 			Op::Sqrt if self.get_type(right) == Kind::Codepoint => {
 				self.emit_type_error(func, format!("type error: √ of a codepoint: {}", list_ops::CHARACTER_IS_NO_NUMBER));
 			}
-			Op::Sqrt => {
+			root @ (Op::Sqrt | Op::Cbrt) => {
 				self.emit_float_value(func, right);
-				func.instruction(&I::F64Sqrt);
+				self.emit_float_root(func, root);
 				self.emit_float_in_exact_context(func, &located.serialize());
 			}
 			Op::Neg => {
@@ -595,13 +595,33 @@ impl WasmGcEmitter {
 	}
 
 	/// base ^ exponent through libm's pow; a NaN (negative base with a fractional exponent) traps as invalid_number
-	pub(super) fn emit_float_power(&mut self, func: &mut Function) {
-		let Some(pow) = self.ffi_func_index(LIBM_POW) else {
-			self.discovered_needs.insert(Need::MathImport(LIBM_POW));
+	/// Call a libm function (`m.pow`), imported once the emitter has found it is needed: false while it is not yet
+	pub(super) fn emit_libm_call(&mut self, func: &mut Function, key: &'static str) -> bool {
+		let Some(index) = self.ffi_func_index(key) else {
+			self.discovered_needs.insert(Need::MathImport(key));
 			func.instruction(&I::Unreachable);
-			return;
+			return false;
 		};
-		func.instruction(&I::Call(pow));
+		func.instruction(&I::Call(index));
+		true
+	}
+
+	/// f64 → its √ (a wasm instruction) or ∛ (libm's cbrt)
+	pub(super) fn emit_float_root(&mut self, func: &mut Function, root: &Op) {
+		match root {
+			Op::Cbrt => {
+				self.emit_libm_call(func, LIBM_CBRT);
+			}
+			_ => {
+				func.instruction(&I::F64Sqrt);
+			}
+		}
+	}
+
+	pub(super) fn emit_float_power(&mut self, func: &mut Function) {
+		if !self.emit_libm_call(func, LIBM_POW) {
+			return;
+		}
 		self.pop_float_scratch(func, 0);
 		self.push_float_scratch(func, 0);
 		self.push_float_scratch(func, 0);

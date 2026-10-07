@@ -118,7 +118,7 @@ Next:
    natural_log binary_log decimal_log logarithm sine … hyperbolic_tangent angle hypotenuse ceiling whole_part
    remainder); the C names still work with a note (modules STD_ALIASES, positioned at the nearest positioned node);
    `use cmath` is the raw C library. A constant fractional exponent (`x ^ (1/3)`) is a float
-   power (analyzer inference constant_value); one held in a variable still traps. sqrt/cbrt have no alias: they are the operators √ ∛.
+   power (analyzer inference constant_value); one held in a variable still traps. sqrt/cbrt have no alias: they are the operators √ ∛ (∛ of a run-time value calls libm cbrt, Math.cbrt in the browser).
 8. Host modules (async, warp-f0): json (done on std-json), hash, regex, file, os, net — through std_pure/std_io.
 
 Collections (classes, branch classes-36): `use collections` = std/collections.wasp, classes over a list field:

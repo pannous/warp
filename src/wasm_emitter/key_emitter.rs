@@ -196,10 +196,9 @@ impl WasmGcEmitter {
 	/// Emit prefix operators: √x, -x, !x, ‖x‖
 	fn emit_prefix_op(&mut self, func: &mut Function, right: &Node, op: &Op) {
 		match op {
-			Op::Sqrt => {
-				// √x = sqrt(x), returns float
+			root @ (Op::Sqrt | Op::Cbrt) => {
 				self.emit_float_value(func, right);
-				func.instruction(&I::F64Sqrt);
+				self.emit_float_root(func, root);
 				self.emit_call(func, "new_float");
 			}
 			Op::Neg => {

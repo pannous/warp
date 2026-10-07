@@ -84,6 +84,8 @@ const LOGICAL_SCRATCH: u32 = 2;
 
 /// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
 const LIBM_POW: &str = "m.pow";
+/// ffi_imports key of libm's cbrt for ∛ of a run-time value
+const LIBM_CBRT: &str = "m.cbrt";
 
 /// Traps of the exact runtime with the message a user should read instead of a wasm backtrace
 const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [

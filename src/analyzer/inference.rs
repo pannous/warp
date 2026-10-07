@@ -156,7 +156,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
 		// √x is irrational in general: an f64
-		Node::Key(left, Op::Sqrt, _) if matches!(left.drop_meta(), Node::Empty) => Kind::Float,
+		Node::Key(left, Op::Sqrt | Op::Cbrt, _) if matches!(left.drop_meta(), Node::Empty) => Kind::Float,
 		// Prefix operators (neg, abs): inherit type from operand
 		Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
 			infer_type(right, scope)
