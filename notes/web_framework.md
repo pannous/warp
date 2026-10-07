@@ -205,7 +205,7 @@ Each step is useful on its own and is what the next ones stand on.
   page·value, else page·routed. A routes program stays listening for that. Tour example routes.
 - Open: typed parameters (card route-typed), nested route blocks (`route "/users" { route ":id" {…} }`), a built site
   prerendering each static route (index.html is "/" only; a deep link needs the serve program to render it), the serve
-  program rendering per request path, `outlet` as the name (question to the Interviewer).
+  program rendering per request path. `outlet` is the canonical word (aliases such as slot on demand).
 
 ## Step 12 (web-stores), what is done and what is left
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
