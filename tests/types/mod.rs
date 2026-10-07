@@ -80,3 +80,4 @@ mod test_variant_payloads;
 mod test_enum_cases;
 mod test_conformance_claims;
 mod test_file_declarations;
+mod test_match_static_variant;
