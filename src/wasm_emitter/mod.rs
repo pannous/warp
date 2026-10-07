@@ -690,10 +690,10 @@ impl WasmGcEmitter {
 		found
 	}
 
-	/// Does the node read a variable (key names and other symbols of a data literal are not variables)
+	/// Does the node read a variable or global (key names and other symbols of a data literal are not variables)
 	fn mentions_variable(&self, node: &Node) -> bool {
 		let mut found = false;
-		node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if self.scope.lookup(name).is_some()));
+		node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name)));
 		found
 	}
 
