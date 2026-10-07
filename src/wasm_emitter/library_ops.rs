@@ -80,6 +80,13 @@ impl WasmGcEmitter {
 		}
 		let node_ref = Ref(self.node_ref(false));
 		self.runtime_function(CODEPOINT_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
+			// ord("a"): a one-character text, as an untyped parameter holds it (card char-text), is its character
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0)]);
+			s.call(f, "text_grapheme_count");
+			Self::emit_list(f, &[I::I64Const(1), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0), I::I64Const(1)]);
+			s.call(f, "string_char_at");
+			Self::emit_list(f, &[I::LocalSet(0), I::End, I::End]);
 			s.emit_require_kind(f, 0, Kind::Codepoint, "not_a_character");
 			f.instruction(&I::LocalGet(0));
 			s.emit_codepoint_of_node(f);
