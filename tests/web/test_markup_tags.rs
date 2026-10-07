@@ -27,3 +27,19 @@ fn a_call_outside_tags_or_of_a_function_stays_a_call() {
 	fails_with("label(for:pwd)", "undefined function: label");
 	eq!(eval("label(x) := x + 1; div{ label(x:1) }"), eval("div{ 2 }"));
 }
+
+// card markup-attribute: a statement `html(lang: "en"){ … }` is the element with its attributes before its children
+#[test]
+fn an_element_statement_takes_its_attributes_in_parentheses() {
+	eq!(eval("html(lang: \"en\"){ p{ \"x\" } }"), eval("html{ lang: \"en\"; p{ \"x\" } }"));
+	eq!(eval("div(class: \"box\" id: \"a\") { p{ \"x\" } }"), eval("div{ class: \"box\" id: \"a\" p{ \"x\" } }"));
+}
+
+// card markup-attribute: rendering a value as HTML (what the CLI prints) repeats none of the program's warnings
+#[test]
+fn rendering_markup_warns_nothing_more() {
+	let shown = eval("html{ p{ \"x\" } }");
+	warp::diagnostic::take_warnings();
+	assert_eq!(warp::markup::to_html(&shown), "<html><p>x</p></html>");
+	assert_eq!(warp::diagnostic::take_warnings().len(), 0);
+}
