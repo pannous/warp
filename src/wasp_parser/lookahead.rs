@@ -176,6 +176,9 @@ impl WaspParser {
 		// Kotlin's `for i in 0 until n`; elsewhere `until` guards a statement: `i++ until c`
 		if self.in_for_header && self.matches_keyword("until") { return Some((Op::Range, 5)); }
 
+		if self.in_style_sheet && matches!(c1, '.' | '#') && self.prev_char().is_whitespace() && self.is_identifier_start(1) {
+			return None; // `#main .x`: the descendant selector's next part
+		}
 		// 1-char operators
 		match c1 {
 			':' => Some((Op::Colon, 1)),

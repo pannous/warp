@@ -20,3 +20,13 @@ fn lengths_keep_their_units() {
 	assert_eq!(html_of("div{ style{\n\t.card { border: 1px solid \"red\" }\n} }"), "<div><style>.card { border: 1px solid red }</style></div>");
 	assert_eq!(html_of("p{ style: { flex: 1 1 } \"x\" }"), "<p style=\"flex: 1 1\">x</p>");
 }
+
+// a blank before `.x` or `#x` in a selector is the descendant combinator, and a rule after another on the same line
+// is a rule of its own, not an index into it (card web-styles-parser)
+#[test]
+fn descendant_selectors_and_rules_on_one_line() {
+	assert_eq!(html_of("div{ style{\n\t#main .x { margin: 0 }\n\tul .item { margin: 0 }\n\t.a .b #c { margin: 0 }\n} }"),
+		"<div><style>#main .x { margin: 0px } ul .item { margin: 0px } .a .b #c { margin: 0px }</style></div>");
+	assert_eq!(html_of("div{ style{ .a { margin: 0 } #main { margin: 0 } } }"), "<div><style>.a { margin: 0px } #main { margin: 0px }</style></div>");
+}
+
