@@ -43,6 +43,15 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   "is not wise enough to answer" / "idk": the defaults stand, not re-asked.
 - P188 web rule (to warp-03): "Stay close to HTML and CSS; don't reinvent the web, only the basic machinery. HTML and
   CSS in our own syntax is fine." Triggered by the invented `li{ transition: fade 200ms }`. Applies to all web work.
+- P189 extra control-flow words (try, catch, switch, match, yield, …) stay display-only keywords. The Kotlin way
+  (keywords usable as names) is acceptable only where no conflict can arise; where an ambiguity is possible, enforce
+  special quoting instead of guessing.
+- P190 page-test words (test / render / click / fill … with / check): "idk": the default stands.
+- P191 `square(x)` lives in the math module, not as a builtin. "Very important that we have many more functions in
+  there, especially sin and so on": the math module may forward to cmath until wasp has its own implementations.
+- P192 netbase backend: later, as a first external-module experiment (Later card); if the server is revived, a
+  smaller version, not the full multi-GB one.
+- P193 the netbase wasp package lives inside pannous/netbase.
 
 ## Decided 2026-10-06 (user, multiple-choice interview, as recommended unless quoted)
 - P165b soft keywords vs tests: strict P165. tests/functions/test_named_arguments.rs:22 renames `fun` → `g`
