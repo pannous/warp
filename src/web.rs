@@ -80,7 +80,7 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	report
 }
 
-/// Markup the page shows as DOM (card web-dom), rendered by std/markup.wasp: inside the program's module when it renders
+/// Markup the page shows as DOM (card web-dom), rendered by lib/markup.wasp: inside the program's module when it renders
 /// itself, else by the renderer compiled on its own
 fn html_of(value: &Node) -> Value {
 	let rendered = RENDERED.with(|rendered| rendered.borrow_mut().take());

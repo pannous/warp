@@ -1,4 +1,4 @@
-// Card netbase-package (notes/netbase.md): `use netbase` (lib/netbase.wasp) queries a netbase server over HTTP; without
+// Card netbase-package (notes/netbase.md): `use netbase` (lib/extra/netbase.wasp) queries a netbase server over HTTP; without
 // one running, the failure names the URL it tried. A test against a running netbase waits for its backend decision.
 #[cfg(feature = "native")]
 use crate::common::fails_with;

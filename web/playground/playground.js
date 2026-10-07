@@ -21,7 +21,7 @@ const NOTIFICATION_TITLE = "wasp";
 const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
-// (src/paint.rs shade, std/draw.wasp)
+// (src/paint.rs shade, lib/draw.wasp)
 const PAINT_INK = 29;
 const PAINT_PAPER = 250;
 const PAINT_COLOR_FROM = 2 ** 24;
@@ -281,7 +281,7 @@ function paintShade(value) {
 	return [PAINT_INK, PAINT_INK, PAINT_INK];
 }
 
-// a markup value as DOM (std/markup.wasp, card web-dom), in a shadow root so its own style cannot restyle the page.
+// a markup value as DOM (lib/markup.wasp, card web-dom), in a shadow root so its own style cannot restyle the page.
 // Markup shown anew after a handler changes only the text nodes and attributes that differ (card web-fine): the
 // elements stay, with their focus, input and scroll state.
 function showRendered(html) {

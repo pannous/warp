@@ -3,7 +3,7 @@
 // also keeps the values of `stored x = v` and those a `warp dev` page keeps across reloads (keptValues, keepValue).
 
 const INSTANCE_ATTRIBUTE = "data-wasp-instance"; // a component instance's elements (src/lowering/element_events.rs)
-const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (std/markup.wasp)
+const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (lib/markup.wasp)
 const NUMBER_FIELDS = ["number", "range"]; // fields whose bound value is a number
 const LEAVING_ATTRIBUTE = "data-wasp-leaving"; // an element animating out: no longer matched, removed when done
 const DEV_STORE = "wasp-dev"; // the store of the values a `warp dev` page keeps (src/lowering/stored_values.rs DEV_STORE)

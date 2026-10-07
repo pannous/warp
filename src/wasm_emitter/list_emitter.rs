@@ -243,7 +243,7 @@ impl WasmGcEmitter {
 		}
 
 		// Check for introspection and math functions; `[count, a]` lists two items; a global `count` does not hide the word
-		// (std/markup.wasp's count(items) under a program's `count = 0`), a local one is an error (emit_shadowed_counting)
+		// (lib/markup.wasp's count(items) under a program's `count = 0`), a local one is an error (emit_shadowed_counting)
 		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Colon) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
 				if self.emit_shadowed_counting(func, fn_name, &items[1]) || (self.scope.lookup(fn_name).is_none() && self.emit_introspection_fn(func, fn_name, &items[1])) {
@@ -429,7 +429,7 @@ impl WasmGcEmitter {
 	/// Returns true if the function was handled
 	/// `count = 0; count(users)`: a local variable named like a counting word, applied to a value, neither counts nor
 	/// lists quietly; the error names the variable (card count-shadowed). A global of that name leaves the word to the
-	/// functions, which call it (std/markup.wasp's count(items))
+	/// functions, which call it (lib/markup.wasp's count(items))
 	pub(super) fn emit_shadowed_counting(&mut self, func: &mut Function, name: &str, argument: &Node) -> bool {
 		let shadowed = self.scope.lookup(name).is_some() && !self.ctx.user_functions.contains_key(name) && crate::analyzer::counting_function(name, &self.ctx).is_some();
 		if shadowed {

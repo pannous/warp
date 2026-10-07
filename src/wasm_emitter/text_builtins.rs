@@ -18,7 +18,7 @@ pub const TEXT_OF: &str = "text_of";
 pub const C_STRING: &str = "c_string";
 const BYTE_AT: &str = "byte_at";
 const BYTE_SLICE: &str = "byte_slice";
-/// `memory_byte(address)`, `memory_set_byte(address, value)`: one byte of linear memory, what std/memory.wasp's
+/// `memory_byte(address)`, `memory_set_byte(address, value)`: one byte of linear memory, what lib/memory.wasp's
 /// `memory.slice` and `memory.copy` are made of (samples/wasm_interop.wasp)
 const MEMORY_BYTE: &str = "memory_byte";
 const MEMORY_SET_BYTE: &str = "memory_set_byte";

@@ -84,7 +84,7 @@ pub const CHANNEL_PENDING: &str = "channel_pending";
 pub const CHANNEL_NEXT: &str = "channel_next";
 pub const CHANNEL_SEND: &str = "channel_send";
 /// std_pure(module, member, arguments) and std_io(…): the standard library's adapters (src/std_adapters.rs, host.js),
-/// called by the words of std/<module>.wasp; std_pure's words have no effect (json), std_io's touch the outside
+/// called by the words of lib/<module>.wasp; std_pure's words have no effect (json), std_io's touch the outside
 pub const STD_PURE: &str = "std_pure";
 pub const STD_IO: &str = "std_io";
 /// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web_server.rs), blocks while

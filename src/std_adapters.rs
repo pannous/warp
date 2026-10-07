@@ -1,4 +1,4 @@
-//! The standard library's adapters (notes/stdlib.md section 7, adapter A): the words of std/<module>.wasp that wasp
+//! The standard library's adapters (notes/stdlib.md section 7, adapter A): the words of lib/<module>.wasp that wasp
 //! cannot write itself call the host words std_pure / std_io (module, member, arguments), answered here natively and
 //! by host.js's twin in the browser. Nodes in, a Node out; a failure is the error naming module.member. JSON crosses as
 //! for the foreign runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain): null ø, booleans 1/0.

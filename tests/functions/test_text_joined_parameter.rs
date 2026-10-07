@@ -1,4 +1,4 @@
-//! A parameter joined to a text literal by + is a text, even when the body also counts it (std/text.wasp's pad_left):
+//! A parameter joined to a text literal by + is a text, even when the body also counts it (lib/text.wasp's pad_left):
 //! without a call to say so it was guessed a list, and the unused definition alone failed with `text + list`
 use crate::is;
 

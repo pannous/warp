@@ -10,7 +10,7 @@ order and what each builds on. Defaults below are undoable; open questions go to
 - **Signals** (notes/signals.md): every variable is a signal once something listens; `:=` derives one and knows what it
   reads; `whenever`, `on change`, page-wide `on click` / `on key` in the playground (phase 7).
 - **Page plumbing** (notes/web_playground.md): the compiler runs in a worker, host words reach the page
-  (host.js), paint draws pixels, `use draw` shapes (std/draw.wasp), fetch, channels, components, threads.
+  (host.js), paint draws pixels, `use draw` shapes (lib/draw.wasp), fetch, channels, components, threads.
 
 ## Order of the cards
 Each step is useful on its own and is what the next ones stand on.
@@ -124,14 +124,14 @@ Each step is useful on its own and is what the next ones stand on.
 - `input{ bind: name }` is `input{ value: name on input { name = event.value } }` (element_events.rs); a checkbox or
   radio binds `checked`. `input` is a page event (PAGE_EVENTS); the page sends {value, checked} (a number from a
   number or range field) and sets a changed field's value/checked when the markup comes back (morphElement).
-- Boolean attributes (checked, disabled, …) are present or absent (std/markup.wasp; true arrives from a run as 1).
+- Boolean attributes (checked, disabled, …) are present or absent (lib/markup.wasp; true arrives from a run as 1).
 - Tour example "form binding" (`typed` field of examples.js).
 - Left: `select{ bind: choice }` (its first render shows the first option), `bind:` inside a component's state
   (component_state.rs sees only handlers), form submit as an event with the fields as an object, validation from types.
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
-  sheet of rules (std/markup.wasp). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
+  sheet of rules (lib/markup.wasp). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
   are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
 - CSS as CSS (classes-42, src/lowering/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
   one rule per line (`.card {…}`, `ul > li {…}`, `h1, h2 {…}`, `a:hover {…}`, `p.note {…}`, `ul li {…}`, `#main {…}`),
@@ -151,7 +151,7 @@ Each step is useful on its own and is what the next ones stand on.
 - Natively the run is a kept wasmtime instance (wasm_reader::run_main_kept); in the browser suite the same tests run
   through the new import warp_host.page_event (host.js pageEventOutcome on the last listening run, as worker.js
   showHandled). Elements and text are read from the rendered HTML (headless.rs `shown`), so html.rs is untouched and a
-  later renderer (std/markup.wasp) keeps working.
+  later renderer (lib/markup.wasp) keeps working.
 - The playground examples keep their `clicks` / `typed` / `clicked` checks (test_in_browser.py --examples).
 - Tests in wasp (src/page_tests.rs, tests/web/test_page_tests.rs; syntax an undoable default, queued with the
   Interviewer): `test "counter" { render Counter(1); click "Add"; fill "name" with "Ada"; check text is "Addn 2" }`.
@@ -165,7 +165,7 @@ Each step is useful on its own and is what the next ones stand on.
 - CSS form (P188, card web-css; lowering/transitions.rs, right after markup_tags): `li{ transition: opacity 200ms }` is
   the element's inline CSS transition, joined to its own `style`; `starting-style: { opacity: 0 }` (CSS's
   @starting-style, which an inline style cannot hold) is the attribute `data-wasp-starting-style`, rendered as
-  declarations by std/markup.wasp. Words are data (not variables), durations normalized to ms, a text taken as written,
+  declarations by lib/markup.wasp. Words are data (not variables), durations normalized to ms, a text taken as written,
   timing words (`ease-out`) join the transition; the words end where the children begin. In `style: {…}` transition
   stays the CSS property as written.
 - The kinds before CSS, `transition: fade 200ms` (also scale, slide), lower to that CSS (opacity, and transform for
@@ -191,7 +191,7 @@ Each step is useful on its own and is what the next ones stand on.
 ## Built sites (card web-ssr, 2026-10-07; split agreed with warp-cd, renderer decided by warp-96)
 - `warp build --site app.wasp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
   host.js, markup.js, site.js, carried in the warp binary (src/site.rs include_str!, one source with the playground).
-- One renderer, written in wasp (warp-96: "Wasp is wasm-first"): std/markup.wasp's to_html (`use markup`; not `html`,
+- One renderer, written in wasp (warp-96: "Wasp is wasm-first"): lib/markup.wasp's to_html (`use markup`; not `html`,
   which samples/html.wasp would shadow) is the one renderer: the CLI and the playground render a markup value with it
   too (src/markup.rs to_html runs `use markup; to_html(value)`; src/html.rs is gone). A program
   compiled for a page (pipeline::for_a_page) exports page·html := to_html(page·value) (lowering/page_html.rs); its
@@ -203,7 +203,7 @@ Each step is useful on its own and is what the next ones stand on.
   build time, so the component instances count alike. The DOM stays; click and input on the root find their element's
   handler (markup.js elementEvent), and after a handler (or a fetch reply) the page morphs (markup.js morphChildren) in
   the HTML of page·html.
-- std/markup.wasp cannot tell a square list from a curly one at run time: a list value whose items hold pairs is
+- lib/markup.wasp cannot tell a square list from a curly one at run time: a list value whose items hold pairs is
   inline CSS (for style) or children (`style{ ".x": {…} }`), any other list the joined attribute value (`class:["a" "b"]`).
 - Scoped style sheets (card web-scoped): an element with data-wasp-scope:"Card" prefixes the selectors of the sheets
   inside it with `[data-wasp-scope="Card"] `; src/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
@@ -226,14 +226,14 @@ Each step is useful on its own and is what the next ones stand on.
   budget); a program with routes too, for now (step 2: following links through messages). Probe: probes/site_worker.py.
 
 ## Routes (card web-router, 2026-10-07; split agreed with warp-cf (web-bundle) and warp-34 (playground, fetch-cancel))
-- `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, std/router.wasp): each route is the function page·route·N,
+- `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, lib/router.wasp): each route is the function page·route·N,
   `id` bound by `let` to that part of the path (a number when it is digits, else the text), page·routes gives the
   patterns in order (exported, for warp-cf's per-route modules), page·routed() is the first route matching the page's
   path, else "no page at <path>"; `route "*"` matches any path (the not-found page). A layout shows page·routed() where
   it says `outlet`; else a program ending with a route shows it as its last line.
 - Typed parameters (card route-typed): `route "/users/:id:int" { p{ "next " + (id + 1) } }`. A parameter declaring
   int, float, text or string is `let id:int = route_segment(…) as int`, so its block type-checks; the route matches
-  only a part of that type (std/router.wasp route_fits: int digits, float digits with one dot), else the next route or
+  only a part of that type (lib/router.wasp route_fits: int digits, float digits with one dot), else the next route or
   not found. An untyped one stays a run-time value of any kind (`"a" + (id + 1)` is a type error: declare the type).
   An unknown type is an error naming the known ones. Casts use `as`: float(text) is broken (card float-of-text), and a
   std function returning int, float or text mixed came back int-typed (card return-type-mixed).
@@ -299,7 +299,7 @@ Each step is useful on its own and is what the next ones stand on.
   wasm_emitter/text_unicode.rs: app.wasm 17.5 → 11.9) → 32.1 KB (site::compacted: shipped scripts without comment
   lines and indentation, host.js 23.8 → 16.7). Svelte's hello world is about 3 KB, Solid's about 5 KB.
 - Not taken: wasm-opt -Oz on app.wasm (11 KB smaller raw, 0.6 KB larger gzipped).
-- What is left in app.wasm is the runtime std/markup.wasp's to_html reaches (texts, lists, equality, floats): a shared
+- What is left in app.wasm is the runtime lib/markup.wasp's to_html reaches (texts, lists, equality, floats): a shared
   runtime module, cached across pages, would help sites with several pages, not the first load.
 - host.js split (2026-10-07, 32.1 → 21.9 KB, host.js 16.7 → 6.1): the core keeps what every page runs (run, outcome,
   page events, timers, values between JS and wasp, std json/os/store/regex); the parts add themselves with addHostPart:

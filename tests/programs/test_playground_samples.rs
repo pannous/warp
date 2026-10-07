@@ -7,7 +7,7 @@ use warp::Node;
 
 const EXCLUDED_LIST: &str = "web/playground/excluded_samples.txt";
 const SAMPLES: &str = "samples";
-/// paint directly or through the draw module (std/draw.wasp show)
+/// paint directly or through the draw module (lib/draw.wasp show)
 const PAINTING: [&str; 2] = ["paint(", "use draw"];
 
 /// The names excluded_samples.txt lists: the first word of each line that is no comment

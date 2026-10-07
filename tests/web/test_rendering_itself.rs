@@ -1,5 +1,5 @@
 // card playground-render: a playground program holding markup renders itself: compiled to export page·html and
-// page·render (std/markup.wasp's to_html inside its own module), the worker no longer compiles a renderer program for
+// page·render (lib/markup.wasp's to_html inside its own module), the worker no longer compiles a renderer program for
 // each value and each fine hole
 use warp::page_html::{PAGE_HTML, PAGE_RENDER};
 

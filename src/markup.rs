@@ -1,6 +1,6 @@
 //! Markup values (card web-dom, notes/web_framework.md): `div{ class:"box" h1{"Hi"} }` is the element div with the
 //! attribute class and the child h1. Which values are markup is decided here; their HTML comes from the one renderer,
-//! std/markup.wasp's to_html, also for the CLI and the playground (a page runs it itself as page·html).
+//! lib/markup.wasp's to_html, also for the CLI and the playground (a page runs it itself as page·html).
 
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 const MARKUP_MODULE: &str = "markup";
-/// The lists of std/markup.wasp naming the HTML elements a markup key may name (custom elements are not markup yet)
+/// The lists of lib/markup.wasp naming the HTML elements a markup key may name (custom elements are not markup yet)
 /// and the attributes
 const ELEMENTS_LIST: &str = "html_elements";
 const ATTRIBUTES_LIST: &str = "html_attributes";
@@ -140,7 +140,7 @@ fn is_declarations(value: &Node) -> bool {
 	content_items(value).iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, value) if !matches!(value.drop_meta(), Node::Key(..) | Node::List(_, Bracket::Curly, _))))
 }
 
-/// The HTML of a markup value, any other value as escaped text, by std/markup.wasp's to_html; a failed rendering is
+/// The HTML of a markup value, any other value as escaped text, by lib/markup.wasp's to_html; a failed rendering is
 /// its error, shown, never an empty page. Quietly: the program that made the value already warned about it, and the
 /// renderer's positions are not the program's
 pub fn to_html(node: &Node) -> String {
