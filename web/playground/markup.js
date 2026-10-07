@@ -82,7 +82,7 @@ function keptStorage(file) {
 	return file === DEV_STORE ? [sessionStorage, DEV_PREFIX] : [localStorage, STORED_PREFIX];
 }
 
-// the kept values of both stores by name, for host.js STD_ADAPTERS.store
+// the kept values of both stores by name, for host-files.js STD_ADAPTERS.store
 function keptValues() {
 	return Object.assign({}, ...["", DEV_STORE].map(file => {
 		try {
@@ -99,7 +99,7 @@ function keptValues() {
 function keepValue(name, value, file) {
 	try {
 		const [storage, prefix] = keptStorage(file);
-		storage.setItem(prefix + name, JSON.stringify(value));
+		value === undefined ? storage.removeItem(prefix + name) : storage.setItem(prefix + name, JSON.stringify(value));
 	} catch (failure) {
 		console.error(`${name} could not be kept:`, failure);
 	}

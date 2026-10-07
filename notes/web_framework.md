@@ -260,6 +260,10 @@ Each step is useful on its own and is what the next ones stand on.
   localStorage (`wasp stored <name>`): the worker gets them at start and sends each save back (host.js
   STD_ADAPTERS.store, markup.js keptValues / keepValue, shared with built sites: site.js). Values cross as JSON
   (std_adapters, as foreign calls).
+- Runtime keys (card web-apis, storage): `storage` is the same store as a map: `storage[k] = v`, `storage[k]` (ø when
+  absent), `delete storage[k]`, `keys(storage)`, `storage.k`; the store words remove and names beside load and save.
+  A program defining its own `storage` keeps it. The word is a default (question queued with the Interviewer: `local[…]`
+  / `session[…]`, or `stored` as a map). IndexedDB for values beyond localStorage's ~5 MB is left.
 - Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
