@@ -48,7 +48,9 @@ async function hydrate() {
 	self.keepStored = keepValue;
 	const outcome = runProgram(bytes, siteHooks);
 	if (outcome.result === undefined) return console.error("wasp:", outcome.failure ?? outcome.trap ?? outcome.error);
-	// kept values may differ from those the page was built with: show what main left (site is set once it listens)
+	// a program with routes imports page_path, which ships host-routes.js
+	globalThis.followSiteLinks?.(goTo);
+	// kept values may differ from those the page was built with: show what main left
 	if (site) showAfter(outcome);
 	const root = document.getElementById(SITE_ROOT);
 	for (const [event, detail] of Object.entries(SITE_EVENTS)) {
@@ -59,24 +61,10 @@ async function hydrate() {
 	}
 }
 
-// the page at `path` (a link was followed, or the back button pressed)
+// the page at `path` (host-routes.js followSiteLinks: a link was followed, or the back button pressed)
 function goTo(path) {
 	navigate(site, siteHooks, path);
 	show();
 }
 
-// a click on a link to a page of this site, without a modifier key or another target: the program shows that page
-function followLink(happened) {
-	const link = happened.target.closest?.("a[href]");
-	if (!site || !link || happened.defaultPrevented || happened.button !== 0 || happened.metaKey || happened.ctrlKey || happened.shiftKey || happened.altKey) return;
-	if ((link.target && link.target !== "_self") || link.hasAttribute("download")) return;
-	const url = new URL(link.href, location.href);
-	if (url.origin !== location.origin) return;
-	happened.preventDefault();
-	if (url.pathname + url.search !== location.pathname + location.search) history.pushState(null, "", url);
-	goTo(url.pathname);
-}
-
-document.addEventListener("click", followLink);
-addEventListener("popstate", () => site && goTo(location.pathname));
 hydrate();

@@ -249,7 +249,7 @@ Each step is useful on its own and is what the next ones stand on.
   page events, timers, values between JS and wasp, std json/os/store/regex); the parts add themselves with addHostPart:
   host-files.js (fetch, read, std file and net), host-hashes.js (std hash), host-tasks.js (tasks, channels,
   BroadcastChannel and WebSocket, shared arrays, fetch_start), host-foreign.js (foreign_call, libm, libc.wasm, .wasm
-  imports; needs files), host-compiler.js (warpHost, run_block; needs files). A part hooks into a run through its
+  imports; needs files), host-compiler.js (warpHost, run_block; needs files), host-routes.js (page_path, navigate, a site's links and back button). A part hooks into a run through its
   steps (started, poll, finished, ended, stopped). src/site.rs HOST_PARTS ships a part when the module imports one of
   its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
   a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the

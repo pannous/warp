@@ -6,9 +6,7 @@
 const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
-const ROOT_PATH = "/"; // the page path before any navigation (page_path)
 const PAGE_ROUTES_EXPORT = "page·routes";
-const PAGE_ROUTED_EXPORT = "page·routed"; // the value of the route the path picks
 const PAGE_BITS = 16;
 const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -80,7 +78,7 @@ function writeBytes(program, bytes) {
 }
 
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
-// host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js. A built site
+// host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js. A built site
 // ships a part only when its module imports one of the part's words (src/site.rs HOST_PARTS); the playground's workers
 // load them all. A part gives any of: words(holder, hooks, access) the host words it adds, access being {program, text,
 // cString} of programImports; imports(holder, hooks) import modules of their own (m, c); importModule(holder, hooks,
@@ -88,7 +86,7 @@ function writeBytes(program, bytes) {
 // started(run) as a run begins; poll(holder) at each check point (sleep, signal_poll); finished(holder, hooks) after a
 // call into the run returned, a failure nobody read or nothing; ended(holder) after the call failed; stopped(holder)
 // when the page drops the run (stopListening)
-const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js"];
+const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js"];
 const hostParts = [];
 function addHostPart(part) {
 	hostParts.push(part);
@@ -166,8 +164,6 @@ function programImports(holder, hooks) {
 				if (known !== undefined) return BigInt(known);
 				throw new Error(`${value}: the playground cannot read it yet`);
 			},
-			// the path of the page shown, which picks its route (src/lowering/routes.rs); navigate changes it
-			page_path: () => buildValue(program(), treeOfPlain(holder.pagePath ?? ROOT_PATH)),
 			// `notify "text"` (src/host.rs notify): the page shows it (playground.js notification)
 			notify: text => {
 				const shown = plainOfTree(readNode(program(), text));
@@ -351,13 +347,6 @@ function millisecondsUntil(minuteOfDay, weekdays = EVERY_DAY, now = new Date()) 
 		if (due > now && (weekdays || EVERY_DAY) & (1 << due.getDay())) return due - now;
 	}
 	return 7 * DAY_MILLISECONDS;
-}
-
-// the page goes to `path` (a link, the back button): page_path() gives it from now on, hooks.navigated hears it (a pending
-// fetch is dropped there); the caller shows the page anew (site.js, worker.js)
-function navigate(holder, hooks, path) {
-	holder.pagePath = path;
-	hooks.navigated?.(holder, path);
 }
 
 // a run's timers started: `fire(handler)` runs the handler on·every·<id> of each when it is due; stopTimers ends them

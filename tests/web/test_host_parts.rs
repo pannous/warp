@@ -54,3 +54,9 @@ fn the_sites_parts_are_the_playgrounds_parts() {
 	let files: Vec<&str> = HOST_PARTS.iter().map(|part| part.script.0).collect();
 	assert_eq!(listed, format!("const HOST_PART_FILES = [{}];", files.iter().map(|file| format!("\"{file}\"")).collect::<Vec<_>>().join(", ")));
 }
+
+// card web-router: a page with routes reads its path (page_path), which ships the routes part; a page without routes does not
+#[test]
+fn a_page_with_routes_ships_the_routes_part() {
+	assert_eq!(part_files("route \"/\" { p{ \"home\" } }\nroute \"*\" { p{ \"no such page\" } }"), ["host-routes.js"]);
+}
