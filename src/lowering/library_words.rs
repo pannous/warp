@@ -205,7 +205,7 @@ pub fn lower(node: Node) -> Node {
 	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
-	Lowering { context, shadowed, objects, plain, instances, parameters: RefCell::new(vec![]), call_results, temporaries: Cell::new(0) }.expand(node)
+	Lowering { context, shadowed, objects, plain, instances, parameters: RefCell::new(vec![]), defining: RefCell::new(vec![]), call_results, temporaries: Cell::new(0) }.expand(node)
 }
 
 /// The variables assigned what a user function returns (`result = parse_json(text)`): any may hold an object
@@ -499,6 +499,8 @@ struct Lowering {
 	instances: crate::traits::InstanceTypes,
 	/// The untyped parameters of the definitions being lowered: any of them may hold an object, so `p.width` reads a field
 	parameters: RefCell<Vec<String>>,
+	/// The functions being defined, innermost last, each with its parameters: `start(l) := l.start` reads the field
+	defining: RefCell<Vec<(String, Vec<String>)>>,
 	/// Variables assigned the result of a user function call (call_results)
 	call_results: HashSet<String>,
 	temporaries: Cell<usize>,
@@ -520,10 +522,8 @@ impl Lowering {
 			// `def f(m) { m.a }`: the body sees the parameters, as `f(m) := m.a` does
 			Node::List(items, bracket, separator) if keyword_definition_parameters(&items).is_some() => {
 				let parameters = keyword_definition_parameters(&items).expect("guarded");
-				let scope = self.parameters.borrow().len();
-				self.parameters.borrow_mut().extend(parameters);
-				let items = items.into_iter().map(|item| self.expand(item)).collect();
-				self.parameters.borrow_mut().truncate(scope);
+				let name = keyword_definition_name(&items);
+				let items = self.within_function(name, parameters, || items.into_iter().map(|item| self.expand(item)).collect());
 				Node::List(items, bracket, separator)
 			}
 			Node::List(items, bracket, separator) => {
@@ -573,11 +573,30 @@ impl Lowering {
 	/// The right side of `head = right` or `head := right`, with the untyped parameters of a definition head in scope
 	fn in_definition(&self, head: &Node, right: Node) -> Node {
 		let parameters = crate::traits::untyped_parameters(head);
+		let name = match head.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.first().map(Node::name),
+			_ => None,
+		};
+		self.within_function(name, parameters, || self.expand(self.body_statement(head, right)))
+	}
+
+	/// `lower` with the parameters of a definition in scope, and its function's name when it has one
+	fn within_function<T>(&self, name: Option<String>, parameters: Vec<String>, lower: impl FnOnce() -> T) -> T {
 		let scope = self.parameters.borrow().len();
-		self.parameters.borrow_mut().extend(parameters);
-		let right = self.expand(self.body_statement(head, right));
+		self.parameters.borrow_mut().extend(parameters.iter().cloned());
+		let named = name.map(|name| self.defining.borrow_mut().push((name, parameters))).is_some();
+		let lowered = lower();
 		self.parameters.borrow_mut().truncate(scope);
-		right
+		if named {
+			self.defining.borrow_mut().pop();
+		}
+		lowered
+	}
+
+	/// `p.name` inside the function `name(p)`: a call would recurse with the same argument forever, so it reads the field
+	fn reads_own_parameter_field(&self, receiver: &Node, name: &str) -> bool {
+		let Node::Symbol(receiver) = receiver.drop_meta() else { return false };
+		self.defining.borrow().last().is_some_and(|(function, parameters)| function == name && parameters.contains(receiver))
 	}
 
 	/// `def total(xs){sum xs}`: the body block of a function that is one braceless call is that statement, not the data
@@ -811,6 +830,7 @@ impl Lowering {
 		// `x.square` and `x.add(y)` call the user function with the receiver as first argument; `l.start` of an object
 		// with a field start reads the field, even beside a function start (`start(l) := l.start`)
 		let reads_declared_field = !is_called && self.instances.is_declared_field(name) && (self.is_parameter(receiver) || self.instances.shape(receiver).is_some());
+		let reads_declared_field = reads_declared_field || (!is_called && self.reads_own_parameter_field(receiver, name));
 		if reads_declared_field {
 			return Some(field_lookup(receiver, name, word_node));
 		}
@@ -1086,7 +1106,13 @@ fn is_marker(node: &Node, marker: &str) -> bool {
 }
 
 /// The untyped parameters of `def f(a, b) {…}` (any function keyword): the head `f (a, b)` holds them in a group
-fn keyword_definition_parameters(items: &[Node]) -> Option<Vec<String>> {
+/// The name of `def f(a, b) {…}`: f
+fn keyword_definition_name(items: &[Node]) -> Option<String> {
+	keyword_definition_head(items)?.first().map(Node::name)
+}
+
+/// The head items of `def f(a, b) {…}` (any function keyword): f and its parameters
+fn keyword_definition_head(items: &[Node]) -> Option<&[Node]> {
 	let (keyword, head) = match items {
 		[keyword, head, _body] => (keyword, head),
 		// `def ((f (m)) {…})`: the head and the body as one group
@@ -1101,6 +1127,11 @@ fn keyword_definition_parameters(items: &[Node]) -> Option<Vec<String>> {
 		return None;
 	}
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
+	Some(head_items)
+}
+
+fn keyword_definition_parameters(items: &[Node]) -> Option<Vec<String>> {
+	let head_items = keyword_definition_head(items)?;
 	let parameters = head_items.iter().skip(1).flat_map(|item| match item.drop_meta() {
 		Node::List(group, Bracket::Round, _) => group.clone(),
 		other => vec![other.clone()],
