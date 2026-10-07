@@ -284,6 +284,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 				// a copy of the object with one field set: a Node, whatever the object's kind is known as
 				return match infer_type(&items[1], scope) { kind if kind.is_ref() => kind, _ => Kind::Empty };
 			}
+			if name == crate::library_words::MAP_GET_OR {
+				// `m.get(k)` is worth what `m[k]` is: a value of the map
+				return element_kind(&items[1], scope).unwrap_or(Kind::Empty);
+			}
 			return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
 		}
 	}

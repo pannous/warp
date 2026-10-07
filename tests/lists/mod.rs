@@ -1,3 +1,4 @@
+mod test_map_get_kind;
 mod test_where_filter;
 mod test_bare_list_assignment;
 mod test_decimal_list_elements;
