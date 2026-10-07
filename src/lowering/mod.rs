@@ -32,6 +32,7 @@ pub mod meta_entries;
 pub mod min_max;
 pub mod mutation;
 pub mod file_declarations;
+pub mod number_words;
 pub mod field_elements;
 pub mod nested_index;
 pub mod named_arguments;
