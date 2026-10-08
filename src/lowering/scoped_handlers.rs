@@ -2,8 +2,9 @@
 //! answers `emit ask` while the block runs, in it and in the functions it calls; the innermost handler wins and the
 //! handler's value is what emit gives (tail-resumptive, plain calls). Before event_signals: an emit no block handler
 //! takes stays the emit, which the program-wide `on ask {…}` answers as before.
-//! Handler i of ask is the function `ask·handler·i(event)`; the global `ask_active` names the active one (0: none) and
-//! `ask_outer_i` the one active when block i was entered, which an emit inside handler i reaches.
+//! Handler i of ask is the function `ask·handler·i(event)`; the global `effect_handler_active_ask` names the active one
+//! (0: none) and `effect_handler_outer_ask_i` the one active when block i was entered, which an emit inside handler i
+//! reaches.
 
 use crate::event_signals::{emit_verbs, emitted, function_with_globals, main_level_variables, reads_event};
 use crate::node::{Bracket, Node, Separator};
@@ -13,11 +14,13 @@ use std::collections::BTreeMap;
 
 const ON_WORD: &str = "on";
 const IN_WORD: &str = "in";
-/// Generated names join their parts with it; a generated variable is a plain word (`ask_active`), as `global` parses it
+/// Generated function names join their parts with it
 const JOINER: &str = "·";
 /// The variable the handler function runs its body into before it restores the active handler
 const RESULT_WORD: &str = "handled";
 const SAVED_WORD: &str = "saved";
+/// The plumbing's global variables (`effect_handler_active_ask`): plain words, as `global` parses them
+const PLUMBING_PREFIX: &str = "effect_handler_";
 
 /// A block handler: its event, its number (unique in the program) and body
 struct Handler {
@@ -87,7 +90,7 @@ fn scoped_blocks(node: Node, handlers: &mut Vec<Handler>) -> Node {
 }
 
 /// `on ask {body} in {block}`: the event, the handler body and the block
-fn scoped_handler(node: &Node) -> Option<(String, Node, Node)> {
+pub(crate) fn scoped_handler(node: &Node) -> Option<(String, Node, Node)> {
 	let Node::List(items, _, Separator::Space) = node.drop_meta() else { return None };
 	let items = phrase_words(items);
 	let [on, words @ .., body, in_word, block] = items.as_slice() else { return None };
@@ -125,15 +128,16 @@ fn dispatched_emits(node: Node, by_event: &BTreeMap<String, Vec<usize>>, verbs: 
 	node.map_children(|child| dispatched_emits(child, by_event, verbs))
 }
 
-/// `ask·enter·i() := { global ask_active, ask_outer_i; ask_outer_i = ask_active; ask_active = i; ask_outer_i }`
+/// `ask·enter·i() := { global active, outer_i; outer_i = active; active = i; outer_i }`: handler i active, the one
+/// before it kept
 fn enter_function(handler: &Handler, main_variables: &std::collections::HashSet<String>) -> Node {
 	let (active, outer) = (active_variable(&handler.event), outer_variable(&handler.event, handler.number));
 	let body = [assign(&outer, Node::Symbol(active.clone())), assign(&active, Node::int(handler.number as i64)), Node::Symbol(outer)];
 	function_with_globals(&enter_name(&handler.event, handler.number), false, &body, main_variables)
 }
 
-/// `ask·handler·i(event) := { previous = ask_active; ask_active = ask_outer_i; handled = (body); ask_active = previous;
-/// handled }`: while the body runs, an emit of ask reaches the handler outside block i
+/// `ask·handler·i(event) := { previous = active; active = outer_i; handled = (body); active = previous; handled }`:
+/// while the body runs, an emit of ask reaches the handler outside block i
 fn handler_function(handler: &Handler, by_event: &BTreeMap<String, Vec<usize>>, verbs: &[String], main_variables: &std::collections::HashSet<String>) -> Node {
 	let active = active_variable(&handler.event);
 	let previous = generated(&[SAVED_WORD, "previous"]);
@@ -176,11 +180,16 @@ fn event_word(event: &str) -> String {
 }
 
 fn active_variable(event: &str) -> String {
-	format!("{}_active", event_word(event))
+	format!("{PLUMBING_PREFIX}active_{}", event_word(event))
 }
 
 fn outer_variable(event: &str, number: usize) -> String {
-	format!("{}_outer_{number}", event_word(event))
+	format!("{PLUMBING_PREFIX}outer_{}_{number}", event_word(event))
+}
+
+/// A variable of the handler plumbing: no state of the program's own (effects.rs keeps a function using it pure)
+pub(crate) fn is_plumbing_variable(name: &str) -> bool {
+	name.starts_with(PLUMBING_PREFIX)
 }
 
 fn active_function(event: &str) -> String {

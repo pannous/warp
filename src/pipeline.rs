@@ -295,6 +295,8 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	}
 	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
+	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
+	let as_written = node.clone();
 	let node = run_passes(node, &SOURCE_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
@@ -320,7 +322,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
-	let effects = EffectReport::of(&node);
+	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
 	}
