@@ -49,7 +49,7 @@ const ERROR: &str = "error";
 /// `raise X` (`throw X`): an exception, the runtime error returned_error with X as its detail, which `try` catches
 pub const RAISE: &str = "raise";
 /// `is_error(x)`: 1 when x is an Error value; `try X else Y` tests its result with it
-const IS_ERROR: &str = "is_error";
+pub const IS_ERROR: &str = "is_error";
 /// error_of(text) → Error: exported, the host builds the Error of a caught stack overflow with it (guarded_call)
 pub const ERROR_OF: &str = "error_of";
 const WARNING: &str = "warning";

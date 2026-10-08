@@ -100,7 +100,12 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, value);
 				self.emit_call(func, writer);
 			}
-			Kind::Error if self.reports_own_error(func, value) => {}
+			// a caught Error prints its message (card catch-message); a type error of its own reports itself
+			Kind::Error => {
+				if !self.reports_own_error(func, value) {
+					self.emit_call(func, writer);
+				}
+			}
 			kind => {
 				let reason = format!("{word} of {} has no runtime text yet", crate::analyzer::kind_with_article(kind));
 				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(value, reason).to_string());
