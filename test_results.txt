@@ -2603,6 +2603,12 @@ PASSED:
   ✓ types::test_iterable::for_walks_what_iterate_gives
   ✓ types::test_iterable::in_searches_what_iterate_gives
   ✓ types::test_list_annotations::a_postfix_list_annotation_declares_the_list
+  ✓ types::test_list_element_types::declared_list_checks_element_assignment
+  ✓ types::test_list_element_types::declared_list_checks_run_time_items_at_the_store
+  ✓ types::test_list_element_types::declared_list_refuses_a_literal_of_another_type
+  ✓ types::test_list_element_types::declared_list_refuses_another_type_later
+  ✓ types::test_list_element_types::declared_lists_keep_fitting_items
+  ✓ types::test_list_element_types::list_fields_check_their_items
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
   ✓ types::test_mutating_methods::a_block_method_changes_its_object_and_gives_a_value
@@ -3420,4 +3426,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3415 passed, 0 failed, 3415 total tested
+19 ignored, 3421 passed, 0 failed, 3421 total tested
