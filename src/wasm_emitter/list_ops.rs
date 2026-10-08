@@ -52,7 +52,6 @@ impl WasmGcEmitter {
 		self.emit_list_cell_access();
 		self.emit_node_counting();
 		self.emit_node_kind_test();
-		self.emit_node_type_name();
 		self.emit_node_indexing();
 		self.emit_with_at_functions();
 		self.emit_typed_list_runtime();
@@ -131,7 +130,7 @@ impl WasmGcEmitter {
 
 	/// node_type_name(node) -> ref $Node: `type(x)` of a value whose static type is unknown (held as a Node), the symbol
 	/// naming its run-time kind as the static names do: bool, rational, int, text, …
-	fn emit_node_type_name(&mut self) {
+	pub(crate) fn emit_node_type_name(&mut self) {
 		if !self.should_emit_function(crate::type_tests::NODE_TYPE_NAME) {
 			return;
 		}
@@ -149,6 +148,21 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::RefTestNonNull(HeapType::Concrete(s.type_manager.ratio_type)), I::If(BlockType::Empty)]);
 				s.emit_string_call(f, crate::analyzer::RATIONAL_WORD, "new_symbol");
 				Self::emit_list(f, &[I::Return, I::End, I::End]);
+			}
+			// an instance of a declared type is a Key whose data is the type's name
+			let type_names: Vec<String> = s.ctx.type_registry.types().iter().map(|type_def| type_def.name.clone()).collect();
+			if !type_names.is_empty() {
+				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Key as i64), I::I64Eq, I::If(BlockType::Empty)]);
+				for type_name in &type_names {
+					s.emit_field(f, 0, 1);
+					f.instruction(&I::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
+					s.emit_string_call(f, type_name, "new_symbol");
+					s.emit_call(f, VALUES_EQUAL);
+					f.instruction(&I::If(BlockType::Empty));
+					s.emit_string_call(f, type_name, "new_symbol");
+					Self::emit_list(f, &[I::Return, I::End]);
+				}
+				f.instruction(&I::End);
 			}
 			for named in RUN_TIME_TYPE_KINDS {
 				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(named as i64), I::I64Eq, I::If(BlockType::Empty)]);
