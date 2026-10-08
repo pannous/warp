@@ -55,3 +55,11 @@ fn a_global_is_a_namespace_or_an_attribute_of_the_scope_not_an_interface() {
 	is!("use js navigator; navigator.hardwareConcurrency > 0", 1);
 	assert!(warp::web_idl::check("Storage", "anything", None).is_ok()); // the constructor, no instance
 }
+
+// an attribute's value is typed by its interface: navigator.clipboard is a Clipboard, also held in a variable
+#[cfg(feature = "native")] // a Worker's navigator has no clipboard
+#[test]
+fn an_attributes_value_is_typed_by_its_interface() {
+	fails_with("use js navigator; navigator.clipboard.writeTxt(\"x\")", "navigator.clipboard (Clipboard in WebIDL) has no member writeTxt; did you mean writeText");
+	fails_with("use js navigator; board = navigator.clipboard; board.writeText()", "writeText(DOMString data)");
+}
