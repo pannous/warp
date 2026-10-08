@@ -20,6 +20,8 @@ structure Obj where
 structure Store where
   vars : String → Option Cell
   heap : List Obj := []
+  /-- the active block handlers, innermost first -/
+  handlers : List (String × Expr) := []
 
 instance : CoeFun Store (fun _ => String → Option Cell) := ⟨Store.vars⟩
 
@@ -31,6 +33,25 @@ def Store.alloc (μ : Store) (p : List String) : Store := { μ with heap := μ.h
 
 /-- the object at address a, if it is of class chain p -/
 def Store.obj (μ : Store) (a : Nat) (p : List String) : Option Obj := μ.heap[a]?.filter (·.path == p)
+
+def Store.withHandlers (μ : Store) (hs : List (String × Expr)) : Store := { μ with handlers := hs }
+
+def Store.push (μ : Store) (ev : String) (h : Expr) : Store := μ.withHandlers ((ev, h) :: μ.handlers)
+
+/-- only the k outermost handlers active -/
+def Store.outer (μ : Store) (k : Nat) : Store := μ.withHandlers (μ.handlers.drop (μ.handlers.length - k))
+
+/-- the innermost handler of ev and the number of handlers outside it -/
+def lookupHandler : List (String × Expr) → String → Option (Expr × Nat)
+  | [], _ => none
+  | (e, h) :: rest, ev => if e = ev then some (h, rest.length) else lookupHandler rest ev
+
+theorem lookupHandler_mem : ∀ {hs : List (String × Expr)} {ev h k}, lookupHandler hs ev = some (h, k) → (ev, h) ∈ hs
+  | (e, g) :: rest, ev, h, k, hl => by
+    simp only [lookupHandler] at hl
+    split at hl
+    · cases hl; subst_vars; exact List.mem_cons_self
+    · exact List.mem_cons_of_mem _ (lookupHandler_mem hl)
 
 def Store.write (μ : Store) (a : Nat) (f : String) (v : Expr) : Store :=
   { μ with heap := μ.heap.modify a fun o => { o with fields := fun g => if g = f then some v else o.fields g } }
@@ -162,6 +183,8 @@ inductive Frame where
   | get (f : String)
   | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
   | isA (c : String)
+  | emit (ev : String)
+  | abort (ev : String) (k : Option Nat)
 
 namespace Frame
 
@@ -192,6 +215,8 @@ def plug : Frame → Expr → Expr
   | setL f v, e => .set e f v
   | setR o f, e => .set o f e
   | isA c, e => .isA e c
+  | emit ev, e => .emit ev e
+  | abort ev k, e => .abort ev k e
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
@@ -232,6 +257,29 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | get {o f μ} : o.isValue = true → Step P (.get o f, μ) (readField μ o f, μ)
   | set {o f v μ} : o.isValue = true → v.isValue = true → Step P (.set o f v, μ) (writeField μ o f v)
   | isA {v c μ} : v.isValue = true → Step P (.isA v c, μ) (.bool (isInstance v c), μ)
+  /-- the body runs with the handler pushed; the handlers return to what they were -/
+  | handleStep {ev h b b' μ μ'} : Step P (b, μ.push ev h) (b', μ') →
+      Step P (.handle ev h b, μ) (.handle ev h b', μ'.withHandlers μ.handlers)
+  | handleValue {ev h v μ} : v.isValue = true → Step P (.handle ev h v, μ) (v, μ)
+  | handleError {ev h m μ} : Step P (.handle ev h (.error m), μ) (.error m, μ)
+  | emitBlock {ev v h k μ} : v.isValue = true → lookupHandler μ.handlers ev = some (h, k) →
+      Step P (.emit ev v, μ) (.scope k (h.subst eventLocal v), μ)
+  | emitProgram {ev v h μ} : v.isValue = true → lookupHandler μ.handlers ev = none → P.handlers ev = some h →
+      Step P (.emit ev v, μ) (.scope 0 (h.subst eventLocal v), μ)
+  | emitNone {ev v μ} : v.isValue = true → lookupHandler μ.handlers ev = none → P.handlers ev = none →
+      Step P (.emit ev v, μ) (.unit, μ)
+  | scopeStep {k e e' μ μ'} : Step P (e, μ.outer k) (e', μ') →
+      Step P (.scope k e, μ) (.scope k e', μ'.withHandlers μ.handlers)
+  | scopeValue {k v μ} : v.isValue = true → Step P (.scope k v, μ) (v, μ)
+  | scopeError {k m μ} : Step P (.scope k (.error m), μ) (.error m, μ)
+  /-- an abort unwinds like an error, but `try` does not catch it (warp throws it with its own wasm tag) -/
+  | escape {F : Frame} {ev k v μ} : F.ready = true → v.isValue = true → Step P (F.plug (.abort ev k v), μ) (.abort ev k v, μ)
+  | tryAbort {ev k v h μ} : v.isValue = true → Step P (.tryCatch (.abort ev k v) h, μ) (.abort ev k v, μ)
+  /-- leaving the handler's scope fixes the depth of the block whose handler ran: the handlers outside it -/
+  | scopeAbort {j ev k v μ} : v.isValue = true → Step P (.scope j (.abort ev k v), μ) (.abort ev (some (k.getD j)) v, μ)
+  /-- the block of ev at that depth ends with v; any other block passes the abort on -/
+  | handleAbort {ev' h ev k v μ} : v.isValue = true →
+      Step P (.handle ev' h (.abort ev k v), μ) (if ev' = ev ∧ k = some μ.handlers.length then v else .abort ev k v, μ)
 
 /-- every declared name has a cell that fits its mode and type -/
 def CellOk (P : Program) (m : Mode) (t : Ty) : Option Cell → Prop
@@ -245,7 +293,9 @@ def HeapOk (P : Program) (μ : Store) : Prop :=
   ∀ (a : Nat) (o : Obj), μ.heap[a]? = some o → ∀ f v, o.fields f = some v →
     v.isValue = true ∧ ∃ t tv, P.fieldTy o.path f = some t ∧ HasType P Ctx.empty v tv ∧ sub tv t = true
 
+def HandlersOk (P : Program) (hs : List (String × Expr)) : Prop := ∀ p ∈ hs, HandlerOk P p.1 p.2
+
 def StoreOk (P : Program) (μ : Store) : Prop :=
-  (∀ x m t, P.names x = some (m, t) → CellOk P m t (μ x)) ∧ HeapOk P μ
+  (∀ x m t, P.names x = some (m, t) → CellOk P m t (μ x)) ∧ HeapOk P μ ∧ HandlersOk P μ.handlers
 
 end Warp

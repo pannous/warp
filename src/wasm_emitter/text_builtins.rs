@@ -5,7 +5,7 @@
 
 use crate::node::Node;
 use crate::type_kinds::{Kind, KIND_MASK};
-use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
+use crate::wasm_emitter::{WasmGcEmitter, ABORT_TO, RAN_WITHOUT_ABORT, RAN_WITHOUT_ERROR};
 use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
@@ -61,12 +61,13 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 19] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 21] = [
 	(MEMORY_BYTE, 1, Kind::Int), (MEMORY_SET_BYTE, 2, Kind::Int),
 	(crate::memoization::MEMO_KNOWN, 2, Kind::Int), (crate::memoization::MEMO_VALUE, 2, Kind::Int), (crate::memoization::MEMO_STORE, 3, Kind::Int),
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (RAISE, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
 	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
 	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int), (CHR, 1, Kind::Codepoint), (crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
+	(RAN_WITHOUT_ABORT, 2, Kind::Int), (ABORT_TO, 1, Kind::Int),
 ];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -245,7 +246,7 @@ impl WasmGcEmitter {
 				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
 				_ => self.emit_runtime_text_cast(func, value),
 			},
-			(BYTE_AT | MEMORY_BYTE | MEMORY_SET_BYTE | IS_ERROR | RAN_WITHOUT_ERROR | STARTS_WITH | ENDS_WITH | crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE, _) => {
+			(BYTE_AT | MEMORY_BYTE | MEMORY_SET_BYTE | IS_ERROR | RAN_WITHOUT_ERROR | RAN_WITHOUT_ABORT | ABORT_TO | STARTS_WITH | ENDS_WITH | crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE, _) => {
 				self.emit_integer_text_builtin(func, name, arguments);
 				self.emit_call(func, "new_int");
 			}
@@ -302,6 +303,8 @@ impl WasmGcEmitter {
 				Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::I64ExtendI32U]);
 			}
 			(RAN_WITHOUT_ERROR, [statement]) => self.emit_ran_without_error(func, statement),
+			(RAN_WITHOUT_ABORT, [handler, statement]) => self.emit_ran_without_abort(func, handler, statement),
+			(ABORT_TO, [handler]) => self.emit_abort_to(func, handler),
 			(STARTS_WITH | ENDS_WITH, [text, part]) => {
 				self.emit_text_argument(func, text);
 				self.emit_text_argument(func, part);

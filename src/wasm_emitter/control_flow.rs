@@ -63,13 +63,23 @@ impl WasmGcEmitter {
 	pub(super) fn emit_raw_branches(&mut self, func: &mut Function, condition: &Node, then_expr: &Node, else_expr: Option<&Node>, value_type: ValType, emit: fn(&mut Self, &mut Function, &Node)) {
 		self.emit_condition(func, condition, Self::emit_numeric_value);
 		func.instruction(&I::If(BlockType::Result(value_type)));
-		emit(self, func, then_expr);
+		self.emit_raw_branch(func, then_expr, emit);
 		func.instruction(&I::Else);
 		match else_expr {
-			Some(else_node) => emit(self, func, else_node),
+			Some(else_node) => self.emit_raw_branch(func, else_node, emit),
 			None => emit(self, func, &Node::int(0)),
 		}
 		func.instruction(&I::End);
+	}
+
+	/// A ø branch where a number is wanted (`y = if c then 5 else ø`, an emit no handler may answer) fails when it runs,
+	/// not when the program compiles: the other branch may be the only one taken
+	fn emit_raw_branch(&mut self, func: &mut Function, branch: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
+		if matches!(branch.drop_meta(), Node::Empty) {
+			self.emit_runtime_error(func, super::list_ops::NOT_A_NUMBER);
+		} else {
+			emit(self, func, branch);
+		}
 	}
 
 	/// Emit if-then-else expression: if condition then then_expr [else else_expr]

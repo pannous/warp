@@ -124,3 +124,6 @@ mod test_await_any_values;
 mod test_constant_listener;
 mod test_task_bools;
 mod test_error_values;
+mod test_emit_operands;
+mod test_handler_globals;
+mod test_aborting_handlers;

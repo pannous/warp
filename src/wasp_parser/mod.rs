@@ -140,6 +140,8 @@ const AWAIT_KEYWORD: &str = "await";
 const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
+/// `1 + emit ask`: an emit inside an expression takes the words of its event like a call (card emit-operand)
+const EMIT_KEYWORDS: [&str; 2] = ["emit", "send"];
 const PRINT_WORD: &str = "print";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";

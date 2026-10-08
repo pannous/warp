@@ -32,8 +32,17 @@ a GPU backend (P118: only for explicit `@gpu`) receives a descriptor instead of 
 - Not passed as bounds: a parameter that is changed, returned, printed or passed to a function that does not only
   read it, a function defined twice, a typed or defaulted parameter.
 
+## Ranges returned by functions (card range-value-run-2, 2026-10-08)
+- A function defined once whose value is a range of its parameters only (`f(n) := 1..n`, `span(a, b) := { a to b }`,
+  `evens(n) := 0..2*n`) is a range producer. A call whose arguments are numbers, variables or arithmetic of them, no
+  call (`f(10^12)`, `f(m)`), is replaced by the range itself, the parameters by the arguments; everything above then
+  reads it from its bounds: `count f(10^12)`, `r = f(10^12); count r`, `total(f(10^7))`. A use as a list collects it
+  as before (`f(5)` is [1 2 3 4], `xs = f(4); xs#1 = 9`). An argument with a call (`f(next() + 4)`) keeps the call and
+  the collected list: the range may read its parameter twice.
+- Not yet: a body with statements before the range, a range of globals, a range stored in a structure.
+
 ## Not yet
 - No step (`1..10 step 2` has no syntax yet); a step joins the descriptor as its third field.
-- A range printed, returned or stored in a structure is collected; a range value at run time (a descriptor struct the
+- A range printed, stored in a structure or returned from a body with statements is collected; a range value at run time (a descriptor struct the
   emitter knows, (start, end, step)) is what a GPU backend would receive (P118); passing to functions is solved by the
   bounds copies above without one.

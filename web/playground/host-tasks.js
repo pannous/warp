@@ -374,8 +374,6 @@ function trapMessage(trap, callee) {
 	return runtime ? runtime.replaceAll("_", " ") : String(trap.message ?? trap);
 }
 
-const KIND_FUNCTION = 16n; // src/type_kinds.rs Kind::Function: a closure
-
 const CAPTURE_PREFIX = "capture·"; // src/wasm_emitter CAPTURE_EXPORT_PREFIX
 
 // a value of the program for a task: a closure as its target's name and captured values ({closure, captured}, rebuilt

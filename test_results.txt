@@ -1,6 +1,14 @@
 === Test Results ===
 
 PASSED:
+  ✓ control::test_aborting_handlers::a_resuming_handler_and_the_end_of_the_block_still_work
+  ✓ control::test_aborting_handlers::a_try_inside_the_block_does_not_catch_the_abort
+  ✓ control::test_aborting_handlers::an_abort_for_an_outer_block_passes_the_inner_one
+  ✓ control::test_aborting_handlers::an_error_after_an_abort_out_of_a_try_keeps_its_message
+  ✓ control::test_aborting_handlers::any_value_and_a_loop_break_inside_the_handler
+  ✓ control::test_aborting_handlers::break_in_a_handler_ends_its_block
+  ✓ control::test_aborting_handlers::the_abort_skips_the_rest_of_the_block
+  ✓ control::test_aborting_handlers::the_innermost_aborting_handler_takes_it_and_the_outer_goes_on
   ✓ control::test_after::a_cancelled_after_gives_the_fallback
   ✓ control::test_after::after_needs_a_shared_condition
   ✓ control::test_after::after_waits_for_its_condition
@@ -79,6 +87,8 @@ PASSED:
   ✓ control::test_do_block::do_still_joins_a_while_condition_with_its_body
   ✓ control::test_each_colon::a_range_do_walks_it
   ✓ control::test_each_colon::each_and_all_with_a_colon_walk_the_list
+  ✓ control::test_emit_operands::an_emit_is_an_operand
+  ✓ control::test_emit_operands::an_emitted_value_is_the_handlers_number
   ✓ control::test_empty_block::a_program_that_is_only_an_empty_block_is_empty
   ✓ control::test_empty_block::an_empty_block_inside_a_statement_is_a_value
   ✓ control::test_empty_block_binding::a_bound_empty_block_counts_zero
@@ -156,6 +166,9 @@ PASSED:
   ✓ control::test_go_blocks::go_blocks_fill_a_job_list
   ✓ control::test_go_blocks::lines_printed_by_tasks_stay_whole
   ✓ control::test_go_blocks::sleep_takes_a_duration
+  ✓ control::test_handler_globals::a_handler_assigns_an_emitted_value_to_a_global
+  ✓ control::test_handler_globals::a_handler_writes_an_annotated_global
+  ✓ control::test_handler_globals::an_int_given_empty_fails_when_it_happens
   ✓ control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
   ✓ control::test_if_empty_branch::a_branch_printing_a_number_gives_empty
@@ -611,6 +624,9 @@ PASSED:
   ✓ ffi::test_host_words::test_a_program_prints_and_uses_the_host
   ✓ ffi::test_host_words::test_clock_and_sleep
   ✓ ffi::test_host_words::test_random_stays_in_range
+  ✓ ffi::test_js_callbacks::a_promise_is_awaited_natively
+  ✓ ffi::test_js_callbacks::a_warp_function_called_back_calls_javascript
+  ✓ ffi::test_js_callbacks::a_warp_function_is_called_back_by_javascript
   ✓ ffi::test_libc_results::atol_returns_a_long
   ✓ ffi::test_libc_results::comment_prose_in_a_header_declares_nothing
   ✓ ffi::test_libc_results::libc_text_and_character_functions
@@ -819,6 +835,8 @@ PASSED:
   ✓ functions::test_effects::test_imports_follow_effects
   ✓ functions::test_empty_call::a_name_and_a_group_stay_symbols_and_defined_calls_run
   ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
+  ✓ functions::test_empty_function_bodies::a_function_with_an_empty_body_leaves_the_program_alone
+  ✓ functions::test_empty_function_bodies::calling_a_function_with_an_empty_body_gives_empty
   ✓ functions::test_event_effects::a_block_handler_handles_its_event
   ✓ functions::test_event_effects::a_declared_effect_set_reports_an_unhandled_event
   ✓ functions::test_event_effects::an_emitted_event_is_a_named_effect
@@ -1331,6 +1349,9 @@ PASSED:
   ✓ lists::test_range_arguments::a_range_argument_used_as_a_list_stays_one
   ✓ lists::test_range_arguments::a_range_passed_on_to_a_reader_stays_its_bounds
   ✓ lists::test_range_arguments::a_range_variable_passed_on_stays_its_bounds
+  ✓ lists::test_range_returns::a_returned_range_is_read_from_its_bounds
+  ✓ lists::test_range_returns::a_returned_range_stored_in_a_variable_stays_its_bounds
+  ✓ lists::test_range_returns::a_returned_range_used_as_a_list_is_its_list
   ✓ lists::test_range_values::a_parenthesized_range_is_a_list
   ✓ lists::test_range_values::a_range_is_a_list_as_an_argument
   ✓ lists::test_range_values::a_range_of_computed_bounds_is_a_list_as_an_argument
@@ -1760,6 +1781,26 @@ PASSED:
   ✓ numbers::test_shift_operators::test_shift_precedence_and_variables
   ✓ numbers::test_shift_operators::test_shift_right_floors_by_a_power_of_two
   ✓ numbers::test_shift_operators::test_shifts_of_big_exact_ints
+  ✓ numbers::test_static_units::test_a_word_before_a_unit_name_is_no_amount
+  ✓ numbers::test_static_units::test_compiling_a_quantity_result_is_refused_until_output_is_supported
+  ✓ numbers::test_static_units::test_dimension_errors_are_compile_errors
+  ✓ numbers::test_static_units::test_quantities_accumulate_in_loops
+  ✓ numbers::test_static_units::test_quantities_in_branches_and_products
+  ✓ numbers::test_static_units::test_unsupported_uses_stay_loud
+  ✓ numbers::test_static_units_compiled::test_a_compiled_quantity_carries_its_unit
+  ✓ numbers::test_static_units_compiled::test_a_whole_list_of_quantities_shows_its_units
+  ✓ numbers::test_static_units_compiled::test_eval_reads_the_same_section
+  ✓ numbers::test_static_units_functions::test_a_unit_word_called_as_a_function_is_no_unit
+  ✓ numbers::test_static_units_functions::test_dimension_errors_inside_functions_are_compile_errors
+  ✓ numbers::test_static_units_functions::test_functions_take_and_give_quantities
+  ✓ numbers::test_static_units_functions::test_one_function_with_several_unit_signatures
+  ✓ numbers::test_static_units_lists::test_curly_interpolation_shows_the_unit
+  ✓ numbers::test_static_units_lists::test_lists_of_quantities
+  ✓ numbers::test_static_units_lists::test_sqrt_halves_the_powers
+  ✓ numbers::test_static_units_output::test_as_and_in_convert_and_check
+  ✓ numbers::test_static_units_output::test_print_shows_the_unit
+  ✓ numbers::test_static_units_output::test_return_gives_the_unit
+  ✓ numbers::test_static_units_output::test_texts_join_quantities
   ✓ numbers::test_sum_of_decimals::the_sum_of_decimal_elements
   ✓ numbers::test_superscript_variables::test_a_negative_superscript_variable_exponent
   ✓ numbers::test_superscript_variables::test_a_superscript_variable_exponent
@@ -2470,6 +2511,8 @@ PASSED:
   ✓ text::test_trim::trim_drops_whitespace_at_both_ends
   ✓ text::test_unicode_escape::a_unicode_escape_is_its_code_point
   ✓ text::test_utf8_bytes::a_text_and_its_utf8_bytes
+  ✓ types::test_any_into_annotated::any_into_an_annotated_int_is_checked_at_run_time
+  ✓ types::test_any_into_annotated::unannotated_places_stay_lax
   ✓ types::test_array_types::hints::test_bracketed_list_type_hints_the_plural_word
   ✓ types::test_array_types::hints::test_plural_word_needs_no_hint
   ✓ types::test_array_types::test_bracketed_type_is_a_list_of_that_type
@@ -2595,6 +2638,9 @@ PASSED:
   ✓ types::test_conformance_claims::a_claim_missing_an_operation_is_an_error
   ✓ types::test_conformance_claims::a_kept_claim_compiles
   ✓ types::test_construction_checks::a_call_construction_checks_its_fields_as_the_braces_do
+  ✓ types::test_construction_defaults::a_construction_default_is_an_instance
+  ✓ types::test_construction_defaults::a_nested_construction_default_is_constructed_too
+  ✓ types::test_construction_defaults::each_instance_gets_its_own_default
   ✓ types::test_constructor_vs_data::test_a_typed_optional_field_puts_the_question_mark_on_its_name
   ✓ types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ types::test_constructor_vs_data::test_construction_checks_field_types
@@ -2877,6 +2923,9 @@ PASSED:
   ✓ types::test_types_scope::test_plural_type_word_denotes_a_list
   ✓ types::test_types_scope::test_type_of_list_names_its_element_type
   ✓ types::test_types_scope::test_type_of_mixed_list_is_plain_list
+  ✓ types::test_upcast_fields::a_cast_or_a_match_reads_it
+  ✓ types::test_upcast_fields::a_subclass_field_through_the_declared_parent_is_an_error
+  ✓ types::test_upcast_fields::unannotated_code_reads_it_at_run_time
   ✓ types::test_value_constructor::a_value_block_runs_at_every_construction
   ✓ types::test_value_constructor::a_value_constructor_takes_parameters
   ✓ types::test_variant_payloads::a_payload_free_variant_is_its_symbol_and_of_its_type
@@ -3512,4 +3561,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3507 passed, 0 failed, 3507 total tested
+19 ignored, 3556 passed, 0 failed, 3556 total tested

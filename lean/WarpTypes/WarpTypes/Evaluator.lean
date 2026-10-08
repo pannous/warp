@@ -7,11 +7,29 @@ program, so the differential test compares warp's values with the model's, not o
 namespace Warp
 open Ty Expr
 
-/-- a step inside frame F of its hole e, given e's own step r: an error in the hole is raised -/
+/-- an abort whose value is computed: it unwinds -/
+def Expr.aborting : Expr → Bool
+  | .abort _ _ v => v.isValue
+  | _ => false
+
+theorem Expr.aborting_eq : ∀ {e : Expr}, e.aborting = true → ∃ ev k v, e = .abort ev k v ∧ v.isValue = true
+  | .abort _ _ _, h => ⟨_, _, _, rfl, h⟩
+
+/-- an abort leaving the scope of a handler with j handlers outside it -/
+def Expr.rescope (j : Nat) : Expr → Expr
+  | .abort ev k v => .abort ev (some (k.getD j)) v
+  | e => e
+
+/-- an abort reaching a block of ev' at depth d: its value if it is that block's, else it passes on -/
+def Expr.landsAt (ev' : String) (d : Nat) : Expr → Expr
+  | .abort ev k v => if ev' = ev ∧ k = some d then v else .abort ev k v
+  | e => e
+
+/-- a step inside frame F of its hole e, given e's own step r: an error or abort in the hole is raised -/
 def stepIn (F : Frame) (e : Expr) (μ : Store) (r : Option (Expr × Store)) : Option (Expr × Store) :=
   match e with
   | .error m => some (.error m, μ)
-  | _ => r.map fun s => (F.plug s.1, s.2)
+  | _ => if e.aborting then some (e, μ) else r.map fun s => (F.plug s.1, s.2)
 
 /-- two operands left to right, then `done` on their values -/
 def stepPair (L : Expr → Frame) (R : Expr → Frame) (a b : Expr) (μ : Store) (ra rb : Option (Expr × Store))
@@ -45,7 +63,9 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
   | .tryCatch e h =>
     match e with
     | .error _ => some (h, μ)
-    | _ => if e.isValue then some (e, μ) else (step P μ e).map fun s => (.tryCatch s.1 h, s.2)
+    | _ =>
+      if e.aborting then some (e, μ)
+      else if e.isValue then some (e, μ) else (step P μ e).map fun s => (.tryCatch s.1 h, s.2)
   | .cast e ts =>
     if e.isValue then some (if ts.any (fits e) then e else .error "type mismatch", μ) else stepIn (.cast ts) e μ (step P μ e)
   | .broadcast f e =>
@@ -59,6 +79,30 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
   | .get o f => if o.isValue then some (readField μ o f, μ) else stepIn (.get f) o μ (step P μ o)
   | .set o f v => stepPair (fun v => .setL f v) (fun o => .setR o f) o v μ (step P μ o) (step P μ v) (some (writeField μ o f v))
   | .isA e c => if e.isValue then some (.bool (isInstance e c), μ) else stepIn (.isA c) e μ (step P μ e)
+  | .handle ev h b =>
+    match b with
+    | .error m => some (.error m, μ)
+    | _ =>
+      if b.aborting then some (b.landsAt ev μ.handlers.length, μ)
+      else if b.isValue then some (b, μ)
+      else (step P (μ.push ev h) b).map fun s => (.handle ev h s.1, s.2.withHandlers μ.handlers)
+  | .emit ev e =>
+    if e.isValue then
+      some (match lookupHandler μ.handlers ev with
+        | some (h, k) => (.scope k (h.subst eventLocal e), μ)
+        | none =>
+          match P.handlers ev with
+          | some h => (.scope 0 (h.subst eventLocal e), μ)
+          | none => (.unit, μ))
+    else stepIn (.emit ev) e μ (step P μ e)
+  | .scope k e =>
+    match e with
+    | .error m => some (.error m, μ)
+    | _ =>
+      if e.aborting then some (e.rescope k, μ)
+      else if e.isValue then some (e, μ)
+      else (step P (μ.outer k) e).map fun s => (.scope k s.1, s.2.withHandlers μ.handlers)
+  | .abort ev k e => if e.isValue then none else stepIn (.abort ev k) e μ (step P μ e)
   | _ => none
 
 variable {P : Program}
@@ -68,7 +112,9 @@ theorem stepIn_sound {F : Frame} (hF : F.ready = true) {e μ r s'}
   unfold stepIn at h
   split at h
   · cases h; exact .raise hF
-  · simp only [Option.map_eq_some_iff] at h
+  · split at h
+    · rename_i ha; cases h; obtain ⟨_, _, _, rfl, hv⟩ := Expr.aborting_eq ha; exact .escape hF hv
+    simp only [Option.map_eq_some_iff] at h
     obtain ⟨⟨e', μ'⟩, hs, rfl⟩ := h
     exact .frame hF (hr _ hs)
 
@@ -161,6 +207,8 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     split at hs
     · cases hs; exact .tryError
     · split at hs
+      · rename_i ha; cases hs; obtain ⟨_, _, _, rfl, hv⟩ := Expr.aborting_eq ha; exact .tryAbort hv
+      split at hs
       · cases hs; exact .tryValue (by assumption)
       · simp only [Option.map_eq_some_iff] at hs
         obtain ⟨⟨e', μ'⟩, he, rfl⟩ := hs
@@ -193,6 +241,45 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     split at hs
     · cases hs; exact .isA (by assumption)
     · exact stepIn_sound (F := .isA c) rfl (fun _ => ih) hs
+  | handle ev h b _ ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .handleError
+    · split at hs
+      · rename_i ha; cases hs; obtain ⟨_, _, _, rfl, hv⟩ := Expr.aborting_eq ha; exact .handleAbort hv
+      split at hs
+      · cases hs; exact .handleValue (by assumption)
+      · simp only [Option.map_eq_some_iff] at hs
+        obtain ⟨⟨e', μ'⟩, he, rfl⟩ := hs
+        exact .handleStep (ih he)
+  | emit ev e ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · rename_i hv
+      cases hs
+      split
+      · rename_i hl; exact .emitBlock hv hl
+      · rename_i hl
+        split
+        · rename_i hp; exact .emitProgram hv hl hp
+        · rename_i hp; exact .emitNone hv hl hp
+    · exact stepIn_sound (F := .emit ev) rfl (fun _ => ih) hs
+  | scope k e ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .scopeError
+    · split at hs
+      · rename_i ha; cases hs; obtain ⟨_, _, _, rfl, hv⟩ := Expr.aborting_eq ha; exact .scopeAbort hv
+      split at hs
+      · cases hs; exact .scopeValue (by assumption)
+      · simp only [Option.map_eq_some_iff] at hs
+        obtain ⟨⟨e', μ'⟩, he, rfl⟩ := hs
+        exact .scopeStep (ih he)
+  | abort ev k e ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs
+    · exact stepIn_sound (F := .abort ev k) rfl (fun _ => ih) hs
   | _ => intro μ s' hs; simp [step] at hs
 
 /-- at most `fuel` steps -/
@@ -227,9 +314,9 @@ def FUEL : Nat := 10000
 /-- what an elaborated program gives when run: `rejected`, `error`, a value as warp prints it, or `?` -/
 def outcome (items : List Item) : String :=
   let s := elaborate items
-  match s.check with
-  | none => "rejected"
-  | some _ =>
+  match s.breaksPlaced, s.check with
+  | false, _ | _, none => "rejected"
+  | true, some _ =>
     match (run s.program FUEL (s.main, s.store)).1 with
     | .error _ => "error"
     | v => if v.isValue then display v else "?"
