@@ -143,6 +143,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("exact_euclid_div") {
 		required.insert(super::INT_RUNTIME);
 	}
+	if required.contains(super::list_ops::LIST_EXTEND) {
+		required.insert("list_concat"); // of a non-list
+	}
 	if required.contains(super::list_ops::NODE_ADD) {
 		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::library_ops::LIST_JOIN]); // two lists added are concatenated, two texts too, a text and a number joined
 	}

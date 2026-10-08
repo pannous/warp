@@ -9,10 +9,11 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 18] = [
+const BUILTIN_CALLS: [&str; 19] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
+	crate::analyzer::LIST_DROP_LAST,
 ];
 
 const PRINT: &str = "print";
@@ -304,6 +305,13 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, count);
 				self.emit_node_instructions(func, zero);
 				self.emit_call(func, crate::analyzer::ZERO_FILL_CALL);
+				return;
+			}
+		}
+		if let [Node::Symbol(call), list] = items {
+			if call == crate::analyzer::LIST_DROP_LAST {
+				self.emit_node_instructions(func, list);
+				self.emit_call(func, crate::analyzer::LIST_DROP_LAST);
 				return;
 			}
 		}
@@ -771,7 +779,9 @@ impl WasmGcEmitter {
 			return;
 		}
 		let destructured = self.destructured_kind(item);
-		if let Some((name, value)) = self.typed_list_store(item) {
+		if let Some((name, items)) = self.typed_list_extension(item) {
+			self.emit_typed_list_extend(func, &name, &items); // the array itself is dropped, it needs no Node
+		} else if let Some((name, value)) = self.typed_list_store(item) {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
 		} else if self.is_float_assignment(item) || self.is_float_call(item) || destructured.is_some_and(|kind| kind.is_float()) {
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64

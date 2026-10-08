@@ -56,6 +56,8 @@ impl WasmGcEmitter {
 		self.emit_with_at_functions();
 		self.emit_typed_list_runtime();
 		self.emit_list_concat();
+		self.emit_list_extend();
+		self.emit_list_drop_last();
 		self.emit_element_children();
 		self.emit_element_body();
 		self.emit_list_insert_at();
@@ -1394,7 +1396,8 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
-	/// list_concat(a, b): copies the cells of a in front of b, which is shared; iteratively (copy_cells)
+	/// list_concat(a, b): a new list, the cells of b copied and those of a in front of them; iteratively (copy_cells).
+	/// Lists are shared (P200b), so `xs + ys` shares no cell with either: an item added to ys later is not in it
 	fn emit_list_concat(&mut self) {
 		if !self.should_emit_function("list_concat") {
 			return;
@@ -1404,13 +1407,91 @@ impl WasmGcEmitter {
 		self.runtime_function("list_concat", params, vec![node_ref_nullable], self.copy_cells_locals(), |s, f| {
 			let (first, second) = (0, 1);
 			let copy = CopyCells::at(2);
-			for list in [first, second] {
+			for list in [second, first] {
 				s.emit_empty_as_null(f, list);
+				s.emit_collect_cells(f, list, None, &copy);
+				s.emit_rebuild_cells(f, &copy);
 			}
-			s.emit_collect_cells(f, first, None, &copy);
-			Self::emit_list(f, &[I::LocalGet(second), I::LocalSet(copy.result)]);
-			s.emit_rebuild_cells(f, &copy);
 			f.instruction(&I::LocalGet(copy.result));
+		});
+	}
+
+	/// list_extend(list, items): `xs += ys`, what `xs.add(v)` lowers to: copies of the items' cells added to the end of
+	/// the list in place, so every holder of it sees them (P200b, Python's extend); ø (an Empty node) becomes the first
+	/// cell itself. Gives back the list, the copied items for a missing one (null), list_concat of a non-list
+	fn emit_list_extend(&mut self) {
+		if !self.should_emit_function(LIST_EXTEND) {
+			return;
+		}
+		let node_ref_nullable = Ref(self.node_ref(true));
+		let node_ref = Ref(self.node_ref(false));
+		let node_type = self.type_manager.node_type;
+		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
+		let locals = [self.copy_cells_locals(), vec![ValType::I64]].concat();
+		self.runtime_function(LIST_EXTEND, vec![node_ref_nullable, node_ref_nullable], vec![node_ref], locals, |s, f| {
+			let (list, items) = (0, 1);
+			let copy = CopyCells::at(2);
+			let kind = copy.result + 1;
+			s.emit_empty_as_null(f, items);
+			s.emit_collect_cells(f, items, None, &copy);
+			s.emit_rebuild_cells(f, &copy);
+			// no items: the list itself, ø for a missing one
+			Self::emit_list(f, &[I::LocalGet(copy.result), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty)]);
+			s.call(f, "new_empty");
+			Self::emit_list(f, &[I::Return, I::End, I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(copy.result), I::RefAsNonNull, I::Return, I::End]);
+			s.emit_field(f, list, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
+			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty)]);
+			for field_index in 0..3 {
+				f.instruction(&I::LocalGet(list));
+				s.emit_field(f, copy.result, field_index);
+				f.instruction(&set(field_index));
+			}
+			Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(list), I::LocalGet(items)]);
+			s.call(f, "list_concat");
+			Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End]);
+			// the last cell takes the copies as its rest
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(copy.cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			s.emit_field(f, copy.cell, 2);
+			Self::emit_list(f, &[I::RefIsNull, I::BrIf(1)]);
+			s.emit_field(f, copy.cell, 2);
+			Self::emit_list(f, &[I::LocalSet(copy.cell), I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(copy.cell), I::LocalGet(copy.result), set(2), I::LocalGet(list), I::RefAsNonNull]);
+		});
+	}
+
+	/// list_drop_last(list): the list without its last item, in place (`xs.pop()`, P200b): the cell before the last ends
+	/// the list, a single cell becomes ø itself
+	fn emit_list_drop_last(&mut self) {
+		if !self.should_emit_function(crate::analyzer::LIST_DROP_LAST) {
+			return;
+		}
+		let node_ref_nullable = Ref(self.node_ref(true));
+		let node_ref = Ref(self.node_ref(false));
+		let node_type = self.type_manager.node_type;
+		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
+		let no_node = || I::RefNull(HeapType::Concrete(node_type));
+		self.runtime_function(crate::analyzer::LIST_DROP_LAST, vec![node_ref_nullable], vec![node_ref], vec![node_ref_nullable], |s, f| {
+			let (list, cell) = (0, 1);
+			s.emit_empty_as_null(f, list);
+			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty)]);
+			s.call(f, "new_empty");
+			Self::emit_list(f, &[I::Return, I::End]);
+			s.emit_field(f, list, 2);
+			Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty),
+				I::LocalGet(list), I::I64Const(Kind::Empty as i64), set(0),
+				I::LocalGet(list), I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }), set(1),
+				I::LocalGet(list), no_node(), set(2), I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
+			// the cell whose rest is the last cell
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			s.emit_field(f, cell, 2);
+			f.instruction(&I::StructGet { struct_type_index: node_type, field_index: 2 });
+			Self::emit_list(f, &[I::RefIsNull, I::BrIf(1)]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(cell), no_node(), set(2), I::LocalGet(list), I::RefAsNonNull]);
 		});
 	}
 
@@ -1523,8 +1604,8 @@ impl WasmGcEmitter {
 		true
 	}
 
-	/// Index assignment builds a new value instead of mutating a shared one (value semantics):
-	/// `y#i=v` stores `node_with_at(y, i, v)` back into `y`, so aliases and deduplicated literals never change.
+	/// Index assignment: `y#i=v` stores `node_with_at(y, i, v)` back into `y`; a list changes in place (P200b), a text,
+	/// which never changes, is a new one
 	fn emit_with_at_functions(&mut self) {
 		if !self.should_emit_function("node_with_at") {
 			return;
@@ -1536,15 +1617,13 @@ impl WasmGcEmitter {
 		let string_type = self.type_manager.string_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 
-		// list_with_at(list, index, value node): copies the cells up to index, shares the rest; iterative (the cells before
-		// index into an array, rebuilt backwards), so a deep index never exhausts the call stack
+		// list_with_at(list, index, value node): the cell at index takes the value in place, so every holder of the list sees
+		// it (P200b); the list itself is given back
 		let list_with_at = next_index(self);
 		let params = vec![node_ref_nullable, ValType::I64, node_ref];
-		let node_array = self.type_manager.node_array_type;
-		let cells_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(node_array) });
-		let locals = vec![node_ref_nullable, ValType::I64, cells_ref, ValType::I32, node_ref_nullable];
+		let locals = vec![node_ref_nullable, ValType::I64];
 		self.runtime_function("list_with_at", params, vec![node_ref], locals, |s, f| {
-			let (list, index, value, cell, countdown, cells, position, result) = (0, 1, 2, 3, 4, 5, 6, 7);
+			let (list, index, value, cell, countdown) = (0, 1, 2, 3, 4);
 			let kind_test = |s: &Self, f: &mut Function| {
 				// a missing cell or ø: lists do not grow by index, the empty list ø included (user, 2026-10-04)
 				Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull]);
@@ -1561,30 +1640,9 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(countdown), I::I64Const(1), I::I64Eq, I::BrIf(1)]);
 			s.emit_field(f, cell, 2);
 			Self::emit_list(f, &[I::LocalSet(cell), I::LocalGet(countdown), I::I64Const(1), I::I64Sub, I::LocalSet(countdown), I::Br(0), I::End, I::End]);
-			// it, with the value
-			s.emit_field(f, cell, 0);
-			Self::emit_list(f, &[I::LocalGet(value)]);
-			s.emit_field(f, cell, 2);
-			Self::emit_list(f, &[I::StructNew(node_type), I::LocalSet(result)]);
-			// the cells before it, in order
-			Self::emit_list(f, &[
-				I::LocalGet(index), I::I64Const(1), I::I64Sub, I::I32WrapI64, I::ArrayNewDefault(node_array), I::LocalSet(cells),
-				I::LocalGet(list), I::LocalSet(cell), I::I32Const(0), I::LocalSet(position),
-				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
-				I::LocalGet(position), I::LocalGet(cells), I::ArrayLen, I::I32GeU, I::BrIf(1),
-				I::LocalGet(cells), I::LocalGet(position), I::LocalGet(cell), I::ArraySet(node_array),
-			]);
-			s.emit_field(f, cell, 2);
-			Self::emit_list(f, &[I::LocalSet(cell), I::LocalGet(position), I::I32Const(1), I::I32Add, I::LocalSet(position), I::Br(0), I::End, I::End]);
-			// rebuilt from the last one back, each sharing what follows
-			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
-				I::LocalGet(position), I::I32Eqz, I::BrIf(1),
-				I::LocalGet(position), I::I32Const(1), I::I32Sub, I::LocalSet(position),
-				I::LocalGet(cells), I::LocalGet(position), I::ArrayGet(node_array), I::LocalSet(cell)]);
-			s.emit_field(f, cell, 0);
-			s.emit_field(f, cell, 1);
-			Self::emit_list(f, &[I::LocalGet(result), I::StructNew(node_type), I::LocalSet(result), I::Br(0), I::End, I::End,
-				I::LocalGet(result), I::RefAsNonNull]);
+			// it takes the value, in place
+			Self::emit_list(f, &[I::LocalGet(cell), I::LocalGet(value), I::StructSet { struct_type_index: node_type, field_index: 1 },
+				I::LocalGet(list), I::RefAsNonNull]);
 		});
 		assert_eq!(self.func_index("list_with_at"), list_with_at, "node_with_at forwards to this index");
 
@@ -1672,6 +1730,8 @@ impl WasmGcEmitter {
 }
 
 
+/// list_extend(list, items): `xs += ys` in place (emit_list_extend)
+pub const LIST_EXTEND: &str = "list_extend";
 /// The runtime error of a missing constant field is a function `no_field_<name>`; eval reports it as `no field <name>`
 pub const NO_FIELD_PREFIX: &str = "no_field_";
 /// struct_body(node): the field list of an instance of a declared type, else the node itself

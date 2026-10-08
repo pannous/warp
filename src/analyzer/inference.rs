@@ -132,6 +132,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			let joins_text = matches!(left_kind, Kind::Text | Kind::Codepoint) && arithmetic_kind(left_kind, &Op::Add, right_kind) == Kind::Text;
 			if op.base_op() == Op::Add && (joins_text || crate::wasm_emitter::text_builtins::concatenates(left_kind, right_kind)) {
 				Kind::Text
+			} else if op.base_op() == Op::Add && (left_kind == Kind::List || right_kind == Kind::List) {
+				Kind::List // `xs += [v]`, what `xs.add(v)` lowers to
 			} else if left_kind == Kind::Float || right_kind == Kind::Float {
 				Kind::Float
 			} else {
@@ -321,6 +323,9 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			if name == crate::library_words::FIELD_WITH || name == crate::library_words::INSTANCE_COPY {
 				// the object with one field set, or its copy: a Node, whatever the object's kind is known as
 				return match infer_type(&items[1], scope) { kind if kind.is_ref() => kind, _ => Kind::Empty };
+			}
+			if name == LIST_DROP_LAST {
+				return Kind::List;
 			}
 			if name == REMOVED_VALUE_CALL {
 				// a map's value or a list: decided at runtime (removed_value), a Node

@@ -10,7 +10,10 @@
 //! - `Host`: reserved for a host-native or GPU implementation behind a host import, taking over above
 //!   `HOST_BACKEND_MIN_LENGTH` at run time; none exists yet (no wasm SIMD, user decision). notes/typed_lists.md
 //!
-//! A typed list keeps value semantics: `ys = xs` copies it when either variable is updated (by index or by an append).
+//! A list is a reference (P200b, card shared-lists): `ys = xs` makes both variables hold the one typed list, an item
+//! added or set through either is in both; `ys = ys + [v]` makes a new list, `ys += [v]` (what `ys.add(v)` lowers to)
+//! grows it in place. A typed list never meets a Node holder of itself, whose copy would part from it: a list another
+//! variable holds as Nodes, or one used whole (an argument, an item, a field) stays the Node list every holder shares.
 
 use super::map_backend::is_update;
 use super::WasmGcEmitter;
@@ -130,8 +133,10 @@ pub enum Backend {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TypedList {
 	pub element: ElementType,
-	/// assigned by index somewhere, so an alias of it needs its own copy
+	/// changed in place somewhere (an item set, an append) through it or a variable holding the same list
 	pub updated: bool,
+	/// held by another variable too (`ys = xs`): `xs = xs + [v]` makes a new list instead of growing the shared one
+	pub aliased: bool,
 }
 
 /// Where a typed list variable lives: a local of the body, or a global main builds and functions read
@@ -164,11 +169,12 @@ enum Source {
 	Literal(ElementType),
 	/// `[]`, `ø`: fits a list of any element type
 	Empty,
-	/// `xs = xs + [4 5]`, what `xs.add(4)` lowers to
+	/// `xs = xs + [4 5]`, `xs += [4]` (what `xs.add(4)` lowers to)
 	Append(ElementType),
 	Variable(String),
-	/// a list held as Nodes (a call's result, a parameter): converted once into an array of its items
-	Converted,
+	/// a list held as Nodes (a call's result, a parameter, a field): converted once into an array of its items. Fresh:
+	/// a call's result, which no one else holds
+	Converted { fresh: bool },
 	Other,
 }
 
@@ -235,6 +241,47 @@ fn indexed_lists(program: &Node) -> HashSet<String> {
 	indexed
 }
 
+/// The items of `xs += [a b]`
+fn extended_items(value: &Node) -> Option<&[Node]> {
+	match value.drop_meta() {
+		Node::List(items, Bracket::Square, _) if !items.is_empty() => Some(items),
+		_ => None,
+	}
+}
+
+/// Each list variable with every variable holding the same list: those assigned one another (`ys = xs`), transitively
+fn alias_groups(sources: &HashMap<String, Vec<Source>>) -> HashMap<String, Vec<String>> {
+	let mut neighbours: HashMap<&str, Vec<&str>> = HashMap::new();
+	for (name, sources) in sources {
+		neighbours.entry(name).or_default();
+		for source in sources {
+			if let Source::Variable(other) = source {
+				neighbours.entry(name).or_default().push(other);
+				neighbours.entry(other).or_default().push(name);
+			}
+		}
+	}
+	let mut groups = HashMap::new();
+	for start in neighbours.keys() {
+		if groups.contains_key(*start) {
+			continue;
+		}
+		let (mut group, mut pending) = (vec![start.to_string()], vec![*start]);
+		while let Some(name) = pending.pop() {
+			for next in &neighbours[name] {
+				if !group.iter().any(|member| member == next) {
+					group.push(next.to_string());
+					pending.push(next);
+				}
+			}
+		}
+		for member in &group {
+			groups.insert(member.clone(), group.clone());
+		}
+	}
+	groups
+}
+
 /// The element type every source agrees on: `Err` when a source is no typed list or they disagree, `Ok(None)` when only
 /// variables of yet unknown type feed it
 fn agreed_element(sources: &[Source], typed: &HashMap<String, Option<ElementType>>, globals: &HashMap<String, (u32, TypedList)>) -> Result<Option<ElementType>, ()> {
@@ -245,7 +292,7 @@ fn agreed_element(sources: &[Source], typed: &HashMap<String, Option<ElementType
 			Source::Empty => None,
 			// an untyped list variable converts like any Node list
 			Source::Variable(name) => typed.get(name).copied().or_else(|| globals.get(name).map(|(_, list)| Some(list.element))).unwrap_or(Some(ElementType::Node)),
-			Source::Converted => Some(ElementType::Node),
+			Source::Converted { .. } => Some(ElementType::Node),
 			Source::Other => return Err(()),
 		};
 		match (agreed, element) {
@@ -296,7 +343,7 @@ impl WasmGcEmitter {
 	fn source_of(&self, target: &str, value: &Node) -> Source {
 		match self.number_source_of(target, value) {
 			// not a tuple `(1, 2)` or an object `{a:1}`, whose brackets a typed list would lose
-			Source::Other if self.get_type(value) == Kind::List && !is_tuple_or_object(value) => Source::Converted,
+			Source::Other if self.get_type(value) == Kind::List && !is_tuple_or_object(value) => Source::Converted { fresh: super::list_abi::called_function(value).is_some() },
 			source => source,
 		}
 	}
@@ -323,8 +370,9 @@ impl WasmGcEmitter {
 
 	/// The list variables of the current body that can be typed arrays: locals of kind List that are only ever assigned
 	/// int (float) literal lists, the empty list, numbers appended to themselves or other such variables, never updated
-	/// by an operator (`xs += …`), not captured by a function, no global, not assigned inside a `try`; a float list only
-	/// ever gets floats by index. Any other use reads them as Nodes, so it stays correct.
+	/// by another operator (`xs -= …`), not captured by a function, no global, not assigned inside a `try`; a float list
+	/// only ever gets floats by index. Lists are shared (P200b): a list some holder keeps as Nodes stays Nodes once it
+	/// changes (list_sharing.rs). Any other use reads them as Nodes, so it stays correct.
 	pub(super) fn find_typed_lists(&self, program: &Node) -> HashMap<String, TypedList> {
 		let mut sources: HashMap<String, Vec<Source>> = HashMap::new();
 		let mut excluded: HashSet<String> = HashSet::new();
@@ -340,8 +388,18 @@ impl WasmGcEmitter {
 						declared_floats.insert(name.clone());
 					}
 					sources.entry(name.clone()).or_default().push(self.source_of(name, value));
+					if super::list_sharing::changes_in_place(value) {
+						updated.insert(name.clone());
+					}
 				}
-				Node::Symbol(name) if is_update(op) => { excluded.insert(name.clone()); }
+				Node::Symbol(name) if *op == Op::AddAssign && extended_items(value).is_some() => {
+					let items = extended_items(value).expect("guarded");
+					sources.entry(name.clone()).or_default().push(Source::Append(self.items_element(items).unwrap_or(ElementType::Node)));
+				}
+				Node::Symbol(name) if is_update(op) => {
+					excluded.insert(name.clone());
+					updated.insert(name.clone());
+				}
 				Node::Key(list, Op::Hash, index) if matches!(op, Op::Assign | Op::Define) || is_update(op) => {
 					let Node::Symbol(name) = list.drop_meta() else { return };
 					if self.map_key(index).is_some() || self.dynamic_key(index).is_some() {
@@ -369,6 +427,39 @@ impl WasmGcEmitter {
 				updated.insert(name.clone());
 			}
 		}
+		let groups = alias_groups(&sources);
+		let group_updated = |name: &String| groups.get(name).is_some_and(|group| group.iter().any(|member| updated.contains(member)));
+		let held = super::list_sharing::held_elsewhere(program, &self.ctx.user_functions);
+		loop {
+			let typed = self.typed_list_elements(&sources, &excluded, &declared_floats, &assigned_kinds);
+			// a changing list is no typed array where a holder keeps it as Nodes: an untyped variable or one of another
+			// element type holding the same list, a field or a call's argument it came from or goes to
+			let element_of = |name: &String| typed.get(name).copied().flatten().or_else(|| self.typed_globals.get(name).map(|(_, list)| list.element));
+			let shared_as_nodes = |name: &String| held.contains(name) || (group_updated(name) && (
+				groups[name].iter().any(|member| element_of(member).is_none() || element_of(member) != element_of(name))
+				|| sources[name].iter().any(|source| matches!(source, Source::Converted { fresh: false }))));
+			let parted: Vec<String> = typed.keys().filter(|name| shared_as_nodes(name)).cloned().collect();
+			if parted.is_empty() {
+				// a Node list pays a conversion wherever it is used as a whole: worth it for one that is indexed or counted, and
+				// for one appended to (map, filter), which as cons cells walks the whole list per append
+				let indexed = indexed_lists(program);
+				let appended = |name: &String| sources[name].iter().any(|source| matches!(source, Source::Append(_)));
+				return typed.into_iter()
+					.filter(|(name, element)| *element != Some(ElementType::Node) || indexed.contains(name) || appended(name))
+					.filter_map(|(name, element)| {
+						let list = TypedList { element: element?, updated: group_updated(&name), aliased: groups[&name].len() > 1 };
+						Some((name, list))
+					})
+					.collect();
+			}
+			excluded.extend(parted);
+		}
+	}
+
+	/// The element type of each list variable that can be a typed array, `None` while only variables of yet unknown
+	/// type feed it
+	fn typed_list_elements(&self, sources: &HashMap<String, Vec<Source>>, excluded: &HashSet<String>, declared_floats: &HashSet<String>,
+		assigned_kinds: &HashMap<String, Vec<Kind>>) -> HashMap<String, Option<ElementType>> {
 		// a variable first assigned ø and appended to only in a branch (`out = ø; … if c {out = out + [x]}`) has the kind ø
 		let appended = |name: &String| sources[name].iter().any(|source| matches!(source, Source::Append(_)));
 		let is_list_local = |name: &String| self.scope.lookup(name).is_some_and(|local| !local.is_param && (local.kind == Kind::List || (local.kind == Kind::Empty && appended(name))));
@@ -400,16 +491,9 @@ impl WasmGcEmitter {
 				}
 			}
 			if !changed {
-				break;
+				return typed;
 			}
 		}
-		// a Node list pays a conversion wherever it is used as a whole: worth it for one that is indexed or counted, and for
-		// one appended to (map, filter), which as cons cells copies the whole list per append
-		let indexed = indexed_lists(program);
-		typed.into_iter()
-			.filter(|(name, element)| *element != Some(ElementType::Node) || indexed.contains(name) || appended(name))
-			.filter_map(|(name, element)| Some((name.clone(), TypedList { element: element?, updated: updated.contains(&name) })))
-			.collect()
 	}
 
 	/// Push what the typed capture global of main's typed list `name` takes: the array, a copy when main changes it later,
@@ -711,14 +795,10 @@ impl WasmGcEmitter {
 		}
 		let runtime = list.element.runtime();
 		match value.drop_meta() {
+			// the one list both variables hold (P200b)
 			Node::Symbol(_) if self.typed_list(value).is_some_and(|(_, source)| source.element == list.element) => {
-				let (source_slot, source_list) = self.typed_list(value).expect("guarded");
+				let (source_slot, _) = self.typed_list(value).expect("guarded");
 				func.instruction(&source_slot.get());
-				let source_name = value.drop_meta().name();
-				let moved = self.moved_lists.iter().any(|(owner, temporary)| (owner == name && *temporary == source_name) || (temporary == name && *owner == source_name));
-				if (list.updated || source_list.updated) && !moved {
-					self.emit_call(func, runtime.copy);
-				}
 			}
 			_ if zero_fill_parts(value).is_some() => {
 				let (count, zero) = zero_fill_parts(value).expect("guarded");
@@ -726,13 +806,14 @@ impl WasmGcEmitter {
 				self.emit_element_value(func, zero, list.element);
 				self.emit_call(func, runtime.filled);
 			}
+			// `xs = xs + [v]`: a new list, unless no other variable holds this one
 			Node::Key(_, Op::Add, appended) if matches!(self.number_source_of(name, value), Source::Append(_)) => {
 				let Node::List(items, _, _) = appended.drop_meta() else { unreachable!("find_typed_lists admits only appended lists") };
 				func.instruction(&slot.get());
-				for item in items {
-					self.emit_element_value(func, item, list.element);
-					self.emit_call(func, runtime.push);
+				if list.aliased {
+					self.emit_call(func, runtime.copy);
 				}
+				self.emit_typed_pushes(func, items, list.element);
 			}
 			Node::Empty => self.emit_typed_list_of(func, &[], list.element),
 			Node::List(items, Bracket::Square, _) if self.number_source_of(name, value).is_literal() || items.is_empty() => {
@@ -751,6 +832,23 @@ impl WasmGcEmitter {
 		}
 		slot.tee(func);
 		true
+	}
+
+	/// `xs += [a b]` of a typed list: the items pushed onto its array in place, leaving the list. False for any other
+	pub(super) fn emit_typed_list_extend(&mut self, func: &mut Function, name: &str, items: &[Node]) -> bool {
+		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
+		func.instruction(&slot.get());
+		self.emit_typed_pushes(func, items, list.element);
+		slot.tee(func);
+		true
+	}
+
+	/// Push each item onto the typed list on the stack, leaving the list
+	fn emit_typed_pushes(&mut self, func: &mut Function, items: &[Node], element: ElementType) {
+		for item in items {
+			self.emit_element_value(func, item, element);
+			self.emit_call(func, element.runtime().push);
+		}
 	}
 
 	/// A new typed list of `items`
@@ -772,6 +870,13 @@ impl WasmGcEmitter {
 		let Node::Key(target, Op::Assign | Op::Define, value) = statement.drop_meta() else { return None };
 		let Node::Symbol(name) = target.drop_meta() else { return None };
 		(self.typed_list(target).is_some() || self.typed_maps.contains(name) || self.typed_structs.contains_key(name)).then(|| (name.clone(), value.as_ref().clone()))
+	}
+
+	/// The variable and items of `xs += [a b]` on a typed list variable
+	pub(super) fn typed_list_extension(&self, statement: &Node) -> Option<(String, Vec<Node>)> {
+		let Node::Key(target, Op::AddAssign, value) = statement.drop_meta() else { return None };
+		let Node::Symbol(name) = target.drop_meta() else { return None };
+		self.typed_list(target).and(extended_items(value)).map(|items| (name.clone(), items.to_vec()))
 	}
 
 	/// Push a typed list variable as the Node list it stands for; false for any other variable
