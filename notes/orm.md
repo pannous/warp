@@ -16,6 +16,7 @@ bo.age += 1                            // UPDATE people SET age = 31 WHERE id = 
 - `name: [C] = database.t` with C a class of the program registers table t for C. `database.t` without a class list
   stays what it is today: one value under the key t of the key-value store (lowering/stored_values.rs).
 - `indexedDB.t` is the same (the alias of `database`).
+- `stored people: [Person]` is the short form of `people: [Person] = database.people` (user, 2026-10-08).
 - The schema comes from C's layout:
   - one column per field: int → INTEGER, float and quantities → REAL in the field's unit, text → TEXT, bool → INTEGER
     0/1;
@@ -40,8 +41,8 @@ written through: `bo.age += 1` is an UPDATE of that row.
 - An impure function in a filter is a loud error (a query may run it any number of times).
 - Backends without application functions (IndexedDB) push down what they can (key/index ranges) and filter the rest
   in memory: same results, the speed differs.
-- Bare field names (`people where age > 20`, as SQL writes it) are open: warp's `where` demands `it.age` today, loudly
-  (question for the Interviewer).
+- Bare field names (P223, user): `people where age > 20` is `it.age > 20` when the element class has the field and no
+  variable age is in scope; a variable in scope wins with a warning. Not implemented yet (`it.age` works).
 
 ## Loading: the smart default
 - A table and every `where`/`sorted by`/`#a..b` on it is a **query**, not loaded. A query loads when the program reads
@@ -67,8 +68,17 @@ written through: `bo.age += 1` is an UPDATE of that row.
 | a lossy change (float → int, text → int) | a loud error naming the column and both types |
 | a rename | the field's meta `@was: old_name` renames the column (RENAME COLUMN); without it, it reads as add + remove |
 
+## How step 1 works
+- lowering/database_tables.rs (a source pass before class_methods): the registered class gets `id: int = 0`; the
+  registration becomes `[Person(row#2, row#3, row#1) for row in std_io("table", "open", [t, schema, file])]`;
+  `people.add(p)` adds and then sets `p.id` from `std_io("table", "insert", …)`; after each `v.f op= e` of a column f:
+  `if v is C and v.id > 0 { std_io("table", "update", …) }`.
+- src/database.rs: the SQLite C API through libloading (the system's libsqlite3, ffi/link.rs get_or_load_library), one
+  connection per file and thread, `:memory:` for inline code. An added column takes the field's default, else the
+  type's zero. A changed column type is a loud error for now (step 7). Browser: `std_io("table", …)` is an error.
+
 ## Steps
-1. **Prototype, native, eager** (this branch):
+1. **Prototype, native, eager** (done: lowering/database_tables.rs, src/database.rs, tests/control/test_database_tables.rs):
    - registration, schema and the implicit id;
    - add and field updates written through;
    - migrations for added/removed columns;
