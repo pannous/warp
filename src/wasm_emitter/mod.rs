@@ -908,8 +908,7 @@ impl WasmGcEmitter {
 		let params: Vec<ValType> = type_def.fields.iter().map(|f| field_def_to_val_type(f, self)).collect();
 
 		// Function type: (params...) -> (ref $TypeName)
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(params.clone(), vec![Ref(type_ref)]);
+		let func_type = self.type_manager.function_type(params.clone(), vec![Ref(type_ref)]);
 		self.functions.function(func_type);
 
 		// Function body: get all params, struct.new
@@ -1142,8 +1141,7 @@ impl WasmGcEmitter {
 		self.next_temp_local = var_count; // Temp locals start after variables
 
 		let node_ref = self.node_ref(false);
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(vec![], vec![Ref(node_ref)]);
+		let func_type = self.type_manager.function_type(vec![], vec![Ref(node_ref)]);
 		self.functions.function(func_type);
 
 		// Build locals list based on variable types

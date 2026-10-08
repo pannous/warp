@@ -14,8 +14,7 @@ impl WasmGcEmitter {
 		locals: Vec<ValType>,
 		body: impl FnOnce(&mut Self, &mut Function),
 	) -> u32 {
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(params, results);
+		let func_type = self.type_manager.function_type(params, results);
 		self.functions.function(func_type);
 		let mut func = Function::new(locals.into_iter().map(|t| (1, t)).collect::<Vec<_>>());
 		body(self, &mut func);

@@ -178,9 +178,8 @@ impl WasmGcEmitter {
 
 	/// `f$list(a, b) -> [a b]`: registered right after `f`, compiled right after its body (same order in both passes)
 	pub(super) fn register_tuple_packer(&mut self, function: &str, kinds: &[Kind]) {
-		let packer_type = self.type_manager.types().len();
 		let (values, node) = (self.tuple_result_types(kinds), ValType::Ref(self.node_ref(false)));
-		self.type_manager.types_mut().ty().function(values, vec![node]);
+		let packer_type = self.type_manager.function_type(values, vec![node]);
 		self.functions.function(packer_type);
 		self.tuple_packers.insert(function.to_string(), self.next_func_idx);
 		self.next_func_idx += 1;
