@@ -26,6 +26,14 @@ const SKIPPED_MEMBERS: [&str; 6] = ["const", "iterable", "maplike", "setlike", "
 /// Words before a member that do not change its name or arguments
 const QUALIFIERS: [&str; 7] = ["static", "stringifier", "getter", "setter", "deleter", "inherit", "readonly"];
 const VARIADIC: &str = "...";
+/// WebIDL's primitive types as warp's (the typedefs among them as their spec defines them: DOMHighResTimeStamp is a
+/// double, EpochTimeStamp an unsigned long long)
+const PRIMITIVE_TYPES: [(&[&str], &str); 4] = [
+	(&["DOMString", "USVString", "ByteString", "CSSOMString"], "text"),
+	(&["boolean"], "bool"),
+	(&["byte", "octet", "short", "unsigned short", "long", "unsigned long", "long long", "unsigned long long", "EpochTimeStamp"], "int"),
+	(&["float", "unrestricted float", "double", "unrestricted double", "DOMHighResTimeStamp"], "float"),
+];
 
 #[derive(Clone, Debug)]
 pub struct Argument {
@@ -38,8 +46,13 @@ pub struct Argument {
 #[derive(Clone, Debug)]
 pub enum Member {
 	Attribute(String),
-	/// each overload's arguments
-	Operation(Vec<Vec<Argument>>),
+	Operation(Vec<Overload>),
+}
+
+#[derive(Clone, Debug)]
+pub struct Overload {
+	pub returns: String,
+	pub arguments: Vec<Argument>,
 }
 
 #[derive(Default)]
@@ -100,6 +113,20 @@ pub fn attribute_interface(interface: &str, member: &str) -> Option<String> {
 	definitions().contains_key(type_name).then(|| type_name.to_string())
 }
 
+/// The warp type of what `member` gives (read, or called when `call`), when WebIDL declares a value that is always one:
+/// a text for DOMString, a bool, an int or a float; None for anything else, a nullable type (ø) included
+pub fn result_type(interface: &str, member: &str, call: bool) -> Option<&'static str> {
+	let declared = match (members_of(interface).remove(member)?, call) {
+		(Member::Attribute(type_name), false) => type_name,
+		(Member::Operation(overloads), true) => {
+			let returns: Vec<String> = overloads.into_iter().map(|overload| overload.returns).collect();
+			returns.iter().all(|other| *other == returns[0]).then(|| returns[0].clone())?
+		}
+		_ => return None,
+	};
+	PRIMITIVE_TYPES.iter().find(|(names, _)| names.contains(&declared.as_str())).map(|(_, warp_type)| *warp_type)
+}
+
 /// `path.member` of a value of `interface` (path as the program writes it: `navigator.clipboard`)
 pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usize>) -> Result<(), String> {
 	let mut members = members_of(interface);
@@ -110,8 +137,8 @@ pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usiz
 	};
 	match (declared, call) {
 		(Member::Attribute(type_name), Some(_)) => Err(format!("{path}.{member} is an attribute ({type_name}), read without a call: {path}.{member}")),
-		(Member::Operation(overloads), Some(count)) if !overloads.iter().any(|arguments| takes(arguments, count)) => {
-			let forms: Vec<String> = overloads.iter().map(|arguments| format!("{member}({})", signature(arguments))).collect();
+		(Member::Operation(overloads), Some(count)) if !overloads.iter().any(|overload| takes(&overload.arguments, count)) => {
+			let forms: Vec<String> = overloads.iter().map(|overload| format!("{member}({})", signature(&overload.arguments))).collect();
 			Err(format!("{path}.{member} takes {}, not {count} argument{}", forms.join(" or "), if count == 1 { "" } else { "s" }))
 		}
 		_ => Ok(()),
@@ -185,11 +212,11 @@ fn add_member(members: &mut BTreeMap<String, Member>, source: &str) {
 	let source = words.join(" ");
 	match source.find('(') {
 		Some(open) if !source[..open].contains("attribute ") => {
-			let Some((_, name)) = typed_name(&source[..open]) else { return }; // a nameless getter
+			let Some((returns, name)) = typed_name(&source[..open]) else { return }; // a nameless getter
 			let close = source.rfind(')').unwrap_or(source.len());
 			let arguments = split_top_level(&source[open + 1..close], ',').iter().filter_map(|argument| parse_argument(argument)).collect();
 			match members.entry(name).or_insert_with(|| Member::Operation(vec![])) {
-				Member::Operation(overloads) => overloads.push(arguments),
+				Member::Operation(overloads) => overloads.push(Overload { returns, arguments }),
 				Member::Attribute(_) => {}
 			}
 		}
