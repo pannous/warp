@@ -41,12 +41,24 @@ theorem number_sub_arithTy {t : Ty} (b : Ty) (ht : sub .number t = true) : sub .
   · rfl
   · simp at hj; exact absurd (sub_trans ht hj.1) (by decide)
 
+theorem repeat_typed {Γ n tn} (s : String) (hn : HasType P Γ n tn) :
+    ∃ t', HasType P Γ (repeatValues s n) t' ∧ sub t' (repeatTy .text tn) = true ∧ sub t' (repeatTy tn .text) = true := by
+  unfold repeatValues
+  split
+  · rename_i k hk
+    cases n <;> simp [asInt] at hk <;> cases hn <;> exact ⟨_, .text, by decide, by decide⟩
+  · exact ⟨_, .error, sub_never _, sub_never _⟩
+
 -- the brute-force case split over operand values needs more than the default budget
 set_option maxHeartbeats 1000000 in
 /-- `-`, `*`, `%`, `/` and `^` on values: a number of a type below `op.ty`, or an error -/
 theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
     (vb : b.isValue = true) : ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (op.ty ta tb) = true := by
   unfold arithValues
+  split
+  · cases ha; obtain ⟨t', h, s, _⟩ := repeat_typed _ hb; exact ⟨t', h, s⟩
+  · cases hb; obtain ⟨t', h, _, s⟩ := repeat_typed _ ha; exact ⟨t', h, s⟩
+  unfold arithValues.numberValues
   split
   · exact ⟨_, .error, sub_never _⟩
   split

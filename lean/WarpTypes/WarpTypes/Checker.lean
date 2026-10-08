@@ -22,6 +22,12 @@ def callable : Ty → Bool
   | .fn _ | .never | .any => true
   | _ => false
 
+/-- a whole number, or a value of unknown type (checked when it runs) -/
+def wholeNumber (t : Ty) : Bool := sub t .int || t == .any
+
+/-- what `*` repeats statically: a text times a whole number, in either order (P1) -/
+def repeats (a b : Ty) : Bool := (textual a && wholeNumber b) || (wholeNumber a && textual b)
+
 def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
@@ -41,7 +47,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _ => none
   | .arith op a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some ta, some tb => if numeric ta && numeric tb then some (op.ty ta tb) else none
+    | some ta, some tb => if (numeric ta && numeric tb) || (op == .mul && repeats ta tb) then some (op.ty ta tb) else none
     | _, _ => none
   | .lt a b =>
     match typeOf P Γ a, typeOf P Γ b with

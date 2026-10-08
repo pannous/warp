@@ -327,6 +327,53 @@ theorem arithTy_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = tr
   rw [ite_eq_right y']
   exact arith_mono ha hb
 
+/-- the result of `*`: a text times a whole number (either order) repeats the text (P1), numbers multiply -/
+def repeatTy (a b : Ty) : Ty :=
+  if a = never ∨ b = never then never
+  else if a = any ∨ b = any then any
+  else if (a = text ∧ sub b number) ∨ (sub a number ∧ b = text) then text
+  else arith a b
+
+/-- above a number other than `never`, below `any`: a number -/
+theorem sub_number_up {b b' : Ty} (h : sub b' number = true) (hb : sub b' b = true) (ny : b ≠ any) (nn : b' ≠ never) :
+    sub b number = true := by
+  cases b' <;> cases b <;> simp_all [sub]
+
+theorem repeatTy_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true) :
+    sub (repeatTy a' b') (repeatTy a b) = true := by
+  unfold repeatTy
+  by_cases n' : a' = never ∨ b' = never
+  · rw [ite_eq_left n']; exact sub_never _
+  rw [ite_eq_right n']
+  have n : ¬(a = never ∨ b = never) := by
+    rintro (rfl | rfl)
+    · exact n' (.inl (sub_to_never ha))
+    · exact n' (.inr (sub_to_never hb))
+  rw [ite_eq_right n]
+  by_cases y : a = any ∨ b = any
+  · rw [ite_eq_left y]; exact sub_any _
+  rw [ite_eq_right y]
+  have y' : ¬(a' = any ∨ b' = any) := by
+    rintro (rfl | rfl)
+    · exact y (.inl (sub_from_any ha))
+    · exact y (.inr (sub_from_any hb))
+  rw [ite_eq_right y']
+  simp only [not_or] at n n' y y'
+  -- a text side stays a text side when widened (only `any` is above text), and a number side stays a number
+  have widened : (a' = text ∧ sub b' number = true) ∨ (sub a' number = true ∧ b' = text) →
+      (a = text ∧ sub b number = true) ∨ (sub a number = true ∧ b = text) := by
+    rintro (⟨rfl, hn⟩ | ⟨hn, rfl⟩)
+    · exact .inl ⟨(sub_from_text ha).resolve_right y.1, sub_number_up hn hb y.2 n'.2⟩
+    · exact .inr ⟨sub_number_up hn ha y.1 n'.1, (sub_from_text hb).resolve_right y.2⟩
+  have narrowed : (a = text ∧ sub b number = true) ∨ (sub a number = true ∧ b = text) →
+      (a' = text ∧ sub b' number = true) ∨ (sub a' number = true ∧ b' = text) := by
+    rintro (⟨rfl, hn⟩ | ⟨hn, rfl⟩)
+    · exact .inl ⟨(sub_to_text ha).resolve_left n'.1, sub_trans hb hn⟩
+    · exact .inr ⟨sub_trans ha hn, (sub_to_text hb).resolve_left n'.2⟩
+  by_cases r' : (a' = text ∧ sub b' number = true) ∨ (sub a' number = true ∧ b' = text)
+  · rw [if_pos r', if_pos (widened r')]; exact sub_refl _
+  · rw [if_neg r', if_neg (fun r => r' (narrowed r))]; exact arith_mono ha hb
+
 theorem plus_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true) :
     sub (plus a' b') (plus a b) = true := by
   unfold plus

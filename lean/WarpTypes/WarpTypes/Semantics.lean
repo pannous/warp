@@ -127,7 +127,17 @@ def isNumber : Expr → Bool
   | .bool _ | .int _ | .num _ => true
   | _ => false
 
+/-- `"ab" * 3`, `3 * "ab"`: the text n times (none for n ≤ 0), P1 -/
+def repeatValues (s : String) (n : Expr) : Expr :=
+  match asInt n with
+  | some k => .text (String.join (List.replicate k.toNat s))
+  | none => .error "a text repeats a whole number of times"
+
 def arithValues (op : ArithOp) (a b : Expr) : Expr :=
+  match op, a, b with
+  | .mul, .text s, n | .mul, n, .text s => repeatValues s n
+  | _, _, _ => numberValues op a b
+where numberValues (op : ArithOp) (a b : Expr) : Expr :=
   if !(isNumber a && isNumber b) then .error "not a number" else
   if (op == .mod || op == .div) && asNumber b == 0 then .error "divide by zero" else
   match asInt a, asInt b with

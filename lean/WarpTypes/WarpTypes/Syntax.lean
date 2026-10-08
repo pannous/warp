@@ -37,12 +37,16 @@ theorem ArithOp.widen_mono (op : ArithOp) {a a' : Ty} (h : Ty.sub a' a = true) :
     Ty.sub (op.widen a') (op.widen a) = true := by
   cases op <;> simp only [widen] <;> first | exact h | exact Ty.join_mono h (Ty.sub_refl _)
 
-/-- the result type of an arithmetic operation -/
-def ArithOp.ty (op : ArithOp) (a b : Ty) : Ty := Ty.arithTy (op.widen a) b
+/-- the result type of an arithmetic operation: `*` also repeats a text -/
+def ArithOp.ty : ArithOp → Ty → Ty → Ty
+  | .mul, a, b => Ty.repeatTy a b
+  | op, a, b => Ty.arithTy (op.widen a) b
 
 theorem ArithOp.ty_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true) (hb : Ty.sub b' b = true) :
-    Ty.sub (op.ty a' b') (op.ty a b) = true :=
-  Ty.arithTy_mono (op.widen_mono ha) hb
+    Ty.sub (op.ty a' b') (op.ty a b) = true := by
+  cases op
+  case mul => exact Ty.repeatTy_mono ha hb
+  all_goals exact Ty.arithTy_mono (ArithOp.widen_mono _ ha) hb
 
 inductive Expr where
   | bool (b : Bool)

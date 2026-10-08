@@ -26,7 +26,7 @@ modes      m ::= var | const | charged
 values     v ::= b | n | q | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
 expr       e ::= v | x                          main-level name (store)
                | y                              local (parameter or let), bound by substitution
-               | e + e | e - e | e * e | e < e | e == e     (`-` and `*` take numbers only; `+` also texts)
+               | e + e | e - e | e * e | e < e | e == e     (`-` takes numbers only; `+` also texts; `*` a text and a whole number)
                | if e then e else e | while e do e | e ; e
                | for y in e { e }               the body once per list item, y the item; gives ø
                | e # e                          1-based element, `xs#1`
@@ -217,7 +217,9 @@ exported as `num 0`; instances). test_warp_computes_what_the_type_model_computes
 - bool-literal-value (P199): `f(b: bool) := b; f(1)` gives 1 (the parameter keeps the int), and the assignment
   expression `x: bool = 1` gives 1 while x holds yes.
 Found on the way: the exporter had mapped `-` and `*` to `+`, so W0 accepted `"a" - 1` and `f(n - 1)` recursed upward.
-W0 now has `arith op a b`, which takes numbers only. Its ops are `-`, `*`, `%`, `/` and `^`. Two ints give an int,
+W0 now has `arith op a b`. It takes numbers only, except that `*` repeats a text a whole number of times in either order
+(P1: `"ab"*3` and `3*"ab"` are "ababab", a count of 0 or less gives ""). That is typed by `repeatTy`: a text side and a
+number side give text, and the checker admits text with an int or `any`. Its ops are `-`, `*`, `%`, `/` and `^`. Two ints give an int,
 except that `/` of a non-divisor and `^` with a negative exponent give a number. That is why `ArithOp.widen` types the
 left side of `/` and `^` as at least number. W0 rejects `x: int = 2^3` and `x: int = 6/2`. warp compiles them and checks
 for a whole number when they run. This is stricter than warp, never unsound, so such programs stay out of the corpus.
