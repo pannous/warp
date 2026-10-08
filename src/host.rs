@@ -17,7 +17,7 @@ const HOST_ALIASES: [(&str, Option<usize>, &str); 2] = [("download", None, "fetc
 
 /// The words of the program's environment, imported from the "host" module and called like C functions (ffi.rs);
 /// sleep, random, random_below and clock need no compiler and live in warp-runtime (runtime/src/host_words.rs)
-pub use warp_runtime::host_words::{CLOCK, EXIT, FILE_HANDLER_PREFIX, HOST_LIBRARY, SIGNAL_WATCH, INTERRUPT_HANDLER, RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_POLL, SLEEP, SYSTEM_VALUE, CLIPBOARD_TEXT, NOTIFY, GPU_COMPUTE, PAGE_PATH, TIMER_HANDLER_PREFIX, FETCH_HANDLER_PREFIX};
+pub use warp_runtime::host_words::{CLOCK, EXIT, FILE_HANDLER_PREFIX, HOST_LIBRARY, SIGNAL_WATCH, INTERRUPT_HANDLER, RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_POLL, SLEEP, SYSTEM_VALUE, CLIPBOARD_TEXT, NOTIFY, GPU_COMPUTE, GPU_RENDER, PAGE_PATH, TIMER_HANDLER_PREFIX, FETCH_HANDLER_PREFIX};
 /// `go f(x)` on a thread (tasks.rs): task_spawn(function name, up to four Int arguments) → task id, task_await(id) → result
 pub const TASK_SPAWN: &str = "task_spawn";
 pub const TASK_AWAIT: &str = "task_await";
@@ -105,16 +105,16 @@ pub const CHANNEL_WORDS: [&str; 5] = ["channel_new", "channel_put", "channel_tak
 pub const TASK_WORDS: [&str; 16] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
 	TASK_INSIDE, SIGNAL_SEND, CHANNEL_WORDS[0], CHANNEL_WORDS[1], CHANNEL_WORDS[2], CHANNEL_WORDS[3], CHANNEL_WORDS[4]];
 /// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
-pub const VALUE_GIVING_WORDS: [&str; 12] = [GPU_COMPUTE, FETCH_REPLY, RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE, CHANNEL_NEXT, CLIPBOARD_TEXT, PAGE_PATH, CHANNEL_WORDS[2], STD_PURE, STD_IO, SERVE_ROUTES];
-pub const HOST_WORDS: [&str; 55] = [GPU_COMPUTE, FETCH_START, FETCH_REPLY, SERVE_ROUTES, STD_PURE, STD_IO, CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, CLIPBOARD_TEXT, NOTIFY, PAGE_PATH, GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, RANDOM_SEED, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
+pub const VALUE_GIVING_WORDS: [&str; 13] = [GPU_COMPUTE, GPU_RENDER, FETCH_REPLY, RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE, CHANNEL_NEXT, CLIPBOARD_TEXT, PAGE_PATH, CHANNEL_WORDS[2], STD_PURE, STD_IO, SERVE_ROUTES];
+pub const HOST_WORDS: [&str; 56] = [GPU_COMPUTE, GPU_RENDER, FETCH_START, FETCH_REPLY, SERVE_ROUTES, STD_PURE, STD_IO, CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, CLIPBOARD_TEXT, NOTIFY, PAGE_PATH, GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, RANDOM_SEED, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
 	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_WRITES, SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2],
 	CHANNEL_WORDS[0], CHANNEL_WORDS[1], CHANNEL_WORDS[2], CHANNEL_WORDS[3], CHANNEL_WORDS[4]];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 55] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 56] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(GPU_COMPUTE, vec![node, node, I64], vec![node]), (FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (PAGE_PATH, vec![], vec![node]), (NOTIFY, vec![node], vec![]), (CHANNEL_SEND, vec![node, node], vec![]),
+	[(GPU_COMPUTE, vec![node, node, I64], vec![node]), (GPU_RENDER, vec![node, I64, I64, node], vec![node]), (FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (PAGE_PATH, vec![], vec![node]), (NOTIFY, vec![node], vec![]), (CHANNEL_SEND, vec![node, node], vec![]),
 		(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (RANDOM_SEED, vec![I64], vec![]), (CLOCK, vec![], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_DAILY, vec![I64, I64, I64], vec![]), (SIGNAL_AT, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (SYSTEM_VALUE, vec![I32], vec![I64]), (EXIT, vec![I64], vec![]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
@@ -465,6 +465,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, PAGE_PATH, page_path)?;
 	linker.func_wrap(HOST_LIBRARY, NOTIFY, notify)?;
 	linker.func_wrap(HOST_LIBRARY, GPU_COMPUTE, gpu_compute)?;
+	linker.func_wrap(HOST_LIBRARY, GPU_RENDER, gpu_render)?;
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_SEND, channel_send)?;
 	linker.func_wrap(HOST_LIBRARY, PAINT, paint)?;
 
@@ -833,12 +834,8 @@ fn notify(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Result
 /// `gpu_compute(shader, numbers, workgroups)` through wgpu (src/gpu.rs): the floats the shader left
 #[cfg(feature = "native")]
 fn gpu_compute(mut caller: Caller<'_, HostState>, shader: HostNode, numbers: HostNode, workgroups: i64) -> wasmtime::Result<HostNode> {
-	let failure = |problem: String| wasmtime::Error::new(crate::tasks::TaskFailure(format!("{GPU_COMPUTE}: {problem}")));
-	let shader = match given_node(&mut caller, shader)? {
-		Node::Text(shader) => shader,
-		Node::Char(letter) => letter.to_string(), // a one-letter text reads as a code point
-		other => return Err(failure(format!("the shader is a text of WGSL, got {}", other.serialize()))),
-	};
+	let failure = gpu_failure(GPU_COMPUTE);
+	let shader = given_shader(&mut caller, shader, &failure)?;
 	let numbers = given_node(&mut caller, numbers)?;
 	let floats = numbers.iter().map(|number| match number.drop_meta() {
 		Node::Number(number) => Ok(f64::from(*number) as f32),
@@ -848,6 +845,57 @@ fn gpu_compute(mut caller: Caller<'_, HostState>, shader: HostNode, numbers: Hos
 	let left = crate::gpu::compute(&shader, &floats, workgroups).map_err(failure)?;
 	let left = left.into_iter().map(|float| Node::Number(Number::Float(float as f64))).collect();
 	built_in_program(&mut caller, &Node::List(left, crate::node::Bracket::Square, crate::node::Separator::Space), GPU_COMPUTE)
+}
+
+/// `gpu_render(shader, width, height)` through wgpu (src/gpu.rs): the pixels the fragment shader colored
+#[cfg(feature = "native")]
+fn gpu_render(mut caller: Caller<'_, HostState>, shader: HostNode, width: i64, height: i64, values: HostNode) -> wasmtime::Result<HostNode> {
+	let failure = gpu_failure(GPU_RENDER);
+	let shader = given_shader(&mut caller, shader, &failure)?;
+	let values = shader_values(&given_node(&mut caller, values)?).map_err(&failure)?;
+	let side = |pixels: i64| u32::try_from(pixels).ok().filter(|&pixels| pixels > 0).ok_or_else(|| failure(format!("an image {width}×{height} pixels")));
+	let pixels = crate::gpu::render(&shader, side(width)?, side(height)?, &values).map_err(&failure)?;
+	let pixels = pixels.into_iter().map(|pixel| Node::Number(Number::Int(i64::from(pixel)))).collect();
+	built_in_program(&mut caller, &Node::List(pixels, crate::node::Bracket::Square, crate::node::Separator::Space), GPU_RENDER)
+}
+
+#[cfg(feature = "native")]
+fn gpu_failure(word: &'static str) -> impl Fn(String) -> wasmtime::Error {
+	move |problem| wasmtime::Error::new(crate::tasks::TaskFailure(format!("{word}: {problem}")))
+}
+
+/// gpu_render's values (none when left out): each entry a number or a list of numbers
+#[cfg(feature = "native")]
+fn shader_values(values: &Node) -> Result<Vec<crate::gpu::ShaderValue>, String> {
+	let float = |name: &str, value: &Node| match value.drop_meta() {
+		Node::Number(number) => Ok(f64::from(*number) as f32),
+		other => Err(format!("values.{name} is a number or a list of numbers, got {}", other.serialize())),
+	};
+	// a map of one entry arrives as that key
+	let entries = match values.drop_meta() {
+		Node::Empty => vec![],
+		single @ Node::Key(..) => vec![single.clone()],
+		map => map.iter().collect(),
+	};
+	entries.iter().map(|entry| {
+		let Node::Key(name, _, value) = entry.drop_meta() else { return Err(format!("values is a map of names, got {}", entry.serialize())) };
+		let name = name.drop_meta().name();
+		let floats = match value.drop_meta() {
+			Node::List(items, _, _) => items.iter().map(|item| float(&name, item)).collect::<Result<Vec<f32>, String>>()?,
+			single => vec![float(&name, single)?],
+		};
+		Ok((name, floats))
+	}).collect()
+}
+
+/// The WGSL text of a gpu word's shader
+#[cfg(feature = "native")]
+fn given_shader(caller: &mut Caller<'_, HostState>, shader: HostNode, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<String> {
+	match given_node(caller, shader)? {
+		Node::Text(shader) => Ok(shader),
+		Node::Char(letter) => Ok(letter.to_string()), // a one-letter text reads as a code point
+		other => Err(failure(format!("the shader is a text of WGSL, got {}", other.serialize()))),
+	}
 }
 
 #[cfg(feature = "native")]

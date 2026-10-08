@@ -18,6 +18,9 @@ import functools, http.server, json, os, re, subprocess, sys, threading, time, u
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", "2")
+# the tour's page starts its worker this late (playground.js ?slow_start): a fast machine then meets the races a slow
+# CI runner meets, e.g. "ready" hiding the first example's "running…" (empty value, the failed deploys of 2026-10-08)
+SLOW_START_MS = 2000
 PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
 # one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
 SESSION = f"warp-browser-tests-{os.getpid()}"
@@ -284,7 +287,7 @@ def check_examples(names, page_url=None, site=None):
 		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
 	open_page("about:blank")
 	console = FirefoxConsole() if firefox else ConsoleWatch()  # before the page, so its loading is watched too
-	open_page(page_url)
+	open_page(f"{page_url}{'&' if '?' in page_url else '?'}slow_start={SLOW_START_MS}")
 	wait_for_isolation()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
 	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))

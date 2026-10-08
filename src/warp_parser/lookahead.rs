@@ -415,10 +415,46 @@ impl WarpParser {
 		if items.len() == 1 { items.remove(0) } else { Node::List(items, Bracket::None, Separator::Space) }
 	}
 
+	/// `norm() := …`, `def abs(): …`, `fun sqrt() { … }`: the word `length` characters ahead names what is defined, not
+	/// the operator. A function of that name is refused (analyzer check_operator_word_functions, P141); a method is
+	/// called as `p.norm()` (card class-method-named)
+	fn defines_named(&self, length: usize) -> bool {
+		if self.peek_char(length) != '(' {
+			return false;
+		}
+		let mut depth = 0;
+		let mut offset = length;
+		loop {
+			match self.peek_char(offset) {
+				'(' => depth += 1,
+				')' if depth == 1 => break,
+				')' => depth -= 1,
+				'\0' | '\n' => return false,
+				_ => {}
+			}
+			offset += 1;
+		}
+		let mut next = offset + 1;
+		while matches!(self.peek_char(next), ' ' | '\t') {
+			next += 1;
+		}
+		let defined_by_keyword = || {
+			let before: String = self.chars[..self.pos].iter().rev().skip_while(|c| c.is_whitespace()).take_while(|c| c.is_alphanumeric()).collect();
+			crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
+		};
+		match (self.peek_char(next), self.peek_char(next + 1)) {
+			(':', '=') => true,
+			(':' | '{', _) => defined_by_keyword(),
+			_ => false,
+		}
+	}
+
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	pub(super) fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
 		if self.matches_keyword("while") { return Some((Op::While, 5)); }
-		if let Some((word, op)) = PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word)) { return Some((op, word.len())); }
+		if let Some((word, op)) = PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word)) {
+			return (!self.defines_named(word.len())).then_some((op, word.len()));
+		}
 		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 

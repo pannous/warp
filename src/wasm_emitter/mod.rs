@@ -66,6 +66,8 @@ const FALSY_TEXTS: [&str; 8] = ["", "0", "false", "no", "ø", "nil", "null", "no
 const ENGINE_DIVIDE_BY_ZERO: &str = "integer divide by zero";
 /// The position a diagnostic without a recorded one names (diagnostic::Diagnostic::at)
 const UNKNOWN_POSITION: &str = " at 0:0";
+/// Node locals every function has after its Int scratch: node_scratch and container_scratch (globals.rs)
+const NODE_SCRATCH_LOCALS: u32 = 2;
 /// What `use { memory, table } from "env"` imports instead of defining: the linear memory and a function table
 pub const MEMORY_ENTITY: &str = "memory";
 pub const TABLE_ENTITY: &str = "table";
@@ -1151,7 +1153,7 @@ impl WasmGcEmitter {
 		}
 		self.int_scratch = var_count + temp_locals;
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
-		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
+		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
 
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, node, 0);

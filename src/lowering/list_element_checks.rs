@@ -99,6 +99,11 @@ impl ElementChecks {
 					None => Node::Key(target, op, Box::new(value)),
 				}
 			}
+			// `xs += ys` of a declared list stores `xs + ys`, checked as that assignment
+			Node::Key(target, Op::AddAssign, value) if matches!(target.drop_meta(), Node::Symbol(name) if self.declared_test(name).is_some()) => {
+				let sum = Node::Key(target.clone(), Op::Add, value);
+				self.lower(Node::Key(target, Op::Assign, Box::new(sum)))
+			}
 			Node::Key(list, Op::Dot, call) => {
 				let append = Node::Key(list, Op::Dot, call);
 				if appended_items(&append).is_none() {

@@ -17,6 +17,7 @@ const PENDING_VALUE = "…"; // the value shown from Run until the new one arriv
 const DEFAULT_EXAMPLE = "hello";
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
+const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
@@ -131,7 +132,12 @@ function showAgain(topic) {
 
 function startWorker() {
 	workerWarmed = false;
-	worker = new Worker(debugBuild ? `worker.js?compiler=${DEBUG_COMPILER}` : "worker.js");
+	const options = new URLSearchParams();
+	if (debugBuild) options.set("compiler", DEBUG_COMPILER);
+	// test_in_browser.py --examples: a worker that starts as late as on a slow CI runner
+	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
+	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
+	worker = new Worker(options.size ? `worker.js?${options}` : "worker.js");
 	workerReady = new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
@@ -150,7 +156,8 @@ function startWorker() {
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
-	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
+	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
+	workerReady.then(() => showing || setStatus("ready"), failure => setStatus(failure.message, true));
 	tellSystemValues();
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });

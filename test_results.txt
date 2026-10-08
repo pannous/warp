@@ -162,6 +162,8 @@ PASSED:
   ✓ control::test_for_over_a_number::a_for_loop_over_a_number_is_a_compile_error
   ✓ control::test_for_underscore::a_loop_over_underscore_runs
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
+  ✓ control::test_function_body::a_field_named_body_wins
+  ✓ control::test_function_body::a_functions_body_is_its_code_as_data
   ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
   ✓ control::test_go_blocks::a_function_starting_a_task_is_no_getter
   ✓ control::test_go_blocks::a_go_block_does_not_hold_up_the_program
@@ -749,6 +751,7 @@ PASSED:
   ✓ functions::test_broadcasting::a_broadcast_inside_a_library_word_and_a_lambda_variable
   ✓ functions::test_broadcasting::a_function_of_several_values_broadcasts_over_its_list_argument
   ✓ functions::test_broadcasting::a_range_broadcasts_like_a_list
+  ✓ functions::test_broadcasting::broadcasting_composes_with_chaining_and_pipelines
   ✓ functions::test_broadcasting::julia_dot_call_broadcasts
   ✓ functions::test_broadcasting::library_words_and_math_operators_broadcast
   ✓ functions::test_broadcasting::max_and_min_without_parentheses
@@ -1034,6 +1037,9 @@ PASSED:
   ✓ functions::test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
   ✓ functions::test_operator_arguments::a_word_operator_alone_stays_a_name
   ✓ functions::test_operator_arguments::an_operator_argument_is_the_operator
+  ✓ functions::test_operator_word_methods::a_function_keyword_definition_of_an_operator_word_is_refused
+  ✓ functions::test_operator_word_methods::a_method_named_like_an_operator_word_is_called
+  ✓ functions::test_operator_word_methods::the_operator_word_stays_an_operator_elsewhere
   ✓ functions::test_optional_parameters::a_missing_optional_argument_is_empty
   ✓ functions::test_optional_parameters::coalescing_keeps_zero_and_false
   ✓ functions::test_optional_parameters::maybe_marks_an_optional_parameter
@@ -1222,6 +1228,7 @@ PASSED:
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
   ✓ lists::test_byte_size::byte_size_counts_bytes_and_size_counts_elements
   ✓ lists::test_captured_call_lists::a_captured_list_of_float_calls_holds_floats
+  ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_counting_word_variables::a_counting_word_variable_in_a_list_is_an_item
   ✓ lists::test_counting_word_variables::shared_values_named_like_counting_words_reach_a_go_block
   ✓ lists::test_decimal_list_elements::a_decimal_element_can_be_assigned
@@ -1439,6 +1446,8 @@ PASSED:
   ✓ lists::test_unpacking::unpack_text
   ✓ lists::test_unpacking::unpack_tuple_function
   ✓ lists::test_unpacking::unpack_tuple_values
+  ✓ lists::test_unpacking_declared::unpacking_checks_declared_types
+  ✓ lists::test_unpacking_into_existing::unpacking_assigns_names_that_hold_numbers
   ✓ lists::test_where_filter::a_where_condition_of_a_bare_word_suggests_the_field
   ✓ lists::test_where_filter::a_where_condition_without_it_is_an_error
   ✓ lists::test_where_filter::where_filters_by_it
@@ -2050,6 +2059,12 @@ PASSED:
   ✓ operators::test_postfix_words::an_operator_word_without_operand_is_a_function
   ✓ operators::test_root_word::a_defined_root_wins
   ✓ operators::test_root_word::root_is_sqrt
+  ✓ operators::test_rough_similarity::a_class_method_serves_both_operators_when_only_one_is_defined
+  ✓ operators::test_rough_similarity::a_class_with_both_methods_keeps_them_apart
+  ✓ operators::test_rough_similarity::a_class_without_the_methods_compares_field_by_field_roughly
+  ✓ operators::test_rough_similarity::rough_lists_compare_their_items_roughly
+  ✓ operators::test_rough_similarity::rough_numbers_are_within_one_percent
+  ✓ operators::test_rough_similarity::rough_texts_ignore_surrounding_whitespace_and_punctuation
   ✓ operators::test_structural_equality::a_float_equals_the_same_exact_number
   ✓ operators::test_structural_equality::a_switch_chooses_a_case_by_the_same_equality
   ✓ operators::test_structural_equality::a_text_never_equals_a_number
@@ -3041,6 +3056,7 @@ PASSED:
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_keys_on_the_engine_settings
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_recompiles_a_damaged_entry
   ✓ wasm::test_compiled_module_cache::test_gc_engine_is_shared
+  ✓ wasm::test_component_exports::a_components_exports_and_dir
   ✓ wasm::test_component_worlds::a_built_component_is_used_by_another_program
   ✓ wasm::test_component_worlds::a_component_calls_what_its_world_imports
   ✓ wasm::test_component_worlds::a_component_declaration_does_nothing_at_run_time
@@ -3314,7 +3330,11 @@ PASSED:
   ✓ web::test_web_server::a_server_function_is_called_over_http
   ✓ web::test_web_server::serve_answers_routes
   ✓ web::test_webgpu::a_compute_shader_runs_over_the_numbers
+  ✓ web::test_webgpu::a_fragment_shader_reads_the_values_given
+  ✓ web::test_webgpu::a_fragment_shader_renders_the_pixels
+  ✓ web::test_webgpu::a_render_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_shader_that_does_not_compile_says_where
+  ✓ web::test_webgpu::a_value_that_is_no_number_says_so
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
   ✓ welcoming::test_braceless_call_argument::an_operator_in_a_braceless_argument_warns_with_both_readings
@@ -3501,6 +3521,7 @@ PASSED:
   ✓ welcoming::test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
   ✓ welcoming::test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
   ✓ welcoming::test_hint_positions::a_lowering_hint_names_its_node
+  ✓ welcoming::test_index_hint_numbers::only_a_number_index_gets_the_hash_hint
   ✓ welcoming::test_index_hint_simple::only_a_simple_index_gets_the_hash_hint
   ✓ welcoming::test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns
   ✓ welcoming::test_it_shadow_warning::a_loop_it_still_shadows_the_function_it
@@ -3662,4 +3683,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3657 passed, 0 failed, 3657 total tested
+19 ignored, 3678 passed, 0 failed, 3678 total tested

@@ -290,10 +290,16 @@ def addable (t : Ty) : Bool := sub t number || sub t text || t == any
 /-- what `-`, `*` and `<` take statically: numbers and a dynamic value -/
 def numeric (t : Ty) : Bool := sub t number || t == any
 
-/-- the result of `+`: `never` when a side raises, dynamic when a side is, a text when a side is a text, a number
-type otherwise -/
+/-- a list type -/
+def isListTy : Ty → Bool
+  | list _ => true
+  | _ => false
+
+/-- the result of `+`: `never` when a side raises, dynamic when a side is, two lists' concatenation a list of their
+elements' join, a text when a side is a text, a number type otherwise -/
 def plus (a b : Ty) : Ty :=
   if a = never ∨ b = never then never else if a = any ∨ b = any then any
+  else if (isListTy a && isListTy b) = true then list (join ((element a).getD any) ((element b).getD any))
   else if a = text ∨ b = text then text else arith a b
 
 /-- the result of `-` and `*`: dynamic when a side is -/
@@ -337,6 +343,26 @@ theorem plus_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true)
     · exact y (.inl (sub_from_any ha))
     · exact y (.inr (sub_from_any hb))
   rw [ite_eq_right y']
+  by_cases l : (isListTy a && isListTy b) = true
+  · obtain ⟨x, rfl⟩ : ∃ x, a = list x := by cases a <;> simp [isListTy] at l ⊢
+    obtain ⟨z, rfl⟩ : ∃ z, b = list z := by cases b <;> simp [isListTy] at l ⊢
+    rcases sub_to_list ha with h | ⟨x', rfl, hx⟩
+    · exact absurd (.inl h) n'
+    rcases sub_to_list hb with h | ⟨z', rfl, hz⟩
+    · exact absurd (.inr h) n'
+    simp only [isListTy, Bool.and_self, if_true, element, Option.getD_some, sub_list]
+    exact join_mono hx hz
+  have l' : ¬(isListTy a' && isListTy b') = true := by
+    intro h'
+    apply l
+    obtain ⟨x', rfl⟩ : ∃ x, a' = list x := by cases a' <;> simp [isListTy] at h' ⊢
+    obtain ⟨z', rfl⟩ : ∃ z, b' = list z := by cases b' <;> simp [isListTy] at h' ⊢
+    rcases sub_from_list ha with h | ⟨x, rfl, _⟩
+    · exact absurd (.inl h) y
+    rcases sub_from_list hb with h | ⟨z, rfl, _⟩
+    · exact absurd (.inr h) y
+    rfl
+  rw [if_neg l, if_neg l']
   by_cases t : a = text ∨ b = text
   · rw [ite_eq_left t]
     have t' : a' = text ∨ b' = text := by
