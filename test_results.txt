@@ -79,6 +79,8 @@ PASSED:
   ✓ control::test_do_block::do_still_joins_a_while_condition_with_its_body
   ✓ control::test_each_colon::a_range_do_walks_it
   ✓ control::test_each_colon::each_and_all_with_a_colon_walk_the_list
+  ✓ control::test_emit_operands::an_emit_is_an_operand
+  ✓ control::test_emit_operands::an_emitted_value_is_the_handlers_number
   ✓ control::test_empty_block::a_program_that_is_only_an_empty_block_is_empty
   ✓ control::test_empty_block::an_empty_block_inside_a_statement_is_a_value
   ✓ control::test_empty_block_binding::a_bound_empty_block_counts_zero
@@ -156,6 +158,9 @@ PASSED:
   ✓ control::test_go_blocks::go_blocks_fill_a_job_list
   ✓ control::test_go_blocks::lines_printed_by_tasks_stay_whole
   ✓ control::test_go_blocks::sleep_takes_a_duration
+  ✓ control::test_handler_globals::a_handler_assigns_an_emitted_value_to_a_global
+  ✓ control::test_handler_globals::a_handler_writes_an_annotated_global
+  ✓ control::test_handler_globals::an_int_given_empty_fails_when_it_happens
   ✓ control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
   ✓ control::test_if_empty_branch::a_branch_printing_a_number_gives_empty
@@ -611,6 +616,9 @@ PASSED:
   ✓ ffi::test_host_words::test_a_program_prints_and_uses_the_host
   ✓ ffi::test_host_words::test_clock_and_sleep
   ✓ ffi::test_host_words::test_random_stays_in_range
+  ✓ ffi::test_js_callbacks::a_promise_is_awaited_natively
+  ✓ ffi::test_js_callbacks::a_warp_function_called_back_calls_javascript_in_the_page
+  ✓ ffi::test_js_callbacks::a_warp_function_is_called_back_by_javascript
   ✓ ffi::test_libc_results::atol_returns_a_long
   ✓ ffi::test_libc_results::comment_prose_in_a_header_declares_nothing
   ✓ ffi::test_libc_results::libc_text_and_character_functions
@@ -819,6 +827,8 @@ PASSED:
   ✓ functions::test_effects::test_imports_follow_effects
   ✓ functions::test_empty_call::a_name_and_a_group_stay_symbols_and_defined_calls_run
   ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
+  ✓ functions::test_empty_function_bodies::a_function_with_an_empty_body_leaves_the_program_alone
+  ✓ functions::test_empty_function_bodies::calling_a_function_with_an_empty_body_gives_empty
   ✓ functions::test_event_effects::a_block_handler_handles_its_event
   ✓ functions::test_event_effects::a_declared_effect_set_reports_an_unhandled_event
   ✓ functions::test_event_effects::an_emitted_event_is_a_named_effect
@@ -1945,6 +1955,8 @@ PASSED:
   ✓ operators::test_structural_equality::struct_instances_compare_by_their_fields
   ✓ operators::test_structural_equality::the_entry_order_of_an_object_does_not_matter
   ✓ operators::test_structural_equality::variables_holding_structures_compare_by_value
+  ✓ operators::test_suffix_power_places::a_field_or_element_squares
+  ✓ operators::test_suffix_power_places::a_root_takes_the_squared_place
   ✓ operators::test_superscript_operator_declarations::test_prefix_operator_on_a_superscript_sign
   ✓ operators::test_superscript_operator_declarations::test_short_declaration_without_the_operator_word
   ✓ operators::test_superscript_operator_declarations::test_suffix_operator_on_a_superscript_digit
@@ -2483,6 +2495,8 @@ PASSED:
   ✓ types::test_bool_assign::a_bool_variable_refuses_other_kinds
   ✓ types::test_bool_assign::a_bool_variable_takes_bools_and_an_int_variable_takes_a_bool
   ✓ types::test_bool_assign::one_and_zero_are_yes_and_no_everywhere
+  ✓ types::test_bool_literal_value::a_function_giving_its_bool_parameter_gives_a_bool
+  ✓ types::test_bool_literal_value::an_assignment_to_a_bool_gives_a_bool
   ✓ types::test_bool_type::a_bool_of_unknown_static_type_is_tested_at_run_time
   ✓ types::test_bool_type::a_list_starting_with_a_bool_is_a_list
   ✓ types::test_bool_type::a_literal_bool_counts_in_arithmetic
@@ -3508,4 +3522,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3503 passed, 0 failed, 3503 total tested
+19 ignored, 3517 passed, 0 failed, 3517 total tested

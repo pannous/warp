@@ -141,11 +141,6 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 
 /// Programs both accept whose values differ, each with its card
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
-	("x: bool = 1", "bool-literal-value"),
-	("x: bool = 0; x = 1", "bool-literal-value"),
-	("f(b: bool) := b; f(1)", "bool-literal-value"),
-	("b = true; b = 1", "bool-literal-value"),
-	("level: int = 0; on alarm { level = 7 }; emit alarm; level", "handler-annotated"),
 	("y: any = \"a\"; x: int = 0; x = y; x", "int-unchecked"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep

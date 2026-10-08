@@ -6,6 +6,8 @@
 //! runtime's message. A value without a JSON form stays in its runtime behind an id, a handle: it crosses as the record
 //! `{$handle: 7, type: "date", text: "datetime.date(2020, 1, 2)"}` and is that object again when it comes back, as an
 //! argument or as the receiver of `d.isoformat()` (the module position). Handles live until warp ends.
+//! A warp function given as an argument crosses as `{$warp_function: 0}`, its index among the call's functions; node
+//! calls it back with the line `{callback: 0, arguments: […]}` and waits for its `{value}` or `{error}` (card js-callbacks).
 
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
@@ -13,6 +15,7 @@ use crate::operators::Op;
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::cell::Cell;
 use std::sync::Mutex;
 
 /// A runtime: its name in `use <runtime> …`, the variable naming its interpreter, the default interpreter, and how it
@@ -33,6 +36,14 @@ const INTERPRETERS: [Interpreter; 2] = [
 const BIG_INTEGER_KEY: &str = "$int";
 /// A codepoint (a WIT `char`, P94), which JSON would make a text: `{"$char": "b"}`
 pub const CODEPOINT_KEY: &str = "$char";
+/// A warp function among a call's arguments: `{"$warp_function": 0}`
+pub const WARP_FUNCTION_KEY: &str = "$warp_function";
+/// How a call's warp functions are called back: by their index, with the arguments the runtime gave them as a list
+pub type Callback<'a> = &'a mut dyn FnMut(usize, Node) -> Result<Node, String>;
+thread_local! {
+	/// Is a warp function being called back here: it cannot call foreign code itself (the runtime waits for its answer)
+	static CALLING_BACK: Cell<bool> = const { Cell::new(false) };
+}
 /// The request loop the child runs: {"module", "member", "arguments"} → {"value"} or {"error"}
 const FOREIGN_PYTHON_LOOP: &str = include_str!("../web/playground/foreign_python.py");
 
@@ -41,7 +52,8 @@ const FOREIGN_JS_LOOP: &str = r#"
 const handles = [];
 const handle = value => (handles.push(value), { "$handle": handles.length, type: value?.constructor?.name ?? typeof value, text: String(value).slice(0, 200) });
 const unplain = value => Array.isArray(value) ? value.map(unplain)
-	: value !== null && typeof value === "object" ? ("$handle" in value ? handles[value.$handle - 1] : Object.fromEntries(Object.entries(value).map(([key, item]) => [key, unplain(item)])))
+	: value !== null && typeof value === "object" ? ("$handle" in value ? handles[value.$handle - 1] : "$warp_function" in value ? warpFunction(value.$warp_function)
+		: Object.fromEntries(Object.entries(value).map(([key, item]) => [key, unplain(item)])))
 	: value;
 const plain = value => {
 	if (typeof value === "bigint") return value >= -(2n ** 63n) && value < 2n ** 63n ? Number(value) : { "$int": value.toString() };
@@ -59,11 +71,31 @@ const operator = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a 
 // `use js self` / `use js window`: node mirrors a page, its global object is globalThis
 const load = async name => name === "operator" ? operator : name === "self" || name === "window" ? globalThis : name in globalThis ? globalThis[name] : (() => { try { return require(name); } catch (failure) { return import(name); } })();
 // the answers own stdout: what a module prints (console.log) goes to stderr
-const reply = process.stdout.write.bind(process.stdout);
+const reply = answer => require("fs").writeSync(1, JSON.stringify(answer) + "\n");
 process.stdout.write = process.stderr.write.bind(process.stderr);
-let pending = Promise.resolve();
-require("readline").createInterface({ input: process.stdin }).on("line", line => {
-	pending = pending.then(async () => {
+// stdin read synchronously, so a warp function called back answers before the JavaScript calling it goes on
+const decoder = new (require("string_decoder").StringDecoder)("utf8");
+let buffered = "";
+const readLine = () => {
+	const chunk = Buffer.alloc(65536);
+	while (!buffered.includes("\n")) {
+		let count;
+		try { count = require("fs").readSync(0, chunk, 0, chunk.length, null); } catch (failure) { if (failure.code === "EAGAIN") continue; throw failure; }
+		if (count === 0) return null;
+		buffered += decoder.write(chunk.subarray(0, count));
+	}
+	const line = buffered.slice(0, buffered.indexOf("\n"));
+	buffered = buffered.slice(line.length + 1);
+	return line;
+};
+const warpFunction = index => (...values) => {
+	reply({ callback: index, arguments: values.map(plain) });
+	const answer = JSON.parse(readLine());
+	if ("error" in answer) throw new Error(answer.error);
+	return unplain(answer.value);
+};
+(async () => {
+	for (let line; (line = readLine()) !== null;) {
 		const request = JSON.parse(line);
 		let answer;
 		try {
@@ -81,9 +113,9 @@ require("readline").createInterface({ input: process.stdin }).on("line", line =>
 		} catch (failure) {
 			answer = { error: failure instanceof Error ? failure.name + ": " + failure.message : String(failure) };
 		}
-		reply(JSON.stringify(answer) + "\n");
-	});
-});
+		reply(answer);
+	}
+})();
 "#;
 
 struct Runtime {
@@ -97,7 +129,7 @@ static RUNNING: Mutex<Vec<(&'static str, Runtime)>> = Mutex::new(Vec::new());
 
 /// `runtime.module.member(arguments…)`, or the member itself when it is no call, as a Node; `module` is a module's name
 /// or a handle
-pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments: &Node) -> Result<Node, String> {
+pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments: &Node, callback: Callback) -> Result<Node, String> {
 	let arguments = match arguments.drop_meta() {
 		_ if !is_call => Value::Null,
 		Node::Empty => Value::Array(vec![]),
@@ -115,8 +147,7 @@ pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments
 		handle => (handle.serialize(), json_of(handle)),
 	};
 	let request = serde_json::json!({"module": module_json, "member": member, "arguments": arguments});
-	let answer = exchange(interpreter, &request.to_string()).map_err(|failure| format!("{runtime}: {failure}"))?;
-	let answer: Value = serde_json::from_str(&answer).map_err(|failure| format!("{runtime} answered no JSON: {failure}"))?;
+	let answer = exchange(interpreter, &request.to_string(), callback).map_err(|failure| format!("{runtime}: {failure}"))?;
 	match (answer.get("value"), answer.get("error")) {
 		(_, Some(Value::String(error))) => Err(format!("{runtime} {module}.{member}: {error}")),
 		(Some(value), _) => Ok(node_of(value)),
@@ -140,21 +171,36 @@ fn component_call(module: &Node, member: &str, arguments: &Value) -> Result<Node
 	result.map(|value| node_of(&value)).map_err(|failure| format!("wasm {receiver}: {failure}"))
 }
 
-/// One request line out, one answer line back; the child is started on first use and again after it ended
-fn exchange(interpreter: &'static Interpreter, request: &str) -> Result<String, String> {
+/// One request line out, one answer line back, each callback line before it answered; the child is started on first
+/// use and again after it ended
+fn exchange(interpreter: &'static Interpreter, request: &str, callback: Callback) -> Result<Value, String> {
+	if CALLING_BACK.get() {
+		return Err("a warp function it calls back cannot call foreign code itself yet".into());
+	}
 	let mut running = RUNNING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	if !running.iter().any(|(runtime, _)| *runtime == interpreter.runtime) {
 		running.push((interpreter.runtime, start(interpreter)?));
 	}
 	let index = running.iter().position(|(runtime, _)| *runtime == interpreter.runtime).expect("started");
 	let child = &mut running[index].1;
-	let mut answer = String::new();
-	let sent = writeln!(child.input, "{request}").and_then(|_| child.input.flush());
-	if sent.is_err() || child.output.read_line(&mut answer).map_err(|failure| failure.to_string())? == 0 {
-		running.remove(index);
-		return Err("the interpreter ended".into());
+	let mut line = request.to_string();
+	loop {
+		let mut answer = String::new();
+		let sent = writeln!(child.input, "{line}").and_then(|_| child.input.flush());
+		if sent.is_err() || child.output.read_line(&mut answer).map_err(|failure| failure.to_string())? == 0 {
+			running.remove(index);
+			return Err("the interpreter ended".into());
+		}
+		let answer: Value = serde_json::from_str(&answer).map_err(|failure| format!("answered no JSON: {failure}"))?;
+		let Some(function) = answer.get("callback").and_then(Value::as_u64) else { return Ok(answer) };
+		CALLING_BACK.set(true);
+		let result = callback(function as usize, node_of(answer.get("arguments").unwrap_or(&Value::Null)));
+		CALLING_BACK.set(false);
+		line = match result {
+			Ok(value) => serde_json::json!({"value": json_of(&value)}),
+			Err(failure) => serde_json::json!({"error": failure}),
+		}.to_string();
 	}
-	Ok(answer)
 }
 
 fn start(interpreter: &Interpreter) -> Result<Runtime, String> {

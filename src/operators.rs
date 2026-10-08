@@ -5,6 +5,10 @@ use serde::{Deserialize, Serialize};
 pub const FUNCTION_KEYWORDS: [&str; 6] = ["fun", "fn", "def", "define", "function", "func"];
 /// Right binding power of `as`: higher than every infix operator, so the target type is a single atom
 pub const TYPE_OPERAND_BP: u8 = 250;
+/// Left binding power of the suffix operators ² ³ ++ --: below `.` (180) and `#` (170), above `^` (160)
+const SUFFIX_BP: u8 = 165;
+/// Right binding power of the prefix operators √ ∛ abs: between ^ (160) and the suffix operators (SUFFIX_BP)
+const PREFIX_BP: u8 = 162;
 
 /// Unicode spellings of operators (wiki/alias.md): glyph, operator and the canonical spelling the style hints suggest.
 /// One table for the lexer and the hints; the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`.
@@ -141,10 +145,9 @@ impl Op {
 	/// Prefix operators: (0, right_bp) - only binds to right
 	pub const fn binding_power(&self) -> (u8, u8) {
 		match self {
-			// Suffix operators (bind very tight to left, no right operand)
-			Op::Square | Op::Cube => (200, 0),
-			// below member access and indexing: `xs#1++`, `bags#1.n++` change the whole place, not its index or field name
-			Op::Inc | Op::Dec => (165, 0),
+			// Suffix operators (no right operand), below member access and indexing: `xs#1++`, `bags#1.n++` change the
+			// whole place and `p.x²` squares it, not its index or field name
+			Op::Square | Op::Cube | Op::Inc | Op::Dec => (SUFFIX_BP, 0),
 
 			// Member access (tightest infix)
 			Op::Dot | Op::SafeDot => (180, 181),
@@ -212,8 +215,9 @@ impl Op {
 			Op::ModAssign | Op::PowAssign | Op::AndAssign | Op::OrAssign |
 			Op::XorAssign => (60, 59),
 
-			// Prefix operators (no left operand, binds to right)
-			Op::Sqrt | Op::Cbrt | Op::Abs => (0, 190),
+			// Prefix operators (no left operand, binds to right): looser than a suffix power (√x² is √(x²)) and member
+			// access (√p.x is √(p.x)), tighter than ^ (√x^2 is (√x)^2)
+			Op::Sqrt | Op::Cbrt | Op::Abs => (0, PREFIX_BP),
 			// Unary minus binds weaker than power: -2^2 → -(2^2)
 			Op::Neg => (0, 155),
 

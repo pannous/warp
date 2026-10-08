@@ -10,7 +10,7 @@ mod values;
 mod big_int;
 pub mod cells;
 mod closures;
-pub use closures::{CLOSURE_CAPTURED, CLOSURE_REBUILD};
+pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 pub(crate) mod exact;
 mod constructors;
 pub use constructors::NEW_BOOL;

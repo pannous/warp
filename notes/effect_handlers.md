@@ -27,3 +27,10 @@ Lowering (src/lowering/scoped_handlers.rs, before event_signals):
 - program-wide handlers do not discharge it: f still emits ask, main handles it
 - `f := … ! Pure` reports an unhandled emitted event like any other effect; a declared `! ask` allows it
 - Lean phase 4 (warp-94) models the same: effect rows of names, handled = removed
+
+## Emit as an operand (card emit-operand)
+- `x = 1 + emit ask`, `3 * emit ask + 1`: the parser (try_parse_emit) makes `emit <words>{data}` one operand, the
+  same Space list a statement `emit ask` is; its words bind like a unary minus operand, so `+ 1` stays outside
+- `emit` and `send` only; `emit = 3`, `emit(x)` and `emit + 1` keep `emit` a name (P165 soft keyword); a word operator after the event (`send alarm{} to "x"`) keeps the old
+  shape, the operator's operands inside the phrase
+- a program-wide handler's value is its last statement's (body statements spliced, not a one-item block `{42}`)

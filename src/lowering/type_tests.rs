@@ -19,6 +19,8 @@ pub const NODE_KIND_IN: &str = "node_kind_in";
 pub const NODE_TYPE_NAME: &str = "node_type_name";
 /// `x is error`: any value may turn out an Error at run time, so this test always reads the kind (card catch-message)
 pub const ERROR_TYPE: &str = "error";
+/// The type of ø, as type(ø) names it; unit, nil … are its aliases (canonical_spec_word)
+pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const LIST_WORD: &str = "list";
 /// `x is pair`: a `key: value` pair
@@ -27,7 +29,7 @@ const OF_WORD: &str = "of";
 pub const TYPE_WORD: &str = "type";
 
 /// Words that name the same type
-fn canonical_spec_word(word: &str) -> &str {
+pub(crate) fn canonical_spec_word(word: &str) -> &str {
 	match word {
 		"integer" | "long" | "i64" | "i32" => "int",
 		"str" | "string" => "text",
@@ -36,6 +38,7 @@ fn canonical_spec_word(word: &str) -> &str {
 		"exact" => "rational",
 		"pair" => "key",
 		"boolean" => "bool",
+		"unit" | "nil" | "ø" | "none" | "null" | "void" => EMPTY_TYPE,
 		other => other,
 	}
 }
@@ -77,6 +80,7 @@ pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
 		"symbol" => vec![Kind::Symbol],
 		"key" => vec![Kind::Key],
 		ERROR_TYPE => vec![Kind::Error],
+		EMPTY_TYPE => vec![Kind::Empty],
 		_ => return None,
 	};
 	Some(kinds.iter().fold(0, |mask, kind| mask | 1 << (*kind as i64)))
@@ -121,6 +125,7 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 		(LIST_WORD, []) => Some(LIST_WORD.to_string()),
 		(PAIR_WORD, []) => Some(canonical_spec_word(PAIR_WORD).to_string()),
 		(ERROR_TYPE, []) => Some(ERROR_TYPE.to_string()),
+		(word, []) if canonical_spec_word(word) == EMPTY_TYPE => Some(EMPTY_TYPE.to_string()),
 		(LIST_WORD, [of, element @ ..]) if *of == OF_WORD => Some(format!("{LIST_WORD} of {}", type_spec(element, shadowed)?)),
 		(word, []) => match plural_element_type(word) {
 			Some(element) => Some(format!("{LIST_WORD} of {}", canonical_spec_word(element))),

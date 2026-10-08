@@ -167,7 +167,7 @@ pub fn lower(program: Node) -> Node {
 	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
 	let lowered = statements.into_iter().enumerate().filter_map(|(index, statement)| match first_handler.get(&index) {
-		Some(name) => Some(function_with_globals(&handler_function_name(name), reads_event(&bodies[name]), &each_its_event(&bodies[name]), &main_variables)),
+		Some(name) => Some(function_with_globals(&handler_function_name(name), reads_event(&bodies[name]), &each_its_event(&bodies[name]).iter().flat_map(statements_of).collect::<Vec<_>>(), &main_variables)),
 		None if handler_lines.contains(&index) => None,
 		None => Some(statement),
 	});
@@ -642,6 +642,15 @@ pub(crate) fn global_declarations(bodies: &[Node], main_variables: &HashSet<Stri
 	mentioned.iter().map(|name| global_declaration(name)).collect()
 }
 
+/// The statements of a block, so the function's value is its last one's, not a one-item block; `{emit ask}` holds the words of its one statement
+pub(crate) fn statements_of(block: &Node) -> Vec<Node> {
+	match block.drop_meta() {
+		Node::List(words, Bracket::Curly, Separator::Space) if words.len() > 1 => vec![Node::List(words.clone(), Bracket::None, Separator::Space)],
+		Node::List(statements, Bracket::Curly, _) => statements.clone(),
+		other => vec![other.clone()],
+	}
+}
+
 /// `global name`, built rather than parsed: a generated name (`users·loading`) parses as a product
 pub(crate) fn global_declaration(name: &str) -> Node {
 	crate::law::substitute(&parse(&format!("global {TEMPLATE_NAME}")), &HashMap::from([(TEMPLATE_NAME.to_string(), Node::Symbol(name.to_string()))]))
@@ -754,11 +763,13 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 	}
 }
 
-/// The variables the main level assigns (`n = 0`, `n += 1`)
+/// The variables the main level assigns (`n = 0`, `n += 1`, `n: int = 0`)
 pub(crate) fn main_level_variables(statements: &[Node]) -> HashSet<String> {
 	statements.iter().filter_map(|statement| match statement.drop_meta() {
 		Node::Key(target, op, _) if *op == Op::Assign || op.is_compound_assign() => match target.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
+			// `level: int = 0`
+			Node::Key(name, Op::Colon, _) => matches!(name.drop_meta(), Node::Symbol(_)).then(|| word(name)),
 			_ => None,
 		},
 		_ => None,

@@ -611,12 +611,69 @@ fn foreign_call(mut caller: Caller<'_, HostState>, runtime: Option<wasmtime::Roo
 	let failure = |message: String| wasmtime::Error::new(TaskFailure(message));
 	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("foreign_call: the module exports no memory".into())) };
 	let mut store = caller.as_context_mut();
+	let functions = function_arguments(&mut store, arguments)?;
 	let [runtime, module, member, call, arguments] = [runtime, module, member, call, arguments].map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
-	let answer = crate::foreign::call(&runtime.name(), &module, &member.name(), call == 1, &arguments).map_err(failure)?;
-	let value = TaskValue::of(&answer).map_err(|problem| failure(problem.to_string()))?;
+	let arguments = with_function_markers(arguments, &functions);
 	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
+	let mut callback = |index: usize, values: Node| -> Result<Node, String> {
+		let Some(Extern::Func(apply)) = caller.get_export(crate::wasm_emitter::CLOSURE_APPLY) else { return Err("the module exports no closure_apply".into()) };
+		let function = functions.iter().flatten().nth(index).copied().ok_or(format!("no warp function {index}"))?;
+		let values = TaskValue::of(&values).and_then(|values| builders.build(&values, &mut caller.as_context_mut())).map_err(|problem| problem.to_string())?;
+		let mut result = [Val::AnyRef(None)];
+		apply.call(&mut caller, &[Val::AnyRef(Some(function)), values], &mut result).map_err(|trap| trap.root_cause().to_string())?;
+		given_node(&mut caller, result[0].unwrap_anyref().copied()).map_err(|problem| problem.to_string())
+	};
+	let answer = crate::foreign::call(&runtime.name(), &module, &member.name(), call == 1, &arguments, &mut callback).map_err(failure)?;
+	let value = TaskValue::of(&answer).map_err(|problem| failure(problem.to_string()))?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
 	Ok(built.unwrap_anyref().copied())
+}
+
+/// A foreign call's arguments, the list's items or the one argument, each a closure or None
+#[cfg(feature = "native")]
+fn function_arguments(store: &mut wasmtime::StoreContextMut<'_, HostState>, arguments: HostNode) -> wasmtime::Result<Vec<Option<wasmtime::Rooted<wasmtime::AnyRef>>>> {
+	use crate::wasm_reader::{FIELD_DATA, FIELD_KIND, FIELD_VALUE};
+	use crate::type_kinds::{Kind, KIND_MASK};
+	let node_of = |value: &Val, store: &wasmtime::StoreContextMut<'_, HostState>| value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(store).ok());
+	let kind_of = |node: &wasmtime::StructRef, store: &mut wasmtime::StoreContextMut<'_, HostState>| node.field(&mut *store, FIELD_KIND).map(|kind| (kind.unwrap_i64() & KIND_MASK) as u8);
+	let mut items = vec![];
+	let mut cell = node_of(&Val::AnyRef(arguments), store);
+	match &cell {
+		Some(node) if kind_of(node, store)? == Kind::List as u8 => {}
+		_ => cell = None,
+	}
+	if cell.is_none() {
+		items.extend(arguments.into_iter().map(|argument| Val::AnyRef(Some(argument))));
+	}
+	while let Some(current) = cell {
+		let first = current.field(&mut *store, FIELD_DATA)?;
+		if first.unwrap_anyref().is_some() {
+			items.push(first);
+		}
+		cell = node_of(&current.field(&mut *store, FIELD_VALUE)?, store);
+	}
+	items.iter().map(|item| Ok(match node_of(item, store) {
+		Some(node) if kind_of(&node, store)? == Kind::Function as u8 => item.unwrap_anyref().copied(),
+		_ => None,
+	})).collect()
+}
+
+/// The arguments with each closure `{$warp_function: index}`, its index among the closures (crate::foreign)
+#[cfg(feature = "native")]
+fn with_function_markers(arguments: Node, functions: &[Option<wasmtime::Rooted<wasmtime::AnyRef>>]) -> Node {
+	if functions.iter().all(Option::is_none) {
+		return arguments;
+	}
+	let marker = |index: usize| Node::List(vec![Node::Key(Box::new(Node::Symbol(crate::foreign::WARP_FUNCTION_KEY.into())), crate::operators::Op::Colon, Box::new(Node::int(index as i64)))], crate::node::Bracket::Curly, crate::node::Separator::Space);
+	let mut index = 0;
+	let mut marked = |item: Node, function: &Option<_>| match function {
+		Some(_) => (marker(index), index += 1).0,
+		None => item,
+	};
+	match arguments.drop_meta().clone() {
+		Node::List(items, bracket, separator) if items.len() == functions.len() => Node::List(items.into_iter().zip(functions).map(|(item, function)| marked(item, function)).collect(), bracket, separator),
+		single => marked(single, &functions[0]),
+	}
 }
 
 #[cfg(feature = "native")]
