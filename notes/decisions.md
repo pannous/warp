@@ -23,6 +23,10 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - Effect handlers step 3 (default, warp-e4, word choice): a block handler ends its `on … in` block with `break value`
   (abort via its own WASM tag); return resumes; raise/stop stay errors.
 - Next big topic (user to warp-dc): stdlib-standard, the standard library as importable modules; warp-e4 leads.
+- Reflection streamlined (user to warp-dc, card reflection, warp-70): `dir(x)` from compile time when known, else at
+  run time from the WASM metadata. Words: x.type, x.class, x.fields/attributes/members, x.methods,
+  f.params/signature, f.effects, event.listeners, module.exports, x.unit, x.doc. Lookup order field → meta →
+  reflection. One warp custom section (wasp.meta), kept unstripped.
 - P199 bool slots accept 1 and 0 as yes/no everywhere (variables, fields, list items); other ints and texts are
   errors. Card bool-assign.
 - P200 class instances passed to functions are shared references (like Python/JS). Card instance-field.
