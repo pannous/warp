@@ -12,6 +12,7 @@ mod test_component_short_use;
 mod test_components_anywhere;
 mod test_foreign_js;
 mod test_web_idl;
+mod test_js_callbacks;
 mod test_foreign_handles;
 mod test_foreign_operators;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
