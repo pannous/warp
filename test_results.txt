@@ -2275,6 +2275,8 @@ PASSED:
   ✓ text::test_constant_expression_text::a_constant_expression_converts_by_its_value
   ✓ text::test_constant_expression_text::the_text_of_a_global_is_its_value
   ✓ text::test_count_in::count_occurrences
+  ✓ text::test_count_method::a_defined_count_keeps_its_calls
+  ✓ text::test_count_method::count_as_a_method_or_a_call_of_two
   ✓ text::test_declared_text_one_character::a_declared_text_takes_a_one_character_text
   ✓ text::test_error_as_text::a_text_builtin_of_an_error_fails_with_the_error
   ✓ text::test_guillemet_strings::guillemets_close_with_the_right_one
@@ -3390,4 +3392,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3385 passed, 0 failed, 3385 total tested
+19 ignored, 3387 passed, 0 failed, 3387 total tested
