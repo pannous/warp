@@ -132,7 +132,7 @@ fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 	Some((condition, then_branch))
 }
 
-pub use equality::{IS_TRUTHY, VALUES_EQUAL};
+pub use equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
 pub use config::{EmitterConfig, EmitterConfigBuilder};
 pub use import_manager::ImportManager;
 pub use string_table::StringTable;
@@ -1172,6 +1172,10 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_node_value(&mut self, func: &mut Function, node: &Node) {
+		if let Some(identity) = self.object_identity(node) {
+			self.emit_object_identity(func, identity);
+			return self.emit_call(func, "new_int");
+		}
 		if let Some(equality) = self.identity_as_equality(node) {
 			return self.emit_node_value(func, &equality);
 		}

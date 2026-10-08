@@ -102,3 +102,4 @@ mod test_real_references;
 mod test_optional_list_items;
 mod test_any_into_annotated;
 mod test_copies;
+mod test_same_identity;
