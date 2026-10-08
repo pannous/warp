@@ -29,7 +29,7 @@ None open. Parked (user: "Later"):
   stdlib-standard, module-manager, package-manager. Nobody takes them until the user releases them.
   Released 2026-10-07 (to warp-96): the standard library, including adapters to other standard libraries. Work starts
   as soon as the board's Now/Next columns are practically empty. stdlib-standard is in Soon; module-manager and
-  package-manager stay in Later. Lead: the functions worker (stdlib modules and adapters; decisions P169-P193).
+  package-manager stay in Later. Lead: warp-e4 (functions; stdlib-standard is the next big topic, 2026-10-08; decisions P169-P193).
   Design questions come to the Interviewer, each with a default.
 - Lax versus strict (2026-10-08, P203): annotations make it strict. Unannotated code is lax (Python-like, run-time
   checks); anything annotated is a promise the compiler enforces; `--strict` warns about the lax spots.
