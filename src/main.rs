@@ -44,6 +44,9 @@ const RUNTIME_STUB_VARIABLE: &str = "WARP_RUNTIME_STUB";
 const RUNTIME_STUB_CRATE: &str = "crates/warp-runtime";
 #[cfg(unix)]
 const EXECUTABLE_MODE: u32 = 0o755;
+/// Where a failed standalone build is remembered (one file per program path), so its note shows once per version of
+/// the program and of warp, not on every run
+const STANDALONE_NOTES_CACHE: &str = ".cache/warp/standalone_notes";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
@@ -426,10 +429,28 @@ fn leave_executable(path: &str) {
         return;
     }
     let program_file = std::path::Path::new(path);
+    let marker = standalone_note_marker(program_file);
+    let noted = marker.as_deref().and_then(modified);
+    let warp_binary = env::current_exe().ok().and_then(|binary| modified(&binary));
+    if noted.is_some_and(|noted| Some(noted) >= modified(program_file) && Some(noted) >= warp_binary) {
+        return;
+    }
     let written = diagnostic::quietly(|| warp::modules::with_program_file(program_file, || write_standalone_executable(&load_file(path), path)));
     if let Err(failure) = written {
-        eprintln!("note: no executable {}: {failure}", executable.display());
+        eprintln!("note: no executable {}: {failure} (said once until the file or warp changes)", executable.display());
+        if let Some(marker) = marker {
+            let _ = marker.parent().map(fs::create_dir_all);
+            let _ = fs::write(&marker, failure);
+        }
     }
+}
+
+/// The file remembering that the standalone build of `program` failed: ~/.cache/warp/standalone_notes/<hash of its path>
+fn standalone_note_marker(program: &std::path::Path) -> Option<std::path::PathBuf> {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    fs::canonicalize(program).ok()?.hash(&mut hasher);
+    Some(std::path::PathBuf::from(env::var_os("HOME")?).join(STANDALONE_NOTES_CACHE).join(format!("{:016x}", hasher.finish())))
 }
 
 /// The program, printing its value, compiled to machine code and appended to a copy of the compiler-less `warp-runtime`
