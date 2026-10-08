@@ -1167,9 +1167,22 @@ fn class_items(body: &Node) -> Vec<Node> {
 /// `def area() -> int {…}`, `fun area(): Int {…}`, `func area() {…}`: the method `area() := …` (with its result type)
 fn keyword_method(words: &[Node]) -> Option<Node> {
 	// Kotlin's expression body `fun sum() = x + y` defines as `:=` does; Java's `int sum() {…}` as C's
-	match crate::declarations::keyword_definition(words).or_else(|| crate::declarations::c_function(words))? {
+	match crate::declarations::keyword_definition(words).or_else(|| crate::declarations::c_function(words)).or_else(|| python_method(words))? {
 		Node::Key(head, Op::Assign, body) => Some(Node::Key(head, Op::Define, body)),
 		definition => Some(definition),
+	}
+}
+
+/// Python's `def f(): x + 1` without parameters, which keyword_definition leaves to late_binding outside a class (P71):
+/// in a class body it is the method `f() := x + 1`
+fn python_method(words: &[Node]) -> Option<Node> {
+	let [keyword, definition] = words else { return None };
+	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word));
+	match definition.drop_meta() {
+		Node::Key(head, Op::Colon, body) if is_keyword && matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
+			Some(Node::Key(head.clone(), Op::Define, body.clone()))
+		}
+		_ => None,
 	}
 }
 
