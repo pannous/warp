@@ -15,7 +15,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			}
 		}
 		Node::Text(text) => {
-			if let Some(number) = crate::wasp_parser::number_in_text(text) {
+			if let Some(number) = crate::warp_parser::number_in_text(text) {
 				analyze_required_functions(ctx, &Node::Number(number));
 			}
 		}
@@ -67,7 +67,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				} else {
 					ctx.required_functions.insert("node_index_at");
 					ctx.required_functions.insert("map_get");
-					if let Some(name) = crate::wasp_parser::subscript_key(value).and_then(constant_field_name) {
+					if let Some(name) = crate::warp_parser::subscript_key(value).and_then(constant_field_name) {
 						if name == crate::wasm_emitter::list_ops::MESSAGE_FIELD {
 							ctx.required_functions.insert(crate::wasm_emitter::list_ops::ERROR_MESSAGE);
 						}
@@ -138,6 +138,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				}
 				if fn_name == crate::library_words::FIELD_WITH {
 					ctx.required_functions.extend([crate::library_words::FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL]);
+				}
+				if fn_name == crate::library_words::VALUES_SIMILAR {
+					ctx.required_functions.insert(crate::wasm_emitter::NUMBERS_SIMILAR); // values_similar when needed
 				}
 				if fn_name == crate::library_words::INSTANCE_COPY {
 					ctx.required_functions.insert(crate::library_words::INSTANCE_COPY);

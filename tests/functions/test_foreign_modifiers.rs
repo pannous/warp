@@ -1,5 +1,5 @@
-//! P78 (user 2026-10-05): modifier words of other languages without wasp meaning (`public`, `static`, `virtual` …) are
-//! skipped with the note "public has no meaning in wasp"; `global` and `const` keep their meaning
+//! P78 (user 2026-10-05): modifier words of other languages without warp meaning (`public`, `static`, `virtual` …) are
+//! skipped with the note "public has no meaning in warp"; `global` and `const` keep their meaning
 use warp::diagnostic::take_warnings;
 use crate::is;
 
@@ -7,7 +7,7 @@ use crate::is;
 fn test_meaningless_modifiers_are_skipped_with_a_note() {
 	take_warnings();
 	is!("public static fun f(){3}; f()", 3);
-	assert!(take_warnings().iter().any(|warning| warning.message.contains("public has no meaning in wasp")));
+	assert!(take_warnings().iter().any(|warning| warning.message.contains("public has no meaning in warp")));
 	is!("private x = 4; x + 1", 5);
 	is!("public def g(x){x*2}; g(5)", 10);
 }

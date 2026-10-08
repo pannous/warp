@@ -64,6 +64,7 @@ pub mod stored_values;
 pub mod transitions;
 pub mod undo_history;
 pub mod switch;
+pub mod test_blocks;
 pub mod traits;
 pub mod tuples;
 pub mod type_constructor;

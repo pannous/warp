@@ -6,7 +6,7 @@
 // use extensions::numbers::*;
 
 use crate::node::Node;
-use crate::wasp_parser::parse;
+use crate::warp_parser::parse;
 
 pub mod lists;
 pub mod numbers;

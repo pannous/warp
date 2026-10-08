@@ -96,8 +96,8 @@ pub fn poll_shared(program: Node) -> Node {
 			// the loop's start polls again: the running flag keeps that inner check out
 			let each_write = format!("if {polling} and not {running} {{ {running} = true; while {writes} < {}({name}) {{ {writes} += 1; BODY }}; {running} = false }}", crate::host::SHARED_WRITES);
 			let body = with_value(&body, &subject);
-			checks.push(crate::law::substitute(crate::wasp_parser::parse(&each_write).drop_meta(), &HashMap::from([("BODY".to_string(), body)])));
-			lowered.push(crate::wasp_parser::parse(&format!("{writes} = {}({name})", crate::host::SHARED_WRITES)).drop_meta().clone());
+			checks.push(crate::law::substitute(crate::warp_parser::parse(&each_write).drop_meta(), &HashMap::from([("BODY".to_string(), body)])));
+			lowered.push(crate::warp_parser::parse(&format!("{writes} = {}({name})", crate::host::SHARED_WRITES)).drop_meta().clone());
 			lowered.push(assign(&polling, Node::True));
 			flags.extend([polling, running]);
 			main_variables.extend(flags.iter().cloned().chain([writes]));
@@ -687,7 +687,7 @@ fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
 	let names = [(SET_PLACEHOLDER, SET_FUNCTION), (OLD_PLACEHOLDER, OLD_WORD), (LISTENER_PLACEHOLDER, LISTENER_WORD), (WITHOUT_PLACEHOLDER, WITHOUT_FUNCTION)];
 	let bindings = names.iter().map(|(placeholder, name)| (placeholder.to_string(), Node::Symbol(name.to_string())))
 		.chain(nodes.iter().map(|(placeholder, node)| (placeholder.to_string(), node.clone()))).collect();
-	crate::law::substitute(&crate::wasp_parser::parse(code), &bindings).drop_meta().clone()
+	crate::law::substitute(&crate::warp_parser::parse(code), &bindings).drop_meta().clone()
 }
 
 fn call(function: &str, arguments: Vec<Node>) -> Node {

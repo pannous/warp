@@ -1,4 +1,4 @@
-// The control flow sample (samples/control_flow.wasp) as newcomers write it: a guard `n if n < 0 =>` binds n to the
+// The control flow sample (samples/control_flow.warp) as newcomers write it: a guard `n if n < 0 =>` binds n to the
 // subject and tests the condition (Rust, Scala), an assigned `d = match v {…}` takes `=>` arms and `_` too, and
 // `finally {…}` after `try … catch …` runs either way while the value stays the try's or the catch's
 use crate::is;

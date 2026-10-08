@@ -28,7 +28,7 @@ const COUNTER: &str = "def Counter(start) {\n\tcount = start\n\tdiv{ button{ on 
 
 #[test]
 fn each_instance_of_a_component_has_its_own_state() {
-	let counter = |instance: usize, count: usize| format!("<div><button data-wasp-instance=\"{instance}\" data-wasp-click=\"1\">+</button><p>n {count}</p></div>");
+	let counter = |instance: usize, count: usize| format!("<div><button data-warp-instance=\"{instance}\" data-warp-click=\"1\">+</button><p>n {count}</p></div>");
 	assert_eq!(html_of(&format!("{COUNTER}div{{ Counter(1) Counter(5) }}")), format!("<div>{}{}</div>", counter(1, 1), counter(2, 5)));
 	assert_eq!(html_of(&format!("{COUNTER}Counter(3)")), counter(1, 3));
 }

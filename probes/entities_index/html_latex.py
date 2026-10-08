@@ -1,6 +1,6 @@
 # The uniscript names HTML and LaTeX define differently, with both readings and the one uniscript takes (user decision
 # P198: the LaTeX reading, except for letters with a diacritic, which take the HTML one), as the table of notes/footguns.md.
-# Reads the sources of a uniscript checkout; latex.wasp keeps the LaTeX readings HTML wins over as `// name: "…"` lines.
+# Reads the sources of a uniscript checkout; latex.warp keeps the LaTeX readings HTML wins over as `// name: "…"` lines.
 # Run: python3 probes/entities_index/html_latex.py ~/dev/uniscript
 import glob, re, sys, unicodedata
 
@@ -31,12 +31,12 @@ def shown(text):
 
 
 root = sys.argv[1]
-html = section(f"{root}/data/entities/html.wasp", "html")
+html = section(f"{root}/data/entities/html.warp", "html")
 html_wins = set()
-latex = section(f"{root}/data/entities/latex.wasp", "latex", html_wins)
+latex = section(f"{root}/data/entities/latex.warp", "latex", html_wins)
 # the sections before latex and html win over both (uniscript's own names, then the Unicode names)
-higher = section(f"{root}/data/entities/uniscript.wasp", "uniscript")
-for path in sorted(glob.glob(f"{root}/data/entities/unicode/*.wasp")):
+higher = section(f"{root}/data/entities/uniscript.warp", "uniscript")
+for path in sorted(glob.glob(f"{root}/data/entities/unicode/*.warp")):
 	for key, value in section(path, "names").items():
 		higher.setdefault(key, value)
 differing = sorted((name for name in html.keys() & latex.keys() if html[name] != latex[name]), key=str.lower)

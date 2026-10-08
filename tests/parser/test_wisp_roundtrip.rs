@@ -1,5 +1,5 @@
-// Wisp, wasp's s-expression form (src/wisp_parser.rs), reads back what it writes (user decision P11, code quality 4:
-// "Keep + add a roundtrip test"): wasp → Node → emit_wisp → parse_wisp → the same Node
+// Wisp, warp's s-expression form (src/wisp_parser.rs), reads back what it writes (user decision P11, code quality 4:
+// "Keep + add a roundtrip test"): warp → Node → emit_wisp → parse_wisp → the same Node
 use warp::{emit_wisp, parse, parse_wisp};
 
 const SAMPLES: [&str; 8] = [

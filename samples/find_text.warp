@@ -1,0 +1,2 @@
+// does a text contain another one?
+"warp is fun" contains "fun"

@@ -3,7 +3,7 @@
 
 use crate::node::Node;
 use crate::operators::Op;
-use crate::wasp_parser::WrittenIndex;
+use crate::warp_parser::WrittenIndex;
 use std::collections::HashSet;
 
 pub fn lower(node: Node) -> Node {

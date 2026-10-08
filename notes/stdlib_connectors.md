@@ -22,13 +22,13 @@ access to anything." Card hijack-stdlib. Survey of what exists, options per ecos
 - **Capabilities** (src/effects.rs): Host, Wasi, Ffi, Libm, Sql, Process. `eval` grants Host+Wasi+Ffi+Libm,
   `eval_untrusted` only Libm. Process (`exec sh "…"`) and Sql are granted by no host yet: there is no "allow anything"
   mode.
-- **Packages** (notes/packages.md): `use name` = local `.wasp`, then builtin/FFI library, then the git registry
-  packages.wasp. Package tools are prebuilt wasm32-wasip1 commands.
+- **Packages** (notes/packages.md): `use name` = local `.warp`, then builtin/FFI library, then the git registry
+  packages.warp. Package tools are prebuilt wasm32-wasip1 commands.
 - **AOT** (notes/aot.md): `warp build --exe` links only print, libm and the host words without compiler; a program
   importing FFI libraries is refused at build time. The browser build gets the host word names only.
 
 ## Values crossing
-Wasp data is a superset of JSON (Node::to_json / Node::from_json exist), so every dynamic runtime speaks JSON:
+Warp data is a superset of JSON (Node::to_json / Node::from_json exist), so every dynamic runtime speaks JSON:
 lists ↔ arrays, `{a:1}` ↔ objects, texts, numbers, booleans (1/0), ø ↔ null. Objects without a JSON form (a numpy
 array, a file handle) come back as their text (`repr`) for now. Handles (proxies that stay in the foreign runtime) are
 step 3.
@@ -48,7 +48,7 @@ step 3.
 ## The "access to anything" mode
 - Foreign calls (C, Python, JS) run arbitrary native code: they are the same trust as FFI. They sit under the Ffi
   capability: granted by `eval` and the CLI, refused to `eval_untrusted`.
-- A CLI mode granting Process and Sql too (`warp --allow all file.wasp`, or `--allow process,sql`) is the missing piece
+- A CLI mode granting Process and Sql too (`warp --allow all file.warp`, or `--allow process,sql`) is the missing piece
   for `exec`/`execute`. Queued as a question to warp-08.
 - AOT: `warp build --exe` keeps refusing programs with foreign imports, naming them (as for FFI libraries). The stub
   could link `foreign_call` later (std::process only, no Cranelift).

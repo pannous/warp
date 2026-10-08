@@ -11,7 +11,7 @@ wasmtime 49 nor any browser ships. So two tasks can never hold the same Node.
 
 Consequence: **an instance per task** (an isolate, like a Worker or an Erlang process). Each task runs in its own
 instance of the same compiled module, on its own thread; arguments and results are *copied* between instances. That
-matches wasp's value semantics (index assignment already copies, aliases never change), so it costs no language rule.
+matches warp's value semantics (index assignment already copies, aliases never change), so it costs no language rule.
 
 ## Semantics
 - `job = go f(x)`: starts f(x) in a new instance on a new thread and returns at once with the task.
@@ -33,7 +33,7 @@ matches wasp's value semantics (index assignment already copies, aliases never c
   functions a `go` starts (the program knows them statically: lower_tasks already collects them).
 - Crossing values: a value leaves an instance as bytes and enters the other one rebuilt. Step 1 carries numbers and
   texts (i64, f64, UTF-8 bytes: no parser needed in wasm). Lists and objects need a serializer out (list_text exists)
-  and a reader in: either a runtime wasp reader in wasm, or the host reads the text (wasp_parser) and builds the Node in
+  and a reader in: either a runtime warp reader in wasm, or the host reads the text (warp_parser) and builds the Node in
   the target instance through exported constructors (new_int, new_text, list cons) — the second reuses the host parser
   and gc_traits, and is step 3.
 - Stop and pause: epoch interruption. `Config::epoch_interruption(true)`, each task store gets a deadline; a ticker
@@ -55,7 +55,7 @@ matches wasp's value semantics (index assignment already copies, aliases never c
   declarations::resolve_tasks decides (inferred kinds), src/tasks.rs runs. `await` binds like a unary minus.
 - Step 2 done (2026-10-04): stop/cancel/pause/resume through epoch interruption (util::task_engine, only for modules
   importing the task words, checked by wasmparser before compiling). Awaiting a stopped task is the error
-  `task f: task stopped`, but not yet catchable with `try`: a host function cannot throw the `wasp_error` tag, so the
+  `task f: task stopped`, but not yet catchable with `try`: a host function cannot throw the `warp_error` tag, so the
   wasm side would have to check a failure flag after task_await and call a runtime error function.
 
 - Step 3 done (2026-10-04): numbers, texts, characters, lists and keys of them cross (tasks::TaskValue, rebuilt in

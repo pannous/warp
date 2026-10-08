@@ -17,7 +17,7 @@ use crate::node::Node;
 use serde_json::{json, Map, Value};
 
 /// the attribute naming the component instance an element belongs to (component_state.rs), passed as event.instance
-const INSTANCE_ATTRIBUTE: &str = "data-wasp-instance";
+const INSTANCE_ATTRIBUTE: &str = "data-warp-instance";
 const INSTANCE: &str = "instance";
 const CLICK: &str = "click";
 const INPUT: &str = "input";
@@ -157,7 +157,7 @@ fn add_text(found: &mut [Element], open: &[usize], text: &mut String, html: &str
 	text.push_str(&plain);
 }
 
-/// ` data-wasp-click="1" checked`: the attributes of a start tag, a bare one with an empty value
+/// ` data-warp-click="1" checked`: the attributes of a start tag, a bare one with an empty value
 fn attributes(mut rest: &str) -> Vec<(String, String)> {
 	let mut found = vec![];
 	loop {

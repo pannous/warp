@@ -1,7 +1,7 @@
 //! Transitions as CSS (card web-css, P188: stay close to HTML and CSS; notes/web_framework.md step 15): in an element's
 //! block `transition: opacity 200ms` is its inline CSS transition (joined to its `style`), and `starting-style: {…}` the
 //! state it enters from and leaves towards, CSS's @starting-style, which an inline style cannot hold: it is the attribute
-//! `data-wasp-starting-style`, applied by the page (markup-transitions.js), which also glides keyed elements with a
+//! `data-warp-starting-style`, applied by the page (markup-transitions.js), which also glides keyed elements with a
 //! transform transition to their new places. The words are data, not variables: names and durations, normalized to
 //! milliseconds; a text is taken as written; the words end where the element's children begin (`p{ transition: opacity
 //! 1s "text" }`). The kinds before CSS, `transition: fade 200ms` (also scale, slide), are that CSS, with a hint to it.
@@ -13,7 +13,7 @@ use crate::operators::Op;
 const TRANSITION: &str = "transition";
 const STYLE: &str = "style";
 const STARTING_STYLE: &str = "starting-style";
-pub const STARTING_STYLE_ATTRIBUTE: &str = "data-wasp-starting-style";
+pub const STARTING_STYLE_ATTRIBUTE: &str = "data-warp-starting-style";
 /// CSS timing words that may follow a transition's duration as words of their own (`opacity 200ms ease-out`)
 const TIMING_WORDS: [&str; 7] = ["ease", "ease-in", "ease-out", "ease-in-out", "linear", "step-start", "step-end"];
 /// The kinds before CSS and the starting style each means; they transition opacity and, for moves, transform

@@ -2,7 +2,7 @@
 
 Decision (notes/decisions.md "Reflection streamlined"): `dir(x)` and the words below answer at compile time when the
 target is known, else at run time from the module's WASM metadata. Lookup order field → meta → reflection. One warp
-custom section, `wasp.meta`, kept unstripped.
+custom section, `warp.meta`, kept unstripped.
 
 ## Words
 | word (aliases) | on | answer | today (2026-10-08, probed) |
@@ -17,9 +17,9 @@ custom section, `wasp.meta`, kept unstripped.
 | `f.params` (`parameters`), `f.signature` | function | parameter names / `(a:int, b:int) -> int` | step 3: user functions |
 | `f.effects` (= `effects of f`) | function | effect set | `effects of f` works |
 | `event.listeners` (= `listeners of e`) | event | handler count/list | `listeners of tick` broken (signal_listeners undefined) |
-| `module.exports` | `use wasm`, foreign module | export names | missing (dir-runtime) |
+| `module.exports` | `use wasm`, foreign module | export names | step 4: imported core modules; components not yet |
 | `x.unit` | quantity | its unit | static units (static_units.rs), no `.unit` word yet |
-| `x.doc` | binding, function | its comment (P114, `use comments`) | `x.@comment` exists |
+| `x.doc` | binding, function | its comment (P114, `use comments`) | step 4: `x.doc` = `x.@comment`, of functions too |
 
 ## Rule
 `x.word` is, in order: x's real field `word` (a class or map field always wins), its meta entry `@word`
@@ -31,14 +31,17 @@ custom section, `wasp.meta`, kept unstripped.
 1. Compile time (free): the analyzer knows the static type of x: class layouts (fields, methods), function
    signatures, effects (effects.rs), units (static_units.rs), module words (modules.rs std_module_definitions). The
    answer is a constant list/text.
-2. Run time, only when the static type is unknown (`any`, a value read from data, a loaded .wasm): ONE host call reads
-   the module's `wasp.meta` section (and the name section for exports), cached per module.
+2. Run time, only when the static type is unknown: a value of one of the program's own classes (`f(o) := o.fields`,
+   `dir(xs#1)`) needs no host call, every class is known at compile time: a type test over them picks the names
+   (`if o is P then ["x" "y"] else …`, reflection.rs Objects::dispatched; a class's own member of that name is read as
+   written; the last else is the field read as written, for `dir` the keys). Values from outside the program (a
+   loaded .wasm, data of another program): ONE host call reads the module's `warp.meta` section, cached per module.
 3. Warp objects (maps, Nodes) answer from their own keys at run time (`keys`, already there).
 
-## wasp.meta layout
-Wasp notation text (parsed by the reader we already have), one map:
+## warp.meta layout
+Warp notation text (parsed by the reader we already have), one map:
 `{units: "km:1 h:-1", classes: {P: {fields: [x y], methods: [norm]}}, functions: {f: {params: [a b], signature: "…", effects: [IO]}}}`.
-`units` holds today's wasp.units text unchanged (warp-worker/warp-99 switches both ends in one commit once this is fixed).
+`units` holds today's warp.units text unchanged (warp-worker/warp-99 switches both ends in one commit once this is fixed).
 
 ## Steps (each a small branch)
 1. reflection.rs: the dot forms → existing function forms (`x.type`, `f.effects`, `e.listeners`); fix `listeners of e`.
@@ -51,4 +54,12 @@ Wasp notation text (parsed by the reader we already have), one map:
    a parameter's type is its annotation or the kind the body demands, the result the inferred kind (`def g(x){x*2}`
    is `(x) -> int`). Not yet: library and host words (`sqrt.signature`).
 4. `x.unit`, `x.doc` (aliases of meta/units), `module.exports` for `use wasm` modules (compile time: their exports).
-5. wasp.meta section (absorbing wasp.units) + the run-time host call for `any`-typed values; playground reader too.
+   `x.doc` done (meta_entries.rs; a function's comment survived no lowering before: declarations::lower_c_functions
+   and nonlocal_cells rebuilt the definition without its Meta, now `Node::with_meta_of`). `x.unit` waits for quantities
+   in variables (units runtime, warp-worker's area). `m.exports` and `dir(m)` of an imported core module (`import
+   lib/fourty_two`) done: reflection::lower_module_words after modules::resolve, the sorted names from
+   wasm_modules::exports. Not yet: components (`use wasm "x.wasm" as lib`, their exports are read only at run time).
+5. warp.meta section (absorbing warp.units) + the run-time host call for `any`-typed values; playground reader too.
+   Done first: run-time names of the program's own classes by type dispatch (Sources 2). Agreed with warp-worker
+   (2026-10-08): web switches static_units with_result_units / module_units and the playground reader to the `units`
+   entry, text byte for byte; warp-worker owns `x.unit` once quantities live in variables.

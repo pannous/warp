@@ -4,7 +4,7 @@ User decision P155: one concept. `ch = channel()` is a channel local to the run,
 (src/channels.rs, sockets in /tmp/warp-channels-<user>); both have the same words, and `send v to "chat"` (P129) is the
 machine channel's send.
 
-```wasp
+```warp
 ch = channel()
 go { for i in 1 to 3 { ch.send(i) }; ch.close() }
 total = 0

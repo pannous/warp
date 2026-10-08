@@ -11,7 +11,7 @@ const MINIMUM_SAMPLES: usize = 50; // guards against an empty directory listing 
 fn runnable_samples() -> Vec<String> {
 	let mut names: Vec<String> = fs::read_dir("samples").expect("samples/")
 		.filter_map(|entry| entry.ok().map(|entry| entry.path().to_string_lossy().to_string()))
-		.filter(|name| name.ends_with(".wasp") && !NEEDS_A_WINDOW.iter().any(|word| name.contains(word)))
+		.filter(|name| name.ends_with(".warp") && !NEEDS_A_WINDOW.iter().any(|word| name.contains(word)))
 		.collect();
 	names.sort();
 	names

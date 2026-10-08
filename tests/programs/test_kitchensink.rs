@@ -1,6 +1,6 @@
 use warp::{block, float, int, key, list, parens, symbol, text, Node};
 use warp::wasm_emitter::WasmGcEmitter;
-use warp::wasp_parser::WaspParser;
+use warp::warp_parser::WarpParser;
 use warp::write_wasm;
 
 /// Comprehensive test covering all Node types and their WASM encoding
@@ -26,7 +26,7 @@ fn test_kitchensink_all_node_types() {
 
 	// Test 6: Tag node (from parser)
 	let tag_input = "div{class=container}";
-	let tag_node = WaspParser::parse(tag_input);
+	let tag_node = WarpParser::parse(tag_input);
 	test_node("Tag", tag_node);
 
 	// Test 7: Key node
@@ -42,7 +42,7 @@ fn test_kitchensink_all_node_types() {
 	test_node("Data", Node::data(vec![1, 2, 3, 4, 5]));
 
 	// Test 12: Complex nested structure
-	let complex = WaspParser::parse("html{head{title{My Page}} body{h1{Hello} p{World}}}");
+	let complex = WarpParser::parse("html{head{title{My Page}} body{h1{Hello} p{World}}}");
 	if !matches!(complex, Node::Error(_)) {
 		test_node("Complex nested HTML", complex);
 	}

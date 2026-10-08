@@ -52,21 +52,21 @@ pub enum CParameter {
 	Number,
 	/// `char *` or a const pointer to bytes (zlib's `const Bytef *buf`): the program's text copied into the module's malloc
 	Text,
-	/// the unsigned count after a text (`const void *input, size_t length`): the text's byte length, which the wasp call
+	/// the unsigned count after a text (`const void *input, size_t length`): the text's byte length, which the warp call
 	/// may leave out (`XXH32("hello", 0)`), then the text crosses by its bytes, NUL bytes included
 	TextLength,
-	/// `T **`: left out of the wasp call, the module gets a NULL-initialised slot of its malloc
+	/// `T **`: left out of the warp call, the module gets a NULL-initialised slot of its malloc
 	Out,
-	/// a writable buffer followed by its in/out length (`Bytef *dest, uLongf *destLen`): the wasp call passes its
+	/// a writable buffer followed by its in/out length (`Bytef *dest, uLongf *destLen`): the warp call passes its
 	/// capacity, the module gets a block of that size
 	Buffer,
-	/// the length slot of the buffer before it: left out of the wasp call, holds the capacity going in, the length written
+	/// the length slot of the buffer before it: left out of the warp call, holds the capacity going in, the length written
 	/// coming out
 	BufferLength,
 }
 
 impl CParameter {
-	/// Does the wasp call pass a value for it (the program's import has its parameter)
+	/// Does the warp call pass a value for it (the program's import has its parameter)
 	fn is_passed(self) -> bool {
 		!matches!(self, CParameter::Out | CParameter::BufferLength)
 	}
@@ -78,12 +78,12 @@ pub enum CResult {
 	Number,
 	/// an unsigned 32-bit C result (`unsigned long` in wasm32): zero-extended into an Int, never negative
 	Unsigned,
-	/// `char *`: the NUL-terminated text in the module's memory, read back as a wasp text, NULL is ø
+	/// `char *`: the NUL-terminated text in the module's memory, read back as a warp text, NULL is ø
 	Text,
 	/// what the first out-pointer received (as natively, notes/ffi_handles.md): a text for `char **`, else the module's
 	/// pointer as a number; NULL there is a loud error naming the C status
 	Out { text: bool },
-	/// the bytes the first buffer received (its length slot says how many) as a wasp text; a C status other than 0 is a
+	/// the bytes the first buffer received (its length slot says how many) as a warp text; a C status other than 0 is a
 	/// loud error (zlib's Z_BUF_ERROR when the capacity is too small)
 	Buffer,
 }
@@ -279,12 +279,12 @@ fn with_header_types(path: &str, exports: &mut HashMap<String, Export>) {
 			eprintln!("[wasm] {header}: {} does not match the module's {} parameters", declared.raw.trim(), export.signature.params.len());
 			continue;
 		}
-		let wasp_parameter = |index: &usize| c_parameters[*index].is_passed();
+		let warp_parameter = |index: &usize| c_parameters[*index].is_passed();
 		if export.parameters.iter().all(|name| name.starts_with('$')) && declared.param_names.len() == c_parameters.len() {
 			export.parameters = declared.param_names.clone();
 		}
-		export.parameters = (0..c_parameters.len()).filter(wasp_parameter).map(|index| export.parameters[index].clone()).collect();
-		export.signature.params = (0..c_parameters.len()).filter(wasp_parameter).map(|index| export.signature.params[index]).collect();
+		export.parameters = (0..c_parameters.len()).filter(warp_parameter).map(|index| export.parameters[index].clone()).collect();
+		export.signature.params = (0..c_parameters.len()).filter(warp_parameter).map(|index| export.signature.params[index]).collect();
 		export.signature.results = match c_result {
 			CResult::Text | CResult::Out { text: true } | CResult::Buffer => vec![wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)], // the text Node the host builds
 			CResult::Unsigned => vec![wasm_encoder::ValType::I64],

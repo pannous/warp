@@ -155,7 +155,7 @@ fn is_computed(value: &Node) -> bool {
 fn value_entry(entry: &Node) -> Option<(&Node, &Node)> {
 	match entry.drop_meta() {
 		Node::Key(field, Op::Assign, value) => Some((field, value)),
-		Node::Key(field, Op::Define, value) if !crate::wasp_parser::mentions(value, IT) && crate::getters::getter_name(entry).is_none() => Some((field, value)),
+		Node::Key(field, Op::Define, value) if !crate::warp_parser::mentions(value, IT) && crate::getters::getter_name(entry).is_none() => Some((field, value)),
 		_ => None,
 	}
 }
@@ -178,7 +178,7 @@ fn function_entry(entry: &Node) -> Option<(String, Vec<Node>, Node)> {
 		Node::Key(head, Op::Define, body) => match head.drop_meta() {
 			Node::Symbol(field) => match lambda(body) {
 				Some((parameters, body)) => Some((field.clone(), parameter_list(parameters), body)),
-				None => (crate::wasp_parser::mentions(body, IT) || crate::getters::getter_name(entry).is_some()).then(|| (field.clone(), vec![], body.as_ref().clone())),
+				None => (crate::warp_parser::mentions(body, IT) || crate::getters::getter_name(entry).is_some()).then(|| (field.clone(), vec![], body.as_ref().clone())),
 			},
 			Node::List(items, Bracket::Round, Separator::None) => match items.split_first() {
 				Some((name, parameters)) if matches!(name.drop_meta(), Node::Symbol(_)) => Some((name.name(), parameters.to_vec(), body.as_ref().clone())),
@@ -198,7 +198,7 @@ fn function_entry(entry: &Node) -> Option<(String, Vec<Node>, Node)> {
 /// function entries
 fn object_assignment(node: Node) -> Node {
 	if let Node::Key(target, Op::Define, value) = node.drop_meta() {
-		let mentions_it = |entry: &Node| crate::wasp_parser::mentions(entry, IT);
+		let mentions_it = |entry: &Node| crate::warp_parser::mentions(entry, IT);
 		let only_functions_mention_it = |entries: &Vec<Node>| entries.iter().any(mentions_it)
 			&& entries.iter().filter(|entry| mentions_it(entry)).all(|entry| function_entry(entry).is_some());
 		if matches!(target.drop_meta(), Node::Symbol(_)) && object_entries(value).is_some_and(only_functions_mention_it) {
@@ -222,7 +222,7 @@ fn statement_block(value: &Node) -> Option<Node> {
 	let Node::List(items, Bracket::Curly, separator) = value.drop_meta() else { return None };
 	let statements = matches!(separator, Separator::Semicolon | Separator::Newline) && items.len() > 1;
 	let lambda = items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Arrow | Op::FatArrow, _))) || crate::lambdas::arrow_lambda(value).is_some();
-	if items.is_empty() || object_entries(value).is_some() || crate::wasp_parser::mentions(value, IT) || lambda {
+	if items.is_empty() || object_entries(value).is_some() || crate::warp_parser::mentions(value, IT) || lambda {
 		return None;
 	}
 	if !statements && !matches!(items.as_slice(), [single] if is_computed(single)) {
@@ -434,14 +434,14 @@ impl Blocks {
 		let fields: Vec<String> = entries.iter().filter(|entry| function_entry(entry).is_none()).filter_map(|entry| match entry.drop_meta() {
 			Node::Key(key, _, _) => Some(key.drop_meta().name()),
 			_ => None,
-		}).filter(|other| other != field && !parameter_names.contains(other) && crate::wasp_parser::mentions(&body, other)).collect();
+		}).filter(|other| other != field && !parameter_names.contains(other) && crate::warp_parser::mentions(&body, other)).collect();
 		for other in &fields {
 			let read = Node::Key(Box::new(Node::Symbol(object_parameter(object))), Op::Dot, Box::new(Node::Symbol(other.clone())));
 			body = crate::library_words::substitute(body, other, &read);
 		}
 		let takes_object = !fields.is_empty();
 		if takes_object {
-			if parameters.is_empty() && crate::wasp_parser::mentions(&body, IT) {
+			if parameters.is_empty() && crate::warp_parser::mentions(&body, IT) {
 				parameters.push(Node::Symbol(IT.to_string()));
 			}
 			parameters.insert(0, Node::Symbol(object_parameter(object)));

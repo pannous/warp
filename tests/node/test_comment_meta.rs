@@ -1,5 +1,5 @@
 //! Card g-1tHQ (playground: `Error("no field meta@https")`): comments attach to the next element as metadata
-//! (samples/comments.wasp, wiki/comments.md, wiki/meta.md): `x.meta` is the map of x's meta information, its
+//! (samples/comments.warp, wiki/comments.md, wiki/meta.md): `x.meta` is the map of x's meta information, its
 //! comment as `comment`; `x.@comment` reads the comment like any meta key. Only under `use comments` (P114)
 use crate::is;
 

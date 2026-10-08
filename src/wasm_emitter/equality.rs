@@ -215,8 +215,9 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// A list cell (local `cell`) whose entry is a meta entry: compare its rest instead, `values_equal(rest, other)`
-	fn skip_meta_cell(&self, f: &mut Function, cell: u32, other: u32, recurse: u32) {
+	/// A list cell (local `cell`) whose entry is a meta entry: compare its rest instead, `values_equal(rest, other)`;
+	/// `extra` pushes the comparison's further arguments (values_similar's tolerance)
+	pub(super) fn skip_meta_cell(&self, f: &mut Function, cell: u32, other: u32, recurse: u32, extra: &[I<'static>]) {
 		let node = self.type_manager.node_type;
 		Self::test(f, cell, HeapType::Concrete(node));
 		f.instruction(&I::If(BlockType::Empty));
@@ -237,6 +238,7 @@ impl WasmGcEmitter {
 			f.instruction(&I::LocalGet(other));
 			push_rest(f);
 		}
+		Self::emit_list(f, extra);
 		f.instruction(&I::Call(recurse));
 		f.instruction(&I::Return);
 		f.instruction(&I::End);
@@ -248,16 +250,16 @@ impl WasmGcEmitter {
 		Ref(RefType { nullable: true, heap_type: any_heap_type() })
 	}
 
-	fn i31_heap() -> HeapType {
+	pub(super) fn i31_heap() -> HeapType {
 		HeapType::Abstract { shared: false, ty: AbstractHeapType::I31 }
 	}
 
-	fn test(func: &mut Function, local: u32, heap: HeapType) {
+	pub(super) fn test(func: &mut Function, local: u32, heap: HeapType) {
 		func.instruction(&I::LocalGet(local));
 		func.instruction(&I::RefTestNonNull(heap));
 	}
 
-	fn field(func: &mut Function, local: u32, struct_type: u32, field_index: u32) {
+	pub(super) fn field(func: &mut Function, local: u32, struct_type: u32, field_index: u32) {
 		func.instruction(&I::LocalGet(local));
 		func.instruction(&I::RefCastNonNull(HeapType::Concrete(struct_type)));
 		func.instruction(&I::StructGet { struct_type_index: struct_type, field_index });
@@ -289,7 +291,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	fn return_if(func: &mut Function, result: i32) {
+	pub(super) fn return_if(func: &mut Function, result: i32) {
 		func.instruction(&I::If(BlockType::Empty));
 		func.instruction(&I::I32Const(result));
 		func.instruction(&I::Return);
@@ -297,7 +299,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The f64 of a number payload: a float's value, an Int converted (an exact one, a ratio too, by exact_to_f64)
-	fn number_as_f64(&self, func: &mut Function, local: u32) {
+	pub(super) fn number_as_f64(&self, func: &mut Function, local: u32) {
 		let (i64_box, f64_box) = (self.type_manager.i64_box_type, self.type_manager.f64_box_type);
 		Self::test(func, local, HeapType::Concrete(f64_box));
 		func.instruction(&I::If(BlockType::Result(ValType::F64)));
@@ -321,7 +323,7 @@ impl WasmGcEmitter {
 		[vec![types.i64_box_type, types.f64_box_type], exact].concat()
 	}
 
-	fn is_number_payload(&self, func: &mut Function, local: u32) {
+	pub(super) fn is_number_payload(&self, func: &mut Function, local: u32) {
 		for (index, heap) in self.number_payload_types().into_iter().enumerate() {
 			Self::test(func, local, HeapType::Concrete(heap));
 			if index > 0 {
@@ -331,7 +333,7 @@ impl WasmGcEmitter {
 	}
 
 	/// An Int, a Float or a bool (an Int marked bool: `false == 0`, card bool-type)
-	fn is_number_kind(func: &mut Function, kind_local: u32) {
+	pub(super) fn is_number_kind(func: &mut Function, kind_local: u32) {
 		let kinds = [Kind::Int as i64, Kind::Float as i64, crate::type_kinds::BOOL_KIND];
 		for kind in kinds {
 			func.instruction(&I::LocalGet(kind_local));
@@ -345,7 +347,8 @@ impl WasmGcEmitter {
 
 	/// Returns from values_equal: two lists are equal as sets of entries when every entry of each has an equal entry in the other.
 	/// Locals: 7 and 8 walk the cells of the list being checked and of the other, 9 flags that the entry was found.
-	fn emit_unordered_entries_equal(f: &mut Function, node: u32, recurse: u32, is_meta_entry: u32) {
+	/// `extra` pushes the comparison's further arguments (values_similar's tolerance)
+	pub(super) fn emit_unordered_entries_equal(f: &mut Function, node: u32, recurse: u32, is_meta_entry: u32, extra: &[I<'static>]) {
 		let (walked, other, found) = (7, 8, 9);
 		let cell_field = |f: &mut Function, local: u32, field_index: u32| {
 			f.instruction(&I::LocalGet(local));
@@ -376,6 +379,7 @@ impl WasmGcEmitter {
 			f.instruction(&I::BrIf(1));
 			cell_field(f, walked, 1);
 			cell_field(f, other, 1);
+			Self::emit_list(f, extra);
 			f.instruction(&I::Call(recurse));
 			f.instruction(&I::If(BlockType::Empty));
 			f.instruction(&I::I32Const(1));
@@ -412,8 +416,8 @@ impl WasmGcEmitter {
 		let cell = Ref(self.node_ref(true));
 		let locals = vec![i64t, i64t, i32t, i32t, i32t, cell, cell, i32t];
 		self.runtime_function(VALUES_EQUAL, vec![Self::any_ref(), Self::any_ref()], vec![i32t], locals, |s, f| {
-			s.skip_meta_cell(f, 0, 1, recurse);
-			s.skip_meta_cell(f, 1, 0, recurse);
+			s.skip_meta_cell(f, 0, 1, recurse, &[]);
+			s.skip_meta_cell(f, 1, 0, recurse, &[]);
 			// null equals only null
 			f.instruction(&I::LocalGet(0));
 			f.instruction(&I::RefIsNull);
@@ -455,7 +459,7 @@ impl WasmGcEmitter {
 			}
 			f.instruction(&I::I32And);
 			f.instruction(&I::If(BlockType::Empty));
-			Self::emit_unordered_entries_equal(f, node, recurse, s.func_index(IS_META_ENTRY));
+			Self::emit_unordered_entries_equal(f, node, recurse, s.func_index(IS_META_ENTRY), &[]);
 			f.instruction(&I::End);
 			Self::field(f, 0, node, 1);
 			Self::field(f, 1, node, 1);

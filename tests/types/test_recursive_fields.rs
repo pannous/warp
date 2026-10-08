@@ -1,5 +1,5 @@
 //! A class field of the class's own type (`left: Tree?`) refers to the class: trees and linked lists as GC structs;
-//! WebAssembly's spellings `type Node: gc struct {…}` and `left: ref Node?` mean the same (samples/wasm_interop.wasp)
+//! WebAssembly's spellings `type Node: gc struct {…}` and `left: ref Node?` mean the same (samples/wasm_interop.warp)
 use crate::is;
 
 #[test]

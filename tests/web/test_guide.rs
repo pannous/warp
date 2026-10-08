@@ -1,4 +1,4 @@
-// The language guide on the playground page (web/playground/guide.md): every ```wasp => value fence shows that value
+// The language guide on the playground page (web/playground/guide.md): every ```warp => value fence shows that value
 // in the page, a ```printed fence after a snippet is what it prints, and every example a chapter links exists in the
 // tour or samples/
 use std::collections::HashSet;
@@ -7,7 +7,7 @@ use warp::web::evaluate;
 const GUIDE: &str = include_str!("../../web/playground/guide.md");
 const TOUR: &str = include_str!("../../web/playground/examples.js");
 const EXCLUDED_SAMPLES: &str = include_str!("../../web/playground/excluded_samples.txt");
-const FENCE_START: &str = "```wasp";
+const FENCE_START: &str = "```warp";
 const VALUE_MARK: &str = " => ";
 const FENCE_END: &str = "```";
 const PRINTED_FENCE: &str = "```printed\n";
@@ -75,7 +75,7 @@ fn every_example_a_chapter_links_exists() {
 		assert!(TOUR.contains(&key), "the guide links the tour example {name}, examples.js has none");
 	}
 	for name in &samples {
-		assert!(std::path::Path::new(&format!("samples/{name}.wasp")).exists(), "the guide links samples/{name}.wasp");
+		assert!(std::path::Path::new(&format!("samples/{name}.warp")).exists(), "the guide links samples/{name}.warp");
 		assert!(!EXCLUDED_SAMPLES.lines().any(|line| line.starts_with(&format!("{name}\t"))), "{name} is not in the playground menu");
 	}
 }

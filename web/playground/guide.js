@@ -6,7 +6,7 @@ const GUIDE_FILE = "guide.md";
 const NARROW_SCREEN = "(max-width: 900px)"; // playground.css stacks the panes there: the guide starts closed
 const EXAMPLES_PREFIX = "Examples: ";
 const SAMPLES_SEPARATOR = "; samples: ";
-const SNIPPET_FENCE = /^```wasp(?: => (.*))?$/;
+const SNIPPET_FENCE = /^```warp(?: => (.*))?$/;
 const PRINTED_FENCE = "```printed"; // right after a snippet: the lines it prints, shown above its value
 
 const chapterOfExample = new Map();

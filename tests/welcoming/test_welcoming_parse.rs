@@ -1,5 +1,5 @@
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 use warp::{Node, Op};
 
 // foreign keyword forms (Python, JS, Ruby, PHP) compile to their intent; snippets in probes/parse/

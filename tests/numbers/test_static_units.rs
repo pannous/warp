@@ -36,7 +36,7 @@ fn test_unsupported_uses_stay_loud() {
 
 #[test]
 fn test_compiling_a_quantity_result_is_refused_until_output_is_supported() {
-	// stage 5: the unit travels in the module's `wasp.units` section (test_static_units_compiled.rs)
+	// stage 5: the unit travels in the module's `warp.units` section (test_static_units_compiled.rs)
 	let compiled = warp::pipeline::compile("total = 0 m; for i in 1..3 { total += 5 m }; total");
 	assert!(compiled.is_ok());
 }

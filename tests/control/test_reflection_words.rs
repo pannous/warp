@@ -80,3 +80,32 @@ fn a_functions_signature() {
 	is!("f(a:int, b:int) := a+b\nf.signature", "(a:int, b:int) -> int");
 	is!("def greet(name:text){\"hi \" + name}\ngreet.signature", "(name:text) -> text");
 }
+
+// step 4: x.doc is x.@comment (under `use comments`), also of a function
+#[test]
+fn a_bindings_doc() {
+	is!("use comments\n// the answer\nx = 42\nx.doc", "the answer");
+	is!("use comments\n// doubles\nf(x) := x*2\nf.doc", "doubles");
+	is!("use comments\n// doubles\ndef f(x){x*2}\nf.doc", "doubles");
+}
+
+#[test]
+fn a_real_field_named_doc_wins() {
+	is!("use comments\n// a page\np = {doc: 7}\np.doc", 7);
+}
+
+// step 4: a core module's exports, read off the module at compile time
+#[test]
+fn a_modules_exports() {
+	is!("import tests/fixtures/wasm/fourty_two; (\"twice\" in fourty_two.exports) > 0", true);
+	is!("import tests/fixtures/wasm/fourty_two; (\"ft\" in dir(fourty_two)) > 0", true);
+	is!("import tests/fixtures/wasm/fourty_two; fourty_two.exports#1", "add32");
+}
+
+// step 5: an object known only at run time, one of the program's classes: a type test over them picks its names
+#[test]
+fn fields_of_an_instance_known_at_run_time() {
+	is!(&format!("{POINT}; class Q{{z:int}}; f(o) := o.fields; f(Q(3))"), warp::texts(vec!["z"]));
+	is!(&format!("{POINT}; f(o) := o.methods; f(P(1, 2))"), warp::texts(vec!["sq"]));
+	is!(&format!("{POINT}; xs = [P(1, 2)]; dir(xs#1)"), warp::texts(vec!["x", "y", "sq"]));
+}

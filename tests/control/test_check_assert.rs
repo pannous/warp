@@ -1,5 +1,5 @@
 // card check-assert (user): `check C` is `assert C`: it throws an error naming the failed condition, as written.
-// samples/polymorphism.wasp combines numbers (user: float stays IEEE, so a float variant would give 3.3000000000000003)
+// samples/polymorphism.warp combines numbers (user: float stays IEEE, so a float variant would give 3.3000000000000003)
 use crate::common::fails_with;
 use crate::is;
 

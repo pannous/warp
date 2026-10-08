@@ -21,7 +21,7 @@ fn a_comment_after_a_text_gets_no_division_note() {
 	let _ = std::fs::remove_file(path);
 }
 
-/// a prose comment (`// property with value list`, samples/html.wasp) reads like no divisor: no note; `// 2`,
+/// a prose comment (`// property with value list`, samples/html.warp) reads like no divisor: no note; `// 2`,
 /// `// n` and `// n + 1` still do
 #[test]
 fn a_prose_comment_after_a_value_gets_no_division_note() {

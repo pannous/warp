@@ -1,4 +1,4 @@
-# Async and channel cases ported from other systems, in wasp's task syntax (wiki/async.md, notes/go_blocks.md): "code ||| expected"
+# Async and channel cases ported from other systems, in warp's task syntax (wiki/async.md, notes/go_blocks.md): "code ||| expected"
 # run: probes/function_calls.sh probes/async_ports.md (scratch/warp of this checkout)
 # JS Promise.all / Python asyncio.gather: results in order
 f(x) := { sleep(30); x * 10 }; await all [go f(1), go f(2), go f(3)] ||| [10 20 30]

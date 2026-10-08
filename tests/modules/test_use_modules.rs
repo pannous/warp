@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use warp::modules::resolve_in;
 use warp::wasm_emitter::eval;
-use warp::wasp_parser::WaspParser;
+use warp::warp_parser::WarpParser;
 use warp::*;
 
 fn module_directory(test: &str, modules: &[(&str, &str)]) -> PathBuf {
@@ -16,7 +16,7 @@ fn module_directory(test: &str, modules: &[(&str, &str)]) -> PathBuf {
 }
 
 fn resolved_text(source: &str, directory: &Path) -> String {
-	let resolved = resolve_in(WaspParser::parse(source), &[directory.to_str().expect("utf8 path")]);
+	let resolved = resolve_in(WarpParser::parse(source), &[directory.to_str().expect("utf8 path")]);
 	format!("{resolved:?}")
 }
 
@@ -47,7 +47,7 @@ fn test_use_math_stays_builtin() {
 
 #[test]
 fn test_module_statements_are_not_imported() {
-	let directory = module_directory("statements", &[("noisy.wasp", "double(x):=x*2\n99")]);
+	let directory = module_directory("statements", &[("noisy.warp", "double(x):=x*2\n99")]);
 	let resolved = resolved_text("use noisy;1", &directory);
 	assert!(resolved.contains("double"), "definition imported: {resolved}");
 	assert!(!resolved.contains("99"), "the module's own expression must not run: {resolved}");
@@ -61,16 +61,16 @@ fn test_warp_extension_is_found() {
 
 #[test]
 fn test_search_order_prefers_earlier_directory() {
-	let first = module_directory("order_first", &[("same.wasp", "from_first:=1")]);
-	let second = module_directory("order_second", &[("same.wasp", "from_second:=2")]);
-	let resolved = resolve_in(WaspParser::parse("use same;1"), &[first.to_str().unwrap(), second.to_str().unwrap()]);
+	let first = module_directory("order_first", &[("same.warp", "from_first:=1")]);
+	let second = module_directory("order_second", &[("same.warp", "from_second:=2")]);
+	let resolved = resolve_in(WarpParser::parse("use same;1"), &[first.to_str().unwrap(), second.to_str().unwrap()]);
 	let text = format!("{resolved:?}");
 	assert!(text.contains("from_first") && !text.contains("from_second"), "{text}");
 }
 
 #[test]
 fn test_module_using_module_imports_transitively_and_survives_cycles() {
-	let directory = module_directory("cycle", &[("ping.wasp", "use pong\nping:=1"), ("pong.wasp", "use ping\npong:=2")]);
+	let directory = module_directory("cycle", &[("ping.warp", "use pong\nping:=1"), ("pong.warp", "use ping\npong:=2")]);
 	let resolved = resolved_text("use ping;1", &directory);
 	assert!(resolved.contains("ping") && resolved.contains("pong"), "{resolved}");
 }
@@ -89,22 +89,22 @@ fn module_function_locals_are_not_the_programs_variables() {
 /// A file module's own code calls its own words, whatever the program names its variables (card module-scope)
 #[test]
 fn a_program_variable_leaves_a_file_module_its_words() {
-	let directory = module_directory("module_scope", &[("mytext.wasp", "words(t) := split(t, \" \")\ntitled(t) := join([upper(w) for w in words(t)], \" \")")]);
-	let program = directory.join("app.wasp");
+	let directory = module_directory("module_scope", &[("mytext.warp", "words(t) := split(t, \" \")\ntitled(t) := join([upper(w) for w in words(t)], \" \")")]);
+	let program = directory.join("app.warp");
 	let run = |code: &str| warp::modules::with_program_file(&program, || eval(code));
 	assert_eq!(run("use mytext; words = [\"ab\", \"cd\"]; [titled w for w in words]"), texts(vec!["AB", "CD"]));
 	assert_eq!(run("use mytext; words = [\"a b\"]; titled \"hello world\""), Node::Text("HELLO WORLD".into()));
 }
 
-/// `use "./helper.wasp"` and `use "/absolute/helper.wasp"` load that file; `./` starts at the program's folder
+/// `use "./helper.warp"` and `use "/absolute/helper.warp"` load that file; `./` starts at the program's folder
 /// (card use-path)
 #[test]
 fn a_quoted_path_uses_that_file() {
-	let directory = module_directory("use_path", &[("helper.wasp", "triple(x) := x * 3")]);
-	let absolute = directory.join("helper.wasp");
+	let directory = module_directory("use_path", &[("helper.warp", "triple(x) := x * 3")]);
+	let absolute = directory.join("helper.warp");
 	assert_eq!(eval(&format!("use \"{}\"; triple(3)", absolute.display())), 9);
-	let program = directory.join("app.wasp");
+	let program = directory.join("app.warp");
 	let run = |code: &str| warp::modules::with_program_file(&program, || eval(code));
-	assert_eq!(run("use \"./helper.wasp\"; triple(2)"), 6);
+	assert_eq!(run("use \"./helper.warp\"; triple(2)"), 6);
 	assert_eq!(run("use \"./helper\"; triple(4)"), 12);
 }

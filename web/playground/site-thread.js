@@ -6,7 +6,7 @@
 // isolation, which a static host gives through coi-serviceworker.js (registered here, then the page reloads once).
 // Relative URLs resolve against the site's root (the page's <base>).
 
-const WORKER_ATTRIBUTE = "data-wasp-worker";
+const WORKER_ATTRIBUTE = "data-warp-worker";
 
 if (!self.crossOriginIsolated && "serviceWorker" in navigator && !sessionStorage.getItem("isolating")) {
 	navigator.serviceWorker.register("coi-serviceworker.js").then(() => {
@@ -29,7 +29,7 @@ function startSiteWorker() {
 		if (data.stored) keepValue(data.stored.name, data.stored.value, data.stored.file);
 		if (data.clipboard !== undefined) copyText(data.clipboard);
 		if (data.print) (data.print.stream === 2 ? console.error : console.log)(data.print.text.replace(/\n$/, ""));
-		if (data.failure) console.error("wasp:", data.failure);
+		if (data.failure) console.error("warp:", data.failure);
 	};
 	worker.postMessage({ start: { module: new URL(SITE_MODULE, document.baseURI).href, stored: keptValues(), session: keptValues([SESSION_STORE]), path: location.pathname } });
 	listenToElements(found => found && worker.postMessage(found));
