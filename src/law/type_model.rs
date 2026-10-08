@@ -237,15 +237,16 @@ fn function_definition(statement: &Node) -> Option<(&str, Vec<&Node>, &Node)> {
 }
 
 /// `a, b = xs` parses as the list `a, (b = xs)`: the names and the value
-fn destructuring(items: &[Node]) -> Option<(Vec<String>, &Node)> {
-	let (last, first) = items.split_last()?;
-	let Node::Key(target, Op::Assign, value) = last.drop_meta() else { return None };
-	let names: Option<Vec<String>> = first.iter().chain(std::iter::once(&**target)).map(|name| match name.drop_meta() {
+/// `a, b = xs` and `a, b = 1, 2`: the names and the values after `=` (one: a list to take apart)
+fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
+	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
+	let Node::Key(target, Op::Assign, value) = items[assignment].drop_meta() else { return None };
+	let names: Option<Vec<String>> = items[..assignment].iter().chain(std::iter::once(&**target)).map(|name| match name.drop_meta() {
 		// `*rest` takes the items between: outside W0
 		Node::Symbol(name) if !name.starts_with('*') => Some(name.clone()),
 		_ => None,
 	}).collect();
-	Some((names?, value))
+	Some((names?, std::iter::once(&**value).chain(&items[assignment + 1..]).collect()))
 }
 
 /// A function or lambda bound at main level: its name, parameters and body
@@ -628,8 +629,11 @@ impl Exporter {
 				other => unsupported(other),
 			},
 			Node::List(items, Bracket::None, Separator::Colon) if destructuring(items).is_some() => {
-				let (names, value) = destructuring(items).expect("a destructuring");
-				self.destructure(&names, value)
+				let (names, values) = destructuring(items).expect("a destructuring");
+				match values[..] {
+					[list] => self.destructure(&names, list),
+					_ => self.assign_tuple(&names, &values),
+				}
 			}
 			// `let x = 1`, `shared n = 5` (one thread in W0): a variable; `int i = 2`: `i: int = 2`
 			Node::List(items, _, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))) => {
@@ -640,6 +644,11 @@ impl Exporter {
 					_ => Ok(format!(".statement ({})", self.expression(statement)?)),
 				}
 			}
+			// `a = b = 3`: `b = 3`, then `a = b`
+			Node::Key(target, Op::Assign, value) if matches!(value.drop_meta(), Node::Key(_, Op::Assign, _)) => {
+				let Node::Key(inner_target, _, _) = value.drop_meta() else { unreachable!("an assignment") };
+				Ok(format!("{},\n  {}", self.item(value)?, self.item(&Node::Key(target.clone(), Op::Assign, inner_target.clone()))?))
+			}
 			Node::Key(target, Op::Assign, value) if !self.is_bound(target) && !matches!(target.drop_meta(), Node::Key(_, Op::Dot, _)) => self.binding(target, ".var", value),
 			other => Ok(format!(".statement ({})", self.expression(other)?)),
 		}
@@ -647,23 +656,51 @@ impl Exporter {
 
 	/// `a, b = xs`: the hidden `·tupleN = xs`, its items counted (warp fails on a wrong number of values), then
 	/// `a = ·tupleN#1`, `b = ·tupleN#2`; several items in one
-	fn destructure(&mut self, names: &[String], value: &Node) -> Lean {
+	fn destructure(&mut self, names: &[String], list: &Node) -> Lean {
 		if let Some(bound) = names.iter().find(|name| self.names.contains_key(*name)) {
 			return Err(format!("not in W0: destructuring into {bound}, which holds a value (card destructure-existing)"));
 		}
 		self.hidden_names += 1;
 		let (tuple, count) = (format!("·tuple{}", self.hidden_names), format!("·count{}", self.hidden_names));
 		let mut items = vec![
-			format!(".bind {} .var none ({}) false", quoted(&tuple), self.expression(value)?),
+			format!(".bind {} .var none ({}) false", quoted(&tuple), self.expression(list)?),
 			format!(".bind {} .var none (.int 0) false", quoted(&count)),
 			format!(".statement (.forIn \"·item\" (.glob {}) (.assign {} (.add (.glob {}) (.int 1))))", quoted(&tuple), quoted(&count), quoted(&count)),
 			format!(".statement (.ite (.eq false (.glob {}) (.int {})) .unit (.error \"wrong number of values\"))", quoted(&count), names.len()),
 		];
 		for (position, name) in names.iter().enumerate() {
-			items.push(format!(".bind {} .var none (.index (.glob {}) (.int {})) {}", quoted(name), quoted(&tuple), position + 1, self.globals.contains(name)));
-			self.names.insert(name.clone(), None);
+			items.push(self.store(name, format!(".index (.glob {}) (.int {})", quoted(&tuple), position + 1)));
 		}
 		Ok(items.join(",\n  "))
+	}
+
+	/// `a, b = 1, 2`: each value in a hidden `·valueN_i` first, so `a, b = b, a` swaps, then into the names, which may
+	/// hold values already (checked against their declared types as any assignment)
+	fn assign_tuple(&mut self, names: &[String], values: &[&Node]) -> Lean {
+		if names.len() != values.len() {
+			return Err(format!("not in W0: {} values for {} names (warp counts them when it compiles)", values.len(), names.len()));
+		}
+		self.hidden_names += 1;
+		let hidden: Vec<String> = (1..=values.len()).map(|position| format!("·value{}_{position}", self.hidden_names)).collect();
+		let mut items = Vec::new();
+		for (name, value) in hidden.iter().zip(values) {
+			items.push(format!(".bind {} .var none ({}) false", quoted(name), self.expression(value)?));
+		}
+		for (name, value) in names.iter().zip(&hidden) {
+			items.push(self.store(name, format!(".glob {}", quoted(value))));
+		}
+		Ok(items.join(",\n  "))
+	}
+
+	/// a main-level name takes a value: its first binding, or an assignment checked against its declared type
+	fn store(&mut self, name: &str, value: String) -> String {
+		match self.names.get(name).cloned() {
+			Some(declared) => format!(".statement (.assign {} ({}))", quoted(name), declared.map_or(value.clone(), |declared| admitted(&declared, value))),
+			None => {
+				self.names.insert(name.to_string(), None);
+				format!(".bind {} .var none ({value}) {}", quoted(name), self.globals.contains(&name.to_string()))
+			}
+		}
 	}
 
 	fn is_bound(&self, target: &Node) -> bool {
