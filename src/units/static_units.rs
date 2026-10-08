@@ -179,7 +179,11 @@ fn mentions_units(node: &Node) -> bool {
 		Node::Symbol(name) => unit_named(name).is_some(),
 		Node::Key(object, Op::Dot, _) => mentions_units(object),
 		Node::Key(left, _, right) => mentions_units(left) || mentions_units(right),
-		Node::List(items, _, _) => items.iter().any(mentions_units),
+		// the first word of a list is a call or command (`min(n, 3)`, `use m`), no unit
+		Node::List(items, _, _) => match items.split_first() {
+			Some((head, rest)) => (!matches!(head.drop_meta(), Node::Symbol(_)) && mentions_units(head)) || rest.iter().any(mentions_units),
+			None => false,
+		},
 		_ => false,
 	}
 }
