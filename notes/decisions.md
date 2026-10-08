@@ -30,6 +30,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P200b real references without exceptions (card real-references, warp-58): maps share like class instances
   (`m = {a: 1}; n = m; n.a = 2; m.a` → 2), and adding a new field keeps the same object (`q = p; q.color = "red";
   p.color` → "red"). `x.copy()` is the explicit independent copy.
+- P200c (user): every object has `copy()` and `clone()` by inheritance from the root type (instances, maps, lists,
+  texts), overridable by a class. clone stays an alias of copy; default shallow copy (warp-58).
 - P199 bool slots accept 1 and 0 as yes/no everywhere (variables, fields, list items); other ints and texts are
   errors. Card bool-assign.
 - P200 class instances passed to functions are shared references (like Python/JS). Card instance-field.
