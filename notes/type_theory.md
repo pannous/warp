@@ -265,6 +265,11 @@ needs `global x`) is refused as outside W0, since W0 reads at call time. Hole la
 hold anything, as in warp. `a, *mid, z = …` is refused; destructuring into names that hold values fails in warp
 (card destructure-existing).
 
+`a, b = 1, 2` (a tuple) exports each value into a hidden `·valueN_i` first, then assigns the names, so the values
+keep their static types and `a, b = b, a` swaps; names that hold values take plain assignments, checked against
+their declarations. A wrong count is refused (warp counts at compile time, W0 has no static count). warp skips the
+declaration check here: `a: int = 0; a, b = 2.5, 6` (card destructure-unchecked, KNOWN_HOLES).
+
 ## not, and, or
 
 No new forms: `not e` is `if e then no else yes`; `a and b` is `if a then b else a` and `a or b` is
