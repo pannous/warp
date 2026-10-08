@@ -39,3 +39,5 @@ data/
 !web/playground/lib/libc.wasm
 # `stored x = v` keeps its values beside the program (src/lowering/stored_values.rs)
 *.stored.json
+# the database tables of samples/orm.warp (a run keeps them beside it)
+samples/*.database.sqlite
