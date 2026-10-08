@@ -219,3 +219,53 @@ run natively and in the browser.
 - P171: new words stay in their modules, except `write` and `exists` (global); a file URL loads the file module.
 - P183: std modules are backed only by wasp, host words or C compiled to wasm; regex is the common subset of Rust regex
   and JS RegExp with a loud error for the rest; the file module's append is `file.append(path, text)`.
+
+## 8. Standard: inventory and plan (card stdlib-standard, functions warp-da, 2026-10-08)
+Goal (user): standard functionality split into importable modules. Steps 1-7 made the modules; this section is where
+every word lives today and what still moves.
+
+### Inventory: where a word is defined
+| place | what | count |
+|---|---|---|
+| src/lowering/library_words.rs SYNONYMS | other names of built-in words (size → len …) | 25 |
+| … RUNTIME_WORDS | words lowered to runtime calls | 17 |
+| … EXPANDED_WORDS | wasp templates kept as Rust strings: list round_to first last sum replace is_digit is_alpha unwrap is_alphanumeric | 10 |
+| src/wasm_emitter/library_ops.rs LIBRARY_FUNCTIONS | runtime functions in wasm: keys values entries contains index_of get without ord chars field_with reverse sort upper lower split join slice | 17 |
+| src/wasm_emitter/text_builtins.rs TEXT_BUILTINS | text runtime functions | 21 |
+| src/wasm_emitter/list_emitter.rs BUILTIN_CALLS | list runtime calls | 18 |
+| src/real.rs FUNCTIONS | exact-real functions | 6 |
+| src/host.rs HOST_WORDS | host imports (print, clock, fetch, paint, clipboard, notify, tasks, foreign_call, gpu, std_pure/std_io …) | 55 |
+| src/modules.rs STD_MODULES | embedded lib/*.wasp: memory net collections hash regex file json os list math text random map time matrix draw markup router i18n | 19 |
+| … PRELUDE_WORDS | module words global without `use`: file: write exists | 2 |
+| … STD_ALIASES, lowering/std_aliases.rs, welcome_forms QUALIFIED_WORDS | foreign and qualified names (OrderedDict, JSON.parse, file.append …) | 27 + 21 + 1 |
+| implicit uses | page_html.rs inserts `use markup`, routes.rs `use router`, markup.rs reads markup's lists at compile time | 2 |
+Words per module: math 45, list 38, text 26, markup 19, matrix 15, time 14, map 10, router 9, the rest fewer.
+lib/web.webidl is data for web_idl.rs, not a module. The playground has no prelude of its own (warp-70).
+
+Probed (functions2, 2026-10-08): `use list` and `import list` work; `use list, text` and `use list text` load only
+list; `from list import zip` has no form; `list.zip(…)` without `use` is the loud error (P171, fine); `use os; args`
+is the symbol args (no CLI way to pass them); a module's words cannot call another module's words.
+
+### Target
+- Three layers, each with one place in the source:
+  1. **Core** (compiler, Rust/wasm runtime): words that need the emitter: the language forms, len/count, indexing, the
+     runtime functions of library_ops / text_builtins / list_emitter, host words. They stay; their names are listed
+     in one generated index (below), not moved.
+  2. **Prelude** (`lib/prelude.wasp`, always loaded, only the words a program calls come along, like a std module):
+     the wasp-written global words. EXPANDED_WORDS' templates move here as ordinary definitions (round_to, first,
+     last, is_digit …), plus PRELUDE_WORDS (write, exists). A word there loses nothing: a program's own definition
+     still wins.
+  3. **Modules** (`lib/<name>.wasp`): everything else, brought by `use`.
+- **One implicit-use mechanism**: modules.rs gets one table "word or form → module it brings" (file URL → file,
+  write/exists → file, a page → markup, routes → router); page_html.rs and routes.rs stop inserting `use` text.
+- **use forms**: `use a, b` and `use a b` load each; `from list import zip, unique` brings only those words (the
+  others stay the loud error); `import list as l` later with the module manager.
+- **Modules calling modules**: a module may `use` another; its words come along through with_needed_definitions.
+- **Discoverability**: `help list` (or `words list`) prints a module's words with their first comment line; the
+  same index generates wiki/standard-library.md, so docs never drift from lib/.
+
+### Cards (column Next)
+std-use-several, std-from-import, std-module-uses-module, std-prelude-module, std-implicit-use, std-args,
+std-module-docs, std-word-tests (each module word called once natively and in the browser).
+Order: use-several and from-import first (small, independent); module-uses-module before prelude-module (the prelude
+calls list words); implicit-use after prelude-module.
