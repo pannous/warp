@@ -46,3 +46,9 @@ fn latex_names_of_uniscript_1_0_4() {
 	is!("\"\\:circ \\:neq\"", "∘ ≠"); // in texts: ∘ and ≠ are no operators of code yet (card emoji-code)
 	is!("\"\\:nat \\:to \\:varepsilon\"", "ℕ → ε");
 }
+
+// uniscript 1.0.5 (P198): a letter whose HTML and LaTeX names differ takes the HTML reading, math names keep LaTeX
+#[test]
+fn html_letters_of_uniscript_1_0_5() {
+	is!("\"\\:ocirc \\:cdot\"", "ô ⋅"); // in texts: ô and ⋅ are no characters of code yet (card emoji-code)
+}
