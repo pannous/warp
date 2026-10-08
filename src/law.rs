@@ -9,6 +9,7 @@
 //! stated → asserted (debug builds, at concrete call sites) → tested (generated inputs) → proved (Lean).
 //! Laws will later attach to the semantic FunctionDecl; until that IR exists they live beside the Node AST.
 pub mod lean;
+pub mod type_model;
 
 use crate::analyzer::{collect_functions, extract_user_functions};
 use crate::context::Context;
