@@ -5,6 +5,14 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- P223 (card orm, warp-functions): filters may name an element's fields bare, like SQL: `people where age > 20`
+  means `people where it.age > 20` when the list holds a known class with that field (database tables included)
+  and no variable of that name is in scope; a variable `age` in scope wins, with a warning that it is also a field.
+- With P222 (user: "warp serve can also get an argument; can we just call warp server.warp if the file is
+  obviously a server?"; criteria are the supervisor's undoable default): `warp serve [file] [port]`; plain
+  `warp app.warp` serves when the program declares a route/get/post handler or a server def (static check),
+  printing the URL and the `warp run` escape; markup-only programs don't auto-serve; `warp run` and `warp test`
+  never serve.
 - ORM (card orm, warp-functions; user in a discussion with the supervisor): plain classes connect to the database
   without inheritance or annotations, they are only registered. Transactions are completely optional (an
   optimization only). Filters work for any warp expression ("magic": SQLite application functions run warp code
