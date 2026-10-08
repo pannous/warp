@@ -56,8 +56,6 @@ function regexOf(pattern, flags = "") {
 // (playground.js); those of `session[k]`, its sessionStorage
 const storedValues = {};
 const sessionValues = {};
-// those of `database[k]`: the page's IndexedDB as the worker started (markup.js keptDatabase)
-const databaseValues = {};
 const contentText = content => typeof content === "string" ? content : JSON.stringify(content);
 const utf8 = new TextEncoder();
 

@@ -16,7 +16,7 @@ if (!self.crossOriginIsolated && "serviceWorker" in navigator && !sessionStorage
 }
 
 // the Worker running the program of the site's module (site.js SITE_MODULE), its markup shown in the root
-async function startSiteWorker() {
+function startSiteWorker() {
 	const root = document.getElementById(SITE_ROOT);
 	const worker = new Worker(`site-worker.js?scripts=${root.getAttribute(WORKER_ATTRIBUTE)}`);
 	worker.onmessage = ({ data }) => {
@@ -31,7 +31,7 @@ async function startSiteWorker() {
 		if (data.print) (data.print.stream === 2 ? console.error : console.log)(data.print.text.replace(/\n$/, ""));
 		if (data.failure) console.error("warp:", data.failure);
 	};
-	worker.postMessage({ start: { module: new URL(SITE_MODULE, document.baseURI).href, stored: keptValues(), session: keptValues([SESSION_STORE]), database: await keptDatabase(), path: location.pathname } });
+	worker.postMessage({ start: { module: new URL(SITE_MODULE, document.baseURI).href, stored: keptValues(), session: keptValues([SESSION_STORE]), path: location.pathname } });
 	listenToElements(found => found && worker.postMessage(found));
 	globalThis.followSiteLinks?.(path => worker.postMessage({ navigate: path }));
 }

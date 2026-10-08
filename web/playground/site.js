@@ -48,7 +48,7 @@ async function hydrate() {
 	// stored values and those a `warp dev` page keeps across reloads (host-files.js STD_ADAPTERS.store, markup.js)
 	Object.assign(storedValues, keptValues());
 	Object.assign(sessionValues, keptValues([SESSION_STORE]));
-	Object.assign(databaseValues, await keptDatabase());
+	await self.loadDatabase?.(); // host-files.js, when the program keeps values
 	self.keepStored = keepValue;
 	const holder = instantiateProgram(bytes, siteHooks);
 	if (holder.failure) return console.error("warp:", holder.failure);

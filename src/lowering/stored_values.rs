@@ -28,7 +28,7 @@ const SESSION_WORD: &str = "session";
 pub const SESSION_STORE: &str = "warp-session";
 /// `database[k]` (alias indexedDB): the store for values beyond localStorage's ~5 MB. Its file ends in this, `app.warp`'s
 /// is `app.database.json`, inline code's this name alone (in memory natively, std_adapters.rs); in the browser any
-/// store whose file ends so is IndexedDB (markup.js DATABASE_STORE)
+/// store whose file ends so is IndexedDB (host-files.js DATABASE_STORE)
 pub const DATABASE_STORE: &str = "database.json";
 const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 const DELETE_WORD: &str = "delete";
