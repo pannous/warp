@@ -44,12 +44,23 @@ inductive Expr where
   /-- broadcasting: `f(xs)` of a function of A given a list of A applies f to each item (`f(x: int) := x+1; f([1])` is
   [2]); warp decides it at compile time, so it is its own form -/
   | broadcast (f : String) (arg : Expr)
+  /-- a reference to the object at heap address a, of the class with ancestor chain `path`: class instances are
+  shared, so a mutation through a parameter is visible to the caller (P200) -/
+  | ref (a : Nat) (path : List String)
+  /-- a fresh instance with its fields unset; a constructor `Circle(2)` is `new` followed by field writes -/
+  | new (path : List String)
+  /-- `o.f` -/
+  | get (e : Expr) (f : String)
+  /-- `o.f = v`, giving v -/
+  | set (e : Expr) (f : String) (v : Expr)
+  /-- `e is C`, the type test of a match arm `Shape::Circle(r)` (P178) -/
+  | isA (e : Expr) (c : String)
   deriving DecidableEq, Repr
 
 namespace Expr
 
 def isValue : Expr → Bool
-  | bool _ | int _ | num _ | text _ | unit | nil => true
+  | bool _ | int _ | num _ | text _ | unit | nil | ref _ _ => true
   | cons h t => h.isValue && t.isValue
   | _ => false
 
@@ -73,6 +84,9 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | tryCatch e h => tryCatch (e.subst y v) (h.subst y v)
   | cast e t => cast (e.subst y v) t
   | broadcast f e => broadcast f (e.subst y v)
+  | get e f => get (e.subst y v) f
+  | set e f w => set (e.subst y v) f (w.subst y v)
+  | isA e c => isA (e.subst y v) c
   | e => e
 
 /-- the main-level names an expression assigns or binds -/
@@ -82,7 +96,8 @@ def assigned : Expr → List String
     a.assigned ++ b.assigned
   | ite c a b => c.assigned ++ a.assigned ++ b.assigned
   | letIn _ _ e b => e.assigned ++ b.assigned
-  | call _ e | cast e _ | broadcast _ e => e.assigned
+  | set a _ b => a.assigned ++ b.assigned
+  | call _ e | cast e _ | broadcast _ e | get e _ | isA e _ => e.assigned
   | _ => []
 
 end Expr
@@ -100,6 +115,18 @@ structure Program where
   funs : String → Option Fn
   /-- names declared `global`: the only main-level names a function may assign (functions2, `global names`) -/
   globals : String → Bool
+  /-- the fields a class declares itself, with their types -/
+  fields : String → String → Option Ty := fun _ _ => none
+
+/-- the type of field f of an instance of the class chain p: the declaration nearest the root wins, so a subclass
+keeps the field types of its ancestors -/
+def Program.fieldTy (P : Program) (p : List String) (f : String) : Option Ty := p.findSome? (P.fields · f)
+
+theorem Program.fieldTy_prefix (P : Program) {q p : List String} (h : q <+: p) {f t} (hq : P.fieldTy q f = some t) :
+    P.fieldTy p f = some t := by
+  obtain ⟨r, rfl⟩ := h
+  simp [Program.fieldTy, List.findSome?_append] at hq ⊢
+  simp [hq]
 
 /-- the types of the locals in scope -/
 abbrev Ctx := String → Option Ty
