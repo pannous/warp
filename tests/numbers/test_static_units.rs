@@ -30,8 +30,8 @@ fn test_dimension_errors_are_compile_errors() {
 
 #[test]
 fn test_unsupported_uses_stay_loud() {
-	// print since stage 3, list elements since stage 4, a whole list since stage 5; a list grown at run time is not yet
-	fails_with("total = 0 m; for i in 1..3 { total += 5 m }; xs = [total]; xs.add(1 m); sum(xs)", "quantities compute only in constant expressions");
+	// print since stage 3, list elements since stage 4, a whole list since stage 5, a list grown at run time since stage 6
+	assert_eq!(shown("total = 0 m; for i in 1..3 { total += 5 m }; xs = [total]; xs.add(1 m); sum(xs)"), "11 m");
 }
 
 #[test]
