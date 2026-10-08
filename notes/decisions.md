@@ -5,6 +5,15 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- P217 (card plus-minus, warp-class): `5 ± 1` is an interval now (user: "I thought they are just interval"):
+  worst-case bounds, `(5 ± 1) + (2 ± 1)` → `7 ± 2`, functions map the endpoints (`sqrt(4 ± 1)` → √3..√5).
+  Gaussian propagation (Measurements.jl) comes later with an explicit form such as `5 ± 1σ` (user chose
+  "interval now, Gaussian later").
+- P218 `x ≈ r ± 1` holds when |x - r| ≤ 1, the tolerance as written (user: no preference; the default stands).
+- P219 ± values print with 2 significant digits of the ± part, the value rounded to the same place: `7.0 ± 1.4`.
+- P220 one meaning of ±: `1950 ± 50 AD` is the same ± value (an interval of years), not a separate units span.
+- P222 (card route-sample, warp-functions): the CGI mode of `warp serve` is retired; `warp serve app.warp 8080`
+  serves the page program (its routes, `server def` functions as POST /rpc/f), the production twin of `warp dev`.
 - From P200b (not asked; card shared-lists-typed, warp-class): a typed list read from a field shares too:
   `p = {xs: [1, 2]}; ys = p.xs; p.xs#1 = 7; ys#1` → 7. The fast unboxed copy is kept only where the compiler proves
   that neither alias is written afterwards; otherwise the list is shared, never a silent snapshot.
