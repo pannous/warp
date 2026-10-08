@@ -271,6 +271,17 @@ impl Foreign<'_> {
 		Ok(crate::web_idl::result_type(&interface, member, is_call))
 	}
 
+	/// Does the node name a used foreign module or a variable holding a foreign value
+	fn mentions_foreign_name(&self, node: &Node) -> bool {
+		let mut found = false;
+		node.visit(&mut |part| {
+			if let Node::Symbol(name) = part {
+				found |= self.modules.contains_key(name) || self.values.contains_key(name);
+			}
+		});
+		found
+	}
+
 	/// The runtime and the module (its name as text) or the handle (the value itself) a receiver names
 	fn receiver(&self, receiver: &Node) -> Option<(String, Node)> {
 		if let Node::Symbol(name) = receiver.drop_meta() {
@@ -292,6 +303,10 @@ impl Foreign<'_> {
 		}
 		if let Some(forwarded) = self.forwarded(&node) {
 			return forwarded;
+		}
+		// `"id \(crypto.randomUUID())"`: the holes are calls of this pass, the text is built later (interpolation.rs)
+		if let Some(text) = crate::interpolation::interpolated_mentioning(&node, |hole| self.mentions_foreign_name(hole)) {
+			return self.rewrite(text);
 		}
 		if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
 			let receiver = self.rewrite(receiver.as_ref().clone());
