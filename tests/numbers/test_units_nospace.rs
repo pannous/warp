@@ -28,4 +28,7 @@ fn test_run_time_quantities_show_glued_and_read_back() {
 	assert_round_trip("p = {dist: 0 km, name: \"run\"}; for i in 1..3 { p.dist += 250 m }; p", "{dist:500m name:\"run\"}");
 	assert_eq!(shown("d = 0 m; for i in 1..3 { d += 2 m }; \"${d}\""), "\"4m\"");
 	assert_eq!(shown("d = 0 m; for i in 1..3 { d += 2 m }; d.serialize()"), "\"4m\"");
+	assert_eq!(shown("d = 0 km; for i in 1..2 { d += 10 km }; \"${d / 3 h}\""), "\"(10/3)km/h\"");
+	assert_eq!(shown("d = 0 km; for i in 1..2 { d += 10 km }; \"${d / 4 h}\""), "\"2.5km/h\"");
+	assert_round_trip("(10/3)km/h", "(10/3)km/h");
 }

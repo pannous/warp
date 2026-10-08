@@ -29,6 +29,9 @@ const LOOP_WORDS: [&str; 2] = ["for", "while"];
 /// `speed·u0`: a function specialised for one unit signature of its arguments
 const SPECIALISATION_SEPARATOR: &str = "·u";
 const TEXT_WORD: &str = "str";
+/// A run-time amount as text that reads back: `1.5`, or a fraction `str` shows as `10/3` in parentheses, `(10/3)km/h`
+const AMOUNT_TEXT: &str = r#"(if str(the_amount).contains("/") then "(" + str(the_amount) + ")" else str(the_amount))"#;
+const AMOUNT_PLACEHOLDER: &str = "the_amount";
 const PRINT_WORD: &str = "print";
 const RETURN_WORD: &str = "return";
 /// The text of a value: `str(q)`, and `text_form(q)` of `${q}` interpolation (interpolation.rs)
@@ -318,11 +321,11 @@ fn conversion_target(node: &Node) -> Option<Vec<Factor>> {
 	}
 }
 
-/// The quantity in `quantity` (an SI amount at run time) as text in `units`: `str(amount / 1000) + "km"`
+/// The quantity in `quantity` (an SI amount at run time) as text in `units`: `str(amount / 1000) + "km"`, a fraction in parentheses
 fn quantity_text(quantity: Node, units: &[Factor]) -> Option<Node> {
 	let per_unit = number_node(&super::scale(units, |factor| base_unit(factor.unit.dimension)))?;
 	let amount = Node::Key(Box::new(quantity), Op::Div, Box::new(per_unit));
-	let text = Node::List(vec![Node::Symbol(TEXT_WORD.to_string()), amount], Bracket::Round, Separator::None);
+	let text = crate::lowering::library_words::substitute(crate::wasp_parser::parse(AMOUNT_TEXT), AMOUNT_PLACEHOLDER, &amount);
 	Some(Node::Key(Box::new(text), Op::Add, Box::new(Node::Text(super::unit_suffix(units)))))
 }
 
@@ -594,7 +597,8 @@ impl Inference {
 	fn quantity_source(&self, amount: &str, signature: &Signature) -> Result<String, Stop> {
 		let units = display_factors(&self.display, signature);
 		let per_unit = number_node(&super::scale(&units, |factor| base_unit(factor.unit.dimension))).ok_or(Stop::Unsupported)?;
-		Ok(format!("str({amount} / ({})) + \"{}\"", per_unit.serialize().trim(), super::unit_suffix(&units)))
+		let amount_text = AMOUNT_TEXT.replace(AMOUNT_PLACEHOLDER, &format!("({amount} / ({}))", per_unit.serialize().trim()));
+		Ok(format!("{amount_text} + \"{}\"", super::unit_suffix(&units)))
 	}
 
 	/// A whole list of quantities as text, built at run time: `"[" + join(map(xs, x => str(x / 1/100) + " cm"), " ") + "]"`
