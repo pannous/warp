@@ -189,6 +189,10 @@ function buildValue(module, tree) {
 			return Number(kind & KIND_MASK) === 3 ? module.new_text(pointer, length) : module.new_symbol(pointer, length);
 		}
 		case 4: return module.new_codepoint(payload.i31);
+		case 6: { // a key (an instance among them): its right side the first cell of the chain, which holds that side's own chain
+			const [right, ...rest] = tree.chain;
+			return module.new_key(buildValue(module, payload.node), right ? buildValue(module, { ...right, chain: rest }) : module.new_empty(), kind >> 8n);
+		}
 		case 7: case 8: {
 			const items = [payload.node, ...tree.chain.map(cell => cell.data?.node)].filter(Boolean);
 			return items.reduceRight((rest, item) => module.new_list(buildValue(module, item), rest, kind >> 8n), null) ?? module.new_empty();

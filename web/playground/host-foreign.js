@@ -176,10 +176,19 @@ function moduleImports(holder, hooks, path) {
 			if (member instanceof WebAssembly.Global) return member.value;
 			if (!member) throw new Error(`${path} exports no ${name}`);
 			const call = cCalls(holder.run).get(`${path}\t${name}`);
-			return call ? callC(holder, exports, member, call, values, `${path} ${name}`) : member(...values);
+			if (call) return callC(holder, exports, member, call, values, `${path} ${name}`);
+			const program = holder.exports;
+			return copied(exports, program, member(...values.map(value => copied(program, exports, value))));
 		},
 	});
 }
+
+// a module warp compiled reads its Nodes (reader.js) and builds them (host.js buildValue)
+const isWarpModule = exports => typeof exports.reflect_data === "function" && typeof exports.new_text === "function";
+// a Node of one warp instance as a copy in the other (src/wasm_modules.rs call_with_values): its texts live in the
+// memory of the instance that made it
+const copied = (from, to, value) => value !== null && typeof value === "object" && isWarpModule(from) && isWarpModule(to)
+	? buildValue(to, readNode(from, value)) : value;
 
 addHostPart({
 	words: (holder, hooks, { program }) => ({

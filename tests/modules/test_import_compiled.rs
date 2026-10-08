@@ -1,7 +1,6 @@
 // Card import-compiled (notes/import_compiled.md): a module warp compiled is imported like any WebAssembly module, and
 // its functions taking or giving values (texts, lists, any value: a Node of the module) are called too, each value
 // copied between the program's instance and the module's
-#[cfg(feature = "native")]
 use crate::is;
 
 #[cfg(feature = "native")]
@@ -35,4 +34,25 @@ fn a_compiled_modules_classes_are_the_programs_too() {
 	is!(&format!("{shapes}P(3, 4).sum()"), 7);
 	is!(&format!("{shapes}width(P(5, 6))"), 5);
 	is!(&format!("{shapes}origin().y"), 7);
+}
+
+// card import-compiled-browser: the same through a module compiled once (`warp compile --wasm
+// tests/fixtures/compiled/shapes.warp`), which the browser reads too
+const COMPILED_SHAPES: &str = "import tests/fixtures/compiled/shapes\n";
+
+#[test]
+fn a_compiled_fixtures_values_and_classes_cross() {
+	is!(&format!("{COMPILED_SHAPES}area(2, 3)"), 6);
+	is!(&format!("{COMPILED_SHAPES}greet(\"Bo\")"), "hi Bo");
+	is!(&format!("{COMPILED_SHAPES}P(3, 4).sum()"), 7);
+	is!(&format!("{COMPILED_SHAPES}width(P(5, 6))"), 5);
+	is!(&format!("{COMPILED_SHAPES}origin().y"), 7);
+}
+
+// a module compiled for any host exports the reflection getters the browser's host reads its values with
+#[cfg(feature = "native")]
+#[test]
+fn a_module_for_any_host_can_be_read_by_the_browser() {
+	let module = warp::pipeline::for_any_host(|| warp::pipeline::compile(SHAPES)).expect("a module");
+	assert!(module.bytes.windows("reflect_data".len()).any(|window| window == b"reflect_data"));
 }
