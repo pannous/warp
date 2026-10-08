@@ -75,9 +75,6 @@ fn euclidean_remainder(a: u32, b: u32, r: u32) -> Vec<Instruction<'static>> {
 	code
 }
 
-/// int_of_any(node): the Int of a value of type any stored into a declared int (P204)
-pub const INT_OF_ANY: &str = "int_of_any";
-
 /// Scratch locals every function reserves for the inline checks (a, b, result)
 pub const INT_SCRATCH_LOCALS: u32 = 3;
 
@@ -439,19 +436,6 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalSet(value));
 		self.emit_require_whole(func, value, super::list_ops::INT_NOT_WHOLE);
 		func.instruction(&I::LocalGet(value));
-	}
-
-	/// The Int of `value` stored into a place declared `declared` (`x: int`, a parameter `n: int`): a value held as a Node
-	/// (of type any: `y: any = "a"` holds a Text) is checked when it runs, an int or nothing else (P204); unannotated
-	/// places stay lax (a character is its code point)
-	pub(super) fn emit_int_for_declared(&mut self, func: &mut Function, declared: Option<&Node>, value: &Node) {
-		let declares_int = declared.is_some_and(|type_node| crate::analyzer::is_int_type(&type_node.name()));
-		if !declares_int || !self.get_type(value).is_ref() {
-			return self.emit_numeric_value(func, value);
-		}
-		self.emit_node_instructions(func, value);
-		func.instruction(&I::RefAsNonNull);
-		self.emit_call(func, INT_OF_ANY);
 	}
 
 	/// Stack [Int] → [Int] before storing to `target`: traps when the Int is no whole number or does not fit its declared

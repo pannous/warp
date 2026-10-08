@@ -262,7 +262,8 @@ impl WasmGcEmitter {
 			Node::Key(left, Op::Define | Op::Assign, right) => {
 				if let Node::Symbol(name) = left.drop_meta() {
 					if let Some(position) = self.scope.lookup(name).map(|local| local.position) {
-						self.emit_float_value(func, right);
+						let declared = self.declared_type_of(left);
+						self.emit_declared_value(func, declared.as_ref(), right, Kind::Float);
 						func.instruction(&I::LocalTee(position));
 					} else if let Some(kind) = self.emit_global_store(func, name, right) {
 						if !kind.is_float() {
