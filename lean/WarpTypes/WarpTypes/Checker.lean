@@ -63,9 +63,10 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     match typeOf P Γ a, typeOf P Γ b with
     | some _, some tb => some tb
     | _, _ => none
+  -- a number index is checked when it runs: `xs[n/2]`
   | .index l i =>
     match typeOf P Γ l, typeOf P Γ i with
-    | some tl, some ti => if listy tl || tl == .text then (if consub ti .int then some (elementTy tl) else none) else none
+    | some tl, some ti => if listy tl || tl == .text then (if consub ti .number then some (elementTy tl) else none) else none
     | _, _ => none
   | .range a b =>
     match typeOf P Γ a, typeOf P Γ b with

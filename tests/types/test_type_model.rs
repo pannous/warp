@@ -353,6 +353,9 @@ const CORPUS: &[&str] = &[
 	"x = 1; x < 2 ? 5 : 6.5",
 	"x = 1; y: int = x > 2 ? 5 : \"no\"; y",
 	"fib(n) := n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)",
+	// a number index is checked when it runs
+	"xs = [1, 2, 3]; n = 4; xs[n/2]",
+	"xs = [1, 2, 3]; n = 3; xs[n/2]",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
