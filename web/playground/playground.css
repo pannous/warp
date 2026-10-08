@@ -140,6 +140,9 @@ main.single { grid-template-columns: minmax(0, 1fr); }
 /* the language guide (guide.js renders guide.md): one open chapter at a time */
 .guide-pane { padding: 8px 14px; max-height: calc(100vh - 80px); position: sticky; top: 8px; overflow-y: auto; font-size: 0.93em; }
 .guide-pane > summary { color: var(--muted); cursor: pointer; }
+.guide-level { display: flex; gap: 4px; margin: 6px 0; }
+.guide-level button { font: inherit; font-size: 0.85em; padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--muted); cursor: pointer; }
+.guide-level button[aria-pressed="true"] { color: inherit; border-color: currentColor; }
 .guide-chapters > p { color: var(--muted); }
 .guide-chapter { border-top: 1px solid var(--line); padding: 4px 0; }
 .guide-chapter > summary { cursor: pointer; font-weight: 600; }
