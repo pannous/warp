@@ -99,25 +99,15 @@ const COPY: &str = "copy";
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
 
-/// Character tests (ASCII), `c.is_digit()`; a character compares by its code point. Templates are not lowered again,
-/// so is_alphanumeric spells out both tests instead of calling the words
-macro_rules! digit_test { () => { "(word_tmp >= '0' and word_tmp <= '9')" } }
-macro_rules! letter_test { () => { "((word_tmp >= 'a' and word_tmp <= 'z') or (word_tmp >= 'A' and word_tmp <= 'Z'))" } }
 /// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `word_tmp` a
-/// temporary that holds it once, `word_argument_2` … the arguments after the receiver
-const EXPANDED_WORDS: [(&str, usize, &str); 10] = [
+/// temporary that holds it once, `word_argument_2` … the arguments after the receiver. The words written in wasp
+/// (first, last, round_to, replace, is_digit …) are lib/prelude.wasp's; these three the emitter dispatches on
+const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	// Python's `list(x)`: the list itself, a text's characters
 	(LIST_WORD, 1, "word_tmp as list"),
-	(ROUND_TO, 2, "round(word_tmp * 10^word_argument_2) / 10^word_argument_2"),
-	("first", 1, "word_tmp#1"),
-	("last", 1, "word_tmp#(count(word_tmp))"),
 	(SUM, 1, "(word_sum=0; for word_item in word_tmp {word_sum = word_sum + word_item}; word_sum)"),
-	("replace", 3, "join(split(word_tmp, word_argument_2), word_argument_3)"),
-	(IS_DIGIT, 1, digit_test!()),
-	(IS_ALPHA, 1, letter_test!()),
 	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
 	(crate::mutation::UNWRAP, 1, "if word_tmp == ø then error(\"unwrapped ø\") else word_tmp"),
-	("is_alphanumeric", 1, concat!(letter_test!(), " or ", digit_test!())),
 ];
 const IS_DIGIT: &str = "is_digit";
 const LIST_WORD: &str = "list";
@@ -196,7 +186,15 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 
 fn arity(word: &str) -> usize {
 	let expanded = EXPANDED_WORDS.iter().map(|(name, arity, _)| (*name, *arity));
-	RUNTIME_WORDS.into_iter().chain(expanded).find(|(name, _)| *name == word).map_or(1, |(_, arity)| arity)
+	let built_in = RUNTIME_WORDS.into_iter().chain(expanded).find(|(name, _)| *name == word).map(|(_, arity)| arity);
+	built_in.or_else(|| crate::modules::prelude_word_arity(word)).unwrap_or(1)
+}
+
+/// The library words a name may stand for once this pass has run: its canonical spelling (`isdigit` → is_digit) and,
+/// for `round`, round_to (`round(x, 2)`). modules::resolve, which runs before, loads the prelude words by them
+pub fn words_spelled_by(name: &str) -> Vec<&'static str> {
+	let rounding = (name == ROUND).then_some(ROUND_TO);
+	canonical_word(name).into_iter().chain(rounding).collect()
 }
 
 pub fn lower(node: Node) -> Node {
@@ -1089,6 +1087,8 @@ impl Lowering {
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
 			Some((_, _, template)) if word == SUM => dispatched_sum(self.expanded(template, arguments)),
 			Some((_, _, template)) => self.expanded(template, arguments),
+			// a prelude word calls its definition from lib/prelude.wasp (modules::prelude_name)
+			None if let Some(qualified) = crate::modules::prelude_name(word) => Node::List([vec![Node::Symbol(qualified)], arguments].concat(), Bracket::Round, Separator::None),
 			None => {
 				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { Node::Symbol(word.to_string()) };
 				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)

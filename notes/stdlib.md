@@ -251,10 +251,15 @@ is the symbol args (no CLI way to pass them); a std module's `use list` worked, 
   1. **Core** (compiler, Rust/wasm runtime): words that need the emitter: the language forms, len/count, indexing, the
      runtime functions of library_ops / text_builtins / list_emitter, host words. They stay; their names are listed
      in one generated index (below), not moved.
-  2. **Prelude** (`lib/prelude.wasp`, always loaded, only the words a program calls come along, like a std module):
-     the wasp-written global words. EXPANDED_WORDS' templates move here as ordinary definitions (round_to, first,
-     last, is_digit …), plus PRELUDE_WORDS (write, exists). A word there loses nothing: a program's own definition
-     still wins.
+  2. **Prelude** (`lib/prelude.wasp`, done, card std-prelude-module): first last round_to replace is_digit is_alpha
+     is_alphanumeric, formerly EXPANDED_WORDS templates (list, sum, unwrap stay templates: the emitter dispatches on
+     them). Loaded when the program or a used std module mentions a word in any spelling (modules::use_prelude,
+     library_words::words_spelled_by: `isdigit`, `round(x, 2)` → round_to); its definitions are named `prelude·first`
+     (modules::prelude_name) and library_words writes the calls so, so a program's own `first` or a local named
+     `first` never meets them. A pass after modules::resolve must not add a prelude word (undo_history indexes
+     instead of calling last). PRELUDE_WORDS (file's write, exists) stay where they are. Fixed on the way: a module
+     word inside an interpolation (`"\(zip(a, b))"`, `"\(x.round(2))"`) was missed by the loader
+     (modules::template_holes); `declared_name` of a list `[a, b]` named b.
   3. **Modules** (`lib/<name>.wasp`): everything else, brought by `use`.
 - **One implicit-use mechanism**: modules.rs gets one table "word or form → module it brings" (file URL → file,
   write/exists → file, a page → markup, routes → router); page_html.rs and routes.rs stop inserting `use` text.

@@ -156,15 +156,13 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 		return program;
 	}
 	let mut needed: Vec<Node> = vec![];
-	// a standard word called as a method (`"hé".to_utf8()`) is needed too
-	let mentioned_or_called = |statements: &[Node]| mentioned_names(statements).into_iter().chain(method_names(statements));
-	let mut mentioned: HashSet<String> = mentioned_or_called(std::slice::from_ref(&program)).collect();
+	let mut mentioned = called_names(std::slice::from_ref(&program));
 	loop {
 		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name))).cloned().collect();
 		if now_needed.len() == needed.len() {
 			break;
 		}
-		mentioned.extend(mentioned_or_called(&now_needed));
+		mentioned.extend(called_names(&now_needed));
 		needed = now_needed;
 	}
 	if needed.is_empty() {
@@ -177,6 +175,21 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	Node::List([needed, statements].concat(), Bracket::None, separator)
 }
 
+
+/// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
+/// words they spell
+fn called_names(statements: &[Node]) -> HashSet<String> {
+	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).collect())
+}
+
+/// The names with the library words they spell (`isdigit` → is_digit, `round` → round_to) and the prelude names of
+/// those (`prelude·is_digit`): library_words, which writes them so, runs after the modules are resolved
+fn with_library_words(names: HashSet<String>) -> HashSet<String> {
+	let spelled: Vec<&str> = names.iter().flat_map(|name| crate::library_words::words_spelled_by(name)).collect();
+	let qualified: Vec<String> = names.iter().map(String::as_str).chain(spelled.iter().copied()).filter_map(prelude_name).collect();
+	let spelled: Vec<String> = spelled.into_iter().map(str::to_string).collect();
+	names.into_iter().chain(spelled).chain(qualified).collect()
+}
 
 /// The variables a program assigns at its top: `words = […]`
 fn program_variables(program: &Node) -> HashSet<String> {
@@ -501,6 +514,25 @@ impl<'a> Loader<'a> {
 				self.std_definitions.extend(definitions.into_iter().filter(|definition| declared_name(definition).is_some_and(|name| words.contains(&name.as_str()))));
 			}
 		}
+		self.use_prelude(program)
+	}
+
+	/// lib/prelude.wasp, its words named `prelude·first` (prelude_name), when the program or a used standard module
+	/// mentions one of them in any spelling (`isdigit`); with_needed_definitions keeps those called
+	fn use_prelude(&mut self, program: &Node) -> Result<(), Node> {
+		let mentioned = called_names(&[std::slice::from_ref(program), &self.std_definitions].concat());
+		let prelude = std_module_definitions(PRELUDE_MODULE).unwrap_or_default();
+		if !prelude.iter().any(|word| mentioned.contains(word)) {
+			return Ok(());
+		}
+		let source = std_module(PRELUDE_MODULE).expect("lib/prelude.wasp is embedded");
+		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(PRELUDE_MODULE), source))?;
+		let qualified = |definition: Node| prelude.iter().fold(definition, |node, word| renamed_word(node, word, &prelude_name(word).unwrap_or_default()));
+		self.std_definitions.extend(definitions.into_iter().map(qualified));
+		MODULE_DEFINITIONS.with(|names| {
+			let mut names = names.borrow_mut();
+			prelude.iter().for_each(|word| { names.remove(word); names.extend(prelude_name(word)); });
+		});
 		Ok(())
 	}
 
@@ -681,7 +713,8 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 19] = [
+const STD_MODULES: [(&str, &str); 20] = [
+	(PRELUDE_MODULE, include_str!("../lib/prelude.wasp")),
 	("memory", include_str!("../lib/memory.wasp")),
 	("net", include_str!("../lib/net.wasp")),
 	("collections", include_str!("../lib/collections.wasp")),
@@ -704,6 +737,10 @@ const STD_MODULES: [(&str, &str); 19] = [
 ];
 /// The standard modules' folder (P194: std/ merged into lib/), embedded in the binary
 const STD_FOLDER: &str = "lib";
+/// lib/prelude.wasp: the wasp-written words of every program, loaded when mentioned (Loader::use_prelude)
+const PRELUDE_MODULE: &str = "prelude";
+/// Between a module's name and its word in a qualified definition name, as between a nested function's outer and own
+const QUALIFIER: char = '·';
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along
 const PRELUDE_WORDS: [(&str, &[&str]); 1] = [("file", &["write", "exists"])];
 /// P183: a file URL in the program loads the file module, no `use file` needed
@@ -766,6 +803,28 @@ pub fn std_module_defining(word: &str) -> Option<&'static str> {
 /// The names a standard module defines, in their order (`dir(time)`); None for no standard module
 pub fn std_module_definitions(module: &str) -> Option<&'static [String]> {
 	std_module_words().iter().find(|(name, _)| *name == module).map(|(_, names)| names.as_slice())
+}
+
+/// The number of parameters of a prelude word (`replace(t, old, new) := …` → 3); None for no prelude word
+pub fn prelude_word_arity(word: &str) -> Option<usize> {
+	static ARITIES: std::sync::OnceLock<Vec<(String, usize)>> = std::sync::OnceLock::new();
+	let arities = ARITIES.get_or_init(|| {
+		let source = std_module(PRELUDE_MODULE).unwrap_or_default();
+		statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(|statement| match statement.drop_meta() {
+			Node::Key(head, Op::Define, _) => match head.drop_meta() {
+				Node::List(items, _, _) => Some((leftmost_symbol(head)?, items.len() - 1)),
+				_ => None,
+			},
+			_ => None,
+		}).collect()
+	});
+	arities.iter().find(|(name, _)| name == word).map(|(_, arity)| *arity)
+}
+
+/// The name a prelude word's definition has in the program (`first` → `prelude·first`): a program's own `first`, or
+/// a local of that name, never meets it; library_words writes the calls of the word so. None for no prelude word
+pub fn prelude_name(word: &str) -> Option<String> {
+	prelude_word_arity(word).map(|_| format!("{PRELUDE_MODULE}{QUALIFIER}{word}"))
 }
 
 /// The texts of a list a standard module assigns at its top: `html_elements = ["html", …]` of markup; empty if missing
@@ -1104,6 +1163,9 @@ pub(crate) fn is_declaration(statement: &Node) -> bool {
 
 /// The name a declaration defines: `f(x) := …`, `x = …`, `x:int = 1`, `fun f(x) {…}`, `global x = …`, `class T {…}`
 fn declared_name(statement: &Node) -> Option<String> {
+	if !is_declaration(statement) {
+		return None; // a list `[a, b]` declares nothing
+	}
 	match statement.drop_meta() {
 		Node::Type { name, .. } => leftmost_symbol(name),
 		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
@@ -1185,7 +1247,34 @@ fn method_names(statements: &[Node]) -> Vec<String> {
 			}
 		});
 	}
+	let holes = template_holes(statements);
+	if !holes.is_empty() {
+		names.extend(method_names(&holes));
+	}
 	names
+}
+
+/// The expressions in the interpolations of the statements (`"\(x.round(2))"`), which are lowered after the modules
+/// are resolved
+fn template_holes(statements: &[Node]) -> Vec<Node> {
+	fn collect(node: &Node, holes: &mut Vec<Node>) {
+		match node {
+			Node::Meta { node: inner, .. } => {
+				holes.extend(crate::interpolation::holes(node));
+				collect(inner, holes);
+			}
+			Node::Key(left, _, right) => {
+				collect(left, holes);
+				collect(right, holes);
+			}
+			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, holes)),
+			Node::Type { body, .. } => collect(body, holes),
+			_ => {}
+		}
+	}
+	let mut holes = vec![];
+	statements.iter().for_each(|statement| collect(statement, &mut holes));
+	holes
 }
 
 fn mentioned_names(statements: &[Node]) -> Vec<String> {
@@ -1203,7 +1292,8 @@ fn mentioned_names(statements: &[Node]) -> Vec<String> {
 				collect(right, names);
 			}
 			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, names)),
-			Node::Meta { node, .. } => collect(node, names),
+			// an interpolation is lowered after the modules are resolved: `"\(zip(a, b))"` calls zip
+			Node::Meta { node: inner, .. } => crate::interpolation::holes(node).iter().chain([inner.as_ref()]).for_each(|part| collect(part, names)),
 			Node::Type { name, body } => {
 				collect(name, names);
 				collect(body, names);
