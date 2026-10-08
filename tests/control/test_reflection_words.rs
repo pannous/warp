@@ -67,3 +67,16 @@ fn inherited_fields_come_first() {
 fn a_real_field_named_fields_wins() {
 	is!("class Form{fields:int}; f = Form(3); f.fields", 3);
 }
+
+// step 3: a function's parameters and signature, from its definition
+#[test]
+fn a_functions_params() {
+	is!("f(a:int, b:int) := a+b\nf.params", warp::texts(vec!["a", "b"]));
+	is!("def g(x){x*2}\ng.parameters", warp::texts(vec!["x"]));
+}
+
+#[test]
+fn a_functions_signature() {
+	is!("f(a:int, b:int) := a+b\nf.signature", "(a:int, b:int) -> int");
+	is!("def greet(name:text){\"hi \" + name}\ngreet.signature", "(name:text) -> text");
+}
