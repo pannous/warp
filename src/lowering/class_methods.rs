@@ -725,7 +725,9 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 	node.visit(&mut |part| if let Node::Key(target, op, value) = part {
 		// `p:Point = …`: the annotation says it
 		if let (Node::Key(variable, Op::Colon, class), Op::Assign) = (target.drop_meta(), op) {
-			if classes.contains(&class.drop_meta().name()) {
+			// `p:Point`, not a list of them `ps:[Point]`
+			let is_class = matches!(class.drop_meta(), Node::Symbol(_) | Node::Type { .. });
+			if is_class && classes.contains(&class.drop_meta().name()) {
 				instances.insert(variable.drop_meta().name(), class.drop_meta().name());
 			}
 		}
@@ -1165,9 +1167,22 @@ fn class_items(body: &Node) -> Vec<Node> {
 /// `def area() -> int {…}`, `fun area(): Int {…}`, `func area() {…}`: the method `area() := …` (with its result type)
 fn keyword_method(words: &[Node]) -> Option<Node> {
 	// Kotlin's expression body `fun sum() = x + y` defines as `:=` does; Java's `int sum() {…}` as C's
-	match crate::declarations::keyword_definition(words).or_else(|| crate::declarations::c_function(words))? {
+	match crate::declarations::keyword_definition(words).or_else(|| crate::declarations::c_function(words)).or_else(|| python_method(words))? {
 		Node::Key(head, Op::Assign, body) => Some(Node::Key(head, Op::Define, body)),
 		definition => Some(definition),
+	}
+}
+
+/// Python's `def f(): x + 1` without parameters, which keyword_definition leaves to late_binding outside a class (P71):
+/// in a class body it is the method `f() := x + 1`
+fn python_method(words: &[Node]) -> Option<Node> {
+	let [keyword, definition] = words else { return None };
+	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word));
+	match definition.drop_meta() {
+		Node::Key(head, Op::Colon, body) if is_keyword && matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
+			Some(Node::Key(head.clone(), Op::Define, body.clone()))
+		}
+		_ => None,
 	}
 }
 
@@ -1558,7 +1573,8 @@ fn class_typed_declarations(node: Node) -> Node {
 
 fn declared_with_classes(node: Node, classes: &[String]) -> Node {
 	match node {
-		Node::List(words, _, _) if words.len() == 2 && classes.contains(&words[0].drop_meta().name()) && matches!(words[1].drop_meta(), Node::Key(variable, Op::Assign, _) if matches!(variable.drop_meta(), Node::Symbol(_))) => {
+		// not the call `P(x = 7)`, a construction with a named argument
+		Node::List(words, bracket, _) if bracket != Bracket::Round && words.len() == 2 && classes.contains(&words[0].drop_meta().name()) && matches!(words[1].drop_meta(), Node::Key(variable, Op::Assign, _) if matches!(variable.drop_meta(), Node::Symbol(_))) => {
 			let Node::Key(variable, _, value) = words[1].drop_meta().clone() else { unreachable!("guarded") };
 			let typed = Node::Key(variable, Op::Colon, Box::new(words[0].clone()));
 			Node::Key(Box::new(typed), Op::Assign, Box::new(declared_with_classes(*value, classes)))

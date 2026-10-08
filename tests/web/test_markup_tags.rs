@@ -69,3 +69,11 @@ fn a_tag_takes_html_attributes_with_equals() {
 	assert_eq!(html_of("div{ label(for=\"pwd\"):\"Password\" }"), "<div><label for=\"pwd\">Password</label></div>");
 	assert_eq!(html_of("p{ shown = \"seen\" }"), "<p>seen</p>");
 }
+
+// card html-dsl-style: inside an element a spaced child `ul { … }` is the element as the glued `ul{ … }` is, so its
+// loop gives one child per item (it was a block whose loop ran: undefined variable fruit·index)
+#[test]
+fn a_spaced_child_element_takes_its_loop_as_children() {
+	eq!(eval("fruits = [\"A\", \"B\"]\nsection { ul { for fruit in fruits { li: fruit } } }"), eval("section{ ul{ li: \"A\" li: \"B\" } }"));
+	eq!(eval("section { h3: \"x\"\n ul { for f in [\"A\"] { li: f } } }"), eval("section{ h3: \"x\" ul{ li: \"A\" } }"));
+}

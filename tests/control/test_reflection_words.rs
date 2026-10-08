@@ -109,3 +109,11 @@ fn fields_of_an_instance_known_at_run_time() {
 	is!(&format!("{POINT}; f(o) := o.methods; f(P(1, 2))"), warp::texts(vec!["sq"]));
 	is!(&format!("{POINT}; xs = [P(1, 2)]; dir(xs#1)"), warp::texts(vec!["x", "y", "sq"]));
 }
+
+// card reflection-def: a definition with its result type written (`-> int`, Python's `-> int:`) reflects too
+#[test]
+fn a_typed_results_functions_params_and_signature() {
+	is!("def add(left:int) -> int { left }\nadd.params", warp::texts(vec!["left"]));
+	is!("def add(left:int) -> int: left\nadd.params", warp::texts(vec!["left"]));
+	is!("def add(left:int) -> int { left }\nadd.signature", "(left:int) -> int");
+}

@@ -95,12 +95,13 @@ impl WasmGcEmitter {
 	}
 
 	/// The parameters and variables of the function whose body defines `function` (`outer` for `outer·inner`), with the
-	/// kinds its compiled body gives them (compile_user_function_body); main's variables behind them, which outer reads
-	/// too (`under = paper` copies main's kind, card captured-copy)
+	/// kinds its compiled body gives them (compile_user_function_body); behind them those of the functions enclosing it
+	/// (`outer·mid·deep` reads outer's too, card nested-two), then main's, which outer reads too (`under = paper` copies
+	/// main's kind, card captured-copy)
 	pub(super) fn enclosing_scope(&self, function: &str, main: &Scope) -> Option<Scope> {
 		let enclosing = self.ctx.enclosing_functions.get(function).and_then(|name| self.ctx.user_functions.get(name))?;
 		let mut scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
-		scope.parent = Some(Box::new(main.clone()));
+		scope.parent = Some(Box::new(self.enclosing_scope(&enclosing.name, main).unwrap_or_else(|| main.clone())));
 		scope.globals = self.ctx.declared_globals.clone();
 		for (index, param) in enclosing.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(&enclosing.name, index) { Kind::List } else { param_kind(param) };
@@ -244,7 +245,7 @@ impl WasmGcEmitter {
 		let mut typed_lists = self.find_typed_lists(&user_fn.body);
 		for (index, param) in user_fn.params.iter().enumerate().filter(|(index, _)| self.takes_list_abi(name, *index)) {
 			let _ = index;
-			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true });
+			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true, aliased: true });
 		}
 		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 		let typed_maps = self.find_typed_maps(&user_fn.body);
@@ -271,6 +272,7 @@ impl WasmGcEmitter {
 		}
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
 		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
+		let saved_loop_values = self.declare_loop_values(&mut locals, &user_fn.body);
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, &user_fn.body, num_params as usize);
 
@@ -321,6 +323,7 @@ impl WasmGcEmitter {
 		self.scope = saved_scope;
 		self.int_scratch = saved_scratch;
 		self.next_temp_local = saved_temp_local;
+		self.loop_values = saved_loop_values;
 		self.returns_node = saved_returns_node;
 		self.returns_float = saved_returns_float;
 		self.returns_list = saved_returns_list;

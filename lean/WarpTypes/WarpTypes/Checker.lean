@@ -45,7 +45,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _ => none
   | .lt a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some ta, some tb => if numeric ta && numeric tb then some .bool else none
+    | some ta, some tb => if (numeric ta && numeric tb) || (textual ta && textual tb) then some .bool else none
     | _, _ => none
   | .eq _ a b =>
     match typeOf P Γ a, typeOf P Γ b with
@@ -440,8 +440,9 @@ inductive Item where
   types that name it -/
   | classDef (name : String) (fields : List (String × Option Ty))
   /-- the cell a local of a function lives in, a fresh instance per call (warp's locals change, W0's are bound by
-  substitution): a class of the one field `cellField`, typed like a main-level name by the first value written -/
-  | cell (name : String)
+  substitution): a class of the one field `cellField`, typed like a main-level name by the first value written, or
+  by its annotation (an annotated parameter assigned in the body, P203: annotations are strict) -/
+  | cell (name : String) (declared : Option Ty)
   /-- `on ev {h}` at main level: a program-wide handler -/
   | on (ev : String) (h : Expr)
   /-- any other statement -/
@@ -477,40 +478,41 @@ def widenOver (s : Spec) (d : Decl) : Decl :=
   { d with type := widened }
 
 /-- rewrites an expression bottom-up, `f` seeing each node with its children rewritten and the locals in scope -/
-def Expr.rewrite (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr → Expr
-  | .call g e => f Γ (.call g (e.rewrite f Γ))
-  | .cons a b => f Γ (.cons (a.rewrite f Γ) (b.rewrite f Γ))
-  | .add a b => f Γ (.add (a.rewrite f Γ) (b.rewrite f Γ))
-  | .arith op a b => f Γ (.arith op (a.rewrite f Γ) (b.rewrite f Γ))
-  | .lt a b => f Γ (.lt (a.rewrite f Γ) (b.rewrite f Γ))
-  | .eq s a b => f Γ (.eq s (a.rewrite f Γ) (b.rewrite f Γ))
-  | .ite c a b => f Γ (.ite (c.rewrite f Γ) (a.rewrite f Γ) (b.rewrite f Γ))
-  | .loop c b d => f Γ (.loop (c.rewrite f Γ) (b.rewrite f Γ) (d.rewrite f Γ))
-  | .seq a b => f Γ (.seq (a.rewrite f Γ) (b.rewrite f Γ))
-  | .index a b => f Γ (.index (a.rewrite f Γ) (b.rewrite f Γ))
-  | .range a b => f Γ (.range (a.rewrite f Γ) (b.rewrite f Γ))
-  | .append a b => f Γ (.append (a.rewrite f Γ) (b.rewrite f Γ))
-  | .assign x e => f Γ (.assign x (e.rewrite f Γ))
-  | .init x e => f Γ (.init x (e.rewrite f Γ))
-  | .letIn y t e b => f Γ (.letIn y t (e.rewrite f Γ) (b.rewrite f (Γ.set y t)))
-  | .tryCatch e h => f Γ (.tryCatch (e.rewrite f Γ) (h.rewrite f Γ))
-  | .cast e ts => f Γ (.cast (e.rewrite f Γ) ts)
-  | .get e g => f Γ (.get (e.rewrite f Γ) g)
-  | .set e g v => f Γ (.set (e.rewrite f Γ) g (v.rewrite f Γ))
-  | .isA e c => f Γ (.isA (e.rewrite f Γ) c)
-  | .handle ev h b => f Γ (.handle ev (h.rewrite f (Γ.set eventLocal .any)) (b.rewrite f Γ))
-  | .emit ev e => f Γ (.emit ev (e.rewrite f Γ))
-  | .scope k e => f Γ (.scope k (e.rewrite f Γ))
-  | .abort ev k e => f Γ (.abort ev k (e.rewrite f Γ))
-  -- the loop variable's type would need P: rewrites see it as any
-  | .forIn y l b d => f Γ (.forIn y (l.rewrite f Γ) (b.rewrite f (Γ.set y .any)) (d.rewrite f Γ))
-  | .lam y b => f Γ (.lam y (b.rewrite f (Γ.set y .any)))
-  | .app a b => f Γ (.app (a.rewrite f Γ) (b.rewrite f Γ))
+def Expr.rewrite (P : Program) (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr → Expr
+  | .call g e => f Γ (.call g (e.rewrite P f Γ))
+  | .cons a b => f Γ (.cons (a.rewrite P f Γ) (b.rewrite P f Γ))
+  | .add a b => f Γ (.add (a.rewrite P f Γ) (b.rewrite P f Γ))
+  | .arith op a b => f Γ (.arith op (a.rewrite P f Γ) (b.rewrite P f Γ))
+  | .lt a b => f Γ (.lt (a.rewrite P f Γ) (b.rewrite P f Γ))
+  | .eq s a b => f Γ (.eq s (a.rewrite P f Γ) (b.rewrite P f Γ))
+  | .ite c a b => f Γ (.ite (c.rewrite P f Γ) (a.rewrite P f Γ) (b.rewrite P f Γ))
+  | .loop c b d => f Γ (.loop (c.rewrite P f Γ) (b.rewrite P f Γ) (d.rewrite P f Γ))
+  | .seq a b => f Γ (.seq (a.rewrite P f Γ) (b.rewrite P f Γ))
+  | .index a b => f Γ (.index (a.rewrite P f Γ) (b.rewrite P f Γ))
+  | .range a b => f Γ (.range (a.rewrite P f Γ) (b.rewrite P f Γ))
+  | .append a b => f Γ (.append (a.rewrite P f Γ) (b.rewrite P f Γ))
+  | .assign x e => f Γ (.assign x (e.rewrite P f Γ))
+  | .init x e => f Γ (.init x (e.rewrite P f Γ))
+  | .letIn y t e b => f Γ (.letIn y t (e.rewrite P f Γ) (b.rewrite P f (Γ.set y t)))
+  | .tryCatch e h => f Γ (.tryCatch (e.rewrite P f Γ) (h.rewrite P f Γ))
+  | .cast e ts => f Γ (.cast (e.rewrite P f Γ) ts)
+  | .get e g => f Γ (.get (e.rewrite P f Γ) g)
+  | .set e g v => f Γ (.set (e.rewrite P f Γ) g (v.rewrite P f Γ))
+  | .isA e c => f Γ (.isA (e.rewrite P f Γ) c)
+  | .handle ev h b => f Γ (.handle ev (h.rewrite P f (Γ.set eventLocal .any)) (b.rewrite P f Γ))
+  | .emit ev e => f Γ (.emit ev (e.rewrite P f Γ))
+  | .scope k e => f Γ (.scope k (e.rewrite P f Γ))
+  | .abort ev k e => f Γ (.abort ev k (e.rewrite P f Γ))
+  | .forIn y l b d =>
+    let l := l.rewrite P f Γ
+    f Γ (.forIn y l (b.rewrite P f (Γ.set y (((typeOf P Γ l).map elementTy).getD .any))) (d.rewrite P f Γ))
+  | .lam y b => f Γ (.lam y (b.rewrite P f (Γ.set y .any)))
+  | .app a b => f Γ (.app (a.rewrite P f Γ) (b.rewrite P f Γ))
   | e => f Γ e
 
 /-- warp decides broadcasting at compile time: a call whose argument is a list of what the function takes -/
 def resolveCalls (P : Program) : Ctx → Expr → Expr :=
-  Expr.rewrite fun Γ e => match e with
+  Expr.rewrite P fun Γ e => match e with
     | .call f e =>
       match P.funs f, typeOf P Γ e with
       | some fd, some te =>
@@ -522,7 +524,7 @@ def resolveCalls (P : Program) : Ctx → Expr → Expr :=
 /-- gradual typing: a value of static type any given to a narrower name or parameter is checked when it runs
 (`level = event.level` is `level = cast event.level [int]`); warp admits these at compile time -/
 def castDynamicValues (P : Program) : Ctx → Expr → Expr :=
-  Expr.rewrite fun Γ e =>
+  Expr.rewrite P fun Γ e =>
     let checked (place : Option Ty) (v : Expr) (give : Expr → Expr) :=
       match place, typeOf P Γ v with
       | some t, some .any => if t == .any then e else give (.cast v [t])
@@ -559,6 +561,15 @@ def sequence : List Expr → Expr
   | e :: rest => .seq e (sequence rest)
 
 def RESULT_ROUNDS : Nat := 4
+
+/-- all functions' results, inferred together so a function may call one defined after it, or call each other (warp
+hoists functions): each round infers every function against the drafts of the round before -/
+def inferFunctions (s : Spec) (functions : List (String × String × Ty × Expr)) : Nat → List (String × Fn) → List (String × Fn)
+  | 0, drafts => drafts
+  | n + 1, drafts =>
+    let s' := { s with funs := drafts }
+    inferFunctions s functions n (functions.map fun (f, y, t, b) =>
+      (f, inferFunction s' f y t b RESULT_ROUNDS (((drafts.lookup f).map (·.result)).getD .never)))
 
 /-- the field of a cell (`Item.cell`) -/
 def cellField : String := "·value"
@@ -613,7 +624,8 @@ def Guesses.fill (g : Guesses) : Item → Item
   | .function f y none b => .function f y (some (((g.params.lookup f).filter (· != .never)).getD .any)) b
   | .classDef c fields =>
     .classDef c (fields.map fun (f, t) => (f, some (t.getD (((g.fields.lookup (c, f)).filter (· != .never)).getD .any))))
-  | .cell c => .classDef c [(cellField, some (((g.cells.lookup c).filter (· != .never)).map widen |>.getD .any))]
+  | .cell c (some t) => .classDef c [(cellField, some t)]
+  | .cell c none => .classDef c [(cellField, some (((g.cells.lookup c).filter (· != .never)).map widen |>.getD .any))]
   | item => item
 
 def Guesses.add (g : Guesses) (classes : List (String × List (String × Option Ty))) : Observation → Guesses
@@ -631,11 +643,11 @@ def Guesses.add (g : Guesses) (classes : List (String × List (String × Option 
 may read a main-level name declared after it: warp hoists functions) -/
 def elaboratePass (items : List Item) (effects aborts : List (String × Ty)) (known : List Decl) : Spec :=
   let functions := items.filterMap fun | .function f y t b => some (f, y, t.getD .any, b) | _ => none
-  let rest := items.filter fun | .function .. | .classDef .. | .cell _ => false | _ => true
+  let rest := items.filter fun | .function .. | .classDef .. | .cell .. => false | _ => true
   let classes := items.filterMap fun | .classDef c fields => some (c, fields.map fun (f, t) => (f, t.getD .any)) | _ => none
-  let withFunctions := functions.foldl (init := ({ decls := known, funs := [], main := .unit, classes, effects, aborts } : Spec))
-    fun s (f, y, t, b) =>
-      { s with funs := s.funs ++ [(f, inferFunction s f y t b RESULT_ROUNDS .never)] }
+  let base : Spec := { decls := known, funs := [], main := .unit, classes, effects, aborts }
+  let drafts := functions.map fun (f, y, t, b) => (f, ({ param := y, paramTy := t, result := .never, body := b } : Fn))
+  let withFunctions := { base with funs := inferFunctions base functions RESULT_ROUNDS drafts }
   let withFunctions := { withFunctions with decls := [] }
   let step (s : Spec) (statements : List Expr) : Item → Spec × List Expr
     | .bind x m annotation value g =>
@@ -649,7 +661,7 @@ def elaboratePass (items : List Item) (effects aborts : List (String × Ty)) (kn
       ({ s with decls := s.decls ++ [{ name := x, mode := .charged, type := t, charged := some body }] }, statements)
     | .statement e => (s, statements ++ [resolveCalls s.program Ctx.empty e])
     | .on ev h => ({ s with handlers := s.handlers ++ [(ev, resolveCalls s.program (Ctx.empty.set eventLocal .any) h)] }, statements)
-    | .function .. | .classDef .. | .cell _ => (s, statements)
+    | .function .. | .classDef .. | .cell .. => (s, statements)
   let (s, statements) := rest.foldl (init := (withFunctions, [])) fun (s, st) item => step s st item
   let s := { s with main := sequence statements }
   let s := (List.range RESULT_ROUNDS).foldl (init := s) fun s _ => { s with decls := s.decls.map (widenOver s) }
@@ -666,12 +678,17 @@ def elaborateTyped (items : List Item) (effects aborts : List (String × Ty)) : 
 def Guesses.refine (items : List Item) (g : Guesses) : Guesses :=
   let s := elaborateTyped (items.map g.fill) g.effects g.aborts
   let classes := items.filterMap fun | .classDef c fields => some (c, fields) | _ => none
-  let cells := items.filterMap fun | .cell c => some c | _ => none
+  let cells := items.filterMap fun | .cell c none => some c | _ => none
   let bodies := s.funs.map fun (_, fd) => observe s.program (Ctx.empty.set fd.param fd.paramTy) fd.body
   let handlers := s.handlers.map fun (ev, h) => observe.observeHandler s.program Ctx.empty ev h
   let observed := observe s.program Ctx.empty s.main ++ bodies.flatten ++ handlers.flatten
+  -- a local holds the type of its first value, widened over the numbers it is given, as a main-level name (P45)
   let firsts := observed.foldl (init := ([] : List (String × Ty))) fun firsts o => match o with
-    | .field [c] f t => if f == cellField && cells.contains c && (firsts.lookup c).isNone then firsts ++ [(c, t)] else firsts
+    | .field [c] f t =>
+      if f != cellField || !cells.contains c then firsts else
+      match firsts.lookup c with
+      | none => firsts ++ [(c, t)]
+      | some first => if sub (join first t) .number then firsts.map fun (d, u) => (d, if d == c then join u t else u) else firsts
     | _ => firsts
   { observed.foldl (fun g o => g.add classes o) g with cells := firsts }
 

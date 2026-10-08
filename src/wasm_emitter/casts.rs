@@ -197,8 +197,7 @@ impl WasmGcEmitter {
 				// Unknown type, emit as key node for dynamic dispatch
 				self.emit_node_instructions(func, value);
 				self.emit_node_instructions(func, target_type);
-				func.instruction(&I::I64Const(op_to_code(&Op::As)));
-				self.emit_call(func, "new_key");
+				self.emit_new_key(func, &Op::As);
 			}
 		}
 	}
@@ -287,6 +286,10 @@ impl WasmGcEmitter {
 
 	/// `x as text`, `str(x)`
 	pub(super) fn emit_cast_to_text(&mut self, func: &mut Function, value: &Node) {
+		// `string(data x+1)` is "x+1"
+		if let Some(quoted) = crate::blocks::quoted_data(value) {
+			return self.emit_string_call(func, &quoted.serialize(), "new_text");
+		}
 		match value {
 			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
 			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
@@ -373,8 +376,8 @@ impl WasmGcEmitter {
 	/// Emit the numeric value of a node onto the stack (as i64)
 	/// `print x`, `puti x`: an output builtin (not shadowed by a user function), whose value is the printed node
 	pub(super) fn is_output_call(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
-			if matches!(word.drop_meta(), Node::Symbol(name) if OUTPUT_CALLS.contains(&name.as_str()) && !self.ctx.user_functions.contains_key(name))))
+		crate::analyzer::is_output_call(node)
+			&& matches!(node.drop_meta(), Node::List(items, _, _) if !self.ctx.user_functions.contains_key(&items[0].name()))
 	}
 }
 

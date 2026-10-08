@@ -28,8 +28,10 @@ through `int_list_as_node`, which builds exactly the square cons list the litera
 printing, returning, passing to a function, `sort`, comparisons… are unchanged, they just pay one O(n) conversion.
 Errors are the same runtime functions (`index_out_of_range`, `index_must_be_an_integer`).
 
-Value semantics: warp lists are values (`node_with_at` copies). A typed list is updated in place, so `ys = xs` copies the
-list (`int_list_copy`) when either side is ever updated by index or append; otherwise the two share it.
+Lists are shared (P200b, card shared-lists): `ys = xs` shares the typed array, so an item set or added through either
+shows in both; `xs = xs + [v]` copies first while the list is aliased (TypedList.aliased). A typed list some holder keeps
+as Nodes (an argument to a function that changes it, an item or field, an untyped alias) stays a Node list
+(wasm_emitter/list_sharing.rs held_elsewhere, find_typed_lists), as one conversion would part the two.
 
 `sum`, `map`, `each`, element-wise `xs * 2` are lowered to loops before emission (library_words.rs, lambdas.rs,
 analyzer::element_wise); those loops reach the dispatch layer as count / element / append, so they get the array for free.
@@ -135,5 +137,8 @@ checked like a declared scalar:
   (`make().n = 5`) is the error "make() gives a copy" (card list-field-receivers).
 - A character stored into a list of unknown static type (one read from a field) goes as its Node; node_with_at took
   it as an Int, so `x#1 = "z"` gave `[122]` (list_ops `is_exact_int_element`).
-- Variance (TypeScript's covariant arrays) needs no rule while lists are values: a callee's widened `xs: list` is its
-  own copy (probes/variance/, notes/footguns.md).
+- Variance (TypeScript's covariant arrays), P215: lists are shared (P200b), so a view of a declared list under a wider
+  element type that changes it (`widen(xs: list) := xs.add(420)` of `names: texts`, `ys: [Shape] = circles;
+  ys.add(…)`) is a compile error where the alias is visible (src/analyzer/list_views.rs); a view that only reads, or of
+  a fitting element type (a subclass), is fine. Not yet: the run-time half (a lax alias, an unannotated parameter,
+  writes checked against the list's own declared element type), probes/variance/.

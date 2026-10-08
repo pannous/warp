@@ -148,6 +148,9 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   error/warning/failed request of the page and its Workers. agent-browser's `console`/`network` see only the page, so
   console_watch.mjs attaches over CDP (`agent-browser get cdp-url`) to every target: Runtime + Log + Network (Chrome's
   Log omits a worker's failed request). pages.yml runs it on _site before deploy and on the live page after (job verify).
+  The runner differs from a Mac: no GPU (Chrome gets SwiftShader's software WebGPU adapter through AGENT_BROWSER_ARGS
+  in pages.yml) and slow starts (test_in_browser.py opens the tour with ?slow_start=2000 to reproduce them locally).
+  A change that may behave differently there: `gh workflow run Playground -R pannous/warp --ref <branch>` first.
 - Not ours: `TypeError … shiftKey … inject.js` in the user's Firefox is a browser extension's content script.
 - Firefox too (card console-errors-step): `--examples --firefox` drives headless Firefox over WebDriver BiDi
   (firefox_driver.mjs: log.entryAdded + network.responseCompleted, workers included; a fresh profile per run). On macOS
