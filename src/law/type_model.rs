@@ -115,8 +115,24 @@ fn event_name(words: &[Node]) -> Option<String> {
 
 fn effect(node: &Node) -> Option<Effect<'_>> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
+	// `on ev {h} in {body}` as a value parses as `(on ev {h}) in {body}`
+	if let [handled, keyword, body] = items.as_slice() {
+		if is_word(keyword, IN_KEYWORD) {
+			if let Some(Effect::On { event, handler, body: None }) = effect(handled) {
+				return Some(Effect::On { event, handler, body: Some(body) });
+			}
+		}
+	}
 	let (first, rest) = items.split_first()?;
 	if is_word(first, ON_KEYWORD) {
+		// `a = on ask {2} in {…}` groups the words after `on`: `on (ask {2})`
+		let rest = match rest {
+			[grouped] => match grouped.drop_meta() {
+				Node::List(words, Bracket::None, Separator::Space) => words.as_slice(),
+				_ => rest,
+			},
+			_ => rest,
+		};
 		let (last, words) = rest.split_last()?;
 		let event = event_name(words)?;
 		return match last.drop_meta() {
@@ -513,6 +529,8 @@ impl Exporter {
 	/// a function body: `{ a; b }` is the sequence
 	fn block(&mut self, body: &Node) -> Lean {
 		match body.drop_meta() {
+			// `{emit too big{value: x}}`: the words of one statement
+			Node::List(items, Bracket::Curly, Separator::Space) if items.len() > 1 => self.expression(&Node::List(items.clone(), Bracket::None, Separator::Space)),
 			Node::List(items, Bracket::Curly, _) if !items.is_empty() => {
 				let statements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
 				let mut statements = statements?;
