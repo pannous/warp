@@ -17,8 +17,10 @@ permissions:
   pages: write
   id-token: write
 
+# one group per ref: an integrator's check of a branch (`gh workflow run Playground --ref <branch>`) and a deploy of main
+# don't cancel each other
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 env:
