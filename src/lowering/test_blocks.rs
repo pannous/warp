@@ -32,24 +32,26 @@ pub fn lower(program: Node) -> Node {
 }
 
 enum Test<'a> {
-	Soft(&'a Node),
+	Soft(Node),
 	Named(&'a str, &'a Node),
 }
 
-/// `test C` or `test "name" { … }`
+/// `test C` or `test "name" { … }`; C may be a phrase of several parts: `test switch 3 {…} == "three"`
 fn test_of(statement: &Node) -> Option<Test<'_>> {
 	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
 	let (head, rest) = items.split_first()?;
 	if !matches!(head.drop_meta(), Node::Symbol(word) if word == TEST_WORD) {
 		return None;
 	}
+	if let [name, body] = rest {
+		if let (Node::Text(name), Node::List(_, Bracket::Curly, _)) = (name.drop_meta(), body.drop_meta()) {
+			return Some(Test::Named(name, body));
+		}
+	}
 	match rest {
-		[condition] => Some(Test::Soft(condition)),
-		[name, body] => match (name.drop_meta(), body.drop_meta()) {
-			(Node::Text(name), Node::List(_, Bracket::Curly, _)) => Some(Test::Named(name, body)),
-			_ => None,
-		},
-		_ => None,
+		[] => None,
+		[condition] => Some(Test::Soft(condition.clone())),
+		phrase => Some(Test::Soft(Node::List(phrase.to_vec(), Bracket::None, Separator::Space))),
 	}
 }
 
@@ -59,7 +61,7 @@ fn run_test(statement: Node) -> Vec<Node> {
 		Some(Test::Soft(condition)) => {
 			let serialized = || format!("{TEST_WORD} {}", condition.serialize().trim());
 			let written = Node::Text(crate::diagnostic::written_statement(&statement).unwrap_or_else(serialized));
-			substitute(substitute(template(SOFT_CHECK), CONDITION, condition), NAME, &written)
+			substitute(substitute(template(SOFT_CHECK), CONDITION, &condition), NAME, &written)
 		}
 		Some(Test::Named(name, body)) => {
 			let body = Node::List(statements(body).into_iter().flat_map(run_test).collect(), Bracket::Curly, Separator::Newline);

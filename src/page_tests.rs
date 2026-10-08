@@ -44,7 +44,7 @@ pub fn answer(code: &str) -> Option<Node> {
 	ranges.iter().rev().for_each(|range| setup.replace_range(range.clone(), ""));
 	let failures: Vec<String> = tests.iter().filter_map(|(name, steps)| run_test(&setup, steps).err().map(|problem| format!("test \"{name}\": {problem}"))).collect();
 	Some(match failures.is_empty() {
-		true => Node::Text(format!("{} passed", plural(tests.len(), TEST_WORD))),
+		true => Node::Text(format!("✓ {} passed", plural(tests.len(), TEST_WORD))),
 		false => error(&format!("{} of {} failed\n{}", failures.len(), plural(tests.len(), TEST_WORD), failures.join("\n"))),
 	})
 }
