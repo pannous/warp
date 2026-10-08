@@ -1221,7 +1221,7 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	if let Some(element) = list_element_type(type_name) {
 		return list_items_mismatch(assignment, name, type_name, element, value);
 	}
-	let actual = bool_misfit(type_name, value).or_else(|| literal_misfit(type_name, value))?;
+	let actual = literal_misfit(type_name, value)?;
 	let value_text = value.serialize();
 	let message = format!("type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}", format!("{actual:?}").to_lowercase());
 	Some(Diagnostic::at(assignment, message).fix(format!("{name}={type_name}({value_text}) or declare {name}:{}", format!("{actual:?}").to_lowercase())))
@@ -1229,6 +1229,9 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 
 /// The kind of a literal `value` that does not fit the built-in type `type_name`; None when it fits or is no literal
 pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
+	if BOOL_TYPES.contains(&type_name.to_lowercase().as_str()) {
+		return bool_misfit(value);
+	}
 	let expected = builtin_type_kind(type_name)?;
 	let actual = computed_literal_kind(value)?;
 	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
@@ -1237,16 +1240,18 @@ pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
 	(!fits).then_some(actual)
 }
 
-/// A bool variable is held as an Int, but int ≰ bool: only true and false fit it (card bool-assign). A bool field still
-/// takes 1 and 0 (tests/types/test_instance_arguments.rs, a question to the user)
-fn bool_misfit(type_name: &str, value: &Node) -> Option<Kind> {
-	if !BOOL_TYPES.contains(&type_name.to_lowercase().as_str()) {
-		return None;
-	}
+/// A bool is held as an Int, but int ≰ bool: true, false and P199's 1 and 0 (yes and no) fit it, no other int
+fn bool_misfit(value: &Node) -> Option<Kind> {
 	match value.drop_meta() {
 		Node::True | Node::False => None,
+		value if is_zero_or_one(value) => None,
 		_ => computed_literal_kind(value),
 	}
+}
+
+/// P199 (user): 1 and 0 are yes and no wherever a bool is expected
+pub(crate) fn is_zero_or_one(value: &Node) -> bool {
+	matches!(value.drop_meta(), Node::Number(Number::Int(0 | 1)))
 }
 
 /// The element type of a list type: `texts` and `list of text` hold `text`

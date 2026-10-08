@@ -326,6 +326,8 @@ pub(super) fn first_kind_change(node: &Node, kinds: &mut HashMap<String, Option<
 			// a first evident value fixes the kind (Int widens to Float); any value of no evident kind ends the check
 			let kind = match (earlier, given) {
 				(None, given) => given,
+				// P199: 1 and 0 are yes and no, a bool variable stays one
+				(Some(Some(EvidentKind::Bool)), Some(_)) if crate::analyzer::is_zero_or_one(value) => Some(EvidentKind::Bool),
 				(Some(Some(was)), Some(now)) => match was.given(now) {
 					Some(kind) => Some(kind),
 					None => {
