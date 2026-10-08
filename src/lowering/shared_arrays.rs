@@ -434,20 +434,32 @@ fn gpu_kernel_map(value: &Node) -> Option<(Node, Node, crate::gpu_maps::Kernel)>
 /// broadcasting.rs pairs two lists, where the map would read ys as one number (its block's address); `dot(xs, ys)` of
 /// one is `sum(xs .* ys)`. `pairs` counts the pairings, naming each one's lists
 fn paired_with_linear(node: Node, names: &HashMap<String, Shared>, defines_dot: bool, pairs: &mut usize) -> Node {
-	use crate::broadcasting::{element_wise_parts, named_by, paired_by, PAIRED_TEMPLATE};
-	let node = node.map_children(|child| paired_with_linear(child, names, defines_dot, pairs));
-	if let Some((receiver, op, operand)) = element_wise_parts(&node).filter(|(_, _, operand)| is_linear_list(operand, names)) {
-		*pairs += 1;
-		return paired_by(receiver, op, operand, PAIRED_TEMPLATE, named_by(format!("linear_{pairs}")));
-	}
-	match node.drop_meta() {
+	use crate::broadcasting::{PAIRED_SUM_TEMPLATE, PAIRED_TEMPLATE};
+	let node = match node.drop_meta() {
 		Node::List(items, Bracket::Round, _) if !defines_dot && items.len() == 3 && items[0].name() == DOT_WORD && items[1..].iter().any(|list| is_linear_list(list, names)) => {
 			let product = crate::analyzer::element_wise(items[1].clone(), Op::Mul, items[2].clone());
-			let sum = Node::List(vec![Node::Symbol(SUM_WORD.into()), product], Bracket::Round, Separator::None);
-			paired_with_linear(sum, names, defines_dot, pairs)
+			Node::List(vec![Node::Symbol(SUM_WORD.into()), product], Bracket::Round, Separator::None)
 		}
 		_ => node,
+	};
+	let summed = match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 2 && items[0].name() == SUM_WORD => Some(items[1].clone()),
+		_ => None,
+	};
+	if let Some(paired) = summed.and_then(|product| paired_linear(&product, names, defines_dot, pairs, PAIRED_SUM_TEMPLATE)) {
+		return paired;
 	}
+	let node = node.map_children(|child| paired_with_linear(child, names, defines_dot, pairs));
+	paired_linear(&node, names, defines_dot, pairs, PAIRED_TEMPLATE).unwrap_or(node)
+}
+
+/// `receiver .op operand` of a linear operand, its items paired by index in `template`: the list, or its fused sum
+fn paired_linear(node: &Node, names: &HashMap<String, Shared>, defines_dot: bool, pairs: &mut usize, template: &str) -> Option<Node> {
+	use crate::broadcasting::{element_wise_parts, named_by, paired_by};
+	let (receiver, op, operand) = element_wise_parts(node).filter(|(_, _, operand)| is_linear_list(operand, names))?;
+	let (receiver, operand) = (paired_with_linear(receiver, names, defines_dot, pairs), paired_with_linear(operand, names, defines_dot, pairs));
+	*pairs += 1;
+	Some(paired_by(receiver, op, operand, template, named_by(format!("linear_{pairs}"))))
 }
 
 /// A linear array, or an element-wise expression of one: `ys`, `(ys .* 2)`

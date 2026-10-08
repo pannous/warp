@@ -34,7 +34,7 @@ pub(crate) const PAIRED_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_ri
 const PAIRED_ITEM: &str = "LEFT#paired_index + RIGHT#paired_index";
 const PAIRED_COUNT: &str = "(if #LEFT == #RIGHT then #LEFT else raise \"element-wise operator: the lists differ in length\")";
 /// `sum(xs .* ys)` and `sum(xs .* 3)` fused into one loop, no list of the products built (5–20× faster, notes/gpu.md)
-const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
+pub(crate) const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
 const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEMS { SUM = SUM + fused_item }; SUM)";
 const SUM_WORD: &str = "sum";
 /// `dot(xs, ys)` is `sum(xs .* ys)`, unless the program defines dot
