@@ -1259,7 +1259,7 @@ pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
 		}
 	}
 	match annotation.drop_meta() {
-		Node::Symbol(word) => plural_element_type(word).or_else(|| word.strip_prefix(LIST_OF_PREFIX)),
+		Node::Symbol(word) => list_element_type(word),
 		Node::List(items, Bracket::Square, _) if items.len() == 1 => symbol(&items[0]),
 		Node::List(items, _, Separator::Space) => match items.as_slice() {
 			[list, of, element] if symbol(list) == Some(LIST_WORD) && symbol(of) == Some(OF_WORD) => symbol(element),
