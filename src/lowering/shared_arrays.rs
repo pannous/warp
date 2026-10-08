@@ -345,6 +345,7 @@ impl Rewrite<'_> {
 				}
 				match items.as_slice() {
 					[word, array] if COUNTING_WORDS.contains(&word.name().as_str()) && let Some(kind) = shared(array, &names) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
+					[word, left, right] if word.name() == crate::wasm_emitter::linear_arrays::LINEAR_DOT && is_linear_floats(left, &names) && is_linear_floats(right, &names) => builtin(&word.name(), vec![left.clone(), right.clone()]),
 					[word, shader, array, workgroups] if word.name() == crate::host::GPU_COMPUTE && is_linear_floats(array, &names) => {
 						builtin(crate::host::GPU_COMPUTE_LINEAR, vec![self.node(shader.clone(), function), array.clone(), self.node(workgroups.clone(), function)])
 					}
@@ -457,9 +458,20 @@ fn paired_with_linear(node: Node, names: &HashMap<String, Shared>, defines_dot: 
 fn paired_linear(node: &Node, names: &HashMap<String, Shared>, defines_dot: bool, pairs: &mut usize, template: &str) -> Option<Node> {
 	use crate::broadcasting::{element_wise_parts, named_by, paired_by};
 	let (receiver, op, operand) = element_wise_parts(node).filter(|(_, _, operand)| is_linear_list(operand, names))?;
+	if template == crate::broadcasting::PAIRED_SUM_TEMPLATE && op == Op::Mul && is_linear_floats(&receiver, names) && is_linear_floats(&operand, names) {
+		return Some(linear_dot(receiver, operand));
+	}
 	let (receiver, operand) = (paired_with_linear(receiver, names, defines_dot, pairs), paired_with_linear(operand, names, defines_dot, pairs));
 	*pairs += 1;
 	Some(paired_by(receiver, op, operand, template, named_by(format!("linear_{pairs}"))))
+}
+
+/// `sum(xs .* ys)` of two linear float arrays: their lengths checked, then linear_dotf over both blocks
+fn linear_dot(left: Node, right: Node) -> Node {
+	use crate::wasm_emitter::linear_arrays::LINEAR_DOT;
+	let template = format!("({}; {LINEAR_DOT}(LEFT, RIGHT))", crate::broadcasting::PAIRED_COUNT).replace("LEFT", "dot_left").replace("RIGHT", "dot_right");
+	let bindings = HashMap::from([("dot_left".to_string(), left), ("dot_right".to_string(), right)]);
+	crate::law::substitute(&crate::warp_parser::parse(&template), &bindings)
 }
 
 /// A linear array, or an element-wise expression of one: `ys`, `(ys .* 2)`
