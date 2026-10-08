@@ -5,6 +5,9 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- Language name (user): the language is named warp everywhere; wasp remains only in README history and other history
+  markdown. Defaults (supervisor): `*.wasp` → `*.warp`, with `.wasp` still readable; URLs and domains
+  (github.com/pannous/wasp, wasp.pannous.com) unchanged; wisp unchanged. Card rename-warp, warp-fixer.
 - P203 general rule, lax versus strict: annotations make it strict. Unannotated code is lax (Python-like, checked at
   run time); anything annotated (`x: T`, field types, `implements`, a declared parent type) is a promise the compiler
   enforces. `--strict` adds warnings for the lax spots. Asked after the user saw "a general conflict between pythonic
@@ -27,6 +30,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   run time from the WASM metadata. Words: x.type, x.class, x.fields/attributes/members, x.methods,
   f.params/signature, f.effects, event.listeners, module.exports, x.unit, x.doc. Lookup order field → meta →
   reflection. One warp custom section (wasp.meta), kept unstripped.
+  Built (default, warp-web): run-time reflection on the program's own classes is a compiled type dispatch
+  (`o.fields` → `if o is P then ["x" "y"] else …`), no host call; wasp.meta plus a host call serve values from outside
+  the program (card reflection-foreign-meta). `members` is an alias of `fields` (field names only).
 - P200b real references without exceptions (card real-references, warp-58): maps share like class instances
   (`m = {a: 1}; n = m; n.a = 2; m.a` → 2), and adding a new field keeps the same object (`q = p; q.color = "red";
   p.color` → "red"). `x.copy()` is the explicit independent copy.
@@ -55,6 +61,14 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   note would be a run-time warning, not built yet); `x.copy(true)` positional also means shallow, and in the
   Kotlin-style `p.copy(shallow = yes, y = 5)` shallow is the flag; each event handler still gets a copy of the event
   as raised; lists are still values until card shared-lists (P200b's "everything shares" includes lists).
+- Soft tests (defaults, warp-worker, notes/soft_tests.md): bare `test C` lines are skipped by `warp run` too (P209);
+  the playground's Run runs a program's tests and shows the summary (no separate Test button); page tests still run
+  under a plain run for now; a program's own `test` function keeps the word.
+- P211 `~` is looser than `≈` (card g_YHSM, "two levels of approximation"): `~` compares numbers within 1% (setting
+  `rough_tolerance`) and texts also ignoring surrounding whitespace and punctuation ("Hello!" ~ "hello"); `≈` stays:
+  numbers within 1e-9 relative, texts ignoring case and accents, lists and objects field by field.
+- P212 a class may define `approximately` (≈) and/or `similar` (~); with only one defined, both operators use it;
+  with neither, the built-in field-by-field rule applies.
 - P209 test blocks run only under `warp test` (chosen over running with the main program); `warp run` and `use` skip
   them.
 - P210 when all tests pass, one summary line ("✓ 12 tests passed"); failures print ✗ lines and "m of n failed" and

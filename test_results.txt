@@ -159,6 +159,7 @@ PASSED:
   ✓ control::test_for_loop::test_for_with_colon_body
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
+  ✓ control::test_for_over_a_number::a_for_loop_over_a_number_is_a_compile_error
   ✓ control::test_for_underscore::a_loop_over_underscore_runs
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
   ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
@@ -215,6 +216,7 @@ PASSED:
   ✓ control::test_match_guards_and_finally::a_guard_binds_and_tests
   ✓ control::test_match_guards_and_finally::an_assigned_match_takes_arrow_cases
   ✓ control::test_match_guards_and_finally::finally_runs_and_keeps_the_value
+  ✓ control::test_mixed_range_bounds::a_range_from_a_letter_to_a_number_is_a_compile_error
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
   ✓ control::test_named_broadcast::a_named_event_reaches_another_program
   ✓ control::test_named_broadcast::a_program_hears_its_own_named_event
@@ -262,10 +264,13 @@ PASSED:
   ✓ control::test_reactive_ports::rxjs_node_qt_events
   ✓ control::test_reactive_ports::svelte_vue_solid_derivations
   ✓ control::test_reactive_ports::the_signals_note_example_runs
+  ✓ control::test_reflection_words::a_bindings_doc
   ✓ control::test_reflection_words::a_classes_methods
   ✓ control::test_reflection_words::a_functions_effects_as_a_dot_form
   ✓ control::test_reflection_words::a_functions_params
   ✓ control::test_reflection_words::a_functions_signature
+  ✓ control::test_reflection_words::a_modules_exports
+  ✓ control::test_reflection_words::a_real_field_named_doc_wins
   ✓ control::test_reflection_words::a_real_field_named_fields_wins
   ✓ control::test_reflection_words::a_real_field_named_listeners_wins
   ✓ control::test_reflection_words::an_events_listeners_as_a_dot_form
@@ -1536,12 +1541,15 @@ PASSED:
   ✓ modules::test_std_matrix::numpy_names_are_matrix_words
   ✓ modules::test_std_matrix::use_matrix_computes
   ✓ modules::test_std_matrix::use_matrix_makes_matrices
+  ✓ modules::test_std_module_docs::help_lists_a_modules_words_with_their_comment
+  ✓ modules::test_std_module_docs::the_markdown_page_has_every_standard_module
   ✓ modules::test_std_module_uses_module::a_programs_own_word_of_the_hidden_name_is_its_own
   ✓ modules::test_std_module_uses_module::a_std_module_calls_another_modules_word
   ✓ modules::test_std_module_uses_module::the_program_uses_both_modules
   ✓ modules::test_std_module_uses_module::the_used_modules_words_stay_hidden_from_the_program
   ✓ modules::test_std_named_program::a_file_shadowing_a_std_module_is_named
   ✓ modules::test_std_named_program::a_program_named_like_a_std_module_uses_the_std_module
+  ✓ modules::test_std_names_offline::a_std_module_name_needs_no_file_lookup
   ✓ modules::test_std_net::use_net_posts_a_text
   ✓ modules::test_std_prelude::a_local_named_like_a_prelude_word_is_the_local
   ✓ modules::test_std_prelude::a_module_word_inside_an_interpolation_comes_along
@@ -1921,6 +1929,10 @@ PASSED:
   ✓ operators::test_add_to::add_to_an_empty_list
   ✓ operators::test_add_to::add_to_appends_an_element
   ✓ operators::test_add_to::add_to_takes_an_expression
+  ✓ operators::test_approximately::a_bool_is_approximately_any_value_of_its_truthiness
+  ✓ operators::test_approximately::instances_are_approximately_equal_field_by_field
+  ✓ operators::test_approximately::lists_and_objects_are_approximately_equal_element_by_element
+  ✓ operators::test_approximately::texts_are_approximately_equal_in_any_case_and_accent
   ✓ operators::test_bar_pipe::a_bar_after_a_braceless_call_pipes_its_result
   ✓ operators::test_bar_pipe::a_bar_before_a_function_pipes_the_value_into_it
   ✓ operators::test_bar_pipe::a_bar_between_values_stays_the_logical_or
@@ -2352,6 +2364,7 @@ PASSED:
   ✓ scope::test_export_declaration::test_export_without_initializer_is_zero
   ✓ scope::test_export_declaration::test_exported_variable_can_be_assigned
   ✓ scope::test_export_declaration::test_type_words_come_from_the_analyzer
+  ✓ scope::test_function_name_kind_clash::a_function_name_given_another_kind_is_a_compile_error
   ✓ scope::test_global_assignment_in_function::global_with_a_value_in_a_function_changes_main
   ✓ scope::test_global_constant_words::global_with_every_constant_word
   ✓ scope::test_global_declaration::test_compound_assignment_on_a_global
@@ -3641,4 +3654,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3636 passed, 0 failed, 3636 total tested
+19 ignored, 3649 passed, 0 failed, 3649 total tested

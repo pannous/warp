@@ -84,6 +84,12 @@ inductive Expr where
   | abort (ev : String) (k : Option Nat) (e : Expr)
   /-- `for y in l { body }`: body runs once per item of the list l, the local y holding the item; gives ø -/
   | forIn (y : String) (l body : Expr)
+  /-- `y => body`, a lambda: it evaluates to the closure `clo y body` once the locals it captures are substituted -/
+  | lam (y : String) (body : Expr)
+  /-- a function value: closed but for its parameter y (run time only) -/
+  | clo (y : String) (body : Expr)
+  /-- `f(a)` of a function value f -/
+  | app (f a : Expr)
   deriving DecidableEq, Repr
 
 /-- the local a handler reads the emitted payload from -/
@@ -92,7 +98,7 @@ def eventLocal : String := "event"
 namespace Expr
 
 def isValue : Expr → Bool
-  | bool _ | int _ | num _ | text _ | unit | nil | ref _ _ => true
+  | bool _ | int _ | num _ | text _ | unit | nil | ref _ _ | clo _ _ => true
   | cons h t => h.isValue && t.isValue
   | _ => false
 
@@ -126,18 +132,20 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | scope k e => scope k (e.subst y v)
   | abort ev k e => abort ev k (e.subst y v)
   | forIn z l b => forIn z (l.subst y v) (if z = y then b else b.subst y v)
+  | lam z b => lam z (if z = y then b else b.subst y v)
+  | app f a => app (f.subst y v) (a.subst y v)
   | e => e
 
 /-- the main-level names an expression assigns or binds -/
 def assigned : Expr → List String
   | assign x e | init x e => x :: e.assigned
   | cons a b | add a b | arith _ a b | lt a b | eq _ a b | loop a b | seq a b | index a b | range a b | append a b
-  | tryCatch a b
+  | tryCatch a b | app a b
   | handle _ a b => a.assigned ++ b.assigned
   | ite c a b => c.assigned ++ a.assigned ++ b.assigned
   | letIn _ _ e b | forIn _ e b => e.assigned ++ b.assigned
   | set a _ b => a.assigned ++ b.assigned
-  | call _ e | cast e _ | broadcast _ e | get e _ | isA e _ | emit _ e | scope _ e | abort _ _ e => e.assigned
+  | call _ e | cast e _ | broadcast _ e | get e _ | isA e _ | emit _ e | scope _ e | abort _ _ e | lam _ e => e.assigned
   | _ => []
 
 end Expr

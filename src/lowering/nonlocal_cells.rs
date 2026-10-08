@@ -161,7 +161,7 @@ fn nonlocal_lambdas(node: Node, count: &mut usize) -> Node {
 		collect_locals(body, &mut locals);
 		let mut hoisted = vec![];
 		let body = in_enclosing(body.clone(), &locals, count, &mut hoisted);
-		return Node::Key(Box::new(head.clone()), op, Box::new(with_first(hoisted, body)));
+		return Node::Key(Box::new(head.clone()), op, Box::new(with_first(hoisted, body))).with_meta_of(&node);
 	}
 	node.map_children(|child| nonlocal_lambdas(child, count))
 }

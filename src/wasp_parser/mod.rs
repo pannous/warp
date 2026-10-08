@@ -102,10 +102,9 @@ const RECORD_WORD: &str = "record";
 const UPTO: &str = "upto";
 /// English operator words (samples/natural.wasp, wiki/operator.md lists `plus` and `equals` as aliases): the longer
 /// phrases first, so `is greater than` is no `is`
-const WORD_OPERATORS: [(&str, Op); 18] = [
-	// identity (P208): `same` is the word, `===` its alias
-	("is not the same as", Op::NotIdentical), ("is the same as", Op::Identical), ("is identical to", Op::Identical),
-	("identical to", Op::Identical), ("same as", Op::Identical), ("identical", Op::Identical), ("same", Op::Identical),
+const WORD_OPERATORS: [(&str, Op); 15] = [
+	// identity (P208): `same` is the word, `===` its alias; no `identical` (user)
+	("is not the same as", Op::NotIdentical), ("is the same as", Op::Identical), ("same as", Op::Identical), ("same", Op::Identical),
 	("is greater than", Op::Gt), ("is less than", Op::Lt), ("is at least", Op::Ge), ("is at most", Op::Le),
 	("greater than", Op::Gt), ("less than", Op::Lt), ("divided by", Op::Div), ("plus", Op::Add), ("minus", Op::Sub),
 	("equals", Op::Eq), ("through", Op::To),

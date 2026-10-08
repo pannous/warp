@@ -477,6 +477,8 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 		.or_else(|| check_subjectless_comparison(program))
 		.or_else(|| check_ambiguous_calls(program))
 		.or_else(|| check_call_arity(program))
+		.or_else(|| check_walked_numbers(program))
+		.or_else(|| check_mixed_range_bounds(program))
 		.map(Diagnostic::into_error)
 }
 
@@ -986,6 +988,43 @@ pub(super) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
 		Node::List(items, _, _) => items.iter().find_map(check_ambiguous_calls),
 		_ => None,
 	}
+}
+
+/// `for x in 3 {…}`: a loop walks a list, a text or a range, never a number (a literal, or a variable only ever
+/// assigned number literals); it failed only at run time with "not a list"
+pub(super) fn check_walked_numbers(program: &Node) -> Option<Diagnostic> {
+	let is_number = |value: &Node| matches!(value.drop_meta(), Node::Number(_));
+	let mut numbers: HashMap<String, bool> = HashMap::new();
+	program.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define, value) = part {
+		if let Node::Symbol(name) = target.drop_meta() {
+			*numbers.entry(name.clone()).or_insert(true) &= is_number(value);
+		}
+	});
+	let mut found = None;
+	program.visit(&mut |part| if let (None, Node::List(items, _, _)) = (&found, part) {
+		let [keyword, variable, within, walked, ..] = items.as_slice() else { return };
+		let walks_number = is_number(walked) || matches!(walked.drop_meta(), Node::Symbol(name) if numbers.get(name) == Some(&true));
+		if walks_number && keyword.drop_meta().name() == "for" && within.drop_meta().name() == "in" {
+			let (variable, walked) = (variable.serialize(), walked.serialize());
+			let message = format!("`for {variable} in {walked}` walks a number: a for loop walks a list, a text or a range, e.g. `for {variable} in 1 to {walked}`");
+			found = Some(Diagnostic::at(part, message));
+		}
+	});
+	found
+}
+
+/// `'a'..3`, `3 to "c"`: a range counts letters or numbers, never from one to the other; it failed only at run time
+/// with "not a character"
+pub(super) fn check_mixed_range_bounds(program: &Node) -> Option<Diagnostic> {
+	let mut found = None;
+	program.visit(&mut |part| if let (None, Node::Key(start, Op::Range | Op::To, end)) = (&found, part) {
+		let (start_value, end_value) = (start.drop_meta(), end.drop_meta());
+		if matches!((start_value, end_value), (Node::Char(_), Node::Number(_)) | (Node::Number(_), Node::Char(_))) {
+			let written = part.serialize();
+			found = Some(Diagnostic::at(part, format!("`{}` mixes a letter and a number: count letters ('a' to 'c') or numbers (1 to 3)", written.trim())));
+		}
+	});
+	found
 }
 
 /// Booleans are not numbers: `true + true` is rejected, not 2 (the runtime still encodes them as Int 1/0)
