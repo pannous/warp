@@ -166,6 +166,37 @@ pub fn lower_module_words(node: Node) -> Node {
 	with_object_words(node, &Objects { modules, defined, ..Objects::default() })
 }
 
+/// `calc.exports`, `dir(calc)` of a component (`use wasm "calc.wasm" as calc`, card reflection-components): its export
+/// names, read off the component natively before foreign_modules makes `calc.exports` a call into it; the page reads
+/// components only at run time (components.js)
+pub fn lower_component_words(node: Node) -> Node {
+	if !node.mentions_any(&[EXPORTS_WORD, DIR_WORD]) {
+		return node;
+	}
+	let modules = component_exports(&node);
+	if modules.is_empty() {
+		return node;
+	}
+	let defined = crate::library_words::defined_names(&node);
+	with_object_words(node, &Objects { modules, defined, ..Objects::default() })
+}
+
+#[cfg(feature = "native")]
+fn component_exports(node: &Node) -> HashMap<String, Vec<String>> {
+	crate::foreign_modules::component_modules(node).into_iter().filter_map(|(alias, path)| match crate::components::export_names(&path) {
+		Ok(names) => Some((alias, names)),
+		Err(failure) => {
+			eprintln!("[wasm] {failure}");
+			None
+		}
+	}).collect()
+}
+
+#[cfg(not(feature = "native"))]
+fn component_exports(_node: &Node) -> HashMap<String, Vec<String>> {
+	HashMap::new()
+}
+
 /// `import lib/fourty_two`: the names fourty_two exports (wasm_modules.rs), sorted; not the setters derived for its globals
 fn module_exports(node: &Node) -> HashMap<String, Vec<String>> {
 	let mut context = crate::context::Context::new();
