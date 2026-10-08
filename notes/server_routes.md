@@ -50,13 +50,16 @@ all. The page build now keeps the definition as a function of the page: tests/we
      the existing async model, so the same lowering as fetch_signals.rs with a POST. **Default.**
    - (b) A synchronous call. That only works inside site-worker (Atomics.wait), so every page with RPC would need the
      Worker plus coi-serviceworker, which costs the bundle budget.
-3. **Page-only code** (event handlers, DOM, `on click`) is harmless on the server: the server runs main once to render
+3. **JavaScript on the client** needs no third language in the source. The page's warp code reaches browser APIs
+   through the WebIDL bindings (notes/web_framework.md "web-apis: WebIDL") and arbitrary JS through foreign_call (js =
+   globalThis, host-foreign.js). Hand-written JS stays possible as a `.js` file of the site, but it is not the model.
+4. **Page-only code** (event handlers, DOM, `on click`) is harmless on the server: the server runs main once to render
    the first HTML, and handlers never fire there.
-4. **Server-only state** a route reads (`users` above) is a value at build/start time in the page. For live data the
+5. **Server-only state** a route reads (`users` above) is a value at build/start time in the page. For live data the
    page fetches it (`users := fetch "/api/users"`). A later step could lower a route's read of a server-only variable to
    that fetch automatically. That needs a `server` mark on variables too (`server users = db.load()`), so it waits for a
    user decision.
-5. **`warp serve app.warp [port]`**: today `warp run` serves when the program says `serve PORT {…}`. A CLI word that
+6. **`warp serve app.warp [port]`**: today `warp run` serves when the program says `serve PORT {…}`. A CLI word that
    serves any page program (site + /rpc routes, no `serve` statement needed) would be the production twin of
    `warp dev`. Cheap: main.rs plus a default port. Not done, because the old `serv` CGI mode in main.rs holds the word.
    Retiring that mode is a question for the user.
