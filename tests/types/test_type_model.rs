@@ -211,6 +211,11 @@ const CORPUS: &[&str] = &[
 	"b = 1; a = b = 3; a + b",
 	"a = b = c = 2; a + b + c",
 	"a = b = [1]; a#1",
+	"out = []; for x in [[1], [2, 3]] { out = out + x }; out",
+	"xs = [1]; xs + xs",
+	"xs = [1]; xs + 2",
+	"f(x) := x + [1]; f([0])",
+	"xs = [1]; ys = [\"a\"]; zs = xs + ys; zs#2",
 	"i = 1; j = i++; j*10+i",
 	"i = 1; j = ++i; j*10+i",
 	"i = 1; i--; i",
@@ -247,7 +252,7 @@ const CORPUS: &[&str] = &[
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("s = 0; for x in 3 { s += x }; s", "non-list"), ("f = x => x*2; f = 3; 0", "lambda-reassign"), ("a: int = 0; a, b = 2.5, 6; a", "destructure-unchecked"), ("a: text = \"\"; a, b = 1, 2; a", "destructure-unchecked"), ("a: int = 0; a = b = 2.5; a", "chain-unchecked"), ("a: int = 0; a = b = \"x\"; b", "chain-unchecked"), ("b: bool = no; b++; b", "bool-assign")];
+const KNOWN_HOLES: &[(&str, &str)] = &[("s = 0; for x in 3 { s += x }; s", "non-list"), ("f = x => x*2; f = 3; 0", "lambda-reassign"), ("a: int = 0; a, b = 2.5, 6; a", "destructure-unchecked"), ("a: text = \"\"; a, b = 1, 2; a", "destructure-unchecked"), ("a: int = 0; a = b = 2.5; a", "chain-unchecked"), ("a: int = 0; a = b = \"x\"; b", "chain-unchecked"), ("b: bool = no; b++; b", "bool-assign"), ("xs: ints = [1]; ys = [\"a\"]; xs = xs + ys; xs", "concat-unchecked")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)

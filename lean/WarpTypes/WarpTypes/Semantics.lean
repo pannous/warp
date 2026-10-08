@@ -105,7 +105,17 @@ def arithValues (op : ArithOp) (a b : Expr) : Expr :=
   | some x, some y => .int (op.apply x y)
   | _, _ => .num (op.apply (asNumber a) (asNumber b))
 
+def isList : Expr → Bool
+  | .nil | .cons _ _ => true
+  | _ => false
+
+def concat : Expr → Expr → Expr
+  | .cons h t, b => .cons h (concat t b)
+  | _, b => b
+
+/-- `+`: two lists concatenate (`xs + ys`), numbers add, a text side makes a text -/
 def addValues (a b : Expr) : Expr :=
+  if isList a && isList b then concat a b else
   if !((isNumber a || isText a) && (isNumber b || isText b)) then .error "not addable" else
   if isText a || isText b then .text (render a ++ render b) else
   match asInt a, asInt b with
@@ -152,14 +162,6 @@ def nth : Expr → Int → Option Expr
 def isClosure : Expr → Bool
   | .clo _ _ => true
   | _ => false
-
-def isList : Expr → Bool
-  | .nil | .cons _ _ => true
-  | _ => false
-
-def concat : Expr → Expr → Expr
-  | .cons h t, b => .cons h (concat t b)
-  | _, b => b
 
 def appendValues (a b : Expr) : Expr := if isList a && isList b then concat a b else .error "not a list"
 

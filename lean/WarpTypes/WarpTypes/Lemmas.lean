@@ -30,16 +30,6 @@ theorem list_value {Γ v a} (h : HasType P Γ v (.list a)) (hv : v.isValue = tru
     v = .nil ∨ ∃ hd tl, v = .cons hd tl ∧ hd.isValue = true ∧ tl.isValue = true := by
   cases v <;> simp [isValue] at hv ⊢ <;> first | exact hv | exact ⟨_, _, ⟨rfl, rfl⟩, hv⟩ | cases h
 
-/-- `+` on values: a number or a text of a type below `plus`, or an error -/
-theorem add_typed {Γ a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
-    (vb : b.isValue = true) : ∃ t', HasType P Γ (addValues a b) t' ∧ sub t' (plus ta tb) = true := by
-  unfold addValues
-  split
-  · exact ⟨_, .error, sub_never _⟩
-  · cases ha <;> cases hb <;>
-      simp_all [isValue, isNumber, isText, asInt, asNumber, plus, Ty.arith, sub] <;>
-      first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩ | exact ⟨_, .text, by decide⟩
-
 /-- `-` and `*` on values: a number of a type below `arithTy`, or an error -/
 theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
     (vb : b.isValue = true) : ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (arithTy ta tb) = true := by
@@ -124,6 +114,26 @@ theorem append_typed {Γ a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ 
     rw [listElem_of_element hea, listElem_of_element heb]
     exact concat_typed hb vb heb va ha hea
   · exact ⟨_, .error, sub_never _⟩
+
+/-- `+` on values: two lists' concatenation, a number or a text of a type below `plus`, or an error -/
+theorem add_typed {Γ a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
+    (vb : b.isValue = true) : ∃ t', HasType P Γ (addValues a b) t' ∧ sub t' (plus ta tb) = true := by
+  unfold addValues
+  split
+  · rename_i hl
+    simp only [Bool.and_eq_true] at hl
+    obtain ⟨ea, hea⟩ := list_element ha hl.1
+    obtain ⟨eb, heb⟩ := list_element hb hl.2
+    have hta := value_list ha va hea
+    have htb := value_list hb vb heb
+    subst hta htb
+    simp only [plus, isListTy, Bool.and_self, if_true, element, Option.getD_some]
+    simpa using concat_typed hb vb heb va ha hea
+  split
+  · exact ⟨_, .error, sub_never _⟩
+  · cases ha <;> cases hb <;>
+      simp_all [isValue, isNumber, isText, isList, asInt, asNumber, plus, isListTy, Ty.arith, sub] <;>
+      first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩ | exact ⟨_, .text, by decide⟩
 
 theorem valueType_typed {Γ} : ∀ {v : Expr} {t}, valueType v = some t → HasType P Γ v t := by
   intro v

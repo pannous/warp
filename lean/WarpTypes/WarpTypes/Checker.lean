@@ -37,7 +37,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .loc y => Γ y
   | .add a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some ta, some tb => if addable ta && addable tb then some (plus ta tb) else none
+    | some ta, some tb => if (addable ta && addable tb) || (listy ta && listy tb) then some (plus ta tb) else none
     | _, _ => none
   | .arith _ a b =>
     match typeOf P Γ a, typeOf P Γ b with

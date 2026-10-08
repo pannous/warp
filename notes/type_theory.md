@@ -290,6 +290,13 @@ methods (`get`, `remove`), `{}` subscripted by numbers (P34), typed maps (`map o
 warp (card bool-assign, KNOWN_HOLES); `s = "a"; s++` is an internal error in warp, while `s += 1` gives "a1" as in W0
 (card inc-text).
 
+## + on lists
+
+`xs + ys` of two lists concatenates (`plus`: a list of the elements' join; `addValues` concatenates two list values,
+`add_typed` proves it). The checker takes `+` when both sides are addable or both are listy (a list or `any`), so
+`[1] + 2` and `xs + "a"` stay errors, as in warp. warp skips the element check when a named list is concatenated
+into a declared one: `xs: ints = [1]; ys = ["a"]; xs = xs + ys` (card concat-unchecked, KNOWN_HOLES).
+
 ## not, and, or
 
 No new forms: `not e` is `if e then no else yes`; `a and b` is `if a then b else a` and `a or b` is
