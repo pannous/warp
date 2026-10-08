@@ -98,24 +98,26 @@ bo's row again, so it changes nothing after written-through changes; an instance
 - An element changed without the write-through form `v.f op= e` (`people#1.age = 5`) leaves its row stale, and a
   query of the table then disagrees with the list.
 
-## How relations work (step 4, eager; card orm)
+## How relations work (step 4; card orm)
 - database_tables.rs with_relations: a field whose type is another registered class (`team: Team`) is a foreign key,
   the column `team` INTEGER holding the row's id; a list field of one (`players: [Person]`) is one-to-many, no column:
   the rows of people whose field of class Team points back (an error when Person has none).
 - Opening people builds `team` as the row of teams with that id (`[r for r in teams if r.id == row#3]#1`), so a related
   row is the same instance as in its table. teams must be registered before people (a compile error otherwise).
-  After people is open, each team's `players` is filled with the people pointing to it.
-- `people.add(p)` stores `p.team.id` (an instance without a row raises "… add it to its table first") and adds p to
-  `p.team.players`; `bo.team = blue` writes blue's id through.
+  A one-to-many field is lazy: database_tables.rs with_member_getters makes `players: [Person]` the getter
+  `players := { global people; [m for m in people if m.team.id == id] }`, a query at each read, so it is no
+  constructor argument (`Team("Red")`) and a moved row (`bo.team = blue`) shows in both teams at once (card orm-moved).
+- `people.add(p)` stores `p.team.id` (an instance without a row raises "… add it to its table first"); `bo.team = blue`
+  writes blue's id through.
 - In a filter, `it.team` is no column for SQL (an id vs an instance): the part goes through a query's function, which
   builds the instance from the id.
 - Objects now point to each other, so a value read back from wasm can be cyclic: both readers mark a node met again
   inside itself as `…` (wasm_reader.rs, reader.js CYCLE_MARK). Printing one inside wasm (`print team`) still exhausts
   the call stack (card cyclic-print).
-- Gaps: a changed foreign key (`bo.team = blue`) leaves the old and new team's lists as they were until the next run;
-  a row pointing to a deleted row, or the 0 of a column added for a foreign key, fails the open (index out of range).
-  Both go away with lazy loading, where `players` is a query.
-- Sample: samples/orm.warp (native only, web/playground/excluded_samples.txt).
+- Gaps: a row pointing to a deleted row, or the 0 of a column added for a foreign key, fails the open (index out of
+  range; card orm-dangling). The getter scans the loaded list; natively it could be a SELECT once tables are queries.
+- Sample: samples/orm.warp (native and playground) has no relations yet: adding `team` to its Person would hit
+  orm-dangling on databases the sample already wrote.
 
 ## Steps
 1. **Prototype, native, eager** (done: lowering/database_tables.rs, src/database.rs, tests/control/test_database_tables.rs):
@@ -125,7 +127,7 @@ bo's row again, so it changes nothing after written-through changes; an instance
    - the table loaded whole at registration, filters in memory.
 2. Queries instead of loading: SQL translation of filters (done, card orm-filters), count/#i/paging, the identity map.
 3. Application functions for the rest of a filter (done, card orm-filters: warp_call into the module).
-4. Foreign keys and one-to-many (done eagerly, card orm), batched lazy loading.
+4. Foreign keys and one-to-many (done, card orm; one-to-many lazy as getters), batched lazy loading of tables.
 5. `transaction { }`.
 6. IndexedDB backend in the browser (async underneath: the page's host keeps a loaded mirror per table, like the
    key-value store). Done simply (branch orm-updates): web/playground/host-files.js `table` keeps each table as

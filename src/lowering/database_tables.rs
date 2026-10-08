@@ -21,13 +21,12 @@ const SAVE_WORD: &str = "save";
 /// the generated code's variables, written as these placeholders (`·` would parse as a product)
 const ROW: &str = "table_row";
 const ADDED: &str = "table_added";
-/// a foreign key's row, and the row of a one-to-many list with one of its members
+/// a foreign key's row, and a row of a one-to-many getter
 const REFERENCED: &str = "table_referenced";
-const OWNER: &str = "table_owner";
 const MEMBER: &str = "table_member";
 const SAVED: &str = "table_saved";
-const GENERATED_NAMES: [(&str, &str); 7] = [(ROW, "table·row"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
-	(REFERENCED, "table·referenced"), (OWNER, "table·owner"), (MEMBER, "table·member"), (SAVED, "table·saved")];
+const GENERATED_NAMES: [(&str, &str); 6] = [(ROW, "table·row"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
+	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved")];
 const SCHEMA_PLACEHOLDER: &str = "table_schema";
 const VALUE_PLACEHOLDER: &str = "table_value";
 /// A filter's query (notes/orm.md step 2): the ids it keeps, its SQL condition and parameters, the functions it calls
@@ -89,8 +88,7 @@ pub fn lower(program: Node) -> Node {
 	if tables.is_empty() {
 		return program;
 	}
-	let registered: Vec<&str> = tables.values().map(|table| table.class.as_str()).collect();
-	with_tables(with_row_ids(program, &registered), &tables, &tables_file(), &mut vec![])
+	with_tables(with_row_fields(program, &tables), &tables, &tables_file(), &mut vec![])
 }
 
 /// The program's registered tables by their list variable
@@ -340,11 +338,9 @@ fn with_arguments(node: Node, table: &Table, values: &[String], row_size: usize)
 fn constructor_arguments(table: &Table, row: &str) -> Vec<String> {
 	let columns = columns_of(table);
 	let column = |name: &str| format!("{row}#{}", 2 + columns.iter().position(|column| column == name).unwrap_or_default());
-	table.fields.iter().map(|(name, _, _)| match (name == ID_FIELD, table.reference(name)) {
+	table.fields.iter().filter(|(name, _, _)| !table.is_members(name)).map(|(name, _, _)| match (name == ID_FIELD, table.reference(name)) {
 		(true, _) => format!("{row}#1"),
 		(false, Some(target)) => referenced(target, &column(name)),
-		// one-to-many: filled once the table pointing back is open (members_filled)
-		_ if table.is_members(name) => "[]".to_string(),
 		_ => column(name),
 	}).chain(implicit_id(table).then(|| format!("{row}#1"))).collect()
 }
@@ -400,27 +396,51 @@ fn database_table(source: &Node) -> Option<String> {
 	DATABASE_WORDS.contains(&store.drop_meta().name().as_str()).then(|| table.drop_meta().name())
 }
 
-/// Each registered class with the field `id: int = 0` unless it has one: 0 until the instance has a row
-fn with_row_ids(node: Node, registered: &[&str]) -> Node {
+/// Each registered class with the field `id: int = 0` unless it has one (0 until the instance has a row), and its
+/// one-to-many fields as getters
+fn with_row_fields(node: Node, tables: &HashMap<String, Table>) -> Node {
 	match node {
-		Node::Type { name, body } if registered.contains(&name.drop_meta().name().as_str()) && !has_id(&body) => {
-			let id = parse(&format!("{ID_FIELD}: int = 0"));
-			let items = match *body {
-				Node::List(mut items, Bracket::Curly, separator @ (Separator::Semicolon | Separator::Newline)) => {
-					items.push(id);
-					Node::List(items, Bracket::Curly, separator)
-				}
-				Node::List(mut items, Bracket::Curly, _) if items.len() == 1 => {
-					items.push(id);
-					Node::List(items, Bracket::Curly, Separator::Semicolon)
-				}
-				// `{int x}`: one field of words
-				Node::List(words, Bracket::Curly, separator) => Node::List(vec![Node::List(words, Bracket::None, separator), id], Bracket::Curly, Separator::Semicolon),
-				body => Node::List(vec![body, id], Bracket::Curly, Separator::Semicolon),
-			};
-			Node::Type { name, body: Box::new(items) }
+		Node::Type { name, body } => match tables.values().find(|table| table.class == name.drop_meta().name()) {
+			Some(table) => Node::Type { name, body: Box::new(with_id(with_member_getters(*body, table))) },
+			None => Node::Type { name, body },
+		},
+		other => other.map_children(|child| with_row_fields(child, tables)),
+	}
+}
+
+/// `players: [Person]` of Team as the getter of the people pointing back, a query at each read (lazy): a moved row is
+/// seen at once
+fn with_member_getters(body: Node, table: &Table) -> Node {
+	let getter = |item: Node| {
+		let Node::Key(field, Op::Colon, _) = item.drop_meta() else { return item };
+		let Some(members) = table.members.iter().find(|members| members.field == field.drop_meta().name()) else { return item };
+		let Some(back) = &members.back else { return item };
+		generated(&format!("{field} := {{ global {list}; [{MEMBER} for {MEMBER} in {list} if {MEMBER}.{back}.{ID_FIELD} == {ID_FIELD}] }}",
+			field = members.field, list = members.table), [])
+	};
+	match body {
+		Node::List(items, Bracket::Curly, separator) if !table.members.is_empty() => Node::List(items.into_iter().map(getter).collect(), Bracket::Curly, separator),
+		body => body,
+	}
+}
+
+fn with_id(body: Node) -> Node {
+	if has_id(&body) {
+		return body;
+	}
+	let id = parse(&format!("{ID_FIELD}: int = 0"));
+	match body {
+		Node::List(mut items, Bracket::Curly, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			items.push(id);
+			Node::List(items, Bracket::Curly, separator)
 		}
-		other => other.map_children(|child| with_row_ids(child, registered)),
+		Node::List(mut items, Bracket::Curly, _) if items.len() == 1 => {
+			items.push(id);
+			Node::List(items, Bracket::Curly, Separator::Semicolon)
+		}
+		// `{int x}`: one field of words
+		Node::List(words, Bracket::Curly, separator) => Node::List(vec![Node::List(words, Bracket::None, separator), id], Bracket::Curly, Separator::Semicolon),
+		body => Node::List(vec![body, id], Bracket::Curly, Separator::Semicolon),
 	}
 }
 
@@ -481,19 +501,9 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 	let code = format!("[{class}({arguments}) for {ROW} in std_io(\"table\", \"open\", [{name:?}, {SCHEMA_PLACEHOLDER}, {file:?}])]",
 		class = table.class, arguments = arguments.join(", "), name = table.name);
 	let rows = generated(&code, [(SCHEMA_PLACEHOLDER, schema)]);
-	let filled = tables.iter().filter(|(owner, _)| open.contains(owner)).flat_map(|(owner, owner_table)| members_filled(owner, owner_table, &variable));
-	Some(std::iter::once(Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(rows))).chain(filled).collect())
+	Some(std::iter::once(Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(rows))).collect())
 }
 
-/// `members: [Person]` of each team: the rows of people whose `team` is that team (`members` the table `owner`'s list
-/// field of the rows of `table`)
-fn members_filled(owner: &str, owner_table: &Table, table: &str) -> Vec<Node> {
-	owner_table.members.iter().filter(|members| members.table == table).filter_map(|members| {
-		let back = members.back.as_ref()?;
-		Some(generated(&format!("for {OWNER} in {owner} {{ {OWNER}.{field} = [{MEMBER} for {MEMBER} in {table} if {MEMBER}.{back}.{ID_FIELD} == {OWNER}.{ID_FIELD}] }}",
-			field = members.field), []))
-	}).collect()
-}
 
 /// The code with each placeholder as its node and the generated variables named
 fn generated<const N: usize>(code: &str, placeholders: [(&str, Node); N]) -> Node {
@@ -524,7 +534,7 @@ fn implicit_id(table: &Table) -> bool {
 }
 
 /// `people.add(p)`: added to the list and inserted as a row, whose id p takes; a foreign key stores the id of its row
-/// (an instance without one is an error) and p joins that row's one-to-many list of it
+/// (an instance without one is an error)
 fn inserted(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Vec<Node>> {
 	let Node::Key(list, Op::Dot, call) = statement.drop_meta() else { return None };
 	let list = list.drop_meta().name();
@@ -539,11 +549,8 @@ fn inserted(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Op
 	let values: Vec<String> = columns.iter().map(|column| column_value(table, ADDED, column)).collect();
 	let checks = table.references.iter().map(|(field, target)| format!(
 		"if {ADDED}.{field}.{ID_FIELD} == 0 {{ raise \"{class}.{field} is no row of {target}: add it to its table first\" }}\n", class = table.class));
-	let joined = table.references.iter().flat_map(|(field, target)| tables[target].members.iter()
-		.filter(|members| members.table == list && members.back.as_ref() == Some(field))
-		.map(move |members| format!("\n{OWNER} = {ADDED}.{field}\n{OWNER}.{}.add({ADDED})", members.field)));
-	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{checks}{list}.add({ADDED})\n{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}]){joined}",
-		checks = checks.collect::<String>(), table = table.name, names = names.join(" "), values = values.join(" "), joined = joined.collect::<String>());
+	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{checks}{list}.add({ADDED})\n{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}])",
+		checks = checks.collect::<String>(), table = table.name, names = names.join(" "), values = values.join(" "));
 	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
 	Some(lowered.children())
 }
