@@ -1185,6 +1185,24 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 	}
 }
 
+/// Does a value of kind `actual` fit the builtin type `type_name` (W0 subtyping, notes/type_theory.md)? An int fits a
+/// float, a decimal fits `exact`, a character fits a text (`"a"` parses as a codepoint); any other type admits all here
+pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
+	let type_name = type_name.trim_end_matches('?');
+	let Some(expected) = builtin_type_kind(type_name) else { return true };
+	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
+	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint;
+	expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text
+}
+
+/// The builtin type a parameter annotation names: `x: text`, not `xs: [int]`
+pub(crate) fn annotated_builtin_type(annotation: &Node) -> Option<&str> {
+	match annotation.drop_meta() {
+		Node::Symbol(name) if builtin_type_kind(name.trim_end_matches('?')).is_some() => Some(name),
+		_ => None,
+	}
+}
+
 pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &Node) -> Option<Diagnostic> {
 	if let Some(base) = type_name.strip_suffix('?') {
 		return match value.drop_meta() {
@@ -1196,11 +1214,9 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 		let message = format!("type mismatch: {name} is declared {type_name}, cannot assign ø");
 		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{type_name}? to allow ø")));
 	}
-	let expected = builtin_type_kind(type_name)?;
+	builtin_type_kind(type_name)?;
 	let actual = computed_literal_kind(value)?;
-	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
-	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint; // `"a"` parses as a codepoint
-	if expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text {
+	if admits(type_name, actual) {
 		return None;
 	}
 	let value_text = value.serialize();

@@ -82,3 +82,4 @@ mod test_conformance_claims;
 mod test_file_declarations;
 mod test_match_static_variant;
 mod test_bool_type;
+mod test_checked_call_kinds;
