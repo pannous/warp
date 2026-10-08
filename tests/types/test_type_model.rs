@@ -241,10 +241,13 @@ const CORPUS: &[&str] = &[
 	"f = x => x*2; f = y => y + 1; f(3)",
 	"x = 1; f = y => x + y; f(1); x = 10; 0",
 	"f = x => x*2; f = 3; 0",
+	"a: int = 0; a = b = 2.5; a",
+	"a: int = 0; a = b = \"x\"; b",
+	"class P { x: int }; p = P(1); a = p.x = 5; a + p.x",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("a: int = 0; a, b = 2.5, 6; a", "destructure-unchecked"), ("a: text = \"\"; a, b = 1, 2; a", "destructure-unchecked"), ("a: int = 0; a = b = 2.5; a", "chain-unchecked"), ("a: int = 0; a = b = \"x\"; b", "chain-unchecked")];
+const KNOWN_HOLES: &[(&str, &str)] = &[("a: int = 0; a, b = 2.5, 6; a", "destructure-unchecked"), ("a: text = \"\"; a, b = 1, 2; a", "destructure-unchecked")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
@@ -252,7 +255,6 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 
 /// Programs both accept whose values differ, each with its card
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
-	("class P { x: int }; p = P(1); a = p.x = 5; a + p.x", "chain-field"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";
