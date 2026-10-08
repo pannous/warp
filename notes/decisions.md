@@ -47,6 +47,14 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - check-assert (user to warp-dc): `check` acts like assert; float parameters stay IEEE and `==` stays exact (no
   tolerance); samples/polymorphism.wasp uses `combine number with number`, so `check combine 1.1 with 2.2 == 3.3`
   passes with exact numbers.
+- Quantities print without a space (user to warp-dc): `500m`, not `500 m`, in print, interpolation, serialize and
+  the playground (warp-99).
+- test-soft (user to warp-dc, card test-soft, warp-99): `test C` is a soft check that records pass/fail and
+  continues; `check C` stays assert; `test "name" { … }` is a named test block beside functions.
+- P209 test blocks run only under `warp test` (chosen over running with the main program); `warp run` and `use` skip
+  them.
+- P210 when all tests pass, one summary line ("✓ 12 tests passed"); failures print ✗ lines and "m of n failed" and
+  exit nonzero.
 - P199 bool slots accept 1 and 0 as yes/no everywhere (variables, fields, list items); other ints and texts are
   errors. Card bool-assign.
 - P200 class instances passed to functions are shared references (like Python/JS). Card instance-field.
