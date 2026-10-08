@@ -32,7 +32,8 @@ pub fn lower(program: Node) -> Node {
 	}
 	match program {
 		Node::List(statements, bracket, separator) if statements.iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some()) => {
-			let statements: Vec<Node> = statements.into_iter().map(|statement| server_definition(&statement).unwrap_or(statement)).collect();
+			let servers = server_names(&statements);
+			let statements: Vec<Node> = statements.into_iter().map(|statement| server_definition(&statement).unwrap_or_else(|| assigned_asking(statement, &servers))).collect();
 			let calls: Vec<Route> = statements.iter().filter_map(rpc_route).collect();
 			let mut routes = 0;
 			let statements = statements.into_iter().flat_map(|statement| match served(&statement) {
@@ -58,7 +59,7 @@ fn without_serving(program: Node) -> Node {
 	match program {
 		Node::List(statements, bracket, separator) => {
 			let statements: Vec<Node> = statements.into_iter().filter(|statement| served(statement).is_none()).collect();
-			let servers: Vec<String> = statements.iter().filter_map(server_definition).filter_map(|definition| defined_function(&definition)).map(|(name, _)| name).collect();
+			let servers = server_names(&statements);
 			if servers.is_empty() {
 				return Node::List(statements, bracket, separator);
 			}
@@ -128,6 +129,21 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 		kept.insert(0, crate::event_signals::function_with_globals(RPC_VALUES, false, &[values], &globals));
 	}
 	Ok(kept)
+}
+
+fn server_names(statements: &[Node]) -> Vec<String> {
+	statements.iter().filter_map(server_definition).filter_map(|definition| defined_function(&definition)).map(|(name, _)| name).collect()
+}
+
+/// `g := f(x)` of a server function f, the page's asking form, is on the server the value it renders, as in the
+/// prerender (asking_the_server): `g = f(x)`
+fn assigned_asking(statement: Node, servers: &[String]) -> Node {
+	match statement.drop_meta() {
+		Node::Key(target, Op::Define, value) if matches!(target.drop_meta(), Node::Symbol(_)) && is_server_call(value, servers) => {
+			Node::Key(target.clone(), Op::Assign, value.clone())
+		}
+		_ => statement,
+	}
 }
 
 /// `g := f(x)` of the call: g

@@ -55,9 +55,10 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    - Refused, loudly: an argument the page only knows inside a function (`def show(k) { p{ doubled(k) } }`). The page
      asks before its code runs, so it sends main-level values only. A synchronous call would need site-worker's
      Atomics.wait.
-   - Known gaps: a server function's untyped parameter is `any`, so `n = doubled(n)` makes n a data value in the native
-     server build (`"n " + n` fails there; `doubled(x:int)` works). The `g := f(x)` hint "prefer g = …" still shows in
-     the server build.
+   - A server function's untyped parameter is `any`, so its arithmetic is a number of run-time kind; joined with a
+     text it takes its text form (`"n " + doubled(n)`, analyzer arithmetic_kind). The server build takes `g := f(x)` of
+     a server function as `g = f(x)`, the value it renders, as the prerender does (serve.rs assigned_asking), so the
+     := hint no longer shows there (card server-def-any).
 3. **JavaScript on the client** needs no third language in the source. The page's warp code reaches browser APIs
    through the WebIDL bindings (notes/web_framework.md "web-apis: WebIDL") and arbitrary JS through foreign_call (js =
    globalThis, host-foreign.js). Hand-written JS stays possible as a `.js` file of the site, but it is not the model.
