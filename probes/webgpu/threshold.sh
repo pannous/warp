@@ -17,3 +17,14 @@ gpu_compute(idle, [1.0], 1)
 t0 = clock(); a = gpu_compute(idle, xs, $workgroups); t1 = clock(); b = gpu_compute(double, xs, $workgroups); t2 = clock(); c = sum(xs .* 2); t3 = clock()
 {n: $n, transfer: t1 - t0, transfer_and_double: t2 - t1, cpu_double_and_sum: t3 - t2}"
 done
+
+# `ys = xs.map(f) @gpu` over a linear float array (src/lowering/gpu_maps.rs) against the CPU's map of the same lambda:
+# a light one (the CPU's f64x2 kernel) and a heavy one (sin, cos: the CPU's generic map)
+for n in $COUNTS; do
+	"$WARP" eval "linear xs = float[$n]
+for i in 1 to $n { xs#i = float(i) / 4 }
+warm = xs.map(x => x + 1) @gpu
+t0 = clock(); a = xs.map(x => x * 2 + 1) @gpu; t1 = clock(); b = xs.map(x => x * 2 + 1); t2 = clock()
+c = xs.map(x => sin(x) * cos(x) + √x) @gpu; t3 = clock(); d = xs.map(x => sin(x) * cos(x) + √x); t4 = clock()
+{n: $n, gpu_light: t1 - t0, cpu_light: t2 - t1, gpu_heavy: t3 - t2, cpu_heavy: t4 - t3}" 2>&1 | grep -v -e hint -e 'the compiler picks'
+done

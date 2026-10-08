@@ -5,7 +5,7 @@
 //! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary, and the parts of
 //! host.js its module imports words of (HOST_PARTS, card web-bundle).
 
-use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
+use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
 use crate::node::Node;
 use std::path::{Path, PathBuf};
 
@@ -63,7 +63,7 @@ pub const HOST_PARTS: [HostPart; 7] = [
 	},
 	HostPart { script: ("host-compiler.js", include_str!("../web/playground/host-compiler.js")), gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK, needs: &["host-files.js"] },
 	HostPart { script: ("host-routes.js", concat!(include_str!("../web/playground/imports.js"), include_str!("../web/playground/host-routes.js"))), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
-	HostPart { script: ("host-gpu.js", include_str!("../web/playground/host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && [GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_RENDER].contains(&name), needs: &["host-tasks.js"] },
+	HostPart { script: ("host-gpu.js", include_str!("../web/playground/host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && [GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_RENDER].contains(&name), needs: &["host-tasks.js"] },
 ];
 /// The parts the page keeps when the program runs in a Worker: host-routes.js follows links and the back button and
 /// moves the focus, which only the page can (site-thread.js)
@@ -128,15 +128,29 @@ pub fn served_files(code: &str, title: &str) -> Result<Option<Vec<SiteFile>>, St
 }
 
 fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>>, String> {
-	let compile = || crate::pipeline::for_a_page(|| crate::pipeline::compile(code));
-	let module = if dev { crate::pipeline::for_dev(compile) } else { compile() };
-	let module = module.map_err(|value| format!("nothing to compile: {}", with_excerpt(code, message_of(&value))))?;
-	if !exports(&module.bytes, crate::page_html::PAGE_HTML) {
+	let compile = |build: &dyn Fn() -> Result<crate::pipeline::CompiledModule, Node>| {
+		let module = crate::pipeline::for_a_page(|| if dev { crate::pipeline::for_dev(build) } else { build() });
+		module.map_err(|value| format!("nothing to compile: {}", with_excerpt(code, message_of(&value))))
+	};
+	let rendering = compile(&|| crate::pipeline::prerendering(|| crate::pipeline::compile(code)))?;
+	if !exports(&rendering.bytes, crate::page_html::PAGE_HTML) {
 		return Ok(None);
 	}
-	let imports = crate::wasm_reader::Imports { host: module.needs_host, wasi: module.needs_wasi, ffi: module.needs_ffi };
-	let rendered = crate::wasm_reader::read_export_after_main(&module.bytes, imports, crate::page_html::PAGE_HTML)
-		.map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))?;
+	let read_after_main = |name: &str| {
+		let imports = crate::wasm_reader::Imports { host: rendering.needs_host, wasi: rendering.needs_wasi, ffi: rendering.needs_ffi };
+		crate::wasm_reader::read_export_after_main(&rendering.bytes, imports, name).map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))
+	};
+	let rendered = read_after_main(crate::page_html::PAGE_HTML)?;
+	// a page calling server functions ships without them, starting from the values they gave here (lowering/serve.rs)
+	let module = if exports(&rendering.bytes, crate::serve::RPC_VALUES) {
+		let values = match read_after_main(crate::serve::RPC_VALUES)?.drop_meta() {
+			Node::List(values, _, _) => values.clone(),
+			single => vec![single.clone()],
+		};
+		compile(&|| crate::pipeline::with_server_values(values.clone(), || crate::pipeline::compile(code)))?
+	} else {
+		rendering
+	};
 	let Node::Text(html) = rendered.drop_meta() else {
 		return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, rendered.serialize()));
 	};

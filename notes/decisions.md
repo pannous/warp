@@ -5,6 +5,13 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- P224 (card plus-minus-print, warp-class): `<`, `>`, `<=`, `>=` on a ± interval answer only when certain, like
+  Julia's IntervalArithmetic: with `y = 6 ± 1` (5..7) `y < 8` → yes, `y < 4` → no. `≈` stays as P218.
+  P224b (user: "we don't want the application to crash" on values read from outside): no run-time crash.
+  Where the compiler knows a value is ±, a bare comparison is a compile error asking for one of
+  `y certainly < x`, `y possibly < x`, `y.value < x`. Where it can't know (data read at run time), an overlap
+  counts as not certain (`certainly`, the condition is no) and a warning is printed once naming the line, with
+  the hint to write `certainly`, `possibly` or `.value`.
 - `//` is a comment only when followed by a space or the end of the line; otherwise floor division: `x //= 3`,
   `x//=3`, `7//2`, `a //b` divide; `a // b`, `x = 1 // note` are comments (user, emphatic, via the supervisor;
   replaces the 2026-10-03 rule, rewritten in place below). warp-worker implements it.

@@ -59,7 +59,7 @@ fn block_types_style_their_operands() {
 #[test]
 fn greek_is_transliterated_phonetically() {
 	converts(&[
-		("<:greek> athos <:/greek>", "αθοσ"), // th is one letter
+		("<:greek> athos <:/greek>", "αθος"), // th is one letter, a word ends in final sigma (uniscript 1.0.6)
 		("<:greek th ch ps>", "θχψ"),
 		("<:greek eta Omega lambda>", "ηΩλ"),
 	]);
@@ -70,11 +70,11 @@ fn greek_is_transliterated_phonetically() {
 #[test]
 fn full_blocks_keep_their_spaces() {
 	converts(&[
-		("<:greek> filosofia kosmos<:/greek>", "φιλοσοφια κοσμοσ"),
-		("<:greek a kosmos>", "ακοσμοσ"),
+		("<:greek> filosofia kosmos<:/greek>", "φιλοσοφια κοσμος"),
+		("<:greek a kosmos>", "ακοσμος"),
 		("<:greek phi chi>", "φχ"),
-		("<:greek>\\nkosmos\\n<:/greek>", "κοσμοσ"),
-		("<:greek>\\n\\nkosmos<:/greek>", "\nκοσμοσ"),
+		("<:greek>\\nkosmos\\n<:/greek>", "κοσμος"),
+		("<:greek>\\n\\nkosmos<:/greek>", "\nκοσμος"),
 	]);
 }
 
@@ -87,7 +87,7 @@ fn warns(uniscript: &str, unicode: &str, warning: &str) {
 
 #[test]
 fn unsupported_characters_and_combinations_warn() {
-	warns("<:greek c>", "c", "uniscript: no greek form of c at byte 0");
+	warns("<:greek q>", "q", "uniscript: no greek form of q at byte 0"); // c types ς since uniscript 1.0.6
 	warns("x <:fracture 7>", "x 7", "uniscript: no fracture form of 7 at byte 2");
 	warns("<:red 𓀀>", "𓀀", "uniscript: red does not apply to 𓀀 at byte 0");
 	warns("<:mirror red 狗>", "狗\u{E004D}", "uniscript: red does not apply to 狗 at byte 0");
@@ -97,7 +97,7 @@ fn unsupported_characters_and_combinations_warn() {
 #[test]
 fn use_strict_makes_uniscript_warnings_errors() {
 	// the first problem is the error, not the opening-tag warning a bare tag would add (uniscript 1.0.3)
-	is!("use strict; use uniscript; uniscript(\"<:greek c>\")", error("uniscript: no greek form of c at byte 0"));
+	is!("use strict; use uniscript; uniscript(\"<:greek q>\")", error("uniscript: no greek form of q at byte 0"));
 	is!("use strict; use uniscript; uniscript(\"<:greek a/>\")", "α");
 }
 

@@ -98,7 +98,61 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    reduced to what still has a payoff, and the threshold card (gpu-threshold) should measure those, not sums.
    Fixed on the way (cards float-typed, list-literal): `xs#1 = 0.5` widened a float list to a Node list (variables.rs
    widen_element_type), and `[2 2] .* [2 4]` asked the list * number question for the lambda's `each_element * [2 4]`.
-3. Ints (option a): `sum`, `dot`, element-wise over $IntList through a host word with an overflow flag, behind the
-   length check; tests compare GPU and CPU on lists above and below the threshold.
+3. Dropped (gpu-threshold): Ints automatically never pay against the fused CPU loop (step 2 finding).
 4. Fusion of an element-wise expression ending in a reduction into one WGSL kernel.
 5. Floats per the Interviewer's answer; `map(f)` of a pure numeric f.
+   Done for linear float arrays (src/lowering/gpu_maps.rs): `ys = xs.map(x => …) @gpu` (or `@gpu xs.map(…)`) of a
+   lambda of + - * / ^ √ ‖‖ and the math words sin … atan2, min, max of the item and number literals becomes a WGSL
+   kernel (whole powers up to 8 multiplied out: WGSL's pow of a negative base is NaN); shared_arrays.rs lowers it to
+   `ys = linear_new(count(xs)); if gpu_map_linear(kernel, xs, ys, workgroups) == 0 { CPU loop }`. The host word gives
+   0 without an adapter (a runtime warning, once) and the CPU maps the same lambda in f64. Where @gpu cannot apply (a
+   list not in linear memory, a lambda WGSL cannot compute, a map not assigned, not a map) a compile-time warning says
+   why and the map runs on the CPU as written. Tests: test_webgpu a_gpu_map_runs_a_numeric_lambda_as_a_kernel,
+   a_gpu_map_the_gpu_cannot_run_says_why. Measured (probes/webgpu/threshold.sh, release, ms):
+
+   | n      | @gpu `x * 2 + 1` | CPU (f64x2 kernel) | @gpu `sin(x) * cos(x) + √x` | CPU (generic map) |
+   |--------|------------------|--------------------|-----------------------------|-------------------|
+   | 10^3   | 2                | 0                  | 3                           | 0                 |
+   | 10^4   | 9–13             | 0                  | 4–24                        | 2                 |
+   | 3·10^4 | 4                | 0                  | 2                           | 8                 |
+   | 10^5   | 2                | 0                  | 3                           | 16                |
+   | 10^6   | 13               | 1                  | 12                          | 167               |
+   | 10^7   | 129              | 11                 | 122                         | 7542              |
+
+   A light lambda never pays (the CPU's SIMD kernel is ~1 ns an item); a heavy one breaks even near 2–3·10^4 items and
+   wins 14× at 10^6, 60× at 10^7. The CPU's generic map of a linear array grew faster than linear (167 → 754 ns an
+   item from 10^6 to 10^7): it mapped the array collected into a list grown item by item. Fixed (card linear-map,
+   shared_arrays.rs numeric_map, collected): a pure numeric lambda maps in one loop into a new block (`sin(x)`: 68 ns
+   an item at 10^7, most of it warp's sin), and an array read as a whole fills a `float[n]` / `int[n]` list
+   (`sum(xs)` 71 → 25 ns an item). The heavy CPU column then reads 17, 281, 1871 ms at 10^5, 10^6, 10^7 (noisy):
+   the GPU still wins 15–20× from 10^6.
+   Thresholds (card gpu-threshold, P214 err on the CPU side), from these measurements:
+   - automatic offload (no @gpu): none. Int reductions and element-wise ops are memory bound; the fused CPU loop
+     (3–15 ns an item) beats the GPU round trip (~12 ns + ~2 ms) at every size, so step 3 is dropped.
+   - `@gpu` map of a light lambda (only arithmetic: + - * / √ ‖‖ min max floor, whole powers): the CPU, in f64, with
+     a warning saying so (gpu_maps.rs Kernel.heavy).
+   - `@gpu` map of a heavy lambda (math words, powers): the GPU from GPU_MAP_MIN_COUNT = 32768 items (2^15, above the
+     measured ~3·10^4 break-even), the CPU below, checked at run time in the lowered map.
+   Test: test_webgpu a_gpu_map_runs_on_the_cpu_where_that_is_faster (below the count the value equals the f64 one).
+   f32 note: `sin` of large arguments loses digits on the GPU (sin(13333.3) differs in the 3rd digit, the argument
+   itself rounds to f32): @gpu is the program's consent to that.
+   Outer numbers (done): a lambda may read the program's numbers (`x => sin(x) * k + shift`): the kernel appends
+   their values to `data` after the items (`data[count + i]`, count = arrayLength - their number), so no second
+   binding and no shader recompiled per value; gpu_map_linear takes them as a list (a value not a number: an error).
+   "Light" is now a cost class, not the f64x2 kernel: a lambda without heavy math words (sin … log, atan2) or
+   non-whole powers stays on the CPU, outer numbers included (`x => x * k`). Test: a_gpu_map_reads_outer_numbers.
+   Chains (done, gpu_maps.rs fused): `xs.map(f).map(g)`, with or without @gpu, is one map of g after f (g's
+   parameter replaced by f's body), so no list of f's results and one GPU round trip. Map results found until none
+   is added: `ys = xs.map(f); zs = ys.map(g)` writes ys a block, and zs maps it as one. Measured (release, warm
+   shader cache, `sin(x)` then `y * y + 1`, ms; noisy, other sessions building):
+
+   | n      | CPU chain | @gpu chain |
+   |--------|-----------|------------|
+   | 10^5   | 11–17     | 47–69      |
+   | 10^6   | 140       | 80–108     |
+   | 10^7   | 1290–1480 | 280–320    |
+
+   Before the fusion the CPU chain mapped f's results as a GC list grown by `out = out + [x]`, quadratic (card
+   map-filter: any `map` of a list, `int[20000].map(x => x * 2)` 0.5 s, 80000 out of fuel).
+   Open: GC float lists (copy into a block first), the browser path with a real adapter, data kept on the GPU
+   between separate statements.
