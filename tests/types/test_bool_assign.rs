@@ -30,3 +30,10 @@ fn one_and_zero_are_yes_and_no_everywhere() {
 	fails_with("bs: bools = [yes 2]", "bs is declared bools, cannot hold int 2");
 	is!("bs: bools = [yes 0]; #bs", 2);
 }
+
+#[test]
+fn a_bool_parameter_refuses_other_ints() {
+	fails_with("f(b: bool) := b; f(2)", "f needs a bool for parameter b, got 2");
+	is!("f(b: bool) := b + 0; f(1)", 1);
+	is!("f(b: bool) := b + 0; f(no)", 0);
+}
