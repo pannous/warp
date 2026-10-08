@@ -1168,15 +1168,16 @@ impl Lowering {
 		)
 	}
 
-	/// `assert C else X` is 1 when C holds and the Error X otherwise; without a message the error says the assertion failed
+	/// `assert C else X` is 1 when C holds and throws X otherwise, also mid-program (`check C`, card check-assert); without
+	/// a message the error says the assertion failed
 	fn lower_assert(&self, condition: Node, message: Node) -> Node {
 		let message = match message.drop_meta() {
-			Node::Empty => Node::Text(format!("assertion failed: {}", condition.serialize())),
+			Node::Empty => Node::Text(format!("{}: {}", crate::wasp_parser::ASSERTION_FAILED, condition.serialize())),
 			_ => message,
 		};
 		let condition_placeholder = ASSERT_CONDITION_PLACEHOLDER;
 		self.instantiate_template(
-			&format!("(if {condition_placeholder} {{1}} else {{error({TRY_FALLBACK_PLACEHOLDER})}})"),
+			&format!("(if {condition_placeholder} {{1}} else {{{}({TRY_FALLBACK_PLACEHOLDER})}})", crate::wasm_emitter::text_builtins::RAISE),
 			&[(condition_placeholder, &condition), (TRY_FALLBACK_PLACEHOLDER, &message)],
 		)
 	}
