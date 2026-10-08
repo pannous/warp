@@ -376,3 +376,9 @@ named_claims checks each declared trait like the claim `class Square{…} is Sha
 error "Square claims Shape but defines no area(s:Square)". A name that is no declared trait (a parent class written
 `: Base`) is not checked. The old "wasp needs no list of them" note is gone. Found on the way: a trait written
 `interface Shape { fun area(): Int }` on one line took `fun` as an operation; function keywords are dropped there.
+Shared lists (card shared-lists, not started): lists are still values. All list changes lower to `place = new value`
+(`ys.add(2)` → `ys = ys + [2]`, pop → slice, `ys#1 = 5` → list_with_at copies the cells), and list_dispatch.rs typed
+lists copy on alias by design ("ys = xs copies it when either variable is updated"). Sharing needs: in-place runtime
+append/set/pop/remove/insert on Node cons lists (ø grows like fields_grow), add lowered to a form other than
+`ys = ys + [v]` (Python: `+` makes a new list, `+=` extends in place), typed $IntList/$FloatList locals aliased to one
+struct and kept typed only while never used whole (as map_backend does).
