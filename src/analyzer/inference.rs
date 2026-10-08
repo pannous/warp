@@ -16,14 +16,18 @@ pub(super) fn is_update(node: &Node) -> bool {
 /// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
 /// The runtime function of `a op b` when an operand's kind is known only at run time (a field of a map parameter, an
 /// element of a parsed JSON value): Int or Float is decided by the values (wasm_emitter list_ops NODE_ARITHMETIC)
+/// A value whose kind is known only at run time, held as a Node: maybe a number, maybe a ± interval
+pub fn is_run_time_kind(kind: &Kind) -> bool {
+	matches!(kind, Kind::Data | Kind::Empty)
+}
+
 pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str> {
-	let runtime_kind = |kind: &Kind| matches!(kind, Kind::Data | Kind::Empty);
-	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || runtime_kind(kind);
+	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || is_run_time_kind(kind);
 	// a value of run-time kind added to a list: node_add concatenates when it is a list too
 	if *op == Op::Add && [left, right].contains(&Kind::Data) && [left, right].contains(&Kind::List) {
 		return Some(crate::wasm_emitter::list_ops::NODE_ADD);
 	}
-	if ![left, right].iter().any(runtime_kind) || ![left, right].iter().all(numeric) {
+	if ![left, right].iter().any(is_run_time_kind) || ![left, right].iter().all(numeric) {
 		return None;
 	}
 	let index = [Op::Add, Op::Sub, Op::Mul, Op::Div].iter().position(|candidate| candidate == op)?;
@@ -92,6 +96,11 @@ pub fn written_kind(node: &Node, scope: &Scope) -> Kind {
 		literal @ Node::Number(_) => literal.kind(),
 		other => infer_type(other, scope),
 	}
+}
+
+/// A math word's result: a Node when its argument is one, which may be a ± interval (crate::uncertain::INTERVAL_WORDS)
+fn interval_or(kind: Kind, argument: &Node, scope: &Scope) -> Kind {
+	if is_run_time_kind(&infer_type(argument, scope)) { Kind::Data } else { kind }
 }
 
 pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
@@ -165,8 +174,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		},
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
-		// √x is irrational in general: an f64
-		Node::Key(left, Op::Sqrt | Op::Cbrt, _) if matches!(left.drop_meta(), Node::Empty) => Kind::Float,
+		// √x is irrational in general: an f64; of a value held as a Node maybe an interval, which it maps (a Node)
+		Node::Key(left, Op::Sqrt | Op::Cbrt, right) if matches!(left.drop_meta(), Node::Empty) => interval_or(Kind::Float, right, scope),
 		// Prefix operators (neg, abs): inherit type from operand
 		Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
 			infer_type(right, scope)
@@ -329,7 +338,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			// FFI/builtin function calls return Int by default
 			// This handles strcmp, strlen, abs, etc.
 			if crate::ffi::is_ffi_function(s) {
-				return ffi_call_kind(s);
+				return match &items[..] {
+					[_, argument] if crate::uncertain::maps_intervals(s) => interval_or(ffi_call_kind(s), argument, scope),
+					_ => ffi_call_kind(s),
+				};
 			}
 		}
 	}
@@ -367,11 +379,14 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
 		}
 	}
-	// Zero-arg function call: (funcname) with no args
+	// Zero-arg function call: (funcname) with no args; `(angle)` of a variable is its value
 	if *bracket == Bracket::Round && items.len() == 1 {
 		if let Node::Symbol(s) = items[0].drop_meta() {
 			if crate::ffi::is_ffi_function(s) {
 				return ffi_call_kind(s);
+			}
+			if let Some(local) = scope.binding(s) {
+				return local.kind;
 			}
 			// Assume zero-arg user function returns Int
 			return Kind::Int;

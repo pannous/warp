@@ -13,7 +13,7 @@ use super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
 use crate::type_kinds::{Kind, KIND_MASK};
-use crate::uncertain::{CERTAINLY, POSSIBLY};
+use crate::uncertain::{Extremum, CERTAINLY, INTERVAL_WORDS, POSSIBLY};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -78,6 +78,88 @@ impl WasmGcEmitter {
 		for (name, operation) in UNCERTAIN_ARITHMETIC.into_iter().zip([I::F64Add, I::F64Sub, I::F64Mul, I::F64Div]) {
 			self.emit_uncertain_arithmetic(name, operation);
 		}
+		for (word, name, extrema) in &INTERVAL_WORDS {
+			if self.should_emit_function(name) {
+				self.emit_interval_word_function(word, name, extrema);
+			}
+		}
+	}
+
+	/// `sin(x)`, `√x` of a value held as a Node in a program with ± values: through the word's uncertain_<word>, which maps
+	/// an interval. False otherwise, and the caller computes the word on a float
+	pub(super) fn emit_interval_word(&mut self, func: &mut Function, word: &str, argument: &Node) -> bool {
+		let Some((_, name, _)) = INTERVAL_WORDS.iter().find(|(known, _, _)| *known == word) else { return false };
+		if !self.should_emit_function(UNCERTAIN_NEW) || !crate::analyzer::is_run_time_kind(&self.get_type(argument)) {
+			return false;
+		}
+		self.emit_node_instructions(func, argument);
+		self.emit_call(func, name);
+		true
+	}
+
+	/// The f64 on the stack → the word of it
+	fn apply_math_word(&mut self, func: &mut Function, word: &str) {
+		match word {
+			"sqrt" => { func.instruction(&I::F64Sqrt); }
+			"abs" => { func.instruction(&I::F64Abs); }
+			"cbrt" => { self.emit_libm_call(func, super::LIBM_CBRT); }
+			import => { func.instruction(&I::Call(self.ffi_func_index(import).expect("a called libm word is imported"))); }
+		}
+	}
+
+	/// uncertain_<word>(node) -> node: the word of a number, of an interval the least and greatest of it at the ends, or
+	/// the extremum the interval reaches
+	fn emit_interval_word_function(&mut self, word: &str, name: &'static str, extrema: &[Extremum]) {
+		let node_ref = ValType::Ref(self.node_ref(false));
+		let (node, parts, low, high) = (0, 1, 2, 3);
+		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![self.parts_ref(), ValType::F64, ValType::F64], |s, f| {
+			s.is_uncertain(f, node);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(node)]);
+			s.call(f, TEXT_AS_FLOAT);
+			s.apply_math_word(f, word);
+			s.call(f, "new_float");
+			Self::emit_list(f, &[I::Return, I::End, I::LocalGet(node)]);
+			s.call(f, UNCERTAIN_PARTS);
+			f.instruction(&I::LocalSet(parts));
+			for (end, local) in [(LOW, low), (HIGH, high)] {
+				Self::emit_list(f, &s.part(parts, end));
+				s.apply_math_word(f, word);
+				f.instruction(&I::LocalSet(local));
+			}
+			Self::emit_list(f, &[
+				I::LocalGet(low), I::LocalGet(high), I::F64Min, I::LocalGet(low), I::LocalGet(high), I::F64Max,
+				I::LocalSet(high), I::LocalSet(low),
+			]);
+			for extremum in extrema {
+				let bound = if extremum.high { high } else { low };
+				Self::emit_list(f, &[I::F64Const(extremum.value.into()), I::LocalGet(bound)]);
+				s.reaches(f, parts, extremum);
+				Self::emit_list(f, &[I::Select, I::LocalSet(bound)]);
+			}
+			f.instruction(&I::I64Const(Kind::Uncertain as i64));
+			Self::emit_list(f, &s.part(parts, VALUE));
+			s.apply_math_word(f, word);
+			Self::emit_list(f, &[I::LocalGet(low), I::LocalGet(high)]);
+			s.new_uncertain_node(f);
+		});
+	}
+
+	/// Push an i32: does the interval in `parts` reach the extremum: `at`, or the first `at + k·every` from its low end
+	fn reaches(&self, func: &mut Function, parts: u32, extremum: &Extremum) {
+		let at = I::F64Const(extremum.at.into());
+		if extremum.every == 0.0 {
+			Self::emit_list(func, &[at.clone()]);
+			Self::emit_list(func, &self.part(parts, LOW));
+			Self::emit_list(func, &[I::F64Ge, at]);
+			Self::emit_list(func, &self.part(parts, HIGH));
+			Self::emit_list(func, &[I::F64Le, I::I32And]);
+			return;
+		}
+		let every = I::F64Const(extremum.every.into());
+		Self::emit_list(func, &self.part(parts, LOW));
+		Self::emit_list(func, &[at.clone(), I::F64Sub, every.clone(), I::F64Div, I::F64Ceil, every, I::F64Mul, at, I::F64Add]);
+		Self::emit_list(func, &self.part(parts, HIGH));
+		func.instruction(&I::F64Le);
 	}
 
 	/// Push an i32: is the Node in `local` uncertain
