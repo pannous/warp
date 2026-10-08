@@ -93,3 +93,11 @@ fn a_bindings_doc() {
 fn a_real_field_named_doc_wins() {
 	is!("use comments\n// a page\np = {doc: 7}\np.doc", 7);
 }
+
+// step 4: a core module's exports, read off the module at compile time
+#[test]
+fn a_modules_exports() {
+	is!("import tests/fixtures/wasm/fourty_two; (\"twice\" in fourty_two.exports) > 0", true);
+	is!("import tests/fixtures/wasm/fourty_two; (\"ft\" in dir(fourty_two)) > 0", true);
+	is!("import tests/fixtures/wasm/fourty_two; fourty_two.exports#1", "add32");
+}

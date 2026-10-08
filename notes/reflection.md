@@ -17,7 +17,7 @@ custom section, `wasp.meta`, kept unstripped.
 | `f.params` (`parameters`), `f.signature` | function | parameter names / `(a:int, b:int) -> int` | step 3: user functions |
 | `f.effects` (= `effects of f`) | function | effect set | `effects of f` works |
 | `event.listeners` (= `listeners of e`) | event | handler count/list | `listeners of tick` broken (signal_listeners undefined) |
-| `module.exports` | `use wasm`, foreign module | export names | missing (dir-runtime) |
+| `module.exports` | `use wasm`, foreign module | export names | step 4: imported core modules; components not yet |
 | `x.unit` | quantity | its unit | static units (static_units.rs), no `.unit` word yet |
 | `x.doc` | binding, function | its comment (P114, `use comments`) | step 4: `x.doc` = `x.@comment`, of functions too |
 
@@ -53,5 +53,7 @@ Wasp notation text (parsed by the reader we already have), one map:
 4. `x.unit`, `x.doc` (aliases of meta/units), `module.exports` for `use wasm` modules (compile time: their exports).
    `x.doc` done (meta_entries.rs; a function's comment survived no lowering before: declarations::lower_c_functions
    and nonlocal_cells rebuilt the definition without its Meta, now `Node::with_meta_of`). `x.unit` waits for quantities
-   in variables (units runtime, warp-worker's area).
+   in variables (units runtime, warp-worker's area). `m.exports` and `dir(m)` of an imported core module (`import
+   lib/fourty_two`) done: reflection::lower_module_words after modules::resolve, the sorted names from
+   wasm_modules::exports. Not yet: components (`use wasm "x.wasm" as lib`, their exports are read only at run time).
 5. wasp.meta section (absorbing wasp.units) + the run-time host call for `any`-typed values; playground reader too.
