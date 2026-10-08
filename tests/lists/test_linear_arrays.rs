@@ -67,3 +67,12 @@ fn a_numeric_map_of_a_mapped_linear_array_writes_a_block_too() {
 	is!(program, list(vec![float(0.5), int(2)]));
 	assert!(!warp::pipeline::lower(program).expect("a program").serialize().contains(".map"));
 }
+
+// a chain of numeric maps over a linear array is one loop of g after f, not a list of f's results mapped again
+#[test]
+fn a_chain_of_numeric_maps_of_a_linear_array_is_one_loop() {
+	let program = "linear xs = float[2]; xs#2 = 1.0; zs = xs.map(x => sin(x)).map(y => max(y, 0.5)); [zs#1, #zs]";
+	is!(program, list(vec![float(0.5), int(2)]));
+	let lowered = warp::pipeline::lower(program).expect("a program").serialize();
+	assert!(lowered.contains("linear_setf") && !lowered.contains("+["), "{lowered}");
+}

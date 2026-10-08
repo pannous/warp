@@ -387,10 +387,12 @@ fn map_parts(value: &Node) -> Option<(&Node, &Node)> {
 }
 
 /// `xs.map(x => …)` of a linear float array whose lambda is pure arithmetic (any the f64x2 kernel cannot compute,
-/// `sin(x)`, `max(x, 2)`): xs and the lambda, mapped in one loop into a new block (card linear-map)
+/// `sin(x)`, `max(x, 2)`): xs and the lambda, mapped in one loop into a new block (card linear-map); a chain
+/// `xs.map(f).map(g)` is one loop of g after f
 fn numeric_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Node)> {
 	let (array, lambda) = map_parts(value)?;
-	(is_linear_floats(array, names) && crate::gpu_maps::kernel(lambda).is_some()).then(|| (array.clone(), lambda.clone()))
+	let (array, lambda) = crate::gpu_maps::fused(array.clone(), lambda.clone());
+	(is_linear_floats(&array, names) && crate::gpu_maps::kernel(&lambda).is_some()).then_some((array, lambda))
 }
 
 fn is_linear_floats(array: &Node, names: &HashMap<String, Shared>) -> bool {

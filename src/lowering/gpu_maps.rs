@@ -27,10 +27,16 @@ const LARGEST_MULTIPLIED_POWER: i64 = 8;
 
 /// `xs.map(f) @gpu` or `@gpu xs.map(f)`: xs and f; a chain `xs.map(f).map(g)` is xs and g after f, one kernel
 pub(crate) fn gpu_map(value: &Node) -> Option<(Node, Node)> {
-	let (mut list, mut function) = crate::parallel::is_annotated(value, GPU_ATTRIBUTE).then(|| crate::parallel::map_call(value)).flatten()?;
+	let (list, function) = crate::parallel::is_annotated(value, GPU_ATTRIBUTE).then(|| crate::parallel::map_call(value)).flatten()?;
+	Some(fused(list, function))
+}
+
+/// The map of `list` by `function` with the maps `list` itself is made of folded in: `xs.map(f).map(g)` is xs and g
+/// after f, one pass over xs without a list of f's results
+pub(crate) fn fused(mut list: Node, mut function: Node) -> (Node, Node) {
 	loop {
-		let Some((inner_list, inner_function)) = crate::parallel::map_call(&list) else { return Some((list, function)) };
-		let Some(both) = composed(&inner_function, &function) else { return Some((list, function)) };
+		let Some((inner_list, inner_function)) = crate::parallel::map_call(&list) else { return (list, function) };
+		let Some(both) = composed(&inner_function, &function) else { return (list, function) };
 		(list, function) = (inner_list, both);
 	}
 }
