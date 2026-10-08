@@ -209,29 +209,81 @@ theorem arith_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true
 theorem arith_sub_number (a b : Ty) : sub (arith a b) number = true := by
   unfold arith; split <;> simp [sub]
 
-/-- what `+` takes: numbers, and texts (`"a" + 1` is "a1") -/
-def addable (t : Ty) : Bool := sub t number || sub t text
+/-- what `+` takes statically: numbers, texts (`"a" + 1` is "a1"), and a dynamic value (`any`, checked when it runs) -/
+def addable (t : Ty) : Bool := sub t number || sub t text || t == any
 
-/-- the result of `+`: a text when a side is a text, a number type otherwise; `never` when a side raises -/
+/-- what `-`, `*` and `<` take statically: numbers and a dynamic value -/
+def numeric (t : Ty) : Bool := sub t number || t == any
+
+/-- the result of `+`: `never` when a side raises, dynamic when a side is, a text when a side is a text, a number
+type otherwise -/
 def plus (a b : Ty) : Ty :=
-  if a == never || b == never then never else if a == text || b == text then text else arith a b
+  if a = never ∨ b = never then never else if a = any ∨ b = any then any
+  else if a = text ∨ b = text then text else arith a b
 
-theorem addable_mono {a a' : Ty} (h : sub a' a = true) (ha : addable a = true) : addable a' = true := by
-  unfold addable at *
-  simp only [Bool.or_eq_true] at *
-  rcases ha with ha | ha
-  · exact .inl (sub_trans h ha)
-  · exact .inr (sub_trans h ha)
+/-- the result of `-` and `*`: dynamic when a side is -/
+def arithTy (a b : Ty) : Ty := if a = any ∨ b = any then any else arith a b
 
-theorem plus_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true) (aa : addable a = true)
-    (ab : addable b = true) : sub (plus a' b') (plus a b) = true := by
-  have hbound : ∀ {t}, addable t = true → t = never ∨ t = bool ∨ t = int ∨ t = number ∨ t = text := by
-    intro t ht; cases t <;> simp_all [addable, sub]
-  rcases hbound aa with rfl | rfl | rfl | rfl | rfl <;>
-  rcases hbound ab with rfl | rfl | rfl | rfl | rfl <;>
-  rcases hbound (addable_mono ha aa) with rfl | rfl | rfl | rfl | rfl <;>
-  rcases hbound (addable_mono hb ab) with rfl | rfl | rfl | rfl | rfl <;>
-  simp_all [plus, arith, sub]
+theorem sub_to_text : ∀ {t : Ty}, sub t text = true → t = never ∨ t = text := by
+  intro t h; cases t <;> simp_all [sub]
+
+theorem sub_from_text : ∀ {t : Ty}, sub text t = true → t = text ∨ t = any := by
+  intro t h; cases t <;> simp_all [sub]
+
+theorem arithTy_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true) :
+    sub (arithTy a' b') (arithTy a b) = true := by
+  unfold arithTy
+  by_cases y : a = any ∨ b = any
+  · rw [ite_eq_left y]; exact sub_any _
+  rw [ite_eq_right y]
+  have y' : ¬(a' = any ∨ b' = any) := by
+    rintro (rfl | rfl)
+    · exact y (.inl (sub_from_any ha))
+    · exact y (.inr (sub_from_any hb))
+  rw [ite_eq_right y']
+  exact arith_mono ha hb
+
+theorem plus_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true) :
+    sub (plus a' b') (plus a b) = true := by
+  unfold plus
+  by_cases n' : a' = never ∨ b' = never
+  · rw [ite_eq_left n']; exact sub_never _
+  rw [ite_eq_right n']
+  have n : ¬(a = never ∨ b = never) := by
+    rintro (rfl | rfl)
+    · exact n' (.inl (sub_to_never ha))
+    · exact n' (.inr (sub_to_never hb))
+  rw [ite_eq_right n]
+  by_cases y : a = any ∨ b = any
+  · rw [ite_eq_left y]; exact sub_any _
+  rw [ite_eq_right y]
+  have y' : ¬(a' = any ∨ b' = any) := by
+    rintro (rfl | rfl)
+    · exact y (.inl (sub_from_any ha))
+    · exact y (.inr (sub_from_any hb))
+  rw [ite_eq_right y']
+  by_cases t : a = text ∨ b = text
+  · rw [ite_eq_left t]
+    have t' : a' = text ∨ b' = text := by
+      rcases t with rfl | rfl
+      · rcases sub_to_text ha with h | h
+        · exact absurd (.inl h) n'
+        · exact .inl h
+      · rcases sub_to_text hb with h | h
+        · exact absurd (.inr h) n'
+        · exact .inr h
+    rw [ite_eq_left t']; exact sub_refl _
+  rw [ite_eq_right t]
+  have t' : ¬(a' = text ∨ b' = text) := by
+    rintro (rfl | rfl)
+    · rcases sub_from_text ha with h | h
+      · exact t (.inl h)
+      · exact y (.inl h)
+    · rcases sub_from_text hb with h | h
+      · exact t (.inr h)
+      · exact y (.inr h)
+  rw [ite_eq_right t']
+  exact arith_mono ha hb
 
 end Ty
 end Warp

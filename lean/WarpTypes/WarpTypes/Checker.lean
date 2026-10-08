@@ -7,6 +7,13 @@ This is what the differential test runs on programs exported from warp (src/law/
 namespace Warp
 open Ty Expr
 
+/-- the checker reads a field only from an error, a class declaring it, or a dynamic value (P201: `s: Shape; s.r` is
+a compile error, `s = Circle(…); s.r` is checked when it runs) -/
+def strictRead (P : Program) : Ty → String → Bool
+  | .never, _ | .any, _ => true
+  | .cls p, f => (P.fieldTy p f).isSome
+  | _, _ => false
+
 def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
@@ -26,11 +33,11 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _ => none
   | .arith _ a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some ta, some tb => if sub ta .number && sub tb .number then some (Ty.arith ta tb) else none
+    | some ta, some tb => if numeric ta && numeric tb then some (arithTy ta tb) else none
     | _, _ => none
   | .lt a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some ta, some tb => if sub ta .number && sub tb .number then some .bool else none
+    | some ta, some tb => if numeric ta && numeric tb then some .bool else none
     | _, _ => none
   | .eq a b =>
     match typeOf P Γ a, typeOf P Γ b with
@@ -89,7 +96,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
       | none => none
     | _, _ => none
   | .ref _ p | .new p => some (.cls p)
-  | .get e f => (typeOf P Γ e).bind (P.readTy · f)
+  | .get e f => (typeOf P Γ e).bind fun te => if strictRead P te f then some (P.readTy te f) else none
   | .set e f v =>
     match typeOf P Γ e, typeOf P Γ v with
     | some te, some tv => (P.writeTy te f).bind fun t => if sub tv t then some tv else none
@@ -116,19 +123,19 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     intro Γ t h
     cases ha : typeOf P Γ a <;> cases hb : typeOf P Γ b <;> simp only [typeOf, ha, hb] at h <;> try cases h
     split at h
-    · rename_i hc; cases h; simp at hc; exact .add (ih1 ha) (ih2 hb) hc.1 hc.2
+    · cases h; exact .add (ih1 ha) (ih2 hb)
     · cases h
   | arith op a b ih1 ih2 =>
     intro Γ t h
     cases ha : typeOf P Γ a <;> cases hb : typeOf P Γ b <;> simp only [typeOf, ha, hb] at h <;> try cases h
     split at h
-    · rename_i hc; cases h; simp at hc; exact .arith (ih1 ha) (ih2 hb) hc.1 hc.2
+    · cases h; exact .arith (ih1 ha) (ih2 hb)
     · cases h
   | lt a b ih1 ih2 =>
     intro Γ t h
     cases ha : typeOf P Γ a <;> cases hb : typeOf P Γ b <;> simp only [typeOf, ha, hb] at h <;> try cases h
     split at h
-    · rename_i hc; cases h; simp at hc; exact .lt (ih1 ha) (ih2 hb) hc.1 hc.2
+    · cases h; exact .lt (ih1 ha) (ih2 hb)
     · cases h
   | eq a b ih1 ih2 =>
     intro Γ t h; simp only [typeOf] at h; split at h
@@ -203,7 +210,9 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
   | get e f ih =>
     intro Γ t h; simp only [typeOf, Option.bind_eq_some_iff] at h
     obtain ⟨te, he, hr⟩ := h
-    exact .get (ih he) hr
+    split at hr
+    · cases hr; exact .get (ih he)
+    · cases hr
   | set e f v ih1 ih2 =>
     intro Γ t h
     cases he : typeOf P Γ e <;> cases hv : typeOf P Γ v <;> simp only [typeOf, he, hv] at h <;> try cases h

@@ -74,8 +74,9 @@ Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a
 | literals | `n : int`, `q : number`, `"s" : text`, `true : bool`, `ø : unit`, `[] : list never` | inference.rs `infer_type` |
 | `v :: vs` | `σ :: list τ : list (σ ⊔ τ)` | `infer_list_type`, `list_type_name` |
 | `x` | Σ(x) = (m, τ) ⇒ τ; reading a charged name runs its body | analyzer `Scope::lookup` |
-| `e1 + e2` | both ≤ number or text; `text` if a side is text (`"a" + 1` is "a1"), `int` if both ≤ int, else `number`; `never` if a side is | inference.rs `arithmetic_kind`, `node_arithmetic` |
-| `e1 < e2` | both ≤ number ⇒ bool | `infer_type` comparison arm |
+| `e1 + e2` | `never` if a side is, `any` if a side is, `text` if a side is text (`"a" + 1` is "a1"), `int` if both ≤ int, else `number`; operands other than numbers and texts raise "not addable" at run time (checker: both ≤ number, text or any) | inference.rs `arithmetic_kind`, `node_arithmetic` |
+| `e1 - e2`, `e1 * e2` | `any` if a side is, `int` if both ≤ int, else `number`; non-numbers raise "not a number" (checker: both ≤ number or any) | same |
+| `e1 < e2` | ⇒ bool; non-numbers raise "not comparable" (checker: both ≤ number or any) | `infer_type` comparison arm |
 | `e1 == e2` | any operands ⇒ bool (`0 == false` is true) | equality.rs |
 | `if c then a else b` | c : any (truthiness: false, 0, ø, [] are falsy); a ⊔ b | `infer_type` if arms |
 | `while c do b` | ⇒ unit | lowering of loops |
@@ -215,9 +216,15 @@ W0 now has `arith op a b`, which takes numbers only.
   program gives it (call arguments, field writes), iterated so recursive calls count. Several kinds join to `any`
   (P173); a place never given a value holds `any`. Elaboration is outside the proof: `check_safe` holds for any
   elaborated Spec.
-- Open model question: warp runs `+` on an `any` value dynamically (`f(x) := x + 1; f(3); f("a")` gives "a1"), W0
-  refuses `+` on `any`. Faithful modeling is gradual typing: operations on `any` allowed statically and checked at
-  run time (a step to an error). Not in the corpus until decided.
+- Gradual typing (P203: annotated code is strict, unannotated code is `any` checked at run time). `HasType` means
+  "cannot get stuck": `+`, `-`, `*`, `<` and field reads type any operands, and the semantics steps operands of the
+  wrong kind to an error ("not addable", "not a number", "not comparable"; a field read off a non-object "not an
+  object"). Operations on `any` give `any`; a field read gives the declared field type for a class that declares
+  it, else `any`. The checker (`typeOf`) stays strict: operands must be addable or numeric, where `any` counts as
+  both, and a field read needs `never`, `any` or a class declaring the field (`strictRead`, P201). Corpus:
+  `f(x) := x + 1; f(3); f("a")` ("a1"), `f(x) := x - 1; f(3); f("a")` (a run-time error), `x: any = 2; x * 3`.
+  warp is stricter than W0 where it knows the value: `x: any = "a"; x - 1` is a compile error in warp (constant
+  propagation), so that form stays out of the corpus.
 - Coverage (data/types/coverage.txt, 600 is!() programs sampled from tests/): 83 were inside W0 before this
   phase. Most of the rest: imports (`use`), maps `{a:1}`, lambdas, `for` loops, `i++`, division, string methods.
 
