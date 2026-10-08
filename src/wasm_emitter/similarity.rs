@@ -1,12 +1,14 @@
-//! `a ≈ b` (`~`, circa, approximately; cards approximately, approximately-all, notes/approximately.md): two numbers
+//! `a ≈ b` (circa, approximately; cards approximately, approximately-all, notes/approximately.md): two numbers
 //! within the relative tolerance inline (numbers_similar), any other two values at run time (values_similar): a bool and
 //! any value alike in truthiness, texts and characters alike in case and accents (text_fold), lists, objects and
-//! instances entry by entry with ≈ again, anything else by values_equal.
+//! instances entry by entry with ≈ again, anything else by values_equal. `a ~ b` (P211, values_rough) is the same with
+//! its own tolerance, texts also without the whitespace and punctuation around them (text_rough_trim).
 
 use super::equality::IS_META_ENTRY;
 use super::text_unicode::CaseMapping;
 use super::{WasmGcEmitter, IS_TRUTHY, VALUES_EQUAL};
-use crate::library_words::VALUES_SIMILAR;
+use super::text_builtins::{TEXT_OF, TEXT_ROUGH_TRIM};
+use crate::library_words::{VALUES_ROUGH, VALUES_SIMILAR};
 use crate::node::Node;
 use crate::type_kinds::{Kind, BOOL_KIND, CURLY_LIST_KIND, KIND_MASK};
 use wasm_encoder::*;
@@ -21,16 +23,19 @@ const VALUES_SIMILAR_NEEDS: [&str; 5] = [NUMBERS_SIMILAR, TEXT_FOLD, VALUES_EQUA
 const TEXT_KINDS: [Kind; 2] = [Kind::Text, Kind::Codepoint];
 
 /// `a ≈ b` needs numbers_similar; values_similar, with its text_fold table, only when the emitter finds an operand that is
-/// not a plain number (a rerun, mod.rs discovered_needs)
+/// not a plain number (a rerun, mod.rs discovered_needs); the same for `a ~ b` and values_rough
 pub fn add_dependencies(required: &mut std::collections::HashSet<&'static str>) {
-	if required.contains(VALUES_SIMILAR) {
+	if required.contains(VALUES_SIMILAR) || required.contains(VALUES_ROUGH) {
 		required.extend(VALUES_SIMILAR_NEEDS);
+	}
+	if required.contains(VALUES_ROUGH) {
+		required.extend([TEXT_ROUGH_TRIM, TEXT_OF]);
 	}
 }
 
 impl WasmGcEmitter {
-	/// Push i64 1/0 for `values_similar(a, b, tolerance)`
-	pub(super) fn emit_similarity(&mut self, func: &mut Function, left: &Node, right: &Node, tolerance: &Node) {
+	/// Push i64 1/0 for `values_similar(a, b, tolerance)` or `values_rough(a, b, tolerance)`, the function given
+	pub(super) fn emit_similarity(&mut self, func: &mut Function, function: &str, left: &Node, right: &Node, tolerance: &Node) {
 		let is_plain_number = |emitter: &Self, side: &Node| matches!(emitter.get_type(side), Kind::Int | Kind::Float) && !crate::analyzer::is_boolean(side, &emitter.scope);
 		if is_plain_number(self, left) && is_plain_number(self, right) {
 			self.emit_float_value(func, left);
@@ -41,7 +46,8 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);
 			self.emit_float_value(func, tolerance);
-			self.emit_call(func, VALUES_SIMILAR);
+			let (_, function, ..) = crate::library_words::SIMILARITY_LEVELS.iter().find(|(_, known, ..)| *known == function).expect("a similarity call");
+			self.emit_call(func, function);
 		}
 		func.instruction(&I::I64ExtendI32U);
 	}
@@ -51,9 +57,14 @@ impl WasmGcEmitter {
 		if self.should_emit_function(NUMBERS_SIMILAR) {
 			self.emit_numbers_similar();
 		}
-		if self.should_emit_function(VALUES_SIMILAR) {
+		let levels = [(VALUES_SIMILAR, false), (VALUES_ROUGH, true)].map(|(name, rough)| (name, rough, self.should_emit_function(name)));
+		if levels.iter().any(|(_, _, needed)| *needed) {
 			self.emit_text_case(TEXT_FOLD, CaseMapping::Fold);
-			self.emit_values_similar();
+		}
+		for (name, rough, needed) in levels {
+			if needed {
+				self.emit_values_similar(name, rough);
+			}
 		}
 	}
 
@@ -69,9 +80,9 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// values_similar(a: anyref, b: anyref, tolerance: f64) -> i32. Locals 3, 4: the kinds; 7, 8, 9: the walk of
-	/// emit_unordered_entries_equal; 10, 11: the payloads
-	fn emit_values_similar(&mut self) {
+	/// values_similar(a: anyref, b: anyref, tolerance: f64) -> i32, or values_rough when `rough`, which trims texts
+	/// before folding them. Locals 3, 4: the kinds; 7, 8, 9: the walk of emit_unordered_entries_equal; 10, 11: the payloads
+	fn emit_values_similar(&mut self, name: &'static str, rough: bool) {
 		let recurse = self.next_func_idx;
 		let node = self.type_manager.node_type;
 		let (a, b, tolerance, kind_a, kind_b, payload_a, payload_b) = (0, 1, 2, 3, 4, 10, 11);
@@ -79,7 +90,7 @@ impl WasmGcEmitter {
 		let (i64t, i32t) = (ValType::I64, ValType::I32);
 		let cell = ValType::Ref(self.node_ref(true));
 		let locals = vec![i64t, i64t, i32t, i32t, cell, cell, i32t, Self::any_ref(), Self::any_ref()];
-		self.runtime_function(VALUES_SIMILAR, vec![Self::any_ref(), Self::any_ref(), ValType::F64], vec![i32t], locals, |s, f| {
+		self.runtime_function(name, vec![Self::any_ref(), Self::any_ref(), ValType::F64], vec![i32t], locals, |s, f| {
 			s.skip_meta_cell(f, a, b, recurse, &tolerance_argument);
 			s.skip_meta_cell(f, b, a, recurse, &tolerance_argument);
 			let call_with_tolerance = |s: &Self, f: &mut Function, name: &str| {
@@ -128,6 +139,10 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);
 			for side in [a, b] {
 				Self::emit_list(f, &[I::LocalGet(side), I::RefCastNonNull(HeapType::Concrete(node))]);
+				if rough {
+					s.call(f, TEXT_OF);
+					s.call(f, TEXT_ROUGH_TRIM);
+				}
 				s.call(f, TEXT_FOLD);
 			}
 			s.call(f, VALUES_EQUAL);

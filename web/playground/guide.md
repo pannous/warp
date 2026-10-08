@@ -387,7 +387,7 @@ square := it * it
 square [1 2 3]
 ```
 
-`map` does the same with any function.
+`map` spells the same out, handy for a function written in place.
 
 ```warp => [2 4 6]
 [1 2 3].map(x => x * 2)
@@ -396,6 +396,13 @@ square [1 2 3]
 Examples: broadcasting
 
 ## Closures
+
+Closures are anonymous functions, tiny ad-hoc pieces of code without a name, very useful in the comparisons:
+```warp
+sort([8 3 1 5 2], {$0 < $1})
+```
+
+(Much shorter than `def compare_elements(a,b){return a<b}`)
 
 A closure is a function that remembers the values around it.
 

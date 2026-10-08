@@ -1,6 +1,6 @@
 //! Key node emission - handles all Key(left, op, right) patterns
 
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use wasm_encoder::*;
 use Instruction as I;
@@ -238,8 +238,7 @@ impl WasmGcEmitter {
 				// Fallback: emit as Key node
 				self.emit_node_instructions(func, &Node::Empty);
 				self.emit_node_instructions(func, right);
-				func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
-				self.emit_call(func, "new_key");
+				self.emit_new_key(func, op);
 			}
 		}
 	}
@@ -326,8 +325,7 @@ impl WasmGcEmitter {
 		// Default: emit as Key node
 		self.emit_node_instructions(func, left);
 		self.emit_node_instructions(func, right);
-		func.instruction(&I::I64Const(crate::operators::op_to_code(&Op::Dot)));
-		self.emit_call(func, "new_key");
+		self.emit_new_key(func, &Op::Dot);
 	}
 
 	/// Emit default Key node (preserve structure for roundtrip)
@@ -359,14 +357,13 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, right_node);
 		}
 		// Preserve the op for roundtrip
-		func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
-		self.emit_call(func, "new_key");
+		self.emit_new_key(func, op);
 	}
 
 	/// `xs += [v]` of a list variable, what `xs.add(v)` lowers to: the list grows in place, every holder of it sees the
 	/// new items (P200b); a typed list pushes them onto its array, a Node list adds copies of their cells (list_extend)
 	fn emit_list_extend_assignment(&mut self, func: &mut Function, left: &Node, right: &Node) -> bool {
-		let Node::Symbol(name) = left.drop_meta() else { return false };
+		let Node::Symbol(name) = left.drop_meta() else { return self.emit_member_list_extend(func, left, right) };
 		if let Node::List(items, Bracket::Square, _) = right.drop_meta() {
 			if self.emit_typed_list_extend(func, name, items) {
 				func.instruction(&I::Drop);
@@ -383,6 +380,20 @@ impl WasmGcEmitter {
 		self.emit_node_instructions(func, right);
 		self.emit_call(func, super::list_ops::LIST_EXTEND);
 		func.instruction(&I::LocalTee(position));
+		true
+	}
+
+	/// `p.items += [v]` (lowered `p#(items+1) += [v]`), `m#2 += [v]`: the list a field or item holds grows in place too
+	/// (P200b), the place taking what list_extend gives back (the new list where it held none)
+	fn emit_member_list_extend(&mut self, func: &mut Function, left: &Node, right: &Node) -> bool {
+		let is_member = matches!(left.drop_meta(), Node::Key(_, Op::Dot | Op::Hash, _));
+		// a field read of no declared element type is of unknown kind (Empty)
+		if !is_member || !matches!(self.get_type(left), crate::Kind::List | crate::Kind::Empty) || self.get_type(right) != crate::Kind::List
+			|| !self.should_emit_function(super::list_ops::LIST_EXTEND) {
+			return false;
+		}
+		let extended = Node::List(vec![Node::Symbol(super::list_ops::LIST_EXTEND.to_string()), left.clone(), right.clone()], Bracket::Round, Separator::None);
+		self.emit_key_node(func, left, &Op::Assign, &extended);
 		true
 	}
 }

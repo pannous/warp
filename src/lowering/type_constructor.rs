@@ -171,10 +171,16 @@ fn instance(items: &[Node], bracket: &Bracket, separator: &Separator, classes: &
 	Some(instance_node(name, fields))
 }
 
-/// `x:1` among the arguments of a construction: the declared field x given by name; an instance `engine(90)` is a value
+/// `x:1` or `x=1` (as a function's named argument, P37) among the arguments of a construction: the declared field x
+/// given by name; an instance `engine(90)` is a value
 fn is_named(argument: &Node, type_def: &TypeDef) -> bool {
 	let names_field = |field: &Node| matches!(field.drop_meta(), Node::Symbol(name) if type_def.fields.iter().any(|declared| declared.name == *name));
-	!instance_parts_marked(argument) && matches!(argument.drop_meta(), Node::Key(field, Op::Colon, _) if names_field(field))
+	// `z=2` names a field even where P has none: "P has no field z", as a function's "f has no parameter z"
+	!instance_parts_marked(argument) && match argument.drop_meta() {
+		Node::Key(field, Op::Colon, _) => names_field(field),
+		Node::Key(field, Op::Assign, _) => matches!(field.drop_meta(), Node::Symbol(_)),
+		_ => false,
+	}
 }
 
 pub(crate) fn entry_value(entry: &Node) -> &Node {

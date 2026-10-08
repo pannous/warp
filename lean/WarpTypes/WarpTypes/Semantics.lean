@@ -95,25 +95,52 @@ def isText : Expr → Bool
   | .text _ => true
   | _ => false
 
+/-- a text's first character and the rest: `for c in "ab"` walks its one-character texts -/
+def peel (s : String) : Option (String × String) :=
+  match s.toList with
+  | [] => none
+  | c :: cs => some (c.toString, String.ofList cs)
+
+/-- one step of a walk over a text: done at the end, else the body for the first character, then the rest -/
+def walkText (y : String) (s : String) (b last : Expr) : Expr :=
+  match peel s with
+  | none => last
+  | some (c, rest) => .forIn y (.text rest) b (b.subst y (.text c))
+
 def isNumber : Expr → Bool
   | .bool _ | .int _ | .num _ => true
   | _ => false
 
 def arithValues (op : ArithOp) (a b : Expr) : Expr :=
   if !(isNumber a && isNumber b) then .error "not a number" else
+  if op == .mod && asNumber b == 0 then .error "divide by zero" else
   match asInt a, asInt b with
   | some x, some y => .int (op.apply x y)
   | _, _ => .num (op.apply (asNumber a) (asNumber b))
 
+def isList : Expr → Bool
+  | .nil | .cons _ _ => true
+  | _ => false
+
+def concat : Expr → Expr → Expr
+  | .cons h t, b => .cons h (concat t b)
+  | _, b => b
+
+/-- `+`: two lists concatenate (`xs + ys`), numbers add, a text side makes a text -/
 def addValues (a b : Expr) : Expr :=
+  if isList a && isList b then concat a b else
   if !((isNumber a || isText a) && (isNumber b || isText b)) then .error "not addable" else
   if isText a || isText b then .text (render a ++ render b) else
   match asInt a, asInt b with
   | some x, some y => .int (x + y)
   | _, _ => .num (asNumber a + asNumber b)
 
+/-- numbers by value, texts in codepoint order (`"a" < "b"`) -/
 def ltValues (a b : Expr) : Expr :=
-  if isNumber a && isNumber b then .bool (decide (asNumber a < asNumber b)) else .error "not comparable"
+  if isNumber a && isNumber b then .bool (decide (asNumber a < asNumber b)) else
+  match a, b with
+  | .text x, .text y => .bool (decide (x < y))
+  | _, _ => .error "not comparable"
 
 def EQ_FUEL : Nat := 64
 
@@ -152,14 +179,6 @@ def nth : Expr → Int → Option Expr
 def isClosure : Expr → Bool
   | .clo _ _ => true
   | _ => false
-
-def isList : Expr → Bool
-  | .nil | .cons _ _ => true
-  | _ => false
-
-def concat : Expr → Expr → Expr
-  | .cons h t, b => .cons h (concat t b)
-  | _, b => b
 
 def appendValues (a b : Expr) : Expr := if isList a && isList b then concat a b else .error "not a list"
 
@@ -220,7 +239,9 @@ inductive Frame where
   | isA (c : String)
   | emit (ev : String)
   | abort (ev : String) (k : Option Nat)
-  | forIn (y : String) (b : Expr)
+  | forIn (y : String) (b last : Expr)
+  | loopLast (c b : Expr)
+  | forInLast (y : String) (l b : Expr)
   | appL (a : Expr) | appR (f : Expr)
 
 namespace Frame
@@ -256,13 +277,16 @@ def plug : Frame → Expr → Expr
   | isA c, e => .isA e c
   | emit ev, e => .emit ev e
   | abort ev k, e => .abort ev k e
-  | forIn y b, e => .forIn y e b
+  | forIn y b d, e => .forIn y e b d
+  | loopLast c b, e => .loop c b e
+  | forInLast y l b, e => .forIn y l b e
   | appL a, e => .app e a
   | appR f, e => .app f e
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
-  | consR h | addR h | arithR _ h | ltR h | eqR _ h | indexR h | rangeR h | appendR h | appR h | setR h _ => h.isValue
+  | consR h | addR h | arithR _ h | ltR h | eqR _ h | indexR h | rangeR h | appendR h | appR h | setR h _
+  | forInLast _ h _ => h.isValue
   | _ => true
 
 end Frame
@@ -281,7 +305,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | lt {a b μ} : a.isValue = true → b.isValue = true → Step P (.lt a b, μ) (ltValues a b, μ)
   | eq {s a b μ} : a.isValue = true → b.isValue = true → Step P (.eq s a b, μ) (.bool (eqValues P μ s a b), μ)
   | ite {v a b μ} : v.isValue = true → Step P (.ite v a b, μ) (if truthy v then a else b, μ)
-  | loop {c b μ} : Step P (.loop c b, μ) (.ite c (.seq b (.loop c b)) .unit, μ)
+  | loop {c b v μ} : v.isValue = true → Step P (.loop c b v, μ) (.ite c (.loop c b b) v, μ)
   | seq {v b μ} : v.isValue = true → Step P (.seq v b, μ) (b, μ)
   | lam {y b μ} : Step P (.lam y b, μ) (.clo y b, μ)
   | app {y b v μ} : v.isValue = true → Step P (.app (.clo y b) v, μ) (b.subst y v, μ)
@@ -325,10 +349,12 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   /-- leaving the handler's scope fixes the depth of the block whose handler ran: the handlers outside it -/
   | scopeAbort {j ev k v μ} : v.isValue = true → Step P (.scope j (.abort ev k v), μ) (.abort ev (some (k.getD j)) v, μ)
   /-- the block of ev at that depth ends with v; any other block passes the abort on -/
-  | forNil {y b μ} : Step P (.forIn y .nil b, μ) (.unit, μ)
-  | forCons {y h t b μ} : h.isValue = true → t.isValue = true →
-      Step P (.forIn y (.cons h t) b, μ) (.seq (b.subst y h) (.forIn y t b), μ)
-  | forOther {y v b μ} : v.isValue = true → isList v = false → Step P (.forIn y v b, μ) (.error "not a list", μ)
+  | forNil {y b v μ} : v.isValue = true → Step P (.forIn y .nil b v, μ) (v, μ)
+  | forCons {y h t b v μ} : h.isValue = true → t.isValue = true → v.isValue = true →
+      Step P (.forIn y (.cons h t) b v, μ) (.forIn y t b (b.subst y h), μ)
+  | forText {y s b v μ} : v.isValue = true → Step P (.forIn y (.text s) b v, μ) (walkText y s b v, μ)
+  | forOther {y l b v μ} : l.isValue = true → isList l = false → isText l = false → v.isValue = true →
+      Step P (.forIn y l b v, μ) (.error "not a list", μ)
   | handleAbort {ev' h ev k v μ} : v.isValue = true →
       Step P (.handle ev' h (.abort ev k v), μ) (if ev' = ev ∧ k = some μ.handlers.length then v else .abort ev k v, μ)
 

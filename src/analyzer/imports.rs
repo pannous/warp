@@ -146,7 +146,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if fn_name == crate::library_words::FIELD_WITH {
 					ctx.required_functions.extend([crate::library_words::FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL]);
 				}
-				if fn_name == crate::library_words::VALUES_SIMILAR {
+				if crate::library_words::is_similarity_call(fn_name) {
 					ctx.required_functions.insert(crate::wasm_emitter::NUMBERS_SIMILAR); // values_similar when needed
 				}
 				if fn_name == crate::library_words::INSTANCE_COPY {

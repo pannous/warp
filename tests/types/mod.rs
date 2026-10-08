@@ -93,6 +93,7 @@ mod test_checked_call_kinds;
 mod test_class_field_type_phrases;
 mod test_optional_casts;
 mod test_bool_literal_value;
+mod test_bool_return; // card bool-return
 mod test_type_of_node_values;
 mod test_shared_instances;
 mod test_type_static;
@@ -109,3 +110,5 @@ mod test_any_field_text;
 mod test_same_identity;
 mod test_loop_item_into_annotated;
 mod test_declared_list_marks;
+mod test_chained_assignments;
+mod test_loop_text_arithmetic;

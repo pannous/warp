@@ -28,7 +28,7 @@ jobs = []
 for i in 1 to 5 { jobs.add(go square(i)) }
 print await all jobs
 
-// or the same as a parallel map
+// or the same as a parallel map (map stays: plain broadcasting `square [1, 2, 3]` runs inline, not in tasks)
 print @parallel [1, 2, 3].map(square)
 
 // tasks share nothing but what is declared shared; `+=` on it is atomic

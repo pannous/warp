@@ -72,3 +72,21 @@ fn an_alias_sees_an_inserted_item() {
 	is!("xs = [\"a\"]; ys = xs; ys.insert(0, \"z\"); xs#1", "z");
 	is!("xs = [\"a\"]; ys = xs; ys.insert(-1, \"q\"); count(xs)", 2);
 }
+
+#[test]
+fn a_list_held_by_a_field_or_item_grows_in_place() {
+	is!("class Bag { items: list }; b = Bag([1]); xs = b.items; b.items.add(2); count(xs)", 2);
+	is!("class Holder{items:[int]}; p = Holder([3]); q = p.items; p.items.add(9); count(q)", 2);
+	is!("class Bag { items: list }; b = Bag([]); b.items.add(2); count(b.items)", 1);
+	is!("p = {xs: [1]}; ys = p.xs; p.xs.add(5); count(ys)", 2);
+	is!("m = [[1], [2]]; row = m#2; m#2.add(5); count(row)", 2);
+}
+
+#[test]
+fn a_typed_alias_of_a_field_or_item_is_no_snapshot() {
+	// card shared-lists-typed: the array copy of `ys = p.xs` stays only where no list is changed in place after it
+	is!("p = {xs: [1, 2]}; ys = p.xs; p.xs#1 = 7; ys#1", 7);
+	is!("m = [[1, 2], [3, 4]]; row = m#2; m#2#1 = 9; row#1", 9);
+	is!("m = [[1, 2], [3, 4]]; row = m#2; m#2.add(5); count(row)", 3);
+	is!("m = [[1, 2], [3, 4]]; s = 0; for i in 1 to 2 { row = m#i; for j in 1 to 2 { s += row#j } }; s", 10);
+}

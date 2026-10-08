@@ -66,6 +66,19 @@ notes/typed_lists.md). A function receiving `names` gets the value, so TypeScrip
 sound. In W0 this shows up as: no expression form mutates a value, only `x = e` changes the store, and `x = e`
 checks e against x's declared type. Preservation (below) is the proof.
 
+**Shared lists (P200b, P215; branch shared-lists, not yet in W0).** Once lists share like maps, the alias hole is
+real: `xs: [Circle] = [c]; ys: [Shape] = xs; ys.add(square); xs#2`. P215 closes it both ways. Plan for W0, after
+shared-lists is on main:
+- a list becomes a heap object like an instance: the value `lst a` points to a cell holding the items and the element
+  type the list was made with (its declared type, else its literal's element type); `xs.add(v)`, insert and
+  `xs#i = v` change the cell instead of assigning xs
+- each write checks v against the cell's element type at run time and is a loud error otherwise (P215's run-time half)
+- `lst a` is typed `list (tag a)`, so covariance stays: the heap invariant "every item of cell a fits tag a" is what
+  writes preserve, and `tag a ≤ τ` makes every read through a `list τ` alias fit τ
+- P215's compile-time half (a visible alias `ys: [Shape] = xs` of a non-fresh `[Circle]` is rejected unless ys is
+  read-only) is a checker rule on assignments whose source is not a fresh list; it must stay monotone (a join-based
+  premise, not `¬ sub`), or W0 keeps it as a known difference
+
 Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a list literal's elements, of `try σ catch τ`.
 `int ⊔ text = any`, `list int ⊔ list text = list any`, `never ⊔ τ = τ`. Code: inference.rs `branches_kind`.
 
@@ -284,6 +297,39 @@ key the map was never given is W0's run-time "unset field" (warp: "no field"). A
 (`p={x:1}; p.y`) is not a field of `map`, so the exporter refuses it. Not modelled: computed keys `m[k]`, `m.keys`,
 methods (`get`, `remove`), `{}` subscripted by numbers (P34), typed maps (`map of int`).
 
+## Increments
+
+`i++`, `++i` (and `--`) export as `i = i + 1`; in warp both forms give the new value. `b: bool = no; b++` compiles in
+warp (card bool-assign, KNOWN_HOLES); `s = "a"; s++` is an internal error in warp, while `s += 1` gives "a1" as in W0
+(card inc-text).
+
+## + on lists
+
+`xs + ys` of two lists concatenates (`plus`: a list of the elements' join; `addValues` concatenates two list values,
+`add_typed` proves it). The checker takes `+` when both sides are addable or both are listy (a list or `any`), so
+`[1] + 2` and `xs + "a"` stay errors, as in warp. warp skips the element check when a named list is concatenated
+into a declared one: `xs: ints = [1]; ys = ["a"]; xs = xs + ys` (card concat-unchecked, KNOWN_HOLES).
+
+## Texts in loops, count, in
+
+`for c in "abc"` walks the text's one-character texts (`forText` peels one with `walkText`; the loop variable has
+type `elementTy`, `text` for a text, as `#` gives). `count xs`, `count x in xs` (how often) and `x in xs` (warp's
+1-based first position, 0 when absent, tests/operators/test_in_position.rs) are derived forms: a walk with a fresh
+`·tally` instance whose int fields hold the count and the index, items compared by `==`. `count 5` (warp: 1) is
+outside W0. warp checks a loop body's last expression by another rule: `for c in ["a"] { c + 1 }` is a compile
+error there while `c = "a"; c + 1` is "a1" (card loop-text).
+
+## Loop values (P55)
+
+A loop's value is its last body value, ø when the body never ran. `loop c b last` and `forIn y l b last` carry that
+value (ø in a program, the exporter writes `.unit`); a round runs the body in the `last` position, then
+`loop c b v` steps to `ite c (loop c b b) v`, `forIn y (h :: t) b v` to `forIn y t b (b[y := h])`, and the end of the
+list or text gives v. The type is `join tb (join td ø)`, syntax-directed and monotone, so `for i in [1, 2] { i }` is
+`any` (an int or ø). forIn's loop variable takes any type above the element type (`sub (elementTy tl) T`): a round
+keeps the body's typing, no narrowing. warp: a loop over a list parameter gives the wrong value (card loop-param,
+KNOWN_VALUE_DIFFERENCES), a loop that never ran gives 0 (card loop-empty; W0 keeps no ø value to compare), text and
+list bodies are card loop-value.
+
 ## not, and, or
 
 No new forms: `not e` is `if e then no else yes`; `a and b` is `if a then b else a` and `a or b` is
@@ -391,3 +437,39 @@ inside a handler body loses the outer handler).
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
 the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
 exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, units, then tasks.
+
+## Named arguments, defaults, nested functions (exporter only)
+
+`f(b=1, a=5)` writes the fields of `f·args` by name, positional arguments fill the others in order, a missing one
+takes its default (`f(a, b=3)`, `b: int = 3`); a call whose arguments do not fit exports as a call given `unit`, so
+W0 rejects it as warp does. Arguments run as written, left to right (P216; warp computed them in parameter order
+until src/lowering/named_arguments.rs moved effectful reordered ones into temporaries). `f(n=4)` names the one
+parameter. A function defined in a function's body is lifted (src/law/type_model/nested_functions.rs) to the
+main-level `outer·inner`, the names of outer it reads added as parameters passed by name; a name it declares
+`nonlocal` is passed as outer's cell (parameter type `outer·y`, the cell class), so writes reach outer. Siblings
+pass on what their callees capture. Checker.lean `inferFunctions` infers all functions' results together, in rounds,
+so a function may call one defined after it and two may call each other (warp hoists functions; before, W0 rejected
+`a() := b() + 1; b() := 5`). A function giving a literal `true` returns 1 in warp (card bool-return). Cards: nested-two-deep (warp cannot read two levels up),
+nonlocal-assign-unchecked (KNOWN_HOLES), named-constructor-args.
+
+## return
+
+`return v` as a function body's last statement is v. Before the end, it is `emit f·return v` and f's body runs
+inside `on f·return { break event }` (the effect handlers above, so no new W0 form and no new proof): the innermost
+handler is the running call's, so recursion returns from the right call. The event's payload is typed `any`, so a
+function that returns early is typed by the join with `any` (sound, imprecise: `f(x) := { if x > 2 { return 7 }; 1 }`
+is `any`). Declared result types (`-> int`, `: int`) are still outside W0.
+
+## use, min/max, text order
+
+`use list` (src/law/type_model/used_modules.rs) brings the definitions of lib/list.warp the program calls, and the
+ones those call, as if the program had written them (not the ones it defines itself). Most of lib/text.warp still
+needs builtins outside W0 (upper, chars, split, ends_with, ord, sort). `min(a, b)` / `max(a, b)` export as
+`b < a ? b : a` / `a < b ? b : a`, a and b bound once (typed `any`). `<` orders texts by codepoints (`ltValues`,
+the checker's `textual`); `"a" < 1` stays out (a one-letter `"a"` is a codepoint in warp).
+`sum` comes along as the warp definition `sum(xs) := { out = 0; for x in xs { out = out + x }; out }` (used_modules.rs
+LIBRARY_WORDS: warp's sum folds from 0, `sum(["a", "b"])` is "0ab"); `.size`, `.count`, `.length` are `count`. A
+function local widens over the numbers it is given, as a main-level name does (P45); an annotated parameter's cell
+keeps its annotation (`Item.cell c (some t)`, P203). Elaboration types a loop variable by its list's element type
+(Expr.rewrite takes P), so `out + x` in a loop over floats is a number, not `any` cast to the local's first type.
+Card sum-empty: `sum []` prints the word sum.

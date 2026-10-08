@@ -68,6 +68,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh ${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/local-only.sh $CLAUDE_PROJECT_DIR/.claude/hooks/watch-playground-deploy.sh",
+            "asyncRewake": true
+          }
+        ]
+      }
     ]
   }
 }

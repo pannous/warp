@@ -21,7 +21,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use std::collections::{HashMap, HashSet};
 
-const GLOBAL: &str = "global";
+pub(crate) const GLOBAL: &str = "global";
 pub(crate) const NONLOCAL: &str = "nonlocal";
 const NEEDLESS_CHARGING_TOPIC: &str = "needless-charging";
 const EFFECTFUL_GETTER_TOPIC: &str = "effectful-getter";

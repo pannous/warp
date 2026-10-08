@@ -1,6 +1,7 @@
 //! Variables and scope: collecting a program's variables, main-level bindings, the Scope of locals
 
 use super::*;
+use std::collections::HashSet;
 
 /// Collect variables defined in node and populate scope
 /// Returns count of temp locals needed (e.g., for while loops)
@@ -217,6 +218,7 @@ pub(super) fn widen_element_type(scope: &mut Scope, list: &Node, value: &Node) {
 		(element, assigned) if element == assigned => return,
 		(INT_WORD, FLOAT_WORD) => format!("{LIST_OF_PREFIX}{FLOAT_WORD}"),
 		(_, INT_WORD) if element == RATIONAL_WORD || element == FLOAT_WORD => return, // an Int fits a rational or float list
+		(FLOAT_WORD, RATIONAL_WORD) => return, // `xs#1 = 0.5` (an exact decimal) of a float list is stored as its f64
 		_ => NODE_LIST_TYPE.to_string(),
 	};
 	local.type_node = Some(Box::new(Node::Symbol(widened)));
@@ -317,7 +319,22 @@ pub fn check_kind_changes(program: &Node) -> Option<Diagnostic> {
 		}
 	});
 	let results = evident_results(program);
-	bodies.into_iter().find_map(|body| first_kind_change(body, &mut HashMap::new(), &results))
+	let globals = global_variables(program);
+	bodies.into_iter().find_map(|body| first_kind_change(body, &mut HashMap::new(), &results, &globals))
+}
+
+/// The variables declared `global y` (at this stage late_binding has moved a function's `global y` to main)
+fn global_variables(program: &Node) -> HashSet<String> {
+	let mut globals = HashSet::new();
+	program.visit(&mut |node| {
+		if let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() {
+			if keyword.drop_meta().name() == crate::late_binding::GLOBAL {
+				let target = if let Node::Key(target, Op::Assign, _) = declared.drop_meta() { target } else { declared };
+				globals.insert(target.name());
+			}
+		}
+	});
+	globals
 }
 
 /// The evident kind of a value for P45's kind changes, with bools apart from ints: int ≰ bool, bool ≤ int (card bool-assign)
@@ -363,25 +380,33 @@ impl EvidentKind {
 
 /// Walks the assignments in program order, not into function definitions or lambdas (their own scopes);
 /// `kinds` holds each variable's evident kind, None once it was given a value of no evident kind
-pub(super) fn first_kind_change(node: &Node, kinds: &mut HashMap<String, Option<EvidentKind>>, results: &HashMap<String, Kind>) -> Option<Diagnostic> {
+pub(super) fn first_kind_change(node: &Node, kinds: &mut HashMap<String, Option<EvidentKind>>, results: &HashMap<String, Kind>, globals: &HashSet<String>) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		Node::Key(head, Op::Define, value) => match head.drop_meta() {
-			// `(f x) := …`: f names a function from here on
+			// `(f x) := …`: f names a function from here on; its body gives the variables it shares, the globals and
+			// its `nonlocal` ones, values of their kinds (card nonlocal-assign)
 			Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-				given_kind(&items[0].name(), Some(EvidentKind::Function), value, kinds)
+				given_kind(&items[0].name(), Some(EvidentKind::Function), value, kinds).or_else(|| {
+					let nonlocals = crate::late_binding::declared_nonlocals(value);
+					let is_shared = |name: &String| globals.contains(name) || nonlocals.contains(name);
+					let mut body_kinds: HashMap<_, _> = kinds.iter().filter(|(name, _)| is_shared(name)).map(|(name, kind)| (name.clone(), *kind)).collect();
+					let change = first_kind_change(value, &mut body_kinds, results, globals);
+					kinds.extend(body_kinds.into_iter().filter(|(name, _)| is_shared(name)));
+					change
+				})
 			}
 			_ => None,
 		},
 		Node::Key(_, Op::Arrow | Op::FatArrow, _) => None,
 		Node::Key(target, Op::Assign, value) => {
-			if let Some(change) = first_kind_change(value, kinds, results) {
+			if let Some(change) = first_kind_change(value, kinds, results, globals) {
 				return Some(change);
 			}
 			let Node::Symbol(name) = target.drop_meta() else { return None };
 			given_kind(name, EvidentKind::of(value, results), value, kinds)
 		}
-		Node::Key(left, _, right) => first_kind_change(left, kinds, results).or_else(|| first_kind_change(right, kinds, results)),
-		Node::List(items, _, _) => items.iter().find_map(|item| first_kind_change(item, kinds, results)),
+		Node::Key(left, _, right) => first_kind_change(left, kinds, results, globals).or_else(|| first_kind_change(right, kinds, results, globals)),
+		Node::List(items, _, _) => items.iter().find_map(|item| first_kind_change(item, kinds, results, globals)),
 		_ => None,
 	}
 }

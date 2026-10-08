@@ -141,7 +141,11 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 		match payload.map_err(failure)? {
 			Payload::TypeSection(reader) => {
 				for group in reader {
-					types.extend(group.map_err(failure)?.into_types().map(|sub_type| sub_type.unwrap_func().clone()));
+					// a warp module's GC struct and array types too: only function types are of exports warp calls
+					types.extend(group.map_err(failure)?.into_types().map(|sub_type| match sub_type.composite_type.inner {
+						wasmparser::CompositeInnerType::Func(function_type) => Some(function_type),
+						_ => None,
+					}));
 				}
 			}
 			Payload::ImportSection(reader) => {
@@ -193,7 +197,7 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 	for (name, kind, index) in exported {
 		match kind {
 			ExternalKind::Func => {
-				let Some(function_type) = function_types.get(index).and_then(|type_index| types.get(*type_index as usize)) else { continue };
+				let Some(function_type) = function_types.get(index).and_then(|type_index| types.get(*type_index as usize)).and_then(Option::as_ref) else { continue };
 				if let (Some(params), Some(results)) = (number_types(function_type.params()), number_types(function_type.results())) {
 					let names = local_names.get(&(index as u32));
 					let parameters = (0..params.len() as u32).map(|local| names.and_then(|names| names.get(&local)).cloned().unwrap_or_else(|| format!("${local}"))).collect();
@@ -432,9 +436,18 @@ fn set_globals(node: Node, globals: &HashMap<&String, bool>, modules: &[String])
 
 /// `m.f(x)`, `m.g` of an imported module m: the call of its qualified import; a bare `f(x)` of an export a builtin takes
 /// (a cast like `double(21)`) is the ambiguity error naming both (P141)
+/// `m.f` naming an exported function f of the imported module m
+fn is_module_function(node: &Node, modules: &[String]) -> bool {
+	let Node::Key(receiver, Op::Dot, member) = node.drop_meta() else { return false };
+	let (Node::Symbol(alias), Node::Symbol(export)) = (receiver.drop_meta(), member.drop_meta()) else { return false };
+	modules.iter().any(|path| module_alias(path) == *alias && exports(path).get(export).is_some_and(|export| export.role == Role::Function))
+}
+
 fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 	let module_of = |alias: &str, export: &str| modules.iter().find(|path| module_alias(path) == alias && exports(path).contains_key(export));
 	match node.drop_meta() {
+		// `m.f.params`: a word of the function itself, not of its result (reflection.rs reads it off warp.meta)
+		Node::Key(receiver, Op::Dot, member) if matches!(member.drop_meta(), Node::Symbol(_)) && is_module_function(receiver, modules) => return Ok(node),
 		Node::Key(receiver, Op::Dot, member) => {
 			if let Node::Symbol(alias) = receiver.drop_meta() {
 				let (export, arguments) = match member.drop_meta() {

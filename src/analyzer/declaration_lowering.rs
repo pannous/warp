@@ -669,6 +669,11 @@ pub(super) const LIST_TIMES_TOPIC: &str = "list-times";
 
 pub(super) fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 	let Node::Key(left, Op::Mul, right) = key.drop_meta() else { return None };
+	// `[2 2] .* [2 4]`: the dotted operator said element-wise, broadcasting pairs the two lists
+	let is_each_element = |side: &Node| matches!(side.drop_meta(), Node::Symbol(name) if name == EACH_ELEMENT);
+	if is_each_element(left) || is_each_element(right) {
+		return None;
+	}
 	let (list, count) = match (is_list_literal(left), is_list_literal(right)) {
 		(true, false) => (left.as_ref(), right.as_ref()),
 		(false, true) => (right.as_ref(), left.as_ref()),
@@ -772,7 +777,7 @@ pub(super) fn zero_filled_subscript(element: &Node, one_based: &Node, variables:
 }
 
 /// `int[100]` or `100 * int`: the zero-filled list of that many elements (the parser reads `int[n]` as one already)
-pub(super) fn typed_array_value(value: &Node) -> Option<Node> {
+pub(crate) fn typed_array_value(value: &Node) -> Option<Node> {
 	match value.drop_meta() {
 		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == ZERO_FILL_CALL) => Some(value.clone()),
 		Node::Key(count, Op::Mul, element) => match element.drop_meta() {

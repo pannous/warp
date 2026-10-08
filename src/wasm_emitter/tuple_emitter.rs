@@ -81,8 +81,9 @@ impl WasmGcEmitter {
 			_ => {
 				// all values first, then the stores: `x, y = y, x` swaps
 				let kinds: Vec<Kind> = names.iter().map(|name| self.variable_kind(name)).collect();
-				for (value, kind) in values.iter().zip(&kinds) {
-					self.emit_value_of_kind(func, value, *kind);
+				for ((value, kind), name) in values.iter().zip(&kinds).zip(names) {
+					let declared = self.declared_type_of(&Node::Symbol(name.clone()));
+					self.emit_declared_value(func, declared.as_ref(), value, *kind);
 				}
 				kinds
 			}
@@ -96,7 +97,7 @@ impl WasmGcEmitter {
 	/// runtime error wrong_number_of_values, as Python's "too many / not enough values to unpack".
 	/// A starred name `*rest` takes the items the others leave, as a list (possibly empty).
 	fn emit_unpacking(&mut self, func: &mut Function, names: &[String], value: &Node) {
-		let (items, count) = (self.node_scratch(), self.scratch(0));
+		let (items, count) = (self.container_scratch(), self.scratch(0));
 		let star = names.iter().position(|name| unstarred(name) != name);
 		let fixed = names.len() as i64 - star.map_or(0, |_| 1);
 		self.emit_node_instructions(func, value);
@@ -151,9 +152,15 @@ impl WasmGcEmitter {
 	/// The value on top of the stack, of `kind`, into the variable `name`
 	fn emit_store_destructured(&mut self, func: &mut Function, name: &str, kind: Kind) {
 		let variable_kind = self.variable_kind(name);
-		if self.storage_type(variable_kind) != self.storage_type(kind) {
+		if matches!(variable_kind, Kind::Int | Kind::Float) && kind.is_ref() {
+			// `a = 0; a, b = [5, 6]`: a number item into a variable that holds a number
+			self.emit_node_as_number(func, variable_kind);
+		} else if self.storage_type(variable_kind) != self.storage_type(kind) {
 			self.emit_type_error(func, format!("{name} holds {variable_kind:?}, the destructured value is {kind:?}"));
 			return;
+		}
+		if variable_kind == Kind::Int {
+			self.emit_fits_declared(func, &Node::Symbol(name.to_string())); // `a: int`: no ratio, within its width
 		}
 		if let Some(local) = self.scope.lookup(name) {
 			func.instruction(&I::LocalSet(local.position));

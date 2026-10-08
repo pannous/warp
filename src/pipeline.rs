@@ -201,7 +201,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 88] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 89] = [
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -258,6 +258,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 88] = [
 	crate::reflection::lower_objects,
 	// methods in a class body become functions over the class before any pass reads the body as fields
 	crate::class_methods::lower,
+	// `calc.exports` of a component (reflection.rs) before foreign_modules makes it a call into the component
+	crate::reflection::lower_component_words,
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
 	crate::foreign_modules::lower,
 	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
@@ -388,10 +390,13 @@ pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
 	crate::diagnostic::begin_program();
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
+		let source = program.clone();
 		let node = crate::folding::precompute(lower_for_emission(program)?);
+		let reflected = crate::reflection::meta_entries(&source, &node);
 		warn_about_run_time_blocks(&node)?;
-		// a final quantity's unit goes into the module's `warp.meta` section
-		choose_module(&node).map(|module| CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module })
+		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
+		let entries: Vec<_> = crate::units::static_units::result_units_entry().into_iter().chain(reflected).collect();
+		choose_module(&node).map(|module| CompiledModule { bytes: crate::meta_section::with_entries(module.bytes, entries), ..module })
 	})
 }
 
