@@ -171,6 +171,10 @@ impl WasmGcEmitter {
 		} else if *op == Op::Range || *op == Op::To {
 			// Range operators: 0..3 (exclusive) or 0...3 / 0…3 (inclusive)
 			self.emit_range(func, left, right, *op == Op::To);
+		} else if *op == Op::PlusMinus {
+			self.emit_float_value(func, left);
+			self.emit_float_value(func, right);
+			self.emit_call(func, super::uncertain::UNCERTAIN_NEW);
 		} else {
 			self.emit_default_key(func, left, right, op);
 		}

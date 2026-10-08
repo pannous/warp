@@ -564,6 +564,7 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 			None => Node::Symbol("function".to_string()),
 		},
 		t if t == Kind::TypeDef as u8 => Node::Type { name: Box::new(node(&data)), body: Box::new(node(&child)) },
+		t if t == Kind::Uncertain as u8 => crate::uncertain::Uncertain::read_node(float_array(store, &data)),
 		_ => Node::Text(format!("Unknown Kind: {tag}")),
 	}
 }
@@ -595,6 +596,12 @@ fn list_in<T>(mut first: Val, mut rest: Val, bracket: crate::node::Bracket, stor
 fn boxed_f64<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<f64> {
 	let float_box = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
 	float_box.field(&mut *store, 0).ok().map(|value| warp_runtime::floats::canonical_nan(value.unwrap_f64()))
+}
+
+fn float_array<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<Vec<f64>> {
+	let array = data.unwrap_anyref()?.unwrap_array(&*store).ok()?;
+	let parts = array.elems(&mut *store).ok()?.map(|element| element.unwrap_f64()).collect();
+	Some(parts)
 }
 
 /// The letters of a `$String(ptr, len)` in linear memory
