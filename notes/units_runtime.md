@@ -79,3 +79,10 @@ appended by the pipeline for eval and `compile` alike; wasm_reader (read_bytes, 
 `.wasm` file read it back, so `warp compile …` then `warp out.wasm` prints `500 m`. A whole list of quantities prints and
 is a final value as the text `[100 cm 250 cm]` (`join(map(xs, …))` at run time). Still loud: lists grown at run time
 (`xs.add(2 m)`), recursion with quantities.
+
+## Revived on main (card units-p64, 2026-10-08)
+Stages 1-5 were cherry-picked onto main, about 2600 commits later. The playground's run_module (non-native) now reads
+`wasp.units` too. A unit word heading a call or command is no unit (`min(n, 3)`, `use m`): before this fix,
+lib/list.wasp take() was taken for a quantity function and dropped. Still loud errors, not yet metadata: a quantity in a
+map or object field (`{dist: d}`), `x:any = d`, `d.serialize()`, lists grown at run time. These need the unit at run time
+(the dynamic-struct alternative above): stage 6.
