@@ -1232,6 +1232,55 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 	}
 }
 
+/// Does a value of kind `actual` fit the builtin type `type_name` (W0 subtyping, notes/type_theory.md)? An int fits a
+/// float, a decimal fits `exact`, a character fits a text (`"a"` parses as a codepoint); any other type admits all here
+pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
+	let type_name = type_name.trim_end_matches('?');
+	let Some(expected) = builtin_type_kind(type_name) else { return true };
+	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
+	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint;
+	expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text
+}
+
+/// The builtin type a parameter annotation names: `x: text`, not `xs: [int]`
+pub(crate) fn annotated_builtin_type(annotation: &Node) -> Option<&str> {
+	match annotation.drop_meta() {
+		Node::Symbol(name) if builtin_type_kind(name.trim_end_matches('?')).is_some() => Some(name),
+		_ => None,
+	}
+}
+
+/// The element type a list annotation names: `texts`, `[text]` and `list of text` are lists of `text`
+pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
+	fn symbol(node: &Node) -> Option<&str> {
+		match node.drop_meta() {
+			Node::Symbol(name) => Some(name),
+			_ => None,
+		}
+	}
+	match annotation.drop_meta() {
+		Node::Symbol(word) => plural_element_type(word).or_else(|| word.strip_prefix(LIST_OF_PREFIX)),
+		Node::List(items, Bracket::Square, _) if items.len() == 1 => symbol(&items[0]),
+		Node::List(items, _, Separator::Space) => match items.as_slice() {
+			[list, of, element] if symbol(list) == Some(LIST_WORD) && symbol(of) == Some(OF_WORD) => symbol(element),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
+/// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
+pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
+	let Some(element) = list_type.strip_prefix(LIST_OF_PREFIX) else { return true };
+	// a rational or real element is a fraction an int list loses (`rational` names the exact Int representation)
+	let fraction = [RATIONAL_WORD, REAL_WORD, FLOAT_WORD, NUMBER_WORD].contains(&element).then_some(Kind::Float);
+	match fraction.or_else(|| builtin_type_kind(element)) {
+		Some(kind) => admits(declared_element, kind),
+		None => true,
+	}
+}
+
 pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &Node) -> Option<Diagnostic> {
 	if let Some(base) = type_name.strip_suffix('?') {
 		return match value.drop_meta() {
@@ -1254,12 +1303,9 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 
 /// The kind of a literal `value` that does not fit the built-in type `type_name`; None when it fits or is no literal
 pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
-	let expected = builtin_type_kind(type_name)?;
+	builtin_type_kind(type_name)?;
 	let actual = computed_literal_kind(value)?;
-	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
-	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint; // `"a"` parses as a codepoint
-	let fits = expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text;
-	(!fits).then_some(actual)
+	(!admits(type_name, actual)).then_some(actual)
 }
 
 /// The element type of a list type: `texts` and `list of text` hold `text`
