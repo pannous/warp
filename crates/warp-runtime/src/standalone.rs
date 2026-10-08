@@ -1,11 +1,13 @@
 //! A standalone executable is the warp-runtime stub carrying a program's machine code:
-//! `<executable><machine code><its length, u64 little-endian><TRAILER_MAGIC><zeros to a multiple of 16>`, then, in a
+//! `<executable><machine code, deflated><its length, u64 little-endian><TRAILER_MAGIC><zeros to a multiple of 16>`, then, in a
 //! Mach-O executable, its code signature: the machine code lies inside the __LINKEDIT segment, so the executable signs
 //! and verifies cleanly (`codesign --verify --strict`, macho.rs). At start the executable looks for the trailer where
 //! its program would end and runs what it carries.
 use crate::engine::{fueled_config, fueled_store};
 use crate::fuel::{fuel_from_environment, DEFAULT_FUEL};
+use crate::host_words::HANDLER_PREFIX;
 use crate::macho;
+use crate::system_signals::{NEW_EMPTY, NEW_INT};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::ops::Range;
@@ -14,17 +16,36 @@ use wasmtime::{Engine, Linker, Module, Result, Val};
 
 const TRAILER_MAGIC: &[u8; 8] = b"WRPCwasm";
 const TRAILER_BYTES: usize = 16;
+/// The carried machine code is deflated: most of it is padding to page boundaries and tables (180 KB → 45 KB)
+const COMPRESSION_LEVEL: u8 = 9;
 /// The carried program ends on this boundary, where codesign puts the signature
 const ALIGNMENT: usize = 16;
 /// The exported functions a program starts at, in order of preference
 pub const ENTRY_POINTS: [&str; 2] = ["main", "_start"];
+/// The memory print and the host words read texts from
+const MEMORY_EXPORT: &str = "memory";
+
+/// Whether the stub looks up this export of a program: its entry point, memory, handlers and the constructors of their
+/// `event`. warp build drops every other export, and the functions only those reached (tree shaking, card g_gFs8)
+pub fn stub_calls_export(name: &str) -> bool {
+	ENTRY_POINTS.contains(&name) || [MEMORY_EXPORT, NEW_EMPTY, NEW_INT].contains(&name) || name.starts_with(HANDLER_PREFIX)
+}
+
+/// The engine an executable's machine code is compiled for (warp build) and run with (the stub): no address map, the
+/// table from machine code to wasm offsets (an eighth of the machine code); a trap names the functions without them
+pub fn standalone_engine() -> Result<Engine> {
+	let mut config = fueled_config();
+	config.generate_address_map(false);
+	Engine::new(&config)
+}
 
 /// `runtime` (an executable, with or without a program) carrying `machine_code` instead. A Mach-O executable comes
 /// back unsigned: sign it (`codesign --sign -`, which `warp build` runs), else macOS refuses to start it.
 pub fn with_machine_code(runtime: &[u8], machine_code: &[u8]) -> Vec<u8> {
 	let mut executable = without_machine_code(runtime);
-	executable.extend_from_slice(machine_code);
-	executable.extend_from_slice(&(machine_code.len() as u64).to_le_bytes());
+	let compressed = miniz_oxide::deflate::compress_to_vec(machine_code, COMPRESSION_LEVEL);
+	executable.extend_from_slice(&compressed);
+	executable.extend_from_slice(&(compressed.len() as u64).to_le_bytes());
 	executable.extend_from_slice(TRAILER_MAGIC);
 	executable.resize(executable.len().next_multiple_of(ALIGNMENT), 0);
 	macho::extend_last_segment_to_end(&mut executable);
@@ -63,7 +84,8 @@ pub fn embedded_machine_code(path: &Path) -> Option<Vec<u8>> {
 	let end = macho::signature_offset(&header).unwrap_or(size);
 	let tail_start = end.checked_sub(TRAILER_BYTES + ALIGNMENT)?;
 	let (trailer_start, length) = trailer_before(&read_at(&mut file, tail_start, end - tail_start)?)?;
-	read_at(&mut file, (tail_start + trailer_start).checked_sub(length)?, length)
+	let compressed = read_at(&mut file, (tail_start + trailer_start).checked_sub(length)?, length)?;
+	miniz_oxide::inflate::decompress_to_vec(&compressed).ok()
 }
 
 fn read_at(file: &mut File, offset: usize, length: usize) -> Option<Vec<u8>> {
@@ -88,7 +110,7 @@ pub fn run_carried_program() -> Option<i32> {
 /// Run machine code compiled with warp's settings (`warp build`): its host words, libm and print are linked, its
 /// result is what it printed (build makes the program print its value)
 pub fn run(machine_code: &[u8]) -> Result<()> {
-	let engine = Engine::new(&fueled_config())?;
+	let engine = standalone_engine()?;
 	// SAFETY: the machine code is warp's own output, appended to this executable by `warp build`
 	let module = unsafe { Module::deserialize(&engine, machine_code)? };
 	let mut linker = Linker::new(&engine);
