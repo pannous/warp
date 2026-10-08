@@ -119,7 +119,8 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      The playground shows no stderr, so the note goes to stdout. A filter (SQL) refuses. IndexedDB is ORM step 6.
    - An empty table answered JSON null: ø is the empty list and reads back as nothing. A route whose value is a table
      or a list literal is marked in the route table (serve.rs answers_a_list, web_server.rs LIST_ANSWER), so its ø
-     answers `[]` (card served-empty). Left: a `server def` giving a table (POST /rpc/f) still answers null.
+     answers `[]` (card served-empty). A `server def` whose value is one (or a call of such a function) is a list word
+     too, so its POST /rpc/f answers `[]` (serve.rs ServerData, card server-def-giving).
 
 ## Undoable defaults taken
 - RPC in the page is async, like fetch (option a), starting from the prerendered value; a call with a local argument is refused.
