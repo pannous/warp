@@ -153,11 +153,11 @@ fn a_hash_glued_to_an_expression_counts_at_line_start() {
 fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
 	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
-	// user decision: no guessing; only glued `a//b` divides, `a // b` is a comment
+	// user decision 2026-10-08: `//` before a space is a comment, `x //= 3` and `a//b` divide
 	is!("items=[1 2 3 4 5]\nmid = len(items) // 2\nmid", 5);
 	is!("x = 7 // 2\nx", 7);
 	is!("x = 7    // 2\nx", 7);
-	is!("n = 10; n //= 3\nn", 10);
+	is!("n = 10; n //= 3\nn", 3);
 	is!("items=[1 2 3 4 5]\nmid = len(items)//2\nmid", 2);
 	is!("n = 10; n//=3; n", 3);
 	// the note "`// …` after code is a comment" shows until acknowledged; a `//` line of its own is no news

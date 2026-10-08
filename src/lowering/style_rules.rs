@@ -2,12 +2,15 @@
 //! quotes (`.card { … }`, `ul > li { … }`, `h1, h2 { … }`, `a:hover { … }`, `#main { … }`) become the text keys
 //! html.rs renders (`".card": { … }`), and lengths with a unit (`8px`, `1.5em`, `50%`, `-2px`) the texts they are,
 //! where warp would read `8px` as `8 * px`. A value after a declaration continues it: `padding: 8px 4px`.
+//! A class or id selector with a lone value is its color: `#done = "red"`, `.done: "red"` (card style-selectors).
 //! In a style sheet the parser keeps a blank before `.x` or `#x` (`#main .x`, the descendant combinator) as the next item.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 const STYLE: &str = "style";
+const SELECTOR_VALUE_PROPERTY: &str = "color";
+const CLASS_OR_ID: [char; 2] = ['.', '#'];
 const CSS_UNITS: [&str; 17] = ["px", "em", "rem", "vh", "vw", "vmin", "vmax", "pt", "ch", "ex", "fr", "deg", "turn", "ms", "s", "cm", "mm"];
 
 pub fn lower(node: Node) -> Node {
@@ -36,6 +39,8 @@ fn styled(items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 		} else if !pending.is_empty() && matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 			// `.card { … }`: a leading-dot name stays apart from its block
 			output.push(rule(joined_selector(&mut pending, None, joiner), &item));
+		} else if let Some((selector, value)) = selector_value(&item) {
+			output.push(rule(selector, &Node::Key(Box::new(Node::Symbol(SELECTOR_VALUE_PROPERTY.into())), Op::Colon, Box::new(value.clone()))));
 		} else if let Some((name, value)) = declaration_value(&item) {
 			let value = css_length(value).map(Node::Text).unwrap_or_else(|| value.clone());
 			output.push(Node::Key(Box::new(name.clone()), Op::Colon, Box::new(value)));
@@ -91,6 +96,15 @@ fn declaration_value(node: &Node) -> Option<(&Node, &Node)> {
 	let Node::Key(name, Op::Colon, value) = node.drop_meta() else { return None };
 	let is_name = matches!(name.drop_meta(), Node::Symbol(_) | Node::Text(_));
 	(is_name && !matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _))).then_some((name.as_ref(), value.as_ref()))
+}
+
+/// `#done = "red"`, `.done: "red"`: a class or id selector and a value that is no block, nor the one declaration
+/// the parser chains onto it (`.done{color:red}` reads `.done:color:red`)
+fn selector_value(node: &Node) -> Option<(String, &Node)> {
+	let Node::Key(name, Op::Colon | Op::Assign, value) = node.drop_meta() else { return None };
+	let selector = selector_text(name).filter(|selector| selector.starts_with(CLASS_OR_ID))?;
+	let is_body = matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Colon, _));
+	(!is_body).then_some((selector, value.as_ref()))
 }
 
 /// `padding: 8px` followed by `4px`: the value `8px 4px`, when both parts are constants; a bare number in a value of

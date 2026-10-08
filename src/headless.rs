@@ -38,8 +38,8 @@ pub struct Page {
 impl Page {
 	/// Runs the program; Err is its value when it fails or needs no module
 	pub fn render(code: &str) -> Result<Page, Node> {
-		// compiled for a page: its page events do come
-		let module = crate::pipeline::for_a_page(|| crate::pipeline::compile(code))?;
+		// compiled for a page: its page events do come; it runs where the server's code is, so it calls it directly
+		let module = crate::pipeline::for_a_page(|| crate::pipeline::prerendering(|| crate::pipeline::compile(code)))?;
 		#[cfg(feature = "native")]
 		let page = native::Run::start(module).map(|(markup, run)| Page { markup, run });
 		#[cfg(not(feature = "native"))]

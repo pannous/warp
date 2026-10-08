@@ -348,6 +348,17 @@ pub(crate) fn class_fields(node: &Node) -> std::collections::HashMap<String, Vec
 	fields
 }
 
+/// Each field of a class body: its name, type name (empty when untyped) and default value (`legs: int = 4`)
+pub(crate) fn field_declarations(body: &Node) -> Vec<(String, String, Option<Node>)> {
+	class_items(body).iter().filter(|item| method_parts(item).is_none()).filter_map(|item| {
+		let default = match item.drop_meta() {
+			Node::Key(_, Op::Assign, value) => Some(value.as_ref().clone()),
+			_ => None,
+		};
+		Some((field_name(item)?, field_type_name(item), default))
+	}).collect()
+}
+
 /// Each class's parent and the names of its own fields and methods (`class Circle extends Shape { r: int }`)
 pub(crate) fn class_members(node: &Node) -> std::collections::HashMap<String, (Option<String>, Vec<String>)> {
 	let mut classes = std::collections::HashMap::new();

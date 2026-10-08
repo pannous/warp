@@ -5,7 +5,7 @@ use super::*;
 impl WasmGcEmitter {
 	/// Emit arithmetic operation: evaluate operands and apply operator
 	pub(super) fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
-		if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+		if let Some(assignment) = self.update_as_assignment(left, op, right) {
 			self.emit_node_instructions(func, &assignment);
 			return;
 		}
@@ -166,7 +166,7 @@ impl WasmGcEmitter {
 		if self.emit_compound_index_assignment(func, left, op, right) {
 			return true;
 		}
-		if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+		if let Some(assignment) = self.update_as_assignment(left, op, right) {
 			if use_float { self.emit_float_value(func, &assignment) } else { self.emit_numeric_value(func, &assignment) }
 			return true;
 		}
@@ -452,6 +452,17 @@ impl WasmGcEmitter {
 		} else {
 			self.emit_malformed(func, left, "a variable to increment or decrement");
 		}
+	}
+
+	/// An update the plain assignment does: of a global, and `x /= y`, which is exactly `x = x / y`
+	/// (`x = 3; x /= 2` → 3/2); only a variable declared `x:int` keeps a whole number
+	fn update_as_assignment(&self, target: &Node, op: &Op, operand: &Node) -> Option<Node> {
+		let global = self.global_update_as_assignment(target, op, operand);
+		if global.is_some() || *op != Op::DivAssign || self.declared_whole(target) {
+			return global;
+		}
+		let quotient = Node::Key(Box::new(target.clone()), Op::Div, Box::new(operand.clone()));
+		Some(Node::Key(Box::new(target.clone()), Op::Assign, Box::new(quotient)))
 	}
 
 	/// `s += x` of a number s and a text x, or `s -= 1` of a text s (card text-crashes): the type error `s = s op x`

@@ -1,0 +1,10 @@
+// card route-sample: one source, a server and its page (notes/server_routes.md)
+// warp run probes/server_routes/one_source.warp, then open http://localhost:18461/users/1
+users = ["Ann", "Bo"]
+server def user_count() { count(users) }
+serve 18461 {
+	get "/api/users" { users }
+}
+route "/" { div{ h1{ "Users" } a{ href:"/users/1" "the second" } } }
+route "/users/:id:int" { p{ "User " + users#id } }
+route "*" { p{ "no such page" } }

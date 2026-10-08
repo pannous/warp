@@ -17,7 +17,7 @@ const HOST_ALIASES: [(&str, Option<usize>, &str); 2] = [("download", None, "fetc
 
 /// The words of the program's environment, imported from the "host" module and called like C functions (ffi.rs);
 /// sleep, random, random_below and clock need no compiler and live in warp-runtime (runtime/src/host_words.rs)
-pub use warp_runtime::host_words::{CLOCK, EXIT, FILE_HANDLER_PREFIX, HOST_LIBRARY, SIGNAL_WATCH, INTERRUPT_HANDLER, RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_POLL, SLEEP, SYSTEM_VALUE, CLIPBOARD_TEXT, NOTIFY, GPU_COMPUTE, GPU_RENDER, GPU_COMPUTE_LINEAR, PAGE_PATH, TIMER_HANDLER_PREFIX, FETCH_HANDLER_PREFIX};
+pub use warp_runtime::host_words::{CLOCK, EXIT, FILE_HANDLER_PREFIX, HOST_LIBRARY, SIGNAL_WATCH, INTERRUPT_HANDLER, RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_POLL, SLEEP, SYSTEM_VALUE, CLIPBOARD_TEXT, NOTIFY, GPU_COMPUTE, GPU_RENDER, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, PAGE_PATH, TIMER_HANDLER_PREFIX, FETCH_HANDLER_PREFIX};
 /// `go f(x)` on a thread (tasks.rs): task_spawn(function name, up to four Int arguments) → task id, task_await(id) → result
 pub const TASK_SPAWN: &str = "task_spawn";
 pub const TASK_AWAIT: &str = "task_await";
@@ -92,6 +92,8 @@ pub const STD_IO: &str = "std_io";
 pub const SERVE_ROUTES: &str = "serve_routes";
 /// `users := fetch url` (src/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
 /// the reply arrived, fetch_reply(id) → [value, error]: the parsed JSON (else the text) and ø, or ø and the failure
+/// `users := fetch url` (lowering/fetch_signals.rs)
+pub const FETCH_WORD: &str = "fetch";
 pub const FETCH_START: &str = "fetch_start";
 pub const FETCH_REPLY: &str = "fetch_reply";
 /// The host words whose result is any Node, its kind decided at run time (held like a map value)
@@ -106,15 +108,15 @@ pub const TASK_WORDS: [&str; 16] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_S
 	TASK_INSIDE, SIGNAL_SEND, CHANNEL_WORDS[0], CHANNEL_WORDS[1], CHANNEL_WORDS[2], CHANNEL_WORDS[3], CHANNEL_WORDS[4]];
 /// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
 pub const VALUE_GIVING_WORDS: [&str; 13] = [GPU_COMPUTE, GPU_RENDER, FETCH_REPLY, RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE, CHANNEL_NEXT, CLIPBOARD_TEXT, PAGE_PATH, CHANNEL_WORDS[2], STD_PURE, STD_IO, SERVE_ROUTES];
-pub const HOST_WORDS: [&str; 57] = [GPU_COMPUTE, GPU_RENDER, GPU_COMPUTE_LINEAR, FETCH_START, FETCH_REPLY, SERVE_ROUTES, STD_PURE, STD_IO, CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, CLIPBOARD_TEXT, NOTIFY, PAGE_PATH, GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, RANDOM_SEED, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
+pub const HOST_WORDS: [&str; 59] = [GPU_COMPUTE, GPU_RENDER, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, FETCH_START, FETCH_REPLY, SERVE_ROUTES, STD_PURE, STD_IO, CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, CLIPBOARD_TEXT, NOTIFY, PAGE_PATH, GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, RANDOM_SEED, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
 	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_WRITES, SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2],
 	CHANNEL_WORDS[0], CHANNEL_WORDS[1], CHANNEL_WORDS[2], CHANNEL_WORDS[3], CHANNEL_WORDS[4]];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 57] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 59] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(GPU_COMPUTE, vec![node, node, I64], vec![node]), (GPU_RENDER, vec![node, I64, I64, node], vec![node]), (GPU_COMPUTE_LINEAR, vec![node, I64, I64], vec![I64]), (FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (PAGE_PATH, vec![], vec![node]), (NOTIFY, vec![node], vec![]), (CHANNEL_SEND, vec![node, node], vec![]),
+	[(GPU_COMPUTE, vec![node, node, I64], vec![node]), (GPU_RENDER, vec![node, I64, I64, node], vec![node]), (GPU_COMPUTE_LINEAR, vec![node, I64, I64], vec![I64]), (GPU_MAP_LINEAR, vec![node, I64, node, I64, I64], vec![I64]), (GPU_REDUCE_LINEAR, vec![node, I64, node, I64, I64], vec![I64]), (FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (PAGE_PATH, vec![], vec![node]), (NOTIFY, vec![node], vec![]), (CHANNEL_SEND, vec![node, node], vec![]),
 		(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (RANDOM_SEED, vec![I64], vec![]), (CLOCK, vec![], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_DAILY, vec![I64, I64, I64], vec![]), (SIGNAL_AT, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (SYSTEM_VALUE, vec![I32], vec![I64]), (EXIT, vec![I64], vec![]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
@@ -402,7 +404,7 @@ pub fn fetch_call(node: &Node) -> Option<(Node, Option<Duration>)> {
 	if !matches!(node.drop_meta(), Node::List(_, Bracket::None, _)) {
 		return None;
 	}
-	let is_fetch = |head: &Node| matches!(head, Node::Symbol(name) if name == "fetch");
+	let is_fetch = |head: &Node| matches!(head, Node::Symbol(name) if name == FETCH_WORD);
 	match parts(node).as_slice() {
 		[head, url] if is_fetch(head) => Some((url.clone(), None)),
 		[head, url, keyword, Node::Number(seconds)] if is_fetch(head) && matches!(keyword, Node::Symbol(k) if k == "timeout") => {
@@ -467,6 +469,8 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, GPU_COMPUTE, gpu_compute)?;
 	linker.func_wrap(HOST_LIBRARY, GPU_RENDER, gpu_render)?;
 	linker.func_wrap(HOST_LIBRARY, GPU_COMPUTE_LINEAR, gpu_compute_linear)?;
+	linker.func_wrap(HOST_LIBRARY, GPU_MAP_LINEAR, gpu_map_linear)?;
+	linker.func_wrap(HOST_LIBRARY, GPU_REDUCE_LINEAR, gpu_reduce_linear)?;
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_SEND, channel_send)?;
 	linker.func_wrap(HOST_LIBRARY, PAINT, paint)?;
 
@@ -731,8 +735,28 @@ fn route_value(caller: &mut Caller<'_, HostState>, function: &str, request: &Nod
 fn std_call(mut caller: Caller<'_, HostState>, module: HostNode, member: HostNode, arguments: HostNode) -> wasmtime::Result<HostNode> {
 	let [module, member, arguments] = [module, member, arguments].map(|value| given_node(&mut caller, value));
 	let (module, member) = (module?.name(), member?.name());
-	let answer = crate::std_adapters::call(&module, &member, &arguments?).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?;
+	let answer = match (module.as_str(), member.as_str()) {
+		("table", "select") => queried_rows(&mut caller, &arguments?)?,
+		_ => crate::std_adapters::call(&module, &member, &arguments?).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?,
+	};
 	built_in_program(&mut caller, &answer, &format!("{module}.{member}"))
+}
+
+/// The ids a filter's query keeps (database.rs select), its warp_call calling the program's functions back; a function
+/// that fails fails the query with its own error (the trap, whose trap_detail says what went wrong)
+#[cfg(feature = "native")]
+fn queried_rows(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
+	let mut trapped = None;
+	let rows = crate::database::select(&arguments.children(), &mut |function, request| route_value(caller, function, request).map_err(|trap| {
+		let problem = format!("{trap:#}");
+		trapped.get_or_insert(trap);
+		problem
+	}));
+	match (rows, trapped) {
+		(Ok(rows), _) => Ok(rows),
+		(Err(_), Some(trap)) => Err(trap),
+		(Err(problem), None) => Err(wasmtime::Error::new(crate::tasks::TaskFailure(format!("table.select: {problem}")))),
+	}
 }
 
 /// The node a host word was given, read out of the caller's instance
@@ -749,11 +773,20 @@ fn channel_listen(mut caller: Caller<'_, HostState>, id: i64, channel: HostNode)
 	crate::channels::listen(id, &channel.name()).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))
 }
 
+/// A fetch's URL, or `[url, body]`: a POST of the body as JSON (a server function the page calls, lowering/serve.rs)
+#[cfg(feature = "native")]
+fn request_of(request: &Node) -> crate::fetches::Request {
+	match request.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 => (items[0].name(), Some(crate::foreign::json_of(&items[1]).to_string())),
+		url => (url.name(), None),
+	}
+}
+
 /// `users := fetch url` starts the fetch (src/fetches.rs)
 #[cfg(feature = "native")]
 fn fetch_start(mut caller: Caller<'_, HostState>, id: i64, url: HostNode) -> wasmtime::Result<()> {
-	let url = given_node(&mut caller, url)?;
-	crate::fetches::start(id, url.name(), FETCH_TIMEOUT);
+	let request = given_node(&mut caller, url)?;
+	crate::fetches::start(id, request_of(&request), FETCH_TIMEOUT);
 	Ok(())
 }
 
@@ -852,23 +885,96 @@ fn gpu_compute(mut caller: Caller<'_, HostState>, shader: HostNode, numbers: Hos
 /// (wasm_emitter/linear_arrays.rs) read and written in place, as f32 on the GPU
 #[cfg(feature = "native")]
 fn gpu_compute_linear(mut caller: Caller<'_, HostState>, shader: HostNode, block: i64, workgroups: i64) -> wasmtime::Result<i64> {
-	const CELL_BYTES: usize = 8;
 	let failure = gpu_failure(GPU_COMPUTE);
 	let shader = given_shader(&mut caller, shader, &failure)?;
-	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("the module exports no memory".into())) };
-	let start = usize::try_from(block).map_err(|_| failure(format!("no linear array at {block}")))?;
-	let cells_of = |bytes: &[u8]| -> Option<std::ops::Range<usize>> {
-		let count = i64::from_le_bytes(bytes.get(start..start + CELL_BYTES)?.try_into().ok()?);
-		let end = start + CELL_BYTES + usize::try_from(count).ok()? * CELL_BYTES;
-		(end <= bytes.len()).then_some(start + CELL_BYTES..end)
-	};
-	let cells = cells_of(memory.data(&caller)).ok_or_else(|| failure(format!("no linear array at {block}")))?;
-	let floats: Vec<f32> = memory.data(&caller)[cells.clone()].chunks_exact(CELL_BYTES).map(|cell| f64::from_le_bytes(cell.try_into().expect("8 bytes")) as f32).collect();
+	let floats = linear_floats(&mut caller, block, &failure)?;
 	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
 	let left = crate::gpu::compute(&shader, &floats, workgroups).map_err(&failure)?;
-	let written = &mut memory.data_mut(&mut caller)[cells];
-	written.chunks_exact_mut(CELL_BYTES).zip(left).for_each(|(cell, float)| cell.copy_from_slice(&(float as f64).to_le_bytes()));
+	write_linear_floats(&mut caller, block, &left, &failure)?;
 	Ok(block)
+}
+
+/// `ys = xs.map(x => …) @gpu` (src/lowering/gpu_maps.rs): the kernel over the cells of the block `source`, then the
+/// values of the program's numbers it reads, written into the block `target` of the same count; 1, or 0 without an
+/// adapter (a warning, once), when the program maps on the CPU
+#[cfg(feature = "native")]
+fn gpu_map_linear(caller: Caller<'_, HostState>, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64) -> wasmtime::Result<i64> {
+	gpu_kernel_linear(caller, GPU_MAP_LINEAR, shader, source, values, target, workgroups, false)
+}
+
+/// `s = sum(xs.map(x => …) @gpu)`, min, max: as gpu_map_linear, but each workgroup leaves its partial result in a cell
+/// after the values, and those, the only ones read back, go into the block `target` of `workgroups` cells
+#[cfg(feature = "native")]
+fn gpu_reduce_linear(caller: Caller<'_, HostState>, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64) -> wasmtime::Result<i64> {
+	gpu_kernel_linear(caller, GPU_REDUCE_LINEAR, shader, source, values, target, workgroups, true)
+}
+
+#[cfg(feature = "native")]
+#[allow(clippy::too_many_arguments)]
+fn gpu_kernel_linear(mut caller: Caller<'_, HostState>, word: &'static str, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64, reduces: bool) -> wasmtime::Result<i64> {
+	static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+	let failure = gpu_failure(word);
+	if let Err(problem) = crate::gpu::available() {
+		if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+			crate::diagnostic::report_runtime_warning(&format!("@gpu: {problem}, so the map runs on the CPU"));
+		}
+		return Ok(0);
+	}
+	let shader = given_shader(&mut caller, shader, &failure)?;
+	let mut floats = linear_floats(&mut caller, source, &failure)?;
+	for value in given_node(&mut caller, values)?.iter() {
+		match value.drop_meta() {
+			Node::Number(number) => floats.push(f64::from(*number) as f32),
+			other => return Err(failure(format!("the lambda reads {}, not a number", other.serialize()))),
+		}
+	}
+	let partials = floats.len();
+	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
+	if reduces {
+		floats.resize(partials + workgroups as usize, 0.0);
+	}
+	let left = crate::gpu::compute_from(&shader, &floats, workgroups, if reduces { partials } else { 0 }).map_err(&failure)?;
+	write_linear_floats(&mut caller, target, &left, &failure)?;
+	Ok(1)
+}
+
+#[cfg(feature = "native")]
+const LINEAR_CELL_BYTES: usize = 8;
+
+/// The byte range of the cells of a linear array's block `[count: i64][count f64 cells]` (wasm_emitter/linear_arrays.rs)
+#[cfg(feature = "native")]
+fn linear_cells(memory: &[u8], block: i64) -> Option<std::ops::Range<usize>> {
+	let start = usize::try_from(block).ok()?;
+	let count = i64::from_le_bytes(memory.get(start..start + LINEAR_CELL_BYTES)?.try_into().ok()?);
+	let end = start + LINEAR_CELL_BYTES + usize::try_from(count).ok()? * LINEAR_CELL_BYTES;
+	(end <= memory.len()).then_some(start + LINEAR_CELL_BYTES..end)
+}
+
+#[cfg(feature = "native")]
+fn linear_memory(caller: &mut Caller<'_, HostState>, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<wasmtime::Memory> {
+	match caller.get_export("memory") {
+		Some(Extern::Memory(memory)) => Ok(memory),
+		_ => Err(failure("the module exports no memory".into())),
+	}
+}
+
+/// A linear float array's cells as f32, as the GPU takes them
+#[cfg(feature = "native")]
+fn linear_floats(caller: &mut Caller<'_, HostState>, block: i64, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Vec<f32>> {
+	let memory = linear_memory(caller, failure)?;
+	let bytes = memory.data(&*caller);
+	let cells = linear_cells(bytes, block).ok_or_else(|| failure(format!("no linear array at {block}")))?;
+	Ok(bytes[cells].chunks_exact(LINEAR_CELL_BYTES).map(|cell| f64::from_le_bytes(cell.try_into().expect("8 bytes")) as f32).collect())
+}
+
+/// The f32 the GPU left, written into a linear float array's cells
+#[cfg(feature = "native")]
+fn write_linear_floats(caller: &mut Caller<'_, HostState>, block: i64, floats: &[f32], failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<()> {
+	let memory = linear_memory(caller, failure)?;
+	let cells = linear_cells(memory.data(&*caller), block).ok_or_else(|| failure(format!("no linear array at {block}")))?;
+	let written = &mut memory.data_mut(caller)[cells];
+	written.chunks_exact_mut(LINEAR_CELL_BYTES).zip(floats).for_each(|(cell, float)| cell.copy_from_slice(&f64::from(*float).to_le_bytes()));
+	Ok(())
 }
 
 /// `gpu_render(shader, width, height)` through wgpu (src/gpu.rs): the pixels the fragment shader colored

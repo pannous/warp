@@ -114,6 +114,10 @@ thread_local! {
 	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
 	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
+	static PRERENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
+	static SERVER_VALUES: std::cell::RefCell<Vec<Node>> = const { std::cell::RefCell::new(vec![]) };
 	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
 	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -158,6 +162,29 @@ pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
 /// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
 pub fn is_for_a_page() -> bool {
 	FOR_A_PAGE.with(|page| page.get())
+}
+
+/// `run` compiling a page that calls its server functions directly, as the server does (lowering/serve.rs): for its
+/// first HTML, rendered at build time
+pub fn prerendering<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&PRERENDERING, run)
+}
+
+pub fn is_prerendering() -> bool {
+	PRERENDERING.with(|prerendering| prerendering.get())
+}
+
+/// `run` compiling the shipped page, whose calls of server functions start as `values`
+pub fn with_server_values<T>(values: Vec<Node>, run: impl FnOnce() -> T) -> T {
+	let before = SERVER_VALUES.with(|current| current.replace(values));
+	let result = run();
+	SERVER_VALUES.with(|current| current.replace(before));
+	result
+}
+
+/// The first value of the page's `index`th call of a server function, ø when none was rendered
+pub fn server_value(index: usize) -> Node {
+	SERVER_VALUES.with(|values| values.borrow().get(index).cloned().unwrap_or(Node::Empty))
 }
 
 /// `run` compiling a program that renders its own markup (the playground, web.rs renders_itself): it exports page·html
@@ -254,6 +281,9 @@ const SOURCE_PASSES: [fn(Node) -> Node; 90] = [
 	crate::type_aliases::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::traits::lower_trait_parameters,
+	// `people: [Person] = database.people`: the table's rows, inserts and field changes written through
+	// (database_tables.rs), before class_methods lowers the class (its row id) and stored_values reads `database.people`
+	crate::database_tables::lower,
 	// `p.fields`, `p.methods`, `dir(p)`: the class layout (reflection.rs), before class_methods lowers the class bodies
 	crate::reflection::lower_objects,
 	// methods in a class body become functions over the class before any pass reads the body as fields

@@ -6,8 +6,8 @@ warp=$1
 programs=$2
 while IFS= read -r program; do
 	report=$("$warp" types "$program" 2>&1)
-	case $report in
-		"W0: "*) echo "IN $(echo $report | grep -E '^(model|warp):' | tr '\n' ' ')" ;;
-		*) echo $report | grep -m1 "not in W0" || echo "OTHER $(echo $report | head -1)" ;;
-	esac
+	# hints and warnings may come before the W0 line
+	if echo $report | grep -q '^W0: '; then echo "IN $(echo $report | grep -E '^(model|warp):' | tr '\n' ' ')"
+	else echo $report | grep -m1 "not in W0" || echo "OTHER $(echo $report | grep -v '^\(hint\|warning\|note\|      \)' | head -1)"
+	fi
 done < "$programs"

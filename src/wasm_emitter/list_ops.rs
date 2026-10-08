@@ -5,7 +5,7 @@ use wasm_encoder::*;
 use Instruction::I32Const;
 use Instruction as I;
 use ValType::Ref;
-use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND};
+use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMARKED_KIND};
 use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::node::Node;
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
@@ -52,6 +52,7 @@ impl WasmGcEmitter {
 		self.emit_list_cell_access();
 		self.emit_node_counting();
 		self.emit_node_kind_test();
+		self.emit_list_marks();
 		self.emit_node_indexing();
 		self.emit_with_at_functions();
 		self.emit_typed_list_runtime();
@@ -195,6 +196,7 @@ impl WasmGcEmitter {
 
 				// ø is the empty list
 				s.emit_field(func, 0, 0);
+				s.emit_unmarked(func);
 				func.instruction(&I::I64Const(Kind::Empty as i64));
 				func.instruction(&I::I64Eq);
 				func.instruction(&I::If(BlockType::Empty));
@@ -365,12 +367,15 @@ impl WasmGcEmitter {
 		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], vec![node_ref_nullable], |s, f| {
 			let (list, position, value, cell) = (0, 1, 2, 3);
 			let lone_cell = [I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)];
+			s.emit_item_check(f, super::declared_values::LIST_ITEM_CHECK, list, value);
 			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty)]);
 			Self::emit_list(f, &lone_cell);
 			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_field(f, list, 0);
-			Self::emit_list(f, &[I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
-				I::LocalGet(list), I::I64Const(SQUARE_LIST_KIND), set(0), I::LocalGet(list), I::LocalGet(value), set(1),
+			s.emit_unmarked(f);
+			Self::emit_list(f, &[I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(list), I::I64Const(SQUARE_LIST_KIND)]);
+			s.emit_or_element_mark(f, list);
+			Self::emit_list(f, &[set(0), I::LocalGet(list), I::LocalGet(value), set(1),
 				I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
 			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::Loop(BlockType::Empty),
 				I::LocalGet(position), I::I64Eqz, I::If(BlockType::Empty), I::LocalGet(cell)]);
@@ -629,7 +634,8 @@ fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 
 /// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
 const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
-const RUNTIME_ERROR_FIXES: [(&str, &str); 3] = [(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (INT_NOT_WHOLE, WHOLE_NUMBER_FIX)];
+const RUNTIME_ERROR_FIXES: [(&str, &str); 4] = [(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (INT_NOT_WHOLE, WHOLE_NUMBER_FIX),
+	(super::declared_values::LIST_CANNOT_HOLD, "its declared element type does not admit it (P215)")];
 
 /// The message of the runtime error trapped in the function `name`: its words, then its fix if it has one
 pub fn runtime_error_message(name: &str) -> String {
@@ -652,12 +658,12 @@ pub const RETURNED_ERROR: &str = "returned_error";
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
-pub const RUNTIME_ERRORS: [&str; 27] = [
+pub const RUNTIME_ERRORS: [&str; 28] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT, super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
-	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO, INT_NOT_WHOLE,
+	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO, INT_NOT_WHOLE, super::declared_values::LIST_CANNOT_HOLD,
 	super::uncertain::NEGATIVE_UNCERTAINTY,
 ];
 
@@ -1416,6 +1422,7 @@ impl WasmGcEmitter {
 		func.instruction(&I::If(BlockType::Empty));
 		func.instruction(&I::Else);
 		self.emit_field(func, list, 0);
+		self.emit_unmarked(func);
 		func.instruction(&I::I64Const(Kind::Empty as i64));
 		func.instruction(&I::I64Eq);
 		func.instruction(&I::If(BlockType::Empty));
@@ -1425,12 +1432,39 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
-	/// The node in local `node` (a lone cell or entry) becomes ø in place, so every holder of it sees the empty list
+	/// The kind on the stack without its element mark, when the program's lists carry marks (declared_values LIST_MARK)
+	pub(super) fn emit_unmarked(&self, func: &mut Function) {
+		if self.marks_lists() {
+			Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And]);
+		}
+	}
+
+	/// The kind on the stack with the element mark of the node in local `node`, when the program's lists carry marks
+	pub(super) fn emit_or_element_mark(&self, func: &mut Function, node: u32) {
+		if self.marks_lists() {
+			self.emit_field(func, node, 0);
+			Self::emit_list(func, &[I::I64Const(!UNMARKED_KIND), I::I64And, I::I64Or]);
+		}
+	}
+
+	/// The run-time error when the item in local `item` (`check` LIST_ITEM_CHECK) or an item of the list in local `item`
+	/// (LIST_ITEMS_CHECK) does not fit the element mark of the list in local `list`
+	pub(super) fn emit_item_check(&self, func: &mut Function, check: &str, list: u32, item: u32) {
+		if self.marks_lists() {
+			Self::emit_list(func, &[I::LocalGet(list), I::LocalGet(item)]);
+			self.call(func, check);
+		}
+	}
+
+	/// The node in local `node` (a lone cell or entry) becomes ø in place, so every holder of it sees the empty list;
+	/// a declared list keeps its element mark
 	pub(super) fn emit_become_empty(&self, func: &mut Function, node: u32) {
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
+		Self::emit_list(func, &[I::LocalGet(node), I::I64Const(Kind::Empty as i64)]);
+		self.emit_or_element_mark(func, node);
 		Self::emit_list(func, &[
-			I::LocalGet(node), I::I64Const(Kind::Empty as i64), set(0),
+			set(0),
 			I::LocalGet(node), I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }), set(1),
 			I::LocalGet(node), I::RefNull(HeapType::Concrete(node_type)), set(2),
 		]);
@@ -1472,6 +1506,7 @@ impl WasmGcEmitter {
 			let (list, items) = (0, 1);
 			let copy = CopyCells::at(2);
 			let kind = copy.result + 1;
+			s.emit_item_check(f, super::declared_values::LIST_ITEMS_CHECK, list, items);
 			s.emit_empty_as_null(f, items);
 			s.emit_collect_cells(f, items, None, &copy);
 			s.emit_rebuild_cells(f, &copy);
@@ -1486,6 +1521,9 @@ impl WasmGcEmitter {
 			for field_index in 0..3 {
 				f.instruction(&I::LocalGet(list));
 				s.emit_field(f, copy.result, field_index);
+				if field_index == 0 {
+					s.emit_or_element_mark(f, list);
+				}
 				f.instruction(&set(field_index));
 			}
 			Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
@@ -1547,7 +1585,7 @@ impl WasmGcEmitter {
 		self.runtime_function(ELEMENT_CHILDREN, vec![node_ref_nullable, node_ref_nullable], vec![node_ref_nullable], vec![node_ref_nullable], |s, f| {
 			let kind_is = |s: &Self, f: &mut Function, local: u32, kind: i64| {
 				s.emit_field(f, local, 0);
-				Self::emit_list(f, &[I::I64Const(kind), I::I64Eq]);
+				Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(kind), I::I64Eq]);
 			};
 			// no children (null or ø): the tail
 			Self::emit_list(f, &[I::LocalGet(children), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
@@ -1673,6 +1711,7 @@ impl WasmGcEmitter {
 			};
 			Self::emit_index_compare(f, I::I64LtS);
 			s.emit_fail_if(f, "index_out_of_range");
+			s.emit_item_check(f, super::declared_values::LIST_ITEM_CHECK, list, value);
 			// the cell at index
 			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::LocalGet(index), I::LocalSet(countdown), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			kind_test(s, f);
@@ -2172,7 +2211,7 @@ impl WasmGcEmitter {
 			is_entry(s, f, 0);
 			Self::emit_list(f, &[I::If(BlockType::Empty), I32Const(1), I::Return, I::End]);
 			s.emit_field(f, 0, 0);
-			Self::emit_list(f, &[I::I64Const(CURLY_LIST_KIND), I::I64Ne, I::If(BlockType::Empty), I32Const(0), I::Return, I::End]);
+			Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(CURLY_LIST_KIND), I::I64Ne, I::If(BlockType::Empty), I32Const(0), I::Return, I::End]);
 			s.emit_field(f, 0, 1);
 			Self::emit_list(f, &[I::RefTestNonNull(HeapType::Concrete(node)), I::If(BlockType::Result(ValType::I32))]);
 			s.emit_field(f, 0, 1);

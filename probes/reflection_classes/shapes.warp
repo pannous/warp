@@ -1,0 +1,5 @@
+// The warp module behind the fixture tests/fixtures/wasm/shapes.wasm (card reflection-classes): its class P and
+// function twice are reflected from the compiled module's warp.meta section and name section. Rebuild:
+//   warp compile --wasm probes/reflection_classes/shapes.warp && mv probes/reflection_classes/shapes.wasm tests/fixtures/wasm/
+class P{x:int; y:int; sq() := x*x+y*y}
+twice(a:int) := a*2
