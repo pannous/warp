@@ -63,9 +63,8 @@ One map path for every spelling (tests/welcoming/test_welcoming_maps.rs, probes/
 ## Field assignment and `?.`
 
 - `p.a = v` and `p["a"] = v` lower to `p = field_with(p, "a", v)`; `p.b.c = 4` to `p = field_with(p, "b", field_with(p.b, "c", 4))`.
-  `field_with` (runtime function, also callable) copies a map: value semantics, `q=p; p.a=9; q.a` stays. On a class instance
-  an existing field is set in place (P200, instances are references: `q=p; p.a=9; q.a` is 9). A new name is added at the end
-  (copying, for instances too). Only a variable that is an object (assigned an object literal, or another such variable) can be assigned to; any
+  `field_with` (runtime function, also callable) changes the object in place and gives it back: objects are references
+  (P200/P200b), `q=p; p.a=9; q.a` is 9 for maps and instances. A new name is added at the end, in front of meta entries. Only a variable that is an object (assigned an object literal, or another such variable) can be assigned to; any
   other target is `undefined function: a` at the lowering.
 - `a?.name` is `(t=a; if t == ø then ø else t.name)` (`Op::SafeDot`, lexed only before a letter, so `x ?.5 : 1` stays a ternary);
   on a non-ø receiver that is no object the miss is `no field name`. `y = x?.a` with a ø result into a variable still fails
