@@ -59,6 +59,12 @@ pub fn lower(program: Node) -> Node {
 	Node::List(main.into_iter().chain(statements).collect(), bracket, separator)
 }
 
+/// Does a block handler of the program answer the event (its dispatch function `ask·active` is defined)?
+pub(crate) fn has_block_handler(program: &Node, event: &str) -> bool {
+	let dispatch = active_function(event);
+	crate::variable_signals::symbols(program).contains(&dispatch)
+}
+
 /// The program with each `on ask {…} in {…}` replaced by its block run under handler i, the handlers collected
 fn scoped_blocks(node: Node, handlers: &mut Vec<Handler>) -> Node {
 	let node = node.map_children(|child| scoped_blocks(child, handlers));
