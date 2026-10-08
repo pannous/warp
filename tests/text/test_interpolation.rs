@@ -99,3 +99,11 @@ fn round_dollar_holes_interpolate_like_curly_ones() {
 	is!("a=\"x\";q=sql \"SELECT * FROM t WHERE a = $(a)\";q#1", "SELECT * FROM t WHERE a = ?");
 	assert_eq!(hints_of("x=1; \"a $(x) b\""), vec![("$(x)".to_string(), "\\(x)".to_string())]);
 }
+
+// card crypto-randomuuid: a hole calling a foreign module is lowered with the module's calls (foreign_modules.rs)
+#[test]
+fn holes_call_foreign_modules() {
+	is!("use js Math; \"m \\(Math.max(1, 5))\"", "m 5");
+	is!("use js JSON; \"j ${JSON.stringify([1])}!\"", "j [1]!");
+	is!("use js crypto; count \"id \\(crypto.randomUUID())\"", 39);
+}
