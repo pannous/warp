@@ -282,7 +282,7 @@ User decision 2026-09-28: exact numbers beyond Q with π, ℯ and square/cube ro
   `cranelift_nan_canonicalization`) is the one Config of the project's engines: `gc_engine`, `run_wat`, `run_wasm`.
   Test helpers under tests/ that build their own Config were left unchanged. Test: test_nan_bits_are_canonical (0/0 is 0x7ff8… on x86 too).
 - Implemented: fuel. `gc_engine` consumes fuel; every store comes from `util::fueled_store`, with the budget
-  `util::DEFAULT_FUEL` = 10^10 steps, overridable by `WARP_FUEL=<steps>`, `warp --fuel <steps>` or `util::with_fuel` (per thread).
+  `util::DEFAULT_FUEL` = 10^11 steps (10^10 until card fuel-default), overridable by `WARP_FUEL=<steps>`, `warp --fuel <steps>` or `util::with_fuel` (per thread).
   Running out is the error `out of fuel after N steps: the program may not terminate …` (`failed_run`, also `run_wat`).
   `while 1 {}` used to fail at compile time (`cannot extract a numeric value from ø`): an empty body `{}` (parsed as ø)
   is now a spinning loop. Tests: test_infinite_loop_runs_out_of_fuel, test_fuel_budget_can_be_raised. The CI test step
@@ -296,6 +296,12 @@ User decision 2026-09-28: exact numbers beyond Q with π, ℯ and square/cube ro
 - Decision: the default budget is 10^10 steps (several seconds), not 10^9 (alternatives: 10^9, which ends a hang in about
   a second but cuts off legitimate long runs such as fib(35); no default, i.e. unlimited unless asked). A budget per thread
   lets tests use small budgets while running in parallel.
+- Decision (2026-10-08, card fuel-default, worker default): the default budget is 10^11. Filling `float[10^7]` item by
+  item (`xs#i = i * 0.5`) costs ~1000 fuel a step, right at 10^10 (warp-web hit it). 10^11 leaves ten times that;
+  runaways still stop with the WARP_FUEL error: `while 1 {}` after 8 s, `i = i + 1` forever after 3 s,
+  `xs = xs + [1]` forever after 29 s (debug build). Alternative not taken: counting fuel per loop iteration (a counter
+  at every loop's back edge, natively, in the browser and in standalone executables) instead of per instruction.
+  Test: test_fuel_default.
 - Decision: the measure check assumes finite numbers. A float NaN or ∞ argument can still make `n<2 ? n : f(n-1)` recurse
   forever; the fuel budget catches it at runtime (alternatives: Div for every function whose parameter may be a float,
   which would make most numeric code Div; excluding NaN via the type once parameters have inferred types).
@@ -336,7 +342,7 @@ Test: test_nan_bits_are_canonical.
 
 ### Termination (halting problem)
 Truly impossible to decide in general; Warp handles both sides without a proof assistant.
-Runtime: every run has a fuel budget (default 10^10 steps, `WARP_FUEL=<steps>` or `warp --fuel <steps>`); `while 1 {}` ends
+Runtime: every run has a fuel budget (default 10^11 steps, `WARP_FUEL=<steps>` or `warp --fuel <steps>`); `while 1 {}` ends
 with `Error('out of fuel after N steps: the program may not terminate …')` instead of hanging.
 Compile time: the effect system has Koka's `Div`. Recursion that moves one parameter by a positive literal toward a guarded
 literal bound (`fib(n) := n<2 ? n : fib(n-1)+fib(n-2)`) is total; `while`, unguarded or unbounded recursion
