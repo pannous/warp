@@ -44,17 +44,17 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
     | some .unset => some (.error "unset", μ)
     | some (.charged b) => some (b, μ)
     | none => none
-  | .add a b => stepPair .addL .addR a b μ (step P μ a) (step P μ b) (some (addValues a b, μ))
+  | .add a b => stepPair .addL .addR a b μ (step P μ a) (step P μ b) (some (addValues (μ.items a) (μ.items b), μ))
   | .arith op a b => stepPair (.arithL op) (.arithR op) a b μ (step P μ a) (step P μ b) (some (arithValues op a b, μ))
   | .lt a b => stepPair .ltL .ltR a b μ (step P μ a) (step P μ b) (some (ltValues a b, μ))
   | .eq s a b => stepPair (.eqL s) (.eqR s) a b μ (step P μ a) (step P μ b) (some (.bool (eqValues P μ s a b), μ))
-  | .ite c a b => if c.isValue then some (if truthy c then a else b, μ) else stepIn (.ite a b) c μ (step P μ c)
+  | .ite c a b => if c.isValue then some (if truthy (μ.items c) then a else b, μ) else stepIn (.ite a b) c μ (step P μ c)
   | .loop c b d => if d.isValue then some (.ite c (.loop c b b) d, μ) else stepIn (.loopLast c b) d μ (step P μ d)
   | .seq a b => if a.isValue then some (b, μ) else stepIn (.seq b) a μ (step P μ a)
   | .index l i => stepPair .indexL .indexR l i μ (step P μ l) (step P μ i)
-      (some ((nth l ((asInt i).getD 0)).getD (.error "index out of range"), μ))
+      (some ((nth (μ.items l) ((asInt i).getD 0)).getD (.error "index out of range"), μ))
   | .range a b => stepPair .rangeL .rangeR a b μ (step P μ a) (step P μ b) (some (rangeValues a b, μ))
-  | .append a b => stepPair .appendL .appendR a b μ (step P μ a) (step P μ b) (some (appendValues a b, μ))
+  | .append a b => stepPair .appendL .appendR a b μ (step P μ a) (step P μ b) (some (appendValues (μ.items a) (μ.items b), μ))
   | .assign x e => if e.isValue then some (e, μ.set x (.val e)) else stepIn (.assign x) e μ (step P μ e)
   | .init x e => if e.isValue then some (e, μ.set x (.val e)) else stepIn (.init x) e μ (step P μ e)
   | .letIn y t e b => if e.isValue then some (b.subst y e, μ) else stepIn (.letIn y t b) e μ (step P μ e)
@@ -74,8 +74,14 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
       match e with
       | .nil => some (.nil, μ)
       | .cons h t => some (.cons (.call f h) (.broadcast f t), μ)
+      | .lref a t => some (.broadcast f (μ.items (.lref a t)), μ)
       | _ => none
     else stepIn (.broadcast f) e μ (step P μ e)
+  | .share e t =>
+    if e.isValue then
+      some (if isList e && fits e (.list t) then (.lref μ.lists.length t, μ.allocList t e) else (.error "type mismatch", μ))
+    else stepIn (.share t) e μ (step P μ e)
+  | .push l v => stepPair .pushL .pushR l v μ (step P μ l) (step P μ v) (some (pushValues μ l v))
   | .new p => some (.ref μ.heap.length p, μ.alloc p)
   | .get o f => if o.isValue then some (readField μ o f, μ) else stepIn (.get f) o μ (step P μ o)
   | .set o f v => stepPair (fun v => .setL f v) (fun o => .setR o f) o v μ (step P μ o) (step P μ v) (some (writeField μ o f v))
@@ -111,6 +117,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
           | .nil => d
           | .cons h t => .forIn y t b (b.subst y h)
           | .text s => walkText y s b d
+          | .lref a t => .forIn y (μ.items (.lref a t)) b d
           | _ => .error "not a list", μ)
       else stepIn (.forInLast y l b) d μ (step P μ d)
     else stepIn (.forIn y b d) l μ (step P μ l)
@@ -248,6 +255,7 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     · split at hs
       · cases hs; exact .broadcastNil
       · cases hs; rename_i hv; simp [isValue] at hv; exact .broadcastCons hv.1 hv.2
+      · cases hs; exact .broadcastRef
       · cases hs
     · exact stepIn_sound (F := .broadcast f) rfl (fun _ => ih) hs
   | new p => intro μ s' hs; simp only [step] at hs; cases hs; exact .new
@@ -314,10 +322,24 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
         · exact .forNil hd
         · simp only [isValue, Bool.and_eq_true] at hv; exact .forCons hv.1 hv.2 hd
         · exact .forText hd
-        · exact .forOther hv (by cases l <;> simp_all [isList]) (by cases l <;> simp_all [isText]) hd
+        · exact .forRef hd
+        · exact .forOther hv (by cases l <;> simp_all [isList]) (by cases l <;> simp_all [isText])
+            (by cases l <;> simp_all [isShared]) hd
       · exact stepIn_sound (F := .forInLast y l b) hv (fun _ => ihd) hs
     · exact stepIn_sound (F := .forIn y b d) rfl (fun _ => ih) hs
   | lam y b => intro μ s' hs; simp only [step] at hs; cases hs; exact .lam
+  | share e t ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · rename_i hv; cases hs
+      split
+      · rename_i hc; simp only [Bool.and_eq_true] at hc; exact .shareNew hv hc.1 hc.2
+      · rename_i hc; exact .shareBad hv (by simpa using hc)
+    · exact stepIn_sound (F := .share t) rfl (fun _ => ih) hs
+  | push l v ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := .pushL) (R := .pushR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+      (fun vl vv hd => by cases hd; exact .push vl vv) hs
   | app f a ih1 ih2 =>
     intro μ s' hs
     exact stepPair_sound (L := .appL) (R := .appR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
@@ -344,16 +366,21 @@ theorem run_sound : ∀ (fuel : Nat) (s : Expr × Store), Steps P s (run P fuel 
     · rename_i s' hs; exact .step (step_sound hs) (run_sound fuel s')
     · exact .refl
 
-/-- a value as warp prints it; `?` where the model does not keep what warp prints (numbers, instances) -/
-def display : Expr → String
-  | .bool b => if b then "yes" else "no"
-  | .int n => toString n
-  | .text s => s!"\"{s}\""
-  | .cons h t => "[" ++ " ".intercalate (showItems (.cons h t)) ++ "]"
-  | _ => "?"
-where showItems : Expr → List String
-  | .cons h t => display h :: showItems t
+/-- a value as warp prints it, shared lists read in store μ down to `depth` levels; `?` where the model does not keep
+what warp prints (numbers, instances) -/
+def display (μ : Store) : Nat → Expr → String
+  | _, .bool b => if b then "yes" else "no"
+  | _, .int n => toString n
+  | _, .text s => s!"\"{s}\""
+  | depth + 1, .lref a t => display μ depth (μ.items (.lref a t))
+  | depth, .cons h t => "[" ++ " ".intercalate (showItems depth (.cons h t)) ++ "]"
+  | _, _ => "?"
+where showItems (depth : Nat) : Expr → List String
+  | .cons h t => display μ depth h :: showItems depth t
   | _ => []
+
+/-- how deep `display` follows shared lists: a list that holds itself prints `?` there -/
+def DISPLAY_DEPTH : Nat := 8
 
 def FUEL : Nat := 10000
 
@@ -363,8 +390,8 @@ def outcome (items : List Item) : String :=
   match s.breaksPlaced, s.check with
   | false, _ | _, none => "rejected"
   | true, some _ =>
-    match (run s.program FUEL (s.main, s.store)).1 with
-    | .error _ => "error"
-    | v => if v.isValue then display v else "?"
+    match run s.program FUEL (s.main, s.store) with
+    | (.error _, _) => "error"
+    | (v, μ) => if v.isValue then display μ DISPLAY_DEPTH v else "?"
 
 end Warp
