@@ -5,7 +5,7 @@ class Warp < Formula
   desc "Wasm-first programming language and data notation (Rust implementation of Wasp)"
   homepage "https://github.com/pannous/warp"
   url "https://github.com/pannous/warp/archive/refs/tags/v1.2.3.tar.gz"
-  sha256 "51b05efeab6d2238c85302148c05b8fbb945e6a5338de78e4dd802ba6a29c1ff"
+  sha256 "14b6848969b50d50d934895e93536a58927495a609ac0f31a320dd7ab3329aaf"
   head "https://github.com/pannous/warp.git", branch: "main"
 
   depends_on "rust" => :build
