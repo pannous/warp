@@ -103,6 +103,13 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
       else if e.isValue then some (e, μ)
       else (step P (μ.outer k) e).map fun s => (.scope k s.1, s.2.withHandlers μ.handlers)
   | .abort ev k e => if e.isValue then none else stepIn (.abort ev k) e μ (step P μ e)
+  | .forIn y l b =>
+    if l.isValue then
+      some (match l with
+        | .nil => .unit
+        | .cons h t => .seq (b.subst y h) (.forIn y t b)
+        | _ => .error "not a list", μ)
+    else stepIn (.forIn y b) l μ (step P μ l)
   | _ => none
 
 variable {P : Program}
@@ -280,6 +287,15 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     split at hs
     · cases hs
     · exact stepIn_sound (F := .abort ev k) rfl (fun _ => ih) hs
+  | forIn y l b ih _ =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · rename_i hv; cases hs
+      split
+      · exact .forNil
+      · simp only [isValue, Bool.and_eq_true] at hv; exact .forCons hv.1 hv.2
+      · exact .forOther hv (by cases l <;> simp_all [isList])
+    · exact stepIn_sound (F := .forIn y b) rfl (fun _ => ih) hs
   | _ => intro μ s' hs; simp [step] at hs
 
 /-- at most `fuel` steps -/

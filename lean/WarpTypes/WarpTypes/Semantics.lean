@@ -204,6 +204,7 @@ inductive Frame where
   | isA (c : String)
   | emit (ev : String)
   | abort (ev : String) (k : Option Nat)
+  | forIn (y : String) (b : Expr)
 
 namespace Frame
 
@@ -236,6 +237,7 @@ def plug : Frame → Expr → Expr
   | isA c, e => .isA e c
   | emit ev, e => .emit ev e
   | abort ev k, e => .abort ev k e
+  | forIn y b, e => .forIn y e b
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
@@ -297,6 +299,10 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   /-- leaving the handler's scope fixes the depth of the block whose handler ran: the handlers outside it -/
   | scopeAbort {j ev k v μ} : v.isValue = true → Step P (.scope j (.abort ev k v), μ) (.abort ev (some (k.getD j)) v, μ)
   /-- the block of ev at that depth ends with v; any other block passes the abort on -/
+  | forNil {y b μ} : Step P (.forIn y .nil b, μ) (.unit, μ)
+  | forCons {y h t b μ} : h.isValue = true → t.isValue = true →
+      Step P (.forIn y (.cons h t) b, μ) (.seq (b.subst y h) (.forIn y t b), μ)
+  | forOther {y v b μ} : v.isValue = true → isList v = false → Step P (.forIn y v b, μ) (.error "not a list", μ)
   | handleAbort {ev' h ev k v μ} : v.isValue = true →
       Step P (.handle ev' h (.abort ev k v), μ) (if ev' = ev ∧ k = some μ.handlers.length then v else .abort ev k v, μ)
 
