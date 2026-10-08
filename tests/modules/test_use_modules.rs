@@ -85,3 +85,13 @@ fn module_function_locals_are_not_the_programs_variables() {
 	assert!(compiled.is_ok());
 	assert!(warnings.iter().all(|warning| !warning.contains("new local")), "{warnings:?}");
 }
+
+/// A file module's own code calls its own words, whatever the program names its variables (card module-scope)
+#[test]
+fn a_program_variable_leaves_a_file_module_its_words() {
+	let directory = module_directory("module_scope", &[("mytext.wasp", "words(t) := split(t, \" \")\ntitled(t) := join([upper(w) for w in words(t)], \" \")")]);
+	let program = directory.join("app.wasp");
+	let run = |code: &str| warp::modules::with_program_file(&program, || eval(code));
+	assert_eq!(run("use mytext; words = [\"ab\", \"cd\"]; [titled w for w in words]"), texts(vec!["AB", "CD"]));
+	assert_eq!(run("use mytext; words = [\"a b\"]; titled \"hello world\""), Node::Text("HELLO WORLD".into()));
+}

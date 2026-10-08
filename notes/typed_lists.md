@@ -109,3 +109,19 @@ cons cells: every read walked i links and n reads ran out of fuel at n = 10^5. N
 - Measured (probes/numeric_lists_bench.sh, `global` row): n = 10^5 out of fuel before, 0.07 s after; n = 10^6 0.08 s.
 - The automatic choice of linear memory (the card's first idea) gains nothing yet: linear memory and GC arrays run at
   the same speed (notes/linear_arrays.md); it pays only once a host or GPU backend takes the block.
+
+## Element types are checked (card list-element-types, 2026-10-08)
+A declared list (`names: texts`, `names: list of text`, a field `items: texts`) holds only items of its element type,
+checked like a declared scalar:
+- Literal items are compile-time errors (analyzer `check_declared_types`, `list_items_mismatch`): the declaration
+  `names: texts = [420]`, a reassignment `names = [420]`, an append `names.add(420)` / `names = names + [420]`, an element
+  `names#1 = 420`; a field's constructor (`type_constructor::field_error`) and its append `b.items.add(420)`
+  (`struct_backend::misfit_list_item`).
+- Items known only at run time are checked at the store (lowering/list_element_checks.rs, first MEANING pass):
+  `if not (v is text) { raise "…" }` as a statement before the store, a call's item held in a temporary `checked·N`
+  first, a whole list from a call checked item by item. The store keeps its form, so a typed int list stays an array.
+- A float or number list takes ints (`is number`), as a declared float does.
+- Not checked yet: run-time items appended to a list field (`b.items.add(f())`), the items of `other` in
+  `names = other + [v]`, and parameters (`f(xs: texts)` called with `[420]`).
+- Variance (TypeScript's covariant arrays) needs no rule while lists are values: a callee's widened `xs: list` is its
+  own copy (probes/variance/, notes/footguns.md).

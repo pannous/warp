@@ -600,7 +600,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
   typed class field, a `const` list and a list a closure reads. Probes: probes/variance/widening_*.wasp.
 - The actual hole is simpler: the element type of a declared list is not checked at all. `names: texts = ["hi"];
   names.add(420)` gives `["hi" 420]` silently, as do `names: texts = [420]`, `names = [420]` and `b.items.add(420)` on a
-  field `items: texts`. A scalar `x: text = "a"; x = 3` is a compile error. Card list-element-types (fix: check items like
-  scalars, at compile time where known, at the store otherwise; the variance design above needs no extra rule while
-  lists stay values). Found on the way: const-list-add, typed-list-upper, class-field-list-of, uncalled-list-param,
+  field `items: texts`. A scalar `x: text = "a"; x = 3` is a compile error. Fixed (card list-element-types): items are
+  checked like scalars, at compile time where known, at the store otherwise (notes/typed_lists.md); the variance design
+  above needs no extra rule while lists stay values. Found on the way: const-list-add, typed-list-upper, class-field-list-of, uncalled-list-param,
   map-function-name.

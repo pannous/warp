@@ -1,0 +1,4 @@
+parts(t) := split(t, " ")
+first_part(t) := parts(t)#1
+words(t) := split(t, " ")
+titled(t) := join([upper(w) for w in words(t)], " ")
