@@ -137,5 +137,8 @@ checked like a declared scalar:
   (`make().n = 5`) is the error "make() gives a copy" (card list-field-receivers).
 - A character stored into a list of unknown static type (one read from a field) goes as its Node; node_with_at took
   it as an Int, so `x#1 = "z"` gave `[122]` (list_ops `is_exact_int_element`).
-- Variance (TypeScript's covariant arrays) needs no rule while lists are values: a callee's widened `xs: list` is its
-  own copy (probes/variance/, notes/footguns.md).
+- Variance (TypeScript's covariant arrays), P215: lists are shared (P200b), so a view of a declared list under a wider
+  element type that changes it (`widen(xs: list) := xs.add(420)` of `names: texts`, `ys: [Shape] = circles;
+  ys.add(…)`) is a compile error where the alias is visible (src/analyzer/list_views.rs); a view that only reads, or of
+  a fitting element type (a subclass), is fine. Not yet: the run-time half (a lax alias, an unannotated parameter,
+  writes checked against the list's own declared element type), probes/variance/.
