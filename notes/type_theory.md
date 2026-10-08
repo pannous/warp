@@ -156,6 +156,10 @@ Model choices to keep in mind (each a simplification of warp, not a claim about 
 P199: a declared bool place (variable or parameter) takes the literals 1 and 0 as yes and no; the exporter
 elaborates them to `.bool` (src/law/type_model.rs bool_literal), so `x: bool = 1` is no hole.
 
+analyzer admits (the run-time check of a value against a builtin type word) agrees with W0 `Ty.sub` for every
+type word × W0 scalar value type (test_warp_admits_what_the_type_model_subtypes), except bool ← int: the run-time
+Kind has no bool, so any int passes a bool check there.
+
 Fixed: declared list elements (`xs: ints = [1]; xs.add("a")`, `xs = ["a"]`, `xs: texts = [420]`), card
 list-element-types (warp-a1, main 499bb5b1c); typed parameters (`f(x: text) := x; f(3)`, card param-types) and
 call results (`f(x: int) := x + 1; y = f(2); y = "a"`, card call-result), functions2 on main by 18952a635.

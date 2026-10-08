@@ -8,6 +8,7 @@ use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasp_parser::TRY_MARKER;
+use crate::type_kinds::Kind;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -22,6 +23,10 @@ const CONSTANT_KEYWORD: &str = "const";
 const ERROR_CALL: &str = "error";
 const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
+/// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
+const BUILTIN_TYPE_WORDS: [&str; 11] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "bool", "boolean"];
+/// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
+const VALUE_KINDS: [(&str, Kind); 4] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text)];
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
 
 /// W0's answer for one program
@@ -320,6 +325,22 @@ pub fn verdicts(exported: &[String]) -> Result<Vec<ModelVerdict>, String> {
 	Ok(lines.iter().map(|line| match line.strip_prefix(ACCEPTED_PREFIX) {
 		Some(type_name) => ModelVerdict::Accepted(type_name.to_string()),
 		None => ModelVerdict::Rejected,
+	}).collect())
+}
+
+/// Where warp's run-time admission of a value to a builtin type (analyzer admits) differs from W0's `Ty.sub`, for
+/// every type word and W0 scalar value type: "word ← value type: warp admits / W0 sub"
+pub fn admits_disagreements() -> Result<Vec<String>, String> {
+	let pairs: Vec<(&str, &str, Kind)> = BUILTIN_TYPE_WORDS.iter().flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (*word, *value, *kind))).collect();
+	let requests: String = pairs.iter().map(|(word, value, _)| format!("#eval IO.println (Ty.sub ({value}) ({}))\n", type_of_word(word).expect("a W0 type word"))).collect();
+	let output = ask_model("admits", &requests)?;
+	let answers: Vec<bool> = output.lines().filter_map(|line| line.parse().ok()).collect();
+	if answers.len() != pairs.len() {
+		return Err(format!("the model answered {} of {} pairs:\n{output}", answers.len(), pairs.len()));
+	}
+	Ok(pairs.iter().zip(answers).filter_map(|((word, value, kind), sub)| {
+		let admits = crate::analyzer::admits(word, *kind);
+		(admits != sub).then(|| format!("{word} ← {value}: warp admits {admits} / W0 sub {sub}"))
 	}).collect())
 }
 
