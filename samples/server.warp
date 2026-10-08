@@ -1,5 +1,5 @@
 // One source for a server and its page: `warp serve samples/server.warp` (or `warp samples/server.warp`), then open
-// http://localhost:8080/ (notes/server_routes.md)
+// http://localhost:8080/ (notes/server_routes.md). The playground runs it as one page, the table in its memory
 class User{name: text}
 stored users: [User]                       // the table users, kept on the server in server.database.sqlite
 
@@ -15,8 +15,10 @@ get "/api/users" { users }                 // data for anyone: GET /api/users
 route "/" {
 	div{
 		h1{ "Users: " + user_count() }
-		a{ href:"/users/1" "the first" }
-		a{ href:"/users/2" "the second" }
+		ul{
+			li{ a{ href:"/users/1" "the first" } }
+			li{ a{ href:"/users/2" "the second" } }
+		}
 	}
 }
 

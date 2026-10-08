@@ -96,6 +96,19 @@ const databaseValues = {};
 const isDatabase = file => file.endsWith(DATABASE_STORE);
 let databaseLoaded;
 
+// the tables of `stored users: [User]` in the page's memory, by name: {columns, rows: [[id, column values…]]}; each run
+// starts without them
+let pageTables = {};
+// the run's output (hooks.print; the playground shows no stderr), where a table in memory says so
+let printNote = text => console.warn(text);
+function pageTable(name, schema = []) {
+	if (!pageTables[name]) {
+		printNote(`note: the table ${name} lives in this page's memory only (the browser has no database yet; warp serve keeps it in SQLite)\n`);
+		pageTables[name] = { columns: schema.map(([column]) => column), rows: [] };
+	}
+	return pageTables[name];
+}
+
 // the values of a store: the session's (markup.js SESSION_STORE), the database's, else the program's
 const valuesOf = file => file === "warp-session" ? sessionValues : isDatabase(file) ? databaseValues : storedValues;
 
@@ -132,7 +145,9 @@ function keep(name, value, file) {
 }
 
 addHostPart({
+	started: () => { pageTables = {}; },
 	words: (holder, hooks, { program, text }) => {
+		printNote = note => hooks.print(note, 1);
 		const fetchUrl = (pointer, length, timeout) => {
 			const url = text(pointer, length);
 			return hostResult(program(), () => getSync(url, timeout), `fetch ${url}`);
@@ -172,6 +187,27 @@ addHostPart({
 				const prefix = filePath(folder).replace(/\/?$/, "/");
 				return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
 			},
+		},
+		// `stored users: [User]` (lowering/database_tables.rs, src/database.rs natively): the browser has no database yet
+		// (notes/orm.md step 6, IndexedDB), so a table lives in the page's memory, said once per table
+		table: {
+			open: (name, schema) => {
+				const table = pageTable(name, schema);
+				return table.rows.map(row => [...row]);
+			},
+			insert: (name, columns, values) => {
+				const table = pageTable(name);
+				const id = table.rows.length === 0 ? 1 : table.rows[table.rows.length - 1][0] + 1;
+				table.rows.push([id, ...table.columns.map(column => values[columns.indexOf(column)] ?? null)]);
+				return id;
+			},
+			update: (name, id, column, value) => {
+				const table = pageTable(name);
+				const row = table.rows.find(row => row[0] === Number(id));
+				if (row) row[1 + table.columns.indexOf(column)] = value;
+				return null;
+			},
+			select: name => { throw new Error(`a filter of the table ${name} is an SQL query: it runs natively (warp serve), the browser has no database yet`); },
 		},
 		net: { post: (url, body) => postSync(url, contentText(body)) },
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
