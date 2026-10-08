@@ -169,13 +169,13 @@ fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, argume
 }
 
 /// `foreign_call("js", receiver, member, call, arguments)`, a JavaScript attribute read or method call: its receiver,
-/// member and whether it is a call
-fn javascript_member(node: &Node) -> Option<(&Node, &str, bool)> {
+/// member, whether it is a call and its arguments
+fn javascript_member(node: &Node) -> Option<(&Node, &str, bool, &Node)> {
 	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
 	match items.as_slice() {
-		[call, runtime, receiver, member, is_call, _] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL)
+		[call, runtime, receiver, member, is_call, arguments] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL)
 			&& matches!(runtime.drop_meta(), Node::Text(runtime) if runtime == JS_RUNTIME) => match member.drop_meta() {
-			Node::Text(member) => Some((receiver, member, *is_call == Node::int(1))),
+			Node::Text(member) => Some((receiver, member, *is_call == Node::int(1), arguments)),
 			_ => None,
 		},
 		_ => None,
@@ -256,13 +256,20 @@ impl Foreign<'_> {
 			// the global inside a lowered read
 			Node::Text(name) => global(name, name),
 			other => {
-				let Some((inner, member, is_call)) = javascript_member(other) else { return Ok(None) };
+				let Some((inner, member, is_call, arguments)) = javascript_member(other) else { return Ok(None) };
 				if let (CONSTRUCTOR_MEMBER, Node::Text(interface)) = (member, inner.drop_meta()) {
 					return Ok(crate::web_idl::constructible(interface).then(|| (interface.clone(), format!("{interface}(…)"))));
 				}
 				let Some((interface, path)) = self.web_idl_receiver(inner)? else { return Ok(None) };
 				let read = if is_call { format!("{path}.{member}(…)") } else { format!("{path}.{member}") };
-				Ok(crate::web_idl::result_interface(&interface, member, is_call).map(|interface| (interface, read)))
+				let context = match arguments.drop_meta() {
+					Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
+						Some(Node::Text(context_id)) => crate::web_idl::context_interface(&interface, member, context_id),
+						_ => None,
+					},
+					_ => None,
+				};
+				Ok(context.or_else(|| crate::web_idl::result_interface(&interface, member, is_call)).map(|interface| (interface, read)))
 			}
 		}
 	}

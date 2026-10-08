@@ -135,3 +135,22 @@ fn a_constructor_is_a_plain_call() {
 	fails_with("use js URL; URL()", "URL(USVString url, optional USVString base), not 0 arguments");
 	fails_with("use js Location; Location()", "Location has no constructor in WebIDL");
 }
+
+// canvas 2D and WebGPU's entry points: getContext of a literal id gives that context's interface
+#[cfg(feature = "native")] // a page's canvas; node has none, so only the checks run
+#[test]
+fn a_canvas_context_is_typed() {
+	fails_with("use js document; c = document.getElementById(\"c\"); ctx = c.getContext(\"2d\"); ctx.fillRec(0, 0, 1, 1)", "(CanvasRenderingContext2D in WebIDL) has no member fillRec; did you mean fillRect");
+	fails_with("use js document; ctx = document.getElementById(\"c\").getContext(\"2d\"); ctx.fillRect(0, 0, 1)", "not 3 arguments");
+	fails_with("use js document; ctx = document.getElementById(\"c\").getContext(\"webgpu\"); ctx.configur(1)", "did you mean configure");
+	fails_with("use js navigator; navigator.gpu.requestAdaptor()", "(GPU in WebIDL) has no member requestAdaptor; did you mean requestAdapter");
+	eq!(warp::web_idl::context_interface("OffscreenCanvas", "getContext", "2d"), Some("OffscreenCanvasRenderingContext2D".to_string()));
+}
+
+// a Worker draws on an OffscreenCanvas
+#[cfg(not(feature = "native"))]
+#[test]
+fn an_offscreen_canvas_draws_in_a_worker() {
+	is!("use js OffscreenCanvas; c = OffscreenCanvas(4, 4); ctx = c.getContext(\"2d\"); ctx.fillRect(0, 0, 2, 2); c.width", 4);
+	fails_with("use js OffscreenCanvas; c = OffscreenCanvas(4, 4); ctx = c.getContext(\"2d\"); ctx.fillRec(0, 0, 2, 2)", "did you mean fillRect");
+}

@@ -406,6 +406,11 @@ Each step is useful on its own and is what the next ones stand on.
   members (web_idl.rs Definition.constructors) check the argument count, an interface without one is an error
   (`Location()`), and the value is typed as the interface. Bundled for this: URL, URLSearchParams, Blob, Headers,
   WebSocket. A global WebIDL does not declare (Date) is constructed unchecked.
+- Canvas (slice 8): `canvas.getContext("2d")` of a literal id is a CanvasRenderingContext2D (web_idl.rs
+  CONTEXT_INTERFACES: webgpu → GPUCanvasContext, webgl/webgl2, bitmaprenderer; an OffscreenCanvas's 2d is
+  OffscreenCanvasRenderingContext2D), also of an Element (declared_result looks in the derived interfaces). WebGPU's
+  entry points bundled: GPU (navigator.gpu), GPUAdapter, GPUDevice, GPUQueue, GPUCanvasContext; requestAdapter's
+  Promise<GPUAdapter?> types as GPUAdapter. lib/web.webidl ~120 KB.
 - WebSocket instances stay untyped in practice (warp-dc: native ws:// channels are the WebSocket path); the missing
   JS→warp callbacks (onmessage over the node pipe, promises in the browser host) are card js-callbacks.
 
