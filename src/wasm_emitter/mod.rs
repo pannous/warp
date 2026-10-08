@@ -850,6 +850,8 @@ impl WasmGcEmitter {
 		self.config.emit_wasi_imports |= effects.needs(Capability::Wasi);
 		// another runtime's module is reached through the host word foreign_call
 		self.config.emit_host_imports |= effects.needs(Capability::Host) || effects.needs(Capability::Foreign);
+		// an ordering of ± values that overlap warns through the host (P224b)
+		self.config.emit_host_imports |= crate::uncertain::may_order_intervals(node);
 	}
 
 	/// Import modules this module declares, known after `emit_for_node`

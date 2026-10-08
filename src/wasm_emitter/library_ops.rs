@@ -72,6 +72,7 @@ impl WasmGcEmitter {
 		if self.should_emit_function(NODE_ORDER) {
 			self.emit_node_order();
 		}
+		self.emit_uncertain_order(); // after node_order, which it calls
 		self.emit_text_case("text_upper", CaseMapping::Upper);
 		self.emit_text_case("text_lower", CaseMapping::Lower);
 		self.emit_text_split();

@@ -5,11 +5,15 @@
 
 use super::float_text::FLOAT_TEXT;
 use super::layout::BYTE;
+use super::library_ops::NODE_ORDER;
 use super::list_ops::TEXT_AS_FLOAT;
 use super::similarity::NUMBERS_SIMILAR;
 use super::text_builtins::TEXT_CONCAT;
 use super::WasmGcEmitter;
+use crate::node::Node;
+use crate::operators::Op;
 use crate::type_kinds::{Kind, KIND_MASK};
+use crate::uncertain::{CERTAINLY, POSSIBLY};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -21,6 +25,18 @@ const UNCERTAIN_PARTS: &str = "uncertain_parts";
 pub const UNCERTAIN_SIMILAR: &str = "uncertain_similar";
 /// uncertain_text(node) -> text: `7.0 ± 2.0`, for list_join (print, str)
 pub const UNCERTAIN_TEXT: &str = "uncertain_text";
+/// uncertain_order(a, b, op, mode, message pointer, length) -> i32: `a < b` and the other orders of ± values (P224b),
+/// op in ORDERINGS' order, mode one of the CertaintyMode
+const UNCERTAIN_ORDER: &str = "uncertain_order";
+const ORDERINGS: [Op; 4] = [Op::Lt, Op::Gt, Op::Le, Op::Ge];
+/// `y certainly < x` the whole interval, `y possibly < x` some of it; a bare `y < x` the compiler did not know to be
+/// ± is certainly, warning once when the intervals overlap
+#[derive(Clone, Copy)]
+enum CertaintyMode {
+	Certainly,
+	Possibly,
+	Bare,
+}
 /// `5 ± -1`
 pub(super) const NEGATIVE_UNCERTAINTY: &str = "an_uncertainty_must_not_be_negative";
 /// The arithmetic of node_add, node_sub, node_mul, node_div with an uncertain operand, in NODE_ARITHMETIC's order
@@ -46,7 +62,7 @@ pub fn add_dependencies(required: &mut std::collections::HashSet<&'static str>) 
 	if required.contains(UNCERTAIN_NEW) {
 		required.extend(UNCERTAIN_FUNCTIONS);
 		required.extend(UNCERTAIN_ARITHMETIC);
-		required.extend([TEXT_AS_FLOAT, NUMBERS_SIMILAR, NEGATIVE_UNCERTAINTY, "new_float"]);
+		required.extend([TEXT_AS_FLOAT, NUMBERS_SIMILAR, NEGATIVE_UNCERTAINTY, "new_float", UNCERTAIN_ORDER, NODE_ORDER]);
 	}
 }
 
@@ -343,6 +359,109 @@ impl WasmGcEmitter {
 			f.instruction(&I::LocalGet(tolerance));
 			s.call(f, NUMBERS_SIMILAR);
 			f.instruction(&I::I32Or);
+		});
+	}
+}
+
+impl WasmGcEmitter {
+	/// `certainly(y < x)`, `possibly(y < x)` (crate::uncertain::lower_certainty): an i64 0 or 1
+	pub(super) fn emit_certainty(&mut self, func: &mut Function, word: &str, comparison: &Node) {
+		let Node::Key(left, op, right) = comparison.drop_meta() else {
+			return self.emit_type_error(func, format!("{word} compares with <, >, <= or >=, not {}", comparison.serialize()));
+		};
+		if !op.is_ordering() {
+			return self.emit_type_error(func, format!("{word} compares with <, >, <= or >=, not {op}"));
+		}
+		if !self.should_emit_function(UNCERTAIN_ORDER) {
+			return self.emit_int_operands_op(func, left, op, right); // no ± in the program: the comparison itself
+		}
+		self.emit_node_instructions(func, left);
+		self.emit_node_instructions(func, right);
+		let mode = if word == CERTAINLY { CertaintyMode::Certainly } else { debug_assert_eq!(word, POSSIBLY); CertaintyMode::Possibly };
+		self.emit_uncertain_order_call(func, *op, mode, (0, 0));
+	}
+
+	/// After both operands of a bare ordering: the i64 verdict, or false with `overlap_warning` when ± values overlap.
+	/// False when the program has no ± values (the caller orders them itself)
+	pub(super) fn emit_bare_uncertain_order(&mut self, func: &mut Function, left: &Node, op: Op, right: &Node) -> bool {
+		if !self.should_emit_function(UNCERTAIN_ORDER) {
+			return false;
+		}
+		let warning = self.located(crate::uncertain::overlap_warning(left, op, right));
+		let message = self.allocate_string(&warning);
+		self.emit_uncertain_order_call(func, op, CertaintyMode::Bare, message);
+		true
+	}
+
+	fn emit_uncertain_order_call(&mut self, func: &mut Function, op: Op, mode: CertaintyMode, (pointer, length): (u32, u32)) {
+		let op_index = ORDERINGS.iter().position(|ordering| *ordering == op).expect("an ordering");
+		Self::emit_list(func, &[I::I32Const(op_index as i32), I::I32Const(mode as i32), I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+		self.emit_call(func, UNCERTAIN_ORDER);
+		func.instruction(&I::I64ExtendI32U);
+	}
+
+	/// uncertain_order: numbers as intervals of one point, anything else by node_order. After node_order
+	pub(super) fn emit_uncertain_order(&mut self) {
+		if !self.should_emit_function(UNCERTAIN_ORDER) {
+			return;
+		}
+		let host_warn = self.ctx.func_registry.get(super::text_builtins::HOST_WARN).map(|function| function.call_index as u32);
+		let warned = host_warn.map(|_| {
+			self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
+			self.next_global_idx += 1;
+			self.next_global_idx - 1
+		});
+		let node_ref = ValType::Ref(self.node_ref(false));
+		let params = vec![node_ref, node_ref, ValType::I32, ValType::I32, ValType::I32, ValType::I32];
+		let locals = vec![self.parts_ref(), self.parts_ref(), ValType::F64, ValType::F64, ValType::I32];
+		self.runtime_function(UNCERTAIN_ORDER, params, vec![ValType::I32], locals, |s, f| {
+			let (a, b, op, mode, pointer, length) = (0, 1, 2, 3, 4, 5);
+			let (a_parts, b_parts, x, y, certain) = (6, 7, 8, 9, 10);
+			// x op y, op in ORDERINGS' order: the strict order, or equal for <= and >=
+			let compare = |f: &mut Function| Self::emit_list(f, &[
+				I::LocalGet(x), I::LocalGet(y), I::F64Gt, I::LocalGet(x), I::LocalGet(y), I::F64Lt, I::LocalGet(op), I::I32Const(1), I::I32And, I::Select,
+				I::LocalGet(x), I::LocalGet(y), I::F64Eq, I::LocalGet(op), I::I32Const(2), I::I32GeU, I::I32And, I::I32Or,
+			]);
+			let is_less = [I::LocalGet(op), I::I32Const(1), I::I32And, I::I32Eqz];
+			// certainly: a's far end against b's near end (a.high < b.low); possibly: the other ends
+			let compare_ends = |f: &mut Function, [a_less, a_greater, b_less, b_greater]: [i32; 4]| {
+				for (parts, (when_less, when_greater), end) in [(a_parts, (a_less, a_greater), x), (b_parts, (b_less, b_greater), y)] {
+					Self::emit_list(f, &s.part(parts, when_less));
+					Self::emit_list(f, &s.part(parts, when_greater));
+					Self::emit_list(f, &is_less);
+					Self::emit_list(f, &[I::Select, I::LocalSet(end)]);
+				}
+				compare(f);
+			};
+
+			s.is_uncertain(f, a);
+			s.is_uncertain(f, b);
+			Self::emit_list(f, &[I::I32Or, I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(a), I::LocalGet(b)]);
+			s.call(f, NODE_ORDER);
+			Self::emit_list(f, &[I::F64ConvertI32S, I::LocalSet(x), I::F64Const(0.0.into()), I::LocalSet(y)]);
+			compare(f);
+			Self::emit_list(f, &[I::Return, I::End]);
+			for (node, parts) in [(a, a_parts), (b, b_parts)] {
+				f.instruction(&I::LocalGet(node));
+				s.call(f, UNCERTAIN_PARTS);
+				f.instruction(&I::LocalSet(parts));
+			}
+			compare_ends(f, [HIGH, LOW, LOW, HIGH]);
+			f.instruction(&I::LocalTee(certain));
+			Self::emit_list(f, &[I::LocalGet(mode), I::I32Const(CertaintyMode::Certainly as i32), I::I32Eq, I::BrIf(0), I::Drop]);
+			compare_ends(f, [LOW, HIGH, HIGH, LOW]);
+			Self::emit_list(f, &[I::LocalGet(mode), I::I32Const(CertaintyMode::Possibly as i32), I::I32Eq, I::BrIf(0)]);
+			match (host_warn, warned) {
+				// bare: an overlap (possible, not certain) warns once
+				(Some(host_warn), Some(warned)) => {
+					Self::emit_list(f, &[I::LocalGet(certain), I::I32Eqz, I::I32And, I::GlobalGet(warned), I::I32Eqz, I::I32And, I::If(BlockType::Empty)]);
+					Self::emit_list(f, &[I::I32Const(1), I::GlobalSet(warned), I::LocalGet(pointer), I::LocalGet(length), I::Call(host_warn), I::End]);
+				}
+				_ => {
+					f.instruction(&I::Drop);
+				}
+			}
+			f.instruction(&I::LocalGet(certain));
 		});
 	}
 }
