@@ -763,11 +763,13 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 	}
 }
 
-/// The variables the main level assigns (`n = 0`, `n += 1`)
+/// The variables the main level assigns (`n = 0`, `n += 1`, `n: int = 0`)
 pub(crate) fn main_level_variables(statements: &[Node]) -> HashSet<String> {
 	statements.iter().filter_map(|statement| match statement.drop_meta() {
 		Node::Key(target, op, _) if *op == Op::Assign || op.is_compound_assign() => match target.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
+			// `level: int = 0`
+			Node::Key(name, Op::Colon, _) => matches!(name.drop_meta(), Node::Symbol(_)).then(|| word(name)),
 			_ => None,
 		},
 		_ => None,

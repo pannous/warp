@@ -125,3 +125,4 @@ mod test_constant_listener;
 mod test_task_bools;
 mod test_error_values;
 mod test_emit_operands;
+mod test_handler_globals;
