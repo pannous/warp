@@ -454,6 +454,7 @@ impl Exporter {
 				Ok(elements?.iter().rev().fold(".nil".to_string(), |tail, head| format!(".cons ({head}) ({tail})")))
 			}
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.expression(&items[0]),
+			Node::List(items, Bracket::Curly, _) if !items.is_empty() => self.block(node),
 			Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) if items.len() > 1 => {
 				let statements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
 				let mut statements = statements?;
@@ -481,6 +482,11 @@ impl Exporter {
 					};
 					Ok(format!(".call {} ({argument})", quoted(&call.name())))
 				}
+				_ => unsupported(node),
+			},
+			// `s += 2` is `s = s + 2`
+			Node::Key(target, op, value) if op.is_compound_assign() => match target.drop_meta() {
+				Node::Symbol(name) => self.assignment(name, &Node::Key(target.clone(), op.base_op(), value.clone())),
 				_ => unsupported(node),
 			},
 			Node::Key(target, Op::Assign, value) => match target.drop_meta() {

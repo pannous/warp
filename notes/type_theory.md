@@ -232,7 +232,8 @@ W0 now has `arith op a b`, which takes numbers only.
   and texts). The exporter now refuses the former (a field read needs a field some class declares; `.add` needs a
   name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
   anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
-  The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp. Most of the rest:
+  The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
+  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. Most of the rest:
   imports (`use`), `for` loops, maps `{a:1}`, lambdas, `on`/`emit`, `i++`, `global`, string methods.
 
 ## Inline unions and optionals
