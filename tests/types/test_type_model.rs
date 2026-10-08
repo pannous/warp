@@ -244,6 +244,8 @@ const CORPUS: &[&str] = &[
 	"a: int = 0; a = b = 2.5; a",
 	"a: int = 0; a = b = \"x\"; b",
 	"class P { x: int }; p = P(1); a = p.x = 5; a + p.x",
+	"for x in [1, 2, 3] { if x > 2 then { \"big\" } }",
+	"for x in [1, 2, 3] { if x < 2 then { \"small\" } }",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
