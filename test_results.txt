@@ -91,6 +91,9 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_error_values::an_error_has_a_message
+  ✓ control::test_error_values::is_error_tests_any_value
+  ✓ control::test_error_values::printing_an_error_prints_its_message
   ✓ control::test_event_footguns::a_change_through_a_list_method_runs_the_listeners
   ✓ control::test_event_footguns::a_derived_value_in_a_method_argument_is_its_value
   ✓ control::test_event_footguns::a_global_declared_after_a_first_write_is_one_variable
@@ -421,6 +424,10 @@ PASSED:
   ✓ control::test_try_exits_and_naming::break_out_of_a_try_restores_the_depth
   ✓ control::test_try_exits_and_naming::continue_out_of_a_try_restores_the_depth
   ✓ control::test_try_exits_and_naming::return_out_of_a_try_restores_the_depth
+  ✓ control::test_try_finally::try_finally_keeps_an_uncaught_error
+  ✓ control::test_try_finally::try_finally_keeps_the_guarded_value
+  ✓ control::test_try_finally::try_finally_runs_the_cleanup_after_a_trap
+  ✓ control::test_try_finally::try_finally_without_catch_runs_the_cleanup
   ✓ control::test_try_index_and_float::a_float_value_passes_through_try_and_if
   ✓ control::test_try_index_and_float::indexing_what_may_be_no_list_falls_back
   ✓ control::test_try_index_and_float::modulo_by_zero_is_a_named_error_try_catches
@@ -1122,6 +1129,8 @@ PASSED:
   ✓ functions::test_whole_float_to_int_parameter::a_whole_float_for_an_int_parameter_is_refused
   ✓ functions::test_words_in_phrases::a_library_word_after_an_operator_takes_its_argument
   ✓ functions::test_words_in_phrases::a_prefix_word_is_the_element_of_a_comprehension
+  ✓ functions::test_words_in_phrases::a_statement_level_library_word_takes_one_operand
+  ✓ functions::test_words_in_phrases::a_suffix_word_after_a_library_word_is_its_prefix_argument
   ✓ functions::test_words_in_phrases::sorted_text_sorts_its_characters
   ✓ functions::test_words_in_phrases::where_filters_a_comprehension_like_if
   ✓ host::tests::test_host_state
@@ -1346,6 +1355,8 @@ PASSED:
   ✓ lists::test_where_filter::a_where_condition_without_it_is_an_error
   ✓ lists::test_where_filter::where_filters_by_it
   ✓ lists::test_where_filter::where_with_an_assignment_binds
+  ✓ modules::test_dir::a_program_s_own_dir_wins
+  ✓ modules::test_dir::dir_lists_the_names_of_a_standard_module
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
   ✓ modules::test_folder_scope::inline_code_has_no_folder_scope
   ✓ modules::test_folder_scope::sibling_definitions_are_visible_without_use
@@ -1920,6 +1931,7 @@ PASSED:
   ✓ parser::test_end_word::a_name_end_stays_a_name
   ✓ parser::test_end_word::end_still_closes_blocks
   ✓ parser::test_entity_table::hello_world_is_the_uniscript_world
+  ✓ parser::test_entity_table::html_letters_of_uniscript_1_0_5
   ✓ parser::test_entity_table::latex_names_of_uniscript_1_0_4
   ✓ parser::test_entity_table::the_entity_table_is_the_pinned_uniscript_index
   ✓ parser::test_glued_method_block::a_glued_block_after_a_dot_is_a_call
@@ -2277,6 +2289,8 @@ PASSED:
   ✓ text::test_character_comparison::test_one_character_text_as_int
   ✓ text::test_character_comparison::test_ord_is_the_code_point
   ✓ text::test_chr::chr_is_the_inverse_of_ord
+  ✓ text::test_codepoint_bytes::a_one_letter_text_has_its_utf8_bytes
+  ✓ text::test_codepoint_bytes::one_letter_list_items_have_their_utf8_bytes
   ✓ text::test_constant_expression_text::a_constant_expression_converts_by_its_value
   ✓ text::test_constant_expression_text::the_text_of_a_global_is_its_value
   ✓ text::test_count_in::count_occurrences
@@ -3397,4 +3411,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3392 passed, 0 failed, 3392 total tested
+19 ignored, 3406 passed, 0 failed, 3406 total tested
