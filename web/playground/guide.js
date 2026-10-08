@@ -1,8 +1,12 @@
 // The language guide beside the editor: guide.md, one chapter per `## title`, chapters from easy to advanced.
 // The open chapter (the page's #anchor) shows its text; `try ▶` runs a snippet, an `Examples:` line links the tour
 // examples and samples/ that show the chapter, and choosing such an example links back to its chapter.
+// The expert guide (guide-expert.md) has the same chapters in compact form; a toggle switches, keeping the open
+// chapter, and the page remembers the choice (?guide=expert names it in a link).
 // Runs after playground.js (both deferred) and uses its $, element and window.playground.
-const GUIDE_FILE = "guide.md";
+const GUIDE_FILES = { beginner: "guide.md", expert: "guide-expert.md" };
+const LEVEL_PARAMETER = "guide";
+const LEVEL_KEY = "warp-guide-level";
 const NARROW_SCREEN = "(max-width: 900px)"; // playground.css stacks the panes there: the guide starts closed
 const EXAMPLES_PREFIX = "Examples: ";
 const SAMPLES_SEPARATOR = "; samples: ";
@@ -99,7 +103,25 @@ function renderGuide(markdown) {
 		const summary = element("summary", {}, element("a", { href: `#${id}` }, title));
 		return element("details", { id, className: "guide-chapter", ontoggle: openedChapter }, summary, ...renderBody(lines, title));
 	});
-	$("guide-chapters").replaceChildren(...renderBody(introLines, ""), ...chapters);
+	return [...renderBody(introLines, ""), ...chapters];
+}
+
+const renderedGuides = {}; // level → its rendered intro and chapters
+
+function chosenLevel() {
+	const named = new URLSearchParams(location.search).get(LEVEL_PARAMETER);
+	let remembered = null;
+	try { remembered = localStorage.getItem(LEVEL_KEY); } catch { /* private window: the default */ }
+	return [named, remembered].find(level => level in renderedGuides) ?? "beginner";
+}
+
+// shows the guide of that level, with the chapter open in the other one
+function showLevel(level) {
+	const open = document.querySelector(".guide-chapter[open]")?.id;
+	$("guide-chapters").replaceChildren(...renderedGuides[level]);
+	for (const button of document.querySelectorAll(".guide-level button")) button.setAttribute("aria-pressed", button.value === level);
+	try { localStorage.setItem(LEVEL_KEY, level); } catch { /* private window: lasts for this page */ }
+	if (open) document.getElementById(open).open = true;
 }
 
 function openedChapter(event) {
@@ -142,11 +164,14 @@ function showChapterLink(chapter) {
 async function startGuide() {
 	if (matchMedia(NARROW_SCREEN).matches) $("guide").open = false;
 	try {
-		renderGuide(await (await fetch(GUIDE_FILE)).text());
+		// the beginner guide first: its Examples lines group the example menu
+		for (const [level, file] of Object.entries(GUIDE_FILES)) renderedGuides[level] = renderGuide(await (await fetch(file)).text());
 	} catch (error) {
 		$("guide-chapters").textContent = `the guide did not load: ${error.message}`;
 		return;
 	}
+	for (const button of document.querySelectorAll(".guide-level button")) button.onclick = () => showLevel(button.value);
+	showLevel(chosenLevel());
 	groupExamplesByChapter();
 	addEventListener("hashchange", openChapterOfAddress);
 	$("examples").addEventListener("change", event => showChapterLink(chapterOfExample.get(event.target.value)));
