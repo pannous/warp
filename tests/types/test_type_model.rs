@@ -281,6 +281,12 @@ const CORPUS: &[&str] = &[
 	"f = x => x*2; f = y => y + 1; f(3)",
 	"x = 1; f = y => x + y; f(1); x = 10; 0",
 	"f = x => x*2; f = 3; 0",
+	// named arguments go to their parameter, positional ones fill the rest; all run in parameter order
+	"f(a, b) := a - b; f(b=1, a=5)",
+	"f(a, b) := a - b; f(5, b=1)",
+	"f(a: int, b: text) := a; f(b=\"x\", a=5)",
+	"f(a: int, b: text) := a; f(b=5, a=\"x\")",
+	"global i = 0; g() := { i = i * 10 + 1; i }; h() := { i = i * 10 + 2; i }; f(a, b) := a * 100 + b; f(b=h(), a=g())",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

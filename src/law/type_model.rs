@@ -513,13 +513,30 @@ impl Exporter {
 		path.iter().flat_map(|ancestor| self.classes[ancestor].1.iter().map(|(field, _)| field.clone())).collect()
 	}
 
-	/// `C(a, b)`: a new instance with its fields written in order, `let o = new C; o.f1 = a; …; o`
+	/// `C(a, b)`: a new instance with its fields written in order, `let o = new C; o.f1 = a; …; o`. A named argument
+	/// `f(b=1, a=5)` goes to its field, the positional ones fill the others in order; warp evaluates them all in field
+	/// order, not as written
 	fn construction(&mut self, class: &str, arguments: &[Node]) -> Lean {
 		let fields = self.constructor_fields(class);
-		if fields.len() != arguments.len() {
+		let mut slots: Vec<Option<&Node>> = vec![None; fields.len()];
+		let mut positional = vec![];
+		for argument in arguments {
+			match argument.drop_meta() {
+				Node::Key(name, Op::Assign, value) => {
+					let slot = fields.iter().position(|field| *field == name.name()).ok_or_else(|| format!("{class} has no field {}", name.name()))?;
+					slots[slot] = Some(value.as_ref());
+				}
+				_ => positional.push(argument),
+			}
+		}
+		let mut positional = positional.into_iter();
+		for slot in slots.iter_mut().filter(|slot| slot.is_none()) {
+			*slot = positional.next();
+		}
+		if positional.next().is_some() || slots.contains(&None) {
 			return Err(format!("{class} takes {} fields, got {}", fields.len(), arguments.len()));
 		}
-		self.instance(class, fields.into_iter().zip(arguments).collect())
+		self.instance(class, fields.into_iter().zip(slots.into_iter().flatten()).collect())
 	}
 
 	/// a new instance of class with the given fields written, `let o = new C; o.f1 = a; …; o`
@@ -1001,7 +1018,6 @@ impl Exporter {
 					_ => unsupported(node),
 				},
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
-				[_, arguments @ ..] if arguments.iter().any(|argument| matches!(argument.drop_meta(), Node::Key(_, Op::Assign, _))) => Err(format!("not in W0: named arguments in {}", node.serialize().trim())),
 				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
 				[call, argument] if self.classes.contains_key(&arguments_class(&call.name())) && matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) => {
 					let Node::Key(first, _, second) = argument.drop_meta() else { unreachable!("a `to` pair") };
