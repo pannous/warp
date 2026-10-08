@@ -42,8 +42,9 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    `warp-runtime` (crates/warp-runtime: wasmtime with `runtime`, `gc`, `gc-copying`, `std`, no Cranelift) with the
    program's machine code appended (`[stub][cwasm][u64 le length][WRPCwasm]`); at start the stub reads its own last 16
    bytes and runs what it carries. The stub is found through `WARP_RUNTIME_STUB`, else `warp-runtime` next to `warp` (or next to
-   the file a link to warp points to), else warp builds it once from its source checkout (`cargo build -p
-   warp-runtime` in warp's profile, issue #10: building an executable just works); only without that source nothing is
+   the file a link to warp points to), else warp builds it once from its source checkout (`cargo build --release -p
+   warp-runtime`, issue #10: building an executable just works; a debug warp always takes this release stub, its own
+   neighbour is a debug stub, card g_gFs8); only without that source nothing is
    written (P104: never a ~120 MB copy of warp; a plain run notes it on stderr, build exits 1).
    Tests build the stub once per run (tests/common runtime_stub). `warp run <file>` runs without leaving an
    executable (P105). Release stub (`cargo build --release -p warp-runtime`): **805 KB**; ackermann.exe **972 KB**
@@ -79,6 +80,27 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
 
 The .cwasm is ~10× the .wasm: every module carries warp's runtime functions (texts, lists, maps …), so each compiled
 module repeats their machine code. A shared runtime module linked to the programs would shrink both.
+
+## Executable size (card g_gFs8, 2026-10-09)
+User: "quicksort: enormous file size of simple algorithms should be reduced with tree shaking". The 21 MB were a debug
+stub (a debug warp built the stub in its own profile; that stub is 5.6 MB today). Now:
+- the stub is always the release build (~890 KB; std ~200 KB, wasmtime + environ ~200 KB, warp_runtime ~100 KB of
+  .text, cargo bloat); a size-optimized wasmtime would cost GC speed (see the release profile note);
+- tree shaking: warp build keeps only the exports the stub calls (standalone::stub_calls_export: main, memory, the
+  `on·…` handlers, new_empty, new_int) and drops what only the others reached (dead_functions::keeping_exports);
+- the executable's engine (standalone::standalone_engine, shared by warp build and the stub) makes no address map:
+  traps still name the functions, without wasm offsets;
+- the carried machine code is deflated (miniz_oxide, already in std's tree: the stub grew 32 bytes); it is mostly page
+  padding and tables.
+
+| executable (release stub) | before | after | machine code (raw) |
+|---|---|---|---|
+| samples/quicksort.warp | 1131568 | 927296 | 215856 → 179752 |
+| samples/game_of_life.warp | 1115744 | 919616 | 200032 → 163680 |
+| `6*7` | 1045520 | 906816 | |
+The rest is the stub. Start time unchanged (~19 ms per run with process start). Next steps if needed: a stub without
+the system signals and values (optional packages chosen by the program's imports), or the shared runtime module
+(Recommendation 5).
 
 ## Alternatives (WASM GC + exceptions are both required by warp output)
 | tool | GC | exceptions (try_table) | AOT | verdict |
