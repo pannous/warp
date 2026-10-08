@@ -8,7 +8,7 @@ use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasp_parser::TRY_MARKER;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -20,6 +20,8 @@ const ACCEPTED_PREFIX: &str = "ok ";
 const REJECTED: &str = "rejected";
 const CONSTANT_KEYWORD: &str = "const";
 const ERROR_CALL: &str = "error";
+const BOOL_TYPE: &str = ".bool";
+const ANY_TYPE: &str = ".any";
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
 
 /// W0's answer for one program
@@ -46,8 +48,8 @@ fn type_of_word(word: &str) -> Option<String> {
 			"int" | "integer" | "long" => ".int",
 			"float" | "number" | "exact" => ".number",
 			"text" | "string" | "str" => ".text",
-			"bool" | "boolean" => ".bool",
-			"any" => ".any",
+			"bool" | "boolean" => BOOL_TYPE,
+			"any" => ANY_TYPE,
 			_ => return None,
 		})
 	};
@@ -97,9 +99,27 @@ fn function_head(head: &Node) -> Option<(&str, &Node)> {
 	}
 }
 
+/// A bool place (a declared variable or parameter) takes the literals 1 and 0 as yes and no (P199)
+fn bool_literal(declared: Option<&str>, value: &Node) -> Option<String> {
+	match value.drop_meta() {
+		Node::Number(Number::Int(n @ (0 | 1))) if declared == Some(BOOL_TYPE) => Some(format!(".bool {}", *n == 1)),
+		_ => None,
+	}
+}
+
+/// `y`, `y: int`: the parameter's name and W0 type
+fn parameter_type(parameter: &Node) -> Result<(String, String), String> {
+	match parameter.drop_meta() {
+		Node::Symbol(parameter) => Ok((parameter.clone(), ANY_TYPE.to_string())),
+		Node::Key(parameter, Op::Colon, annotation) => Ok((parameter.name(), annotation_type(annotation)?)),
+		other => Err(unsupported(other).unwrap_err()),
+	}
+}
+
 #[derive(Default)]
 struct Exporter {
-	functions: HashSet<String>,
+	/// the functions of the program with their parameter's W0 type
+	functions: HashMap<String, String>,
 	/// main-level names bound so far, with their declared type when annotated
 	names: HashMap<String, Option<String>>,
 	locals: Vec<String>,
@@ -110,8 +130,8 @@ impl Exporter {
 		let program = statements(program);
 		for statement in &program {
 			if let Node::Key(head, Op::Define, _) = statement.drop_meta() {
-				if let Some((name, _)) = function_head(head) {
-					self.functions.insert(name.to_string());
+				if let Some((name, parameter)) = function_head(head) {
+					self.functions.insert(name.to_string(), parameter_type(parameter)?.1);
 				}
 			}
 		}
@@ -156,6 +176,9 @@ impl Exporter {
 
 	/// A call's result stored in a declared list is checked item by item at run time (list-element-types): a cast
 	fn stored_value(&mut self, declared: Option<&str>, value: &Node) -> Lean {
+		if let Some(yes_or_no) = bool_literal(declared, value) {
+			return Ok(yes_or_no);
+		}
 		let lean = self.expression(value)?;
 		Ok(match declared {
 			Some(declared) if declared.starts_with(".list") && self.is_call(value) => format!(".cast ({lean}) ({declared})"),
@@ -164,15 +187,11 @@ impl Exporter {
 	}
 
 	fn is_call(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.functions.contains(name)))
+		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.functions.contains_key(name)))
 	}
 
 	fn function(&mut self, name: &str, parameter: &Node, body: &Node) -> Lean {
-		let (parameter, parameter_type) = match parameter.drop_meta() {
-			Node::Symbol(parameter) => (parameter.clone(), ".any".to_string()),
-			Node::Key(parameter, Op::Colon, annotation) => (parameter.name(), annotation_type(annotation)?),
-			other => return unsupported(other),
-		};
+		let (parameter, parameter_type) = parameter_type(parameter)?;
 		self.locals.push(parameter.clone());
 		let body = self.expression(body);
 		self.locals.pop();
@@ -218,8 +237,13 @@ impl Exporter {
 					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
 					_ => unsupported(node),
 				},
-				[call, argument] if matches!(call.drop_meta(), Node::Symbol(name) if self.functions.contains(name)) => {
-					Ok(format!(".call {} ({})", quoted(&call.name()), self.expression(argument)?))
+				[call, argument] if self.functions.contains_key(&call.name()) => {
+					let declared = self.functions[&call.name()].clone();
+					let argument = match bool_literal(Some(&declared), argument) {
+						Some(yes_or_no) => yes_or_no,
+						None => self.expression(argument)?,
+					};
+					Ok(format!(".call {} ({argument})", quoted(&call.name())))
 				}
 				_ => unsupported(node),
 			},

@@ -26,6 +26,9 @@ const CORPUS: &[&str] = &[
 	"x: int = 1; x = 2.5",
 	"x: float = 1",
 	"x: int = true",
+	"x: bool = 1",
+	"x: bool = 0; x = 1",
+	"f(b: bool) := b; f(1)",
 	"x: text = 3",
 	"x: text = \"ab\"; x = 3",
 	"const c = 1; c = 2",
@@ -60,7 +63,8 @@ const CORPUS: &[&str] = &[
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
 const KNOWN_HOLES: &[(&str, &str)] = &[
-	("x: bool = 1", "bool-assign"),
+	("x: bool = 2", "bool-assign"),
+	("f(b: bool) := b; f(2)", "bool-assign"),
 	("b = true; b = 2", "bool-assign"),
 ];
 

@@ -151,7 +151,10 @@ Model choices to keep in mind (each a simplification of warp, not a claim about 
 
 | program | W0 | card |
 | --- | --- | --- |
-| `x: bool = 1`, `b = true; b = 2` | int ≰ bool (b then prints `yes`) | bool-assign |
+| `x: bool = 2`, `b = true; b = 2`, `f(b: bool) := b; f(2)` | int ≰ bool (b then prints `yes`) | bool-assign |
+
+P199: a declared bool place (variable or parameter) takes the literals 1 and 0 as yes and no; the exporter
+elaborates them to `.bool` (src/law/type_model.rs bool_literal), so `x: bool = 1` is no hole.
 
 Fixed: declared list elements (`xs: ints = [1]; xs.add("a")`, `xs = ["a"]`, `xs: texts = [420]`), card
 list-element-types (warp-a1, main 499bb5b1c); typed parameters (`f(x: text) := x; f(3)`, card param-types) and
