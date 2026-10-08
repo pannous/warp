@@ -49,8 +49,9 @@ inductive Expr where
   | error (msg : String)
   | tryCatch (e handler : Expr)
   /-- the run-time check warp inserts where a value of unknown type goes to a declared place (`names = f()` of a
-  `names: texts`, card list-element-types): the value if it fits t, else an error -/
-  | cast (e : Expr) (t : Ty)
+  `names: texts`, card list-element-types; any value given to an inline union `x: int | text` or an optional
+  `x: int?`): the value if it fits one of the alternatives ts, else an error -/
+  | cast (e : Expr) (ts : List Ty)
   /-- broadcasting: `f(xs)` of a function of A given a list of A applies f to each item (`f(x: int) := x+1; f([1])` is
   [2]); warp decides it at compile time, so it is its own form -/
   | broadcast (f : String) (arg : Expr)
@@ -93,7 +94,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | letIn z t e b => letIn z t (e.subst y v) (if z = y then b else b.subst y v)
   | call f e => call f (e.subst y v)
   | tryCatch e h => tryCatch (e.subst y v) (h.subst y v)
-  | cast e t => cast (e.subst y v) t
+  | cast e ts => cast (e.subst y v) ts
   | broadcast f e => broadcast f (e.subst y v)
   | get e f => get (e.subst y v) f
   | set e f w => set (e.subst y v) f (w.subst y v)

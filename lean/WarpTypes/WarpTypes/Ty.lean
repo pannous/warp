@@ -198,6 +198,23 @@ theorem element_mono {l l' e : Ty} (hl : sub l' l = true) (he : element l = some
     · exact ⟨never, rfl, by simp⟩
     · exact ⟨b, rfl, hb⟩
 
+/-- the type of a value of one of the alternatives ts: their join (`int | float` is `number`, `int | text` is `any`) -/
+def joinAll (ts : List Ty) : Ty := ts.foldr join never
+
+theorem sub_joinAll : ∀ {t : Ty} {ts : List Ty}, t ∈ ts → sub t (joinAll ts) = true
+  | _, a :: ts, h => by
+    simp only [joinAll, List.foldr_cons]
+    rcases List.mem_cons.1 h with rfl | h
+    · exact join_upper_left _ _
+    · exact sub_trans (sub_joinAll h) (join_upper_right _ _)
+
+/-- consistent subtyping (gradual typing): `any` stands for whatever type the value turns out to have, so a dynamic
+value may go where a cast checks it -/
+def consub : Ty → Ty → Bool
+  | any, _ => true
+  | list a, list b => consub a b
+  | a, b => sub a b
+
 theorem arith_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true) :
     sub (arith a' b') (arith a b) = true := by
   unfold arith

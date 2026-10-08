@@ -33,6 +33,12 @@ const UNIT_TYPE: &str = ".unit";
 const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
+/// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
+const UNION_TYPE: &str = "(Ty.joinAll ";
+const UNION_JOINER: &str = " or ";
+const OPTIONAL_MARK: char = '?';
+/// the type of ø, the empty part of an optional (ø is the empty list)
+const EMPTY_TYPE: &str = ".list .never";
 
 /// W0's answer for one program
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,6 +75,19 @@ fn type_of_word(word: &str) -> Option<String> {
 	match scalar(word) {
 		Some(lean) => Some(lean.to_string()),
 		None => word.strip_suffix('s').and_then(scalar).map(|element| format!(".list {element}")),
+	}
+}
+
+/// `[.int, .text]` of the union type `(Ty.joinAll [.int, .text])`
+fn union_alternatives(declared: &str) -> Option<&str> {
+	declared.strip_prefix(UNION_TYPE)?.strip_suffix(')')
+}
+
+/// a value given to a declared place: a union checks it against its alternatives when it runs
+fn admitted(declared: &str, value: String) -> String {
+	match union_alternatives(declared) {
+		Some(alternatives) => format!(".cast ({value}) {alternatives}"),
+		None => value,
 	}
 }
 
@@ -186,8 +205,26 @@ impl Exporter {
 		})
 	}
 
+	/// `int or text`, `int?`: the join of the alternatives; a union warp narrows to one part (`int | float` is float)
+	/// is that part
+	fn union_type(&self, union: &str) -> Lean {
+		let parts = union.strip_suffix(OPTIONAL_MARK);
+		let mut alternatives = parts.unwrap_or(union).split(UNION_JOINER).map(|part| self.type_of(part)).collect::<Result<Vec<_>, String>>()?;
+		if parts.is_some() {
+			alternatives.push(EMPTY_TYPE.to_string());
+		}
+		Ok(match alternatives.as_slice() {
+			[single] => single.clone(),
+			_ => format!("{UNION_TYPE}[{}])", alternatives.join(", ")),
+		})
+	}
+
 	fn annotation_type(&self, annotation: &Node) -> Lean {
+		if let Some(union) = crate::analyzer::union_type_name(annotation) {
+			return self.union_type(&union);
+		}
 		match annotation.drop_meta() {
+			Node::Symbol(word) if word.ends_with(OPTIONAL_MARK) => self.union_type(word),
 			Node::Symbol(word) => self.type_of(word),
 			other => unsupported(other),
 		}
@@ -323,8 +360,9 @@ impl Exporter {
 		}
 		let lean = self.expression(value)?;
 		Ok(match declared {
-			Some(declared) if declared.starts_with(".list") && self.is_call(value) => format!(".cast ({lean}) ({declared})"),
-			_ => lean,
+			Some(declared) if declared.starts_with(".list") && self.is_call(value) => format!(".cast ({lean}) [{declared}]"),
+			Some(declared) => admitted(declared, lean),
+			None => lean,
 		})
 	}
 
@@ -422,7 +460,7 @@ impl Exporter {
 					let declared = self.functions[&call.name()].clone();
 					let argument = match bool_literal(Some(&declared), argument) {
 						Some(yes_or_no) => yes_or_no,
-						None => self.expression(argument)?,
+						None => admitted(&declared, self.expression(argument)?),
 					};
 					Ok(format!(".call {} ({argument})", quoted(&call.name())))
 				}
