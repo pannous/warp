@@ -40,7 +40,7 @@ mod string_table;
 mod type_manager;
 mod try_guard;
 mod tuple_emitter;
-pub use try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
+pub use try_guard::{ABORT_TO, CAUGHT_ERROR, RAN_WITHOUT_ABORT, RAN_WITHOUT_ERROR};
 mod witness;
 pub(crate) mod wasi_emitter;
 
@@ -192,6 +192,7 @@ pub struct WasmGcEmitter {
 	/// Emitting data, not code: the value of an object entry or a quoted form, where unknown words stay words (P62)
 	data_context: bool,
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
+	abort_catching: Option<try_guard::AbortCatching>, // the tag of aborting effect handlers
 	memo_caches: HashMap<i64, (u32, u32)>, // per memoized function id: the globals of its values and known flags (memoization.rs)
 	extra_global_names: Vec<(u32, &'static str)>,
 
@@ -271,6 +272,7 @@ impl WasmGcEmitter {
 			guards_errors: false,
 			data_context: false,
 			error_catching: None,
+			abort_catching: None,
 			memo_caches: HashMap::new(),
 			extra_global_names: Vec::new(),
 			config: EmitterConfig::default(),
