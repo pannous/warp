@@ -108,5 +108,16 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    check), printing "serving http://localhost:8080 (routes found; `warp run app.warp` runs it once without serving)";
    `warp run` and `warp test` never serve. Probe: probes/warp_serve/app.warp; tests/web/test_warp_serve.rs.
 
+7. **samples/server.warp** (card sample-server, 2026-10-09) runs under `warp serve` and in the playground. Found on the way:
+   - The serving instance lives as long as the server, but a page render runs in an instance of its own and may add
+     rows. So every served route (get/post/RPC) starts with `global users; users = database.users` for each table
+     variable (serve.rs reading_tables), and database_tables.rs reopens a registered table for that plain assignment.
+     Before, GET /api/users answered the table as it was at the start. Test: tests/web/test_served_tables.rs.
+   - The page build leaves top-level `get`/`post` routes out (serve.rs is_serving), and with them the tables only
+     they read. Before, the page logged "table.open: no such word in the browser".
+   - In the browser a table lives in the page's memory (host-files.js `table`), and its first open prints a note.
+     The playground shows no stderr, so the note goes to stdout. A filter (SQL) refuses. IndexedDB is ORM step 6.
+   - An empty table answers JSON null, because ø is the empty list (card served-empty).
+
 ## Undoable defaults taken
 - RPC in the page is async, like fetch (option a), starting from the prerendered value; a call with a local argument is refused.
