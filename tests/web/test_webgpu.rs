@@ -134,3 +134,14 @@ fn a_chain_of_gpu_maps_is_one_kernel() {
 	let lowered = warp::pipeline::lower(&format!("{program}ys#1")).expect("a program").serialize();
 	assert_eq!(lowered.matches("gpu_map_linear").count(), 1, "{lowered}");
 }
+
+// card gpu-vectors: an @gpu map of a list of floats (not in linear memory) copies its items into a block once and maps
+// that, so the list need not be declared `linear`
+#[test]
+fn a_gpu_map_takes_a_list_of_floats() {
+	use warp::diagnostic::{with_warning_mode, WarningMode};
+	let program = "xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\n";
+	let checked = format!("{program}abs(ys#40000 - sin(1)) < 0.00001");
+	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&checked)).serialize(), "yes");
+	assert_eq!(eval("ys = [0.5, 1.5].map(x => sin(x)) @gpu\n[#ys, ys#2 == sin(1.5)]").serialize(), "[2 yes]");
+}

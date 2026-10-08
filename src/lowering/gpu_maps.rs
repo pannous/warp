@@ -164,22 +164,22 @@ fn float_literal(number: f64) -> String {
 	if written.contains(['.', 'e', 'E']) { written } else { format!("{written}.0") }
 }
 
-/// Every `@gpu` that shared_arrays will not lower to the GPU (`linear_floats` are the program's linear float arrays): a
-/// warning saying why it runs on the CPU (an error under strict)
-pub fn warn_unapplied(node: Node, linear_floats: &[String]) -> Node {
+/// Every `@gpu` that shared_arrays will not lower to the GPU: a warning saying why it runs on the CPU (an error under
+/// strict)
+pub fn warn_unapplied(node: Node) -> Node {
 	let mut warnings = vec![];
-	collect_unapplied(&node, linear_floats, &mut warnings);
+	collect_unapplied(&node, &mut warnings);
 	match crate::diagnostic::report(&warnings) {
 		Ok(()) => node,
 		Err(error) => error,
 	}
 }
 
-fn collect_unapplied(node: &Node, linear_floats: &[String], warnings: &mut Vec<crate::diagnostic::Diagnostic>) {
+fn collect_unapplied(node: &Node, warnings: &mut Vec<crate::diagnostic::Diagnostic>) {
 	let warn = |warnings: &mut Vec<_>, reason: String| warnings.push(crate::diagnostic::Diagnostic::at(node, format!("{reason}, so this runs on the CPU")));
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_)) && gpu_map(value).is_some() => {
-			if let Some(reason) = unapplied(value, linear_floats) {
+			if let Some(reason) = unapplied(value) {
 				warn(warnings, reason);
 			}
 		}
@@ -187,18 +187,15 @@ fn collect_unapplied(node: &Node, linear_floats: &[String], warnings: &mut Vec<c
 			let assign = if crate::parallel::map_call(node).is_some() { "@gpu maps into a new array: assign the map" } else { "@gpu runs only a map" };
 			warn(warnings, format!("{assign}, `ys = xs.map(x => …) @gpu`"));
 		}
-		Node::Key(left, _, right) => [left, right].into_iter().for_each(|part| collect_unapplied(part, linear_floats, warnings)),
-		Node::List(items, _, _) => items.iter().for_each(|item| collect_unapplied(item, linear_floats, warnings)),
+		Node::Key(left, _, right) => [left, right].into_iter().for_each(|part| collect_unapplied(part, warnings)),
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_unapplied(item, warnings)),
 		_ => {}
 	}
 }
 
 /// Why the `@gpu` map `value` cannot run on the GPU, if it cannot
-fn unapplied(value: &Node, linear_floats: &[String]) -> Option<String> {
-	let (array, lambda) = gpu_map(value)?;
-	if !matches!(array.drop_meta(), Node::Symbol(name) if linear_floats.contains(name)) {
-		return Some(format!("@gpu maps a `linear xs = float[n]` on the GPU; {} is none", array.serialize().trim()));
-	}
+fn unapplied(value: &Node) -> Option<String> {
+	let (_, lambda) = gpu_map(value)?;
 	if is_light(&lambda) {
 		return Some(format!("@gpu: the CPU maps `{}` faster: only arithmetic, ~1–5 ns an item (f64x2 lanes where it can), the GPU ~12", lambda.serialize().trim()));
 	}

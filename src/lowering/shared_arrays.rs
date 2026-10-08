@@ -94,8 +94,7 @@ pub fn lower(node: Node) -> Node {
 		}
 		declared.extend(results);
 	}
-	let linear_floats: Vec<String> = declared.iter().filter(|(_, kind)| is_linear_float_array(**kind)).map(|(name, _)| name.clone()).collect();
-	let node = crate::gpu_maps::warn_unapplied(node, &linear_floats);
+	let node = crate::gpu_maps::warn_unapplied(node);
 	if declared.is_empty() || matches!(node, Node::Error(_)) {
 		return node;
 	}
@@ -265,8 +264,13 @@ impl Rewrite<'_> {
 				let names = self.names(function);
 				match (target.drop_meta(), op) {
 					// `ys = xs.map(x => …) @gpu` of a linear float array: the lambda as a WGSL kernel, the CPU's map without an adapter
-					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, lambda, kernel)) = gpu_kernel_map(&value, &names) => {
-						gpu_mapped(&target, &array, &lambda, kernel)
+					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, lambda, kernel)) = gpu_kernel_map(&value) => {
+						if is_linear_floats(&array, &names) {
+							gpu_mapped(&target, &array, &lambda, kernel)
+						} else {
+							let (copy, block) = copied_into_block(&target, &array);
+							Node::List(vec![copy, gpu_mapped(&target, &block, &lambda, kernel)], Bracket::None, Separator::Semicolon)
+						}
 					}
 					// `ys = xs.map(x => x * 0.5 + 1)` of a linear float array: its float kernel makes ys, a new linear array
 					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, kernel)) = float_map(&value, &names) => {
@@ -403,11 +407,25 @@ fn is_linear_float_array(kind: Shared) -> bool {
 	kind.storage == Storage::Linear && kind.element == Element::Float && !kind.value
 }
 
-/// `xs.map(x => …) @gpu` of a linear float array whose lambda WGSL computes: xs, the lambda and its kernel
-fn gpu_kernel_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Node, crate::gpu_maps::Kernel)> {
+/// `xs.map(x => …) @gpu` whose lambda WGSL computes: xs, the lambda and its kernel
+fn gpu_kernel_map(value: &Node) -> Option<(Node, Node, crate::gpu_maps::Kernel)> {
 	let (array, lambda) = crate::gpu_maps::gpu_map(value)?;
-	let kernel = crate::gpu_maps::gpu_kernel(&lambda).filter(|_| is_linear_floats(&array, names))?;
+	let kernel = crate::gpu_maps::gpu_kernel(&lambda)?;
 	Some((array, lambda, kernel))
+}
+
+/// The items of the list `array` (not in linear memory) as floats in a new block, once: the statements and the name
+/// holding the block's address
+fn copied_into_block(target: &Node, array: &Node) -> (Node, Node) {
+	use crate::wasm_emitter::linear_arrays::{LINEAR_FLOAT_WORDS, LINEAR_NEW};
+	let [_, set, _] = LINEAR_FLOAT_WORDS;
+	let copy = crate::warp_parser::parse(&format!("copy_list = copy_items; copy_block = {LINEAR_NEW}(count(copy_list)); copy_index = 0; for copy_item in copy_list {{ copy_index = copy_index + 1; {set}(copy_block, copy_index, {}(copy_item)) }}", FLOAT_WORDS[0]));
+	let separator = crate::analyzer::TEMPORARY_SEPARATOR;
+	let temporary = |part: &str| Node::Symbol(format!("{}{separator}copy{separator}{part}", target.name()));
+	let block = temporary("block");
+	let copy = [("copy_list", temporary("list")), ("copy_block", block.clone()), ("copy_index", temporary("index")), ("copy_item", temporary("item")), ("copy_items", array.clone())]
+		.into_iter().fold(copy, |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, &value));
+	(copy, block)
 }
 
 /// `ys = linear_new(count(xs))`, then the kernel maps xs's cells into ys's, given the values of the program's numbers it
@@ -448,7 +466,7 @@ fn float_map_results(node: &Node, declared: &HashMap<String, Shared>) -> HashMap
 		if let Node::Symbol(name) = target.drop_meta() {
 			let entry = assignments.entry(name.clone()).or_insert((0, false));
 			entry.0 += 1;
-			entry.1 = float_map(value, declared).is_some() || gpu_compute_of_linear_floats(value, declared) || gpu_kernel_map(value, declared).is_some() || numeric_map(value, declared).is_some();
+			entry.1 = float_map(value, declared).is_some() || gpu_compute_of_linear_floats(value, declared) || gpu_kernel_map(value).is_some() || numeric_map(value, declared).is_some();
 		}
 	});
 	let linear_floats = Shared { element: Element::Float, value: false, storage: Storage::Linear };
