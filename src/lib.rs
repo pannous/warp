@@ -52,6 +52,7 @@ pub mod host;
 pub mod foreign;
 #[cfg(feature = "native")]
 pub mod std_adapters;
+pub mod std_docs;
 #[cfg(feature = "native")]
 pub mod web_server;
 #[cfg(feature = "native")]
