@@ -141,5 +141,18 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    binding and no shader recompiled per value; gpu_map_linear takes them as a list (a value not a number: an error).
    "Light" is now a cost class, not the f64x2 kernel: a lambda without heavy math words (sin … log, atan2) or
    non-whole powers stays on the CPU, outer numbers included (`x => x * k`). Test: a_gpu_map_reads_outer_numbers.
-   Open: GC float lists (copy into a block first), the browser path with a
-   real adapter, chains of maps kept on the GPU.
+   Chains (done, gpu_maps.rs fused): `xs.map(f).map(g)`, with or without @gpu, is one map of g after f (g's
+   parameter replaced by f's body), so no list of f's results and one GPU round trip. Map results found until none
+   is added: `ys = xs.map(f); zs = ys.map(g)` writes ys a block, and zs maps it as one. Measured (release, warm
+   shader cache, `sin(x)` then `y * y + 1`, ms; noisy, other sessions building):
+
+   | n      | CPU chain | @gpu chain |
+   |--------|-----------|------------|
+   | 10^5   | 11–17     | 47–69      |
+   | 10^6   | 140       | 80–108     |
+   | 10^7   | 1290–1480 | 280–320    |
+
+   Before the fusion the CPU chain mapped f's results as a GC list grown by `out = out + [x]`, quadratic (card
+   map-filter: any `map` of a list, `int[20000].map(x => x * 2)` 0.5 s, 80000 out of fuel).
+   Open: GC float lists (copy into a block first), the browser path with a real adapter, data kept on the GPU
+   between separate statements.
