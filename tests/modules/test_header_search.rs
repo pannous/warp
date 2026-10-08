@@ -17,3 +17,17 @@ fn only_sdl_names_read_the_sdl_headers() {
 	assert!(!implicit_header_libraries("sqrt").contains(&"SDL2"));
 	assert!(implicit_header_libraries("strlen").contains(&"c"));
 }
+
+#[test]
+fn the_sdl_headers_declare_the_window_functions() {
+	// samples/sdl_red_square.wasp: SDL_CreateWindow and SDL_DestroyWindow are declared in SDL_video.h
+	for name in ["SDL_CreateWindow", "SDL_DestroyWindow", "SDL_CreateRenderer", "SDL_Delay"] {
+		assert!(warp::ffi::get_ffi_signature_from_lib(name, "SDL2").is_some(), "{name}");
+	}
+}
+
+#[test]
+fn an_import_nothing_declares_says_why() {
+	crate::common::fails_with("import foo from 'nolib'; foo(1)", "foo is imported from nolib, but no header of nolib is found");
+	crate::common::fails_with("import SDL_Nothing from 'SDL2'; SDL_Nothing(1)", "SDL_Nothing is imported from SDL2, but its headers do not declare it");
+}

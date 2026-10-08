@@ -53,7 +53,8 @@ fn where_filters(node: Node) -> Node {
 fn where_comprehension(subject: &Node, condition: &Node) -> Node {
 	if !crate::lambdas::mentions(condition, crate::lambdas::IMPLICIT_PARAMETER) {
 		let subject = subject.serialize();
-		return crate::node::error(&format!("`{subject} where {}` filters by each element `it`: write {subject} where it > 1", condition.serialize()));
+		let field_hint = field_condition(condition).map(|(field, written)| format!(", or {subject} where {written} for a field {field} of each element")).unwrap_or_default();
+		return crate::node::error(&format!("`{subject} where {}` filters by each element `it`: write {subject} where it > 1{field_hint}", condition.serialize()));
 	}
 	// a name of its own: in a function of one parameter `it` is that parameter
 	let element = Node::Symbol(WHERE_ELEMENT.to_string());
@@ -61,6 +62,16 @@ fn where_comprehension(subject: &Node, condition: &Node) -> Node {
 	let word = |word: &str| Node::Symbol(word.to_string());
 	let clause = Node::List(vec![word(FOR_WORD), element.clone(), word(IN_WORD), subject.clone(), word(IF_WORD)], Bracket::None, Separator::Space);
 	Node::List(vec![element, clause, condition], Bracket::Square, Separator::Space)
+}
+
+/// The field `country` a condition `country is germany` may mean of each element, with the condition written so:
+/// `it.country==germany`
+fn field_condition(condition: &Node) -> Option<(String, String)> {
+	let Node::Key(field, op, value) = condition.drop_meta() else { return None };
+	let Node::Symbol(name) = field.drop_meta() else { return None };
+	let it = Node::Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+	let field_of_it = Node::Key(Box::new(it), Op::Dot, field.clone());
+	Some((name.clone(), Node::Key(Box::new(field_of_it), op.clone(), value.clone()).serialize()))
 }
 
 /// `xs where it > 1` parses as `(xs where it) > 1`: the operators right of `where` join its condition,
