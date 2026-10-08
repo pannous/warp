@@ -8,6 +8,8 @@ const KIND_INT = "1";
 const KIND_FLOAT = "2";
 const KIND_MASK = 0xFFn;
 const KIND_FUNCTION = 16n; // src/type_kinds.rs Kind::Function: a closure
+const KIND_SYMBOL = "5";
+const CYCLE_MARK = "…"; // src/wasm_reader.rs CYCLE_MARK: a node met again inside itself (objects pointing to each other)
 const utf8Decoder = new TextDecoder("utf-8", { fatal: false });
 
 function readText(module, pointer, length) {
@@ -19,9 +21,9 @@ function floatPayload(value) {
 	return Number.isFinite(value) && !Object.is(value, -0) ? value : String(Object.is(value, -0) ? "-0" : value);
 }
 
-function readPayload(module, payload) {
+function readPayload(module, payload, path) {
 	switch (PAYLOAD_TAGS[module.reflect_tag(payload)]) {
-		case "node": return { node: readNode(module, payload) };
+		case "node": return { node: readNode(module, payload, path) };
 		case "int": return { int: String(module.reflect_i64(payload)) };
 		case "float": return { float: floatPayload(module.reflect_f64(payload)) };
 		case "string": return { text: readText(module, module.reflect_text_ptr(payload), module.reflect_text_len(payload)) };
@@ -37,16 +39,20 @@ function readPayload(module, payload) {
 }
 
 // a closure keeps its node, out of JSON, so foreign code can call it (host.js callableOf)
-function readCell(module, node) {
-	const cell = { kind: String(module.get_kind(node)), data: readPayload(module, module.reflect_data(node)) };
+function readCell(module, node, path) {
+	const cell = { kind: String(module.get_kind(node)), data: readPayload(module, module.reflect_data(node), path) };
 	if ((BigInt(cell.kind) & KIND_MASK) === KIND_FUNCTION) Object.defineProperty(cell, "warpFunction", { value: { module, node } });
 	return cell;
 }
 
-function readNode(module, node) {
-	const tree = readCell(module, node);
+// `path` the nodes it is read inside of: one of them again is a cycle, read as CYCLE_MARK
+function readNode(module, node, path = []) {
+	if (path.includes(node)) return { kind: KIND_SYMBOL, data: { text: CYCLE_MARK }, chain: [] };
+	path.push(node);
+	const tree = readCell(module, node, path);
 	tree.chain = [];
-	for (let next = module.reflect_value(node); next !== null; next = module.reflect_value(next)) tree.chain.push(readCell(module, next));
+	for (let next = module.reflect_value(node); next !== null; next = module.reflect_value(next)) tree.chain.push(readCell(module, next, path));
+	path.pop();
 	return tree;
 }
 
