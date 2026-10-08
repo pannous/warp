@@ -5,6 +5,11 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- ORM (card orm, warp-functions; user in a discussion with the supervisor): plain classes connect to the database
+  without inheritance or annotations, they are only registered. Transactions are completely optional (an
+  optimization only). Filters work for any warp expression ("magic": SQLite application functions run warp code
+  inside queries). Lazy loading: a smart default chosen by us, fine-tuning keywords later. Migrations: start with
+  the supervisor's proposal.
 - `x /= y` means exactly `x = x / y`: `x = 3; x /= 2` → 3/2, prints 1.5; floor division is `x //= y`; a variable
   declared `x:int` keeps a whole number. Card div-assign, warp-worker switches the floor tests to `//=` (user,
   asked directly by the supervisor).
