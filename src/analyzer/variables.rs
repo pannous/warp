@@ -247,20 +247,52 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	}
 }
 
-/// The kind a value evidently has as written: a literal, a list literal, or arithmetic of numbers; None for anything else
-/// (a variable, a call, a loop variable), whose kind only inference knows
-pub(super) fn evident_kind(value: &Node) -> Option<Kind> {
+/// The kind a value evidently has as written: a literal, a list literal, arithmetic of numbers, or a name or call whose
+/// kind `known` gives; None for anything else (a variable, a loop variable), whose kind only inference knows
+pub(super) fn evident_kind(value: &Node, known: &HashMap<String, Kind>) -> Option<Kind> {
 	match value.drop_meta() {
 		Node::Number(Number::Float(_)) => Some(Kind::Float),
 		Node::Number(_) => Some(Kind::Int),
 		Node::Text(_) | Node::Char(_) => Some(Kind::Text),
 		Node::List(_, Bracket::Square, _) => Some(Kind::List),
-		Node::Key(left, op, right) if op.is_arithmetic() => match (evident_kind(left)?, evident_kind(right)?) {
+		Node::Key(left, op, right) if op.is_arithmetic() => match (evident_kind(left, known)?, evident_kind(right, known)?) {
 			(Kind::Int, Kind::Int) => Some(Kind::Int),
 			(Kind::Int | Kind::Float, Kind::Int | Kind::Float) => Some(Kind::Float),
 			_ => None,
 		},
+		Node::Symbol(name) => known.get(name).copied(),
+		Node::List(items, Bracket::Round, Separator::None) => match items.first().map(Node::drop_meta) {
+			Some(Node::Symbol(function)) => known.get(&format!("{function}{CALL_SUFFIX}")).copied(),
+			_ => None,
+		},
 		_ => None,
+	}
+}
+
+/// Marks a function's result in the `known` kinds of evident_kind, apart from a variable of the same name
+const CALL_SUFFIX: &str = "()";
+
+/// The result kind of each user function whose last expression's kind is evident, its declared parameters known:
+/// `f(x: int) := x + 1` gives an Int, `f() := "a"` a Text
+fn evident_results(program: &Node) -> HashMap<String, Kind> {
+	let mut ctx = Context::new();
+	extract_user_functions_inner(&mut ctx, program);
+	ctx.user_functions.values().filter_map(|function| {
+		let parameters = function.params.iter().filter_map(|param| {
+			let kind = builtin_type_kind(annotated_builtin_type(param.annotation.as_ref()?)?)?;
+			Some((param.name.clone(), if kind == Kind::Codepoint { Kind::Text } else { kind }))
+		}).collect();
+		let kind = evident_kind(last_expression(&function.body), &parameters)?;
+		Some((format!("{}{CALL_SUFFIX}", function.name), kind))
+	}).collect()
+}
+
+/// The expression a body gives: its last statement
+fn last_expression(body: &Node) -> &Node {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly | Bracket::None, Separator::Semicolon | Separator::Newline) if !items.is_empty() => last_expression(items.last().expect("not empty")),
+		Node::List(items, Bracket::Curly, _) if items.len() == 1 => last_expression(&items[0]),
+		other => other,
 	}
 }
 
@@ -273,7 +305,8 @@ pub fn check_kind_changes(program: &Node) -> Option<Diagnostic> {
 			bodies.push(body);
 		}
 	});
-	bodies.into_iter().find_map(|body| first_kind_change(body, &mut HashMap::new()))
+	let results = evident_results(program);
+	bodies.into_iter().find_map(|body| first_kind_change(body, &mut HashMap::new(), &results))
 }
 
 /// The evident kind of a value for P45's kind changes, with bools apart from ints: int ≰ bool, bool ≤ int (card bool-assign)
@@ -284,11 +317,11 @@ pub(super) enum EvidentKind {
 }
 
 impl EvidentKind {
-	fn of(value: &Node) -> Option<EvidentKind> {
+	fn of(value: &Node, results: &HashMap<String, Kind>) -> Option<EvidentKind> {
 		match value.drop_meta() {
 			Node::True | Node::False => Some(EvidentKind::Bool),
 			Node::Key(_, op, _) if op.is_comparison() => Some(EvidentKind::Bool),
-			_ => evident_kind(value).map(EvidentKind::Of),
+			_ => evident_kind(value, results).map(EvidentKind::Of),
 		}
 	}
 
@@ -314,15 +347,15 @@ impl EvidentKind {
 
 /// Walks the assignments in program order, not into function definitions or lambdas (their own scopes);
 /// `kinds` holds each variable's evident kind, None once it was given a value of no evident kind
-pub(super) fn first_kind_change(node: &Node, kinds: &mut HashMap<String, Option<EvidentKind>>) -> Option<Diagnostic> {
+pub(super) fn first_kind_change(node: &Node, kinds: &mut HashMap<String, Option<EvidentKind>>, results: &HashMap<String, Kind>) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		Node::Key(_, Op::Define | Op::Arrow | Op::FatArrow, _) => None,
 		Node::Key(target, Op::Assign, value) => {
-			if let Some(change) = first_kind_change(value, kinds) {
+			if let Some(change) = first_kind_change(value, kinds, results) {
 				return Some(change);
 			}
 			let Node::Symbol(name) = target.drop_meta() else { return None };
-			let (earlier, given) = (kinds.get(name).copied(), EvidentKind::of(value));
+			let (earlier, given) = (kinds.get(name).copied(), EvidentKind::of(value, results));
 			// a first evident value fixes the kind (Int widens to Float); any value of no evident kind ends the check
 			let kind = match (earlier, given) {
 				(None, given) => given,
@@ -340,8 +373,8 @@ pub(super) fn first_kind_change(node: &Node, kinds: &mut HashMap<String, Option<
 			kinds.insert(name.clone(), kind);
 			None
 		}
-		Node::Key(left, _, right) => first_kind_change(left, kinds).or_else(|| first_kind_change(right, kinds)),
-		Node::List(items, _, _) => items.iter().find_map(|item| first_kind_change(item, kinds)),
+		Node::Key(left, _, right) => first_kind_change(left, kinds, results).or_else(|| first_kind_change(right, kinds, results)),
+		Node::List(items, _, _) => items.iter().find_map(|item| first_kind_change(item, kinds, results)),
 		_ => None,
 	}
 }

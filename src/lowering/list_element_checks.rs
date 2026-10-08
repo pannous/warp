@@ -1,7 +1,8 @@
 //! A declared list holds only items of its element type (card list-element-types). A literal item of another type is a
 //! compile-time error (analyzer check_declared_types); an item known only at run time is checked at the store:
 //! `names.add(v)` of `names: texts` is `if not (v is text) { raise "…" }; names.add(v)`, a call's item is held in a
-//! temporary first, and a whole list from a call (`names = f()`) has each item checked.
+//! temporary first, and a whole list from a call (`names = f()`) or another list (`names = other + [v]`) has each item
+//! checked. A list field of an instance whose class is known (`b = bag(…)`) is checked the same way: `b.items.add(v)`.
 //! The check is a statement before the store, so the store keeps its form (a typed int list stays an array).
 
 use crate::analyzer::{added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list, list_element_type, of_type_declaration};
@@ -19,12 +20,19 @@ const CHECKED_PREFIX: &str = "checked·";
 const NUMBER_WORD: &str = "number";
 
 pub fn lower(node: Node) -> Node {
-	ElementChecks { declared: HashMap::new(), temporaries: 0 }.lower(node)
+	let class_fields = crate::class_methods::class_fields(&node);
+	let classes: Vec<String> = class_fields.keys().cloned().collect();
+	let instances = crate::class_methods::instance_classes(&node, &classes);
+	ElementChecks { declared: HashMap::new(), class_fields, instances, temporaries: 0 }.lower(node)
 }
 
 struct ElementChecks {
 	/// the declared type of each variable so far, as check_declared_types reads them
 	declared: HashMap<String, String>,
+	/// each class's fields with their type names, for `b.items.add(v)` of a field `items: texts`
+	class_fields: HashMap<String, Vec<(String, String)>>,
+	/// the class of each variable known to hold an instance
+	instances: HashMap<String, String>,
 	temporaries: usize,
 }
 
@@ -59,31 +67,38 @@ impl ElementChecks {
 				let Some((name, type_name)) = declaration else { return Node::Key(target, op, Box::new(value)) };
 				self.declared.insert(name.clone(), type_name.clone());
 				match element_test(&name, &type_name) {
-					Some(test) => self.checked_store(&test, *target, op, value),
+					Some(test) => self.checked_store(&test, &name, *target, op, value),
 					None => Node::Key(target, op, Box::new(value)),
 				}
 			}
 			Node::Key(list, Op::Dot, call) => {
 				let append = Node::Key(list, Op::Dot, call);
-				match (append_target(&append), appended_items(&append)) {
-					(Some(name), Some(_)) => match self.declared_test(&name) {
-						Some(test) => self.checked_append(&test, append),
-						None => append,
-					},
-					_ => append.map_children(|child| self.lower(child)),
+				match self.append_test(&append) {
+					Some(test) => self.checked_append(&test, append),
+					None if appended_items(&append).is_some() => append,
+					None => append.map_children(|child| self.lower(child)),
 				}
 			}
 			other => other.map_children(|child| self.lower(child)),
 		}
 	}
 
-	/// `names = names + [v]`, `names = [v w]`, `names = f()`
-	fn checked_store(&mut self, test: &ElementTest, target: Node, op: Op, value: Node) -> Node {
+	/// `names = names + [v]`, `names = other + [v]`, `names = [v w]`, `names = f()`
+	fn checked_store(&mut self, test: &ElementTest, name: &str, target: Node, op: Op, value: Node) -> Node {
 		let mut checks = vec![];
 		let value = match added_items(&value) {
 			Some(items) => {
 				let items = self.checked_items(items.to_vec(), test, &mut checks);
-				with_added_items(&value, items)
+				let value = with_added_items(&value, items);
+				match value {
+					Node::Key(list, Op::Add, appended) if !self.holds_checked_items(&list, name) => {
+						let held = self.temporary();
+						checks.push(assignment(held.clone(), *list));
+						checks.push(each_item_check(&held, test));
+						Node::Key(Box::new(held), Op::Add, appended)
+					}
+					value => value,
+				}
 			}
 			None if matches!(value.drop_meta(), Node::Empty) || computed_literal_kind(&value).is_some() => value,
 			None => {
@@ -130,6 +145,31 @@ impl ElementChecks {
 		element_test(name, self.declared.get(name)?)
 	}
 
+	/// The list `xs` of `xs + [v]` stored in `name` holds checked items: name itself or a list declared with the same
+	/// element type
+	fn holds_checked_items(&self, list: &Node, name: &str) -> bool {
+		let Node::Symbol(list) = list.drop_meta() else { return false };
+		let element = |variable: &str| self.declared.get(variable).and_then(|type_name| list_element_type(type_name));
+		list == name || element(list).is_some_and(|element_type| element(name) == Some(element_type))
+	}
+
+	/// The test of the list an append call `names.add(…)`, `b.items.add(…)` adds to: a declared list variable or the
+	/// list field of an instance whose class is known
+	fn append_test(&self, append: &Node) -> Option<ElementTest> {
+		appended_items(append)?;
+		let Node::Key(list, Op::Dot, _) = append.drop_meta() else { return None };
+		match list.drop_meta() {
+			Node::Symbol(name) => self.declared_test(name),
+			Node::Key(instance, Op::Dot, field) => {
+				let class = self.instances.get(&instance.drop_meta().name())?;
+				let field = field.drop_meta().name();
+				let (_, type_name) = self.class_fields.get(class)?.iter().find(|(name, _)| *name == field)?;
+				element_test(&format!("{field} of {class}"), type_name)
+			}
+			_ => None,
+		}
+	}
+
 	fn with_checks(&mut self, checks: Vec<Node>, store: Node) -> Node {
 		if checks.is_empty() {
 			return store;
@@ -149,15 +189,6 @@ fn element_test(name: &str, type_name: &str) -> Option<ElementTest> {
 	let type_word = if kind == Kind::Float { NUMBER_WORD.to_string() } else { element.to_string() };
 	let message = format!("type mismatch: {name} is declared {type_name}, cannot hold an item that is no {element}");
 	Some(ElementTest { type_word, message })
-}
-
-/// The list variable `names` of `names.add(…)`
-fn append_target(append: &Node) -> Option<String> {
-	let Node::Key(list, Op::Dot, _) = append.drop_meta() else { return None };
-	match list.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}
 }
 
 /// `if not (v is text) { raise "…" }`
