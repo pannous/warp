@@ -34,3 +34,11 @@ fn test_untrusted_code_gets_no_js() {
 	// P88 (user 2026-10-05): untrusted code gets every capability for now
 	assert_eq!(warp::pipeline::eval_untrusted("use js Math; Math.max(1, 5)"), 5);
 }
+
+// card node-console: what a foreign module prints goes to stderr, the answers keep stdout to themselves
+#[cfg(feature = "native")]
+#[test]
+fn test_foreign_printing_keeps_the_answer_channel() {
+	is!("use js console; console.log(1); 3", 3);
+	is!("use python builtins; builtins.print(1); 3", 3);
+}
