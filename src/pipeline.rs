@@ -612,10 +612,11 @@ pub(crate) fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_f
 	result.unwrap_or_else(failed_run)
 }
 
-/// Without wasmtime the embedding host runs the program (the browser playground: web.rs)
+/// Without wasmtime the embedding host runs the program (the browser playground: web.rs); a final quantity's unit is
+/// read back from the module's `wasp.units` section, as wasm_reader does natively
 #[cfg(not(feature = "native"))]
 pub(crate) fn run_module(module: CompiledModule) -> Node {
-	crate::web::run_in_host(&module.bytes)
+	crate::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))
 }
 
 /// The run used up its fuel: it probably does not terminate, or needs a larger budget
