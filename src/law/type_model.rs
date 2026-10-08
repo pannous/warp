@@ -644,6 +644,11 @@ impl Exporter {
 					_ => Ok(format!(".statement ({})", self.expression(statement)?)),
 				}
 			}
+			// `a = b = 3`: `b = 3`, then `a = b`
+			Node::Key(target, Op::Assign, value) if matches!(value.drop_meta(), Node::Key(_, Op::Assign, _)) => {
+				let Node::Key(inner_target, _, _) = value.drop_meta() else { unreachable!("an assignment") };
+				Ok(format!("{},\n  {}", self.item(value)?, self.item(&Node::Key(target.clone(), Op::Assign, inner_target.clone()))?))
+			}
 			Node::Key(target, Op::Assign, value) if !self.is_bound(target) && !matches!(target.drop_meta(), Node::Key(_, Op::Dot, _)) => self.binding(target, ".var", value),
 			other => Ok(format!(".statement ({})", self.expression(other)?)),
 		}

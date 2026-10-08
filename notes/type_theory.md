@@ -270,6 +270,10 @@ keep their static types and `a, b = b, a` swaps; names that hold values take pla
 their declarations. A wrong count is refused (warp counts at compile time, W0 has no static count). warp skips the
 declaration check here: `a: int = 0; a, b = 2.5, 6` (card destructure-unchecked, KNOWN_HOLES).
 
+`a = b = 3` exports as `b = 3`, then `a = b` (each a first binding or an assignment). warp checks a chained
+declared name only at run time (`a: int = 0; a = b = 2.5`, card chain-unchecked), and `a = p.x = 5` gives `a` the
+object (card chain-field).
+
 ## not, and, or
 
 No new forms: `not e` is `if e then no else yes`; `a and b` is `if a then b else a` and `a or b` is
