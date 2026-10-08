@@ -1,5 +1,6 @@
 // Card reflection-components (notes/reflection.md step 4): `lib.exports` and `dir(lib)` of a component used with
 // `use wasm "x.wasm" as lib` are its exported function names, read off the component at compile time
+#[cfg(feature = "native")]
 use crate::is;
 
 #[cfg(feature = "native")]

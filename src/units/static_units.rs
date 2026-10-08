@@ -128,12 +128,16 @@ fn factors_of(text: &str) -> Option<Vec<Factor>> {
 
 /// The module with the `units` entry of the units of its result, when the last lowered program's result has units
 pub(crate) fn with_result_units(bytes: Vec<u8>) -> Vec<u8> {
-	let Some(units) = take_result_units() else { return bytes };
-	let text = match units {
+	crate::meta_section::with_entries(bytes, result_units_entry().into_iter().collect())
+}
+
+/// The `units` entry of the last lowered program's result, when it has units
+pub(crate) fn result_units_entry() -> Option<(&'static str, Node)> {
+	let text = match take_result_units()? {
 		ResultUnits::Whole(factors) => factors_text(&factors),
 		ResultUnits::Fields(fields) => fields.iter().map(|(field, factors)| format!("{field}{FIELD_MARK}{}", factors_text(factors))).collect::<Vec<_>>().join(FIELD_SEPARATOR),
 	};
-	crate::meta_section::with_entries(bytes, vec![(UNITS_ENTRY, Node::Text(text))])
+	Some((UNITS_ENTRY, Node::Text(text)))
 }
 
 /// The result of running a module, as the quantity its `units` entry names (unchanged without it)

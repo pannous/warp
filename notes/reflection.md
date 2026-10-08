@@ -66,3 +66,10 @@ Warp notation text (parsed by the reader we already have), one map:
    Done first: run-time names of the program's own classes by type dispatch (Sources 2). Agreed with warp-worker
    (2026-10-08): web switches static_units with_result_units / module_units and the playground reader to the `units`
    entry, text byte for byte; warp-worker owns `x.unit` once quantities live in variables.
+   Done (card reflection-foreign-meta): pipeline::compile_program writes the `functions` and `classes` entries
+   (reflection::meta_entries: the lowered program's functions minus class methods, the classes' layouts from the
+   source) next to `units` in one meta_section::with_entries. An importing program (`import "adder.wasm"`) reads them
+   at compile time, the module's path is known then, so no host call: `adder.exports` are the module's own functions
+   (not warp's runtime exports), `adder.add.params` and `.signature` come from the entry (Objects::module_function_word;
+   wasm_modules::qualify leaves `m.f.word` of an exported function unqualified for it). The run-time host call stays
+   for `any`-typed values only. Not yet: classes of an imported module (`m.P.fields`), the page reader.
