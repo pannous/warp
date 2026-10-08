@@ -129,3 +129,4 @@ mod test_parameter_any;
 mod test_captured_copy_of_global;
 mod test_braced_it_warning;
 mod test_text_joined_parameter;
+mod test_words_in_phrases;
