@@ -53,6 +53,9 @@ const EMIT_KEYWORD: &str = "emit";
 const GLOBAL_KEYWORD: &str = "global";
 /// `break v` in a block handler ends its block with v (aborting handlers)
 const BREAK_KEYWORD: &str = "break";
+/// `return v` before a function's end is the event `f·return` whose block handler, around f's body, breaks with v
+const RETURN_KEYWORD: &str = "return";
+const RETURN_EVENT_SUFFIX: &str = "·return";
 /// the handler's local holding the payload, `event.level`
 const EVENT_LOCAL: &str = "event";
 /// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
@@ -234,6 +237,38 @@ fn map_keys(program: &Node) -> Option<Vec<String>> {
 
 fn is_word(node: &Node, word: &str) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(found) if found == word)
+}
+
+/// the value of `return v`, ø of a bare `return`
+fn returned(node: &Node) -> Option<Node> {
+	match node.drop_meta() {
+		Node::List(items, _, _) if items.first().is_some_and(|first| is_word(first, RETURN_KEYWORD)) => Some(match &items[1..] {
+			[] => Node::Empty,
+			[value] => value.clone(),
+			words => Node::List(words.to_vec(), Bracket::None, Separator::Space),
+		}),
+		_ => None,
+	}
+}
+
+fn returns(body: &Node) -> bool {
+	let mut found = false;
+	body.visit(&mut |part| found |= returned(part).is_some());
+	found
+}
+
+/// A function body ending in `return v` ends in v
+fn without_tail_return(body: &Node) -> Node {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, separator) if returned(body).is_none() => {
+			let mut items = items.clone();
+			if let Some(value) = items.last().and_then(returned) {
+				*items.last_mut().expect("a last statement") = value;
+			}
+			Node::List(items, Bracket::Curly, separator.clone())
+		}
+		_ => returned(body).unwrap_or_else(|| body.clone()),
+	}
 }
 
 fn is_list_literal(node: &Node) -> bool {
@@ -438,6 +473,8 @@ struct Exporter {
 	/// the locals of the function being exported: each lives in a cell, a fresh instance of its class `f·n` per call
 	/// (W0's locals are bound by substitution, warp's change), whose one field takes the join of the values written
 	cells: Vec<String>,
+	/// the event a `return` of the function being exported emits, when it returns before its end
+	returning: Option<String>,
 	/// the classes of the function locals' cells: a parameter of one holds the cell itself (a lifted nested function's
 	/// nonlocal, nested_functions.rs)
 	cell_classes: Vec<String>,
@@ -881,7 +918,13 @@ impl Exporter {
 		self.cells = cells.iter().chain(&references).cloned().collect();
 		self.locals.push(parameter.clone());
 		self.argument_fields = fields.clone();
-		let body = self.block(body);
+		let body = &without_tail_return(body);
+		let return_event = format!("{name}{RETURN_EVENT_SUFFIX}");
+		self.returning = returns(body).then(|| return_event.clone());
+		let body = self.block(body).map(|body| match self.returning.take() {
+			Some(event) => format!(".handle {event} (.abort {event} none (.loc {})) ({body})", quoted(EVENT_LOCAL), event = quoted(&event)),
+			None => body,
+		});
 		self.locals.pop();
 		self.argument_fields.clear();
 		self.cells.clear();
@@ -1019,6 +1062,10 @@ impl Exporter {
 	}
 
 	fn expression(&mut self, node: &Node) -> Lean {
+		if let Some(value) = returned(node) {
+			let event = self.returning.clone().ok_or("not in W0: a return outside a function body")?;
+			return Ok(format!(".emit {} ({})", quoted(&event), self.expression(&value)?));
+		}
 		match node.drop_meta() {
 			Node::Number(Number::Int(n)) => Ok(format!(".int ({n})")),
 			Node::Number(Number::Float(_) | Number::Quotient(_, _)) => Ok(".num 0".to_string()),

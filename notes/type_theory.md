@@ -451,3 +451,11 @@ pass on what their callees capture. Checker.lean `inferFunctions` infers all fun
 so a function may call one defined after it and two may call each other (warp hoists functions; before, W0 rejected
 `a() := b() + 1; b() := 5`). A function giving a literal `true` returns 1 in warp (card bool-return). Cards: nested-two-deep (warp cannot read two levels up),
 nonlocal-assign-unchecked (KNOWN_HOLES), named-constructor-args.
+
+## return
+
+`return v` as a function body's last statement is v. Before the end, it is `emit f·return v` and f's body runs
+inside `on f·return { break event }` (the effect handlers above, so no new W0 form and no new proof): the innermost
+handler is the running call's, so recursion returns from the right call. The event's payload is typed `any`, so a
+function that returns early is typed by the join with `any` (sound, imprecise: `f(x) := { if x > 2 { return 7 }; 1 }`
+is `any`). Declared result types (`-> int`, `: int`) are still outside W0.

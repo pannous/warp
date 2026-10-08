@@ -306,6 +306,12 @@ const CORPUS: &[&str] = &[
 	"a() := b() + 1; b() := 5; a()",
 	"a() := b() + 1; b() := \"x\"; a()",
 	"a(n) := if n < 1 then 0 else b(n - 1); b(n) := a(n); a(3)",
+	// `return v` at the end is v; before it, an event whose block handler around the body breaks with v
+	"f(x) := { return x + 1 }; f(1)",
+	"f(x) := { if x > 2 { return 7 }; 1 }; f(5) + f(1)",
+	"f(x) := { for i in 1..x { if i == 3 { return i * 10 } }; 0 }; f(5)",
+	"f(n) := { if n < 1 { return 0 }; n + f(n - 1) }; f(4)",
+	"f(x: int) := { if x > 2 { return \"big\" }; x }; f(5)",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
