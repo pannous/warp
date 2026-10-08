@@ -15,5 +15,4 @@ print "sum of \(n) items: CPU \(on_cpu) in \(t1 - t0) ms, GPU \(on_gpu) in \(t2 
 
 ys = xs.map(x => sin(x) * exp(x) + cos(x * 3)) @gpu
 t3 = clock()
-last = ys#n
-print "the mapped list itself back from the GPU: \(t3 - t2) ms, last item \(last)"
+print "the mapped list itself back from the GPU: \(t3 - t2) ms, last item \(ys#n)"
