@@ -43,6 +43,8 @@ const EMPTY_TYPE: &str = ".list .never";
 const ON_KEYWORD: &str = "on";
 const IN_KEYWORD: &str = "in";
 const EMIT_KEYWORD: &str = "emit";
+/// `break v` in a block handler ends its block with v (aborting handlers)
+const BREAK_KEYWORD: &str = "break";
 /// the handler's local holding the payload, `event.level`
 const EVENT_LOCAL: &str = "event";
 /// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
@@ -258,6 +260,9 @@ struct Exporter {
 	argument_fields: Vec<String>,
 	/// each class's ancestor chain, root first, and its own fields with their type words
 	classes: HashMap<String, ClassShape>,
+	/// the event whose block a `break` ends: the innermost block handler's; none in a loop (the loop's break) or a
+	/// program-wide handler
+	breaking: Vec<Option<String>>,
 }
 
 /// A class's ancestor chain and its own fields as (name, type word)
@@ -382,17 +387,36 @@ impl Exporter {
 		keys.into_iter().map(|(class, _)| class).collect()
 	}
 
-	/// a handler body: `event` is its payload
-	fn handler(&mut self, handler: &Node) -> Lean {
+	/// a handler body: `event` is its payload; a block handler (of `on ev {…} in {…}`) may `break`
+	fn handler(&mut self, handler: &Node, block_event: Option<&str>) -> Lean {
 		self.locals.push(EVENT_LOCAL.to_string());
-		let handler = self.block(handler);
+		let handler = self.breaking_in(block_event.map(str::to_string), |exporter| exporter.block(handler));
 		self.locals.pop();
 		handler
 	}
 
+	fn breaking_in(&mut self, event: Option<String>, export: impl FnOnce(&mut Self) -> Lean) -> Lean {
+		self.breaking.push(event);
+		let exported = export(self);
+		self.breaking.pop();
+		exported
+	}
+
+	/// `break v` or a bare `break` (ø) in a block handler
+	fn abort(&mut self, value: Option<&Node>) -> Lean {
+		let Some(event) = self.breaking.last().cloned().flatten() else {
+			return Err("not in W0: a break outside a block handler".to_string());
+		};
+		let value = match value {
+			Some(value) => self.expression(value)?,
+			None => UNIT_TYPE.to_string(),
+		};
+		Ok(format!(".abort {} none ({value})", quoted(&event)))
+	}
+
 	fn effect(&mut self, effect: Effect) -> Lean {
 		match effect {
-			Effect::On { event, handler, body: Some(body) } => Ok(format!(".handle {} ({}) ({})", quoted(&event), self.handler(handler)?, self.block(body)?)),
+			Effect::On { event, handler, body: Some(body) } => Ok(format!(".handle {} ({}) ({})", quoted(&event), self.handler(handler, Some(&event))?, self.block(body)?)),
 			Effect::On { event, .. } => Err(format!("not in W0: a program-wide handler of {event} inside an expression")),
 			Effect::Emit { event, payload } if payload.is_empty() => Ok(format!(".emit {} .unit", quoted(&event))),
 			Effect::Emit { event, payload } => Ok(format!(".emit {} ({})", quoted(&event), self.instance(&event_class(&event), payload)?)),
@@ -437,7 +461,7 @@ impl Exporter {
 
 	fn item(&mut self, statement: &Node) -> Lean {
 		if let Some(Effect::On { event, handler, body: None }) = effect(statement) {
-			return Ok(format!(".on {} ({})", quoted(&event), self.handler(handler)?));
+			return Ok(format!(".on {} ({})", quoted(&event), self.handler(handler, None)?));
 		}
 		match statement.drop_meta() {
 			Node::Type { name, .. } => self.class_definition(&name.drop_meta().name()),
@@ -586,6 +610,8 @@ impl Exporter {
 				Ok(statements.iter().rev().fold(last, |rest, statement| format!(".seq ({statement}) ({rest})")))
 			}
 			_ if effect(node).is_some() => self.effect(effect(node).expect("an effect")),
+			Node::Symbol(word) if word == BREAK_KEYWORD => self.abort(None),
+			Node::List(items, _, _) if items.len() == 2 && is_word(&items[0], BREAK_KEYWORD) => self.abort(Some(&items[1])),
 			Node::List(items, _, _) if items.first().is_some_and(|class| self.classes.contains_key(&class.name())) => self.construction(&items[0].name(), &items[1..]),
 			Node::List(items, _, _) => match items.as_slice() {
 				[marker, body, handler] if is_word(marker, TRY_MARKER) => self.binary(".tryCatch", body, handler),
@@ -647,7 +673,7 @@ impl Exporter {
 				_ => unsupported(node),
 			},
 			Node::Key(condition, Op::Do, body) => match condition.drop_meta() {
-				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self.binary(".loop", condition, body),
+				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self.breaking_in(None, |exporter| exporter.binary(".loop", condition, body)),
 				_ => unsupported(node),
 			},
 			Node::Key(left, Op::Add, right) if is_list_literal(left) || is_list_literal(right) => self.binary(".append", left, right),
