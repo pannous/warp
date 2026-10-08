@@ -25,6 +25,8 @@ pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
 					_ => Some(Kind::Int),
 				},
 				(Kind::Float | Kind::Int, Kind::Float | Kind::Int) => Some(Kind::Float),
+				// `"5"*3` repeats the text (card repeat-int)
+				(left_kind, right_kind) if super::inference::repeats_text(left_kind, op, right_kind) => Some(Kind::Text),
 				_ => None,
 			}
 		}
