@@ -284,6 +284,12 @@ key the map was never given is W0's run-time "unset field" (warp: "no field"). A
 (`p={x:1}; p.y`) is not a field of `map`, so the exporter refuses it. Not modelled: computed keys `m[k]`, `m.keys`,
 methods (`get`, `remove`), `{}` subscripted by numbers (P34), typed maps (`map of int`).
 
+## Increments
+
+`i++`, `++i` (and `--`) export as `i = i + 1`; in warp both forms give the new value. `b: bool = no; b++` compiles in
+warp (card bool-assign, KNOWN_HOLES); `s = "a"; s++` is an internal error in warp, while `s += 1` gives "a1" as in W0
+(card inc-text).
+
 ## not, and, or
 
 No new forms: `not e` is `if e then no else yes`; `a and b` is `if a then b else a` and `a or b` is

@@ -981,6 +981,14 @@ impl Exporter {
 				}
 				_ => unsupported(node),
 			},
+			// `i++` and `++i` are `i = i + 1`, both giving the new value
+			Node::Key(left, op @ (Op::Inc | Op::Dec), right) => match [left, right].into_iter().find(|side| matches!(side.drop_meta(), Node::Symbol(_))) {
+				Some(target) => {
+					let step = if *op == Op::Inc { Op::Add } else { Op::Sub };
+					self.assignment(&target.name(), &Node::Key(target.clone(), step, Box::new(Node::Number(Number::Int(1)))))
+				}
+				None => unsupported(node),
+			},
 			// `s += 2` is `s = s + 2`
 			Node::Key(target, op, value) if op.is_compound_assign() => match target.drop_meta() {
 				Node::Symbol(name) => self.assignment(name, &Node::Key(target.clone(), op.base_op(), value.clone())),
