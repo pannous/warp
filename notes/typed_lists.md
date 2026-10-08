@@ -150,3 +150,13 @@ alias `d = out` exists, though only after the loop (int[20000].map 0.5 s, 80000 
 (list_dispatch.rs appends_while_aliased) an append copies only if it can run after an assignment between its own
 variable and another (`ys = xs`, `xs = ys`) in program order, or in a loop around one. map / filter of 10^6 ints: 7–9
 ms (release); a variable given a second map result (`d = d.map(…)`) stays linear. Tests: tests/lists/test_map_typed.rs.
+  a fitting element type (a subclass), is fine. The run-time half (a lax alias `ys = names`, an unannotated parameter
+  `f(xs) := xs.add(420)`): a declared Node-held list's head cell carries an element mark, the node_kind_in kinds its
+  element type admits, in kind bits 16+ (type_kinds::element_mark, set by list_mark at the assignment);
+  list_extend, list_insert_at and list_with_at check each new item (list_item_check, error "list cannot hold this
+  item"). Whole-kind compares mask the mark off (UNMARKED_KIND: equality, similarity, is_map, element_children).
+  Only a type written in the source marks (Local.declared): the `list of int` inferred for `ys = [1]` leaves the list
+  open. An empty declared list (ø) is marked too and keeps its mark when it becomes a cell or ø again
+  (list_extend, list_insert_at, emit_become_empty; ø compares mask with KIND_MASK; card p215-empty).
+  Limits: a class element type checks only that the item is an object (OBJECT_KINDS), not its class; typed arrays
+  need none. Probes: probes/variance/runtime_*.warp.

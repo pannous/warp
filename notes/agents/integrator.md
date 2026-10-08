@@ -39,6 +39,13 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
 - web::test_bundle_budget fails when a branch grows every program's app.wasm: integrator_tools/site_size.sh
   <commits> measures the hello-world site per first-parent merge (worktree budget_bisect), the grower goes back to
   its worker with the section/segment diff (`wasm-tools objdump`).
+  site_size.sh totals run ~24 B below the test's (gzip -9 vs flate2): deltas only, the verdict is
+  `tests/queue.sh -- a_hello_world_site_stays_within_its_budget --nocapture`.
+- Bisecting: integrator_tools/bisect_test.sh <test> under `git bisect run --first-parent` (it resets the tracked
+  test_results.txt that queue.sh rewrites, else bisect stops after one step); integrator_tools/tour_at.sh <commit>
+  <example>… for a tour failure. Never check out another commit in the integrate worktree while gate.sh runs, and
+  TaskStop a running gate before re-merging there. A JS-only follow-up tip can be merged off-tree
+  (`git merge-tree --write-tree` + `git commit-tree`), pushed as a branch for the runner check while the gate finishes.
 - Failures: report test name + first panic line to the worker. A failure that passes alone is shared state: find and
   fix the cause in a small commit with a test (known flake: tests running the shared debug/warp binary; rerun).
 - Batch branches that arrive close together. After each push: one line to the Supervisor and the board.

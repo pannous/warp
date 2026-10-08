@@ -41,22 +41,31 @@ theorem number_sub_arithTy {t : Ty} (b : Ty) (ht : sub .number t = true) : sub .
   · rfl
   · simp at hj; exact absurd (sub_trans ht hj.1) (by decide)
 
-theorem number_sub_div (a b : Ty) : sub .number (ArithOp.div.ty a b) = true :=
-  number_sub_arithTy b (join_upper_right a .number)
+theorem repeat_typed {Γ n tn} (s : String) (hn : HasType P Γ n tn) :
+    ∃ t', HasType P Γ (repeatValues s n) t' ∧ sub t' (repeatTy .text tn) = true ∧ sub t' (repeatTy tn .text) = true := by
+  unfold repeatValues
+  split
+  · rename_i k hk
+    cases n <;> simp [asInt] at hk <;> cases hn <;> exact ⟨_, .text, by decide, by decide⟩
+  · exact ⟨_, .error, sub_never _, sub_never _⟩
 
 -- the brute-force case split over operand values needs more than the default budget
 set_option maxHeartbeats 1000000 in
-/-- `-`, `*`, `%` and `/` on values: a number of a type below `op.ty`, or an error -/
+/-- `-`, `*`, `%`, `/` and `^` on values: a number of a type below `op.ty`, or an error -/
 theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
     (vb : b.isValue = true) : ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (op.ty ta tb) = true := by
   unfold arithValues
+  split
+  · cases ha; obtain ⟨t', h, s, _⟩ := repeat_typed _ hb; exact ⟨t', h, s⟩
+  · cases hb; obtain ⟨t', h, _, s⟩ := repeat_typed _ ha; exact ⟨t', h, s⟩
+  unfold arithValues.numberValues
   split
   · exact ⟨_, .error, sub_never _⟩
   split
   · exact ⟨_, .error, sub_never _⟩
   · cases op
-    case div =>
-      have n := number_sub_div ta tb
+    case div | pow =>
+      have n : sub .number (arithTy (join ta .number) tb) = true := number_sub_arithTy tb (join_upper_right ta .number)
       split
       · split
         · exact ⟨_, .num, n⟩
@@ -129,6 +138,33 @@ theorem concat_typed {Γ b tb eb} (hb : HasType P Γ b tb) (vb : b.isValue = tru
     rw [value_list hb vb eb'] at hb
     exact ⟨_, hb, by simpa [concat] using join_upper_right _ _⟩
   | _ => intro ta ea va ha hea; cases ha <;> simp_all [isValue, element]
+
+/-- replacing an item of a list value by a value of type at most e keeps it a list of at most e -/
+theorem replaceAt_typed {Γ v tv e} (hv : HasType P Γ v tv) (vv : v.isValue = true) (sv : sub tv e = true) :
+    ∀ {xs : Expr} {txs n r}, xs.isValue = true → HasType P Γ xs txs → sub txs (.list e) = true →
+    replaceAt xs n v = some r → r.isValue = true ∧ ∃ tr, HasType P Γ r tr ∧ sub tr (.list e) = true := by
+  intro xs
+  induction xs with
+  | cons h t _ iht =>
+    intro txs n r va hxs st hr
+    simp only [isValue, Bool.and_eq_true] at va
+    cases hxs with
+    | cons hh ht hel =>
+      simp only [sub_list] at st
+      have sa := sub_trans (join_upper_left _ _) st
+      have sl := sub_trans (join_upper_right _ _) st
+      have tl := value_list ht va.2 hel
+      subst tl
+      simp only [replaceAt] at hr
+      split at hr
+      · cases hr
+        exact ⟨by simp [isValue, vv, va.2], _, .cons hv ht rfl, by simpa using join_least sv sl⟩
+      · simp only [Option.map_eq_some_iff] at hr
+        obtain ⟨r', hr', rfl⟩ := hr
+        obtain ⟨vr, tr, htr, str⟩ := iht va.2 ht (by simpa using sl) hr'
+        obtain ⟨e', he', se⟩ := element_mono str rfl
+        exact ⟨by simp [isValue, va.1, vr], _, .cons hh htr he', by simpa using join_least sa se⟩
+  | _ => intro txs n r _ _ _ hr; simp [replaceAt] at hr
 
 /-- a list value's type has elements -/
 theorem list_element {Γ v t} (h : HasType P Γ v t) (hl : isList v = true) : ∃ e, element t = some e := by
@@ -354,6 +390,12 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨_, h1, s1⟩ := ih1 hs
     obtain ⟨_, h2, _⟩ := ih2 hs
     exact ⟨_, .push h1 h2, s1⟩
+  | setAt _ _ _ ih1 ih2 ih3 =>
+    intro Γ' hs
+    obtain ⟨_, h1, _⟩ := ih1 hs
+    obtain ⟨_, h2, _⟩ := ih2 hs
+    obtain ⟨_, h3, s3⟩ := ih3 hs
+    exact ⟨_, .setAt h1 h2 h3, s3⟩
   | new => intros; exact ⟨_, .new, sub_refl _⟩
   | get _ ih =>
     intro Γ' hs
@@ -465,6 +507,8 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | lref => intros; simp only [Expr.subst]; exact .lref
   | share _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .share (ih hΓ hv htv)
   | push _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .push (ih1 hΓ hv htv) (ih2 hΓ hv htv)
+  | setAt _ _ _ ih1 ih2 ih3 =>
+    intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .setAt (ih1 hΓ hv htv) (ih2 hΓ hv htv) (ih3 hΓ hv htv)
   | new => intros; simp only [Expr.subst]; exact .new
   | get _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .get (ih hΓ hv htv)
   | set _ hw _ st ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .set (ih1 hΓ hv htv) hw (ih2 hΓ hv htv) st

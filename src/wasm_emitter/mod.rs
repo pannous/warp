@@ -216,6 +216,8 @@ pub struct WasmGcEmitter {
 	globals: GlobalSection,
 	tags: TagSection,
 	guards_errors: bool, // the program has a `try` that catches runtime errors
+	/// The program declares a list type (`names: texts`), so its lists may carry element marks (P215)
+	declares_list_types: bool,
 	/// Emitting data, not code: the value of an object entry or a quoted form, where unknown words stay words (P62)
 	data_context: bool,
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
@@ -256,6 +258,8 @@ pub struct WasmGcEmitter {
 	discovered_needs: std::collections::HashSet<Need>,
 	/// The highest operator code list_text writes as written, from the needs (any code above it is written `:`)
 	written_operator_bound: i64,
+	/// The program quotes a tag (`data point{x:1}`), which list_text writes as an instance: only then does it check for one
+	writes_tags: bool,
 	type_errors: Vec<String>,
 	/// The latest source position among the nodes being emitted (note_position)
 	source_position: Option<(usize, usize)>,
@@ -300,6 +304,7 @@ impl WasmGcEmitter {
 			globals: GlobalSection::new(),
 			tags: TagSection::new(),
 			guards_errors: false,
+			declares_list_types: false,
 			data_context: false,
 			error_catching: None,
 			abort_catching: None,
@@ -326,6 +331,7 @@ impl WasmGcEmitter {
 			text_heap_global: None,
 			discovered_needs: Default::default(),
 			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
+			writes_tags: false,
 			type_errors: Vec::new(),
 			source_position: None,
 			loop_labels: Vec::new(),
@@ -656,6 +662,7 @@ impl WasmGcEmitter {
 		self.scope.function_kinds = self.user_function_kinds();
 		crate::analyzer::note_bool_functions(self.ctx.user_functions.values());
 		self.derive_imports_from_effects(node);
+		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
 		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
 			Need::Function(name) => Some(*name),
@@ -663,9 +670,11 @@ impl WasmGcEmitter {
 		}));
 		let key_operators = self.discovered_needs.iter().filter_map(|need| if let Need::KeyOperator(code) = need { Some(*code) } else { None });
 		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
+		self.writes_tags = library_ops::mentions_quoted_tag(node);
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
+		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
 		self.guards_errors = try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();
 		trace!(
@@ -1424,6 +1433,15 @@ impl WasmGcEmitter {
 			.collect();
 		self.names.functions(&name_map(&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect()));
 
+		// a user function's parameter names, for debuggers and wasm-tools; a page leaves them out for size, an importer
+		// reads them from warp.meta (wasm_modules.rs read_exports)
+		if !crate::pipeline::is_for_a_page() {
+			let parameter_names = self.ctx.user_functions.values()
+				.filter_map(|function| Some((function.func_index?, function.params.iter().enumerate().map(|(i, param)| (i as u32, param.name.as_str())).collect())))
+				.collect();
+			self.names.locals(&indirect_name_map(parameter_names));
+		}
+
 		let tm = &self.type_manager;
 		let mut types = vec![(tm.string_type, "String"), (tm.i64_box_type, "i64box"), (tm.f64_box_type, "f64box"), (tm.node_type, "Node"),
 			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList"), (tm.float_array_type, "FloatArray"), (tm.float_list_type, "FloatList")];
@@ -1455,13 +1473,7 @@ impl WasmGcEmitter {
 			}
 		}
 		fields.extend(self.instance_types.values().map(|instance| (instance.type_index, instance.fields.iter().enumerate().map(|(i, (field, _))| (i as u32, field.as_str())).collect())));
-		fields.sort_by_key(|(type_idx, _)| *type_idx);
-		fields.dedup_by_key(|(type_idx, _)| *type_idx);
-		let mut type_field_names = IndirectNameMap::new();
-		for (type_idx, mut names) in fields {
-			type_field_names.append(type_idx, &name_map(&mut names));
-		}
-		self.names.fields(&type_field_names);
+		self.names.fields(&indirect_name_map(fields));
 
 		if let Some(tag_names) = self.error_tag_names() {
 			self.names.tags(&tag_names);
@@ -1672,6 +1684,17 @@ fn name_map(names: &mut Vec<(u32, &str)>) -> NameMap {
 	let mut map = NameMap::new();
 	for (idx, name) in names.iter() {
 		map.append(*idx, name);
+	}
+	map
+}
+
+/// Name maps of several functions or types, in index order, one map per index
+fn indirect_name_map(mut entries: Vec<(u32, Vec<(u32, &str)>)>) -> IndirectNameMap {
+	entries.sort_by_key(|(idx, _)| *idx);
+	entries.dedup_by_key(|(idx, _)| *idx);
+	let mut map = IndirectNameMap::new();
+	for (idx, mut names) in entries {
+		map.append(idx, &name_map(&mut names));
 	}
 	map
 }

@@ -314,7 +314,7 @@ static LOADED_LIBRARIES: OnceLock<std::sync::Mutex<HashMap<String, Arc<Library>>
 
 /// Get or load a dynamic library
 #[cfg(feature = "native")]
-fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
+pub(crate) fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
     let cache = LOADED_LIBRARIES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
     let mut guard = cache.lock().ok()?;
 

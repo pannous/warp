@@ -20,7 +20,7 @@ archive you write answers to; workers get decisions as your messages, not by rea
   e.g. synonym spellings, features to build, cases a rule covers (user 2026-10-06: "remember in multiple choice
   questions to also sometimes allow multiple selections"); single choice only for real either/or questions.
   Pure word choices (synonym spellings of the same meaning) are not asked: the recommended word is canonical, the
-  others become aliases with a note naming it (notes/open_decisions.md "Standing rules", word choices).
+  others become aliases with a note naming it (user 2026-10-06; normalize::advise, notes/fixits.md).
 - Recording: move each answer to the newest Decided section of notes/decisions.md with the date and the decision in clean words, then tell the asking session
   and the Supervisor whether the assumption stands or must be undone (and which worker should do it).
   The user dictates by speech recognition: fix misheard words, never paste raw answers (no "oof", no "metal data"

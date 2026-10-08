@@ -109,5 +109,6 @@ mod test_copies;
 mod test_any_field_text;
 mod test_same_identity;
 mod test_loop_item_into_annotated;
+mod test_declared_list_marks;
 mod test_chained_assignments;
 mod test_loop_text_arithmetic;

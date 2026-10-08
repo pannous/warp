@@ -113,10 +113,11 @@ impl WarpParser {
 		HASH_DIRECTIVES.contains(&word.as_str())
 	}
 
-	/// `//` right behind an operand (`7//2`, `x//=2`, `f(x)//2`) divides; after a space or `:` (URLs) it starts a comment
+	/// `//` after an operand with no space behind it (`7//2`, `x //= 2`, `f(x) //2`) divides; followed by a space or the end
+	/// of the line it starts a comment, as it does after no operand (`//note` on a line of its own, `://` in URLs)
 	pub(super) fn at_floor_division(&self) -> bool {
-		let previous = self.prev_char();
-		self.current_char() == '/' && self.peek_char(1) == '/' && self.pos > 0 && (is_identifier_char(previous) || matches!(previous, ')' | ']'))
+		let divisor_follows = self.chars.get(self.pos + 2).is_some_and(|next| !next.is_whitespace());
+		self.current_char() == '/' && self.peek_char(1) == '/' && divisor_follows && self.follows_operand_on_its_line()
 	}
 
 	/// `.+ .- .* ./` at the cursor: the element-wise form of the arithmetic operator
@@ -378,7 +379,7 @@ impl WarpParser {
 			if c1 == '/' && c2 == '/' && self.prev_char() != ':' && !self.at_floor_division() {
 				if self.follows_operand_on_its_line() && self.comment_reads_like_divisor() {
 					self.set_hint_pos();
-					crate::diagnostic::educate_once(SLASH_COMMENT_TOPIC, "a // b", "a//b", "`// …` after code is a comment; floor division is written glued: a//b");
+					crate::diagnostic::educate_once(SLASH_COMMENT_TOPIC, "a // b", "a//b", "`// …` after code is a comment; floor division has no space after //: a //b");
 				}
 				self.advance_by(2);
 				let text = self.consume_rest_of_line();

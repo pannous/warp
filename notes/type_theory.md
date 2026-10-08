@@ -26,7 +26,7 @@ modes      m ::= var | const | charged
 values     v ::= b | n | q | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
 expr       e ::= v | x                          main-level name (store)
                | y                              local (parameter or let), bound by substitution
-               | e + e | e - e | e * e | e < e | e == e     (`-` and `*` take numbers only; `+` also texts)
+               | e + e | e - e | e * e | e < e | e == e     (`-` takes numbers only; `+` also texts; `*` a text and a whole number)
                | if e then e else e | while e do e | e ; e
                | for y in e { e }               the body once per list item, y the item; gives ø
                | e # e                          1-based element, `xs#1`
@@ -66,15 +66,15 @@ visible covariant alias that writes is a compile error (the compile-time half, w
 
 **Shared lists in W0 (Semantics.lean `Store.lists`).** A stored list is a cell of the store, `lref a t`, made by
 `share e t` from a list value whose items fit t (else "type mismatch") and typed `list t`. `push l v` (`xs.add(v)`)
-appends v to the cell if v fits t, else it is a run-time error; list reads (`+`, `++`, `#`, `if`, `for`, broadcast)
+appends v to the cell if v fits t, else it is a run-time error, and `setAt l i v` (`xs#i = v`, `xs[i-1] = v`) replaces the i-th item the same way (an index outside the list is an error); list reads (`+`, `++`, `#`, `if`, `for`, broadcast)
 read the cell's items (`Store.items`). The store invariant `ListsOk` (each cell's items are a value whose type is
 below `list t`) is what each write keeps, and since `t ≤ τ` for every `list τ` alias, every read through it fits τ:
 covariance stays sound (preservation, progress and safety proved, no sorry). The exporter shares a list where a
 main-level list name takes it (`xs = [1]`, `xs: ints = …`, `xs = []`), tagged with the declared element type (`any`
 when undeclared: warp's undeclared lists take anything); `ys = xs` stores the same cell. Function locals' lists
-stay values (`xs = xs ++ [v]` in their cell). Not yet: `xs#i = v` and insert as writes, list identity for `===`
+stay values (`xs = xs ++ [v]` in their cell). Not yet: insert as a write, list identity for `===`
 beyond names. The compile-time half is not in W0 (its run-time check is what makes the model sound); the corpus
-lists `ys: numbers = xs; ys.add(2.5)` as a known value difference (W0: error, warp: adds it; card p215-user).
+lists `ys: numbers = xs; ys.add(2.5)` and `ys#1 = 2.5` as known value differences (W0: error, warp: adds it; card p215-user).
 
 Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a list literal's elements, of `try σ catch τ`.
 `int ⊔ text = any`, `list int ⊔ list text = list any`, `never ⊔ τ = τ`. Code: inference.rs `branches_kind`.
@@ -217,7 +217,12 @@ exported as `num 0`; instances). test_warp_computes_what_the_type_model_computes
 - bool-literal-value (P199): `f(b: bool) := b; f(1)` gives 1 (the parameter keeps the int), and the assignment
   expression `x: bool = 1` gives 1 while x holds yes.
 Found on the way: the exporter had mapped `-` and `*` to `+`, so W0 accepted `"a" - 1` and `f(n - 1)` recursed upward.
-W0 now has `arith op a b`, which takes numbers only.
+W0 now has `arith op a b`. It takes numbers only, except that `*` repeats a text a whole number of times in either order
+(P1: `"ab"*3` and `3*"ab"` are "ababab", a count of 0 or less gives ""). That is typed by `repeatTy`: a text side and a
+number side give text, and the checker admits text with an int or `any`. Its ops are `-`, `*`, `%`, `/` and `^`. Two ints give an int,
+except that `/` of a non-divisor and `^` with a negative exponent give a number. That is why `ArithOp.widen` types the
+left side of `/` and `^` as at least number. W0 rejects `x: int = 2^3` and `x: int = 6/2`. warp compiles them and checks
+for a whole number when they run. This is stricter than warp, never unsound, so such programs stay out of the corpus.
 
 ## Functions of several parameters, `def`, inferred parameters
 
