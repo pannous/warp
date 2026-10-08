@@ -15,8 +15,16 @@ fn a_call_before_the_definition_reads_the_variable() {
 	is!("k = 3; x = f(); def f(){ k + 1 }; x", 4);
 }
 
+/// A constant keeps its value and type as the global (uniscript's `const uniscript_version = "…"`)
+#[test]
+fn a_call_before_the_definition_reads_a_constant() {
+	is!("const w = \"v1\"; x = f(); def f(){ w + \"!\" }; x", "v1!");
+	is!("const k = 3; x = f(); def f(){ k + 1 }; x", 4);
+}
+
 /// Routes become functions placed before the program's statements, so a typed list a route reads is bound after them
 /// (card route-typed-list)
+#[cfg(feature = "native")]
 #[test]
 fn a_route_reads_a_typed_list_of_main() {
 	let program = "class User{name: text}; users: [User] = [User(\"a\")]; route \"/\" { p{ \"home\" } }; route \"/u\" { h1{ \"User \" + users#1.name } }";
