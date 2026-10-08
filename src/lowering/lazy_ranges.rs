@@ -4,7 +4,8 @@
 //! `filter` and the other iteration words already loop over a range's bounds (for_loop.rs, lambdas.rs). A range passed
 //! to a function that only reads its parameter so is passed as its bounds: `f(1..n)` calls `f·range·0(1, n)`, a copy of
 //! f whose parameter is the range of its two new parameters. Any other use (printing, returning, changing it) keeps the
-//! variable a list, collected once (declaration_lowering.rs).
+//! variable a list, collected once (declaration_lowering.rs). A function whose value is a range of its parameters
+//! (`f(n) := 1..n`) returns that range: a call with plain arguments is the range itself, read as above.
 
 use crate::analyzer::{call_name, extract_user_functions, TEMPORARY_SEPARATOR};
 use crate::context::Context;
@@ -38,6 +39,8 @@ pub fn lower(node: Node) -> Node {
 	extract_user_functions(&mut context, &node);
 	let own = |word: &str| context.user_functions.contains_key(word);
 	let mut lowering = Lowering { counts: !own(COUNT), sums: !own(SUM), temporaries: 0 };
+	let producers = range_producers(&node);
+	let node = inline_produced_ranges(node, &producers);
 	let readers = range_readers(&node);
 	let node = replace_range_variables(node, &readers);
 	lowering.rewrite(pass_ranges_as_bounds(node, &readers))
@@ -411,4 +414,64 @@ fn bounds_copies(statement: &Node, readers: &RangeReaders, copies: &mut Copies) 
 		}
 		make(Node::List(new_parameters, Bracket::Round, Separator::None), call_bounds_copies(new_body, readers, copies))
 	}).collect()
+}
+
+/// Per function defined once whose value is a range of its parameters (`f(n) := 1..n`, `upto(a, b) := { a to b }`): its
+/// parameters and that range
+type RangeProducers = HashMap<String, Produced>;
+/// A producer's parameters and the range its body is
+type Produced = (Vec<String>, Node);
+
+fn range_producers(program: &Node) -> RangeProducers {
+	let mut definitions: HashMap<String, Vec<Option<Produced>>> = HashMap::new();
+	program.visit(&mut |part| {
+		let Some((head, body, _)) = definition_parts(part) else { return };
+		let Some((name, parameters)) = signature(&head) else { return };
+		let parameters: Option<Vec<String>> = parameters.iter().map(|parameter| match parameter.drop_meta() {
+			Node::Symbol(parameter) => Some(parameter.clone()),
+			_ => None,
+		}).collect();
+		let produced = parameters.and_then(|parameters| {
+			let range = produced_range(&body)?;
+			symbols(&range).iter().all(|symbol| parameters.contains(symbol)).then_some((parameters, range))
+		});
+		definitions.entry(name).or_default().push(produced);
+	});
+	definitions.into_iter().filter_map(|(name, mut found)| (found.len() == 1).then(|| found.remove(0)).flatten().map(|produced| (name, produced))).collect()
+}
+
+/// The range a body is: `1..n`, `(1..n)`, `{ 1..n }`, with plain bounds
+fn produced_range(body: &Node) -> Option<Node> {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) if items.len() == 1 => produced_range(&items[0]),
+		other => range_of(other).map(|range| range.whole),
+	}
+}
+
+/// Each call of a range producer with plain arguments (`count f(10^12)`, `r = f(n)`) is its range, the parameters
+/// replaced by the arguments; definition heads stay
+fn inline_produced_ranges(node: Node, producers: &RangeProducers) -> Node {
+	if producers.is_empty() {
+		return node;
+	}
+	if let Some((head, body, make)) = definition_parts(&node) {
+		return make(head, inline_produced_ranges(body, producers));
+	}
+	let node = node.map_children(|child| inline_produced_ranges(child, producers));
+	let Node::List(items, bracket, separator) = node.drop_meta() else { return node };
+	let Some((parameters, range)) = call_name(items, bracket, separator).and_then(|name| producers.get(name)) else { return node };
+	// `f(g())` is `(f (g))`: one argument, the call, not the arguments of f
+	let called = |argument: &Node| matches!(argument.drop_meta(), Node::List(inner, bracket, separator) if call_name(inner, bracket, separator).is_some());
+	let arguments = if items.len() == 2 && called(&items[1]) { vec![&items[1]] } else { call_arguments(&items[1..]) };
+	// an argument is evaluated where the range reads its parameter, maybe twice: numbers and variables only, no call
+	let calls_nothing = |argument: &Node| {
+		let mut calls = false;
+		argument.visit(&mut |part| calls |= called(part));
+		!calls
+	};
+	if arguments.len() != parameters.len() || !arguments.iter().all(|argument| plain_bound(argument) && calls_nothing(argument)) {
+		return node;
+	}
+	let bindings: HashMap<String, Node> = parameters.iter().cloned().zip(arguments.into_iter().map(|argument| argument.drop_meta().clone())).collect();
+	Node::List(vec![crate::law::substitute(range, &bindings)], Bracket::Round, Separator::None)
 }
