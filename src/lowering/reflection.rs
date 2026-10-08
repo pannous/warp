@@ -115,7 +115,9 @@ pub fn meta_entries(source: &Node, lowered: &Node) -> Vec<(&'static str, Node)> 
 	let mut layouts: Vec<(String, ClassLayout)> = crate::class_methods::class_layouts(source).into_iter().collect();
 	layouts.sort_by(|(one, _), (other, _)| one.cmp(other));
 	let is_method = |name: &String| layouts.iter().any(|(_, layout)| layout.methods.contains(name));
-	let functions: Vec<(String, Node)> = user_functions(lowered).values().filter(|function| !is_method(&function.name)).map(|function| {
+	// the program's own functions, not the library's its lowering brought in (html_render, prelude·replace)
+	let own = user_functions(source);
+	let functions: Vec<(String, Node)> = user_functions(lowered).values().filter(|function| own.contains_key(&function.name) && !is_method(&function.name)).map(|function| {
 		let params = function.params.iter().map(|param| param.name.clone()).collect::<Vec<_>>();
 		(function.name.clone(), meta_map(vec![(PARAMS_WORDS[0], text_list(&params)), (SIGNATURE_WORD, Node::Text(signature(function)))]))
 	}).collect();
