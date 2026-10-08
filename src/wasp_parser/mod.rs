@@ -371,7 +371,9 @@ const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
 const FINALLY_KEYWORD: &str = "finally";
 /// The hidden name `try X finally Z` binds X's Error to, to hand it on as the value
 const UNCAUGHT_ERROR: &str = "uncaught·error";
-const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
+/// `check C` is `assert C` (user, card check-assert)
+const GUARD_MARKERS: [(&str, &str); 3] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER), ("check", ASSERT_MARKER)];
+pub const ASSERTION_FAILED: &str = "assertion failed";
 /// `nand` and its glyph pair, both `not (a and b)`
 /// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
 fn item_named(node: Node, name: &str, item: &Node) -> Node {

@@ -18,6 +18,8 @@ pub(crate) const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
 /// `include x`: the whole file, spliced in place
 const INCLUDE_KEYWORD: &str = "include";
 const USE_KEYWORD: &str = "use";
+/// `from list import zip, unique`: only those words of the module
+const IMPORT_KEYWORD: &str = "import";
 /// name: "git url" for every package, compiled in so warp finds it from any directory
 const PACKAGE_REGISTRY: &str = include_str!("../packages.wasp");
 /// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
@@ -193,7 +195,12 @@ fn program_variables(program: &Node) -> HashSet<String> {
 /// own code calls its own words (lexical scope), the program's `words` is its variable
 fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
 	let shadowed: Vec<String> = definitions.iter().filter_map(declared_name).filter(|name| variables.contains(name)).collect();
-	definitions.into_iter().map(|definition| shadowed.iter().fold(definition, |node, name| renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}")))).collect()
+	renamed_apart(definitions, &shadowed)
+}
+
+/// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
+fn renamed_apart(definitions: Vec<Node>, names: &[String]) -> Vec<Node> {
+	definitions.into_iter().map(|definition| names.iter().fold(definition, |node, name| renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}")))).collect()
 }
 
 /// `from` as a word renamed `to`; a field `x.from` keeps its name
@@ -375,8 +382,11 @@ impl<'a> Loader<'a> {
 	}
 
 	fn resolve(&mut self, node: Node) -> Result<Node, Node> {
-		if let Some(used) = used_module(&node) {
-			return Ok(match self.import(&used, &node)? {
+		if let Some((used, statement, words)) = imported_words(&node) {
+			return Ok(Node::List(self.import_words(&used, &statement, &words)?, Bracket::None, Separator::Semicolon));
+		}
+		if let Some(uses) = used_modules(&node) {
+			return Ok(match self.import_all(uses)? {
 				imported if imported.is_empty() => Node::Empty,
 				imported => Node::List(imported, Bracket::None, Separator::Semicolon),
 			});
@@ -385,9 +395,10 @@ impl<'a> Loader<'a> {
 			Node::List(items, bracket, separator) => {
 				let mut resolved = Vec::with_capacity(items.len());
 				for item in items {
-					match used_module(&item) {
-						Some(used) => resolved.extend(self.import(&used, &item)?),
-						None => resolved.push(self.resolve(item)?),
+					match (imported_words(&item), used_modules(&item)) {
+						(Some((used, statement, words)), _) => resolved.extend(self.import_words(&used, &statement, &words)?),
+						(None, Some(uses)) => resolved.extend(self.import_all(uses)?),
+						(None, None) => resolved.push(self.resolve(item)?),
 					}
 				}
 				Ok(Node::List(resolved, bracket, separator))
@@ -395,6 +406,33 @@ impl<'a> Loader<'a> {
 			Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(self.resolve(*node)?), data }),
 			other => Ok(other),
 		}
+	}
+
+	/// The statements of each module a `use` names
+	fn import_all(&mut self, uses: Vec<(Used, Node)>) -> Result<Vec<Node>, Node> {
+		let mut imported = vec![];
+		for (used, statement) in uses {
+			imported.extend(self.import(&used, &statement)?);
+		}
+		Ok(imported)
+	}
+
+	/// A module's statements with only `words` visible to the program: its other words are renamed apart.
+	/// A module loaded already brings nothing new
+	fn import_words(&mut self, used: &Used, statement: &Node, words: &[String]) -> Result<Vec<Node>, Node> {
+		let first_std_definition = self.std_definitions.len();
+		let imported = self.import(used, statement)?;
+		let std_definitions = self.std_definitions.split_off(first_std_definition);
+		let module_words: HashSet<String> = imported.iter().chain(&std_definitions).filter_map(declared_name).collect();
+		if module_words.is_empty() {
+			return Ok(imported);
+		}
+		if let Some(missing) = words.iter().find(|word| !module_words.contains(*word)) {
+			return Err(error(&format!("{} has no {missing}", used.name)));
+		}
+		let hidden: Vec<String> = module_words.into_iter().filter(|word| !words.contains(word)).collect();
+		self.std_definitions.extend(renamed_apart(std_definitions, &hidden));
+		Ok(renamed_apart(imported, &hidden))
 	}
 
 	/// The statements a `use` stands for: the module's definitions, nothing for a module already loaded,
@@ -614,7 +652,7 @@ impl<'a> Loader<'a> {
 
 	/// The modules a sibling file uses, resolved from its folder
 	fn uses_of(&mut self, sibling: &mut Sibling) -> Result<Vec<Node>, Node> {
-		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_module(statement).is_some()).cloned().collect();
+		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_modules(statement).is_some()).cloned().collect();
 		let outer_directory = self.including_directory.replace(folder_of(&sibling.path));
 		let resolved = uses.into_iter().map(|statement| self.resolve(statement)).collect::<Result<Vec<Node>, Node>>();
 		self.including_directory = outer_directory;
@@ -992,6 +1030,52 @@ struct Used {
 	import: Import,
 	name: String,
 	requirement: Option<Requirement>,
+}
+
+/// The words of a statement, commas flattened: the parser groups `use list` before the comma of `use list, text`
+fn statement_words(node: &Node) -> Option<Vec<&Node>> {
+	match node.drop_meta() {
+		Node::List(items, _, Separator::Colon) => match items.split_first()?.0.drop_meta() {
+			Node::List(head, _, _) => Some(head.iter().chain(&items[1..]).collect()),
+			_ => None,
+		},
+		Node::List(items, _, _) => Some(items.iter().collect()),
+		_ => None,
+	}
+}
+
+/// The modules a `use` statement names, each with the statement that uses it alone: `use list, text` and
+/// `use list text` (card std-use) use each; `use js Math` is a foreign module (lowering/foreign_modules.rs), not two
+fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
+	if let Some(used) = used_module(node) {
+		return Some(vec![(used, node.clone())]);
+	}
+	let words = statement_words(node)?;
+	let [keyword, names @ ..] = words.as_slice() else { return None };
+	let plain_name = |name: &&Node| matches!(name.drop_meta(), Node::Symbol(word) if !crate::foreign_modules::FOREIGN_RUNTIMES.contains(&word.as_str()) && ![MINIMUM_KEYWORD, "as", "from"].contains(&word.as_str()) && !is_version_keyword(name));
+	if names.len() < 2 || !names.iter().all(plain_name) {
+		return None;
+	}
+	names.iter().map(|name| {
+		let statement = Node::List(vec![(*keyword).clone(), (*name).clone()], Bracket::None, Separator::Space);
+		used_module(&statement).map(|used| (used, statement))
+	}).collect()
+}
+
+/// `from list import zip, unique`: the module, the statement that uses it, and the only words it brings (card std-import)
+fn imported_words(node: &Node) -> Option<(Used, Node, Vec<String>)> {
+	let words = statement_words(node)?;
+	let [from, module, import, names @ ..] = words.as_slice() else { return None };
+	let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
+	if !is_word(from, MINIMUM_KEYWORD) || !is_word(import, IMPORT_KEYWORD) || names.is_empty() {
+		return None;
+	}
+	let names = names.iter().map(|name| match name.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		_ => None,
+	}).collect::<Option<Vec<String>>>()?;
+	let statement = Node::List(vec![Node::Symbol(USE_KEYWORD.into()), (*module).clone()], Bracket::None, Separator::Space);
+	used_module(&statement).map(|used| (used, statement, names))
 }
 
 /// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.wasp`.

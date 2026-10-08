@@ -115,6 +115,25 @@ def addValues (a b : Expr) : Expr :=
 def ltValues (a b : Expr) : Expr :=
   if isNumber a && isNumber b then .bool (decide (asNumber a < asNumber b)) else .error "not comparable"
 
+def EQ_FUEL : Nat := 64
+
+/-- `==` is loose (P208): instances of one class whose fields are equal are equal, lists item by item; `same` is
+identity. Fuel bounds the walk through cyclic instances -/
+def looseEq (P : Program) (μ : Store) : Nat → Expr → Expr → Bool
+  | fuel + 1, .ref a p, .ref b q =>
+    a == b || (p == q && match μ.obj a p, μ.obj b q with
+      | some o, some r => (P.fieldNames p).all fun f => match o.fields f, r.fields f with
+        | some x, some y => looseEq P μ fuel x y
+        | none, none => true
+        | _, _ => false
+      | _, _ => false)
+  | fuel + 1, .cons h t, .cons h' t' => looseEq P μ fuel h h' && looseEq P μ fuel t t'
+  | _, a, b => decide (a = b)
+
+/-- `same` compares by identity (an instance is its address), `==` loosely -/
+def eqValues (P : Program) (μ : Store) (same : Bool) (a b : Expr) : Bool :=
+  if same then decide (a = b) else looseEq P μ EQ_FUEL a b
+
 /-- false, 0, "", ø and [] are falsy -/
 def truthy : Expr → Bool
   | .bool b => b
@@ -170,7 +189,7 @@ inductive Frame where
   | addL (b : Expr) | addR (a : Expr)
   | arithL (op : ArithOp) (b : Expr) | arithR (op : ArithOp) (a : Expr)
   | ltL (b : Expr) | ltR (a : Expr)
-  | eqL (b : Expr) | eqR (a : Expr)
+  | eqL (s : Bool) (b : Expr) | eqR (s : Bool) (a : Expr)
   | ite (a b : Expr)
   | seq (b : Expr)
   | indexL (i : Expr) | indexR (l : Expr)
@@ -197,8 +216,8 @@ def plug : Frame → Expr → Expr
   | arithR op a, e => .arith op a e
   | ltL b, e => .lt e b
   | ltR a, e => .lt a e
-  | eqL b, e => .eq e b
-  | eqR a, e => .eq a e
+  | eqL s b, e => .eq s e b
+  | eqR s a, e => .eq s a e
   | ite a b, e => .ite e a b
   | seq b, e => .seq e b
   | indexL i, e => .index e i
@@ -220,7 +239,7 @@ def plug : Frame → Expr → Expr
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
-  | consR h | addR h | arithR _ h | ltR h | eqR h | indexR h | appendR h | setR h _ => h.isValue
+  | consR h | addR h | arithR _ h | ltR h | eqR _ h | indexR h | appendR h | setR h _ => h.isValue
   | _ => true
 
 end Frame
@@ -237,7 +256,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | add {a b μ} : a.isValue = true → b.isValue = true → Step P (.add a b, μ) (addValues a b, μ)
   | arith {op a b μ} : a.isValue = true → b.isValue = true → Step P (.arith op a b, μ) (arithValues op a b, μ)
   | lt {a b μ} : a.isValue = true → b.isValue = true → Step P (.lt a b, μ) (ltValues a b, μ)
-  | eq {a b μ} : a.isValue = true → b.isValue = true → Step P (.eq a b, μ) (.bool (decide (a = b)), μ)
+  | eq {s a b μ} : a.isValue = true → b.isValue = true → Step P (.eq s a b, μ) (.bool (eqValues P μ s a b), μ)
   | ite {v a b μ} : v.isValue = true → Step P (.ite v a b, μ) (if truthy v then a else b, μ)
   | loop {c b μ} : Step P (.loop c b, μ) (.ite c (.seq b (.loop c b)) .unit, μ)
   | seq {v b μ} : v.isValue = true → Step P (.seq v b, μ) (b, μ)

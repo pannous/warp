@@ -126,7 +126,8 @@ function groupExamplesByChapter() {
 	const chosen = $("examples").value;
 	const others = [...Object.keys(EXAMPLES), ...Object.keys(SAMPLES).sort()].filter(name => !chapterOfExample.has(name));
 	const chapters = [...examplesOfChapter].map(([chapter, names]) => group(chapter, names.filter(name => exampleSource(name) !== undefined)));
-	$("examples").replaceChildren(...chapters, group(MORE_SAMPLES, others));
+	// a sample no chapter links yet: guide.md should give it a chapter, Advanced at the latest
+	$("examples").replaceChildren(...chapters, ...(others.length ? [group(MORE_SAMPLES, others)] : []));
 	$("examples").value = chosen;
 }
 

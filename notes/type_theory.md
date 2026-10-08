@@ -233,8 +233,28 @@ W0 now has `arith op a b`, which takes numbers only.
   name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
   anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
   The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
-  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). Most of the rest:
+  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121. Most of the rest:
   imports (`use`), `for` loops, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
+
+## Globals
+
+`global n = 0` binds a main-level name functions may assign (`Decl.isGlobal`; `ProgramOk` demands a function body
+assigns only globals); `global y` inside a function, or bare at main level before `y = …`, only declares. The
+exporter collects every name declared `global` anywhere first. In warp a function's assignment to a name without
+`global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0); W0 has no function locals, so the exporter
+refuses it. Elaboration runs twice so a function can read a main-level name whatever their order
+(`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet: `global float y = …`
+(the exporter does not read the type word yet), `global x; x` (read before any value).
+
+## Equality (P208)
+
+`Expr.eq same a b`: `a == b` (same = false) is loose: two instances of one class are equal when their fields are
+(`looseEq`, walking the heap with fuel for cycles; `Program.fieldNames` enumerates a class chain's fields for it),
+lists item by item, anything else by value. `a === b` / `a same b` (same = true) is identity on instances (an
+instance is its address); on other values it compares by value, so `0 === false` is no. Not modelled: list identity
+(W0's lists are values, `[1] === [1]` is yes in W0, no in warp under P208) and `1 === 1.0` (W0 keeps no float
+values). The exporter maps `!=` and `!==` to the negation; `same`/`identical` spellings once warp parses them
+(card same-identity, which also covers warp still answering yes for `p === q` of distinct instances).
 
 ## Inline unions and optionals
 
