@@ -1,5 +1,5 @@
 // One source for a server and its page: `warp serve samples/server.warp` (or `warp samples/server.warp`), then open
-// http://localhost:8080/ (notes/server_routes.md). The playground runs it as one page, the table in its memory
+// http://localhost:8080/ (notes/server_routes.md). The playground runs it as one page, the table in IndexedDB
 class User{name: text}
 stored users: [User]                       // the table users, kept on the server in server.database.sqlite
 

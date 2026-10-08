@@ -2,7 +2,8 @@
 //! table people for the class Person. The list starts as the table's rows (`std_io("table", "open", …)` creates the
 //! table or migrates it to the class's fields), `people.add(p)` inserts p and gives it its row's id, and a field change
 //! `p.age += 1` of an instance with a row is written through (`std_io("table", "update", …)`). Natively the tables live
-//! in `<program>.database.sqlite` (in memory for code without a file, database.rs); the browser has no tables yet.
+//! in `<program>.database.sqlite` (in memory for code without a file, database.rs); the browser keeps them in IndexedDB
+//! (web/playground/host-files.js), where a filter stays the list comprehension over the rows.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -148,6 +149,9 @@ pub fn registered(program: &Node) -> Tables {
 /// binding of the ids it keeps, and the condition keeping the list's instances of those ids, so a filtered row is the
 /// same instance. What SQL can say stays SQL; any other part is a function of the program the query calls per row.
 pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, tables: &mut Tables) -> Option<Result<(Node, Node), Node>> {
+	if cfg!(not(feature = "native")) {
+		return None; // the browser's tables have no SQL: their rows are the list already
+	}
 	let table = tables.tables.get(&subject.drop_meta().name())?;
 	let first_function = tables.functions.len();
 	let mut query = Query { table, variables, parameters: vec![], functions: vec![], first_function };
@@ -427,6 +431,9 @@ fn has_id(body: &Node) -> bool {
 /// The registrations, inserts and field changes of the tables as their table calls, in every block; `open` the tables
 /// registered so far, as a foreign key reads the rows of its table
 fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Node {
+	if let Some(saved) = saved(&node, tables, file) {
+		return saved;
+	}
 	match node {
 		Node::List(statements, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			let statements = statements.into_iter().flat_map(|statement| table_statements(statement, tables, file, open)).collect();
@@ -437,15 +444,15 @@ fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &m
 }
 
 fn table_statements(statement: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Vec<Node> {
-	if let Some(lowered) = opened(&statement, tables, file, open).or_else(|| inserted(&statement, tables, file)).or_else(|| saved(&statement, tables, file)) {
+	if let Some(lowered) = opened(&statement, tables, file, open).or_else(|| inserted(&statement, tables, file)) {
 		return lowered;
 	}
 	let updates = written_through(&statement, tables, file);
 	[vec![with_tables(statement, tables, file, open)], updates].concat()
 }
 
-/// `people: [Person] = database.people` as the list of the table's rows, each an instance with its id, then the
-/// one-to-many lists of the open tables its rows point back to; a plain `people = database.people` of a registered
+/// `people: [Person] = database.people` as the list of the table's rows, each an instance with its id; then the
+/// one-to-many lists of the open tables its rows point back to. A plain `people = database.people` of a registered
 /// people opens it again (a served route reading it at each request)
 fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Option<Vec<Node>> {
 	let Node::Key(target, Op::Assign, source) = statement.drop_meta() else { return None };
@@ -453,7 +460,8 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 		Node::Key(variable, Op::Colon, _) => variable.drop_meta(),
 		variable @ Node::Symbol(_) => variable,
 		_ => return None,
-	}.name();
+	};
+	let variable = variable.name();
 	let table = tables.get(&variable)?;
 	database_table(source)?;
 	if let Some((field, unopened)) = table.references.iter().find(|(_, referenced)| !open.contains(referenced)) {
@@ -567,9 +575,10 @@ fn column_update(table: &Table, instance: &str, column: &str, file: &str) -> Str
 		name = table.name, value = column_value(table, instance, column))
 }
 
-/// `save p`: every column of p's row written, the value p; an instance of a table's class without a row is an error
-fn saved(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Vec<Node>> {
-	let Node::List(parts, _, Separator::Space) = statement.drop_meta() else { return None };
+/// `save p`, anywhere (`print(save p)` of a standalone build too): every column of p's row written, the value p; an
+/// instance of a table's class without a row is an error
+fn saved(node: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Node> {
+	let Node::List(parts, _, Separator::Space) = node.drop_meta() else { return None };
 	let [word, value] = parts.as_slice() else { return None };
 	if word.drop_meta().name() != SAVE_WORD || tables.is_empty() {
 		return None;
@@ -580,5 +589,5 @@ fn saved(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Optio
 			class = table.class, name = variable, updates = updates.join("\n"))
 	});
 	let code = format!("{SAVED} = {VALUE_PLACEHOLDER}\n{writes}{SAVED}", writes = writes.collect::<String>());
-	Some(generated(&code, [(VALUE_PLACEHOLDER, value.clone())]).children())
+	Some(Node::List(generated(&code, [(VALUE_PLACEHOLDER, value.clone())]).children(), Bracket::Round, Separator::Semicolon))
 }
