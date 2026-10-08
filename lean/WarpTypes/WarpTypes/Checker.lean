@@ -87,7 +87,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     match typeOf P Γ e, typeOf P Γ h with
     | some te, some th => some (join te th)
     | _, _ => none
-  | .cast e t => (typeOf P Γ e).map fun _ => t
+  | .cast e ts => (typeOf P Γ e).bind fun te => if ts.any (consub te) then some (joinAll ts) else none
   | .broadcast f e =>
     match P.funs f, typeOf P Γ e with
     | some fn, some te =>
@@ -194,10 +194,12 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     intro Γ t h; simp only [typeOf] at h; split at h
     · rename_i he hh; cases h; exact .tryCatch (ih1 he) (ih2 hh)
     · cases h
-  | cast e t' ih =>
-    intro Γ t h; simp only [typeOf, Option.map_eq_some_iff] at h
-    obtain ⟨_, he, rfl⟩ := h
-    exact .cast (ih he)
+  | cast e ts ih =>
+    intro Γ t h; simp only [typeOf, Option.bind_eq_some_iff] at h
+    obtain ⟨_, he, hc⟩ := h
+    split at hc
+    · cases hc; exact .cast (ih he)
+    · cases hc
   | broadcast f e ih =>
     intro Γ t h
     cases hf : P.funs f <;> cases he : typeOf P Γ e <;> simp only [typeOf, hf, he] at h <;> try cases h
@@ -385,7 +387,7 @@ def resolveCalls (P : Program) (Γ : Ctx) : Expr → Expr
   | .init x e => .init x (resolveCalls P Γ e)
   | .letIn y t e b => .letIn y t (resolveCalls P Γ e) (resolveCalls P (Γ.set y t) b)
   | .tryCatch e h => .tryCatch (resolveCalls P Γ e) (resolveCalls P Γ h)
-  | .cast e t => .cast (resolveCalls P Γ e) t
+  | .cast e ts => .cast (resolveCalls P Γ e) ts
   | .get e f => .get (resolveCalls P Γ e) f
   | .set e f v => .set (resolveCalls P Γ e) f (resolveCalls P Γ v)
   | .isA e c => .isA (resolveCalls P Γ e) c

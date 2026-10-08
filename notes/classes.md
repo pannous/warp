@@ -134,6 +134,12 @@ replaces that where the static type is known, modelled on map_backend.rs (typed 
   refuses `x:int=5; x=2.5` (big_int.rs emit_fits_declared, struct_backend.rs emit_field_value); `/=` still keeps an int
   an int. Open: a Node instance `P(0.5)` (card int-field). P126 texts inside containers print quoted everywhere (print, interpolation, string()): `P{x:1 name:"a"}`,
   `["a" "b"]`; a top-level `print "a"` still writes a.
+Shared instances (P200, card instance-field, lowering/shared_instances.rs): a function changing a field of a parameter
+(`q.x = 7`, `q.items.add(v)`, or passing q on to a function or method that does, found by a fixpoint) gives
+`[value, q]` (each `return v` too), and a call stores it back into a variable argument:
+`(f·shared = f(p); p = f·shared#2; f·shared#1)`. Copy-in/copy-out over value instances, no heap: `q = Point(9)`
+stays local; aliases do not share (`q = p; q.x = 7` leaves p), nor does an argument that is no variable (`f(bags#1)`),
+nor a function used as a value (it keeps its plain result). Any parameter counts, a map given as one too.
 Next steps: struct elements in typed lists (`for p in points`), a struct result of a construction inside a function
 (`moved(dx) := point(x + dx, y)`).
 

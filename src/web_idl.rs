@@ -30,6 +30,7 @@ const SKIPPED_MEMBERS: [&str; 6] = ["const", "iterable", "maplike", "setlike", "
 /// Words before a member that do not change its name or arguments
 const QUALIFIERS: [&str; 7] = ["static", "stringifier", "getter", "setter", "deleter", "inherit", "readonly"];
 const VARIADIC: &str = "...";
+const CONSTRUCTOR: &str = "constructor";
 /// WebIDL's primitive types as warp's (the typedefs among them as their spec defines them: DOMHighResTimeStamp is a
 /// double, EpochTimeStamp an unsigned long long)
 const PRIMITIVE_TYPES: [(&[&str], &str); 4] = [
@@ -65,6 +66,8 @@ struct Definition {
 	members: BTreeMap<String, Member>,
 	includes: Vec<String>,
 	namespace: bool,
+	/// each constructor overload's arguments (`new URL(url, base)`); none: not constructible
+	constructors: Vec<Vec<Argument>>,
 }
 
 fn definitions() -> &'static HashMap<String, Definition> {
@@ -198,6 +201,25 @@ fn derived_interfaces(interface: &str) -> Vec<String> {
 	derived
 }
 
+/// `URL(text)` of `use js URL`, the constructor called (JavaScript's `new`): the interface the value is, None when
+/// WebIDL does not declare one of that name; Err for no constructor or an argument count none takes
+pub fn check_constructor(interface: &str, count: usize) -> Result<Option<String>, String> {
+	let Some(definition) = definitions().get(interface).filter(|definition| !definition.namespace) else { return Ok(None) };
+	if definition.constructors.is_empty() {
+		return Err(format!("{interface} has no constructor in WebIDL: its values come from the platform"));
+	}
+	if !definition.constructors.iter().any(|arguments| takes(arguments, count)) {
+		let forms: Vec<String> = definition.constructors.iter().map(|arguments| format!("{interface}({})", signature(arguments))).collect();
+		return Err(format!("{interface} takes {}, not {count} argument{}", forms.join(" or "), if count == 1 { "" } else { "s" }));
+	}
+	Ok(Some(interface.to_string()))
+}
+
+/// Does WebIDL declare a constructor of `interface` (`URL(text)` is a URL)
+pub fn constructible(interface: &str) -> bool {
+	definitions().get(interface).is_some_and(|definition| !definition.constructors.is_empty())
+}
+
 /// A global of a page that the program's scope lacks (a Worker's: localStorage), else unchecked
 fn page_only(global: &str) -> Result<(), String> {
 	let Some(interface) = interface_of_global(global, PAGE_SCOPE).filter(|_| PROGRAM_SCOPE != PAGE_SCOPE) else { return Ok(()) };
@@ -247,7 +269,10 @@ fn parse(text: &str) -> HashMap<String, Definition> {
 		definition.namespace |= header.split_whitespace().any(|word| word == "namespace");
 		definition.parent = parent.or(definition.parent.take());
 		for member in split_top_level(body, ';') {
-			add_member(&mut definition.members, &member);
+			match without_extended_attributes(&member).trim().strip_prefix(CONSTRUCTOR) {
+				Some(signature) if signature.trim_start().starts_with('(') => definition.constructors.push(arguments_of(signature)),
+				_ => add_member(&mut definition.members, &member),
+			}
 		}
 	}
 	parsed
@@ -266,8 +291,7 @@ fn add_member(members: &mut BTreeMap<String, Member>, source: &str) {
 	match source.find('(') {
 		Some(open) if !source[..open].contains("attribute ") => {
 			let Some((returns, name)) = typed_name(&source[..open]) else { return }; // a nameless getter
-			let close = source.rfind(')').unwrap_or(source.len());
-			let arguments = split_top_level(&source[open + 1..close], ',').iter().filter_map(|argument| parse_argument(argument)).collect();
+			let arguments = arguments_of(&source[open..]);
 			match members.entry(name).or_insert_with(|| Member::Operation(vec![])) {
 				Member::Operation(overloads) => overloads.push(Overload { returns, arguments }),
 				Member::Attribute(_) => {}
@@ -280,6 +304,13 @@ fn add_member(members: &mut BTreeMap<String, Member>, source: &str) {
 			}
 		}
 	}
+}
+
+/// The arguments of `(DOMString url, optional DOMString base)`
+fn arguments_of(signature: &str) -> Vec<Argument> {
+	let open = signature.find('(').map_or(0, |open| open + 1);
+	let close = signature.rfind(')').unwrap_or(signature.len());
+	split_top_level(&signature[open..close], ',').iter().filter_map(|argument| parse_argument(argument)).collect()
 }
 
 /// `optional DOMString label = "default"`, `any... data`

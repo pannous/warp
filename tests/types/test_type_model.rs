@@ -78,6 +78,20 @@ const CORPUS: &[&str] = &[
 	"f(x) := x - 1; f(3); f(\"a\")",
 	"x: any = 2; x * 3",
 	"x: any = 2; x < 3",
+	"x: int | text = 3; x",
+	"x: int | text = 3; x = \"ab\"; x",
+	"x: (int|text) = 3; x = \"ab\"; x",
+	"x: int or text = \"ab\"; x = 4; x + 1",
+	"x: float | text = 2; x",
+	"x: int | text = 3; x = 2.5",
+	"x: int | text = [1, 2]",
+	"x: int | float = 3; x = \"ab\"",
+	"x: int | text = 3; x * 2",
+	"f(x: int | text) := x; f(\"ab\")",
+	"f(x: int or text) := x; f(3)",
+	"f(x: int | text) := x; f(2.5)",
+	"x: int | ø = 3; x",
+	"x: int | ø = 3; x = \"a\"",
 	"class P { x }; p = P(1); p.x + 1",
 	"b = true; b = 1",
 	"class Point { x: int; y: int }; p = Point(1, 2); p.x",
@@ -111,7 +125,6 @@ const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	("x: bool = 0; x = 1", "bool-literal-value"),
 	("f(b: bool) := b; f(1)", "bool-literal-value"),
 	("b = true; b = 1", "bool-literal-value"),
-	("class Point { x: int }; f(q: Point) := q.x = 7; p = Point(1); f(p); p.x", "instance-field"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";

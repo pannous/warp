@@ -123,3 +123,15 @@ fn the_global_object_is_typed() {
 fn a_worker_has_no_window() {
 	fails_with("use js window; window.atob(\"aGk=\")", "self is the Worker's global");
 }
+
+// a constructor is called as a function (JavaScript's `new`): checked against WebIDL's constructors, the value typed
+#[test]
+fn a_constructor_is_a_plain_call() {
+	is!("use js URL; u = URL(\"https://a.b/c?d=1\"); u.pathname", "/c");
+	is!("use js URLSearchParams; p = URLSearchParams(\"a=1&b=2\"); p.get(\"b\")", "2");
+	is!("use js Blob; b = Blob([\"abc\"]); b.size", 3);
+	is!("use js Date; d = Date(0); d.getTime()", 0); // ECMAScript: constructed, unchecked
+	fails_with("use js URL; URL(\"https://a.b/c\").pathnam", "did you mean pathname");
+	fails_with("use js URL; URL()", "URL(USVString url, optional USVString base), not 0 arguments");
+	fails_with("use js Location; Location()", "Location has no constructor in WebIDL");
+}

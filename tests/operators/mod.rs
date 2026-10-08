@@ -12,6 +12,7 @@ mod test_operator_declarations;
 mod test_operator_precedence;
 mod test_superscript_operator_declarations;
 mod test_operator_parsing;
+mod test_increment_places;
 mod test_operators;
 mod test_structural_equality;
 mod test_truthiness_of_objects;
