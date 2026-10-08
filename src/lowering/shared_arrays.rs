@@ -103,7 +103,8 @@ pub fn lower(node: Node) -> Node {
 	if (declared.is_empty() && !reduces_on_gpu(&node)) || matches!(node, Node::Error(_)) {
 		return node;
 	}
-	if let Some(linear) = first_linear {
+	// dot and `.*` of linear arrays stay in linear memory, the compiler does not pick it for them yet (card compiler-picks-dot)
+	if let Some(linear) = first_linear.filter(|_| pairs == 0) {
 		crate::normalize::set_position_of(&linear);
 		crate::diagnostic::educate_once(LINEAR_TOPIC, "linear xs = int[n]", "xs = int[n]",
 			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
@@ -458,11 +459,11 @@ fn paired_with_linear(node: Node, names: &HashMap<String, Shared>, defines_dot: 
 fn paired_linear(node: &Node, names: &HashMap<String, Shared>, defines_dot: bool, pairs: &mut usize, template: &str) -> Option<Node> {
 	use crate::broadcasting::{element_wise_parts, named_by, paired_by};
 	let (receiver, op, operand) = element_wise_parts(node).filter(|(_, _, operand)| is_linear_list(operand, names))?;
+	*pairs += 1;
 	if template == crate::broadcasting::PAIRED_SUM_TEMPLATE && op == Op::Mul && is_linear_floats(&receiver, names) && is_linear_floats(&operand, names) {
 		return Some(linear_dot(receiver, operand));
 	}
 	let (receiver, operand) = (paired_with_linear(receiver, names, defines_dot, pairs), paired_with_linear(operand, names, defines_dot, pairs));
-	*pairs += 1;
 	Some(paired_by(receiver, op, operand, template, named_by(format!("linear_{pairs}"))))
 }
 
