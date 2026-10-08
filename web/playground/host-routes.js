@@ -1,6 +1,7 @@
 // The routes of a page (a part of host.js, which says how parts work): the path that picks its route (page_path),
 // going to another path (navigate) and, in a built site, its links and the back button (followSiteLinks), the module
-// of each route (loadRouteModule) and the focus after a route change (focusRoute)
+// of each route (loadRouteModule) and the focus after a route change (focusRoute). A site whose program runs in a
+// Worker loads it twice: the page for its links, back button and focus (without host.js), the Worker for the rest
 
 const ROOT_PATH = "/"; // the page path before any navigation (page_path)
 const PAGE_ROUTED_EXPORT = "page·routed"; // the value of the route the path picks
@@ -55,7 +56,7 @@ function loadRouteModule(holder) {
 	return loadedRoutes.get(name);
 }
 
-addHostPart({
+globalThis.addHostPart?.({
 	words: (holder, hooks, { program }) => ({
 		// the path of the page shown, which picks its route (src/lowering/routes.rs); navigate changes it
 		page_path: () => buildValue(program(), treeOfPlain(holder.pagePath ?? ROOT_PATH)),

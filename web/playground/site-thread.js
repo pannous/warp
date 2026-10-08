@@ -1,7 +1,8 @@
 // The page of a built site whose program runs in a Worker (card site-worker, src/site.rs): a module that starts tasks
 // runs off the page's thread in site-worker.js, so a blocking `await` may wait and its tasks run together on the task
 // Workers. The page keeps the DOM: site.js calls startSiteWorker instead of hydrate, which sends the Worker the module,
-// the kept values, the path and each element event, and morphs in the markup it answers. Shared memory needs cross-origin
+// the kept values, the path, each element event and each path a link or the back button goes to (host-routes.js
+// followSiteLinks, shipped with routes), and morphs in the markup it answers. Shared memory needs cross-origin
 // isolation, which a static host gives through coi-serviceworker.js (registered here, then the page reloads once).
 // Relative URLs resolve against the site's root (the page's <base>).
 
@@ -23,6 +24,7 @@ function startSiteWorker() {
 			const template = document.createElement("template");
 			template.innerHTML = data.html;
 			morphChildren(root, template.content);
+			if (data.navigated) focusRoute(root);
 		}
 		if (data.stored) keepValue(data.stored.name, data.stored.value, data.stored.file);
 		if (data.clipboard !== undefined) copyText(data.clipboard);
@@ -31,4 +33,5 @@ function startSiteWorker() {
 	};
 	worker.postMessage({ start: { module: new URL(SITE_MODULE, document.baseURI).href, stored: keptValues(), session: keptValues([SESSION_STORE]), path: location.pathname } });
 	listenToElements(found => found && worker.postMessage(found));
+	globalThis.followSiteLinks?.(path => worker.postMessage({ navigate: path }));
 }
