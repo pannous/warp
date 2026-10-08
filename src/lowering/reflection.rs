@@ -21,6 +21,8 @@ const VARIABLE_EVENTS: [&str; 2] = ["set", "change"];
 const CLASS_WORDS: [&str; 2] = ["class", crate::type_tests::TYPE_WORD];
 const FIELDS_WORDS: [&str; 3] = ["fields", "attributes", "members"];
 const METHODS_WORD: &str = "methods";
+/// A class's definition as written, in its warp.meta entry: a program importing the module declares the class too
+pub const DEFINITION_WORD: &str = "definition";
 const DIR_WORD: &str = "dir";
 const KEYS_WORD: &str = "keys";
 const EXPORTS_WORD: &str = "exports";
@@ -110,8 +112,9 @@ fn as_reflection_words(node: Node, functions: &Functions, listened: &HashSet<Str
 
 /// The warp.meta entries of a program (card reflection-foreign-meta, meta_section.rs): `functions` {f: {params: ["a"]
 /// signature: "(a:int) -> int"}}, read off the lowered program (every definition form is one by then, the kinds are
-/// inferred), and `classes` {P: {fields: ["x"] methods: ["sum"]}} off the source; absent when the program defines none
-pub fn meta_entries(source: &Node, lowered: &Node) -> Vec<(&'static str, Node)> {
+/// inferred), and `classes` {P: {fields: ["x"] methods: ["sum"] definition: "class P{…}"}} off the source; absent when the
+/// program defines none
+pub fn meta_entries(source: &Node, lowered: &Node, code: &str) -> Vec<(&'static str, Node)> {
 	let mut layouts: Vec<(String, ClassLayout)> = crate::class_methods::class_layouts(source).into_iter().collect();
 	layouts.sort_by(|(one, _), (other, _)| one.cmp(other));
 	let is_method = |name: &String| layouts.iter().any(|(_, layout)| layout.methods.contains(name));
@@ -121,11 +124,42 @@ pub fn meta_entries(source: &Node, lowered: &Node) -> Vec<(&'static str, Node)> 
 		let params = function.params.iter().map(|param| param.name.clone()).collect::<Vec<_>>();
 		(function.name.clone(), meta_map(vec![(PARAMS_WORDS[0], text_list(&params)), (SIGNATURE_WORD, Node::Text(signature(function)))]))
 	}).collect();
-	let classes: Vec<(String, Node)> = layouts.iter().map(|(class, layout)| (class.clone(), meta_map(vec![(FIELDS_WORDS[0], text_list(&layout.fields)), (METHODS_WORD, text_list(&layout.methods))]))).collect();
+	let classes: Vec<(String, Node)> = layouts.iter().map(|(class, layout)| (class.clone(), meta_map(vec![(FIELDS_WORDS[0], text_list(&layout.fields)), (METHODS_WORD, text_list(&layout.methods)),
+		(DEFINITION_WORD, class_definition(code, class).unwrap_or(Node::Empty))]))).collect();
 	[(META_FUNCTIONS, functions), (META_CLASSES, classes)].into_iter()
 		.filter(|(_, entries)| !entries.is_empty())
 		.map(|(entry, entries)| (entry, meta_map(entries.iter().map(|(name, value)| (name.as_str(), value.clone())).collect())))
 		.collect()
+}
+
+/// A class's definition as written in the code: from its keyword (`class P`, `struct P`) to its balanced closing brace
+/// (a parsed class does not serialize back to its source)
+fn class_definition(code: &str, class: &str) -> Option<Node> {
+	let keywords = crate::warp_parser::TYPE_DECLARATION_WORDS.iter().chain(CLASS_WORDS.iter());
+	let starts = keywords.flat_map(|keyword| code.match_indices(&format!("{keyword} {class}")).map(|(at, written)| (at, written.len())).collect::<Vec<_>>());
+	let (start, _) = starts.filter(|(at, length)| !code[at + length..].starts_with(|next: char| next.is_alphanumeric() || next == '_')).min()?;
+	balanced_end(&code[start..]).map(|end| Node::Text(code[start..start + end].to_string()))
+}
+
+/// The length of the text up to the brace closing its first `{`, quoted text skipped
+fn balanced_end(text: &str) -> Option<usize> {
+	let (mut depth, mut quoted, mut escaped) = (0, false, false);
+	for (index, character) in text.char_indices() {
+		match character {
+			_ if escaped => escaped = false,
+			'\\' if quoted => escaped = true,
+			'"' => quoted = !quoted,
+			'{' if !quoted => depth += 1,
+			'}' if !quoted => {
+				depth -= 1;
+				if depth == 0 {
+					return Some(index + 1);
+				}
+			}
+			_ => {}
+		}
+	}
+	None
 }
 
 fn user_functions(program: &Node) -> Functions {

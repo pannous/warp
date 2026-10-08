@@ -15,9 +15,6 @@ const SETTER_PREFIX: &str = "set ";
 /// The exports `include m` runs, the first one m has (P139)
 const ENTRY_POINTS: [&str; 2] = ["main", "_start"];
 
-/// The warp.meta entry naming the functions of a module warp compiled (meta_section.rs)
-const WARP_FUNCTIONS: &str = "functions";
-
 /// The custom section describing the program's C calls for a host that cannot see an import's types
 /// (web/playground/host.js, which calls libc.wasm for `c` and imported modules): a line `module\tname\tparameters\tresult`
 /// per import. Parameter letters: `t` a text (a NUL-terminated copy in the program's memory), `l` the length of the text
@@ -200,7 +197,7 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 		let import_name: &'static str = Box::leak(name.clone().into_boxed_str());
 		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role, parameters, c_parameters: vec![], c_result: CResult::Number, node_result });
 	};
-	let warp_functions = crate::meta_section::entry(bytes, WARP_FUNCTIONS).unwrap_or(Node::Empty);
+	let warp_functions = crate::meta_section::entry(bytes, crate::reflection::META_FUNCTIONS).unwrap_or(Node::Empty);
 	for (name, kind, index) in exported {
 		match kind {
 			ExternalKind::Func => {
@@ -376,6 +373,30 @@ fn number_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encoder::ValTy
 		wasmparser::ValType::F64 => Some(wasm_encoder::ValType::F64),
 		_ => None,
 	}).collect()
+}
+
+/// The classes of a module warp compiled, as their definitions (its warp.meta `classes`): the program importing it
+/// declares them too, so `P(1, 2)` and its methods are the program's own, and an instance crosses as a value
+pub fn classes(path: &str) -> Vec<Node> {
+	let Some(Node::List(classes, _, _)) = module_bytes(path).ok().and_then(|bytes| crate::meta_section::entry(&bytes, crate::reflection::META_CLASSES)) else { return vec![] };
+	classes.iter().filter_map(|class| match class[crate::reflection::DEFINITION_WORD].drop_meta() {
+		Node::Text(definition) => Some(crate::normalize::without_hints(|| crate::warp_parser::parse(definition)).drop_meta().clone()),
+		_ => None,
+	}).collect()
+}
+
+/// `shapes.P(1, 2)` of a class of the module with that alias (classes): the program's class `P(1, 2)`
+pub fn with_bare_classes(node: Node, alias: &str, classes: &[String]) -> Node {
+	if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
+		let constructed = match member.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.first().map(|word| word.drop_meta().name()),
+			_ => None,
+		};
+		if receiver.drop_meta().name() == alias && constructed.is_some_and(|class| classes.contains(&class)) {
+			return with_bare_classes(member.drop_meta().clone(), alias, classes);
+		}
+	}
+	node.map_children(|child| with_bare_classes(child, alias, classes))
 }
 
 /// The name a module's exports are qualified with: its file stem (`fourty_two.twice(21)`)
