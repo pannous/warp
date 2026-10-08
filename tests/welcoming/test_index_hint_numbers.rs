@@ -1,11 +1,11 @@
 // Card g_YiSA (user): the hint toward `xs#2` over `xs[1]` only for a number, where it is as short; `hidden_bias[j]`
 // would become the longer `hidden_bias#(j+1)`, so a name gets no hint
 use warp::normalize::{capture_hints, set_hint_mode, HintMode};
-use warp::wasp_parser::WaspParser;
+use warp::warp_parser::WarpParser;
 
 fn index_hints(code: &str) -> Vec<String> {
 	set_hint_mode(HintMode::Always);
-	let (_, hints) = capture_hints(|| WaspParser::parse(code));
+	let (_, hints) = capture_hints(|| WarpParser::parse(code));
 	hints.into_iter().filter(|hint| hint.reason.contains("indexing")).map(|hint| hint.original).collect()
 }
 

@@ -86,7 +86,7 @@ fn a_range_broadcasts_like_a_list() {
 	crate::is!("sq(x) := x*x; sq all 1 to 5", warp::ints(vec![1, 4, 9, 16, 25]));
 }
 
-// card broadcast-examples (P142): samples/functions.wasp chains and pipes a broadcast instead of a map
+// card broadcast-examples (P142): samples/functions.warp chains and pipes a broadcast instead of a map
 #[test]
 fn broadcasting_composes_with_chaining_and_pipelines() {
 	assert_eq!(eval("square(x) := x*x; numbers = [1, 2, 3, 4, 5]; (square all numbers).filter(x => x > 5).sum()").serialize(), "50");
