@@ -584,8 +584,9 @@ fn with_objects_as_instances(node: Node, fields: &std::collections::HashMap<Stri
 			let class = class.drop_meta().name();
 			instance_from(with_objects_as_instances(*object, fields), &class, fields)
 		}
-		// `s as Circle` of an instance: the checked downcast (P201)
-		Node::Key(object, Op::As, class) if class_of(&class).is_some() => checked_cast(with_objects_as_instances(*object, fields), &class.drop_meta().name()),
+		// `s as Circle` of a variable or field: the checked downcast (P201); `render(t) as docx` of a call picks an
+		// overload (overloads.rs)
+		Node::Key(object, Op::As, class) if class_of(&class).is_some() && is_place(&object) => checked_cast(with_objects_as_instances(*object, fields), &class.drop_meta().name()),
 		Node::Key(class, Op::Dot, member) if class_of(&class).is_some() && leading_name(&member) == FROM_JSON_WORD => {
 			let arguments = match member.drop_meta() {
 				Node::List(items, Bracket::Round, _) => items[1..].iter().cloned().map(|argument| with_objects_as_instances(argument, fields)).collect(),
@@ -596,6 +597,16 @@ fn with_objects_as_instances(node: Node, fields: &std::collections::HashMap<Stri
 			instance_from(parsed, &class, fields)
 		}
 		other => other.map_children(|child| with_objects_as_instances(child, fields)),
+	}
+}
+
+/// `s`, `box.shape`, `shapes#1`
+fn is_place(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(_) => true,
+		Node::Key(holder, Op::Dot | Op::Hash, _) => is_place(holder),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_place(&items[0]),
+		_ => false,
 	}
 }
 
