@@ -65,6 +65,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 					ctx.required_functions.insert("node_index_at");
 					ctx.required_functions.insert("map_get");
 					if let Some(name) = crate::wasp_parser::subscript_key(value).and_then(constant_field_name) {
+						if name == crate::wasm_emitter::list_ops::MESSAGE_FIELD {
+							ctx.required_functions.insert(crate::wasm_emitter::list_ops::ERROR_MESSAGE);
+						}
 						ctx.missing_field_names.insert(name);
 					}
 					ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);

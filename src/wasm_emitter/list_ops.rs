@@ -1619,6 +1619,10 @@ pub(super) const STRUCT_BODY: &str = "struct_body";
 pub(super) const INSTANCE_FIELD: &str = "instance_field";
 /// tagged_field(node, name): the field of the tagged object `tag:{…}` the node is, null for any other node
 pub(super) const TAGGED_FIELD: &str = "tagged_field";
+/// error_message(node): the message of an Error as a text, null for any other node: `e.message` (card catch-message)
+pub const ERROR_MESSAGE: &str = "error_message";
+/// The field every Error has
+pub const MESSAGE_FIELD: &str = "message";
 const KEY_KIND: i64 = Kind::Key as i64;
 pub const MAP_KEY_NAME: &str = "map_key_name";
 /// node_at_key(xs, key) and node_with_key(xs, key, value): `xs[key]` read and set with a key known only at runtime
@@ -1705,6 +1709,11 @@ impl WasmGcEmitter {
 						Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, I32Const(pointer as i32), I32Const(length as i32)]);
 						self.emit_call(func, "new_symbol");
 						self.emit_call(func, finder);
+						func.instruction(&I::BrOnNonNull(0));
+					}
+					if name == MESSAGE_FIELD {
+						Self::emit_list(func, &[I::LocalGet(held)]);
+						self.emit_call(func, ERROR_MESSAGE);
 						func.instruction(&I::BrOnNonNull(0));
 					}
 					func.instruction(&I::Call(self.func_index(&format!("{NO_FIELD_PREFIX}{name}"))));
@@ -1820,6 +1829,14 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
 			f.instruction(&I::RefNull(HeapType::Concrete(node)));
 		});
+		if self.should_emit_function(ERROR_MESSAGE) {
+			self.runtime_function(ERROR_MESSAGE, vec![nullable_node_ref], vec![nullable_node_ref], vec![], |_, f| {
+				Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+				Self::emit_list(f, &[I::LocalGet(0), I::StructGet { struct_type_index: node, field_index: 0 }, I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Ne]);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+				Self::emit_list(f, &[I::I64Const(Kind::Text as i64), I::LocalGet(0), I::StructGet { struct_type_index: node, field_index: 1 }, I::RefNull(HeapType::Concrete(node)), I::StructNew(node)]);
+			});
+		}
 		if self.should_emit_function(TAGGED_FIELD) {
 			let list_kind = Kind::List as i64;
 			self.runtime_function(TAGGED_FIELD, vec![node_ref, node_ref], vec![nullable_node_ref], vec![nullable_node_ref], |s, f| {
