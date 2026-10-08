@@ -36,3 +36,20 @@ fn test_lists_grow_with_quantities_of_their_unit() {
 	assert_eq!(shown("xs = [1 m]; xs.add(2 m); sum(xs)"), "3 m");
 	fails_with("xs = [1 m]; xs.add(2 s); sum(xs)", "DimensionError");
 }
+
+#[test]
+fn test_a_whole_object_shows_its_units() {
+	// stage 7: the quantity fields come first in the text, the plain ones follow
+	assert_eq!(shown("p = {name: \"a b\", dist: 2 m}; for i in 1..2 { p.dist += 1 m }; \"${p}\""), "\"{dist:3 m name:\"a b\"}\"");
+	assert_eq!(shown("p = {dist: 0 km, t: 1 s}; for i in 1..3 { p.dist += 250 m }; text_form(p)"), "\"{dist:500 m t:1 s}\"");
+	#[cfg(feature = "native")]
+	assert!(crate::common::printed("p = {dist: 0 km, name: \"run\"}; for i in 1..3 { p.dist += 250 m }; print p").starts_with("{dist:500 m name:\"run\"}\n"));
+}
+
+#[test]
+fn test_aliases_keep_the_units() {
+	assert_eq!(shown("p = {dist: 1 km, n: 3}; q = p; q.dist += 500 m; q.dist"), "1500 m");
+	assert_eq!(shown("p = {dist: 1 km}; q = p; q"), "dist:1 km");
+	assert_eq!(shown("xs = [1 m]; ys = xs; ys.add(2 m); sum(ys)"), "3 m");
+	fails_with("p = {dist: 1 km}; q = p; q.dist = 2 s; q", "DimensionError");
+}

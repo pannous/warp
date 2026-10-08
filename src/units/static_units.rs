@@ -41,6 +41,7 @@ const ELEMENT_WORDS: [&str; 5] = ["sum", "max", "min", "first", "last"];
 const COUNT_WORDS: [&str; 3] = ["count", "size", "length"];
 
 type Signature = Vec<(Dimension, i32)>;
+type Fields = Vec<(String, Signature)>;
 
 /// The units of a program's final value: of the value itself, or of the fields of the object it is
 #[derive(Clone, Debug, PartialEq)]
@@ -280,10 +281,10 @@ struct Inference {
 	variables: HashMap<String, Signature>,
 	/// Variables holding a list of quantities: the signature of its elements
 	lists: HashMap<String, Signature>,
-	/// Variables holding an object with quantity fields: the signature of each field
-	objects: HashMap<String, HashMap<String, Signature>>,
+	/// Variables holding an object with quantity fields: each field (in written order) and its signature, none for a plain one
+	objects: HashMap<String, Fields>,
 	/// The quantity fields of the program's final value, when it is such an object
-	result_fields: Option<Vec<(String, Signature)>>,
+	result_fields: Option<Fields>,
 	definitions: HashMap<String, Definition>,
 	/// Specialised functions: their name and result signature
 	specialised: HashMap<Specialisation, (String, Signature)>,
@@ -499,6 +500,17 @@ impl Inference {
 				return Ok((Node::Key(Box::new(target), op, Box::new(Node::List(items, Bracket::Square, separator.clone()))), vec![]));
 			}
 		}
+		// `q = p`, `ys = xs`: an alias has the signatures of what it names
+		if let Node::Symbol(other) = value.drop_meta() {
+			if let Some(fields) = self.objects.get(other).cloned() {
+				self.objects.insert(name, fields);
+				return Ok((Node::Key(Box::new(target), op, Box::new(value)), vec![]));
+			}
+			if let Some(element) = self.lists.get(other).cloned() {
+				self.lists.insert(name, element);
+				return Ok((Node::Key(Box::new(target), op, Box::new(value)), vec![]));
+			}
+		}
 		if let Some(object) = self.object_literal(&name, &value) {
 			return object.map(|object| (Node::Key(Box::new(target), op, Box::new(object)), vec![]));
 		}
@@ -518,18 +530,16 @@ impl Inference {
 	fn object_literal(&mut self, name: &str, value: &Node) -> Option<Result<Node, Stop>> {
 		let entries = object_entries(value)?;
 		let mut lowered = vec![];
-		let mut fields = HashMap::new();
+		let mut fields = vec![];
 		for (field, op, value) in entries {
 			let (value, signature) = match self.infer(value) {
 				Ok(inferred) => inferred,
 				Err(stop) => return Some(Err(stop)),
 			};
-			if !signature.is_empty() {
-				fields.insert(field.name(), signature);
-			}
+			fields.push((field.name(), signature));
 			lowered.push(Node::Key(Box::new(field), op, Box::new(value)));
 		}
-		if fields.is_empty() {
+		if fields.iter().all(|(_, signature)| signature.is_empty()) {
 			return None;
 		}
 		self.objects.insert(name.to_string(), fields);
@@ -540,7 +550,8 @@ impl Inference {
 	/// `p.dist` of an object with quantity fields: the field's signature (none for a plain field)
 	fn field_signature(&self, object: &Node, field: &Node) -> Option<Signature> {
 		let (Node::Symbol(object), Node::Symbol(field)) = (object.drop_meta(), field.drop_meta()) else { return None };
-		Some(self.objects.get(object)?.get(field).cloned().unwrap_or_default())
+		let fields = self.objects.get(object)?;
+		Some(fields.iter().find(|(name, _)| name == field).map(|(_, signature)| signature.clone()).unwrap_or_default())
 	}
 
 	/// `q.serialize()`: the quantity's text; `xs.add(q)`: q has the element signature of xs
@@ -578,13 +589,46 @@ impl Inference {
 		}
 	}
 
-		/// A whole list of quantities as text, built at run time: `"[" + join(map(xs, x => str(x / 1/100) + " cm"), " ") + "]"`
+	/// The source of a quantity's text at run time, `amount` an SI amount: `str(amount / (1/100)) + " cm"`
+	fn quantity_source(&self, amount: &str, signature: &Signature) -> Result<String, Stop> {
+		let units = display_factors(&self.display, signature);
+		let per_unit = number_node(&super::scale(&units, |factor| base_unit(factor.unit.dimension))).ok_or(Stop::Unsupported)?;
+		Ok(format!("str({amount} / ({})) + \" {}\"", per_unit.serialize().trim(), units_text(&units)))
+	}
+
+	/// A whole list of quantities as text, built at run time: `"[" + join(map(xs, x => str(x / 1/100) + " cm"), " ") + "]"`
 	fn list_text(&self, name: &str) -> Result<Node, Stop> {
 		let element = self.lists.get(name).ok_or(Stop::Unsupported)?;
-		let units = display_factors(&self.display, element);
-		let per_unit = number_node(&super::scale(&units, |factor| base_unit(factor.unit.dimension))).ok_or(Stop::Unsupported)?;
-		let source = format!("\"[\" + join(map({name}, item => str(item / ({})) + \" {}\"), \" \") + \"]\"", per_unit.serialize().trim(), units_text(&units));
+		let source = format!("\"[\" + join(map({name}, item => {}), \" \") + \"]\"", self.quantity_source("item", element)?);
 		Ok(crate::wasp_parser::parse(&source))
+	}
+
+	/// A whole object with quantity fields as text, built at run time: `{dist:500 m name:"run"}`. The quantity fields come
+	/// first, the plain ones follow as an object of them shows them
+	fn object_text(&self, name: &str) -> Result<Node, Stop> {
+		let fields = self.objects.get(name).ok_or(Stop::Unsupported)?;
+		let mut quantities = vec![];
+		let mut plain = vec![];
+		for (field, signature) in fields {
+			match signature.is_empty() {
+				true => plain.push(format!("{field}: {name}.{field}")),
+				false => quantities.push(format!("\"{field}:\" + {}", self.quantity_source(&format!("({name}.{field} as number)"), signature)?)),
+			}
+		}
+		let rest = match plain.is_empty() {
+			true => "\"}\"".to_string(),
+			false => format!("\" \" + text_form({{{}}})[1..]", plain.join(", ")),
+		};
+		Ok(crate::wasp_parser::parse(&format!("\"{{\" + {} + {rest}", quantities.join(" + \" \" + "))))
+	}
+
+	/// The text of a whole list or object with quantities (`print xs`, `"${p}"`); None for any other value
+	fn whole_text(&self, value: &Node) -> Option<Result<Node, Stop>> {
+		match value.drop_meta() {
+			Node::Symbol(name) if self.lists.contains_key(name) => Some(self.list_text(name)),
+			Node::Symbol(name) if self.objects.contains_key(name) => Some(self.object_text(name)),
+			_ => None,
+		}
 	}
 
 	/// The last statement of the program when it is a whole list of quantities: its text
@@ -667,6 +711,9 @@ impl Inference {
 			}
 		}
 		match items {
+			[head, value] if call_or_words && TEXT_WORDS.iter().any(|text| word(head, text)) && self.whole_text(value).is_some() => {
+				self.whole_text(value).map(|text| text.map(|text| (text, vec![])))
+			}
 			[head, value] if call_or_words && TEXT_WORDS.iter().any(|text| word(head, text)) => Some((|| {
 				let (value, signature) = self.infer(value.clone())?;
 				if signature.is_empty() {
@@ -674,8 +721,8 @@ impl Inference {
 				}
 				Ok((self.as_text(value, &signature, None)?, vec![]))
 			})()),
-			[head, value] if call_or_words && word(head, PRINT_WORD) && matches!(value.drop_meta(), Node::Symbol(name) if self.lists.contains_key(name)) => {
-				Some(self.list_text(&value.name()).map(|text| (Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()), vec![])))
+			[head, value] if call_or_words && word(head, PRINT_WORD) && self.whole_text(value).is_some() => {
+				self.whole_text(value).map(|text| text.map(|text| (Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()), vec![])))
 			}
 			[head, value] if call_or_words && word(head, PRINT_WORD) => Some((|| {
 				let shown_units = conversion_target(value);
@@ -787,9 +834,7 @@ impl Inference {
 			if statements && index + 1 == count && self.at_top {
 				// a final object: its fields' units go into `wasp.units`
 				if let Some(fields) = self.objects.get(&item.name()).filter(|_| matches!(item.drop_meta(), Node::Symbol(_))) {
-					let mut fields: Vec<(String, Signature)> = fields.clone().into_iter().collect();
-					fields.sort_by(|(a, _), (b, _)| a.cmp(b));
-					self.result_fields = Some(fields);
+					self.result_fields = Some(fields.iter().filter(|(_, signature)| !signature.is_empty()).cloned().collect());
 					lowered.push(item);
 					signatures.push(vec![]);
 					continue;
