@@ -178,3 +178,12 @@ fn a_reduction_of_a_gpu_map_reads_back_partial_results() {
 	assert!(lowered.contains("gpu_reduce_linear"), "{lowered}");
 	assert_eq!(eval(&format!("{}s = sum(xs.map(x => sin(x)) @gpu)\ns == sin(0.5) + sin(1)", filled(2))).serialize(), "yes");
 }
+
+// a list of floats in GC memory is copied into a block once, as for a map
+#[test]
+fn a_reduction_of_a_gpu_map_takes_a_list_of_floats() {
+	let program = "xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\ns = max(xs.map(x => sin(x)) @gpu)\n";
+	let lowered = warp::pipeline::lower(&format!("{program}s")).expect("a program").serialize();
+	assert!(lowered.contains("gpu_reduce_linear"), "{lowered}");
+	assert_eq!(eval(&format!("{program}abs(s - sin(1)) < 0.00001")).serialize(), "yes");
+}

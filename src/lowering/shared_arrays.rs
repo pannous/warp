@@ -96,7 +96,7 @@ pub fn lower(node: Node) -> Node {
 		declared.extend(results);
 	}
 	let node = crate::gpu_maps::warn_unapplied(node);
-	if declared.is_empty() || matches!(node, Node::Error(_)) {
+	if (declared.is_empty() && !reduces_on_gpu(&node)) || matches!(node, Node::Error(_)) {
 		return node;
 	}
 	if let Some(linear) = first_linear {
@@ -419,6 +419,14 @@ fn gpu_kernel_map(value: &Node) -> Option<(Node, Node, crate::gpu_maps::Kernel)>
 	let (array, lambda) = crate::gpu_maps::gpu_map(value)?;
 	let kernel = crate::gpu_maps::gpu_kernel(&lambda)?;
 	Some((array, lambda, kernel))
+}
+
+/// Whether the program has a `s = sum(xs.map(f) @gpu)` that may run on the GPU, of any list of floats
+fn reduces_on_gpu(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= matches!(part.drop_meta(), Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_))
+		&& crate::gpu_maps::gpu_reduction(value).is_some_and(|(_, map)| gpu_kernel_map(&map).is_some())));
+	found
 }
 
 /// The program's numbers a kernel reads, as the list its host word takes
