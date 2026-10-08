@@ -155,8 +155,10 @@ Copies (P205/P207, runtime instance_copy(object, shallow)): `x.copy()` is deep (
 `x.copy(shallow: true)` makes only the object's own entries and cells new (copy_spine). The class keeps its type; a
 class's own `copy` method wins, `clone` is an alias that always calls it (METHOD_ALIASES), Kotlin
 `p.copy(y = 5)` copies then sets (class_methods copies, `shallow = yes` among its arguments is the flag).
-Open: P206's got-it note when a copy shares a resource (copies share closures and data silently now); lists are still
-values (`ys = xs; ys.add(2)` leaves xs).
+Lists share too (P200b, card shared-lists): add (`xs += [v]`, list_extend), pop (list_drop_last), remove (map_without,
+maps alike), insert (list_insert_at) and `xs#i = v` change the list in place; `+` (list_concat) makes a new one; typed
+lists share their array (notes/typed_lists.md). Open: a list held by a field or item does not grow in place yet
+(card shared-lists-follow); P206's got-it note when a copy shares a resource (copies share closures and data silently).
 Next steps: struct elements in typed lists (`for p in points`), a struct result of a construction inside a function
 (`moved(dx) := point(x + dx, y)`).
 

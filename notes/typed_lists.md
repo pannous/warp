@@ -28,8 +28,10 @@ through `int_list_as_node`, which builds exactly the square cons list the litera
 printing, returning, passing to a function, `sort`, comparisons… are unchanged, they just pay one O(n) conversion.
 Errors are the same runtime functions (`index_out_of_range`, `index_must_be_an_integer`).
 
-Value semantics: wasp lists are values (`node_with_at` copies). A typed list is updated in place, so `ys = xs` copies the
-list (`int_list_copy`) when either side is ever updated by index or append; otherwise the two share it.
+Lists are shared (P200b, card shared-lists): `ys = xs` shares the typed array, so an item set or added through either
+shows in both; `xs = xs + [v]` copies first while the list is aliased (TypedList.aliased). A typed list some holder keeps
+as Nodes (an argument to a function that changes it, an item or field, an untyped alias) stays a Node list
+(wasm_emitter/list_sharing.rs held_elsewhere, find_typed_lists), as one conversion would part the two.
 
 `sum`, `map`, `each`, element-wise `xs * 2` are lowered to loops before emission (library_words.rs, lambdas.rs,
 analyzer::element_wise); those loops reach the dispatch layer as count / element / append, so they get the array for free.

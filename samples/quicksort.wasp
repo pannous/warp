@@ -12,7 +12,7 @@ def quicksort(arr) {
     return quicksort(left) + middle + quicksort(right)
 }
 
-// Partitioning version (Lomuto); lists are values, so it returns the sorted list instead of sorting in place
+// Partitioning version (Lomuto): swap changes arr in place (lists are shared); it also returns the list
 def quicksort_partitioned(arr, lo, hi) {
     if lo >= hi { return arr }
 
