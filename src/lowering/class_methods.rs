@@ -721,7 +721,9 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 	node.visit(&mut |part| if let Node::Key(target, op, value) = part {
 		// `p:Point = …`: the annotation says it
 		if let (Node::Key(variable, Op::Colon, class), Op::Assign) = (target.drop_meta(), op) {
-			if classes.contains(&class.drop_meta().name()) {
+			// `p:Point`, not a list of them `ps:[Point]`
+			let is_class = matches!(class.drop_meta(), Node::Symbol(_) | Node::Type { .. });
+			if is_class && classes.contains(&class.drop_meta().name()) {
 				instances.insert(variable.drop_meta().name(), class.drop_meta().name());
 			}
 		}
