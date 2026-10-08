@@ -9,6 +9,8 @@ use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 
 type Reply = Result<String, String>;
+/// The URL and, for a POST, its body
+pub type Request = (String, Option<String>);
 
 const THREAD_ENDED: &str = "fetch failed: the fetching thread ended";
 
@@ -22,11 +24,15 @@ thread_local! {
 	static FETCHES: RefCell<HashMap<i64, Fetch>> = RefCell::new(HashMap::new());
 }
 
-/// Start fetching `url`; the handler on·fetch·id runs once the reply arrived (a reply still on its way is dropped)
-pub fn start(id: i64, url: String, timeout: Duration) {
+/// Start fetching `url` (POSTing the body when there is one); the handler on·fetch·id runs once the reply arrived (a
+/// reply still on its way is dropped)
+pub fn start(id: i64, (url, body): Request, timeout: Duration) {
 	let (sender, receiver) = channel();
 	let awaited = format!("fetch {url}");
-	std::thread::spawn(move || sender.send(crate::host::fetch(&url, timeout)));
+	std::thread::spawn(move || sender.send(match body {
+		Some(body) => crate::extensions::utils::post_within(&url, &body, timeout).map_err(|reason| format!("fetch {url} failed: {reason}")),
+		None => crate::host::fetch(&url, timeout),
+	}));
 	FETCHES.with(|fetches| fetches.borrow_mut().insert(id, Fetch::Pending(receiver)));
 	let handler = format!("{}{id}", crate::host::FETCH_HANDLER_PREFIX);
 	warp_runtime::system_signals::await_ready(handler, awaited, move || arrived(id));

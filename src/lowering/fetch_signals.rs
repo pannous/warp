@@ -6,6 +6,7 @@
 //! anew when one of them changes (`on change id {…}`). `users.loading` and `users.error` are the variables
 //! users·loading and users·error.
 
+use crate::host::FETCH_WORD;
 use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::node::Node;
 use crate::operators::Op;
@@ -13,8 +14,6 @@ use std::collections::{HashMap, HashSet};
 
 const LOADING_FIELD: &str = "loading";
 const ERROR_FIELD: &str = "error";
-/// A program without this word holds no async fetch: the pass skips it
-const FETCH_WORD: &str = "fetch";
 const START_TEMPLATE: &str = "VALUE = ø; LOADING = true; ERROR = ø; fetch_start(ID, URL)";
 /// The value written last: a listener on it sees loading and error already set
 const ARRIVED_TEMPLATE: &str = "REPLY = fetch_reply(ID); LOADING = false; ERROR = REPLY#2; VALUE = REPLY#1";

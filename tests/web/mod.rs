@@ -47,3 +47,5 @@ mod test_tag_lists;
 mod test_safari_imports;
 #[cfg(feature = "native")] // a site build with the native compiler
 mod test_server_functions_in_page; // card route-sample
+#[cfg(feature = "native")] // a site build with the native compiler
+mod test_server_rpc_stub; // card rpc-stub

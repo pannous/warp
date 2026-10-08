@@ -3,7 +3,8 @@
 //! "/api/users", "route·0"] …])`, which serves until it is stopped (src/web_server.rs natively; the playground says
 //! loudly that it cannot serve). `server def f(a, b) {…}` (typed RPC, notes/web_framework.md "Server and page") is f,
 //! and also the route POST /rpc/f calling it with the request's JSON array of arguments. A program file whose last line
-//! shows a page serves that page too, at / (src/site.rs); its page build leaves the serving out.
+//! shows a page serves that page too, at / (src/site.rs); its page build leaves the serving out and asks the server
+//! for a server function's value (without_serving).
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -47,23 +48,46 @@ pub fn lower(program: Node) -> Node {
 }
 
 /// A program compiled for its page (pipeline::for_a_page) does not serve: the server runs it natively, the page in the
-/// browser (notes/web_framework.md "Built sites"). A server function is a function of the page too, its body run there
-/// until the page calls POST /rpc/f instead (notes/server_routes.md, step 2)
+/// browser (notes/web_framework.md "Built sites"). A main-level `x := f(args)` of a server function asks the server, as
+/// `x := fetch` does (POST /rpc/f, lowering/fetch_signals.rs), so f's body stays out of app.wasm; a server function the
+/// page calls otherwise still runs there, loudly (notes/server_routes.md)
 fn without_serving(program: Node) -> Node {
 	match program {
 		Node::List(statements, bracket, separator) => {
 			let statements: Vec<Node> = statements.into_iter().filter(|statement| served(statement).is_none()).collect();
-			let shipped: Vec<_> = statements.iter().filter(|statement| server_definition(statement).is_some()).map(|statement| {
-				crate::diagnostic::Diagnostic::at(statement, "a server function also runs in the page and ships in its app.wasm (until the page calls POST /rpc/, notes/server_routes.md): keep secrets out of it".to_string())
-			}).collect();
-			if let Err(error) = crate::diagnostic::report(&shipped) {
+			let servers: Vec<String> = statements.iter().filter_map(server_definition).filter_map(|definition| defined_function(&definition)).map(|(name, _)| name).collect();
+			let asked: Vec<Node> = statements.into_iter().map(|statement| server_call(&statement, &servers).unwrap_or(statement)).collect();
+			let page_code = Node::List(asked.iter().filter(|statement| server_definition(statement).is_none()).cloned().collect(), Bracket::None, Separator::None);
+			let called_directly = |statement: &Node| server_definition(statement).and_then(|definition| defined_function(&definition)).map(|(name, _)| name).filter(|name| page_code.mentions_any(&[name]));
+			let warnings: Vec<_> = asked.iter().filter_map(|statement| called_directly(statement).map(|name| crate::diagnostic::Diagnostic::at(statement, format!("the page calls the server function {name} directly, so its body ships in its app.wasm: `x := {name}(…)` asks the server instead (POST {RPC_PREFIX}{name}, notes/server_routes.md)")))).collect();
+			if let Err(error) = crate::diagnostic::report(&warnings) {
 				return error;
 			}
-			Node::List(statements.into_iter().map(|statement| server_definition(&statement).unwrap_or(statement)).collect(), bracket, separator)
+			let shipped: Vec<Node> = asked.iter().filter(|statement| server_definition(statement).is_none() || called_directly(statement).is_some()).map(|statement| server_definition(statement).unwrap_or_else(|| statement.clone())).collect();
+			Node::List(shipped, bracket, separator)
 		}
 		single if served(&single).is_some() => Node::Empty,
 		other => other,
 	}
+}
+
+/// `x := f(a, b)` of a server function f as `x := fetch ["/rpc/f", [a, b]]`, the request fetch_start POSTs
+fn server_call(statement: &Node, servers: &[String]) -> Option<Node> {
+	let Node::Key(target, Op::Define, value) = statement.drop_meta() else { return None };
+	let (name, arguments) = crate::tuples::call_parts(value)?;
+	if !servers.iter().any(|server| server == name) {
+		return None;
+	}
+	let arguments = match arguments {
+		[single] => match single.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.clone(),
+			_ => arguments.to_vec(),
+		},
+		several => several.to_vec(),
+	};
+	let request = Node::List(vec![Node::Text(format!("{RPC_PREFIX}{name}")), Node::List(arguments, Bracket::Square, Separator::Colon)], Bracket::Square, Separator::Colon);
+	let fetch = Node::List(vec![Node::Symbol(crate::host::FETCH_WORD.to_string()), request], Bracket::None, Separator::Space);
+	Some(Node::Key(target.clone(), Op::Define, Box::new(fetch)))
 }
 
 /// `serve port {routes}`: the port and each route's method, path and body
@@ -106,12 +130,17 @@ fn with_any_parameters(definition: Node) -> Node {
 
 /// POST /rpc/f of a function marked `server`: f called with the items of the request's JSON array
 fn rpc_route(definition: &Node) -> Option<Route> {
+	let (name, parameters) = defined_function(definition)?;
+	let arguments: Vec<String> = (1..=parameters).map(|index| format!("{REQUEST_WORD}.body#{index}")).collect();
+	let call = crate::warp_parser::parse(&format!("{name}({})", arguments.join(", ")));
+	Some((RPC_METHOD.to_string(), Node::Text(format!("{RPC_PREFIX}{name}")), Node::List(vec![call], Bracket::Curly, Separator::None)))
+}
+
+/// The name and parameter count of the function a definition defines
+fn defined_function(definition: &Node) -> Option<(String, usize)> {
 	let mut context = crate::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, definition);
-	let function = context.user_functions.into_values().next()?;
-	let arguments: Vec<String> = (1..=function.params.len()).map(|index| format!("{REQUEST_WORD}.body#{index}")).collect();
-	let call = crate::warp_parser::parse(&format!("{}({})", function.name, arguments.join(", ")));
-	Some((RPC_METHOD.to_string(), Node::Text(format!("{RPC_PREFIX}{}", function.name)), Node::List(vec![call], Bracket::Curly, Separator::None)))
+	context.user_functions.into_values().next().map(|function| (function.name, function.params.len()))
 }
 
 /// The routes of a block, one per line (`get "/" {…}` each) or in a row

@@ -9,7 +9,7 @@ One source file is compiled twice:
 | build | what it makes of | made by |
 |---|---|---|
 | server (native, `warp run app.warp`) | `serve 8080 { get "/api/x" {…} }` serves HTTP, `server def f` is also POST /rpc/f, the page's site answers GET / and any other path | lowering/serve.rs, web_server.rs, site::served_files |
-| page (wasm in the browser, pipeline::for_a_page) | `route` patterns run in the page's router, `serve` is left out, `server def f` is a plain function | lowering/routes.rs, lowering/serve.rs without_serving, site.js |
+| page (wasm in the browser, pipeline::for_a_page) | `route` patterns run in the page's router, `serve` is left out, `server def f` is asked over POST /rpc/f | lowering/routes.rs, lowering/serve.rs without_serving, site.js |
 
 Example (probes/server_routes/one_source.warp, which runs and was checked in a browser):
 
@@ -33,23 +33,21 @@ route "*" { p{ "no such page" } }
 
 ## Fixed now (commit 366c0efdc)
 A program with `server def` and a page failed its page build ("undefined: server"), so the server served no page at
-all. The page build now keeps the definition as a function of the page: tests/web/test_server_functions_in_page.rs.
+all. The page build now takes the definition: tests/web/test_server_functions_in_page.rs.
 
 ## What is left: how the code splits (the real design question)
 1. **Shared code** (data shapes, validation, formatting, the route table) compiles into both builds. It works today
    because every definition is in both.
-2. **Server-only code** (`server def`): its body still runs in the page too. This works for pure code, but it is wrong
-   for two kinds of code:
-   - code that reads server state (a database, files, secrets);
-   - secrets shipped in app.wasm, where anyone can read them. **This is a leak once real backends exist.**
-
-   Step 2 (next card, rpc-stub): the page build replaces the body with a call of POST /rpc/f. It sends the arguments as
-   a JSON array and reads the result as the value. Natively the call is direct, so the server's own render needs no
-   HTTP. Two ways to make the page wait:
-   - (a) Like `users := fetch …`: a main-level `n := user_count()` becomes a fetch signal (loading/value/error). This is
-     the existing async model, so the same lowering as fetch_signals.rs with a POST. **Default.**
-   - (b) A synchronous call. That only works inside site-worker (Atomics.wait), so every page with RPC would need the
-     Worker plus coi-serviceworker, which costs the bundle budget.
+2. **Server-only code** (`server def`), done (card rpc-stub, probes/server_routes/rpc_stub.warp, checked in a browser):
+   in the page build a main-level `x := f(args)` of a server function becomes `x := fetch ["/rpc/f", [args]]`
+   (lowering/serve.rs without_serving), a POST of the arguments as a JSON array. It is async like any fetch (option a):
+   `x` is ø with `x.loading` until the reply arrives, so the page writes `x ?? "…"` (the ø check demands it). f's
+   definition is left out of the page, so its body and any secret in it stay out of app.wasm
+   (tests/web/test_server_rpc_stub.rs). fetch_start takes `[url, body]` for a POST on both hosts (src/host.rs
+   request_of, host-tasks.js startFetch).
+   - A page that calls f any other way (`p{ f() }`, inside a function) still gets f's body, with a warning naming f and
+     the `x := f(…)` form. A synchronous call (option b) would need site-worker's Atomics.wait and coi-serviceworker.
+   - The page's first HTML (prerendered at build time by app.wasm itself) shows the pending state, `said: …`.
 3. **JavaScript on the client** needs no third language in the source. The page's warp code reaches browser APIs
    through the WebIDL bindings (notes/web_framework.md "web-apis: WebIDL") and arbitrary JS through foreign_call (js =
    globalThis, host-foreign.js). Hand-written JS stays possible as a `.js` file of the site, but it is not the model.
@@ -65,5 +63,4 @@ all. The page build now keeps the definition as a function of the page: tests/we
    Retiring that mode is a question for the user.
 
 ## Undoable defaults taken
-- `server def` bodies run in the page until rpc-stub (loud in this note, not silently). The page build used to fail on them.
-- RPC in the page will be async, like fetch (option a).
+- RPC in the page is async, like fetch (option a); a direct call in the page ships the body, with a warning.
