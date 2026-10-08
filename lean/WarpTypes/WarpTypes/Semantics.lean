@@ -113,6 +113,7 @@ def isNumber : Expr → Bool
 
 def arithValues (op : ArithOp) (a b : Expr) : Expr :=
   if !(isNumber a && isNumber b) then .error "not a number" else
+  if op == .mod && asNumber b == 0 then .error "divide by zero" else
   match asInt a, asInt b with
   | some x, some y => .int (op.apply x y)
   | _, _ => .num (op.apply (asNumber a) (asNumber b))
@@ -134,8 +135,12 @@ def addValues (a b : Expr) : Expr :=
   | some x, some y => .int (x + y)
   | _, _ => .num (asNumber a + asNumber b)
 
+/-- numbers by value, texts in codepoint order (`"a" < "b"`) -/
 def ltValues (a b : Expr) : Expr :=
-  if isNumber a && isNumber b then .bool (decide (asNumber a < asNumber b)) else .error "not comparable"
+  if isNumber a && isNumber b then .bool (decide (asNumber a < asNumber b)) else
+  match a, b with
+  | .text x, .text y => .bool (decide (x < y))
+  | _, _ => .error "not comparable"
 
 def EQ_FUEL : Nat := 64
 

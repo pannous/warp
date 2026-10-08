@@ -73,10 +73,15 @@ impl WasmGcEmitter {
 		Node::List(marked.collect(), bracket.clone(), separator.clone())
 	}
 
-	/// The declared type of the variable `target` (`x: int`), if it has one
+	/// The declared type of the variable `target` (`x: int`, a parameter `f(x: int)` of the function compiled), if it has one
 	pub(super) fn declared_type_of(&self, target: &Node) -> Option<Node> {
 		let Node::Symbol(name) = target.drop_meta() else { return None };
-		self.scope.lookup(name).and_then(|local| local.type_node.as_deref().cloned())
+		let local = self.scope.lookup(name)?;
+		if let Some(type_node) = &local.type_node {
+			return Some(type_node.as_ref().clone());
+		}
+		let function = self.ctx.user_functions.get(self.compiling.as_deref()?).filter(|_| local.is_param)?;
+		function.params.iter().find(|param| param.name == *name)?.annotation.clone()
 	}
 
 	/// `value` stored into a place declared `declared` that holds a `kind`: checked at run time when its static kind leaves

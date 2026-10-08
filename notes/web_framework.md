@@ -278,7 +278,15 @@ Each step is useful on its own and is what the next ones stand on.
   Words (P188, browser API names; warp-03's undoable default, no user answer): `local[k]` is that store
   (localStorage), `storage[k]` its alias; `session[k]` a store of its own (sessionStorage while the tab lasts, natively
   in memory while the process runs; SESSION_STORE "warp-session", host.js sessionValues). A program defining its own
-  `storage`, `local` or `session` keeps it. IndexedDB for values beyond localStorage's ~5 MB is left.
+  `storage`, `local` or `session` keeps it.
+- IndexedDB (2026-10-08, warp-web): `database[k]` (alias `indexedDB`) is a store of its own for values beyond
+  localStorage's ~5 MB, same forms (`database.k`, delete, keys). Natively `<program>.database.json` beside the program
+  (inline code: in memory); in the browser the IndexedDB database `warp`, object store `values`, all in host-files.js
+  (shipped only with programs keeping values, so a hello-world site stays in its byte budget): loadDatabase reads it
+  once before the program runs (worker.js, site-worker.js, site.js; Workers have IndexedDB too), each change is
+  written back where the host keeps values (self.keepStored; the browser test suite keeps them in memory). Any store file ending in `database.json` (stored_values.rs DATABASE_STORE) is the
+  database in the browser. Checked by hand in the playground across reloads; a built site's path is not yet checked
+  in a browser. Probe: probes/stores/database.warp.
 - Clipboard (P188, navigator.clipboard's names; warp-03's default): `clipboard.write(text)` is the std word
   std_io("clipboard", "write", [text]) (lowering/system_values.rs): pbcopy / wl-copy / xclip natively, in a page
   markup.js copyText (navigator.clipboard.writeText, which needs a recent click; a refusal goes to the console), from a

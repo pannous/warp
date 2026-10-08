@@ -1,6 +1,7 @@
 #!/bin/bash
 # Builds web/playground: the warp compiler for the browser (no wasmtime: the `native` feature off, src/web.rs) in two
-# builds, samples.js (samples/*.warp for the example menu) and keywords.js (the editor's hard and soft keywords). Serve the repository root and open the page:
+# builds, samples.js (samples/*.warp for the example menu), keywords.js (the editor's hard and soft keywords) and
+# version.js (the commit built, shown in the ⋯ menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)
 # Usage: build.sh [optimized|debug|components|served <site>]   (all when omitted)
 #   optimized → warp.wasm: release profile (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
@@ -123,3 +124,8 @@ with open(sys.argv[1], "w", encoding="utf-8") as script:
 	script.write("// made by build.sh from src/lowering/soft_keywords.rs\nconst KEYWORDS = " + json.dumps({"hard": words("HARD_KEYWORDS"), "soft": words("SOFT_KEYWORDS") + words("HIGHLIGHTED_WORDS")}, ensure_ascii=False) + ";\n")
 PYTHON
 echo "built $page/keywords.js"
+
+# the ⋯ menu names the commit the page was built from, so a deployed page tells which version it is (card version-commit)
+echo "// made by build.sh: the commit built
+const PLAYGROUND_VERSION = { commit: \"$(git rev-parse HEAD)\", date: \"$(git log -1 --format=%cs)\" };" > "$page/version.js"
+echo "built $page/version.js"

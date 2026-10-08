@@ -100,6 +100,8 @@ mod test_type_static;
 mod test_upcast_fields;
 mod test_empty_type_aliases;
 mod test_real_references;
+mod test_shared_lists; // card shared-lists
+mod test_widened_list_views; // card p215-user
 mod test_optional_list_items;
 mod test_any_into_annotated;
 mod test_any_into_annotated_types;
@@ -107,3 +109,5 @@ mod test_copies;
 mod test_any_field_text;
 mod test_same_identity;
 mod test_loop_item_into_annotated;
+mod test_chained_assignments;
+mod test_loop_text_arithmetic;

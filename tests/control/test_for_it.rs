@@ -13,7 +13,7 @@ fn it_is_the_loop_variable() {
 #[test]
 fn a_symbol_prints_its_name() {
 	is!("x = hello; print x; 1", 1);
-	is!("for friend in [foe1, friend1]: print it", 2);
+	is!("for friend in [foe1, friend1]: print it", warp::Node::Empty); // P213: print gives ø, so does the loop
 }
 
 // the branches of an if in the body are no lambdas: their `it` is the loop variable too (card inside-nested)

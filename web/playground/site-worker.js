@@ -44,6 +44,7 @@ function pageMarkup() {
 async function start({ module, stored, session, path }) {
 	Object.assign(storedValues, stored);
 	Object.assign(sessionValues, session);
+	await self.loadDatabase?.(); // host-files.js, when the program keeps values
 	pagePath = path;
 	const bytes = new Uint8Array(await (await fetch(module)).arrayBuffer());
 	await taskPoolReady(); // tasks run on loaded Workers, not inline

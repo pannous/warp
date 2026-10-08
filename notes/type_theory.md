@@ -437,3 +437,39 @@ inside a handler body loses the outer handler).
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
 the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
 exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, units, then tasks.
+
+## Named arguments, defaults, nested functions (exporter only)
+
+`f(b=1, a=5)` writes the fields of `f·args` by name, positional arguments fill the others in order, a missing one
+takes its default (`f(a, b=3)`, `b: int = 3`); a call whose arguments do not fit exports as a call given `unit`, so
+W0 rejects it as warp does. Arguments run as written, left to right (P216; warp computed them in parameter order
+until src/lowering/named_arguments.rs moved effectful reordered ones into temporaries). `f(n=4)` names the one
+parameter. A function defined in a function's body is lifted (src/law/type_model/nested_functions.rs) to the
+main-level `outer·inner`, the names of outer it reads added as parameters passed by name; a name it declares
+`nonlocal` is passed as outer's cell (parameter type `outer·y`, the cell class), so writes reach outer. Siblings
+pass on what their callees capture. Checker.lean `inferFunctions` infers all functions' results together, in rounds,
+so a function may call one defined after it and two may call each other (warp hoists functions; before, W0 rejected
+`a() := b() + 1; b() := 5`). A function giving a literal `true` returns 1 in warp (card bool-return). Cards: nested-two-deep (warp cannot read two levels up),
+nonlocal-assign-unchecked (KNOWN_HOLES), named-constructor-args.
+
+## return
+
+`return v` as a function body's last statement is v. Before the end, it is `emit f·return v` and f's body runs
+inside `on f·return { break event }` (the effect handlers above, so no new W0 form and no new proof): the innermost
+handler is the running call's, so recursion returns from the right call. The event's payload is typed `any`, so a
+function that returns early is typed by the join with `any` (sound, imprecise: `f(x) := { if x > 2 { return 7 }; 1 }`
+is `any`). Declared result types (`-> int`, `: int`) are still outside W0.
+
+## use, min/max, text order
+
+`use list` (src/law/type_model/used_modules.rs) brings the definitions of lib/list.warp the program calls, and the
+ones those call, as if the program had written them (not the ones it defines itself). Most of lib/text.warp still
+needs builtins outside W0 (upper, chars, split, ends_with, ord, sort). `min(a, b)` / `max(a, b)` export as
+`b < a ? b : a` / `a < b ? b : a`, a and b bound once (typed `any`). `<` orders texts by codepoints (`ltValues`,
+the checker's `textual`); `"a" < 1` stays out (a one-letter `"a"` is a codepoint in warp).
+`sum` comes along as the warp definition `sum(xs) := { out = 0; for x in xs { out = out + x }; out }` (used_modules.rs
+LIBRARY_WORDS: warp's sum folds from 0, `sum(["a", "b"])` is "0ab"); `.size`, `.count`, `.length` are `count`. A
+function local widens over the numbers it is given, as a main-level name does (P45); an annotated parameter's cell
+keeps its annotation (`Item.cell c (some t)`, P203). Elaboration types a loop variable by its list's element type
+(Expr.rewrite takes P), so `out + x` in a loop over floats is a number, not `any` cast to the local's first type.
+Card sum-empty: `sum []` prints the word sum.

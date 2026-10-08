@@ -245,7 +245,7 @@ impl WasmGcEmitter {
 		let mut typed_lists = self.find_typed_lists(&user_fn.body);
 		for (index, param) in user_fn.params.iter().enumerate().filter(|(index, _)| self.takes_list_abi(name, *index)) {
 			let _ = index;
-			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true });
+			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true, aliased: true });
 		}
 		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 		let typed_maps = self.find_typed_maps(&user_fn.body);
@@ -272,6 +272,7 @@ impl WasmGcEmitter {
 		}
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
 		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
+		let saved_loop_values = self.declare_loop_values(&mut locals, &user_fn.body);
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, &user_fn.body, num_params as usize);
 
@@ -322,6 +323,7 @@ impl WasmGcEmitter {
 		self.scope = saved_scope;
 		self.int_scratch = saved_scratch;
 		self.next_temp_local = saved_temp_local;
+		self.loop_values = saved_loop_values;
 		self.returns_node = saved_returns_node;
 		self.returns_float = saved_returns_float;
 		self.returns_list = saved_returns_list;

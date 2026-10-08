@@ -160,6 +160,10 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			if let Node::Symbol(name) = left.drop_meta() {
 				widen_to_float(scope, name, right);
+				// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
+				if *op == Op::AddAssign {
+					type_list_by_first_append(name, &Node::Key(left.clone(), Op::Add, right.clone()), scope);
+				}
 			}
 			collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
 		}
@@ -214,6 +218,7 @@ pub(super) fn widen_element_type(scope: &mut Scope, list: &Node, value: &Node) {
 		(element, assigned) if element == assigned => return,
 		(INT_WORD, FLOAT_WORD) => format!("{LIST_OF_PREFIX}{FLOAT_WORD}"),
 		(_, INT_WORD) if element == RATIONAL_WORD || element == FLOAT_WORD => return, // an Int fits a rational or float list
+		(FLOAT_WORD, RATIONAL_WORD) => return, // `xs#1 = 0.5` (an exact decimal) of a float list is stored as its f64
 		_ => NODE_LIST_TYPE.to_string(),
 	};
 	local.type_node = Some(Box::new(Node::Symbol(widened)));

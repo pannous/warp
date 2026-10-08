@@ -16,7 +16,7 @@ fn a_global_number_list_read_by_a_function_is_an_array() {
 fn a_global_typed_list_reads_as_its_list() {
 	is!("xs = [1, 2, 3]; f() := xs; f()", ints(vec![1, 2, 3]));
 	is!("xs = [1, 2]; xs.add(3); g() := count xs; [g(), xs]", list(vec![int(3), ints(vec![1, 2, 3])]));
-	is!("xs = [1, 2, 3]; ys = xs; ys#1 = 9; f() := xs#1 + ys#1; f()", 10);
+	is!("xs = [1, 2, 3]; ys = xs; ys#1 = 9; f() := xs#1 + ys#1; f()", 18); // P200b: ys and xs are one list
 }
 
 /// a function that changes the global list keeps it a Node list, as before
