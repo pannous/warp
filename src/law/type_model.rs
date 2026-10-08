@@ -718,7 +718,7 @@ impl Exporter {
 		let mut items = vec![
 			format!(".bind {} .var none ({}) false", quoted(&tuple), self.expression(list)?),
 			format!(".bind {} .var none (.int 0) false", quoted(&count)),
-			format!(".statement (.forIn \"·item\" (.glob {}) (.assign {} (.add (.glob {}) (.int 1))))", quoted(&tuple), quoted(&count), quoted(&count)),
+			format!(".statement (.forIn \"·item\" (.glob {}) (.assign {} (.add (.glob {}) (.int 1))) {UNIT_TYPE})", quoted(&tuple), quoted(&count), quoted(&count)),
 			format!(".statement (.ite (.eq false (.glob {}) (.int {})) .unit (.error \"wrong number of values\"))", quoted(&count), names.len()),
 		];
 		for (position, name) in names.iter().enumerate() {
@@ -874,7 +874,7 @@ impl Exporter {
 		self.locals.push(variable.clone());
 		let body = self.breaking_in(None, |exporter| exporter.block(body));
 		self.locals.pop();
-		Ok(format!(".forIn {} ({list}) ({})", quoted(&variable), body?))
+		Ok(format!(".forIn {} ({list}) ({}) {UNIT_TYPE}", quoted(&variable), body?))
 	}
 
 	/// `x => body`: x is a local of the body; a lambda of no or several parameters is not in W0
@@ -928,7 +928,7 @@ impl Exporter {
 				format!(".seq ({}) ({})", increment(TALLY_INDEX), matches(first))
 			}
 		};
-		let walk = format!(".forIn \"·item\" ({}) ({step})", self.expression(list)?);
+		let walk = format!(".forIn \"·item\" ({}) ({step}) {UNIT_TYPE}", self.expression(list)?);
 		let start = format!(".seq ({}) ({})", write(CELL_FIELD, ".int 0".to_string()), write(TALLY_INDEX, ".int 0".to_string()));
 		let counted = format!(".letIn \"·t\" (.cls {path}) (.new {path}) (.seq ({start}) (.seq ({walk}) ({})))", field(CELL_FIELD));
 		match item {
@@ -1072,7 +1072,7 @@ impl Exporter {
 				_ => unsupported(node),
 			},
 			Node::Key(condition, Op::Do, body) => match condition.drop_meta() {
-				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self.breaking_in(None, |exporter| exporter.binary(".loop", condition, body)),
+				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self.breaking_in(None, |exporter| exporter.binary(".loop", condition, body).map(|lean| format!("{lean} {UNIT_TYPE}"))),
 				_ => unsupported(node),
 			},
 			Node::Key(left, Op::Add, right) if is_list_literal(left) || is_list_literal(right) => self.binary(".append", left, right),

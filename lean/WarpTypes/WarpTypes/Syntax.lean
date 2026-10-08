@@ -36,7 +36,9 @@ inductive Expr where
   /-- `a == b` (loose), or with `same` (`a same b`, `===`) identity on instances (P208) -/
   | eq (same : Bool) (a b : Expr)
   | ite (c a b : Expr)
-  | loop (c body : Expr)
+  /-- `while c { body }` (P55): its value is the last body value, ø when the body never ran; `last` is that value so
+  far, ø in a program, or the body running -/
+  | loop (c body last : Expr)
   | seq (a b : Expr)
   /-- `xs#i`, 1-based -/
   | index (l i : Expr)
@@ -83,7 +85,7 @@ inductive Expr where
   outside it), unknown (none) until the abort leaves the handler's scope (run time) -/
   | abort (ev : String) (k : Option Nat) (e : Expr)
   /-- `for y in l { body }`: body runs once per item of the list l, the local y holding the item; gives ø -/
-  | forIn (y : String) (l body : Expr)
+  | forIn (y : String) (l body last : Expr)
   /-- `y => body`, a lambda: it evaluates to the closure `clo y body` once the locals it captures are substituted -/
   | lam (y : String) (body : Expr)
   /-- a function value: closed but for its parameter y (run time only) -/
@@ -112,7 +114,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | lt a b => lt (a.subst y v) (b.subst y v)
   | eq s a b => eq s (a.subst y v) (b.subst y v)
   | ite c a b => ite (c.subst y v) (a.subst y v) (b.subst y v)
-  | loop c b => loop (c.subst y v) (b.subst y v)
+  | loop c b d => loop (c.subst y v) (b.subst y v) (d.subst y v)
   | seq a b => seq (a.subst y v) (b.subst y v)
   | index a b => index (a.subst y v) (b.subst y v)
   | range a b => range (a.subst y v) (b.subst y v)
@@ -131,7 +133,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | emit ev e => emit ev (e.subst y v)
   | scope k e => scope k (e.subst y v)
   | abort ev k e => abort ev k (e.subst y v)
-  | forIn z l b => forIn z (l.subst y v) (if z = y then b else b.subst y v)
+  | forIn z l b d => forIn z (l.subst y v) (if z = y then b else b.subst y v) (d.subst y v)
   | lam z b => lam z (if z = y then b else b.subst y v)
   | app f a => app (f.subst y v) (a.subst y v)
   | e => e
@@ -139,11 +141,12 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
 /-- the main-level names an expression assigns or binds -/
 def assigned : Expr → List String
   | assign x e | init x e => x :: e.assigned
-  | cons a b | add a b | arith _ a b | lt a b | eq _ a b | loop a b | seq a b | index a b | range a b | append a b
+  | cons a b | add a b | arith _ a b | lt a b | eq _ a b | seq a b | index a b | range a b | append a b
   | tryCatch a b | app a b
   | handle _ a b => a.assigned ++ b.assigned
-  | ite c a b => c.assigned ++ a.assigned ++ b.assigned
-  | letIn _ _ e b | forIn _ e b => e.assigned ++ b.assigned
+  | ite c a b | loop c a b => c.assigned ++ a.assigned ++ b.assigned
+  | forIn _ e b d => e.assigned ++ b.assigned ++ d.assigned
+  | letIn _ _ e b => e.assigned ++ b.assigned
   | set a _ b => a.assigned ++ b.assigned
   | call _ e | cast e _ | broadcast _ e | get e _ | isA e _ | emit _ e | scope _ e | abort _ _ e | lam _ e => e.assigned
   | _ => []

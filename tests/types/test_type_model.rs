@@ -213,6 +213,13 @@ const CORPUS: &[&str] = &[
 	"b = 1; a = b = 3; a + b",
 	"a = b = c = 2; a + b + c",
 	"a = b = [1]; a#1",
+	"x = for i in [1, 2, 3] { i * 10 }; x",
+	"i = 0; w = while i < 3 { i += 1; i * 2 }; w",
+	"(for x in [1, 2] { x }) + 1",
+	"xs = [1, 2]; for x in xs { x + 1 }",
+	"f(n) := for x in [1, 2] { x + n }; f(1)",
+	"x = for i in [] { i }; x",
+	"i = 5; w = while i < 3 { i += 1 }; w",
 	"count [1, 2]",
 	"xs = [1, 2, 3]; count(xs)",
 	"2 in [1, 2]",
@@ -281,6 +288,7 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 
 /// Programs both accept whose values differ, each with its card
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
+	("f(xs) := for x in xs { x + 1 }; f([1, 2])", "loop-param"),
 	("class P { x: int }; p = P(1); a = p.x = 5; a + p.x", "chain-field"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep

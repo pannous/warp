@@ -55,10 +55,10 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     match typeOf P Γ c, typeOf P Γ a, typeOf P Γ b with
     | some _, some ta, some tb => some (join ta tb)
     | _, _, _ => none
-  | .loop c b =>
-    match typeOf P Γ c, typeOf P Γ b with
-    | some _, some _ => some .unit
-    | _, _ => none
+  | .loop c b d =>
+    match typeOf P Γ c, typeOf P Γ b, typeOf P Γ d with
+    | some _, some tb, some td => some (join tb (join td .unit))
+    | _, _, _ => none
   | .seq a b =>
     match typeOf P Γ a, typeOf P Γ b with
     | some _, some tb => some tb
@@ -121,8 +121,10 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _ => none
   | .scope _ e => typeOf P Γ e
   | .abort ev _ e => (typeOf P Γ e).bind fun te => if sub te (P.aborts ev) then some .never else none
-  | .forIn y l b => (typeOf P Γ l).bind fun tl =>
-    if listy tl || tl == .text then (typeOf P (Γ.set y (elementTy tl)) b).map fun _ => .unit else none
+  | .forIn y l b d => (typeOf P Γ l).bind fun tl =>
+    if listy tl || tl == .text then (typeOf P (Γ.set y (elementTy tl)) b).bind fun tb =>
+      (typeOf P Γ d).map fun td => join tb (join td .unit)
+    else none
   | .lam y b => (typeOf P (Γ.set y .any) b).map .fn
   | .clo y b => (typeOf P (Ctx.empty.set y .any) b).map .fn
   | .app f a =>
@@ -172,9 +174,9 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     intro Γ t h; simp only [typeOf] at h; split at h
     · rename_i hc ha hb; cases h; exact .ite (ih0 hc) (ih1 ha) (ih2 hb)
     · cases h
-  | loop c b ih1 ih2 =>
+  | loop c b d ih1 ih2 ih3 =>
     intro Γ t h; simp only [typeOf] at h; split at h
-    · rename_i hc hb; cases h; exact .loop (ih1 hc) (ih2 hb)
+    · rename_i hc hb hd; cases h; exact .loop (ih1 hc) (ih2 hb) (ih3 hd)
     · cases h
   | seq a b ih1 ih2 =>
     intro Γ t h; simp only [typeOf] at h; split at h
@@ -274,14 +276,14 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     cases hR : P.effects ev <;> cases he : typeOf P Γ e <;> simp only [typeOf, hR, he] at hs <;> try cases hs
     exact .emit hR (ih he)
   | scope k e ih => intro Γ t hs; exact .scope (ih hs)
-  | forIn y l b ih1 ih2 =>
+  | forIn y l b d ih1 ih2 ih3 =>
     intro Γ t hs
     simp only [typeOf, Option.bind_eq_some_iff] at hs
     obtain ⟨tl, hl, hs⟩ := hs
     split at hs
-    · simp only [Option.map_eq_some_iff] at hs
-      obtain ⟨_, hb, rfl⟩ := hs
-      exact .forIn (ih1 hl) (ih2 hb)
+    · simp only [Option.bind_eq_some_iff, Option.map_eq_some_iff] at hs
+      obtain ⟨tb, hb, td, hd, rfl⟩ := hs
+      exact .forIn (ih1 hl) (sub_refl _) (ih2 hb) (ih3 hd)
     · cases hs
   | lam y b ih =>
     intro Γ t hs; simp only [typeOf, Option.map_eq_some_iff] at hs
@@ -454,13 +456,13 @@ def widen : Ty → Ty
 /-- the values a main-level name is given -/
 def valuesOf (x : String) : Expr → List Expr
   | .assign y e | .init y e => (if y = x then [e] else []) ++ valuesOf x e
-  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .loop a b | .seq a b | .index a b | .range a b | .append a b
+  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .range a b | .append a b
   | .tryCatch a b | .app a b => valuesOf x a ++ valuesOf x b
-  | .ite c a b => valuesOf x c ++ valuesOf x a ++ valuesOf x b
+  | .ite c a b | .loop c a b | .forIn _ c a b => valuesOf x c ++ valuesOf x a ++ valuesOf x b
   | .letIn _ _ e b => valuesOf x e ++ valuesOf x b
   | .set a _ b => valuesOf x a ++ valuesOf x b
   | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e | .abort _ _ e => valuesOf x e
-  | .handle _ h b | .forIn _ h b => valuesOf x h ++ valuesOf x b
+  | .handle _ h b => valuesOf x h ++ valuesOf x b
   | .lam _ b => valuesOf x b
   | _ => []
 
@@ -483,7 +485,7 @@ def Expr.rewrite (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr → Expr
   | .lt a b => f Γ (.lt (a.rewrite f Γ) (b.rewrite f Γ))
   | .eq s a b => f Γ (.eq s (a.rewrite f Γ) (b.rewrite f Γ))
   | .ite c a b => f Γ (.ite (c.rewrite f Γ) (a.rewrite f Γ) (b.rewrite f Γ))
-  | .loop c b => f Γ (.loop (c.rewrite f Γ) (b.rewrite f Γ))
+  | .loop c b d => f Γ (.loop (c.rewrite f Γ) (b.rewrite f Γ) (d.rewrite f Γ))
   | .seq a b => f Γ (.seq (a.rewrite f Γ) (b.rewrite f Γ))
   | .index a b => f Γ (.index (a.rewrite f Γ) (b.rewrite f Γ))
   | .range a b => f Γ (.range (a.rewrite f Γ) (b.rewrite f Γ))
@@ -501,7 +503,7 @@ def Expr.rewrite (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr → Expr
   | .scope k e => f Γ (.scope k (e.rewrite f Γ))
   | .abort ev k e => f Γ (.abort ev k (e.rewrite f Γ))
   -- the loop variable's type would need P: rewrites see it as any
-  | .forIn y l b => f Γ (.forIn y (l.rewrite f Γ) (b.rewrite f (Γ.set y .any)))
+  | .forIn y l b d => f Γ (.forIn y (l.rewrite f Γ) (b.rewrite f (Γ.set y .any)) (d.rewrite f Γ))
   | .lam y b => f Γ (.lam y (b.rewrite f (Γ.set y .any)))
   | .app a b => f Γ (.app (a.rewrite f Γ) (b.rewrite f Γ))
   | e => f Γ e
@@ -592,13 +594,13 @@ def observe (P : Program) (Γ : Ctx) : Expr → List Observation
       | some (.cls p), some tv => [.field p f tv]
       | _, _ => []) ++ observe P Γ o ++ observe P Γ v
   | .letIn y t e b => observe P Γ e ++ observe P (Γ.set y t) b
-  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .loop a b | .seq a b | .index a b | .range a b | .append a b
+  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .range a b | .append a b
   | .tryCatch a b | .app a b => observe P Γ a ++ observe P Γ b
-  | .ite c a b => observe P Γ c ++ observe P Γ a ++ observe P Γ b
+  | .ite c a b | .loop c a b => observe P Γ c ++ observe P Γ a ++ observe P Γ b
   | .assign _ e | .init _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e => observe P Γ e
   | .handle ev h b => observeHandler P Γ ev h ++ observe P Γ b
   | .abort ev _ e => ((typeOf P Γ e).getD .any |> Observation.abort ev) :: observe P Γ e
-  | .forIn y l b => observe P Γ l ++ observe P (Γ.set y (((typeOf P Γ l).map elementTy).getD .any)) b
+  | .forIn y l b d => observe P Γ l ++ observe P (Γ.set y (((typeOf P Γ l).map elementTy).getD .any)) b ++ observe P Γ d
   | .lam y b => observe P (Γ.set y .any) b
   | _ => []
 where
@@ -684,7 +686,7 @@ W0 does not have): so no abort escapes its block -/
 def Expr.breaksIn (ev : Option String) : Expr → Bool
   | .abort e k x => ev == some e && k.isNone && x.breaksIn ev
   | .handle e h b => h.breaksIn (some e) && b.breaksIn ev
-  | .loop c b | .forIn _ c b => c.breaksIn none && b.breaksIn none
+  | .loop c b d | .forIn _ c b d => c.breaksIn none && b.breaksIn none && d.breaksIn none
   | .lam _ b => b.breaksIn none
   | .letIn _ _ e b => e.breaksIn ev && b.breaksIn ev
   | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .range a b | .append a b | .tryCatch a b

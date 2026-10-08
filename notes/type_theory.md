@@ -306,6 +306,17 @@ type `elementTy`, `text` for a text, as `#` gives). `count xs`, `count x in xs` 
 outside W0. warp checks a loop body's last expression by another rule: `for c in ["a"] { c + 1 }` is a compile
 error there while `c = "a"; c + 1` is "a1" (card loop-text).
 
+## Loop values (P55)
+
+A loop's value is its last body value, ø when the body never ran. `loop c b last` and `forIn y l b last` carry that
+value (ø in a program, the exporter writes `.unit`); a round runs the body in the `last` position, then
+`loop c b v` steps to `ite c (loop c b b) v`, `forIn y (h :: t) b v` to `forIn y t b (b[y := h])`, and the end of the
+list or text gives v. The type is `join tb (join td ø)`, syntax-directed and monotone, so `for i in [1, 2] { i }` is
+`any` (an int or ø). forIn's loop variable takes any type above the element type (`sub (elementTy tl) T`): a round
+keeps the body's typing, no narrowing. warp: a loop over a list parameter gives the wrong value (card loop-param,
+KNOWN_VALUE_DIFFERENCES), a loop that never ran gives 0 (card loop-empty; W0 keeps no ø value to compare), text and
+list bodies are card loop-value.
+
 ## not, and, or
 
 No new forms: `not e` is `if e then no else yes`; `a and b` is `if a then b else a` and `a or b` is

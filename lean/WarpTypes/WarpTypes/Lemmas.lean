@@ -252,11 +252,12 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨a', h1, s1⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
     exact ⟨_, .ite h0 h1 h2, join_mono s1 s2⟩
-  | loop _ _ ih1 ih2 =>
+  | loop _ _ _ ih1 ih2 ih3 =>
     intro Γ' hs
     obtain ⟨_, h1, _⟩ := ih1 hs
-    obtain ⟨_, h2, _⟩ := ih2 hs
-    exact ⟨_, .loop h1 h2, sub_refl _⟩
+    obtain ⟨_, h2, s2⟩ := ih2 hs
+    obtain ⟨_, h3, s3⟩ := ih3 hs
+    exact ⟨_, .loop h1 h2 h3, join_mono s2 (join_mono s3 (sub_refl _))⟩
   | seq _ _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨_, h1, _⟩ := ih1 hs
@@ -342,11 +343,12 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih hs
     exact ⟨_, .abort h1 (sub_trans s1 st), sub_refl _⟩
-  | forIn _ _ ih1 ih2 =>
+  | forIn _ sT _ _ ih1 ih2 ih3 =>
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih1 hs
-    obtain ⟨_, h2, _⟩ := ih2 (hs.set_le _ (elementTy_mono s1))
-    exact ⟨_, .forIn h1 h2, sub_refl _⟩
+    obtain ⟨_, h2, s2⟩ := ih2 (hs.set _ _)
+    obtain ⟨_, h3, s3⟩ := ih3 hs
+    exact ⟨_, .forIn h1 (sub_trans (elementTy_mono s1) sT) h2 h3, join_mono s2 (join_mono s3 (sub_refl _))⟩
   | lam _ ih =>
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih (hs.set _ _)
@@ -393,7 +395,8 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | eq _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .eq (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | ite _ _ _ ih0 ih1 ih2 =>
     intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .ite (ih0 hΓ hv htv) (ih1 hΓ hv htv) (ih2 hΓ hv htv)
-  | loop _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .loop (ih1 hΓ hv htv) (ih2 hΓ hv htv)
+  | loop _ _ _ ih1 ih2 ih3 =>
+    intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .loop (ih1 hΓ hv htv) (ih2 hΓ hv htv) (ih3 hΓ hv htv)
   | seq _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .seq (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | index _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .index (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | range _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .range (ih1 hΓ hv htv) (ih2 hΓ hv htv)
@@ -433,16 +436,16 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | emit hR _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .emit hR (ih hΓ hv htv)
   | scope _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .scope (ih hΓ hv htv)
   | abort _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .abort (ih hΓ hv htv) st
-  | @forIn Γ0 z l b tl tb hl hb ih1 ih2 =>
+  | @forIn Γ0 z l b d tl T tb td hl sT hb hd ih1 ih2 ih3 =>
     intro Γ y tv v hΓ hv htv
     simp only [Expr.subst]
     subst hΓ
     by_cases hzy : z = y
     · subst hzy
       rw [Ctx.set_same] at hb
-      simpa using HasType.forIn (ih1 rfl hv htv) hb
+      simpa using HasType.forIn (ih1 rfl hv htv) sT hb (ih3 rfl hv htv)
     · simp only [hzy, ite_false]
-      exact .forIn (ih1 rfl hv htv) (ih2 (Ctx.set_comm Γ hzy tv _) hv htv)
+      exact .forIn (ih1 rfl hv htv) sT (ih2 (Ctx.set_comm Γ hzy tv _) hv htv) (ih3 rfl hv htv)
   | @lam Γ0 z b tb hb ih =>
     intro Γ y tv v hΓ hv htv
     simp only [Expr.subst]

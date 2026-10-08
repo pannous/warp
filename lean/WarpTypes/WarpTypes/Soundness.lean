@@ -7,6 +7,11 @@ open Ty Expr
 
 variable {P : Program}
 
+/-- a loop's type after a round whose value has a type below the body's -/
+theorem loop_bound {tb t td : Ty} (h : sub t tb = true) : sub (join tb (join t .unit)) (join tb (join td .unit)) = true :=
+  join_least (join_upper_left _ _)
+    (join_least (sub_trans h (join_upper_left _ _)) (sub_trans (join_upper_right td .unit) (join_upper_right tb _)))
+
 /-- the type of a plugged frame: the hole has a type, and anything of a smaller type in the hole gives a smaller type -/
 theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
     ∃ te, HasType P Γ e te ∧
@@ -70,10 +75,13 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
   case abort => cases h with | abort he st => exact ⟨_, he, fun h' s => ⟨_, .abort h' (sub_trans s st), sub_refl _⟩⟩
   case forIn =>
     cases h with
-    | forIn hl hb =>
-      refine ⟨_, hl, fun h' s => ?_⟩
-      obtain ⟨_, hb', _⟩ := narrow hb ((CtxSub.refl _).set_le _ (elementTy_mono s))
-      exact ⟨_, .forIn h' hb', sub_refl _⟩
+    | forIn hl sT hb hd => exact ⟨_, hl, fun h' s => ⟨_, .forIn h' (sub_trans (elementTy_mono s) sT) hb hd, sub_refl _⟩⟩
+  case loopLast =>
+    cases h with
+    | loop hc hb hd => exact ⟨_, hd, fun h' s => ⟨_, .loop hc hb h', join_mono (sub_refl _) (join_mono s (sub_refl _))⟩⟩
+  case forInLast =>
+    cases h with
+    | forIn hl sT hb hd => exact ⟨_, hd, fun h' s => ⟨_, .forIn hl sT hb h', join_mono (sub_refl _) (join_mono s (sub_refl _))⟩⟩
 
 /-- a value of a class type is a reference -/
 theorem cls_value {Γ v p} (h : HasType P Γ v (.cls p)) (hv : v.isValue = true) : ∃ a, v = .ref a p := by
@@ -245,7 +253,9 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
   | loop =>
     intro t h hμ
     cases h with
-    | loop hc hb => exact ⟨⟨_, .ite hc (.seq hb (.loop hc hb)) .unit, by simp [join, sub_refl]⟩, hμ⟩
+    | loop hc hb hd =>
+      exact ⟨⟨_, .ite hc (.loop hc hb hb) hd,
+        join_least (loop_bound (sub_refl _)) (sub_trans (join_upper_left _ .unit) (join_upper_right _ _))⟩, hμ⟩
   | seq => intro t h hμ; cases h with | seq _ hb => exact ⟨⟨_, hb, sub_refl _⟩, hμ⟩
   | @index l i μ vl _ =>
     intro t h hμ
@@ -372,29 +382,30 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     intro t h hμ
     obtain ⟨_, he, _⟩ := frame_typing F h
     cases he with | abort hv st => exact ⟨⟨_, .abort hv st, sub_never _⟩, hμ⟩
-  | forNil => intro t h hμ; cases h; exact ⟨⟨_, .unit, sub_refl _⟩, hμ⟩
-  | forOther => intro t _ hμ; exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
-  | @forText y s b μ =>
+  | forNil =>
     intro t h hμ
     cases h with
-    | forIn hl hb =>
+    | forIn _ _ _ hd => exact ⟨⟨_, hd, sub_trans (join_upper_left _ _) (join_upper_right _ _)⟩, hμ⟩
+  | forOther => intro t _ hμ; exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+  | @forText y s b v μ _ =>
+    intro t h hμ
+    cases h with
+    | forIn hl sT hb hd =>
       cases hl
       unfold walkText
       split
-      · exact ⟨⟨_, .unit, sub_refl _⟩, hμ⟩
-      · obtain ⟨_, h1, _⟩ := let_typed hb rfl .text (by simp [elementTy, sub])
-        exact ⟨⟨_, .seq h1 (.forIn .text hb), sub_refl _⟩, hμ⟩
-  | @forCons y hd tl b μ vh vt =>
+      · exact ⟨⟨_, hd, sub_trans (join_upper_left _ _) (join_upper_right _ _)⟩, hμ⟩
+      · obtain ⟨_, h1, s1⟩ := let_typed hb rfl .text (by simpa [elementTy] using sT)
+        exact ⟨⟨_, .forIn .text sT hb h1, loop_bound s1⟩, hμ⟩
+  | @forCons y hd tl b v μ vh vt _ =>
     intro t h hμ
     cases h with
-    | forIn hl hb =>
+    | forIn hl sT hb hd' =>
       cases hl with
       | cons hh ht he =>
-        obtain ⟨_, h1, _⟩ := let_typed hb vh hh (by simp [elementTy, element]; exact join_upper_left _ _)
-        have hs : ∀ {a l e}, element l = some e → sub (elementTy l) (elementTy (.list (join a e))) = true := by
-          intro a l e he; rw [elementTy_of_element he, elementTy_of_element rfl]; exact join_upper_right _ _
-        obtain ⟨_, hb', _⟩ := narrow hb ((CtxSub.refl _).set_le _ (hs he))
-        exact ⟨⟨_, .seq h1 (.forIn ht hb'), sub_refl _⟩, hμ⟩
+        obtain ⟨_, h1, s1⟩ := let_typed hb vh hh (sub_trans (by simp [elementTy, element]; exact join_upper_left _ _) sT)
+        refine ⟨⟨_, .forIn ht (sub_trans ?_ sT) hb h1, loop_bound s1⟩, hμ⟩
+        rw [elementTy_of_element he, elementTy_of_element rfl]; exact join_upper_right _ _
   | tryAbort =>
     intro t h hμ
     cases h with | tryCatch he _ => cases he with | abort hv st => exact ⟨⟨_, .abort hv st, sub_never _⟩, hμ⟩
@@ -455,7 +466,7 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
   | @eq _ s a b _ _ _ _ ih1 ih2 =>
     exact in_frame (.eqL s b) rfl (ih1 hΓ hμ) fun va => in_frame (.eqR s a) va (ih2 hΓ hμ) fun vb => steps (.eq va vb)
   | @ite _ c a b _ _ _ _ _ _ ih0 _ _ => exact in_frame (.ite a b) rfl (ih0 hΓ hμ) fun vc => steps (.ite vc)
-  | loop => exact steps .loop
+  | @loop _ c b _ _ _ _ _ _ _ _ _ ih3 => exact in_frame (.loopLast c b) rfl (ih3 hΓ hμ) fun vd => steps (.loop vd)
   | @seq _ a b _ _ _ _ ih1 _ => exact in_frame (.seq b) rfl (ih1 hΓ hμ) fun va => steps (.seq va)
   | @index _ l i _ _ _ _ ih1 ih2 =>
     exact in_frame (.indexL i) rfl (ih1 hΓ hμ) fun vl => in_frame (.indexR l) vl (ih2 hΓ hμ) fun vi => steps (.index vl vi)
@@ -516,13 +527,13 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     · exact steps .scopeError
     · exact steps (.scopeAbort hv)
     · exact steps (.scopeStep hs)
-  | @forIn _ y l b _ _ _ _ ih _ =>
-    refine in_frame (.forIn y b) rfl (ih hΓ hμ) fun hv => ?_
+  | @forIn _ y l b d _ _ _ _ _ _ _ _ ih _ ihd =>
+    refine in_frame (.forIn y b d) rfl (ih hΓ hμ) fun hv => in_frame (.forInLast y l b) hv (ihd hΓ hμ) fun vd => ?_
     cases l with
-    | nil => exact steps .forNil
-    | cons h t => simp only [isValue, Bool.and_eq_true] at hv; exact steps (.forCons hv.1 hv.2)
-    | text s => exact steps .forText
-    | _ => exact steps (.forOther hv rfl rfl)
+    | nil => exact steps (.forNil vd)
+    | cons h t => simp only [isValue, Bool.and_eq_true] at hv; exact steps (.forCons hv.1 hv.2 vd)
+    | text s => exact steps (.forText vd)
+    | _ => exact steps (.forOther hv rfl rfl vd)
   | @abort _ ev k e _ _ _ ih => exact in_frame (.abort ev k) rfl (ih hΓ hμ) fun v => .inr (.inr (.inl ⟨ev, k, e, rfl, v⟩))
 
 /-- any number of steps -/
