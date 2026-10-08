@@ -29,6 +29,11 @@ const SCALAR_OPERATORS: [Op; 3] = [Op::Abs, Op::Sqrt, Op::Cbrt];
 const ALL_ITEM: &str = "all_item";
 /// Declared parameter kinds that take one element of a list (P50)
 const SCALAR_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint];
+/// `xs .op ys` of two lists (card gpu-vectors, notes/gpu.md): the lists held once, their items paired by index
+const PAIRED_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; (1 to (if #LEFT == #RIGHT then #LEFT else raise \"element-wise operator: the lists differ in length\")).map(paired_index => paired_item))";
+const PAIRED_ITEM: &str = "LEFT#paired_index + RIGHT#paired_index";
+/// `dot(xs, ys)` is `sum(xs .* ys)`, unless the program defines dot
+const DOT_WORD: &str = "dot";
 
 /// P84 (user: "This should have already been done with broadcasting"): several juxtaposed arguments of a function of one
 /// parameter are one list, `sum 1 2 3` is `sum [1 2 3]`, and a scalar function broadcasts over it (`square 1 2 3`).
@@ -269,7 +274,8 @@ pub fn lower(program: Node) -> Node {
 	collect_list_variables(&program, &broadcasting, &mut assigned);
 	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
 	let scalar_parameters = found.iter().map(|definition| (definition.name.clone(), definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect())).collect();
-	Broadcast { functions: broadcasting, list_variables, scalar_parameters }.rewrite(program)
+	let defines_dot = defined.contains(&DOT_WORD.to_string());
+	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, paired: Default::default() }.rewrite(program)
 }
 
 /// `map(list, broadcast_item => applied(broadcast_item))`
@@ -363,6 +369,8 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 				let is_list = declared_list || match value.drop_meta() {
 					Node::List(items, Bracket::Square, _) => !items.iter().any(is_pair),
 					_ if is_range(value) => true,
+					_ if element_wise_parts(value).is_some() => true,
+					_ if crate::analyzer::typed_array_value(value).is_some() => true,
 					Node::Empty => appended.contains(name),
 					// `xs = xs + [i]`
 					Node::Key(left, Op::Add, right) => matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)),
@@ -414,6 +422,9 @@ struct Broadcast {
 	list_variables: HashSet<String>,
 	/// Per function of several parameters: which parameters take one value (`add(a, b) := a + b`: both)
 	scalar_parameters: HashMap<String, Vec<bool>>,
+	defines_dot: bool,
+	/// element-wise operators between two lists so far: each holds its lists under names of its own
+	paired: std::cell::Cell<usize>,
 }
 
 impl Broadcast {
@@ -430,6 +441,7 @@ impl Broadcast {
 				}).collect();
 				self.broadcast_call(&items, &bracket, &separator)
 					.or_else(|| self.broadcast_one_argument(&items, &bracket, &separator))
+					.or_else(|| self.dot(&items, &bracket))
 					.unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, op, right) if matches!(left.drop_meta(), Node::Empty) && SCALAR_OPERATORS.contains(&op) => {
@@ -438,8 +450,13 @@ impl Broadcast {
 			}
 			Node::Key(left, op, right) => {
 				let (left, right) = (self.rewrite(*left), self.rewrite(*right));
+				let key = Node::Key(Box::new(left), op, Box::new(right));
+				if let Some(paired) = self.paired_lists(&key) {
+					return paired;
+				}
+				let Node::Key(left, op, right) = key else { unreachable!() };
 				let method_call = (op == Op::Dot).then(|| self.broadcast_method(&left, &right)).flatten();
-				method_call.unwrap_or(Node::Key(Box::new(left), op, Box::new(right)))
+				method_call.unwrap_or(Node::Key(left, op, right))
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
 			other => other,
@@ -509,6 +526,40 @@ impl Broadcast {
 			call[index + 1] = item;
 			Node::List(call, Bracket::Round, Separator::None)
 		}))
+	}
+
+	/// `xs .op ys` with both sides lists: the items paired by index (lists of different lengths are an error)
+	fn paired_lists(&self, node: &Node) -> Option<Node> {
+		let (receiver, op, operand) = element_wise_parts(node)?;
+		if !self.is_list_expression(&receiver) || !self.is_list_expression(&operand) {
+			return None;
+		}
+		let count = self.paired.replace(self.paired.get() + 1);
+		let named = |text: &str| text.replace("LEFT", &format!("paired_left_{count}")).replace("RIGHT", &format!("paired_right_{count}"));
+		let item = match crate::warp_parser::parse(&named(PAIRED_ITEM)).drop_meta() {
+			Node::Key(left, _, right) => Node::Key(left.clone(), op, right.clone()),
+			other => unreachable!("{other:?}"),
+		};
+		let bindings = HashMap::from([("paired_left".to_string(), receiver), ("paired_right".to_string(), operand), ("paired_item".to_string(), item)]);
+		Some(crate::law::substitute(&crate::warp_parser::parse(&named(PAIRED_TEMPLATE)), &bindings))
+	}
+
+	/// A list, or an element-wise expression giving one: `xs`, `[1 2]`, `(xs .* 2)`
+	fn is_list_expression(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_list_expression(&items[0]),
+			_ => self.is_list(node) || element_wise_parts(node).is_some_and(|(receiver, _, _)| self.is_list_expression(&receiver)),
+		}
+	}
+
+	/// `dot(xs, ys)`: `sum(xs .* ys)`
+	fn dot(&self, items: &[Node], bracket: &Bracket) -> Option<Node> {
+		let [head, left, right] = items else { return None };
+		if self.defines_dot || *bracket != Bracket::Round || !matches!(head.drop_meta(), Node::Symbol(word) if word == DOT_WORD) {
+			return None;
+		}
+		let product = self.rewrite(crate::analyzer::element_wise(left.clone(), Op::Mul, right.clone()));
+		Some(Node::List(vec![Node::Symbol("sum".to_string()), product], Bracket::Round, Separator::None))
 	}
 
 	/// A list literal that is no object, or a variable only ever assigned one

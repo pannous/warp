@@ -769,7 +769,7 @@ pub(super) fn zero_filled_subscript(element: &Node, one_based: &Node, variables:
 }
 
 /// `int[100]` or `100 * int`: the zero-filled list of that many elements (the parser reads `int[n]` as one already)
-pub(super) fn typed_array_value(value: &Node) -> Option<Node> {
+pub(crate) fn typed_array_value(value: &Node) -> Option<Node> {
 	match value.drop_meta() {
 		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == ZERO_FILL_CALL) => Some(value.clone()),
 		Node::Key(count, Op::Mul, element) => match element.drop_meta() {

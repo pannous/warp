@@ -24,16 +24,15 @@ gpu_compute / gpu_render plumbing (src/gpu.rs, web/playground/host-gpu.js, notes
    operator is a round trip and a single cheap op never beats the CPU (it is memory bound: the copy costs more than
    the arithmetic).
 
-## Precision: the open question (conflicts with P118)
-WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on Metal). warp floats are f64, Ints i64.
-P118 (user, earlier): GPU only on an explicit `@gpu` map, never silent offloading, because f32 results differ. The new
-card asks for an automatic threshold. Options, asked at the Interviewer:
-- (a, recommended) automatic only where the result is identical: Int lists whose items fit i32, computed in i32 with an
-  overflow flag the kernel sets (then the CPU redoes it); float lists go to the GPU only when the program says f32 is
-  fine (`@gpu` on the expression, or a `float32[n]` list).
-- (b) automatic for floats too above the threshold: results rounded to f32 (~7 digits), tests compare with a tolerance.
-- (c) double-float emulation (two f32 per value, ~48-bit mantissa): closer to f64 but not identical, 4–10x slower.
-Default until answered: (a).
+## Precision (P214, user 2026-10-08: option a)
+WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on Metal); warp floats are f64, Ints i64.
+- Automatic offloading only where the result is identical: Int lists whose items fit i32, computed in i32 with an
+  overflow flag the kernel sets (then the CPU redoes it).
+- Floats only when the program allows f32: `@gpu` on the expression, or a `float32[n]` list. Where `@gpu` cannot apply
+  (no adapter, an unsupported operation, big Ints) it runs on the CPU with a warning or hint saying why.
+- Err on the CPU side (P214 addition): start conservative, ≥ 10^7 items or fused chains / data resident on the GPU
+  only; a single cheap op like `xs .* 3` rarely pays off. Measurements set the real bounds later (card gpu-threshold).
+Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) double-float emulation.
 
 ## Threshold and transfer cost
 - Cost per GPU call: dispatch + readback ≈ 50–200 µs (map_async round trip), plus the copy: wasm GC array → host
@@ -53,7 +52,13 @@ Default until answered: (a).
 - Big Ints (handles beyond the fixnum range) and non-number items: CPU.
 
 ## Steps
-1. CPU first: `xs .op ys` for two lists (equal length, else a clear error); `dot`. Tests pin the values.
+1. Done (branch gpu-vectors): `xs .op ys` of two lists pairs the items (broadcasting.rs paired_lists: both lists held
+   once under paired_left_N / paired_right_N, `(1 to n).map(i => l#i op r#i)`, different lengths raise "the lists
+   differ in length"); a list is a list literal, a variable only ever assigned lists (now also `float[n]` and
+   element-wise results) or an element-wise expression. `dot(xs, ys)` is `sum(xs .* ys)` unless the program defines
+   dot. Tests: tests/lists/test_element_wise_lists.rs. CPU cost (release, process start included): dot of two
+   float[10^6] 0.47 s, of 10^7 2.05 s (~200 ns an item: indexing through the closure map), slower than
+   `sum(xs .* 2)` (20–30 ns): a fused loop for the paired form is worth doing with the GPU kernel's lowering.
 2. Measure: a probe timing CPU vs GPU for n = 10^4…10^7 on sum, dot, .* then sum, map(sin), with the copy separated
    from the compute; the thresholds come from it.
 3. Ints (option a): `sum`, `dot`, element-wise over $IntList through a host word with an overflow flag, behind the
