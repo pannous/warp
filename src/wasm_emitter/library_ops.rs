@@ -1,5 +1,6 @@
 //! Runtime functions of the library words (`reverse`, `sort`, `upper`, `lower`, `split`, `join`), see library_words.rs
 
+use crate::operators::{op_to_code, Op};
 use crate::type_kinds::{Kind, KIND_MASK};
 use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
@@ -12,8 +13,8 @@ const BRACKET_INFO_MASK: i64 = 0xff;
 /// The operator code in a key's kind, above its KIND_BITS; a type instance `point{x:1}` has none
 const OP_INFO_MASK: i64 = 0xff;
 /// An operator's text in list_text's table: its pointer and length, two i32 words
-const OPERATOR_ENTRY_BYTES: i32 = 8;
-use crate::wasm_emitter::layout::{BYTE, WORD};
+const OPERATOR_ENTRY_BYTES: i32 = 2;
+use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::text_unicode::CaseMapping;
 
 const KEY_KIND: i64 = Kind::Key as i64;
@@ -420,14 +421,19 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// The table list_text joins an entry by: each operator code's written text (operators::written_operator) as its
-	/// pointer and length
-	fn allocate_operator_texts(&mut self) -> u32 {
-		let table: Vec<u8> = (0..=OP_INFO_MASK as usize).flat_map(|code| {
-			let (pointer, length) = self.allocate_string(&crate::operators::written_operator(code));
-			[pointer.to_le_bytes(), length.to_le_bytes()].concat()
-		}).collect();
-		self.allocate_bytes("operator_texts", &table)
+	/// The table list_text joins an entry by: the written texts (operators::written_operator) of the operators up to
+	/// the bound the program's Keys need, then `:` for any code above, in one run of bytes, and for each its offset in
+	/// the run and length as two bytes; returns (run, table). A hello world carries `:` alone (web::test_bundle_budget)
+	fn allocate_operator_texts(&mut self) -> (u32, u32) {
+		let bound = self.written_operator_bound as usize;
+		let texts: Vec<String> = (0..=bound).map(crate::operators::written_operator).chain([crate::operators::Op::Colon.as_str().to_string()]).collect();
+		let mut table = vec![];
+		let mut offset = 0;
+		for text in &texts {
+			table.extend([u8::try_from(offset).expect("operator texts within 255 bytes"), text.len() as u8]);
+			offset += text.len();
+		}
+		(self.allocate_bytes("operator_texts", texts.concat().as_bytes()), self.allocate_bytes("operator_table", &table))
 	}
 
 	fn emit_joining(&mut self, name: &'static str, nested: bool) {
@@ -440,7 +446,9 @@ impl WasmGcEmitter {
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
 		let map_texts = [self.allocate_string("{"), self.allocate_string("}")];
-		let operator_texts = self.allocate_operator_texts();
+		// only a program whose Keys hold operators beyond `:` carries their texts (web::test_bundle_budget)
+		let operator_texts = (self.written_operator_bound > op_to_code(&Op::Colon)).then(|| self.allocate_operator_texts());
+		let instance_texts = [self.allocate_string(""), self.allocate_string(Op::Colon.as_str())];
 		let empty_text = self.allocate_string(EMPTY_TEXT);
 		let bool_texts = [self.allocate_string(crate::node::NO), self.allocate_string(crate::node::YES)];
 		let i64_box = self.type_manager.i64_box_type;
@@ -517,9 +525,21 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &[I::End, I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type)]);
 					// joined by its operator as written: `x+1`, an instance `point{x:1}` without one (P123)
 					s.emit_field(f, element, 0);
-					Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(OP_INFO_MASK), I::I64And, I::I32WrapI64, I32Const(OPERATOR_ENTRY_BYTES), I::I32Mul, I32Const(operator_texts as i32), I::I32Add, I::LocalTee(operator_entry)]);
-					Self::emit_list(f, &[I::I32Load(WORD), I::LocalGet(operator_entry), I::I32Load(MemArg { offset: 4, ..WORD })]);
-					s.call(f, "new_text");
+					Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(OP_INFO_MASK), I::I64And]);
+					if let Some((run, table)) = operator_texts {
+						let last_code = I32Const(s.written_operator_bound as i32 + 1);
+						Self::emit_list(f, &[I::I32WrapI64, I::LocalTee(operator_entry), last_code.clone(), I::LocalGet(operator_entry), last_code, I::I32LtU, I::Select]);
+						Self::emit_list(f, &[I32Const(OPERATOR_ENTRY_BYTES), I::I32Mul, I32Const(table as i32), I::I32Add, I::LocalTee(operator_entry)]);
+						Self::emit_list(f, &[I::I32Load8U(BYTE), I32Const(run as i32), I::I32Add, I::LocalGet(operator_entry), I::I32Load8U(MemArg { offset: 1, ..BYTE })]);
+						s.call(f, "new_text");
+					} else {
+						let [none, colon] = instance_texts;
+						Self::emit_list(f, &[I::I64Const(op_to_code(&Op::None)), I::I64Eq, I::If(BlockType::Result(node_ref))]);
+						new_text(f, none);
+						f.instruction(&I::Else);
+						new_text(f, colon);
+						f.instruction(&I::End);
+					}
 					Self::emit_list(f, &[I::Call(own_index), I::LocalSet(element), I::End]);
 					// a curly list is a map: its bracket info, above the kind (other info may sit higher still)
 					let is_map = |f: &mut Function| {

@@ -231,8 +231,7 @@ impl WasmGcEmitter {
 				// Fallback: emit as Key node
 				self.emit_node_instructions(func, &Node::Empty);
 				self.emit_node_instructions(func, right);
-				func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
-				self.emit_call(func, "new_key");
+				self.emit_new_key(func, op);
 			}
 		}
 	}
@@ -319,8 +318,7 @@ impl WasmGcEmitter {
 		// Default: emit as Key node
 		self.emit_node_instructions(func, left);
 		self.emit_node_instructions(func, right);
-		func.instruction(&I::I64Const(crate::operators::op_to_code(&Op::Dot)));
-		self.emit_call(func, "new_key");
+		self.emit_new_key(func, &Op::Dot);
 	}
 
 	/// Emit default Key node (preserve structure for roundtrip)
@@ -352,8 +350,7 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, right_node);
 		}
 		// Preserve the op for roundtrip
-		func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
-		self.emit_call(func, "new_key");
+		self.emit_new_key(func, op);
 	}
 }
 

@@ -197,8 +197,7 @@ impl WasmGcEmitter {
 				// Unknown type, emit as key node for dynamic dispatch
 				self.emit_node_instructions(func, value);
 				self.emit_node_instructions(func, target_type);
-				func.instruction(&I::I64Const(op_to_code(&Op::As)));
-				self.emit_call(func, "new_key");
+				self.emit_new_key(func, &Op::As);
 			}
 		}
 	}

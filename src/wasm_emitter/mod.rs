@@ -56,6 +56,8 @@ enum Need {
 	Function(&'static str),
 	/// A libm import, keyed like ffi_imports (`m.pow`) so it never shadows a user function
 	MathImport(&'static str),
+	/// The operator code of a Key the program makes at run time, which list_text writes as written (`x+1`)
+	KeyOperator(i64),
 }
 
 /// The texts `as bool` reads as false
@@ -167,7 +169,7 @@ use crate::function::Function as FuncDef;
 #[cfg(feature = "native")]
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Separator};
-use crate::operators::{op_to_code, Op};
+use crate::operators::Op;
 use crate::type_kinds::{field_def_to_val_type, Kind, RawFieldValue, TypeDef, TypeRegistry, KIND_MASK};
 #[cfg(feature = "native")]
 use crate::util::gc_engine;
@@ -247,6 +249,8 @@ pub struct WasmGcEmitter {
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
+	/// The highest operator code list_text writes as written, from the needs (any code above it is written `:`)
+	written_operator_bound: i64,
 	type_errors: Vec<String>,
 	/// The latest source position among the nodes being emitted (note_position)
 	source_position: Option<(usize, usize)>,
@@ -315,6 +319,7 @@ impl WasmGcEmitter {
 			tuple_packers: HashMap::new(),
 			text_heap_global: None,
 			discovered_needs: Default::default(),
+			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
 			type_errors: Vec::new(),
 			source_position: None,
 			loop_labels: Vec::new(),
@@ -648,8 +653,10 @@ impl WasmGcEmitter {
 		analyze_required_functions(&mut self.ctx, node);
 		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
 			Need::Function(name) => Some(*name),
-			Need::MathImport(_) => None,
+			Need::MathImport(_) | Need::KeyOperator(_) => None,
 		}));
+		let key_operators = self.discovered_needs.iter().filter_map(|need| if let Need::KeyOperator(code) = need { Some(*code) } else { None });
+		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
@@ -684,6 +691,7 @@ impl WasmGcEmitter {
 		match need {
 			Need::Function(name) => self.ctx.required_functions.contains(name),
 			Need::MathImport(key) => self.ctx.ffi_imports.contains_key(*key),
+			Need::KeyOperator(code) => *code <= self.written_operator_bound || !self.ctx.required_functions.contains(library_ops::LIST_TEXT),
 		}
 	}
 
@@ -1162,6 +1170,14 @@ impl WasmGcEmitter {
 
 	fn collect_and_allocate_strings(&mut self, node: &Node) {
 		self.string_table.collect_from_node(node, &mut self.scope);
+	}
+
+	/// A Key of its two sides on the stack, joined by `op` (list_text writes the op as written, a need when it is new)
+	fn emit_new_key(&mut self, func: &mut Function, op: &crate::operators::Op) {
+		let code = crate::operators::op_to_code(op);
+		self.discovered_needs.insert(Need::KeyOperator(code));
+		func.instruction(&I::I64Const(code));
+		self.emit_call(func, "new_key");
 	}
 
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {

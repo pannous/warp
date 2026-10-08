@@ -398,8 +398,7 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) => {
 				self.emit_literal(func, left);
 				self.emit_literal(func, right);
-				func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
-				self.emit_call(func, "new_key");
+				self.emit_new_key(func, op);
 			}
 			Node::List(items, bracket, _) if !items.is_empty() => self.emit_list_structure_with(func, items, bracket, Self::emit_literal),
 			Node::List(..) | Node::Empty => self.emit_call(func, "new_empty"),
