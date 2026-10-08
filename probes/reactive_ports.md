@@ -1,4 +1,4 @@
-# Reactive and event cases ported from other systems, in wasp's signal syntax (notes/signals.md): "code ||| expected"
+# Reactive and event cases ported from other systems, in warp's signal syntax (notes/signals.md): "code ||| expected"
 # run: probes/function_calls.sh probes/reactive_ports.md (scratch/warp of this checkout)
 # Svelte: $: derivations and stores
 count = 0; doubled := count * 2; count = 3; doubled ||| 6

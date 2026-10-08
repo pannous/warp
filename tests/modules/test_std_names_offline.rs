@@ -6,7 +6,7 @@ use crate::is;
 #[test]
 fn a_std_module_name_needs_no_file_lookup() {
 	#[cfg(not(feature = "native"))]
-	std::fs::write("regex.wasp", "matches(subject, pattern) := 42").expect("the overlay takes the file");
+	std::fs::write("regex.warp", "matches(subject, pattern) := 42").expect("the overlay takes the file");
 	#[cfg(not(feature = "native"))]
 	assert_eq!(warp::modules::module_file_shadowing("regex"), None);
 	is!("use regex; matches(\"7\", \"[0-9]\")", true);

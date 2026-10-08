@@ -334,7 +334,7 @@ impl WasmGcEmitter {
 
 /// A meta entry `@name` (meta_entries.rs) is no field: a map with one keeps the generic way
 fn is_meta_key(index: &Node) -> bool {
-	let key = crate::wasp_parser::subscript_key(index).unwrap_or(index);
+	let key = crate::warp_parser::subscript_key(index).unwrap_or(index);
 	matches!(key.drop_meta(), Node::Text(name) | Node::Symbol(name) if name.starts_with(crate::node::ATTRIBUTE_MARK))
 }
 

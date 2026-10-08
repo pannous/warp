@@ -1,6 +1,6 @@
 # Effect handlers (card effect-handlers, user: "yes, steps 1+2")
 
-Events are wasp's effects: `emit ask` performs the effect `ask`, an `on ask {…}` handler answers it. Handlers are
+Events are warp's effects: `emit ask` performs the effect `ask`, an `on ask {…}` handler answers it. Handlers are
 tail-resumptive only: the handler's value is what `emit` gives, and the emitting code goes on (P163). No captured
 continuations, everything is plain calls.
 
@@ -42,7 +42,7 @@ Lowering (src/lowering/scoped_handlers.rs, before event_signals):
   leaves the innermost enclosing construct; a `break` inside a loop of the handler body still belongs to that loop.
   `return` keeps meaning the handler's value (resume), `raise`/`stop` stay errors (P163).
 - Only block handlers abort; a program-wide `on fail {…}` has no block to unwind to (`break` there is an error as before).
-- Mechanism: wasm exceptions, a tag `wasp_abort(i32)` of its own, so a user's `try … else` (tag `wasp_error`) never
+- Mechanism: wasm exceptions, a tag `warp_abort(i32)` of its own, so a user's `try … else` (tag `warp_error`) never
   catches an abort. The handler stores the value in the global `effect_handler_aborted_<event>_<i>` and throws i;
   the block runs inside `ran_without_abort(i, {value = block})` (try_guard.rs), which catches i (another number is
   rethrown to the next block out), puts `try_depth` back to what it was at the block's start (tries the abort jumped

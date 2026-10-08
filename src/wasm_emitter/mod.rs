@@ -79,7 +79,7 @@ pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
 const OUTPUT_CALLS: [&str; 5] = ["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
 
 /// Builtins that round a float to an exact Int
-pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = ["ceil", "floor", "round", "round_half_up", "round_half_even", crate::wasp_parser::FLOOR_QUOTIENT];
+pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = ["ceil", "floor", "round", "round_half_up", "round_half_even", crate::warp_parser::FLOOR_QUOTIENT];
 
 /// 2^63: floats with a magnitude at or beyond it do not fit an i64
 const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
@@ -131,7 +131,7 @@ fn trap_detail(trace: &str) -> Option<String> {
 
 /// Why a unit word is an undefined variable: quantities are computed in constant expressions only
 const UNIT_AT_RUN_TIME: &str = " (a unit: quantities compute only in constant expressions so far, not yet in functions, loops, lists, branches or print; notes/units_runtime.md)";
-/// The global behind the export `trap_detail`: not a wasp name, so no user global meets it
+/// The global behind the export `trap_detail`: not a warp name, so no user global meets it
 const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
 
 const TERNARY_BRANCHES: &str = "`condition ? then : else`";
@@ -1391,7 +1391,7 @@ impl WasmGcEmitter {
 
 	/// The name section: subsections in id order (module, functions, types, globals, fields, tags), every map by index
 	fn emit_names(&mut self) {
-		self.names.module("wasp_compact");
+		self.names.module("warp_compact");
 
 		let functions: Vec<(u32, String)> = self.ctx.func_registry.all().iter()
 			.map(|f| (f.call_index as u32, f.name.clone()))

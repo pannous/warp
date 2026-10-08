@@ -121,7 +121,7 @@ Legend: (a) a small no-decision fix exists or is pending; (b) needs a user decis
 
 ## host, library, network, filesystem scan or lost files (keep ignored): 16
 
-- test_ffi.rs::test_ffi_sdl_init — requires SDL2 library and wasp files
+- test_ffi.rs::test_ffi_sdl_init — requires SDL2 library and warp files
 - test_ffi.rs::test_ffi_sdl_window — requires SDL2 library and FFI signatures
 - test_ffi.rs::test_ffi_sdl_version — requires SDL2 library and FFI signatures
 - test_ffi.rs::test_ffi_sdl_combined — requires SDL2 library and FFI signatures

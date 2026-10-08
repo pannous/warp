@@ -1,8 +1,8 @@
 #!/bin/bash
 # Size and start-up of a standalone executable: `warp build --exe` with the release warp-runtime stub (notes/aot.md).
-# usage: probes/aot/standalone.sh <program.wasp> [warp binary]     (run from the repo root)
+# usage: probes/aot/standalone.sh <program.warp> [warp binary]     (run from the repo root)
 set -e
-SOURCE=${1:?program.wasp}
+SOURCE=${1:?program.warp}
 WARP=${2:-scratch/warp}
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 TARGET=$(cd "$ROOT" && cargo metadata --offline --format-version 1 --no-deps | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')

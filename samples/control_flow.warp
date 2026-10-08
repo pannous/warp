@@ -1,0 +1,82 @@
+// Control flow in warp
+// Expressions over statements
+a = 3
+b = 7
+x = -2
+
+// Conditional expression (ternary)
+max = a > b ? a : b
+sign = x < 0 ? "negative" : x > 0 ? "positive" : "zero"
+print "max \(max), x is \(sign)"
+
+// If as expression
+compute_something() := "something"
+compute_other() := "other"
+condition = max > 5
+result = if condition {
+    compute_something()
+} else {
+    compute_other()
+}
+print "computed \(result)"
+
+// Pattern matching, with guards
+value = -42
+describe = match value {
+    0 => "zero"
+    1 => "one"
+    n if n < 0 => "negative"
+    n if n > 100 => "large"
+    _ => "other"
+}
+print "\(value) is \(describe)"
+
+// Loops
+for i in 1..4 {
+    print i
+}
+
+process(item) := print "processing \(item)"
+collection = ["apple", "pear"]
+for item in collection {
+    process(item)
+}
+
+// While loop
+countdown = 3
+while countdown > 0 {
+    countdown = countdown - 1
+}
+
+// Loop with break/continue
+items = [4, -1, 5, 9, 2]
+target = 9
+for x in items {
+    if x == target { break }
+    if x < 0 { continue }
+    process(x)
+}
+
+// Infinite loop with break
+events = ["click", "key", "quit", "never seen"]
+handled = 0
+loop {
+    event = events#(handled + 1)
+    if event == "quit" { break }
+    handled = handled + 1
+}
+print "handled \(handled) events"
+
+// Exception handling
+risky_operation() := 1/0
+try {
+    risky_operation()
+} catch error {
+    print "Error caught"
+} finally {
+    print "cleanup"
+}
+
+// Errors are values: try … else gives a fallback value
+parsed = try risky_operation() else 0
+print "parsed \(parsed)"

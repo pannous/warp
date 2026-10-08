@@ -5,7 +5,7 @@ use super::*;
 /// A statement changing a variable it reads: `x=x+1`, `x+=1`, `x++` (data like `{x=1}` reads nothing)
 pub(super) fn is_update(node: &Node) -> bool {
 	match node {
-		Node::Key(target, Op::Assign, value) => matches!(target.drop_meta(), Node::Symbol(name) if crate::wasp_parser::mentions(value, name)),
+		Node::Key(target, Op::Assign, value) => matches!(target.drop_meta(), Node::Symbol(name) if crate::warp_parser::mentions(value, name)),
 		Node::Key(target, op, _) if matches!(op, Op::Inc | Op::Dec) || op.is_compound_assign() => matches!(target.drop_meta(), Node::Symbol(_)),
 		_ => false,
 	}
@@ -187,14 +187,14 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		// An element: `xs#i`, `xs[i]`, `text#i`
 		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
 		// a field read by name with a declared kind: `v.x` of `type V {x: float}`
-		Node::Key(indexed, Op::Hash, index) if crate::wasp_parser::subscript_key(index)
+		Node::Key(indexed, Op::Hash, index) if crate::warp_parser::subscript_key(index)
 			.and_then(|key| match key.drop_meta() { Node::Text(name) => scope.function_kind(&field_kind_key(name)), _ => None })
 			.is_some() && !matches!(indexed.drop_meta(), Node::Empty) => {
-			let Some(Node::Text(name)) = crate::wasp_parser::subscript_key(index).map(Node::drop_meta) else { unreachable!("guarded") };
+			let Some(Node::Text(name)) = crate::warp_parser::subscript_key(index).map(Node::drop_meta) else { unreachable!("guarded") };
 			scope.function_kind(&field_kind_key(name)).expect("guarded")
 		}
 		Node::Key(indexed, Op::Hash, index) if !matches!(indexed.drop_meta(), Node::Empty) => element_kind(indexed, scope).unwrap_or_else(|| {
-			let by_name = crate::wasp_parser::subscript_key(index).is_some_and(|key| matches!(key.drop_meta(), Node::Text(_) | Node::Char(_))
+			let by_name = crate::warp_parser::subscript_key(index).is_some_and(|key| matches!(key.drop_meta(), Node::Text(_) | Node::Char(_))
 				|| matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
 			if by_name { Kind::Empty } else { Kind::Int }
 		}),
@@ -262,7 +262,7 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 			return kind;
 		}
-		if name == crate::wasp_parser::TEXT_TIMES {
+		if name == crate::warp_parser::TEXT_TIMES {
 			// `it times it` of numbers multiplies (list_emitter.rs emit_text_times)
 			return match items.get(2).map(|repeated| infer_type(repeated, scope)) {
 				Some(kind) if kind.is_int() || kind.is_float() => arithmetic_kind(infer_type(&items[1], scope), &Op::Mul, kind),

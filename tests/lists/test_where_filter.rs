@@ -28,6 +28,6 @@ fn where_with_an_assignment_binds() {
 
 #[test]
 fn a_where_condition_of_a_bare_word_suggests_the_field() {
-	// samples/netbase.wasp: `results where country is germany`
+	// samples/netbase.warp: `results where country is germany`
 	crate::common::fails_with("results = [{country: germany}]; results where country is germany", "or results where it.country==germany for a field country");
 }

@@ -1,4 +1,4 @@
-# samples/*.wasp left out of the playground menu (build.sh), each with why; tests/programs/test_playground_samples.rs
+# samples/*.warp left out of the playground menu (build.sh), each with why; tests/programs/test_playground_samples.rs
 # checks that every other sample runs without an error. Fix one, delete its line, and it is in the menu again
 # (card playground-excluded-samples, 2026-10-07).
 # needs a window: native only

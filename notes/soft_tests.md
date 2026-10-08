@@ -1,6 +1,6 @@
 # Tests in a program (card test-soft, P209, P210)
 
-```wasp
+```warp
 square(x) := x * x
 test square(3) == 9            // soft: records pass/fail, goes on
 test "squares" {               // named: a failing check or any error fails only this block
@@ -8,9 +8,9 @@ test "squares" {               // named: a failing check or any error fails only
 }
 ```
 
-- `warp test file.wasp`: the tests run; each failure prints `✗ test square(3) == 10` or `✗ "squares": assertion failed: …`
+- `warp test file.warp`: the tests run; each failure prints `✗ test square(3) == 10` or `✗ "squares": assertion failed: …`
   when it happens; the last line is `✓ 3 tests passed` (exit 0) or `2 of 3 failed` (exit 1).
-- `warp run` / `warp file.wasp` / `use`: the tests are skipped (P209).
+- `warp run` / `warp file.warp` / `use`: the tests are skipped (P209).
 - The playground has no `warp test`: its Run runs a program's tests (src/web.rs run_shown), so the kitchen sink shows
   `✓ 33 tests passed`.
 - How: src/lowering/test_blocks.rs, a SOURCE_PASSES pass, rewrites top-level tests (and `test` lines inside test

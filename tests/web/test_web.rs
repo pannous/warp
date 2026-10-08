@@ -5,12 +5,12 @@ use warp::analyzer::analyze;
 use warp::extensions::print;
 use warp::util::fetch;
 use warp::wasm_emitter::eval;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 use warp::type_kinds::NodeKind;
 use crate::{is, eq, skip, put};
 
 #[test]
-fn test_html_wasp() {
+fn test_html_warp() {
 	eval("html{bold{Hello}}"); // => <html><body><bold>Hello</bold></body></html> via appendChild bold to body
 	eval("html: h1: 'Hello, World!'"); // => <html><h1>Hello, World!</h1></html>
 	                                //	eval("html{bold($myid style=red){Hello}}"); // => <bold id=myid style=red>Hello</bold>
@@ -109,7 +109,7 @@ fn test_dom_property() {
 	// is!(*result.value().string, "dfsa");
 	//	getExternRefPropertyValue OK  [object HTMLCanvasElement] style [object CSSStyleDeclaration]
 	// ⚠️ But can't forward result as smarti or stringref:  SyntaxError: Failed to parse String to BigInt
-	// todo : how to communicate new string as RETURN type of arbitrary function from js to wasp?
+	// todo : how to communicate new string as RETURN type of arbitrary function from js to warp?
 	// call Webview.getString(); ?
 
 	//	embedder.trace('canvas = document.getElementById("canvas");');

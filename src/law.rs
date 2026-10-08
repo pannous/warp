@@ -369,7 +369,7 @@ pub fn property_test(lawful: &Lawful, law: &Law, trials: usize, code: &str) -> V
 
 /// Raise every law as far as it goes: property tests first (they find counterexamples), then Lean.
 pub fn verify(code: &str) -> Vec<LawReport> {
-	let lawful = separate_laws(crate::wasp_parser::WaspParser::parse(code));
+	let lawful = separate_laws(crate::warp_parser::WarpParser::parse(code));
 	lawful
 		.laws
 		.iter()

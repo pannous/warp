@@ -5,7 +5,7 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasp_parser::parse;
+use crate::warp_parser::parse;
 
 const UNDO_WORD: &str = "undo";
 const REDO_WORD: &str = "redo";

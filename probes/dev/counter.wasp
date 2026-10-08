@@ -1,3 +1,0 @@
-// card web-dev: `warp dev probes/dev/counter.wasp`, click +, then edit the label: the page reloads, the count stays
-count = 0
-div{ button{ on click { count += 1 } "+" } p{ "clicks " + count } }

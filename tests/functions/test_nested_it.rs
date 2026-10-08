@@ -1,7 +1,7 @@
 //! `it` belongs to the innermost lambda (Kotlin): a nested `{ it … }` shadows the outer `it`, and a function's `it`
 //! binding stops at a lambda inside its body (cards nested-it, it-leak; notes/implicit_params.md)
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn test_glued_block_after_a_method_is_a_lambda() {

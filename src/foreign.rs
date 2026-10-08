@@ -65,7 +65,7 @@ const plain = value => {
 	if (typeof value === "function" || typeof value === "object") return handle(value); // a Date, a Map, an instance, a function
 	return value;
 };
-// what wasp's operators on a value of this runtime forward to (lowering/foreign_modules.rs)
+// what warp's operators on a value of this runtime forward to (lowering/foreign_modules.rs)
 const operator = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
 	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
 	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };

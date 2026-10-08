@@ -27,6 +27,6 @@ fn test_dimension_errors_inside_functions_are_compile_errors() {
 
 #[test]
 fn test_a_unit_word_called_as_a_function_is_no_unit() {
-	// `min(n, 3)` calls min, it is no minute: tk stays a plain function that sp can call (lib/list.wasp split_at)
+	// `min(n, 3)` calls min, it is no minute: tk stays a plain function that sp can call (lib/list.warp split_at)
 	assert_eq!(shown("tk(xs, n) := { out = []; for i in 1 to min(n, count(xs)) { out = out + [xs#i] }; out }; sp(xs, n) := [tk(xs, n), 2]; sp([1, 2, 3, 4], 1)"), "[[1] 2]");
 }

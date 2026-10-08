@@ -245,7 +245,7 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	// a parameter's representation comes from its calls (infer_parameters_from_calls), not from the body
 	let Some(local) = scope.locals.get_mut(name).filter(|local| !local.is_param && local.type_node.as_ref().is_none_or(|_| local.kind == Kind::List)) else { return };
 	let mixes = |a: Kind, b: Kind| a == b || [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float)) || [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint));
-	// an element of unknown kind may be an object: `item = 2` earlier, then `for item in basket` (samples/natural.wasp)
+	// an element of unknown kind may be an object: `item = 2` earlier, then `for item in basket` (samples/natural.warp)
 	let unknown_element = assigned == Kind::Empty && matches!(value.drop_meta(), Node::Key(_, Op::Hash, _));
 	let other_kind = unknown_element || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
 	if CONCRETE_KINDS.contains(&local.kind) && other_kind {

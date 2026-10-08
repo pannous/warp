@@ -129,7 +129,7 @@ fn load(path: &str) -> Result<Loaded, String> {
 	Ok(Loaded { store, instance, functions, kinds, held: vec![] })
 }
 
-/// What warp's host gives a component importing `host` (a wasp component's world, `import host: { time: () -> i64 }`,
+/// What warp's host gives a component importing `host` (a warp component's world, `import host: { time: () -> i64 }`,
 /// component_worlds.rs): its words print, time (milliseconds since 1970) and read (a file's text); any other function
 /// of the import traps when called, naming itself
 fn serve_host_imports(linker: &mut Linker<ComponentState>, component: &Component) -> wasmtime::Result<()> {

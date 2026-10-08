@@ -1,0 +1,35 @@
+// The standard library module collections (notes/stdlib.md): `use collections`, classes over a list field
+class Stack { items = []
+  push(x) := items.add(x)
+  pop() := items.pop()
+  peek() := items#count(items)
+  size() := count(items)
+}
+class Queue { items = []
+  enqueue(x) := items.add(x)
+  dequeue() := { first = items#1; items = items[1:]; first }
+  peek() := items#1
+  size() := count(items)
+}
+class Deque { items = []
+  push_back(x) := items.add(x)
+  push_front(x) := { items = [x] + items }
+  pop_back() := items.pop()
+  pop_front() := { first = items#1; items = items[1:]; first }
+  size() := count(items)
+}
+class Set { items = []
+  init(xs) := { for x in xs { if not (x in items) { items.add(x) } } }
+  add(x) := { if not (x in items) { items.add(x) } }
+  has(x) := (x in items) > 0
+  remove(x) := { kept = []; for y in items { if y != x { kept.add(y) } }; items = kept }
+  size() := count(items)
+}
+class Counter { keys = []; counts = []
+  init(xs) := { for x in xs { add(x) } }
+  add(x) := { i = x in keys; if i { counts#i += 1 } else { keys.add(x); counts.add(1) } }
+  get(x) := { i = x in keys; if i { counts#i } else { 0 } }
+  most_common() := { best = 1; for i in 1 to count(counts) { if counts#i > counts#best { best = i } }; keys#best }
+}
+// warp maps keep insertion order: an ordered map is a map
+OrderedMap() := {}

@@ -5,7 +5,7 @@
 //! - Type signatures (Signature)
 //! - Function metadata and variants (Function)
 //!
-//! Design based on wasp/source/Code.h Function/Signature classes.
+//! Design based on warp/source/Code.h Function/Signature classes.
 
 use crate::local::Local;
 use crate::node::Node;
@@ -18,8 +18,8 @@ use wasm_encoder::ValType;
 pub enum ABI {
 	#[default]
 	Native,            // Standard WASM calling convention
-	Wasp,              // Multi-value return tuples (value, type)
-	WaspSmartPointers, // Smart pointers for multi-value compatibility
+	Warp,              // Multi-value return tuples (value, type)
+	WarpSmartPointers, // Smart pointers for multi-value compatibility
 	Canonical,         // WIT canonical ABI
 }
 

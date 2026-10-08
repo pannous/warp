@@ -1,5 +1,5 @@
 //! Card task-name: a function's own name (a loop variable, a local) is its own, also when main names a task or a
-//! variable the same; found with `c = go nap(1000)` in a site program under std/markup.wasp's `for c in chars(name)`
+//! variable the same; found with `c = go nap(1000)` in a site program under std/markup.warp's `for c in chars(name)`
 use crate::is;
 
 #[test]

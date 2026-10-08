@@ -1,5 +1,5 @@
 //! An object's fields may be separated by commas on one line and by newlines or semicolons between lines (JSON5 style,
-//! "commas optional", samples/kitchensink.wasp): the parser groups `{ a: 1, b: 2; c: 3 }` as `{ (a: 1, b: 2); c: 3 }`,
+//! "commas optional", samples/kitchensink.warp): the parser groups `{ a: 1, b: 2; c: 3 }` as `{ (a: 1, b: 2); c: 3 }`,
 //! and `.c` found no field; `{ "a": 1⏎ b: 2 }` (a quoted name, rows on lines) neither. A braced list whose items are all
 //! fields, alone or in such groups, is one comma-separated row of them.
 

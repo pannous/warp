@@ -11,13 +11,13 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasp_parser::parse;
+use crate::warp_parser::parse;
 use std::collections::{HashMap, HashSet};
 
 pub const STORED_WORD: &str = "stored";
 /// The store of the values a `warp dev` page keeps across reloads (in memory natively; dev.js, site.js)
-pub const DEV_STORE: &str = "wasp-dev";
-/// `app.wasp` keeps its stored values in `app.stored.json`
+pub const DEV_STORE: &str = "warp-dev";
+/// `app.warp` keeps its stored values in `app.stored.json`
 const STORE_FILE_EXTENSION: &str = "stored.json";
 /// stands for the default value in the template of the load
 const DEFAULT_PLACEHOLDER: &str = "stored_default_value";
@@ -25,7 +25,7 @@ const DEFAULT_PLACEHOLDER: &str = "stored_default_value";
 const LOCAL_WORDS: [&str; 2] = ["local", "storage"];
 const SESSION_WORD: &str = "session";
 /// The store of `session[k]` (in memory natively, std_adapters.rs; sessionStorage in the browser, markup.js SESSION_STORE)
-pub const SESSION_STORE: &str = "wasp-session";
+pub const SESSION_STORE: &str = "warp-session";
 const DELETE_WORD: &str = "delete";
 const KEYS_WORD: &str = "keys";
 /// stand for the key and the value in the templates of a storage access
@@ -35,7 +35,7 @@ const VALUE_PLACEHOLDER: &str = "storage_value";
 pub fn lower(program: Node) -> Node {
 	let stores = stores_used(&program);
 	let program = if stores.is_empty() { program } else { storage_accesses(program, &stores) };
-	let stores = crate::wasp_parser::mentions(&program, STORED_WORD) && !crate::soft_keywords::program_names(&program, STORED_WORD);
+	let stores = crate::warp_parser::mentions(&program, STORED_WORD) && !crate::soft_keywords::program_names(&program, STORED_WORD);
 	let dev = crate::pipeline::is_for_dev();
 	if !stores && !dev {
 		return program;
@@ -121,7 +121,7 @@ fn changed_names(statements: &[Node]) -> HashSet<String> {
 fn stores_used(program: &Node) -> Vec<(&'static str, String)> {
 	let local = store_file();
 	let words = LOCAL_WORDS.iter().map(|word| (*word, local.clone())).chain([(SESSION_WORD, SESSION_STORE.to_string())]);
-	words.filter(|(word, _)| crate::wasp_parser::mentions(program, word) && !crate::soft_keywords::program_names(program, word)).collect()
+	words.filter(|(word, _)| crate::warp_parser::mentions(program, word) && !crate::soft_keywords::program_names(program, word)).collect()
 }
 
 /// Each access of a store word as the store's call

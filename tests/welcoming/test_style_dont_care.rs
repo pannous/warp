@@ -3,12 +3,12 @@
 use crate::is;
 use warp::normalize::*;
 use warp::wasm_emitter::eval;
-use warp::wasp_parser::WaspParser;
+use warp::warp_parser::WarpParser;
 
 fn hints_with(style: Style, code: &str) -> Vec<String> {
 	set_hint_mode(HintMode::Always);
 	set_style(style);
-	let (_, hints) = capture_hints(|| WaspParser::parse(code));
+	let (_, hints) = capture_hints(|| WarpParser::parse(code));
 	set_style(Style::default());
 	hints.into_iter().map(|hint| hint.original).collect()
 }

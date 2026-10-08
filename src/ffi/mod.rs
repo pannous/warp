@@ -125,13 +125,13 @@ pub fn undefined_function_message(name: &str) -> String {
 /// What a C pointer type crosses as (notes/ffi_handles.md)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CPointer {
-    /// `char *`, `const unsigned char *`: a wasp text (a parameter its NUL-terminated letters in linear memory)
+    /// `char *`, `const unsigned char *`: a warp text (a parameter its NUL-terminated letters in linear memory)
     Text,
     /// `void *`, `int *`: a parameter points into linear memory; a result is a handle
     Memory,
     /// `sqlite3 *`, `FILE *`: an id into the run's handle table (CHandles), 0 is NULL
     Handle,
-    /// `sqlite3 **ppDb`: left out of the wasp call; the first one becomes the result, the others receive NULL
+    /// `sqlite3 **ppDb`: left out of the warp call; the first one becomes the result, the others receive NULL
     Out,
 }
 
@@ -158,8 +158,8 @@ pub fn pointer_kind(c_type: &str) -> Option<CPointer> {
     }
 }
 
-/// The C parameters a wasp call passes: all but the out-pointers
-fn wasp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
+/// The C parameters a warp call passes: all but the out-pointers
+fn warp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
     param_types.iter().filter(|t| pointer_kind(t) != Some(CPointer::Out))
 }
 
@@ -201,7 +201,7 @@ pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<boo
         return texts;
     }
     let texts = get_library_header_paths(library).iter().flat_map(|path| parse_header_file(path, library))
-        .map(|declared| (declared.name.clone(), wasp_parameters(&declared.param_types).map(|c_type| pointer_kind(c_type) == Some(CPointer::Text)).collect()))
+        .map(|declared| (declared.name.clone(), warp_parameters(&declared.param_types).map(|c_type| pointer_kind(c_type) == Some(CPointer::Text)).collect()))
         .collect();
     let texts: &'static HashMap<String, Vec<bool>> = Box::leak(Box::new(texts));
     parsed.push((library.to_string(), texts));
@@ -384,7 +384,7 @@ pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
     if let Some(sig) = implicit_header_libraries(name).iter().filter_map(declared).find(text_result) {
         return Some(sig);
     }
-    // the cached signatures of well-known libraries first (wasp's own `random` is no libc random), then the headers
+    // the cached signatures of well-known libraries first (warp's own `random` is no libc random), then the headers
     get_ffi_signatures().get(name).cloned().or_else(|| implicit_header_libraries(name).iter().find_map(declared))
 }
 

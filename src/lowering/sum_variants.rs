@@ -30,7 +30,7 @@ pub fn lower(program: Node) -> Node {
 	}
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
-			let parent = name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
+			let parent = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
 			if let Some(variants) = parent.and_then(|parent| sum_types.get_mut(&parent)) {
 				variants.classes.push(name.drop_meta().name());
 			}

@@ -283,7 +283,7 @@ impl Objects {
 			};
 			let bindings = [("RECEIVER", subject.clone()), ("CLASS", Node::Symbol(class.clone())), ("NAMES", names), ("OTHERWISE", otherwise)];
 			let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
-			crate::law::substitute(&crate::wasp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
+			crate::law::substitute(&crate::warp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
 		}))
 	}
 

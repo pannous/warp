@@ -390,7 +390,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 	if keyword_name != TRAIT_KEYWORDS[0] {
 		let written = format!("{keyword_name} {name}{{…}}");
 		crate::normalize::set_position_of(node);
-		crate::normalize::hint(&written, &format!("{} {name}{{…}}", TRAIT_KEYWORDS[0]), "wasp calls it a trait");
+		crate::normalize::hint(&written, &format!("{} {name}{{…}}", TRAIT_KEYWORDS[0]), "warp calls it a trait");
 	}
 	if is_builtin_trait(name) {
 		return Some(Err(Diagnostic::at(keyword, format!("{name} is a built-in trait")).fix(format!("name your trait otherwise than {name}")).into_error()));
@@ -672,7 +672,7 @@ fn claim_error(declaration: &Node, claimed: &Trait, traits: &Traits, witnesses: 
 /// P177: `class Square implements Shape {…}`, `struct Square: Shape {…}`: the declared traits the parser put on the name
 fn named_claims<'a>(node: &'a Node, traits: &'a Traits) -> Vec<&'a Trait> {
 	let Node::Type { name, .. } = node.drop_meta() else { return vec![] };
-	let Some(Node::List(claimed, _, _)) = name.attribute(crate::wasp_parser::IMPLEMENTS_WORD).map(Node::drop_meta) else { return vec![] };
+	let Some(Node::List(claimed, _, _)) = name.attribute(crate::warp_parser::IMPLEMENTS_WORD).map(Node::drop_meta) else { return vec![] };
 	claimed.iter().filter_map(|claimed| traits.named(&claimed.drop_meta().name())).collect()
 }
 

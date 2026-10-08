@@ -13,7 +13,7 @@ notes/session
 # probes/ holds hand-written probe sources only (tracked); see AGENTS.md "Folders"
 probes/**
 !probes/**/
-!probes/**/*.wasp
+!probes/**/*.warp
 !probes/**/*.md
 !probes/**/*.rs
 !probes/**/*.py
@@ -30,7 +30,7 @@ scratch/
 # kept but not committed: logs, test results, patches, dumps, benchmark data
 data/
 
-# packages fetched by `use <name>`, see packages.wasp
+# packages fetched by `use <name>`, see packages.warp
 /packages/
 
 # test fixtures may be prebuilt modules and components (tests/fixtures/components/*/build.sh rebuilds them)

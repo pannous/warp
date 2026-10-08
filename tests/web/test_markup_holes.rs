@@ -2,7 +2,7 @@
 //! attribute or child are read on their own after a handler (`page·hole·<path>`, the element indices from the root),
 //! and the page changes only the ones whose HTML differs
 use warp::markup::holes;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 const TOGGLE: &str = "done = false\ntoggles = 0\ndiv{ button{ on click { done = not done; toggles += 1 } \"toggle\" } p{ class: done ? \"done\" : \"open\" \"state\" } ul{ li{ \"toggled \" + toggles + \" times\" } } }";
 

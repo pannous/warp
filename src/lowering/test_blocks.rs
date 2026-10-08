@@ -6,7 +6,7 @@
 
 use crate::lowering::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
-use crate::wasp_parser::parse;
+use crate::warp_parser::parse;
 
 const TEST_WORD: &str = "test";
 const COUNT: (&str, &str) = ("tests_run_", "tests·run");

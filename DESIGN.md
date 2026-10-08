@@ -381,9 +381,9 @@ a `wasi:filesystem` import cannot perform file IO regardless of type checker bug
 WebAssembly component model is a sound runtime backstop for the effect system. Neither a
 generated-Rust backend nor a conventional native target offers this.
 
-### The semantic artifact is Wasp data
+### The semantic artifact is Warp data
 
-`Program` is kept out of `Node`, but it serializes to Wasp notation. The language then
+`Program` is kept out of `Node`, but it serializes to Warp notation. The language then
 describes its own semantics in its own format, golden tests of typed IR are readable,
 the "explicit systems view" is simply this projection, and agents can diff resolutions.
 
@@ -457,7 +457,7 @@ match safe_head([1 2 3]) {
    and GC types.
 6. Differential-test `source -> IR interpreter` against
    `source -> IR -> WASM -> Node`.
-7. Serialize `Program` as Wasp from the start, for golden IR tests.
+7. Serialize `Program` as Warp from the start, for golden IR tests.
 8. Add Option/Result variants and exhaustive match.
 9. Infer effects from resolved host calls and derive WIT imports from them.
 10. Add `law` declarations: runtime assertions, then generated property tests, then

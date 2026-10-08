@@ -1,6 +1,6 @@
-# `use netbase` (card netbase-package, samples/netbase.wasp)
+# `use netbase` (card netbase-package, samples/netbase.warp)
 
-```wasp
+```warp
 use netbase
 load wikidata
 results = query "all cities with population > 100000"
@@ -22,8 +22,8 @@ debug results where country is germany
   pannous.com. The local data folder `import/` is empty (0 B) apart from small samples (cities1000.txt, facts.n3…).
 
 ## So it needs a server: the plan
-1. **The package (small, warp side)**: a repository `pannous/netbase-wasp` (or a `netbase.wasp` in pannous/netbase),
-   listed in warp's `packages.wasp`, made of wasp code over what warp already has (`fetch`, `json`):
+1. **The package (small, warp side)**: a repository `pannous/netbase-warp` (or a `netbase.warp` in pannous/netbase),
+   listed in warp's `packages.warp`, made of warp code over what warp already has (`fetch`, `json`):
    - `netbase_server = env("NETBASE") or "https://netbase.pannous.com"`
    - `query(q) := parse_json(fetch(netbase_server + "/json/query/" + q))` (lib/json, lib/os `env`; URL-encoding the query is a missing small word): a list of records
      (id, name, statements as fields), so `first 10 of results` and `results where it.country == "germany"` are plain
@@ -37,16 +37,16 @@ debug results where country is germany
    (b) a small public dataset (cities1000.txt + wordnet) on a local `./netbase :server` for tests and the sample;
    (c) skip netbase and back the package with Wikidata's public SPARQL endpoint (query.wikidata.org), translating
        `all cities with population > 100000` into SPARQL: no server to run, but the natural-query translation
-       would have to be rewritten in wasp.
+       would have to be rewritten in warp.
    Recommended: (b) for tests now, (a) or (c) as the user decides.
 3. Tests: against a local server started by the test (like test_web_server), never a mock.
 
 ## Open (for the user via the Interviewer)
 - Which backend: revive netbase.pannous.com (a), a local small netbase (b), or Wikidata SPARQL (c)?
-- Where the package lives: its own repository netbase-wasp, or netbase.wasp inside pannous/netbase?
+- Where the package lives: its own repository netbase-warp, or netbase.warp inside pannous/netbase?
 
 ## Built so far (default (b) of warp-03, 2026-10-07)
-- `lib/extra/netbase.wasp`: `query(q)` / `query_at(server, q)` fetch `<server>/json/query/<q>` and parse the JSON; the server is
+- `lib/extra/netbase.warp`: `query(q)` / `query_at(server, q)` fetch `<server>/json/query/<q>` and parse the JSON; the server is
   env NETBASE, else http://localhost:8181. Without a server the error names the URL (tests/modules/test_netbase_package.rs).
   `load wikidata` is not defined: loading is the server's import.
 - Writing it found two compiler bugs, fixed: `f() := a or "d"` (inference of or/and) and fetch of a computed URL.

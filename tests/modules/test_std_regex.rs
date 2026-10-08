@@ -1,7 +1,7 @@
 //! The standard library module regex (notes/stdlib.md section 7): Rust's regex natively, JS RegExp in the browser,
 //! held to what both engines do alike: look-around and backreferences are a loud error in both
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn use_regex_matches_finds_and_replaces() {

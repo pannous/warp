@@ -1,6 +1,6 @@
 //! The standard library module time (notes/stdlib.md): the calendar over clock()
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn dates_of_milliseconds() {

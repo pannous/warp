@@ -1,7 +1,7 @@
 // card parameter-takes: a parameter that takes any value is annotated `any`; a parameter called with two kinds takes
 // any value too (P173)
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn an_any_parameter_takes_every_kind() {

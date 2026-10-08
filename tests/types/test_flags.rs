@@ -23,8 +23,8 @@ fn test_an_unknown_flag_is_an_error() {
 
 #[test]
 fn test_wit_flags_parse_like_the_declaration() {
-	use warp::wasp_parser::{ParserOptions, WaspParser};
-	let wit = WaspParser::parse_with_options("flags permissions {\n read,\n write,\n}", ParserOptions::wit());
+	use warp::warp_parser::{ParserOptions, WarpParser};
+	let wit = WarpParser::parse_with_options("flags permissions {\n read,\n write,\n}", ParserOptions::wit());
 	assert_eq!(wit.serialize().matches("read").count(), 1);
 	assert_eq!(wit.size(), 3);
 	is!("flags permissions {read, write}; permissions p = write; p.write - p.read", 1);

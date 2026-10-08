@@ -1,0 +1,42 @@
+// Sieve of Eratosthenes, then binary search over the primes found
+
+fun sieve(limit) {
+    // warp: `[true] * n` is refused as ambiguous (repeat or multiply?); repeating a list is `(limit + 1) times [true]`
+    is_prime = (limit + 1) times [true]
+    is_prime[0] = false
+    is_prime[1] = false
+    for i in 2..limit {
+        if i * i > limit { break }
+        if is_prime[i] {
+            j = i * i
+            while j <= limit {
+                is_prime[j] = false
+                j += i
+            }
+        }
+    }
+    var primes = []
+    for n in 0..limit {
+        if is_prime[n] { primes.push(n) }
+    }
+    return primes
+}
+
+fun binary_search(list, target) {
+    low = 0
+    high = list.length - 1
+    while low <= high {
+        // warp: `/` divides exactly ((0+3)/2 is 1.5, "index must be an integer"); integer halving is `(low + high)//2` (glued: `x // 2` with a space is a comment)
+        mid = (low + high)//2
+        if list[mid] == target { return mid }
+        if list[mid] < target { low = mid + 1 } else { high = mid - 1 }
+    }
+    return -1
+}
+
+primes = sieve(100)
+total = 0
+for p in primes { total += p }
+found = binary_search(primes, 97)
+missing = binary_search(primes, 50)
+total + found + missing

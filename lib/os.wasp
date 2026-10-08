@@ -1,5 +1,0 @@
-// The standard library module os (notes/stdlib.md section 7): `use os`, through the adapter std_io; the browser has no
-// environment (env gives ø) and no command line (args gives [])
-env(name:any) := std_io("os", "env", [name])
-// the command line arguments after the program file: `warp run prog.wasp a b` gives ["a" "b"]
-args = std_io("os", "args", [])

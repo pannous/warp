@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY};
 
-const NOTIFICATION_TITLE: &str = "wasp";
+const NOTIFICATION_TITLE: &str = "warp";
 const READING_LIFETIME: Duration = Duration::from_secs(1);
 /// Any public address: connecting a UDP socket only asks the routing table
 const INTERNET_ADDRESS: &str = "1.1.1.1:53";

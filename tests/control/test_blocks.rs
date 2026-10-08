@@ -1,5 +1,5 @@
 use crate::{is, eq, skip};
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn test_indent_as_block() {
