@@ -344,13 +344,15 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				_ => MAP_TYPE.to_string(),
 			}
 		}
-		// `xs + ys` of two lists: items of their common type, of any type (held as Nodes) when they differ
+		// `xs + ys` of two lists: items of their common type, else of the union of two builtin types (held as Nodes)
 		Node::Key(left, Op::Add, right) if [left, right].iter().all(|list| infer_type(list, scope) == Kind::List) => {
 			let elements = [left, right].map(|list| list_type_name(list, scope));
 			let words: Option<Vec<String>> = elements.iter().map(|list| list.strip_prefix(LIST_OF_PREFIX).map(str::to_string)).collect();
-			match words {
-				Some(words) => common_type_word(&words).map_or(NODE_LIST_TYPE.to_string(), |word| format!("{LIST_OF_PREFIX}{word}")),
-				None => PLAIN.to_string(),
+			let Some(words) = words else { return PLAIN.to_string() };
+			match common_type_word(&words) {
+				Some(word) => format!("{LIST_OF_PREFIX}{word}"),
+				None if words.iter().all(|word| is_builtin_or_union(word)) => format!("{LIST_OF_PREFIX}{}", words.join(UNION_JOINER)),
+				None => NODE_LIST_TYPE.to_string(),
 			}
 		}
 		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`; an element of a `list of list of int`
@@ -480,7 +482,7 @@ pub(super) fn common_type_word(words: &[String]) -> Option<String> {
 pub fn diagnose(program: &Node) -> Option<Node> {
 	check_type_word_functions(program)
 		.or_else(|| check_parameter_annotations(program))
-		.or_else(|| check_declared_types(program, &mut HashMap::new()))
+		.or_else(|| check_declared_types(program, &mut HashMap::new(), &mut Scope::new()))
 		.or_else(|| super::list_views::check_widened_list_views(program))
 		.or_else(|| check_constants(program, &mut HashMap::new()))
 		.or_else(|| check_null_use(program, &mut HashMap::new()))
@@ -1340,7 +1342,7 @@ pub(crate) fn unsupported_union_part(type_name: &str) -> Option<&str> {
 }
 
 /// `x:int=…` declares x's type; every value assigned to x later must fit it
-pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, String>) -> Option<Diagnostic> {
+pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, String>, lists: &mut Scope) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		// `names#1 = 420`: an element of a declared list
 		Node::Key(target, Op::Assign, value) if indexed_list(target).is_some_and(|name| declared.contains_key(name)) => {
@@ -1349,6 +1351,9 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 			let element = list_element_type(type_name)?;
 			let item = Node::List(vec![value.as_ref().clone()], Bracket::Square, Separator::Space);
 			list_items_mismatch(node, name, type_name, element, &item)
+		}
+		Node::Key(target, Op::Assign | Op::Define, value) if super::variables::function_definition_body(node).is_some() => {
+			check_declared_types(value, &mut with_parameters_declared(target, declared), &mut Scope::new())
 		}
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			let declaration = match target.drop_meta() {
@@ -1361,11 +1366,17 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 					return Some(Diagnostic::at(node, message).fix(format!("declare {name}:any to hold any value")));
 				}
 				declared.insert(name.clone(), type_name.clone());
-				if let Some(mismatch) = assignment_mismatch(node, &name, &type_name, value) {
+				if let Some(mismatch) = assignment_mismatch(node, &name, &type_name, value).or_else(|| evident_items_mismatch(node, &name, &type_name, value, lists)) {
 					return Some(mismatch);
 				}
+				if list_element_type(&type_name).is_some() {
+					lists.define(name, Some(Box::new(Node::Symbol(type_name))), Kind::List);
+				}
+			} else if let Node::Symbol(name) = target.drop_meta() {
+				let (kind, type_node) = super::variables::value_binding(value, lists);
+				lists.define(name.clone(), type_node, kind);
 			}
-			check_declared_types(value, declared)
+			check_declared_types(value, declared, lists)
 		}
 		// `names.add(420)`: the method call appends before mutation lowers it to `names = names + [420]`
 		Node::Key(list, Op::Dot, _) if appended_items(node).is_some() => {
@@ -1375,18 +1386,33 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 			let appended = Node::List(appended_items(node)?.to_vec(), Bracket::Square, Separator::Space);
 			list_items_mismatch(node, name, type_name, element, &appended)
 		}
-		Node::Key(left, _, right) => check_declared_types(left, declared).or_else(|| check_declared_types(right, declared)),
+		Node::Key(left, _, right) => check_declared_types(left, declared, lists).or_else(|| check_declared_types(right, declared, lists)),
 		_ if crate::tuples::destructuring(node).is_some() => destructured_mismatch(node, declared),
 		Node::List(items, bracket, separator) => {
 			// `names: list of text = […]` still arrives as the items `names:list`, `of`, `text=[…]`
 			if let Some(declaration) = of_type_declaration(items, bracket, separator) {
-				return check_declared_types(&declaration, declared);
+				return check_declared_types(&declaration, declared, lists);
 			}
 			let prefixed = items.windows(2).filter_map(|pair| prefixed_declaration(&pair[0], &pair[1]));
-			prefixed.chain(items.iter().cloned()).find_map(|item| check_declared_types(&item, declared))
+			prefixed.chain(items.iter().cloned()).find_map(|item| check_declared_types(&item, declared, lists))
 		}
 		_ => None,
 	}
+}
+
+/// The declared types inside a function `(f n:int m)`: its annotated parameters are declared, a plain one hides an outer
+/// declaration of its name
+fn with_parameters_declared(head: &Node, declared: &HashMap<String, String>) -> HashMap<String, String> {
+	let mut inner = declared.clone();
+	let Node::List(items, _, _) = head.drop_meta() else { return inner };
+	for parameter in items.iter().skip(1).map(Node::drop_meta) {
+		match (declaring_name_and_type(parameter), parameter) {
+			(Some((name, type_name)), _) => inner.insert(name, type_name),
+			(None, Node::Symbol(name)) => inner.remove(name),
+			_ => None,
+		};
+	}
+	inner
 }
 
 /// `a, b = 2.5, 6` and `a, b = [2.5, 6]`: each value written for a declared name must fit its type, as in `a = 2.5`
@@ -1449,6 +1475,10 @@ pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
 /// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
 pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
 	let Some(element) = list_type.strip_prefix(LIST_OF_PREFIX) else { return true };
+	// `list of int or text` (`[1] + ["a"]`): every part must fit
+	if let Some(parts) = union_parts(element) {
+		return parts.iter().all(|part| elements_fit(declared_element, &format!("{LIST_OF_PREFIX}{part}")));
+	}
 	// a rational or real element is a fraction an int list loses (`rational` names the exact Int representation)
 	let fraction = [RATIONAL_WORD, REAL_WORD, FLOAT_WORD, NUMBER_WORD].contains(&element).then_some(Kind::Float);
 	match fraction.or_else(|| builtin_type_kind(element)) {
@@ -1531,6 +1561,17 @@ pub(crate) fn added_items(value: &Node) -> Option<&[Node]> {
 		Node::List(items, Bracket::Square, _) => Some(items),
 		_ => None,
 	}
+}
+
+/// `xs = ys`, `xs = xs + ys` of a declared list: the items of a list whose element type is evident (`ys = ["a"]`) must
+/// fit, as the run-time check would find (lists `lists` knows the element types of, as written so far)
+fn evident_items_mismatch(assignment: &Node, name: &str, type_name: &str, value: &Node, lists: &Scope) -> Option<Diagnostic> {
+	let element = list_element_type(type_name)?;
+	let list_type = list_type_name(value, lists);
+	let items = list_type.strip_prefix(LIST_OF_PREFIX).filter(|_| !elements_fit(element, &list_type))?;
+	// the value may be a temporary of the element checks (`checked·1`): its items are named, not it
+	let message = format!("type mismatch: {name} is declared {type_name}, cannot hold an item that is no {element}: the assigned items are {items}");
+	Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:list to hold any items")))
 }
 
 /// The first literal item of a list value that does not fit `element`, with its kind
