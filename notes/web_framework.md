@@ -361,6 +361,19 @@ Each step is useful on its own and is what the next ones stand on.
   Cost: 69 more crates in Cargo.lock, a first build of about a minute. Not a sample yet.
 - Next: more buffers and uniforms (a map of named arrays), typed results (ints as array<i32>), render to a canvas.
 
+## web-apis: WebIDL (2026-10-08, warp-95)
+- `use js <global>` of a browser global is typed through WebIDL as `use c` is through C headers: src/web_idl.rs reads
+  lib/web.webidl (bundled from w3c/webref's @webref/idl 3.85.0 by scripts/webidl_bundle.py: console, Crypto,
+  Performance, Storage, Navigator, Location, Clipboard whole, i.e. with every partial, mixin and parent of all 334 spec
+  files; Window and its mixins only with the attributes that name those globals). foreign_modules.rs checks a member of
+  such a global at compile time: one the interface lacks (did you mean, case-insensitive first), an attribute called,
+  an argument count no overload takes. Natively too: node resolves a name to its global first, which is the same
+  object (node-only members such as performance.eventLoopUtilization are refused: `use js "perf_hooks"`).
+- A global WebIDL does not declare (Math, JSON: ECMAScript; node modules) stays unchecked. Tests: tests/ffi/test_web_idl.rs.
+- Next: result kinds from the IDL (DOMString → text, boolean, numbers, `?` → ø), members of held values
+  (`navigator.clipboard.writeText` reaches Clipboard), [Exposed=Window] vs Worker (the playground runs programs in a
+  Worker, where localStorage does not exist: say so at compile time), more interfaces (bundle arguments).
+
 ## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
 - No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`
   connects at once (natively an unreachable server is a loud error there) and hears what the server sends;
