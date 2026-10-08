@@ -41,12 +41,9 @@ theorem number_sub_arithTy {t : Ty} (b : Ty) (ht : sub .number t = true) : sub .
   · rfl
   · simp at hj; exact absurd (sub_trans ht hj.1) (by decide)
 
-theorem number_sub_div (a b : Ty) : sub .number (ArithOp.div.ty a b) = true :=
-  number_sub_arithTy b (join_upper_right a .number)
-
 -- the brute-force case split over operand values needs more than the default budget
 set_option maxHeartbeats 1000000 in
-/-- `-`, `*`, `%` and `/` on values: a number of a type below `op.ty`, or an error -/
+/-- `-`, `*`, `%`, `/` and `^` on values: a number of a type below `op.ty`, or an error -/
 theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
     (vb : b.isValue = true) : ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (op.ty ta tb) = true := by
   unfold arithValues
@@ -55,8 +52,8 @@ theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P �
   split
   · exact ⟨_, .error, sub_never _⟩
   · cases op
-    case div =>
-      have n := number_sub_div ta tb
+    case div | pow =>
+      have n : sub .number (arithTy (join ta .number) tb) = true := number_sub_arithTy tb (join_upper_right ta .number)
       split
       · split
         · exact ⟨_, .num, n⟩

@@ -353,6 +353,14 @@ const CORPUS: &[&str] = &[
 	"n: number = 7 / 2; n",
 	"y: int = 1; y = 7/2; y",
 	"\"ab\" / 2",
+	// `^`: an int power of ints, a number for a negative exponent
+	"2^10",
+	"2^0",
+	"(-2)^3",
+	"2^3^2",
+	"x = 3; x^2 + 1",
+	"n: number = 2^-1; n",
+	"\"ab\"^2",
 	// `c ? a : b` is `if c then a else b`
 	"x = 3; x > 2 ? \"big\" : \"small\"",
 	"x = 1; x < 2 ? 5 : 6.5",

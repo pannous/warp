@@ -217,7 +217,10 @@ exported as `num 0`; instances). test_warp_computes_what_the_type_model_computes
 - bool-literal-value (P199): `f(b: bool) := b; f(1)` gives 1 (the parameter keeps the int), and the assignment
   expression `x: bool = 1` gives 1 while x holds yes.
 Found on the way: the exporter had mapped `-` and `*` to `+`, so W0 accepted `"a" - 1` and `f(n - 1)` recursed upward.
-W0 now has `arith op a b`, which takes numbers only.
+W0 now has `arith op a b`, which takes numbers only. Its ops are `-`, `*`, `%`, `/` and `^`. Two ints give an int,
+except that `/` of a non-divisor and `^` with a negative exponent give a number. That is why `ArithOp.widen` types the
+left side of `/` and `^` as at least number. W0 rejects `x: int = 2^3` and `x: int = 6/2`. warp compiles them and checks
+for a whole number when they run. This is stricter than warp, never unsound, so such programs stay out of the corpus.
 
 ## Functions of several parameters, `def`, inferred parameters
 

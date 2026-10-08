@@ -17,6 +17,8 @@ inductive ArithOp where
   | mod
   /-- `6/2` is the int 3, `7/2` the number 3.5 -/
   | div
+  /-- `2^10` is the int 1024, `2^-1` the number 0.5 -/
+  | pow
   deriving DecidableEq, Repr
 
 def ArithOp.apply : ArithOp → Int → Int → Int
@@ -24,10 +26,11 @@ def ArithOp.apply : ArithOp → Int → Int → Int
   | .mul, a, b => a * b
   | .mod, a, b => a % b
   | .div, a, b => a / b
+  | .pow, a, b => a ^ b.toNat
 
-/-- the dividend of `/` counts as a number: two ints divide to a fraction -/
+/-- the left side of `/` and `^` counts as a number: two ints divide to a fraction, a negative power is one -/
 def ArithOp.widen : ArithOp → Ty → Ty
-  | .div, t => Ty.join t .number
+  | .div, t | .pow, t => Ty.join t .number
   | _, t => t
 
 theorem ArithOp.widen_mono (op : ArithOp) {a a' : Ty} (h : Ty.sub a' a = true) :
