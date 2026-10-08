@@ -120,9 +120,23 @@ fn units_text(factors: &[Factor]) -> String {
 	}
 }
 
+/// An amount as it reads back before a unit: 3, 9.81, and a fraction without a finite decimal in parentheses, (23/18)
+pub(crate) fn amount_text(amount: &Rational) -> String {
+	amount.decimal_text().unwrap_or_else(|| format!("({amount})"))
+}
+
+/// The units as they follow an amount, right after it (user 2026-10-08: no space): m, m/s², and /m for 1/m (3/m)
+pub(crate) fn unit_suffix(factors: &[Factor]) -> String {
+	let units = units_text(factors);
+	match units.strip_prefix("1/") {
+		Some(below) => format!("/{below}"),
+		None => units,
+	}
+}
+
 impl fmt::Display for Quantity {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{} {}", self.amount, units_text(&self.factors))
+		write!(f, "{}{}", amount_text(&self.amount), unit_suffix(&self.factors))
 	}
 }
 
@@ -174,7 +188,7 @@ pub struct Tolerance {
 impl fmt::Display for Tolerance {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{} ± {}", self.value, self.tolerance)?;
-		self.unit.map_or(Ok(()), |unit| write!(f, " {}", unit.name))
+		self.unit.map_or(Ok(()), |unit| write!(f, "{}", unit.name))
 	}
 }
 
@@ -188,7 +202,7 @@ pub struct Range {
 
 impl fmt::Display for Range {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{} - {} {}", self.from, self.to, self.unit.name)
+		write!(f, "{} - {}{}", self.from, self.to, self.unit.name)
 	}
 }
 
@@ -504,6 +518,11 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 				Node::Key(..) => evaluate_in(&with_unit(amount, unit), variables),
 				_ => amount_times(amount, Value::Quantity(Quantity::of(1, target_unit(unit).expect("guarded"))), variables),
 			},
+			// `(23/18)m/s`, as a fraction amount shows: the amount in parentheses, then compound units
+			[amount, unit] if matches!(amount.drop_meta(), Node::List(_, Bracket::Round, _)) && unit_expression(unit).is_some() => {
+				let factors = unit_expression(unit).expect("guarded");
+				amount_times(amount, Value::Quantity(Quantity { amount: Rational::integer(1), factors }), variables)
+			}
 			[quantity, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == IN_WORD) && unit_expression(unit).is_some() => {
 				convert(evaluate_in(quantity, variables)?, unit_expression(unit).expect("guarded"))
 			}
