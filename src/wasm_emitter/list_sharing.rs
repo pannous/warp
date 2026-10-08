@@ -74,9 +74,13 @@ impl Holders<'_> {
 	}
 }
 
-/// `list_drop_last(xs)`: a call that changes the list it is given (what `xs.pop()` lowers to)
+/// The calls that change the list they are given: what `xs.pop()`, `xs.insert(…)` and `xs.remove(v)` lower to
+const IN_PLACE_CALLS: [&str; 4] = [crate::analyzer::LIST_DROP_LAST, crate::analyzer::INSERT_AT_CALL, crate::analyzer::INSERT_EITHER_CALL,
+	crate::library_words::MAP_WITHOUT];
+
+/// `list_drop_last(xs)`, `list_insert_at(xs, i, v)`, `map_without(xs, v)`: a call that changes the list it is given
 pub(super) fn changes_in_place(value: &Node) -> bool {
-	matches!(super::list_abi::called_function(value), Some(name) if name == crate::analyzer::LIST_DROP_LAST)
+	matches!(super::list_abi::called_function(value), Some(name) if IN_PLACE_CALLS.contains(&name))
 }
 
 fn is_reading(word: &Node) -> bool {

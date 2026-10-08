@@ -351,8 +351,8 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// list_insert_at(list, position, value): copies the cells before the 0-based position, puts value there and shares
-	/// the rest; a position past the end (or negative) appends. Iteratively (copy_cells)
+	/// list_insert_at(list, position, value): value at the 0-based position, in place so every holder sees it (P200b):
+	/// the cell there moves one on and takes value; a position past the end (or negative) appends, ø becomes [value]
 	fn emit_list_insert_at(&mut self) {
 		if !self.should_emit_function(crate::analyzer::INSERT_AT_CALL) {
 			return;
@@ -360,15 +360,33 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_ref_nullable = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
+		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
 		let params = vec![node_ref_nullable, ValType::I64, node_ref];
-		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], self.copy_cells_locals(), |s, f| {
-			let (list, position, value) = (0, 1, 2);
-			let copy = CopyCells::at(3);
-			s.emit_empty_as_null(f, list);
-			s.emit_collect_cells(f, list, Some(position), &copy);
-			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value), I::LocalGet(copy.cell), I::StructNew(node_type), I::LocalSet(copy.result)]);
-			s.emit_rebuild_cells(f, &copy);
-			Self::emit_list(f, &[I::LocalGet(copy.result), I::RefAsNonNull]);
+		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], vec![node_ref_nullable], |s, f| {
+			let (list, position, value, cell) = (0, 1, 2, 3);
+			let lone_cell = [I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)];
+			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &lone_cell);
+			Self::emit_list(f, &[I::Return, I::End]);
+			s.emit_field(f, list, 0);
+			Self::emit_list(f, &[I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+				I::LocalGet(list), I::I64Const(SQUARE_LIST_KIND), set(0), I::LocalGet(list), I::LocalGet(value), set(1),
+				I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::Loop(BlockType::Empty),
+				I::LocalGet(position), I::I64Eqz, I::If(BlockType::Empty), I::LocalGet(cell)]);
+			// the cell there keeps its place and takes value, a new cell after it its old item and rest
+			s.emit_field(f, cell, 0);
+			s.emit_field(f, cell, 1);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::StructNew(node_type), set(2), I::LocalGet(cell), I::LocalGet(value), set(1),
+				I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(cell)]);
+			Self::emit_list(f, &lone_cell);
+			Self::emit_list(f, &[set(2), I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::LocalGet(position), I::I64Const(1), I::I64Sub, I::LocalSet(position), I::Br(0), I::End,
+				I::Unreachable]);
 		});
 	}
 
@@ -630,9 +648,6 @@ const INDEX_OUT_OF_RANGE_IN: &str = "index_out_of_range_in";
 
 /// `return error("…")` from a function that returns numbers: the run fails, the message is the trap detail
 pub const RETURNED_ERROR: &str = "returned_error";
-
-/// map_without_cells(cells, key): what map_without builds the remaining cells with
-const MAP_WITHOUT_CELLS: &str = "map_without_cells";
 
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
@@ -1396,6 +1411,17 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
+	/// The node in local `node` (a lone cell or entry) becomes ø in place, so every holder of it sees the empty list
+	pub(super) fn emit_become_empty(&self, func: &mut Function, node: u32) {
+		let node_type = self.type_manager.node_type;
+		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
+		Self::emit_list(func, &[
+			I::LocalGet(node), I::I64Const(Kind::Empty as i64), set(0),
+			I::LocalGet(node), I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }), set(1),
+			I::LocalGet(node), I::RefNull(HeapType::Concrete(node_type)), set(2),
+		]);
+	}
+
 	/// list_concat(a, b): a new list, the cells of b copied and those of a in front of them; iteratively (copy_cells).
 	/// Lists are shared (P200b), so `xs + ys` shares no cell with either: an item added to ys later is not in it
 	fn emit_list_concat(&mut self) {
@@ -1480,10 +1506,9 @@ impl WasmGcEmitter {
 			s.call(f, "new_empty");
 			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_field(f, list, 2);
-			Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty),
-				I::LocalGet(list), I::I64Const(Kind::Empty as i64), set(0),
-				I::LocalGet(list), I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }), set(1),
-				I::LocalGet(list), no_node(), set(2), I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
+			Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty)]);
+			s.emit_become_empty(f, list);
+			Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
 			// the cell whose rest is the last cell
 			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			s.emit_field(f, cell, 2);
@@ -2243,48 +2268,57 @@ impl WasmGcEmitter {
 			s.call(f, "map_find");
 			Self::emit_list(f, &[I::BrOnNonNull(0), I::LocalGet(2), I::End]);
 		});
-		// map_without_cells(cells, key): the cells without the key's entry (or, of a list, the first element equal to the
-		// key: `xs.remove(v)`), the cells before it copied, the rest shared
-		let without_cells = next_index(self);
-		self.runtime_function(MAP_WITHOUT_CELLS, vec![nullable, node_ref], vec![nullable], vec![], |s, f| {
-			Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
-			s.emit_field(f, 0, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(1)]);
+		// map_without(map, key): the map without the key's entry (or, of a list, without the first element equal to the
+		// key: `xs.remove(v)`), in place so every holder sees it (P200b): a later cell is unlinked, the first cell takes
+		// the second's item and rest, a lone entry or cell becomes ø itself
+		let set = |field_index: u32| I::StructSet { struct_type_index: node, field_index };
+		self.runtime_function(MAP_WITHOUT, vec![node_ref, node_ref], vec![node_ref], vec![nullable, nullable], |s, f| {
+			let (map, key, previous, cell) = (0, 1, 2, 3);
+			let holds_key = |s: &Self, f: &mut Function, cell: u32| {
+				s.emit_field(f, cell, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(key)]);
+				s.call(f, "map_entry_has_key");
+				s.emit_field(f, cell, 1);
+				f.instruction(&I::LocalGet(key));
+				s.call(f, VALUES_EQUAL);
+				f.instruction(&I::I32Or);
+			};
+			is_entry(s, f, map);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(map), I::LocalGet(key)]);
 			s.call(f, "map_entry_has_key");
-			s.emit_field(f, 0, 1);
-			f.instruction(&I::LocalGet(1));
-			s.call(f, VALUES_EQUAL);
-			Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[I::Return, I::End]);
-			s.emit_field(f, 0, 0);
-			s.emit_field(f, 0, 1);
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[I::LocalGet(1), I::Call(without_cells), I::StructNew(node)]);
-		});
-		// map_without(map, key): ø for the one entry `{a:1}` of the key, the map itself for another one, else its cells
-		// without the key's entry
-		self.runtime_function(MAP_WITHOUT, vec![node_ref, node_ref], vec![node_ref], vec![], |s, f| {
-			is_entry(s, f, 0);
-			Self::emit_list(f, &[I::If(BlockType::Result(node_ref)), I::LocalGet(0), I::LocalGet(1)]);
-			s.call(f, "map_entry_has_key");
-			Self::emit_list(f, &[I::If(BlockType::Result(node_ref))]);
-			s.call(f, "new_empty");
-			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::End, I::Else, I::Block(BlockType::Result(node_ref)), I::LocalGet(0), I::LocalGet(1), I::Call(without_cells), I::BrOnNonNull(0)]);
-			s.call(f, "new_empty");
-			Self::emit_list(f, &[I::End, I::End]);
+			f.instruction(&I::If(BlockType::Empty));
+			s.emit_become_empty(f, map);
+			Self::emit_list(f, &[I::End, I::LocalGet(map), I::Return, I::End]);
+			// ø: nothing to remove
+			s.emit_field(f, map, 1);
+			Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(map), I::Return, I::End]);
+			holds_key(s, f, map);
+			f.instruction(&I::If(BlockType::Empty));
+			s.emit_field(f, map, 2);
+			Self::emit_list(f, &[I::LocalTee(cell), I::RefIsNull, I::If(BlockType::Empty)]);
+			s.emit_become_empty(f, map);
+			Self::emit_list(f, &[I::Else, I::LocalGet(map)]);
+			s.emit_field(f, cell, 1);
+			Self::emit_list(f, &[set(1), I::LocalGet(map)]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[set(2), I::End, I::LocalGet(map), I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(map), I::LocalSet(previous), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			s.emit_field(f, previous, 2);
+			Self::emit_list(f, &[I::LocalTee(cell), I::RefIsNull, I::BrIf(1)]);
+			holds_key(s, f, cell);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(previous)]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[set(2), I::Br(2), I::End, I::LocalGet(cell), I::LocalSet(previous), I::Br(0), I::End, I::End, I::LocalGet(map)]);
 		});
 		// removed_value(collection, key): what `collection.remove(key)` gives, of a map the key's value (ø if absent), of
-		// a list the list without the first element equal to the key (the static kinds don't tell a map from a list)
+		// a list the list itself, which map_without then changes (the static kinds don't tell a map from a list)
 		self.runtime_function(crate::analyzer::REMOVED_VALUE_CALL, vec![node_ref, node_ref], vec![node_ref], vec![], |s, f| {
 			f.instruction(&I::LocalGet(0));
 			s.call(f, IS_MAP);
 			Self::emit_list(f, &[I::If(BlockType::Result(node_ref)), I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "new_empty");
 			s.call(f, MAP_GET_OR);
-			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::LocalGet(1)]);
-			s.call(f, MAP_WITHOUT);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::End]);
 		});
 	}
 }

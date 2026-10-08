@@ -49,3 +49,26 @@ fn each_literal_is_a_new_list() {
 	is!("f() := { xs = []; xs.add(1); count(xs) }; f() + f()", 2);
 	is!("s = 0; for i in [1, 2, 3] { xs = [0]; xs.add(i); s += count(xs) }; s", 6);
 }
+
+#[test]
+fn an_alias_sees_a_removed_item() {
+	is!("xs = [1, 2, 3]; ys = xs; ys.remove(1); count(xs)", 2);
+	is!("xs = [1, 2, 3]; ys = xs; ys.remove(2); xs#2", 3);
+	is!("xs = [1, 2, 3]; ys = xs; ys.remove(3); count(xs)", 2);
+	is!("xs = [1]; ys = xs; ys.remove(1); count(xs)", 0);
+	is!("xs = [1, 2, 1]; xs.remove(1); xs", warp::ints(vec![2, 1]));
+}
+
+#[test]
+fn an_alias_sees_a_removed_entry() {
+	is!("m = {a: 1, b: 2}; n = m; n.remove(\"a\"); count(m)", 1);
+	is!("m = {a: 1, b: 2}; n = m; n.remove(\"b\"); count(m)", 1);
+	is!("m = {a: 1, b: 2}; m.remove(\"a\")", 1);
+}
+
+#[test]
+fn an_alias_sees_an_inserted_item() {
+	is!("xs = [\"a\", \"c\"]; ys = xs; ys.insert(1, \"b\"); xs#2", "b");
+	is!("xs = [\"a\"]; ys = xs; ys.insert(0, \"z\"); xs#1", "z");
+	is!("xs = [\"a\"]; ys = xs; ys.insert(-1, \"q\"); count(xs)", 2);
+}
