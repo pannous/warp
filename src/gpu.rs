@@ -46,6 +46,11 @@ fn gpu() -> Result<&'static Gpu, String> {
 	.map_err(Clone::clone)
 }
 
+/// Whether this machine has a GPU to run shaders on, or why not
+pub fn available() -> Result<(), String> {
+	gpu().map(|_| ())
+}
+
 /// Run `shader` over `numbers`: the numbers it left, or why not (no GPU, a shader that does not compile, …)
 pub fn compute(shader: &str, numbers: &[f32], workgroups: u32) -> Result<Vec<f32>, String> {
 	let Gpu { device, queue } = gpu()?;

@@ -86,7 +86,10 @@ pub fn lower(node: Node) -> Node {
 		}
 		declared.insert(name, shared);
 	});
-	if declared.is_empty() {
+	declared.extend(float_map_results(&node, &declared));
+	let linear_floats: Vec<String> = declared.iter().filter(|(_, kind)| is_linear_float_array(**kind)).map(|(name, _)| name.clone()).collect();
+	let node = crate::gpu_maps::warn_unapplied(node, &linear_floats);
+	if declared.is_empty() || matches!(node, Node::Error(_)) {
 		return node;
 	}
 	if let Some(linear) = first_linear {
@@ -94,7 +97,6 @@ pub fn lower(node: Node) -> Node {
 		crate::diagnostic::educate_once(LINEAR_TOPIC, "linear xs = int[n]", "xs = int[n]",
 			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
 	}
-	declared.extend(float_map_results(&node, &declared));
 	let functions = definitions(&node);
 	let shared_parameters = shared_parameters(&node, &functions, &declared);
 	Rewrite { declared, functions: &functions, shared_parameters: &shared_parameters }.node(node, None)
@@ -255,6 +257,10 @@ impl Rewrite<'_> {
 			Node::Key(target, op, value) => {
 				let names = self.names(function);
 				match (target.drop_meta(), op) {
+					// `ys = xs.map(x => …) @gpu` of a linear float array: the lambda as a WGSL kernel, the CPU's map without an adapter
+					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, lambda, shader)) = gpu_kernel_map(&value, &names) => {
+						gpu_mapped(&target, &array, &lambda, &shader)
+					}
 					// `ys = xs.map(x => x * 0.5 + 1)` of a linear float array: its float kernel makes ys, a new linear array
 					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, kernel)) = float_map(&value, &names) => {
 						Node::Key(target, op, Box::new(builtin(&kernel, vec![array])))
@@ -366,7 +372,36 @@ fn float_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Str
 }
 
 fn is_linear_floats(array: &Node, names: &HashMap<String, Shared>) -> bool {
-	shared(array, names).is_some_and(|kind| kind.storage == Storage::Linear && kind.element == Element::Float)
+	shared(array, names).is_some_and(is_linear_float_array)
+}
+
+fn is_linear_float_array(kind: Shared) -> bool {
+	kind.storage == Storage::Linear && kind.element == Element::Float && !kind.value
+}
+
+/// `xs.map(x => …) @gpu` of a linear float array whose lambda WGSL computes: xs, the lambda and its kernel
+fn gpu_kernel_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Node, String)> {
+	let (array, lambda) = crate::gpu_maps::gpu_map(value)?;
+	let shader = crate::gpu_maps::kernel(&lambda).filter(|_| is_linear_floats(&array, names))?;
+	Some((array, lambda, shader))
+}
+
+/// `ys = linear_new(count(xs))`, then the kernel maps xs's cells into ys's, or without an adapter the CPU does
+fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, shader: &str) -> Node {
+	use crate::library_words::substitute;
+	use crate::wasm_emitter::linear_arrays::{LINEAR_COUNT, LINEAR_FLOAT_WORDS, LINEAR_NEW};
+	let Node::Key(parameter, _, body) = lambda.drop_meta() else { unreachable!("a kernel is a lambda") };
+	let [get, set, _] = LINEAR_FLOAT_WORDS;
+	let size = crate::gpu_maps::WORKGROUP_SIZE;
+	let template = crate::warp_parser::parse(&format!(
+		"gpu_target = {LINEAR_NEW}({LINEAR_COUNT}(gpu_source)); \
+		if {}(gpu_shader, gpu_source, gpu_target, ({LINEAR_COUNT}(gpu_source) + {size} - 1)//{size}) == 0 {{ \
+			for gpu_index in 1 to {LINEAR_COUNT}(gpu_source) {{ {set}(gpu_target, gpu_index, gpu_item) }} }}", crate::host::GPU_MAP_LINEAR));
+	let separator = crate::analyzer::TEMPORARY_SEPARATOR;
+	let index = Node::Symbol(format!("{}{separator}gpu{separator}index", target.name()));
+	let item = substitute(body.as_ref().clone(), &parameter.name(), &builtin(get, vec![array.clone(), index.clone()]));
+	[("gpu_target", target.clone()), ("gpu_source", array.clone()), ("gpu_shader", Node::Text(shader.to_string())), ("gpu_index", index), ("gpu_item", item)]
+		.into_iter().fold(template, |node, (placeholder, value)| substitute(node, placeholder, &value))
 }
 
 /// `gpu_compute(shader, xs, workgroups)` of a linear float array, which the shader updates in place
@@ -381,7 +416,7 @@ fn float_map_results(node: &Node, declared: &HashMap<String, Shared>) -> HashMap
 		if let Node::Symbol(name) = target.drop_meta() {
 			let entry = assignments.entry(name.clone()).or_insert((0, false));
 			entry.0 += 1;
-			entry.1 = float_map(value, declared).is_some() || gpu_compute_of_linear_floats(value, declared);
+			entry.1 = float_map(value, declared).is_some() || gpu_compute_of_linear_floats(value, declared) || gpu_kernel_map(value, declared).is_some();
 		}
 	});
 	let linear_floats = Shared { element: Element::Float, value: false, storage: Storage::Linear };

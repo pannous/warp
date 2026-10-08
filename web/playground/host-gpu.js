@@ -25,6 +25,7 @@ const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte r
 // the WGSL type of a value of 1…4 floats and its alignment in bytes
 const VALUE_TYPES = [, ["f32", 4], ["vec2f", 8], ["vec3f", 16], ["vec4f", 16]];
 let gpuDevice; // the task Worker's device, asked for once
+let gpuMapWarned = false;
 
 // the task Worker's side: {values} the shader left, or {error} (no WebGPU, a shader that does not compile, …)
 async function gpuComputed({ shader, numbers, workgroups }) {
@@ -185,6 +186,20 @@ addHostPart({
 				// a copy: a view would post all of memory
 				cells.set(gpuJob("gpu_compute", { shader: plain(shader), numbers: cells.slice(), workgroups: Number(workgroups) }));
 				return block;
+			},
+			// `ys = xs.map(x => …) @gpu` (src/lowering/gpu_maps.rs): the kernel over source's cells into target's; 0 without
+			// an adapter (said once), when the program maps them on the CPU
+			gpu_map_linear: (shader, source, target, workgroups) => {
+				const cells = linearCells(program().memory, source);
+				try {
+					linearCells(program().memory, target).set(gpuJob("gpu_compute", { shader: plain(shader), numbers: cells.slice(), workgroups: Number(workgroups) }));
+					return 1n;
+				} catch (failure) {
+					if (!/adapter|task Workers/.test(failure.message)) throw failure;
+					if (!gpuMapWarned) console.warn(`@gpu: ${failure.message}, so the map runs on the CPU`);
+					gpuMapWarned = true;
+					return 0n;
+				}
 			},
 			gpu_render: (shader, width, height, values) => {
 				const given = values == null ? {} : plain(values);
