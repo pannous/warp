@@ -1080,6 +1080,22 @@ pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Uncheck
 /// `const x=…` binds x once: a later assignment of another value, a compound assignment, an increment or an element
 /// assignment is rejected (P130); the same value again only warns (P159). `let x=…` may change, with a note that
 /// teaches `var` for a variable that changes (P159)
+/// A `let` variable may change, with a got-it note teaching `var`
+fn educate_let_change(node: &Node, place: &str, change: &str) {
+	crate::normalize::set_position_of(node);
+	crate::diagnostic::educate_once(LET_CHANGES_TOPIC, &format!("let {place}"), &format!("var {place}"), &format!("{place} changes ({change}): var says so where it is declared"));
+}
+
+/// The method call `add(4)`, `pop()`, `remove(x)` of `names.add(4)`: one that changes the list it is called on
+fn changing_list_method(call: &Node) -> bool {
+	let method = match call.drop_meta() {
+		Node::List(items, _, _) => items.first().map(Node::name),
+		Node::Symbol(name) => Some(name.clone()),
+		_ => None,
+	};
+	method.is_some_and(|method| is_list_mutating_method(&method))
+}
+
 pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (String, String)>) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
@@ -1106,10 +1122,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 			};
 			let assignment = node.drop_meta().serialize();
 			match constants.get(&place) {
-				Some((keyword, _)) if keyword == IMMUTABLE_LET => {
-					crate::normalize::set_position_of(node);
-					crate::diagnostic::educate_once(LET_CHANGES_TOPIC, &format!("let {place}"), &format!("var {place}"), &format!("{place} changes ({assignment}): var says so where it is declared"));
-				}
+				Some((keyword, _)) if keyword == IMMUTABLE_LET => educate_let_change(node, &place, &assignment),
 				Some((_, bound)) if *op == Op::Assign && matches!(target.drop_meta(), Node::Symbol(_)) && value.serialize() == *bound => {
 					let redundant = Diagnostic::at(node, format!("{place} is const and already {bound}: {assignment} changes nothing")).fix("remove the redundant assignment".to_string());
 					if crate::diagnostic::report(std::slice::from_ref(&redundant)).is_err() {
@@ -1123,6 +1136,20 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 				None => {}
 			}
 			check_constants(value, constants)
+		}
+		// `names.add(4)`, `names.pop()` change the list as an assignment would (card const-list-add)
+		Node::Key(list, Op::Dot, call) if changing_list_method(call) => {
+			let place = list.name();
+			let change = node.drop_meta().serialize();
+			match constants.get(&place) {
+				Some((keyword, _)) if keyword == IMMUTABLE_LET => educate_let_change(node, &place, &change),
+				Some(_) => {
+					return Some(Diagnostic::at(node, format!("{place} is const, cannot change it: {change}"))
+						.fix(format!("change a copy (copy = {place}), or declare {place} without const")));
+				}
+				None => {}
+			}
+			check_constants(call, constants)
 		}
 		Node::Key(left, _, right) => check_constants(left, constants).or_else(|| check_constants(right, constants)),
 		_ => None,
