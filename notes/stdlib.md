@@ -192,7 +192,9 @@ run natively and in the browser.
    prelude word); `use os` brings env. Natively the file system (paths as read resolves them) and the environment; in
    the browser host.js keeps written files in memory while the page is open (read sees them first, then the served
    repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
-   method `xs.append(v)` a program using `use file` still needs (question Q6). args waits for a CLI way to pass them.
+   method `xs.append(v)` a program using `use file` still needs (question Q6). `use os; args` (card std-args): the words
+   after the program file, `warp run prog.wasp a b` gives ["a" "b"] (main.rs program_file → std_adapters
+   set_program_arguments), [] without any and in the browser; without `use os`, `args` is still the symbol.
 2. Done as A instead of B: hash: `use hash` brings sha256 (lowercase hex) and crc32 (a number) of a text's UTF-8
    bytes: sha2 and crc32fast natively (both already warp dependencies), a synchronous JS twin in host.js (crypto.subtle
    is asynchronous, a host call cannot wait); same values in both hosts (tests/modules/test_std_hash.rs). B (C modules
