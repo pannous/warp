@@ -136,7 +136,7 @@ impl WaspParser {
 			('?', '?') => return Some((Op::Coalesce, 2)),
 			('?', '.') if c3.is_alphabetic() || c3 == '_' => return Some((Op::SafeDot, 2)), // `x?.name`; `x ?.5 : 1` is a ternary
 			(':', '=') => return Some((Op::Define, 2)),
-			('~', '~') => return Some((Op::Similar, 2)),
+			('~', '~') => return Some((Op::Rough, 2)),
 			(':', ':') => return Some((Op::Scope, 2)),
 			('-', '>') => return Some((Op::Arrow, 2)),
 			// R's `x <- 3` assigns with a note, the cramped `x<-3` is an error (P145, left_arrow_assignment)
@@ -205,7 +205,8 @@ impl WaspParser {
 			'≤' => Some((Op::Le, 1)),
 			'≥' => Some((Op::Ge, 1)),
 			'≠' => Some((Op::Ne, 1)),
-			'≈' | '⋍' | '~' => Some((Op::Similar, 1)),
+			'≈' | '⋍' => Some((Op::Similar, 1)),
+			'~' => Some((Op::Rough, 1)),
 			'!' => Some((Op::Not, 1)),
 			'¬' => Some((Op::Not, 1)),
 			'&' if self.starts_function_reference() && self.prev_char().is_whitespace() => None, // `map &square xs`

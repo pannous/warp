@@ -71,15 +71,19 @@ const IMPL_WORD: &str = "impl";
 /// Kotlin's `p.copy(y = 5)`
 const COPY_WORD: &str = "copy";
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
-const OPERATOR_METHODS: [(Op, [&str; 3]); 7] = [
-	(Op::Add, ["plus", "add", "__add__"]),
-	(Op::Sub, ["minus", "subtract", "__sub__"]),
-	(Op::Mul, ["times", "multiply", "__mul__"]),
-	(Op::Div, ["divide", "div", "__truediv__"]),
-	(Op::Mod, ["mod", "modulo", "__mod__"]),
-	(Op::Lt, ["less", "smaller", "__lt__"]),
-	(Op::Gt, ["more", "bigger", "__gt__"]),
+const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
+	(Op::Add, &["plus", "add", "__add__"]),
+	(Op::Sub, &["minus", "subtract", "__sub__"]),
+	(Op::Mul, &["times", "multiply", "__mul__"]),
+	(Op::Div, &["divide", "div", "__truediv__"]),
+	(Op::Mod, &["mod", "modulo", "__mod__"]),
+	(Op::Lt, &["less", "smaller", "__lt__"]),
+	(Op::Gt, &["more", "bigger", "__gt__"]),
+	(Op::Similar, &["approximately"]),
+	(Op::Rough, &["similar"]),
 ];
+/// P212: a class defining the method of only one of these operators has it serve the other too
+const INTERCHANGEABLE_OPERATORS: [(Op, Op); 2] = [(Op::Similar, Op::Rough), (Op::Rough, Op::Similar)];
 /// The run-time choice of a library-word method by the receiver's class (dispatched_by_class)
 const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then METHOD else OTHERWISE";
 /// Ruby's `include Walker` in a class body takes in a mixin
@@ -787,6 +791,14 @@ fn operator_calls(node: Node) -> Node {
 	});
 	if methods.is_empty() {
 		return node;
+	}
+	let defines = |methods: &[(String, Op, String)], class: &str, op: Op| methods.iter().find(|(owner, known, _)| owner == class && *known == op).map(|(_, _, method)| method.clone());
+	for (class, _, _) in methods.clone() {
+		for (defined, missing) in INTERCHANGEABLE_OPERATORS {
+			if let (Some(method), None) = (defines(&methods, &class, defined), defines(&methods, &class, missing)) {
+				methods.push((class.clone(), missing, method));
+			}
+		}
 	}
 	let classes: Vec<String> = methods.iter().map(|(class, _, _)| class.clone()).collect();
 	let instances = instance_classes(&node, &classes);

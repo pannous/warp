@@ -128,7 +128,7 @@ fn combinator(op: &Op) -> Option<&'static str> {
 	Some(match op {
 		Op::Gt => " > ",
 		Op::Add => " + ",
-		Op::Similar => " ~ ",
+		Op::Similar | Op::Rough => " ~ ",
 		Op::Dot => ".",
 		Op::Colon => ":",
 		Op::Hash => "#",

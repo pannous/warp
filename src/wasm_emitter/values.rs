@@ -176,8 +176,8 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [word, left, right, tolerance] = items {
-			if word.drop_meta().name() == crate::library_words::VALUES_SIMILAR {
-				self.emit_similarity(func, left, right, tolerance);
+			if crate::library_words::is_similarity_call(&word.drop_meta().name()) {
+				self.emit_similarity(func, &word.drop_meta().name(), left, right, tolerance);
 				return true;
 			}
 		}
