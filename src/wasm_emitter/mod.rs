@@ -31,6 +31,7 @@ pub(crate) mod list_sharing;
 mod library_ops;
 mod text_unicode;
 mod similarity;
+mod uncertain;
 pub use similarity::NUMBERS_SIMILAR;
 pub(crate) mod list_ops;
 mod list_abi;
@@ -672,6 +673,7 @@ impl WasmGcEmitter {
 		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
 		self.writes_tags = library_ops::mentions_quoted_tag(node);
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
+		uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
 		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
@@ -917,8 +919,7 @@ impl WasmGcEmitter {
 		let params: Vec<ValType> = type_def.fields.iter().map(|f| field_def_to_val_type(f, self)).collect();
 
 		// Function type: (params...) -> (ref $TypeName)
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(params.clone(), vec![Ref(type_ref)]);
+		let func_type = self.type_manager.function_type(params.clone(), vec![Ref(type_ref)]);
 		self.functions.function(func_type);
 
 		// Function body: get all params, struct.new
@@ -963,6 +964,7 @@ impl WasmGcEmitter {
 		self.emit_node_type_name(); // after values_equal, which names an instance's declared type
 		self.emit_text_as_int(); // after the getters: it calls get_int_value
 		self.emit_text_as_float();
+		self.emit_uncertain_runtime(); // after text_as_float, which it calls
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}
@@ -1151,8 +1153,7 @@ impl WasmGcEmitter {
 		self.next_temp_local = var_count; // Temp locals start after variables
 
 		let node_ref = self.node_ref(false);
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(vec![], vec![Ref(node_ref)]);
+		let func_type = self.type_manager.function_type(vec![], vec![Ref(node_ref)]);
 		self.functions.function(func_type);
 
 		// Build locals list based on variable types
@@ -1454,7 +1455,7 @@ impl WasmGcEmitter {
 			const KIND_GLOBALS: [&str; 12] = ["kind_empty", "kind_int", "kind_float", "kind_text", "kind_codepoint", "kind_symbol",
 				"kind_key", "kind_block", "kind_list", "kind_data", "kind_meta", "kind_error"];
 			let mut globals: Vec<(u32, &str)> = KIND_GLOBALS.iter().enumerate()
-				.filter(|(idx, _)| (*idx as u32) < self.next_global_idx).map(|(idx, name)| (idx as u32, *name)).collect();
+				.filter(|(idx, _)| (*idx as u32) < self.ctx.kind_global_indices.len() as u32).map(|(idx, name)| (idx as u32, *name)).collect();
 			globals.extend(self.extra_global_names.iter().copied());
 			self.names.globals(&name_map(&mut globals));
 		}

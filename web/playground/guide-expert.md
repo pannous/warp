@@ -70,6 +70,14 @@ xs = [3 1 2]; xs += [4]; [#xs, xs#1, sum xs, sort xs]
 [x² for x in [1 2 3 4] where x > 2]
 ```
 
+### Whole lists at once
+
+A function of a number broadcasts over a list; `map` takes a lambda `x => …`.
+
+```warp => [[1 4 9] [2 4 6]]
+square := it * it; [square [1 2 3], [1 2 3].map(x => x * 2)]
+```
+
 ## Objects
 
 Literal objects with dot access and in-place updates.
@@ -97,14 +105,6 @@ for i in 1 to 3 { print i }; n = 0; while n < 3 { n += 1 }; n
 
 ```warp => [55 42]
 def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2); twice := it * 2; [fib 10, twice 21]
-```
-
-## Whole lists at once
-
-A function of a number broadcasts over a list; `map` takes a lambda `x => …`.
-
-```warp => [[1 4 9] [2 4 6]]
-square := it * it; [square [1 2 3], [1 2 3].map(x => x * 2)]
 ```
 
 ## Closures

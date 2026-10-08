@@ -7,6 +7,7 @@ const SHARED_HANDLER = "on·shared";
 const SOCKET_ADDRESS = /^wss?:\/\//; // src/web_sockets.rs SOCKET_SCHEMES
 const TEXT_REPLY_TYPE = "text/plain"; // src/web_server.rs TEXT_REPLY_TYPE: a text reply of a server function
 const SERVER_REPLIES_ID = "warp-replies"; // src/site.rs REPLIES_ID
+const ROUTE_DATA_URL = "/rpc/route·data·"; // src/lowering/serve.rs RPC_PREFIX + ROUTE_DATA_PREFIX
 
 const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED, TASK_STOPPED, TASK_STOP
 const TASK_FAILED = 2n;
@@ -429,6 +430,11 @@ function serverReply(url, body) {
 	return index < 0 ? undefined : serverReplies.splice(index, 1)[0];
 }
 
+// the replies of route data in so far, by request (card route-data-cache): what a route shows for a path is asked once,
+// so going back to a page, or to a path of another route (ø), asks the server nothing
+const routeDataReplies = new Map();
+const routeDataKey = (url, body) => body !== undefined && decodeURI(url).startsWith(ROUTE_DATA_URL) ? url + " " + body : undefined;
+
 // A request [url, body] POSTs the body as JSON: a server function the page calls (src/lowering/serve.rs)
 function startFetch(holder, hooks, id, request) {
 	const [url, body] = Array.isArray(request) ? [request[0], JSON.stringify(request[1])] : [request];
@@ -436,13 +442,15 @@ function startFetch(holder, hooks, id, request) {
 	const started = { url, posted: body !== undefined };
 	(holder.fetches ??= new Map()).set(id, started);
 	const current = () => holder.fetches.get(id) === started && !holder.stopped;
+	const routeData = routeDataKey(url, body);
 	const arrive = reply => {
+		if (routeData && !reply.error) routeDataReplies.set(routeData, reply);
 		if (!current() || started.reply) return;
 		started.reply = reply;
 		hooks.arrived?.(holder, FETCH_HANDLER_PREFIX + id);
 	};
 	const failed = reason => ({ error: `fetch ${url} failed: ${reason}` });
-	const rendered = body !== undefined && serverReply(url, body);
+	const rendered = routeDataReplies.get(routeData) ?? (body !== undefined && serverReply(url, body));
 	if (rendered) return void queueMicrotask(() => arrive({ body: rendered.body, text: rendered.text }));
 	if (taskPool.length === 0) return void fetchReplyOf(url, body).then(reply => arrive(reply.error ? failed(reply.error) : reply));
 	const worker = taskPool.pop();

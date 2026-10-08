@@ -1,6 +1,7 @@
 // The program of a built site in a Worker (card site-worker): a site whose module starts tasks runs here, off the page's
 // thread, so a blocking `await` may wait (Atomics.wait) and its tasks run on the pool of task Workers (host-tasks.js).
-// The page (site.js) keeps the DOM: it sends the module's URL, the kept values (the session's apart), the page's path and each element event;
+// The page (site.js) keeps the DOM: it sends the module's URL, the kept values (the session's apart), the page's path, the
+// server's replies of a rendered page and each element event;
 // this worker answers with the page's markup anew (its export page·html, as site.js show() renders it) after main, each
 // handler, each timer and each path the page went to (a link or the back button: its route, its module loaded first).
 // Its scripts come as ?scripts=…, resolved against this file, the site's root (src/site.rs).
@@ -21,7 +22,7 @@ const hooks = {
 	pagePath: () => pagePath,
 	instantiated: holder => { site = holder; },
 	print: (text, stream) => post({ print: { text, stream } }),
-	listen: holder => startTimers(holder, handler => showAfter(runTimer(holder, hooks, handler))),
+	listen: holder => holder.timers && startTimers(holder, handler => showAfter(runTimer(holder, hooks, handler))), // host-timers.js
 	arrived: (holder, handler) => holder === site && showAfter(runTimer(holder, hooks, handler)),
 };
 
@@ -41,7 +42,8 @@ function pageMarkup() {
 	return { html: plainOfTree(readNode(site.exports, render())) };
 }
 
-async function start({ module, stored, session, path }) {
+async function start({ module, stored, session, path, replies }) {
+	serverReplies.push(...JSON.parse(replies ?? "[]")); // host-tasks.js: a page a server rendered for its path (P221)
 	Object.assign(storedValues, stored);
 	Object.assign(sessionValues, session);
 	await self.loadDatabase?.(); // host-files.js, when the program keeps values

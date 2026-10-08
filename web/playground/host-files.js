@@ -168,6 +168,7 @@ addHostPart({
 		};
 	},
 	adapters: {
+		os: { env: () => null, args: () => [] }, // a page has no environment and no command line
 		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/stored_values.rs, std_io): the page's values
 		// (markup.js keptValues), each save sent back to it with its store (the dev store of a `warp dev` page, the
 		// session's, else the program's)

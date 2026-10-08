@@ -90,6 +90,7 @@ pub mod fixits;
 pub mod time;
 pub mod real;
 pub mod units;
+pub mod uncertain;
 pub mod fixed_width;
 pub mod modules;
 pub mod wasm_modules;

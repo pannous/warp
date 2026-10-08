@@ -55,9 +55,10 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    - Refused, loudly: an argument the page only knows inside a function (`def show(k) { p{ doubled(k) } }`). The page
      asks before its code runs, so it sends main-level values only. A synchronous call would need site-worker's
      Atomics.wait.
-   - Known gaps: a server function's untyped parameter is `any`, so `n = doubled(n)` makes n a data value in the native
-     server build (`"n " + n` fails there; `doubled(x:int)` works). The `g := f(x)` hint "prefer g = …" still shows in
-     the server build.
+   - A server function's untyped parameter is `any`, so its arithmetic is a number of run-time kind; joined with a
+     text it takes its text form (`"n " + doubled(n)`, analyzer arithmetic_kind). The server build takes `g := f(x)` of
+     a server function as `g = f(x)`, the value it renders, as the prerender does (serve.rs assigned_asking), so the
+     := hint no longer shows there (card server-def-any).
 3. **JavaScript on the client** needs no third language in the source. The page's warp code reaches browser APIs
    through the WebIDL bindings (notes/web_framework.md "web-apis: WebIDL") and arbitrary JS through foreign_call (js =
    globalThis, host-foreign.js). Hand-written JS stays possible as a `.js` file of the site, but it is not the model.
@@ -84,9 +85,15 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      replies as `<script type="application/json" id="warp-replies">`. host-tasks.js answers the first fetch of each
      request from them in a microtask, so the page shows the rendered value before the browser paints. A page without
      server calls stays the built file. Test: the_first_visit_gets_finished_html.
-   - Left: (b) Every route-data fetch runs on each navigation (ø
-     for a path of another route). A page whose program runs in a Worker (site-thread.js) cannot read the replies
-     element yet, so it fetches as before. (c) A main-level statement of the page that reads server data (`if count(users) == 0
+   - Navigation asks each route-data request once (card route-data-cache): host-tasks.js keeps the replies of
+     `/rpc/route·data·N` in by request (routeDataReplies), so going back to a page, or to a path of another route (ø),
+     asks the server nothing; the reply stays as fetched until the page reloads.
+   - A page whose program runs in a Worker (site-worker.js) gets the replies element's text with its start message
+     from site-thread.js, so its first visit asks the server nothing either (card ssr-worker-replies).
+   - Probe of both: probes/route_data/server_calls.sh counts the POSTs through probes/route_data/counting_proxy.py (the
+     browser's network log misses a Worker's fetches): app.warp's links home, first, second, home, first, second ask
+     "/users/1" and "/users/2" once each; worker_app.warp's direct visit of /users/2 asks nothing (one call before).
+   - Left: (c) A main-level statement of the page that reads server data (`if count(users) == 0
      { users.add(…) }`) fails loudly in the browser ("table.open: no such word in the browser"). (d) Access rules: card
      route-access.
    - Found on the way: route functions now stand where the first route stood instead of before everything, because a

@@ -16,11 +16,15 @@ pub const LINEAR_COUNT: &str = "linear_count";
 /// get, set, add of an Int cell and of a float cell (the order of shared_arrays' element words)
 pub const LINEAR_INT_WORDS: [&str; 3] = ["linear_get", "linear_set", "linear_add"];
 pub const LINEAR_FLOAT_WORDS: [&str; 3] = ["linear_getf", "linear_setf", "linear_addf"];
+/// linear_dotf(xs, ys) -> the sum of xs#i * ys#i over xs's count of cells, two pairs at a time in f64x2 lanes: `dot` and
+/// `sum(xs .* ys)` of two linear float arrays of equal length (shared_arrays.rs checks it)
+pub const LINEAR_DOT: &str = "linear_dotf";
 /// The registry names crate::wasm_emitter's ffi_func_index looks the words up by
-const FUNCTION_NAMES: [(&str, &str); 8] = [
+const FUNCTION_NAMES: [(&str, &str); 9] = [
 	(LINEAR_NEW, "ffi_linear_new"), (LINEAR_COUNT, "ffi_linear_count"),
 	("linear_get", "ffi_linear_get"), ("linear_set", "ffi_linear_set"), ("linear_add", "ffi_linear_add"),
 	("linear_getf", "ffi_linear_getf"), ("linear_setf", "ffi_linear_setf"), ("linear_addf", "ffi_linear_addf"),
+	(LINEAR_DOT, "ffi_linear_dotf"),
 ];
 
 /// `ys = xs.map(x => x * 0.5 + 1)` over a linear float array: the kernel `linear_mapf·x·x*0.5+1`, its parameter and
@@ -65,13 +69,14 @@ const CELL_BYTES: i64 = 8;
 const CELL: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
 
 /// name, parameters, results of the linear words
-pub fn linear_word_signatures() -> [(&'static str, Vec<ValType>, Vec<ValType>); 8] {
+pub fn linear_word_signatures() -> [(&'static str, Vec<ValType>, Vec<ValType>); 9] {
 	let [get, set, add] = LINEAR_INT_WORDS;
 	let [getf, setf, addf] = LINEAR_FLOAT_WORDS;
 	[
 		(LINEAR_NEW, vec![I64], vec![I64]), (LINEAR_COUNT, vec![I64], vec![I64]),
 		(get, vec![I64, I64], vec![I64]), (set, vec![I64, I64, I64], vec![I64]), (add, vec![I64, I64, I64], vec![I64]),
 		(getf, vec![I64, I64], vec![F64]), (setf, vec![I64, I64, F64], vec![F64]), (addf, vec![I64, I64, F64], vec![F64]),
+		(LINEAR_DOT, vec![I64, I64], vec![F64]),
 	]
 }
 
@@ -99,6 +104,7 @@ impl WasmGcEmitter {
 					f.instruction(&I::I32WrapI64);
 					f.instruction(&I::I64Load(CELL));
 				}),
+				LINEAR_DOT => self.runtime_function(name, params, results, vec![I32, I32, I32, V128, F64], |_, f| Self::emit_float_dot(f)),
 				_ if word == LINEAR_INT_WORDS[0] || word == LINEAR_FLOAT_WORDS[0] => self.runtime_function(name, params, results, vec![], |s, f| {
 					s.emit_linear_cell(f);
 					f.instruction(&if float { I::F64Load(CELL) } else { I::I64Load(CELL) });
@@ -146,6 +152,31 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalGet(reading), I::F64Load(CELL), I::LocalSet(cell), I::LocalGet(writing)]);
 		emit_kernel(func, parameter, body, cell, false);
 		Self::emit_list(func, &[I::F64Store(CELL), I::End, I::LocalGet(result)]);
+	}
+
+	/// linear_dotf(xs, ys) -> the sum of the products of their cells: two pairs at a time in f64x2 lanes, an odd last
+	/// pair alone
+	fn emit_float_dot(func: &mut Function) {
+		let (left, right, reading_left, reading_right, pairs_end, lanes, sum) = (0, 1, 2, 3, 4, 5, 6);
+		let count = [I::LocalGet(left), I::I32WrapI64, I::I64Load(CELL)];
+		for (block, cursor) in [(left, reading_left), (right, reading_right)] {
+			Self::emit_list(func, &[I::LocalGet(block), I::I32WrapI64, I::I32Const(CELL_BYTES as i32), I::I32Add, I::LocalSet(cursor)]);
+		}
+		func.instruction(&I::LocalGet(reading_left));
+		Self::emit_list(func, &count);
+		Self::emit_list(func, &[I::I32WrapI64, I::I32Const(-2), I::I32And, I::I32Const(3), I::I32Shl, I::I32Add, I::LocalSet(pairs_end)]);
+		Self::emit_list(func, &[I::Block(wasm_encoder::BlockType::Empty), I::Loop(wasm_encoder::BlockType::Empty)]);
+		Self::emit_list(func, &[I::LocalGet(reading_left), I::LocalGet(pairs_end), I::I32GeU, I::BrIf(1)]);
+		Self::emit_list(func, &[I::LocalGet(lanes), I::LocalGet(reading_left), I::V128Load(PAIR_ALIGNED), I::LocalGet(reading_right), I::V128Load(PAIR_ALIGNED), I::F64x2Mul, I::F64x2Add, I::LocalSet(lanes)]);
+		for cursor in [reading_left, reading_right] {
+			Self::emit_list(func, &[I::LocalGet(cursor), I::I32Const(PAIR_BYTES), I::I32Add, I::LocalSet(cursor)]);
+		}
+		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
+		Self::emit_list(func, &[I::LocalGet(lanes), I::F64x2ExtractLane(0), I::LocalGet(lanes), I::F64x2ExtractLane(1), I::F64Add, I::LocalSet(sum)]);
+		// an odd count: the last pair
+		Self::emit_list(func, &count);
+		Self::emit_list(func, &[I::I64Const(1), I::I64And, I::I32WrapI64, I::If(wasm_encoder::BlockType::Empty)]);
+		Self::emit_list(func, &[I::LocalGet(sum), I::LocalGet(reading_left), I::F64Load(CELL), I::LocalGet(reading_right), I::F64Load(CELL), I::F64Mul, I::F64Add, I::LocalSet(sum), I::End, I::LocalGet(sum)]);
 	}
 
 	/// linear_new(count) -> address: a zeroed block (fresh pages, never reused) with its count in the header

@@ -39,8 +39,7 @@ impl WasmGcEmitter {
 			return None;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let order_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(vec![node_ref, node_ref], vec![ValType::I32]);
+		let order_type = self.type_manager.function_type(vec![node_ref, node_ref], vec![ValType::I32]);
 		let witness_ref = RefType { nullable: true, heap_type: HeapType::Concrete(order_type) };
 		self.globals.global(GlobalType { val_type: Ref(witness_ref), mutable: true, shared: false }, &ConstExpr::ref_null(HeapType::Concrete(order_type)));
 		self.exports.export(WITNESS_GLOBAL, ExportKind::Global, self.next_global_idx);

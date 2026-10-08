@@ -51,3 +51,5 @@ mod test_count_shadowed; // card count-shadowed
 mod test_discarded_pure_warning;
 mod test_slash_comment_needs_space;
 mod test_ternary_hint_got_it; // card hint-dismiss
+#[cfg(feature = "native")] // wasmtime's fuel: the browser runs without it, stopped by a timer (playground.js RUN_TIMEOUT_MS)
+mod test_fuel_default; // card fuel-default

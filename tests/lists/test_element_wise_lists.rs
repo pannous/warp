@@ -56,3 +56,11 @@ fn a_list_literal_pairs_with_a_dotted_operator() {
 	is!("[2 2] .* [2 4]", parse("[4 8]"));
 	is!("sum([1.5 2] .* [2 4])", 11);
 }
+
+// `float[n]` of a variable count is a list too: before, `xs .* ys` of two was `x * ys`, a float * list error
+#[test]
+fn zero_filled_lists_of_a_variable_count_pair() {
+	let filled = "n = 3; xs = float[n]; ys = float[n]; for i in 1 to n { xs#i = i; ys#i = 2 }\n";
+	is!(&format!("{filled}dot(xs, ys)"), 12.0);
+	is!(&format!("{filled}zs = xs .* ys; zs#3"), 6.0);
+}

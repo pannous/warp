@@ -385,8 +385,8 @@ impl WasmGcEmitter {
 
 	/// A text operand as is, a number in its text form; the implicit conversion is hinted
 	fn emit_concatenated(&mut self, func: &mut Function, operand: &Node) {
-		if self.get_type(operand) == Kind::Empty {
-			// a value held as a Node (a map value) may be a number at runtime: joined, a number takes its text form
+		if matches!(self.get_type(operand), Kind::Empty | Kind::Data) {
+			// a value held as a Node (a map value, arithmetic of an any value) may be a number at runtime: joined, a number takes its text form
 			self.emit_node_instructions(func, &super::joined_text(std::slice::from_ref(operand), ""));
 			return;
 		}
