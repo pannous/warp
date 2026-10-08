@@ -56,3 +56,4 @@ mod test_decimal_units;
 mod test_number_words;
 mod test_time_of_day;
 mod test_div_assign;
+mod test_abs_of_float_variable;
