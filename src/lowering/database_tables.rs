@@ -15,6 +15,8 @@ pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one
 const ID_FIELD: &str = "id";
 const ADD_WORD: &str = "add";
+/// `save p` writes every column of p's row (field changes are written through already, so it changes nothing then)
+const SAVE_WORD: &str = "save";
 /// the generated code's variables, written as these placeholders (`·` would parse as a product)
 const ROW: &str = "table_row";
 const ADDED: &str = "table_added";
@@ -22,8 +24,9 @@ const ADDED: &str = "table_added";
 const REFERENCED: &str = "table_referenced";
 const OWNER: &str = "table_owner";
 const MEMBER: &str = "table_member";
-const GENERATED_NAMES: [(&str, &str); 6] = [(ROW, "table·row"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
-	(REFERENCED, "table·referenced"), (OWNER, "table·owner"), (MEMBER, "table·member")];
+const SAVED: &str = "table_saved";
+const GENERATED_NAMES: [(&str, &str); 7] = [(ROW, "table·row"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
+	(REFERENCED, "table·referenced"), (OWNER, "table·owner"), (MEMBER, "table·member"), (SAVED, "table·saved")];
 const SCHEMA_PLACEHOLDER: &str = "table_schema";
 const VALUE_PLACEHOLDER: &str = "table_value";
 /// A filter's query (notes/orm.md step 2): the ids it keeps, its SQL condition and parameters, the functions it calls
@@ -434,7 +437,7 @@ fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &m
 }
 
 fn table_statements(statement: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Vec<Node> {
-	if let Some(lowered) = opened(&statement, tables, file, open).or_else(|| inserted(&statement, tables, file)) {
+	if let Some(lowered) = opened(&statement, tables, file, open).or_else(|| inserted(&statement, tables, file)).or_else(|| saved(&statement, tables, file)) {
 		return lowered;
 	}
 	let updates = written_through(&statement, tables, file);
@@ -549,7 +552,29 @@ fn written_through(statement: &Node, tables: &HashMap<String, Table>, file: &str
 	}
 	let Node::Key(instance, Op::Dot, field) = target.drop_meta() else { return vec![] };
 	let (Node::Symbol(instance), field) = (instance.drop_meta(), field.drop_meta().name()) else { return vec![] };
-	tables.values().filter(|table| field != ID_FIELD && columns_of(table).contains(&field)).map(|table| parse(&format!(
-		"if {instance} is {class} and {instance}.{ID_FIELD} > 0 {{ std_io(\"table\", \"update\", [{name:?}, {instance}.{ID_FIELD}, {field:?}, {value}, {file:?}]) }}",
-		class = table.class, name = table.name, value = column_value(table, instance, &field)))).collect()
+	tables.values().filter(|table| field != ID_FIELD && columns_of(table).contains(&field))
+		.map(|table| parse(&format!("if {instance} is {class} and {instance}.{ID_FIELD} > 0 {{ {update} }}",
+			class = table.class, update = column_update(table, instance, &field, file)))).collect()
+}
+
+/// The UPDATE of one column of `instance`'s row
+fn column_update(table: &Table, instance: &str, column: &str, file: &str) -> String {
+	format!("std_io(\"table\", \"update\", [{name:?}, {instance}.{ID_FIELD}, {column:?}, {value}, {file:?}])",
+		name = table.name, value = column_value(table, instance, column))
+}
+
+/// `save p`: every column of p's row written, the value p; an instance of a table's class without a row is an error
+fn saved(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Vec<Node>> {
+	let Node::List(parts, _, Separator::Space) = statement.drop_meta() else { return None };
+	let [word, value] = parts.as_slice() else { return None };
+	if word.drop_meta().name() != SAVE_WORD || tables.is_empty() {
+		return None;
+	}
+	let writes = tables.iter().map(|(variable, table)| {
+		let updates: Vec<String> = columns_of(table).iter().map(|column| column_update(table, SAVED, column, file)).collect();
+		format!("if {SAVED} is {class} {{\nif {SAVED}.{ID_FIELD} == 0 {{ raise \"save: this {class} has no row: add it to {name} first\" }}\n{updates}\n}}\n",
+			class = table.class, name = variable, updates = updates.join("\n"))
+	});
+	let code = format!("{SAVED} = {VALUE_PLACEHOLDER}\n{writes}{SAVED}", writes = writes.collect::<String>());
+	Some(generated(&code, [(VALUE_PLACEHOLDER, value.clone())]).children())
 }

@@ -29,7 +29,9 @@ bo.age += 1                            // UPDATE people SET age = 31 WHERE id = 
 ## The table is a list
 Everything a list does works on a table: `count`, `#i`, `for p in people`, `where`, `map`, `add`/`+=`, `remove`.
 Its elements are ordinary instances of C. An instance read from a table remembers its row (`id`), so a field change is
-written through: `bo.age += 1` is an UPDATE of that row.
+written through: `bo.age += 1` is an UPDATE of that row. `save bo` (a statement, its value bo) writes every column of
+bo's row again, so it changes nothing after written-through changes; an instance without a row is an error there
+("add it to people first"). Supervisor default, 2026-10-08, decisions.md.
 
 ## Filters: any warp expression
 - `people where it.age > 20 and it.name.starts_with("B")`: the parts SQL has (comparisons, and/or/not, arithmetic,
