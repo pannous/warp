@@ -82,6 +82,9 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			values.remove(&text_of(name)?);
 			save_stored_values(&file, values).map(|_| Node::Empty).map_err(failure)
 		}
+		// the tables of registered classes (lowering/database_tables.rs)
+		#[cfg(feature = "native")]
+		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),
 		("store", "names", [file]) => Ok(texts(stored_values(&text_of(file)?).map_err(failure)?.into_iter().map(|(name, _)| name))),
 		_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
 	}

@@ -228,7 +228,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 89] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 90] = [
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -281,6 +281,9 @@ const SOURCE_PASSES: [fn(Node) -> Node; 89] = [
 	crate::type_aliases::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::traits::lower_trait_parameters,
+	// `people: [Person] = database.people`: the table's rows, inserts and field changes written through
+	// (database_tables.rs), before class_methods lowers the class (its row id) and stored_values reads `database.people`
+	crate::database_tables::lower,
 	// `p.fields`, `p.methods`, `dir(p)`: the class layout (reflection.rs), before class_methods lowers the class bodies
 	crate::reflection::lower_objects,
 	// methods in a class body become functions over the class before any pass reads the body as fields
