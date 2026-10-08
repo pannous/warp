@@ -5,6 +5,7 @@
 //! argument stays an error.
 
 use crate::diagnostic::Diagnostic;
+use crate::min_max::{is_plain, with_bindings};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -12,6 +13,8 @@ use std::collections::HashMap;
 /// `x?`, `int?`: optional
 const OPTIONAL_MARK: char = '?';
 const MAYBE_WORD: &str = "maybe";
+/// the arguments computed before a call whose named arguments change their order (P216)
+const TEMPORARY_PREFIX: &str = "named_argument_";
 
 struct Function {
 	parameters: Vec<String>,
@@ -36,7 +39,7 @@ pub fn lower(node: Node) -> Node {
 	if !functions.values().any(|function| !function.extras.is_empty()) && !has_named_call(&node, &functions) {
 		return node;
 	}
-	Rewrite { functions }.node(node)
+	Rewrite { functions, temporaries: Default::default() }.node(node)
 }
 
 /// Defaults written as other languages do: Ruby's keyword parameter `def f(a, b: 2)` (a literal after the colon is no
@@ -262,8 +265,18 @@ fn symbols_in_order(body: &Node) -> Vec<String> {
 	symbols
 }
 
+/// A plain value, a text or a list of them: it stays in place, so the parameter check still sees its evident type
+fn is_effect_free(value: &Node) -> bool {
+	match value.drop_meta() {
+		Node::Text(_) | Node::Char(_) => true,
+		Node::List(items, Bracket::Square, _) => items.iter().all(is_effect_free),
+		value => is_plain(value),
+	}
+}
+
 struct Rewrite {
 	functions: HashMap<String, Function>,
+	temporaries: std::cell::Cell<usize>,
 }
 
 /// `fun = {x*y}` called by name: `fun` is also a function keyword, so the function made of the block is `fun·block`
@@ -323,24 +336,42 @@ impl Rewrite {
 	}
 
 	/// The arguments in parameter order: positional ones fill the parameters not named, extras not named pass the
-	/// variable of their name
+	/// variable of their name. They run as written (P216): when the order changes, an argument that may have effects is
+	/// computed first into a temporary, `f(b=h(), a=g())` is `(t1 = h(); t2 = g(); f(t2, t1))`
 	fn call(&self, call: &Node, name: &str, arguments: &[Node]) -> Result<Node, Node> {
 		let function = &self.functions[name];
 		if function.extras.is_empty() && !arguments.iter().any(|argument| named_argument(argument).is_some()) {
 			return Ok(call.clone());
 		}
-		let named: HashMap<String, &Node> = arguments.iter().filter_map(named_argument).collect();
-		let mut positional = arguments.iter().filter(|argument| named_argument(argument).is_none());
-		let callee = if function.parameters.is_empty() && !function.extras.is_empty() { callable_name(name) } else { name.to_string() };
-		let mut ordered = vec![Node::Symbol(callee)];
+		let named: HashMap<String, usize> = arguments.iter().enumerate().filter_map(|(position, argument)| named_argument(argument).map(|(name, _)| (name, position))).collect();
+		let mut positional = (0..arguments.len()).filter(|position| named_argument(&arguments[*position]).is_none());
+		let mut order: Vec<Result<usize, Node>> = vec![];
 		for (parameter, default) in function.parameters.iter().zip(&function.defaults) {
-			match named.get(parameter).copied().or_else(|| positional.next()).or(default.as_ref()) {
-				Some(value) => ordered.push(value.clone()),
-				None => return Err(Diagnostic::at(call, format!("{name} needs a value for parameter {parameter}")).into_error()),
+			match (named.get(parameter).copied().or_else(|| positional.next()), default) {
+				(Some(position), _) => order.push(Ok(position)),
+				(None, Some(default)) => order.push(Err(default.clone())),
+				(None, None) => return Err(Diagnostic::at(call, format!("{name} needs a value for parameter {parameter}")).into_error()),
 			}
 		}
-		ordered.extend(positional.cloned());
-		ordered.extend(function.extras.iter().map(|extra| named.get(extra).map_or_else(|| Node::Symbol(extra.clone()), |value| (*value).clone())));
-		Ok(Node::List(ordered, Bracket::Round, Separator::None))
+		order.extend(positional.map(Ok));
+		order.extend(function.extras.iter().map(|extra| named.get(extra).copied().ok_or_else(|| Node::Symbol(extra.clone()))));
+		let value = |position: usize| named_argument(&arguments[position]).map_or_else(|| arguments[position].clone(), |(_, value)| value.clone());
+		let written: Vec<usize> = order.iter().filter_map(|slot| slot.as_ref().ok().copied()).collect();
+		let mut bindings = vec![];
+		let mut values: Vec<Node> = (0..arguments.len()).map(value).collect();
+		if !written.is_sorted() {
+			for value in values.iter_mut().filter(|value| !is_effect_free(value)) {
+				let temporary = Node::Symbol(self.temporary());
+				bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(std::mem::replace(value, temporary))));
+			}
+		}
+		let callee = if function.parameters.is_empty() && !function.extras.is_empty() { callable_name(name) } else { name.to_string() };
+		let ordered = std::iter::once(Node::Symbol(callee)).chain(order.into_iter().map(|slot| slot.map_or_else(|default| default, |position| values[position].clone())));
+		Ok(with_bindings(bindings, Node::List(ordered.collect(), Bracket::Round, Separator::None)))
+	}
+
+	fn temporary(&self) -> String {
+		self.temporaries.set(self.temporaries.get() + 1);
+		format!("{TEMPORARY_PREFIX}{}", self.temporaries.get())
 	}
 }
