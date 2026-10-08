@@ -23,6 +23,7 @@ const FIELDS_WORDS: [&str; 3] = ["fields", "attributes", "members"];
 const METHODS_WORD: &str = "methods";
 const DIR_WORD: &str = "dir";
 const KEYS_WORD: &str = "keys";
+const EXPORTS_WORD: &str = "exports";
 const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
 
@@ -120,11 +121,13 @@ fn signature(function: &crate::context::UserFunctionDef) -> String {
 }
 
 /// What the compile-time object words know: each class's layout, the classes of instance variables, the keys of map
-/// literals' variables
+/// literals' variables, the exports of the imported core modules by their alias
+#[derive(Default)]
 struct Objects {
 	layouts: HashMap<String, ClassLayout>,
 	instances: HashMap<String, String>,
 	maps: HashMap<String, Vec<String>>,
+	modules: HashMap<String, Vec<String>>,
 	defined: HashSet<String>,
 }
 
@@ -140,8 +143,34 @@ pub fn lower_objects(node: Node) -> Node {
 		maps: map_keys(&node),
 		defined: crate::library_words::defined_names(&node),
 		layouts,
+		..Objects::default()
 	};
 	with_object_words(node, &objects)
+}
+
+/// `m.exports`, `dir(m)` of an imported core module m, once modules::resolve has found its file
+pub fn lower_module_words(node: Node) -> Node {
+	if !node.mentions_any(&[EXPORTS_WORD, DIR_WORD]) {
+		return node;
+	}
+	let modules = module_exports(&node);
+	if modules.is_empty() {
+		return node;
+	}
+	let defined = crate::library_words::defined_names(&node);
+	with_object_words(node, &Objects { modules, defined, ..Objects::default() })
+}
+
+/// `import lib/fourty_two`: the names fourty_two exports (wasm_modules.rs), sorted; not the setters derived for its globals
+fn module_exports(node: &Node) -> HashMap<String, Vec<String>> {
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_ffi_imports(&mut context, node);
+	let paths: HashSet<&str> = context.ffi_imports.values().map(|import| import.library).filter(|library| crate::wasm_modules::is_module_path(library)).collect();
+	paths.into_iter().map(|path| {
+		let mut names: Vec<String> = crate::wasm_modules::exports(path).keys().filter(|name| !name.contains(' ')).cloned().collect();
+		names.sort();
+		(crate::wasm_modules::module_alias(path), names)
+	}).collect()
 }
 
 /// `m = {a:1, b:2}`: m's keys as written
@@ -198,18 +227,22 @@ impl Objects {
 				_ => None,
 			};
 		}
+		if let Some(exports) = self.modules.get(subject) {
+			return (word == EXPORTS_WORD).then(|| text_list(exports));
+		}
 		let keys = self.maps.get(subject)?;
 		(FIELDS_WORDS.contains(&word) && !keys.iter().any(|key| key == word)).then(|| self.map_keys(subject))
 	}
 
-	/// `dir(x)`: the fields and methods of an instance or class, the keys of a map
+	/// `dir(x)`: the fields and methods of an instance or class, a module's exports, the keys of a map
 	fn dir(&self, subject: &str) -> Option<Node> {
 		if self.defined.contains(DIR_WORD) {
 			return None;
 		}
-		match self.class_of(subject) {
-			Some(class) => Some(text_list(&[self.fields(class), self.methods(class)].concat())),
-			None => self.maps.contains_key(subject).then(|| self.map_keys(subject)),
+		match (self.class_of(subject), self.modules.get(subject)) {
+			(Some(class), _) => Some(text_list(&[self.fields(class), self.methods(class)].concat())),
+			(None, Some(exports)) => Some(text_list(exports)),
+			(None, None) => self.maps.contains_key(subject).then(|| self.map_keys(subject)),
 		}
 	}
 
