@@ -28,11 +28,13 @@ const EXPORTS_WORD: &str = "exports";
 const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then NAMES else OTHERWISE";
 const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
+/// `f.body`: the body as written, as data (card g_X_3s)
+const BODY_WORD: &str = "body";
 
 type Functions = std::collections::BTreeMap<String, crate::context::UserFunctionDef>;
 
 pub fn lower(node: Node) -> Node {
-	if !node.mentions_any(&[EFFECTS_WORD, LISTENERS_WORD, SIGNATURE_WORD, PARAMS_WORDS[0], PARAMS_WORDS[1]]) {
+	if !node.mentions_any(&[EFFECTS_WORD, LISTENERS_WORD, SIGNATURE_WORD, BODY_WORD, PARAMS_WORDS[0], PARAMS_WORDS[1]]) {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
@@ -84,7 +86,7 @@ fn unlistened_reflection(node: &Node, listened: &HashSet<String>, defined: &Hash
 }
 
 /// `f.effects` → `effects of f` for a function f, `e.listeners` → `listeners of e` for a listened e; a function's
-/// `f.params` and `f.signature` are constants read off its definition
+/// `f.params`, `f.signature` and `f.body` are constants read off its definition
 fn as_reflection_words(node: Node, functions: &Functions, listened: &HashSet<String>, defined: &HashSet<String>) -> Node {
 	if let Node::Key(subject, Op::Dot, word) = node.drop_meta() {
 		if let (Some(name), Some(word)) = (symbol(subject), symbol(word)) {
@@ -94,6 +96,7 @@ fn as_reflection_words(node: Node, functions: &Functions, listened: &HashSet<Str
 				(LISTENERS_WORD, _) if listened.contains(name) => Some(of_phrase(word, name)),
 				(word, Some(function)) if PARAMS_WORDS.contains(&word) => Some(text_list(&function.params.iter().map(|param| param.name.clone()).collect::<Vec<_>>())),
 				(SIGNATURE_WORD, Some(function)) => Some(Node::Text(signature(function))),
+				(BODY_WORD, Some(function)) => Some(Node::List(vec![Node::Symbol(crate::blocks::DATA_WORD.into()), function.body.as_ref().clone()], Bracket::None, Separator::Space)),
 				_ => None,
 			};
 			if let Some(reflected) = reflected {
