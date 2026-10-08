@@ -7,6 +7,9 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 ## Decided forms (defaults taken, Interviewer asked where marked)
 - Defaults: `f(a, b=2)`, typed `f(a, b:int=2)`, a default may read earlier parameters `f(a, b=a*2)`. Named
   arguments `f(b=1)` / `f(b:1)` skip defaults and mix with positional ones (P37).
+  A bare flag name sets it: `f(3, loud)` of a parameter `loud = no` (default yes or no) is `f(3, loud: yes)` when no
+  variable loud is in scope, as `x.copy(shallow)` is `x.copy(shallow: yes)` (card copy-shallow, named_arguments.rs
+  flag_arguments).
 - Overloading by arity: `def f(a)` + `def f(a,b)` become `f·1`, `f·2` (src/lowering/overloads.rs
   `lower_arity_overloads`, a MEANING pass before broadcasting reads arities). A call names the variant its argument
   count fits; none or two fitting (`f(a)` + `f(a, b=2)` called `f(5)`) is an error. Methods: class_methods prepends

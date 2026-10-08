@@ -163,6 +163,12 @@ function gpuJob(word, job) {
 	return values;
 }
 
+// the f64 cells of a linear array: its block is [count: i64][count cells] (src/wasm_emitter/linear_arrays.rs)
+function linearCells(memory, block) {
+	const count = Number(new DataView(memory.buffer).getBigInt64(Number(block), true));
+	return new Float64Array(memory.buffer, Number(block) + Float64Array.BYTES_PER_ELEMENT, count);
+}
+
 addHostPart({
 	words: (holder, hooks, { program }) => {
 		const plain = node => plainOfTree(readNode(program(), node));
@@ -172,6 +178,13 @@ addHostPart({
 				const values = gpuJob("gpu_compute", { shader: plain(shader), numbers: plain(numbers).map(Number), workgroups: Number(workgroups) });
 				// floats, also the whole ones (treeOfPlain would make 3 an Int)
 				return list(values, float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }));
+			},
+			// over a `linear xs = float[n]`: its cells read and written in place, no list built (card gpu-vectors)
+			gpu_compute_linear: (shader, block, workgroups) => {
+				const cells = linearCells(program().memory, block);
+				// a copy: a view would post all of memory
+				cells.set(gpuJob("gpu_compute", { shader: plain(shader), numbers: cells.slice(), workgroups: Number(workgroups) }));
+				return block;
 			},
 			gpu_render: (shader, width, height, values) => {
 				const given = values == null ? {} : plain(values);

@@ -12,7 +12,7 @@ Goal: every `samples/*.warp` runs, ideally by fixing the language rather than th
 - `samples/life_kotlin_ranges.warp` fails on purpose (tests/welcoming/test_welcoming_ask.rs pins its explanation).
 
 ## Warp habits the old samples get wrong (sample-side fixes)
-- Lists are values: a function cannot change a list it is passed. Return the new list, or make the state `global`.
+- Lists are shared (P200b): a function changes the list it is passed, as in Python; `+` and `copy()` make new lists.
 - A function sees main-level constants; to change (or read a computed) main-level value, declare it `global`.
 - `/` is exact division (`7/3` stays a fraction); use `//` for floor division, written glued: ` // ` with spaces is a comment.
 - `1e10` is an exact number and cannot later hold a float: `1e10 as float`.

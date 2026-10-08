@@ -1,4 +1,4 @@
-// the parameter a sum of text and number. Result: sound, names stays ["hi"]
+// the parameter a sum of text and number. Result (P215, lists shared): compile error, the view admits numbers
 names: list of text = ["hi"]
 widen(xs: list of (text or number)) := { xs.add(420); xs }
 widen(names)

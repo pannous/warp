@@ -427,3 +427,13 @@ pub fn op_named(text: &str) -> Option<Op> {
 pub fn code_to_op(code: i64) -> Op {
 	usize::try_from(code).ok().and_then(|index| OP_CODES.get(index)).copied().unwrap_or(Op::None)
 }
+
+/// What Node::serialize writes between an entry's key and value, by operator code: `x+1`, `0.1 as float`, nothing for
+/// an instance `p{x:1}` (Op::None); a code no operator has reads as `:`
+pub fn written_operator(code: usize) -> String {
+	match OP_CODES.get(code).map(Op::as_str) {
+		None => Op::Colon.as_str().to_string(),
+		Some(word) if word.starts_with(char::is_alphabetic) => format!(" {word} "),
+		Some(symbol) => symbol.to_string(),
+	}
+}

@@ -110,8 +110,16 @@ fn fields_of_an_instance_known_at_run_time() {
 	is!(&format!("{POINT}; xs = [P(1, 2)]; dir(xs#1)"), warp::texts(vec!["x", "y", "sq"]));
 }
 
-// card reflection-classes: a module compiled from warp (probes/reflection_classes/shapes.warp) keeps its classes in
-// its warp.meta section and its parameter names in its name section
+// card reflection-def: a definition with its result type written (`-> int`, Python's `-> int:`) reflects too
+#[test]
+fn a_typed_results_functions_params_and_signature() {
+	is!("def add(left:int) -> int { left }\nadd.params", warp::texts(vec!["left"]));
+	is!("def add(left:int) -> int: left\nadd.params", warp::texts(vec!["left"]));
+	is!("def add(left:int) -> int { left }\nadd.signature", "(left:int) -> int");
+}
+
+// card reflection-classes: a module compiled from warp (probes/reflection_classes/shapes.warp) keeps its classes and
+// functions in its warp.meta section and its parameter names in its name section
 const SHAPES: &str = "import tests/fixtures/wasm/shapes";
 
 #[test]

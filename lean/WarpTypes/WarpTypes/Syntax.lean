@@ -10,14 +10,17 @@ inductive Mode where
   | var | const | charged
   deriving DecidableEq, Repr
 
-/-- `-` and `*`: numbers only, unlike `+` -/
+/-- `-`, `*` and `%`: numbers only, unlike `+` -/
 inductive ArithOp where
   | sub | mul
+  /-- the Euclidean remainder: `-7 % 3` is 2, `7 % -3` is 1, as warp's -/
+  | mod
   deriving DecidableEq, Repr
 
 def ArithOp.apply : ArithOp → Int → Int → Int
   | .sub, a, b => a - b
   | .mul, a, b => a * b
+  | .mod, a, b => a % b
 
 inductive Expr where
   | bool (b : Bool)

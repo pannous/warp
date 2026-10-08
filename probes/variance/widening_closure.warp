@@ -1,4 +1,4 @@
-// a list a closure reads. Result: sound, peek() gives ["hi"]
+// a list a closure reads. Result (P215, lists shared): compile error "widen(xs: list) changes names, which is declared texts"
 names: texts = ["hi"]
 peek() := names
 widen(xs: list) := { xs.add(420); xs }

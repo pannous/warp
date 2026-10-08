@@ -11,7 +11,7 @@ fn an_inlined_helper_updates_the_list_handed_back() {
 
 #[test]
 fn an_inlined_helper_leaves_its_argument_unchanged() {
-	is!(&format!("{SWAP}x=[1 2 3]; y = swap(x, 0, 2); x#1 * 10 + y#1"), 13);
+	is!(&format!("{SWAP}x=[1 2 3]; y = swap(x, 0, 2); x#1 * 10 + y#1"), 33); // P200b: swap changes the list it is given, as in Python
 }
 
 #[test]

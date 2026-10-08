@@ -41,9 +41,6 @@ custom section, `warp.meta`, kept unstripped.
 ## warp.meta layout
 Warp notation text (parsed by the reader we already have), one map:
 `{units: "km:1 h:-1", classes: {P: {fields: [x y], methods: [norm]}}, functions: {f: {params: [a b], signature: "…", effects: [IO]}}}`.
-Written today: `units` and `classes` (meta_section::with_program_entries; classes from reflection::lower_objects, inherited
-fields first, names as symbols since a one-letter text reads back as a codepoint). Parameter names travel in the name
-section's local names instead of a `functions` entry (wasm_emitter emit_names), which named arguments read too.
 `units` holds today's warp.units text unchanged (warp-worker/warp-99 switches both ends in one commit once this is fixed).
 
 ## Steps (each a small branch)
@@ -69,9 +66,20 @@ section's local names instead of a `functions` entry (wasm_emitter emit_names), 
    Done first: run-time names of the program's own classes by type dispatch (Sources 2). Agreed with warp-worker
    (2026-10-08): web switches static_units with_result_units / module_units and the playground reader to the `units`
    entry, text byte for byte; warp-worker owns `x.unit` once quantities live in variables.
-   Done (card reflection-classes): a module compiled from warp (`warp compile --wasm`, imported as `import shapes`)
-   answers `shapes.P.fields`, `shapes.P.methods`, `dir(shapes.P)` from its `classes` entry and `shapes.twice.params`
-   from its name section (reflection::lower_module_words; wasm_modules::read_exports now skips the GC struct types such
-   a module has instead of panicking, so its number functions are callable: `twice(a: 21)`). Fixture
+   Done (card reflection-foreign-meta): pipeline::compile_program writes the `functions` and `classes` entries
+   (reflection::meta_entries: the lowered program's functions minus class methods, the classes' layouts from the
+   source) next to `units` in one meta_section::with_entries. An importing program (`import "adder.wasm"`) reads them
+   at compile time, the module's path is known then, so no host call: `adder.exports` are the module's own functions
+   (not warp's runtime exports), `adder.add.params` and `.signature` come from the entry (Objects::module_function_word;
+   wasm_modules::qualify leaves `m.f.word` of an exported function unqualified for it). The run-time host call stays
+   for `any`-typed values only. Not yet: the page reader.
+   Done (card reflection-classes, on that entry): `m.P.fields`, `m.P.methods`, `dir(m.P)` of an imported module's class
+   (Objects::module_member_word, which also answers `m.f.params`). The entries hold names as symbols (`[x y]`), a
+   one-letter text reads back as a character; `classes` lists inherited fields first. wasm_emitter emit_names also
+   writes the parameters' local names, so named arguments reach a warp module's function (`twice(a: 21)`). Fixture
    tests/fixtures/wasm/shapes.wasm from probes/reflection_classes/shapes.warp. Not yet: constructing or reading the
-   module's instances (`shapes.P(1, 2)`, exports with reference types).
+   module's instances (`shapes.P(1, 2)`, exports with reference types; card import-compiled).
+   Size (web::test_bundle_budget, 23 KB for a hello-world site, a few dozen bytes of headroom): the `functions` entry
+   holds only the functions the source defines, not the html_*/prelude ones lowering brings in; a hello world writes
+   no section. The same rule holds for run-time tables: list_text carries the operators' texts only when the program
+   makes a Key with an operator beyond `:` (a Need::KeyOperator, wasm_emitter/mod.rs).

@@ -106,11 +106,12 @@ thread_local! {
 }
 
 /// The store in memory a file stands for: of a program without a file, those a `warp dev` page keeps itself (its
-/// sessionStorage), the session's; none for a store file
+/// sessionStorage), the session's, inline code's database; none for a store file
 fn unfiled_store(file: &str) -> Option<&'static str> {
 	match file {
 		"" | crate::stored_values::DEV_STORE => Some(""),
 		crate::stored_values::SESSION_STORE => Some(crate::stored_values::SESSION_STORE),
+		crate::stored_values::DATABASE_STORE => Some(crate::stored_values::DATABASE_STORE),
 		_ => None,
 	}
 }

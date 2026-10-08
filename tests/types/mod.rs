@@ -93,12 +93,15 @@ mod test_checked_call_kinds;
 mod test_class_field_type_phrases;
 mod test_optional_casts;
 mod test_bool_literal_value;
+mod test_bool_return; // card bool-return
 mod test_type_of_node_values;
 mod test_shared_instances;
 mod test_type_static;
 mod test_upcast_fields;
 mod test_empty_type_aliases;
 mod test_real_references;
+mod test_shared_lists; // card shared-lists
+mod test_widened_list_views; // card p215-user
 mod test_optional_list_items;
 mod test_any_into_annotated;
 mod test_any_into_annotated_types;
@@ -106,3 +109,5 @@ mod test_copies;
 mod test_any_field_text;
 mod test_same_identity;
 mod test_loop_item_into_annotated;
+mod test_chained_assignments;
+mod test_loop_text_arithmetic;
