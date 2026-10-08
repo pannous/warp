@@ -36,3 +36,4 @@ mod test_use_several; // card std-use
 mod test_from_import; // card std-import
 mod test_std_shadowed_names; // card libm-function
 mod test_std_args; // card std-args
+mod test_std_implicit_use; // card std-implicit
