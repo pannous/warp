@@ -1,7 +1,7 @@
 //! Warp's type checks against W0, the Lean model of warp's type theory (notes/type_theory.md, lean/WarpTypes):
 //! the proofs must build without `sorry`, and warp must reject every program the model rejects, except the known
 //! holes, each with its card. A fixed hole fails the test until it is taken off the list.
-use warp::law::type_model::{axioms, export, model_sources, verdicts, warp_verdict, ModelVerdict};
+use warp::law::type_model::{admits_disagreements, axioms, export, model_sources, verdicts, warp_verdict, ModelVerdict};
 
 /// The soundness theorems the tie-in rests on
 const THEOREMS: [&str; 5] = ["Warp.progress", "Warp.preservation", "Warp.safety", "Warp.typeOf_sound", "Warp.check_safe"];
@@ -26,6 +26,12 @@ const CORPUS: &[&str] = &[
 	"x: int = 1; x = 2.5",
 	"x: float = 1",
 	"x: int = true",
+	"x: bool = 1",
+	"x: bool = 0; x = 1",
+	"f(b: bool) := b; f(1)",
+	"x: bool = 2",
+	"f(b: bool) := b; f(2)",
+	"b = true; b = 2",
 	"x: text = 3",
 	"x: text = \"ab\"; x = 3",
 	"const c = 1; c = 2",
@@ -56,13 +62,30 @@ const CORPUS: &[&str] = &[
 	"if 1 < 2 then 1 else \"a\"",
 	"try error(\"no\") catch 1",
 	"x = 1; x == \"a\"",
+	"b = true; b = 1",
+	"class Point { x: int; y: int }; p = Point(1, 2); p.x",
+	"class Point { x: int; y: int }; p = Point(1, 2); p.x = 5; p.x",
+	"class Point { x: int; y: int }; p = Point(1, 2); p.x = \"a\"",
+	"class Point { x: int }; p = Point(\"a\")",
+	"class Point { x: int }; f(q: Point) := q.x = 7; p = Point(1); f(p); p.x",
+	"class Shape { name: text }; class Circle extends Shape { r: int }; c = Circle(\"a\", 2); c.r",
+	"class Shape { name: text }; class Circle extends Shape { r: int }; s: Shape = Circle(\"a\", 2); s.name",
+	"type Color = red | rgb(r: int, g: int, b: int); c = rgb(1, 2, 3); c.r",
+	"type Color = red | rgb(r: int, g: int, b: int); c = rgb(1, 2, 3); c is Color",
+	"type Color = red | rgb(r: int, g: int, b: int); c = rgb(1, \"a\", 3)",
+	"type Shape = circle(r: int) | square(s: int); f(x: Shape) := 1; f(circle(2))",
+	"type Shape = circle(r: int) | square(s: int); f(x: circle) := x.r; f(square(2))",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
 const KNOWN_HOLES: &[(&str, &str)] = &[
-	("x: bool = 1", "bool-assign"),
-	("b = true; b = 2", "bool-assign"),
+	("class Shape { name: text }; class Circle extends Shape { r: int }; s: Shape = Circle(\"a\", 2); s.r", "upcast-field"),
+	("type Color = red | rgb(r: int, g: int, b: int); c: Color = rgb(1, 2, 3); c.r", "upcast-field"),
 ];
+
+/// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
+/// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
+const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub false", "boolean ← .int: warp admits true / W0 sub false"];
 
 #[test]
 fn test_type_model_is_proved() {
@@ -101,4 +124,11 @@ fn test_warp_rejects_what_the_type_model_rejects() {
 		}
 	}
 	assert!(disagreements.is_empty(), "{}", disagreements.join("\n"));
+}
+
+#[test]
+fn test_warp_admits_what_the_type_model_subtypes() {
+	crate::requires!(crate::common::LEAN);
+	let disagreements = admits_disagreements().unwrap_or_else(|why| panic!("the model does not answer:\n{why}"));
+	assert_eq!(disagreements, KNOWN_ADMITS_GAPS, "warp's admits and W0's Ty.sub differ");
 }

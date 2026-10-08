@@ -6,6 +6,18 @@ import WarpTypes.Syntax
 namespace Warp
 open Ty
 
+/-- the type a field read gives: from an error (`never`), `never` -/
+def Program.readTy (P : Program) : Ty → String → Option Ty
+  | .never, _ => some .never
+  | .cls p, f => P.fieldTy p f
+  | _, _ => none
+
+/-- the type a field write takes: into an error (`never`), anything -/
+def Program.writeTy (P : Program) : Ty → String → Option Ty
+  | .never, _ => some .any
+  | .cls p, f => P.fieldTy p f
+  | _, _ => none
+
 inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | bool {Γ b} : HasType P Γ (.bool b) .bool
   | int {Γ n} : HasType P Γ (.int n) .int
@@ -53,6 +65,14 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- broadcasting: f : A → B over a list of A gives a list of B -/
   | broadcast {Γ f e fn te a} : P.funs f = some fn → HasType P Γ e te → element te = some a → sub a fn.paramTy = true →
       HasType P Γ (.broadcast f e) (.list fn.result)
+  | ref {Γ a p} : HasType P Γ (.ref a p) (.cls p)
+  | new {Γ p} : HasType P Γ (.new p) (.cls p)
+  /-- field access: the field type of the static class (or of an ancestor) -/
+  | get {Γ e f te t} : HasType P Γ e te → P.readTy te f = some t → HasType P Γ (.get e f) t
+  /-- field write: fields are invariant, the value must fit the declared field type -/
+  | set {Γ e f v te t tv} : HasType P Γ e te → P.writeTy te f = some t → HasType P Γ v tv → sub tv t = true →
+      HasType P Γ (.set e f v) tv
+  | isA {Γ e c te} : HasType P Γ e te → HasType P Γ (.isA e c) .bool
 
 /-- every function body fits its declared result, given its parameter, and assigns only global names -/
 def FunsOk (P : Program) : Prop :=

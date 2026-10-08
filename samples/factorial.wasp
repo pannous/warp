@@ -1,4 +1,4 @@
 // Factorial - recursive
-def fact(n) := n <= 1 ? 1 : n * fact(n-1)
+def fact(n) = if n <= 1 then 1 else n * fact(n - 1)
 
 fact(5)

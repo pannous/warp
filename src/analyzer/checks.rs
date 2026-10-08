@@ -390,6 +390,8 @@ pub const TEMPORARY_SEPARATOR: &str = "·";
 /// Statements that name functions or modules instead of calling them
 pub(super) const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 pub(super) const LIST_OF_PREFIX: &str = "list of ";
+/// The type words of a bool, held as an Int (builtin_type_kind)
+const BOOL_TYPES: [&str; 2] = ["bool", "boolean"];
 pub(super) const OF_WORD: &str = "of";
 
 /// The map word a call names: `map_keys`, `map_values` or `map_entries`
@@ -1219,8 +1221,14 @@ pub(crate) fn union_type_name(node: &Node) -> Option<String> {
 				collect_parts(right, parts)
 			}
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => collect_parts(&items[0], parts),
-			Node::Symbol(word) => Some(parts.push(word.clone())),
-			Node::Empty => Some(parts.push(NONE_WORDS[0].to_string())),
+			Node::Symbol(word) => {
+				parts.push(word.clone());
+				Some(())
+			}
+			Node::Empty => {
+				parts.push(NONE_WORDS[0].to_string());
+				Some(())
+			}
 			_ => None,
 		}
 	}
@@ -1251,10 +1259,6 @@ fn strip_round(node: &Node) -> &Node {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => strip_round(&items[0]),
 		other => other,
 	}
-}
-
-fn is_bool_type(type_name: &str) -> bool {
-	matches!(type_name.to_lowercase().as_str(), "bool" | "boolean")
 }
 
 /// The first part of an inline union that is no builtin type: `point` of `point or text` (unions of classes come later)
@@ -1385,6 +1389,9 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 
 /// The kind of a literal `value` that does not fit the built-in type `type_name`; None when it fits or is no literal
 pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
+	if is_bool_type(type_name) {
+		return bool_misfit(value);
+	}
 	if !is_builtin_or_union(type_name) {
 		return None;
 	}
@@ -1392,6 +1399,25 @@ pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
 	let list_literal = matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if !items.is_empty()).then_some(Kind::List);
 	let actual = list_literal.or_else(|| computed_literal_kind(value))?;
 	(!admits(type_name, actual)).then_some(actual)
+}
+
+/// A bool is held as an Int, but int ≰ bool: true, false and P199's 1 and 0 (yes and no) fit it, no other int
+fn bool_misfit(value: &Node) -> Option<Kind> {
+	match value.drop_meta() {
+		Node::True | Node::False => None,
+		value if is_zero_or_one(value) => None,
+		_ => computed_literal_kind(value),
+	}
+}
+
+/// `bool`, `boolean`: a bool, held as an Int (builtin_type_kind)
+pub(crate) fn is_bool_type(type_name: &str) -> bool {
+	BOOL_TYPES.contains(&type_name.trim_end_matches('?').to_lowercase().as_str())
+}
+
+/// P199 (user): 1 and 0 are yes and no wherever a bool is expected
+pub(crate) fn is_zero_or_one(value: &Node) -> bool {
+	matches!(value.drop_meta(), Node::Number(Number::Int(0 | 1)))
 }
 
 /// The element type of a list type: `texts` and `list of text` hold `text`

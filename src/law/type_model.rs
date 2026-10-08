@@ -8,7 +8,8 @@ use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasp_parser::TRY_MARKER;
-use std::collections::{HashMap, HashSet};
+use crate::type_kinds::Kind;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -20,6 +21,12 @@ const ACCEPTED_PREFIX: &str = "ok ";
 const REJECTED: &str = "rejected";
 const CONSTANT_KEYWORD: &str = "const";
 const ERROR_CALL: &str = "error";
+const BOOL_TYPE: &str = ".bool";
+const ANY_TYPE: &str = ".any";
+/// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
+const BUILTIN_TYPE_WORDS: [&str; 11] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "bool", "boolean"];
+/// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
+const VALUE_KINDS: [(&str, Kind); 4] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text)];
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
 
 /// W0's answer for one program
@@ -46,8 +53,8 @@ fn type_of_word(word: &str) -> Option<String> {
 			"int" | "integer" | "long" => ".int",
 			"float" | "number" | "exact" => ".number",
 			"text" | "string" | "str" => ".text",
-			"bool" | "boolean" => ".bool",
-			"any" => ".any",
+			"bool" | "boolean" => BOOL_TYPE,
+			"any" => ANY_TYPE,
 			_ => return None,
 		})
 	};
@@ -57,13 +64,6 @@ fn type_of_word(word: &str) -> Option<String> {
 	match scalar(word) {
 		Some(lean) => Some(lean.to_string()),
 		None => word.strip_suffix('s').and_then(scalar).map(|element| format!(".list {element}")),
-	}
-}
-
-fn annotation_type(annotation: &Node) -> Lean {
-	match annotation.drop_meta() {
-		Node::Symbol(word) => type_of_word(word).ok_or_else(|| format!("not in W0: type {word}")),
-		other => unsupported(other),
 	}
 }
 
@@ -83,6 +83,14 @@ fn statements(node: &Node) -> Vec<&Node> {
 	}
 }
 
+/// A sum type `type Color = red | rgb(…)` parses as the list of its type definitions (the sum, then each variant)
+fn type_definitions(statement: &Node) -> Vec<&Node> {
+	match statement.drop_meta() {
+		Node::List(items, Bracket::None, _) if items.iter().all(|item| matches!(item.drop_meta(), Node::Type { .. })) => items.iter().collect(),
+		other => vec![other],
+	}
+}
+
 /// `f(y)`, `f(y: int)`: a definition head of one parameter
 fn function_head(head: &Node) -> Option<(&str, &Node)> {
 	match head.drop_meta() {
@@ -97,21 +105,117 @@ fn function_head(head: &Node) -> Option<(&str, &Node)> {
 	}
 }
 
-#[derive(Default)]
-struct Exporter {
-	functions: HashSet<String>,
-	/// main-level names bound so far, with their declared type when annotated
-	names: HashMap<String, Option<String>>,
-	locals: Vec<String>,
+/// A bool place (a declared variable or parameter) takes the literals 1 and 0 as yes and no (P199)
+fn bool_literal(declared: Option<&str>, value: &Node) -> Option<String> {
+	match value.drop_meta() {
+		Node::Number(Number::Int(n @ (0 | 1))) if declared == Some(BOOL_TYPE) => Some(format!(".bool {}", *n == 1)),
+		_ => None,
+	}
 }
 
+/// A value whose type is evidently bool: `true`, `1 < 2`
+fn is_evident_bool(value: &Node) -> bool {
+	matches!(value.drop_meta(), Node::True | Node::False | Node::Key(_, Op::Lt | Op::Le | Op::Gt | Op::Ge | Op::Eq | Op::Ne, _))
+}
+
+fn lean_strings(words: &[String]) -> String {
+	format!("[{}]", words.iter().map(|word| quoted(word)).collect::<Vec<_>>().join(", "))
+}
+
+#[derive(Default)]
+struct Exporter {
+	/// the functions of the program with their parameter's W0 type
+	functions: HashMap<String, String>,
+	/// main-level names bound so far, with their declared type when annotated
+	names: HashMap<String, Option<String>>,
+	/// main-level names bound to an evident bool (`b = true`): a bool place for the literals 1 and 0 (P199)
+	bool_names: Vec<String>,
+	locals: Vec<String>,
+	/// each class's ancestor chain, root first, and its own fields with their type words
+	classes: HashMap<String, ClassShape>,
+}
+
+/// A class's ancestor chain and its own fields as (name, type word)
+type ClassShape = (Vec<String>, Vec<(String, String)>);
+
 impl Exporter {
+	/// `int`, `texts`, `Point`: the W0 type a type word names
+	fn type_of(&self, word: &str) -> Lean {
+		match self.classes.get(word) {
+			Some((path, _)) => Ok(format!(".cls {}", lean_strings(path))),
+			None => type_of_word(word).ok_or_else(|| format!("not in W0: type {word}")),
+		}
+	}
+
+	fn annotation_type(&self, annotation: &Node) -> Lean {
+		match annotation.drop_meta() {
+			Node::Symbol(word) => self.type_of(word),
+			other => unsupported(other),
+		}
+	}
+
+	/// `y`, `y: int`: the parameter's name and W0 type
+	fn parameter_type(&self, parameter: &Node) -> Result<(String, String), String> {
+		match parameter.drop_meta() {
+			Node::Symbol(parameter) => Ok((parameter.clone(), ANY_TYPE.to_string())),
+			Node::Key(parameter, Op::Colon, annotation) => Ok((parameter.name(), self.annotation_type(annotation)?)),
+			other => Err(unsupported(other).unwrap_err()),
+		}
+	}
+
+	/// `class C extends P { f: T … }` and the variants of `type Color = … | rgb(r: int …)` (a variant extends its sum)
+	fn collect_classes(&mut self, program: &Node) {
+		let own_fields = crate::lowering::class_methods::class_fields(program);
+		let mut parents = HashMap::new();
+		program.visit(&mut |part| if let Node::Type { name, .. } = part {
+			parents.insert(name.drop_meta().name(), name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).map(Node::name));
+		});
+		fn path(class: &str, parents: &HashMap<String, Option<String>>, depth: usize) -> Vec<String> {
+			let mut chain = match parents.get(class) {
+				Some(Some(parent)) if depth < parents.len() => path(parent, parents, depth + 1),
+				_ => vec![],
+			};
+			chain.push(class.to_string());
+			chain
+		}
+		for class in parents.keys() {
+			let fields = own_fields.get(class).cloned().unwrap_or_default();
+			self.classes.insert(class.clone(), (path(class, &parents, 0), fields));
+		}
+	}
+
+	/// all fields of a class, its ancestors' first, the order its constructor takes them in
+	fn constructor_fields(&self, class: &str) -> Vec<String> {
+		let (path, _) = &self.classes[class];
+		path.iter().flat_map(|ancestor| self.classes[ancestor].1.iter().map(|(field, _)| field.clone())).collect()
+	}
+
+	/// `C(a, b)`: a new instance with its fields written in order, `let o = new C; o.f1 = a; …; o`
+	fn construction(&mut self, class: &str, arguments: &[Node]) -> Lean {
+		let fields = self.constructor_fields(class);
+		if fields.len() != arguments.len() {
+			return Err(format!("{class} takes {} fields, got {}", fields.len(), arguments.len()));
+		}
+		let path = lean_strings(&self.classes[class].0);
+		let local = format!("new·{class}");
+		let writes: Result<Vec<String>, String> = fields.iter().zip(arguments).map(|(field, argument)| Ok(format!(".set (.loc {}) {} ({})", quoted(&local), quoted(field), self.expression(argument)?))).collect();
+		let body = writes?.iter().rev().fold(format!(".loc {}", quoted(&local)), |rest, write| format!(".seq ({write}) ({rest})"));
+		Ok(format!(".letIn {} (.cls {path}) (.new {path}) ({body})", quoted(&local)))
+	}
+
+	fn class_definition(&self, class: &str) -> Lean {
+		let fields: Result<Vec<String>, String> = self.classes[class].1.iter().map(|(field, type_word)| Ok(format!("({}, {})", quoted(field), self.type_of(type_word)?))).collect();
+		Ok(format!(".classDef {} [{}]", quoted(class), fields?.join(", ")))
+	}
+
 	fn items(&mut self, program: &Node) -> Result<Vec<String>, String> {
-		let program = statements(program);
+		self.collect_classes(program);
+		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
 		for statement in &program {
 			if let Node::Key(head, Op::Define, _) = statement.drop_meta() {
-				if let Some((name, _)) = function_head(head) {
-					self.functions.insert(name.to_string());
+				if let Some((name, parameter)) = function_head(head) {
+					let parameter_type = self.parameter_type(parameter)?.1;
+					self.functions.insert(name.to_string(), parameter_type);
 				}
 			}
 		}
@@ -120,6 +224,7 @@ impl Exporter {
 
 	fn item(&mut self, statement: &Node) -> Lean {
 		match statement.drop_meta() {
+			Node::Type { name, .. } => self.class_definition(&name.drop_meta().name()),
 			Node::Key(head, Op::Define, body) => match (head.drop_meta(), function_head(head)) {
 				(Node::Symbol(name), _) => {
 					self.names.insert(name.clone(), None);
@@ -132,7 +237,7 @@ impl Exporter {
 				Node::Key(target, Op::Assign, value) => self.binding(target, ".const", value),
 				other => unsupported(other),
 			},
-			Node::Key(target, Op::Assign, value) if !self.is_bound(target) => self.binding(target, ".var", value),
+			Node::Key(target, Op::Assign, value) if !self.is_bound(target) && !matches!(target.drop_meta(), Node::Key(_, Op::Dot, _)) => self.binding(target, ".var", value),
 			other => Ok(format!(".statement ({})", self.expression(other)?)),
 		}
 	}
@@ -145,9 +250,12 @@ impl Exporter {
 	fn binding(&mut self, target: &Node, mode: &str, value: &Node) -> Lean {
 		let (name, annotation) = match target.drop_meta() {
 			Node::Symbol(name) => (name.clone(), None),
-			Node::Key(name, Op::Colon, annotation) => (name.name(), Some(annotation_type(annotation)?)),
+			Node::Key(name, Op::Colon, annotation) => (name.name(), Some(self.annotation_type(annotation)?)),
 			other => return unsupported(other),
 		};
+		if annotation.is_none() && is_evident_bool(value) {
+			self.bool_names.push(name.clone());
+		}
 		let value = self.stored_value(annotation.as_deref(), value)?;
 		self.names.insert(name.clone(), annotation.clone());
 		let annotation = annotation.map_or("none".to_string(), |lean| format!("(some ({lean}))"));
@@ -156,6 +264,9 @@ impl Exporter {
 
 	/// A call's result stored in a declared list is checked item by item at run time (list-element-types): a cast
 	fn stored_value(&mut self, declared: Option<&str>, value: &Node) -> Lean {
+		if let Some(yes_or_no) = bool_literal(declared, value) {
+			return Ok(yes_or_no);
+		}
 		let lean = self.expression(value)?;
 		Ok(match declared {
 			Some(declared) if declared.starts_with(".list") && self.is_call(value) => format!(".cast ({lean}) ({declared})"),
@@ -164,15 +275,11 @@ impl Exporter {
 	}
 
 	fn is_call(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.functions.contains(name)))
+		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.functions.contains_key(name)))
 	}
 
 	fn function(&mut self, name: &str, parameter: &Node, body: &Node) -> Lean {
-		let (parameter, parameter_type) = match parameter.drop_meta() {
-			Node::Symbol(parameter) => (parameter.clone(), ".any".to_string()),
-			Node::Key(parameter, Op::Colon, annotation) => (parameter.name(), annotation_type(annotation)?),
-			other => return unsupported(other),
-		};
+		let (parameter, parameter_type) = self.parameter_type(parameter)?;
 		self.locals.push(parameter.clone());
 		let body = self.expression(body);
 		self.locals.pop();
@@ -181,7 +288,10 @@ impl Exporter {
 
 	fn assignment(&mut self, name: &str, value: &Node) -> Lean {
 		let declared = self.names.get(name).cloned().flatten();
-		let value = self.stored_value(declared.as_deref(), value)?;
+		let value = match bool_literal(self.bool_names.contains(&name.to_string()).then_some(BOOL_TYPE), value) {
+			Some(yes_or_no) => yes_or_no,
+			None => self.stored_value(declared.as_deref(), value)?,
+		};
 		let operation = if self.names.contains_key(name) { ".assign" } else { ".init" };
 		Ok(format!("{operation} {} ({value})", quoted(name)))
 	}
@@ -212,19 +322,26 @@ impl Exporter {
 				let last = statements.pop().expect("more than one statement");
 				Ok(statements.iter().rev().fold(last, |rest, statement| format!(".seq ({statement}) ({rest})")))
 			}
+			Node::List(items, _, _) if items.first().is_some_and(|class| self.classes.contains_key(&class.name())) => self.construction(&items[0].name(), &items[1..]),
 			Node::List(items, _, _) => match items.as_slice() {
 				[marker, body, handler] if is_word(marker, TRY_MARKER) => self.binary(".tryCatch", body, handler),
 				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
 					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
 					_ => unsupported(node),
 				},
-				[call, argument] if matches!(call.drop_meta(), Node::Symbol(name) if self.functions.contains(name)) => {
-					Ok(format!(".call {} ({})", quoted(&call.name()), self.expression(argument)?))
+				[call, argument] if self.functions.contains_key(&call.name()) => {
+					let declared = self.functions[&call.name()].clone();
+					let argument = match bool_literal(Some(&declared), argument) {
+						Some(yes_or_no) => yes_or_no,
+						None => self.expression(argument)?,
+					};
+					Ok(format!(".call {} ({argument})", quoted(&call.name())))
 				}
 				_ => unsupported(node),
 			},
 			Node::Key(target, Op::Assign, value) => match target.drop_meta() {
 				Node::Symbol(name) => self.assignment(name, value),
+				Node::Key(object, Op::Dot, field) => Ok(format!(".set ({}) {} ({})", self.expression(object)?, quoted(&field.name()), self.expression(value)?)),
 				_ => unsupported(node),
 			},
 			// `xs.add(v)` is `xs = xs ++ [v]`: lists are values
@@ -234,6 +351,7 @@ impl Exporter {
 					let operation = if self.names.contains_key(name) { ".assign" } else { return unsupported(node) };
 					Ok(format!("{operation} {} (.append (.glob {}) (.cons ({item}) .nil))", quoted(name), quoted(name)))
 				}
+				(_, Node::Symbol(field)) => Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field))),
 				_ => unsupported(node),
 			},
 			Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
@@ -259,6 +377,8 @@ impl Exporter {
 			Node::Key(left, Op::Add | Op::Sub | Op::Mul, right) if !left.is_nothing() => self.binary(".add", left, right),
 			Node::Key(left, Op::Lt | Op::Le, right) => self.binary(".lt", left, right),
 			Node::Key(left, Op::Gt | Op::Ge, right) => self.binary(".lt", right, left),
+			// `c is Color` parses as `c == Color`: a type test
+			Node::Key(left, Op::Eq, right) if self.classes.contains_key(&right.name()) => Ok(format!(".isA ({}) {}", self.expression(left)?, quoted(&right.name()))),
 			Node::Key(left, Op::Eq | Op::Ne, right) => self.binary(".eq", left, right),
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
 			_ => unsupported(node),
@@ -296,6 +416,22 @@ pub fn verdicts(exported: &[String]) -> Result<Vec<ModelVerdict>, String> {
 	Ok(lines.iter().map(|line| match line.strip_prefix(ACCEPTED_PREFIX) {
 		Some(type_name) => ModelVerdict::Accepted(type_name.to_string()),
 		None => ModelVerdict::Rejected,
+	}).collect())
+}
+
+/// Where warp's run-time admission of a value to a builtin type (analyzer admits) differs from W0's `Ty.sub`, for
+/// every type word and W0 scalar value type: "word ← value type: warp admits / W0 sub"
+pub fn admits_disagreements() -> Result<Vec<String>, String> {
+	let pairs: Vec<(&str, &str, Kind)> = BUILTIN_TYPE_WORDS.iter().flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (*word, *value, *kind))).collect();
+	let requests: String = pairs.iter().map(|(word, value, _)| format!("#eval IO.println (Ty.sub ({value}) ({}))\n", type_of_word(word).expect("a W0 type word"))).collect();
+	let output = ask_model("admits", &requests)?;
+	let answers: Vec<bool> = output.lines().filter_map(|line| line.parse().ok()).collect();
+	if answers.len() != pairs.len() {
+		return Err(format!("the model answered {} of {} pairs:\n{output}", answers.len(), pairs.len()));
+	}
+	Ok(pairs.iter().zip(answers).filter_map(|((word, value, kind), sub)| {
+		let admits = crate::analyzer::admits(word, *kind);
+		(admits != sub).then(|| format!("{word} ← {value}: warp admits {admits} / W0 sub {sub}"))
 	}).collect())
 }
 
