@@ -191,6 +191,12 @@ const CORPUS: &[&str] = &[
 	"i=0; !i",
 	"f(a:bool,b:bool):=not (a or b); f(true, false)",
 	"x = 1 < 2 or 3 < 2; x",
+
+	"xs = [1, 2]; a, b = xs; a*10+b",
+	"f() := [1, 2]; a, b = f(); a*10+b",
+	"a, b = [1]; b",
+	"a, b = [1, 2, 3]; b",
+	"a, b = [1, 2]; a = \"x\"; a",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

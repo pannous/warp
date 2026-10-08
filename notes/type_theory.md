@@ -236,7 +236,7 @@ W0 now has `arith op a b`, which takes numbers only.
   name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
   anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
   The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
-  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600; with function locals: 123; with `let x = …`, `shared n = …` and C-style `int i = 2` / `String s = …`: 125; with ranges: 131; with `not`/`and`/`or`: 140, all agreeing. Most of the rest:
+  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600; with function locals: 123; with `let x = …`, `shared n = …` and C-style `int i = 2` / `String s = …`: 125; with ranges: 131; with `not`/`and`/`or`: 140; with `a, b = xs`: 141, all agreeing. Most of the rest:
   imports (`use`), multiple assignment `a, b = xs`, nested functions, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
 
 ## Globals
@@ -247,6 +247,13 @@ exporter collects every name declared `global` anywhere first. In warp a functio
 `global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0): see Function locals. Elaboration runs twice so a function can read a main-level name whatever their order
 (`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet: `global float y = …`
 (the exporter does not read the type word yet), `global x; x` (read before any value).
+
+## Destructuring
+
+`a, b = xs` (first bindings only) exports as a hidden `·tupleN = xs`, its items counted by a `for` loop into
+`·countN` (warp fails with "wrong number of values" otherwise), then `a = ·tupleN#1`, `b = ·tupleN#2`: the names
+hold anything, as in warp. `a, *mid, z = …` is refused; destructuring into names that hold values fails in warp
+(card destructure-existing).
 
 ## not, and, or
 
