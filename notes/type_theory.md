@@ -309,8 +309,8 @@ item-unchecked).
 lists item by item, anything else by value. `a === b` / `a same b` (same = true) is identity on instances (an
 instance is its address); on other values it compares by value, so `0 === false` is no. Not modelled: list identity
 (W0's lists are values, `[1] === [1]` is yes in W0, no in warp under P208) and `1 === 1.0` (W0 keeps no float
-values). The exporter maps `!=` and `!==` to the negation; `same`/`identical` spellings once warp parses them
-(card same-identity, which also covers warp still answering yes for `p === q` of distinct instances).
+values). The exporter maps `!=` and `!==` to the negation; `same`, `same as` and `is the same as` are `===`
+(`identical` is no alias, user decision).
 
 ## Inline unions and optionals
 
