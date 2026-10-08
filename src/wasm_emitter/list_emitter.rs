@@ -95,7 +95,7 @@ impl WasmGcEmitter {
 			return false;
 		}
 		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
-		self.emit_type_error(func, crate::ffi::undefined_function_diagnostic(&call, name).remembered());
+		self.emit_type_error(func, self.ctx.undefined_function_diagnostic(&call, name).remembered());
 		true
 	}
 

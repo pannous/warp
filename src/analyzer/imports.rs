@@ -438,8 +438,13 @@ pub(super) fn add_ffi_import(ctx: &mut Context, name: &str, library: &str) {
 	let sig = get_ffi_signature_from_lib(name, library)
 		.or_else(|| get_ffi_signature(name));
 
-	if let Some(sig) = sig {
-		ctx.ffi_imports.insert(name.to_string(), sig);
+	match sig {
+		Some(sig) => {
+			ctx.ffi_imports.insert(name.to_string(), sig);
+		}
+		None => {
+			ctx.unresolved_imports.insert(name.to_string(), library.to_string());
+		}
 	}
 }
 
