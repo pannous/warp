@@ -78,9 +78,15 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      and arrives as that text (host-tasks.js fetchReply; before, it got the `\n` of a GET reply).
    - Probe: probes/route_data/app.warp (seed command in its comment), checked in a browser: / → first → second → home,
      and a direct visit to /users/2. Tests: tests/web/test_route_data.rs.
-   - Left: (a) the first HTML of a deep path is still the prerender of "/" until the page hydrates; finished HTML per
-     request (server-side rendering of the route) is the next step. (b) Every route-data fetch runs on each navigation (ø
-     for a path of another route). (c) A main-level statement of the page that reads server data (`if count(users) == 0
+   - First visit (step 3): a served page that asks the server (its prerender exports rpc·values) is rendered for each
+     request. site.rs ServedSite::file_at runs the prerender's module with host::with_page_path(path) and reads
+     page·html, rpc·requests (`[["/rpc/f", [args]] …]`) and rpc·values after one run of main. The page carries those
+     replies as `<script type="application/json" id="warp-replies">`. host-tasks.js answers the first fetch of each
+     request from them in a microtask, so the page shows the rendered value before the browser paints. A page without
+     server calls stays the built file. Test: the_first_visit_gets_finished_html.
+   - Left: (b) Every route-data fetch runs on each navigation (ø
+     for a path of another route). A page whose program runs in a Worker (site-thread.js) cannot read the replies
+     element yet, so it fetches as before. (c) A main-level statement of the page that reads server data (`if count(users) == 0
      { users.add(…) }`) fails loudly in the browser ("table.open: no such word in the browser"). (d) Access rules: card
      route-access.
    - Found on the way: route functions now stand where the first route stood instead of before everything, because a

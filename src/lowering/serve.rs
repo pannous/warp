@@ -22,6 +22,8 @@ const RPC_METHOD: &str = "POST";
 const RPC_VALUE_INFIX: &str = "·rpc·";
 /// What a prerendered page exports: the values its calls of server functions gave, the shipped page's first ones
 pub const RPC_VALUES: &str = "rpc·values";
+/// The prerender's requests of those values, `[["/rpc/f", [args]] …]`: a server renders a page with their replies (site.rs)
+pub const RPC_REQUESTS: &str = "rpc·requests";
 
 /// P221: the server functions giving what a route shows, `route·data·0(path)`
 const ROUTE_DATA_PREFIX: &str = "route·data·";
@@ -285,9 +287,11 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 	}
 	if prerendering {
 		let values = Node::List(names.iter().cloned().map(Node::Symbol).collect(), Bracket::Square, Separator::Colon);
+		let requests = Node::List((0..calls.len()).map(|index| rpc_request(&asking(index).0)).collect(), Bracket::Square, Separator::Colon);
 		let globals: HashSet<String> = main_variables.into_iter().chain(names).collect();
 		// first: the last statement shows the page
 		kept.insert(0, crate::event_signals::function_with_globals(RPC_VALUES, false, &[values], &globals));
+		kept.insert(0, crate::event_signals::function_with_globals(RPC_REQUESTS, false, &[requests], &globals));
 	}
 	Ok(kept)
 }

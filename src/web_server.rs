@@ -5,11 +5,13 @@
 //! value as JSON (as std json's to_json writes it); no route is 404, a failing route 500 with its message.
 
 use crate::node::Node;
-use crate::site::SiteFile;
+use crate::site::ServedSite;
 use std::cell::Cell;
 
 const JSON_TYPE: &str = "application/json";
 const TEXT_TYPE: &str = "text/plain; charset=utf-8";
+/// A reply of this type is a text (host-tasks.js TEXT_REPLY_TYPE)
+pub const TEXT_REPLY_TYPE: &str = "text/plain";
 const NOT_FOUND: u16 = 404;
 const FAILED: u16 = 500;
 const SITE_METHOD: &str = "GET";
@@ -77,7 +79,7 @@ fn text_of(node: &Node) -> String {
 
 /// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function; a GET no route
 /// takes is a file of the program's `site` (src/site.rs), its page at /
-pub fn serve(port: u16, routes: &[Route], site: &[SiteFile], mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
+pub fn serve(port: u16, routes: &[Route], site: &ServedSite, mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
 	let server = tiny_http::Server::http(("0.0.0.0", port)).map_err(|problem| format!("serve {port}: {problem}"))?;
 	let limit = take_request_limit();
 	let mut served = 0;
@@ -102,9 +104,14 @@ pub fn serve(port: u16, routes: &[Route], site: &[SiteFile], mut answer: impl Fn
 }
 
 /// `GET /` is the site's page, `GET /app.wasm` its module and so on
-fn site_file(site: &[SiteFile], method: &str, path: &str) -> Option<Answer> {
-	let (name, bytes) = crate::site::file_at(site, path).filter(|_| method == SITE_METHOD)?;
-	Some(Answer { status: 200, content_type: crate::site::content_type(name), body: bytes.clone() })
+fn site_file(site: &ServedSite, method: &str, path: &str) -> Option<Answer> {
+	if method != SITE_METHOD {
+		return None;
+	}
+	Some(match site.file_at(path)? {
+		Ok((name, body)) => Answer { status: 200, content_type: crate::site::content_type(&name), body },
+		Err(failure) => Answer::failed(&failure),
+	})
 }
 
 /// An HTTP body as a value: a JSON object or array parsed into its map or list, any other body the text

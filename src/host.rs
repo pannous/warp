@@ -701,8 +701,8 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 /// The site of the program file being run, which a program whose last line shows a page serves at / (src/site.rs); a
 /// page that fails to build is said, and the routes are served without it
 #[cfg(feature = "native")]
-fn served_site(port: u16) -> Vec<crate::site::SiteFile> {
-	let Some(file) = crate::modules::program_file() else { return vec![] };
+fn served_site(port: u16) -> crate::site::ServedSite {
+	let Some(file) = crate::modules::program_file() else { return Default::default() };
 	let title = file.file_stem().map_or(String::new(), |stem| stem.to_string_lossy().to_string());
 	let rendered = std::fs::read_to_string(&file).map_err(|failure| failure.to_string()).and_then(|code| crate::site::served_files(&code, &title));
 	rendered.unwrap_or_else(|failure| {

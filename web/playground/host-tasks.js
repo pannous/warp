@@ -5,7 +5,8 @@
 // the checks of the listeners on shared values (src/lowering/signal_values.rs), run at every check point
 const SHARED_HANDLER = "on·shared";
 const SOCKET_ADDRESS = /^wss?:\/\//; // src/web_sockets.rs SOCKET_SCHEMES
-const TEXT_REPLY_TYPE = "text/plain"; // src/web_server.rs TEXT_TYPE: a text reply of a server function
+const TEXT_REPLY_TYPE = "text/plain"; // src/web_server.rs TEXT_REPLY_TYPE: a text reply of a server function
+const SERVER_REPLIES_ID = "warp-replies"; // src/site.rs REPLIES_ID
 
 const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED, TASK_STOPPED, TASK_STOP
 const TASK_FAILED = 2n;
@@ -419,6 +420,15 @@ function taskTree(value) {
 // the page runs the handler (worker.js hooks.arrived). A fetch started anew drops the reply of the one before, going
 // to another page (navigate) the pending ones, a run that ended all.
 const FETCH_HANDLER_PREFIX = "on·fetch·";
+// the replies of the server calls of a page a server rendered for its path (src/site.rs replies_script): each answers
+// the first fetch of its request, so the page starts showing what the server rendered (P221)
+const serverReplies = JSON.parse(globalThis.document?.getElementById(SERVER_REPLIES_ID)?.textContent ?? "[]");
+function serverReply(url, body) {
+	const asked = JSON.stringify(JSON.parse(body));
+	const index = serverReplies.findIndex(reply => reply.url === url && JSON.stringify(reply.arguments) === asked);
+	return index < 0 ? undefined : serverReplies.splice(index, 1)[0];
+}
+
 // A request [url, body] POSTs the body as JSON: a server function the page calls (src/lowering/serve.rs)
 function startFetch(holder, hooks, id, request) {
 	const [url, body] = Array.isArray(request) ? [request[0], JSON.stringify(request[1])] : [request];
@@ -432,6 +442,8 @@ function startFetch(holder, hooks, id, request) {
 		hooks.arrived?.(holder, FETCH_HANDLER_PREFIX + id);
 	};
 	const failed = reason => ({ error: `fetch ${url} failed: ${reason}` });
+	const rendered = body !== undefined && serverReply(url, body);
+	if (rendered) return void queueMicrotask(() => arrive({ body: rendered.body, text: rendered.text }));
 	if (taskPool.length === 0) return void fetchReplyOf(url, body).then(reply => arrive(reply.error ? failed(reply.error) : reply));
 	const worker = taskPool.pop();
 	started.shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
