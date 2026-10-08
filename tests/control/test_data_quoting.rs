@@ -25,3 +25,9 @@ fn data_of_a_tag_reads_as_written() {
 	is!("m = {a:{b:1}}; string m", "{a:{b:1}}");
 	is!("e = data a:1; string e", "{a:1}");
 }
+
+// card data-list: quoted data in a list reads as written, as the list held in a variable does
+#[test] fn data_in_a_list_reads_as_written() {
+	is!("string [data a or b, 3]", "[a or b 3]");
+	is!("xs = [data a or b, 3]; string xs", "[a or b 3]");
+}

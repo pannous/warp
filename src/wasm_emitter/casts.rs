@@ -385,7 +385,7 @@ impl WasmGcEmitter {
 fn is_plain_data(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) => true,
-		Node::List(items, Bracket::Square, _) => items.iter().all(is_plain_data),
+		Node::List(items, Bracket::Square, _) => items.iter().all(|item| is_plain_data(item) || quoted_source(item).is_some()), // card data-list
 		_ => false,
 	}
 }
