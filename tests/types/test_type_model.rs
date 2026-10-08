@@ -50,6 +50,8 @@ const CORPUS: &[&str] = &[
 	"f(x: float) := x * 2; f(1)",
 	"f(n: int) := if n < 1 then 1 else n * f(n - 1); f(5)",
 	"f(x) := x; f(3)",
+	"f(x: text) := x; f(3)",
+	"f(x: int) := x + 1; y = f(2); y = \"a\"",
 	"i = 0; while i < 3 do i = i + 1; i",
 	"if 1 < 2 then 1 else \"a\"",
 	"try error(\"no\") catch 1",
@@ -60,8 +62,6 @@ const CORPUS: &[&str] = &[
 const KNOWN_HOLES: &[(&str, &str)] = &[
 	("x: bool = 1", "bool-assign"),
 	("b = true; b = 2", "bool-assign"),
-	("f(x: text) := x; f(3)", "param-types"),
-	("f(x: int) := x + 1; y = f(2); y = \"a\"", "call-result"),
 ];
 
 #[test]

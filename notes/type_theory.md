@@ -151,12 +151,12 @@ Model choices to keep in mind (each a simplification of warp, not a claim about 
 
 | program | W0 | card |
 | --- | --- | --- |
-| `f(x: text) := x; f(3)` | int ≰ text: parameters are checked only for int (P49) and classes (admit) | param-types |
 | `x: bool = 1`, `b = true; b = 2` | int ≰ bool (b then prints `yes`) | bool-assign |
-| `f(x: int) := x + 1; y = f(2); y = "a"` | text ≰ int: a call result has no evident kind for P45 | call-result |
 
 Fixed: declared list elements (`xs: ints = [1]; xs.add("a")`, `xs = ["a"]`, `xs: texts = [420]`), card
-list-element-types (warp-a1, main 499bb5b1c). Not a hole: `xs = [1]; xs = ["a"]`, an undeclared list holds anything.
+list-element-types (warp-a1, main 499bb5b1c); typed parameters (`f(x: text) := x; f(3)`, card param-types) and
+call results (`f(x: int) := x + 1; y = f(2); y = "a"`, card call-result), functions2 on main by 18952a635.
+bool-assign is on its way (warp-15 tip 64c8abf14). Not a hole: `xs = [1]; xs = ["a"]`, an undeclared list holds anything.
 
 ## Later phases
 
