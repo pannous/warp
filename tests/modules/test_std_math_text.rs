@@ -117,3 +117,13 @@ fn use_math_brings_descriptive_names_and_cmath_the_c_library() {
 	}
 	is!("use cmath; cos(0) + cbrt(8)", 3);
 }
+
+/// The hints of a program point at its own code, never at a standard module's (card use-text)
+#[test]
+fn a_standard_module_gives_no_hints() {
+	let hints_of = |code: &str| warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code)).1;
+	let module_hints = hints_of("use text; repeat(\"ab\", 2)");
+	assert!(module_hints.is_empty(), "{module_hints:?}");
+	let own_hints = hints_of("use text; xs = [1, 2]; xs[0]");
+	assert!(own_hints.iter().any(|hint| hint.original == "xs[0]"), "{own_hints:?}");
+}
