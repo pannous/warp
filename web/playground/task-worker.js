@@ -8,7 +8,7 @@ importScripts(...(SITE_SCRIPTS ?? ["reader.js", "imports.js", "host.js"]));
 if (!SITE_SCRIPTS) importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 self.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host.js prepareTaskPool)
 
-self.onmessage = ({ data }) => data.fetch ? fetchInto(data) : data.gpu ? gpuComputeInto(data) : runTaskInto(data);
+self.onmessage = ({ data }) => data.fetch ? fetchInto(data) : data.gpu ? gpuJobInto(data) : runTaskInto(data);
 
 function runTaskInto({ module, name, ints, values, shared, arrays, captured, control, channels }) {
 	let output = "";

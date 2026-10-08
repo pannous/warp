@@ -7,6 +7,8 @@ prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 // warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)
 const COMPILER_URL = new URL(self.location.href).searchParams.get("compiler") ?? "warp.wasm";
+// ?slow_start=<ms> (playground.js passes the page's one): ready that much later, as on a slow CI runner
+const SLOW_START_MS = Number(new URL(self.location.href).searchParams.get("slow_start") ?? 0);
 self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same compiler (host.js blockCompiler)
 
 let compiler; // the compiler instance's exports
@@ -87,7 +89,8 @@ function warmUp() {
 	}
 }
 
-const ready = loadCompiler().then(() => post({ type: "ready" }), failure => post({ type: "failed", message: failure.message }));
+const ready = loadCompiler().then(() => new Promise(done => setTimeout(done, SLOW_START_MS)))
+	.then(() => post({ type: "ready" }), failure => post({ type: "failed", message: failure.message }));
 
 // `use python` runs in Pyodide (host.js registers its call): loaded on first use, since a host call cannot wait for it
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.29.5/full/";
@@ -184,6 +187,7 @@ self.onmessage = async ({ data }) => {
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.stored) return Object.assign(storedValues, data.stored) && Object.assign(sessionValues, data.session); // host-files.js STD_ADAPTERS.store
 	await ready;
+	await globalThis.loadDatabase?.(); // host-files.js: `database[k]`'s values, once
 	if (data.warm) return warmUp();
 	if (data.event) return handleEvent(data);
 	if (data.navigate) return handleNavigation(data.navigate);

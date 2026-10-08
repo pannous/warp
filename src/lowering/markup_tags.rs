@@ -35,7 +35,7 @@ fn outside_tags(node: Node, defined: &HashSet<String>) -> Node {
 	}
 }
 
-/// `ul { … }` with a blank, as a statement: the element `ul{ … }` when the program does not define the name, so its
+/// `ul { … }` with a blank, as a statement or a child of an element: the element `ul{ … }` when the program does not define the name, so its
 /// children read as the glued tag's do (`ul { for item in items { li: item } }`, samples/html_dsl.warp);
 /// glued `html(lang: "en"){ … }` (a round list) the element `html{ lang: "en" … }`, its attributes before its children
 /// (card markup-attribute)
@@ -77,7 +77,7 @@ fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 		Node::Key(name, Op::Colon, body) => match *body {
 			Node::List(items, Bracket::Curly, separator) => {
 				let is_element = matches!(name.drop_meta(), Node::Symbol(tag) if crate::markup::is_element_tag(tag));
-				let items = if is_element { tags_over_values(items, defined) } else { items };
+				let items = if is_element { tags_over_values(spaced_children(items, &separator, defined), defined) } else { items };
 				let items = items.into_iter().map(|item| tag_with_attributes(attributed_tag(item, defined), defined))
 					.map(|item| if is_element { loop_as_comprehension(item) } else { item })
 					.map(|item| if is_element && is_computed_children(&item) { Node::List(vec![item], Bracket::Square, Separator::None) } else { item })
@@ -87,6 +87,14 @@ fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 			body => Node::Key(name, Op::Colon, Box::new(body)),
 		},
 		other => other,
+	}
+}
+
+/// An element's children with each spaced `ul { … }` the element; a lone one is the whole block, `{ ul { … } }`
+fn spaced_children(items: Vec<Node>, separator: &Separator, defined: &HashSet<String>) -> Vec<Node> {
+	match spaced_element(Node::List(items, Bracket::None, separator.clone()), defined) {
+		Node::List(items, Bracket::None, _) => items.into_iter().map(|item| spaced_element(item, defined)).collect(),
+		element => vec![element],
 	}
 }
 

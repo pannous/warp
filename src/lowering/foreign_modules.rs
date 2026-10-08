@@ -36,6 +36,18 @@ pub fn lower(program: Node) -> Node {
 	Foreign { modules: &modules, values: HashMap::new(), component_values: Default::default(), web_idl_values: HashMap::new() }.rewrite(program)
 }
 
+/// The components the program uses, by alias: `use wasm "calc.wasm" as calc`, `use calc.wasm` (their paths beside the
+/// program)
+pub fn component_modules(program: &Node) -> HashMap<String, String> {
+	let mut modules = HashMap::new();
+	component_uses(program.clone()).visit(&mut |node| {
+		if let Node::List(items, _, _) = node {
+			modules.extend(foreign_use(items).filter(|(_, (runtime, _))| runtime == COMPONENT_RUNTIME).map(|(alias, (_, path))| (alias, path)));
+		}
+	});
+	modules
+}
+
 /// `use rust_demo.wasm`: the component's long form `use wasm "rust_demo.wasm"` (card g-_Xm4); a core module file stays
 /// the import of its functions (modules.rs)
 fn component_uses(node: Node) -> Node {

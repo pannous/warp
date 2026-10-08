@@ -1,0 +1,5 @@
+// a typed alias of a field sees a write through the field (P200b, card shared-lists-typed)
+p = {xs: [1, 2]}
+ys = p.xs
+p.xs#1 = 7
+ys#1

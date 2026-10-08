@@ -206,24 +206,27 @@ impl WasmGcEmitter {
 		func.instruction(&I::I64Const(1));
 		func.instruction(&I::LocalSet(ran_local));
 		let (statements, step) = loop_control::split_step(body);
-		// the step of a `for` loop (its counter's increment) runs after a body ending in a number without becoming
-		// the loop's value
-		let step_apart = step.is_some() && matches!(&statements, Node::List(items, _, _) if self.ends_in_number(items));
+		// a body ending in a text or list: that value is the loop's (P55)
+		let value = if wrap_result && self.ends_in_reference(&statements) { self.loop_value(&statements) } else { LoopValue::Number };
+		let value_local = match value { LoopValue::Held(local) => Some(local), _ => None };
+		// the step of a `for` loop (its counter's increment) runs after a body ending in a number or a held value
+		// without becoming the loop's value
+		let step_apart = step.is_some() && (value_local.is_some() || matches!(&statements, Node::List(items, _, _) if self.ends_in_number(items)));
 		if loop_control::has_jump(body) {
 			func.instruction(&I::Block(BlockType::Empty));
 			self.enter_loop(break_frame, loop_control::open_control_frames(func));
-			self.emit_loop_body(func, &statements, result_local);
+			self.emit_loop_body(func, &statements, result_local, value_local);
 			self.leave_loop();
 			func.instruction(&I::End);
 		} else {
-			self.emit_loop_body(func, if step_apart || step.is_none() { &statements } else { body }, result_local);
+			self.emit_loop_body(func, if step_apart || step.is_none() { &statements } else { body }, result_local, value_local);
 		}
 		match &step {
 			Some(step) if step_apart => {
 				self.emit_block_value(func, step);
 				func.instruction(&I::Drop);
 			}
-			Some(step) if loop_control::has_jump(body) => self.emit_loop_body(func, step, result_local),
+			Some(step) if loop_control::has_jump(body) => self.emit_loop_body(func, step, result_local, None),
 			_ => {}
 		}
 		func.instruction(&I::Br(0));
@@ -236,8 +239,18 @@ impl WasmGcEmitter {
 			func.instruction(&I::LocalGet(ran_local));
 			func.instruction(&I::I32WrapI64);
 			func.instruction(&I::If(BlockType::Result(Ref(self.node_ref(false)))));
-			func.instruction(&I::LocalGet(result_local));
-			self.emit_call(func, "new_int");
+			match value {
+				LoopValue::Held(local) => {
+					func.instruction(&I::LocalGet(local));
+					func.instruction(&I::RefAsNonNull);
+					self.loop_values.depth -= 1;
+				}
+				LoopValue::Updated(variable) => self.emit_node_instructions(func, &variable),
+				LoopValue::Number => {
+					func.instruction(&I::LocalGet(result_local));
+					self.emit_call(func, "new_int");
+				}
+			}
 			func.instruction(&I::Else);
 			self.emit_call(func, "new_empty");
 			func.instruction(&I::End);
@@ -246,8 +259,9 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// One pass of a loop body; a numeric value becomes the loop's value
-	pub(super) fn emit_loop_body(&mut self, func: &mut Function, body: &Node, result_local: u32) {
+	/// One pass of a loop body; a numeric value becomes the loop's value, a text or list one too when held in
+	/// value_local
+	pub(super) fn emit_loop_body(&mut self, func: &mut Function, body: &Node, result_local: u32, value_local: Option<u32>) {
 		let statements = match body.drop_meta() {
 			Node::List(items, Bracket::Curly, _) => items.clone(),
 			other => vec![other.clone()],
@@ -261,13 +275,54 @@ impl WasmGcEmitter {
 			return;
 		}
 		if body.is_nothing() { // `while c {}` only spins: nothing to evaluate
-		} else if self.get_type(body).is_ref() && !self.ends_in_number(&statements) { // `while c { s += "a" }`: a text or list update, its value is not a number
+		} else if self.ends_in_reference(body) { // `while c { s += "a" }`: a text or list update, its value is not a number
 			self.emit_node_instructions(func, body);
-			func.instruction(&I::Drop);
+			func.instruction(&value_local.map_or(I::Drop, I::LocalSet));
 		} else {
 			self.emit_block_value(func, body);
 			func.instruction(&I::LocalSet(result_local));
 		}
+	}
+
+	/// A loop body whose value is a text, character, list or other Node, not a number (a character held as a number
+	/// would show its code point)
+	fn ends_in_reference(&self, body: &Node) -> bool {
+		let statements = match body.drop_meta() {
+			Node::List(items, Bracket::Curly, _) => items.clone(),
+			other => vec![other.clone()],
+		};
+		let kind = self.get_type(body);
+		!body.is_nothing() && (kind.is_ref() && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
+	}
+
+	/// Declares the Node locals the loops of `body` hold their values in, after node_scratch; gives the enclosing
+	/// function's, to restore when this one is done
+	pub(super) fn declare_loop_values(&mut self, locals: &mut Vec<(u32, ValType)>, body: &Node) -> LoopValues {
+		let declared = loop_nesting(body);
+		if declared > 0 {
+			locals.push((declared, Ref(self.node_ref(true))));
+		}
+		std::mem::replace(&mut self.loop_values, LoopValues { declared, depth: 0 })
+	}
+
+	/// Where the value of a loop whose body ends in a text or list comes from
+	fn loop_value(&mut self, statements: &Node) -> LoopValue {
+		match last_statement(statements).drop_meta() {
+			// `xs = xs + [i]`, `s += c`: the variable after the loop, read once
+			Node::Key(variable, op, _) if (*op == Op::Assign || op.is_compound_assign()) && matches!(variable.drop_meta(), Node::Symbol(_)) => {
+				LoopValue::Updated(variable.drop_meta().clone())
+			}
+			_ => self.take_loop_value_local().map_or(LoopValue::Number, LoopValue::Held),
+		}
+	}
+
+	/// The Node local of the next nesting level, none in a function that declared too few (its loop keeps a number)
+	fn take_loop_value_local(&mut self) -> Option<u32> {
+		let LoopValues { declared, depth } = self.loop_values;
+		(depth < declared).then(|| {
+			self.loop_values.depth += 1;
+			self.node_scratch() + NODE_SCRATCH_LOCALS + depth
+		})
 	}
 
 	pub(super) fn emit_while_loop(&mut self, func: &mut Function, left: &Node, body: &Node) {
@@ -276,6 +331,30 @@ impl WasmGcEmitter {
 
 	pub(super) fn emit_while_loop_value(&mut self, func: &mut Function, left: &Node, body: &Node) {
 		self.emit_while_loop_impl(func, left, body, false);
+	}
+}
+
+/// The Node locals holding the values of loops whose bodies end in a text or list, one per nesting level
+#[derive(Default, Clone, Copy)]
+pub(super) struct LoopValues {
+	declared: u32,
+	depth: u32,
+}
+
+/// The value of a loop: a number (the last numeric body value), a Node held each pass, or an updated variable read
+/// after the loop
+enum LoopValue {
+	Number,
+	Held(u32),
+	Updated(Node),
+}
+
+/// How deeply loops nest in node: the loop value locals it needs
+fn loop_nesting(node: &Node) -> u32 {
+	match node.drop_meta() {
+		Node::Key(left, op, right) => u32::from(*op == Op::Do) + loop_nesting(left).max(loop_nesting(right)),
+		Node::List(items, _, _) => items.iter().map(loop_nesting).max().unwrap_or(0),
+		_ => 0,
 	}
 }
 

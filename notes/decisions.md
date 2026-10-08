@@ -5,6 +5,29 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- From P200b (not asked; card shared-lists-typed, warp-class): a typed list read from a field shares too:
+  `p = {xs: [1, 2]}; ys = p.xs; p.xs#1 = 7; ys#1` → 7. The fast unboxed copy is kept only where the compiler proves
+  that neither alias is written afterwards; otherwise the list is shared, never a silent snapshot.
+- P216 (warp-types): named arguments run as written, left to right (like Python): with `global i = 0;
+  g() := { i = i*10+1; i }; h() := { i = i*10+2; i }; f(a, b) := a*100 + b`, `f(b=h(), a=g())` runs h first
+  (b=2), then g (a=21) → 2102; the corpus pin 112 (parameter order) changes. Applies to constructors too
+  (card named-constructor-args).
+- P214 (card gpu-vectors, warp-web; revises P118): big list math moves to the GPU automatically only where the result
+  is identical to the CPU's: Int lists fitting i32, with an overflow flag (the CPU redoes it on overflow). Float lists
+  go to the GPU only when the program allows f32: `@gpu …` or a `float32[n]` list. `sum(int[10^7] .* 3)` → GPU;
+  `sum(float[10^7] .* 0.1)` → CPU. User: "for @gpu give a warning or hint if the GPU does not apply" (it then runs on
+  the CPU). The GPU covers the dotted element-wise operators (`xs .* 2`, `xs .+ ys`).
+  Threshold (user): offloading usually pays off from about 10⁵–10⁶ elements, clearly from 10⁶–10⁷; one cheap op
+  like `xs .* 3` may never pay off unless several ops are fused or the data stays on the GPU. Err on the CPU side.
+  Once the feature works, measure where and when to enable it and set safety bounds from real measurements.
+- P215 (card shared-lists, warp-class): with shared lists, element types are checked both ways, per P203: where the
+  alias is visible a covariant assignment is a compile error (`xs: [Circle] = [c]; ys: [Shape] = xs` → error unless ys
+  is read-only); otherwise each write (add/insert/`xs#i = v`) checks the declared element type and fails loudly at
+  run time.
+- P213 (card loop-value, warp-worker): a loop ending in `print` gives ø, because print gives ø (#18) and a loop's
+  value is its last body value (P55); no pass-count special case. `for f in [foe1, friend1]: print it` → ø
+  (tests/control/test_for_it.rs pinned 2, changes to ø); `for i in [1,2]: i*10` stays 20. Loops stay expressions
+  (the user asked; "loops are statements" like Lean's Unit was offered and not chosen).
 - Language name (user): the language is named warp everywhere; wasp remains only in README history and other history
   markdown. Defaults (supervisor): `*.wasp` → `*.warp`, with `.wasp` still readable; URLs and domains
   (github.com/pannous/wasp, wasp.pannous.com) unchanged; wisp unchanged. Card rename-warp, warp-fixer.

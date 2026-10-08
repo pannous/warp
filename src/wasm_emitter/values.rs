@@ -176,8 +176,8 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [word, left, right, tolerance] = items {
-			if word.drop_meta().name() == crate::library_words::VALUES_SIMILAR {
-				self.emit_similarity(func, left, right, tolerance);
+			if crate::library_words::is_similarity_call(&word.drop_meta().name()) {
+				self.emit_similarity(func, &word.drop_meta().name(), left, right, tolerance);
 				return true;
 			}
 		}
@@ -398,8 +398,7 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) => {
 				self.emit_literal(func, left);
 				self.emit_literal(func, right);
-				func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
-				self.emit_call(func, "new_key");
+				self.emit_new_key(func, op);
 			}
 			Node::List(items, bracket, _) if !items.is_empty() => self.emit_list_structure_with(func, items, bracket, Self::emit_literal),
 			Node::List(..) | Node::Empty => self.emit_call(func, "new_empty"),

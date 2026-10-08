@@ -15,15 +15,7 @@ def factorial(n) {
     return n * factorial(n - 1)
 }
 
-// Higher-order functions
-def map(list, fn) {
-    var result = []
-    for item in list {
-        result.push(fn(item))
-    }
-    return result
-}
-
+// Higher-order functions (no map needed: a function of one item applies to a whole list, see below)
 def filter(list, predicate) {
     var result = []
     for item in list {

@@ -278,7 +278,15 @@ Each step is useful on its own and is what the next ones stand on.
   Words (P188, browser API names; warp-03's undoable default, no user answer): `local[k]` is that store
   (localStorage), `storage[k]` its alias; `session[k]` a store of its own (sessionStorage while the tab lasts, natively
   in memory while the process runs; SESSION_STORE "warp-session", host.js sessionValues). A program defining its own
-  `storage`, `local` or `session` keeps it. IndexedDB for values beyond localStorage's ~5 MB is left.
+  `storage`, `local` or `session` keeps it.
+- IndexedDB (2026-10-08, warp-web): `database[k]` (alias `indexedDB`) is a store of its own for values beyond
+  localStorage's ~5 MB, same forms (`database.k`, delete, keys). Natively `<program>.database.json` beside the program
+  (inline code: in memory); in the browser the IndexedDB database `warp`, object store `values`, all in host-files.js
+  (shipped only with programs keeping values, so a hello-world site stays in its byte budget): loadDatabase reads it
+  once before the program runs (worker.js, site-worker.js, site.js; Workers have IndexedDB too), each change is
+  written back where the host keeps values (self.keepStored; the browser test suite keeps them in memory). Any store file ending in `database.json` (stored_values.rs DATABASE_STORE) is the
+  database in the browser. Checked by hand in the playground across reloads; a built site's path is not yet checked
+  in a browser. Probe: probes/stores/database.warp.
 - Clipboard (P188, navigator.clipboard's names; warp-03's default): `clipboard.write(text)` is the std word
   std_io("clipboard", "write", [text]) (lowering/system_values.rs): pbcopy / wl-copy / xclip natively, in a page
   markup.js copyText (navigator.clipboard.writeText, which needs a recent click; a refusal goes to the console), from a
@@ -361,7 +369,21 @@ Each step is useful on its own and is what the next ones stand on.
   `native` feature; pollster blocks on its futures), one device per process; errors in the browser's form, `1:10:
   expected identifier…` or wgpu's innermost cause. A machine without an adapter says "no WebGPU adapter" (tests skip).
   Cost: 69 more crates in Cargo.lock, a first build of about a minute. Not a sample yet.
-- Next: more buffers and uniforms (a map of named arrays), typed results (ints as array<i32>), render to a canvas.
+- Render (card g_YqWY, 2026-10-08, warp-web): `gpu_render(shader, width, height)` runs the WGSL fragment shader `main`
+  (`@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f`, `at.xy` the pixel's center) over a
+  width×height rgba8unorm image and gives its pixels as paint takes them, 0xFFRRGGBB row by row (alpha dropped).
+  warp appends the vertex stage (warp_full_image: one triangle covering the image) after the shader, so compile errors
+  keep the user's line numbers. Same task-Worker path as gpu_compute (host-gpu.js GPU_JOBS), natively src/gpu.rs
+  render. samples/webgpu.warp animates rings (a frame per loop step: paint + sleep), in the playground menu again.
+  Without an adapter the samples test skips it loudly (CI).
+- Values (uniforms): `gpu_render(shader, w, h, {frame: 3, size: [128, 128]})`: the shader reads the map as `values.frame`
+  (f32), `values.size` (vec2f; lists of 2–4 numbers are vec2f…vec4f). warp appends `struct WarpValues {…}` and
+  `@group(0) @binding(0) var<uniform> values` after the shader (gpu.rs / host-gpu.js uniform_layout: WGSL alignment, 4 /
+  8 / 16 bytes, rows of 16) and binds them through an explicit pipeline layout, so an unread value is no error. Leaving
+  the map out passes a null node (ffi_emitter.rs fills a missing argument), i.e. no values. A frame's values change
+  without interpolating them into the shader text.
+- Next: more buffers (a map of named arrays) for gpu_compute, typed results (ints as array<i32>), rendering straight
+  into a page canvas (GPUCanvasContext) without the pixel round trip; GPU vectors: card gpu-vectors, notes/gpu.md.
 
 ## web-apis: WebIDL (2026-10-08, warp-95)
 - `use js <global>` of a browser global is typed through WebIDL as `use c` is through C headers: src/web_idl.rs reads

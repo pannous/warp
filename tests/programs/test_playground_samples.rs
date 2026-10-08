@@ -9,6 +9,8 @@ const EXCLUDED_LIST: &str = "web/playground/excluded_samples.txt";
 const SAMPLES: &str = "samples";
 /// paint directly or through the draw module (lib/draw.warp show)
 const PAINTING: [&str; 2] = ["paint(", "use draw"];
+/// A sample on the GPU (samples/webgpu.warp) is skipped, loudly, on a machine without one (CI)
+const NO_GPU: &str = "no WebGPU adapter";
 
 /// The names excluded_samples.txt lists: the first word of each line that is no comment
 fn excluded_samples() -> Vec<String> {
@@ -36,6 +38,10 @@ fn every_playground_sample_runs_without_an_error() {
 		.collect();
 	menu.sort();
 	let failures: Vec<String> = menu.iter().filter_map(|name| match eval(&sample_path(name)) {
+		Node::Error(message) if message.to_string().contains(NO_GPU) => {
+			crate::common::announce_skip("a WebGPU adapter", name);
+			None
+		}
 		failed @ Node::Error(_) => Some(format!("{name}: {}", failed.serialize())),
 		_ => None,
 	}).collect();

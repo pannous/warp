@@ -149,18 +149,25 @@ const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
 const OPERAND_TEMPORARY: &str = "operand_tmp";
 /// The variable holding a list while one of its elements changes: `place·0`
 const PLACE_TEMPORARY: &str = "place·";
-/// `a ≈ b` holds when |a-b| ≤ tolerance·max(|a|, |b|); a program that assigns `tolerance` sets it
-const TOLERANCE_VARIABLE: &str = "tolerance";
-const DEFAULT_RELATIVE_TOLERANCE: &str = "1e-9";
 /// values_similar(a, b, tolerance): `a ≈ b` (wasm_emitter/similarity.rs)
 pub const VALUES_SIMILAR: &str = "values_similar";
+/// values_rough(a, b, tolerance): `a ~ b`, looser (P211)
+pub const VALUES_ROUGH: &str = "values_rough";
+/// Per level of approximation: its operator, its call, the variable a program sets its relative tolerance with
+/// (|a-b| ≤ tolerance·max(|a|, |b|)) and the default tolerance
+/// values_similar or values_rough
+pub fn is_similarity_call(name: &str) -> bool {
+	SIMILARITY_LEVELS.iter().any(|(_, function, ..)| *function == name)
+}
+
+pub const SIMILARITY_LEVELS: [(Op, &str, &str, &str); 2] = [(Op::Similar, VALUES_SIMILAR, "tolerance", "1e-9"), (Op::Rough, VALUES_ROUGH, "rough_tolerance", "0.01")];
 const RECEIVER_PLACEHOLDER: &str = "word_argument";
 const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "word_tmp";
 
 /// Library words whose result is always a text, and those whose result is always a list
 const TEXT_RESULT_WORDS: [&str; 4] = ["upper", "lower", "trim", "join"];
-const LIST_RESULT_WORDS: [&str; 7] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES, MAP_WITHOUT];
+const LIST_RESULT_WORDS: [&str; 8] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES, MAP_WITHOUT, crate::wasm_emitter::list_ops::LIST_EXTEND];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	use crate::type_kinds::Kind;
@@ -411,7 +418,7 @@ fn is_nested_place(place: &Node) -> bool {
 }
 
 /// `place += 1` for `place++`, `place -= 1` for `place--`
-fn stepped(place: Node, step: Op) -> Node {
+pub(crate) fn stepped(place: Node, step: Op) -> Node {
 	let update = if step == Op::Inc { Op::AddAssign } else { Op::SubAssign };
 	Node::Key(Box::new(place), update, Box::new(Node::int(1)))
 }
@@ -660,6 +667,9 @@ impl Lowering {
 				self.method_call(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Dot, Box::new(right)))
 			}
 			Node::Key(left, Op::Assign, right) => {
+				if let Some(chained) = self.chained_field_assignment(&left, &right) {
+					return chained;
+				}
 				let left = self.expand(*left);
 				let right = self.in_definition(&left, *right);
 				self.field_assignment(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Assign, Box::new(right)))
@@ -668,7 +678,7 @@ impl Lowering {
 				let (receiver, word) = (self.expand(*left), *right);
 				self.safe_lookup(receiver, word)
 			}
-			Node::Key(left, Op::Similar, right) => self.lower_similar(self.expand(*left), self.expand(*right)),
+			Node::Key(left, op @ (Op::Similar | Op::Rough), right) => self.lower_similar(op, self.expand(*left), self.expand(*right)),
 			Node::Key(left, Op::Coalesce, right) => self.lower_coalesce(self.expand(*left), self.expand(*right)),
 			Node::Key(left, Op::Define, right) => {
 				let left = self.expand(*left);
@@ -734,9 +744,10 @@ impl Lowering {
 	/// `a ≈ b`, `a ~ b`, `a circa b`: compared within the relative tolerance; a side that is more than a plain value or
 	/// arithmetic is computed once into a temporary
 	/// `a ≈ b`: the emitter's values_similar(a, b, tolerance), numbers inline, any other values field by field
-	fn lower_similar(&self, left: Node, right: Node) -> Node {
-		let tolerance = if self.shadowed.contains(TOLERANCE_VARIABLE) { TOLERANCE_VARIABLE } else { DEFAULT_RELATIVE_TOLERANCE };
-		let call = vec![Node::Symbol(VALUES_SIMILAR.to_string()), left, right, crate::warp_parser::parse(tolerance)];
+	fn lower_similar(&self, op: Op, left: Node, right: Node) -> Node {
+		let (_, function, variable, default) = SIMILARITY_LEVELS.iter().find(|(level, ..)| *level == op).expect("a similarity operator");
+		let tolerance = if self.shadowed.contains(*variable) { variable } else { default };
+		let call = vec![Node::Symbol(function.to_string()), left, right, crate::warp_parser::parse(tolerance)];
 		Node::List(call, Bracket::Round, Separator::None)
 	}
 
@@ -1002,6 +1013,16 @@ impl Lowering {
 		let Node::Key(_, Op::Hash, index) = target.drop_meta() else { return None };
 		subscript_field(index)?;
 		self.stored(target, value.clone())
+	}
+
+	/// `a = p.x = 5` is `p.x = 5; a = p.x`: the value of a field assignment is the field's new value, not the object
+	/// field_with gives (card chain-field)
+	fn chained_field_assignment(&self, outer: &Node, value: &Node) -> Option<Node> {
+		let Node::Key(inner, Op::Assign, _) = value.drop_meta() else { return None };
+		let Node::Key(_, Op::Hash, index) = self.expand(inner.as_ref().clone()).drop_meta().clone() else { return None };
+		subscript_field(&index)?;
+		let read_back = Node::Key(Box::new(outer.clone()), Op::Assign, inner.clone());
+		Some(self.expand(Node::List(vec![value.clone(), read_back], Bracket::None, Separator::Semicolon)))
 	}
 
 	/// `place = value` for any place: a variable, an element `xs#i` of one (as written), a field (field_with on its

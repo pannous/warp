@@ -73,10 +73,15 @@ impl WasmGcEmitter {
 		Node::List(marked.collect(), bracket.clone(), separator.clone())
 	}
 
-	/// The declared type of the variable `target` (`x: int`), if it has one
+	/// The declared type of the variable `target` (`x: int`, a parameter `f(x: int)` of the function compiled), if it has one
 	pub(super) fn declared_type_of(&self, target: &Node) -> Option<Node> {
 		let Node::Symbol(name) = target.drop_meta() else { return None };
-		self.scope.lookup(name).and_then(|local| local.type_node.as_deref().cloned())
+		let local = self.scope.lookup(name)?;
+		if let Some(type_node) = &local.type_node {
+			return Some(type_node.as_ref().clone());
+		}
+		let function = self.ctx.user_functions.get(self.compiling.as_deref()?).filter(|_| local.is_param)?;
+		function.params.iter().find(|param| param.name == *name)?.annotation.clone()
 	}
 
 	/// `value` stored into a place declared `declared` that holds a `kind`: checked at run time when its static kind leaves
@@ -85,10 +90,23 @@ impl WasmGcEmitter {
 		let check = declared.and_then(|declared| self.admitted(declared)).filter(|admitted| self.needs_run_time_check(admitted, value));
 		let (Some(admitted), Some(declared)) = (check, declared) else { return self.emit_value_of_kind(func, value, kind) };
 		self.emit_node_instructions(func, value);
+		self.emit_admitted_node(func, &admitted, declared, kind);
+	}
+
+	/// The Node on top of the stack into a number `kind` local: unboxed when its run-time kind is a number, else the
+	/// error "not an int" (`a = 0; a, b = xs`)
+	pub(super) fn emit_node_as_number(&mut self, func: &mut Function, kind: Kind) {
+		let declared = Node::Symbol(if kind.is_float() { "float" } else { "int" }.to_string());
+		let admitted = self.admitted(&declared).expect("int and float are builtin types");
+		self.emit_admitted_node(func, &admitted, &declared, kind);
+	}
+
+	/// The Node on top of the stack, as a `kind` value, when `admitted` admits it; else the error "not a <declared>"
+	fn emit_admitted_node(&mut self, func: &mut Function, admitted: &Admitted, declared: &Node, kind: Kind) {
 		func.instruction(&I::RefAsNonNull);
 		let held = self.node_scratch();
 		func.instruction(&I::LocalSet(held));
-		self.emit_admits(func, held, &admitted);
+		self.emit_admits(func, held, admitted);
 		Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Empty)]);
 		self.emit_trap_detail(func, &Node::Text(format!("not {}", crate::analyzer::with_article(&declared.name()))));
 		self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);

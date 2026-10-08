@@ -39,6 +39,10 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if matches!(op, Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or) {
 				ctx.required_functions.insert(crate::wasm_emitter::IS_TRUTHY);
 			}
+			// `xs += [v]`, what `xs.add(v)` lowers to: the list grows in place
+			if *op == Op::AddAssign && matches!(value.drop_meta(), Node::List(_, Bracket::Square, _)) {
+				ctx.required_functions.insert(crate::wasm_emitter::list_ops::LIST_EXTEND);
+			}
 			if *op == Op::Assign || op.is_compound_assign() {
 				if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
 					ctx.required_functions.insert("node_with_at");
@@ -114,6 +118,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if let Some(word) = crate::wasm_emitter::cells::CELL_WORDS.iter().find(|word| **word == fn_name) {
 					ctx.required_functions.insert(word);
 				}
+				if fn_name == LIST_DROP_LAST {
+					ctx.required_functions.insert(LIST_DROP_LAST);
+				}
 				if fn_name == REMOVED_VALUE_CALL {
 					ctx.required_functions.extend([crate::library_words::MAP_GET_OR, crate::library_words::MAP_WITHOUT]);
 				}
@@ -139,7 +146,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if fn_name == crate::library_words::FIELD_WITH {
 					ctx.required_functions.extend([crate::library_words::FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL]);
 				}
-				if fn_name == crate::library_words::VALUES_SIMILAR {
+				if crate::library_words::is_similarity_call(fn_name) {
 					ctx.required_functions.insert(crate::wasm_emitter::NUMBERS_SIMILAR); // values_similar when needed
 				}
 				if fn_name == crate::library_words::INSTANCE_COPY {

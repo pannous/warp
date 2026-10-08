@@ -4,6 +4,6 @@ use crate::is;
 
 #[test]
 fn print_name_in_a_text_walks_it() {
-	is!("print chars in \"hello\"", 5);
+	is!("print chars in \"hello\"", warp::Node::Empty); // P213: a loop ending in print gives ø
 	is!("c = \"e\"; print c in \"hello\"", warp::Node::Empty); // print gives nothing (issue #18)
 }

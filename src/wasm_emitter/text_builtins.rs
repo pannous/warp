@@ -29,6 +29,7 @@ const MEMORY_SET_BYTE: &str = "memory_set_byte";
 /// `trim(text)`: the text without the whitespace at either end, sharing its memory
 const TRIM: &str = "trim";
 const TEXT_TRIM: &str = "text_trim";
+pub const TEXT_ROUGH_TRIM: &str = "text_rough_trim";
 /// `chr(n)`: the character of a code point, the inverse of `ord(c)`
 const CHR: &str = "chr";
 /// `starts_with(text, prefix)`, `ends_with(text, suffix)`: 1 or 0
@@ -42,6 +43,9 @@ const TEXT_MATCHES_AT: &str = "text_matches_at";
 pub const TEXT_FIND: &str = "text_find";
 /// The bytes trim drops: space, tab, line feed, carriage return
 const WHITESPACE_BYTES: [i32; 4] = [b' ' as i32, b'\t' as i32, b'\n' as i32, b'\r' as i32];
+/// The bytes below are ASCII; text_rough_trim keeps any byte of a longer UTF-8 character
+const ASCII_END: i32 = 0x80;
+const ASCII_ALPHANUMERIC_RANGES: [(u8, u8); 3] = [(b'0', b'9'), (b'A', b'Z'), (b'a', b'z')];
 const READ: &str = "read";
 const READ_TEXT: &str = "read_text";
 const HOST_READ: &str = "host_read";
@@ -143,6 +147,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("exact_euclid_div") {
 		required.insert(super::INT_RUNTIME);
 	}
+	if required.contains(super::list_ops::LIST_EXTEND) {
+		required.insert("list_concat"); // of a non-list
+	}
 	if required.contains(super::list_ops::NODE_ADD) {
 		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::library_ops::LIST_JOIN]); // two lists added are concatenated, two texts too, a text and a number joined
 	}
@@ -192,7 +199,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(TEXT_ARGUMENT) {
 		required.insert(TEXT_OF);
 	}
-	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, TEXT_TRIM, C_STRING, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
+	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, TEXT_TRIM, TEXT_ROUGH_TRIM, C_STRING, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
@@ -555,34 +562,54 @@ impl WasmGcEmitter {
 
 		// text_trim(text): the bytes between the whitespace at either end, sharing the memory of text
 		if self.should_emit_function(TEXT_TRIM) {
-			self.runtime_function(TEXT_TRIM, vec![node_ref], vec![node_ref], vec![ValType::I32, ValType::I32, ValType::I32], |s, f| {
-				let (address, start, end) = (1, 2, 3);
-				s.emit_text_field(f, 0, 0);
-				f.instruction(&I::LocalSet(address));
-				s.emit_text_field(f, 0, 1);
-				f.instruction(&I::LocalSet(end));
-				let is_whitespace = |f: &mut Function, offset: Vec<I<'static>>| {
-					for (index, byte) in WHITESPACE_BYTES.iter().enumerate() {
-						Self::emit_list(f, &[I::LocalGet(address)]);
-						Self::emit_list(f, &offset);
-						Self::emit_list(f, &[I::I32Add, I::I32Load8U(BYTE), I::I32Const(*byte), I::I32Eq]);
-						if index > 0 {
-							f.instruction(&I::I32Or);
-						}
+			self.emit_trim(TEXT_TRIM, |f, byte| {
+				for (index, whitespace) in WHITESPACE_BYTES.iter().enumerate() {
+					Self::emit_list(f, &[I::LocalGet(byte), I::I32Const(*whitespace), I::I32Eq]);
+					if index > 0 {
+						f.instruction(&I::I32Or);
 					}
-				};
-				// leading: start moves right while it is before end and at whitespace
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(start), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
-				is_whitespace(f, vec![I::LocalGet(start)]);
-				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(start), I::I32Const(1), I::I32Add, I::LocalSet(start), I::Br(0), I::End, I::End]);
-				// trailing: end moves left while the byte before it is whitespace
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(end), I::LocalGet(start), I::I32LeU, I::BrIf(1)]);
-				is_whitespace(f, vec![I::LocalGet(end), I::I32Const(1), I::I32Sub]);
-				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(end), I::I32Const(1), I::I32Sub, I::LocalSet(end), I::Br(0), I::End, I::End]);
-				Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(start), I::I32Add, I::LocalGet(end), I::LocalGet(start), I::I32Sub]);
-				s.call(f, "new_text");
+				}
 			});
 		}
+		// text_rough_trim(text): without the whitespace, control characters and ASCII punctuation at either end (`a ~ b`, P211)
+		if self.should_emit_function(TEXT_ROUGH_TRIM) {
+			self.emit_trim(TEXT_ROUGH_TRIM, |f, byte| {
+				Self::emit_list(f, &[I::LocalGet(byte), I::I32Const(ASCII_END), I::I32LtU]);
+				for (first, last) in ASCII_ALPHANUMERIC_RANGES {
+					Self::emit_list(f, &[I::LocalGet(byte), I::I32Const(first as i32), I::I32Sub, I::I32Const((last - first) as i32), I::I32LeU, I::I32Eqz, I::I32And]);
+				}
+			});
+		}
+	}
+
+	/// name(text): the bytes between the ones `is_trimmed` holds for (given the local of a byte) at either end, sharing
+	/// the memory of text
+	fn emit_trim(&mut self, name: &'static str, is_trimmed: impl Fn(&mut Function, u32)) {
+		let node_ref = Ref(self.node_ref(false));
+		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![ValType::I32; 4], |s, f| {
+			let (address, start, end, byte) = (1, 2, 3, 4);
+			s.emit_text_field(f, 0, 0);
+			f.instruction(&I::LocalSet(address));
+			s.emit_text_field(f, 0, 1);
+			f.instruction(&I::LocalSet(end));
+			let load = |f: &mut Function, offset: &[I<'static>]| {
+				f.instruction(&I::LocalGet(address));
+				Self::emit_list(f, offset);
+				Self::emit_list(f, &[I::I32Add, I::I32Load8U(BYTE), I::LocalSet(byte)]);
+			};
+			// leading: start moves right while it is before end and at a trimmed byte
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(start), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
+			load(f, &[I::LocalGet(start)]);
+			is_trimmed(f, byte);
+			Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(start), I::I32Const(1), I::I32Add, I::LocalSet(start), I::Br(0), I::End, I::End]);
+			// trailing: end moves left while the byte before it is trimmed
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(end), I::LocalGet(start), I::I32LeU, I::BrIf(1)]);
+			load(f, &[I::LocalGet(end), I::I32Const(1), I::I32Sub]);
+			is_trimmed(f, byte);
+			Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(end), I::I32Const(1), I::I32Sub, I::LocalSet(end), I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(start), I::I32Add, I::LocalGet(end), I::LocalGet(start), I::I32Sub]);
+			s.call(f, "new_text");
+		});
 	}
 
 	/// c_string, error_of, warn_text, text_concat and read_text

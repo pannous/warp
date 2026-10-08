@@ -27,3 +27,4 @@ mod test_optimizer_extended_const;
 mod test_read_bytes_plain_result;
 mod test_wasm_interop_rest;
 mod test_component_worlds;
+mod test_component_exports; // card reflection-components

@@ -15,8 +15,12 @@ const PROGRAM_ORIGIN = "http://program.invalid";
 const TYPING_DELAY_MS = 300;
 const PENDING_VALUE = "…"; // the value shown from Run until the new one arrives
 const DEFAULT_EXAMPLE = "hello";
+const COMMIT_URL = "https://github.com/pannous/warp/commit/";
+const SHORT_COMMIT = 9;
+const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
+const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
@@ -131,7 +135,12 @@ function showAgain(topic) {
 
 function startWorker() {
 	workerWarmed = false;
-	worker = new Worker(debugBuild ? `worker.js?compiler=${DEBUG_COMPILER}` : "worker.js");
+	const options = new URLSearchParams();
+	if (debugBuild) options.set("compiler", DEBUG_COMPILER);
+	// test_in_browser.py --examples: a worker that starts as late as on a slow CI runner
+	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
+	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
+	worker = new Worker(options.size ? `worker.js?${options}` : "worker.js");
 	workerReady = new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
@@ -150,7 +159,8 @@ function startWorker() {
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
-	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
+	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
+	workerReady.then(() => showing || setStatus("ready"), failure => setStatus(failure.message, true));
 	tellSystemValues();
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
@@ -290,9 +300,15 @@ function showAcknowledged() {
 	$("silenced").hidden = acknowledged.length === 0;
 }
 
+// the » value line; markup the page renders (#rendered) is shown there only, its text would repeat it (card hide-html)
+function showValue(value, error, html) {
+	$("value").textContent = value;
+	$("value").classList.toggle("error", Boolean(error));
+	$("value").parentElement.hidden = Boolean(html) && !error;
+}
+
 function showReport(report) {
-	$("value").textContent = report.value;
-	$("value").classList.toggle("error", report.error);
+	showValue(report.value, report.error, report.html);
 	const errorAt = report.error ? report.error_at : null; // the failing place: clicking the error goes there
 	$("value").classList.toggle("located", Boolean(errorAt));
 	$("value").title = errorAt ? `go to ${at(errorAt.line, errorAt.column)}` : "";
@@ -465,10 +481,7 @@ function showEventOutput(data) {
 	if (data.type === "paint") showPaintings([data]);
 	if (data.type === "address") showAddress(data.path);
 	if (data.type !== "handled") return;
-	if (data.value !== undefined) {
-		$("value").textContent = data.value;
-		$("value").classList.toggle("error", data.error);
-	}
+	if (data.value !== undefined) showValue(data.value, data.error, data.html);
 	if (data.html !== undefined) showRendered(data.html);
 	(data.patches ?? []).forEach(showPatch);
 }
@@ -523,6 +536,13 @@ function showBuildSwitch() {
 		title: debugBuild ? "warp.debug.wasm: Rust function names and lines in traces and the browser's debugger" : "warp.wasm, the small one" });
 }
 
+// the commit the page was built from (build.sh version.js), linked to it on GitHub
+function showVersion() {
+	if (!PLAYGROUND_VERSION) return;
+	const { commit, date } = PLAYGROUND_VERSION;
+	Object.assign($("version"), { href: `${COMMIT_URL}${commit}`, textContent: `version ${commit.slice(0, SHORT_COMMIT)} · ${date}`, hidden: false });
+}
+
 function downloadModule() {
 	if (!lastModule) return setStatus("no module yet: a constant result needs none");
 	const link = element("a", { href: URL.createObjectURL(new Blob([lastModule], { type: "application/wasm" })), download: "program.wasm" });
@@ -540,8 +560,8 @@ function runNow() {
 
 // Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, so it is not taken for the new one
 function runPressed() {
-	$("value").textContent = PENDING_VALUE;
-	$("value").classList.remove("error", "located");
+	showValue(PENDING_VALUE);
+	$("value").classList.remove("located");
 	return runNow();
 }
 
@@ -559,7 +579,32 @@ function chooseExample(name) {
 	const source = exampleSource(name);
 	if (source === undefined) return;
 	$("examples").value = name;
+	showExampleInAddress(name);
 	return runCode(source);
+}
+
+// the address names the chosen example as its hash (#circle), so it can be shared or reloaded; the default one leaves
+// it plain, and a guide chapter's hash (#guide-lists) stays (card sample-hash)
+function showExampleInAddress(name) {
+	const address = new URL(location.href);
+	EXAMPLE_PARAMETERS.forEach(parameter => address.searchParams.delete(parameter));
+	if (name !== DEFAULT_EXAMPLE) address.hash = name;
+	else if (exampleSource(hashName()) !== undefined) address.hash = "";
+	if (address.href !== location.href) history.replaceState(history.state, "", address);
+}
+
+const hashName = () => decodeURIComponent(location.hash.slice(1));
+
+// the example the address names: ?example=circle (?sample=circle), else #circle
+function requestedExample() {
+	const parameters = new URLSearchParams(location.search);
+	return [...EXAMPLE_PARAMETERS.map(parameter => parameters.get(parameter)), hashName()].find(name => name && exampleSource(name) !== undefined);
+}
+
+// #circle typed into the address shows that example
+function chooseExampleOfHash() {
+	const name = hashName();
+	if (exampleSource(name) !== undefined && name !== $("examples").value) chooseExample(name);
 }
 
 function fillExamples() {
@@ -590,10 +635,11 @@ function initialize() {
 	$("download").onclick = downloadModule;
 	startResizers();
 	showBuildSwitch();
+	showVersion();
 	fillExamples();
 	startWorker();
-	const requested = new URLSearchParams(location.search).get("example");
-	chooseExample(requested && exampleSource(requested) !== undefined ? requested : DEFAULT_EXAMPLE);
+	chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
+	addEventListener("hashchange", chooseExampleOfHash);
 }
 
 // for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report

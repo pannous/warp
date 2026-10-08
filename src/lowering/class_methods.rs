@@ -71,15 +71,19 @@ const IMPL_WORD: &str = "impl";
 /// Kotlin's `p.copy(y = 5)`
 const COPY_WORD: &str = "copy";
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
-const OPERATOR_METHODS: [(Op, [&str; 3]); 7] = [
-	(Op::Add, ["plus", "add", "__add__"]),
-	(Op::Sub, ["minus", "subtract", "__sub__"]),
-	(Op::Mul, ["times", "multiply", "__mul__"]),
-	(Op::Div, ["divide", "div", "__truediv__"]),
-	(Op::Mod, ["mod", "modulo", "__mod__"]),
-	(Op::Lt, ["less", "smaller", "__lt__"]),
-	(Op::Gt, ["more", "bigger", "__gt__"]),
+const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
+	(Op::Add, &["plus", "add", "__add__"]),
+	(Op::Sub, &["minus", "subtract", "__sub__"]),
+	(Op::Mul, &["times", "multiply", "__mul__"]),
+	(Op::Div, &["divide", "div", "__truediv__"]),
+	(Op::Mod, &["mod", "modulo", "__mod__"]),
+	(Op::Lt, &["less", "smaller", "__lt__"]),
+	(Op::Gt, &["more", "bigger", "__gt__"]),
+	(Op::Similar, &["approximately"]),
+	(Op::Rough, &["similar"]),
 ];
+/// P212: a class defining the method of only one of these operators has it serve the other too
+const INTERCHANGEABLE_OPERATORS: [(Op, Op); 2] = [(Op::Similar, Op::Rough), (Op::Rough, Op::Similar)];
 /// The run-time choice of a library-word method by the receiver's class (dispatched_by_class)
 const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then METHOD else OTHERWISE";
 /// Ruby's `include Walker` in a class body takes in a mixin
@@ -721,7 +725,9 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 	node.visit(&mut |part| if let Node::Key(target, op, value) = part {
 		// `p:Point = …`: the annotation says it
 		if let (Node::Key(variable, Op::Colon, class), Op::Assign) = (target.drop_meta(), op) {
-			if classes.contains(&class.drop_meta().name()) {
+			// `p:Point`, not a list of them `ps:[Point]`
+			let is_class = matches!(class.drop_meta(), Node::Symbol(_) | Node::Type { .. });
+			if is_class && classes.contains(&class.drop_meta().name()) {
 				instances.insert(variable.drop_meta().name(), class.drop_meta().name());
 			}
 		}
@@ -787,6 +793,14 @@ fn operator_calls(node: Node) -> Node {
 	});
 	if methods.is_empty() {
 		return node;
+	}
+	let defines = |methods: &[(String, Op, String)], class: &str, op: Op| methods.iter().find(|(owner, known, _)| owner == class && *known == op).map(|(_, _, method)| method.clone());
+	for (class, _, _) in methods.clone() {
+		for (defined, missing) in INTERCHANGEABLE_OPERATORS {
+			if let (Some(method), None) = (defines(&methods, &class, defined), defines(&methods, &class, missing)) {
+				methods.push((class.clone(), missing, method));
+			}
+		}
 	}
 	let classes: Vec<String> = methods.iter().map(|(class, _, _)| class.clone()).collect();
 	let instances = instance_classes(&node, &classes);
@@ -1153,9 +1167,22 @@ fn class_items(body: &Node) -> Vec<Node> {
 /// `def area() -> int {…}`, `fun area(): Int {…}`, `func area() {…}`: the method `area() := …` (with its result type)
 fn keyword_method(words: &[Node]) -> Option<Node> {
 	// Kotlin's expression body `fun sum() = x + y` defines as `:=` does; Java's `int sum() {…}` as C's
-	match crate::declarations::keyword_definition(words).or_else(|| crate::declarations::c_function(words))? {
+	match crate::declarations::keyword_definition(words).or_else(|| crate::declarations::c_function(words)).or_else(|| python_method(words))? {
 		Node::Key(head, Op::Assign, body) => Some(Node::Key(head, Op::Define, body)),
 		definition => Some(definition),
+	}
+}
+
+/// Python's `def f(): x + 1` without parameters, which keyword_definition leaves to late_binding outside a class (P71):
+/// in a class body it is the method `f() := x + 1`
+fn python_method(words: &[Node]) -> Option<Node> {
+	let [keyword, definition] = words else { return None };
+	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word));
+	match definition.drop_meta() {
+		Node::Key(head, Op::Colon, body) if is_keyword && matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
+			Some(Node::Key(head.clone(), Op::Define, body.clone()))
+		}
+		_ => None,
 	}
 }
 
@@ -1546,7 +1573,8 @@ fn class_typed_declarations(node: Node) -> Node {
 
 fn declared_with_classes(node: Node, classes: &[String]) -> Node {
 	match node {
-		Node::List(words, _, _) if words.len() == 2 && classes.contains(&words[0].drop_meta().name()) && matches!(words[1].drop_meta(), Node::Key(variable, Op::Assign, _) if matches!(variable.drop_meta(), Node::Symbol(_))) => {
+		// not the call `P(x = 7)`, a construction with a named argument
+		Node::List(words, bracket, _) if bracket != Bracket::Round && words.len() == 2 && classes.contains(&words[0].drop_meta().name()) && matches!(words[1].drop_meta(), Node::Key(variable, Op::Assign, _) if matches!(variable.drop_meta(), Node::Symbol(_))) => {
 			let Node::Key(variable, _, value) = words[1].drop_meta().clone() else { unreachable!("guarded") };
 			let typed = Node::Key(variable, Op::Colon, Box::new(words[0].clone()));
 			Node::Key(Box::new(typed), Op::Assign, Box::new(declared_with_classes(*value, classes)))

@@ -259,6 +259,10 @@ impl Rewrite<'_> {
 					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, kernel)) = float_map(&value, &names) => {
 						Node::Key(target, op, Box::new(builtin(&kernel, vec![array])))
 					}
+					// `ys = gpu_compute(shader, xs, w)` of a linear float array: ys names the same block
+					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && gpu_compute_of_linear_floats(&value, &names) => {
+						Node::Key(target, op, Box::new(self.node(*value, function)))
+					}
 					// `n = n + v`, `n = n - v`: the atomic add, as `n += v`, so no task's update is lost
 					(name, Op::Assign) if let Some(kind) = shared_value(name, &names) && let Some((op, added)) = self_update(name, &value) => {
 						let [_, _, add] = element_words(kind);
@@ -305,6 +309,9 @@ impl Rewrite<'_> {
 				}
 				match items.as_slice() {
 					[word, array] if COUNTING_WORDS.contains(&word.name().as_str()) && let Some(kind) = shared(array, &names) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
+					[word, shader, array, workgroups] if word.name() == crate::host::GPU_COMPUTE && is_linear_floats(array, &names) => {
+						builtin(crate::host::GPU_COMPUTE_LINEAR, vec![self.node(shader.clone(), function), array.clone(), self.node(workgroups.clone(), function)])
+					}
 					// `for x in xs {…}` over an array: over its indexes, x read from each cell
 					[word, item, in_word, array, body] if word.name() == "for" && in_word.name() == "in" && let Some(kind) = shared(array, &names) => {
 						let index = Node::Symbol(format!("{}{}index", array.name(), crate::analyzer::TEMPORARY_SEPARATOR));
@@ -354,20 +361,27 @@ fn float_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Str
 	};
 	let Node::Key(parameter, Op::FatArrow, body) = lambda.drop_meta() else { return None };
 	let Node::Symbol(parameter) = parameter.drop_meta() else { return None };
-	let kind = shared(array, names)?;
-	let linear_floats = kind.storage == Storage::Linear && kind.element == Element::Float;
-	(linear_floats && crate::wasm_emitter::linear_arrays::is_float_kernel(parameter, body))
+	(is_linear_floats(array, names) && crate::wasm_emitter::linear_arrays::is_float_kernel(parameter, body))
 		.then(|| (array.clone(), crate::wasm_emitter::linear_arrays::kernel_name(parameter, body)))
 }
 
-/// The names assigned once, by a float map of a linear float array: linear float arrays too
+fn is_linear_floats(array: &Node, names: &HashMap<String, Shared>) -> bool {
+	shared(array, names).is_some_and(|kind| kind.storage == Storage::Linear && kind.element == Element::Float)
+}
+
+/// `gpu_compute(shader, xs, workgroups)` of a linear float array, which the shader updates in place
+fn gpu_compute_of_linear_floats(value: &Node, names: &HashMap<String, Shared>) -> bool {
+	matches!(value.drop_meta(), Node::List(items, _, _) if items.len() == 4 && items[0].name() == crate::host::GPU_COMPUTE && is_linear_floats(&items[2], names))
+}
+
+/// The names assigned once, by a float map or a gpu_compute of a linear float array: linear float arrays too
 fn float_map_results(node: &Node, declared: &HashMap<String, Shared>) -> HashMap<String, Shared> {
 	let mut assignments: HashMap<String, (usize, bool)> = HashMap::new();
 	node.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::AddAssign | Op::SubAssign | Op::MulAssign | Op::DivAssign, value) = part {
 		if let Node::Symbol(name) = target.drop_meta() {
 			let entry = assignments.entry(name.clone()).or_insert((0, false));
 			entry.0 += 1;
-			entry.1 = float_map(value, declared).is_some();
+			entry.1 = float_map(value, declared).is_some() || gpu_compute_of_linear_floats(value, declared);
 		}
 	});
 	let linear_floats = Shared { element: Element::Float, value: false, storage: Storage::Linear };

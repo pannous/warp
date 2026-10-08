@@ -45,6 +45,12 @@ pub const NOTIFY: &str = "notify";
 /// `gpu_compute(shader, numbers, workgroups)`: a WGSL compute shader run over the numbers on the GPU (WebGPU in the
 /// browser, web/playground/host-gpu.js), the numbers it left (card web-apis, notes/web_framework.md "web-apis: WebGPU")
 pub const GPU_COMPUTE: &str = "gpu_compute";
+/// `gpu_render(shader, width, height)`: a WGSL fragment shader `main` run over every pixel, the pixels paint shows
+/// (0xFFRRGGBB row by row; card g_YqWY, notes/web_framework.md "web-apis: WebGPU")
+pub const GPU_RENDER: &str = "gpu_render";
+/// `gpu_compute(shader, xs, workgroups)` of a `linear xs = float[n]`: the shader runs over the cells of the block in linear
+/// memory, read and written in place without building a list (card gpu-vectors, notes/gpu.md); gives the block back
+pub const GPU_COMPUTE_LINEAR: &str = "gpu_compute_linear";
 /// `on·file·0`: the handler of the first `on file "x" change {…}`
 pub const FILE_HANDLER_PREFIX: &str = "on·file·";
 /// `exit(code)` ends the run, not the process (P121, system_signals.rs ExitRequest)

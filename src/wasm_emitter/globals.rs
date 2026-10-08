@@ -34,6 +34,11 @@ impl WasmGcEmitter {
 		self.int_scratch + big_int::INT_SCRATCH_LOCALS
 	}
 
+	/// A second Node scratch local: a container held while node_scratch serves its items (`a, b = xs` checking an item)
+	pub(super) fn container_scratch(&self) -> u32 {
+		self.node_scratch() + 1
+	}
+
 	/// Emit a fetch call using the host.fetch import (host.fetch_within for an explicit timeout)
 	/// Returns a Text node with the body, or an Error node with the reason: the host marks a failure by a negative length
 	pub(super) fn emit_fetch_call(&mut self, func: &mut Function, url_node: &Node, timeout: Option<std::time::Duration>) {
