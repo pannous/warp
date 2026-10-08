@@ -21,7 +21,7 @@ const hooks = {
 	pagePath: () => pagePath,
 	instantiated: holder => { site = holder; },
 	print: (text, stream) => post({ print: { text, stream } }),
-	listen: holder => startTimers(holder, handler => showAfter(runTimer(holder, hooks, handler))),
+	listen: holder => holder.timers && startTimers(holder, handler => showAfter(runTimer(holder, hooks, handler))), // host-timers.js
 	arrived: (holder, handler) => holder === site && showAfter(runTimer(holder, hooks, handler)),
 };
 

@@ -69,14 +69,14 @@ impl ImportManager {
 	fn emit_host_imports(&mut self, type_manager: &mut TypeManager, ctx: &mut Context) {
 		// Type for fetch: (i32, i32) -> (i32, i32)
 		// Takes (url_ptr, url_len), returns (result_ptr, result_len); a negative length marks a failure reason
-		let fetch_type_idx = type_manager.add_function_type(
+		let fetch_type_idx = type_manager.function_type(
 			vec![ValType::I32, ValType::I32],
 			vec![ValType::I32, ValType::I32],
 		);
 
 		// Type for run: (i32, i32) -> i64
 		// Takes (wasm_ptr, wasm_len), returns result value
-		let run_type_idx = type_manager.add_function_type(
+		let run_type_idx = type_manager.function_type(
 			vec![ValType::I32, ValType::I32],
 			vec![ValType::I64],
 		);
@@ -87,7 +87,7 @@ impl ImportManager {
 		Self::register_import(ctx, "host_fetch");
 
 		// fetch_within: (url_ptr, url_len, timeout_ms: i64) -> (result_ptr, result_len), for an explicit timeout
-		let fetch_within_type_idx = type_manager.add_function_type(
+		let fetch_within_type_idx = type_manager.function_type(
 			vec![ValType::I32, ValType::I32, ValType::I64],
 			vec![ValType::I32, ValType::I32],
 		);
@@ -101,7 +101,7 @@ impl ImportManager {
 		Self::register_import(ctx, "host_read");
 
 		// warn: (message_ptr, message_len) -> (), a runtime warning (diagnostic::report_runtime_warning)
-		let warn_type_idx = type_manager.add_function_type(vec![ValType::I32, ValType::I32], vec![]);
+		let warn_type_idx = type_manager.function_type(vec![ValType::I32, ValType::I32], vec![]);
 		self.imports
 			.import("host", "warn", EntityType::Function(warn_type_idx));
 		Self::register_import(ctx, "host_warn");
@@ -115,7 +115,7 @@ impl ImportManager {
 	/// Emit WASI imports (fd_write from wasi_snapshot_preview1)
 	fn emit_wasi_imports(&mut self, type_manager: &mut TypeManager, ctx: &mut Context) {
 		// Type for fd_write: (fd: i32, iovs: i32, iovs_len: i32, nwritten: i32) -> i32
-		let fd_write_type_idx = type_manager.add_function_type(
+		let fd_write_type_idx = type_manager.function_type(
 			vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
 			vec![ValType::I32],
 		);
@@ -150,7 +150,7 @@ impl ImportManager {
 		imports.sort_by(|(a, ..), (b, ..)| a.cmp(b));
 
 		for (name, library, import_name, params, results) in imports {
-			let type_idx = type_manager.add_function_type(params, results);
+			let type_idx = type_manager.function_type(params, results);
 
 			// Import from library module (e.g., "m" for libm, "c" for libc)
 			self.imports

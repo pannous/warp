@@ -386,10 +386,19 @@ impl WasmGcEmitter {
 	/// list_text(list, separator), the text of a list (`str(xs)`), also takes nested lists, each as "[…]" ("{…}" for a
 	/// map), entries as "key:value", symbols as their names and texts quoted (P126: `["a" "b"]`, `p{name:"a"}`)
 	fn emit_list_join(&mut self) {
-		for (name, nested) in [(LIST_JOIN, false), (LIST_TEXT, true)] {
-			if self.should_emit_function(name) {
-				self.emit_joining(name, nested);
-			}
+		let joinings = [(LIST_JOIN, false), (LIST_TEXT, true)].into_iter().filter(|(name, _)| self.should_emit_function(name)).collect::<Vec<_>>();
+		if joinings.is_empty() {
+			return;
+		}
+		// the functions both call, once
+		self.emit_text_quoted();
+		self.emit_text_heap_global();
+		self.emit_int_to_decimal();
+		self.emit_exact_text();
+		self.emit_float_text(); // after int_to_decimal, which it calls
+		self.emit_uncertain_text(); // after float_text and text_concat, which it calls
+		for (name, nested) in joinings {
+			self.emit_joining(name, nested);
 		}
 	}
 
@@ -441,12 +450,6 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_joining(&mut self, name: &'static str, nested: bool) {
-		self.emit_text_quoted();
-		self.emit_text_heap_global();
-		self.emit_int_to_decimal();
-		self.emit_exact_text();
-		self.emit_float_text(); // after int_to_decimal, which it calls
-		self.emit_uncertain_text(); // after float_text and text_concat, which it calls
 		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
