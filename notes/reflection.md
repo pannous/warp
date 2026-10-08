@@ -31,8 +31,11 @@ custom section, `warp.meta`, kept unstripped.
 1. Compile time (free): the analyzer knows the static type of x: class layouts (fields, methods), function
    signatures, effects (effects.rs), units (static_units.rs), module words (modules.rs std_module_definitions). The
    answer is a constant list/text.
-2. Run time, only when the static type is unknown (`any`, a value read from data, a loaded .wasm): ONE host call reads
-   the module's `warp.meta` section (and the name section for exports), cached per module.
+2. Run time, only when the static type is unknown: a value of one of the program's own classes (`f(o) := o.fields`,
+   `dir(xs#1)`) needs no host call, every class is known at compile time: a type test over them picks the names
+   (`if o is P then ["x" "y"] else …`, reflection.rs Objects::dispatched; a class's own member of that name is read as
+   written; the last else is the field read as written, for `dir` the keys). Values from outside the program (a
+   loaded .wasm, data of another program): ONE host call reads the module's `warp.meta` section, cached per module.
 3. Warp objects (maps, Nodes) answer from their own keys at run time (`keys`, already there).
 
 ## warp.meta layout
@@ -57,3 +60,6 @@ Warp notation text (parsed by the reader we already have), one map:
    lib/fourty_two`) done: reflection::lower_module_words after modules::resolve, the sorted names from
    wasm_modules::exports. Not yet: components (`use wasm "x.wasm" as lib`, their exports are read only at run time).
 5. warp.meta section (absorbing warp.units) + the run-time host call for `any`-typed values; playground reader too.
+   Done first: run-time names of the program's own classes by type dispatch (Sources 2). Agreed with warp-worker
+   (2026-10-08): web switches static_units with_result_units / module_units and the playground reader to the `units`
+   entry, text byte for byte; warp-worker owns `x.unit` once quantities live in variables.

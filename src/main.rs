@@ -37,6 +37,7 @@ const MACHINE_CODE_EXTENSION: &str = "cwasm";
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
 /// `warp run <file>`: the program runs, no executable is left (P105)
 const RUN_PREFIX: &str = "run ";
+const TEST_WORD: &str = "test";
 const RUNTIME_STUB_NAME: &str = "warp-runtime";
 const RUNTIME_STUB_VARIABLE: &str = "WARP_RUNTIME_STUB";
 /// The crate of the stub in warp's source checkout
@@ -110,6 +111,12 @@ fn program_file(args: &[String]) -> Option<(bool, &str, &[String])> {
     let file = if only_run { 2 } else { 1 };
     let path = args.get(file).filter(|path| path.ends_with(".wasp") || path.ends_with(".warp"))?;
     Some((only_run, path.as_str(), &args[file + 1..]))
+}
+
+/// `warp test file.warp`: the program file whose tests run
+fn test_file(args: &[String]) -> Option<&str> {
+    let path = args.get(2).filter(|path| path.ends_with(".wasp") || path.ends_with(".warp"))?;
+    args.get(1).is_some_and(|word| TEST_WORD == word).then_some(path.as_str())
 }
 
 /// What the command line asks for: a file, a subcommand (`eval`, `compile`, `verify`, `tool` …) or code to evaluate
@@ -212,6 +219,17 @@ fn run_command(args: &[String]) {
                 std::process::exit(1);
             }
         }
+    } else if let Some(path) = test_file(args) {
+        // P209, P210: the file's `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero
+        diagnostic::show_lines_of(&source_of(path));
+        let result = warp::pipeline::for_tests(|| eval(path));
+        let failed = matches!(result, Node::Error(_));
+        match result.drop_meta() {
+            Node::Text(summary) => println!("{summary}"),
+            Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => println!("{}", summary.drop_meta().serialize().trim_matches('"')),
+            other => show(other, ""),
+        }
+        std::process::exit(if failed { 1 } else { 0 });
     } else if let Some((only_run, path, program_arguments)) = program_file(args) {
         // P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
         warp::std_adapters::set_program_arguments(program_arguments.to_vec()); // `use os; args`
@@ -242,7 +260,7 @@ fn run_command(args: &[String]) {
         }
     } else if arg_string == "test" || arg_string == "tests" {
         {
-            println!("Run tests with: cargo test");
+            println!("warp test <file.warp> runs the tests of a program; warp's own tests run with: cargo test");
         }
     } else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
         println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");

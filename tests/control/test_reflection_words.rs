@@ -101,3 +101,11 @@ fn a_modules_exports() {
 	is!("import tests/fixtures/wasm/fourty_two; (\"ft\" in dir(fourty_two)) > 0", true);
 	is!("import tests/fixtures/wasm/fourty_two; fourty_two.exports#1", "add32");
 }
+
+// step 5: an object known only at run time, one of the program's classes: a type test over them picks its names
+#[test]
+fn fields_of_an_instance_known_at_run_time() {
+	is!(&format!("{POINT}; class Q{{z:int}}; f(o) := o.fields; f(Q(3))"), warp::texts(vec!["z"]));
+	is!(&format!("{POINT}; f(o) := o.methods; f(P(1, 2))"), warp::texts(vec!["sq"]));
+	is!(&format!("{POINT}; xs = [P(1, 2)]; dir(xs#1)"), warp::texts(vec!["x", "y", "sq"]));
+}

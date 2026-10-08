@@ -1,0 +1,9 @@
+square(x) := x * x
+test square(3) == 10
+test "squares" {
+  check square(4) == 15
+  print "not reached"
+}
+test "fine" { check square(1) == 1 }
+test square(2) == 4
+print "after the tests"

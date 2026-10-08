@@ -141,6 +141,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   `local["k"]` canonical (localStorage), `storage["k"]` alias, `session["k"]` sessionStorage (natively in memory);
   clipboard `clipboard.write("text")` (navigator.clipboard.writeText), `clipboard.read()` = `clipboard` (native only;
   in a browser page reading stays a loud error, it is async).
+  IndexedDB (word choice, warp-web, branch database-store 020211abc): `database["k"]` canonical, `indexedDB["k"]`
+  alias, same forms as local/session (database.k, delete, keys); natively <program>.database.json beside the program.
 - Trailing percent (default, warp-d0, card postfix-words): a `%` with nothing after it is a percent, x/100 exact:
   `10%` = 1/10, `200 * 10%` = 20, `50 % of 200` = 100 (`of` multiplies after a percent). CSS values like
   `width: 50%` stay as written; `whenever battery < 20%` keeps its battery-level reading. Infix `%` stays remainder.
