@@ -39,3 +39,9 @@ data/
 !web/playground/lib/libc.wasm
 # `stored x = v` keeps its values beside the program (src/lowering/stored_values.rs)
 *.stored.json
+# the executables `warp build` and running a sample leave beside their source (card cwd-artifacts)
+/samples/*
+!/samples/*.*
+!/samples/*/
+/samples/*.wasm
+/samples/*.wast
