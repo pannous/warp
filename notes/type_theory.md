@@ -28,6 +28,7 @@ expr       e ::= v | x                          main-level name (store)
                | y                              local (parameter or let), bound by substitution
                | e + e | e - e | e * e | e < e | e == e     (`-` and `*` take numbers only; `+` also texts)
                | if e then e else e | while e do e | e ; e
+               | for y in e { e }               the body once per list item, y the item; gives ø
                | e # e                          1-based element, `xs#1`
                | e ++ e                         list append, what `xs + [v]` / `xs.add(v)` lower to
                | x = e | init x e               assignment / first binding of a main-level name
@@ -157,6 +158,7 @@ Model choices to keep in mind (each a simplification of warp, not a claim about 
 | --- | --- | --- |
 | `x: bool = 2`, `b = true; b = 2`, `f(b: bool) := b; f(2)` | int ≰ bool (b then prints `yes`) | bool-assign |
 | `s: Shape = Circle("a", 2); s.r`, `c: Color = rgb(1, 2, 3); c.r` | Shape has no field r (warp looks it up at run time) | upcast-field |
+| `s = 0; for x in 3 { s += x }; s` | a for over an int (warp fails at run time, "not a list") | non-list |
 
 P199: a bool place (a declared variable or parameter, or a variable whose first value is evidently bool) takes
 the literals 1 and 0 as yes and no. The exporter elaborates them to `.bool` (src/law/type_model.rs bool_literal),
@@ -233,8 +235,8 @@ W0 now has `arith op a b`, which takes numbers only.
   name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
   anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
   The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
-  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121. Most of the rest:
-  imports (`use`), `for` loops, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
+  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600. Most of the rest:
+  imports (`use`), ranges `1..3`, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
 
 ## Globals
 
@@ -245,6 +247,17 @@ exporter collects every name declared `global` anywhere first. In warp a functio
 refuses it. Elaboration runs twice so a function can read a main-level name whatever their order
 (`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet: `global float y = …`
 (the exporter does not read the type word yet), `global x; x` (read before any value).
+
+## For loops
+
+`for y in l { b }` (`Expr.forIn`): l evaluates first; an empty list gives ø, `h :: t` steps to `b[h/y] ; for y in t
+{ b }`, any other value is the error "not a list". Typing: y has the list's element type (`listElem`, `any` when the
+list's type is not a list type), the loop has type `unit`; the checker also demands a list type (`listy`), so
+`for x in 3` is rejected (hole non-list). The exporter refuses `it`, a type word as the variable (type filters, unit
+walks), ranges, and a variable that is a main-level name (warp's loop assigns that name, so `x = 5; for x in [1] {}; x`
+is 1 there; W0's y is a local). `break` in a loop is not in W0 (as for `while`). Value difference found:
+`n: int = 0; for x in [1, "a"] { n = x }; n` is 97 in warp, an error in W0 (the item skips the P204 check, card
+item-unchecked).
 
 ## Equality (P208)
 

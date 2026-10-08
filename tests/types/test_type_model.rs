@@ -150,10 +150,15 @@ const CORPUS: &[&str] = &[
 
 	"class Shape { name: text }; class Circle extends Shape { r: int }; s: Shape = Circle(\"a\", 2); s.r",
 	"type Color = red | rgb(r: int, g: int, b: int); c: Color = rgb(1, 2, 3); c.r",
+
+	"s = 0; for x in [1, 2, 3] { s += x }; s",
+	"out = []; for x in [1, 2] { out.add(x) }; out",
+	"class P { x: int }; s = 0; for p in [P(1), P(2)] { s += p.x }; s",
+	"t = \"\"; for w in [\"a\", \"b\"] { t = t + w }; t",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[];
+const KNOWN_HOLES: &[(&str, &str)] = &[("s = 0; for x in 3 { s += x }; s", "non-list")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
@@ -163,6 +168,7 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	("class P { x: int }; p = P(1); q = P(1); p === q", "same-identity"),
 	("class P { x: int }; p = P(1); q = P(1); p !== q", "same-identity"),
+	("n: int = 0; for x in [1, \"a\"] { n = x }; n", "item-unchecked"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";

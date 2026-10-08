@@ -33,6 +33,7 @@ const UNIT_TYPE: &str = ".unit";
 const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
+const FOR_KEYWORD: &str = "for";
 /// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
 const UNION_TYPE: &str = "(Ty.joinAll ";
 const UNION_JOINER: &str = " or ";
@@ -613,6 +614,20 @@ impl Exporter {
 		Ok(format!(".assign {} ({value})", quoted(name)))
 	}
 
+	/// `for x in xs { body }`: x is a local of the body; a `break` in it ends the loop. A type word or `it` as the
+	/// variable (type filters, unit walks) is not in W0, nor a main-level name (warp's loop assigns it, W0's shadows it)
+	fn for_loop(&mut self, variable: &Node, list: &Node, body: &Node) -> Lean {
+		let variable = match variable.drop_meta() {
+			Node::Symbol(name) if name != crate::lambdas::IMPLICIT_PARAMETER && type_of_word(name).is_none() && !self.names.contains_key(name) => name.clone(),
+			_ => return Err(format!("not in W0: the loop variable {}", variable.serialize().trim())),
+		};
+		let list = self.expression(list)?;
+		self.locals.push(variable.clone());
+		let body = self.breaking_in(None, |exporter| exporter.block(body));
+		self.locals.pop();
+		Ok(format!(".forIn {} ({list}) ({})", quoted(&variable), body?))
+	}
+
 	fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
 		Ok(format!("{constructor} ({}) ({})", self.expression(left)?, self.expression(right)?))
 	}
@@ -653,6 +668,7 @@ impl Exporter {
 			Node::List(items, _, _) if items.first().is_some_and(|class| self.classes.contains_key(&class.name())) => self.construction(&items[0].name(), &items[1..]),
 			Node::List(items, _, _) => match items.as_slice() {
 				[marker, body, handler] if is_word(marker, TRY_MARKER) => self.binary(".tryCatch", body, handler),
+				[for_word, variable, in_word, list, body] if is_word(for_word, FOR_KEYWORD) && is_word(in_word, IN_KEYWORD) => self.for_loop(variable, list, body),
 				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
 					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
 					_ => unsupported(node),
