@@ -24,12 +24,12 @@ fn a_warp_function_is_called_back_by_javascript() {
 	is!("use js Array; use js JSON; JSON.stringify(Array.from([5, 6], (x, i) => i))", "[0,1]");
 }
 
-// natively node waits for the callback's answer on its stdin: a request there is not read yet (card js-nested-callbacks)
+// natively node answers the warp function's own foreign calls while it waits for its answer (card js-nested); a promise
+// there cannot be waited for
 #[test]
-fn a_warp_function_called_back_calls_javascript_in_the_page() {
-	let code = "use js Array; use js Math; use js JSON; JSON.stringify(Array.from([1, 3], x => Math.max(x, 2)))";
-	#[cfg(not(feature = "native"))]
-	is!(code, "[2,3]");
+fn a_warp_function_called_back_calls_javascript() {
+	is!("use js Array; use js Math; use js JSON; JSON.stringify(Array.from([1, 3], x => Math.max(x, 2)))", "[2,3]");
+	is!("use js Array; use js JSON; JSON.stringify(Array.from([[1], [2, 3]], xs => JSON.stringify(Array.from(xs, x => x * 10))))", "[\"[10]\",\"[20,30]\"]");
 	#[cfg(feature = "native")]
-	fails_with(code, "cannot call foreign code itself yet");
+	fails_with("use js Array; use js Promise; Array.from([1], x => Promise.resolve(x))", "cannot wait for");
 }
