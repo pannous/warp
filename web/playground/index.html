@@ -4,13 +4,17 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>warp playground</title>
+	<!-- inline, so no favicon.ico request fails in the console (card console-errors) -->
+	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
 	<script>
 		// tasks on Workers need shared memory, which needs cross-origin isolation: a service worker adds the headers
-		// GitHub Pages cannot send, then the page reloads once under it (coi-serviceworker.js)
-		if (!self.crossOriginIsolated && "serviceWorker" in navigator && !sessionStorage.getItem("isolating")) {
-			navigator.serviceWorker.register("coi-serviceworker.js").then(() => {
+		// GitHub Pages cannot send, then the page reloads once under it (coi-serviceworker.js), once it is active: a reload
+		// before comes back without it. A hard reload bypasses it, so an isolated page clears the flag for the next try
+		if (self.crossOriginIsolated) sessionStorage.removeItem("isolating");
+		else if ("serviceWorker" in navigator && !sessionStorage.getItem("isolating")) {
+			navigator.serviceWorker.register("coi-serviceworker.js").then(() => navigator.serviceWorker.ready).then(() => {
 				sessionStorage.setItem("isolating", "1");
-				if (!navigator.serviceWorker.controller) location.reload();
+				location.reload();
 			}, () => {});
 		}
 	</script>
