@@ -1,5 +1,5 @@
 
-// shared code with wasp tests etc
+// shared code with warp tests etc
 // only lib.rs allows reexporting as:
 // use warp::extensions::*; etc
 // use crate::extensions::*; // crate for F12
@@ -42,7 +42,7 @@ pub mod shared;
 #[cfg(feature = "native")]
 pub mod paint;
 pub mod wasm_optimizer;
-pub mod wasp_parser;
+pub mod warp_parser;
 pub mod wisp_parser;
 pub mod uniscript_entities;
 pub mod operators;
@@ -96,7 +96,7 @@ pub mod package_tools;
 pub mod web;
 
 // ==================== Core Re-exports ====================
-// Node AST - the heart of wasp
+// Node AST - the heart of warp
 pub use node::{Bracket, Node, Separator};
 pub use operators::{is_function_keyword, Op, FUNCTION_KEYWORDS};
 // Node convenience constructors
@@ -104,7 +104,7 @@ pub use node::{block, codepoint, error, error_node, float, floats, data, int, in
 // Node variants (except Number/List which conflict with extension types)
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
-pub use wasp_parser::{parse, parse_data, parse_file, parse_xml, WaspParser};
+pub use warp_parser::{parse, parse_data, parse_file, parse_xml, WarpParser};
 pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
 pub use type_kinds::{AstKind, NodeKind, Kind, TypeRegistry, TypeDef, FieldDef, USER_TYPE_TAG_START, extract_instance_values, RawFieldValue};

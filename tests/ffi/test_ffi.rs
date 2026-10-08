@@ -60,7 +60,7 @@ fn test_ffi_strlen() {
 	// Test: char* . int32 (strlen from libc);
 	is!("import strlen from \"c\"\nstrlen(\"hello\")", 5);
 	is!("import strlen from \"c\"\nstrlen(\"\")", 0);
-	is!("import strlen from \"c\"\nstrlen(\"Wasp\")", 4);
+	is!("import strlen from \"c\"\nstrlen(\"Warp\")", 4);
 }
 
 #[test]
@@ -70,8 +70,8 @@ fn test_ffi_atof() {
 }
 
 #[test]
-fn test_ffi_fmin_wasp_file() {
-	is!("tests/wasp/ffi/test_ffi_fmin.wasp", 2.1);
+fn test_ffi_fmin_warp_file() {
+	is!("tests/warp/ffi/test_ffi_fmin.warp", 2.1);
 }
 
 #[test]
@@ -296,13 +296,13 @@ fn test_import_from_pattern_emit() {
 
 #[test]
 fn test_c_type_mapping() {
-	// assert!(mapCTypeToWasp("double") == float64t);
-	//     assert!(mapCTypeToWasp("float") == float32t);
-	//     assert!(mapCTypeToWasp("int") == int32t);
-	//     assert!(mapCTypeToWasp("long") == i64);
-	//     assert!(mapCTypeToWasp("char*") == charp);
-	//     assert!(mapCTypeToWasp("const char*") == charp);
-	//     assert!(mapCTypeToWasp("void") == nils);
+	// assert!(mapCTypeToWarp("double") == float64t);
+	//     assert!(mapCTypeToWarp("float") == float32t);
+	//     assert!(mapCTypeToWarp("int") == int32t);
+	//     assert!(mapCTypeToWarp("long") == i64);
+	//     assert!(mapCTypeToWarp("char*") == charp);
+	//     assert!(mapCTypeToWarp("const char*") == charp);
+	//     assert!(mapCTypeToWarp("void") == nils);
 }
 
 // ============================================================================
@@ -313,7 +313,7 @@ fn test_c_type_mapping() {
 fn test_ffi_sdl_init() {
 	// Test: SDL_Init - Initialize SDL with timer subsystem (works headless);
 	// Returns 0 on success, non-zero on error
-	is!("tests/wasp/ffi/sdl/sdl_init.wasp", 0);
+	is!("tests/warp/ffi/sdl/sdl_init.warp", 0);
 
 	// Test: SDL_Quit - Clean up SDL
 	is!("import SDL_Quit from 'SDL2'\nSDL_Quit()\n42", 42);
@@ -321,21 +321,21 @@ fn test_ffi_sdl_init() {
 
 #[test]
 fn test_ffi_sdl_window() {
-	is!("tests/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
+	is!("tests/warp/ffi/sdl/sdl_init_quit.warp", 1);
 }
 
 #[test]
 fn test_ffi_sdl_version() {
 	// Test: SDL_GetVersion - Get SDL version info
 	// This tests struct parameter passing via FFI
-	is!("tests/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
+	is!("tests/warp/ffi/sdl/sdl_init_quit.warp", 1);
 }
 
 #[test]
 fn test_ffi_sdl_combined() {
 	// Combined test: Multiple SDL function imports
 	// Tests that we can import multiple SDL functions in one program
-	is!("tests/wasp/ffi/sdl/sdl_get_ticks.wasp", 100);
+	is!("tests/warp/ffi/sdl/sdl_get_ticks.warp", 100);
 }
 
 #[test]
@@ -345,7 +345,7 @@ fn test_ffi_sdl_parallel_runs() {
 		for _ in 0..8 {
 			threads.spawn(|| {
 				for _ in 0..10 {
-					is!("tests/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
+					is!("tests/warp/ffi/sdl/sdl_init_quit.warp", 1);
 				}
 			});
 		}
@@ -356,7 +356,7 @@ fn test_ffi_sdl_parallel_runs() {
 #[ignore = "requires SDL2 library and FFI signatures"]
 fn test_ffi_sdl_debug() {
 	// print results of SDL functions to debug FFI
-	is!("tests/wasp/ffi/sdl/sdl_debug.wasp", 1);
+	is!("tests/warp/ffi/sdl/sdl_debug.warp", 1);
 }
 
 #[test]
@@ -364,7 +364,7 @@ fn test_ffi_sdl_debug() {
 fn test_ffi_sdl_red_square_demo() {
 	// DEMO: Display a red square using SDL2 via FFI
 	// This will show an actual window with graphics
-	is!("tests/wasp/ffi/sdl/sdl_red_square_demo.wasp", 1);
+	is!("tests/warp/ffi/sdl/sdl_red_square_demo.warp", 1);
 }
 
 #[test]
@@ -584,7 +584,7 @@ fn test_ffi_abs_from_c() {
 }
 
 #[test]
-#[allow(clippy::approx_constant)] // 3.14 is the wasp literal under test, not π
+#[allow(clippy::approx_constant)] // 3.14 is the warp literal under test, not π
 fn test_ffi_fabs_from_m() {
 	// fabs from libm takes f64 and returns f64
 	is!("import fabs from 'm'\nfabs(-3.14)", 3.14);

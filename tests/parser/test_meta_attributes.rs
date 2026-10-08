@@ -5,7 +5,7 @@
 use crate::common::fails_with;
 use crate::is;
 use warp::wasm_emitter::eval;
-use warp::wasp_parser::{parse, parse_data};
+use warp::warp_parser::{parse, parse_data};
 
 const POINT: &str = "class point{x:int y:int}; ";
 

@@ -1,5 +1,5 @@
 //! Warnings are reported and compilation continues, unless warnings are errors:
-//! `use strict` in wasp, `--strict` on the command line, `diagnostic::with_warning_mode` from Rust.
+//! `use strict` in warp, `--strict` on the command line, `diagnostic::with_warning_mode` from Rust.
 //! `warning(message)` reports at runtime: "" as a warning, an Error value when warnings are errors.
 
 use warp::diagnostic::{take_runtime_warnings, with_warning_mode, WarningMode};

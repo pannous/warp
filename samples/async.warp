@@ -1,0 +1,49 @@
+// Concurrency in warp: no async keyword, no colored functions (wiki/async.md).
+// A function never says how it is called: the caller decides with `go`. A task stands in for its value,
+// `await` says where the program waits for it.
+
+fetch_user(id) := { sleep(300 ms); "user \(id)" }
+fetch_posts(id) := { sleep(300 ms); [id, id + 1] }
+
+// the same function, called plainly: it simply runs
+print fetch_user(1)
+
+// called with go: it runs on its own while the program goes on
+user = go fetch_user(7)
+posts = go fetch_posts(7)
+print "both started"
+// await waits here, about 300 ms after both started, not 600
+print await user
+print await posts
+
+// a block runs as a task too; the program waits for its go blocks before it ends
+go {
+	sleep(100 ms)
+	print "from a go block"
+}
+
+// many tasks at once, their results in order
+square(x) := { sleep(100 ms); x * x }
+jobs = []
+for i in 1 to 5 { jobs.add(go square(i)) }
+print await all jobs
+
+// or the same as a parallel map (map stays: plain broadcasting `square [1, 2, 3]` runs inline, not in tasks)
+print @parallel [1, 2, 3].map(square)
+
+// tasks share nothing but what is declared shared; `+=` on it is atomic
+shared done = false
+shared count = 0
+go {
+	for i in 1 to 100 { count += 1 }
+	done = true
+}
+// a task that waits until done holds
+finished = after done return count
+print await finished
+
+// a cancelled task falls back
+shared never = false
+waiting = after never return "late"
+cancel waiting
+print await waiting or "cancelled"

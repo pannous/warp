@@ -1,4 +1,4 @@
-// card cli-std: a program whose file is named like a standard module (hash.wasp saying `use hash`) uses the standard
+// card cli-std: a program whose file is named like a standard module (hash.warp saying `use hash`) uses the standard
 // module, never its own file
 use warp::wasm_emitter::eval;
 
@@ -7,7 +7,7 @@ fn a_program_named_like_a_std_module_uses_the_std_module() {
 	let folder = crate::common::scratch_directory("std_named_program");
 	std::fs::create_dir_all(&folder).expect("scratch folder");
 	let code = "use hash; crc32(\"abc\")";
-	let program = folder.join("hash.wasp");
+	let program = folder.join("hash.warp");
 	std::fs::write(&program, code).expect("the program file");
 	let result = warp::modules::with_program_file(&program, || eval(code));
 	assert_eq!(result.serialize().trim(), "891568578");
@@ -19,9 +19,9 @@ fn a_program_named_like_a_std_module_uses_the_std_module() {
 fn a_file_shadowing_a_std_module_is_named() {
 	let folder = crate::common::scratch_directory("std_shadowing_file");
 	std::fs::create_dir_all(&folder).expect("scratch folder");
-	std::fs::write(folder.join("hash.wasp"), "greeting = \"hi\"").expect("the shadowing file");
+	std::fs::write(folder.join("hash.warp"), "greeting = \"hi\"").expect("the shadowing file");
 	let code = "use hash; crc32(\"abc\")";
-	let result = warp::modules::with_program_file(&folder.join("app.wasp"), || eval(code));
+	let result = warp::modules::with_program_file(&folder.join("app.warp"), || eval(code));
 	let message = result.serialize();
-	assert!(message.contains("finds the file") && message.contains("hash.wasp"), "{message}");
+	assert!(message.contains("finds the file") && message.contains("hash.warp"), "{message}");
 }

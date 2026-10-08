@@ -31,7 +31,7 @@ fn test_float_local_inside_float_function() {
 	is!("quarters(n) := {q=1/4; q*n}; quarters(2)", 0.5);
 }
 
-#[test] // samples/raytracer.wasp: `normalize(v) := mul(v, 1.0 / length(v))` with length returning a float typed s as Int
+#[test] // samples/raytracer.warp: `normalize(v) := mul(v, 1.0 / length(v))` with length returning a float typed s as Int
 fn test_parameter_passed_a_float_returning_call() {
 	is!("def half(x) := sqrt(x) / 2; def scale(v, s) := v * s; scale(2, 1.0 / half(16.0))", 1.0);
 	is!("def f() := 0.5 * random() + 1.5; def g(s) := s * 2; g(f()) >= 3", true);

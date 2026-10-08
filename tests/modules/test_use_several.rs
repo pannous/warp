@@ -1,6 +1,6 @@
 //! One `use` naming several modules (card std-use): `use list, text` and `use list text` use each of them
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn a_use_with_commas_uses_each_module() {

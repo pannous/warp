@@ -22,7 +22,7 @@ const IMPLICIT_TRAIT_PREFIX: &str = "has·";
 const SUPER: &str = "super";
 const SUPER_INFIX: &str = "·super·";
 const GLOBAL_KEYWORD: &str = "global";
-use crate::wasp_parser::CONSTRUCTOR_WORD;
+use crate::warp_parser::CONSTRUCTOR_WORD;
 /// A property's setter `set age(v) {…}` is the method `age·set(self, v)`, run by `p.age = v`
 const SETTER_SUFFIX: &str = "·set";
 /// The value a method changing its object gives besides it, `pop·value` in the method and `pop·result` of a call, and
@@ -33,7 +33,7 @@ const RESULT_SUFFIX: &str = "·result";
 const CAST_VALUE: &str = "cast·value";
 const CAST_PLACEHOLDER: &str = "cast_placeholder";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
-/// Other languages' method names (Python's deque, Java's Deque and Queue, JS's Array and Set) and the wasp methods they
+/// Other languages' method names (Python's deque, Java's Deque and Queue, JS's Array and Set) and the warp methods they
 /// mean, the first one the class defines taken, with a note; only on a class that does not define the name itself
 const METHOD_ALIASES: [(&str, &[&str]); 23] = [
 	("clone", &["copy"]), // clone always calls the class's copy (P207)
@@ -50,9 +50,9 @@ const METHOD_ALIASES: [(&str, &[&str]); 23] = [
 const SIZE_WORDS: [&str; 4] = ["size", "count", "len", "length"];
 /// The keywords of a field: Swift's `var count = 0`, `let`, Kotlin's `val`
 const FIELD_KEYWORDS: [&str; 3] = ["var", "let", "val"];
-/// Member modifiers that may mean something in wasp, so they get no note that wasp needs them not
+/// Member modifiers that may mean something in warp, so they get no note that warp needs them not
 const SILENT_MODIFIERS: [&str; 1] = ["async"];
-/// The constructor names of other languages, aliases of `init` (P162): wasp's old `value`, JavaScript, Python, Ruby,
+/// The constructor names of other languages, aliases of `init` (P162): warp's old `value`, JavaScript, Python, Ruby,
 /// PHP, VB.NET, Delphi, Rust; besides a method named like its class (C++, Java, C#)
 const CONSTRUCTOR_ALIASES: [&str; 8] = ["value", "constructor", "__init__", "initialize", "__construct", "New", "Create", "new"];
 /// The methods that give a class its text, equality and order (the witnesses of Printable, Equatable, Comparable),
@@ -158,7 +158,7 @@ fn method_aliases(node: Node) -> Node {
 	with_method_aliases(node, &instances)
 }
 
-/// The method of the class for `written`: the name itself, or the alias's wasp method, or for a size word the size
+/// The method of the class for `written`: the name itself, or the alias's warp method, or for a size word the size
 /// method the class defines
 fn aliased_method(written: &str, defined: &[String]) -> Option<String> {
 	if defined.iter().any(|method| method == written) {
@@ -200,7 +200,7 @@ fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String,
 	}
 }
 
-/// json's word for a program with classes (lib/json.wasp): the classes' names go along, so an instance is its fields
+/// json's word for a program with classes (lib/json.warp): the classes' names go along, so an instance is its fields
 const TO_JSON_WORD: &str = "to_json";
 const TO_JSON_OF_CLASSES_WORD: &str = "to_json_of_classes";
 /// Other languages' calls giving an instance's json or its fields: Kotlin's `Json.encodeToString(p)` is to_json(p),
@@ -352,7 +352,7 @@ pub(crate) fn class_fields(node: &Node) -> std::collections::HashMap<String, Vec
 pub(crate) fn class_members(node: &Node) -> std::collections::HashMap<String, (Option<String>, Vec<String>)> {
 	let mut classes = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
-		let parent = name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
+		let parent = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
 		classes.insert(name.drop_meta().name(), (parent, class_items(body).iter().filter_map(item_name).collect()));
 	});
 	classes
@@ -369,7 +369,7 @@ pub(crate) struct ClassLayout {
 pub(crate) fn class_layouts(node: &Node) -> std::collections::HashMap<String, ClassLayout> {
 	let mut layouts = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
-		let parent = name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
+		let parent = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
 		let class = name.drop_meta().name();
 		let (mut fields, mut methods) = (vec![], vec![]);
 		for item in class_items(body) {
@@ -645,7 +645,7 @@ fn is_place(node: &Node) -> bool {
 fn checked_cast(object: Node, class: &str) -> Node {
 	let held = Node::Symbol(CAST_VALUE.to_string());
 	let message = format!("{} is no {class}", object.serialize());
-	let check = crate::wasp_parser::parse(&format!("if not ({CAST_PLACEHOLDER} is {class}) {{ raise {message:?} }}"));
+	let check = crate::warp_parser::parse(&format!("if not ({CAST_PLACEHOLDER} is {class}) {{ raise {message:?} }}"));
 	let statements = vec![Node::Key(Box::new(held.clone()), Op::Assign, Box::new(object)), crate::library_words::substitute(check, CAST_PLACEHOLDER, &held), held];
 	Node::List(statements, Bracket::Round, Separator::Semicolon)
 }
@@ -858,7 +858,7 @@ fn dispatched_by_class(receiver: &Node, member: Node, methods: &MethodNames, ren
 	methods.defined_by.iter().filter(|(method, _)| *method == name).fold(library_call, |otherwise, (_, class)| {
 		let bindings = [("RECEIVER", receiver.clone()), ("CLASS", Node::Symbol(class.clone())), ("METHOD", method_call.clone()), ("OTHERWISE", otherwise)];
 		let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
-		crate::law::substitute(&crate::wasp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
+		crate::law::substitute(&crate::warp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
 	})
 }
 
@@ -1056,7 +1056,7 @@ fn copies(node: Node) -> Node {
 fn with_mixins(node: Node) -> Result<Node, Node> {
 	let mut mixins: Vec<(String, Vec<Node>)> = vec![];
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
-		if name.attribute(crate::wasp_parser::MIXIN_WORD).is_some() {
+		if name.attribute(crate::warp_parser::MIXIN_WORD).is_some() {
 			mixins.push((name.drop_meta().name(), class_items(body)));
 		}
 	});
@@ -1068,9 +1068,9 @@ fn with_mixins(node: Node) -> Result<Node, Node> {
 
 fn taking_in_mixins(node: Node, mixins: &[(String, Vec<Node>)]) -> Result<Node, Node> {
 	match node {
-		Node::Type { name, .. } if name.attribute(crate::wasp_parser::MIXIN_WORD).is_some() => Ok(Node::Empty),
+		Node::Type { name, .. } if name.attribute(crate::warp_parser::MIXIN_WORD).is_some() => Ok(Node::Empty),
 		Node::Type { name, body } => {
-			let mut taken: Vec<String> = name.attribute(crate::wasp_parser::WITH_KEYWORD).map(|names| match names.drop_meta() {
+			let mut taken: Vec<String> = name.attribute(crate::warp_parser::WITH_KEYWORD).map(|names| match names.drop_meta() {
 				Node::List(names, _, _) => names.iter().map(|name| name.drop_meta().name()).collect(),
 				single => vec![single.name()],
 			}).unwrap_or_default();
@@ -1089,8 +1089,8 @@ fn taking_in_mixins(node: Node, mixins: &[(String, Vec<Node>)]) -> Result<Node, 
 				};
 				items.extend(mixin_items.iter().filter(|item| item_name(item).is_none_or(|item| !own_names.contains(&item))).cloned());
 			}
-			let name = match name.attribute(crate::wasp_parser::EXTENDS_KEYWORD) {
-				Some(parent) => Node::Symbol(name.drop_meta().name()).with_attribute(crate::wasp_parser::EXTENDS_KEYWORD, parent.clone()),
+			let name = match name.attribute(crate::warp_parser::EXTENDS_KEYWORD) {
+				Some(parent) => Node::Symbol(name.drop_meta().name()).with_attribute(crate::warp_parser::EXTENDS_KEYWORD, parent.clone()),
 				None => Node::Symbol(name.drop_meta().name()),
 			};
 			Ok(Node::Type { name: Box::new(name), body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) })
@@ -1116,7 +1116,7 @@ fn inherit(node: Node) -> Result<(Node, Vec<Node>), Node> {
 	let mut classes: Vec<(String, Option<String>, Vec<Node>)> = vec![];
 	node.visit(&mut |part| {
 		if let Node::Type { name, body } = part {
-			let parent = name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
+			let parent = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
 			classes.push((name.drop_meta().name(), parent, class_items(body)));
 		}
 	});
@@ -1172,7 +1172,7 @@ fn keyword_method(words: &[Node]) -> Option<Node> {
 }
 
 /// A property's getter and setter as methods: `get age() {…}` is the getter `age := …`, `set age(v) {…}` the setter
-/// `age·set(v) := …`; the wasp form `age:{getter} set{setter}` has the new value as `it`
+/// `age·set(v) := …`; the warp form `age:{getter} set{setter}` has the new value as `it`
 fn accessors(words: &[Node]) -> Option<Vec<Node>> {
 	let [first, second] = words else { return None };
 	let method = |name: &str, parameters: Vec<Node>, body: &Node| {
@@ -1185,7 +1185,7 @@ fn accessors(words: &[Node]) -> Option<Vec<Node>> {
 	let is_block = |node: &Node| matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
 	match (first.drop_meta(), second.drop_meta()) {
 		// `get age() {…}`, `set age(v) {…}`
-		(Node::Symbol(word), Node::List(parts, _, _)) if crate::wasp_parser::ACCESSOR_WORDS.contains(&word.as_str()) => {
+		(Node::Symbol(word), Node::List(parts, _, _)) if crate::warp_parser::ACCESSOR_WORDS.contains(&word.as_str()) => {
 			let [call, body] = parts.as_slice() else { return None };
 			let Node::List(call, Bracket::Round, _) = call.drop_meta() else { return None };
 			let name = call.first()?.drop_meta().name();
@@ -1203,8 +1203,8 @@ fn accessors(words: &[Node]) -> Option<Vec<Node>> {
 		(Node::Key(name, Op::Colon | Op::None, getter), Node::Key(set, Op::Colon | Op::None, setter)) if set.drop_meta().name() == "set" && is_block(getter) && is_block(setter) => {
 			let name = name.drop_meta().name();
 			// `it` is the new value; named apart, so no pass reads the block as a lambda of `it`
-			let new_value = Node::Symbol(format!("{}{SETTER_SUFFIX}", crate::wasp_parser::IT_WORD));
-			let setter = renamed_symbol(setter.as_ref().clone(), crate::wasp_parser::IT_WORD, &new_value);
+			let new_value = Node::Symbol(format!("{}{SETTER_SUFFIX}", crate::warp_parser::IT_WORD));
+			let setter = renamed_symbol(setter.as_ref().clone(), crate::warp_parser::IT_WORD, &new_value);
 			Some(vec![method(&name, vec![], getter), method(&format!("{name}{SETTER_SUFFIX}"), vec![new_value], &setter)])
 		}
 		_ => None,
@@ -1243,11 +1243,11 @@ fn setter_calls(node: Node, setters: &[String]) -> Node {
 	}
 }
 
-/// A member without the words that change nothing in wasp: `mutating func f() {…}` is `func f() {…}`, Swift's
+/// A member without the words that change nothing in warp: `mutating func f() {…}` is `func f() {…}`, Swift's
 /// `var count = 0` the field `count = 0`
 fn without_modifiers(item: Node) -> Node {
 	let Node::List(words, bracket, separator) = item.drop_meta().clone() else { return item };
-	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::wasp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || FIELD_KEYWORDS.contains(&word.as_str()));
+	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::warp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || FIELD_KEYWORDS.contains(&word.as_str()));
 	let kept: Vec<Node> = words.iter().skip_while(|word| is_modifier(word)).cloned().collect();
 	if let Some(kept_word) = kept.first().map(leading_name).filter(|_| kept.len() < words.len()) {
 		let modifiers: Vec<String> = words[..words.len() - kept.len()].iter().map(|word| word.drop_meta().name()).collect();
@@ -1283,7 +1283,7 @@ fn nested_fields(words: &[Node]) -> Option<Node> {
 		Node::List(group, Bracket::None, _) => group.iter().all(|field| matches!(field.drop_meta(), Node::Symbol(_) | Node::Key(_, Op::Colon, _))),
 		_ => false,
 	};
-	let is_member_word = crate::operators::is_function_keyword(word) || is_constructor_word(word) || crate::wasp_parser::ACCESSOR_WORDS.contains(&word.as_str());
+	let is_member_word = crate::operators::is_function_keyword(word) || is_constructor_word(word) || crate::warp_parser::ACCESSOR_WORDS.contains(&word.as_str());
 	(!is_member_word && !fields.is_empty() && fields.iter().all(is_field)).then(|| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(block.clone())))
 }
 
@@ -1342,7 +1342,7 @@ fn class_attributes(node: Node, qualified: &[(String, String)]) -> Node {
 				return Node::Type { name, body };
 			}
 			let items = items.into_iter().map(|item| match is_attribute(&item) {
-				true => item.with_attribute(crate::wasp_parser::STATIC_KEYWORD, Node::True),
+				true => item.with_attribute(crate::warp_parser::STATIC_KEYWORD, Node::True),
 				false => item,
 			}).collect();
 			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
@@ -1521,7 +1521,7 @@ fn method_calls_named(node: &Node) -> std::collections::HashSet<String> {
 /// class without methods, which no later pass splits
 fn with_members(node: Node) -> Node {
 	match node {
-		Node::Type { name, body } if name.attribute(crate::wasp_parser::MIXIN_WORD).is_none() => {
+		Node::Type { name, body } if name.attribute(crate::warp_parser::MIXIN_WORD).is_none() => {
 			let members = Node::List(class_items(&body), Bracket::Curly, Separator::Semicolon);
 			let changed = members.serialize() != Node::List(class_items_as_written(&body), Bracket::Curly, Separator::Semicolon).serialize();
 			Node::Type { name, body: Box::new(if changed { members } else { *body }) }
@@ -1785,7 +1785,7 @@ fn item_name(item: &Node) -> Option<String> {
 /// Every class that extends another with all its items, its name without the parent
 fn with_inherited(node: Node, classes: &[(String, Option<String>, Vec<Node>)]) -> Result<Node, Node> {
 	match node {
-		Node::Type { name, body: _ } if name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).is_some() => {
+		Node::Type { name, body: _ } if name.attribute(crate::warp_parser::EXTENDS_KEYWORD).is_some() => {
 			let class = name.drop_meta().name();
 			let items = inherited_items(&class, classes, &mut vec![])?;
 			Ok(Node::Type { name: Box::new(Node::Symbol(class)), body: Box::new(Node::List(items, Bracket::Curly, Separator::Space)) })
@@ -1837,7 +1837,7 @@ fn instance_member(item: &Node) -> Option<(String, Vec<Node>)> {
 
 /// `static k = 3`, `static make(x) := …` in a class body (P122)
 fn is_static(item: &Node) -> bool {
-	item.attribute(crate::wasp_parser::STATIC_KEYWORD).is_some()
+	item.attribute(crate::warp_parser::STATIC_KEYWORD).is_some()
 }
 
 /// `circle·count`: the global or function a static member of a class is

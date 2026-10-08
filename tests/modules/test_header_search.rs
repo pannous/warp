@@ -20,7 +20,7 @@ fn only_sdl_names_read_the_sdl_headers() {
 
 #[test]
 fn the_sdl_headers_declare_the_window_functions() {
-	// samples/sdl_red_square.wasp: SDL_CreateWindow and SDL_DestroyWindow are declared in SDL_video.h
+	// samples/sdl_red_square.warp: SDL_CreateWindow and SDL_DestroyWindow are declared in SDL_video.h
 	for name in ["SDL_CreateWindow", "SDL_DestroyWindow", "SDL_CreateRenderer", "SDL_Delay"] {
 		assert!(warp::ffi::get_ffi_signature_from_lib(name, "SDL2").is_some(), "{name}");
 	}

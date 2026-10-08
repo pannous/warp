@@ -3,7 +3,7 @@
 use crate::common::fails_with;
 use crate::is;
 
-/// The notes (written → wasp word) with a fix that a program's compilation gives
+/// The notes (written → warp word) with a fix that a program's compilation gives
 fn alias_notes(code: &str) -> Vec<(String, String)> {
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code));
 	hints.iter().filter(|hint| hint.fix().is_some()).map(|hint| (hint.original.clone(), hint.canonical.clone())).collect()

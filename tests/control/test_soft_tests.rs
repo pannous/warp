@@ -55,10 +55,10 @@ fn warp_test_prints_the_failures_and_exits_nonzero() {
 		std::fs::write(&file, program).expect("write the program");
 		crate::common::warp_command().args(["test", &file.to_string_lossy()]).output().expect("warp runs")
 	};
-	let passed = run("passing.wasp", PASSING);
+	let passed = run("passing.warp", PASSING);
 	assert_eq!(String::from_utf8_lossy(&passed.stdout).trim(), "✓ 3 tests passed");
 	assert!(passed.status.success());
-	let failed = run("failing.wasp", FAILING);
+	let failed = run("failing.warp", FAILING);
 	let printed = String::from_utf8_lossy(&failed.stdout);
 	assert!(printed.contains("✗ test square(3) == 10\n"), "{printed}");
 	assert!(printed.contains("✗ \"squares\": assertion failed: square(4) == 15\n"), "{printed}");

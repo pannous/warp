@@ -1,5 +1,5 @@
-//! `warp dev app.wasp [port]` (card web-dev, notes/web_framework.md step 13): serves the program's site (src/site.rs)
-//! from memory, with dev.js in its page. The page asks /wasp-dev/state for the build's version and failure; a request
+//! `warp dev app.warp [port]` (card web-dev, notes/web_framework.md step 13): serves the program's site (src/site.rs)
+//! from memory, with dev.js in its page. The page asks /warp-dev/state for the build's version and failure; a request
 //! finding the file changed builds it anew first, so no watcher runs. A new version reloads the page, a failure shows as
 //! an overlay with its position, the source line and its fix (web/playground/dev.js), while the last good build serves on.
 
@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 pub const DEV_PORT: u16 = 8008;
-const STATE_PATH: &str = "/wasp-dev/state";
+const STATE_PATH: &str = "/warp-dev/state";
 const INDEX_PATH: &str = "/";
 const NOT_FOUND: u16 = 404;
 const JSON_TYPE: &str = "application/json";

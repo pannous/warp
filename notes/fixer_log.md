@@ -4,7 +4,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-03 fix-print-args
 - `print(a, b)` and `print a, b` print their arguments joined by a space (Python), worth the joined text.
-  The parser turns the comma list `[[print a], b]` into the call `print(a, b)` (wasp_parser.rs
+  The parser turns the comma list `[[print a], b]` into the call `print(a, b)` (warp_parser.rs
   `print_call_with_several_arguments`); the emitter prints `join([a, b], " ")` (list_emitter.rs `printed_value`).
   tests/text/test_print_arguments.rs (CLI stdout + is!, also in the browser).
 - `warp parse` shows closing brackets and the separators (`,` `;` `⏎`), so a merged statement is visible.
@@ -12,7 +12,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-03 fix-print-calls
 - `print first [10, 5]` / `print(upper "ab")` / `print upper "ab", "c"`: words separated by spaces after print are ONE
-  expression (wasp_parser.rs `grouped_list`, `print_arguments`); only commas separate print's arguments.
+  expression (warp_parser.rs `grouped_list`, `print_arguments`); only commas separate print's arguments.
   Before, the call's arguments were flattened (`print(upper "a")` = print(upper, "a")). The parser keeps the
   canonical forms `[print expr]` (space) and `print(a, b)` (round); `print_arguments_of` reads both.
 - `print "a"\n√9` already gives 3 on main (todo marked DONE).
@@ -33,7 +33,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-03 fix-spaced-required
 - `class person{name! email?}`: a `!` glued to its name and followed by a space is the suffix (required field / evaluate
-  / mutate mark) even when an operand follows (wasp_parser.rs try_parse_evaluate_bang); `a ! b` spaced is unchanged.
+  / mutate mark) even when an operand follows (warp_parser.rs try_parse_evaluate_bang); `a ! b` spaced is unchanged.
   tests/parser/test_spaced_required_fields.rs.
 - `while i<n {i++}` already works on main (todo marked DONE).
 
@@ -113,7 +113,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-05 fix-hash-slices
 - Slices: `xs[a..b]`, `xs[a:b]`, text and variable bounds already worked; new `xs#(a…b)` / `xs#(a..b)` 1-based
-  slices (wasp_parser hash_slice_bounds). Unparenthesized `xs#a..b` stays the range from the value xs#a (it works on
+  slices (warp_parser hash_slice_bounds). Unparenthesized `xs#a..b` stays the range from the value xs#a (it works on
   main: `xs#1..6`), so it is no slice; queued as a question.
 
 ## 2026-10-05 fix-is-declaration
@@ -138,11 +138,11 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-05 p58-hash-range-warning
 - P58: `xs#a..b` stays the range from the value xs#a, with a warning naming the slice xs#(a..b) and the range (xs#a)..b
-  (wasp_parser hash_range_warning).
+  (warp_parser hash_range_warning).
 
 ## 2026-10-05 p60-catch-except
 - P60: `try {…} catch {…}`, `catch e {…}`, `try: … except: …`, `except E:` / `except E as e:` are synonyms of `try X else Y`
-  (wasp_parser FALLBACK_WORDS, parse_caught_name); using the caught name is a loud error for now.
+  (warp_parser FALLBACK_WORDS, parse_caught_name); using the caught name is a loud error for now.
 
 ## 2026-10-05 p61-is-teaches-be
 - P61: `is` always compares; `x is v` with x unbound is the error "undefined variable: x; `is` compares, a definition is
@@ -178,7 +178,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   missing left operand (#, -, +, not, √, if, while) and a suffix operator's (x++) as nothing, `x = ø` stays.
 
 ## 2026-10-06 fix-todo-comments
-- wasp_parser "todo edge case: leading plus": `+5`, `+x`, `3 + +2`, `[+1 -2]` gave "Unexpected character '+'"; a `+`
+- warp_parser "todo edge case: leading plus": `+5`, `+x`, `3 + +2`, `[+1 -2]` gave "Unexpected character '+'"; a `+`
   glued to its operand is now the unary plus, the operand itself (a spaced `+` stays the operator word).
 
 ## 2026-10-06 lowered-error-text
@@ -220,6 +220,6 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-06 flaky-browser
 - every_sample_runs_without_a_compiler_error timed out when the task pool was empty (Workers not loaded yet, or used up
-  by stopped tasks): host.js then runs a task inline, and threads.wasp's `go spin(10^12)`; `stop endless` cannot stop
+  by stopped tasks): host.js then runs a task inline, and threads.warp's `go spin(10^12)`; `stop endless` cannot stop
   an inline task. Reproduced with prepareTaskPool(0) (120 s timeout); fixed by taskPoolReady before each run and a
   replacement Worker for a stopped one. Alone the test takes 3.4 s in the browser.

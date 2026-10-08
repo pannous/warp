@@ -1,6 +1,6 @@
 //! P166 (user): an element-wise operator on a plain number is the plain operator; a list still maps
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn element_wise_on_a_number_is_the_plain_operator() {

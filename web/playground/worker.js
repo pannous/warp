@@ -20,7 +20,7 @@ let panicMessage; // the compiler's last panic message
 
 let warming = false; // the warm-up's run says nothing to the page
 const post = message => warming || self.postMessage(message);
-// the first markup program compiles the markup renderer (lib/markup.wasp's to_html) once: ~0.5 s in Chrome, seconds in
+// the first markup program compiles the markup renderer (lib/markup.warp's to_html) once: ~0.5 s in Chrome, seconds in
 // Safari. The page asks for it while idle after its first run (card guide-warmup), so a guide's first ▶ is quick too
 const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store

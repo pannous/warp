@@ -1,6 +1,6 @@
-//! Page tests written in wasp (card web-testing, notes/web_framework.md step 14), run on headless pages (headless.rs):
+//! Page tests written in warp (card web-testing, notes/web_framework.md step 14), run on headless pages (headless.rs):
 //!
-//! ```wasp
+//! ```warp
 //! def Counter() { count = 0; div{ button{ on click { count += 1 } "Add" } p{ count } } }
 //! test "counter" {
 //!     render Counter()
@@ -135,7 +135,7 @@ fn after_word<'a>(statement: &'a str, word: &str) -> &'a str {
 
 /// The texts a step names: `fill "name" with "Ada"` → name, Ada
 fn texts(statement: &str) -> Vec<String> {
-	match crate::wasp_parser::parse(statement).drop_meta() {
+	match crate::warp_parser::parse(statement).drop_meta() {
 		Node::List(items, _, _) => items.iter().filter_map(|item| match item.drop_meta() {
 			Node::Text(text) => Some(text.clone()),
 			_ => None,
@@ -177,7 +177,7 @@ fn check(page: &Page, condition: &str) -> Result<(), String> {
 	}
 }
 
-/// A wasp text literal of `text`
+/// A warp text literal of `text`
 fn quoted(text: &str) -> String {
 	format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }

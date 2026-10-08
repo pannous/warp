@@ -2,7 +2,7 @@
 
 Decision (notes/decisions.md "Reflection streamlined"): `dir(x)` and the words below answer at compile time when the
 target is known, else at run time from the module's WASM metadata. Lookup order field → meta → reflection. One warp
-custom section, `wasp.meta`, kept unstripped.
+custom section, `warp.meta`, kept unstripped.
 
 ## Words
 | word (aliases) | on | answer | today (2026-10-08, probed) |
@@ -35,13 +35,13 @@ custom section, `wasp.meta`, kept unstripped.
    `dir(xs#1)`) needs no host call, every class is known at compile time: a type test over them picks the names
    (`if o is P then ["x" "y"] else …`, reflection.rs Objects::dispatched; a class's own member of that name is read as
    written; the last else is the field read as written, for `dir` the keys). Values from outside the program (a
-   loaded .wasm, data of another program): ONE host call reads the module's `wasp.meta` section, cached per module.
+   loaded .wasm, data of another program): ONE host call reads the module's `warp.meta` section, cached per module.
 3. Warp objects (maps, Nodes) answer from their own keys at run time (`keys`, already there).
 
-## wasp.meta layout
-Wasp notation text (parsed by the reader we already have), one map:
+## warp.meta layout
+Warp notation text (parsed by the reader we already have), one map:
 `{units: "km:1 h:-1", classes: {P: {fields: [x y], methods: [norm]}}, functions: {f: {params: [a b], signature: "…", effects: [IO]}}}`.
-`units` holds today's wasp.units text unchanged (warp-worker/warp-99 switches both ends in one commit once this is fixed).
+`units` holds today's warp.units text unchanged (warp-worker/warp-99 switches both ends in one commit once this is fixed).
 
 ## Steps (each a small branch)
 1. reflection.rs: the dot forms → existing function forms (`x.type`, `f.effects`, `e.listeners`); fix `listeners of e`.
@@ -59,7 +59,7 @@ Wasp notation text (parsed by the reader we already have), one map:
    in variables (units runtime, warp-worker's area). `m.exports` and `dir(m)` of an imported core module (`import
    lib/fourty_two`) done: reflection::lower_module_words after modules::resolve, the sorted names from
    wasm_modules::exports. Not yet: components (`use wasm "x.wasm" as lib`, their exports are read only at run time).
-5. wasp.meta section (absorbing wasp.units) + the run-time host call for `any`-typed values; playground reader too.
+5. warp.meta section (absorbing warp.units) + the run-time host call for `any`-typed values; playground reader too.
    Done first: run-time names of the program's own classes by type dispatch (Sources 2). Agreed with warp-worker
    (2026-10-08): web switches static_units with_result_units / module_units and the playground reader to the `units`
    entry, text byte for byte; warp-worker owns `x.unit` once quantities live in variables.

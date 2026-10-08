@@ -354,7 +354,7 @@ fn fold_comparisons(node: Node, constants: &Variables, clock: bool) -> Node {
 			Err(message) => error(&message),
 		};
 	}
-	let reads_quantities = needs_quantities(&node) || constants.keys().any(|name| crate::wasp_parser::mentions(&node, name));
+	let reads_quantities = needs_quantities(&node) || constants.keys().any(|name| crate::warp_parser::mentions(&node, name));
 	match evaluate_in(&node, &mut constants.clone()).ok().filter(|_| reads_quantities) {
 		Some(Value::Number(answer)) => Node::int(answer),
 		_ => match evaluate_in(&node, &mut constants.clone()) {
@@ -387,7 +387,7 @@ fn without_unread_constants(program: Node, constants: &Variables) -> Node {
 	}
 	let (statements, bracket, separator) = crate::variable_signals::main_statements(&program);
 	let assigns = |statement: &Node, name: &str| matches!(statement.drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(assigned) if assigned == name));
-	let unread = |name: &str| statements.iter().all(|statement| assigns(statement, name) || !crate::wasp_parser::mentions(statement, name));
+	let unread = |name: &str| statements.iter().all(|statement| assigns(statement, name) || !crate::warp_parser::mentions(statement, name));
 	let last = statements.len().saturating_sub(1);
 	let kept: Vec<Node> = statements.iter().enumerate()
 		.filter(|(index, statement)| *index == last || !constants.keys().any(|name| assigns(statement, name) && unread(name)))

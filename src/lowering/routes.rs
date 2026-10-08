@@ -5,7 +5,7 @@
 //! page·route·N, the exported page·routes gives the patterns in order, page·route_index() the index of the first route matching the path (-1 when none; the site
 //! loads that route's module first, card web-bundle), and page·routed() that route's value, else "no page at <path>"; `route "*"`
 //! matches any path (the not-found page). The program shows page·routed() where it says `outlet` (a layout around the
-//! routes), else as its last line when that is a route. The matching is lib/router.wasp's; the browser's URLPattern
+//! routes), else as its last line when that is a route. The matching is lib/router.warp's; the browser's URLPattern
 //! syntax works too (card route-urlpattern): ":tab?", ":path*", ":path+", "*" as the last part, and ":id(\\d+)", whose
 //! regular expression page·route_index checks with std regex.
 //! A route's block may hold routes (card route-nested), their patterns relative to it: the block's other items are its
@@ -32,7 +32,7 @@ pub const REGEX_MATCH: &str = "matches";
 /// Where a layout shows the matched route
 const OUTLET: &str = "outlet";
 const PARAMETER_MARK: &str = ":";
-/// The types a parameter may declare (lib/router.wasp route_fits)
+/// The types a parameter may declare (lib/router.warp route_fits)
 const PARAMETER_TYPES: [&str; 4] = ["int", "float", "text", "string"];
 /// URLPattern (card route-urlpattern): how often the last part may come ("?", "*", "+"), a regular expression "(…)"
 const PART_MARKS: [char; 3] = ['?', '*', '+'];
@@ -121,7 +121,7 @@ fn joined(outer: &str, inner: &str) -> String {
 }
 
 /// A parameter of a pattern part: ":id:int" → id, its type int; ":id(\\d+)?" → id, its regular expression (a URLPattern
-/// mark or group leaves it untyped, as lib/router.wasp route_part_type)
+/// mark or group leaves it untyped, as lib/router.warp route_part_type)
 struct Parameter<'a> {
 	name: &'a str,
 	kind: Option<&'a str>,
@@ -177,7 +177,7 @@ fn patterns(routes: &[Route]) -> Node {
 /// The index of the first route whose pattern matches the path, else -1
 fn matching(routes: &[Route]) -> Vec<Node> {
 	let matches = routes.iter().enumerate().map(|(index, (pattern, _))| template(MATCH_TEMPLATE, [("pattern", text(pattern)), ("index", Node::int(index as i64)), ("groups_fit", groups_fit(pattern))]));
-	std::iter::once(crate::wasp_parser::parse(PATH_TEMPLATE)).chain(matches).chain([crate::wasp_parser::parse(NO_ROUTE)]).collect()
+	std::iter::once(crate::warp_parser::parse(PATH_TEMPLATE)).chain(matches).chain([crate::warp_parser::parse(NO_ROUTE)]).collect()
 }
 
 /// Whether each parameter with a regular expression matches its part, as the URLPattern does: all of it
@@ -190,18 +190,18 @@ fn groups_fit(pattern: &str) -> Node {
 		return Node::True;
 	}
 	let all = (0..fits.len()).map(|index| format!("fit_{index}")).collect::<Vec<_>>().join(" and ");
-	crate::law::substitute(&crate::wasp_parser::parse(&all), &fits)
+	crate::law::substitute(&crate::warp_parser::parse(&all), &fits)
 }
 
 /// The value of the route page·route_index picks, else the not-found text
 fn choice(routes: &[Route]) -> Vec<Node> {
 	let index = template(INDEX_TEMPLATE, [("index_of_route", Node::Symbol(PAGE_ROUTE_INDEX.to_string()))]);
 	let choices = (0..routes.len()).map(|index| template(CHOICE_TEMPLATE, [("index", Node::int(index as i64)), ("chosen", Node::Symbol(format!("{ROUTE_PREFIX}{index}")))]));
-	std::iter::once(index).chain(choices).chain([crate::wasp_parser::parse(NOT_FOUND_TEMPLATE)]).collect()
+	std::iter::once(index).chain(choices).chain([crate::warp_parser::parse(NOT_FOUND_TEMPLATE)]).collect()
 }
 
 fn template<const N: usize>(code: &str, bindings: [(&str, Node); N]) -> Node {
-	crate::law::substitute(&crate::wasp_parser::parse(code), &bindings.into_iter().map(|(name, value)| (name.to_string(), value)).collect())
+	crate::law::substitute(&crate::warp_parser::parse(code), &bindings.into_iter().map(|(name, value)| (name.to_string(), value)).collect())
 }
 
 fn text(value: &str) -> Node {

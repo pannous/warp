@@ -1,4 +1,4 @@
-//! `use <name>` without a local module: registered git repositories (packages.wasp), fetched into packages/<name>
+//! `use <name>` without a local module: registered git repositories (packages.warp), fetched into packages/<name>
 
 use warp::modules::{fetch_package, package_repository};
 use warp::error;

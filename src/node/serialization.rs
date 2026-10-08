@@ -1,4 +1,4 @@
-//! Writing a node as wasp text: serialize and its annotation prefixes
+//! Writing a node as warp text: serialize and its annotation prefixes
 
 use super::*;
 

@@ -1,4 +1,4 @@
-// card web-dev: `warp dev app.wasp` serves the program's site from memory; /wasp-dev/state tells the page (dev.js) the
+// card web-dev: `warp dev app.warp` serves the program's site from memory; /warp-dev/state tells the page (dev.js) the
 // build's version and its failure, which the page shows as an overlay; a change of the file makes a new version
 use std::time::Duration;
 
@@ -10,13 +10,13 @@ fn get(path: &str) -> String {
 }
 
 fn state() -> serde_json::Value {
-	serde_json::from_str(&get("/wasp-dev/state")).expect("json")
+	serde_json::from_str(&get("/warp-dev/state")).expect("json")
 }
 
 #[test]
 fn the_dev_server_rebuilds_a_changed_program() {
 	std::fs::create_dir_all(FOLDER).expect("scratch folder");
-	let program = std::path::Path::new(FOLDER).join("app.wasp");
+	let program = std::path::Path::new(FOLDER).join("app.warp");
 	std::fs::write(&program, "p{ \"one\" }").expect("the program");
 	let served = program.clone();
 	std::thread::spawn(move || {
@@ -30,7 +30,7 @@ fn the_dev_server_rebuilds_a_changed_program() {
 	}
 	let page = get("/");
 	assert!(page.contains("<p>one</p>") && page.contains("<script src=\"dev.js\">"), "{page}");
-	assert!(get("/dev.js").contains("wasp-dev/state"));
+	assert!(get("/dev.js").contains("warp-dev/state"));
 	let first = state();
 	assert!(first["error"].is_null(), "{first}");
 

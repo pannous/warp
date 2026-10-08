@@ -1,8 +1,8 @@
-// wiki/reference.md: wasp data refers back to an enclosing node by name (`$a`) or by its id (`a[id=1]{…}`, `@1`), in
+// wiki/reference.md: warp data refers back to an enclosing node by name (`$a`) or by its id (`a[id=1]{…}`, `@1`), in
 // words `ref a` / `ref 1` (P160), so a literal describes a cyclic graph; the reference stays a name, so printing never
 // loops. `$1` is only ever a positional parameter
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn bracketed_attributes_before_a_body_are_meta_entries() {

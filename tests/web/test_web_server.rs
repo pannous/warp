@@ -27,8 +27,8 @@ fn serve_answers_routes() {
 		std::thread::sleep(Duration::from_millis(50));
 	}
 	assert_eq!(get("/api/users"), r#"[{"name":"Ann","age":31},{"name":"Bo","age":7}]"#);
-	let echoed = ureq::post(&format!("http://127.0.0.1:{PORT}/echo")).send("hello wasp").expect("an answer").body_mut().read_to_string().expect("a text");
-	assert_eq!(echoed, "hello wasp");
+	let echoed = ureq::post(&format!("http://127.0.0.1:{PORT}/echo")).send("hello warp").expect("an answer").body_mut().read_to_string().expect("a text");
+	assert_eq!(echoed, "hello warp");
 	assert_eq!(get("/hello?name=Ann"), "hello Ann");
 	let missing = ureq::get(&format!("http://127.0.0.1:{PORT}/nowhere")).call();
 	assert!(matches!(missing, Err(ureq::Error::StatusCode(404))), "{missing:?}");
@@ -66,7 +66,7 @@ fn a_program_serves_its_own_page() {
 	const PAGE_PORT: u16 = 18433;
 	let server = std::thread::spawn(|| {
 		warp::web_server::stop_after(4);
-		let value = warp::wasm_emitter::eval("tests/fixtures/served_page.wasp");
+		let value = warp::wasm_emitter::eval("tests/fixtures/served_page.warp");
 		(value.first_error().is_none(), value.serialize())
 	});
 	let started = std::time::Instant::now();
@@ -107,7 +107,7 @@ fn a_served_page_with_routes_answers_every_path() {
 	const ROUTES_PORT: u16 = 18441;
 	let server = std::thread::spawn(|| {
 		warp::web_server::stop_after(4);
-		let value = warp::wasm_emitter::eval("tests/fixtures/served_routes.wasp");
+		let value = warp::wasm_emitter::eval("tests/fixtures/served_routes.warp");
 		(value.first_error().is_none(), value.serialize())
 	});
 	let started = std::time::Instant::now();

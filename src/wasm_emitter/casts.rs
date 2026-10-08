@@ -20,7 +20,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_text_cast(&mut self, func: &mut Function, text: &str, target_type: &Node) {
-		match crate::wasp_parser::number_in_text(text) {
+		match crate::warp_parser::number_in_text(text) {
 			Some(number) => self.emit_cast(func, &Node::Number(number), target_type),
 			None => self.emit_runtime_error(func, "invalid_number"),
 		}

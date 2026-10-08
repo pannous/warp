@@ -10,7 +10,7 @@ use crate::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
+use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -117,8 +117,8 @@ pub fn shallow_flag(argument: &Node) -> Node {
 }
 
 /// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `word_tmp` a
-/// temporary that holds it once, `word_argument_2` … the arguments after the receiver. The words written in wasp
-/// (first, last, round_to, replace, is_digit …) are lib/prelude.wasp's; these three the emitter dispatches on
+/// temporary that holds it once, `word_argument_2` … the arguments after the receiver. The words written in warp
+/// (first, last, round_to, replace, is_digit …) are lib/prelude.warp's; these three the emitter dispatches on
 const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	// Python's `list(x)`: the list itself, a text's characters
 	(LIST_WORD, 1, "word_tmp as list"),
@@ -429,7 +429,7 @@ fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 		Node::Meta { data, .. } => Node::Meta { node: Box::new(Node::Text(name.to_string())), data: data.clone() },
 		_ => Node::Text(name.to_string()),
 	};
-	crate::wasp_parser::subscript(object.clone(), key)
+	crate::warp_parser::subscript(object.clone(), key)
 }
 
 /// A field lookup by a name, as `field_lookup` builds it: its value is an object whenever the field holds one
@@ -437,7 +437,7 @@ fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 /// value may be an object
 fn is_field_lookup(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Key(_, Op::Hash, index) if crate::wasp_parser::subscript_key(index).and_then(field_name).is_some() => true,
+		Node::Key(_, Op::Hash, index) if crate::warp_parser::subscript_key(index).and_then(field_name).is_some() => true,
 		Node::Key(list, Op::Hash, _) => is_field_lookup(list),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_field_lookup(&items[0]),
 		_ => false,
@@ -468,7 +468,7 @@ pub(crate) fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
 
 /// The field name of a subscript `p["name"]`, as `p.name` lowers: None for an element `xs#i`
 fn subscript_field(index: &Node) -> Option<String> {
-	match crate::wasp_parser::subscript_key(index)?.drop_meta() {
+	match crate::warp_parser::subscript_key(index)?.drop_meta() {
 		Node::Text(name) => Some(name.clone()),
 		Node::Char(letter) => Some(letter.to_string()),
 		_ => None,
@@ -744,7 +744,7 @@ impl Lowering {
 	fn lower_similar(&self, op: Op, left: Node, right: Node) -> Node {
 		let (_, function, variable, default) = SIMILARITY_LEVELS.iter().find(|(level, ..)| *level == op).expect("a similarity operator");
 		let tolerance = if self.shadowed.contains(*variable) { variable } else { default };
-		let call = vec![Node::Symbol(function.to_string()), left, right, crate::wasp_parser::parse(tolerance)];
+		let call = vec![Node::Symbol(function.to_string()), left, right, crate::warp_parser::parse(tolerance)];
 		Node::List(call, Bracket::Round, Separator::None)
 	}
 
@@ -878,7 +878,7 @@ impl Lowering {
 		let body = match value {
 			None => body,
 			Some(value) => {
-				let lookup = Node::Key(Box::new(value), Op::Assign, Box::new(crate::wasp_parser::subscript(map.clone(), key.clone())));
+				let lookup = Node::Key(Box::new(value), Op::Assign, Box::new(crate::warp_parser::subscript(map.clone(), key.clone())));
 				Node::List([vec![lookup], crate::for_loop::block_items(&body)].concat(), Bracket::Curly, Separator::Semicolon)
 			}
 		};
@@ -931,7 +931,7 @@ impl Lowering {
 	fn method_call(&self, receiver: &Node, method: &Node) -> Option<Node> {
 		// `pair.0` is the first item of a tuple or list, counted from 0 like `pair[0]`
 		if let Node::Number(crate::extensions::numbers::Number::Int(_)) = method.drop_meta() {
-			return Some(crate::wasp_parser::subscript(receiver.clone(), method.clone()));
+			return Some(crate::warp_parser::subscript(receiver.clone(), method.clone()));
 		}
 		let (word_node, arguments) = match method.drop_meta() {
 			Node::Symbol(_) => (method, vec![]),
@@ -1059,7 +1059,7 @@ impl Lowering {
 		match node.drop_meta() {
 			Node::Symbol(name) => self.objects.get(name).cloned(),
 			Node::Key(base, Op::Hash, index) => {
-				let field = field_name(crate::wasp_parser::subscript_key(index)?)?;
+				let field = field_name(crate::warp_parser::subscript_key(index)?)?;
 				let (_, value) = object_entries(&self.object_literal(base)?)?.into_iter().find(|(name, _)| *name == field)?;
 				object_entries(&value).map(|_| value)
 			}
@@ -1108,7 +1108,7 @@ impl Lowering {
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
 			Some((_, _, template)) if word == SUM => dispatched_sum(self.expanded(template, arguments)),
 			Some((_, _, template)) => self.expanded(template, arguments),
-			// a prelude word calls its definition from lib/prelude.wasp (modules::prelude_name)
+			// a prelude word calls its definition from lib/prelude.warp (modules::prelude_name)
 			None if let Some(qualified) = crate::modules::prelude_name(word) => Node::List([vec![Node::Symbol(qualified)], arguments].concat(), Bracket::Round, Separator::None),
 			None => {
 				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { Node::Symbol(word.to_string()) };
@@ -1192,7 +1192,7 @@ impl Lowering {
 	/// a message the error says the assertion failed
 	fn lower_assert(&self, condition: Node, message: Node) -> Node {
 		let message = match message.drop_meta() {
-			Node::Empty => Node::Text(format!("{}: {}", crate::wasp_parser::ASSERTION_FAILED, condition.serialize())),
+			Node::Empty => Node::Text(format!("{}: {}", crate::warp_parser::ASSERTION_FAILED, condition.serialize())),
 			_ => message,
 		};
 		let condition_placeholder = ASSERT_CONDITION_PLACEHOLDER;

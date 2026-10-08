@@ -41,12 +41,12 @@ fn test_plural_declarations_are_lists() {
 
 mod hints {
 	use warp::normalize::*;
-	use warp::wasp_parser::WaspParser;
+	use warp::warp_parser::WarpParser;
 
 	#[test]
 	fn test_bracketed_list_type_hints_the_plural_word() {
 		set_hint_mode(HintMode::Always);
-		let (_, hints) = capture_hints(|| WaspParser::parse("x:[number]=[1 2]"));
+		let (_, hints) = capture_hints(|| WarpParser::parse("x:[number]=[1 2]"));
 		let spelled: Vec<(String, String)> = hints.into_iter().map(|hint| (hint.original, hint.canonical)).collect();
 		assert_eq!(spelled, vec![("[number]".to_string(), "numbers".to_string())]);
 	}
@@ -54,7 +54,7 @@ mod hints {
 	#[test]
 	fn test_plural_word_needs_no_hint() {
 		set_hint_mode(HintMode::Always);
-		let (_, hints) = capture_hints(|| WaspParser::parse("x:numbers=[1 2]"));
+		let (_, hints) = capture_hints(|| WarpParser::parse("x:numbers=[1 2]"));
 		assert!(hints.is_empty(), "{hints:?}");
 	}
 }

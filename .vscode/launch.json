@@ -7,16 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'wasp'",
+            "name": "Debug unit tests in library 'warp'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=wasp"
+                    "--package=warp"
                 ],
                 "filter": {
-                    "name": "wasp",
+                    "name": "warp",
                     "kind": "lib"
                 }
             },
@@ -26,15 +26,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'wasp'",
+            "name": "Debug executable 'warp'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=wasp",
-                    "--package=wasp"
+                    "--bin=warp",
+                    "--package=warp"
                 ],
                 "filter": {
-                    "name": "wasp",
+                    "name": "warp",
                     "kind": "bin"
                 }
             },
@@ -44,16 +44,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'wasp'",
+            "name": "Debug unit tests in executable 'warp'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=wasp",
-                    "--package=wasp"
+                    "--bin=warp",
+                    "--package=warp"
                 ],
                 "filter": {
-                    "name": "wasp",
+                    "name": "warp",
                     "kind": "bin"
                 }
             },
@@ -69,7 +69,7 @@
                     "test",
                     "--no-run",
                     "--test=ast_tests",
-                    "--package=wasp"
+                    "--package=warp"
                 ],
                 "filter": {
                     "name": "ast_tests",
@@ -88,7 +88,7 @@
                     "test",
                     "--no-run",
                     "--test=test_emitter",
-                    "--package=wasp"
+                    "--package=warp"
                 ],
                 "filter": {
                     "name": "test_emitter",
@@ -107,7 +107,7 @@
                     "test",
                     "--no-run",
                     "--test=node_test",
-                    "--package=wasp"
+                    "--package=warp"
                 ],
                 "filter": {
                     "name": "node_test",
@@ -126,7 +126,7 @@
                     "test",
                     "--no-run",
                     "--test=string_tests",
-                    "--package=wasp"
+                    "--package=warp"
                 ],
                 "filter": {
                     "name": "string_tests",
@@ -139,16 +139,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug integration test 'test_wasp'",
+            "name": "Debug integration test 'test_warp'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--test=test_wasp",
-                    "--package=wasp"
+                    "--test=test_warp",
+                    "--package=warp"
                 ],
                 "filter": {
-                    "name": "test_wasp",
+                    "name": "test_warp",
                     "kind": "test"
                 }
             },

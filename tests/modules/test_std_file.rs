@@ -2,7 +2,7 @@
 //! the file system and environment, in the browser host.js's in-memory files (read sees what write wrote) and no
 //! environment
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 const FOLDER: &str = "scratch/test_std_file";
 

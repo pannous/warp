@@ -440,7 +440,7 @@ impl EffectReport {
 
 /// Rust API: resolved effects of `function` in `code`
 pub fn effects_of(code: &str, function: &str) -> Option<EffectSet> {
-	EffectReport::of(&crate::wasp_parser::WaspParser::parse(code)).effects_of(function)
+	EffectReport::of(&crate::warp_parser::WarpParser::parse(code)).effects_of(function)
 }
 
 fn trusted_external(name: &str) -> Option<External> {

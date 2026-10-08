@@ -1,6 +1,6 @@
 //! The standard library module random (notes/stdlib.md)
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn use_random_brings_choice_shuffle_sample() {

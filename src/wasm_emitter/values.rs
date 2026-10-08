@@ -182,7 +182,7 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [word, dividend, divisor] = items {
-			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) {
+			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::warp_parser::FLOOR_QUOTIENT) {
 				self.emit_floor_quotient(func, dividend, divisor);
 				return true;
 			}

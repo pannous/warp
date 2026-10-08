@@ -12,9 +12,9 @@ fn has_use_statement(program: &Node) -> bool {
 
 #[test]
 fn routes_and_pages_lower_without_use_statements() {
-	let routed = warp::routes::lower(warp::wasp_parser::parse(ROUTED));
+	let routed = warp::routes::lower(warp::warp_parser::parse(ROUTED));
 	assert!(!has_use_statement(&routed), "{}", routed.serialize());
-	let page = warp::pipeline::for_a_page(|| warp::page_html::use_markup(warp::wasp_parser::parse("p{ \"hi\" }")));
+	let page = warp::pipeline::for_a_page(|| warp::page_html::use_markup(warp::warp_parser::parse("p{ \"hi\" }")));
 	assert!(!has_use_statement(&page), "{}", page.serialize());
 }
 

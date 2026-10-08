@@ -37,7 +37,7 @@ pub fn map_c_type_to_valtype(c_type: &str) -> Option<wasm_encoder::ValType> {
 }
 
 /// C type words: a "declaration" named after one is a function pointer or a cast (`int (*_close)(void *);`), never a
-/// function the program could call; taken for one, it would shadow wasp's own `int(…)`
+/// function the program could call; taken for one, it would shadow warp's own `int(…)`
 pub(crate) const C_TYPE_WORDS: [&str; 13] = ["int", "char", "void", "long", "short", "unsigned", "signed", "float", "double", "const", "struct", "union", "enum"];
 
 /// C keywords that start a statement: a line holding one declares no function
@@ -194,7 +194,7 @@ fn without_libc_annotations(declaration: &str) -> String {
 
 /// Convert FfiHeaderSignature to FfiSignature (using 'static lifetime via leak)
 pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> {
-    let params: Vec<wasm_encoder::ValType> = wasp_parameters(&hsig.param_types)
+    let params: Vec<wasm_encoder::ValType> = warp_parameters(&hsig.param_types)
         .filter_map(|t| map_c_type_to_valtype(t))
         .collect();
     let results: Vec<wasm_encoder::ValType> = header_result(hsig).into_iter().collect();

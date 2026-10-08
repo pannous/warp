@@ -1,4 +1,4 @@
-//! Forms from other languages, lowered to wasp's own (notes/welcoming.md): `match` cases written with `=>`, `_` the
+//! Forms from other languages, lowered to warp's own (notes/welcoming.md): `match` cases written with `=>`, `_` the
 //! default case (Rust, Scala), and `loop { … }`, the endless loop left by `break` (Rust)
 
 use crate::is;

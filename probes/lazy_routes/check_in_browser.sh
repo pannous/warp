@@ -7,14 +7,14 @@ WARP=${1:-warp}
 PORT=8931
 WORK=scratch/lazy_routes
 SITE=$WORK/three_routes-site
-rm -rf "$WORK" && mkdir -p "$WORK" && cp probes/lazy_routes/three_routes.wasp "$WORK/"
-"$WARP" build --site "$WORK/three_routes.wasp" || exit 1
+rm -rf "$WORK" && mkdir -p "$WORK" && cp probes/lazy_routes/three_routes.warp "$WORK/"
+"$WARP" build --site "$WORK/three_routes.warp" || exit 1
 python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$SITE" 2> "$WORK/requests.log" &
 SERVER=$!
 trap 'kill $SERVER; agent-browser close >/dev/null 2>&1' EXIT
 sleep 1
 failures=0
-shown() { agent-browser eval 'document.querySelector("#wasp-root h1, #wasp-root p")?.textContent' | tail -1; }
+shown() { agent-browser eval 'document.querySelector("#warp-root h1, #warp-root p")?.textContent' | tail -1; }
 focused() { agent-browser eval '(document.activeElement.id || document.activeElement.tagName) + " " + document.activeElement.getAttribute("tabindex")' | tail -1; }
 fetched() { grep -c "GET /$1 " "$WORK/requests.log"; }
 expect() { # what, actual, expected
@@ -27,7 +27,7 @@ expect "primes module before the link" "$(fetched app-route-1.wasm)" 0
 agent-browser click 'a[href="/primes"]' >/dev/null && sleep 1
 expect "primes" "$(shown)" '"primes: 2 3 5 7 11 13 17 19 23 29"'
 expect "primes module after the link" "$(fetched app-route-1.wasm)" 1
-expect "focus without a heading" "$(focused)" '"wasp-root -1"'
+expect "focus without a heading" "$(focused)" '"warp-root -1"'
 agent-browser click 'a[href="/fib"]' >/dev/null && sleep 1
 expect "fib" "$(shown)" '"fib 15 = 610"'
 agent-browser back >/dev/null && sleep 1

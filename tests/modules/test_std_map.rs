@@ -1,6 +1,6 @@
 //! The standard library module map (notes/stdlib.md)
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn use_map_brings_merge_and_map_values() {

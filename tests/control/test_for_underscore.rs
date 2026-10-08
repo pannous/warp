@@ -1,5 +1,5 @@
 //! `for _ in 0..3 { … }` loops with an unused loop variable; `_` is no placeholder of a partial application there
-//! (it made the loop a lambda that never ran: samples/particles.wasp spawned no particles)
+//! (it made the loop a lambda that never ran: samples/particles.warp spawned no particles)
 use crate::is;
 
 #[test]
