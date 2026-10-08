@@ -68,11 +68,15 @@ require("readline").createInterface({ input: process.stdin }).on("line", line =>
 		let answer;
 		try {
 			let owner = null, value = typeof request.module === "object" ? unplain(request.module) : await load(request.module);
-			for (const part of request.member.split(".")) {
-				if (value?.[part] === undefined) throw new ReferenceError(`${request.module} has no ${request.member}`);
-				[owner, value] = [value, value[part]];
+			// member "": the module constructed, `new URL(…)` (lowering/foreign_modules.rs CONSTRUCTOR_MEMBER)
+			if (request.member === "") value = new value(...unplain(request.arguments));
+			else {
+				for (const part of request.member.split(".")) {
+					if (value?.[part] === undefined) throw new ReferenceError(`${request.module} has no ${request.member}`);
+					[owner, value] = [value, value[part]];
+				}
+				if (request.arguments !== null) value = await value.apply(owner, unplain(request.arguments));
 			}
-			if (request.arguments !== null) value = await value.apply(owner, unplain(request.arguments));
 			answer = { value: plain(value) };
 		} catch (failure) {
 			answer = { error: failure instanceof Error ? failure.name + ": " + failure.message : String(failure) };
