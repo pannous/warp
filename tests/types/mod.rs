@@ -1,4 +1,5 @@
 mod test_array_types;
+mod test_list_element_types;
 mod test_cast_bugs;
 mod test_constructor_vs_data;
 mod test_data;

@@ -2,7 +2,7 @@
 //! `P{x:1 y:2}` (glued, parsed as the key `P` Op::None `{…}`) constructs and validates one too, while `P:{…}` is plain
 //! data (D4): an instance is the data key marked `Instance`, emitted with its own op code, so it never equals the data.
 
-use crate::analyzer::{builtin_type_kind, call_name, collect_all_types, literal_kind};
+use crate::analyzer::{builtin_type_kind, call_name, collect_all_types, list_element_type, literal_misfit, misfit_item};
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -218,16 +218,18 @@ fn field_error(type_def: &TypeDef, registry: &TypeRegistry, located: &Node, entr
 			return Some(Diagnostic::at(located, message).fix(format!("declare {field} in {name}, or write the data {name}:{{…}}")).into_error());
 		};
 		let declared_type = declared.type_name.trim_end_matches('?');
-		let expected = builtin_type_kind(declared_type)?;
-		let actual = literal_kind(value)?;
-		let fits = expected == actual || (expected == Kind::Float && actual == Kind::Int) || (expected == Kind::Text && actual == Kind::Codepoint);
-		(!fits).then(|| {
-			let mut message = format!("{name}.{field} is {declared_type}, got {} {}", format!("{actual:?}").to_lowercase(), value.serialize());
-			if expected == Kind::Int && actual == Kind::Float {
-				message += ": an int must be a whole number"; // as the run-time check says (list_ops INT_NOT_WHOLE)
-			}
-			Diagnostic::at(located, message).into_error()
-		})
+		// a list field `items: texts` takes a literal list of fitting items (card list-element-types)
+		if let Some(element) = list_element_type(declared_type) {
+			let (item, actual) = misfit_item(element, value)?;
+			let message = format!("{name}.{field} is {declared_type}, got the {} item {}", format!("{actual:?}").to_lowercase(), item.serialize());
+			return Some(Diagnostic::at(located, message).into_error());
+		}
+		let actual = literal_misfit(declared_type, value)?;
+		let mut message = format!("{name}.{field} is {declared_type}, got {} {}", format!("{actual:?}").to_lowercase(), value.serialize());
+		if builtin_type_kind(declared_type) == Some(Kind::Int) && actual == Kind::Float {
+			message += ": an int must be a whole number"; // as the run-time check says (list_ops INT_NOT_WHOLE)
+		}
+		Some(Diagnostic::at(located, message).into_error())
 	});
 	wrong_entry.or_else(|| {
 		let given: Vec<String> = entries.iter().filter_map(entry_name).collect();

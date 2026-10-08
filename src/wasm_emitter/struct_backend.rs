@@ -170,6 +170,10 @@ impl WasmGcEmitter {
 	/// (emit_assigned_entry_value); false otherwise
 	pub(super) fn emit_struct_field_set(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) -> bool {
 		let Some(access) = self.field_access(target, index) else { return false };
+		if let Some(message) = self.misfit_list_item(target, access.field_index as usize, value) {
+			self.emit_type_error(func, message);
+			return true;
+		}
 		if self.misfits(value, access.kind) {
 			let class = self.typed_structs[&target.drop_meta().name()].clone();
 			let field = &self.ctx.type_registry.get_by_name(&class).expect("a declared class").fields[access.field_index as usize];
@@ -185,6 +189,16 @@ impl WasmGcEmitter {
 		let key = crate::wasp_parser::subscript_key(index).expect("a field by name").clone();
 		self.emit_assigned_entry_value(func, target, &key, value);
 		true
+	}
+
+	/// `b.items.add(420)` of a field `items: texts`: the literal item its list field does not take (card list-element-types)
+	fn misfit_list_item(&self, target: &Node, field_index: usize, value: &Node) -> Option<String> {
+		let class = self.typed_structs.get(&target.drop_meta().name())?;
+		let field = &self.ctx.type_registry.get_by_name(class)?.fields[field_index];
+		let element = crate::analyzer::list_element_type(&field.type_name)?;
+		let (item, actual) = crate::analyzer::misfit_item(element, value)?;
+		let given = crate::analyzer::kind_with_article(actual);
+		Some(format!("{} of {class} is {} field, got the item {} ({given})", field.name, crate::analyzer::with_article(&field.type_name), item.serialize()))
 	}
 
 	/// `p = P{…}`: the struct of the field values in p's local; `p = field_with(p, "x", v)`: the field set in place.

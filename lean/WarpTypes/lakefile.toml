@@ -1,0 +1,5 @@
+name = "WarpTypes"
+defaultTargets = ["WarpTypes"]
+
+[[lean_lib]]
+name = "WarpTypes"

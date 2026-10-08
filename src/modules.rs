@@ -22,8 +22,8 @@ const USE_KEYWORD: &str = "use";
 const PACKAGE_REGISTRY: &str = include_str!("../packages.wasp");
 /// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
 const MODULE_DIRECTORY: &str = "module_directory";
-/// A module word a program variable shadows is renamed apart: `words` of lib/text is `std·words` in its definitions
-const SHADOWED_WORD_PREFIX: &str = "std·";
+/// A module word a program variable shadows is renamed apart: `words` of lib/text is `lib·words` in its definitions
+const SHADOWED_WORD_PREFIX: &str = "lib·";
 /// where packages are fetched to, below the working directory
 pub const PACKAGES_DIRECTORY: &str = "packages";
 /// where a tagged version of a package is fetched once per machine and linked from packages/: a tag never changes
@@ -56,6 +56,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let own_names: Vec<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
+	loader.program_variables = program_variables(&program);
 	let folder = loader.including_directory.clone();
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader.resolve(program).and_then(|program| loader.implicit_std_modules(&program).map(|_| program)).and_then(|program| match loader.scope {
@@ -154,7 +155,6 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	if definitions.is_empty() {
 		return program;
 	}
-	let definitions = shadowed_apart(definitions, &program_variables(&program));
 	let mut needed: Vec<Node> = vec![];
 	// a standard word called as a method (`"hé".to_utf8()`) is needed too
 	let mentioned_or_called = |statements: &[Node]| mentioned_names(statements).into_iter().chain(method_names(statements));
@@ -189,7 +189,7 @@ fn program_variables(program: &Node) -> HashSet<String> {
 	}).collect()
 }
 
-/// Module words a program variable shadows, renamed in the module's definitions (`words` → `std·words`): the module's
+/// Module words a program variable shadows, renamed in the module's definitions (`words` → `lib·words`): the module's
 /// own code calls its own words (lexical scope), the program's `words` is its variable
 fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
 	let shadowed: Vec<String> = definitions.iter().filter_map(declared_name).filter(|name| variables.contains(name)).collect();
@@ -365,11 +365,13 @@ struct Loader<'a> {
 	wasm_modules: Vec<String>,
 	/// the definitions of the standard modules used: the program gets those it calls (with_needed_definitions)
 	std_definitions: Vec<Node>,
+	/// the program's top-level variables: a module word of the same name is renamed apart in the module (shadowed_apart)
+	program_variables: HashSet<String>,
 }
 
 impl<'a> Loader<'a> {
 	fn new(directories: &'a [&'a str], including_directory: Option<PathBuf>) -> Self {
-		Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory, scope: None, wasm_modules: vec![], std_definitions: vec![] }
+		Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory, scope: None, wasm_modules: vec![], std_definitions: vec![], program_variables: HashSet::new() }
 	}
 
 	fn resolve(&mut self, node: Node) -> Result<Node, Node> {
@@ -513,7 +515,7 @@ impl<'a> Loader<'a> {
 		let statements = statements(module?);
 		Ok(match import {
 			Import::Use => {
-				let declarations: Vec<Node> = statements.into_iter().filter(is_declaration).collect();
+				let declarations = shadowed_apart(statements.into_iter().filter(is_declaration).collect(), &self.program_variables);
 				MODULE_DEFINITIONS.with(|names| names.borrow_mut().extend(declarations.iter().filter_map(declared_name)));
 				declarations
 			}
@@ -540,14 +542,19 @@ impl<'a> Loader<'a> {
 	}
 
 	fn candidates_with(&self, name: &str, extensions: &[&str]) -> Vec<PathBuf> {
-		if !is_plain_relative_path(name) {
-			return vec![];
-		}
 		let has_extension = extensions.iter().any(|extension| name.ends_with(&format!(".{extension}")));
 		let file_names: Vec<String> = match has_extension {
 			true => vec![name.to_string()],
 			false => extensions.iter().map(|extension| format!("{name}.{extension}")).collect(),
 		};
+		// `use "./helper.wasp"`, `use "/srv/helper.wasp"`: that file, `./` from the including file's folder
+		if is_explicit_path(name) {
+			let base = self.including_directory.clone().unwrap_or_default();
+			return file_names.iter().map(|file_name| base.join(file_name)).collect();
+		}
+		if !is_plain_relative_path(name) {
+			return vec![];
+		}
 		let bases: Vec<PathBuf> = self.including_directory.iter().cloned().chain(std::iter::once(PathBuf::new())).collect();
 		let mut candidates = Vec::new();
 		for base in &bases {
@@ -1027,6 +1034,11 @@ pub(crate) fn path_of(node: &Node) -> Option<String> {
 		Node::Key(name, Op::Dot, extension) => Some(format!("{}.{}", path_of(name)?, path_of(extension)?)),
 		_ => None,
 	}
+}
+
+/// A path naming its file itself rather than a name to search for: absolute, or starting at `./` or `../`
+fn is_explicit_path(name: &str) -> bool {
+	Path::new(name).is_absolute() || name.starts_with("./") || name.starts_with("../")
 }
 
 /// A relative path that stays below its directory

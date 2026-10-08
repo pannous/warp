@@ -429,7 +429,7 @@ fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separ
 
 /// `x:list of int=[1 2]` (parsed as the items `x:list`, `of`, `int=[1 2]`) is `x:"list of int"=[1 2]`, the same type as `x:list<int>`;
 /// nested applications chain: `list of list of int`
-pub(super) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
 	let [declaration, of, ..] = items else { return None };
 	let Node::Key(name, Op::Colon, head) = declaration.drop_meta() else { return None };
 	let Node::Symbol(mut type_name) = head.drop_meta().clone() else { return None };

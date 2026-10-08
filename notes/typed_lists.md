@@ -109,3 +109,25 @@ cons cells: every read walked i links and n reads ran out of fuel at n = 10^5. N
 - Measured (probes/numeric_lists_bench.sh, `global` row): n = 10^5 out of fuel before, 0.07 s after; n = 10^6 0.08 s.
 - The automatic choice of linear memory (the card's first idea) gains nothing yet: linear memory and GC arrays run at
   the same speed (notes/linear_arrays.md); it pays only once a host or GPU backend takes the block.
+
+## Element types are checked (card list-element-types, 2026-10-08)
+A declared list (`names: texts`, `names: list of text`, a field `items: texts`) holds only items of its element type,
+checked like a declared scalar:
+- Literal items are compile-time errors (analyzer `check_declared_types`, `list_items_mismatch`): the declaration
+  `names: texts = [420]`, a reassignment `names = [420]`, an append `names.add(420)` / `names = names + [420]`, an element
+  `names#1 = 420`; a field's constructor (`type_constructor::field_error`) and its append `b.items.add(420)`
+  (`struct_backend::misfit_list_item`).
+- Items known only at run time are checked at the store (lowering/list_element_checks.rs, first MEANING pass):
+  `if not (v is text) { raise "…" }` as a statement before the store, a call's item held in a temporary `checked·N`
+  first, a whole list from a call checked item by item. The store keeps its form, so a typed int list stays an array.
+- `names = other + [v]` checks the items of `other` in a for-loop too, unless `other` is `names` itself or declared
+  with the same element type (card list-element-runtime).
+- A field's run-time append `b.items.add(f())` is checked the same way when b's class is known in the pass
+  (`b = bag(…)`, `b: bag`; class_methods `instance_classes`, `class_fields`): "items of bag is declared texts".
+- A float or number list takes ints (`is number`), as a declared float does.
+- Parameters (`f(xs: texts)` called with `[420]`): warp-7c's param-types work (functions2, checks.rs
+  `declared_element_type`, `elements_fit`).
+- Not checked yet: a field append whose instance's class the pass can't see (a parameter `b` without annotation, a
+  returned instance), and a field assigned whole at run time (`b.items = f()`).
+- Variance (TypeScript's covariant arrays) needs no rule while lists are values: a callee's widened `xs: list` is its
+  own copy (probes/variance/, notes/footguns.md).
