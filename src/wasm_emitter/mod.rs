@@ -906,6 +906,7 @@ impl WasmGcEmitter {
 		self.emit_cells();
 		self.emit_text_of();
 		self.emit_equality_ops();
+		self.emit_node_type_name(); // after values_equal, which names an instance's declared type
 		self.emit_text_as_int(); // after the getters: it calls get_int_value
 		self.emit_text_as_float();
 		if self.config.emit_reflection {

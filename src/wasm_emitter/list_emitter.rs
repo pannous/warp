@@ -376,6 +376,7 @@ impl WasmGcEmitter {
 		}
 		let kind = match arg.drop_meta() {
 			literal @ Node::Number(_) => literal.kind(),
+			Node::Empty => crate::type_kinds::Kind::Empty,
 			_ => self.get_type(arg),
 		};
 		match (kind, crate::analyzer::literal_number_type_word(arg)) {
@@ -388,6 +389,20 @@ impl WasmGcEmitter {
 	/// A value held as a Node whose type only the run time knows: an optional, an `any` parameter, an item of a mixed list
 	fn has_unknown_static_type(&self, subject: &Node) -> bool {
 		!matches!(subject.drop_meta(), Node::Number(_)) && matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data)
+	}
+
+	/// `type(x)` reads the value's type at run time: for a value held as a Node, a variable that may hold a ratio (an exact
+	/// number of Int kind), a Key that may be an instance of a declared type
+	fn type_known_only_at_run_time(&self, subject: &Node) -> bool {
+		if crate::analyzer::is_boolean(subject, &self.scope) || matches!(subject.drop_meta(), Node::Number(_) | Node::Empty) {
+			return false;
+		}
+		match self.get_type(subject) {
+			crate::Kind::Empty | crate::Kind::Data => true,
+			crate::Kind::Int => self.int_runtime(),
+			crate::Kind::Key => !self.ctx.type_registry.types().is_empty(),
+			_ => false,
+		}
 	}
 
 	/// `is_type(x, "spec")` as a Node: its 1 or 0
@@ -467,7 +482,7 @@ impl WasmGcEmitter {
 				self.emit_runtime_error(func, error);
 				true
 			}
-			"type" if !crate::analyzer::is_boolean(arg, &self.scope) && self.has_unknown_static_type(arg) => {
+			"type" if self.type_known_only_at_run_time(arg) => {
 				self.emit_node_instructions(func, arg);
 				func.instruction(&I::RefAsNonNull);
 				self.emit_call(func, crate::type_tests::NODE_TYPE_NAME);
