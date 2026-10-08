@@ -31,6 +31,9 @@ const TASK_POOL_SIZE = Math.min(4, self.navigator?.hardwareConcurrency ?? 2);
 const TASK_POOL_WAIT_MS = 10000;
 const TASK_POOL_POLL_MS = 10;
 const hasTaskWorkers = () => self.crossOriginIsolated && self.Worker;
+// why a run's tasks take turns: said once per run, as a warning and at once to the page (hooks.tasksInline), whose
+// timeout then names it instead of "the program may not terminate" (card coi-headless)
+const TASKS_INLINE = "tasks take turns here, one runs to its end before the program goes on: the page is not cross-origin isolated (its service worker cannot run, as in a private window), so it has no shared memory for task Workers. A task that waits for another, or runs until stopped, never ends";
 
 // a built site's task Worker loads the site's scripts (site-worker.js siteScripts), the playground's all of them
 function addTaskWorker() {
@@ -219,6 +222,13 @@ function endChannels(run) {
 	unlockChannels(table, true);
 }
 
+function sayTasksInline(run, holder, hooks) {
+	if (run.saidTasksInline) return;
+	run.saidTasksInline = true;
+	holder.warnings.push(TASKS_INLINE);
+	hooks.tasksInline?.(TASKS_INLINE);
+}
+
 // a task of the run: f(arguments) in a fresh instance of the program (src/tasks.rs TaskTable::run), the Int arguments as
 // they are or the argument list (`values`, a tree of reader.js) rebuilt for a wrapper f·node. On a Worker of the pool
 // (shared memory needs cross-origin isolation), which writes the result into a SharedArrayBuffer; else at once, here
@@ -233,6 +243,7 @@ function startTask(holder, hooks, name, ints, values) {
 		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels });
 		run.tasks.set(id, { name, worker, shared, control, inline: () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels) });
 	} else {
+		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);
 		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels));
 	}
 	return id;
