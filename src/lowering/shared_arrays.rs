@@ -244,6 +244,11 @@ impl Rewrite<'_> {
 	}
 
 	fn node(&self, node: Node, function: Option<&str>) -> Node {
+		// `"a \(xs#1)"`: the holes' expressions as code now, so their shared names are rewritten like any others
+		let mentioned = |hole: &Node| mentions_any(hole, &self.names(function));
+		if let Some(text) = matches!(node, Node::Meta { .. }).then(|| crate::interpolation::interpolated_mentioning(&node, mentioned)).flatten() {
+			return self.node(text, function);
+		}
 		if let Some((name, first, kind)) = declaration(&node) {
 			let count = if kind.value { crate::node::int(VALUE_CELL) } else { self.node(first.clone(), function) };
 			let created = Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(builtin(kind.storage.new_and_count().0, vec![count])));
@@ -419,6 +424,13 @@ fn gpu_kernel_map(value: &Node) -> Option<(Node, Node, crate::gpu_maps::Kernel)>
 	let (array, lambda) = crate::gpu_maps::gpu_map(value)?;
 	let kernel = crate::gpu_maps::gpu_kernel(&lambda)?;
 	Some((array, lambda, kernel))
+}
+
+/// Whether a name of `names` occurs in node
+fn mentions_any(node: &Node, names: &HashMap<String, Shared>) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= matches!(part.drop_meta(), Node::Symbol(name) if names.contains_key(name)));
+	found
 }
 
 /// Whether the program has a `s = sum(xs.map(f) @gpu)` that may run on the GPU, of any list of floats
