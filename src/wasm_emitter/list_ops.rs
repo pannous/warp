@@ -44,7 +44,6 @@ impl CopyCells {
 impl WasmGcEmitter {
 	/// Emit list and string operation helper functions
 	pub(crate) fn emit_list_ops(&mut self) {
-		self.require_list_marks();
 		self.emit_is_meta_entry();
 		self.emit_zero_fill();
 		if TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
@@ -197,8 +196,7 @@ impl WasmGcEmitter {
 
 				// ø is the empty list
 				s.emit_field(func, 0, 0);
-				func.instruction(&I::I64Const(KIND_MASK));
-				func.instruction(&I::I64And);
+				s.emit_unmarked(func);
 				func.instruction(&I::I64Const(Kind::Empty as i64));
 				func.instruction(&I::I64Eq);
 				func.instruction(&I::If(BlockType::Empty));
@@ -369,15 +367,15 @@ impl WasmGcEmitter {
 		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], vec![node_ref_nullable], |s, f| {
 			let (list, position, value, cell) = (0, 1, 2, 3);
 			let lone_cell = [I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)];
-			Self::emit_list(f, &[I::LocalGet(list), I::LocalGet(value)]);
-			s.call(f, super::declared_values::LIST_ITEM_CHECK);
+			s.emit_item_check(f, super::declared_values::LIST_ITEM_CHECK, list, value);
 			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty)]);
 			Self::emit_list(f, &lone_cell);
 			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_field(f, list, 0);
-			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(list)]);
-			s.emit_element_mark(f, list);
-			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::I64Or, set(0), I::LocalGet(list), I::LocalGet(value), set(1),
+			s.emit_unmarked(f);
+			Self::emit_list(f, &[I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(list), I::I64Const(SQUARE_LIST_KIND)]);
+			s.emit_or_element_mark(f, list);
+			Self::emit_list(f, &[set(0), I::LocalGet(list), I::LocalGet(value), set(1),
 				I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
 			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::Loop(BlockType::Empty),
 				I::LocalGet(position), I::I64Eqz, I::If(BlockType::Empty), I::LocalGet(cell)]);
@@ -1410,8 +1408,7 @@ impl WasmGcEmitter {
 		func.instruction(&I::If(BlockType::Empty));
 		func.instruction(&I::Else);
 		self.emit_field(func, list, 0);
-		func.instruction(&I::I64Const(KIND_MASK));
-		func.instruction(&I::I64And);
+		self.emit_unmarked(func);
 		func.instruction(&I::I64Const(Kind::Empty as i64));
 		func.instruction(&I::I64Eq);
 		func.instruction(&I::If(BlockType::Empty));
@@ -1421,10 +1418,28 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
-	/// The element mark of the node in local `node` (declared_values LIST_MARK), its kind bits cleared
-	pub(super) fn emit_element_mark(&self, func: &mut Function, node: u32) {
-		self.emit_field(func, node, 0);
-		Self::emit_list(func, &[I::I64Const(!UNMARKED_KIND), I::I64And]);
+	/// The kind on the stack without its element mark, when the program's lists carry marks (declared_values LIST_MARK)
+	pub(super) fn emit_unmarked(&self, func: &mut Function) {
+		if self.marks_lists() {
+			Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And]);
+		}
+	}
+
+	/// The kind on the stack with the element mark of the node in local `node`, when the program's lists carry marks
+	pub(super) fn emit_or_element_mark(&self, func: &mut Function, node: u32) {
+		if self.marks_lists() {
+			self.emit_field(func, node, 0);
+			Self::emit_list(func, &[I::I64Const(!UNMARKED_KIND), I::I64And, I::I64Or]);
+		}
+	}
+
+	/// The run-time error when the item in local `item` (`check` LIST_ITEM_CHECK) or an item of the list in local `item`
+	/// (LIST_ITEMS_CHECK) does not fit the element mark of the list in local `list`
+	pub(super) fn emit_item_check(&self, func: &mut Function, check: &str, list: u32, item: u32) {
+		if self.marks_lists() {
+			Self::emit_list(func, &[I::LocalGet(list), I::LocalGet(item)]);
+			self.call(func, check);
+		}
 	}
 
 	/// The node in local `node` (a lone cell or entry) becomes ø in place, so every holder of it sees the empty list;
@@ -1432,10 +1447,10 @@ impl WasmGcEmitter {
 	pub(super) fn emit_become_empty(&self, func: &mut Function, node: u32) {
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
-		func.instruction(&I::LocalGet(node));
-		self.emit_element_mark(func, node);
+		Self::emit_list(func, &[I::LocalGet(node), I::I64Const(Kind::Empty as i64)]);
+		self.emit_or_element_mark(func, node);
 		Self::emit_list(func, &[
-			I::I64Const(Kind::Empty as i64), I::I64Or, set(0),
+			set(0),
 			I::LocalGet(node), I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }), set(1),
 			I::LocalGet(node), I::RefNull(HeapType::Concrete(node_type)), set(2),
 		]);
@@ -1477,8 +1492,7 @@ impl WasmGcEmitter {
 			let (list, items) = (0, 1);
 			let copy = CopyCells::at(2);
 			let kind = copy.result + 1;
-			Self::emit_list(f, &[I::LocalGet(list), I::LocalGet(items)]);
-			s.call(f, super::declared_values::LIST_ITEMS_CHECK);
+			s.emit_item_check(f, super::declared_values::LIST_ITEMS_CHECK, list, items);
 			s.emit_empty_as_null(f, items);
 			s.emit_collect_cells(f, items, None, &copy);
 			s.emit_rebuild_cells(f, &copy);
@@ -1494,8 +1508,7 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalGet(list));
 				s.emit_field(f, copy.result, field_index);
 				if field_index == 0 {
-					s.emit_element_mark(f, list);
-					f.instruction(&I::I64Or);
+					s.emit_or_element_mark(f, list);
 				}
 				f.instruction(&set(field_index));
 			}
@@ -1684,8 +1697,7 @@ impl WasmGcEmitter {
 			};
 			Self::emit_index_compare(f, I::I64LtS);
 			s.emit_fail_if(f, "index_out_of_range");
-			Self::emit_list(f, &[I::LocalGet(list), I::LocalGet(value)]);
-			s.call(f, super::declared_values::LIST_ITEM_CHECK);
+			s.emit_item_check(f, super::declared_values::LIST_ITEM_CHECK, list, value);
 			// the cell at index
 			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::LocalGet(index), I::LocalSet(countdown), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			kind_test(s, f);

@@ -150,7 +150,24 @@ pub(super) const LIST_CANNOT_HOLD: &str = "list_cannot_hold_this_item";
 /// The in-place writers of a list, which check their items against its element mark
 const MARK_CHECKING_WRITERS: [&str; 3] = [super::list_ops::LIST_EXTEND, crate::analyzer::INSERT_AT_CALL, "node_with_at"];
 
+/// Whether the program declares a list type anywhere (`names: texts`, its lowered form the type as the target's Meta, a
+/// field `items: [text]`); a program without one emits no element marks and no item checks
+pub(super) fn declares_list_types(node: &Node) -> bool {
+	let is_list_type = |declared: &Node| crate::analyzer::list_element_type(&declared.name()).is_some();
+	match node {
+		Node::Meta { node, data } => is_list_type(data) || declares_list_types(node),
+		Node::Key(left, op, right) => (*op == crate::operators::Op::Colon && is_list_type(right)) || declares_list_types(left) || declares_list_types(right),
+		Node::List(items, _, _) => items.iter().any(declares_list_types),
+		_ => false,
+	}
+}
+
 impl WasmGcEmitter {
+	/// Whether this program's lists carry element marks (LIST_MARK): only then the writers check and keep them
+	pub(super) fn marks_lists(&self) -> bool {
+		self.should_emit_function(LIST_MARK)
+	}
+
 	/// The element mark of a list declared `declared` (`names: texts`), when a writer could check it
 	pub(super) fn element_mark_of(&self, declared: &Node) -> Option<i64> {
 		if !self.should_emit_function(LIST_MARK) {
@@ -166,7 +183,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn require_list_marks(&mut self) {
-		if MARK_CHECKING_WRITERS.iter().any(|writer| self.should_emit_function(writer)) {
+		if self.declares_list_types && MARK_CHECKING_WRITERS.iter().any(|writer| self.should_emit_function(writer)) {
 			self.ctx.required_functions.extend([crate::type_tests::NODE_KIND_IN, LIST_MARK, LIST_ITEM_CHECK, LIST_ITEMS_CHECK]);
 		}
 	}
