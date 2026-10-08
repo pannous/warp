@@ -9,15 +9,15 @@ fn test_a_compiled_quantity_carries_its_unit() {
 	let module = warp::pipeline::compile(LOOP).expect("compiles");
 	assert!(module.bytes.windows(b"wasp.units".len()).any(|window| window == b"wasp.units"));
 	#[cfg(feature = "native")] // the browser build runs modules in the page (test_eval_reads_the_same_section)
-	assert_eq!(warp::wasm_reader::read_bytes(&module.bytes).expect("runs").serialize().trim(), "500 m");
+	assert_eq!(warp::wasm_reader::read_bytes(&module.bytes).expect("runs").serialize().trim(), "500m");
 }
 
 #[test]
 fn test_eval_reads_the_same_section() {
-	assert_eq!(eval(LOOP).serialize().trim(), "500 m");
+	assert_eq!(eval(LOOP).serialize().trim(), "500m");
 }
 
 #[test]
 fn test_a_whole_list_of_quantities_shows_its_units() {
-	assert_eq!(eval("xs = [1 m, 250 cm]; xs").serialize(), "\"[100 cm 250 cm]\"");
+	assert_eq!(eval("xs = [1 m, 250 cm]; xs").serialize(), "\"[100cm 250cm]\"");
 }

@@ -5,7 +5,7 @@
 //! written unit after the run (`RESULT_UNITS`). Stage 2: a function called with quantities (or whose body has unit
 //! literals) is specialised per unit signature of its arguments, `speed·u0`. A quantity anywhere these stages do not
 //! cover (lists, interpolation, recursion) leaves the program unchanged: the unit stays the loud undefined-variable error.
-//! Stage 3: `print q`, `"text " + q` and a final value show the unit (`str(amount / unit) + " km"` at run time), `q as km`
+//! Stage 3: `print q`, `"text " + q` and a final value show the unit (`str(amount / unit) + "km"` at run time), `q as km`
 //! and `q in km` check the dimension and choose the unit shown, `return q` carries the signature (all returns agree).
 //! Stage 4: a variable holding a list of quantities has one element signature (`xs = [1 m, 2 m]`), used by `xs#i`,
 //! `sum max min first last count` and `for x in xs`; `√q` halves the powers; `${q}` interpolation shows the unit.
@@ -29,6 +29,9 @@ const LOOP_WORDS: [&str; 2] = ["for", "while"];
 /// `speed·u0`: a function specialised for one unit signature of its arguments
 const SPECIALISATION_SEPARATOR: &str = "·u";
 const TEXT_WORD: &str = "str";
+/// A run-time amount as text that reads back: `1.5`, or a fraction `str` shows as `10/3` in parentheses, `(10/3)km/h`
+const AMOUNT_TEXT: &str = r#"(if str(the_amount).contains("/") then "(" + str(the_amount) + ")" else str(the_amount))"#;
+const AMOUNT_PLACEHOLDER: &str = "the_amount";
 const PRINT_WORD: &str = "print";
 const RETURN_WORD: &str = "return";
 /// The text of a value: `str(q)`, and `text_form(q)` of `${q}` interpolation (interpolation.rs)
@@ -318,12 +321,12 @@ fn conversion_target(node: &Node) -> Option<Vec<Factor>> {
 	}
 }
 
-/// The quantity in `quantity` (an SI amount at run time) as text in `units`: `str(amount / 1000) + " km"`
+/// The quantity in `quantity` (an SI amount at run time) as text in `units`: `str(amount / 1000) + "km"`, a fraction in parentheses
 fn quantity_text(quantity: Node, units: &[Factor]) -> Option<Node> {
 	let per_unit = number_node(&super::scale(units, |factor| base_unit(factor.unit.dimension)))?;
 	let amount = Node::Key(Box::new(quantity), Op::Div, Box::new(per_unit));
-	let text = Node::List(vec![Node::Symbol(TEXT_WORD.to_string()), amount], Bracket::Round, Separator::None);
-	Some(Node::Key(Box::new(text), Op::Add, Box::new(Node::Text(format!(" {}", units_text(units))))))
+	let text = crate::lowering::library_words::substitute(crate::wasp_parser::parse(AMOUNT_TEXT), AMOUNT_PLACEHOLDER, &amount);
+	Some(Node::Key(Box::new(text), Op::Add, Box::new(Node::Text(super::unit_suffix(units)))))
 }
 
 /// `left op right`, computed when both are numbers: `5 km` is the literal 5000, a value and no computation (blocks.rs reads
@@ -511,8 +514,10 @@ impl Inference {
 				return Ok((Node::Key(Box::new(target), op, Box::new(value)), vec![]));
 			}
 		}
-		if let Some(object) = self.object_literal(&name, &value) {
-			return object.map(|object| (Node::Key(Box::new(target), op, Box::new(object)), vec![]));
+		if let Some(object) = self.object_literal(&value) {
+			let (object, fields) = object?;
+			self.objects.insert(name, fields);
+			return Ok((Node::Key(Box::new(target), op, Box::new(object)), vec![]));
 		}
 		let (value, signature) = self.infer(value)?;
 		if let Some(declared) = declared.filter(|declared| *declared != signature) {
@@ -525,9 +530,9 @@ impl Inference {
 		Ok((Node::Key(Box::new(target), op, Box::new(value)), signature))
 	}
 
-	/// `p = {dist: 5 m, name: "run"}`: the object with its amounts in SI units, p's field signatures noted; None for an
-	/// object without quantities
-	fn object_literal(&mut self, name: &str, value: &Node) -> Option<Result<Node, Stop>> {
+	/// `{dist: 5 m, name: "run"}`: the object with its amounts in SI units and its fields' signatures; None for an object
+	/// without quantities
+	fn object_literal(&mut self, value: &Node) -> Option<Result<(Node, Fields), Stop>> {
 		let entries = object_entries(value)?;
 		let mut lowered = vec![];
 		let mut fields = vec![];
@@ -542,9 +547,8 @@ impl Inference {
 		if fields.iter().all(|(_, signature)| signature.is_empty()) {
 			return None;
 		}
-		self.objects.insert(name.to_string(), fields);
 		let Node::List(_, bracket, separator) = value.drop_meta() else { return None };
-		Some(Ok(Node::List(lowered, bracket.clone(), separator.clone())))
+		Some(Ok((Node::List(lowered, bracket.clone(), separator.clone()), fields)))
 	}
 
 	/// `p.dist` of an object with quantity fields: the field's signature (none for a plain field)
@@ -593,7 +597,8 @@ impl Inference {
 	fn quantity_source(&self, amount: &str, signature: &Signature) -> Result<String, Stop> {
 		let units = display_factors(&self.display, signature);
 		let per_unit = number_node(&super::scale(&units, |factor| base_unit(factor.unit.dimension))).ok_or(Stop::Unsupported)?;
-		Ok(format!("str({amount} / ({})) + \" {}\"", per_unit.serialize().trim(), units_text(&units)))
+		let amount_text = AMOUNT_TEXT.replace(AMOUNT_PLACEHOLDER, &format!("({amount} / ({}))", per_unit.serialize().trim()));
+		Ok(format!("{amount_text} + \"{}\"", super::unit_suffix(&units)))
 	}
 
 	/// A whole list of quantities as text, built at run time: `"[" + join(map(xs, x => str(x / 1/100) + " cm"), " ") + "]"`
@@ -809,6 +814,17 @@ impl Inference {
 	fn infer_list(&mut self, items: Vec<Node>, bracket: Bracket, separator: Separator) -> Result<(Node, Signature), Stop> {
 		if let Some(output) = self.output_form(&items, &bracket, &separator) {
 			return output;
+		}
+		// a written object `{dist:500m name:"run"}` (only `:` entries: `{x = 1 m}` is a block); as the program's value its
+		// fields' units go into `wasp.units`
+		let list = Node::List(items.clone(), bracket.clone(), separator.clone());
+		let is_written_object = object_entries(&list).is_some_and(|entries| entries.iter().all(|(_, op, _)| *op == Op::Colon));
+		if let Some(object) = self.object_literal(&list).filter(|_| is_written_object) {
+			let (object, fields) = object?;
+			if self.at_top {
+				self.result_fields = Some(fields.into_iter().filter(|(_, signature)| !signature.is_empty()).collect());
+			}
+			return Ok((object, vec![]));
 		}
 		if bracket == Bracket::Round && separator == Separator::None {
 			if let Some(call) = self.specialised_call(&items) {
