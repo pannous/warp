@@ -385,6 +385,11 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// A value held as a Node whose type only the run time knows: an optional, an `any` parameter, an item of a mixed list
+	fn has_unknown_static_type(&self, subject: &Node) -> bool {
+		!matches!(subject.drop_meta(), Node::Number(_)) && matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data)
+	}
+
 	/// `is_type(x, "spec")` as a Node: its 1 or 0
 	fn emit_type_test(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
 		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
@@ -404,7 +409,7 @@ impl WasmGcEmitter {
 		}
 		let [_, subject, spec] = items.as_slice() else { return false };
 		let Node::Text(spec) = spec.drop_meta() else { return false };
-		let unknown = spec == crate::type_tests::ERROR_TYPE || (!matches!(subject.drop_meta(), Node::Number(_)) && matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data));
+		let unknown = spec == crate::type_tests::ERROR_TYPE || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
 		match crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type) {
 			Some(mask) => {
@@ -460,6 +465,12 @@ impl WasmGcEmitter {
 				let Node::Symbol(extremum) = arg.drop_meta() else { return false };
 				let Some((_, error)) = crate::min_max::EMPTY_LIST_ERRORS.iter().find(|(name, _)| name == extremum) else { return false };
 				self.emit_runtime_error(func, error);
+				true
+			}
+			"type" if !crate::analyzer::is_boolean(arg, &self.scope) && self.has_unknown_static_type(arg) => {
+				self.emit_node_instructions(func, arg);
+				func.instruction(&I::RefAsNonNull);
+				self.emit_call(func, crate::type_tests::NODE_TYPE_NAME);
 				true
 			}
 			"type" => {

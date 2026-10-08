@@ -12,6 +12,9 @@ use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONA
 
 /// The code points from which UTF-8 needs 2, 3 and 4 bytes
 const UTF8_LENGTH_STEPS: [i64; 3] = [0x80, 0x800, 0x10000];
+/// The kinds a value of unknown static type may have at run time, named by node_type_name as Kind's Display does
+const RUN_TIME_TYPE_KINDS: [Kind; 12] = [Kind::Empty, Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::Symbol, Kind::Key, Kind::Block, Kind::List, Kind::Error,
+	Kind::TypeDef, Kind::Function];
 
 
 /// An ASCII letter with this bit set is lowercase: `byte | ASCII_LOWERCASE_BIT == 'e'` takes e and E
@@ -49,6 +52,7 @@ impl WasmGcEmitter {
 		self.emit_list_cell_access();
 		self.emit_node_counting();
 		self.emit_node_kind_test();
+		self.emit_node_type_name();
 		self.emit_node_indexing();
 		self.emit_with_at_functions();
 		self.emit_typed_list_runtime();
@@ -123,6 +127,36 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I64ShrU, I::I64Const(1), I::I64And]);
 			});
 		}
+	}
+
+	/// node_type_name(node) -> ref $Node: `type(x)` of a value whose static type is unknown (held as a Node), the symbol
+	/// naming its run-time kind as the static names do: bool, rational, int, text, …
+	fn emit_node_type_name(&mut self) {
+		if !self.should_emit_function(crate::type_tests::NODE_TYPE_NAME) {
+			return;
+		}
+		let node_ref = self.node_ref(false);
+		let kind = 1;
+		self.runtime_function(crate::type_tests::NODE_TYPE_NAME, vec![Ref(node_ref)], vec![Ref(node_ref)], vec![ValType::I64], |s, f| {
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::LocalTee(kind), I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq, I::If(BlockType::Empty)]);
+			s.emit_string_call(f, crate::analyzer::BOOL_TYPE, "new_symbol");
+			Self::emit_list(f, &[I::Return, I::End]);
+			if s.int_runtime() {
+				// an exact number that is no integer holds a $Ratio (exact.rs)
+				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::Int as i64), I::I64Eq, I::If(BlockType::Empty)]);
+				s.emit_field(f, 0, 1);
+				Self::emit_list(f, &[I::RefTestNonNull(HeapType::Concrete(s.type_manager.ratio_type)), I::If(BlockType::Empty)]);
+				s.emit_string_call(f, crate::analyzer::RATIONAL_WORD, "new_symbol");
+				Self::emit_list(f, &[I::Return, I::End, I::End]);
+			}
+			for named in RUN_TIME_TYPE_KINDS {
+				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(named as i64), I::I64Eq, I::If(BlockType::Empty)]);
+				s.emit_string_call(f, &named.to_string(), "new_symbol");
+				Self::emit_list(f, &[I::Return, I::End]);
+			}
+			s.emit_string_call(f, &Kind::Data.to_string(), "new_symbol");
+		});
 	}
 
 	fn emit_node_counting(&mut self) {
