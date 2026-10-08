@@ -37,7 +37,12 @@ function morphChildren(shown, wanted, animated = shown.hasChildNodes()) {
 		else if (old.nodeType === Node.ELEMENT_NODE) morphElement(old, node);
 		else if (old.nodeValue !== node.nodeValue) old.nodeValue = node.nodeValue;
 	}
-	for (; current; current = nextLive(current.nextSibling)) leave(current);
+	// the next node is found before leave removes this one, which has no next sibling after
+	while (current) {
+		const next = nextLive(current.nextSibling);
+		leave(current);
+		current = next;
+	}
 	placesBefore.forEach((before, element) => moveFrom(element, before));
 }
 

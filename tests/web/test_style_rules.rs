@@ -30,3 +30,11 @@ fn descendant_selectors_and_rules_on_one_line() {
 	assert_eq!(html_of("div{ style{ .a { margin: 0 } #main { margin: 0 } } }"), "<div><style>.a { margin: 0px } #main { margin: 0px }</style></div>");
 }
 
+
+// a class or id selector with a lone value is its color (card style-selectors); one declaration in braces stays a rule
+#[test]
+fn a_selector_with_a_value_is_its_color() {
+	assert_eq!(html_of("div{ style{ #done = \"red\" } }"), "<div><style>#done { color: red }</style></div>");
+	assert_eq!(html_of("div{ style{ .done: \"red\"; .open = green } }"), "<div><style>.done { color: red } .open { color: green }</style></div>");
+	assert_eq!(html_of("div{ style{ .done{color:red} #main{margin:0} } }"), "<div><style>.done { color: red } #main { margin: 0px }</style></div>");
+}

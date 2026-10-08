@@ -46,11 +46,23 @@ fn gpu() -> Result<&'static Gpu, String> {
 	.map_err(Clone::clone)
 }
 
+/// Whether this machine has a GPU to run shaders on, or why not
+pub fn available() -> Result<(), String> {
+	gpu().map(|_| ())
+}
+
 /// Run `shader` over `numbers`: the numbers it left, or why not (no GPU, a shader that does not compile, …)
 pub fn compute(shader: &str, numbers: &[f32], workgroups: u32) -> Result<Vec<f32>, String> {
+	compute_from(shader, numbers, workgroups, 0)
+}
+
+/// Run `shader` over `numbers`: the numbers it left from index `first` on, the only ones read back (a reduction's
+/// partial results after the items)
+pub fn compute_from(shader: &str, numbers: &[f32], workgroups: u32, first: usize) -> Result<Vec<f32>, String> {
 	let Gpu { device, queue } = gpu()?;
 	let bytes: Vec<u8> = numbers.iter().flat_map(|number| number.to_le_bytes()).collect();
-	let size = bytes.len() as u64;
+	let offset = (first.min(numbers.len()) * FLOAT_BYTES) as u64;
+	let size = bytes.len() as u64 - offset;
 	let usage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST;
 	let storage = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("gpu_compute numbers"), contents: &bytes, usage });
 	let readback = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_compute readback"), size, usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
@@ -77,7 +89,7 @@ pub fn compute(shader: &str, numbers: &[f32], workgroups: u32) -> Result<Vec<f32
 		pass.set_bind_group(0, &bindings, &[]);
 		pass.dispatch_workgroups(workgroups, 1, 1);
 	}
-	encoder.copy_buffer_to_buffer(&storage, 0, &readback, 0, size);
+	encoder.copy_buffer_to_buffer(&storage, offset, &readback, 0, size);
 	queue.submit([encoder.finish()]);
 	let bytes = read_back(device, &readback, validation)?;
 	Ok(bytes.chunks_exact(FLOAT_BYTES).map(|chunk| f32::from_le_bytes(chunk.try_into().expect("four bytes"))).collect())

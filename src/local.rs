@@ -6,6 +6,7 @@ use crate::node::Node;
 pub struct Local {
 	pub name: String,
 	pub type_node: Option<Box<Node>>,  // Type as Node (Symbol or complex type)
+	pub declared: bool,                 // type_node written in the source (`names: texts`), not inferred
 	pub position: u32,                  // WASM local index
 	pub is_param: bool,                 // Parameter vs local variable
 	pub kind: crate::type_kinds::Kind,  // Value kind (Int, Float, Text, etc.)
@@ -20,6 +21,7 @@ impl Local {
 			position,
 			name: name.into(),
 			type_node: None,
+			declared: false,
 			kind,
 			is_param: false,
 			data_pointer: 0,
@@ -32,6 +34,7 @@ impl Local {
 			position,
 			name: name.into(),
 			type_node: None,
+			declared: false,
 			kind,
 			is_param: true,
 			data_pointer: 0,

@@ -249,6 +249,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		if name == crate::library_words::LIST_SUM && items.len() == 3 {
 			return infer_type(&items[2], scope); // the loop it dispatches around
 		}
+		// `data a and b` never runs: it is the literal written, here a Key
+		if name == crate::blocks::DATA_WORD && items.len() == 2 && *bracket == Bracket::None {
+			return match items[1].kind() { Kind::Block => Kind::List, kind => kind };
+		}
 		if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
 			return infer_type(&items[1], scope); // `return x` is worth x
 		}

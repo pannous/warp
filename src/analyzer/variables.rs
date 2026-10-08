@@ -132,10 +132,15 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 							Some(type_name) => (declared_kind(&type_name.name()).unwrap_or_else(|| binding_kind(right, scope)), Some(Box::new(type_name.clone()))),
 							None => value_binding(right, scope),
 						};
+						let is_declared = declared.is_some();
 						scope.define(name.clone(), type_node, kind);
+						if let Some(local) = scope.own_binding_mut(name) {
+							local.declared = is_declared;
+						}
 					}
 					Node::Symbol(name) => {
 						type_list_by_first_append(name, right, scope);
+						widen_list_type(scope, name, right);
 						widen_to_float(scope, name, right);
 						widen_to_node(scope, name, right);
 					}
@@ -221,6 +226,24 @@ pub(super) fn widen_element_type(scope: &mut Scope, list: &Node, value: &Node) {
 		(FLOAT_WORD, RATIONAL_WORD) => return, // `xs#1 = 0.5` (an exact decimal) of a float list is stored as its f64
 		_ => NODE_LIST_TYPE.to_string(),
 	};
+	local.type_node = Some(Box::new(Node::Symbol(widened)));
+}
+
+/// `ys = ["a"]; ys = [3]`: a variable given lists of two element types holds the items of both, of their common type
+/// (`list of number` for ints and floats), else held as Nodes; a declared type is kept (checked elsewhere)
+fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
+	if infer_type(value, scope) != Kind::List {
+		return;
+	}
+	let assigned = list_type_name(value, scope);
+	let Some(local) = scope.own_binding_mut(name).filter(|local| local.kind == Kind::List && !local.is_param) else { return };
+	let Some(held) = local.type_node.as_ref().map(|type_node| type_node.name()) else { return };
+	let (Some(held_element), Some(assigned_element)) = (held.strip_prefix(LIST_OF_PREFIX), assigned.strip_prefix(LIST_OF_PREFIX)) else { return };
+	if held_element == assigned_element {
+		return;
+	}
+	let common = super::checks::common_type_word(&[held_element.to_string(), assigned_element.to_string()]);
+	let widened = common.map_or(NODE_LIST_TYPE.to_string(), |element| format!("{LIST_OF_PREFIX}{element}"));
 	local.type_node = Some(Box::new(Node::Symbol(widened)));
 }
 
@@ -626,7 +649,10 @@ pub(crate) fn declare_global(program: Node, names: &[String]) -> Node {
 		single => (vec![single], Bracket::None, Separator::Newline),
 	};
 	for name in names {
-		let assigns = |item: &Node| matches!(item.drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(target) if target == name));
+		let named = |target: &Node| matches!(target.drop_meta(), Node::Symbol(target) if target == name);
+		// `xs = v` or the typed `xs: [int] = v`
+		let assigns = |item: &Node| matches!(item.drop_meta(), Node::Key(target, Op::Assign, _)
+			if named(target) || matches!(target.drop_meta(), Node::Key(typed, Op::Colon, _) if named(typed)));
 		match items.iter().position(assigns) {
 			Some(index) => items[index] = as_global(items[index].clone()),
 			None => items.insert(0, as_global(Node::Symbol(name.clone()))),
@@ -792,6 +818,7 @@ impl Scope {
 		let local = Local {
 			name: name.clone(),
 			type_node,
+			declared: false,
 			position,
 			is_param: false,
 			kind,

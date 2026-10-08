@@ -1,0 +1,11 @@
+<!-- markup.js morphChildren: markup that loses two or more trailing children loses them all (the tour pair
+"fine updates" then "components" kept a stale <ul>). Open via a server at the repository root; the title says ok or FAIL -->
+<title>morph shrink</title>
+<script src="../web/playground/markup.js"></script>
+<script>
+const markup = html => { const template = document.createElement("template"); template.innerHTML = html; return template.content; };
+const shown = document.createElement("div");
+morphChildren(shown, markup("<style>.a{}</style><button>b</button><p>c</p><ul><li>d</li></ul>"));
+morphChildren(shown, markup("<div>1</div><div>2</div>"));
+document.title = shown.innerHTML === "<div>1</div><div>2</div>" ? "ok" : `FAIL ${shown.innerHTML}`;
+</script>

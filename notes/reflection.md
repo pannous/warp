@@ -72,7 +72,13 @@ Warp notation text (parsed by the reader we already have), one map:
    at compile time, the module's path is known then, so no host call: `adder.exports` are the module's own functions
    (not warp's runtime exports), `adder.add.params` and `.signature` come from the entry (Objects::module_function_word;
    wasm_modules::qualify leaves `m.f.word` of an exported function unqualified for it). The run-time host call stays
-   for `any`-typed values only. Not yet: classes of an imported module (`m.P.fields`), the page reader.
+   for `any`-typed values only. Not yet: the page reader.
+   Done (card reflection-classes, on that entry): `m.P.fields`, `m.P.methods`, `dir(m.P)` of an imported module's class
+   (Objects::module_member_word, which also answers `m.f.params`). The entries hold names as symbols (`[x y]`), a
+   one-letter text reads back as a character; `classes` lists inherited fields first. wasm_emitter emit_names also
+   writes the parameters' local names, so named arguments reach a warp module's function (`twice(a: 21)`). Fixture
+   tests/fixtures/wasm/shapes.wasm from probes/reflection_classes/shapes.warp. Not yet: constructing or reading the
+   module's instances (`shapes.P(1, 2)`, exports with reference types; card import-compiled).
    Size (web::test_bundle_budget, 23 KB for a hello-world site, a few dozen bytes of headroom): the `functions` entry
    holds only the functions the source defines, not the html_*/prelude ones lowering brings in; a hello world writes
    no section. The same rule holds for run-time tables: list_text carries the operators' texts only when the program

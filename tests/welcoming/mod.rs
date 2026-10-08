@@ -23,6 +23,7 @@ mod test_welcoming_rangeblock;
 mod test_welcoming_slices;
 mod test_welcoming_sugar;
 mod test_let_const_changes;
+mod test_function_bindings; // card serve-var
 mod test_const_list_methods;
 mod test_c_style;
 mod test_item_list_cast_hint;
@@ -48,3 +49,5 @@ mod test_sleep_unit_shadow;
 mod test_undefined_in_text_sum; // card compile-path
 mod test_count_shadowed; // card count-shadowed
 mod test_discarded_pure_warning;
+mod test_slash_comment_needs_space;
+mod test_ternary_hint_got_it; // card hint-dismiss

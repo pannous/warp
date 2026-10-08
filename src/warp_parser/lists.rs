@@ -142,8 +142,9 @@ impl WarpParser {
 			};
 
 			let consumed_input = self.pos != pos_before;
-			// `==` is loose (false equals ø): only a real ø is skipped
-			if matches!(item, Empty) && !(consumed_input && close.is_some()) {
+			// `==` is loose (false equals ø): only a real ø is skipped; `sum []` keeps its empty argument
+			let is_argument = in_command && items_with_seps.len() > statement_start;
+			if matches!(item, Empty) && !(consumed_input && (close.is_some() || is_argument)) {
 				if !consumed_input {
 					self.advance();
 				}

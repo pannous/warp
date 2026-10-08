@@ -151,8 +151,8 @@ function startWorker() {
 			if (data.type === "failed") return reject(new Error(data.message));
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
-			if (data.type === "print") pending.printed.push(data);
-			if (data.type === "sleep") pending.slept = true;
+			if (data.type === "print") printedChunk(pending, data);
+			if (data.type === "sleep") pending.frame++;
 			if (data.type === "tasks inline") pending.tasksInline = data.reason;
 			if (data.type === "paint") painted(pending, data);
 			if (data.type === "module") lastModule = data.bytes;
@@ -179,15 +179,32 @@ const darkMode = matchMedia(DARK_MODE_QUERY);
 const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches } });
 darkMode.addEventListener("change", tellSystemValues);
 
-// `loop { …; show(); sleep(16) }`: a paint after a sleep is an animation's next frame, shown at once in place of the
-// last one; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (card drawing-frames)
+// `loop { …; show(); sleep(16) }`: each sleep starts an animation's next frame, what the run paints or prints in it
+// replaces the last frame's; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
+// drawing-frames, snake-frames)
+function startsFrame(run, output) {
+	const starts = run.frame > 0 && run.framesShown[output] !== run.frame;
+	run.framesShown[output] = run.frame;
+	if (starts) {
+		run.animating = true;
+		stopAfterTimeout(run);
+	}
+	return starts;
+}
+
 function painted(run, painting) {
-	if (!run.slept) return run.paintings.push(painting);
-	run.slept = false;
-	run.animating = true;
+	if (!startsFrame(run, "paintings")) return run.paintings.push(painting);
 	run.paintings = [painting];
 	showFrame(painting);
-	stopAfterTimeout(run);
+}
+
+// a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins
+function printedChunk(run, chunk) {
+	if (startsFrame(run, "printed")) {
+		showPrinted(run.printed);
+		run.printed = [];
+	}
+	run.printed.push(chunk);
 }
 
 function stopAfterTimeout(run) {
@@ -220,7 +237,7 @@ function evaluate(code) {
 async function runInWorker(code) {
 	await workerReady;
 	return new Promise(resolve => {
-		const run = { id: ++nextRunId, resolve, printed: [], paintings: [] };
+		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {} };
 		stopAfterTimeout(run);
 		pending = run;
 		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
@@ -313,9 +330,7 @@ function showReport(report) {
 	$("value").classList.toggle("located", Boolean(errorAt));
 	$("value").title = errorAt ? `go to ${at(errorAt.line, errorAt.column)}` : "";
 	$("value").onclick = errorAt ? () => jumpTo(errorAt.line, errorAt.column) : null;
-	const printed = report.printed.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join("");
-	$("printed").textContent = printed;
-	$("printed").hidden = printed === "";
+	showPrinted(report.printed);
 	showRendered(report.html);
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
@@ -470,6 +485,12 @@ function clickDetail(click) {
 	const bounds = target.getBoundingClientRect();
 	const scale = target.width ? target.width / bounds.width : 1;
 	return { x: Math.floor((click.clientX - bounds.left) * scale), y: Math.floor((click.clientY - bounds.top) * scale) };
+}
+
+function showPrinted(chunks) {
+	const printed = chunks.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join("");
+	$("printed").textContent = printed;
+	$("printed").hidden = printed === "";
 }
 
 // what a handler printed, painted and gave, while no run is pending
