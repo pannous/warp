@@ -39,28 +39,28 @@ pub(crate) fn parallel_map(node: &Node) -> Option<(Node, Node)> {
 			}
 		}
 	}
-	is_annotated(node).then(|| map_call(node).or_else(|| all_call(node))).flatten()
+	is_annotated(node, PARALLEL_ATTRIBUTE).then(|| map_call(node).or_else(|| all_call(node))).flatten()
 }
 
 /// `@parallel` on a form parallel_map can't split into tasks (`@parallel square xs`): a warning (an error under strict)
 /// instead of running it in sequence without a word; said once, by the innermost form the annotation is on
 pub(crate) fn sequential_warning(node: &Node) -> Option<Node> {
-	if !annotated_here(node) {
+	if !annotated_here(node, PARALLEL_ATTRIBUTE) {
 		return None;
 	}
 	let message = "@parallel runs this in sequence: only `xs.map(f)`, `f all xs` and `go for x in xs { … }` run in parallel";
 	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, message.to_string())]).err()
 }
 
-/// `@parallel` on a form or on the start of its first part: `@parallel xs.map(f)` annotates xs, `@parallel square all
-/// xs` (read as `(square all) xs`) square
-fn is_annotated(node: &Node) -> bool {
-	annotated_here(node) || head(node).is_some_and(|head| is_form(head) && is_annotated(head))
+/// `@parallel` (or another attribute, `@gpu`) on a form or on the start of its first part: `@parallel xs.map(f)`
+/// annotates xs, `@parallel square all xs` (read as `(square all) xs`) square
+pub(crate) fn is_annotated(node: &Node, attribute: &str) -> bool {
+	annotated_here(node, attribute) || head(node).is_some_and(|head| is_form(head) && is_annotated(head, attribute))
 }
 
-/// `@parallel` on a form or on its first part when that is no form itself
-fn annotated_here(node: &Node) -> bool {
-	head(node).is_some_and(|head| node.attribute(PARALLEL_ATTRIBUTE).is_some() || (!is_form(head) && head.attribute(PARALLEL_ATTRIBUTE).is_some()))
+/// The attribute on a form or on its first part when that is no form itself
+pub(crate) fn annotated_here(node: &Node, attribute: &str) -> bool {
+	head(node).is_some_and(|head| node.attribute(attribute).is_some() || (!is_form(head) && head.attribute(attribute).is_some()))
 }
 
 /// The first part of a form: the left of a key, the first item of a list
@@ -84,7 +84,7 @@ fn all_call(node: &Node) -> Option<(Node, Node)> {
 }
 
 /// `xs.map(f)`: xs and f
-fn map_call(node: &Node) -> Option<(Node, Node)> {
+pub(crate) fn map_call(node: &Node) -> Option<(Node, Node)> {
 	let Node::Key(list, Op::Dot, call) = node.drop_meta() else { return None };
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [map, function] = items.as_slice() else { return None };
