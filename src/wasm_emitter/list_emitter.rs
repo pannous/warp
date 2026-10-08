@@ -102,7 +102,8 @@ impl WasmGcEmitter {
 	/// `f(a, b…)` or `(f)` of a user function, an FFI import or a text builtin
 	fn emit_function_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) -> bool {
 		let Some(Node::Symbol(fn_name)) = items.first().map(Node::drop_meta) else { return false };
-		if items.len() < 2 && *bracket != Bracket::Round {
+		// `(angle)` of a variable is its value
+		if items.len() < 2 && (*bracket != Bracket::Round || self.is_variable(fn_name)) {
 			return false;
 		}
 		if self.ctx.user_functions.contains_key(fn_name) {
