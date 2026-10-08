@@ -71,19 +71,32 @@ fn prefixed<'a>(value: &'a Node, words: &[&str]) -> Option<&'a Node> {
 	}
 }
 
+/// `data e`: e, the expression as written
+pub(crate) fn quoted_data(node: &Node) -> Option<&Node> {
+	prefixed(node, &[DATA_WORD])
+}
+
 /// `(data q+1)` is `data q+1` and `[data a]` the list of one item `data a`: a prefix takes the rest of its group,
 /// it is no function to call
+/// `string(data x+1)`: the call of string with the one argument `data x+1`
 fn prefixed_group(node: &Node) -> Option<Node> {
 	let Node::List(items, bracket @ (Bracket::Round | Bracket::Square), Separator::None | Separator::Space) = node.drop_meta() else { return None };
-	let [prefix, _, ..] = items.as_slice() else { return None };
-	if !matches!(prefix.drop_meta(), Node::Symbol(word) if word == DATA_WORD || BLOCK_WORDS.contains(&word.as_str())) {
-		return None;
+	let is_prefix = |item: &Node| matches!(item.drop_meta(), Node::Symbol(word) if word == DATA_WORD || BLOCK_WORDS.contains(&word.as_str()));
+	match items.as_slice() {
+		[prefix, _, ..] if is_prefix(prefix) => {
+			let prefixed = Node::List(items.clone(), Bracket::None, Separator::Space);
+			Some(match bracket {
+				Bracket::Square => Node::List(vec![prefixed], Bracket::Square, Separator::None),
+				_ => prefixed,
+			})
+		}
+		// only `data`: `f(block rest)` passes a variable named block
+		[function @ Node::Symbol(_), prefix, _, ..] if *bracket == Bracket::Round && prefix.drop_meta().name() == DATA_WORD => {
+			let argument = Node::List(items[1..].to_vec(), Bracket::None, Separator::Space);
+			Some(Node::List(vec![function.clone(), argument], Bracket::Round, Separator::None))
+		}
+		_ => None,
 	}
-	let prefixed = Node::List(items.clone(), Bracket::None, Separator::Space);
-	Some(match bracket {
-		Bracket::Square => Node::List(vec![prefixed], Bracket::Square, Separator::None),
-		_ => prefixed,
-	})
 }
 
 /// In a body: `param!` the argument's code (a group), a bare `param` the argument as data

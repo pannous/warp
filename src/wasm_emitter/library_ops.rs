@@ -11,8 +11,9 @@ use crate::type_kinds::{CURLY_BRACKET_INFO, CURLY_LIST_KIND, KIND_BITS, SQUARE_L
 const BRACKET_INFO_MASK: i64 = 0xff;
 /// The operator code in a key's kind, above its KIND_BITS; a type instance `point{x:1}` has none
 const OP_INFO_MASK: i64 = 0xff;
-const INSTANCE_OP_CODE: i64 = 0;
-use crate::wasm_emitter::layout::BYTE;
+/// An operator's text in list_text's table: its pointer and length, two i32 words
+const OPERATOR_ENTRY_BYTES: i32 = 8;
+use crate::wasm_emitter::layout::{BYTE, WORD};
 use crate::wasm_emitter::text_unicode::CaseMapping;
 
 const KEY_KIND: i64 = Kind::Key as i64;
@@ -419,6 +420,16 @@ impl WasmGcEmitter {
 		});
 	}
 
+	/// The table list_text joins an entry by: each operator code's written text (operators::written_operator) as its
+	/// pointer and length
+	fn allocate_operator_texts(&mut self) -> u32 {
+		let table: Vec<u8> = (0..=OP_INFO_MASK as usize).flat_map(|code| {
+			let (pointer, length) = self.allocate_string(&crate::operators::written_operator(code));
+			[pointer.to_le_bytes(), length.to_le_bytes()].concat()
+		}).collect();
+		self.allocate_bytes("operator_texts", &table)
+	}
+
 	fn emit_joining(&mut self, name: &'static str, nested: bool) {
 		self.emit_text_quoted();
 		self.emit_text_heap_global();
@@ -428,8 +439,8 @@ impl WasmGcEmitter {
 		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
-		let map_texts = [self.allocate_string("{"), self.allocate_string("}"), self.allocate_string(":")];
-		let no_text = self.allocate_string("");
+		let map_texts = [self.allocate_string("{"), self.allocate_string("}")];
+		let operator_texts = self.allocate_operator_texts();
 		let empty_text = self.allocate_string(EMPTY_TEXT);
 		let bool_texts = [self.allocate_string(crate::node::NO), self.allocate_string(crate::node::YES)];
 		let i64_box = self.type_manager.i64_box_type;
@@ -438,10 +449,10 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
-		locals.extend([ValType::I64, nullable]);
+		locals.extend([ValType::I64, nullable, ValType::I32]);
 		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
-			let (bound, address, position, is_first, number, entry_value) = (4, 5, 6, 7, 8, 9);
+			let (bound, address, position, is_first, number, entry_value, operator_entry) = (4, 5, 6, 7, 8, 9, 10);
 			let is_kind = |f: &mut Function, kind: Kind| {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
@@ -476,7 +487,7 @@ impl WasmGcEmitter {
 				// list_text: a nested list as its literal, "[" + list_text(item, " ") + "]", a map in braces
 				if nested {
 					let [open, close, space] = texts;
-					let [open_map, close_map, colon] = map_texts;
+					let [open_map, close_map] = map_texts;
 					let new_text = |f: &mut Function, (pointer, length): (u32, u32)| {
 						Self::emit_list(f, &[I32Const(pointer as i32), I32Const(length as i32)]);
 						s.call(f, "new_text");
@@ -504,14 +515,11 @@ impl WasmGcEmitter {
 					f.instruction(&I::LocalSet(entry_value));
 					s.emit_entry_in_braces(f, entry_value);
 					Self::emit_list(f, &[I::End, I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type)]);
-					// an instance `point{x:1}` (a key without operator) joins its name and fields without one (P123)
+					// joined by its operator as written: `x+1`, an instance `point{x:1}` without one (P123)
 					s.emit_field(f, element, 0);
-					Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(OP_INFO_MASK), I::I64And, I::I64Const(INSTANCE_OP_CODE), I::I64Eq]);
-					f.instruction(&I::If(BlockType::Result(node_ref)));
-					new_text(f, no_text);
-					f.instruction(&I::Else);
-					new_text(f, colon);
-					f.instruction(&I::End);
+					Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(OP_INFO_MASK), I::I64And, I::I32WrapI64, I32Const(OPERATOR_ENTRY_BYTES), I::I32Mul, I32Const(operator_texts as i32), I::I32Add, I::LocalTee(operator_entry)]);
+					Self::emit_list(f, &[I::I32Load(WORD), I::LocalGet(operator_entry), I::I32Load(MemArg { offset: 4, ..WORD })]);
+					s.call(f, "new_text");
 					Self::emit_list(f, &[I::Call(own_index), I::LocalSet(element), I::End]);
 					// a curly list is a map: its bracket info, above the kind (other info may sit higher still)
 					let is_map = |f: &mut Function| {
