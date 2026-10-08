@@ -164,5 +164,14 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    elsewhere, or xs or a number f reads is written after ys's statement (ys keeps the values before). The round trip
    (upload, dispatch, readback, f64↔f32) is the cost, not the kernel: 10^7 sin then cos, ms: two maps 272–321, folded
    143–188, one map alone ~150 (load average 20–30, noisy). Test: a_gpu_map_result_mapped_again_stays_on_the_gpu.
+   Reductions (done, gpu_maps.rs Reduction + reduce_shader, shared_arrays.rs gpu_reduced, host word
+   gpu_reduce_linear): `s = sum(xs.map(f) @gpu)`, min, max. Each workgroup of 256 maps its items and folds them in
+   shared memory (tree of halvings), one partial per group is written after the data, only those come back (n/256
+   floats), the CPU combines them. Below GPU_MAP_MIN_COUNT or without an adapter, the reduction as written runs.
+   f32: sum of 10^7 sin·exp is 9093306.84 against 9093307.88 in f64 (1e-7 relative). Measured (release,
+   probes/webgpu/threshold.sh, `sin(x) * exp(x)`, GC list copied in, ms): 10^5 GPU 4–27 / CPU 15, 10^6 20 / 140,
+   10^7 170–200 / 2800–3500 (the CPU side builds the mapped GC list, then sums). Tests: test_webgpu
+   a_reduction_of_a_gpu_map_reads_back_partial_results, a_reduction_of_a_gpu_map_takes_a_list_of_floats.
+   `dot` waits for list .* list (paired lists on the GPU).
    Open: a result both read on the CPU and mapped again on the GPU (a GPU buffer kept per block, skipping the upload),
    the browser path with a real adapter.
