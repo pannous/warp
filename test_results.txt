@@ -887,6 +887,10 @@ PASSED:
   ✓ functions::test_let_in::let_value_in
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
+  ✓ functions::test_library_word_values::a_function_updating_a_main_list_asks_for_global
+  ✓ functions::test_library_word_values::a_library_word_is_a_function_value_of_map_and_filter
+  ✓ functions::test_library_word_values::an_uncalled_function_updating_its_list_parameter_compiles
+  ✓ functions::test_library_word_values::print_in_a_block_prints_the_one_expression
   ✓ functions::test_list_conversion::an_empty_list
   ✓ functions::test_list_conversion::list_of_a_value
   ✓ functions::test_map_phrase::test_map_a_function_first_without_on
@@ -3017,6 +3021,8 @@ PASSED:
   ✓ web::test_routes::the_route_index_names_the_route_the_path_picks
   ✓ web::test_routes::the_route_matching_the_path_is_shown
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
+  ✓ web::test_safari_imports::safaris_engine_reads_the_imports_of_a_task_program
+  ✓ web::test_safari_imports::the_page_never_asks_the_engine_for_import_or_export_descriptors
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
   ✓ web::test_site::a_site_starting_tasks_runs_its_program_in_a_worker
@@ -3413,4 +3419,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3408 passed, 0 failed, 3408 total tested
+19 ignored, 3414 passed, 0 failed, 3414 total tested
