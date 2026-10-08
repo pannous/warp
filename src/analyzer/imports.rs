@@ -228,8 +228,13 @@ pub(super) fn ffi_call_kind(name: &str) -> Kind {
 	crate::ffi::get_ffi_signature(name).map_or(Kind::Int, |signature| signature_kind(&signature))
 }
 
-/// The kind of a foreign function's result: a float, a text (a C string), a host word's Node, else an int
+/// The kind of a foreign function's result: a float, a text (a C string), a host word's Node, what a function of a module
+/// warp compiled declares, else an int
 pub(crate) fn signature_kind(signature: &crate::ffi::FfiSignature) -> Kind {
+	let declared = crate::wasm_modules::is_module_path(signature.library).then(|| crate::wasm_modules::exports(signature.library).get(signature.name)?.node_result).flatten();
+	if let Some(kind) = declared {
+		return kind;
+	}
 	match signature.results.first() {
 		Some(wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32) => Kind::Float,
 		Some(wasm_encoder::ValType::Ref(_)) if signature.library != crate::host::HOST_LIBRARY => Kind::Text,
