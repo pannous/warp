@@ -764,7 +764,7 @@ pub(super) fn subscripted_array_type(type_node: &Node) -> Option<Node> {
 }
 
 /// `int[n]` parsed as the subscript `int#(n+1)`: the list of n zeros when the type word is no variable
-pub(super) fn zero_filled_subscript(element: &Node, one_based: &Node, variables: &HashSet<String>) -> Option<Node> {
+pub(crate) fn zero_filled_subscript(element: &Node, one_based: &Node, variables: &HashSet<String>) -> Option<Node> {
 	let Node::Symbol(word) = element.drop_meta() else { return None };
 	if variables.contains(word) {
 		return None;

@@ -41,10 +41,10 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	if *op == Op::Add && [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List) {
 		Kind::List // concatenation
 	} else if *op == Op::Add && (crate::wasm_emitter::text_builtins::concatenates(left, right)
-		|| [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)))
+		|| [left, right].iter().any(|kind| matches!(kind, Kind::Empty | Kind::Data)) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)))
 		|| repeats_text(left, op, right)
 	{
-		// concatenation; a value held as a Node (a map value, an element of one) joining a text; `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
+		// concatenation; a value held as a Node (a map value, an element of one, a number of run-time kind) joining a text; `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
 		Kind::Text
 	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Error | Kind::Function)) {
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness"); an error operand stays an error, a function is no number
@@ -379,12 +379,13 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
 		}
 	}
-	// Zero-arg function call: (funcname) with no args; `(angle)` of a variable is its value
+	// Zero-arg function call: (funcname) with no args
 	if *bracket == Bracket::Round && items.len() == 1 {
 		if let Node::Symbol(s) = items[0].drop_meta() {
 			if crate::ffi::is_ffi_function(s) {
 				return ffi_call_kind(s);
 			}
+			// `abs(c)`: a variable in parentheses is the variable
 			if let Some(local) = scope.binding(s) {
 				return local.kind;
 			}

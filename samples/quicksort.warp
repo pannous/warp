@@ -2,7 +2,7 @@
 // Classic divide-and-conquer sorting
 
 def quicksort(arr) {
-    if arr.length <= 1 { return arr }
+    if arr.length <= 1 : return arr 
 
     pivot = arr[arr.length//2]
     left = arr.filter(x => x < pivot)

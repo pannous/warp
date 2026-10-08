@@ -74,6 +74,8 @@ const PAGE_SIDE_PARTS: [&str; 1] = ["host-routes.js"];
 const LINE_COMMENT: &str = "//";
 /// The element holding the program's markup (site.js SITE_ROOT)
 const ROOT_ID: &str = "warp-root";
+/// The element holding the replies of a rendered page's server calls (host-tasks.js SERVER_REPLIES_ID)
+const REPLIES_ID: &str = "warp-replies";
 const PAGE_TEMPLATE: &str = r#"<!doctype html>
 <html>
 <head>
@@ -83,7 +85,7 @@ const PAGE_TEMPLATE: &str = r#"<!doctype html>
 {{base}}</head>
 <body>
 <div id="{{root}}"{{worker}}>{{body}}</div>
-{{scripts}}</body>
+{{replies}}{{scripts}}</body>
 </html>
 "#;
 
@@ -122,15 +124,83 @@ pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, Str
 
 /// The files of the site of `code`; `dev` adds dev.js. A failure names its position with the source line
 pub fn files(code: &str, title: &str, dev: bool) -> Result<Vec<SiteFile>, String> {
-	site_files(code, title, dev)?.ok_or_else(|| format!("the program shows no page: it exports no {}", crate::page_html::PAGE_HTML))
+	site_files(code, title, dev)?.map(|site| site.files).ok_or_else(|| format!("the program shows no page: it exports no {}", crate::page_html::PAGE_HTML))
 }
 
-/// The files of the site a program serving its page serves (src/web_server.rs), none when its last line shows nothing
-pub fn served_files(code: &str, title: &str) -> Result<Option<Vec<SiteFile>>, String> {
+/// The site a program serving its page serves (src/web_server.rs), none when its last line shows nothing
+pub fn served_files(code: &str, title: &str) -> Result<Option<ServedSite>, String> {
 	site_files(code, title, false)
 }
 
-fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>>, String> {
+/// A site as a server serves it: its files, and the page of a program asking the server rendered anew for each request
+#[derive(Default)]
+pub struct ServedSite {
+	pub files: Vec<SiteFile>,
+	renderer: Option<Renderer>,
+}
+
+/// P221 (user: the first visit gets finished HTML): the prerender's module run for the request's path gives the page's
+/// markup and the replies of its server calls for that path, which the page answers its first fetches from
+/// (host-tasks.js SERVER_REPLIES), so it starts showing what the server rendered
+struct Renderer {
+	bytes: Vec<u8>,
+	imports: crate::wasm_reader::Imports,
+	title: String,
+	scripts: Vec<Script>,
+	worker_scripts: Vec<Script>,
+}
+
+impl ServedSite {
+	/// The file a request path names (file_at); a page of a program asking the server is rendered for the path
+	pub fn file_at(&self, path: &str) -> Option<Result<SiteFile, String>> {
+		let (name, bytes) = file_at(&self.files, path)?;
+		match &self.renderer {
+			Some(renderer) if name == PAGE_FILE || name == ROUTED_PAGE_FILE => {
+				let root = if name == PAGE_FILE { BESIDE } else { SITE_ROOT };
+				Some(renderer.page_at(path, root).map(|page| (name.clone(), page.into_bytes())))
+			}
+			_ => Some(Ok((name.clone(), bytes.clone()))),
+		}
+	}
+}
+
+impl Renderer {
+	fn page_at(&self, path: &str, root: &str) -> Result<String, String> {
+		let names = [crate::page_html::PAGE_HTML, crate::serve::RPC_REQUESTS, crate::serve::RPC_VALUES];
+		let read = crate::host::with_page_path(path, || crate::wasm_reader::read_exports_after_main(&self.bytes, self.imports, &names));
+		let [html, requests, values]: [Node; 3] = read.map_err(|failure| format!("the page of {path} failed: {failure}"))?.try_into().expect("three exports");
+		let Node::Text(html) = html.drop_meta() else { return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, html.serialize())) };
+		Ok(page(&self.title, html, &replies_script(&items_of(&requests), &items_of(&values)), &self.scripts, &self.worker_scripts, root))
+	}
+}
+
+/// A list's items, a single value as one
+fn items_of(list: &Node) -> Vec<Node> {
+	match list.drop_meta() {
+		Node::List(items, _, _) => items.clone(),
+		single => vec![single.clone()],
+	}
+}
+
+/// The replies of the page's server calls as host-tasks.js reads them: each request's url and arguments with the reply
+/// the server gives it (web_server.rs Answer: a text as text/plain, any other value as JSON)
+fn replies_script(requests: &[Node], values: &[Node]) -> String {
+	let replies: Vec<serde_json::Value> = requests.iter().zip(values).filter_map(|(request, value)| {
+		let [url, arguments] = items_of(request).try_into().ok()?;
+		let answer = crate::web_server::Answer::of(value);
+		Some(serde_json::json!({
+			"url": url.name(),
+			"arguments": crate::foreign::json_of(&arguments),
+			"body": String::from_utf8_lossy(&answer.body),
+			"text": answer.content_type.starts_with(crate::web_server::TEXT_REPLY_TYPE),
+		}))
+	}).collect();
+	// `</` would end the script element early
+	let json = serde_json::Value::Array(replies).to_string().replace("</", "<\\/");
+	format!("<script type=\"application/json\" id=\"{REPLIES_ID}\">{json}</script>\n")
+}
+
+fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, String> {
 	let compile = |build: &dyn Fn() -> Result<crate::pipeline::CompiledModule, Node>| {
 		let module = crate::pipeline::for_a_page(|| if dev { crate::pipeline::for_dev(build) } else { build() });
 		module.map_err(|value| format!("nothing to compile: {}", with_excerpt(code, message_of(&value))))
@@ -139,13 +209,15 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>
 	if !exports(&rendering.bytes, crate::page_html::PAGE_HTML) {
 		return Ok(None);
 	}
+	let imports = crate::wasm_reader::Imports { host: rendering.needs_host, wasi: rendering.needs_wasi, ffi: rendering.needs_ffi };
 	let read_after_main = |name: &str| {
-		let imports = crate::wasm_reader::Imports { host: rendering.needs_host, wasi: rendering.needs_wasi, ffi: rendering.needs_ffi };
 		crate::wasm_reader::read_export_after_main(&rendering.bytes, imports, name).map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))
 	};
 	let rendered = read_after_main(crate::page_html::PAGE_HTML)?;
 	// a page calling server functions ships without them, starting from the values they gave here (lowering/serve.rs)
-	let module = if exports(&rendering.bytes, crate::serve::RPC_VALUES) {
+	let asks_the_server = exports(&rendering.bytes, crate::serve::RPC_VALUES);
+	let rendering_bytes = rendering.bytes.clone();
+	let module = if asks_the_server {
 		let values = match read_after_main(crate::serve::RPC_VALUES)?.drop_meta() {
 			Node::List(values, _, _) => values.clone(),
 			single => vec![single.clone()],
@@ -165,7 +237,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>
 	} else {
 		(host_scripts.into_iter().chain(page_scripts_of(&module.bytes)).chain(dev_script).collect(), vec![])
 	};
-	let page = |root: &str| page(title, html, &scripts, &worker_scripts, root).into_bytes();
+	let page_file = |root: &str| page(title, html, "", &scripts, &worker_scripts, root).into_bytes();
 	let routed = exports(&module.bytes, crate::routes::PAGE_ROUTES);
 	// each route's own functions in a module the page loads when it shows the route; a dev page reloads whole anyway
 	let split = if dev { None } else { crate::route_split::split_by_route(&module.bytes)? };
@@ -173,15 +245,16 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>
 		Some(split) => (split.primary, split.routes),
 		None => (module.bytes, vec![]),
 	};
-	let mut files = vec![(PAGE_FILE.to_string(), page(BESIDE)), (MODULE_FILE.to_string(), primary)];
+	let mut files = vec![(PAGE_FILE.to_string(), page_file(BESIDE)), (MODULE_FILE.to_string(), primary)];
 	if routed {
-		files.push((ROUTED_PAGE_FILE.to_string(), page(SITE_ROOT)));
+		files.push((ROUTED_PAGE_FILE.to_string(), page_file(SITE_ROOT)));
 	}
 	files.extend(route_modules);
 	let worker_files = if worker_scripts.is_empty() { &[][..] } else { &WORKER_FILES[..] };
 	let shipped = scripts.iter().chain(worker_scripts.iter().filter(|script| !scripts.contains(script))).chain(worker_files);
 	files.extend(shipped.map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
-	Ok(Some(files))
+	let renderer = asks_the_server.then(|| Renderer { bytes: rendering_bytes, imports, title: title.to_string(), scripts, worker_scripts });
+	Ok(Some(ServedSite { files, renderer }))
 }
 
 /// The file of a site a request path names: "/" is the page, "/app.wasm" the module, …, any other path the page of a
@@ -208,7 +281,7 @@ fn exports(module: &[u8], name: &str) -> bool {
 
 /// The page `warp dev` shows before any build succeeded: only dev.js, which shows the failure
 pub fn dev_shell(title: &str) -> Vec<SiteFile> {
-	let page = page(title, "", &[DEV_SCRIPT], &[], BESIDE);
+	let page = page(title, "", "", &[DEV_SCRIPT], &[], BESIDE);
 	vec![(PAGE_FILE.to_string(), page.into_bytes()), (DEV_SCRIPT.0.to_string(), DEV_SCRIPT.1.as_bytes().to_vec())]
 }
 
@@ -274,13 +347,13 @@ fn with_excerpt(code: &str, message: String) -> String {
 
 /// A page served at a deeper path than the site's files finds them, and the module and route modules they load,
 /// through its <base> (`root`)
-fn page(title: &str, body: &str, scripts: &[Script], worker_scripts: &[Script], root: &str) -> String {
+fn page(title: &str, body: &str, replies: &str, scripts: &[Script], worker_scripts: &[Script], root: &str) -> String {
 	let scripts: String = scripts.iter().map(|(name, _)| format!("<script src=\"{name}\"></script>\n")).collect();
 	let worker_list: Vec<&str> = worker_scripts.iter().map(|(name, _)| *name).collect();
 	let worker = if worker_list.is_empty() { String::new() } else { format!(" {WORKER_ATTRIBUTE}=\"{}\"", worker_list.join(LIST_SEPARATOR)) };
 	let base = if root == BESIDE { String::new() } else { format!("<base href=\"{root}\">\n") };
 	// the program's texts last, so nothing in them is read as a placeholder
-	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{worker}}", &worker).replace("{{base}}", &base).replace("{{title}}", &escaped(title)).replace("{{body}}", body)
+	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{worker}}", &worker).replace("{{base}}", &base).replace("{{title}}", &escaped(title)).replace("{{replies}}", replies).replace("{{body}}", body)
 }
 
 /// A script without its comment lines, blank lines and indentation (card web-bundle: host.js gzipped 24 → 17 KB); the
