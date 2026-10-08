@@ -49,3 +49,19 @@ fn declared_list_checks_element_assignment() {
 	is!("names: texts = [\"hi\"]; names#1 = \"yo\"; names#1", "yo");
 	is!("xs: ints = [1 2]; xs#2 = 5; xs#2", 5);
 }
+
+#[test]
+fn list_fields_check_run_time_items() {
+	let program = "same(y) := y; class bag { items: texts }; b = bag([\"hi\"]); ";
+	fails_with(&format!("{program}b.items.add(same(420)); b.items"), "items of bag is declared texts");
+	is!(&format!("{program}b.items.add(same(\"yo\")); #b.items"), 2);
+}
+
+#[test]
+fn declared_list_checks_the_items_of_another_list() {
+	let numbers = "numbers() := [1 2]; other = numbers(); names: texts = [\"hi\"]; ";
+	fails_with(&format!("{numbers}names = other + [\"yo\"]; names"), DECLARED);
+	fails_with("numbers() := [1 2]; names: texts = numbers() + [\"yo\"]; names", DECLARED);
+	is!("words() := [\"a\" \"b\"]; names: texts = words() + [\"c\"]; #names", 3);
+	is!("names: texts = [\"hi\"]; more: texts = [\"yo\"]; names = more + [\"ok\"]; #names", 2);
+}
