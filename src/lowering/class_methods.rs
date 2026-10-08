@@ -1573,7 +1573,8 @@ fn class_typed_declarations(node: Node) -> Node {
 
 fn declared_with_classes(node: Node, classes: &[String]) -> Node {
 	match node {
-		Node::List(words, _, _) if words.len() == 2 && classes.contains(&words[0].drop_meta().name()) && matches!(words[1].drop_meta(), Node::Key(variable, Op::Assign, _) if matches!(variable.drop_meta(), Node::Symbol(_))) => {
+		// not the call `P(x = 7)`, a construction with a named argument
+		Node::List(words, bracket, _) if bracket != Bracket::Round && words.len() == 2 && classes.contains(&words[0].drop_meta().name()) && matches!(words[1].drop_meta(), Node::Key(variable, Op::Assign, _) if matches!(variable.drop_meta(), Node::Symbol(_))) => {
 			let Node::Key(variable, _, value) = words[1].drop_meta().clone() else { unreachable!("guarded") };
 			let typed = Node::Key(variable, Op::Colon, Box::new(words[0].clone()));
 			Node::Key(Box::new(typed), Op::Assign, Box::new(declared_with_classes(*value, classes)))
