@@ -91,6 +91,8 @@ mod test_bool_assign;
 mod test_checked_call_kinds;
 mod test_class_field_type_phrases;
 mod test_optional_casts;
+mod test_bool_literal_value;
 mod test_type_of_node_values;
 mod test_shared_instances;
 mod test_type_static;
+mod test_empty_type_aliases;

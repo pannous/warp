@@ -125,10 +125,6 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 
 /// Programs both accept whose values differ, each with its card
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
-	("x: bool = 1", "bool-literal-value"),
-	("x: bool = 0; x = 1", "bool-literal-value"),
-	("f(b: bool) := b; f(1)", "bool-literal-value"),
-	("b = true; b = 1", "bool-literal-value"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";
