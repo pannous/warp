@@ -19,6 +19,7 @@ fn a_key_variable_gets_no_indexing_hint() {
 	set_hint_mode(HintMode::Always);
 	let (_, hints) = capture_hints(|| WaspParser::parse("merge(a, b) := { out = a; for k in keys(b) { out[k] = b[k] }; out }"));
 	assert!(hints.iter().all(|hint| !hint.reason.contains("indexing")), "{hints:?}");
-	let (_, hints) = capture_hints(|| WaspParser::parse("xs = [1 2]; for k in keys(m) { 0 }; xs[k]"));
-	assert!(hints.iter().any(|hint| hint.reason.contains("indexing")), "outside the loop k is no key variable: {hints:?}");
+	let (_, hints) = capture_hints(|| WaspParser::parse("xs = [1 2]; for k in keys(m) { 0 }; xs[0]"));
+	// card g_YiSA (user): a name index never gets the hint now, so a number shows the hint still works after the loop
+	assert!(hints.iter().any(|hint| hint.reason.contains("indexing")), "a number index after the loop: {hints:?}");
 }

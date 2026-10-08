@@ -12,7 +12,8 @@ fn index_hints(code: &str) -> Vec<String> {
 #[test]
 fn only_a_simple_index_gets_the_hash_hint() {
 	assert_eq!(index_hints("xs=[1 2 3]; xs[1]"), vec!["xs[1]"]);
-	assert_eq!(index_hints("xs=[1 2 3]; i=0; xs[i]"), vec!["xs[i]"]);
+	// card g_YiSA (user): a name gets no hint either, `xs#(i+1)` is longer (test_index_hint_numbers.rs)
+	assert_eq!(index_hints("xs=[1 2 3]; i=0; xs[i]"), Vec::<String>::new());
 	assert_eq!(index_hints("xs=[1 2 3]; i=0; xs[i+1]"), Vec::<String>::new());
 	assert_eq!(index_hints("xs=[1 2 3]; n=3; xs[n/2]"), Vec::<String>::new());
 }
