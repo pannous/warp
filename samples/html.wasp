@@ -1,10 +1,11 @@
 #!/usr/bin/env wasp
 html{ lang:"en"
+  style{ .form-group { margin: 8px 0 } label { display: block } } // css rules as they are written in css
   body{
     form{
       div{ class:"form-group" // free form values need to be quoted
-          input{ type:email id:email } // single values need no quotes
           label{ for:email "Email address:"} // html text appears as free string (without key:)
+          input{ type:email id:email } // single values need no quotes
       }
       div{ class:"form-group"
             label(for:pwd):"Password"
