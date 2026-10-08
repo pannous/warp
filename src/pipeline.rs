@@ -190,7 +190,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 80] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 81] = [
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::component_worlds::lower,
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
@@ -222,6 +222,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 80] = [
 	// `li{ transition: fade 200ms }`: words as data, the attribute data-wasp-transition (transitions.rs), before any pass
 	// reads fade as a variable
 	crate::transitions::lower,
+	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
+	crate::introspection::lower,
 	// `root` is sqrt (word_operators.rs), before pipes.rs reads `2|square|root`
 	crate::word_operators::lower,
 	// `x | f` (pipes.rs) before any pass reads the or

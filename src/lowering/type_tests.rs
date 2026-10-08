@@ -15,6 +15,8 @@ use std::collections::HashSet;
 pub const IS_TYPE: &str = "is_type";
 /// `node_kind_in(node, mask)`: 1 when the run-time kind of node is in the bit mask of kinds (wasm_emitter list_ops.rs)
 pub const NODE_KIND_IN: &str = "node_kind_in";
+/// `x is error`: any value may turn out an Error at run time, so this test always reads the kind (card catch-message)
+pub const ERROR_TYPE: &str = "error";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const LIST_WORD: &str = "list";
 /// `x is pair`: a `key: value` pair
@@ -72,6 +74,7 @@ pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
 		"codepoint" => vec![Kind::Codepoint],
 		"symbol" => vec![Kind::Symbol],
 		"key" => vec![Kind::Key],
+		ERROR_TYPE => vec![Kind::Error],
 		_ => return None,
 	};
 	Some(kinds.iter().fold(0, |mask, kind| mask | 1 << (*kind as i64)))
@@ -115,6 +118,7 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 	match (*first, rest) {
 		(LIST_WORD, []) => Some(LIST_WORD.to_string()),
 		(PAIR_WORD, []) => Some(canonical_spec_word(PAIR_WORD).to_string()),
+		(ERROR_TYPE, []) => Some(ERROR_TYPE.to_string()),
 		(LIST_WORD, [of, element @ ..]) if *of == OF_WORD => Some(format!("{LIST_WORD} of {}", type_spec(element, shadowed)?)),
 		(word, []) => match plural_element_type(word) {
 			Some(element) => Some(format!("{LIST_WORD} of {}", canonical_spec_word(element))),

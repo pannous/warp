@@ -1,0 +1,6 @@
+// The real hole: the element type of a declared list is never checked, no widening needed.
+// Result (2026-10-08): ["hi" 420] (silent); `names: texts = [420]`, `names = [420]` and `b.items.add(420)` pass too,
+// while `x: text = "a"; x = 3` is a compile error. Card list-element-types.
+names: texts = ["hi"]
+names.add(420)
+names

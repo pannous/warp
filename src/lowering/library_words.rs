@@ -744,6 +744,12 @@ impl Lowering {
 			}
 		}
 		let word = self.library_word_for(head, items.len() - 1)?;
+		// `sorted "listen" == sorted "silent"`: the word takes the operand of the comparison, as a defined function of `it` does
+		if let ([_, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
+			if is_comparison(argument) {
+				return Some(with_first_comparand(argument.clone(), &|operand| self.call(word, &items[0], vec![operand], true)));
+			}
+		}
 		if let [_, of, rest @ ..] = items {
 			if matches!(of.drop_meta(), Node::Symbol(word) if word == "of") && !rest.is_empty() {
 				// `first of xs` is `first(xs)`
@@ -991,7 +997,7 @@ impl Lowering {
 
 	/// The call of `word` with the receiver and its arguments; arguments are the items after the word for the prefix form
 	fn call(&self, word: &'static str, head: &Node, arguments: Vec<Node>, is_prefix: bool) -> Node {
-		let mut arguments = if is_prefix { merge_prefix_arguments(word, arguments) } else { arguments };
+		let mut arguments = if is_prefix { self.merged_prefix_arguments(word, arguments) } else { arguments };
 		let wanted = arity(word);
 		let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
 		if arguments.len() < wanted && arguments.len() + optional >= wanted {
@@ -1017,6 +1023,20 @@ impl Lowering {
 				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)
 			}
 		}
+	}
+
+	/// The arguments after the first wanted-1 of a braceless call as one phrase; a phrase heading with a library word is
+	/// its call: `first sort xs` is `first(sort(xs))`
+	fn merged_prefix_arguments(&self, word: &str, arguments: Vec<Node>) -> Vec<Node> {
+		let wanted = arity(word);
+		if arguments.len() <= wanted {
+			return arguments;
+		}
+		let (kept, rest) = arguments.split_at(wanted - 1);
+		let heads_with_word = matches!(rest[0].drop_meta(), Node::Symbol(name) if self.library_word(name).is_some());
+		let phrase = heads_with_word.then(|| self.word_call(rest, &Bracket::None, &Separator::Space)).flatten();
+		let phrase = phrase.unwrap_or_else(|| Node::List(rest.to_vec(), Bracket::None, Separator::Space));
+		[kept.to_vec(), vec![phrase]].concat()
 	}
 
 	/// A source template with `hidden` variables made unique, its placeholders replaced by the given nodes
@@ -1113,14 +1133,18 @@ fn dispatched_sum(expanded: Node) -> Node {
 	Node::List(items, bracket, separator)
 }
 
-/// `first [1 2 3]` has one argument, `join [1 2] ","` two: a prefix call with more items than the word takes keeps the rest together
-fn merge_prefix_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
-	let wanted = arity(word);
-	if arguments.len() <= wanted {
-		return arguments;
+/// `a == b`, `a < b`, `a and b`: where a library word's argument stops
+fn is_comparison(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, op, _) if op.is_comparison() || op.is_logical())
+}
+
+/// The leftmost operand of a comparison chain, replaced: `"a" == b and c` → `f("a") == b and c`
+fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -> Node {
+	match node {
+		Node::Key(left, op, right) if op.is_comparison() || op.is_logical() => Node::Key(Box::new(with_first_comparand(*left, replace)), op, right),
+		Node::Meta { node, data } if is_comparison(&node) => Node::Meta { node: Box::new(with_first_comparand(*node, replace)), data },
+		operand => replace(operand),
 	}
-	let (kept, rest) = arguments.split_at(wanted - 1);
-	[kept.to_vec(), vec![Node::List(rest.to_vec(), Bracket::None, Separator::Space)]].concat()
 }
 
 pub(crate) fn substitute(node: Node, placeholder: &str, replacement: &Node) -> Node {

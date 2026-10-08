@@ -266,6 +266,10 @@ impl WaspParser {
 			caught = if word == ELSE_KEYWORD { None } else { self.parse_caught_name(word) };
 			self.skip_python_colon();
 			self.parse_expr(0)
+		} else if marker == TRY_MARKER && self.finally_ahead().is_some() {
+			// `try X finally Z` is `try X catch e { e } finally Z`: a failure of X, trap included, stays the value after Z
+			caught = Some(UNCAUGHT_ERROR.to_string());
+			Symbol(UNCAUGHT_ERROR.to_string())
 		} else if marker == TRY_MARKER {
 			return error("`try` needs an `else`: `try X else Y`");
 		} else {
@@ -279,10 +283,9 @@ impl WaspParser {
 
 	/// `… finally {Z}` after a guard: `(finally·N = guard; Z; finally·N)`, Z runs and the guard's value stays
 	fn with_finally(&mut self, guard: Node) -> Node {
-		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
-		if self.word_at(ahead) != FINALLY_KEYWORD {
+		let Some(ahead) = self.finally_ahead() else {
 			return guard;
-		}
+		};
 		self.advance_by(ahead + FINALLY_KEYWORD.len());
 		self.skip_spaces();
 		let cleanup = if self.current_char() == ':' { self.colon_body(":") } else { self.rest_of_statement() };
@@ -290,6 +293,12 @@ impl WaspParser {
 		let value = Symbol(format!("{FINALLY_KEYWORD}·{}", self.finally_blocks));
 		let held = Node::Key(Box::new(value.clone()), Op::Assign, Box::new(guard));
 		Node::List(vec![held, cleanup, value], Bracket::Round, Separator::Semicolon)
+	}
+
+	/// The blanks before a following `finally`, if one follows
+	fn finally_ahead(&self) -> Option<usize> {
+		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		(self.word_at(ahead) == FINALLY_KEYWORD).then_some(ahead)
 	}
 
 	/// `after C return V`: the marker call `after·return(C, V)`, when a `return` follows on the statement (outside brackets);
@@ -384,7 +393,7 @@ impl WaspParser {
 		let mut items = vec![self.parse_expr(0)];
 		loop {
 			self.skip_spaces();
-			if FALLBACK_WORDS.iter().any(|word| self.matches_keyword(word)) || matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',') {
+			if FALLBACK_WORDS.iter().chain([&FINALLY_KEYWORD]).any(|word| self.matches_keyword(word)) || matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',') {
 				break;
 			}
 			let position = self.pos;

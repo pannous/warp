@@ -362,6 +362,8 @@ pub const ASSERT_MARKER: &str = "assert·else";
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
 /// `try X catch Y finally Z`: Z runs after either, the value stays X's or Y's
 const FINALLY_KEYWORD: &str = "finally";
+/// The hidden name `try X finally Z` binds X's Error to, to hand it on as the value
+const UNCAUGHT_ERROR: &str = "uncaught·error";
 const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
 /// `nand` and its glyph pair, both `not (a and b)`
 /// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`

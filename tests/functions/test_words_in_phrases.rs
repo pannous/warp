@@ -29,3 +29,18 @@ fn sorted_text_sorts_its_characters() {
 	is!("sort(\"cab\")", "abc");
 	is!("word = sorted \"listen\"; word == sorted \"silent\"", true);
 }
+
+#[test]
+fn a_suffix_word_after_a_library_word_is_its_prefix_argument() {
+	is!("xs = [3, 1, 2]; first sorted xs", 1);
+	is!("xs = [3, 1, 2]; last sorted xs", 3);
+	is!("xs = [3, 1, 2]; first sort xs", 1);
+	is!("xs = [3, 1, 2]; (xs sorted)#1", 1);
+}
+
+#[test]
+fn a_statement_level_library_word_takes_one_operand() {
+	is!("sorted \"listen\" == sorted \"silent\"", true);
+	is!("reverse \"ab\" == \"ba\"", true);
+	is!("xs = [1, 2]; sum xs == 3", true);
+}
