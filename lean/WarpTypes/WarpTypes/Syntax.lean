@@ -38,6 +38,12 @@ inductive Expr where
   | call (f : String) (arg : Expr)
   | error (msg : String)
   | tryCatch (e handler : Expr)
+  /-- the run-time check warp inserts where a value of unknown type goes to a declared place (`names = f()` of a
+  `names: texts`, card list-element-types): the value if it fits t, else an error -/
+  | cast (e : Expr) (t : Ty)
+  /-- broadcasting: `f(xs)` of a function of A given a list of A applies f to each item (`f(x: int) := x+1; f([1])` is
+  [2]); warp decides it at compile time, so it is its own form -/
+  | broadcast (f : String) (arg : Expr)
   deriving DecidableEq, Repr
 
 namespace Expr
@@ -65,7 +71,19 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | letIn z t e b => letIn z t (e.subst y v) (if z = y then b else b.subst y v)
   | call f e => call f (e.subst y v)
   | tryCatch e h => tryCatch (e.subst y v) (h.subst y v)
+  | cast e t => cast (e.subst y v) t
+  | broadcast f e => broadcast f (e.subst y v)
   | e => e
+
+/-- the main-level names an expression assigns or binds -/
+def assigned : Expr → List String
+  | assign x e | init x e => x :: e.assigned
+  | cons a b | add a b | lt a b | eq a b | loop a b | seq a b | index a b | append a b | tryCatch a b =>
+    a.assigned ++ b.assigned
+  | ite c a b => c.assigned ++ a.assigned ++ b.assigned
+  | letIn _ _ e b => e.assigned ++ b.assigned
+  | call _ e | cast e _ | broadcast _ e => e.assigned
+  | _ => []
 
 end Expr
 
@@ -80,6 +98,8 @@ structure Fn where
 structure Program where
   names : String → Option (Mode × Ty)
   funs : String → Option Fn
+  /-- names declared `global`: the only main-level names a function may assign (functions2, `global names`) -/
+  globals : String → Bool
 
 /-- the types of the locals in scope -/
 abbrev Ctx := String → Option Ty

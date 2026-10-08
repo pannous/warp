@@ -22,6 +22,17 @@ def sub : Ty → Ty → Bool
   | text, text | unit, unit => true
   | _, _ => false
 
+/-- the type as warp writes it -/
+def name : Ty → String
+  | never => "never"
+  | bool => "bool"
+  | int => "int"
+  | number => "number"
+  | text => "text"
+  | unit => "unit"
+  | list t => s!"list of {t.name}"
+  | any => "any"
+
 /-- least upper bound -/
 def join : Ty → Ty → Ty
   | never, b => b
@@ -146,6 +157,30 @@ theorem arith_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true
 
 theorem arith_sub_number (a b : Ty) : sub (arith a b) number = true := by
   unfold arith; split <;> simp [sub]
+
+/-- what `+` takes: numbers, and texts (`"a" + 1` is "a1") -/
+def addable (t : Ty) : Bool := sub t number || sub t text
+
+/-- the result of `+`: a text when a side is a text, a number type otherwise; `never` when a side raises -/
+def plus (a b : Ty) : Ty :=
+  if a == never || b == never then never else if a == text || b == text then text else arith a b
+
+theorem addable_mono {a a' : Ty} (h : sub a' a = true) (ha : addable a = true) : addable a' = true := by
+  unfold addable at *
+  simp only [Bool.or_eq_true] at *
+  rcases ha with ha | ha
+  · exact .inl (sub_trans h ha)
+  · exact .inr (sub_trans h ha)
+
+theorem plus_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true) (aa : addable a = true)
+    (ab : addable b = true) : sub (plus a' b') (plus a b) = true := by
+  have hbound : ∀ {t}, addable t = true → t = never ∨ t = bool ∨ t = int ∨ t = number ∨ t = text := by
+    intro t ht; cases t <;> simp_all [addable, sub]
+  rcases hbound aa with rfl | rfl | rfl | rfl | rfl <;>
+  rcases hbound ab with rfl | rfl | rfl | rfl | rfl <;>
+  rcases hbound (addable_mono ha aa) with rfl | rfl | rfl | rfl | rfl <;>
+  rcases hbound (addable_mono hb ab) with rfl | rfl | rfl | rfl | rfl <;>
+  simp_all [plus, arith, sub]
 
 end Ty
 end Warp
