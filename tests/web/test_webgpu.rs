@@ -114,3 +114,13 @@ fn a_gpu_map_runs_on_the_cpu_where_that_is_faster() {
 	assert_eq!(eval(&format!("{}abs(ys#40000 - sin(xs#40000)) < 0.00001", filled(40000))).serialize(), "yes");
 	with_warning_mode(WarningMode::Error, || crate::common::fails_with("linear xs = float[2]\nys = xs.map(x => x * 2 + 1) @gpu", "f64x2"));
 }
+
+// card gpu-vectors: a @gpu lambda may read numbers of the program (`k`, `shift`): the kernel gets their values with
+// each map; a lambda of only arithmetic stays on the CPU, with outer numbers too
+#[test]
+fn a_gpu_map_reads_outer_numbers() {
+	use warp::diagnostic::{with_warning_mode, WarningMode};
+	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nk = 0.5; shift = 2\nys = xs.map(x => sin(x) * k + shift) @gpu\n";
+	assert_eq!(eval(&format!("{program}abs(ys#40000 - (sin(1) * 0.5 + 2)) < 0.00001")).serialize(), "yes");
+	with_warning_mode(WarningMode::Error, || crate::common::fails_with("linear xs = float[2]\nk = 3.0\nys = xs.map(x => x * k) @gpu", "CPU maps"));
+}

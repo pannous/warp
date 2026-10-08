@@ -258,8 +258,8 @@ impl Rewrite<'_> {
 				let names = self.names(function);
 				match (target.drop_meta(), op) {
 					// `ys = xs.map(x => …) @gpu` of a linear float array: the lambda as a WGSL kernel, the CPU's map without an adapter
-					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, lambda, shader)) = gpu_kernel_map(&value, &names) => {
-						gpu_mapped(&target, &array, &lambda, &shader)
+					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, lambda, kernel)) = gpu_kernel_map(&value, &names) => {
+						gpu_mapped(&target, &array, &lambda, kernel)
 					}
 					// `ys = xs.map(x => x * 0.5 + 1)` of a linear float array: its float kernel makes ys, a new linear array
 					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, kernel)) = float_map(&value, &names) => {
@@ -395,20 +395,21 @@ fn is_linear_float_array(kind: Shared) -> bool {
 }
 
 /// `xs.map(x => …) @gpu` of a linear float array whose lambda WGSL computes: xs, the lambda and its kernel
-fn gpu_kernel_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Node, String)> {
+fn gpu_kernel_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Node, crate::gpu_maps::Kernel)> {
 	let (array, lambda) = crate::gpu_maps::gpu_map(value)?;
-	let shader = crate::gpu_maps::gpu_kernel(&lambda).filter(|_| is_linear_floats(&array, names))?;
-	Some((array, lambda, shader))
+	let kernel = crate::gpu_maps::gpu_kernel(&lambda).filter(|_| is_linear_floats(&array, names))?;
+	Some((array, lambda, kernel))
 }
 
-/// `ys = linear_new(count(xs))`, then the kernel maps xs's cells into ys's, or the CPU does: for few items or without an
-/// adapter
-fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, shader: &str) -> Node {
+/// `ys = linear_new(count(xs))`, then the kernel maps xs's cells into ys's, given the values of the program's numbers it
+/// reads, or the CPU does: for few items or without an adapter
+fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, kernel: crate::gpu_maps::Kernel) -> Node {
 	use crate::wasm_emitter::linear_arrays::LINEAR_COUNT;
 	let size = crate::gpu_maps::WORKGROUP_SIZE;
 	let fewest = crate::gpu_maps::GPU_MAP_MIN_COUNT;
-	let mapped = format!("if {LINEAR_COUNT}(map_source) < {fewest} or {}(gpu_shader, map_source, map_target, ({LINEAR_COUNT}(map_source) + {size} - 1)//{size}) == 0 {{ map_loop }}", crate::host::GPU_MAP_LINEAR);
-	block_mapped(target, array, lambda, &mapped, &[("gpu_shader", Node::Text(shader.to_string()))])
+	let mapped = format!("if {LINEAR_COUNT}(map_source) < {fewest} or {}(gpu_shader, map_source, gpu_values, map_target, ({LINEAR_COUNT}(map_source) + {size} - 1)//{size}) == 0 {{ map_loop }}", crate::host::GPU_MAP_LINEAR);
+	let values = Node::List(kernel.outer.into_iter().map(Node::Symbol).collect(), Bracket::Square, Separator::Space);
+	block_mapped(target, array, lambda, &mapped, &[("gpu_shader", Node::Text(kernel.shader)), ("gpu_values", values)])
 }
 
 /// `ys = linear_new(count(xs))`, then `mapped` (`map_loop` in it the CPU's loop writing each cell of ys from xs's)

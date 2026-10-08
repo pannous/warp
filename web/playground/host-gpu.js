@@ -187,12 +187,16 @@ addHostPart({
 				cells.set(gpuJob("gpu_compute", { shader: plain(shader), numbers: cells.slice(), workgroups: Number(workgroups) }));
 				return block;
 			},
-			// `ys = xs.map(x => …) @gpu` (src/lowering/gpu_maps.rs): the kernel over source's cells into target's; 0 without
+			// `ys = xs.map(x => …) @gpu` (src/lowering/gpu_maps.rs): the kernel over source's cells (and the values it reads)
+			// into target's; 0 without
 			// an adapter (said once), when the program maps them on the CPU
-			gpu_map_linear: (shader, source, target, workgroups) => {
-				const cells = linearCells(program().memory, source);
+			gpu_map_linear: (shader, source, values, target, workgroups) => {
+				// the items, then the values of the program's numbers the kernel reads
+				const numbers = [...linearCells(program().memory, source), ...[plain(values) ?? []].flat().map(Number)];
 				try {
-					linearCells(program().memory, target).set(gpuJob("gpu_compute", { shader: plain(shader), numbers: cells.slice(), workgroups: Number(workgroups) }));
+					const left = gpuJob("gpu_compute", { shader: plain(shader), numbers, workgroups: Number(workgroups) });
+					const cells = linearCells(program().memory, target);
+					cells.set(left.slice(0, cells.length));
 					return 1n;
 				} catch (failure) {
 					if (!/adapter|task Workers/.test(failure.message)) throw failure;
