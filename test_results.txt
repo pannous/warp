@@ -618,6 +618,8 @@ PASSED:
   ✓ ffi::test_wasi::test_wasi_putf
   ✓ ffi::test_wasi::test_wasi_puti
   ✓ ffi::test_web_idl::a_call_with_a_count_no_overload_takes_is_an_error
+  ✓ ffi::test_web_idl::a_declared_primitive_result_is_a_warp_value
+  ✓ ffi::test_web_idl::a_foreign_calls_value_as_text
   ✓ ffi::test_web_idl::a_global_is_a_namespace_or_an_attribute_of_the_scope_not_an_interface
   ✓ ffi::test_web_idl::a_global_without_webidl_stays_unchecked
   ✓ ffi::test_web_idl::a_member_the_interface_lacks_is_an_error_with_its_near_miss
@@ -2614,6 +2616,11 @@ PASSED:
   ✓ types::test_generic_types::test_comparisons_and_shifts_are_not_type_applications
   ✓ types::test_generic_types::test_nested_type_applications
   ✓ types::test_generic_types::test_type_of_a_literal_list_stays
+  ✓ types::test_inline_unions::a_covered_part_is_dropped
+  ✓ types::test_inline_unions::a_part_that_is_no_builtin_type_is_refused
+  ✓ types::test_inline_unions::an_inline_union_holds_either_kind
+  ✓ types::test_inline_unions::an_inline_union_parameter_takes_either_kind
+  ✓ types::test_inline_unions::an_inline_union_refuses_a_value_fitting_no_part
   ✓ types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result
   ✓ types::test_int_declaration_stays_whole::a_declared_int_refuses_a_fraction_at_run_time
   ✓ types::test_int_declaration_stays_whole::a_declared_int_takes_whole_results
@@ -3457,4 +3464,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3452 passed, 0 failed, 3452 total tested
+19 ignored, 3459 passed, 0 failed, 3459 total tested

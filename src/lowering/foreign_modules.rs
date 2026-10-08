@@ -259,17 +259,16 @@ impl Foreign<'_> {
 		}
 	}
 
-	/// `crypto.randomUuid()`: what WebIDL declares for the receiver instead
-	fn undeclared_in_web_idl(&self, receiver: &Node, member: &str, is_call: bool, arguments: &Node) -> Option<String> {
+	/// The warp type WebIDL declares for what the member gives (`crypto.randomUUID()`: text); Err when WebIDL declares
+	/// something else for the receiver (`crypto.randomUuid()`)
+	fn web_idl_result(&self, receiver: &Node, member: &str, is_call: bool, arguments: &Node) -> Result<Option<&'static str>, String> {
 		let count = match arguments {
 			Node::List(items, _, _) => items.len(),
 			_ => 0,
 		};
-		match self.web_idl_receiver(receiver) {
-			Err(problem) => Some(problem),
-			Ok(Some((interface, path))) => crate::web_idl::check_member(&interface, &path, member, is_call.then_some(count)).err(),
-			Ok(None) => None,
-		}
+		let Some((interface, path)) = self.web_idl_receiver(receiver)? else { return Ok(None) };
+		crate::web_idl::check_member(&interface, &path, member, is_call.then_some(count))?;
+		Ok(crate::web_idl::result_type(&interface, member, is_call))
 	}
 
 	/// The runtime and the module (its name as text) or the handle (the value itself) a receiver names
@@ -308,10 +307,17 @@ impl Foreign<'_> {
 					},
 					_ => return node,
 				};
-				if let Some(problem) = (runtime == JS_RUNTIME).then(|| self.undeclared_in_web_idl(&receiver, &member, is_call, &arguments)).flatten() {
-					return crate::diagnostic::Diagnostic::at(&node, problem).into_error();
-				}
-				return foreign_call(&runtime, module, &member, is_call, arguments);
+				let result_type = match runtime == JS_RUNTIME {
+					true => self.web_idl_result(&receiver, &member, is_call, &arguments),
+					false => Ok(None),
+				};
+				let call = foreign_call(&runtime, module, &member, is_call, arguments);
+				// a declared text, bool, int or float is a warp value: `crypto.randomUUID().upper()` is warp's upper
+				return match result_type {
+					Err(problem) => crate::diagnostic::Diagnostic::at(&node, problem).into_error(),
+					Ok(Some(warp_type)) => Node::Key(Box::new(call), Op::As, Box::new(Node::Symbol(warp_type.to_string()))),
+					Ok(None) => call,
+				};
 			}
 			// `counter.increment(2)` of a handle a component gave: the method of its resource
 			if let Some(items) = called_method(member).filter(|items| self.holds_component_value(&receiver) && !is_warp_method(&items[0].name())) {

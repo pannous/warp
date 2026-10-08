@@ -709,12 +709,13 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Does the node call a function of the program (`str(f(1))` is the text of f's result, not of the call)
+	/// Does the node call a function of the program or a host word giving a value (`str(f(1))` is the text of f's result, not of the call)
 	fn mentions_call(&self, node: &Node) -> bool {
 		let mut found = false;
 		node.visit(&mut |part| {
 			if let Node::List(items, _, _) = part {
-				found |= matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.ctx.user_functions.contains_key(name));
+				// a user function's call, or a host word's that gives a value (`foreign_call`, `fetch_reply`)
+				found |= matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.ctx.user_functions.contains_key(name) || crate::host::VALUE_GIVING_WORDS.contains(&name.as_str()));
 			}
 		});
 		found

@@ -198,3 +198,11 @@ Fix: host.js finishedTask runs a task its Worker could not instantiate (`unstart
 whose failed allocation frees its own garbage. Still possible: the other test worker's garbage filling the page
 (TESTS_PER_WORKER recycling bounds it). Not usable: `--js-flags=--expose-gc` through agent-browser `--args` (the tab
 ends on about:blank), a declared memory maximum (still ~8 GB reserved).
+
+## First markup run (card guide-warmup, 2026-10-08)
+- The first markup program a worker compiles pays a one-time cost (the markup renderer, lib/markup.wasp's to_html):
+  live, a fresh page measured 470–560 ms in headless Chrome and 0.6–4.4 s in WebKit 26, later markup runs ~80–120 ms,
+  other programs none. After a run is shown the page asks its worker once to warm up (playground.js warmWorker →
+  worker.js warmUp: `p{ "" }` evaluated with the worker's messages silenced, skipped over a live run). With it the
+  first markup run was ~80 ms in Chrome and ~97 ms in WebKit (local build). Measured with a Playwright probe timing
+  window.playground.evaluate in a fresh context (probes/*.mjs are not tracked; agent-browser eval works the same).
