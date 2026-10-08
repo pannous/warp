@@ -52,7 +52,7 @@ const CHOICE_TEMPLATE: &str = "if routed_index == index { return chosen() }";
 const NOT_FOUND_TEMPLATE: &str = "\"no page at \" + page_path()";
 
 /// A route as written: its pattern and the items of its block
-type Route = (String, Vec<Node>);
+pub(crate) type Route = (String, Vec<Node>);
 /// The block of an inner route as a function of its own: its name, whole pattern and items
 type Part = (String, String, Vec<Node>);
 
@@ -67,12 +67,16 @@ pub fn lower(program: Node) -> Node {
 	let routes: Vec<Route> = statements.iter().filter_map(route).flat_map(|(pattern, body)| flattened(&pattern, &body, &mut parts)).collect();
 	let routed = call(PAGE_ROUTED, vec![]);
 	let outlet = HashMap::from([(OUTLET.to_string(), routed.clone())]);
-	let mut lowered: Vec<Node> = parts.iter().map(|(name, pattern, body)| function_with_globals(name, false, &route_body(pattern, body), &main_variables)).collect();
-	lowered.extend(routes.iter().enumerate().map(|(index, (pattern, body))| function_with_globals(&format!("{ROUTE_PREFIX}{index}"), false, &route_body(pattern, body), &main_variables)));
-	lowered.push(function_with_globals(PAGE_ROUTES, false, &[patterns(&routes)], &main_variables));
-	lowered.push(function_with_globals(PAGE_ROUTE_INDEX, false, &matching(&routes), &main_variables));
-	lowered.push(function_with_globals(PAGE_ROUTED, false, &choice(&routes), &main_variables));
-	lowered.extend(statements.iter().filter(|statement| route(statement).is_none()).map(|statement| crate::law::substitute(statement, &outlet)));
+	let mut functions: Vec<Node> = parts.iter().map(|(name, pattern, body)| function_with_globals(name, false, &route_body(pattern, body), &main_variables)).collect();
+	functions.extend(routes.iter().enumerate().map(|(index, (pattern, body))| function_with_globals(&format!("{ROUTE_PREFIX}{index}"), false, &route_body(pattern, body), &main_variables)));
+	functions.push(function_with_globals(PAGE_ROUTES, false, &[patterns(&routes)], &main_variables));
+	functions.push(function_with_globals(PAGE_ROUTE_INDEX, false, &matching(&routes), &main_variables));
+	functions.push(function_with_globals(PAGE_ROUTED, false, &choice(&routes), &main_variables));
+	// the functions stand where the first route stood, after the main-level data the routes read: a function reads a
+	// typed main-level list (`users: [User] = …`) from where it is defined (card typed-global-capture)
+	let first_route = statements.iter().position(|statement| route(statement).is_some()).unwrap_or_default();
+	let mut lowered: Vec<Node> = statements.iter().filter(|statement| route(statement).is_none()).map(|statement| crate::law::substitute(statement, &outlet)).collect();
+	lowered.splice(first_route..first_route, functions);
 	if ends_with_route {
 		lowered.push(routed);
 	}
@@ -85,7 +89,7 @@ pub(crate) fn is_route(statement: &Node) -> bool {
 }
 
 /// `route "/users/:id" {…}`: the pattern ("/" parses as a character) and the block's items
-fn route(statement: &Node) -> Option<Route> {
+pub(crate) fn route(statement: &Node) -> Option<Route> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };
 	let [word, pattern, block] = items.as_slice() else { return None };
 	let Node::List(body, Bracket::Curly, _) = block.drop_meta() else { return None };
@@ -160,7 +164,7 @@ fn pattern_problem(pattern: &str) -> Option<String> {
 }
 
 /// The route's block after a `let` for each parameter of its pattern, typed when the parameter declares its type
-fn route_body(pattern: &str, body: &[Node]) -> Vec<Node> {
+pub(crate) fn route_body(pattern: &str, body: &[Node]) -> Vec<Node> {
 	if let Some(problem) = pattern_problem(pattern) {
 		return vec![crate::node::error(&problem)];
 	}
