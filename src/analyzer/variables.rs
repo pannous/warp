@@ -276,10 +276,45 @@ pub fn check_kind_changes(program: &Node) -> Option<Diagnostic> {
 	bodies.into_iter().find_map(|body| first_kind_change(body, &mut HashMap::new()))
 }
 
+/// The evident kind of a value for P45's kind changes, with bools apart from ints: int ≰ bool, bool ≤ int (card bool-assign)
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum EvidentKind {
+	Of(Kind),
+	Bool,
+}
+
+impl EvidentKind {
+	fn of(value: &Node) -> Option<EvidentKind> {
+		match value.drop_meta() {
+			Node::True | Node::False => Some(EvidentKind::Bool),
+			Node::Key(_, op, _) if op.is_comparison() => Some(EvidentKind::Bool),
+			_ => evident_kind(value).map(EvidentKind::Of),
+		}
+	}
+
+	/// The kind a variable that was `self` has after it is given `now`, None when `now` does not mix with it
+	fn given(self, now: EvidentKind) -> Option<EvidentKind> {
+		use EvidentKind::{Bool, Of};
+		match (self, now) {
+			(Bool, Bool) => Some(Bool),
+			(Of(Kind::Int | Kind::Float), Bool) => Some(self),
+			(Of(was), Of(now)) if was == now => Some(self),
+			(Of(Kind::Int | Kind::Float), Of(Kind::Int | Kind::Float)) => Some(if now == Of(Kind::Float) { now } else { self }),
+			_ => None,
+		}
+	}
+
+	fn with_article(self) -> String {
+		match self {
+			EvidentKind::Bool => "a Bool".to_string(),
+			EvidentKind::Of(kind) => kind_with_article(kind),
+		}
+	}
+}
+
 /// Walks the assignments in program order, not into function definitions or lambdas (their own scopes);
 /// `kinds` holds each variable's evident kind, None once it was given a value of no evident kind
-pub(super) fn first_kind_change(node: &Node, kinds: &mut HashMap<String, Option<Kind>>) -> Option<Diagnostic> {
-	let mixes = |a: Kind, b: Kind| a == b || [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float));
+pub(super) fn first_kind_change(node: &Node, kinds: &mut HashMap<String, Option<EvidentKind>>) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		Node::Key(_, Op::Define | Op::Arrow | Op::FatArrow, _) => None,
 		Node::Key(target, Op::Assign, value) => {
@@ -287,17 +322,17 @@ pub(super) fn first_kind_change(node: &Node, kinds: &mut HashMap<String, Option<
 				return Some(change);
 			}
 			let Node::Symbol(name) = target.drop_meta() else { return None };
-			let (earlier, given) = (kinds.get(name).copied(), evident_kind(value));
-			if let (Some(Some(was)), Some(now)) = (earlier, given) {
-				if !mixes(was, now) {
-					let message = format!("{name} was {}, is given {}: use another name", kind_with_article(was), kind_with_article(now));
-					return Some(Diagnostic::at(value, message));
-				}
-			}
+			let (earlier, given) = (kinds.get(name).copied(), EvidentKind::of(value));
 			// a first evident value fixes the kind (Int widens to Float); any value of no evident kind ends the check
 			let kind = match (earlier, given) {
 				(None, given) => given,
-				(Some(Some(was)), Some(now)) => Some(if now == Kind::Float { now } else { was }),
+				(Some(Some(was)), Some(now)) => match was.given(now) {
+					Some(kind) => Some(kind),
+					None => {
+						let message = format!("{name} was {}, is given {}: use another name", was.with_article(), now.with_article());
+						return Some(Diagnostic::at(value, message));
+					}
+				},
 				_ => None,
 			};
 			kinds.insert(name.clone(), kind);

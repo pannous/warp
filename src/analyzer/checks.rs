@@ -381,6 +381,8 @@ pub const TEMPORARY_SEPARATOR: &str = "·";
 /// Statements that name functions or modules instead of calling them
 pub(super) const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 pub(super) const LIST_OF_PREFIX: &str = "list of ";
+/// The type words of a bool, held as an Int (builtin_type_kind)
+const BOOL_TYPES: [&str; 2] = ["bool", "boolean"];
 pub(super) const OF_WORD: &str = "of";
 
 /// The map word a call names: `map_keys`, `map_values` or `map_entries`
@@ -1219,7 +1221,7 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	if let Some(element) = list_element_type(type_name) {
 		return list_items_mismatch(assignment, name, type_name, element, value);
 	}
-	let actual = literal_misfit(type_name, value)?;
+	let actual = bool_misfit(type_name, value).or_else(|| literal_misfit(type_name, value))?;
 	let value_text = value.serialize();
 	let message = format!("type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}", format!("{actual:?}").to_lowercase());
 	Some(Diagnostic::at(assignment, message).fix(format!("{name}={type_name}({value_text}) or declare {name}:{}", format!("{actual:?}").to_lowercase())))
@@ -1233,6 +1235,18 @@ pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
 	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint; // `"a"` parses as a codepoint
 	let fits = expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text;
 	(!fits).then_some(actual)
+}
+
+/// A bool variable is held as an Int, but int ≰ bool: only true and false fit it (card bool-assign). A bool field still
+/// takes 1 and 0 (tests/types/test_instance_arguments.rs, a question to the user)
+fn bool_misfit(type_name: &str, value: &Node) -> Option<Kind> {
+	if !BOOL_TYPES.contains(&type_name.to_lowercase().as_str()) {
+		return None;
+	}
+	match value.drop_meta() {
+		Node::True | Node::False => None,
+		_ => computed_literal_kind(value),
+	}
 }
 
 /// The element type of a list type: `texts` and `list of text` hold `text`
