@@ -41,6 +41,8 @@ pub mod gpu;
 pub mod shared;
 #[cfg(feature = "native")]
 pub mod paint;
+#[cfg(feature = "native")]
+pub mod paint_window;
 pub mod wasm_optimizer;
 pub mod warp_parser;
 pub mod wisp_parser;

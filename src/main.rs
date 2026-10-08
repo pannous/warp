@@ -198,6 +198,11 @@ fn run_command(args: &[String]) {
                 std::process::exit(1);
             }
         }
+    } else if args[1] == warp::paint_window::COMMAND {
+        if let Err(failure) = warp::paint_window::run(args.get(2).is_some_and(|flag| flag == warp::paint_window::CHECK)) {
+            eprintln!("{failure}");
+            std::process::exit(1);
+        }
     } else if args[1] == SERVE_COMMAND {
         match served_program(&args[2..]) {
             Ok((path, port)) => serve_file(path, port, ""),
