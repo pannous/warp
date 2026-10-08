@@ -248,6 +248,48 @@ fn destructuring(items: &[Node]) -> Option<(Vec<String>, &Node)> {
 	Some((names?, value))
 }
 
+/// A function or lambda bound at main level: its name, parameters and body
+fn callable_definition(statement: &Node) -> Option<(&str, Vec<String>, &Node)> {
+	if let Some((name, parameters, body)) = function_definition(statement) {
+		return Some((name, parameters.iter().map(|parameter| parameter.drop_meta().name()).collect(), body));
+	}
+	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else { return None };
+	let (Node::Symbol(name), Node::Key(parameter, Op::FatArrow, body)) = (target.drop_meta(), unwrapped(value).drop_meta()) else { return None };
+	Some((name, vec![parameter.name()], &**body))
+}
+
+/// `(e)` is e
+fn unwrapped(node: &Node) -> &Node {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => unwrapped(&items[0]),
+		other => other,
+	}
+}
+
+fn mentions(node: &Node, name: &str) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= matches!(part, Node::Symbol(symbol) if symbol == name));
+	found
+}
+
+/// Warp's late binding (src/lowering/late_binding.rs): a function or lambda reading a main-level name the program
+/// changes after its definition, with a call after that change, needs `global x`. W0 reads at call time, which gives
+/// what warp gives for every program warp accepts, so such programs are outside W0 rather than rejected by it
+fn late_binding(statements: &[&Node], globals: &[String]) -> Option<String> {
+	for (position, statement) in statements.iter().enumerate() {
+		let Some((name, parameters, body)) = callable_definition(statement) else { continue };
+		for (offset, later) in statements[position + 1..].iter().enumerate() {
+			let Node::Key(target, op, _) = later.drop_meta() else { continue };
+			let Node::Symbol(changed) = target.drop_meta() else { continue };
+			let read = mentions(body, changed) && !parameters.contains(changed) && !globals.contains(changed);
+			if (*op == Op::Assign || op.is_compound_assign()) && read && statements[position + offset + 2..].iter().any(|call| mentions(call, name)) {
+				return Some(format!("not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"));
+			}
+		}
+	}
+	None
+}
+
 /// `not e`: yes when e is falsy
 fn negation(lean: String) -> String {
 	format!(".ite ({lean}) (.bool false) (.bool true)")
@@ -341,6 +383,8 @@ struct Exporter {
 	cells: Vec<String>,
 	/// the cell locals whose first value is a list: `xs.add(v)` appends to them
 	cell_lists: Vec<String>,
+	/// main-level names bound to a lambda: warp makes them functions, so a bare `f` is a call missing its argument
+	lambda_names: Vec<String>,
 	/// how many hidden main-level names (`·tuple1`, `·count1`) destructuring took so far
 	hidden_names: usize,
 }
@@ -515,6 +559,9 @@ impl Exporter {
 		});
 		let event_classes = self.collect_event_classes(program);
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
+		if let Some(why) = late_binding(&program, &self.globals) {
+			return Err(why);
+		}
 		let mut argument_classes = Vec::new();
 		let mut cell_items = Vec::new();
 		for statement in &program {
@@ -633,6 +680,9 @@ impl Exporter {
 		if annotation.is_none() && is_evident_bool(value) {
 			self.bool_names.push(name.clone());
 		}
+		if matches!(unwrapped(value), Node::Key(_, Op::FatArrow, _)) {
+			self.lambda_names.push(name.clone());
+		}
 		if is_list_literal(value) || matches!(value.drop_meta(), Node::Empty) || annotation.as_deref().is_some_and(|lean| lean.starts_with(".list")) {
 			self.list_names.push(name.clone());
 		}
@@ -737,6 +787,27 @@ impl Exporter {
 		Ok(format!(".forIn {} ({list}) ({})", quoted(&variable), body?))
 	}
 
+	/// `x => body`: x is a local of the body; a lambda of no or several parameters is not in W0
+	fn lambda(&mut self, parameter: &Node, body: &Node) -> Lean {
+		let parameter = match parameter.drop_meta() {
+			Node::Symbol(name) => name.clone(),
+			other => return Err(format!("not in W0: the lambda parameters {}", other.serialize().trim())),
+		};
+		self.locals.push(parameter.clone());
+		let body = self.breaking_in(None, |exporter| exporter.block(body));
+		self.locals.pop();
+		Ok(format!(".lam {} ({})", quoted(&parameter), body?))
+	}
+
+	/// a variable, parameter or local (not a function or class): what a call of it calls is its value
+	fn holds_value(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Symbol(name) => !self.functions.contains_key(name) && !self.classes.contains_key(name)
+				&& (self.names.contains_key(name) || self.locals.contains(name) || self.argument_fields.contains(name) || self.cells.contains(name)),
+			_ => false,
+		}
+	}
+
 	/// a literal, a name (not a function's), or operators on such: evaluating it twice changes nothing
 	fn is_pure(&self, node: &Node) -> bool {
 		match node.drop_meta() {
@@ -766,12 +837,14 @@ impl Exporter {
 			Node::Char(c) => Ok(format!(".text {}", quoted(&c.to_string()))), // `"a"` parses as a codepoint
 			Node::Empty => Ok(".nil".to_string()), // ø is the empty list (`xs = []` parses as ø)
 			Node::Symbol(name) if self.cells.contains(name) => Ok(self.cell_value(name)),
+			// the function's first local is its arguments object; loops and lambdas push theirs after it
 			Node::Symbol(name) if self.argument_fields.contains(name) => {
-				Ok(format!(".get (.loc {}) {}", quoted(self.locals.last().expect("the arguments object")), quoted(name)))
+				Ok(format!(".get (.loc {}) {}", quoted(self.locals.first().expect("the arguments object")), quoted(name)))
 			}
 			Node::Symbol(name) if self.locals.contains(name) => Ok(format!(".loc {}", quoted(name))),
 			// `two()` of a function of no parameters parses as `(two)`
 			Node::Symbol(name) if self.functions.get(name).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(name))),
+			Node::Symbol(name) if self.lambda_names.contains(name) => Err(format!("not in W0: {name} as a value (warp calls it; `function {name}` is the function)")),
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
 			Node::List(items, Bracket::Square, _) => {
 				let elements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
@@ -809,6 +882,14 @@ impl Exporter {
 				[call, arguments @ ..] if arguments.len() > 1 && self.classes.contains_key(&arguments_class(&call.name())) => {
 					let arguments = self.construction(&arguments_class(&call.name()), arguments)?;
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
+				}
+				// `f(3)` of a name holding a lambda
+				[value, argument] if self.holds_value(value) => {
+					let function = match value.drop_meta() {
+						Node::Symbol(name) if self.lambda_names.contains(name) => format!(".glob {}", quoted(name)),
+						_ => self.expression(value)?,
+					};
+					Ok(format!(".app ({function}) ({})", self.expression(argument)?))
 				}
 				[call, argument] if self.functions.contains_key(&call.name()) => {
 					let declared = self.functions[&call.name()].clone();
@@ -879,6 +960,7 @@ impl Exporter {
 			}
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
 			Node::Key(empty, Op::Not, operand) if empty.is_nothing() => Ok(negation(self.expression(operand)?)),
+			Node::Key(parameter, Op::FatArrow, body) => self.lambda(parameter, body),
 			// `a and b` is b when a is truthy, else a; `a or b` the other way round: a, free of effects, evaluated twice
 			Node::Key(left, op @ (Op::And | Op::Or), right) if self.is_pure(left) => {
 				let (left, right) = (self.expression(left)?, self.expression(right)?);
