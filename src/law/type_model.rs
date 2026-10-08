@@ -13,6 +13,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod nested_functions;
+
 /// The lake project of the model, in the source tree
 pub const MODEL_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lean/WarpTypes");
 /// `lake build` of one project must not run twice at once
@@ -412,6 +414,8 @@ fn lean_strings(words: &[String]) -> String {
 struct Exporter {
 	/// the functions of the program with their parameter's W0 type
 	functions: HashMap<String, String>,
+	/// the parameter name of each function of one parameter: `f(n=3)` names it
+	single_parameters: HashMap<String, String>,
 	/// main-level names bound so far, with their declared type when annotated
 	names: HashMap<String, Option<String>>,
 	/// main-level names bound to an evident bool (`b = true`): a bool place for the literals 1 and 0 (P199)
@@ -434,6 +438,9 @@ struct Exporter {
 	/// the locals of the function being exported: each lives in a cell, a fresh instance of its class `f·n` per call
 	/// (W0's locals are bound by substitution, warp's change), whose one field takes the join of the values written
 	cells: Vec<String>,
+	/// the classes of the function locals' cells: a parameter of one holds the cell itself (a lifted nested function's
+	/// nonlocal, nested_functions.rs)
+	cell_classes: Vec<String>,
 	/// the cell locals whose first value is a list: `xs.add(v)` appends to them
 	cell_lists: Vec<String>,
 	/// main-level names bound to a lambda: warp makes them functions, so a bare `f` is a call missing its argument
@@ -558,7 +565,10 @@ impl Exporter {
 	fn instance(&mut self, class: &str, fields: Vec<(String, &Node)>) -> Lean {
 		let path = lean_strings(&self.classes[class].0);
 		let local = format!("new·{class}");
-		let writes: Result<Vec<String>, String> = fields.iter().map(|(field, value)| Ok(format!(".set (.loc {}) {} ({})", quoted(&local), quoted(field), self.expression(value)?))).collect();
+		let writes: Result<Vec<String>, String> = fields.iter().map(|(field, value)| {
+			let field_type = self.classes[class].1.iter().find(|(own, _)| own == field).and_then(|(_, word)| word.clone());
+			Ok(format!(".set (.loc {}) {} ({})", quoted(&local), quoted(field), self.argument(field_type.as_deref(), value)?))
+		}).collect();
 		let body = writes?.iter().rev().fold(format!(".loc {}", quoted(&local)), |rest, write| format!(".seq ({write}) ({rest})"));
 		Ok(format!(".letIn {} (.cls {path}) (.new {path}) ({body})", quoted(&local)))
 	}
@@ -631,6 +641,8 @@ impl Exporter {
 		program.visit(&mut |part| if let Some((name, _)) = global_declaration(part) {
 			self.globals.push(name.to_string());
 		});
+		let lifted = nested_functions::lift(program, &self.globals)?;
+		let program = &lifted;
 		let event_classes = self.collect_event_classes(program);
 		let program_node = program;
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
@@ -639,6 +651,16 @@ impl Exporter {
 		}
 		let mut argument_classes = Vec::new();
 		let mut cell_items = Vec::new();
+		// first: a lifted nested function's parameter `y: outer·y` holds outer's cell
+		for statement in &program {
+			let Some((name, _, body)) = function_definition(statement) else { continue };
+			for local in assigned_locals(body, &self.globals) {
+				let class = cell_class(name, &local);
+				self.classes.insert(class.clone(), (vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]));
+				cell_items.push(format!(".cell {}", quoted(&class)));
+				self.cell_classes.push(class);
+			}
+		}
 		for statement in &program {
 			let Some((name, parameters, _)) = function_definition(statement) else { continue };
 			if self.functions.contains_key(name) {
@@ -646,7 +668,10 @@ impl Exporter {
 			}
 			let parameter_type = match parameters.as_slice() {
 				[] => UNIT_TYPE.to_string(),
-				[parameter] => self.parameter_type(parameter)?.1,
+				[parameter] => {
+					self.single_parameters.insert(name.to_string(), parameter_name(parameter));
+					self.parameter_type(parameter)?.1
+				}
 				parameters => {
 					let class = arguments_class(name);
 					let fields = parameters.iter().map(|parameter| Ok((self.parameter_type(parameter)?.0, parameter_type_word(parameter)))).collect::<Result<Vec<_>, String>>()?;
@@ -661,14 +686,6 @@ impl Exporter {
 				}
 			};
 			self.functions.insert(name.to_string(), parameter_type);
-		}
-		for statement in &program {
-			let Some((name, _, body)) = function_definition(statement) else { continue };
-			for local in assigned_locals(body, &self.globals) {
-				let class = cell_class(name, &local);
-				self.classes.insert(class.clone(), (vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]));
-				cell_items.push(format!(".cell {}", quoted(&class)));
-			}
 		}
 		argument_classes.extend(event_classes);
 		let mut words_used = false;
@@ -852,7 +869,8 @@ impl Exporter {
 			[] => (UNIT_PARAMETER.to_string(), vec![], declared),
 			parameters => (arguments_class(name), parameters.iter().map(|parameter| parameter_name(parameter)).collect(), declared),
 		};
-		let cells = assigned_locals(body, &self.globals);
+		let references: Vec<String> = parameters.iter().filter(|parameter| parameter_type_word(parameter).is_some_and(|word| self.cell_classes.contains(&word))).map(|parameter| parameter_name(parameter)).collect();
+		let cells: Vec<String> = assigned_locals(body, &self.globals).into_iter().filter(|cell| !references.contains(cell)).collect();
 		// an assigned parameter's cell starts with the argument (read before the cell's name hides it)
 		let first_values: Vec<String> = cells.iter().map(|cell| match () {
 			_ if *cell == parameter => format!(".loc {}", quoted(cell)),
@@ -860,9 +878,9 @@ impl Exporter {
 			_ => UNIT_TYPE.to_string(),
 		}).collect();
 		self.cell_lists = cells.iter().filter(|cell| first_value_is_list(body, cell)).cloned().collect();
-		self.cells = cells.clone();
+		self.cells = cells.iter().chain(&references).cloned().collect();
 		self.locals.push(parameter.clone());
-		self.argument_fields = fields;
+		self.argument_fields = fields.clone();
 		let body = self.block(body);
 		self.locals.pop();
 		self.argument_fields.clear();
@@ -874,6 +892,12 @@ impl Exporter {
 				_ => format!(".letIn \"·new\" (.cls {path}) (.new {path}) (.seq (.set (.loc \"·new\") {} ({first_value})) (.loc \"·new\"))", quoted(CELL_FIELD)),
 			};
 			format!(".letIn {} (.cls {path}) ({new_cell}) ({body})", quoted(cell))
+		});
+		// a cell parameter among several is read from the arguments object once
+		let body = references.iter().filter(|reference| fields.contains(reference)).fold(body, |body, reference| {
+			let cell = parameters.iter().find(|parameter| parameter_name(parameter) == **reference).and_then(|parameter| parameter_type_word(parameter)).expect("a cell parameter");
+			let path = lean_strings(&[cell]);
+			format!(".letIn {} (.cls {path}) (.get (.loc {}) {}) ({body})", quoted(reference), quoted(&parameter), quoted(reference))
 		});
 		Ok(format!(".function {} {} {parameter_type} ({body})", quoted(name), quoted(&parameter)))
 	}
@@ -951,6 +975,14 @@ impl Exporter {
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_pure(&items[0]),
 			Node::Key(left, op, right) => !matches!(op, Op::Assign | Op::Define | Op::Dot) && !op.is_compound_assign() && self.is_pure(left) && self.is_pure(right),
 			_ => false,
+		}
+	}
+
+	/// the value given to a place of the given type word: to a cell parameter, the caller's cell itself
+	fn argument(&mut self, type_word: Option<&str>, value: &Node) -> Lean {
+		match value.drop_meta() {
+			Node::Symbol(name) if type_word.is_some_and(|word| self.cell_classes.iter().any(|cell| cell == word)) && self.cells.contains(name) => Ok(format!(".loc {}", quoted(name))),
+			_ => self.expression(value),
 		}
 	}
 
@@ -1062,9 +1094,16 @@ impl Exporter {
 					Ok(format!(".app ({function}) ({})", self.expression(argument)?))
 				}
 				[call, argument] if self.functions.contains_key(&call.name()) => {
+					let argument = match argument.drop_meta() {
+						Node::Key(name, Op::Assign, value) if self.single_parameters.get(&call.name()) == Some(&name.name()) => value.as_ref(),
+						Node::Key(name, Op::Assign, _) => return Err(format!("{} has no parameter {}", call.name(), name.name())),
+						_ => argument,
+					};
 					let declared = self.functions[&call.name()].clone();
+					let cell = self.cell_classes.iter().find(|cell| declared == format!(".cls {}", lean_strings(&[cell.to_string()]))).cloned();
 					let argument = match bool_literal(Some(&declared), argument) {
 						Some(yes_or_no) => yes_or_no,
+						None if cell.is_some() => self.argument(cell.as_deref(), argument)?,
 						None => admitted(&declared, self.expression(argument)?),
 					};
 					Ok(format!(".call {} ({argument})", quoted(&call.name())))

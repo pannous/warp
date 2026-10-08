@@ -437,3 +437,16 @@ inside a handler body loses the outer handler).
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
 the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
 exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, units, then tasks.
+
+## Named arguments, defaults, nested functions (exporter only)
+
+`f(b=1, a=5)` writes the fields of `f·args` by name, positional arguments fill the others in order, a missing one
+takes its default (`f(a, b=3)`, `b: int = 3`); a call whose arguments do not fit exports as a call given `unit`, so
+W0 rejects it as warp does. Arguments run as written, left to right (P216; warp computed them in parameter order
+until src/lowering/named_arguments.rs moved effectful reordered ones into temporaries). `f(n=4)` names the one
+parameter. A function defined in a function's body is lifted (src/law/type_model/nested_functions.rs) to the
+main-level `outer·inner`, the names of outer it reads added as parameters passed by name; a name it declares
+`nonlocal` is passed as outer's cell (parameter type `outer·y`, the cell class), so writes reach outer. Siblings
+pass on what their callees capture and are ordered callees first (W0 types functions in order: a main-level
+`a() := b() + 1; b() := 5` is still rejected). Cards: nested-two-deep (warp cannot read two levels up),
+nonlocal-assign-unchecked (KNOWN_HOLES), named-constructor-args.

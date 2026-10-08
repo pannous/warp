@@ -291,10 +291,21 @@ const CORPUS: &[&str] = &[
 	"f(a, b=3) := a - b; f(5) + f(5, b=2)",
 	"f(a, b: int = 3) := a - b; f(5)",
 	"f(a, b: int = 3) := a - b; f(5, b=\"x\")",
+	"f(n) := n * 2; f(n=4)",
+	// nested functions read the outer function's names; `nonlocal y` writes through, a plain `y = 7` is inner's own
+	"outer(x) := { inner(y) := x + y; inner(2) }; outer(5)",
+	"outer(x: int) := { inner(y: int) := x + y; inner(\"a\") }; outer(5)",
+	"outer(x) := { y = 1; inner() := { nonlocal y; y = y + x }; inner(); inner(); y }; outer(5)",
+	"outer(x) := { y = 1; inner() := { y = 7; y }; inner() + y }; outer(5)",
+	"outer(x) := { a() := b() + 1; b() := x; a() }; outer(5)",
+	"outer() := { y = 1; inc() := { nonlocal y; y += 1 }; twice() := { inc(); inc() }; twice(); y }; outer()",
+	"outer(n) := { total = 0; add(k) := { nonlocal total; total += k }; for i in 1..n { add(i) }; total }; outer(4)",
+	"outer(n) := { fact(k) := if k < 2 then 1 else k * fact(k - 1); fact(n) }; outer(5)",
+	"outer(x) := { mid(y) := { deep(z) := y + z; deep(1) }; mid(10) }; outer(100)",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("a: int = 0; a, b = 2.5, 6; a", "destructure-unchecked"), ("a: text = \"\"; a, b = 1, 2; a", "destructure-unchecked"), ("a: int = 0; a = b = 2.5; a", "chain-unchecked"), ("a: int = 0; a = b = \"x\"; b", "chain-unchecked"), ("b: bool = no; b++; b", "bool-assign"), ("xs: ints = [1]; ys = [\"a\"]; xs = xs + ys; xs", "concat-unchecked"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = 2.5; n }; f(3)", "param-assign-unchecked")];
+const KNOWN_HOLES: &[(&str, &str)] = &[("a: int = 0; a, b = 2.5, 6; a", "destructure-unchecked"), ("a: text = \"\"; a, b = 1, 2; a", "destructure-unchecked"), ("a: int = 0; a = b = 2.5; a", "chain-unchecked"), ("a: int = 0; a = b = \"x\"; b", "chain-unchecked"), ("b: bool = no; b++; b", "bool-assign"), ("xs: ints = [1]; ys = [\"a\"]; xs = xs + ys; xs", "concat-unchecked"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = 2.5; n }; f(3)", "param-assign-unchecked"), ("outer() := { y = 1; inner() := { nonlocal y; y = \"a\" }; inner(); y }; outer()", "nonlocal-assign-unchecked")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
