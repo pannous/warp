@@ -190,7 +190,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 84] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 85] = [
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -227,6 +227,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 84] = [
 	crate::transitions::lower,
 	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
 	crate::introspection::lower,
+	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
+	crate::reflection::lower,
 	// `root` is sqrt (word_operators.rs), before pipes.rs reads `2|square|root`
 	crate::word_operators::lower,
 	// `x | f` (pipes.rs) before any pass reads the or
