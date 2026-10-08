@@ -212,7 +212,12 @@ impl WasmGcEmitter {
 			Op::Neg => {
 				// -x = 0 - x
 				let use_float = self.get_type(right).is_float();
-				if use_float {
+				if self.get_type(right) == crate::Kind::Data { // a number known only at run time: node_sub decides
+					func.instruction(&I::I64Const(0));
+					self.emit_call(func, "new_int");
+					self.emit_node_instructions(func, right);
+					self.emit_call(func, super::list_ops::NODE_ARITHMETIC[1].0);
+				} else if use_float {
 					func.instruction(&I::F64Const(0.0.into()));
 					self.emit_float_value(func, right);
 					func.instruction(&I::F64Sub);

@@ -197,6 +197,8 @@ impl WasmGcEmitter {
 			};
 			s.emit_codepoint_as_text(f, first);
 			s.emit_codepoint_as_text(f, second);
+			s.emit_uncertain_as_value(f, first);
+			s.emit_uncertain_as_value(f, second);
 			for (node, kind) in [(first, kinds[0]), (second, kinds[1])] {
 				s.emit_field(f, node, 0);
 				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
@@ -442,6 +444,7 @@ impl WasmGcEmitter {
 		self.emit_int_to_decimal();
 		self.emit_exact_text();
 		self.emit_float_text(); // after int_to_decimal, which it calls
+		self.emit_uncertain_text(); // after float_text and text_concat, which it calls
 		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
@@ -571,6 +574,12 @@ impl WasmGcEmitter {
 					f.instruction(&I::If(BlockType::Empty));
 					Self::emit_list(f, &[I32Const(empty_text.0 as i32), I32Const(empty_text.1 as i32)]);
 					s.call(f, "new_text");
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
+				if s.should_emit_function(super::uncertain::UNCERTAIN_TEXT) {
+					is_kind(f, Kind::Uncertain);
+					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
+					s.call(f, super::uncertain::UNCERTAIN_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				is_kind(f, Kind::Float);

@@ -35,9 +35,15 @@ unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.61).
   span comparisons (`1950 ± 50 == 1900 - 2000`) and every case with units stay compile-time as before.
 - Tests: tests/numbers/test_plus_minus.rs.
 
+- Card plus-minus-print (done): print and `str(x)` show `6.0 ± 1.0` (uncertain_text in list_join, the format of
+  the read-back); `x.value`, `x.low`, `x.high`, `x.uncertainty` as floats (uncertain_field, in the constant-field
+  lookup like `e.message`); `-x` of any run-time number is node_sub(0, x); `<` and the other orders compare the values
+  (node_order), an undoable default queued with the Interviewer (alternative: `<` only when the whole interval is below).
+  Tests: tests/numbers/test_plus_minus_print.rs.
+
 ## Open
-- Card plus-minus-print: printing at run time (`print x`, `"{x}"`: text_of has no Uncertain case), `.value` and
-  `.uncertainty`, negation `-(5 ± 1)` (units.rs still errors), comparisons `<`.
+- `"y=" + x` with an interval x is the general type error text + data (no implicit conversion of a run-time value);
+  `"y=" + str(x)` works. Text interpolation does not exist in warp (notes/i18n.md).
 - Card plus-minus-playground: the playground reader (web.rs node_from_tree), math words (sqrt, sin: map the endpoints,
   split at extrema), units with ± at run time (`5 m ± 1 cm`).
 - A typed parameter `f(x: float)` refuses an interval argument ("not a number"); the error should name the ± value.

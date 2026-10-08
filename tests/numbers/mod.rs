@@ -56,3 +56,4 @@ mod test_decimal_units;
 mod test_number_words;
 mod test_time_of_day;
 mod test_plus_minus;
+mod test_plus_minus_print;
