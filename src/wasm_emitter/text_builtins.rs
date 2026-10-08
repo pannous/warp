@@ -154,7 +154,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.extend(["exact_mul", "exact_add", "exact_sub"]);
 	}
 	if required.contains("list_sort") {
-		required.insert(super::library_ops::NODE_ORDER);
+		required.extend([super::library_ops::NODE_ORDER, "text_chars", "list_join"]);
 	}
 	if [TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH].iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_MATCHES_AT);
