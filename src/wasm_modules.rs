@@ -141,7 +141,11 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 		match payload.map_err(failure)? {
 			Payload::TypeSection(reader) => {
 				for group in reader {
-					types.extend(group.map_err(failure)?.into_types().map(|sub_type| sub_type.unwrap_func().clone()));
+					// a GC module's struct and array types take type indices too (a module compiled from warp)
+					types.extend(group.map_err(failure)?.into_types().map(|sub_type| match sub_type.composite_type.inner {
+						wasmparser::CompositeInnerType::Func(function_type) => Some(function_type),
+						_ => None,
+					}));
 				}
 			}
 			Payload::ImportSection(reader) => {
@@ -193,7 +197,7 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 	for (name, kind, index) in exported {
 		match kind {
 			ExternalKind::Func => {
-				let Some(function_type) = function_types.get(index).and_then(|type_index| types.get(*type_index as usize)) else { continue };
+				let Some(function_type) = function_types.get(index).and_then(|type_index| types.get(*type_index as usize)).and_then(Option::as_ref) else { continue };
 				if let (Some(params), Some(results)) = (number_types(function_type.params()), number_types(function_type.results())) {
 					let names = local_names.get(&(index as u32));
 					let parameters = (0..params.len() as u32).map(|local| names.and_then(|names| names.get(&local)).cloned().unwrap_or_else(|| format!("${local}"))).collect();
@@ -436,6 +440,14 @@ fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 	let module_of = |alias: &str, export: &str| modules.iter().find(|path| module_alias(path) == alias && exports(path).contains_key(export));
 	match node.drop_meta() {
 		Node::Key(receiver, Op::Dot, member) => {
+			// `m.f.params`: a function has no fields, its member is a reflection word (reflection.rs), not a call of f
+			if let Node::Key(alias, Op::Dot, export) = receiver.drop_meta() {
+				if let (Node::Symbol(alias), Node::Symbol(export)) = (alias.drop_meta(), export.drop_meta()) {
+					if module_of(alias, export).is_some_and(|path| exports(path)[export].role == Role::Function) {
+						return Ok(node.clone());
+					}
+				}
+			}
 			if let Node::Symbol(alias) = receiver.drop_meta() {
 				let (export, arguments) = match member.drop_meta() {
 					Node::List(items, _, _) => match items.split_first() {

@@ -392,8 +392,8 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let node = crate::folding::precompute(lower_for_emission(program)?);
 		warn_about_run_time_blocks(&node)?;
-		// a final quantity's unit goes into the module's `warp.meta` section
-		choose_module(&node).map(|module| CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module })
+		// a final quantity's unit and the program's classes go into the module's `warp.meta` section
+		choose_module(&node).map(|module| CompiledModule { bytes: crate::meta_section::with_program_entries(module.bytes), ..module })
 	})
 }
 
@@ -459,7 +459,7 @@ fn eval_program(node: Node) -> Node {
 
 	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
 	match emit_module(&node) {
-		Ok(module) => run_module(CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module }),
+		Ok(module) => run_module(CompiledModule { bytes: crate::meta_section::with_program_entries(module.bytes), ..module }),
 		Err(type_error) => type_error,
 	}
 }

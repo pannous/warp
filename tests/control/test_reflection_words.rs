@@ -109,3 +109,21 @@ fn fields_of_an_instance_known_at_run_time() {
 	is!(&format!("{POINT}; f(o) := o.methods; f(P(1, 2))"), warp::texts(vec!["sq"]));
 	is!(&format!("{POINT}; xs = [P(1, 2)]; dir(xs#1)"), warp::texts(vec!["x", "y", "sq"]));
 }
+
+// card reflection-classes: a module compiled from warp (probes/reflection_classes/shapes.warp) keeps its classes in
+// its warp.meta section and its parameter names in its name section
+const SHAPES: &str = "import tests/fixtures/wasm/shapes";
+
+#[test]
+fn a_warp_modules_functions_and_their_params() {
+	is!(&format!("{SHAPES}; twice(21)"), 42);
+	is!(&format!("{SHAPES}; twice(a: 21)"), 42);
+	is!(&format!("{SHAPES}; shapes.twice.params"), warp::texts(vec!["a"]));
+}
+
+#[test]
+fn a_warp_modules_classes() {
+	is!(&format!("{SHAPES}; shapes.P.fields"), warp::texts(vec!["x", "y"]));
+	is!(&format!("{SHAPES}; shapes.P.methods"), warp::texts(vec!["sq"]));
+	is!(&format!("{SHAPES}; dir(shapes.P)"), warp::texts(vec!["x", "y", "sq"]));
+}

@@ -41,6 +41,9 @@ custom section, `warp.meta`, kept unstripped.
 ## warp.meta layout
 Warp notation text (parsed by the reader we already have), one map:
 `{units: "km:1 h:-1", classes: {P: {fields: [x y], methods: [norm]}}, functions: {f: {params: [a b], signature: "…", effects: [IO]}}}`.
+Written today: `units` and `classes` (meta_section::with_program_entries; classes from reflection::lower_objects, inherited
+fields first, names as symbols since a one-letter text reads back as a codepoint). Parameter names travel in the name
+section's local names instead of a `functions` entry (wasm_emitter emit_names), which named arguments read too.
 `units` holds today's warp.units text unchanged (warp-worker/warp-99 switches both ends in one commit once this is fixed).
 
 ## Steps (each a small branch)
@@ -66,3 +69,9 @@ Warp notation text (parsed by the reader we already have), one map:
    Done first: run-time names of the program's own classes by type dispatch (Sources 2). Agreed with warp-worker
    (2026-10-08): web switches static_units with_result_units / module_units and the playground reader to the `units`
    entry, text byte for byte; warp-worker owns `x.unit` once quantities live in variables.
+   Done (card reflection-classes): a module compiled from warp (`warp compile --wasm`, imported as `import shapes`)
+   answers `shapes.P.fields`, `shapes.P.methods`, `dir(shapes.P)` from its `classes` entry and `shapes.twice.params`
+   from its name section (reflection::lower_module_words; wasm_modules::read_exports now skips the GC struct types such
+   a module has instead of panicking, so its number functions are callable: `twice(a: 21)`). Fixture
+   tests/fixtures/wasm/shapes.wasm from probes/reflection_classes/shapes.warp. Not yet: constructing or reading the
+   module's instances (`shapes.P(1, 2)`, exports with reference types).

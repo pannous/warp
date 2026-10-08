@@ -1403,6 +1403,12 @@ impl WasmGcEmitter {
 			.collect();
 		self.names.functions(&name_map(&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect()));
 
+		// a user function's parameter names: an importer calls it with named arguments and reflects `m.f.params`
+		let parameter_names = self.ctx.user_functions.values()
+			.filter_map(|function| Some((function.func_index?, function.params.iter().enumerate().map(|(i, param)| (i as u32, param.name.as_str())).collect())))
+			.collect();
+		self.names.locals(&indirect_name_map(parameter_names));
+
 		let tm = &self.type_manager;
 		let mut types = vec![(tm.string_type, "String"), (tm.i64_box_type, "i64box"), (tm.f64_box_type, "f64box"), (tm.node_type, "Node"),
 			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList"), (tm.float_array_type, "FloatArray"), (tm.float_list_type, "FloatList")];
@@ -1434,13 +1440,7 @@ impl WasmGcEmitter {
 			}
 		}
 		fields.extend(self.instance_types.values().map(|instance| (instance.type_index, instance.fields.iter().enumerate().map(|(i, (field, _))| (i as u32, field.as_str())).collect())));
-		fields.sort_by_key(|(type_idx, _)| *type_idx);
-		fields.dedup_by_key(|(type_idx, _)| *type_idx);
-		let mut type_field_names = IndirectNameMap::new();
-		for (type_idx, mut names) in fields {
-			type_field_names.append(type_idx, &name_map(&mut names));
-		}
-		self.names.fields(&type_field_names);
+		self.names.fields(&indirect_name_map(fields));
 
 		if let Some(tag_names) = self.error_tag_names() {
 			self.names.tags(&tag_names);
@@ -1651,6 +1651,17 @@ fn name_map(names: &mut Vec<(u32, &str)>) -> NameMap {
 	let mut map = NameMap::new();
 	for (idx, name) in names.iter() {
 		map.append(*idx, name);
+	}
+	map
+}
+
+/// Name maps of several functions or types, in index order, one map per index
+fn indirect_name_map(mut entries: Vec<(u32, Vec<(u32, &str)>)>) -> IndirectNameMap {
+	entries.sort_by_key(|(idx, _)| *idx);
+	entries.dedup_by_key(|(idx, _)| *idx);
+	let mut map = IndirectNameMap::new();
+	for (idx, mut names) in entries {
+		map.append(idx, &name_map(&mut names));
 	}
 	map
 }
