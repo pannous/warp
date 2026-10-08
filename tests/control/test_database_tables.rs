@@ -62,3 +62,11 @@ fn stored_registers_a_table_of_the_same_name() {
 	eval("class Person{name: text; age: int}\nstored people: [Person]\npeople.add(Person(\"Di\", 50))");
 	is!(&program("people", "people#1.name"), "Di");
 }
+
+// samples/orm.warp keeps its rows beside it and seeds them once, so each run gives the same
+#[cfg(feature = "native")]
+#[test]
+fn the_orm_sample_runs_twice_alike() {
+	is!("samples/orm.warp", "Bo has row 2");
+	is!("samples/orm.warp", "Bo has row 2");
+}
