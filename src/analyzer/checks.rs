@@ -1149,7 +1149,7 @@ pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> 
 }
 
 /// The declared name and type of the target `x:int` or `int x`
-pub(super) fn declaring_name_and_type(target: &Node) -> Option<(String, String)> {
+pub(crate) fn declaring_name_and_type(target: &Node) -> Option<(String, String)> {
 	let (name, type_name) = match target {
 		Node::Key(name, Op::Colon, type_name) => (name.drop_meta().clone(), type_name.drop_meta().clone()),
 		prefixed => number_type_prefix(prefixed)?,
@@ -1163,6 +1163,14 @@ pub(super) fn declaring_name_and_type(target: &Node) -> Option<(String, String)>
 /// `x:int=…` declares x's type; every value assigned to x later must fit it
 pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, String>) -> Option<Diagnostic> {
 	match node.drop_meta() {
+		// `names#1 = 420`: an element of a declared list
+		Node::Key(target, Op::Assign, value) if indexed_list(target).is_some_and(|name| declared.contains_key(name)) => {
+			let name = indexed_list(target)?;
+			let type_name = &declared[name];
+			let element = list_element_type(type_name)?;
+			let item = Node::List(vec![value.as_ref().clone()], Bracket::Square, Separator::Space);
+			list_items_mismatch(node, name, type_name, element, &item)
+		}
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			let declaration = match target.drop_meta() {
 				Node::Symbol(name) => declared.get_key_value(name).map(|(name, type_name)| (name.clone(), type_name.clone())),
@@ -1176,8 +1184,20 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 			}
 			check_declared_types(value, declared)
 		}
+		// `names.add(420)`: the method call appends before mutation lowers it to `names = names + [420]`
+		Node::Key(list, Op::Dot, _) if appended_items(node).is_some() => {
+			let Node::Symbol(name) = list.drop_meta() else { return None };
+			let type_name = declared.get(name)?;
+			let element = list_element_type(type_name)?;
+			let appended = Node::List(appended_items(node)?.to_vec(), Bracket::Square, Separator::Space);
+			list_items_mismatch(node, name, type_name, element, &appended)
+		}
 		Node::Key(left, _, right) => check_declared_types(left, declared).or_else(|| check_declared_types(right, declared)),
-		Node::List(items, _, _) => {
+		Node::List(items, bracket, separator) => {
+			// `names: list of text = […]` still arrives as the items `names:list`, `of`, `text=[…]`
+			if let Some(declaration) = of_type_declaration(items, bracket, separator) {
+				return check_declared_types(&declaration, declared);
+			}
 			let prefixed = items.windows(2).filter_map(|pair| prefixed_declaration(&pair[0], &pair[1]));
 			prefixed.chain(items.iter().cloned()).find_map(|item| check_declared_types(&item, declared))
 		}
@@ -1196,14 +1216,69 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 		let message = format!("type mismatch: {name} is declared {type_name}, cannot assign ø");
 		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{type_name}? to allow ø")));
 	}
+	if let Some(element) = list_element_type(type_name) {
+		return list_items_mismatch(assignment, name, type_name, element, value);
+	}
+	let actual = literal_misfit(type_name, value)?;
+	let value_text = value.serialize();
+	let message = format!("type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}", format!("{actual:?}").to_lowercase());
+	Some(Diagnostic::at(assignment, message).fix(format!("{name}={type_name}({value_text}) or declare {name}:{}", format!("{actual:?}").to_lowercase())))
+}
+
+/// The kind of a literal `value` that does not fit the built-in type `type_name`; None when it fits or is no literal
+pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
 	let expected = builtin_type_kind(type_name)?;
 	let actual = computed_literal_kind(value)?;
 	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
 	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint; // `"a"` parses as a codepoint
-	if expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text {
-		return None;
+	let fits = expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text;
+	(!fits).then_some(actual)
+}
+
+/// The element type of a list type: `texts` and `list of text` hold `text`
+pub(crate) fn list_element_type(type_name: &str) -> Option<&str> {
+	plural_element_type(type_name).or_else(|| type_name.strip_prefix(LIST_OF_PREFIX))
+}
+
+/// The items a list value is given literally: all of `[a b]`, the appended ones of `xs + [c]`
+pub(crate) fn added_items(value: &Node) -> Option<&[Node]> {
+	match value.drop_meta() {
+		Node::List(items, Bracket::Square, _) => Some(items),
+		Node::Key(_, Op::Add, appended) => match appended.drop_meta() {
+			Node::List(items, Bracket::Square, _) => Some(items),
+			_ => None,
+		},
+		_ => None,
 	}
-	let value_text = value.serialize();
-	let message = format!("type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}", format!("{actual:?}").to_lowercase());
-	Some(Diagnostic::at(assignment, message).fix(format!("{name}={type_name}({value_text}) or declare {name}:{}", format!("{actual:?}").to_lowercase())))
+}
+
+/// The first literal item of a list value that does not fit `element`, with its kind
+pub(crate) fn misfit_item<'a>(element: &str, value: &'a Node) -> Option<(&'a Node, Kind)> {
+	added_items(value)?.iter().find_map(|item| Some((item, literal_misfit(element, item)?)))
+}
+
+/// The list variable `names` of an element `names#i`
+pub(crate) fn indexed_list(target: &Node) -> Option<&str> {
+	let Node::Key(list, Op::Hash, _) = target.drop_meta() else { return None };
+	match list.drop_meta() {
+		Node::Symbol(name) => Some(name),
+		_ => None,
+	}
+}
+
+/// The items of an append call `xs.add(a)`, `xs.push(a, b)`
+pub(crate) fn appended_items(call: &Node) -> Option<&[Node]> {
+	let Node::Key(_, Op::Dot, method_call) = call.drop_meta() else { return None };
+	let Node::List(items, _, _) = method_call.drop_meta() else { return None };
+	let (method, arguments) = items.split_first()?;
+	let is_append = matches!(method.drop_meta(), Node::Symbol(word) if crate::broadcasting::APPEND_METHODS.contains(&word.as_str()));
+	is_append.then_some(arguments)
+}
+
+/// `names: texts = [420]`, `names.add(420)`: a literal item the declared element type does not take
+fn list_items_mismatch(assignment: &Node, name: &str, type_name: &str, element: &str, value: &Node) -> Option<Diagnostic> {
+	let (item, actual) = misfit_item(element, value)?;
+	let actual = format!("{actual:?}").to_lowercase();
+	let message = format!("type mismatch: {name} is declared {type_name}, cannot hold {actual} {}", item.serialize());
+	Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:list to hold any items")))
 }

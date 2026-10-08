@@ -16,7 +16,7 @@ const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Po
 const MAP_WORD: &str = "map";
 const ALL_WORD: &str = "all";
 /// Methods that append to a list variable (analyzer APPEND_METHODS)
-const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
+pub(crate) const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 const EXTREMUM_WORDS: [&str; 2] = ["max", "min"];
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
