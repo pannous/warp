@@ -20,9 +20,8 @@ test "squares" {               // named: a failing check or any error fails only
 - A condition may be a phrase: `test switch 3 {…} == "three"`. Write `test (#"héllo") == 5`: `test #x` is an index.
 
 Open / not done:
-- Page tests (`test "…" { render … }`, src/page_tests.rs) still run under a plain eval; P209 would run them only under
-  `warp test`. Their summary already reads `✓ n tests passed`.
-- Multi-line Error texts are cut at the first line (raise("a\nb") shows Error("a")), so the ✗ lines are printed, not
-  carried in the final Error.
+- Page tests (`test "…" { render … }`, src/page_tests.rs) follow P209 too: skipped by a plain run, run under
+  `warp test` and the playground's Run; their failures are ✗ lines in the Error, then `m of n failed`. A program mixing
+  page tests with soft `test C` lines is not handled (the page runner takes the soft lines as setup).
 - `test` lines inside functions or loops are not tests (top level and test blocks only).
 - A fresh worktree needs web/playground/served-files.js for `cargo browser-test` (build.sh writes it).
