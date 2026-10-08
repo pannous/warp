@@ -7,6 +7,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use std::cell::Cell;
+use std::collections::{HashMap, HashSet};
 
 const FOR_WORD: &str = "for";
 const IN_WORD: &str = "in";
@@ -27,17 +28,91 @@ pub fn lower(node: Node) -> Node {
 /// `xs where it > 1` as the comprehension `[it for it in xs if it > 1]`; before welcome_forms reads `xs where …` as
 /// juxtaposed words. A condition not reading `it` is an error: it would filter nothing it can name.
 pub fn lower_where(node: Node) -> Node {
-	where_filters(where_reassociated(node))
+	let node = where_reassociated(node);
+	let mut lists = Lists::of(&node);
+	let filtered = where_filters(node, &mut lists);
+	crate::database_tables::with_filter_functions(filtered, lists.tables)
 }
 
-fn where_filters(node: Node) -> Node {
-	let node = node.map_children(where_filters);
+/// What a filter's condition may name besides `it`: the fields of each element of a list declared of a class
+/// (`people: [Person]`), and the variables, which win over a field of the same name (P223)
+struct Lists {
+	fields: HashMap<String, Vec<String>>,
+	variables: HashSet<String>,
+	tables: crate::database_tables::Tables,
+}
+
+impl Lists {
+	fn of(program: &Node) -> Self {
+		let classes: HashMap<String, Vec<String>> = crate::database_tables::class_bodies(program).into_iter()
+			.map(|(class, body)| (class, crate::class_methods::field_declarations(&body).into_iter().map(|(field, _, _)| field).collect())).collect();
+		let (mut fields, mut variables) = (HashMap::new(), HashSet::new());
+		program.visit(&mut |node| match node {
+			Node::Key(declared, Op::Colon, list_type) => {
+				if let (Node::Symbol(list), Node::List(element, Bracket::Square, _)) = (declared.drop_meta(), list_type.drop_meta()) {
+					if let Some(class_fields) = element.first().filter(|_| element.len() == 1).and_then(|class| classes.get(&class.drop_meta().name())) {
+						fields.insert(list.clone(), class_fields.clone());
+					}
+				}
+			}
+			Node::Key(target, Op::Assign | Op::Define, _) => variables.extend(bound_names(target)),
+			Node::List(words, _, _) if words.first().is_some_and(|word| is_word(word, FOR_WORD)) => variables.extend(words.get(1).map(Node::name)),
+			_ => {}
+		});
+		Lists { fields, variables, tables: crate::database_tables::registered(program) }
+	}
+
+	/// `age > 20` of `people where …` as `it.age > 20` where each person has a field age and no variable age is bound
+	fn with_fields_of_it(&self, subject: &Node, condition: Node) -> Node {
+		let Some(fields) = self.fields.get(&subject.drop_meta().name()) else { return condition };
+		fields_of_it(condition, fields, &self.variables)
+	}
+}
+
+/// The names a definition or assignment binds: `x`, `x: int`, the parameters of `f(a, b: int)`
+fn bound_names(target: &Node) -> Vec<String> {
+	match target.drop_meta() {
+		Node::Symbol(name) => vec![name.clone()],
+		Node::Key(name, Op::Colon, _) => bound_names(name),
+		Node::List(items, _, _) => items.iter().skip(1).flat_map(bound_names).collect(),
+		_ => vec![],
+	}
+}
+
+fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>) -> Node {
+	match condition {
+		Node::Symbol(name) if fields.contains(&name) => {
+			let field_of_it = Node::Key(Box::new(Node::Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string())), Op::Dot, Box::new(Node::Symbol(name.clone())));
+			if !variables.contains(&name) {
+				return field_of_it;
+			}
+			let warning = format!("{name} is the variable {name} here, not the field of each element: write {} for the field", field_of_it.serialize());
+			match crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&Node::Symbol(name.clone()), warning)]) {
+				Ok(()) => Node::Symbol(name),
+				Err(error) => error,
+			}
+		}
+		// `it.age`, `name.reverse()`: what follows a dot is no variable
+		Node::Key(left, Op::Dot, right) => Node::Key(Box::new(fields_of_it(*left, fields, variables)), Op::Dot, right),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(fields_of_it(*node, fields, variables)), data },
+		other => other.map_children(|child| fields_of_it(child, fields, variables)),
+	}
+}
+
+fn where_filters(node: Node, lists: &mut Lists) -> Node {
+	let node = node.map_children(|child| where_filters(child, lists));
 	let Node::List(items, bracket, separator) = node else { return node };
 	let Some(at) = where_position(&items) else { return Node::List(items, bracket, separator) };
 	let filtered = match items[at + 1].drop_meta() {
 		// Haskell's binding `x * 2 where x = 3`: the assignment, then the expression
 		Node::Key(_, Op::Assign, _) => Node::List(vec![items[at + 1].clone(), items[at - 1].clone()], Bracket::Round, Separator::Semicolon),
-		_ => where_comprehension(&items[at - 1], &items[at + 1]),
+		_ => {
+			let condition = lists.with_fields_of_it(&items[at - 1], items[at + 1].clone());
+			match crate::database_tables::queried(&items[at - 1], &condition, &lists.variables, &mut lists.tables) {
+				Some((ids, kept)) => Node::List(vec![ids, where_comprehension(&items[at - 1], &kept)], Bracket::Round, Separator::Semicolon),
+				None => where_comprehension(&items[at - 1], &condition),
+			}
+		}
 	};
 	// `xs where c` alone, or the last argument of a call `count(xs where c)`
 	if at == 1 && bracket == Bracket::None {
