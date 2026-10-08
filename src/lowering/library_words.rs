@@ -140,6 +140,8 @@ const ASSERT_CONDITION_PLACEHOLDER: &str = "assert_placeholder_condition";
 const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
 const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
 const OPERAND_TEMPORARY: &str = "operand_tmp";
+/// The variable holding a list while one of its elements changes: `place·0`
+const PLACE_TEMPORARY: &str = "place·";
 /// `a ≈ b` holds when |a-b| ≤ tolerance·max(|a|, |b|); a program that assigns `tolerance` sets it
 const TOLERANCE_VARIABLE: &str = "tolerance";
 const DEFAULT_RELATIVE_TOLERANCE: &str = "1e-9";
@@ -382,6 +384,15 @@ fn field_step(method: &Node) -> Option<(Node, Op)> {
 	}
 }
 
+/// A place deeper than a variable, its element or its field (`b.n += 1` sets a struct field in place): `p.b.n`,
+/// `bags#1.n`, `xs#1#2`
+fn is_nested_place(place: &Node) -> bool {
+	match place.drop_meta() {
+		Node::Key(base, Op::Dot | Op::Hash, _) => !matches!(base.drop_meta(), Node::Symbol(_)),
+		_ => false,
+	}
+}
+
 /// `place += 1` for `place++`, `place -= 1` for `place--`
 fn stepped(place: Node, step: Op) -> Node {
 	let update = if step == Op::Inc { Op::AddAssign } else { Op::SubAssign };
@@ -429,6 +440,15 @@ pub(crate) fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
 			_ => None,
 		})
 		.collect()
+}
+
+/// The field name of a subscript `p["name"]`, as `p.name` lowers: None for an element `xs#i`
+fn subscript_field(index: &Node) -> Option<String> {
+	match crate::wasp_parser::subscript_key(index)?.drop_meta() {
+		Node::Text(name) => Some(name.clone()),
+		Node::Char(letter) => Some(letter.to_string()),
+		_ => None,
+	}
 }
 
 fn field_name(key: &Node) -> Option<String> {
@@ -609,7 +629,15 @@ impl Lowering {
 				let (field, op) = field_step(&right).expect("guarded");
 				self.expand(stepped(Node::Key(left, Op::Dot, Box::new(field)), op))
 			}
-			Node::Key(left, op @ (Op::Inc | Op::Dec), _) if matches!(left.drop_meta(), Node::Key(_, Op::Dot, _)) => self.expand(stepped(*left, op)),
+			// `xs#1++`, `bags#1.n++`: the whole place steps
+			Node::Key(left, op @ (Op::Inc | Op::Dec), _) if matches!(left.drop_meta(), Node::Key(_, Op::Dot | Op::Hash, _)) => self.expand(stepped(*left, op)),
+			// `bags#1.n += 4`, `p.b.n += 2`, `xs#1#2 += 1`: `place = place + 4`, stored back into the place
+			Node::Key(left, op, right) if op.is_compound_assign() && is_nested_place(&left) => {
+				let combined = Node::Key(left.clone(), op.base_op(), right);
+				let left = self.expand(*left);
+				let combined = self.expand(combined);
+				self.stored(&left, combined.clone()).unwrap_or(Node::Key(Box::new(left), Op::Assign, Box::new(combined)))
+			}
 			Node::Key(left, Op::Dot, right) => {
 				let (left, right) = (self.expand(*left), self.expand_method(*right));
 				self.method_call(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Dot, Box::new(right)))
@@ -713,9 +741,7 @@ impl Lowering {
 		if crate::min_max::is_plain(&operand) {
 			return operand;
 		}
-		let number = self.temporaries.get();
-		self.temporaries.set(number + 1);
-		let temporary = Node::Symbol(format!("{OPERAND_TEMPORARY}_{number}"));
+		let temporary = Node::Symbol(format!("{OPERAND_TEMPORARY}_{}", self.next_temporary()));
 		bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(operand)));
 		temporary
 	}
@@ -958,20 +984,39 @@ impl Lowering {
 	}
 
 	/// `object.name = value` is `object = field_with(object, "name", value)`; a nested path updates the objects on the way
-	/// (`p.b.c = 4` is `p = field_with(p, "b", field_with(p.b, "c", 4))`)
+	/// (`p.b.c = 4` is `p = field_with(p, "b", field_with(p.b, "c", 4))`), an element on the way is stored back
+	/// (`bags#1.n = 5` is `bags#1 = field_with(bags#1, "n", 5)`)
 	fn field_assignment(&self, target: &Node, value: &Node) -> Option<Node> {
-		let Node::Key(base, Op::Hash, index) = target.drop_meta() else { return None };
-		let name = match crate::wasp_parser::subscript_key(index)?.drop_meta() {
-			Node::Text(name) => name.clone(),
-			Node::Char(letter) => letter.to_string(),
-			_ => return None,
+		let Node::Key(_, Op::Hash, index) = target.drop_meta() else { return None };
+		subscript_field(index)?;
+		self.stored(target, value.clone())
+	}
+
+	/// `place = value` for any place: a variable, an element `xs#i` of one (as written), a field (field_with on its
+	/// object, stored back), an element of anything else through a temporary (`p.items#1 = v` is
+	/// `place·0 = p.items; place·0#1 = v; p.items = place·0`)
+	fn stored(&self, place: &Node, value: Node) -> Option<Node> {
+		let assigned = |place: &Node, value: Node| Node::Key(Box::new(place.clone()), Op::Assign, Box::new(value));
+		let Node::Key(base, Op::Hash, index) = place.drop_meta() else {
+			return matches!(place.drop_meta(), Node::Symbol(_)).then(|| assigned(place, value));
 		};
-		let updated = Node::List(vec![Node::Symbol(FIELD_WITH.to_string()), base.as_ref().clone(), Node::Text(name), value.clone()], Bracket::Round, Separator::None);
-		match base.drop_meta() {
-			Node::Symbol(_) => Some(Node::Key(base.clone(), Op::Assign, Box::new(updated))),
-			_ if is_field_lookup(base) => self.field_assignment(base, &updated),
-			_ => None,
+		if let Some(name) = subscript_field(index) {
+			let updated = Node::List(vec![Node::Symbol(FIELD_WITH.to_string()), base.as_ref().clone(), Node::Text(name), value], Bracket::Round, Separator::None);
+			return self.stored(base, updated);
 		}
+		if matches!(base.drop_meta(), Node::Symbol(_)) {
+			return Some(assigned(place, value));
+		}
+		let held = Node::Symbol(format!("{PLACE_TEMPORARY}{}", self.next_temporary()));
+		let element = Node::Key(Box::new(held.clone()), Op::Hash, index.clone());
+		let statements = vec![assigned(&held, base.as_ref().clone()), assigned(&element, value), self.stored(base, held)?];
+		Some(Node::List(statements, Bracket::None, Separator::Semicolon))
+	}
+
+	fn next_temporary(&self) -> usize {
+		let number = self.temporaries.get();
+		self.temporaries.set(number + 1);
+		number
 	}
 
 	/// `receiver?.name`: ø when the receiver is ø, else the field
@@ -979,9 +1024,7 @@ impl Lowering {
 		let Node::Symbol(name) = word.drop_meta() else {
 			return Diagnostic::at(&word, "?. needs a field name after it").into_error();
 		};
-		let number = self.temporaries.get();
-		self.temporaries.set(number + 1);
-		let temporary = format!("safe_tmp_{number}");
+		let temporary = format!("safe_tmp_{}", self.next_temporary());
 		let program = parse(&format!("({temporary}={RECEIVER_PLACEHOLDER}; if {temporary} == ø then ø else {LOOKUP_PLACEHOLDER})"));
 		let lookup = field_lookup(&Node::Symbol(temporary), name, &word);
 		substitute(substitute(program, RECEIVER_PLACEHOLDER, &receiver), LOOKUP_PLACEHOLDER, &lookup)
