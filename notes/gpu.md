@@ -121,7 +121,11 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    | 10^7   | 129              | 11                 | 122                         | 7542              |
 
    A light lambda never pays (the CPU's SIMD kernel is ~1 ns an item); a heavy one breaks even near 2–3·10^4 items and
-   wins 14× at 10^6, 60× at 10^7. The CPU's generic map of a linear array grows faster than linear (167 → 754 ns an
-   item from 10^6 to 10^7): it maps the array collected into a list first (card linear-map).
+   wins 14× at 10^6, 60× at 10^7. The CPU's generic map of a linear array grew faster than linear (167 → 754 ns an
+   item from 10^6 to 10^7): it mapped the array collected into a list grown item by item. Fixed (card linear-map,
+   shared_arrays.rs numeric_map, collected): a pure numeric lambda maps in one loop into a new block (`sin(x)`: 68 ns
+   an item at 10^7, most of it warp's sin), and an array read as a whole fills a `float[n]` / `int[n]` list
+   (`sum(xs)` 71 → 25 ns an item). The heavy CPU column then reads 17, 281, 1871 ms at 10^5, 10^6, 10^7 (noisy):
+   the GPU still wins 15–20× from 10^6.
    Open: lambdas reading outer numbers (a uniform), GC float lists (copy into a block first), the browser path with a
    real adapter, chains of maps kept on the GPU.
