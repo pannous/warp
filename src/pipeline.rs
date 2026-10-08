@@ -190,7 +190,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 81] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 82] = [
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::component_worlds::lower,
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
@@ -240,6 +240,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 81] = [
 	crate::class_methods::lower,
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
 	crate::foreign_modules::lower,
+	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
+	crate::optional_casts::lower,
 	crate::phrase_calls::lower,
 	crate::std_aliases::lower, crate::class_methods::lower_json_classes, crate::welcome_forms::lower, crate::analyzer::lower_kebab_members, crate::number_keys::lower,
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)
