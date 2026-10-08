@@ -8,6 +8,7 @@ mod test_empty_block_binding;
 mod test_empty_block;
 mod test_for_loop;
 mod test_for_over_a_number;
+mod test_mixed_range_bounds;
 mod test_if_call_condition;
 mod test_if_value_kind;
 mod test_if_then_assign;

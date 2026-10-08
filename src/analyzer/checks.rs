@@ -478,6 +478,7 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 		.or_else(|| check_ambiguous_calls(program))
 		.or_else(|| check_call_arity(program))
 		.or_else(|| check_walked_numbers(program))
+		.or_else(|| check_mixed_range_bounds(program))
 		.map(Diagnostic::into_error)
 }
 
@@ -1007,6 +1008,20 @@ pub(super) fn check_walked_numbers(program: &Node) -> Option<Diagnostic> {
 			let (variable, walked) = (variable.serialize(), walked.serialize());
 			let message = format!("`for {variable} in {walked}` walks a number: a for loop walks a list, a text or a range, e.g. `for {variable} in 1 to {walked}`");
 			found = Some(Diagnostic::at(part, message));
+		}
+	});
+	found
+}
+
+/// `'a'..3`, `3 to "c"`: a range counts letters or numbers, never from one to the other; it failed only at run time
+/// with "not a character"
+pub(super) fn check_mixed_range_bounds(program: &Node) -> Option<Diagnostic> {
+	let mut found = None;
+	program.visit(&mut |part| if let (None, Node::Key(start, Op::Range | Op::To, end)) = (&found, part) {
+		let (start_value, end_value) = (start.drop_meta(), end.drop_meta());
+		if matches!((start_value, end_value), (Node::Char(_), Node::Number(_)) | (Node::Number(_), Node::Char(_))) {
+			let written = part.serialize();
+			found = Some(Diagnostic::at(part, format!("`{}` mixes a letter and a number: count letters ('a' to 'c') or numbers (1 to 3)", written.trim())));
 		}
 	});
 	found
