@@ -96,8 +96,8 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    + ~1 ms fixed) at every size, so automatic offloading of single Int reductions never pays off; the GPU wins only
    on heavy per-item work (map of sin/exp/pow, long fused chains) or data that stays on the GPU. Step 3 is therefore
    reduced to what still has a payoff, and the threshold card (gpu-threshold) should measure those, not sums.
-   Pre-existing, not from this card: a float typed list summed (`xs = float[3]; sum(xs .* 4)`, also unfused) gives
-   "not an int"; a list literal right of `.*` (`[2 2] .* [2 4]`) hits the list * number ambiguity check.
+   Fixed on the way (cards float-typed, list-literal): `xs#1 = 0.5` widened a float list to a Node list (variables.rs
+   widen_element_type), and `[2 2] .* [2 4]` asked the list * number question for the lambda's `each_element * [2 4]`.
 3. Ints (option a): `sum`, `dot`, element-wise over $IntList through a host word with an overflow flag, behind the
    length check; tests compare GPU and CPU on lists above and below the threshold.
 4. Fusion of an element-wise expression ending in a reduction into one WGSL kernel.
