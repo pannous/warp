@@ -129,12 +129,17 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    Thresholds (card gpu-threshold, P214 err on the CPU side), from these measurements:
    - automatic offload (no @gpu): none. Int reductions and element-wise ops are memory bound; the fused CPU loop
      (3–15 ns an item) beats the GPU round trip (~12 ns + ~2 ms) at every size, so step 3 is dropped.
-   - `@gpu` map of a light lambda (one the f64x2 kernel computes: + - * / √ ‖‖ of the item and numbers): the CPU,
-     in f64, with a warning saying so (gpu_maps.rs is_light).
+   - `@gpu` map of a light lambda (only arithmetic: + - * / √ ‖‖ min max floor, whole powers): the CPU, in f64, with
+     a warning saying so (gpu_maps.rs Kernel.heavy).
    - `@gpu` map of a heavy lambda (math words, powers): the GPU from GPU_MAP_MIN_COUNT = 32768 items (2^15, above the
      measured ~3·10^4 break-even), the CPU below, checked at run time in the lowered map.
    Test: test_webgpu a_gpu_map_runs_on_the_cpu_where_that_is_faster (below the count the value equals the f64 one).
    f32 note: `sin` of large arguments loses digits on the GPU (sin(13333.3) differs in the 3rd digit, the argument
    itself rounds to f32): @gpu is the program's consent to that.
-   Open: lambdas reading outer numbers (a uniform), GC float lists (copy into a block first), the browser path with a
+   Outer numbers (done): a lambda may read the program's numbers (`x => sin(x) * k + shift`): the kernel appends
+   their values to `data` after the items (`data[count + i]`, count = arrayLength - their number), so no second
+   binding and no shader recompiled per value; gpu_map_linear takes them as a list (a value not a number: an error).
+   "Light" is now a cost class, not the f64x2 kernel: a lambda without heavy math words (sin … log, atan2) or
+   non-whole powers stays on the CPU, outer numbers included (`x => x * k`). Test: a_gpu_map_reads_outer_numbers.
+   Open: GC float lists (copy into a block first), the browser path with a
    real adapter, chains of maps kept on the GPU.
