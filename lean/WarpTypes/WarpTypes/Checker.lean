@@ -62,6 +62,10 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     match typeOf P Γ l, typeOf P Γ i with
     | some tl, some ti => if listy tl || tl == .text then (if consub ti .int then some (elementTy tl) else none) else none
     | _, _ => none
+  | .range a b =>
+    match typeOf P Γ a, typeOf P Γ b with
+    | some ta, some tb => if consub ta .number && consub tb .number then some (.list (arithTy ta tb)) else none
+    | _, _ => none
   | .append a b =>
     match typeOf P Γ a, typeOf P Γ b with
     | some ta, some tb => if listy ta && listy tb then some (.list (join (listElem ta) (listElem tb))) else none
@@ -171,6 +175,12 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     · split at h
       · cases h; exact .index (ih1 hl) (ih2 hi)
       · cases h
+    · cases h
+  | range a b ih1 ih2 =>
+    intro Γ t h
+    cases ha : typeOf P Γ a <;> cases hb : typeOf P Γ b <;> simp only [typeOf, ha, hb] at h <;> try cases h
+    split at h
+    · cases h; exact .range (ih1 ha) (ih2 hb)
     · cases h
   | append a b ih1 ih2 =>
     intro Γ t h
@@ -420,7 +430,7 @@ def widen : Ty → Ty
 /-- the values a main-level name is given -/
 def valuesOf (x : String) : Expr → List Expr
   | .assign y e | .init y e => (if y = x then [e] else []) ++ valuesOf x e
-  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .loop a b | .seq a b | .index a b | .append a b
+  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .loop a b | .seq a b | .index a b | .range a b | .append a b
   | .tryCatch a b => valuesOf x a ++ valuesOf x b
   | .ite c a b => valuesOf x c ++ valuesOf x a ++ valuesOf x b
   | .letIn _ _ e b => valuesOf x e ++ valuesOf x b
@@ -451,6 +461,7 @@ def Expr.rewrite (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr → Expr
   | .loop c b => f Γ (.loop (c.rewrite f Γ) (b.rewrite f Γ))
   | .seq a b => f Γ (.seq (a.rewrite f Γ) (b.rewrite f Γ))
   | .index a b => f Γ (.index (a.rewrite f Γ) (b.rewrite f Γ))
+  | .range a b => f Γ (.range (a.rewrite f Γ) (b.rewrite f Γ))
   | .append a b => f Γ (.append (a.rewrite f Γ) (b.rewrite f Γ))
   | .assign x e => f Γ (.assign x (e.rewrite f Γ))
   | .init x e => f Γ (.init x (e.rewrite f Γ))
@@ -554,7 +565,7 @@ def observe (P : Program) (Γ : Ctx) : Expr → List Observation
       | some (.cls p), some tv => [.field p f tv]
       | _, _ => []) ++ observe P Γ o ++ observe P Γ v
   | .letIn y t e b => observe P Γ e ++ observe P (Γ.set y t) b
-  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .loop a b | .seq a b | .index a b | .append a b
+  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .loop a b | .seq a b | .index a b | .range a b | .append a b
   | .tryCatch a b => observe P Γ a ++ observe P Γ b
   | .ite c a b => observe P Γ c ++ observe P Γ a ++ observe P Γ b
   | .assign _ e | .init _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e => observe P Γ e
@@ -647,7 +658,7 @@ def Expr.breaksIn (ev : Option String) : Expr → Bool
   | .handle e h b => h.breaksIn (some e) && b.breaksIn ev
   | .loop c b | .forIn _ c b => c.breaksIn none && b.breaksIn none
   | .letIn _ _ e b => e.breaksIn ev && b.breaksIn ev
-  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .append a b | .tryCatch a b
+  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .range a b | .append a b | .tryCatch a b
   | .set a _ b => a.breaksIn ev && b.breaksIn ev
   | .ite c a b => c.breaksIn ev && a.breaksIn ev && b.breaksIn ev
   | .assign _ e | .init _ e | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e

@@ -169,6 +169,22 @@ const CORPUS: &[&str] = &[
 	"fact(n) := { r = 1; if n > 1 then r = n * fact(n - 1); r }; fact(5)",
 	"g(n) := n; fact(n) := { r = 1; r = g(n); r }; fact(5)",
 	"y: any = 3; class P { v: int }; p = P(1); p.v = y; p.v",
+
+	"let x = 1; x = 2; x",
+	"shared n = 5; n += 2; n",
+	"String s = 'ab'; s",
+	"String s = 3; s",
+	"int i = 2; i = \"a\"; i",
+	"int i = 2.5; i",
+
+	"0..3",
+	"1 to 3",
+	"s = 0; for i in 0..3 { s += i }; s",
+	"s = 0; for i in 1 to 3 { s += i }; s",
+	"3..1",
+	"count(n) := { c=0; for i in 0..n { c += 1 }; c }; count(5)",
+	"to add number a to number b: a+b; add 1 to 2",
+	"b = 0; a = on fail { break 1 } in { b = on fail { break 2 } in { emit fail; 9 }; b * 10 }; a",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

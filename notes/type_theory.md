@@ -30,6 +30,7 @@ expr       e ::= v | x                          main-level name (store)
                | if e then e else e | while e do e | e ; e
                | for y in e { e }               the body once per list item, y the item; gives ø
                | e # e                          1-based element, `xs#1`
+               | e .. e                         the ints from a up to b, b excluded; `a to b` is `a..b+1`
                | e ++ e                         list append, what `xs + [v]` / `xs.add(v)` lower to
                | x = e | init x e               assignment / first binding of a main-level name
                | let y : τ = e in e
@@ -235,8 +236,8 @@ W0 now has `arith op a b`, which takes numbers only.
   name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
   anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
   The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
-  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600; with function locals: 123. Most of the rest:
-  imports (`use`), named arguments, nested functions, ranges `1..3`, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
+  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600; with function locals: 123; with `let x = …`, `shared n = …` and C-style `int i = 2` / `String s = …`: 125; with ranges: 131, all agreeing. Most of the rest:
+  imports (`use`), multiple assignment `a, b = xs`, nested functions, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
 
 ## Globals
 
@@ -246,6 +247,15 @@ exporter collects every name declared `global` anywhere first. In warp a functio
 `global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0): see Function locals. Elaboration runs twice so a function can read a main-level name whatever their order
 (`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet: `global float y = …`
 (the exporter does not read the type word yet), `global x; x` (read before any value).
+
+## Ranges
+
+`a..b` (`Expr.range`, `intList`) is the list of ints from a up to b, b excluded; `a to b` / `a...b` export as
+`a..(b+1)`; a reversed range is empty. Typing: `list (arithTy ta tb)`, the checker demands number bounds. Number
+bounds fail when the range runs (W0 keeps no float values; warp gives `[1.5 2.5]` for `1.5..3`), letter ranges
+(`'a'..'e'`) are refused by the exporter; `"a"..3` compiles in warp and fails at run time (card range-mixed).
+`add 1 to 2` of a function `to add number a to number b: …` parses as `add (1 to 2)`: the exporter splits the pair
+into the two arguments, as warp does.
 
 ## Function locals
 

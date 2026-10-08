@@ -34,6 +34,7 @@ const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
 const FOR_KEYWORD: &str = "for";
+const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
 /// the one field of a function local's cell (`f·n`): `·` keeps it apart from the program's own fields
 const CELL_FIELD: &str = "·value";
 /// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
@@ -75,7 +76,7 @@ fn quoted(text: &str) -> String {
 /// `int`, `texts`, `list`: the W0 type a warp type word names
 fn type_of_word(word: &str) -> Option<String> {
 	let scalar = |word: &str| -> Option<&str> {
-		Some(match crate::type_kinds::canonical_type_name(word) {
+		Some(match crate::type_kinds::canonical_type_name(&word.to_lowercase()) {
 			"int" | "integer" | "long" => ".int",
 			"float" | "number" | "exact" => ".number",
 			"text" | "string" | "str" => ".text",
@@ -560,6 +561,15 @@ impl Exporter {
 				Node::Key(target, Op::Assign, value) => self.binding(target, ".const", value),
 				other => unsupported(other),
 			},
+			// `let x = 1`, `shared n = 5` (one thread in W0): a variable; `int i = 2`: `i: int = 2`
+			Node::List(items, _, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))) => {
+				let Node::Key(target, _, value) = items[1].drop_meta() else { unreachable!("an assignment") };
+				match items[0].drop_meta() {
+					Node::Symbol(word) if VARIABLE_KEYWORDS.contains(&word.as_str()) => self.binding(target, ".var", value),
+					Node::Symbol(word) if self.type_of(word).is_ok() => self.binding(&Node::Key(target.clone(), Op::Colon, Box::new(items[0].clone())), ".var", value),
+					_ => Ok(format!(".statement ({})", self.expression(statement)?)),
+				}
+			}
 			Node::Key(target, Op::Assign, value) if !self.is_bound(target) && !matches!(target.drop_meta(), Node::Key(_, Op::Dot, _)) => self.binding(target, ".var", value),
 			other => Ok(format!(".statement ({})", self.expression(other)?)),
 		}
@@ -735,6 +745,12 @@ impl Exporter {
 				},
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
 				[_, arguments @ ..] if arguments.iter().any(|argument| matches!(argument.drop_meta(), Node::Key(_, Op::Assign, _))) => Err(format!("not in W0: named arguments in {}", node.serialize().trim())),
+				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
+				[call, argument] if self.classes.contains_key(&arguments_class(&call.name())) && matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) => {
+					let Node::Key(first, _, second) = argument.drop_meta() else { unreachable!("a `to` pair") };
+					let arguments = self.construction(&arguments_class(&call.name()), &[first.as_ref().clone(), second.as_ref().clone()])?;
+					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
+				}
 				[call, arguments @ ..] if arguments.len() > 1 && self.classes.contains_key(&arguments_class(&call.name())) => {
 					let arguments = self.construction(&arguments_class(&call.name()), arguments)?;
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
@@ -807,6 +823,11 @@ impl Exporter {
 				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { format!(".ite ({compared}) (.bool false) (.bool true)") } else { compared })
 			}
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
+			// `'a'..'e'`: letters, outside W0
+			Node::Key(from, Op::Range | Op::To, to) if [from, to].iter().any(|bound| matches!(bound.drop_meta(), Node::Text(_) | Node::Char(_))) => unsupported(node),
+			Node::Key(from, Op::Range, to) => self.binary(".range", from, to),
+			// `1 to 3` includes 3
+			Node::Key(from, Op::To, to) => Ok(format!(".range ({}) (.add ({}) (.int 1))", self.expression(from)?, self.expression(to)?)),
 			_ => unsupported(node),
 		}
 	}
