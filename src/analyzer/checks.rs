@@ -344,6 +344,15 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				_ => MAP_TYPE.to_string(),
 			}
 		}
+		// `xs + ys` of two lists: items of their common type, of any type (held as Nodes) when they differ
+		Node::Key(left, Op::Add, right) if [left, right].iter().all(|list| infer_type(list, scope) == Kind::List) => {
+			let elements = [left, right].map(|list| list_type_name(list, scope));
+			let words: Option<Vec<String>> = elements.iter().map(|list| list.strip_prefix(LIST_OF_PREFIX).map(str::to_string)).collect();
+			match words {
+				Some(words) => common_type_word(&words).map_or(NODE_LIST_TYPE.to_string(), |word| format!("{LIST_OF_PREFIX}{word}")),
+				None => PLAIN.to_string(),
+			}
+		}
 		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`; an element of a `list of list of int`
 		// a `list of int`; an element of a `list of list` (`[("a", 2)]`, tuples of mixed items) holds its items as Nodes
 		Node::Key(map, Op::Hash, _) => {
