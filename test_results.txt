@@ -3167,6 +3167,7 @@ PASSED:
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
   ✓ web::test_site::a_site_starting_tasks_runs_its_program_in_a_worker
   ✓ web::test_site::a_site_with_routes_is_one_page_for_every_path
+  ✓ web::test_site::a_site_with_routes_starting_tasks_runs_its_program_in_a_worker
   ✓ web::test_site::a_static_page_is_its_last_line_rendered
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
   ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
@@ -3561,4 +3562,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3556 passed, 0 failed, 3556 total tested
+19 ignored, 3557 passed, 0 failed, 3557 total tested
