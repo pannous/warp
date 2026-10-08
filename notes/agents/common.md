@@ -7,7 +7,7 @@ relays an explicit user decision counts as the user's decision.
 
 Read first: AGENTS.md, notes/roles.md (roles, enforcement), notes/welcoming.md (clear intent → compile it; ambiguous →
 warning with "got it" or a loud error naming the explicit forms; preferred syntax differs → educate), and the decided
-standing rules in notes/open_decisions.md and wiki/Footguns.md. Decisions reach you from the Interviewer or Supervisor;
+standing rules in notes/standing_rules.md and wiki/Footguns.md. Decisions reach you from the Interviewer or Supervisor;
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
 
