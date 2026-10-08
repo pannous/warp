@@ -71,7 +71,7 @@ fn field_condition(condition: &Node) -> Option<(String, String)> {
 	let Node::Symbol(name) = field.drop_meta() else { return None };
 	let it = Node::Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
 	let field_of_it = Node::Key(Box::new(it), Op::Dot, field.clone());
-	Some((name.clone(), Node::Key(Box::new(field_of_it), op.clone(), value.clone()).serialize()))
+	Some((name.clone(), Node::Key(Box::new(field_of_it), *op, value.clone()).serialize()))
 }
 
 /// `xs where it > 1` parses as `(xs where it) > 1`: the operators right of `where` join its condition,
