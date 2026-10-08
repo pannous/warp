@@ -41,3 +41,18 @@ fn a_sum_of_an_element_wise_expression_is_fused() {
 	assert!(warp::pipeline::lower("xs=[1 2 3]; sum(xs .* 2)").expect("lowered").serialize().contains("fused_sum"));
 	is!("sum(xs) := 7; xs=[1 2]; sum(xs .* 2)", 7);
 }
+
+// card float-typed: an exact decimal stored in a float list keeps it a float list, its items floats in arithmetic
+#[test]
+fn a_float_list_given_a_decimal_stays_a_float_list() {
+	is!("xs = float[3]; xs#1 = 0.5; s = 0; for x in xs { s = s + x * 4 }; s", 2.0);
+	is!("xs = float[3]; xs#1 = 0.5; s = 7; s = 1.5 + xs#1; s", 2.0);
+	is!("xs = float[3]; xs#1 = 0.5; sum(xs .* 4)", 2.0);
+}
+
+// card list-literal: a list literal on the right of a dotted operator pairs, the dotted form is no list * number question
+#[test]
+fn a_list_literal_pairs_with_a_dotted_operator() {
+	is!("[2 2] .* [2 4]", parse("[4 8]"));
+	is!("sum([1.5 2] .* [2 4])", 11);
+}
