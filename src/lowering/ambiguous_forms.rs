@@ -4,7 +4,7 @@
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const BARE_LIST_TOPIC: &str = "bare-list";
 const SUFFIX_PRECEDENCE_TOPIC: &str = "suffix-precedence";
@@ -35,18 +35,18 @@ fn operator_values(node: Node) -> Node {
 /// The suffix words of the program's functions with the function each applies, `squared` → `square`; a name the
 /// program assigns is its variable, never a suffix word (`solved = solve(x); return solved`)
 fn suffix_words(node: &Node) -> SuffixWords {
-	let mut variables = std::collections::HashSet::new();
+	let mut variables = HashSet::new();
 	crate::library_words::collect_assigned_names(node, &mut variables);
 	let functions = crate::analyzer::applicable_function_names(node);
 	let words = functions.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
-	let mut words: SuffixWords = words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
+	let mut words: HashMap<String, String> = words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
 	// the library's own: `xs sorted`, `xs reversed`, `x squared` (x²), `x cubed` (x³), unless the program names them
 	for (word, function) in LIBRARY_SUFFIX_WORDS {
 		if !variables.contains(word) && !functions.contains(function.trim_start_matches(POWER_MARK)) {
 			words.entry(word.to_string()).or_insert(function.to_string());
 		}
 	}
-	words
+	SuffixWords { words, variables }
 }
 
 const VOWELS: [char; 5] = ['a', 'e', 'i', 'o', 'u'];
@@ -76,8 +76,19 @@ fn past_forms(function: &str) -> Vec<String> {
 const LIBRARY_SUFFIX_WORDS: [(&str, &str); 4] = [("sorted", "sort"), ("reversed", "reverse"), ("squared", "^square"), ("cubed", "^cube")];
 const POWER_MARK: char = '^';
 
-/// suffix word → function
-type SuffixWords = HashMap<String, String>;
+struct SuffixWords {
+	/// suffix word → function
+	words: HashMap<String, String>,
+	/// the names the program assigns
+	variables: HashSet<String>,
+}
+
+impl SuffixWords {
+	/// `first sorted xs`: a library word before a suffix word is a prefix call of it, `first(sort(xs))`
+	fn is_library_word(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name) if crate::library_words::is_library_word(name) && !self.variables.contains(name))
+	}
+}
 
 fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 	match node {
@@ -136,7 +147,7 @@ fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<Suffix> {
 		return Some(Suffix::Operator(op));
 	}
 	let Node::Symbol(word) = word.drop_meta() else { return None };
-	functions.get(word).cloned().map(Suffix::Function)
+	functions.words.get(word).cloned().map(Suffix::Function)
 }
 
 /// The word as written: `sqrt` for the parser's `√ø`
@@ -215,7 +226,7 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 		let suffix = heading_suffix_word(&item, functions);
 		// `map xs abs` passes abs to map: an operator word applies only to a whole first operand (`-7 abs`, `x = -7 abs`)
 		let suffix = suffix.filter(|(_, suffix)| matches!(suffix, Suffix::Function(_)) || applied.len() == 1);
-		let (Some(operand), Some((word, function))) = (applied.last(), suffix) else {
+		let (Some(operand), Some((word, function))) = (applied.last().filter(|operand| !functions.is_library_word(operand)), suffix) else {
 			applied.push(item);
 			continue;
 		};
