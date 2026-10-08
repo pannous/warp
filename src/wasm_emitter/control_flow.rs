@@ -206,10 +206,9 @@ impl WasmGcEmitter {
 		func.instruction(&I::I64Const(1));
 		func.instruction(&I::LocalSet(ran_local));
 		let (statements, step) = loop_control::split_step(body);
-		// a body ending in a text or list: that value is the loop's (P55), held in a Node local
-		// a body of unknown value (a call giving Empty) keeps the old number value
-		let held = self.ends_in_reference(&statements) && self.get_type(&statements) != Kind::Empty;
-		let value_local = if wrap_result && held { self.take_loop_value_local() } else { None };
+		// a body ending in a text or list: that value is the loop's (P55)
+		let value = if wrap_result && self.ends_in_reference(&statements) { self.loop_value(&statements) } else { LoopValue::Number };
+		let value_local = match value { LoopValue::Held(local) => Some(local), _ => None };
 		// the step of a `for` loop (its counter's increment) runs after a body ending in a number or a held value
 		// without becoming the loop's value
 		let step_apart = step.is_some() && (value_local.is_some() || matches!(&statements, Node::List(items, _, _) if self.ends_in_number(items)));
@@ -240,13 +239,17 @@ impl WasmGcEmitter {
 			func.instruction(&I::LocalGet(ran_local));
 			func.instruction(&I::I32WrapI64);
 			func.instruction(&I::If(BlockType::Result(Ref(self.node_ref(false)))));
-			if let Some(value_local) = value_local {
-				func.instruction(&I::LocalGet(value_local));
-				func.instruction(&I::RefAsNonNull);
-				self.loop_values.depth -= 1;
-			} else {
-				func.instruction(&I::LocalGet(result_local));
-				self.emit_call(func, "new_int");
+			match value {
+				LoopValue::Held(local) => {
+					func.instruction(&I::LocalGet(local));
+					func.instruction(&I::RefAsNonNull);
+					self.loop_values.depth -= 1;
+				}
+				LoopValue::Updated(variable) => self.emit_node_instructions(func, &variable),
+				LoopValue::Number => {
+					func.instruction(&I::LocalGet(result_local));
+					self.emit_call(func, "new_int");
+				}
 			}
 			func.instruction(&I::Else);
 			self.emit_call(func, "new_empty");
@@ -289,9 +292,7 @@ impl WasmGcEmitter {
 			other => vec![other.clone()],
 		};
 		let kind = self.get_type(body);
-		// `for x in xs: print x` keeps its pass count (test_for_it pins 2; the question is with the Interviewer)
-		let prints = statements.last().is_some_and(|last| self.is_output_call(last));
-		!body.is_nothing() && !prints && (kind.is_ref() && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
+		!body.is_nothing() && (kind.is_ref() && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
 	}
 
 	/// Declares the Node locals the loops of `body` hold their values in, after node_scratch; gives the enclosing
@@ -302,6 +303,19 @@ impl WasmGcEmitter {
 			locals.push((declared, Ref(self.node_ref(true))));
 		}
 		std::mem::replace(&mut self.loop_values, LoopValues { declared, depth: 0 })
+	}
+
+	/// Where the value of a loop whose body ends in a text or list comes from
+	fn loop_value(&mut self, statements: &Node) -> LoopValue {
+		match last_statement(statements).drop_meta() {
+			// `if c then {out = out + [x]}`, a filter's step: held, each pass would make the list a Node again
+			Node::Key(_, Op::Then | Op::Else, _) => LoopValue::Number,
+			// `xs = xs + [i]`, `s += c`: the variable after the loop, read once
+			Node::Key(variable, op, _) if (*op == Op::Assign || op.is_compound_assign()) && matches!(variable.drop_meta(), Node::Symbol(_)) => {
+				LoopValue::Updated(variable.drop_meta().clone())
+			}
+			_ => self.take_loop_value_local().map_or(LoopValue::Number, LoopValue::Held),
+		}
 	}
 
 	/// The Node local of the next nesting level, none in a function that declared too few (its loop keeps a number)
@@ -327,6 +341,14 @@ impl WasmGcEmitter {
 pub(super) struct LoopValues {
 	declared: u32,
 	depth: u32,
+}
+
+/// The value of a loop: a number (the last numeric body value), a Node held each pass, or an updated variable read
+/// after the loop
+enum LoopValue {
+	Number,
+	Held(u32),
+	Updated(Node),
 }
 
 /// How deeply loops nest in node: the loop value locals it needs
