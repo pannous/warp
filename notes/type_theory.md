@@ -107,6 +107,26 @@ typing `x = e` inside function bodies (Σ is read-only there).
 - Soundness follows: a well-typed program never gets stuck; it ends in a value of (a subtype of) its type, raises an
   error value, or runs forever (`while`, a charged name reading itself).
 
+All three are proved, with no `sorry` and only Lean's standard axioms (`#print axioms Warp.safety`: propext,
+Quot.sound). Plain Lean 4 core (toolchain v4.34.1), no Mathlib. Build: `cd lean/WarpTypes && lake build` (~10 s).
+
+| file | contents |
+| --- | --- |
+| Ty.lean | types, `sub` (decidable), `join`, `element`, `arith`; reflexivity, transitivity, antisymmetry, join is the least upper bound, monotonicity |
+| Syntax.lean | `Expr`, `isValue`, `subst`, `Program` (Σ and Φ), `Ctx` |
+| Typing.lean | `HasType` (one rule per row of the table above), `FunsOk` |
+| Semantics.lean | store cells (unset, value, charged body), value operations, evaluation `Frame`s, `Step`, `StoreOk` |
+| Lemmas.lean | values are closed, narrowing (smaller local types give smaller types), substitution, typing of `+`, `#`, `++` |
+| Soundness.lean | `frame_typing`, `preservation`, `progress`, `Steps`, `safety` |
+
+Model choices to keep in mind (each a simplification of warp, not a claim about it):
+- Typing is algorithmic (one type per expression, no subsumption rule), so preservation says the type may shrink:
+  `if c then 1 else 2.5` has type number and steps to `1 : int`.
+- `==` compares values structurally; warp's `0 == false` (true) is a refinement for later.
+- A function body may assign main-level names (warp needs `global` there); allowing it only makes W0 more permissive.
+- Run-time element checks (list-element-types stores `names = f()` with a check per item) are a cast from `any`,
+  not yet in W0: W0 refuses `names = f()` when f's result type is not ≤ `list text`.
+
 ## Holes found 2026-10-08 (warp compiles, W0 rejects)
 
 `warp compile --wasm '<code>'` accepts all of these:
