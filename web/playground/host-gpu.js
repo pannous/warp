@@ -25,7 +25,6 @@ const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte r
 // the WGSL type of a value of 1…4 floats and its alignment in bytes
 const VALUE_TYPES = [, ["f32", 4], ["vec2f", 8], ["vec3f", 16], ["vec4f", 16]];
 let gpuDevice; // the task Worker's device, asked for once
-let gpuMapWarned = false;
 const FLOATS_STATE = 2; // the shared buffer's state when it holds raw floats (writeShared's JSON is state 1)
 
 // the task Worker's side: the floats the shader left from index `first` on (only those are read back)
@@ -212,8 +211,9 @@ addHostPart({
 				return 1n;
 			} catch (failure) {
 				if (!/adapter|task Workers/.test(failure.message)) throw failure;
-				if (!gpuMapWarned) console.warn(`@gpu: ${failure.message}, so the map runs on the CPU`);
-				gpuMapWarned = true;
+				// once a run, as the program's runtime warning (natively report_runtime_warning), not on the console
+				const warning = `@gpu: ${failure.message}, so the map runs on the CPU`;
+				if (!holder.warnings.includes(warning)) holder.warnings.push(warning);
 				return 0n;
 			}
 		};
