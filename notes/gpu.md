@@ -191,4 +191,9 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    measuring: the page keeps an old host-gpu.js in the browser cache; open it with `?nocache=<n>` in a new session.
    Native runs of the sample show 41 ms for the sum: its first GPU call creates the device (gpu.rs keeps it per
    process); warmed up (threshold.sh) it is 20 ms.
-   Open: a result both read on the CPU and mapped again on the GPU (a GPU buffer kept per block, skipping the upload).
+   Kept buffers (native): a result read on the CPU (ys#i, #ys, text holes) and then mapped or reduced @gpu again keeps
+   its storage buffer on the GPU (gpu.rs KEPT, the last 4 blocks); the later kernel copies from it instead of uploading.
+   gpu_maps.rs marked_kept sets the flags (6th argument of gpu_map_linear / gpu_reduce_linear: KEEP_RESULT 1,
+   SOURCE_KEPT 2); a write to ys or a call that hands it on between them drops both. 10^7 items, second map: 125–172 →
+   68–84 ms. Missing kept buffer → plain upload. The browser ignores the flag: each task Worker has its own device and
+   taskPool hands out any worker, so a kept buffer would need worker affinity (open).
