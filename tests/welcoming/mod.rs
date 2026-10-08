@@ -48,4 +48,5 @@ mod test_sleep_unit_shadow;
 mod test_undefined_in_text_sum; // card compile-path
 mod test_count_shadowed; // card count-shadowed
 mod test_discarded_pure_warning;
+#[cfg(feature = "native")] // wasmtime's fuel: the browser runs without it, stopped by a timer (playground.js RUN_TIMEOUT_MS)
 mod test_fuel_default; // card fuel-default
