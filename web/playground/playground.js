@@ -15,6 +15,7 @@ const PROGRAM_ORIGIN = "http://program.invalid";
 const TYPING_DELAY_MS = 300;
 const PENDING_VALUE = "…"; // the value shown from Run until the new one arrives
 const DEFAULT_EXAMPLE = "hello";
+const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz picks a tour example or sample; the address shows the chosen one
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
@@ -559,7 +560,16 @@ function chooseExample(name) {
 	const source = exampleSource(name);
 	if (source === undefined) return;
 	$("examples").value = name;
+	showExampleInAddress(name);
 	return runCode(source);
+}
+
+// the address names the chosen example, so it can be shared or reloaded; the default one leaves it plain
+function showExampleInAddress(name) {
+	const address = new URL(location.href);
+	EXAMPLE_PARAMETERS.forEach(parameter => address.searchParams.delete(parameter));
+	if (name !== DEFAULT_EXAMPLE) address.searchParams.set(EXAMPLE_PARAMETERS[0], name);
+	if (address.href !== location.href) history.replaceState(history.state, "", address);
 }
 
 function fillExamples() {
@@ -592,7 +602,8 @@ function initialize() {
 	showBuildSwitch();
 	fillExamples();
 	startWorker();
-	const requested = new URLSearchParams(location.search).get("example");
+	const parameters = new URLSearchParams(location.search);
+	const requested = EXAMPLE_PARAMETERS.map(parameter => parameters.get(parameter)).find(Boolean);
 	chooseExample(requested && exampleSource(requested) !== undefined ? requested : DEFAULT_EXAMPLE);
 }
 
