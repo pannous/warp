@@ -441,6 +441,14 @@ impl WasmGcEmitter {
 			};
 			given.insert(param.name.clone(), argument.clone());
 			let argument = &argument;
+			// `f(xs: texts)` refuses a list of ints (W0: list int ≰ list text)
+			let element = param.annotation.as_ref().and_then(crate::analyzer::declared_element_type);
+			let list_type = crate::analyzer::list_type_name(argument, &self.scope);
+			if let Some(element) = element.filter(|element| !crate::analyzer::elements_fit(element, &list_type)) {
+				let message = format!("{} needs a list of {element} for parameter {}, got {} (a {list_type})", user_fn.name, param.name, argument.serialize());
+				self.emit_type_error(func, message);
+				return;
+			}
 			if self.takes_list_abi(&user_fn.name, i) {
 				self.emit_list_abi_value(func, argument);
 				continue;
@@ -456,7 +464,9 @@ impl WasmGcEmitter {
 			let refused: &[Kind] = if declared_list { &[Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint] } else { &[Kind::List, Kind::Text] };
 			// a declared builtin type takes only its subtypes, `f(x: text)` refuses 3 (W0, notes/type_theory.md)
 			let declared_misfit = param.annotation.as_ref().and_then(crate::analyzer::annotated_builtin_type).is_some_and(|type_name| SCALAR_KINDS.contains(&given) && !crate::analyzer::admits(type_name, given));
-			if declared_misfit || ((!expected.is_ref() || declared_list) && refused.contains(&given) && given != expected) {
+			// `[]` is ø here: the empty list fits every declared list
+			let is_empty_list = matches!(argument.drop_meta(), Node::Empty);
+			if declared_misfit || ((!expected.is_ref() || declared_list) && refused.contains(&given) && given != expected && !is_empty_list) {
 				let message = format!("{} needs {} for parameter {}, got {} ({})", user_fn.name, kind_with_article(expected), param.name, argument.serialize(), kind_with_article(given));
 				self.emit_type_error(func, message);
 				return;

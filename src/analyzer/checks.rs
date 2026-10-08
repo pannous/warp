@@ -1203,6 +1203,37 @@ pub(crate) fn annotated_builtin_type(annotation: &Node) -> Option<&str> {
 	}
 }
 
+/// The element type a list annotation names: `texts`, `[text]` and `list of text` are lists of `text`
+pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
+	fn symbol(node: &Node) -> Option<&str> {
+		match node.drop_meta() {
+			Node::Symbol(name) => Some(name),
+			_ => None,
+		}
+	}
+	match annotation.drop_meta() {
+		Node::Symbol(word) => plural_element_type(word).or_else(|| word.strip_prefix(LIST_OF_PREFIX)),
+		Node::List(items, Bracket::Square, _) if items.len() == 1 => symbol(&items[0]),
+		Node::List(items, _, Separator::Space) => match items.as_slice() {
+			[list, of, element] if symbol(list) == Some(LIST_WORD) && symbol(of) == Some(OF_WORD) => symbol(element),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
+/// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
+pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
+	let Some(element) = list_type.strip_prefix(LIST_OF_PREFIX) else { return true };
+	// a rational or real element is a fraction an int list loses (`rational` names the exact Int representation)
+	let fraction = [RATIONAL_WORD, REAL_WORD, FLOAT_WORD, NUMBER_WORD].contains(&element).then_some(Kind::Float);
+	match fraction.or_else(|| builtin_type_kind(element)) {
+		Some(kind) => admits(declared_element, kind),
+		None => true,
+	}
+}
+
 pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &Node) -> Option<Diagnostic> {
 	if let Some(base) = type_name.strip_suffix('?') {
 		return match value.drop_meta() {
