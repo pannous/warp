@@ -228,8 +228,24 @@ W0 now has `arith op a b`, which takes numbers only.
 - Coverage (data/types/coverage.txt, 600 is!() programs sampled from tests/): 83 were inside W0 before this
   phase. Most of the rest: imports (`use`), maps `{a:1}`, lambdas, `for` loops, `i++`, division, string methods.
 
+## Inline unions and optionals
+
+`x: int | text`, `int or text`, `(int|text)` and the optional `int | ø` stay out of `Ty`: a union in the order would
+make `join` a true least upper bound (`int ⊔ text = int | text`), else `join_mono` and with it narrowing break (with
+`join int text = any`, `int ≤ int|text` but `any ≰ int|text`), and every type operator (`plus`, `element`,
+`readTy`, `writeTy`) would need a union case. Warp runs operations on a union like on `any`, so W0 models a union
+declaration as its alternatives' join (`Ty.joinAll`: `int | text` is `any`, `int | float` is `number`) and every
+value given to it as `cast v [alternatives]`, the run-time check, which keeps a value fitting one alternative. The
+checker admits a cast when the value's static type is consistent with an alternative (`consub`, gradual consistent
+subtyping: `any` stands for anything, `list any` fits `list int`), so `x: int | text = 3; x = 2.5` and
+`f(x: int | text) := x; f(2.5)` are rejected as warp rejects them. The exporter (src/law/type_model.rs) reads the
+union with the analyzer's `union_type_name` (a covered part dropped, ø made optional) and wraps main-level bindings,
+assignments and single-parameter call arguments. Not yet: unions as fields or as one of several parameters, unions
+of classes (warp refuses them for now), `x as T?` (a conversion in warp: `"4" as int?` is 4; W0's cast only checks).
+`x: int? = 3` does not parse in warp (card int-spaces); the corpus spells it `x: int | ø = 3`.
+
 ## Later phases
 
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
-inline unions (card inline-union: `union a b`), the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
+the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
 exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, then effects and tasks.

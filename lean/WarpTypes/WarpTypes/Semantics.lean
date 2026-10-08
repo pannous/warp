@@ -150,7 +150,7 @@ inductive Frame where
   | assign (x : String) | init (x : String)
   | letIn (y : String) (t : Ty) (b : Expr)
   | call (f : String)
-  | cast (t : Ty)
+  | cast (ts : List Ty)
   | broadcast (f : String)
   | get (f : String)
   | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
@@ -179,7 +179,7 @@ def plug : Frame → Expr → Expr
   | init x, e => .init x e
   | letIn y t b, e => .letIn y t e b
   | call f, e => .call f e
-  | cast t, e => .cast e t
+  | cast ts, e => .cast e ts
   | broadcast f, e => .broadcast f e
   | get f, e => .get e f
   | setL f v, e => .set e f v
@@ -220,7 +220,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | broadcastNil {f μ} : Step P (.broadcast f .nil, μ) (.nil, μ)
   | broadcastCons {f h t μ} : h.isValue = true → t.isValue = true →
       Step P (.broadcast f (.cons h t), μ) (.cons (.call f h) (.broadcast f t), μ)
-  | cast {v t μ} : v.isValue = true → Step P (.cast v t, μ) (if fits v t then v else .error "type mismatch", μ)
+  | cast {v ts μ} : v.isValue = true → Step P (.cast v ts, μ) (if ts.any (fits v) then v else .error "type mismatch", μ)
   | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)
   | get {o f μ} : o.isValue = true → Step P (.get o f, μ) (readField μ o f, μ)
   | set {o f v μ} : o.isValue = true → v.isValue = true → Step P (.set o f v, μ) (writeField μ o f v)

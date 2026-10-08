@@ -61,8 +61,8 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- inference.rs raises_error: the bottom kind -/
   | error {Γ m} : HasType P Γ (.error m) .never
   | tryCatch {Γ e h te th} : HasType P Γ e te → HasType P Γ h th → HasType P Γ (.tryCatch e h) (join te th)
-  /-- a run-time checked cast: statically any source type -/
-  | cast {Γ e t te} : HasType P Γ e te → HasType P Γ (.cast e t) t
+  /-- a run-time checked cast: statically any source type, the alternatives' join -/
+  | cast {Γ e ts te} : HasType P Γ e te → HasType P Γ (.cast e ts) (joinAll ts)
   /-- broadcasting: f : A → B over a list of A gives a list of B -/
   | broadcast {Γ f e fn te a} : P.funs f = some fn → HasType P Γ e te → element te = some a → sub a fn.paramTy = true →
       HasType P Γ (.broadcast f e) (.list fn.result)

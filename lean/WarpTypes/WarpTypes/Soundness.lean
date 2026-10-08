@@ -266,13 +266,16 @@ theorem preservation (hP : FunsOk P) {s s' : Expr × Store} (hs : Step P s s') :
         have h2 := sub_trans (join_upper_right _ _) ha
         refine ⟨⟨_, .cons (.call hf hh h1) (.broadcast hf ht helt h2) rfl, ?_⟩, hμ⟩
         simp only [sub_list]; exact join_least (sub_refl _) (sub_refl _)
-  | @cast v t μ hv =>
+  | @cast v ts μ hv =>
     intro t' h hμ
     cases h with
     | cast _ =>
       refine ⟨?_, hμ⟩
       split
-      · rename_i hf; obtain ⟨tv, htv, st⟩ := fits_typed (P := P) (Γ := Ctx.empty) hf; exact ⟨tv, htv, st⟩
+      · rename_i hf
+        obtain ⟨t, ht, hfit⟩ := List.any_eq_true.1 hf
+        obtain ⟨tv, htv, st⟩ := fits_typed (P := P) (Γ := Ctx.empty) hfit
+        exact ⟨tv, htv, sub_trans st (sub_joinAll ht)⟩
       · exact ⟨_, .error, sub_never _⟩
   | new => intro t h hμ; cases h; exact ⟨⟨_, .ref, sub_refl _⟩, hμ.1, hμ.2.alloc _⟩
   | @get o f μ vo =>
@@ -349,7 +352,7 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     · exact steps (.tryValue hv)
     · exact steps .tryError
     · exact steps (.tryStep hs)
-  | @cast _ _ t _ _ ih => exact in_frame (.cast t) rfl (ih hΓ) fun v => steps (.cast v)
+  | @cast _ _ ts _ _ ih => exact in_frame (.cast ts) rfl (ih hΓ) fun v => steps (.cast v)
   | @broadcast _ f _ _ _ _ _ he _ _ ih =>
     refine in_frame (.broadcast f) rfl (ih hΓ) fun v => ?_
     rename_i hel _
