@@ -185,6 +185,14 @@ const CORPUS: &[&str] = &[
 	"count(n) := { c=0; for i in 0..n { c += 1 }; c }; count(5)",
 	"to add number a to number b: a+b; add 1 to 2",
 	"b = 0; a = on fail { break 1 } in { b = on fail { break 2 } in { emit fail; 9 }; b * 10 }; a",
+
+	"0 and 7",
+	"1 and 7",
+	"(not 0) and 7",
+	"not 1==2 and 2==2",
+	"i=0; !i",
+	"f(a:bool,b:bool):=not (a or b); f(true, false)",
+	"x = 1 < 2 or 3 < 2; x",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
