@@ -9,7 +9,6 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::class_methods::ClassLayout;
-
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -24,9 +23,13 @@ const FIELDS_WORDS: [&str; 3] = ["fields", "attributes", "members"];
 const METHODS_WORD: &str = "methods";
 const DIR_WORD: &str = "dir";
 const KEYS_WORD: &str = "keys";
+const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
+const SIGNATURE_WORD: &str = "signature";
+
+type Functions = std::collections::BTreeMap<String, crate::context::UserFunctionDef>;
 
 pub fn lower(node: Node) -> Node {
-	if !node.mentions_any(&[EFFECTS_WORD, LISTENERS_WORD]) {
+	if !node.mentions_any(&[EFFECTS_WORD, LISTENERS_WORD, SIGNATURE_WORD, PARAMS_WORDS[0], PARAMS_WORDS[1]]) {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
@@ -39,8 +42,7 @@ pub fn lower(node: Node) -> Node {
 	}
 	let mut context = crate::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, &node);
-	let functions: HashSet<String> = context.user_functions.into_keys().collect();
-	as_reflection_words(node, &functions, &listened)
+	as_reflection_words(node, &context.user_functions, &listened, &defined)
 }
 
 /// The name an `on` or `once` statement listens to
@@ -78,21 +80,43 @@ fn unlistened_reflection(node: &Node, listened: &HashSet<String>, defined: &Hash
 	}
 }
 
-/// `f.effects` → `effects of f` for a function f, `e.listeners` → `listeners of e` for a listened e
-fn as_reflection_words(node: Node, functions: &HashSet<String>, listened: &HashSet<String>) -> Node {
+/// `f.effects` → `effects of f` for a function f, `e.listeners` → `listeners of e` for a listened e; a function's
+/// `f.params` and `f.signature` are constants read off its definition
+fn as_reflection_words(node: Node, functions: &Functions, listened: &HashSet<String>, defined: &HashSet<String>) -> Node {
 	if let Node::Key(subject, Op::Dot, word) = node.drop_meta() {
 		if let (Some(name), Some(word)) = (symbol(subject), symbol(word)) {
-			let reflected = match word {
-				EFFECTS_WORD => functions.contains(name),
-				LISTENERS_WORD => listened.contains(name),
-				_ => false,
+			let function = functions.get(name).filter(|_| !defined.contains(word));
+			let reflected = match (word, function) {
+				(EFFECTS_WORD, Some(_)) => Some(of_phrase(word, name)),
+				(LISTENERS_WORD, _) if listened.contains(name) => Some(of_phrase(word, name)),
+				(word, Some(function)) if PARAMS_WORDS.contains(&word) => Some(text_list(&function.params.iter().map(|param| param.name.clone()).collect::<Vec<_>>())),
+				(SIGNATURE_WORD, Some(function)) => Some(Node::Text(signature(function))),
+				_ => None,
 			};
-			if reflected {
-				return Node::List(vec![Node::Symbol(word.into()), Node::Symbol(OF_WORD.into()), Node::Symbol(name.into())], Bracket::None, Separator::Space);
+			if let Some(reflected) = reflected {
+				return reflected;
 			}
 		}
 	}
-	node.map_children(|child| as_reflection_words(child, functions, listened))
+	node.map_children(|child| as_reflection_words(child, functions, listened, defined))
+}
+
+/// `effects of f`
+fn of_phrase(word: &str, name: &str) -> Node {
+	Node::List(vec![Node::Symbol(word.into()), Node::Symbol(OF_WORD.into()), Node::Symbol(name.into())], Bracket::None, Separator::Space)
+}
+
+/// `(a:int, b:int) -> int`: each parameter with its declared or demanded type, the result's kind when known
+fn signature(function: &crate::context::UserFunctionDef) -> String {
+	let params: Vec<String> = function.params.iter().map(|param| {
+		let type_name = param.annotation.as_ref().map(|annotation| annotation.drop_meta().name()).or_else(|| param.used_as.map(|kind| kind.to_string()));
+		type_name.map_or_else(|| param.name.clone(), |type_name| format!("{}:{type_name}", param.name))
+	}).collect();
+	let result = match function.return_kind {
+		crate::type_kinds::Kind::Empty => String::new(),
+		kind => format!(" -> {kind}"),
+	};
+	format!("({}){result}", params.join(", "))
 }
 
 /// What the compile-time object words know: each class's layout, the classes of instance variables, the keys of map

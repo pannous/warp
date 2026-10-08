@@ -14,7 +14,7 @@ custom section, `wasp.meta`, kept unstripped.
 | `x.methods` | instance, class | method names | step 2: without constructors and derived methods |
 | `x.keys` | map, object | keys | works (library word) |
 | `x.meta`, `x.@key` | any binding | meta entries (meta_entries.rs) | works, `x.meta` under `use comments` |
-| `f.params`, `f.signature` | function | parameter names / `(a:int, b:int) -> int` | "undefined function: params" |
+| `f.params` (`parameters`), `f.signature` | function | parameter names / `(a:int, b:int) -> int` | step 3: user functions |
 | `f.effects` (= `effects of f`) | function | effect set | `effects of f` works |
 | `event.listeners` (= `listeners of e`) | event | handler count/list | `listeners of tick` broken (signal_listeners undefined) |
 | `module.exports` | `use wasm`, foreign module | export names | missing (dir-runtime) |
@@ -47,6 +47,8 @@ Wasp notation text (parsed by the reader we already have), one map:
    layout from class_methods::class_layouts, instances from instance_classes: constructions, `p:P` annotations and
    typed parameters). Not yet: instances only the analyzer infers (a call's result), `fun P.sum()` extension methods
    in `methods`.
-3. Functions: `f.params`, `f.signature`.
+3. Functions: `f.params`, `f.signature`. Done in reflection::lower: constants from the user function's definition;
+   a parameter's type is its annotation or the kind the body demands, the result the inferred kind (`def g(x){x*2}`
+   is `(x) -> int`). Not yet: library and host words (`sqrt.signature`).
 4. `x.unit`, `x.doc` (aliases of meta/units), `module.exports` for `use wasm` modules (compile time: their exports).
 5. wasp.meta section (absorbing wasp.units) + the run-time host call for `any`-typed values; playground reader too.
