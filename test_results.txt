@@ -2665,6 +2665,7 @@ PASSED:
   ✓ types::test_mutating_methods::a_method_setting_an_element_of_a_list_field_changes_its_object
   ✓ types::test_mutating_methods::pop_on_a_list_field
   ✓ types::test_mutating_methods::the_call_gives_the_changed_object
+  ✓ types::test_optional_casts::a_function_of_empty_returns_empty
   ✓ types::test_optional_casts::a_javascript_null_is_empty
   ✓ types::test_optional_casts::an_optional_cast_keeps_empty
   ✓ types::test_optional_number_fields::a_comment_after_an_optional_type_ends_the_field
@@ -3481,4 +3482,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3476 passed, 0 failed, 3476 total tested
+19 ignored, 3477 passed, 0 failed, 3477 total tested
