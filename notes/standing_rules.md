@@ -38,3 +38,6 @@ Open questions are in notes/open_decisions.md, and only there.
   server (notes/agents/common.md).
 - open_decisions.md holds only what is open (2026-10-08): "It's called open decisions for a reason. Open, you get
   it?" Pending and parked questions and user to-dos; answers go to notes/decisions.md, standing rules here.
+- notes/decisions.md is grep-only history (2026-10-08): "If it's really grep-only, then it's perfect. Otherwise, move
+  them to a history file." Nobody reads it front to back; should a role ever need to read it whole, move the built
+  decisions to a history file first.
