@@ -89,6 +89,15 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    ~11 ns an item for the whole round trip (f64 → f32, upload, readback, back to f64), against 20–30 ns of the CPU's
    fused `sum(xs .* 2)` over a GC float list: break-even near 10^5 for a list coming back, lower for a reduction.
    The browser path (host-gpu.js) copies the cells into the task Worker's message, untested with a real adapter.
+   CPU fusion first (done, broadcasting.rs fused_sum): `sum(xs .op k)`, `sum(xs .op ys)` and `dot` are one loop adding
+   the items, no list built. Int lists, release, per item: `sum(xs .* 3)` 24 → 3.2 ns, `dot(xs, xs)` 190 → 15 ns
+   (`sum xs` alone 3–4 ns). Test: test_element_wise_lists a_sum_of_an_element_wise_expression_is_fused.
+   Finding: a fused CPU reduction (3–15 ns) beats the GPU round trip (~11 ns an item as f64, maybe ~5 as i32,
+   + ~1 ms fixed) at every size, so automatic offloading of single Int reductions never pays off; the GPU wins only
+   on heavy per-item work (map of sin/exp/pow, long fused chains) or data that stays on the GPU. Step 3 is therefore
+   reduced to what still has a payoff, and the threshold card (gpu-threshold) should measure those, not sums.
+   Pre-existing, not from this card: a float typed list summed (`xs = float[3]; sum(xs .* 4)`, also unfused) gives
+   "not an int"; a list literal right of `.*` (`[2 2] .* [2 4]`) hits the list * number ambiguity check.
 3. Ints (option a): `sum`, `dot`, element-wise over $IntList through a host word with an overflow flag, behind the
    length check; tests compare GPU and CPU on lists above and below the threshold.
 4. Fusion of an element-wise expression ending in a reduction into one WGSL kernel.

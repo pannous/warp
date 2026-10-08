@@ -30,3 +30,14 @@ fn lists_of_different_lengths_are_an_error() {
 	let failed = eval("xs=[1 2 3]; ys=[1 2]; xs .* ys");
 	assert!(matches!(&failed, Node::Error(message) if message.to_string().contains("length")), "{failed:?}");
 }
+
+// sum of an element-wise expression is one loop adding the items (the list is never built), same values
+#[test]
+fn a_sum_of_an_element_wise_expression_is_fused() {
+	is!("xs=[1 2 3]; sum(xs .* 2)", 12);
+	is!("xs=[1 2]; sum((xs .* 2) .+ 1)", 8);
+	is!("sum(ø .* 2)", 0);
+	is!("xs=[1 2 3]; ys=[4 5 6]; dot(xs, ys)", 32);
+	assert!(warp::pipeline::lower("xs=[1 2 3]; sum(xs .* 2)").expect("lowered").serialize().contains("fused_sum"));
+	is!("sum(xs) := 7; xs=[1 2]; sum(xs .* 2)", 7);
+}

@@ -30,8 +30,13 @@ const ALL_ITEM: &str = "all_item";
 /// Declared parameter kinds that take one element of a list (P50)
 const SCALAR_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint];
 /// `xs .op ys` of two lists (card gpu-vectors, notes/gpu.md): the lists held once, their items paired by index
-const PAIRED_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; (1 to (if #LEFT == #RIGHT then #LEFT else raise \"element-wise operator: the lists differ in length\")).map(paired_index => paired_item))";
+const PAIRED_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; (1 to COUNT).map(paired_index => paired_item))";
 const PAIRED_ITEM: &str = "LEFT#paired_index + RIGHT#paired_index";
+const PAIRED_COUNT: &str = "(if #LEFT == #RIGHT then #LEFT else raise \"element-wise operator: the lists differ in length\")";
+/// `sum(xs .* ys)` and `sum(xs .* 3)` fused into one loop, no list of the products built (5–20× faster, notes/gpu.md)
+const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
+const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEMS { SUM = SUM + fused_item }; SUM)";
+const SUM_WORD: &str = "sum";
 /// `dot(xs, ys)` is `sum(xs .* ys)`, unless the program defines dot
 const DOT_WORD: &str = "dot";
 
@@ -274,8 +279,8 @@ pub fn lower(program: Node) -> Node {
 	collect_list_variables(&program, &broadcasting, &mut assigned);
 	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
 	let scalar_parameters = found.iter().map(|definition| (definition.name.clone(), definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect())).collect();
-	let defines_dot = defined.contains(&DOT_WORD.to_string());
-	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, paired: Default::default() }.rewrite(program)
+	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
+	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, defines_sum, paired: Default::default() }.rewrite(program)
 }
 
 /// `map(list, broadcast_item => applied(broadcast_item))`
@@ -423,6 +428,7 @@ struct Broadcast {
 	/// Per function of several parameters: which parameters take one value (`add(a, b) := a + b`: both)
 	scalar_parameters: HashMap<String, Vec<bool>>,
 	defines_dot: bool,
+	defines_sum: bool,
 	/// element-wise operators between two lists so far: each holds its lists under names of its own
 	paired: std::cell::Cell<usize>,
 }
@@ -431,6 +437,9 @@ impl Broadcast {
 	fn rewrite(&self, node: Node) -> Node {
 		match node {
 			Node::List(items, bracket, separator) => {
+				if let Some(reduced) = self.dot(&items, &bracket).or_else(|| self.fused_sum(&items, &bracket)) {
+					return reduced;
+				}
 				// `map square [1 2 3]`: the iteration word applies square itself (lambdas.rs), no broadcast inside it
 				let iterates = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::function_values::ITERATION_WORDS.contains(&word.as_str()));
 				let items: Vec<Node> = items.into_iter().map(|item| match item.drop_meta() {
@@ -441,7 +450,6 @@ impl Broadcast {
 				}).collect();
 				self.broadcast_call(&items, &bracket, &separator)
 					.or_else(|| self.broadcast_one_argument(&items, &bracket, &separator))
-					.or_else(|| self.dot(&items, &bracket))
 					.unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, op, right) if matches!(left.drop_meta(), Node::Empty) && SCALAR_OPERATORS.contains(&op) => {
@@ -534,14 +542,45 @@ impl Broadcast {
 		if !self.is_list_expression(&receiver) || !self.is_list_expression(&operand) {
 			return None;
 		}
-		let count = self.paired.replace(self.paired.get() + 1);
-		let named = |text: &str| text.replace("LEFT", &format!("paired_left_{count}")).replace("RIGHT", &format!("paired_right_{count}"));
+		Some(self.paired(receiver, op, operand, PAIRED_TEMPLATE))
+	}
+
+	/// Two lists, their items paired by index in `template`: a list of `left op right`, or their sum
+	fn paired(&self, receiver: Node, op: Op, operand: Node, template: &str) -> Node {
+		let named = self.namer();
 		let item = match crate::warp_parser::parse(&named(PAIRED_ITEM)).drop_meta() {
 			Node::Key(left, _, right) => Node::Key(left.clone(), op, right.clone()),
 			other => unreachable!("{other:?}"),
 		};
 		let bindings = HashMap::from([("paired_left".to_string(), receiver), ("paired_right".to_string(), operand), ("paired_item".to_string(), item)]);
-		Some(crate::law::substitute(&crate::warp_parser::parse(&named(PAIRED_TEMPLATE)), &bindings))
+		crate::law::substitute(&crate::warp_parser::parse(&named(&template.replace("COUNT", PAIRED_COUNT))), &bindings)
+	}
+
+	/// The template's names made this rewrite's own: LEFT → paired_left_3 …
+	fn namer(&self) -> impl Fn(&str) -> String {
+		let count = self.paired.replace(self.paired.get() + 1);
+		move |text: &str| [("LEFT", "paired_left"), ("RIGHT", "paired_right"), ("SUM", "fused_sum"), ("ITEMS", "fused_items"), ("ITEM", "fused_item")]
+			.iter().fold(text.to_string(), |text, (placeholder, name)| text.replace(placeholder, &format!("{name}_{count}")))
+	}
+
+	/// `sum(xs .op ys)`, `sum(xs .op k)`: one loop adding the items, the element-wise list never built
+	fn fused_sum(&self, items: &[Node], bracket: &Bracket) -> Option<Node> {
+		let [head, argument] = items else { return None };
+		if self.defines_sum || *bracket != Bracket::Round || head.name() != SUM_WORD {
+			return None;
+		}
+		let (receiver, op, operand) = element_wise_parts(ungrouped(argument))?;
+		if !self.is_list_expression(&receiver) {
+			return None;
+		}
+		let (receiver, operand) = (self.rewrite(receiver), self.rewrite(operand));
+		if self.is_list_expression(&operand) {
+			return Some(self.paired(receiver, op, operand, PAIRED_SUM_TEMPLATE));
+		}
+		let named = self.namer();
+		let item = Node::Key(Box::new(Node::Symbol(named("ITEM"))), op, Box::new(operand));
+		let bindings = HashMap::from([("fused_list".to_string(), receiver), ("fused_item".to_string(), item)]);
+		Some(crate::law::substitute(&crate::warp_parser::parse(&named(FUSED_SUM_TEMPLATE)), &bindings))
 	}
 
 	/// A list, or an element-wise expression giving one: `xs`, `[1 2]`, `(xs .* 2)`
@@ -558,8 +597,8 @@ impl Broadcast {
 		if self.defines_dot || *bracket != Bracket::Round || !matches!(head.drop_meta(), Node::Symbol(word) if word == DOT_WORD) {
 			return None;
 		}
-		let product = self.rewrite(crate::analyzer::element_wise(left.clone(), Op::Mul, right.clone()));
-		Some(Node::List(vec![Node::Symbol("sum".to_string()), product], Bracket::Round, Separator::None))
+		let sum = [Node::Symbol(SUM_WORD.to_string()), crate::analyzer::element_wise(left.clone(), Op::Mul, right.clone())];
+		self.fused_sum(&sum, bracket).or_else(|| Some(Node::List(vec![sum[0].clone(), self.rewrite(sum[1].clone())], Bracket::Round, Separator::None)))
 	}
 
 	/// A list literal that is no object, or a variable only ever assigned one
@@ -620,6 +659,14 @@ fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
 }
 
 /// `x.map(each_element => each_element op operand)`: x, op, operand
+/// `(x)` → x
+fn ungrouped(node: &Node) -> &Node {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => ungrouped(&items[0]),
+		other => other,
+	}
+}
+
 fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
 	let Node::Key(receiver, Op::Dot, call) = node.drop_meta() else { return None };
 	let Node::List(items, Bracket::Round, _) = call.drop_meta() else { return None };
