@@ -7,7 +7,7 @@
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// `x?`, `int?`: optional
 const OPTIONAL_MARK: char = '?';
@@ -27,6 +27,8 @@ pub fn lower(node: Node) -> Node {
 	if functions.is_empty() {
 		return node;
 	}
+	let assigned = assigned_names(&node);
+	let node = flag_arguments(node, &functions, &assigned);
 	DECLARED_TYPES.with(|types| *types.borrow_mut() = declared_types(&node));
 	let mut unknown = None;
 	collect_extras(&node, &mut functions, &mut unknown);
@@ -96,12 +98,60 @@ fn is_maybe_annotated(node: &Node) -> bool {
 
 fn literal_default(parameter: Node) -> Node {
 	match parameter {
-		Node::Key(name, Op::Colon, value) if matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_)) => Node::Key(name, Op::Assign, value),
+		Node::Key(name, Op::Colon, value) if matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False) => Node::Key(name, Op::Assign, value),
 		// the value may be ø or of the type: it is held boxed, as any value
 		Node::Key(name, Op::Colon, type_name) if type_name.drop_meta().name().ends_with(OPTIONAL_MARK) => optional(*name),
 		Node::Symbol(name) if name.len() > 1 && name.ends_with(OPTIONAL_MARK) => optional(Node::Symbol(name.trim_end_matches(OPTIONAL_MARK).to_string())),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(literal_default(*node)), data },
 		other => other,
+	}
+}
+
+/// The names the program assigns anywhere (a parameter's default `loud = no` is none): a bare flag argument of such a
+/// name is that variable
+fn assigned_names(node: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	collect_assigned(node, &mut names);
+	names
+}
+
+fn collect_assigned(node: &Node, names: &mut HashSet<String>) {
+	match node.drop_meta() {
+		Node::Key(head, Op::Define | Op::Assign, body) if is_function_head(untyped_head(head)) => collect_assigned(body, names),
+		Node::Key(target, op, value) => {
+			if let (Node::Symbol(name), Op::Assign | Op::Define) = (target.drop_meta(), op) {
+				names.insert(name.clone());
+			}
+			collect_assigned(target, names);
+			collect_assigned(value, names);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned(item, names)),
+		_ => {}
+	}
+}
+
+/// `f(3, loud)` of a flag `loud = no` (a parameter whose default is yes or no) where no variable loud is in scope:
+/// `f(3, loud: yes)`, as `copy(shallow)` is `copy(shallow: yes)` (card copy-shallow)
+fn flag_arguments(node: Node, functions: &HashMap<String, Function>, bound: &HashSet<String>) -> Node {
+	match node {
+		Node::Key(head, op @ (Op::Define | Op::Assign), body) if is_function_head(untyped_head(&head)) => {
+			let mut inner = bound.clone();
+			if let Node::List(items, _, _) = untyped_head(&head).drop_meta() {
+				inner.extend(items[1..].iter().map(parameter_name));
+			}
+			Node::Key(head, op, Box::new(flag_arguments(*body, functions, &inner)))
+		}
+		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if functions.contains_key(name)) => {
+			let function = &functions[&items[0].name()];
+			let is_flag = |name: &String| function.parameters.iter().zip(&function.defaults)
+				.any(|(parameter, default)| parameter == name && matches!(default.as_ref().map(Node::drop_meta), Some(Node::True | Node::False)));
+			let items = items.into_iter().enumerate().map(|(index, item)| match item.drop_meta() {
+				Node::Symbol(name) if index > 0 && is_flag(name) && !bound.contains(name) => Node::Key(Box::new(item.clone()), Op::Colon, Box::new(Node::True)),
+				_ => flag_arguments(item, functions, bound),
+			}).collect();
+			Node::List(items, Bracket::Round, separator)
+		}
+		other => other.map_children(|child| flag_arguments(child, functions, bound)),
 	}
 }
 
