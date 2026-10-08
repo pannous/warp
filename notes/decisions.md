@@ -5,6 +5,9 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- Every major or semi-major feature ships with a sample in samples/, especially the ORM and the server (user, to the
+  supervisor; rule in notes/agents/common.md 2ca368e9f; cards sample-orm, warp-fixer, and sample-server,
+  warp-functions).
 - P224 (card plus-minus-print, warp-class): `<`, `>`, `<=`, `>=` on a ± interval answer only when certain, like
   Julia's IntervalArithmetic: with `y = 6 ± 1` (5..7) `y < 8` → yes, `y < 4` → no. `≈` stays as P218.
   P224b (user: "we don't want the application to crash" on values read from outside): no run-time crash.
