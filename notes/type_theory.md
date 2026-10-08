@@ -277,6 +277,15 @@ the handler stack (`Store.handlers`, innermost first; `StoreOk` = vars ∧ heap 
 a result type R (`Program.effects`, inferred as the join of its handlers' types, `Guesses.effects`); a handler must
 fit R, an emit has type `join R unit`. `ProgramOk` (was `FunsOk`) also demands the program-wide handlers fit.
 Program-wide handlers are hoisted in both: `x = emit ask; on ask { 1 }; x` is 1.
+Aborting handlers (effect handlers Step 3): `break v` (bare `break` = ø) in a block handler is `Expr.abort ev none v`.
+It unwinds like an error, but `try` does not catch it (`tryAbort`); leaving the handler's `scope k` fixes the depth k
+of the block whose handler ran (`scopeAbort`, the handlers outside that block); a `handle` of ev whose body aborts
+with ev at depth `μ.handlers.length` ends with v, any other passes it on (`handleAbort`). Typing: `break v` has type
+`never` and v must fit the event's abort type (`Program.aborts`, inferred as the join of its `break` values); a
+block gives `join body aborts`. Preservation needs nothing more; progress allows a final state "an abort with a
+value", since the proof does not track that every abort meets its block. The checker's `breaksPlaced` (in
+`verdict`, outside the proof) keeps every `break` in a block handler of its own event and out of loops, so warp's
+programs cannot reach that state. Program-wide handlers cannot abort.
 Exporter limits: a first binding inside a handler or body (`on ask { y = emit ask; … }`) is refused like any first
 binding inside an expression; pre-declare the name. Warp bugs found here: cards handler-annotated (an annotated
 global assigned by a program-wide handler keeps its old value) and handler-global (a global assigned from an emit

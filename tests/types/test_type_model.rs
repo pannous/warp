@@ -120,6 +120,7 @@ const CORPUS: &[&str] = &[
 	"a = 0; compute() := emit ask; on ask { 1 } in { a = on ask { 2 } in { compute() }; a * 10 + compute() }",
 	"on ask { 7 }; compute() := emit ask; a = on ask { 2 } in { compute() }; a * 10 + compute()",
 	"y = 0; on ask { y = 5; y + 10 } in { emit ask }",
+	"y = 0; on ask { 1 } in { on ask { y = emit ask; y + 10 } in { emit ask } }",
 	"n = 0; on alarm { n += 1 }; emit alarm; emit alarm; n",
 	"level = 0; on alarm { level = event.level }; emit alarm{level: 3}; level",
 	"def check(x) { if x > 2 { emit too big{value: x} }; x }; check(1)",

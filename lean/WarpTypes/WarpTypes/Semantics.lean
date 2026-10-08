@@ -184,6 +184,7 @@ inductive Frame where
   | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
   | isA (c : String)
   | emit (ev : String)
+  | abort (ev : String) (k : Option Nat)
 
 namespace Frame
 
@@ -215,6 +216,7 @@ def plug : Frame → Expr → Expr
   | setR o f, e => .set o f e
   | isA c, e => .isA e c
   | emit ev, e => .emit ev e
+  | abort ev k, e => .abort ev k e
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
@@ -270,6 +272,14 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
       Step P (.scope k e, μ) (.scope k e', μ'.withHandlers μ.handlers)
   | scopeValue {k v μ} : v.isValue = true → Step P (.scope k v, μ) (v, μ)
   | scopeError {k m μ} : Step P (.scope k (.error m), μ) (.error m, μ)
+  /-- an abort unwinds like an error, but `try` does not catch it (warp throws it with its own wasm tag) -/
+  | escape {F : Frame} {ev k v μ} : F.ready = true → v.isValue = true → Step P (F.plug (.abort ev k v), μ) (.abort ev k v, μ)
+  | tryAbort {ev k v h μ} : v.isValue = true → Step P (.tryCatch (.abort ev k v) h, μ) (.abort ev k v, μ)
+  /-- leaving the handler's scope fixes the depth of the block whose handler ran: the handlers outside it -/
+  | scopeAbort {j ev k v μ} : v.isValue = true → Step P (.scope j (.abort ev k v), μ) (.abort ev (some (k.getD j)) v, μ)
+  /-- the block of ev at that depth ends with v; any other block passes the abort on -/
+  | handleAbort {ev' h ev k v μ} : v.isValue = true →
+      Step P (.handle ev' h (.abort ev k v), μ) (if ev' = ev ∧ k = some μ.handlers.length then v else .abort ev k v, μ)
 
 /-- every declared name has a cell that fits its mode and type -/
 def CellOk (P : Program) (m : Mode) (t : Ty) : Option Cell → Prop

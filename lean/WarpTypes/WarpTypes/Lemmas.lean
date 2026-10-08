@@ -291,7 +291,7 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih1 (hs.set _ _)
     obtain ⟨_, h2, s2⟩ := ih2 hs
-    exact ⟨_, .handle hR h1 (sub_trans s1 sh) h2, s2⟩
+    exact ⟨_, .handle hR h1 (sub_trans s1 sh) h2, join_mono s2 (sub_refl _)⟩
   | emit hR _ ih =>
     intro Γ' hs
     obtain ⟨_, h1, _⟩ := ih hs
@@ -300,6 +300,10 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih hs
     exact ⟨_, .scope h1, s1⟩
+  | abort _ st ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih hs
+    exact ⟨_, .abort h1 (sub_trans s1 st), sub_refl _⟩
 
 theorem Ctx.set_same (Γ : Ctx) (y : String) (a b : Ty) : (Γ.set y a).set y b = Γ.set y b := by
   funext z; simp only [Ctx.set]; split <;> simp_all
@@ -374,6 +378,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
       exact .handle hR (ih1 (Ctx.set_comm Γ (fun h => hy h.symm) tv .any) hv htv) sh (ih2 rfl hv htv)
   | emit hR _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .emit hR (ih hΓ hv htv)
   | scope _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .scope (ih hΓ hv htv)
+  | abort _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .abort (ih hΓ hv htv) st
 
 /-- a value of type tv ≤ t bound to a local of type t: the body keeps (a subtype of) its type -/
 theorem let_typed {y t v b tv tb} (hb : HasType P (Ctx.empty.set y t) b tb) (hv : v.isValue = true)
