@@ -15,6 +15,8 @@ use std::collections::HashSet;
 pub const IS_TYPE: &str = "is_type";
 /// `node_kind_in(node, mask)`: 1 when the run-time kind of node is in the bit mask of kinds (wasm_emitter list_ops.rs)
 pub const NODE_KIND_IN: &str = "node_kind_in";
+/// `node_type_name(node)`: `type(x)` of a value of unknown static type, its run-time type as a symbol (list_ops.rs)
+pub const NODE_TYPE_NAME: &str = "node_type_name";
 /// `x is error`: any value may turn out an Error at run time, so this test always reads the kind (card catch-message)
 pub const ERROR_TYPE: &str = "error";
 const ARTICLES: [&str; 2] = ["a", "an"];

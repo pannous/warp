@@ -376,12 +376,32 @@ impl WasmGcEmitter {
 		}
 		let kind = match arg.drop_meta() {
 			literal @ Node::Number(_) => literal.kind(),
+			Node::Empty => crate::type_kinds::Kind::Empty,
 			_ => self.get_type(arg),
 		};
 		match (kind, crate::analyzer::literal_number_type_word(arg)) {
 			(_, Some(number_word)) => number_word.to_string(),
 			(crate::type_kinds::Kind::List, _) => crate::analyzer::shown_list_type_name(arg, &self.scope),
 			_ => kind.to_string(),
+		}
+	}
+
+	/// A value held as a Node whose type only the run time knows: an optional, an `any` parameter, an item of a mixed list
+	fn has_unknown_static_type(&self, subject: &Node) -> bool {
+		!matches!(subject.drop_meta(), Node::Number(_)) && matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data)
+	}
+
+	/// `type(x)` reads the value's type at run time: for a value held as a Node, a variable that may hold a ratio (an exact
+	/// number of Int kind), a Key that may be an instance of a declared type
+	fn type_known_only_at_run_time(&self, subject: &Node) -> bool {
+		if crate::analyzer::is_boolean(subject, &self.scope) || matches!(subject.drop_meta(), Node::Number(_) | Node::Empty) {
+			return false;
+		}
+		match self.get_type(subject) {
+			crate::Kind::Empty | crate::Kind::Data => true,
+			crate::Kind::Int => self.int_runtime(),
+			crate::Kind::Key => !self.ctx.type_registry.types().is_empty(),
+			_ => false,
 		}
 	}
 
@@ -404,7 +424,7 @@ impl WasmGcEmitter {
 		}
 		let [_, subject, spec] = items.as_slice() else { return false };
 		let Node::Text(spec) = spec.drop_meta() else { return false };
-		let unknown = spec == crate::type_tests::ERROR_TYPE || (!matches!(subject.drop_meta(), Node::Number(_)) && matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data));
+		let unknown = spec == crate::type_tests::ERROR_TYPE || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
 		match crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type) {
 			Some(mask) => {
@@ -460,6 +480,12 @@ impl WasmGcEmitter {
 				let Node::Symbol(extremum) = arg.drop_meta() else { return false };
 				let Some((_, error)) = crate::min_max::EMPTY_LIST_ERRORS.iter().find(|(name, _)| name == extremum) else { return false };
 				self.emit_runtime_error(func, error);
+				true
+			}
+			"type" if self.type_known_only_at_run_time(arg) => {
+				self.emit_node_instructions(func, arg);
+				func.instruction(&I::RefAsNonNull);
+				self.emit_call(func, crate::type_tests::NODE_TYPE_NAME);
 				true
 			}
 			"type" => {

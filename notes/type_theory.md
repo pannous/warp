@@ -74,8 +74,9 @@ Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a
 | literals | `n : int`, `q : number`, `"s" : text`, `true : bool`, `ø : unit`, `[] : list never` | inference.rs `infer_type` |
 | `v :: vs` | `σ :: list τ : list (σ ⊔ τ)` | `infer_list_type`, `list_type_name` |
 | `x` | Σ(x) = (m, τ) ⇒ τ; reading a charged name runs its body | analyzer `Scope::lookup` |
-| `e1 + e2` | both ≤ number or text; `text` if a side is text (`"a" + 1` is "a1"), `int` if both ≤ int, else `number`; `never` if a side is | inference.rs `arithmetic_kind`, `node_arithmetic` |
-| `e1 < e2` | both ≤ number ⇒ bool | `infer_type` comparison arm |
+| `e1 + e2` | `never` if a side is, `any` if a side is, `text` if a side is text (`"a" + 1` is "a1"), `int` if both ≤ int, else `number`; operands other than numbers and texts raise "not addable" at run time (checker: both ≤ number, text or any) | inference.rs `arithmetic_kind`, `node_arithmetic` |
+| `e1 - e2`, `e1 * e2` | `any` if a side is, `int` if both ≤ int, else `number`; non-numbers raise "not a number" (checker: both ≤ number or any) | same |
+| `e1 < e2` | ⇒ bool; non-numbers raise "not comparable" (checker: both ≤ number or any) | `infer_type` comparison arm |
 | `e1 == e2` | any operands ⇒ bool (`0 == false` is true) | equality.rs |
 | `if c then a else b` | c : any (truthiness: false, 0, ø, [] are falsy); a ⊔ b | `infer_type` if arms |
 | `while c do b` | ⇒ unit | lowering of loops |
@@ -205,8 +206,46 @@ exported as `num 0`; instances). test_warp_computes_what_the_type_model_computes
 Found on the way: the exporter had mapped `-` and `*` to `+`, so W0 accepted `"a" - 1` and `f(n - 1)` recursed upward.
 W0 now has `arith op a b`, which takes numbers only.
 
+## Functions of several parameters, `def`, inferred parameters
+
+- The exporter desugars `f(a, b) := body` (and `def f(a, b) { body }`) into a function of one parameter, an
+  instance of the generated class `f·args` with fields a and b. The body reads `args.a`, and a call `f(1, "x")`
+  constructs the arguments object. Per-position types come from class typing, so the proofs are unchanged. A
+  function of no parameters takes `unit`; `two()` parses as `(two)`.
+- Elaboration (Checker.lean `Guesses`) types an unannotated parameter or class field by the join of the values the
+  program gives it (call arguments, field writes), iterated so recursive calls count. Several kinds join to `any`
+  (P173); a place never given a value holds `any`. Elaboration is outside the proof: `check_safe` holds for any
+  elaborated Spec.
+- Gradual typing (P203: annotated code is strict, unannotated code is `any` checked at run time). `HasType` means
+  "cannot get stuck": `+`, `-`, `*`, `<` and field reads type any operands, and the semantics steps operands of the
+  wrong kind to an error ("not addable", "not a number", "not comparable"; a field read off a non-object "not an
+  object"). Operations on `any` give `any`; a field read gives the declared field type for a class that declares
+  it, else `any`. The checker (`typeOf`) stays strict: operands must be addable or numeric, where `any` counts as
+  both, and a field read needs `never`, `any` or a class declaring the field (`strictRead`, P201). Corpus:
+  `f(x) := x + 1; f(3); f("a")` ("a1"), `f(x) := x - 1; f(3); f("a")` (a run-time error), `x: any = 2; x * 3`.
+  warp is stricter than W0 where it knows the value: `x: any = "a"; x - 1` is a compile error in warp (constant
+  propagation), so that form stays out of the corpus.
+- Coverage (data/types/coverage.txt, 600 is!() programs sampled from tests/): 83 were inside W0 before this
+  phase. Most of the rest: imports (`use`), maps `{a:1}`, lambdas, `for` loops, `i++`, division, string methods.
+
+## Inline unions and optionals
+
+`x: int | text`, `int or text`, `(int|text)` and the optional `int | ø` stay out of `Ty`: a union in the order would
+make `join` a true least upper bound (`int ⊔ text = int | text`), else `join_mono` and with it narrowing break (with
+`join int text = any`, `int ≤ int|text` but `any ≰ int|text`), and every type operator (`plus`, `element`,
+`readTy`, `writeTy`) would need a union case. Warp runs operations on a union like on `any`, so W0 models a union
+declaration as its alternatives' join (`Ty.joinAll`: `int | text` is `any`, `int | float` is `number`) and every
+value given to it as `cast v [alternatives]`, the run-time check, which keeps a value fitting one alternative. The
+checker admits a cast when the value's static type is consistent with an alternative (`consub`, gradual consistent
+subtyping: `any` stands for anything, `list any` fits `list int`), so `x: int | text = 3; x = 2.5` and
+`f(x: int | text) := x; f(2.5)` are rejected as warp rejects them. The exporter (src/law/type_model.rs) reads the
+union with the analyzer's `union_type_name` (a covered part dropped, ø made optional) and wraps main-level bindings,
+assignments and single-parameter call arguments. Not yet: unions as fields or as one of several parameters, unions
+of classes (warp refuses them for now), `x as T?` (a conversion in warp: `"4" as int?` is 4; W0's cast only checks).
+`x: int? = 3` does not parse in warp (card int-spaces); the corpus spells it `x: int | ø = 3`.
+
 ## Later phases
 
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
-inline unions (card inline-union: `union a b`), the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
+the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
 exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, then effects and tasks.

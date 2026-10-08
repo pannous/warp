@@ -37,6 +37,7 @@ pub mod number_words;
 pub mod field_elements;
 pub mod list_element_checks;
 pub mod nested_index;
+pub mod shared_instances;
 pub mod named_arguments;
 pub mod number_keys;
 pub mod overloads;

@@ -29,38 +29,31 @@ theorem list_value {Γ v a} (h : HasType P Γ v (.list a)) (hv : v.isValue = tru
     v = .nil ∨ ∃ hd tl, v = .cons hd tl ∧ hd.isValue = true ∧ tl.isValue = true := by
   cases v <;> simp [isValue] at hv ⊢ <;> first | exact hv | exact ⟨_, _, ⟨rfl, rfl⟩, hv⟩ | cases h
 
-theorem number_value {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (hs : sub t .number = true) :
-    (asInt v ≠ none ∧ sub t .int = true) ∨ (asInt v = none ∧ t = .number) := by
-  cases h <;> simp_all [isValue, asInt, sub]
-
+/-- `+` on values: a number or a text of a type below `plus`, or an error -/
 theorem add_typed {Γ a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
-    (vb : b.isValue = true) (sa : addable ta = true) (sb : addable tb = true) :
-    ∃ t', HasType P Γ (addValues a b) t' ∧ sub t' (plus ta tb) = true := by
-  cases ha <;> cases hb <;> simp_all [isValue, addValues, isText, asInt, asNumber, plus, Ty.arith, addable, sub] <;>
-    first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩ | exact ⟨_, .text, by decide⟩
+    (vb : b.isValue = true) : ∃ t', HasType P Γ (addValues a b) t' ∧ sub t' (plus ta tb) = true := by
+  unfold addValues
+  split
+  · exact ⟨_, .error, sub_never _⟩
+  · cases ha <;> cases hb <;>
+      simp_all [isValue, isNumber, isText, asInt, asNumber, plus, Ty.arith, sub] <;>
+      first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩ | exact ⟨_, .text, by decide⟩
 
+/-- `-` and `*` on values: a number of a type below `arithTy`, or an error -/
 theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
-    (vb : b.isValue = true) (sa : sub ta .number = true) (sb : sub tb .number = true) :
-    ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (Ty.arith ta tb) = true := by
-  have whole : ∀ {v t x}, HasType P Γ v t → v.isValue = true → sub t .number = true → asInt v = some x →
-      sub t .int = true := by
-    intro v t x h hv hs hx
-    rcases number_value h hv hs with ⟨_, ht⟩ | ⟨hn, _⟩
-    · exact ht
-    · simp [hx] at hn
+    (vb : b.isValue = true) : ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (arithTy ta tb) = true := by
   unfold arithValues
   split
-  · rename_i x y hx hy
-    exact ⟨_, .int, by simp [Ty.arith, whole ha va sa hx, whole hb vb sb hy, sub]⟩
-  · rename_i hnot
-    refine ⟨_, .num, ?_⟩
-    rcases number_value ha va sa with ⟨ia, _⟩ | ⟨_, rfl⟩
-    · rcases number_value hb vb sb with ⟨ib, _⟩ | ⟨_, rfl⟩
-      · obtain ⟨x, hx⟩ := Option.ne_none_iff_exists'.1 ia
-        obtain ⟨y, hy⟩ := Option.ne_none_iff_exists'.1 ib
-        exact (hnot x y hx hy).elim
-      · simp [Ty.arith, sub]
-    · simp [Ty.arith, sub]
+  · exact ⟨_, .error, sub_never _⟩
+  · cases ha <;> cases hb <;>
+      simp_all [isValue, isNumber, asInt, asNumber, arithTy, Ty.arith, sub] <;>
+      first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩
+
+theorem lt_typed {Γ a b} : ∃ t', HasType P Γ (ltValues a b) t' ∧ sub t' .bool = true := by
+  unfold ltValues
+  split
+  · exact ⟨_, .bool, sub_refl _⟩
+  · exact ⟨_, .error, sub_never _⟩
 
 theorem nth_typed {Γ} : ∀ {l : Expr} (i : Int) {tl e v}, l.isValue = true → HasType P Γ l tl → element tl = some e →
     nth l i = some v → ∃ tv, HasType P Γ v tv ∧ sub tv e = true := by
@@ -125,12 +118,15 @@ theorem fits_typed {Γ v t} (h : fits v t = true) : ∃ tv, HasType P Γ v tv �
   · cases h
 
 /-- a smaller object type reads a smaller field type -/
-theorem readTy_mono {te te' : Ty} (h : sub te' te = true) {f t} (ht : P.readTy te f = some t) :
-    ∃ t', P.readTy te' f = some t' ∧ sub t' t = true := by
-  cases te <;> simp [Program.readTy] at ht
-  · subst ht; rw [sub_to_never h]; exact ⟨_, rfl, sub_refl _⟩
-  · cases te' <;> simp_all [Program.readTy, sub]
-    exact ⟨_, P.fieldTy_prefix h ht, sub_refl _⟩
+theorem readTy_mono {te te' : Ty} (h : sub te' te = true) (f : String) :
+    sub (P.readTy te' f) (P.readTy te f) = true := by
+  cases te <;> simp [Program.readTy]
+  · rw [sub_to_never h]; simp
+  · cases te' <;> simp_all [sub]
+    rename_i p q
+    cases hf : P.fieldTy p f with
+    | none => simp
+    | some t => rw [P.fieldTy_prefix h hf]; simp [sub_refl]
 
 /-- a smaller object type takes a larger field type -/
 theorem writeTy_anti {te te' : Ty} (h : sub te' te = true) {f t} (ht : P.writeTy te f = some t) :
@@ -170,21 +166,21 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     intro Γ' hs
     obtain ⟨t', h', s'⟩ := hs _ _ hy
     exact ⟨t', .loc h', s'⟩
-  | add _ _ sa sb ih1 ih2 =>
+  | add _ _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨a', h1, s1⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
-    exact ⟨_, .add h1 h2 (addable_mono s1 sa) (addable_mono s2 sb), plus_mono s1 s2 sa sb⟩
-  | arith _ _ sa sb ih1 ih2 =>
+    exact ⟨_, .add h1 h2, plus_mono s1 s2⟩
+  | arith _ _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨a', h1, s1⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
-    exact ⟨_, .arith h1 h2 (sub_trans s1 sa) (sub_trans s2 sb), arith_mono s1 s2⟩
-  | lt _ _ sa sb ih1 ih2 =>
+    exact ⟨_, .arith h1 h2, arithTy_mono s1 s2⟩
+  | lt _ _ ih1 ih2 =>
     intro Γ' hs
-    obtain ⟨a', h1, s1⟩ := ih1 hs
-    obtain ⟨b', h2, s2⟩ := ih2 hs
-    exact ⟨_, .lt h1 h2 (sub_trans s1 sa) (sub_trans s2 sb), sub_refl _⟩
+    obtain ⟨a', h1, _⟩ := ih1 hs
+    obtain ⟨b', h2, _⟩ := ih2 hs
+    exact ⟨_, .lt h1 h2, sub_refl _⟩
   | eq _ _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨a', h1, _⟩ := ih1 hs
@@ -253,11 +249,10 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     exact ⟨_, .broadcast hf h1 he' (sub_trans sa ha), sub_refl _⟩
   | ref => intros; exact ⟨_, .ref, sub_refl _⟩
   | new => intros; exact ⟨_, .new, sub_refl _⟩
-  | get _ hr ih =>
+  | get _ ih =>
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih hs
-    obtain ⟨t', hr', st⟩ := readTy_mono s1 hr
-    exact ⟨_, .get h1 hr', st⟩
+    exact ⟨_, .get h1, readTy_mono s1 _⟩
   | set _ hw _ st ih1 ih2 =>
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih1 hs
@@ -298,9 +293,9 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
     split at hz
     · cases hz; simp [*]; exact value_ctx htv hv _
     · simp [*]; exact .loc hz
-  | add _ _ sa sb ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .add (ih1 hΓ hv htv) (ih2 hΓ hv htv) sa sb
-  | arith _ _ sa sb ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .arith (ih1 hΓ hv htv) (ih2 hΓ hv htv) sa sb
-  | lt _ _ sa sb ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .lt (ih1 hΓ hv htv) (ih2 hΓ hv htv) sa sb
+  | add _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .add (ih1 hΓ hv htv) (ih2 hΓ hv htv)
+  | arith _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .arith (ih1 hΓ hv htv) (ih2 hΓ hv htv)
+  | lt _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .lt (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | eq _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .eq (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | ite _ _ _ ih0 ih1 ih2 =>
     intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .ite (ih0 hΓ hv htv) (ih1 hΓ hv htv) (ih2 hΓ hv htv)
@@ -328,7 +323,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | broadcast hf _ he ha ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .broadcast hf (ih hΓ hv htv) he ha
   | ref => intros; simp only [Expr.subst]; exact .ref
   | new => intros; simp only [Expr.subst]; exact .new
-  | get _ hr ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .get (ih hΓ hv htv) hr
+  | get _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .get (ih hΓ hv htv)
   | set _ hw _ st ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .set (ih1 hΓ hv htv) hw (ih2 hΓ hv htv) st
   | isA _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .isA (ih hΓ hv htv)
 

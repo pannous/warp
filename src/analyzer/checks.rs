@@ -401,7 +401,7 @@ pub(super) fn map_word(call: &Node) -> Option<&'static str> {
 }
 
 pub(super) const INT_WORD: &str = "int";
-pub(super) const RATIONAL_WORD: &str = "rational";
+pub(crate) const RATIONAL_WORD: &str = "rational";
 pub(super) const FLOAT_WORD: &str = "float";
 pub(super) const NUMBER_WORD: &str = "number";
 /// Irrational constants are `real`, although the underlying representation may still be exact or float: the type name is
