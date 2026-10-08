@@ -92,3 +92,4 @@ mod test_checked_call_kinds;
 mod test_class_field_type_phrases;
 mod test_optional_casts;
 mod test_type_of_node_values;
+mod test_shared_instances;
