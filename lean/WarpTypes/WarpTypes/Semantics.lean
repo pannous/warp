@@ -22,6 +22,8 @@ structure Store where
   heap : List Obj := []
   /-- the active block handlers, innermost first -/
   handlers : List (String × Expr) := []
+  /-- the shared lists: each one's element type and its items (a `nil`/`cons` value); only grows -/
+  lists : List (Ty × Expr) := []
 
 instance : CoeFun Store (fun _ => String → Option Cell) := ⟨Store.vars⟩
 
@@ -33,6 +35,20 @@ def Store.alloc (μ : Store) (p : List String) : Store := { μ with heap := μ.h
 
 /-- the object at address a, if it is of class chain p -/
 def Store.obj (μ : Store) (a : Nat) (p : List String) : Option Obj := μ.heap[a]?.filter (·.path == p)
+
+/-- the items of the shared list at address a, if it was made with element type t -/
+def Store.listAt (μ : Store) (a : Nat) (t : Ty) : Option Expr := (μ.lists[a]?.filter (·.1 == t)).map (·.2)
+
+/-- a new shared list, at address `μ.lists.length` -/
+def Store.allocList (μ : Store) (t : Ty) (items : Expr) : Store := { μ with lists := μ.lists ++ [(t, items)] }
+
+def Store.writeList (μ : Store) (a : Nat) (items : Expr) : Store :=
+  { μ with lists := μ.lists.modify a fun c => (c.1, items) }
+
+/-- what a list operation reads: a shared list's items (`nil` for an address no run makes), any other value itself -/
+def Store.items (μ : Store) : Expr → Expr
+  | .lref a t => (μ.listAt a t).getD .nil
+  | v => v
 
 def Store.withHandlers (μ : Store) (hs : List (String × Expr)) : Store := { μ with handlers := hs }
 
@@ -113,9 +129,9 @@ def isNumber : Expr → Bool
 
 def arithValues (op : ArithOp) (a b : Expr) : Expr :=
   if !(isNumber a && isNumber b) then .error "not a number" else
-  if op == .mod && asNumber b == 0 then .error "divide by zero" else
+  if (op == .mod || op == .div) && asNumber b == 0 then .error "divide by zero" else
   match asInt a, asInt b with
-  | some x, some y => .int (op.apply x y)
+  | some x, some y => if op == .div && x % y != 0 then .num (op.apply x y) else .int (op.apply x y)
   | _, _ => .num (op.apply (asNumber a) (asNumber b))
 
 def isList : Expr → Bool
@@ -154,6 +170,8 @@ def looseEq (P : Program) (μ : Store) : Nat → Expr → Expr → Bool
         | none, none => true
         | _, _ => false
       | _, _ => false)
+  | fuel + 1, .lref a t, b => looseEq P μ fuel (μ.items (.lref a t)) b
+  | fuel + 1, a, .lref b u => looseEq P μ fuel a (μ.items (.lref b u))
   | fuel + 1, .cons h t, .cons h' t' => looseEq P μ fuel h h' && looseEq P μ fuel t t'
   | _, a, b => decide (a = b)
 
@@ -180,6 +198,10 @@ def isClosure : Expr → Bool
   | .clo _ _ => true
   | _ => false
 
+def isShared : Expr → Bool
+  | .lref _ _ => true
+  | _ => false
+
 def appendValues (a b : Expr) : Expr := if isList a && isList b then concat a b else .error "not a list"
 
 /-- the type of a value, as `HasType` gives it -/
@@ -191,6 +213,7 @@ def valueType : Expr → Option Ty
   | .unit => some .unit
   | .nil => some (.list .never)
   | .ref _ p => some (.cls p)
+  | .lref _ t => some (.list t)
   | .cons h t =>
     match valueType h, valueType t with
     | some a, some l =>
@@ -205,6 +228,14 @@ def fits (v : Expr) (t : Ty) : Bool :=
   match valueType v with
   | some tv => sub tv t
   | none => false
+
+/-- `xs.add(v)` of values: v joins the shared list if it fits the list's element type -/
+def pushValues (μ : Store) : Expr → Expr → Expr × Store
+  | .lref a t, v =>
+    match μ.listAt a t with
+    | some items => if fits v t then (.lref a t, μ.writeList a (concat items (.cons v .nil))) else (.error "type mismatch", μ)
+    | none => (.error "dangling list", μ)
+  | _, _ => (.error "not a list", μ)
 
 /-- the k ints from m: `[m, m+1, …]` -/
 def intList (m : Int) : Nat → Expr
@@ -243,6 +274,8 @@ inductive Frame where
   | loopLast (c b : Expr)
   | forInLast (y : String) (l b : Expr)
   | appL (a : Expr) | appR (f : Expr)
+  | share (t : Ty)
+  | pushL (v : Expr) | pushR (l : Expr)
 
 namespace Frame
 
@@ -282,10 +315,13 @@ def plug : Frame → Expr → Expr
   | forInLast y l b, e => .forIn y l b e
   | appL a, e => .app e a
   | appR f, e => .app f e
+  | share t, e => .share e t
+  | pushL v, e => .push e v
+  | pushR l, e => .push l e
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
-  | consR h | addR h | arithR _ h | ltR h | eqR _ h | indexR h | rangeR h | appendR h | appR h | setR h _
+  | consR h | addR h | arithR _ h | ltR h | eqR _ h | indexR h | rangeR h | appendR h | appR h | setR h _ | pushR h
   | forInLast _ h _ => h.isValue
   | _ => true
 
@@ -300,11 +336,11 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | readValue {x v μ} : μ x = some (.val v) → Step P (.glob x, μ) (v, μ)
   | readUnset {x μ} : μ x = some .unset → Step P (.glob x, μ) (.error "unset", μ)
   | readCharged {x b μ} : μ x = some (.charged b) → Step P (.glob x, μ) (b, μ)
-  | add {a b μ} : a.isValue = true → b.isValue = true → Step P (.add a b, μ) (addValues a b, μ)
+  | add {a b μ} : a.isValue = true → b.isValue = true → Step P (.add a b, μ) (addValues (μ.items a) (μ.items b), μ)
   | arith {op a b μ} : a.isValue = true → b.isValue = true → Step P (.arith op a b, μ) (arithValues op a b, μ)
   | lt {a b μ} : a.isValue = true → b.isValue = true → Step P (.lt a b, μ) (ltValues a b, μ)
   | eq {s a b μ} : a.isValue = true → b.isValue = true → Step P (.eq s a b, μ) (.bool (eqValues P μ s a b), μ)
-  | ite {v a b μ} : v.isValue = true → Step P (.ite v a b, μ) (if truthy v then a else b, μ)
+  | ite {v a b μ} : v.isValue = true → Step P (.ite v a b, μ) (if truthy (μ.items v) then a else b, μ)
   | loop {c b v μ} : v.isValue = true → Step P (.loop c b v, μ) (.ite c (.loop c b b) v, μ)
   | seq {v b μ} : v.isValue = true → Step P (.seq v b, μ) (b, μ)
   | lam {y b μ} : Step P (.lam y b, μ) (.clo y b, μ)
@@ -313,8 +349,9 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
       Step P (.app f v, μ) (.error "not a function", μ)
   | range {a b μ} : a.isValue = true → b.isValue = true → Step P (.range a b, μ) (rangeValues a b, μ)
   | index {l i μ} : l.isValue = true → i.isValue = true →
-      Step P (.index l i, μ) ((nth l ((asInt i).getD 0)).getD (.error "index out of range"), μ)
-  | append {a b μ} : a.isValue = true → b.isValue = true → Step P (.append a b, μ) (appendValues a b, μ)
+      Step P (.index l i, μ) ((nth (μ.items l) ((asInt i).getD 0)).getD (.error "index out of range"), μ)
+  | append {a b μ} : a.isValue = true → b.isValue = true →
+      Step P (.append a b, μ) (appendValues (μ.items a) (μ.items b), μ)
   | assign {x v μ} : v.isValue = true → Step P (.assign x v, μ) (v, μ.set x (.val v))
   | init {x v μ} : v.isValue = true → Step P (.init x v, μ) (v, μ.set x (.val v))
   | letIn {y t v b μ} : v.isValue = true → Step P (.letIn y t v b, μ) (b.subst y v, μ)
@@ -323,6 +360,12 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | broadcastNil {f μ} : Step P (.broadcast f .nil, μ) (.nil, μ)
   | broadcastCons {f h t μ} : h.isValue = true → t.isValue = true →
       Step P (.broadcast f (.cons h t), μ) (.cons (.call f h) (.broadcast f t), μ)
+  | broadcastRef {f a t μ} : Step P (.broadcast f (.lref a t), μ) (.broadcast f (μ.items (.lref a t)), μ)
+  | shareNew {v t μ} : v.isValue = true → isList v = true → fits v (.list t) = true →
+      Step P (.share v t, μ) (.lref μ.lists.length t, μ.allocList t v)
+  | shareBad {v t μ} : v.isValue = true → (isList v && fits v (.list t)) = false →
+      Step P (.share v t, μ) (.error "type mismatch", μ)
+  | push {l v μ} : l.isValue = true → v.isValue = true → Step P (.push l v, μ) (pushValues μ l v)
   | cast {v ts μ} : v.isValue = true → Step P (.cast v ts, μ) (if ts.any (fits v) then v else .error "type mismatch", μ)
   | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)
   | get {o f μ} : o.isValue = true → Step P (.get o f, μ) (readField μ o f, μ)
@@ -353,7 +396,9 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | forCons {y h t b v μ} : h.isValue = true → t.isValue = true → v.isValue = true →
       Step P (.forIn y (.cons h t) b v, μ) (.forIn y t b (b.subst y h), μ)
   | forText {y s b v μ} : v.isValue = true → Step P (.forIn y (.text s) b v, μ) (walkText y s b v, μ)
-  | forOther {y l b v μ} : l.isValue = true → isList l = false → isText l = false → v.isValue = true →
+  | forRef {y a t b v μ} : v.isValue = true → Step P (.forIn y (.lref a t) b v, μ) (.forIn y (μ.items (.lref a t)) b v, μ)
+  | forOther {y l b v μ} : l.isValue = true → isList l = false → isText l = false → isShared l = false →
+      v.isValue = true →
       Step P (.forIn y l b v, μ) (.error "not a list", μ)
   | handleAbort {ev' h ev k v μ} : v.isValue = true →
       Step P (.handle ev' h (.abort ev k v), μ) (if ev' = ev ∧ k = some μ.handlers.length then v else .abort ev k v, μ)
@@ -372,7 +417,11 @@ def HeapOk (P : Program) (μ : Store) : Prop :=
 
 def HandlersOk (P : Program) (hs : List (String × Expr)) : Prop := ∀ p ∈ hs, HandlerOk P p.1 p.2
 
+/-- every shared list's items are a list value whose items fit the list's element type -/
+def ListsOk (P : Program) (ls : List (Ty × Expr)) : Prop :=
+  ∀ (a : Nat) t items, ls[a]? = some (t, items) → items.isValue = true ∧ ∃ ti, HasType P Ctx.empty items ti ∧ sub ti (.list t) = true
+
 def StoreOk (P : Program) (μ : Store) : Prop :=
-  (∀ x m t, P.names x = some (m, t) → CellOk P m t (μ x)) ∧ HeapOk P μ ∧ HandlersOk P μ.handlers
+  (∀ x m t, P.names x = some (m, t) → CellOk P m t (μ x)) ∧ HeapOk P μ ∧ HandlersOk P μ.handlers ∧ ListsOk P μ.lists
 
 end Warp

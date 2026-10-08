@@ -92,6 +92,8 @@ pub const STD_IO: &str = "std_io";
 pub const SERVE_ROUTES: &str = "serve_routes";
 /// `users := fetch url` (src/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
 /// the reply arrived, fetch_reply(id) → [value, error]: the parsed JSON (else the text) and ø, or ø and the failure
+/// `users := fetch url` (lowering/fetch_signals.rs)
+pub const FETCH_WORD: &str = "fetch";
 pub const FETCH_START: &str = "fetch_start";
 pub const FETCH_REPLY: &str = "fetch_reply";
 /// The host words whose result is any Node, its kind decided at run time (held like a map value)
@@ -402,7 +404,7 @@ pub fn fetch_call(node: &Node) -> Option<(Node, Option<Duration>)> {
 	if !matches!(node.drop_meta(), Node::List(_, Bracket::None, _)) {
 		return None;
 	}
-	let is_fetch = |head: &Node| matches!(head, Node::Symbol(name) if name == "fetch");
+	let is_fetch = |head: &Node| matches!(head, Node::Symbol(name) if name == FETCH_WORD);
 	match parts(node).as_slice() {
 		[head, url] if is_fetch(head) => Some((url.clone(), None)),
 		[head, url, keyword, Node::Number(seconds)] if is_fetch(head) && matches!(keyword, Node::Symbol(k) if k == "timeout") => {
@@ -751,11 +753,20 @@ fn channel_listen(mut caller: Caller<'_, HostState>, id: i64, channel: HostNode)
 	crate::channels::listen(id, &channel.name()).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))
 }
 
+/// A fetch's URL, or `[url, body]`: a POST of the body as JSON (a server function the page calls, lowering/serve.rs)
+#[cfg(feature = "native")]
+fn request_of(request: &Node) -> crate::fetches::Request {
+	match request.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 => (items[0].name(), Some(crate::foreign::json_of(&items[1]).to_string())),
+		url => (url.name(), None),
+	}
+}
+
 /// `users := fetch url` starts the fetch (src/fetches.rs)
 #[cfg(feature = "native")]
 fn fetch_start(mut caller: Caller<'_, HostState>, id: i64, url: HostNode) -> wasmtime::Result<()> {
-	let url = given_node(&mut caller, url)?;
-	crate::fetches::start(id, url.name(), FETCH_TIMEOUT);
+	let request = given_node(&mut caller, url)?;
+	crate::fetches::start(id, request_of(&request), FETCH_TIMEOUT);
 	Ok(())
 }
 

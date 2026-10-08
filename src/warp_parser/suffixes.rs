@@ -450,9 +450,10 @@ impl WarpParser {
 			return None;
 		}
 
+		let start = self.pos;
 		let arg = self.parse_expr(argument_bp);
-		if arg == Empty {
-			return None;
+		if arg == Empty && self.pos == start {
+			return None; // an ø or [] written there is the argument: `x = sum []`
 		}
 
 		Some(Node::List(
