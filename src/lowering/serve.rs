@@ -102,6 +102,11 @@ fn top_level_statements(code: &str) -> Vec<Node> {
 	}
 }
 
+/// `serve PORT {…}` or a top-level `get "/api" {…}`: the server's alone, the page leaves it out
+fn is_serving(statement: &Node) -> bool {
+	served(statement).is_some() || !top_level_routes(statement).is_empty()
+}
+
 /// The route a top-level `get "/api" {…}` statement is
 fn top_level_routes(statement: &Node) -> Vec<Route> {
 	match statement.drop_meta() {
@@ -140,7 +145,7 @@ fn with_route_data(program: Node) -> Node {
 	lowered.splice(first_route..first_route, data_functions);
 	// the shipped page asks the server, so the server data's definitions stay on the server
 	if crate::pipeline::is_for_a_page() && !crate::pipeline::is_prerendering() {
-		let page_reads = |name: &String| lowered.iter().filter(|statement| server_variable(statement).is_none() && server_definition(statement).is_none()).any(|statement| statement.mentions_any(&[name]));
+		let page_reads = |name: &String| lowered.iter().filter(|statement| server_variable(statement).is_none() && server_definition(statement).is_none() && !is_serving(statement)).any(|statement| statement.mentions_any(&[name]));
 		let unread: Vec<String> = server_data.iter().filter(|name| !page_reads(name)).cloned().collect();
 		lowered.retain(|statement| server_variable(statement).is_none_or(|name| !unread.contains(&name)));
 	}
@@ -256,7 +261,7 @@ fn parse_named(code: &str) -> Node {
 fn without_serving(program: Node) -> Node {
 	match program {
 		Node::List(statements, bracket, separator) => {
-			let statements: Vec<Node> = statements.into_iter().filter(|statement| served(statement).is_none()).collect();
+			let statements: Vec<Node> = statements.into_iter().filter(|statement| !is_serving(statement)).collect();
 			let servers: Vec<String> = statements.iter().filter_map(server_definition).filter_map(|definition| defined_function(&definition)).map(|(name, _)| name).collect();
 			if servers.is_empty() {
 				return Node::List(statements, bracket, separator);

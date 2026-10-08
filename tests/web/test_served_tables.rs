@@ -36,3 +36,12 @@ fn a_served_route_reads_the_table_at_each_request() {
 	assert!(read("/api/users").contains("Ann"));
 	server.join().expect("the server thread");
 }
+
+// a top-level `get` is the server's alone: the page leaves it out, and with it the table it reads
+#[test]
+fn a_get_reading_a_table_does_not_ship_it() {
+	let program = "class User{name: text}\nstored people: [User]\nget \"/api/all\" { people }\nroute \"/\" { p{ \"home\" } }\nroute \"/u/:id:int\" { h1{ people#id.name } }";
+	let files = warp::site::files(program, "people_app", false).expect("the page builds");
+	let module = &files.iter().find(|(name, _)| name == "app.wasm").expect("app.wasm").1;
+	assert!(!module.windows("people".len()).any(|window| window == b"people"), "the table shipped in app.wasm");
+}
