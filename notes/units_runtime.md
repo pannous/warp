@@ -86,3 +86,13 @@ Stages 1-5 were cherry-picked onto main, about 2600 commits later. The playgroun
 lib/list.wasp take() was taken for a quantity function and dropped. Still loud errors, not yet metadata: a quantity in a
 map or object field (`{dist: d}`), `x:any = d`, `d.serialize()`, lists grown at run time. These need the unit at run time
 (the dynamic-struct alternative above): stage 6.
+
+## Stage 6 done (card units-p64): objects, annotations, serialize, growing lists
+Static as well, without a run-time struct: a variable holding an object literal with quantity fields notes one signature
+per field (`p = {dist: 0 m}`), so `p.dist`, `p.dist += 250 m` and `p.dist = q` check and compute. A final object names
+its fields' units in `wasp.units` (`dist=m:1;t=s:1`), and reading it back makes those fields quantities. `x:any = q` keeps
+the signature. `x:km = q` checks it (P203: annotated code is strict) and x is then a plain number. `q.serialize()` and
+`serialize(q)` give the text `"4 m"`. `xs.add(q)` and `xs.push(q)` check the element signature. `dist: 5 m` is data, not a
+lazy block (blocks.rs is_computed). Still loud errors: `print p` or a whole object used anywhere but as the final value,
+aliases of an object (`q = p`), recursion with quantities. Quantities whose units are known only at run time (parsed
+input) would need the dynamic struct.
