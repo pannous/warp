@@ -6,6 +6,8 @@
 const PAYLOAD_TAGS = ["null", "node", "int", "float", "string", "i31", "big_int", "ratio", "other"];
 const KIND_INT = "1";
 const KIND_FLOAT = "2";
+const KIND_MASK = 0xFFn;
+const KIND_FUNCTION = 16n; // src/type_kinds.rs Kind::Function: a closure
 const utf8Decoder = new TextDecoder("utf-8", { fatal: false });
 
 function readText(module, pointer, length) {
@@ -33,8 +35,11 @@ function readPayload(module, payload) {
 	}
 }
 
+// a closure keeps its node, out of JSON, so foreign code can call it (host.js callableOf)
 function readCell(module, node) {
-	return { kind: String(module.get_kind(node)), data: readPayload(module, module.reflect_data(node)) };
+	const cell = { kind: String(module.get_kind(node)), data: readPayload(module, module.reflect_data(node)) };
+	if ((BigInt(cell.kind) & KIND_MASK) === KIND_FUNCTION) Object.defineProperty(cell, "warpFunction", { value: { module, node } });
+	return cell;
 }
 
 function readNode(module, node) {

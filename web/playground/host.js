@@ -205,7 +205,6 @@ function programImports(holder, hooks) {
 	});
 }
 
-const KIND_MASK = 0xFFn;
 const decode = bytes => utf8Decoder.decode(bytes);
 
 const textTree = text => ({ kind: "3", data: { text }, chain: [] });
@@ -278,8 +277,15 @@ function plainOfTree(tree) {
 			const isObject = (kind >> 8n) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
 			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
 		}
+		case Number(KIND_FUNCTION): return tree.warpFunction ? callableOf(tree.warpFunction) : null;
 		default: return null;
 	}
+}
+
+// a warp function given to foreign code: a JavaScript function calling it back through the module's closure_apply
+// (src/wasm_emitter/closures.rs), synchronously, with as many of its arguments as it takes
+function callableOf({ module, node }) {
+	return (...values) => plainOfTree(readResult(module, module.closure_apply(node, buildValue(module, treeOfPlain(values)))));
 }
 
 // objects of the page without a plain form (a Date, a Map, an instance, a function), kept for foreign_call behind ids:
