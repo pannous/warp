@@ -9,11 +9,11 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 20] = [
+const BUILTIN_CALLS: [&str; 21] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
-	crate::analyzer::LIST_DROP_LAST, crate::library_words::VALUES_SIMILAR,
+	crate::analyzer::LIST_DROP_LAST, crate::library_words::VALUES_SIMILAR, super::list_ops::LIST_EXTEND,
 ];
 
 const PRINT: &str = "print";
@@ -320,6 +320,14 @@ impl WasmGcEmitter {
 			if call == crate::analyzer::LIST_DROP_LAST {
 				self.emit_node_instructions(func, list);
 				self.emit_call(func, crate::analyzer::LIST_DROP_LAST);
+				return;
+			}
+		}
+		if let [Node::Symbol(call), list, added] = items {
+			if call == super::list_ops::LIST_EXTEND {
+				self.emit_node_instructions(func, list);
+				self.emit_node_instructions(func, added);
+				self.emit_call(func, super::list_ops::LIST_EXTEND);
 				return;
 			}
 		}
@@ -855,6 +863,10 @@ impl WasmGcEmitter {
 	/// `s += "a"`, `xs = xs + [1]`, and an `if` whose branch does such an update
 	fn is_ref_update(&self, item: &Node) -> bool {
 		match item.drop_meta() {
+			// `p.items += [v]`, `m#2 += [v]`: items added to the list a field or item holds (emit_member_list_extend)
+			Node::Key(left, Op::AddAssign, right) if matches!(left.drop_meta(), Node::Key(_, Op::Hash | Op::Dot, _)) => {
+				matches!(right.drop_meta(), Node::List(_, Bracket::Square, _))
+			}
 			Node::Key(left, op, _) if *op == Op::Assign || op.is_compound_assign() => {
 				matches!(left.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).map(|local| local.kind)
 					.or_else(|| self.ctx.user_globals.get(name).map(|(_, kind)| *kind)).is_some_and(|kind| kind.is_ref()))

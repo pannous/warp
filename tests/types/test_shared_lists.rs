@@ -72,3 +72,12 @@ fn an_alias_sees_an_inserted_item() {
 	is!("xs = [\"a\"]; ys = xs; ys.insert(0, \"z\"); xs#1", "z");
 	is!("xs = [\"a\"]; ys = xs; ys.insert(-1, \"q\"); count(xs)", 2);
 }
+
+#[test]
+fn a_list_held_by_a_field_or_item_grows_in_place() {
+	is!("class Bag { items: list }; b = Bag([1]); xs = b.items; b.items.add(2); count(xs)", 2);
+	is!("class Holder{items:[int]}; p = Holder([3]); q = p.items; p.items.add(9); count(q)", 2);
+	is!("class Bag { items: list }; b = Bag([]); b.items.add(2); count(b.items)", 1);
+	is!("p = {xs: [1]}; ys = p.xs; p.xs.add(5); count(ys)", 2);
+	is!("m = [[1], [2]]; row = m#2; m#2.add(5); count(row)", 2);
+}

@@ -160,7 +160,7 @@ const TEMPORARY: &str = "word_tmp";
 
 /// Library words whose result is always a text, and those whose result is always a list
 const TEXT_RESULT_WORDS: [&str; 4] = ["upper", "lower", "trim", "join"];
-const LIST_RESULT_WORDS: [&str; 7] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES, MAP_WITHOUT];
+const LIST_RESULT_WORDS: [&str; 8] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES, MAP_WITHOUT, crate::wasm_emitter::list_ops::LIST_EXTEND];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	use crate::type_kinds::Kind;
