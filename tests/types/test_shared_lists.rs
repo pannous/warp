@@ -81,3 +81,12 @@ fn a_list_held_by_a_field_or_item_grows_in_place() {
 	is!("p = {xs: [1]}; ys = p.xs; p.xs.add(5); count(ys)", 2);
 	is!("m = [[1], [2]]; row = m#2; m#2.add(5); count(row)", 2);
 }
+
+#[test]
+fn a_typed_alias_of_a_field_or_item_is_no_snapshot() {
+	// card shared-lists-typed: the array copy of `ys = p.xs` stays only where no list is changed in place after it
+	is!("p = {xs: [1, 2]}; ys = p.xs; p.xs#1 = 7; ys#1", 7);
+	is!("m = [[1, 2], [3, 4]]; row = m#2; m#2#1 = 9; row#1", 9);
+	is!("m = [[1, 2], [3, 4]]; row = m#2; m#2.add(5); count(row)", 3);
+	is!("m = [[1, 2], [3, 4]]; s = 0; for i in 1 to 2 { row = m#i; for j in 1 to 2 { s += row#j } }; s", 10);
+}

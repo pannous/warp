@@ -108,3 +108,44 @@ pub fn changes_list(body: &Node, name: &str) -> bool {
 	});
 	found
 }
+
+/// The variables whose lists `body` changes in place (an item set, an append, a method that changes it, an argument to
+/// a function that changes it), each by the variable it is reached from: `grid#i#j = v` changes grid. A list reached
+/// otherwise (`f()#1 = v`), or a function that changes any list, is the unknown root ""
+pub(super) fn written_roots(body: &Node, functions: &BTreeMap<String, UserFunctionDef>) -> HashSet<String> {
+	let mut roots = HashSet::new();
+	body.visit(&mut |part| match part {
+		Node::Key(target, op, value) if matches!(op, Op::Assign | Op::Define) || is_update(op) => match target.drop_meta() {
+			Node::Key(list, Op::Hash, _) => { roots.insert(root(list)); }
+			Node::Symbol(name) if is_update(op) || changes_in_place(value) => { roots.insert(name.clone()); }
+			_ => {}
+		},
+		Node::Key(list, Op::Dot, call) if matches!(call.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if is_list_mutating_method(method))) => {
+			roots.insert(root(list));
+		}
+		Node::List(items, Bracket::Round, Separator::None) => {
+			let Some(function) = items.first().and_then(|callee| functions.get(&callee.drop_meta().name())) else { return };
+			for (index, argument) in items.iter().enumerate().skip(1) {
+				if changes_parameter(function, index - 1) {
+					roots.insert(root(argument));
+				}
+			}
+			// a list it reaches otherwise (a global, a field of an argument)
+			let own = written_roots(&function.body, &BTreeMap::new());
+			if own.iter().any(|written| !function.params.iter().any(|param| param.name == *written)) {
+				roots.insert(String::new());
+			}
+		}
+		_ => {}
+	});
+	roots
+}
+
+/// The variable a place is reached from: `grid` of `grid#i#j`, `p` of `p.xs`; "" for any other
+fn root(place: &Node) -> String {
+	match place.drop_meta() {
+		Node::Symbol(name) => name.clone(),
+		Node::Key(base, Op::Hash | Op::Dot, _) => root(base),
+		_ => String::new(),
+	}
+}

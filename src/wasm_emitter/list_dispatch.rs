@@ -380,10 +380,15 @@ impl WasmGcEmitter {
 		let mut assigned_kinds: HashMap<String, Vec<Kind>> = HashMap::new();
 		// `xs = float[n]`: declared floats, so any number written into it is stored as one
 		let mut declared_floats: HashSet<String> = HashSet::new();
+		// `row = grid#i`, `ys = p.xs`: a typed list read from a field or item, an array copy of a list others hold
+		let mut place_sourced: HashSet<String> = HashSet::new();
 		program.visit(&mut |part| {
 			let Node::Key(target, op, value) = part else { return };
 			match target.drop_meta() {
 				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => {
+					if matches!(value.drop_meta(), Node::Key(_, Op::Hash | Op::Dot, _)) {
+						place_sourced.insert(name.clone());
+					}
 					if zero_fill_parts(value).is_some_and(|(_, zero)| self.items_element(std::slice::from_ref(zero)) == Some(ElementType::Float)) {
 						declared_floats.insert(name.clone());
 					}
@@ -430,8 +435,17 @@ impl WasmGcEmitter {
 		let groups = alias_groups(&sources);
 		let group_updated = |name: &String| groups.get(name).is_some_and(|group| group.iter().any(|member| updated.contains(member)));
 		let held = super::list_sharing::held_elsewhere(program, &self.ctx.user_functions);
+		let written = super::list_sharing::written_roots(program, &self.ctx.user_functions);
 		loop {
 			let typed = self.typed_list_elements(&sources, &excluded, &declared_floats, &assigned_kinds);
+			// such a copy is no snapshot only while no list but the typed arrays is changed in place (shared-lists-typed):
+			// `ys = p.xs; p.xs#1 = 7` shares the list instead
+			let writes_shared_lists = written.iter().any(|root| !typed.contains_key(root));
+			let snapshots: Vec<String> = typed.keys().filter(|name| writes_shared_lists && place_sourced.contains(*name)).cloned().collect();
+			if !snapshots.is_empty() {
+				excluded.extend(snapshots);
+				continue;
+			}
 			// a changing list is no typed array where a holder keeps it as Nodes: an untyped variable or one of another
 			// element type holding the same list, a field or a call's argument it came from or goes to
 			let element_of = |name: &String| typed.get(name).copied().flatten().or_else(|| self.typed_globals.get(name).map(|(_, list)| list.element));
