@@ -1428,6 +1428,8 @@ PASSED:
   ✓ modules::test_std_map::use_map_inverts_picks_and_builds_from_pairs
   ✓ modules::test_std_map::use_map_lists_its_entries
   ✓ modules::test_std_map::use_map_omits_and_filters_values
+  ✓ modules::test_std_math_text::a_module_function_maps_in_a_comprehension
+  ✓ modules::test_std_math_text::a_program_variable_leaves_the_module_its_words
   ✓ modules::test_std_math_text::a_standard_module_gives_no_hints
   ✓ modules::test_std_math_text::comprehensions_in_module_and_program_ask_nothing
   ✓ modules::test_std_math_text::use_math_brings_descriptive_names_and_cmath_the_c_library
@@ -3411,4 +3413,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3406 passed, 0 failed, 3406 total tested
+19 ignored, 3408 passed, 0 failed, 3408 total tested
