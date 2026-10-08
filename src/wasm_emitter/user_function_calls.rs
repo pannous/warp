@@ -270,7 +270,7 @@ impl WasmGcEmitter {
 			locals.push((temp_locals, ValType::I64));
 		}
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
-		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
+		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, &user_fn.body, num_params as usize);
 

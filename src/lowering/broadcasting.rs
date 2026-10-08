@@ -440,10 +440,11 @@ impl Broadcast {
 				if let Some(reduced) = self.dot(&items, &bracket).or_else(|| self.fused_sum(&items, &bracket)) {
 					return reduced;
 				}
-				// `map square [1 2 3]`: the iteration word applies square itself (lambdas.rs), no broadcast inside it
+				// `map square [1 2 3]`: the iteration word applies square itself (lambdas.rs), no broadcast inside it; a
+				// parenthesized argument is a value of its own, `(square xs) |> filter(…)` is `filter (square xs) …`
 				let iterates = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::function_values::ITERATION_WORDS.contains(&word.as_str()));
 				let items: Vec<Node> = items.into_iter().map(|item| match item.drop_meta() {
-					Node::List(inner, inner_bracket, inner_separator) if iterates => {
+					Node::List(inner, inner_bracket, inner_separator) if iterates && *inner_bracket != Bracket::Round => {
 						Node::List(inner.iter().cloned().map(|part| self.rewrite(part)).collect(), inner_bracket.clone(), inner_separator.clone())
 					}
 					_ => self.rewrite(item),

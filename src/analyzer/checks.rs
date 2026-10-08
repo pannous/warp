@@ -344,6 +344,15 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				_ => MAP_TYPE.to_string(),
 			}
 		}
+		// `xs + ys` of two lists: items of their common type, of any type (held as Nodes) when they differ
+		Node::Key(left, Op::Add, right) if [left, right].iter().all(|list| infer_type(list, scope) == Kind::List) => {
+			let elements = [left, right].map(|list| list_type_name(list, scope));
+			let words: Option<Vec<String>> = elements.iter().map(|list| list.strip_prefix(LIST_OF_PREFIX).map(str::to_string)).collect();
+			match words {
+				Some(words) => common_type_word(&words).map_or(NODE_LIST_TYPE.to_string(), |word| format!("{LIST_OF_PREFIX}{word}")),
+				None => PLAIN.to_string(),
+			}
+		}
 		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`; an element of a `list of list of int`
 		// a `list of int`; an element of a `list of list` (`[("a", 2)]`, tuples of mixed items) holds its items as Nodes
 		Node::Key(map, Op::Hash, _) => {
@@ -519,10 +528,6 @@ pub(super) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 /// `sqrt(x) := …`, `def abs(x): …`: a prefix operator word reads as the operator, so the definition could never be
 /// called (P141); it arrives as `(√ ø x) := …`. Checked on the source, before a pass reads the operator
 pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
-	let operator_word = |head: &Node| match head.drop_meta() {
-		Node::Key(empty, op @ (Op::Sqrt | Op::Cbrt | Op::Abs | Op::Not), _) if empty.is_nothing() => Some(*op),
-		_ => None,
-	};
 	let mut clash = None;
 	program.visit(&mut |node| {
 		if clash.is_some() {
@@ -532,15 +537,31 @@ pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
 			Node::Key(head, Op::Define | Op::Assign, _) => operator_word(head),
 			Node::List(items, _, _) => match (items.first(), items.get(1).map(Node::drop_meta)) {
 				(Some(def), Some(Node::Key(head, Op::Colon, _))) if crate::operators::is_function_keyword(&crate::declarations::word(def)) => operator_word(head),
+				(Some(def), Some(head)) if crate::operators::is_function_keyword(&crate::declarations::word(def)) => operator_word(head),
 				_ => None,
 			},
 			_ => None,
 		};
-		clash = defined.map(|op| (node.clone(), op));
+		clash = defined.map(|(word, op)| (node.clone(), word, op));
 	});
-	let (definition, op) = clash?;
-	let word = OPERATOR_WORDS.iter().find(|(known, _)| *known == op).map_or("this word", |(_, word)| *word);
+	let (definition, word, op) = clash?;
 	Some(Diagnostic::at(&definition, format!("{word} is an operator ({op}); rename your function")))
+}
+
+/// The operator word a definition's head names: `norm(x)` keeps its name (the parser's defines_named), also as the
+/// first part of `fun norm(x) { … }`; `not(x)` arrives as the operator
+fn operator_word(head: &Node) -> Option<(String, Op)> {
+	match head.drop_meta() {
+		Node::Key(empty, op @ (Op::Sqrt | Op::Cbrt | Op::Abs | Op::Not), _) if empty.is_nothing() => {
+			OPERATOR_WORDS.iter().find(|(known, _)| known == op).map(|(_, word)| (word.to_string(), *op))
+		}
+		Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
+			Some(Node::Symbol(name)) => crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(word, _)| word == name).map(|(word, op)| (word.to_string(), *op)),
+			Some(call @ Node::List(..)) => operator_word(call),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// The words the parser reads as prefix operators (warp_parser lookahead.rs peek_prefix_operator)
@@ -1354,6 +1375,7 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 			list_items_mismatch(node, name, type_name, element, &appended)
 		}
 		Node::Key(left, _, right) => check_declared_types(left, declared).or_else(|| check_declared_types(right, declared)),
+		_ if crate::tuples::destructuring(node).is_some() => destructured_mismatch(node, declared),
 		Node::List(items, bracket, separator) => {
 			// `names: list of text = […]` still arrives as the items `names:list`, `of`, `text=[…]`
 			if let Some(declaration) = of_type_declaration(items, bracket, separator) {
@@ -1364,6 +1386,22 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 		}
 		_ => None,
 	}
+}
+
+/// `a, b = 2.5, 6` and `a, b = [2.5, 6]`: each value written for a declared name must fit its type, as in `a = 2.5`
+fn destructured_mismatch(node: &Node, declared: &HashMap<String, String>) -> Option<Diagnostic> {
+	let (names, values) = crate::tuples::destructuring(node)?;
+	let values = match values {
+		[one] => match strip_round(one) {
+			Node::List(items, Bracket::Square | Bracket::Round, _) => items.as_slice(),
+			_ => return None,
+		},
+		many => many,
+	};
+	if values.len() != names.len() {
+		return None;
+	}
+	names.iter().zip(values).find_map(|(name, value)| assignment_mismatch(node, name, declared.get(name)?, value))
 }
 
 /// Does a value of kind `actual` fit the builtin type `type_name` (W0 subtyping, notes/type_theory.md)? An int fits a

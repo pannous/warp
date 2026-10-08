@@ -5,7 +5,7 @@
 //! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary, and the parts of
 //! host.js its module imports words of (HOST_PARTS, card web-bundle).
 
-use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
+use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
 use crate::node::Node;
 use std::path::{Path, PathBuf};
 
@@ -63,7 +63,7 @@ pub const HOST_PARTS: [HostPart; 7] = [
 	},
 	HostPart { script: ("host-compiler.js", include_str!("../web/playground/host-compiler.js")), gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK, needs: &["host-files.js"] },
 	HostPart { script: ("host-routes.js", concat!(include_str!("../web/playground/imports.js"), include_str!("../web/playground/host-routes.js"))), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
-	HostPart { script: ("host-gpu.js", include_str!("../web/playground/host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && [GPU_COMPUTE, GPU_COMPUTE_LINEAR].contains(&name), needs: &["host-tasks.js"] },
+	HostPart { script: ("host-gpu.js", include_str!("../web/playground/host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && [GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_RENDER].contains(&name), needs: &["host-tasks.js"] },
 ];
 /// The parts the page keeps when the program runs in a Worker: host-routes.js follows links and the back button and
 /// moves the focus, which only the page can (site-thread.js)

@@ -5,7 +5,7 @@ use super::*;
 
 pub const BOOL_TYPE: &str = "bool";
 /// Calls whose value is a bool
-const BOOL_CALLS: [&str; 4] = [crate::type_tests::IS_TYPE, crate::traits::INSTANCE_OF, crate::wasm_emitter::text_builtins::IS_ERROR, crate::library_words::VALUES_SIMILAR];
+const BOOL_CALLS: [&str; 5] = [crate::type_tests::IS_TYPE, crate::traits::INSTANCE_OF, crate::wasm_emitter::text_builtins::IS_ERROR, crate::library_words::VALUES_SIMILAR, crate::library_words::VALUES_ROUGH];
 
 thread_local! {
 	/// The user functions of the program being emitted whose result is a bool (note_bool_functions)

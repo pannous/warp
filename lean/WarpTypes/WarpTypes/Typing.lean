@@ -41,7 +41,9 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- any condition (truthiness); inference.rs branches_kind -/
   | ite {Γ c a b tc ta tb} : HasType P Γ c tc → HasType P Γ a ta → HasType P Γ b tb →
       HasType P Γ (.ite c a b) (join ta tb)
-  | loop {Γ c b tc tb} : HasType P Γ c tc → HasType P Γ b tb → HasType P Γ (.loop c b) .unit
+  /-- P55: the last body value, or ø when the body never ran (a program's `last` is ø) -/
+  | loop {Γ c b d tc tb td} : HasType P Γ c tc → HasType P Γ b tb → HasType P Γ d td →
+      HasType P Γ (.loop c b d) (join tb (join td .unit))
   | seq {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.seq a b) tb
   /-- inference.rs element_kind -/
   | index {Γ l i tl ti} : HasType P Γ l tl → HasType P Γ i ti → HasType P Γ (.index l i) (elementTy tl)
@@ -88,9 +90,10 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | scope {Γ k e te} : HasType P Γ e te → HasType P Γ (.scope k e) te
   /-- `break v` does not return: the bottom type; v goes to a block of ev -/
   | abort {Γ ev k e te} : HasType P Γ e te → sub te (P.aborts ev) = true → HasType P Γ (.abort ev k e) .never
-  /-- the loop variable holds the list's items (anything when the list's type is not known: a non-list fails when it
-  runs) -/
-  | forIn {Γ y l b tl tb} : HasType P Γ l tl → HasType P (Γ.set y (listElem tl)) b tb → HasType P Γ (.forIn y l b) .unit
+  /-- the loop variable holds the list's items or the text's one-character texts (anything when the type is not
+  known: a value of another type fails when it runs) -/
+  | forIn {Γ y l b d tl T tb td} : HasType P Γ l tl → sub (elementTy tl) T = true → HasType P (Γ.set y T) b tb →
+      HasType P Γ d td → HasType P Γ (.forIn y l b d) (join tb (join td .unit))
 
 /-- a handler of ev, closed but for the payload, gives at most ev's result type -/
 def HandlerOk (P : Program) (ev : String) (h : Expr) : Prop :=

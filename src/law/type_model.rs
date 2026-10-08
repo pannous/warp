@@ -58,6 +58,11 @@ const EVENT_CLASS_SUFFIX: &str = "·event";
 /// Maps `{a:1}` (P200b: they share, like instances) are instances of one class `map` whose fields are every key the
 /// program writes, in a literal or with `m.key = v`; reading a key never written is W0's run-time "unset field"
 const MAP_CLASS: &str = "map";
+/// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (x's first position from 1, else 0) walk the list
+/// with a `·tally` instance: its int fields hold the count or position and the current index
+const COUNT_WORD: &str = "count";
+const TALLY_CLASS: &str = "·tally";
+const TALLY_INDEX: &str = "·index";
 
 /// W0's answer for one program
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -273,7 +278,6 @@ fn function_definition(statement: &Node) -> Option<(&str, Vec<&Node>, &Node)> {
 	}
 }
 
-/// `a, b = xs` parses as the list `a, (b = xs)`: the names and the value
 /// `a, b = xs` and `a, b = 1, 2`: the names and the values after `=` (one: a list to take apart)
 fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
 	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
@@ -338,14 +342,14 @@ fn cell_class(function: &str, local: &str) -> String {
 	format!("{function}·{local}")
 }
 
-/// The names a function body assigns (`n = 0`, `n += 1`), in order of first assignment, but for its parameters and
-/// the given globals: its locals (functions2)
-fn assigned_locals(body: &Node, parameters: &[String], globals: &[String]) -> Vec<String> {
+/// The names a function body assigns (`n = 0`, `n += 1`, a parameter too), in order of first assignment, but for the
+/// given globals: its locals (functions2)
+fn assigned_locals(body: &Node, globals: &[String]) -> Vec<String> {
 	let mut locals: Vec<String> = vec![];
 	body.visit(&mut |part| {
 		if let Node::Key(target, op, _) = part {
 			match target.drop_meta() {
-				Node::Symbol(name) if (*op == Op::Assign || op.is_compound_assign()) && !parameters.contains(name) && !globals.contains(name) && !locals.contains(name) => locals.push(name.clone()),
+				Node::Symbol(name) if (*op == Op::Assign || op.is_compound_assign()) && !globals.contains(name) && !locals.contains(name) => locals.push(name.clone()),
 				_ => {}
 			}
 		}
@@ -509,13 +513,30 @@ impl Exporter {
 		path.iter().flat_map(|ancestor| self.classes[ancestor].1.iter().map(|(field, _)| field.clone())).collect()
 	}
 
-	/// `C(a, b)`: a new instance with its fields written in order, `let o = new C; o.f1 = a; …; o`
+	/// `C(a, b)`: a new instance with its fields written in order, `let o = new C; o.f1 = a; …; o`. A named argument
+	/// `f(b=1, a=5)` goes to its field, the positional ones fill the others in order; warp evaluates them all in field
+	/// order, not as written
 	fn construction(&mut self, class: &str, arguments: &[Node]) -> Lean {
 		let fields = self.constructor_fields(class);
-		if fields.len() != arguments.len() {
+		let mut slots: Vec<Option<&Node>> = vec![None; fields.len()];
+		let mut positional = vec![];
+		for argument in arguments {
+			match argument.drop_meta() {
+				Node::Key(name, Op::Assign, value) => {
+					let slot = fields.iter().position(|field| *field == name.name()).ok_or_else(|| format!("{class} has no field {}", name.name()))?;
+					slots[slot] = Some(value.as_ref());
+				}
+				_ => positional.push(argument),
+			}
+		}
+		let mut positional = positional.into_iter();
+		for slot in slots.iter_mut().filter(|slot| slot.is_none()) {
+			*slot = positional.next();
+		}
+		if positional.next().is_some() || slots.contains(&None) {
 			return Err(format!("{class} takes {} fields, got {}", fields.len(), arguments.len()));
 		}
-		self.instance(class, fields.into_iter().zip(arguments).collect())
+		self.instance(class, fields.into_iter().zip(slots.into_iter().flatten()).collect())
 	}
 
 	/// a new instance of class with the given fields written, `let o = new C; o.f1 = a; …; o`
@@ -622,15 +643,21 @@ impl Exporter {
 			self.functions.insert(name.to_string(), parameter_type);
 		}
 		for statement in &program {
-			let Some((name, parameters, body)) = function_definition(statement) else { continue };
-			let parameters: Vec<String> = parameters.iter().map(|parameter| self.parameter_type(parameter).map(|(parameter, _)| parameter)).collect::<Result<_, String>>()?;
-			for local in assigned_locals(body, &parameters, &self.globals) {
+			let Some((name, _, body)) = function_definition(statement) else { continue };
+			for local in assigned_locals(body, &self.globals) {
 				let class = cell_class(name, &local);
 				self.classes.insert(class.clone(), (vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]));
 				cell_items.push(format!(".cell {}", quoted(&class)));
 			}
 		}
 		argument_classes.extend(event_classes);
+		let mut words_used = false;
+		program_node.visit(&mut |part| words_used |= is_word(part, COUNT_WORD) || is_word(part, IN_KEYWORD));
+		if words_used {
+			let fields = [CELL_FIELD, TALLY_INDEX].map(|field| (field.to_string(), Some("int".to_string())));
+			self.classes.insert(TALLY_CLASS.to_string(), (vec![TALLY_CLASS.to_string()], fields.to_vec()));
+			argument_classes.push(TALLY_CLASS.to_string());
+		}
 		if let Some(keys) = map_keys(program_node) {
 			self.classes.insert(MAP_CLASS.to_string(), (vec![MAP_CLASS.to_string()], keys.into_iter().map(|key| (key, None)).collect()));
 			argument_classes.push(MAP_CLASS.to_string());
@@ -707,7 +734,7 @@ impl Exporter {
 		let mut items = vec![
 			format!(".bind {} .var none ({}) false", quoted(&tuple), self.expression(list)?),
 			format!(".bind {} .var none (.int 0) false", quoted(&count)),
-			format!(".statement (.forIn \"·item\" (.glob {}) (.assign {} (.add (.glob {}) (.int 1))))", quoted(&tuple), quoted(&count), quoted(&count)),
+			format!(".statement (.forIn \"·item\" (.glob {}) (.assign {} (.add (.glob {}) (.int 1))) {UNIT_TYPE})", quoted(&tuple), quoted(&count), quoted(&count)),
 			format!(".statement (.ite (.eq false (.glob {}) (.int {})) .unit (.error \"wrong number of values\"))", quoted(&count), names.len()),
 		];
 		for (position, name) in names.iter().enumerate() {
@@ -805,8 +832,13 @@ impl Exporter {
 			[] => (UNIT_PARAMETER.to_string(), vec![], declared),
 			parameters => (arguments_class(name), parameters.iter().map(|parameter| parameter.drop_meta().name()).collect(), declared),
 		};
-		let parameters: Vec<String> = std::iter::once(parameter.clone()).chain(fields.iter().cloned()).collect();
-		let cells = assigned_locals(body, &parameters, &self.globals);
+		let cells = assigned_locals(body, &self.globals);
+		// an assigned parameter's cell starts with the argument (read before the cell's name hides it)
+		let first_values: Vec<String> = cells.iter().map(|cell| match () {
+			_ if *cell == parameter => format!(".loc {}", quoted(cell)),
+			_ if fields.contains(cell) => format!(".get (.loc {}) {}", quoted(&parameter), quoted(cell)),
+			_ => UNIT_TYPE.to_string(),
+		}).collect();
 		self.cell_lists = cells.iter().filter(|cell| first_value_is_list(body, cell)).cloned().collect();
 		self.cells = cells.clone();
 		self.locals.push(parameter.clone());
@@ -815,9 +847,13 @@ impl Exporter {
 		self.locals.pop();
 		self.argument_fields.clear();
 		self.cells.clear();
-		let body = cells.iter().rev().fold(body?, |body, cell| {
+		let body = cells.iter().zip(&first_values).rev().fold(body?, |body, (cell, first_value)| {
 			let path = lean_strings(&[cell_class(name, cell)]);
-			format!(".letIn {} (.cls {path}) (.new {path}) ({body})", quoted(cell))
+			let new_cell = match first_value.as_str() {
+				UNIT_TYPE => format!(".new {path}"),
+				_ => format!(".letIn \"·new\" (.cls {path}) (.new {path}) (.seq (.set (.loc \"·new\") {} ({first_value})) (.loc \"·new\"))", quoted(CELL_FIELD)),
+			};
+			format!(".letIn {} (.cls {path}) ({new_cell}) ({body})", quoted(cell))
 		});
 		Ok(format!(".function {} {} {parameter_type} ({body})", quoted(name), quoted(&parameter)))
 	}
@@ -863,7 +899,7 @@ impl Exporter {
 		self.locals.push(variable.clone());
 		let body = self.breaking_in(None, |exporter| exporter.block(body));
 		self.locals.pop();
-		Ok(format!(".forIn {} ({list}) ({})", quoted(&variable), body?))
+		Ok(format!(".forIn {} ({list}) ({}) {UNIT_TYPE}", quoted(&variable), body?))
 	}
 
 	/// `x => body`: x is a local of the body; a lambda of no or several parameters is not in W0
@@ -900,6 +936,30 @@ impl Exporter {
 
 	fn cell_value(&self, cell: &str) -> String {
 		format!(".get (.loc {}) {}", quoted(cell), quoted(CELL_FIELD))
+	}
+
+	/// `count list`, `count item in list`, and with `position` `item in list`: a walk of the list with a fresh `·tally`
+	fn tally(&mut self, list: &Node, item: Option<&Node>, position: bool) -> Lean {
+		let (tally, path) = (".loc \"·t\"", lean_strings(&[TALLY_CLASS.to_string()]));
+		let field = |name: &str| format!(".get ({tally}) {}", quoted(name));
+		let write = |name: &str, value: String| format!(".set ({tally}) {} ({value})", quoted(name));
+		let increment = |name: &str| write(name, format!(".add ({}) (.int 1)", field(name)));
+		let matches = |then: String| format!(".ite (.eq false (.loc \"·item\") (.loc \"·x\")) ({then}) .unit");
+		let step = match (item, position) {
+			(None, _) => increment(CELL_FIELD),
+			(Some(_), false) => matches(increment(CELL_FIELD)),
+			(Some(_), true) => {
+				let first = format!(".ite (.eq false ({}) (.int 0)) ({}) .unit", field(CELL_FIELD), write(CELL_FIELD, field(TALLY_INDEX)));
+				format!(".seq ({}) ({})", increment(TALLY_INDEX), matches(first))
+			}
+		};
+		let walk = format!(".forIn \"·item\" ({}) ({step}) {UNIT_TYPE}", self.expression(list)?);
+		let start = format!(".seq ({}) ({})", write(CELL_FIELD, ".int 0".to_string()), write(TALLY_INDEX, ".int 0".to_string()));
+		let counted = format!(".letIn \"·t\" (.cls {path}) (.new {path}) (.seq ({start}) (.seq ({walk}) ({})))", field(CELL_FIELD));
+		match item {
+			Some(item) => Ok(format!(".letIn \"·x\" .any ({}) ({counted})", self.expression(item)?)),
+			None => Ok(counted),
+		}
 	}
 
 	fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
@@ -947,12 +1007,17 @@ impl Exporter {
 			Node::List(items, _, _) => match items.as_slice() {
 				[marker, body, handler] if is_word(marker, TRY_MARKER) => self.binary(".tryCatch", body, handler),
 				[for_word, variable, in_word, list, body] if is_word(for_word, FOR_KEYWORD) && is_word(in_word, IN_KEYWORD) => self.for_loop(variable, list, body),
+				// `count 2 in xs` parses as `count (2 in xs)`
+				[count, list] if is_word(count, COUNT_WORD) && !self.functions.contains_key(COUNT_WORD) => match list.drop_meta() {
+					Node::List(words, Bracket::None, _) if words.len() == 3 && is_word(&words[1], IN_KEYWORD) => self.tally(&words[2], Some(&words[0]), false),
+					_ => self.tally(list, None, false),
+				},
+				[item, in_word, list] if is_word(in_word, IN_KEYWORD) => self.tally(list, Some(item), true),
 				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
 					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
 					_ => unsupported(node),
 				},
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
-				[_, arguments @ ..] if arguments.iter().any(|argument| matches!(argument.drop_meta(), Node::Key(_, Op::Assign, _))) => Err(format!("not in W0: named arguments in {}", node.serialize().trim())),
 				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
 				[call, argument] if self.classes.contains_key(&arguments_class(&call.name())) && matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) => {
 					let Node::Key(first, _, second) = argument.drop_meta() else { unreachable!("a `to` pair") };
@@ -980,6 +1045,14 @@ impl Exporter {
 					Ok(format!(".call {} ({argument})", quoted(&call.name())))
 				}
 				_ => unsupported(node),
+			},
+			// `i++` and `++i` are `i = i + 1`, both giving the new value
+			Node::Key(left, op @ (Op::Inc | Op::Dec), right) => match [left, right].into_iter().find(|side| matches!(side.drop_meta(), Node::Symbol(_))) {
+				Some(target) => {
+					let step = if *op == Op::Inc { Op::Add } else { Op::Sub };
+					self.assignment(&target.name(), &Node::Key(target.clone(), step, Box::new(Node::Number(Number::Int(1)))))
+				}
+				None => unsupported(node),
 			},
 			// `s += 2` is `s = s + 2`
 			Node::Key(target, op, value) if op.is_compound_assign() => match target.drop_meta() {
@@ -1023,7 +1096,7 @@ impl Exporter {
 				_ => unsupported(node),
 			},
 			Node::Key(condition, Op::Do, body) => match condition.drop_meta() {
-				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self.breaking_in(None, |exporter| exporter.binary(".loop", condition, body)),
+				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self.breaking_in(None, |exporter| exporter.binary(".loop", condition, body).map(|lean| format!("{lean} {UNIT_TYPE}"))),
 				_ => unsupported(node),
 			},
 			Node::Key(left, Op::Add, right) if is_list_literal(left) || is_list_literal(right) => self.binary(".append", left, right),

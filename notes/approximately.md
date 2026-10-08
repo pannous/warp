@@ -1,6 +1,6 @@
 # ≈ approximately (cards approximately, approximately-all; D8)
 
-`a ≈ b` (also `~`, `~~`, `⋍`, `circa`, `approximately`) holds for any two values:
+`a ≈ b` (also `⋍`, `circa`, `approximately`) holds for any two values:
 
 | operands | alike when |
 |---|---|
@@ -19,7 +19,11 @@
 - text_fold is text_lower's emitter with CaseMapping::Fold: a letter whose canonical decomposition adds only combining
   marks maps to its base letter's lower case. Hangul syllables stay themselves. No full case folding: `ß` stays `ß`.
 
-## Open (card g_YHSM, Interviewer)
-- `~` vs `≈` as two levels (e.g. `≈` as above, `~` looser: 1% and trimmed whitespace?), each falling back to the
-  other when a type defines only one. Today both are the same operator.
-- A class's own `approximately(other)` method overriding the field-by-field default (with operator methods).
+## `~` looser than `≈` (card g_YHSM, P211, P212)
+- `a ~ b` (also `~~`) is Op::Rough: the same rules with `rough_tolerance` (default 0.01), and texts are trimmed of
+  whitespace, control characters and ASCII punctuation at both ends before folding (text_rough_trim):
+  `"Hello!" ~ "hello"`. Lists, objects and instances compare entry by entry with `~` again.
+- library_words.rs SIMILARITY_LEVELS: operator, call (values_similar, values_rough), tolerance variable, default;
+  similarity.rs emits both runtime functions from one body (`rough` adds text_of + text_rough_trim before text_fold).
+- A class method `approximately(o)` is `≈`, `similar(o)` is `~` (class_methods.rs OPERATOR_METHODS); a class defining
+  only one has it serve both operators (INTERCHANGEABLE_OPERATORS); with neither, the field-by-field rule.
