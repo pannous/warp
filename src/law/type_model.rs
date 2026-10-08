@@ -43,6 +43,8 @@ const EMPTY_TYPE: &str = ".list .never";
 const ON_KEYWORD: &str = "on";
 const IN_KEYWORD: &str = "in";
 const EMIT_KEYWORD: &str = "emit";
+/// `global n = 0` at main level, `global n` in a function: a main-level name functions may assign
+const GLOBAL_KEYWORD: &str = "global";
 /// `break v` in a block handler ends its block with v (aborting handlers)
 const BREAK_KEYWORD: &str = "break";
 /// the handler's local holding the payload, `event.level`
@@ -162,6 +164,22 @@ fn effect(node: &Node) -> Option<Effect<'_>> {
 	Some(Effect::Emit { event: event_name(rest)?, payload: vec![] })
 }
 
+/// `global n` or `global n = 0` (parsed `global: n`, `global: (n = 0)`): the name and the value
+fn global_declaration(node: &Node) -> Option<(&str, Option<&Node>)> {
+	let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() else { return None };
+	if !is_word(keyword, GLOBAL_KEYWORD) {
+		return None;
+	}
+	match declared.drop_meta() {
+		Node::Symbol(name) => Some((name, None)),
+		Node::Key(name, Op::Assign, value) => match name.drop_meta() {
+			Node::Symbol(name) => Some((name, Some(&**value))),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 fn event_class(event: &str) -> String {
 	format!("{event}{EVENT_CLASS_SUFFIX}")
 }
@@ -263,6 +281,10 @@ struct Exporter {
 	/// the event whose block a `break` ends: the innermost block handler's; none in a loop (the loop's break) or a
 	/// program-wide handler
 	breaking: Vec<Option<String>>,
+	/// the names declared `global` anywhere in the program
+	globals: Vec<String>,
+	/// exporting a function body: there a name assigned without `global` is a new local (functions2)
+	in_function: bool,
 }
 
 /// A class's ancestor chain and its own fields as (name, type word)
@@ -430,6 +452,9 @@ impl Exporter {
 
 	fn items(&mut self, program: &Node) -> Result<Vec<String>, String> {
 		self.collect_classes(program);
+		program.visit(&mut |part| if let Some((name, _)) = global_declaration(part) {
+			self.globals.push(name.to_string());
+		});
 		let event_classes = self.collect_event_classes(program);
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
 		let mut argument_classes = Vec::new();
@@ -462,6 +487,12 @@ impl Exporter {
 	fn item(&mut self, statement: &Node) -> Lean {
 		if let Some(Effect::On { event, handler, body: None }) = effect(statement) {
 			return Ok(format!(".on {} ({})", quoted(&event), self.handler(handler, None)?));
+		}
+		match global_declaration(statement) {
+			Some((name, Some(value))) => return self.binding(&Node::Symbol(name.to_string()), ".var", value),
+			// `global x; x = 7`: the later first binding is the global one
+			Some((_, None)) => return Ok(format!(".statement {UNIT_TYPE}")),
+			None => {}
 		}
 		match statement.drop_meta() {
 			Node::Type { name, .. } => self.class_definition(&name.drop_meta().name()),
@@ -505,7 +536,7 @@ impl Exporter {
 		let value = self.stored_value(annotation.as_deref(), value)?;
 		self.names.insert(name.clone(), annotation.clone());
 		let annotation = annotation.map_or("none".to_string(), |lean| format!("(some ({lean}))"));
-		Ok(format!(".bind {} {mode} {annotation} ({value}) false", quoted(&name)))
+		Ok(format!(".bind {} {mode} {annotation} ({value}) {}", quoted(&name), self.globals.contains(&name)))
 	}
 
 	/// A call's result stored in a declared list is checked item by item at run time (list-element-types): a cast
@@ -544,7 +575,9 @@ impl Exporter {
 		};
 		self.locals.push(parameter.clone());
 		self.argument_fields = fields;
+		self.in_function = true;
 		let body = self.block(body);
+		self.in_function = false;
 		self.locals.pop();
 		self.argument_fields.clear();
 		Ok(format!(".function {} {} {parameter_type} ({})", quoted(name), quoted(&parameter), body?))
@@ -573,6 +606,9 @@ impl Exporter {
 		};
 		if !self.names.contains_key(name) {
 			return Err(format!("not in W0: a first binding of {name} inside an expression"));
+		}
+		if self.in_function && !self.globals.iter().any(|global| global == name) {
+			return Err(format!("not in W0: {name} assigned in a function without `global {name}` (a local there)"));
 		}
 		Ok(format!(".assign {} ({value})", quoted(name)))
 	}
@@ -611,6 +647,8 @@ impl Exporter {
 			}
 			_ if effect(node).is_some() => self.effect(effect(node).expect("an effect")),
 			Node::Symbol(word) if word == BREAK_KEYWORD => self.abort(None),
+			// `global y` in a function only declares: the name is main-level and assignable there
+			_ if global_declaration(node).is_some_and(|(name, value)| value.is_none() && self.names.contains_key(name)) => Ok(UNIT_TYPE.to_string()),
 			Node::List(items, _, _) if items.len() == 2 && is_word(&items[0], BREAK_KEYWORD) => self.abort(Some(&items[1])),
 			Node::List(items, _, _) if items.first().is_some_and(|class| self.classes.contains_key(&class.name())) => self.construction(&items[0].name(), &items[1..]),
 			Node::List(items, _, _) => match items.as_slice() {

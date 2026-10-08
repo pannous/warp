@@ -560,13 +560,16 @@ def Guesses.add (g : Guesses) (classes : List (String × List (String × Option 
   | .handler ev t => { g with effects := joinAt g.effects ev t }
   | .abort ev t => { g with aborts := joinAt g.aborts ev t }
 
-def elaborateTyped (items : List Item) (effects aborts : List (String × Ty)) : Spec :=
+/-- one elaboration pass; functions are inferred seeing the main-level names `known` from the pass before (a function
+may read a main-level name declared after it: warp hoists functions) -/
+def elaboratePass (items : List Item) (effects aborts : List (String × Ty)) (known : List Decl) : Spec :=
   let functions := items.filterMap fun | .function f y t b => some (f, y, t.getD .any, b) | _ => none
   let rest := items.filter fun | .function .. | .classDef .. => false | _ => true
   let classes := items.filterMap fun | .classDef c fields => some (c, fields.map fun (f, t) => (f, t.getD .any)) | _ => none
-  let withFunctions := functions.foldl (init := ({ decls := [], funs := [], main := .unit, classes, effects, aborts } : Spec))
+  let withFunctions := functions.foldl (init := ({ decls := known, funs := [], main := .unit, classes, effects, aborts } : Spec))
     fun s (f, y, t, b) =>
       { s with funs := s.funs ++ [(f, inferFunction s f y t b RESULT_ROUNDS .never)] }
+  let withFunctions := { withFunctions with decls := [] }
   let step (s : Spec) (statements : List Expr) : Item → Spec × List Expr
     | .bind x m annotation value g =>
       let value := resolveCalls s.program Ctx.empty value
@@ -588,6 +591,9 @@ def elaborateTyped (items : List Item) (effects aborts : List (String × Ty)) : 
     main := lax Ctx.empty s.main
     funs := s.funs.map fun (f, fn) => (f, { fn with body := lax (Ctx.empty.set fn.param fn.paramTy) fn.body })
     handlers := s.handlers.map fun (ev, h) => (ev, lax (Ctx.empty.set eventLocal .any) h) }
+
+def elaborateTyped (items : List Item) (effects aborts : List (String × Ty)) : Spec :=
+  elaboratePass items effects aborts (elaboratePass items effects aborts []).decls
 
 /-- one round of inference: elaborate with the guesses so far, then join in the values the program gives -/
 def Guesses.refine (items : List Item) (g : Guesses) : Guesses :=

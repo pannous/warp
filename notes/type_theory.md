@@ -233,8 +233,18 @@ W0 now has `arith op a b`, which takes numbers only.
   name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
   anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
   The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
-  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). Most of the rest:
+  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121. Most of the rest:
   imports (`use`), `for` loops, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
+
+## Globals
+
+`global n = 0` binds a main-level name functions may assign (`Decl.isGlobal`; `ProgramOk` demands a function body
+assigns only globals); `global y` inside a function, or bare at main level before `y = …`, only declares. The
+exporter collects every name declared `global` anywhere first. In warp a function's assignment to a name without
+`global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0); W0 has no function locals, so the exporter
+refuses it. Elaboration runs twice so a function can read a main-level name whatever their order
+(`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet: `global float y = …`
+(the type word is lost in parsing), `global x; x` (read before any value).
 
 ## Inline unions and optionals
 
