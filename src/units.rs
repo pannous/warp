@@ -214,6 +214,9 @@ pub fn describe(data: &DataValue) -> Option<String> {
 	if let Some(tolerance) = data.downcast_ref::<Tolerance>() {
 		return Some(tolerance.to_string());
 	}
+	if let Some(uncertain) = data.downcast_ref::<crate::uncertain::Uncertain>() {
+		return Some(uncertain.to_string());
+	}
 	if let Some(duration) = data.downcast_ref::<crate::time::Duration>() {
 		return Some(duration.to_string());
 	}
@@ -607,6 +610,9 @@ fn negate(value: Value) -> Evaluated {
 fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 	match (left, op, right) {
 		(left @ (Value::Tolerance(_) | Value::Range(_)), Op::Eq | Op::Ne, right @ (Value::Tolerance(_) | Value::Range(_))) => same_span(left, op, right),
+		// `(5 ± 1) * 2` without units: an uncertain value, propagated at run time (wasm_emitter/uncertain.rs)
+		(left, Op::Add | Op::Sub | Op::Mul | Op::Div, right) if [&left, &right].iter().all(|value| unitless_number(value))
+			&& [&left, &right].iter().any(|value| matches!(value, Value::Tolerance(_))) => Err(Stop::Unsupported),
 		(Value::Tolerance(_) | Value::Range(_), _, _) | (_, _, Value::Tolerance(_) | Value::Range(_)) => {
 			fail(format!("arithmetic on a value with tolerance or a range is not supported: {op}"))
 		}
@@ -780,6 +786,10 @@ fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 		_ => order.is_ge(),
 	};
 	Ok(Value::Number(holds as i64))
+}
+
+fn unitless_number(value: &Value) -> bool {
+	matches!(value, Value::Number(_) | Value::Tolerance(Tolerance { unit: None, .. }))
 }
 
 /// A range or a value with tolerance as the closed span it covers, and its unit: `1950 ± 50 AD` is 1900 to 2000 AD

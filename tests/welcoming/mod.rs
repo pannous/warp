@@ -23,6 +23,7 @@ mod test_welcoming_rangeblock;
 mod test_welcoming_slices;
 mod test_welcoming_sugar;
 mod test_let_const_changes;
+mod test_function_bindings; // card serve-var
 mod test_const_list_methods;
 mod test_c_style;
 mod test_item_list_cast_hint;
@@ -50,3 +51,5 @@ mod test_count_shadowed; // card count-shadowed
 mod test_discarded_pure_warning;
 mod test_slash_comment_needs_space;
 mod test_ternary_hint_got_it; // card hint-dismiss
+#[cfg(feature = "native")] // wasmtime's fuel: the browser runs without it, stopped by a timer (playground.js RUN_TIMEOUT_MS)
+mod test_fuel_default; // card fuel-default

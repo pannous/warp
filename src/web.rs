@@ -296,6 +296,10 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 		}
 		tag if tag == Kind::Function as i64 => value_node(), // a closure reads as the name of its function
 		tag if tag == Kind::TypeDef as i64 => Node::Type { name: Box::new(data_node()), body: Box::new(value_node()) },
+		tag if tag == Kind::Uncertain as i64 => {
+			let floats = data.get("floats").and_then(Value::as_array);
+			crate::uncertain::Uncertain::read_node(floats.map(|parts| parts.iter().filter_map(float_value).collect()))
+		}
 		tag => Node::Text(format!("Unknown Kind: {tag}")),
 	}
 }
@@ -323,7 +327,12 @@ fn list_node(first: Option<Node>, rest: Option<Node>, bracket: Bracket) -> Node 
 
 /// A Float payload: `{"float": number}`, or a text for what JSON has no number for (`"NaN"`, `"Infinity"`, `"-0"`)
 fn payload_float(payload: &Value) -> Option<f64> {
-	match payload.get("float")? {
+	float_value(payload.get("float")?)
+}
+
+/// A float as reader.js floatPayload sends it: a number, or text for NaN, the infinities and -0
+fn float_value(float: &Value) -> Option<f64> {
+	match float {
 		Value::String(text) => text.parse().ok(),
 		number => number.as_f64(),
 	}

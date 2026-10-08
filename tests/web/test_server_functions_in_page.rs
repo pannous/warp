@@ -20,3 +20,12 @@ fn a_page_build_warns_that_a_server_function_ships() {
 	let (_, module) = files.iter().find(|(name, _)| name == "app.wasm").expect("app.wasm");
 	assert!(module.windows("/rpc/user_count".len()).any(|window| window == b"/rpc/user_count"));
 }
+
+// `g := f(x)` of a server function is the page's asking form; the server build takes it as the value it renders, so
+// it hints nothing about := (card server-def-any)
+#[test]
+fn the_asking_form_of_a_server_call_hints_nothing() {
+	let program = "server def doubled(x:int) { x * 2 }\ng := doubled(3)\nserve 18476 { get \"/a\" { 1 } }\n\"g \" + g";
+	let lowered = warp::pipeline::lower(program).expect("lowers");
+	assert!(lowered.serialize().contains("g=(doubled 3)"), "{}", lowered.serialize());
+}

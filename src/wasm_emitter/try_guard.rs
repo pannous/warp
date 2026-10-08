@@ -74,8 +74,7 @@ impl WasmGcEmitter {
 	/// A new exception tag carrying one i32
 	fn declare_i32_tag(&mut self) -> u32 {
 		let tag = self.tags.len();
-		let tag_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(vec![ValType::I32], vec![]);
+		let tag_type = self.type_manager.function_type(vec![ValType::I32], vec![]);
 		self.tags.tag(TagType { kind: TagKind::Exception, func_type_idx: tag_type });
 		tag
 	}

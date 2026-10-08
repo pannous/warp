@@ -48,3 +48,4 @@ mod test_case_table;
 mod test_error_as_text;
 mod test_count_method;
 mod test_codepoint_bytes;
+mod test_repeat_typed; // card repeat-int

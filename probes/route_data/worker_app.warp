@@ -1,0 +1,9 @@
+// ssr-worker-replies probe: app.warp with a task, so the page's program runs in a Worker (site-worker.js); a direct
+// visit of /users/2 shows "User Bo" from the replies embedded in the HTML without asking the server again
+// Seed: as app.warp
+class User{name: text}
+users: [User] = database.users
+twice(x) := x * 2
+answer = await go twice(21)
+route "/" { div{ p{ "home " + answer } a{ href:"/users/1" "first" } } }
+route "/users/:id:int" { div{ h1{ "User " + users#id.name } a{ href:"/users/2" "second" } a{ href:"/" "home" } } }

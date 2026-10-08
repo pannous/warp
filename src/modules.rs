@@ -75,13 +75,21 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 /// module the program names (`use collections; s = Stack()`). class_methods, which turns a class's methods into
 /// functions and its method calls into theirs, runs before `resolve` loads a module's other definitions; the loader
 /// then leaves these modules' classes out (EARLY_CLASS_MODULES). A class the program declares itself wins.
-pub fn insert_module_classes(program: Node) -> Node {
+pub fn insert_module_classes(mut program: Node) -> Node {
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
 	let own_names: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) = (vec![], vec![], HashSet::new(), vec![]);
 	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
 	for used in statements(program.clone()).iter().filter_map(used_module).filter(|used| used.import == Import::Use) {
+		if let Some(module) = loader.find(&used.name).is_none().then(|| loader.find_with(&used.name, &crate::wasm_modules::MODULE_EXTENSIONS)).flatten() {
+			let module = module.to_string_lossy();
+			let classes = crate::wasm_modules::classes(&module);
+			let names: Vec<String> = classes.iter().filter_map(declared_name).collect();
+			program = crate::wasm_modules::with_bare_classes(program, &crate::wasm_modules::module_alias(&module), &names);
+			file_classes.extend(classes);
+			continue;
+		}
 		let (path, source, is_std) = match loader.find(&used.name) {
 			Some(path) => match crate::web::read_text(&path.to_string_lossy()) {
 				Some(source) => (path, source, false),

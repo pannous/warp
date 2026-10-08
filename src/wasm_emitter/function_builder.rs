@@ -4,6 +4,9 @@ use super::WasmGcEmitter;
 use wasm_encoder::*;
 use Instruction as I;
 
+/// The runtime functions a page's scripts call (web/playground: host.js buildValue, guarded_call, reader.js readNode)
+const PAGE_HOST_CALLS: [&str; 10] = ["new_empty", "new_int", "new_float", "new_codepoint", "new_text", "new_symbol", "new_key", "new_list", "get_kind", "error_of"];
+
 impl WasmGcEmitter {
 	/// Declares and emits the function `name`; `body` writes the instructions, the closing `end` is added here
 	pub(super) fn runtime_function(
@@ -14,8 +17,7 @@ impl WasmGcEmitter {
 		locals: Vec<ValType>,
 		body: impl FnOnce(&mut Self, &mut Function),
 	) -> u32 {
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(params, results);
+		let func_type = self.type_manager.function_type(params, results);
 		self.functions.function(func_type);
 		let mut func = Function::new(locals.into_iter().map(|t| (1, t)).collect::<Vec<_>>());
 		body(self, &mut func);
@@ -33,8 +35,17 @@ impl WasmGcEmitter {
 		locals: Vec<ValType>,
 		body: impl FnOnce(&mut Self, &mut Function),
 	) {
-		let index = self.runtime_function(name, params, results, locals, body);
-		self.exports.export(name, ExportKind::Func, index);
+		self.runtime_function(name, params, results, locals, body);
+		self.export_runtime_function(name);
+	}
+
+	/// Exports the emitted runtime function `name` for the host; a page's host (web/playground) calls only some, and
+	/// the others are left to tree shaking (web::test_bundle_budget)
+	pub(super) fn export_runtime_function(&mut self, name: &'static str) {
+		if !crate::pipeline::is_for_a_page() || PAGE_HOST_CALLS.contains(&name) {
+			let index = self.func_index(name);
+			self.exports.export(name, ExportKind::Func, index);
+		}
 	}
 
 	pub(super) fn emit_list(func: &mut Function, instructions: &[Instruction]) {

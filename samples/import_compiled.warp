@@ -1,0 +1,11 @@
+// A module warp compiled is imported like any WebAssembly module (notes/import_compiled.md). First compile it:
+//   warp compile --wasm probes/import_compiled/shapes.warp
+// then `warp samples/import_compiled.warp`. Texts, lists and instances cross between the two modules as values
+import "../probes/import_compiled/shapes.wasm"
+
+print(area(2, 3))                     // a function on numbers
+print(shapes.greet("Ann"))            // a text in and out, qualified by the module's name
+p = P(3, 4)                           // the module's class is the program's too
+print(p.sum())
+print(width(P(5, 6)))                 // an instance as an argument
+origin().y                            // and as a result

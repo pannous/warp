@@ -371,6 +371,7 @@ const CORPUS: &[&str] = &[
 	"x: text = \"ab\"*2; x",
 	"\"ab\"*2.5",
 	"\"ab\"*\"cd\"",
+	"x: int = \"5\"*3; x",
 	// `c ? a : b` is `if c then a else b`
 	"x = 3; x > 2 ? \"big\" : \"small\"",
 	"x = 1; x < 2 ? 5 : 6.5",
@@ -397,7 +398,7 @@ const CORPUS: &[&str] = &[
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("b: bool = no; b++; b", "bool-assign"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("x: int = \"5\"*3; x", "repeat-int")];
+const KNOWN_HOLES: &[(&str, &str)] = &[("b: bool = no; b++; b", "bool-assign"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
