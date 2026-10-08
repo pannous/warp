@@ -41,8 +41,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   returns its own class (checked when annotated); a copy keeps the real class (no slicing).
 - P208 `===` on objects (instances, maps, lists) is identity (chosen over a new `same(a, b)`): `q = p; q === p` yes,
   `p.copy() === p` no. On scalars `===` stays P196/P196b (type + value). `==` stays loose. The preferred spelling
-  is `same`: `a same b`, `a same as b`, `a is the same as b`; `===` and `identical` (`a is identical to b`) are its
-  aliases (user). Plain `is` stays the type
+  is `same`: `a same b`, `a same as b`, `a is the same as b`; `===` is its alias (user). `identical` was proposed
+  and dropped as bloat (each phrase alias costs parser special cases). Plain `is` stays the type
   test (`red is Color`).
 - check-assert (user to warp-dc): `check` acts like assert; float parameters stay IEEE and `==` stays exact (no
   tolerance); samples/polymorphism.wasp uses `combine number with number`, so `check combine 1.1 with 2.2 == 3.3`
