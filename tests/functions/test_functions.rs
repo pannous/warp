@@ -3,7 +3,7 @@
 
 use warp::analyzer::{analyze, collect_functions};
 use warp::type_kinds::Kind;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 use warp::Node;
 use crate::{is, eq};
 
@@ -128,7 +128,7 @@ fn test_stacked_lambdas() {
 
 #[test]
 fn test_modifiers() {
-	// P78 (user 2026-10-05): modifiers without wasp meaning are skipped with a note; a lone definition stays ø, so call it
+	// P78 (user 2026-10-05): modifiers without warp meaning are skipped with a note; a lone definition stays ø, so call it
 	is!("public fun ignore(){3}; ignore()", 3);
 	is!("public static export import extern external C global inline virtual override final abstract private protected internal const constexpr volatile mutable thread_local synchronized transient native fun ignore(){3}; ignore()",3);
 }
@@ -159,7 +159,7 @@ fn test_fibonacci_typed2() {
 	// is!("fib(n:int) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
 
 
-	// C-like syntaxes - not wasp style, use n:type instead of type n:
+	// C-like syntaxes - not warp style, use n:type instead of type n:
 	// is!("int fib(int n){n < 2 ? n : fib(n - 1) + fib(n - 2)}; fib(10)", 55);
 	// is!("fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
 	// is!("fib(number n) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
@@ -171,7 +171,7 @@ fn test_fibonacci_typed2() {
 	// Implicit param with = - not yet supported:
 	// is!("fib = it < 2 ? 1 : fib(it - 1) + fib(it - 2); fib(10)", 55);
 
-	// Space-separated param - obscure, not wasp style:
+	// Space-separated param - obscure, not warp style:
 	// is!("fib number := if number<2 : 1 else fib(number - 1) + fib it - 2; fib(9)", 55);
 }
 
@@ -183,7 +183,7 @@ fn test_function_definitions() {
 }
 
 #[test]
-#[allow(clippy::approx_constant)] // 3.14 is the wasp literal under test, not π
+#[allow(clippy::approx_constant)] // 3.14 is the warp literal under test, not π
 fn test_variables() {
 	// Basic integers
 	is!("x=42; x", 42);

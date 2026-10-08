@@ -25,7 +25,7 @@ fn a_change_of_a_stored_value_is_kept_for_the_next_run() {
 fn a_program_keeps_its_stored_values_in_a_file_beside_it() {
 	let folder = std::path::Path::new("scratch/stored_signals");
 	std::fs::create_dir_all(folder).expect("scratch folder");
-	let program = folder.join("app.wasp");
+	let program = folder.join("app.warp");
 	let store = folder.join("app.stored.json");
 	let _ = std::fs::remove_file(&store);
 	let run = || warp::modules::with_program_file(&program, || eval("stored launches = 0; launches += 1; launches"));

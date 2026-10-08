@@ -1,14 +1,14 @@
 //! Other ecosystems' names for the standard library's words (notes/stdlib.md, alias rule): `JSON.parse(t)` (JS) and
-//! `json.loads(t)` (Python) are `parse_json(t)` with a got-it note naming wasp's word, and bring their module as if the
+//! `json.loads(t)` (Python) are `parse_json(t)` with a got-it note naming warp's word, and bring their module as if the
 //! program said `use json`. A program naming the module itself (`re = 3`, `use python "json"`, which foreign_modules
 //! already turned into calls) keeps its meaning. Runs before welcome_forms' module_calls: Python's json is also the
-//! name of wasp's module.
+//! name of warp's module.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
-/// `module.member(…)` of another ecosystem: wasp's `word` of `std_module` (none for a prelude word), its arguments the
+/// `module.member(…)` of another ecosystem: warp's `word` of `std_module` (none for a prelude word), its arguments the
 /// written ones in `order`
 struct StdAlias {
 	module: &'static str,

@@ -1,7 +1,7 @@
 # Component worlds (`warp build --wit`, `warp build --component`)
 
 A program declares the component it is with `component name { import …: {…} export …: interface }`
-(samples/wasm_interop.wasp, tests/wasm/test_component_worlds.rs). At run time the declaration does nothing.
+(samples/wasm_interop.warp, tests/wasm/test_component_worlds.rs). At run time the declaration does nothing.
 
 - `src/lowering/component_worlds.rs` parses the declaration into a `World` (WIT names, kebab-case) and writes its WIT
   (`world_wit`, what `warp build --wit` writes). Types: the scalars of `WIT_TYPES` and `string`.

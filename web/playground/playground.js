@@ -21,12 +21,12 @@ const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
 const STDOUT = 1;
-const NOTIFICATION_TITLE = "wasp";
+const NOTIFICATION_TITLE = "warp";
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
-// (src/paint.rs shade, lib/draw.wasp)
+// (src/paint.rs shade, lib/draw.warp)
 const PAINT_INK = 29;
 const PAINT_PAPER = 250;
 const PAINT_COLOR_FROM = 2 ** 24;
@@ -354,7 +354,7 @@ function paintShade(value) {
 	return [PAINT_INK, PAINT_INK, PAINT_INK];
 }
 
-// a markup value as DOM (lib/markup.wasp, card web-dom), in a shadow root so its own style cannot restyle the page.
+// a markup value as DOM (lib/markup.warp, card web-dom), in a shadow root so its own style cannot restyle the page.
 // Markup shown anew after a handler changes only the text nodes and attributes that differ (card web-fine): the
 // elements stay, with their focus, input and scroll state.
 function showRendered(html) {
@@ -571,7 +571,7 @@ function fillExamples() {
 function initialize() {
 	editor = CodeMirror.fromTextArea($("code"), {
 		// fixedGutter moves the gutter on every scroll, which Firefox warns about; wrapped lines never scroll sideways
-		lineNumbers: true, lineWrapping: true, fixedGutter: false, mode: "wasp", indentWithTabs: true, tabSize: 4,
+		lineNumbers: true, lineWrapping: true, fixedGutter: false, mode: "warp", indentWithTabs: true, tabSize: 4,
 		extraKeys: { "Ctrl-Enter": runPressed, "Cmd-Enter": runPressed },
 	});
 	editor.on("change", () => {

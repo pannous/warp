@@ -1,4 +1,4 @@
-// Cards destructure-return and destructure-exp (samples/neural_net.wasp): `(h, o) = fw()` in a function body is a
+// Cards destructure-return and destructure-exp (samples/neural_net.warp): `(h, o) = fw()` in a function body is a
 // statement, so the body ends with the value of its last line (it was a data block holding both values, {0.4 0.4})
 use crate::is;
 

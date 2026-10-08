@@ -15,7 +15,7 @@ grouped into folders".
   by a test is dropped, the rest moves into the topic file. Assertions in regular test files stay where they are, even
   when duplicated. The test count drops only by probe tests that were duplicates; each one is named in its commit.
 - `#[cfg(feature = "native")]` stays on the `mod` line of a native-only file (now in the folder's mod.rs).
-- Data files stay where they are: tests/fixtures/, tests/wasp/ (paths in the tests are relative to the crate root).
+- Data files stay where they are: tests/fixtures/, tests/warp/ (paths in the tests are relative to the crate root).
 
 ## Folders
 User 2026-10-03: "OK as listed".
@@ -23,7 +23,7 @@ User 2026-10-03: "OK as listed".
 Moved one folder per branch (`tests-tidy-<folder>`), small and quick to merge, because other workers add test files
 all the time.
 
-- `parser/`: test_parser test_parser_sugar test_wasp_format test_wasp_position test_comments test_inline_comments test_meta test_meta_attributes test_attributes test_surface_syntax test_newline_precedence test_juxtaposition test_statement_sequence test_statement_terminators test_statements_after_type test_one_line_statements test_semicolon_square test_symbol_hyphen test_glyph_aliases test_number_glyphs test_superscript_signs test_spaced_required_fields test_dollar_names test_json test_xml
+- `parser/`: test_parser test_parser_sugar test_warp_format test_warp_position test_comments test_inline_comments test_meta test_meta_attributes test_attributes test_surface_syntax test_newline_precedence test_juxtaposition test_statement_sequence test_statement_terminators test_statements_after_type test_one_line_statements test_semicolon_square test_symbol_hyphen test_glyph_aliases test_number_glyphs test_superscript_signs test_spaced_required_fields test_dollar_names test_json test_xml
 - `node/`: node_values_test test_node test_node_operators test_node_todo test_normalization
 - `numbers/`: test_number test_math test_float_assignment test_float_bit_operations test_float_exact_context test_float_parameters test_float_promotion test_float_to_int_range test_declared_float_exact_reals test_rounding_in_functions test_sum_of_decimals test_shift_operators test_fixed_width_ints test_unbounded_int test_rational_type test_angle test_units_arithmetic test_units_compare test_units_followup test_counting_units test_zero_fill test_law test_float_text test_float_zero_and_compound
 - `operators/`: test_operators test_operator_parsing test_operator_declarations test_less_than_compare test_equality_never_chains test_structural_equality test_logic_grouped_operands test_mutating_bang test_negated_call test_add_to test_in_position test_truthiness_of_objects test_like test_logical_calls (+ probe_operators, probe_precedence, probe_increment condensed)

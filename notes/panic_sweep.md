@@ -1,7 +1,7 @@
 # Panic sweep (task F)
 
 Rule: a program a user can write never panics the compiler. `panic!`/`unwrap()`/`expect()`/`unreachable!()` in
-src/wasm_emitter, src/analyzer.rs and src/wasp_parser.rs became error values (`emit_type_error`, `emit_malformed`,
+src/wasm_emitter, src/analyzer.rs and src/warp_parser.rs became error values (`emit_type_error`, `emit_malformed`,
 `emit_undefined_variable`, `WasmGcEmitter::type_error`, `TypeManager::type_errors`), tests in tests/sweeps/test_panic_sweep.rs.
 
 ## Converted
@@ -38,8 +38,8 @@ src/wasm_emitter, src/analyzer.rs and src/wasp_parser.rs became error values (`e
 | `i64::try_from(number).expect("big literal needs the Int runtime")` | `analyze_required_functions` requires the Int runtime for every non-fixnum literal |
 | `decimal_fraction` `expect`s | parse the output of Rust's own `{:e}` formatting of an f64 |
 | analyzer `.expect("guarded")` (7×) and `call sites were collected from known functions` | the `match` arm guard calls the same helper that must return `Some` |
-| `wasp_parser` `panic!("Invalid bracket")` | `parse_bracketed` is only called with the literals `( [ { <` |
-| `wasp_parser` `body_items…next().unwrap()` / `precedences.last().unwrap()` | preceded by a `len() == 1` / `is_empty()` check |
+| `warp_parser` `panic!("Invalid bracket")` | `parse_bracketed` is only called with the literals `( [ { <` |
+| `warp_parser` `body_items…next().unwrap()` / `precedences.last().unwrap()` | preceded by a `len() == 1` / `is_empty()` check |
 | `node_emitter::EmitContext::emit_call` | the type is not used by any emitter path |
 | `Number::to_bigint` / `to_rational` panics | every caller matches Int/BigInt (and Quotient/BigQuotient) first; the arithmetic arms check `is_rational` |
 | wisp_parser `panic!("expected …")` (13) | all inside its `#[cfg(test)]` module: test assertions |

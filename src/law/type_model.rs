@@ -7,7 +7,7 @@ use super::lean::{lean_executable, run_with_timeout};
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasp_parser::TRY_MARKER;
+use crate::warp_parser::TRY_MARKER;
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -391,7 +391,7 @@ impl Exporter {
 		let own_fields = crate::lowering::class_methods::class_fields(program);
 		let mut parents = HashMap::new();
 		program.visit(&mut |part| if let Node::Type { name, .. } = part {
-			parents.insert(name.drop_meta().name(), name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).map(Node::name));
+			parents.insert(name.drop_meta().name(), name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(Node::name));
 		});
 		fn path(class: &str, parents: &HashMap<String, Option<String>>, depth: usize) -> Vec<String> {
 			let mut chain = match parents.get(class) {
@@ -857,7 +857,7 @@ impl Exporter {
 
 /// The program as the Lean list of W0 items, or why it is outside W0
 pub fn export(code: &str) -> Result<String, String> {
-	let program = crate::wasp_parser::parse(code);
+	let program = crate::warp_parser::parse(code);
 	let items = Exporter::default().items(&program)?;
 	Ok(format!("[{}]", items.join(",\n  ")))
 }

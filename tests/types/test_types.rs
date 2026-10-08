@@ -5,7 +5,7 @@ use warp::analyzer::analyze;
 use warp::extensions::assert_throws;
 use warp::Node;
 use warp::type_kinds::NodeKind;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 use warp::Number;
 use crate::{is, skip};
 

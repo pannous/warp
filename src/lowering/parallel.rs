@@ -129,7 +129,7 @@ pub(crate) fn loop_in_tasks(variable: Node, list: Node, body: Node, number: usiz
 /// The template with its temporaries named apart, then the placeholders filled (the program's own `parallel_…` names
 /// stay as they are)
 fn filled(program: &str, number: usize, fills: &[(&str, Node)]) -> Node {
-	let template = named_apart(crate::wasp_parser::parse(program), number);
+	let template = named_apart(crate::warp_parser::parse(program), number);
 	fills.iter().fold(template, |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, value))
 }
 
@@ -151,7 +151,7 @@ fn copied_updates(body: &Node, shared: &[String]) -> Option<Node> {
 	let mut updated: Option<(String, Node)> = None;
 	body.visit(&mut |part| if let Node::Key(target, op, value) = part {
 		let Node::Symbol(name) = target.drop_meta() else { return };
-		let updates = op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) || (*op == Op::Assign && crate::wasp_parser::mentions(value, name));
+		let updates = op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) || (*op == Op::Assign && crate::warp_parser::mentions(value, name));
 		if updates && !shared.contains(name) && updated.is_none() {
 			updated = Some((name.clone(), part.clone()));
 		}

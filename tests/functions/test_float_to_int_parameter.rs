@@ -1,4 +1,4 @@
-// P49 (user, 2026-10-05): a float passed to an int parameter is a compile error, wasp never loses digits silently
+// P49 (user, 2026-10-05): a float passed to an int parameter is a compile error, warp never loses digits silently
 use crate::common::fails_with;
 use crate::is;
 

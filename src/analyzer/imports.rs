@@ -15,7 +15,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			}
 		}
 		Node::Text(text) => {
-			if let Some(number) = crate::wasp_parser::number_in_text(text) {
+			if let Some(number) = crate::warp_parser::number_in_text(text) {
 				analyze_required_functions(ctx, &Node::Number(number));
 			}
 		}
@@ -67,7 +67,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				} else {
 					ctx.required_functions.insert("node_index_at");
 					ctx.required_functions.insert("map_get");
-					if let Some(name) = crate::wasp_parser::subscript_key(value).and_then(constant_field_name) {
+					if let Some(name) = crate::warp_parser::subscript_key(value).and_then(constant_field_name) {
 						if name == crate::wasm_emitter::list_ops::MESSAGE_FIELD {
 							ctx.required_functions.insert(crate::wasm_emitter::list_ops::ERROR_MESSAGE);
 						}

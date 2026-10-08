@@ -59,14 +59,14 @@ peq! → parses_to!, Strings! → texts!, wis! → wisp!, strings!/todow gone); 
 P101 neutral comments. The crate-wide allows were already gone (no dead-code warnings).
 2026-10-06 later: #19 operator levels and UTF-8 constants named (named-tables), #12 Node::map_children for 14
 passes (map-children; the shared analysis itself is P91, notes/build_speed.md), #10 ffi.rs → src/ffi/{mod,header,link}.rs.
-#10 done 2026-10-06: analyzer.rs, wasm_emitter/mod.rs (4 119 → 1 709), gc_traits.rs, node.rs and wasp_parser.rs are
+#10 done 2026-10-06: analyzer.rs, wasm_emitter/mod.rs (4 119 → 1 709), gc_traits.rs, node.rs and warp_parser.rs are
 directories of topic files (pure moves: re-exports or impl blocks of child modules, private items pub(super)).
 Still open: a shared Program context for passes (#12), the remaining panics in wisp_parser
 and extensions/numbers.rs (#13), the Unicode/precedence tables (#19).
 
 Left, because they need a decision, edit tests, or would collide with the sessions editing the same files now:
 #4/#5/#10 moves and splits (every open branch touches mod.rs, analyzer.rs,
-wasp_parser.rs), #12, #13, #15–#20, smarty.rs and test_asts.rs, the extensions/ dead traits (extensions.rs says it is
+warp_parser.rs), #12, #13, #15–#20, smarty.rs and test_asts.rs, the extensions/ dead traits (extensions.rs says it is
 linked from ~/dev/script/rust), the crate-wide `#![allow(dead_code, unused_imports)]`.
 Observed once: a 4-thread run aborted in `test_struct_types::test_magic_object_mismatch` (should_panic) with
 `assertion failed: a.comes_from_same_engine(b.engine())` while panicking; it passes alone (see TODO).
@@ -84,14 +84,14 @@ Observed once: a 4-thread run aborted in `test_struct_types::test_magic_object_m
 | 7 | Constants redefined per file: `KIND_MASK` ×6, `BYTE: MemArg` ×5, `KIND_SHIFT`/`SQUARE_BRACKET_INFO` ×2–3, plus 14 inline `MemArg {…}` | wasm_emitter/*.rs, web.rs | Med | S | One `wasm_emitter/layout.rs` (or in type_kinds.rs next to `Kind`) | Mechanical |
 | 8 | Four near-identical "instantiate and call main" functions, engine/linker setup in 6 files, three HTTP getters (`util::fetch` panics, `extensions::utils::download` returns "", `host::fetch` returns Result) | wasm_reader.rs, run/, host.rs, util.rs, extensions/utils.rs, wasm_emitter/mod.rs | Med | M | `src/runtime/` with one `run_main<S>(bytes, state, link)`; one `net::get(url, timeout) -> Result` | Mechanical-ish |
 | 9 | Two C-header parsers and five C-type mappers; `link_ffi_functions` is 298 lines of 20 hand-written copies of the same closure | ffi.rs, ffi_parser.rs | Med | M | One parser in `ffi/header.rs`, one `c_type_kind`; a `(lib, name, arity)` table with `link_f64_unary/binary` | Mechanical-ish |
-| 10 | Giant files: wasm_emitter/mod.rs 3 832, wasp_parser.rs 3 491, analyzer.rs 3 139, node.rs 2 469, gc_traits.rs 1 730, ffi.rs 1 531 | 6 files | Med | L | Splits in §2 | Mechanical moves |
+| 10 | Giant files: wasm_emitter/mod.rs 3 832, warp_parser.rs 3 491, analyzer.rs 3 139, node.rs 2 469, gc_traits.rs 1 730, ffi.rs 1 531 | 6 files | Med | L | Splits in §2 | Mechanical moves |
 | 11 | Giant functions: `emit_numeric_value` 336, `link_ffi_functions` 298, `emit_exact_functions` 283, `emit_list_ops` 256, `continue_expr` 233, `emit_cast` 229, `main` 202 | §2 | Med | M–L | Dispatch tables / one function per case | Refactor |
 | 12 | Every lowering pass re-runs `extract_user_functions` over the whole program (12 call sites) and re-implements the Node recursion (`Lowering::expand` in 5 files, 41 `Meta` re-wrap arms); `node::map_node` exists unused | lowering passes | Med | M | `Node::map_bottom_up(f)` + one `Program` context computed once per pipeline run | Design |
 | 13 | `panic!` on user-reachable paths despite decision #1: node arithmetic `Cannot add …` (4), `IndexMut` (3), wisp_parser (13), `extensions/numbers.rs` (6), `FunctionRegistry::get`, `todo!` in node.rs (3) and main.rs (2) | §5 | Med | M | Error values (`Node::Error`) or `Result`; see notes/panic_sweep.md for the pattern | Mechanical per site |
 | 14 | AGENTS.md describes files that no longer exist (`src/emitter.rs`, `src/wasm_gc_emitter.rs`, `docs/…`, `tests/node_test.rs` …, `examples/`, `vendor/`, wasmer/wasmedge runners); CLAUDE.md is a diverged copy (16 differing lines) | AGENTS.md, CLAUDE.md | Med | S | Rewrite the architecture section from §1; CLAUDE.md → symlink to AGENTS.md | Decision (user owns both) |
 | 15 | tests/: 225 flat files; `probe_*.rs` (7) inside the suite, tests/probes/*.rs not compiled, tests/notes/ is notes, tests/test_utils.rs a dead module cache (11 warnings), 250 duplicated assertion lines (65 inside test_wasm.rs alone) | tests/ | Low | M | Topic subdirectories, move orphans out (§6) | Decision (tests are append-only) |
 | 16 | Two instruction styles: `func.instruction(&Instruction::X)` (657 sites, mod.rs/constructors/wasi/ffi_emitter) vs `use Instruction as I` (1 241 sites) | wasm_emitter/*.rs | Low | S | fastmod to the `I::` style, then `emit_list(func, &[…])` for straight-line runs | Mechanical |
-| 17 | Root clutter: `goo`, `conversation.md` (92 KB chat dump), `node.wat`, `test.wasp`, dangling `wasp -> target/debug/wasp`, `warp -> target/release/warp` (no target/ in repo), `build_debug.sh`, `add_ignore_to_failing_tests.sh`, `nextest.sh` beside `test.sh` | / | Low | S | Delete or move to notes/OLD, probes/ | Decision |
+| 17 | Root clutter: `goo`, `conversation.md` (92 KB chat dump), `node.wat`, `test.warp`, dangling `warp -> target/debug/warp`, `warp -> target/release/warp` (no target/ in repo), `build_debug.sh`, `add_ignore_to_failing_tests.sh`, `nextest.sh` beside `test.sh` | / | Low | S | Delete or move to notes/OLD, probes/ | Decision |
 | 18 | 279 commented-out code lines (59 extensions/lists.rs, 39 strings.rs, 34 ast.rs, 32 node.rs, wasmedge 13), 178 trivial "// Get x / // Create y" comments (55 in wasm_emitter/mod.rs) | §4, §5 | Low | S | Delete | Mechanical |
 | 19 | 517 numeric literals outside `const` (calendar 86, strings 67 Unicode ranges, operators 53 precedences, text_unicode 51, big_int 43), local slots by number (`LocalGet(5)` ×16) | §5 | Low | M | Named consts at file top; named scratch locals | Mechanical per file |
 | 20 | Cryptic names: `laste`, `typ`, `todow`, `tee`, `Dada`, `peq!`, `s!`/`strings!`/`Strings!`, `fetch(p0)`, `smarty32`, `float_data28`; vulgar comments in Cargo.toml/extensions.rs | §5 | Low | S | Renames (§5) | Mechanical (semgrep) |
@@ -104,7 +104,7 @@ Six directories (`wasm_emitter/` 21 files, `extensions/` 6, `run/` 4, `compiler/
 
 | kind | files |
 |------|-------|
-| syntax | wasp_parser, wisp_parser, operators, node, meta, ast (dead), interpolation (half parse, half lowering) |
+| syntax | warp_parser, wisp_parser, operators, node, meta, ast (dead), interpolation (half parse, half lowering) |
 | lowering passes (Node → Node, called from `lower_for_emission`) | mutation, modules, type_name_matching, meta_entries, versions, injection, interpolation, function_equality, type_tests, ambiguous_forms, lambdas, function_values, real (`lower`), type_constructor, min_max, declarations, switch, phrase_words, library_words, for_loop, plus `host::lower_aliases` and `analyzer::{lower_negated_calls, lower_list_times, lower_declarations, resolve_data_scope, resolve_main_variable_assignments}` |
 | analysis | analyzer, context, local, function, type_kinds, effects, diagnostic, normalize, law/, units, time/, real (`answer`), fixed_width |
 | native runtime | host, ffi, ffi_parser, gc_traits, wasm_reader, run/, util (engine config), package_tools, wasm_optimizer |
@@ -123,7 +123,7 @@ src/
   main.rs                CLI only, `use warp::…` (finding #1)
   pipeline.rs            from wasm_emitter/mod.rs 3499–3812: compile, eval, eval_untrusted, eval_parsed,
                          lower_for_emission → lowering::run, run_module, out_of_fuel, explain_runtime_error
-  syntax/                node/ (split, §2), wasp_parser/ (split, §2), wisp_parser.rs, operators.rs, meta.rs
+  syntax/                node/ (split, §2), warp_parser/ (split, §2), wisp_parser.rs, operators.rs, meta.rs
   lowering/
     mod.rs               `pub const PASSES: &[(&str, fn(Node) -> Result<Node, Node>)]` in today's order;
                          `run(node)` folds them and stops at the first Error (replaces the 7-deep nested call
@@ -158,16 +158,16 @@ is in 8 of the 26 mutual dependencies.
 
 ### Dependency graph (crate:: references, top-level modules)
 - One strongly connected component of **42** modules: practically every module can reach every other.
-- 26 direct 2-cycles, e.g. `analyzer ↔ wasm_emitter`, `analyzer ↔ wasp_parser`, `node ↔ wasp_parser`,
+- 26 direct 2-cycles, e.g. `analyzer ↔ wasm_emitter`, `analyzer ↔ warp_parser`, `node ↔ warp_parser`,
   `node ↔ wasm_reader`, `node ↔ gc_traits`, `node ↔ normalize`, `extensions ↔ wasm_emitter`, `extensions ↔ analyzer`.
-- Fan-out: wasm_emitter 41, analyzer 18, wasp_parser 15, library_words 11. Fan-in: node 42, operators 32, extensions 19.
+- Fan-out: wasm_emitter 41, analyzer 18, warp_parser 15, library_words 11. Fan-in: node 42, operators 32, extensions 19.
 - Root causes, each fixed by one move:
   1. the pipeline in `wasm_emitter/mod.rs` → `pipeline.rs` removes ~25 of the emitter's 41 edges;
   2. `Node::from_gc_object` / `read_list_from_gc` (node.rs 303–453) → `runtime/gc/` removes node → wasm_reader/gc_traits;
-  3. `node.rs` calling `wasp_parser::parse` (`From<&str>`-style helpers) → `syntax/` side;
+  3. `node.rs` calling `warp_parser::parse` (`From<&str>`-style helpers) → `syntax/` side;
   4. the runtime-function names the analyzer reads (`VALUES_EQUAL`, `INT_RUNTIME`, `IS_TRUTHY`, `TEXT_FORM`, …) →
      a leaf `wasm_emitter/runtime_names.rs` (no imports), or move their users into the emitter (see above);
-  5. test macros out of `extensions` (they call `wasm_emitter::eval`, `analyzer`, `wasp_parser`).
+  5. test macros out of `extensions` (they call `wasm_emitter::eval`, `analyzer`, `warp_parser`).
 
 ## 2. Size
 
@@ -175,7 +175,7 @@ is in 8 of the 26 mutual dependencies.
 | lines | file | lines | file |
 |------:|------|------:|------|
 | 3832 | wasm_emitter/mod.rs | 741 | effects.rs |
-| 3491 | wasp_parser.rs | 684 | extensions/reals.rs |
+| 3491 | warp_parser.rs | 684 | extensions/reals.rs |
 | 3139 | analyzer.rs | 605 | real.rs |
 | 2469 | node.rs | 575 | wasm_emitter/equality.rs |
 | 1730 | gc_traits.rs | 573 | library_words.rs |
@@ -193,16 +193,16 @@ is in 8 of the 26 mutual dependencies.
 | 298 | link_ffi_functions | ffi.rs:540 | 6 |
 | 283 | emit_exact_functions | wasm_emitter/exact.rs:113 | 4 |
 | 256 | emit_list_ops | wasm_emitter/list_ops.rs:20 | 3 |
-| 233 | continue_expr | wasp_parser.rs:1648 | 6 |
+| 233 | continue_expr | warp_parser.rs:1648 | 6 |
 | 229 | emit_cast | wasm_emitter/mod.rs:2291 | 6 |
 | 202 | main | main.rs:81 | 4 |
 | 187 | emit_list_node | wasm_emitter/list_emitter.rs:72 | 5 |
-| 185 | parse_symbol_with_suffix | wasp_parser.rs:1398 | 6 |
+| 185 | parse_symbol_with_suffix | warp_parser.rs:1398 | 6 |
 | 181 | create_ffi_wrapper | ffi.rs:1081 | 5 |
 | 177 | infer_type | analyzer.rs:133 | 9 |
 | 174 | emit_raw_struct | wasm_emitter/mod.rs:3321 | 4 |
 | 174 | emit_float_value | wasm_emitter/mod.rs:2900 | 6 |
-| 172 | parse_xml_tag | wasp_parser.rs:2915 | 5 |
+| 172 | parse_xml_tag | warp_parser.rs:2915 | 5 |
 | 166 | emit_values_equal | wasm_emitter/equality.rs:311 | 5 |
 | 155 | emit_magnitude_functions | wasm_emitter/big_int.rs:699 | 4 |
 | 155 | emit_int_functions | wasm_emitter/big_int.rs:1058 | 3 |
@@ -236,7 +236,7 @@ the list function reads as a table of contents (as `emit_text_units` already is)
   `casts.rs` (2190–2521, `emit_cast` split per target type) ·
   `numeric_value.rs` (2539–3076: `emit_numeric_value`, `emit_float_value`, `emit_integer_builtin`) ·
   `raw_struct.rs` (3321–3565) · `names.rs` (3201–3298) · driver → `src/pipeline.rs` (3566–3812).
-- **wasp_parser.rs (3 491)** → `wasp_parser/mod.rs` (struct, entry points, `parse_expr`, `continue_expr`) ·
+- **warp_parser.rs (3 491)** → `warp_parser/mod.rs` (struct, entry points, `parse_expr`, `continue_expr`) ·
   `lexing.rs` (506–910: chars, whitespace, comments) · `operators.rs` (911–1100, user operators 396–492) ·
   `atoms.rs` (1112–1600: atoms, symbols, suffixes) · `control.rs` (1883–2300: if/else/while/for/guards) ·
   `literals.rs` (2423–2830: strings, holes, numbers) · `xml.rs` (786–865, 2915–3087) ·
@@ -321,7 +321,7 @@ Commented-out code: 279 lines, 30 blocks of ≥ 3 lines; biggest in extensions/l
 ast.rs (34), node.rs (32), extensions/numbers.rs (14), extensions.rs (13), run/wasmedge_runner.rs (13).
 
 Outdated docs: AGENTS.md describes `src/emitter.rs`, `src/wasm_gc_emitter.rs`, `docs/wasm-gc-reading-guide.md`,
-`tests/{node,wasp_parser,wasm_gc_emitter,wasm_reader}_test.rs`, `cargo run --example …` (no examples/), "vendored
+`tests/{node,warp_parser,wasm_gc_emitter,wasm_reader}_test.rs`, `cargo run --example …` (no examples/), "vendored
 dependencies (see vendor/)" (no vendor/), and wasmer/wasmedge backends. notes/probes_layout.md still says builds go to
 `/opt/cargo/warp-<topic>` (contradicts notes/build_speed.md, shared target). notes/build_speed.md §5 mentions wasmer and
 wasmedge as heavy deps; they are not dependencies any more. `main.rs` has `todo!("linking files needs compilation with
@@ -332,7 +332,7 @@ WABT_MERGE")` behind a C++ flag.
 **Panics where decision #1 wants error values** (notes/panic_sweep.md covered emitter/analyzer/parser; these remain):
 - node.rs: `Add/Sub/Mul/Div for Node` panic `Cannot add {:?} and {:?}` (2010, 2092, 2170, 2249); `IndexMut` panics on
   missing keys/out of bounds (630–667); `remove` (120); `todo!` in `class`, `typ`, `add` (78, 82, 194).
-- wasp_parser.rs:2902 `Invalid bracket`; function.rs:446 `FunctionRegistry::get` panics; wasm_emitter/mod.rs:303
+- warp_parser.rs:2902 `Invalid bracket`; function.rs:446 `FunctionRegistry::get` panics; wasm_emitter/mod.rs:303
   `func_index` (kept on purpose, see panic_sweep), :3170 `finish` (test API).
 - wisp_parser.rs: 13 `panic!("expected …")` + 37 unwrap/expect.
 - extensions/numbers.rs: `panic!("unsupported types")` ×4, `not an integer`, `unimplemented!()` for Complex.
@@ -347,7 +347,7 @@ list_ops.rs 37 (UTF-8 masks; text_unicode already names some), big_int.rs 43 (lo
 `LocalGet(5..19)` with bare numbers 16×: name the scratch locals (`let carry = 5;` or a `Locals` enum).
 
 **Trivial comments**: 178 comments of the form "// Get x", "// Create y", "// Emit z" restating the next line
-(wasm_emitter/mod.rs 55, wasp_parser.rs 25, ffi.rs 14, list_emitter.rs 12, gc_traits.rs 10). Also the `// ====`
+(wasm_emitter/mod.rs 55, warp_parser.rs 25, ffi.rs 14, list_emitter.rs 12, gc_traits.rs 10). Also the `// ====`
 banner comments in ffi.rs that a module split replaces.
 
 **Names**: `Node::laste` → `last`, `Node::typ` → `type_name`, `todow` → delete, `tee` → delete, `Dada` →
@@ -384,7 +384,7 @@ by constants defined mid-file (list_ops.rs 1014–1016 `SQUARE_BRACKET_INFO`, `K
   ships test helpers and `extensions` depends on the whole compiler. Move them to tests/common/mod.rs.
 - probes/: 3.2 MB, mostly the fixer prompt templates and per-topic snippet dirs from 2026-10-02 (algo 2.2 MB, ask,
   break, elements, listexpr, listparams, maps, parse, print, slices, globals, …). Once those topics are merged, keep the
-  `.wasp` snippets that became tests' inputs and delete the rest; `stage_own_hunks.py`, `unignore.py`,
+  `.warp` snippets that became tests' inputs and delete the rest; `stage_own_hunks.py`, `unignore.py`,
   `commit_unignored.py`, `bisect_step.sh` are one-off agent tools (move to ~/dev/bin if reused).
 
 ## 7. Build hygiene
@@ -432,6 +432,6 @@ contract `fn(Node) -> Result<Node, Node>`) · #8 runtime API · #9 hard-coded li
 6. Keep the 20 hand-written libm/libc bindings in ffi.rs, or rely on the generic header-driven FFI only?
 7. `Node` operators (`+ - * /`, `IndexMut`): return `Node::Error` instead of panicking?
 8. CLAUDE.md: replace with a symlink to AGENTS.md, and may AGENTS.md's architecture section be rewritten from §1?
-9. Root clutter (`goo`, `conversation.md`, `node.wat`, `test.wasp`, dangling `wasp`/`warp` links, `build_debug.sh`,
+9. Root clutter (`goo`, `conversation.md`, `node.wat`, `test.warp`, dangling `warp`/`warp` links, `build_debug.sh`,
    `add_ignore_to_failing_tests.sh`, `nextest.sh`): delete or move to notes/OLD?
 10. DONE (user: "can we gate it"): no split needed, the cdylib is gated to web/playground/build.sh.

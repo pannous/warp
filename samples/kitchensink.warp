@@ -1,0 +1,116 @@
+#!/usr/bin/env warp
+// Kitchen sink: every feature of the language in one program that compiles and runs, natively and in the playground
+// (tests/programs/test_samples.rs test_kitchensink, tour example "kitchen sink"). Each part checks its own results;
+// the value says whether all of them pass
+
+checks = []
+
+// ---- data notation: JSON5-like, comments, optional quotes, commas and semicolons
+person = {
+  f: /*inline comments*/ "inline comments",
+  "a": "classical json",
+  d: "semicolons optional";
+  b: "quotes optional",
+  c: "commas optional"
+  e: "trailing comments" // trailing comments
+  name: "Alice"
+  age: 30
+  hobbies: ["reading" "hiking" "coding"]
+  address: { street: "highway 66", district: "Metro" }
+}
+checks.add(person.age == 30)
+checks.add(person.hobbies#2 == "hiking")
+checks.add(person.address.district == "Metro")
+
+// ---- numbers: unbounded integers, exact rationals and roots, decimals that add up
+checks.add(2^100 % 1000 == 376)
+checks.add(1/3 + 1/6 == 1/2)
+checks.add(√2 * √2 == 2)
+checks.add(0.1 + 0.2 == 0.3)
+
+// ---- text: interpolation, graphemes, codepoints
+n = 7
+checks.add("n is \(n)" == "n is 7")
+checks.add(#"héllo" == 5)
+checks.add(codepoint('A') == 65)
+checks.add("Hello".upper == "HELLO")
+
+// ---- lists, ranges, comprehensions, pipes
+squares = [x * x for x in 1 to 5]
+checks.add(squares == [1 4 9 16 25])
+checks.add(sum(1 to 10) == 55)
+checks.add(([3 1 2] | sort) == [1 2 3])
+ages = {"ann": 31, "bob": 42}
+checks.add(ages["bob"] == 42)
+products = 0
+for (a, b) in [(1, 2), (3, 4)] { products += a * b }
+checks.add(products == 14)
+
+// ---- functions: definitions, implicit it, lambdas, closures, recursion
+square := it * it
+checks.add(square(9) == 81)
+def fib(n) { if n < 2 { return n }; fib(n - 1) + fib(n - 2) }
+checks.add(fib(10) == 55)
+twice(f, x) := f(f(x))
+checks.add(twice(x => x + 3, 1) == 7)
+adder(a) := b => a + b
+plus_two = adder(2)
+checks.add(plus_two(5) == 7)
+checks.add(adder(2)(5) == 7)
+
+// ---- control flow: if, while, for, switch, try
+total = 0
+i = 0
+while i < 4 { i += 1; total += i }
+checks.add(total == 10)
+checks.add((if total > 5 then "big" else "small") == "big")
+checks.add((try { [1]#5 } else { "caught" }) == "caught")
+checks.add(switch 3 {1: "one" 3: "three" default: "many"} == "three")
+checks.add(5 is int)
+
+// ---- classes and inheritance
+class Animal { name: "?"; speak := "..." }
+class Dog extends Animal { speak := name + " barks" }
+rex = Dog{name: "Rex"}
+checks.add(rex.speak == "Rex barks")
+
+// ---- events: emit and on (P163), handlers get the event
+alarms = 0
+on alarm { alarms += event.level }
+emit alarm{level: 2}
+emit alarm{level: 3}
+checks.add(alarms == 5)
+
+// ---- signals: whenever runs each time its condition becomes true (P156), on change, derived values
+temperature = 20
+heat_waves = 0
+whenever temperature > 30 { heat_waves += 1 }
+temperature = 35
+temperature = 36
+temperature = 10
+temperature = 40
+checks.add(heat_waves == 2)
+b = 1
+c = 2
+changes = 0
+on change b + c { changes += 1 }
+b = 5
+checks.add(changes == 1)
+
+// ---- tasks: go, await, shared values, channels (P155)
+job = go { 6 * 7 }
+checks.add((await job) == 42)
+shared counter = 0
+jobs = []
+for k in 1 to 4 { jobs.add(go { counter += 1 }) }
+await all jobs
+checks.add(counter == 4)
+ch = channel()
+go { for k in 1 to 3 { ch.send(k) }; ch.close() }
+received = 0
+for v in ch { received += v }
+checks.add(received == 6)
+
+passed = 0
+for ok in checks { if ok { passed += 1 } }
+if passed == #checks then "all \(passed) checks pass" else "failed: \(checks)"

@@ -1,0 +1,19 @@
+#!/usr/bin/env warp
+html{ lang:"en"
+  style{ .form-group { margin: 8px 0 } label { display: block } } // css rules as they are written in css
+  body{
+    form{
+      div{ class:"form-group" // free form values need to be quoted
+          label{ for:email "Email address:"} // html text appears as free string (without key:)
+          input{ type:email id:email } // single values need no quotes
+      }
+      div{ class:"form-group"
+            label(for:pwd):"Password"
+            input{ id:pwd type:password}
+      }
+      button{ class:['btn' 'btn-info']      // property with value list
+            'Submit'                        // text quoted with single quote
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 //! Channels between programs (wiki/signal.md, notes/system_signals.md): `broadcast value on "chat"` sends the value as
-//! wasp text to every program on this machine listening with `on message from "chat" {…}`. A channel is the directory
+//! warp text to every program on this machine listening with `on message from "chat" {…}`. A channel is the directory
 //! `/tmp/warp-channels-<user>/<channel>` (the temp directory off unix), a named event's (`chat/stop the machine`, P129b)
 //! the directory `stop_the_machine` inside it; each listener binds a Unix datagram socket there (its file removed when the run's
 //! listeners are forgotten), a broadcast sends one datagram to each socket in it and removes those nobody reads any more.
@@ -104,7 +104,7 @@ pub fn pending(id: i64) -> i64 {
 	0
 }
 
-/// `channel_next(id)`: the oldest message waiting, as wasp text
+/// `channel_next(id)`: the oldest message waiting, as warp text
 pub fn next(id: i64) -> Option<String> {
 	#[cfg(unix)]
 	return LISTENERS.with(|listeners| listeners.borrow_mut().get_mut(&id)?.received.pop_front());

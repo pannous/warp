@@ -1,7 +1,7 @@
 //! wiki/function-pointer.md: `map square on [1 2 3]`, `map function square on …`, `map &square …` with the function
 //! first, for a function defined either way (`square:=it*it` makes the parser apply it, `map (square (on xs))`)
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn test_map_a_function_on_a_list() {

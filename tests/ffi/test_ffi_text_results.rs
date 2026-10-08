@@ -1,4 +1,4 @@
-// A C function returning char * gives a wasp text (card ffi-char-text): its NUL-terminated string is copied into the
+// A C function returning char * gives a warp text (card ffi-char-text): its NUL-terminated string is copied into the
 // module, NULL is ø; other pointer results stay refused loudly; a libc function used without `use c` says how to import it
 #![cfg(feature = "native")]
 use crate::is;

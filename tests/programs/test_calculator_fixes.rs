@@ -1,4 +1,4 @@
-//! What samples/calculator.wasp needed: `else` on the next line, texts in comparisons, failing returns, run-time math
+//! What samples/calculator.warp needed: `else` on the next line, texts in comparisons, failing returns, run-time math
 use crate::is;
 use warp::wasm_emitter::eval;
 

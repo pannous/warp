@@ -284,7 +284,7 @@ fn holder_path(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
 		Node::Key(object, Op::Dot, field) => Some(format!("{}.{}", holder_path(object)?, field_word(field)?)),
-		Node::Key(object, Op::Hash, index) => Some(format!("{}.{}", holder_path(object)?, field_word(crate::wasp_parser::subscript_key(index)?)?)),
+		Node::Key(object, Op::Hash, index) => Some(format!("{}.{}", holder_path(object)?, field_word(crate::warp_parser::subscript_key(index)?)?)),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => holder_path(&items[0]),
 		_ => None,
 	}
@@ -320,7 +320,7 @@ impl FunctionValues {
 			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name) || self.variables.contains(name)) => true,
 			// `g(y => y*2)` of `g = x => x`: the function value it was given
 			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.passing_through.get(name).and_then(|index| items.get(index + 1)).is_some_and(|argument| self.is_function_value(argument))) => true,
-			Node::List(items, _, _) if matches!(items.as_slice(), [marker, _, _, ..] if matches!(marker.drop_meta(), Node::Symbol(word) if word == crate::wasp_parser::TRY_MARKER)) => {
+			Node::List(items, _, _) if matches!(items.as_slice(), [marker, _, _, ..] if matches!(marker.drop_meta(), Node::Symbol(word) if word == crate::warp_parser::TRY_MARKER)) => {
 				self.is_function_value(&items[1]) || self.is_function_value(&items[2])
 			}
 			// a block is worth its last statement: `{fallback}`

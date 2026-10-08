@@ -100,7 +100,7 @@ fn rpc_route(definition: &Node) -> Option<Route> {
 	crate::analyzer::extract_user_functions(&mut context, definition);
 	let function = context.user_functions.into_values().next()?;
 	let arguments: Vec<String> = (1..=function.params.len()).map(|index| format!("{REQUEST_WORD}.body#{index}")).collect();
-	let call = crate::wasp_parser::parse(&format!("{}({})", function.name, arguments.join(", ")));
+	let call = crate::warp_parser::parse(&format!("{}({})", function.name, arguments.join(", ")));
 	Some((RPC_METHOD.to_string(), Node::Text(format!("{RPC_PREFIX}{}", function.name)), Node::List(vec![call], Bracket::Curly, Separator::None)))
 }
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds web/playground: the warp compiler for the browser (no wasmtime: the `native` feature off, src/web.rs) in two
-# builds, samples.js (samples/*.wasp for the example menu) and keywords.js (the editor's hard and soft keywords). Serve the repository root and open the page:
+# builds, samples.js (samples/*.warp for the example menu) and keywords.js (the editor's hard and soft keywords). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)
 # Usage: build.sh [optimized|debug|components|served <site>]   (all when omitted)
 #   optimized → warp.wasm: release profile (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
@@ -96,14 +96,14 @@ esac
 
 git ls-files --cached --others --exclude-standard | write_served_files "$page/served-files.js"
 
-python3 - "$page/samples.js" "$page/excluded_samples.txt" samples/*.wasp <<'PYTHON'
+python3 - "$page/samples.js" "$page/excluded_samples.txt" samples/*.warp <<'PYTHON'
 import json, os, sys
 # the samples the page cannot run yet stay out of the menu, each named with its error in excluded_samples.txt
 excluded = {line.split()[0] for line in open(sys.argv[2], encoding="utf-8") if line.strip() and not line.startswith("#")}
-names = {os.path.basename(path)[:-len(".wasp")]: path for path in sys.argv[3:]}
+names = {os.path.basename(path)[:-len(".warp")]: path for path in sys.argv[3:]}
 samples = {name: open(path, encoding="utf-8").read() for name, path in names.items() if name not in excluded}
 with open(sys.argv[1], "w", encoding="utf-8") as script:
-	script.write("// made by build.sh from samples/*.wasp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
+	script.write("// made by build.sh from samples/*.warp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
 PYTHON
 echo "built $page/samples.js"
 

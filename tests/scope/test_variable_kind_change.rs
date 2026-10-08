@@ -19,7 +19,7 @@ fn a_loop_variable_may_reuse_the_name_of_a_list() {
 
 #[test]
 fn a_loop_variable_may_reuse_the_name_of_a_number_and_read_fields() {
-	// samples/natural.wasp: `item = 2` earlier, then `for each item in basket { … item.price }`
+	// samples/natural.warp: `item = 2` earlier, then `for each item in basket { … item.price }`
 	is!("item = 2; basket = [{price: 2} {price: 3}]; t = 0; for item in basket { t = t + item.price }; t", 5);
 	is!("item = 2; basket = [{price: 2} {price: 3}]; t = 0; for each item in basket { t = t + item.price }; t", 5);
 	is!("p = 2; people = [{age: 7}]; p = people#1; p.age", 7);

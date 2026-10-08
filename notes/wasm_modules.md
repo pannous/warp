@@ -4,7 +4,7 @@
 text form `name.wat`, in the module search directories (src/modules.rs `use_wasm_module`). An explicit path works too:
 `import "lib/x.wasm"`, `use "x.wat"`.
 
-```wasp
+```warp
 import tests/fixtures/wasm/fourty_two   // exports ft (global i64 42), twice(i64), half(f64), add32(i32, i32), tick()
 twice(ft) + half(5.0)                   // 86.5
 ```
@@ -49,11 +49,11 @@ twice(ft) + half(5.0)                   // 86.5
     is its byte length, which the wasp call may leave out: `XXH32("hello", 0)` passes 5 itself, and the text then
     crosses by its bytes, NUL bytes included (compressed data). Given explicitly (`crc32(0, "hello", 5)`, the call has
     all parameters) it is passed as written.
-  - `T **` is an out-pointer, left out of the wasp call: the module gets a NULL slot of its malloc and what it received
+  - `T **` is an out-pointer, left out of the warp call: the module gets a NULL slot of its malloc and what it received
     is the result (as natively, notes/ffi_handles.md), a text for `char **` (`strtol("42 apples", 10)` is " apples"),
     else the module's pointer as a number; NULL there is a loud error naming the C status.
   - A writable pointer followed by a pointer to an unsigned count (`Bytef *dest, uLongf *destLen`) is a buffer: the
-    wasp call passes its capacity in its place and leaves the count out; the module gets a block of that size and a
+    warp call passes its capacity in its place and leaves the count out; the module gets a block of that size and a
     slot holding the capacity, and the bytes it wrote (as many as the slot then says) are the result, a text. A C
     status other than 0 is a loud error: `uncompress(4, …)` fails with "uncompress failed (C status -5)" (Z_BUF_ERROR).
   - An `unsigned` result of an i32 is zero-extended into an Int (`crc32(0, "wasp", 4)` is 3400449319, not negative).

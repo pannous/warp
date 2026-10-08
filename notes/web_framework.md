@@ -1,35 +1,35 @@
-# wasp as a web framework (plan, 2026-10-07)
+# warp as a web framework (plan, 2026-10-07)
 
-Goal (user, 2026-10-07): replace React / Svelte / Next with wasp itself: markup is wasp data, reactivity is wasp's
+Goal (user, 2026-10-07): replace React / Svelte / Next with warp itself: markup is warp data, reactivity is warp's
 signals, the server is the same program. The cards are the web-* cards on the board (column Soon); this note is their
 order and what each builds on. Defaults below are undoable; open questions go to the Interviewer.
 
 ## What exists already
-- **Markup as data**: `html{ body{ h1: "Hi" ul{ li: "a" li: "b" } } }` parses (samples/html.wasp, html_dsl.wasp; repeated
+- **Markup as data**: `html{ body{ h1: "Hi" ul{ li: "a" li: "b" } } }` parses (samples/html.warp, html_dsl.warp; repeated
   keys like `li li li` since 49a48ece1, tests/web/test_markup_tags.rs). It is only a value today: nothing renders it.
 - **Signals** (notes/signals.md): every variable is a signal once something listens; `:=` derives one and knows what it
   reads; `whenever`, `on change`, page-wide `on click` / `on key` in the playground (phase 7).
 - **Page plumbing** (notes/web_playground.md): the compiler runs in a worker, host words reach the page
-  (host.js), paint draws pixels, `use draw` shapes (lib/draw.wasp), fetch, channels, components, threads.
+  (host.js), paint draws pixels, `use draw` shapes (lib/draw.warp), fetch, channels, components, threads.
 
 ## Order of the cards
 Each step is useful on its own and is what the next ones stand on.
 
 | # | card | builds on | what it adds |
 |---|---|---|---|
-| 1 | web-dom (web-dom-render) | markup as data | an `html{…}` / `div{…}` value renders as real DOM in the page and as an HTML string natively (`warp run page.wasp > page.html`): tags, attributes (`a{href:"/"}`), text, nesting, escaping |
+| 1 | web-dom (web-dom-render) | markup as data | an `html{…}` / `div{…}` value renders as real DOM in the page and as an HTML string natively (`warp run page.warp > page.html`): tags, attributes (`a{href:"/"}`), text, nesting, escaping |
 | 2 | web-element (web-element-events) | 1, signals phase 7 | `button{ on click { count += 1 } "Add" }`: handlers on an element, `event` its data, delegated under the hood |
 | 3 | web-fine (web-fine-grained) | 1, 2, derived signals | markup reading a signal (`p{ "total " + total }`, `div{ class: done ? "done" : "open" }`) updates only that text node or attribute when the signal changes; no virtual DOM |
 | 4 | web-components | 3 | components are functions returning markup with props and children (`Card(title:"Hi") { p:"text" }`), own signals per instance, cleanup of their listeners when removed |
 | 5 | web-keyed (web-keyed-lists) | 3, 4 | `for todo in todos { li{ key: todo.id … } }` patches inserts, removals and moves by key |
 | 6 | web-bind | 3 | two-way form bindings (`input{ bind: name }`), submit as an event with the fields as an object, validation from types |
-| 7 | web-styles | 1, 3 | styles as wasp data scoped to a component, signals in values, plain CSS out |
+| 7 | web-styles | 1, 3 | styles as warp data scoped to a component, signals in values, plain CSS out |
 | 8 | web-async (web-async-data) | 3, fetch | `users := fetch "/api/users"` as a signal with loading / value / error states, refetch on change, cancel on navigation |
 | 9 | web-router | 4, 8 | `route "/users/:id" { UserPage(id) }`, History API links, nested layouts, not-found page |
 | 10 | web-server | std json | native server in the same program (below); typed RPC between page and server |
 | 11 | web-ssr (web-ssr-hydration) | 1, 3, 10 | render at the server or at build time (`warp build --site`), then attach the signals to the existing DOM |
 | 12 | web-stores | 3 | shared stores / context as module-level signals, persisted signals (`stored theme = "dark"`), undo |
-| 13 | web-dev (web-dev-loop) | 1–4 | `warp dev page.wasp`: hot reload keeping signal state, the playground's error overlay in the app |
+| 13 | web-dev (web-dev-loop) | 1–4 | `warp dev page.warp`: hot reload keeping signal state, the playground's error overlay in the app |
 | 14 | web-testing | 1, 2 | `render(Counter())`, click "Add", expect "1": headless in the browser suite, natively against the HTML string |
 | 15 | web-transitions | 5 | enter / leave / move transitions declared as data |
 | 16 | web-a11y (web-a11y-i18n) | 1, 4 | accessible defaults with welcoming warnings (an `img` without `alt`), translations as data |
@@ -40,7 +40,7 @@ Each step is useful on its own and is what the next ones stand on.
 - **Routes**: `serve 8080 { get "/api/users" { users } post "/api/users" { … } }`. A route's block value is the response:
   a text as text/plain, any other value as JSON (std json to_json). `request` holds method, path, query and body (the
   body parsed when it is JSON); `status 404` sets the status; `header "name" "value"` later.
-- **Plain HTTP from the page**: `fetch "/api/users"` gives the parsed JSON as a wasp value (arrays ↔ lists, objects ↔
+- **Plain HTTP from the page**: `fetch "/api/users"` gives the parsed JSON as a warp value (arrays ↔ lists, objects ↔
   maps); a status of 400 or more is an Error value carrying the status and the body text.
 - **Typed RPC**: `server def users(min_age) {…}` in the same program. The server build exposes it as
   `POST /rpc/<name>` with the arguments as a JSON array and the result as JSON; the page build replaces its body with a
@@ -72,10 +72,10 @@ Each step is useful on its own and is what the next ones stand on.
 - Repeated keys (user decision P176, card g-_bGo): in a named tag's block, glued `ul{…}` or spaced `ul {…}`, a repeated
   `key: value` is a child (`ul{ li: "First" li: "Second" }` is two li), as repeated elements in XML/HTML; a plain `{…}`
   stays a map whose repeated key is the error "duplicate key", also inside a tag, and so does a declared type's
-  constructor `Point{ x: 1 x: 2 }`. The parser's one-shot flag tag_block (wasp_parser/mod.rs) skips the check for the
+  constructor `Point{ x: 1 x: 2 }`. The parser's one-shot flag tag_block (warp_parser/mod.rs) skips the check for the
   tag's own block only.
 - Natively the value serializes as HTML (`to_html`), text escaped. In the page the program's value, when it is markup, is
-  shown as DOM in the output pane instead of its wasp text; `show(markup)` places it explicitly.
+  shown as DOM in the output pane instead of its warp text; `show(markup)` places it explicitly.
 
 ## Step 3 (web-fine), what is done and what is left
 - Done (DOM side): after a handler the page receives the whole markup again (the output binding, event_signals.rs) and
@@ -98,7 +98,7 @@ Each step is useful on its own and is what the next ones stand on.
 - Own state per instance (lowering/component_state.rs, before element_events): a variable of a component that one of
   its element handlers mentions is the main-level list `Counter·count`, one entry per instance; an instance is the n-th
   call of that component in a render (React's hooks rule, undoable default, question queued with the Interviewer); the
-  handler's element carries `data-wasp-instance`, the page passes it as `event.instance`. The program's last line
+  handler's element carries `data-warp-instance`, the page passes it as `event.instance`. The program's last line
   becomes the getter `page·markup`, which resets the instance counters before each render.
 - Class components (warp-41, branch classes-40, notes/classes.md): a class with render() (aliases view, template,
   build) constructed as an element's child or as the program's value renders through render().
@@ -113,7 +113,7 @@ Each step is useful on its own and is what the next ones stand on.
 - A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,
   `ul{ ts.map(t => li{t}) }` (markup_tags.rs keeps it a `[…]`, which the analyzer and emitter take as an item, not as
   statements to run; analyzer/variables.rs: a statement group in a structure declares its locals).
-- `li{ key: todo.id … }` is the attribute data-wasp-key; playground.js morphChildren moves the shown element of that
+- `li{ key: todo.id … }` is the attribute data-warp-key; playground.js morphChildren moves the shown element of that
   key into place instead of rewriting elements by position. Tour example "keyed list" (`keyed` check).
 - A for loop among an element's children, `ul{ for t in ts { li{t} } }`, is the comprehension `[li{t} for t in ts]`
   (markup_tags.rs loop_as_comprehension; in a for header the parser no longer reads `ts { … }` as the child tag ts).
@@ -124,14 +124,14 @@ Each step is useful on its own and is what the next ones stand on.
 - `input{ bind: name }` is `input{ value: name on input { name = event.value } }` (element_events.rs); a checkbox or
   radio binds `checked`. `input` is a page event (PAGE_EVENTS); the page sends {value, checked} (a number from a
   number or range field) and sets a changed field's value/checked when the markup comes back (morphElement).
-- Boolean attributes (checked, disabled, …) are present or absent (lib/markup.wasp; true arrives from a run as 1).
+- Boolean attributes (checked, disabled, …) are present or absent (lib/markup.warp; true arrives from a run as 1).
 - Tour example "form binding" (`typed` field of examples.js).
 - Left: `select{ bind: choice }` (its first render shows the first option), `bind:` inside a component's state
   (component_state.rs sees only handlers), form submit as an event with the fields as an object, validation from types.
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
-  sheet of rules (lib/markup.wasp). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
+  sheet of rules (lib/markup.warp). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
   are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
 - CSS as CSS (classes-42, src/lowering/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
   one rule per line (`.card {…}`, `ul > li {…}`, `h1, h2 {…}`, `a:hover {…}`, `p.note {…}`, `ul li {…}`, `#main {…}`),
@@ -144,16 +144,16 @@ Each step is useful on its own and is what the next ones stand on.
 
 ## Step 14 (web-testing), what is done and what is left (classes-42, warp-06)
 - `warp::headless::Page` (src/headless.rs, tests/web/test_headless_pages.rs): `Page::render(code)` runs the program
-  and keeps the run; `click("Add")` finds the element showing that text with a `data-wasp-click`, runs its handler
+  and keeps the run; `click("Add")` finds the element showing that text with a `data-warp-click`, runs its handler
   (`on·click·N·node` with `[{instance}]` for a component instance) and reads `page·value` anew; `type_into(label,
   text)` fires `input` on the field found by placeholder, name or id; `text()` (without style/script), `html()`,
   `markup()`. A missing element is an Err naming the page's HTML.
 - Natively the run is a kept wasmtime instance (wasm_reader::run_main_kept); in the browser suite the same tests run
   through the new import warp_host.page_event (host.js pageEventOutcome on the last listening run, as worker.js
   showHandled). Elements and text are read from the rendered HTML (headless.rs `shown`), so html.rs is untouched and a
-  later renderer (lib/markup.wasp) keeps working.
+  later renderer (lib/markup.warp) keeps working.
 - The playground examples keep their `clicks` / `typed` / `clicked` checks (test_in_browser.py --examples).
-- Tests in wasp (src/page_tests.rs, tests/web/test_page_tests.rs; syntax an undoable default, queued with the
+- Tests in warp (src/page_tests.rs, tests/web/test_page_tests.rs; syntax an undoable default, queued with the
   Interviewer): `test "counter" { render Counter(1); click "Add"; fill "name" with "Ada"; check text is "Addn 2" }`.
   A program with a top-level test block that renders runs its tests host-side on headless pages: the code outside the
   tests is the setup, other lines in a test are its own setup, `check` holds with `text` / `html` bound to the page.
@@ -164,8 +164,8 @@ Each step is useful on its own and is what the next ones stand on.
 ## Step 15 (web-transitions), what is done and what is left
 - CSS form (P188, card web-css; lowering/transitions.rs, right after markup_tags): `li{ transition: opacity 200ms }` is
   the element's inline CSS transition, joined to its own `style`; `starting-style: { opacity: 0 }` (CSS's
-  @starting-style, which an inline style cannot hold) is the attribute `data-wasp-starting-style`, rendered as
-  declarations by lib/markup.wasp. Words are data (not variables), durations normalized to ms, a text taken as written,
+  @starting-style, which an inline style cannot hold) is the attribute `data-warp-starting-style`, rendered as
+  declarations by lib/markup.warp. Words are data (not variables), durations normalized to ms, a text taken as written,
   timing words (`ease-out`) join the transition; the words end where the children begin. In `style: {…}` transition
   stays the CSS property as written.
 - The kinds before CSS, `transition: fade 200ms` (also scale, slide), lower to that CSS (opacity, and transform for
@@ -174,7 +174,7 @@ Each step is useful on its own and is what the next ones stand on.
   "transition" (site.rs scripts_of; playground index.html and pages.yml SITE_FILES list it), replaces markup.js's
   defaults transitionPlaces, enter, leave, moveFrom (hello-world budget stays small). Web Animations API from the
   computed CSS transition: an element with a starting style animates in from it when inserted and towards it before
-  removal (marked data-wasp-leaving, skipped by matching, removed when done; a keyed item gone from its list leaves
+  removal (marked data-warp-leaving, skipped by matching, removed when done; a keyed item gone from its list leaves
   where it stands); a keyed one whose transition covers transform (or all) glides to its new place (FLIP). Nothing
   animates on the first render or with prefers-reduced-motion. Tests: tests/web/test_css_transitions.rs,
   test_transitions.rs; tour example transitions (`animated` check of test_in_browser.py);
@@ -182,17 +182,17 @@ Each step is useful on its own and is what the next ones stand on.
 - Left: custom keyframes as data, `0.3s` (card
   fractional-durations), leaving items still take their space until removed (no absolute positioning while leaving).
 - Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
-  (`data-wasp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
-  `[data-wasp-scope="Card"] ` (html.rs), so they style only elements inside it (not the root itself; a nested
+  (`data-warp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
+  `[data-warp-scope="Card"] ` (html.rs), so they style only elements inside it (not the root itself; a nested
   component's elements still match).
 - Left (warp-06 takes the parser bits): `.card { … }` written
   without quotes (the parser stops at `.`), `8px` written as a number with a unit (parses as 8 * px).
 
 ## Built sites (card web-ssr, 2026-10-07; split agreed with warp-cd, renderer decided by warp-96)
-- `warp build --site app.wasp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
+- `warp build --site app.warp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
   host.js, markup.js, site.js, carried in the warp binary (src/site.rs include_str!, one source with the playground).
-- One renderer, written in wasp (warp-96: "Wasp is wasm-first"): lib/markup.wasp's to_html (`use markup`; not `html`,
-  which samples/html.wasp would shadow) is the one renderer: the CLI and the playground render a markup value with it
+- One renderer, written in warp (warp-96: "Warp is wasm-first"): lib/markup.warp's to_html (`use markup`; not `html`,
+  which samples/html.warp would shadow) is the one renderer: the CLI and the playground render a markup value with it
   too (src/markup.rs to_html runs `use markup; to_html(value)`; src/html.rs is gone). A program
   compiled for a page (pipeline::for_a_page) exports page·html := to_html(page·value) (lowering/page_html.rs); its
   page·value is event_signals' output binding, else the last line when that is an expression (no assignment,
@@ -203,16 +203,16 @@ Each step is useful on its own and is what the next ones stand on.
   build time, so the component instances count alike. The DOM stays; click and input on the root find their element's
   handler (markup.js elementEvent), and after a handler (or a fetch reply) the page morphs (markup.js morphChildren) in
   the HTML of page·html.
-- lib/markup.wasp cannot tell a square list from a curly one at run time: a list value whose items hold pairs is
+- lib/markup.warp cannot tell a square list from a curly one at run time: a list value whose items hold pairs is
   inline CSS (for style) or children (`style{ ".x": {…} }`), any other list the joined attribute value (`class:["a" "b"]`).
-- Scoped style sheets (card web-scoped): an element with data-wasp-scope:"Card" prefixes the selectors of the sheets
-  inside it with `[data-wasp-scope="Card"] `; src/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
+- Scoped style sheets (card web-scoped): an element with data-warp-scope:"Card" prefixes the selectors of the sheets
+  inside it with `[data-warp-scope="Card"] `; src/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
 - Timers in a built page: site.js starts them after main (host.js startTimers, shared with the playground worker),
-  each handler morphs the page; a failing handler stops them (probes/site/ticker.wasp).
-- A program serving its own page: `warp run app.wasp` with `serve 8080 {…}` and a page as its last line answers GET /
+  each handler morphs the page; a failing handler stops them (probes/site/ticker.warp).
+- A program serving its own page: `warp run app.warp` with `serve 8080 {…}` and a page as its last line answers GET /
   with the page rendered when the server starts (src/site.rs render, the page build without the serve statement) and
   /app.wasm, /site.js … beside it; a route wins over a file of the same path. The page hydrates and fetches the
-  program's own routes (probes/site/served.wasp). Page events draw no "never raises it" warning there. Only program
+  program's own routes (probes/site/served.warp). Page events draw no "never raises it" warning there. Only program
   files serve a page (the host builds it from modules::program_file).
 - Open: the page is rendered once at start (per request later); a relative `fetch "/api/…"` fails during that render
   (no server yet), so the first HTML shows the error state until the page fetches; `server def` bodies still run in the
@@ -220,22 +220,22 @@ Each step is useful on its own and is what the next ones stand on.
 - Programs in a Worker (card site-worker, step 1): a module importing task words (task_/channel_/shared_, site.rs
   runs_in_a_worker) runs in site-worker.js, where a blocking await may wait (Atomics.wait) and its tasks run together on
   the task Workers. The page loads site-thread.js, markup.js and site.js only; its root lists the Worker's scripts
-  (data-wasp-worker="reader.js,host.js,host-tasks.js…"), and site.js calls startSiteWorker instead of hydrate: the page
+  (data-warp-worker="reader.js,host.js,host-tasks.js…"), and site.js calls startSiteWorker instead of hydrate: the page
   sends the module, kept values, path and element events, the Worker answers html/stored/print/failure. A static host
   gets cross-origin isolation through coi-serviceworker.js (one reload). A plain page stays on the page's thread (bundle
   budget). Routes (step 2, card site-worker-step): the page keeps host-routes.js (links, back button, focus) and sends
   the Worker {navigate: path}; the Worker loads that route's module and answers its markup with `navigated`, after
-  which the page focuses the route. Probe: probes/site_worker.py (also probes/site/routed_tasks.wasp).
+  which the page focuses the route. Probe: probes/site_worker.py (also probes/site/routed_tasks.warp).
 
 ## Routes (card web-router, 2026-10-07; split agreed with warp-cf (web-bundle) and warp-34 (playground, fetch-cancel))
-- `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, lib/router.wasp): each route is the function page·route·N,
+- `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, lib/router.warp): each route is the function page·route·N,
   `id` bound by `let` to that part of the path (a number when it is digits, else the text), page·routes gives the
   patterns in order (exported, for warp-cf's per-route modules), page·routed() is the first route matching the page's
   path, else "no page at <path>"; `route "*"` matches any path (the not-found page). A layout shows page·routed() where
   it says `outlet`; else a program ending with a route shows it as its last line.
 - Typed parameters (card route-typed): `route "/users/:id:int" { p{ "next " + (id + 1) } }`. A parameter declaring
   int, float, text or string is `let id:int = route_segment(…) as int`, so its block type-checks; the route matches
-  only a part of that type (lib/router.wasp route_fits: int digits, float digits with one dot), else the next route or
+  only a part of that type (lib/router.warp route_fits: int digits, float digits with one dot), else the next route or
   not found. An untyped one stays a run-time value of any kind (`"a" + (id + 1)` is a type error: declare the type).
   An unknown type is an error naming the known ones. Casts use `as`: float(text) is broken (card float-of-text), and a
   std function returning int, float or text mixed came back int-typed (card return-type-mixed).
@@ -261,7 +261,7 @@ Each step is useful on its own and is what the next ones stand on.
   per-route pages of route-prerender and the per-request rendering of serve-route): a site with routes is index.html
   (rendered at "/") plus its copy 404.html with <base href="/">, which static hosts (GitHub Pages) serve for any path
   they have no file of; site::file_at answers such a path with it in `warp dev` and in a serve program
-  (tests/fixtures/served_routes.wasp). site.js runs main at location.pathname and shows that route, so a deep link
+  (tests/fixtures/served_routes.warp). site.js runs main at location.pathname and shows that route, so a deep link
   shows the home page's HTML until the module ran. The <base> makes the scripts, app.wasm and app-route-N.wasm load
   from the root (a site in a subfolder of its host gets no deep links). Browser check: probes/site/deep_link_in_browser.sh.
 - `outlet` is the canonical word (aliases such as slot on demand).
@@ -270,14 +270,14 @@ Each step is useful on its own and is what the next ones stand on.
 - Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
   value an earlier run kept under its name, else the default; `on change theme` keeps each change. Natively the values
   are JSON in `<program>.stored.json` beside the program (in memory for inline code), in the playground the page's
-  localStorage (`wasp stored <name>`): the worker gets them at start and sends each save back (host.js
+  localStorage (`warp stored <name>`): the worker gets them at start and sends each save back (host.js
   STD_ADAPTERS.store, markup.js keptValues / keepValue, shared with built sites: site.js). Values cross as JSON
   (std_adapters, as foreign calls).
 - Runtime keys (card web-apis, storage): `storage` is the same store as a map: `storage[k] = v`, `storage[k]` (ø when
   absent), `delete storage[k]`, `keys(storage)`, `storage.k`; the store words remove and names beside load and save.
   Words (P188, browser API names; warp-03's undoable default, no user answer): `local[k]` is that store
   (localStorage), `storage[k]` its alias; `session[k]` a store of its own (sessionStorage while the tab lasts, natively
-  in memory while the process runs; SESSION_STORE "wasp-session", host.js sessionValues). A program defining its own
+  in memory while the process runs; SESSION_STORE "warp-session", host.js sessionValues). A program defining its own
   `storage`, `local` or `session` keeps it. IndexedDB for values beyond localStorage's ~5 MB is left.
 - Clipboard (P188, navigator.clipboard's names; warp-03's default): `clipboard.write(text)` is the std word
   std_io("clipboard", "write", [text]) (lowering/system_values.rs): pbcopy / wl-copy / xclip natively, in a page
@@ -291,7 +291,7 @@ Each step is useful on its own and is what the next ones stand on.
 - Shared stores: a used module's main-level variables are the program's shared state (`use settings` reads and writes
   its theme), and the program's `on change theme` sees the writes of the module's functions (modules::resolve runs
   before the signal passes, card module-signal-writes). `stored theme = "dark"` in a module is a declaration the
-  module contributes: kept in the store of the program that uses it (probes/stores/app.wasp, tests/modules/
+  module contributes: kept in the store of the program that uses it (probes/stores/app.warp, tests/modules/
   test_module_signals.rs). Context (a value for a subtree of components without props): question with the
   Interviewer; default until then: main-level variables, which every component reads.
 
@@ -301,10 +301,10 @@ Each step is useful on its own and is what the next ones stand on.
   wasm_emitter/text_unicode.rs: app.wasm 17.5 → 11.9) → 32.1 KB (site::compacted: shipped scripts without comment
   lines and indentation, host.js 23.8 → 16.7). Svelte's hello world is about 3 KB, Solid's about 5 KB.
 - Not taken: wasm-opt -Oz on app.wasm (11 KB smaller raw, 0.6 KB larger gzipped).
-- What is left in app.wasm is the runtime lib/markup.wasp's to_html reaches (texts, lists, equality, floats): a shared
+- What is left in app.wasm is the runtime lib/markup.warp's to_html reaches (texts, lists, equality, floats): a shared
   runtime module, cached across pages, would help sites with several pages, not the first load.
 - host.js split (2026-10-07, 32.1 → 21.9 KB, host.js 16.7 → 6.1): the core keeps what every page runs (run, outcome,
-  page events, timers, values between JS and wasp, std json/os/store/regex); the parts add themselves with addHostPart:
+  page events, timers, values between JS and warp, std json/os/store/regex); the parts add themselves with addHostPart:
   host-files.js (fetch, read, std file and net), host-hashes.js (std hash), host-tasks.js (tasks, channels,
   BroadcastChannel and WebSocket, shared arrays, fetch_start), host-foreign.js (foreign_call, libm, libc.wasm, .wasm
   imports; needs files), host-compiler.js (warpHost, run_block; needs files), host-routes.js (page_path, navigate, a site's links and back button). A part hooks into a run through its
@@ -351,7 +351,7 @@ Each step is useful on its own and is what the next ones stand on.
 - `gpu_compute(shader, numbers, workgroups)` (host word, warp-runtime host_words.rs GPU_COMPUTE): a WGSL compute
   shader whose entry point `main` reads and writes the numbers as `array<f32>` at @group(0) @binding(0), dispatched
   over `workgroups` workgroups; the value is the list of floats it left (f32: WGSL has no f64). Example:
-  probes/webgpu/double.wasp; tests/web/test_webgpu.rs (browser suite: real GPU, skips loudly without an adapter).
+  probes/webgpu/double.warp; tests/web/test_webgpu.rs (browser suite: real GPU, skips loudly without an adapter).
 - Browser: host part web/playground/host-gpu.js (site.rs HOST_PARTS, needs host-tasks.js). WebGPU only answers
   asynchronously, so a task Worker (task-worker.js `data.gpu`) asks for the device once, runs the job and writes
   {values} or {error} with writeShared; the program's worker blocks in host-tasks.js readShared (shared by tasks,
@@ -366,7 +366,7 @@ Each step is useful on its own and is what the next ones stand on.
   width×height rgba8unorm image and gives its pixels as paint takes them, 0xFFRRGGBB row by row (alpha dropped).
   warp appends the vertex stage (warp_full_image: one triangle covering the image) after the shader, so compile errors
   keep the user's line numbers. Same task-Worker path as gpu_compute (host-gpu.js GPU_JOBS), natively src/gpu.rs
-  render. samples/webgpu.wasp animates rings (a frame per loop step: paint + sleep), in the playground menu again.
+  render. samples/webgpu.warp animates rings (a frame per loop step: paint + sleep), in the playground menu again.
   Without an adapter the samples test skips it loudly (CI).
 - Values (uniforms): `gpu_render(shader, w, h, {frame: 3, size: [128, 128]})`: the shader reads the map as `values.frame`
   (f32), `values.size` (vec2f; lists of 2–4 numbers are vec2f…vec4f). warp appends `struct WarpValues {…}` and
@@ -443,17 +443,17 @@ Each step is useful on its own and is what the next ones stand on.
   against wss://echo.websocket.org (text and JSON).
 
 ## Step 13 (web-dev), what is done and what is left
-- `warp dev app.wasp [port]` (src/dev_server.rs, default port 8008) serves the program's site from memory
+- `warp dev app.warp [port]` (src/dev_server.rs, default port 8008) serves the program's site from memory
   (site::files, the same page `warp build --site` writes, plus web/playground/dev.js). No watcher: a request finding
-  the file's mtime changed builds anew. dev.js polls /wasp-dev/state ({version, error}) every 300 ms: a new version
+  the file's mtime changed builds anew. dev.js polls /warp-dev/state ({version, error}) every 300 ms: a new version
   reloads the page; a failure shows as an overlay (message, `line | source`, caret, fix) while the last good build
   serves on, and the next good build reloads.
 - State across reloads: a dev build (pipeline::for_dev) keeps each main-level variable the program changes later
   (assigned again or `+=`, stored_values.rs dev_kept) as `stored` keeps it, in the store DEV_STORE: the page's
-  sessionStorage (`wasp dev <name>`), in memory natively. Only a changed value is saved, so a variable never changed
+  sessionStorage (`warp dev <name>`), in memory natively. Only a changed value is saved, so a variable never changed
   takes its new initial value from the edited source; one changed keeps its value (as React Fast Refresh does).
   site.js hydrate loads the kept values and shows what main left (page·html).
-- Tests: tests/web/test_dev_server.rs; probes/dev/counter.wasp (click, edit the label: the count stays),
+- Tests: tests/web/test_dev_server.rs; probes/dev/counter.warp (click, edit the label: the count stays),
   probes/dev/stored_check.py.
 - Left: watching used modules (only the program's file counts), component instance state (`Counter·count` lists) and
   the playground editor's error marks in the overlay; a failure's source line is that of the program, not of a module.

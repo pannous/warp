@@ -4,7 +4,7 @@ use wasmtime::{Config, Engine, Store};
 /// frame of a deep recursion) at each of its many small growths
 const GC_HEAP_INITIAL_BYTES: u64 = 1 << 30;
 
-/// Engine settings every wasp run shares: GC and typed function references. NaNs are canonicalized where they are
+/// Engine settings every warp run shares: GC and typed function references. NaNs are canonicalized where they are
 /// observed (floats::canonical_nan, P119), not after every float operation, which doubled the cost of float loops.
 /// Machine code compiled with these settings (`warp compile --aot`, `warp build`) loads into any engine made
 /// from them, with or without a compiler.

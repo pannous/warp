@@ -1,5 +1,5 @@
 //! wiki/mark.md: inside a tag's block `div(class:"form-group")` is the tag `div{class:"form-group"}`, and
-//! `label(for:pwd):"Password"` the tag `label{for:pwd "Password"}` (samples/html.wasp, card g-_alg). Only data takes
+//! `label(for:pwd):"Password"` the tag `label{for:pwd "Password"}` (samples/html.warp, card g-_alg). Only data takes
 //! this reading: a name the program defines stays its call, and outside a tag block a call of an unbound name stays
 //! the loud error (P92). A comprehension or method call among an element's children gives children (card web-keyed).
 
@@ -36,7 +36,7 @@ fn outside_tags(node: Node, defined: &HashSet<String>) -> Node {
 }
 
 /// `ul { … }` with a blank, as a statement: the element `ul{ … }` when the program does not define the name, so its
-/// children read as the glued tag's do (`ul { for item in items { li: item } }`, samples/html_dsl.wasp);
+/// children read as the glued tag's do (`ul { for item in items { li: item } }`, samples/html_dsl.warp);
 /// glued `html(lang: "en"){ … }` (a round list) the element `html{ lang: "en" … }`, its attributes before its children
 /// (card markup-attribute)
 fn spaced_element(node: Node, defined: &HashSet<String>) -> Node {

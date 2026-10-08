@@ -11,9 +11,9 @@ fn error_text(code: &str) -> String {
 
 #[test]
 fn include_splices_the_whole_file_and_runs_it() {
-	is!("include \"tests/fixtures/counter.wasp\"; counter", 11);
+	is!("include \"tests/fixtures/counter.warp\"; counter", 11);
 	is!("include tests/fixtures/counter; counter", 11);
-	is!("include tests/fixtures/counter.wasp; counter", 11);
+	is!("include tests/fixtures/counter.warp; counter", 11);
 }
 
 #[test]

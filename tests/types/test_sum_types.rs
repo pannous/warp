@@ -1,4 +1,4 @@
-// Sum types (card sum-types, samples/types.wasp): `type Option[T] = Some(T) | None` declares a class per variant with a
+// Sum types (card sum-types, samples/types.warp): `type Option[T] = Some(T) | None` declares a class per variant with a
 // payload, each extending the sum type; a variant without payload is its name (None stays ø); match takes them apart
 use crate::is;
 

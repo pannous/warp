@@ -237,7 +237,7 @@ def show_example(name):
 		if (!clicks.length && typed === undefined) return JSON.stringify(shown);
 		const rendered = document.getElementById("rendered").shadowRoot;
 		const elements = [...rendered.querySelectorAll("*")];
-		const keys = elements.map(element => element.getAttribute("data-wasp-key"));
+		const keys = elements.map(element => element.getAttribute("data-warp-key"));
 		const field = rendered.querySelector("input");
 		let animations = 0;
 		const animate = Element.prototype.animate;
@@ -253,7 +253,7 @@ def show_example(name):
 		}}
 		Element.prototype.animate = animate;
 		const kept = elements.every(element => element.isConnected);
-		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-wasp-key") === keys[index]);
+		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-warp-key") === keys[index]);
 		const clickedPrinted = document.getElementById("printed").textContent;
 		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0, address: shownAddress() }});
 	}})()"""

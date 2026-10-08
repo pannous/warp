@@ -13,5 +13,5 @@ fn a_local_named_like_a_module_word_is_the_local() {
 
 #[test]
 fn a_local_named_like_a_program_function_is_the_local() {
-	is!("f(x) := x + 1; g(n) := { f = [n]; f }; g(3)", warp::wasp_parser::parse("[3]"));
+	is!("f(x) := x + 1; g(n) := { f = [n]; f }; g(3)", warp::warp_parser::parse("[3]"));
 }

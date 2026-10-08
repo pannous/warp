@@ -1,7 +1,7 @@
 //! Which operator the parser puts on top: precedence, associativity, prefix/suffix and glyph forms
 //! (condensed from probe_operators.rs, probe_precedence.rs and probe_increment.rs)
 use warp::node::Node;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 use warp::Op;
 use crate::is;
 
