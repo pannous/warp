@@ -130,6 +130,10 @@ checked like a declared scalar:
 - A float or number list takes ints (`is number`), as a declared float does.
 - Parameters (`f(xs: texts)` called with `[420]`): warp-7c's param-types work (functions2, checks.rs
   `declared_element_type`, `elements_fit`).
-- Not checked yet: a field of a receiver that is no variable (`bags#1.items.add(v)`, `make().items.add(v)`).
+- A receiver inside an element (`bags#1.n = 5`, `bags#1.items.add(v)`, `bags#1.items#1 = v`) is taken out into
+  `nested·N`, changed, checked and written back (lowering/nested_index.rs); a receiver that is a call's result
+  (`make().n = 5`) is the error "make() gives a copy" (card list-field-receivers).
+- A character stored into a list of unknown static type (one read from a field) goes as its Node; node_with_at took
+  it as an Int, so `x#1 = "z"` gave `[122]` (list_ops `is_exact_int_element`).
 - Variance (TypeScript's covariant arrays) needs no rule while lists are values: a callee's widened `xs: list` is its
   own copy (probes/variance/, notes/footguns.md).

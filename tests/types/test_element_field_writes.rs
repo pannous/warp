@@ -23,6 +23,13 @@ fn a_list_field_of_an_element_checks_its_items() {
 }
 
 #[test]
+fn a_character_stored_into_a_list_of_unknown_type_stays_a_character() {
+	is!("class bag { items: list }; b = bag([\"a\"]); x = b.items; x#1 = \"z\"; x#1", "z");
+	is!("class bag { items: texts }; b = bag([\"a\"]); b.items#1 = \"z\"; b.items#1", "z");
+	is!("class p { s: text }; q = p(\"ab\"); y = q.s; y#1 = \"z\"; y", "zb");
+}
+
+#[test]
 fn a_store_into_a_call_result_is_an_error() {
 	fails_with("class bag { n: int }; make() := bag(1); make().n = 5", "make() gives a copy");
 	fails_with("class bag { items: texts }; make() := bag([\"a\"]); make().items.add(\"b\")", "make() gives a copy");
