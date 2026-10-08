@@ -213,6 +213,46 @@ const CORPUS: &[&str] = &[
 	"b = 1; a = b = 3; a + b",
 	"a = b = c = 2; a + b + c",
 	"a = b = [1]; a#1",
+	"f(n) := { n += 1; n }; f(3)",
+	"f(a, b) := { b = b * 2; a + b }; f(1, 2)",
+	"f(xs) := { xs = xs + [1]; count xs }; f([5])",
+	"f(n) := { n = n + 1; n }; x = 3; f(x); x",
+	"x = for i in [1, 2, 3] { i * 10 }; x",
+	"i = 0; w = while i < 3 { i += 1; i * 2 }; w",
+	"(for x in [1, 2] { x }) + 1",
+	"xs = [1, 2]; for x in xs { x + 1 }",
+	"f(n) := for x in [1, 2] { x + n }; f(1)",
+	"x = for i in [] { i }; x",
+	"i = 5; w = while i < 3 { i += 1 }; w",
+	"count [1, 2]",
+	"xs = [1, 2, 3]; count(xs)",
+	"2 in [1, 2]",
+	"3 in [1, 2]",
+	"2 in [2, 2]",
+	"if 1 in [1, 2] { 7 } else { 8 }",
+	"count 2 in [1, 2, 2, 3]",
+	"\"b\" in [\"a\", \"b\"]",
+	"(2 in [1, 2]) + \"x\"",
+	"f(xs, n) := { if n == 0 then count xs else f(xs, n - 1) }; f([1, 2], 2)",
+	"count \"abc\"",
+	"count \"\"",
+	"n = 0; for c in \"héllo\" { n += 1 }; n",
+	"s = \"\"; for c in \"ab\" { s = c + s }; s",
+	"\"b\" in \"abc\"",
+	"count \"a\" in \"banana\"",
+	"s = \"x\"; for c in \"ab\" { s = c + 1 }; s",
+	"xs = [1, 2]; count xs in [1]",
+	"out = []; for x in [[1], [2, 3]] { out = out + x }; out",
+	"xs = [1]; xs + xs",
+	"xs = [1]; xs + 2",
+	"f(x) := x + [1]; f([0])",
+	"xs = [1]; ys = [\"a\"]; zs = xs + ys; zs#2",
+	"i = 1; j = i++; j*10+i",
+	"i = 1; j = ++i; j*10+i",
+	"i = 1; i--; i",
+	"i = 1; while (i < 10) do { i++ }; i",
+	"i = 0; for x in [1, 2] { i++ }; i",
+	"f(n) := { k = n; k++; k }; f(4)",
 	"p = {x:1 y:2}; p.y",
 	"p = {x:1}; p.x + \"a\"",
 	"{a:1} == {a:1}",
@@ -241,10 +281,16 @@ const CORPUS: &[&str] = &[
 	"f = x => x*2; f = y => y + 1; f(3)",
 	"x = 1; f = y => x + y; f(1); x = 10; 0",
 	"f = x => x*2; f = 3; 0",
+	// named arguments go to their parameter, positional ones fill the rest; all run in parameter order
+	"f(a, b) := a - b; f(b=1, a=5)",
+	"f(a, b) := a - b; f(5, b=1)",
+	"f(a: int, b: text) := a; f(b=\"x\", a=5)",
+	"f(a: int, b: text) := a; f(b=5, a=\"x\")",
+	"global i = 0; g() := { i = i * 10 + 1; i }; h() := { i = i * 10 + 2; i }; f(a, b) := a * 100 + b; f(b=h(), a=g())",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("a: int = 0; a, b = 2.5, 6; a", "destructure-unchecked"), ("a: text = \"\"; a, b = 1, 2; a", "destructure-unchecked"), ("a: int = 0; a = b = 2.5; a", "chain-unchecked"), ("a: int = 0; a = b = \"x\"; b", "chain-unchecked")];
+const KNOWN_HOLES: &[(&str, &str)] = &[("a: int = 0; a, b = 2.5, 6; a", "destructure-unchecked"), ("a: text = \"\"; a, b = 1, 2; a", "destructure-unchecked"), ("a: int = 0; a = b = 2.5; a", "chain-unchecked"), ("a: int = 0; a = b = \"x\"; b", "chain-unchecked"), ("b: bool = no; b++; b", "bool-assign"), ("xs: ints = [1]; ys = [\"a\"]; xs = xs + ys; xs", "concat-unchecked"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = 2.5; n }; f(3)", "param-assign-unchecked")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
@@ -252,6 +298,7 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 
 /// Programs both accept whose values differ, each with its card
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
+	("f(xs) := for x in xs { x + 1 }; f([1, 2])", "loop-param"),
 	("class P { x: int }; p = P(1); a = p.x = 5; a + p.x", "chain-field"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
