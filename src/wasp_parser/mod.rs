@@ -208,6 +208,11 @@ pub(crate) fn print_arguments_of(call: &[Node], bracket: &Bracket) -> Vec<Node> 
 /// so the comma list [[print a], b] becomes the call print(a, b)
 fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
 	let items = if separator == Separator::Space { with_arrow_bodies(items) } else { items };
+	// `{ print upper n }`: a block of the one statement prints the one expression too
+	let is_print_block = bracket == Bracket::Curly && separator == Separator::Space && items.len() > 2 && is_print_word(&items[0]);
+	if is_print_block {
+		return Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator);
+	}
 	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
 		return Node::List(items, bracket, separator);
 	}
