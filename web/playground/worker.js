@@ -18,7 +18,11 @@ const PATH_JOINER = "·";
 const VALUE_DELAY_MILLISECONDS = 50;
 let panicMessage; // the compiler's last panic message
 
-const post = message => self.postMessage(message);
+let warming = false; // the warm-up's run says nothing to the page
+const post = message => warming || self.postMessage(message);
+// the first markup program compiles the markup renderer (lib/markup.wasp's to_html) once: ~0.5 s in Chrome, seconds in
+// Safari. The page asks for it while idle after its first run (card guide-warmup), so a guide's first ▶ is quick too
+const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
 const hooks = {
@@ -69,6 +73,17 @@ function evaluate(code, acknowledged) {
 	} catch (crash) {
 		compiler = undefined; // a panic leaves the compiler's memory in an unknown state: load it again
 		return { value: `compiler crashed: ${panicMessage ?? crash.message}`, error: true, crashed: true, warnings: [], runtime_warnings: [], hints: [], notes: [] };
+	}
+}
+
+// not over a live run (its listeners and timers stay), nor without a compiler (after a crash: the next run loads it)
+function warmUp() {
+	if (live || !compiler) return;
+	warming = true;
+	try {
+		evaluate(WARM_UP_CODE, {});
+	} finally {
+		warming = false;
 	}
 }
 
@@ -169,6 +184,7 @@ self.onmessage = async ({ data }) => {
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.stored) return Object.assign(storedValues, data.stored) && Object.assign(sessionValues, data.session); // host-files.js STD_ADAPTERS.store
 	await ready;
+	if (data.warm) return warmUp();
 	if (data.event) return handleEvent(data);
 	if (data.navigate) return handleNavigation(data.navigate);
 	if (live) stopListening(live);
