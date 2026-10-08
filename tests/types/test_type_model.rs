@@ -348,6 +348,11 @@ const CORPUS: &[&str] = &[
 	"n: number = 7 / 2; n",
 	"y: int = 1; y = 7/2; y",
 	"\"ab\" / 2",
+	// `c ? a : b` is `if c then a else b`
+	"x = 3; x > 2 ? \"big\" : \"small\"",
+	"x = 1; x < 2 ? 5 : 6.5",
+	"x = 1; y: int = x > 2 ? 5 : \"no\"; y",
+	"fib(n) := n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

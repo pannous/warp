@@ -1083,6 +1083,11 @@ impl Exporter {
 		Ok(format!("{constructor} ({}) ({})", self.expression(left)?, self.expression(right)?))
 	}
 
+	/// `if c then a else b` and `c ? a : b`
+	fn conditional(&mut self, condition: &Node, then: &Node, otherwise: &Node) -> Lean {
+		Ok(format!(".ite ({}) ({}) ({})", self.expression(condition)?, self.expression(then)?, self.expression(otherwise)?))
+	}
+
 	fn expression(&mut self, node: &Node) -> Lean {
 		if let Some(value) = returned(node) {
 			let event = self.returning.clone().ok_or("not in W0: a return outside a function body")?;
@@ -1217,11 +1222,13 @@ impl Exporter {
 			},
 			Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
 				Node::Key(condition, Op::Then, then) => match condition.drop_meta() {
-					Node::Key(empty, Op::If, condition) if empty.is_nothing() => {
-						Ok(format!(".ite ({}) ({}) ({})", self.expression(condition)?, self.expression(then)?, self.expression(otherwise)?))
-					}
+					Node::Key(empty, Op::If, condition) if empty.is_nothing() => self.conditional(condition, then, otherwise),
 					_ => unsupported(node),
 				},
+				_ => unsupported(node),
+			},
+			Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
+				Node::Key(then, Op::Colon, otherwise) => self.conditional(condition, then, otherwise),
 				_ => unsupported(node),
 			},
 			Node::Key(condition, Op::Then, then) => match condition.drop_meta() {
