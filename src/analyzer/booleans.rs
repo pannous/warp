@@ -51,7 +51,9 @@ pub fn is_boolean(node: &Node, scope: &Scope) -> bool {
 			_ => false,
 		},
 		Node::Symbol(name) => is_bool_variable(name, scope),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_boolean(&items[0], scope),
+		// `(x < 3)`, a braced body `def ok(x){x < 10}`
+		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 => is_boolean(&items[0], scope),
+		Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if word.drop_meta().name() == crate::lowering::tuples::RETURN) => is_boolean(&items[1], scope),
 		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.last().is_some_and(|last| is_boolean(last, scope)),
 		Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if BOOL_CALLS.contains(&name.as_str()) || is_bool_function(name)),
 		_ => false,
