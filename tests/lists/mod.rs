@@ -58,6 +58,7 @@ mod test_global_typed_lists;
 mod test_list_compound_add;
 mod test_one_entry_map_text;
 mod test_type_word_items;
+mod test_generated_name_hints;
 mod test_global_comprehension;
 mod test_captured_call_lists;
 mod test_nested_index_assignment;

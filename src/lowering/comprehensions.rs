@@ -168,7 +168,7 @@ impl Lowering {
 		let made = format!("{MADE}_{number}");
 		let push = format!("{made}.push({ELEMENT})");
 		let body = if condition.is_some() { format!("if {CONDITION} {{ {push} }}") } else { push };
-		let template = format!("(let {made} = []; for {VARIABLE} in {SEQUENCE} {{ {body} }}; {made})");
+		let template = format!("(var {made} = []; for {VARIABLE} in {SEQUENCE} {{ {body} }}; {made})");
 		let mut program = parse(&template);
 		for (placeholder, replacement) in [(VARIABLE, variable), (SEQUENCE, sequence), (ELEMENT, element)] {
 			program = substitute(program, placeholder, replacement);
