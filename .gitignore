@@ -39,5 +39,11 @@ data/
 !web/playground/lib/libc.wasm
 # `stored x = v` keeps its values beside the program (src/lowering/stored_values.rs)
 *.stored.json
-# the database tables of samples/orm.warp (a run keeps them beside it)
+# the executables `warp build` and running a sample leave beside their source (card cwd-artifacts)
+/samples/*
+!/samples/*.*
+!/samples/*/
+/samples/*.wasm
+/samples/*.wast
+# the database tables of samples/orm.warp (a run keeps them beside it), after the exception above
 samples/*.database.sqlite
