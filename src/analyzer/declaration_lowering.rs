@@ -19,7 +19,7 @@ pub fn indexed_parameter_copies(node: Node) -> Node {
 	parameter_copies(node, &maps)
 }
 
-pub(super) fn parameter_copies(node: Node, maps: &HashSet<(String, usize)>) -> Node {
+pub(super) fn parameter_copies(node: Node, maps: &HashMap<(String, usize), bool>) -> Node {
 	match node {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
 			let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
@@ -28,10 +28,10 @@ pub(super) fn parameter_copies(node: Node, maps: &HashSet<(String, usize)>) -> N
 			// a parameter that is assigned (`arr = swap(arr, i, j)`) would convert at every assignment: it keeps walking
 			for (index, parameter) in items[1..].iter().enumerate().filter_map(|(index, parameter)| Some((index, parameter_symbol(parameter)?))) {
 				// every call passing a map: `m[k]` looks a key up, no list copy (a one-entry map would lose its key)
-				let takes_maps = maps.contains(&(function.clone(), index));
-				if takes_maps && keys(&body, &parameter) && !assigns(&body, &parameter) {
+				let takes_maps = maps.get(&(function.clone(), index));
+				if takes_maps.is_some_and(|fresh| keys(&body, &parameter, *fresh)) && !assigns(&body, &parameter) {
 					body = with_copy(body, &parameter, crate::wasm_emitter::MAP_COPY_SUFFIX); // a hash table (map_backend.rs)
-				} else if !takes_maps && indexes(&body, &parameter) && !assigned_from_call_in_loop(&body, &parameter) {
+				} else if takes_maps.is_none() && indexes(&body, &parameter) && !assigned_from_call_in_loop(&body, &parameter) {
 					body = with_copy(body, &parameter, LIST_COPY_SUFFIX);
 				}
 			}
@@ -45,8 +45,9 @@ pub(super) fn parameter_copies(node: Node, maps: &HashSet<(String, usize)>) -> N
 }
 
 /// The parameters every call passes a map: a map literal of name keys, or a variable only ever assigned one. Only those
-/// may become hash tables; a list or an instance given there keeps the generic way
-pub(super) fn map_parameters(program: &Node) -> HashSet<(String, usize)> {
+/// may become hash tables; a list or an instance given there keeps the generic way. The flag: every call passes a
+/// literal, a new map no one else holds
+pub(super) fn map_parameters(program: &Node) -> HashMap<(String, usize), bool> {
 	let is_map_literal = |value: &Node| matches!(value.drop_meta(), Node::List(items, Bracket::Curly, _) if items.iter().all(|item|
 		matches!(item.drop_meta(), Node::Key(key, Op::Colon, _) if matches!(key.drop_meta(), Node::Symbol(key) | Node::Text(key) if !key.starts_with(crate::node::ATTRIBUTE_MARK)))));
 	let mut assigned: HashMap<String, bool> = HashMap::new();
@@ -56,13 +57,16 @@ pub(super) fn map_parameters(program: &Node) -> HashSet<(String, usize)> {
 		}
 	});
 	let is_map = |argument: &Node| is_map_literal(argument) || matches!(argument.drop_meta(), Node::Symbol(name) if assigned.get(name) == Some(&true));
-	let mut passed: HashMap<(String, usize), bool> = HashMap::new();
+	// (every call passes a map, every call passes a literal)
+	let mut passed: HashMap<(String, usize), (bool, bool)> = HashMap::new();
 	calls_outside_heads(program, &mut |items| for (function, arguments) in called_functions(items) {
 		for (index, argument) in arguments.into_iter().enumerate() {
-			*passed.entry((function.clone(), index)).or_insert(true) &= is_map(argument);
+			let (maps, literals) = passed.entry((function.clone(), index)).or_insert((true, true));
+			*maps &= is_map(argument);
+			*literals &= is_map_literal(argument);
 		}
 	});
-	passed.into_iter().filter(|(_, maps)| *maps).map(|(position, _)| position).collect()
+	passed.into_iter().filter(|(_, (maps, _))| *maps).map(|(position, (_, literals))| (position, literals)).collect()
 }
 
 /// Every list of the program but a definition's head `(f a b) := …`, which names parameters and calls nothing
@@ -147,9 +151,9 @@ pub(super) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 	found
 }
 
-/// Does the body look an entry of the map parameter up in a loop by a text key, and never set one: a map is a
-/// reference (P200b), so `m[k] = v` must reach the caller's map, not a table copy
-pub(super) fn keys(body: &Node, name: &str) -> bool {
+/// Does the body set an entry of the map parameter (`m[k] = v`) or look one up in a loop, by a text key. A map is a
+/// reference (P200b): a set entry must reach the caller's map, so a table copy only when every call passes a new one
+pub(super) fn keys(body: &Node, name: &str, fresh: bool) -> bool {
 	let is_name = |part: &Node| matches!(part.drop_meta(), Node::Symbol(symbol) if symbol == name);
 	let key_variables = key_variables(body);
 	let by_key = |index: &Node| looks_up_a_key(index, &key_variables);
@@ -157,11 +161,13 @@ pub(super) fn keys(body: &Node, name: &str) -> bool {
 	body.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
 		set |= matches!(target.drop_meta(), Node::Key(map, Op::Hash, _) if is_name(map));
 		set |= is_name(target) && crate::library_words::is_field_update_of(name, value);
+		looked_up |= matches!(target.drop_meta(), Node::Key(map, Op::Hash, index) if is_name(map) && by_key(index));
+		looked_up |= is_name(target) && field_update(value, name);
 	});
 	body.visit(&mut |part| if let Node::Key(_, Op::While | Op::Do, _) = part {
 		part.visit(&mut |inner| looked_up |= matches!(inner, Node::Key(map, Op::Hash, index) if is_name(map) && by_key(index)));
 	});
-	looked_up && !set
+	looked_up && (fresh || !set)
 }
 
 /// `field_with(m, "k", v)` of the variable m with a text key: the lowered `m["k"] = v`
