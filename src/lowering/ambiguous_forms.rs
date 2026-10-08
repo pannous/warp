@@ -15,21 +15,34 @@ const ARITHMETIC: [Op; 7] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Re
 
 pub fn lower(node: Node) -> Node {
 	let words = suffix_words(&node);
-	operator_values(lower_node(node, &words))
+	operator_values(library_word_values(lower_node(node, &words), &words))
 }
 
 /// The parameter of the function an operator word stands for
 const OPERAND_NAME: &str = "value";
 
+fn operand() -> Box<Node> {
+	Box::new(Node::Symbol(OPERAND_NAME.to_string()))
+}
+
 /// `f = abs`, `xs.map(sqrt)`: an operator word left without an operand is the function `value => abs value`
 fn operator_values(node: Node) -> Node {
 	match operator_reference(&node) {
-		Some(op) => {
-			let operand = || Box::new(Node::Symbol(OPERAND_NAME.to_string()));
-			Node::Key(operand(), Op::FatArrow, Box::new(Node::Key(Box::new(Node::Empty), op, operand())))
-		}
+		Some(op) => Node::Key(operand(), Op::FatArrow, Box::new(Node::Key(Box::new(Node::Empty), op, operand()))),
 		None => node.map_children(operator_values),
 	}
+}
+
+/// `xs.map(upper)`, `map(xs, upper)`: a library word passed to an iteration word is the function `value => upper value`
+fn library_word_values(node: Node, words: &SuffixWords) -> Node {
+	let node = node.map_children(|child| library_word_values(child, words));
+	let Node::List(mut items, bracket, separator) = node else { return node };
+	let is_iteration = items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if crate::function_values::ITERATION_WORDS.contains(&name.as_str())));
+	if let Some(function) = items.last_mut().filter(|last| is_iteration && words.is_library_word(last)) {
+		let call = Node::List(vec![function.clone(), *operand()], Bracket::None, Separator::Space);
+		*function = Node::Key(operand(), Op::FatArrow, Box::new(call));
+	}
+	Node::List(items, bracket, separator)
 }
 
 /// The suffix words of the program's functions with the function each applies, `squared` → `square`; a name the
@@ -46,7 +59,7 @@ fn suffix_words(node: &Node) -> SuffixWords {
 			words.entry(word.to_string()).or_insert(function.to_string());
 		}
 	}
-	SuffixWords { words, variables }
+	SuffixWords { words, variables, functions }
 }
 
 const VOWELS: [char; 5] = ['a', 'e', 'i', 'o', 'u'];
@@ -81,12 +94,14 @@ struct SuffixWords {
 	words: HashMap<String, String>,
 	/// the names the program assigns
 	variables: HashSet<String>,
+	/// the program's own functions
+	functions: HashSet<String>,
 }
 
 impl SuffixWords {
-	/// `first sorted xs`: a library word before a suffix word is a prefix call of it, `first(sort(xs))`
+	/// A library word the program does not name itself: `first sorted xs` is `first(sort(xs))`, `xs.map(upper)` maps it
 	fn is_library_word(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::Symbol(name) if crate::library_words::is_library_word(name) && !self.variables.contains(name))
+		matches!(node.drop_meta(), Node::Symbol(name) if crate::library_words::is_library_word(name) && !self.variables.contains(name) && !self.functions.contains(name))
 	}
 }
 
