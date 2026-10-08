@@ -383,11 +383,16 @@ fn table_statements(statement: Node, tables: &HashMap<String, Table>, file: &str
 	[vec![with_tables(statement, tables, file)], updates].concat()
 }
 
-/// `people: [Person] = database.people` as the list of the table's rows, each an instance with its id
+/// `people: [Person] = database.people` as the list of the table's rows, each an instance with its id; a plain
+/// `people = database.people` of a registered people opens it again (a served route reading it at each request)
 fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Vec<Node>> {
 	let Node::Key(target, Op::Assign, source) = statement.drop_meta() else { return None };
-	let Node::Key(variable, Op::Colon, _) = target.drop_meta() else { return None };
-	let table = tables.get(&variable.drop_meta().name())?;
+	let variable = match target.drop_meta() {
+		Node::Key(variable, Op::Colon, _) => variable.drop_meta(),
+		variable @ Node::Symbol(_) => variable,
+		_ => return None,
+	};
+	let table = tables.get(&variable.name())?;
 	database_table(source)?;
 	// the row is [id, column values…] in the order of the columns
 	let arguments = constructor_arguments(table, ROW);

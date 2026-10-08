@@ -56,6 +56,7 @@ pub fn lower(program: Node) -> Node {
 		Node::List(statements, bracket, separator) if port.is_some() || statements.iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some()) => {
 			let statements: Vec<Node> = statements.into_iter().map(|statement| server_definition(&statement).unwrap_or(statement)).collect();
 			let calls: Vec<Route> = statements.iter().filter_map(rpc_route).collect();
+			let tables: Vec<(String, Node)> = statements.iter().filter_map(table_variable).collect();
 			let mut routes = 0;
 			let serves_itself = statements.iter().any(|statement| served(statement).is_some());
 			// `warp serve`: the top-level routes and the server functions at its port, after the program's statements
@@ -63,19 +64,19 @@ pub fn lower(program: Node) -> Node {
 			let mut statements: Vec<Node> = statements.into_iter().flat_map(|statement| match served(&statement) {
 				Some((port, mut routed)) => {
 					routed.extend(calls.iter().cloned());
-					serving(port, routed, &mut routes)
+					serving(port, routed, &tables, &mut routes)
 				}
 				None => vec![statement],
 			}).collect();
 			if let (Some(port), false) = (port, serves_itself) {
 				let routed = top_level.iter().flat_map(top_level_routes).chain(calls).collect();
-				statements.extend(serving(Node::int(i64::from(port)), routed, &mut routes));
+				statements.extend(serving(Node::int(i64::from(port)), routed, &tables, &mut routes));
 			}
 			Node::List(statements, bracket, separator)
 		}
 		single if served(&single).is_some() => {
 			let (port, routed) = served(&single).expect("checked");
-			Node::List(serving(port, routed, &mut 0), Bracket::None, Separator::Semicolon)
+			Node::List(serving(port, routed, &[], &mut 0), Bracket::None, Separator::Semicolon)
 		}
 		other => other,
 	}
@@ -170,6 +171,39 @@ fn server_variable(statement: &Node) -> Option<String> {
 		},
 		_ => None,
 	}
+}
+
+/// `users: [User] = database.users` or `stored users: [User]`: the table variable and `database.users`, its table.
+/// A served route reads it anew at each request (`global users; users = database.users`, reopened by
+/// database_tables.rs): a page render runs in an instance of its own and may have changed the table since
+fn table_variable(statement: &Node) -> Option<(String, Node)> {
+	let name = server_variable(statement)?;
+	match statement.drop_meta() {
+		Node::Key(target, Op::Assign, source) if matches!(target.drop_meta(), Node::Key(_, Op::Colon, list_type) if matches!(list_type.drop_meta(), Node::List(_, Bracket::Square, _))) => {
+			Some((name, source.drop_meta().clone()))
+		}
+		Node::List(..) => {
+			let table = Node::Key(Box::new(Node::Symbol(DATABASE_WORDS[0].to_string())), Op::Dot, Box::new(Node::Symbol(name.clone())));
+			Some((name, table))
+		}
+		_ => None,
+	}
+}
+
+/// The route's body after the statements reading the program's tables anew
+fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
+	if tables.is_empty() {
+		return body;
+	}
+	let reads = tables.iter().flat_map(|(name, table)| [
+		crate::warp_parser::parse(&format!("{} {name}", crate::late_binding::GLOBAL)),
+		Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(table.clone())),
+	]);
+	let statements = match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) => items.clone(),
+		_ => vec![body],
+	};
+	Node::List(reads.chain(statements).collect(), Bracket::Curly, Separator::Newline)
 }
 
 /// The item with each value reading server data as the call of a server function giving it; markup and blocks are
@@ -442,7 +476,7 @@ fn routes_in(items: &[Node]) -> Vec<Route> {
 }
 
 /// The route functions, then the call that serves them
-fn serving(port: Node, routes: Vec<Route>, count: &mut usize) -> Vec<Node> {
+fn serving(port: Node, routes: Vec<Route>, tables: &[(String, Node)], count: &mut usize) -> Vec<Node> {
 	let mut statements = vec![];
 	let mut table = vec![];
 	for (method, path, body) in routes {
@@ -450,7 +484,7 @@ fn serving(port: Node, routes: Vec<Route>, count: &mut usize) -> Vec<Node> {
 		*count += 1;
 		let request = Node::Key(Box::new(Node::Symbol(REQUEST_WORD.to_string())), Op::Colon, Box::new(Node::Symbol(ANY_TYPE.to_string())));
 		let head = Node::List(vec![Node::Symbol(function.clone()), request], Bracket::Round, Separator::None);
-		statements.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
+		statements.push(Node::Key(Box::new(head), Op::Define, Box::new(reading_tables(body, tables))));
 		table.push(Node::List(vec![Node::Text(method), path, Node::Text(function)], Bracket::Square, Separator::Colon));
 	}
 	let routes = Node::List(table, Bracket::Square, Separator::Colon);

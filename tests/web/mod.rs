@@ -56,3 +56,5 @@ mod test_server_rpc_everywhere; // card rpc-everywhere
 mod test_warp_serve; // P222
 #[cfg(feature = "native")] // a site build and a server on a port
 mod test_route_data; // P221
+#[cfg(feature = "native")] // a server on a port and its SQLite tables
+mod test_served_tables; // card sample-server
