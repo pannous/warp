@@ -254,6 +254,15 @@ pub fn is_whole_type(name: &str) -> bool {
 	canonical_type_name(&name) != "exact" && builtin_type_kind(&name) == Some(Kind::Int)
 }
 
+/// A declared type a decimal loses digits in: a whole type, or an inline union with a whole part and no fractional
+/// one (`int or text` refuses 2.5, `int or float` takes it)
+pub fn refuses_decimals(type_name: &str) -> bool {
+	match union_parts(type_name.trim_end_matches('?')) {
+		Some(parts) => parts.iter().any(|part| is_whole_type(part)) && !parts.iter().any(|part| admits(part, Kind::Float)),
+		None => is_whole_type(type_name),
+	}
+}
+
 /// A plural type word denotes a list of that type: `ints`, `numbers` → `int`, `number`
 pub fn plural_element_type(word: &str) -> Option<&str> {
 	let singular = word.strip_suffix('s')?;
@@ -1183,8 +1192,74 @@ pub(crate) fn declaring_name_and_type(target: &Node) -> Option<(String, String)>
 	};
 	match (name, type_name) {
 		(Node::Symbol(name), Node::Symbol(type_name)) => Some((name, type_name)),
+		(Node::Symbol(name), union) => Some((name, union_type_name(&union)?)),
 		_ => None,
 	}
+}
+
+/// An inline union type joins its parts with it: `x: int | text` and `x: int or text` declare x "int or text", the
+/// anonymous form of P179's sum types (card inline-union)
+const UNION_JOINER: &str = " or ";
+/// The empty part of a union, `int | ø`, makes it optional: `int?`
+const NONE_WORDS: [&str; 3] = ["none", "nil", "null"];
+
+/// The parts of an inline union type name: "int or text" → int, text; None for a single type
+pub(crate) fn union_parts(type_name: &str) -> Option<Vec<&str>> {
+	type_name.contains(UNION_JOINER).then(|| type_name.split(UNION_JOINER).collect())
+}
+
+/// The type name of an inline union `int | text`, `(int or text)`: its parts with a part another part covers dropped
+/// (`int | float` is `float`, `bool | int` is `int`) and an empty part made optional (`int | ø` is `int?`); None unless
+/// the parts are words and one of them is a builtin type, so a value `ok: a or b` stays a value
+pub(crate) fn union_type_name(node: &Node) -> Option<String> {
+	fn collect_parts(node: &Node, parts: &mut Vec<String>) -> Option<()> {
+		match node.drop_meta() {
+			Node::Key(left, Op::Or, right) => {
+				collect_parts(left, parts)?;
+				collect_parts(right, parts)
+			}
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => collect_parts(&items[0], parts),
+			Node::Symbol(word) => Some(parts.push(word.clone())),
+			Node::Empty => Some(parts.push(NONE_WORDS[0].to_string())),
+			_ => None,
+		}
+	}
+	let Node::Key(_, Op::Or, _) = strip_round(node).drop_meta() else { return None };
+	let mut parts = vec![];
+	collect_parts(node, &mut parts)?;
+	if !parts.iter().any(|part| builtin_type_kind(part).is_some()) {
+		return None;
+	}
+	let optional = parts.iter().any(|part| NONE_WORDS.contains(&part.as_str()));
+	parts.retain(|part| !NONE_WORDS.contains(&part.as_str()));
+	parts.dedup();
+	let covers = |wide: &String, narrow: &String| {
+		wide != narrow && !is_bool_type(wide) && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind))
+	};
+	let kept: Vec<&String> = parts.iter().filter(|part| !parts.iter().any(|other| covers(other, part))).collect();
+	let joined = kept.iter().map(|part| part.as_str()).collect::<Vec<_>>().join(UNION_JOINER);
+	Some(if optional { format!("{joined}?") } else { joined })
+}
+
+/// A builtin type or an inline union of builtin types: `int`, `int or text`
+fn is_builtin_or_union(type_name: &str) -> bool {
+	union_parts(type_name).unwrap_or_else(|| vec![type_name]).iter().all(|part| builtin_type_kind(part).is_some())
+}
+
+fn strip_round(node: &Node) -> &Node {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => strip_round(&items[0]),
+		other => other,
+	}
+}
+
+fn is_bool_type(type_name: &str) -> bool {
+	matches!(type_name.to_lowercase().as_str(), "bool" | "boolean")
+}
+
+/// The first part of an inline union that is no builtin type: `point` of `point or text` (unions of classes come later)
+pub(crate) fn unsupported_union_part(type_name: &str) -> Option<&str> {
+	union_parts(type_name.trim_end_matches('?'))?.into_iter().find(|part| builtin_type_kind(part).is_none())
 }
 
 /// `x:int=…` declares x's type; every value assigned to x later must fit it
@@ -1204,6 +1279,10 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 				declaring => declaring_name_and_type(declaring),
 			};
 			if let Some((name, type_name)) = declaration {
+				if let Some(part) = unsupported_union_part(&type_name) {
+					let message = format!("{name} is declared {type_name}: an inline union joins builtin types only so far, {part} is none");
+					return Some(Diagnostic::at(node, message).fix(format!("declare {name}:any to hold any value")));
+				}
 				declared.insert(name.clone(), type_name.clone());
 				if let Some(mismatch) = assignment_mismatch(node, &name, &type_name, value) {
 					return Some(mismatch);
@@ -1236,6 +1315,9 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 /// float, a decimal fits `exact`, a character fits a text (`"a"` parses as a codepoint); any other type admits all here
 pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
 	let type_name = type_name.trim_end_matches('?');
+	if let Some(parts) = union_parts(type_name) {
+		return parts.iter().any(|part| admits(part, actual));
+	}
 	let Some(expected) = builtin_type_kind(type_name) else { return true };
 	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
 	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint;
@@ -1245,7 +1327,7 @@ pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
 /// The builtin type a parameter annotation names: `x: text`, not `xs: [int]`
 pub(crate) fn annotated_builtin_type(annotation: &Node) -> Option<&str> {
 	match annotation.drop_meta() {
-		Node::Symbol(name) if builtin_type_kind(name.trim_end_matches('?')).is_some() => Some(name),
+		Node::Symbol(name) if is_builtin_or_union(name.trim_end_matches('?')) => Some(name),
 		_ => None,
 	}
 }
@@ -1303,8 +1385,12 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 
 /// The kind of a literal `value` that does not fit the built-in type `type_name`; None when it fits or is no literal
 pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
-	builtin_type_kind(type_name)?;
-	let actual = computed_literal_kind(value)?;
+	if !is_builtin_or_union(type_name) {
+		return None;
+	}
+	// a list literal fits no scalar type: `x: int = [1 2]`
+	let list_literal = matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if !items.is_empty()).then_some(Kind::List);
+	let actual = list_literal.or_else(|| computed_literal_kind(value))?;
 	(!admits(type_name, actual)).then_some(actual)
 }
 
