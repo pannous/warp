@@ -116,15 +116,32 @@ pub fn attribute_interface(interface: &str, member: &str) -> Option<String> {
 /// The warp type of what `member` gives (read, or called when `call`), when WebIDL declares a value that is always one:
 /// a text for DOMString, a bool, an int or a float; None for anything else, a nullable type (ø) included
 pub fn result_type(interface: &str, member: &str, call: bool) -> Option<&'static str> {
-	let declared = match (members_of(interface).remove(member)?, call) {
-		(Member::Attribute(type_name), false) => type_name,
+	primitive_type(&declared_result(interface, member, call)?)
+}
+
+/// result_type, or the optional type for a nullable one: `text?` for `DOMString?` (ø or a text, optional_casts.rs)
+pub fn optional_result_type(interface: &str, member: &str, call: bool) -> Option<String> {
+	let declared = declared_result(interface, member, call)?;
+	match declared.strip_suffix('?') {
+		Some(nullable) => primitive_type(nullable).map(|warp_type| format!("{warp_type}?")),
+		None => primitive_type(&declared).map(str::to_string),
+	}
+}
+
+/// The WebIDL type of what `member` gives, when all its overloads agree
+fn declared_result(interface: &str, member: &str, call: bool) -> Option<String> {
+	match (members_of(interface).remove(member)?, call) {
+		(Member::Attribute(type_name), false) => Some(type_name),
 		(Member::Operation(overloads), true) => {
 			let returns: Vec<String> = overloads.into_iter().map(|overload| overload.returns).collect();
-			returns.iter().all(|other| *other == returns[0]).then(|| returns[0].clone())?
+			returns.iter().all(|other| *other == returns[0]).then(|| returns[0].clone())
 		}
-		_ => return None,
-	};
-	PRIMITIVE_TYPES.iter().find(|(names, _)| names.contains(&declared.as_str())).map(|(_, warp_type)| *warp_type)
+		_ => None,
+	}
+}
+
+fn primitive_type(declared: &str) -> Option<&'static str> {
+	PRIMITIVE_TYPES.iter().find(|(names, _)| names.contains(&declared)).map(|(_, warp_type)| *warp_type)
 }
 
 /// `path.member` of a value of `interface` (path as the program writes it: `navigator.clipboard`)
