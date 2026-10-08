@@ -132,7 +132,8 @@ impl WasmGcEmitter {
 	/// node_type_name(node) -> ref $Node: `type(x)` of a value whose static type is unknown (held as a Node), the symbol
 	/// naming its run-time kind as the static names do: bool, rational, int, text, …
 	fn emit_node_type_name(&mut self) {
-		if !self.should_emit_function(crate::type_tests::NODE_TYPE_NAME) {
+		// only when a program asks type(): it calls new_symbol, which emitting all runtimes must not mark used
+		if !self.ctx.required_functions.contains(crate::type_tests::NODE_TYPE_NAME) {
 			return;
 		}
 		let node_ref = self.node_ref(false);
