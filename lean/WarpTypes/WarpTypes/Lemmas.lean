@@ -16,6 +16,7 @@ theorem value_ctx {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (Γ' :
   | text => exact .text
   | unit => exact .unit
   | nil => exact .nil
+  | ref => exact .ref
   | cons _ _ he ih1 ih2 => simp [isValue] at hv; exact .cons (ih1 hv.1) (ih2 hv.2) he
   | _ => simp [isValue] at hv
 
@@ -99,6 +100,22 @@ theorem fits_typed {Γ v t} (h : fits v t = true) : ∃ tv, HasType P Γ v tv �
   split at h
   · exact ⟨_, valueType_typed (by assumption), h⟩
   · cases h
+
+/-- a smaller object type reads a smaller field type -/
+theorem readTy_mono {te te' : Ty} (h : sub te' te = true) {f t} (ht : P.readTy te f = some t) :
+    ∃ t', P.readTy te' f = some t' ∧ sub t' t = true := by
+  cases te <;> simp [Program.readTy] at ht
+  · subst ht; rw [sub_to_never h]; exact ⟨_, rfl, sub_refl _⟩
+  · cases te' <;> simp_all [Program.readTy, sub]
+    exact ⟨_, P.fieldTy_prefix h ht, sub_refl _⟩
+
+/-- a smaller object type takes a larger field type -/
+theorem writeTy_anti {te te' : Ty} (h : sub te' te = true) {f t} (ht : P.writeTy te f = some t) :
+    ∃ t', P.writeTy te' f = some t' ∧ sub t t' = true := by
+  cases te <;> simp [Program.writeTy] at ht
+  · subst ht; rw [sub_to_never h]; exact ⟨_, rfl, sub_any _⟩
+  · cases te' <;> simp_all [Program.writeTy, sub]
+    exact ⟨_, P.fieldTy_prefix h ht, sub_refl _⟩
 
 /-- Γ' gives every local of Γ a smaller type -/
 def CtxSub (Γ' Γ : Ctx) : Prop := ∀ z t, Γ z = some t → ∃ t', Γ' z = some t' ∧ sub t' t = true
@@ -206,6 +223,23 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨_, h1, s1⟩ := ih hs
     obtain ⟨a', he', sa⟩ := element_mono s1 he
     exact ⟨_, .broadcast hf h1 he' (sub_trans sa ha), sub_refl _⟩
+  | ref => intros; exact ⟨_, .ref, sub_refl _⟩
+  | new => intros; exact ⟨_, .new, sub_refl _⟩
+  | get _ hr ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih hs
+    obtain ⟨t', hr', st⟩ := readTy_mono s1 hr
+    exact ⟨_, .get h1 hr', st⟩
+  | set _ hw _ st ih1 ih2 =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih1 hs
+    obtain ⟨_, h2, s2⟩ := ih2 hs
+    obtain ⟨t', hw', st'⟩ := writeTy_anti s1 hw
+    exact ⟨_, .set h1 hw' h2 (sub_trans (sub_trans s2 st) st'), s2⟩
+  | isA _ ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, _⟩ := ih hs
+    exact ⟨_, .isA h1, sub_refl _⟩
 
 theorem Ctx.set_same (Γ : Ctx) (y : String) (a b : Ty) : (Γ.set y a).set y b = Γ.set y b := by
   funext z; simp only [Ctx.set]; split <;> simp_all
@@ -263,6 +297,11 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | tryCatch _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .tryCatch (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | cast _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .cast (ih hΓ hv htv)
   | broadcast hf _ he ha ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .broadcast hf (ih hΓ hv htv) he ha
+  | ref => intros; simp only [Expr.subst]; exact .ref
+  | new => intros; simp only [Expr.subst]; exact .new
+  | get _ hr ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .get (ih hΓ hv htv) hr
+  | set _ hw _ st ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .set (ih1 hΓ hv htv) hw (ih2 hΓ hv htv) st
+  | isA _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .isA (ih hΓ hv htv)
 
 /-- a value of type tv ≤ t bound to a local of type t: the body keeps (a subtype of) its type -/
 theorem let_typed {y t v b tv tb} (hb : HasType P (Ctx.empty.set y t) b tb) (hv : v.isValue = true)

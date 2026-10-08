@@ -21,9 +21,9 @@ ambiguous forms per notes/welcoming.md), never less, except at a listed hole.
 ## W0: syntax
 
 ```
-types      τ ::= never | bool | int | number | text | unit | list τ | any
+types      τ ::= never | bool | int | number | text | unit | list τ | cls [C₀ … Cₙ] | any
 modes      m ::= var | const | charged
-values     v ::= b | n | q | "s" | ø | [] | v :: v                    (lists are cons cells, as the GC $Node)
+values     v ::= b | n | q | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
 expr       e ::= v | x                          main-level name (store)
                | y                              local (parameter or let), bound by substitution
                | e + e | e < e | e == e
@@ -36,7 +36,9 @@ expr       e ::= v | x                          main-level name (store)
                | broadcast f e                  f applied to each item of a list (warp decides it statically)
                | cast e τ                       run-time checked: the value if it fits τ, else an error
                | error "s" | try e catch e
-program    P ::= Σ (declared names: x ↦ (m, τ, charged body?)), Φ (functions f(y:τ):τ := e), main e
+               | new [C…] | e.f | e.f = e | e is C          instances (phase 4)
+program    P ::= Σ (declared names: x ↦ (m, τ, charged body?)), Φ (functions f(y:τ):τ := e),
+               Θ (classes: C ↦ its own fields f:τ), main e
 ```
 
 Code: `Node` (src/node/mod.rs) carries all of this untyped; `Kind` (src/type_kinds.rs) is the run-time tag. W0 types
@@ -53,6 +55,7 @@ exact decimals/rationals (Kind::Int holding a ratio, wasm_emitter/exact.rs) and 
 | bool ≤ int | true/false act as 1/0 (P195: `true + 1` is 2) | BOOL_KIND masks to Int |
 | int ≤ number | `x: float = 1` is accepted | checks.rs `assignment_mismatch` (Float ← Int) |
 | list σ ≤ list τ if σ ≤ τ | **covariant lists** | probes/variance/ |
+| cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
 
 Covariant lists are sound in warp because **lists are values**: `xs.add(v)` is the assignment `xs = xs ++ [v]` of a
 new list to the variable xs (node_with_at copies; typed lists copy on `ys = xs` when either side is updated,
@@ -152,9 +155,11 @@ Model choices to keep in mind (each a simplification of warp, not a claim about 
 | program | W0 | card |
 | --- | --- | --- |
 | `x: bool = 2`, `b = true; b = 2`, `f(b: bool) := b; f(2)` | int ≰ bool (b then prints `yes`) | bool-assign |
+| `s: Shape = Circle("a", 2); s.r`, `c: Color = rgb(1, 2, 3); c.r` | Shape has no field r (warp looks it up at run time) | upcast-field |
 
-P199: a declared bool place (variable or parameter) takes the literals 1 and 0 as yes and no; the exporter
-elaborates them to `.bool` (src/law/type_model.rs bool_literal), so `x: bool = 1` is no hole.
+P199: a bool place (a declared variable or parameter, or a variable whose first value is evidently bool) takes
+the literals 1 and 0 as yes and no. The exporter elaborates them to `.bool` (src/law/type_model.rs bool_literal),
+so `x: bool = 1` and `b = true; b = 1` are no holes.
 
 analyzer admits (the run-time check of a value against a builtin type word) agrees with W0 `Ty.sub` for every
 type word × W0 scalar value type (test_warp_admits_what_the_type_model_subtypes), except bool ← int: the run-time
@@ -165,8 +170,32 @@ list-element-types (warp-a1, main 499bb5b1c); typed parameters (`f(x: text) := x
 call results (`f(x: int) := x + 1; y = f(2); y = "a"`, card call-result), functions2 on main by 18952a635.
 bool-assign is on its way (warp-15 tip 64c8abf14). Not a hole: `xs = [1]; xs = ["a"]`, an undeclared list holds anything.
 
+## Classes and sum types (phase 4)
+
+A class type is its ancestor chain, root first: `class Circle extends Shape` is `cls ["Shape", "Circle"]`, and a
+variant of `type Color = red | rgb(r: int, …)` is `cls ["Color", "rgb"]` (P178, P179: a variant is a class extending
+the sum). So subtyping is the prefix order and join the common prefix, with no class table in `Ty`.
+- Instances live on a heap that only grows (`Store.heap`), and a value is `ref a path`, so instances are shared:
+  a mutation through a parameter is visible to the caller (P200). The ref carries its class, so typing needs no heap
+  typing; `HeapOk` says every field set on an instance holds a value of the field's type.
+- A field's type is the first declaration along the chain from the root (`Program.fieldTy`), so a subclass keeps its
+  ancestors' field types. Fields are invariant: a write must fit the declared type, a read gives it.
+- `new` makes an instance with no field set (reading one is the error "unset field"). The exporter turns a
+  constructor `Circle("a", 2)` into `let o = new …; o.name = "a"; o.r = 2; o`, with fields in warp's order:
+  ancestors first.
+- `e is C` (warp parses it as `e == C`) is the run-time test that C is in the instance's chain. A `cast` to a class
+  type is the checked downcast of a match arm.
+- Weaker than warp claims: reading through a dangling reference, or a reference whose class differs from its
+  object's, steps to an error rather than being ruled out. Neither can arise from a program, since `new` is the only
+  source of refs.
+
+Agreeing corpus: constructors with wrong field types, field writes, inheritance, variants, `is`, and parameters
+typed by a sum or by a variant. Not covered by a verdict test: P200's sharing. Warp accepts
+`f(q: Point) := q.x = 7; p = Point(1); f(p); p.x` like the model does, but gives 1 where the model gives 7 (card
+instance-field). Catching that needs a value comparison: an executable evaluator in Lean, proved to agree with `Step`.
+
 ## Later phases
 
-Sum types and enum cases with values (P178, P179: sealed classes, optional as a sum with auto-unwrap), classes with
-typed fields (P131, notes/classes.md), errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
+Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
+inline unions (card inline-union: `union a b`), the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
 exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, then effects and tasks.
