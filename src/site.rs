@@ -7,6 +7,7 @@
 
 use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
 use crate::node::Node;
+use warp_runtime::host_words::{RANDOM, RANDOM_BELOW, RANDOM_SEED, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY};
 use std::path::{Path, PathBuf};
 
 const PAGE_FILE: &str = "index.html";
@@ -44,7 +45,7 @@ pub struct HostPart {
 /// The parts of host.js, in load order (host.js HOST_PART_FILES); the tasks and routes parts start with imports.js, which they
 /// read their module's imports with. std_pure and std_io are coarse: they carry every std
 /// module's words, so a program using json (std_pure) also gets the hashes
-pub const HOST_PARTS: [HostPart; 7] = [
+pub const HOST_PARTS: [HostPart; 9] = [
 	HostPart {
 		script: ("host-files.js", include_str!("../web/playground/host-files.js")),
 		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", STD_IO].contains(&name),
@@ -64,6 +65,8 @@ pub const HOST_PARTS: [HostPart; 7] = [
 	HostPart { script: ("host-compiler.js", include_str!("../web/playground/host-compiler.js")), gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK, needs: &["host-files.js"] },
 	HostPart { script: ("host-routes.js", concat!(include_str!("../web/playground/imports.js"), include_str!("../web/playground/host-routes.js"))), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
 	HostPart { script: ("host-gpu.js", include_str!("../web/playground/host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && [GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_RENDER].contains(&name), needs: &["host-tasks.js"] },
+	HostPart { script: ("host-timers.js", include_str!("../web/playground/host-timers.js")), gives: |module, name| module == HOST_LIBRARY && [SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT].contains(&name), needs: &[] },
+	HostPart { script: ("host-random.js", include_str!("../web/playground/host-random.js")), gives: |module, name| module == HOST_LIBRARY && [RANDOM, RANDOM_BELOW, RANDOM_SEED].contains(&name), needs: &[] },
 ];
 /// The parts the page keeps when the program runs in a Worker: host-routes.js follows links and the back button and
 /// moves the focus, which only the page can (site-thread.js)

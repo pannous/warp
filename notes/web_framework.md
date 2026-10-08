@@ -312,8 +312,9 @@ Each step is useful on its own and is what the next ones stand on.
 - What is left in app.wasm is the runtime lib/markup.warp's to_html reaches (texts, lists, equality, floats): a shared
   runtime module, cached across pages, would help sites with several pages, not the first load.
 - host.js split (2026-10-07, 32.1 → 21.9 KB, host.js 16.7 → 6.1): the core keeps what every page runs (run, outcome,
-  page events, timers, values between JS and warp, std json/os/store/regex); the parts add themselves with addHostPart:
-  host-files.js (fetch, read, std file and net), host-hashes.js (std hash), host-tasks.js (tasks, channels,
+  page events, values between JS and warp, std_pure/std_io's dispatch); the parts add themselves with addHostPart:
+  host-files.js (fetch, read, std file, net, store and os), host-hashes.js (std_pure: hash, json, regex), host-timers.js
+  (on every …, at 9:00), host-random.js (random, seeded), host-tasks.js (tasks, channels,
   BroadcastChannel and WebSocket, shared arrays, fetch_start), host-foreign.js (foreign_call, libm, libc.wasm, .wasm
   imports; needs files), host-compiler.js (warpHost, run_block; needs files), host-routes.js (page_path, navigate, a site's links and back button). A part hooks into a run through its
   steps (started, poll, finished, ended, stopped). src/site.rs HOST_PARTS ships a part when the module imports one of
