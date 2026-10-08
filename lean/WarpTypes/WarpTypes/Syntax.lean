@@ -80,6 +80,8 @@ inductive Expr where
   resume, the block `on ev {…} in {…}` whose handler ran ends with v. k is the depth of that block (the handlers
   outside it), unknown (none) until the abort leaves the handler's scope (run time) -/
   | abort (ev : String) (k : Option Nat) (e : Expr)
+  /-- `for y in l { body }`: body runs once per item of the list l, the local y holding the item; gives ø -/
+  | forIn (y : String) (l body : Expr)
   deriving DecidableEq, Repr
 
 /-- the local a handler reads the emitted payload from -/
@@ -120,6 +122,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | emit ev e => emit ev (e.subst y v)
   | scope k e => scope k (e.subst y v)
   | abort ev k e => abort ev k (e.subst y v)
+  | forIn z l b => forIn z (l.subst y v) (if z = y then b else b.subst y v)
   | e => e
 
 /-- the main-level names an expression assigns or binds -/
@@ -128,7 +131,7 @@ def assigned : Expr → List String
   | cons a b | add a b | arith _ a b | lt a b | eq _ a b | loop a b | seq a b | index a b | append a b | tryCatch a b
   | handle _ a b => a.assigned ++ b.assigned
   | ite c a b => c.assigned ++ a.assigned ++ b.assigned
-  | letIn _ _ e b => e.assigned ++ b.assigned
+  | letIn _ _ e b | forIn _ e b => e.assigned ++ b.assigned
   | set a _ b => a.assigned ++ b.assigned
   | call _ e | cast e _ | broadcast _ e | get e _ | isA e _ | emit _ e | scope _ e | abort _ _ e => e.assigned
   | _ => []

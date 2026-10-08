@@ -173,6 +173,16 @@ theorem CtxSub.set {Γ' Γ : Ctx} (h : CtxSub Γ' Γ) (y : String) (t : Ty) : Ct
   · cases hz; exact ⟨_, by simp [*], sub_refl _⟩
   · simp [*]; exact h z tz hz
 
+theorem CtxSub.refl (Γ : Ctx) : CtxSub Γ Γ := fun _ t h => ⟨t, h, sub_refl t⟩
+
+theorem CtxSub.set_le {Γ' Γ : Ctx} (h : CtxSub Γ' Γ) (y : String) {t' t : Ty} (st : sub t' t = true) :
+    CtxSub (Γ'.set y t') (Γ.set y t) := by
+  intro z tz hz
+  simp only [Ctx.set] at hz ⊢
+  split at hz
+  · cases hz; exact ⟨t', by simp [*], st⟩
+  · simp [*]; exact h z tz hz
+
 /-- narrowing: smaller local types give a smaller type -/
 theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → ∃ t', HasType P Γ' e t' ∧ sub t' t = true := by
   induction h with
@@ -304,6 +314,11 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih hs
     exact ⟨_, .abort h1 (sub_trans s1 st), sub_refl _⟩
+  | forIn _ _ ih1 ih2 =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih1 hs
+    obtain ⟨_, h2, _⟩ := ih2 (hs.set_le _ (listElem_mono s1))
+    exact ⟨_, .forIn h1 h2, sub_refl _⟩
 
 theorem Ctx.set_same (Γ : Ctx) (y : String) (a b : Ty) : (Γ.set y a).set y b = Γ.set y b := by
   funext z; simp only [Ctx.set]; split <;> simp_all
@@ -379,6 +394,16 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | emit hR _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .emit hR (ih hΓ hv htv)
   | scope _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .scope (ih hΓ hv htv)
   | abort _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .abort (ih hΓ hv htv) st
+  | @forIn Γ0 z l b tl tb hl hb ih1 ih2 =>
+    intro Γ y tv v hΓ hv htv
+    simp only [Expr.subst]
+    subst hΓ
+    by_cases hzy : z = y
+    · subst hzy
+      rw [Ctx.set_same] at hb
+      simpa using HasType.forIn (ih1 rfl hv htv) hb
+    · simp only [hzy, ite_false]
+      exact .forIn (ih1 rfl hv htv) (ih2 (Ctx.set_comm Γ hzy tv _) hv htv)
 
 /-- a value of type tv ≤ t bound to a local of type t: the body keeps (a subtype of) its type -/
 theorem let_typed {y t v b tv tb} (hb : HasType P (Ctx.empty.set y t) b tb) (hv : v.isValue = true)

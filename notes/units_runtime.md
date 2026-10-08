@@ -100,6 +100,6 @@ input) would need the dynamic struct.
 ## Stage 7 done (card units-p64): whole objects and aliases
 `print p`, `"${p}"` and `text_form(p)` of an object with quantity fields build its text at run time: the quantity fields
 come first, then the plain ones as an object of them prints them (`{dist:500 m name:"run"}`). A field of a mixed object
-is any-typed at run time, and its arithmetic has no text yet (card text-arithmetic), so the text uses `(p.dist as number)`.
+is any-typed at run time; its arithmetic has a text since card text-arithmetic (casts.rs: Kind::Data reads dynamically).
 `q = p` and `ys = xs` copy the signatures (maps and lists are values). Recursion with quantities stays a loud error
 (card static-units, Later). wasp.units may move into card reflection's wasp.meta section (warp-a2).

@@ -2,7 +2,7 @@
 # Builds web/playground: the warp compiler for the browser (no wasmtime: the `native` feature off, src/web.rs) in two
 # builds, samples.js (samples/*.wasp for the example menu) and keywords.js (the editor's hard and soft keywords). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)
-# Usage: build.sh [optimized|debug|components]   (all when omitted)
+# Usage: build.sh [optimized|debug|components|served <site>]   (all when omitted)
 #   optimized → warp.wasm: release profile (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
 #               feature (wasmparser's validator, a quarter of the module: the browser validates anyway), then wasm-opt
 #   debug     → warp.debug.wasm: profile web-debug (opt-level 1, line tables, the name section kept), with `validate`, so
@@ -10,6 +10,7 @@
 #   components → components/<name>.js for every COMPONENTS component (`use wasm "<name>.wasm"`, components.js): jco
 #               transpiles it (npm i -g @bytecodealliance/jco), the core modules go into the script as base64, the
 #               WIT signatures of its exports as JSON (wasm-tools component wit --json; cargo install wasm-tools)
+#   served <site> → <site>/served-files.js for a collected site (pages.yml); every build writes the repository's
 # Measured 2026-10-03: optimized 1.30 MB (545 KB gzipped); debug 22 MB (4.8 MB gzipped; full DWARF would be 53 MB).
 # Not taken: -Cpanic=immediate-abort with -Zbuild-std saves another 6% but needs nightly and loses the panic messages.
 set -euo pipefail
@@ -75,13 +76,25 @@ PYTHON
 	done
 }
 
+# served-files.js: the files the server has, so the compiler's module and header searches ask only for those that exist
+# (host-files.js; a missing one is a red 404 in the console, card console-errors). Paths are relative to the served root
+write_served_files() {
+	python3 -c 'import json, sys
+names = sorted(line for line in sys.stdin.read().split("\n") if line)
+print("// made by build.sh: the files the server has (host-files.js isUnserved)\nconst SERVED_FILES = new Set(" + json.dumps(names) + ");")' > "$1"
+	echo "built $1"
+}
+
 case "${1:-all}" in
+	served) (cd "$2" && find . -type f | sed 's|^\./||') | write_served_files "$2/served-files.js"; exit ;;
 	optimized) build_optimized ;;
 	debug) build_debug ;;
 	components) build_components; exit ;;
 	all) build_optimized; build_debug; build_components ;;
-	*) echo "usage: $0 [optimized|debug|components]" >&2; exit 2 ;;
+	*) echo "usage: $0 [optimized|debug|components|served <site>]" >&2; exit 2 ;;
 esac
+
+git ls-files --cached --others --exclude-standard | write_served_files "$page/served-files.js"
 
 python3 - "$page/samples.js" "$page/excluded_samples.txt" samples/*.wasp <<'PYTHON'
 import json, os, sys

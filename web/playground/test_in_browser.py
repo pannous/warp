@@ -33,6 +33,11 @@ ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its 
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 IGNORED_ARGUMENTS = ("--nocapture", "--quiet", "-q", "--color", "--format")
+# the console of the page and its workers (console_watch.mjs): any error or warning there fails the tour check
+CONSOLE_WATCHER = os.path.join(REPOSITORY, "web", "playground", "console_watch.mjs")
+CONSOLE_READY = "ready"
+CONSOLE_SETTLE_SECONDS = 0.3  # a shown example's last messages reach the watcher
+PAGE_LOAD = "(loading the page)"
 
 
 def include_dirs():
@@ -143,13 +148,49 @@ def browser(*arguments):
 		return ""  # a busy or crashed page: the stall check decides
 
 
+# shows an example or sample (%s: its name as JSON) and waits until its run finished
+RUN_EXAMPLE = """await playground.chooseExample(%s);
+		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));"""
+
+
+def run_sample(name):
+	browser("eval", f"(async () => {{ {RUN_EXAMPLE % json.dumps(name)} }})()")
+
+
+class ConsoleWatch:
+	"""the errors and warnings of the page's console and its workers' (console_watch.mjs), taken per shown example"""
+
+	def __init__(self):
+		self.process = subprocess.Popen(["node", CONSOLE_WATCHER, browser("get", "cdp-url")], stdout=subprocess.PIPE, text=True)
+		self.messages, self.ready = [], threading.Event()
+		threading.Thread(target=self.read, daemon=True).start()
+		if not self.ready.wait(30):
+			sys.exit("error: console_watch.mjs did not attach to the browser")
+
+	def read(self):
+		for line in self.process.stdout:
+			if line.strip() == CONSOLE_READY:
+				self.ready.set()
+			else:
+				message = json.loads(line)
+				self.messages.append(f"{message['level']}: {message['text']}" + (f" ({message['url']})" if message["url"] else ""))
+
+	def take(self):
+		"""the messages since the last take, each once"""
+		time.sleep(CONSOLE_SETTLE_SECONDS)
+		taken, self.messages = self.messages, []
+		return list(dict.fromkeys(taken))
+
+	def stop(self):
+		self.process.terminate()
+
+
 def show_example(name):
 	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
 	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons or links, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`) and the address bar's path (`address`)"""
 	script = f"""(async () => {{
 		const name = {json.dumps(name)};
-		await playground.chooseExample(name);
-		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
+		{RUN_EXAMPLE % json.dumps(name)}
 		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
 		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent,
 			canvases: document.querySelectorAll("#paintings canvas").length }};
@@ -193,7 +234,8 @@ def wait_for_isolation():
 
 def check_examples(names, page_url=None, site=None):
 	"""every example of the tour shows its value and prints its text in the playground (the local build, the collected
-	`site` directory, or the deployed one at `page_url`); exit code 101 on a difference"""
+	`site` directory, or the deployed one at `page_url`), and neither loading the page nor showing an example or a sample
+	writes an error or warning to the console (card console-errors); exit code 101 on a difference"""
 	server = None
 	if site:
 		server = serve(None, os.path.abspath(site))
@@ -203,21 +245,33 @@ def check_examples(names, page_url=None, site=None):
 			sys.exit("error: web/playground/warp.wasm is missing; build it with web/playground/build.sh")
 		server = serve(None)
 		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
+	open_page("about:blank")
+	console = ConsoleWatch()  # before the page, so its loading is watched too
 	open_page(page_url)
 	wait_for_isolation()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
+	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))
 	failures = []
-	names = names or list(examples)
-	for name in names:
-		expected, shown = examples[name], show_example(name)
-		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]]
+	def verdict(name, wrong):
+		wrong += [f"console {message}" for message in console.take()]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
 		if wrong:
 			failures.append(name)
+	verdict(PAGE_LOAD, [])
+	chosen = [(name, False) for name in examples] + [(name, True) for name in samples]
+	chosen = [(name, sample) for name, sample in chosen if not names or name in names]
+	for name, sample in chosen:
+		if sample:
+			run_sample(name)
+			verdict(f"samples/{name}", [])
+		else:
+			expected, shown = examples[name], show_example(name)
+			verdict(name, [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]])
+	console.stop()
 	browser("close")
 	if server:
 		server.shutdown()
-	print(f"\nexamples: {len(names) - len(failures)} of {len(names)} show what they promise" + (f"; failed: {', '.join(failures)}" if failures else ""))
+	print(f"\nexamples and samples: {len(chosen) + 1 - len(failures)} of {len(chosen) + 1} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 
 

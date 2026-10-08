@@ -83,7 +83,7 @@ pub const LIST_SUM: &str = "list_sum";
 pub const RUNTIME_WORDS: [(&str, usize); 18] = [
 	(ORD, 1), ("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
 	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (COLLECTION_POSITION, 2), (MAP_GET_OR, 3), (SLICE, 3),
-	(MAP_WITHOUT, 2), (INSTANCE_COPY, 1),
+	(MAP_WITHOUT, 2), (INSTANCE_COPY, 2),
 ];
 /// `codepoint(c)`, `ord(c)`, `ordinal(c)`: the code point of a character (`c as int` is only its digit). Inside the
 /// compiler it is `ord`, since `codepoint` is also a type word
@@ -100,6 +100,21 @@ const COPY: &str = "copy";
 pub const FIELD_WITH: &str = "field_with";
 /// instance_copy(x): a new instance with x's field values (`p.copy()`, Kotlin's `p.copy(y = 5)`); any other value is x
 pub const INSTANCE_COPY: &str = "instance_copy";
+/// The named argument of `copy` asking for a shallow copy (P205)
+pub const SHALLOW: &str = "shallow";
+
+/// `instance_copy(object, shallow)`
+pub fn copy_call(object: Node, shallow: Node) -> Node {
+	Node::List(vec![Node::Symbol(INSTANCE_COPY.to_string()), object, shallow], Bracket::Round, Separator::None)
+}
+
+/// The value of `shallow: v` / `shallow = v`, or a positional `v`
+pub fn shallow_flag(argument: &Node) -> Node {
+	match argument.drop_meta() {
+		Node::Key(name, Op::Colon | Op::Assign, value) if name.drop_meta().name() == SHALLOW => value.as_ref().clone(),
+		other => other.clone(),
+	}
+}
 
 /// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `word_tmp` a
 /// temporary that holds it once, `word_argument_2` … the arguments after the receiver. The words written in wasp
@@ -1074,9 +1089,9 @@ impl Lowering {
 		if arguments.len() < wanted && arguments.len() + optional >= wanted {
 			arguments.resize(wanted, Node::Empty);
 		}
-		// an instance is a reference (P200): its copy is a new one; other values are never shared, so they are themselves
-		if let (COPY, [receiver]) = (word, arguments.as_slice()) {
-			return Node::List(vec![Node::Symbol(INSTANCE_COPY.to_string()), receiver.clone()], Bracket::Round, Separator::None);
+		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
+		if let (COPY, [receiver], shallow) | (COPY, [receiver, shallow], _) = (word, arguments.as_slice(), &Node::False) {
+			return copy_call(receiver.clone(), shallow_flag(shallow));
 		}
 		// a text builtin's own arity check names its values (`trim takes 1 value, got 2`)
 		let checks_itself = crate::wasm_emitter::text_builtins::is_text_builtin(word);

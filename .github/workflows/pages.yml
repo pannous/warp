@@ -62,7 +62,9 @@ jobs:
         # the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
         mkdir -p _site/tests/fixtures/wasm && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h _site/tests/fixtures/wasm/
         echo "warp.pannous.com" > _site/CNAME
-    - name: Every tour example shows what it promises (examples.js) in the collected site, else no deploy
+        # the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
+        web/playground/build.sh served _site
+    - name: Every tour example shows what it promises (examples.js) and no example or sample writes an error or warning to the console, in the collected site, else no deploy
       run: python3 web/playground/test_in_browser.py --examples --site _site
     - uses: actions/upload-pages-artifact@v3
       with:
@@ -77,3 +79,14 @@ jobs:
     steps:
     - id: deployment
       uses: actions/deploy-pages@v4
+
+  # the same check against the deployed page: its console stays clean too (card console-errors)
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install agent-browser
+      run: npm install -g agent-browser && agent-browser install --with-deps
+    - name: The live playground shows the tour and its console stays clean
+      run: python3 web/playground/test_in_browser.py --examples --url https://warp.pannous.com/

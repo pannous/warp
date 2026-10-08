@@ -112,6 +112,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _ => none
   | .scope _ e => typeOf P Γ e
   | .abort ev _ e => (typeOf P Γ e).bind fun te => if sub te (P.aborts ev) then some .never else none
+  | .forIn y l b => (typeOf P Γ l).bind fun tl => if listy tl then (typeOf P (Γ.set y (listElem tl)) b).map fun _ => .unit else none
 
 theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some t → HasType P Γ e t := by
   intro e
@@ -251,6 +252,15 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     cases hR : P.effects ev <;> cases he : typeOf P Γ e <;> simp only [typeOf, hR, he] at hs <;> try cases hs
     exact .emit hR (ih he)
   | scope k e ih => intro Γ t hs; exact .scope (ih hs)
+  | forIn y l b ih1 ih2 =>
+    intro Γ t hs
+    simp only [typeOf, Option.bind_eq_some_iff] at hs
+    obtain ⟨tl, hl, hs⟩ := hs
+    split at hs
+    · simp only [Option.map_eq_some_iff] at hs
+      obtain ⟨_, hb, rfl⟩ := hs
+      exact .forIn (ih1 hl) (ih2 hb)
+    · cases hs
   | abort ev k e ih =>
     intro Γ t hs
     simp only [typeOf, Option.bind_eq_some_iff] at hs
@@ -413,7 +423,7 @@ def valuesOf (x : String) : Expr → List Expr
   | .letIn _ _ e b => valuesOf x e ++ valuesOf x b
   | .set a _ b => valuesOf x a ++ valuesOf x b
   | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e | .abort _ _ e => valuesOf x e
-  | .handle _ h b => valuesOf x h ++ valuesOf x b
+  | .handle _ h b | .forIn _ h b => valuesOf x h ++ valuesOf x b
   | _ => []
 
 /-- P45: a name declared by its first value widens over the numbers it is given (`x = 1; x = 2.5` is a number);
@@ -451,6 +461,8 @@ def Expr.rewrite (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr → Expr
   | .emit ev e => f Γ (.emit ev (e.rewrite f Γ))
   | .scope k e => f Γ (.scope k (e.rewrite f Γ))
   | .abort ev k e => f Γ (.abort ev k (e.rewrite f Γ))
+  -- the loop variable's type would need P: rewrites see it as any
+  | .forIn y l b => f Γ (.forIn y (l.rewrite f Γ) (b.rewrite f (Γ.set y .any)))
   | e => f Γ e
 
 /-- warp decides broadcasting at compile time: a call whose argument is a list of what the function takes -/
@@ -537,6 +549,7 @@ def observe (P : Program) (Γ : Ctx) : Expr → List Observation
   | .assign _ e | .init _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e => observe P Γ e
   | .handle ev h b => observeHandler P Γ ev h ++ observe P Γ b
   | .abort ev _ e => ((typeOf P Γ e).getD .any |> Observation.abort ev) :: observe P Γ e
+  | .forIn y l b => observe P Γ l ++ observe P (Γ.set y (((typeOf P Γ l).map listElem).getD .any)) b
   | _ => []
 where
   observeHandler (P : Program) (Γ : Ctx) (ev : String) (h : Expr) : List Observation :=
@@ -615,7 +628,7 @@ W0 does not have): so no abort escapes its block -/
 def Expr.breaksIn (ev : Option String) : Expr → Bool
   | .abort e k x => ev == some e && k.isNone && x.breaksIn ev
   | .handle e h b => h.breaksIn (some e) && b.breaksIn ev
-  | .loop c b => c.breaksIn none && b.breaksIn none
+  | .loop c b | .forIn _ c b => c.breaksIn none && b.breaksIn none
   | .letIn _ _ e b => e.breaksIn ev && b.breaksIn ev
   | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .append a b | .tryCatch a b
   | .set a _ b => a.breaksIn ev && b.breaksIn ev

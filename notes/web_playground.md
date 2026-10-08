@@ -135,6 +135,22 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 - The tests page is not published (it needs test_in_browser.py's endpoints and the 38 MB test binary).
 - C headers in the browser tests: WARP_INCLUDE=/include, served by name as /__include__/<header> from INCLUDE_DIRS.
 
+## A clean console, checked (card console-errors, user 2026-10-08)
+- The red lines were the compiler's searches: `use math` asks ., include, lib, lib/extra, src, source, samples for
+  math.wasp/.warp before the embedded module, a C header search asks lib/host.h…; every miss was a 404 in the console
+  (Firefox shows worker XHRs; ~46 per sample). Now build.sh writes served-files.js (the server's files: git ls-files
+  locally, `build.sh served _site` for the deploy) and host-files.js getSync answers an unlisted path "missing" without
+  asking. Also: an inline 🐝 favicon (favicon.ico 404), CodeMirror fixedGutter off (Firefox's scroll-linked warning).
+- index.html reloaded under coi-serviceworker.js before the worker was active: the page came back unisolated and the
+  `isolating` flag stopped retries (headless Chrome: no shared memory, tasks/mouse/kitchen sink failed live). It now
+  waits for serviceWorker.ready; an isolated page clears the flag (a hard reload bypasses the worker).
+- Gate: `test_in_browser.py --examples [--site D | --url U]` runs the tour and every sample and fails on any console
+  error/warning/failed request of the page and its Workers. agent-browser's `console`/`network` see only the page, so
+  console_watch.mjs attaches over CDP (`agent-browser get cdp-url`) to every target: Runtime + Log + Network (Chrome's
+  Log omits a worker's failed request). pages.yml runs it on _site before deploy and on the live page after (job verify).
+- Not ours: `TypeError … shiftKey … inject.js` in the user's Firefox is a browser extension's content script.
+- Open: the gate in headless Firefox (card console-errors-step).
+
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
 per address; `read_text`, `file_exists` on top, the file system outside the page), a path of the served repository or a
