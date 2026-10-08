@@ -6,10 +6,11 @@
 #   probes/rename_to_warp.sh --check   list what a run would still change (exit 1 if anything), then the kept mentions
 # Kept as written:
 #   - lines naming the original: C++, `implementation of wasp`, `Wasp Wisp and Warp`; lines marked legacy; lines about
-#     this rename itself
+#     this rename itself; hash test vectors of the word (`crc32(0, "wasp", 4)`, `XXH32(…)`)
 #   - lines accepting both names: a file name or quoted word with wasp whose warp form is on the same line
 #     (`".wasp" || ".warp"`, `["wasp", "warp"]`, `sin.wasp`/`sin.warp`)
 #   - URLs, domains and paths of the original: github.com/pannous/wasp, wasp.pannous.com, ~/wasp, homebrew-wasp
+#   - files of other repositories: the uniscript package's uniscript.wasp
 #   - notes/OLD (history) and this script
 # wisp is a different word and stays.
 set -euo pipefail
@@ -17,10 +18,10 @@ set -euo pipefail
 MODE="${1:-rename}"
 EXCLUDED=(':!notes/OLD' ':!probes/rename_to_warp.sh')
 
-KEPT_LINES='C\+\+|\blegacy\b|implementation of \W*wasp|Wasp,? Wisp|wasp remains|rename[-_ ]?(?:to[-_ ])?warp|named warp everywhere'
+KEPT_LINES='C\+\+|\blegacy\b|crc32\(|XXH32\(|implementation of \W*wasp|Wasp,? Wisp|wasp remains|rename[-_ ]?(?:to[-_ ])?warp|named warp everywhere'
 # a file name `x.wasp` or a quoted word `"wasp_main"`: kept with its line when its warp form is there too
 BOTH_NAMES='\w*\.(?:wasp|Wasp|WASP)\b|["'"'"'][\w.-]*(?:wasp|Wasp|WASP)[\w.-]*["'"'"']'
-KEPT_PARTS='(?:https?://)?(?:www\.)?github\.com/pannous/wasp\b[\w./#-]*|[\w.-]*wasp\.pannous\.com[\w./#-]*|pannous\.github\.io/wasp\b|~/wasp\b[\w./-]*|/Users/me/wasp\b|apps/wasp\b|homebrew-wasp'
+KEPT_PARTS='(?:https?://)?(?:www\.)?github\.com/pannous/wasp\b[\w./#-]*|[\w.-]*wasp\.pannous\.com[\w./#-]*|pannous\.github\.io/wasp\b|~/wasp\b[\w./-]*|/Users/me/wasp\b|apps/wasp\b|homebrew-wasp|(?<![/\w])uniscript\.wasp'
 
 # perl: every line of the files named on stdin (NUL separated); MODE check prints the lines it would change
 convert_files() {
