@@ -207,7 +207,9 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalSet(ran_local));
 		let (statements, step) = loop_control::split_step(body);
 		// a body ending in a text or list: that value is the loop's (P55), held in a Node local
-		let value_local = if wrap_result && self.ends_in_reference(&statements) { self.take_loop_value_local() } else { None };
+		// a body of unknown value (a call giving Empty) keeps the old number value
+		let held = self.ends_in_reference(&statements) && self.get_type(&statements) != Kind::Empty;
+		let value_local = if wrap_result && held { self.take_loop_value_local() } else { None };
 		// the step of a `for` loop (its counter's increment) runs after a body ending in a number or a held value
 		// without becoming the loop's value
 		let step_apart = step.is_some() && (value_local.is_some() || matches!(&statements, Node::List(items, _, _) if self.ends_in_number(items)));
