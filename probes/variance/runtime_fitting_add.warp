@@ -1,0 +1,5 @@
+// P215 run-time half: a fitting write through an alias stays fine: ["hi" "yo"]
+names: texts = ["hi"]
+f(xs) := xs.add("yo")
+f(names)
+names

@@ -216,6 +216,8 @@ pub struct WasmGcEmitter {
 	globals: GlobalSection,
 	tags: TagSection,
 	guards_errors: bool, // the program has a `try` that catches runtime errors
+	/// The program declares a list type (`names: texts`), so its lists may carry element marks (P215)
+	declares_list_types: bool,
 	/// Emitting data, not code: the value of an object entry or a quoted form, where unknown words stay words (P62)
 	data_context: bool,
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
@@ -300,6 +302,7 @@ impl WasmGcEmitter {
 			globals: GlobalSection::new(),
 			tags: TagSection::new(),
 			guards_errors: false,
+			declares_list_types: false,
 			data_context: false,
 			error_catching: None,
 			abort_catching: None,
@@ -656,6 +659,7 @@ impl WasmGcEmitter {
 		self.scope.function_kinds = self.user_function_kinds();
 		crate::analyzer::note_bool_functions(self.ctx.user_functions.values());
 		self.derive_imports_from_effects(node);
+		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
 		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
 			Need::Function(name) => Some(*name),
@@ -666,6 +670,7 @@ impl WasmGcEmitter {
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
+		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
 		self.guards_errors = try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();
 		trace!(
