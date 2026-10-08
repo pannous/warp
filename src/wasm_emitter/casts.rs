@@ -102,7 +102,8 @@ impl WasmGcEmitter {
 			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
 			// a list known only at run time (an element, a parsed value) too: "[1 2]", nested lists as their literals;
 			// an instance as its literal "point{x:1 y:2}" (P123), an entry "a:1"
-			Kind::List | Kind::Empty | Kind::Key => {
+			// and a value of a kind known only at run time (`p.dist / 2` of an any-typed field, card text-arithmetic)
+			Kind::List | Kind::Empty | Kind::Key | Kind::Data => {
 				self.emit_dynamic_text(func, value);
 				return;
 			}

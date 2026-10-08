@@ -612,7 +612,7 @@ impl Inference {
 		for (field, signature) in fields {
 			match signature.is_empty() {
 				true => plain.push(format!("{field}: {name}.{field}")),
-				false => quantities.push(format!("\"{field}:\" + {}", self.quantity_source(&format!("({name}.{field} as number)"), signature)?)),
+				false => quantities.push(format!("\"{field}:\" + {}", self.quantity_source(&format!("{name}.{field}"), signature)?)),
 			}
 		}
 		let rest = match plain.is_empty() {
