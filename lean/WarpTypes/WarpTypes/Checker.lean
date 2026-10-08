@@ -106,6 +106,13 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
       | none => none
     | _, _ => none
   | .ref _ p | .new p => some (.cls p)
+  | .lref _ t => some (.list t)
+  /- statically, a list and a write that may fit; each write is checked again when it runs -/
+  | .share e t => (typeOf P Γ e).bind fun te => if consub te (.list t) then some (.list t) else none
+  | .push l v =>
+    match typeOf P Γ l, typeOf P Γ v with
+    | some tl, some tv => if listy tl && consub tv (listElem tl) then some tl else none
+    | _, _ => none
   | .get e f => (typeOf P Γ e).bind fun te => if strictRead P te f then some (P.readTy te f) else none
   | .set e f v =>
     match typeOf P Γ e, typeOf P Γ v with
@@ -246,7 +253,19 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
       · rename_i hel hs; cases h; exact .broadcast hf (ih he) hel hs
       · cases h
     · cases h
-  | ref | new => intro Γ t h; simp [typeOf] at h; subst h; constructor
+  | ref | new | lref => intro Γ t h; simp [typeOf] at h; subst h; constructor
+  | share e t ih =>
+    intro Γ t' h; simp only [typeOf, Option.bind_eq_some_iff] at h
+    obtain ⟨_, he, hc⟩ := h
+    split at hc
+    · cases hc; exact .share (ih he)
+    · cases hc
+  | push l v ih1 ih2 =>
+    intro Γ t h
+    cases hl : typeOf P Γ l <;> cases hv : typeOf P Γ v <;> simp only [typeOf, hl, hv] at h <;> try cases h
+    split at h
+    · cases h; exact .push (ih1 hl) (ih2 hv)
+    · cases h
   | get e f ih =>
     intro Γ t h; simp only [typeOf, Option.bind_eq_some_iff] at h
     obtain ⟨te, he, hr⟩ := h
@@ -380,7 +399,8 @@ theorem Spec.check_sound {s : Spec} {t} (h : s.check = some t) :
   · rename_i hok
     simp only [Bool.and_eq_true, List.all_eq_true] at hok
     obtain ⟨⟨hdecls, hfuns⟩, hhandlers⟩ := hok
-    refine ⟨⟨?_, ?_⟩, ⟨?_, fun a o ho => by simp [Spec.store] at ho, fun p hp => by simp [Spec.store] at hp⟩,
+    refine ⟨⟨?_, ?_⟩, ⟨?_, fun a o ho => by simp [Spec.store] at ho, fun p hp => by simp [Spec.store] at hp,
+      fun a t xs hx => by simp [Spec.store] at hx⟩,
       typeOf_sound h⟩
     · intro f fn hf
       simp only [Spec.program, Option.map_eq_some_iff] at hf

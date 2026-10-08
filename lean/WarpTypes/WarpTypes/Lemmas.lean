@@ -17,6 +17,7 @@ theorem value_ctx {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (Γ' :
   | unit => exact .unit
   | nil => exact .nil
   | ref => exact .ref
+  | lref => exact .lref
   | clo hb => exact .clo hb
   | cons _ _ he ih1 ih2 => simp [isValue] at hv; exact .cons (ih1 hv.1) (ih2 hv.2) he
   | _ => simp [isValue] at hv
@@ -27,7 +28,7 @@ theorem value_list {Γ v t e} (h : HasType P Γ v t) (hv : v.isValue = true) (he
   cases h <;> simp_all [isValue, element]
 
 theorem list_value {Γ v a} (h : HasType P Γ v (.list a)) (hv : v.isValue = true) :
-    v = .nil ∨ ∃ hd tl, v = .cons hd tl ∧ hd.isValue = true ∧ tl.isValue = true := by
+    v = .nil ∨ (∃ hd tl, v = .cons hd tl ∧ hd.isValue = true ∧ tl.isValue = true) ∨ ∃ b t, v = .lref b t := by
   cases v <;> simp [isValue] at hv ⊢ <;> first | exact hv | exact ⟨_, _, ⟨rfl, rfl⟩, hv⟩ | cases h
 
 /-- an arithmetic result on a number-or-wider left side is a number or wider -/
@@ -122,6 +123,11 @@ theorem concat_typed {Γ b tb eb} (hb : HasType P Γ b tb) (vb : b.isValue = tru
       apply join_least
       · exact sub_trans (join_upper_left _ _) (join_upper_left _ _)
       · exact sub_trans hs'' (join_least (sub_trans (join_upper_right _ _) (join_upper_left _ _)) (join_upper_right _ _))
+  | lref =>
+    intro ta ea _ ha hea
+    cases ha; simp [element] at hea; subst hea
+    rw [value_list hb vb eb'] at hb
+    exact ⟨_, hb, by simpa [concat] using join_upper_right _ _⟩
   | _ => intro ta ea va ha hea; cases ha <;> simp_all [isValue, element]
 
 /-- a list value's type has elements -/
@@ -338,6 +344,16 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨a', he', sa⟩ := element_mono s1 he
     exact ⟨_, .broadcast hf h1 he' (sub_trans sa ha), sub_refl _⟩
   | ref => intros; exact ⟨_, .ref, sub_refl _⟩
+  | lref => intros; exact ⟨_, .lref, sub_refl _⟩
+  | share _ ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, _⟩ := ih hs
+    exact ⟨_, .share h1, sub_refl _⟩
+  | push _ _ ih1 ih2 =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih1 hs
+    obtain ⟨_, h2, _⟩ := ih2 hs
+    exact ⟨_, .push h1 h2, s1⟩
   | new => intros; exact ⟨_, .new, sub_refl _⟩
   | get _ ih =>
     intro Γ' hs
@@ -446,6 +462,9 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | cast _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .cast (ih hΓ hv htv)
   | broadcast hf _ he ha ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .broadcast hf (ih hΓ hv htv) he ha
   | ref => intros; simp only [Expr.subst]; exact .ref
+  | lref => intros; simp only [Expr.subst]; exact .lref
+  | share _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .share (ih hΓ hv htv)
+  | push _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .push (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | new => intros; simp only [Expr.subst]; exact .new
   | get _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .get (ih hΓ hv htv)
   | set _ hw _ st ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .set (ih1 hΓ hv htv) hw (ih2 hΓ hv htv) st

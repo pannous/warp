@@ -106,6 +106,14 @@ inductive Expr where
   resume, the block `on ev {…} in {…}` whose handler ran ends with v. k is the depth of that block (the handlers
   outside it), unknown (none) until the abort leaves the handler's scope (run time) -/
   | abort (ev : String) (k : Option Nat) (e : Expr)
+  /-- a shared list (P200b): the list at address a of the store's lists, made with element type t (declared, else
+  any); every name holding it sees an item added through another -/
+  | lref (a : Nat) (t : Ty)
+  /-- a new shared list of the items of the list value e, of element type t: a list literal, `a..b`, `xs + ys` -/
+  | share (e : Expr) (t : Ty)
+  /-- `xs.add(v)`: v joins the end of the shared list xs if it fits xs's element type, else a loud error (P215's
+  run-time half); gives xs -/
+  | push (l v : Expr)
   /-- `for y in l { body }`: body runs once per item of the list l, the local y holding the item; gives ø -/
   | forIn (y : String) (l body last : Expr)
   /-- `y => body`, a lambda: it evaluates to the closure `clo y body` once the locals it captures are substituted -/
@@ -122,7 +130,7 @@ def eventLocal : String := "event"
 namespace Expr
 
 def isValue : Expr → Bool
-  | bool _ | int _ | num _ | text _ | unit | nil | ref _ _ | clo _ _ => true
+  | bool _ | int _ | num _ | text _ | unit | nil | ref _ _ | clo _ _ | lref _ _ => true
   | cons h t => h.isValue && t.isValue
   | _ => false
 
@@ -158,19 +166,22 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | forIn z l b d => forIn z (l.subst y v) (if z = y then b else b.subst y v) (d.subst y v)
   | lam z b => lam z (if z = y then b else b.subst y v)
   | app f a => app (f.subst y v) (a.subst y v)
+  | share e t => share (e.subst y v) t
+  | push l w => push (l.subst y v) (w.subst y v)
   | e => e
 
 /-- the main-level names an expression assigns or binds -/
 def assigned : Expr → List String
   | assign x e | init x e => x :: e.assigned
   | cons a b | add a b | arith _ a b | lt a b | eq _ a b | seq a b | index a b | range a b | append a b
-  | tryCatch a b | app a b
+  | tryCatch a b | app a b | push a b
   | handle _ a b => a.assigned ++ b.assigned
   | ite c a b | loop c a b => c.assigned ++ a.assigned ++ b.assigned
   | forIn _ e b d => e.assigned ++ b.assigned ++ d.assigned
   | letIn _ _ e b => e.assigned ++ b.assigned
   | set a _ b => a.assigned ++ b.assigned
-  | call _ e | cast e _ | broadcast _ e | get e _ | isA e _ | emit _ e | scope _ e | abort _ _ e | lam _ e => e.assigned
+  | call _ e | cast e _ | broadcast _ e | get e _ | isA e _ | emit _ e | scope _ e | abort _ _ e | lam _ e
+  | share e _ => e.assigned
   | _ => []
 
 end Expr

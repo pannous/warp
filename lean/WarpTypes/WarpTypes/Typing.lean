@@ -74,6 +74,13 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | broadcast {Γ f e fn te a} : P.funs f = some fn → HasType P Γ e te → element te = some a → sub a fn.paramTy = true →
       HasType P Γ (.broadcast f e) (.list fn.result)
   | ref {Γ a p} : HasType P Γ (.ref a p) (.cls p)
+  /-- a shared list is typed by the element type it was made with: its items fit that type, which every write checks,
+  so a covariant view `list τ` of it (t ≤ τ) reads items that fit τ -/
+  | lref {Γ a t} : HasType P Γ (.lref a t) (.list t)
+  /-- the items are checked against t when the list is made -/
+  | share {Γ e t te} : HasType P Γ e te → HasType P Γ (.share e t) (.list t)
+  /-- the item is checked against the list's own element type when it runs -/
+  | push {Γ l v tl tv} : HasType P Γ l tl → HasType P Γ v tv → HasType P Γ (.push l v) tl
   | new {Γ p} : HasType P Γ (.new p) (.cls p)
   /-- field access: the field type of the static class (or of an ancestor) -/
   | get {Γ e f te} : HasType P Γ e te → HasType P Γ (.get e f) (P.readTy te f)

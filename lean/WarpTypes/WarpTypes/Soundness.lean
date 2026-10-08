@@ -73,6 +73,9 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
   case isA => cases h with | isA he => exact ⟨_, he, fun h' _ => ⟨_, .isA h', sub_refl _⟩⟩
   case emit => cases h with | emit hR he => exact ⟨_, he, fun h' _ => ⟨_, .emit hR h', sub_refl _⟩⟩
   case abort => cases h with | abort he st => exact ⟨_, he, fun h' s => ⟨_, .abort h' (sub_trans s st), sub_refl _⟩⟩
+  case share => cases h with | share he => exact ⟨_, he, fun h' _ => ⟨_, .share h', sub_refl _⟩⟩
+  case pushL => cases h with | push hl hv => exact ⟨_, hl, fun h' s => ⟨_, .push h' hv, s⟩⟩
+  case pushR => cases h with | push hl hv => exact ⟨_, hv, fun h' _ => ⟨_, .push hl h', sub_refl _⟩⟩
   case forIn =>
     cases h with
     | forIn hl sT hb hd => exact ⟨_, hl, fun h' s => ⟨_, .forIn h' (sub_trans (elementTy_mono s) sT) hb hd, sub_refl _⟩⟩
@@ -157,6 +160,71 @@ theorem get_typed {μ : Store} (hμ : HeapOk P μ) {o te f} (ho : HasType P Ctx.
     | none => exact dynamic (by simp [Program.readTy, hf])
   | _ => exact dynamic rfl
 
+theorem concat_value {b : Expr} (vb : b.isValue = true) : ∀ {a : Expr}, a.isValue = true → (concat a b).isValue = true := by
+  intro a
+  induction a <;> intro va <;> simp_all [concat, isValue]
+
+/-- what a list operation reads of a value: a value of a smaller type -/
+theorem items_typed {μ : Store} (hl : ListsOk P μ.lists) {v tv} (h : HasType P Ctx.empty v tv) (hv : v.isValue = true) :
+    (μ.items v).isValue = true ∧ ∃ t', HasType P Ctx.empty (μ.items v) t' ∧ sub t' tv = true := by
+  cases v with
+  | lref a t =>
+    cases h
+    cases hx : μ.listAt a t with
+    | none => simp only [Store.items, hx, Option.getD]; exact ⟨rfl, _, .nil, by simp⟩
+    | some items =>
+      simp only [Store.items, hx, Option.getD]
+      simp only [Store.listAt, Option.map_eq_some_iff, Option.filter_eq_some_iff, beq_iff_eq] at hx
+      obtain ⟨⟨t0, xs⟩, ⟨hget, ht0⟩, rfl⟩ := hx
+      simp only at ht0; subst ht0
+      exact hl a _ _ hget
+  | _ => exact ⟨hv, _, h, sub_refl _⟩
+
+theorem ListsOk.alloc {ls : List (Ty × Expr)} (h : ListsOk P ls) {t items ti} (hv : items.isValue = true)
+    (ht : HasType P Ctx.empty items ti) (st : sub ti (.list t) = true) : ListsOk P (ls ++ [(t, items)]) := by
+  intro a t' xs hx
+  rw [List.getElem?_append] at hx
+  split at hx
+  · exact h a t' xs hx
+  · rw [List.getElem?_singleton] at hx; split at hx
+    · cases hx; exact ⟨hv, ti, ht, st⟩
+    · cases hx
+
+theorem ListsOk.write {ls : List (Ty × Expr)} (h : ListsOk P ls) {a t old items ti} (ha : ls[a]? = some (t, old))
+    (hv : items.isValue = true) (ht : HasType P Ctx.empty items ti) (st : sub ti (.list t) = true) :
+    ListsOk P (ls.modify a fun c => (c.1, items)) := by
+  intro b t' xs hb
+  by_cases hab : a = b
+  · subst hab; simp [ha] at hb; obtain ⟨rfl, rfl⟩ := hb; exact ⟨hv, ti, ht, st⟩
+  · simp [hab] at hb; exact h b t' xs hb
+
+/-- `xs.add(v)`: the shared list itself, its new item checked against its element type, or an error -/
+theorem push_typed {μ : Store} (hμ : StoreOk P μ) {l v tl tv} (hl : HasType P Ctx.empty l tl) (vl : l.isValue = true)
+    (_hv : HasType P Ctx.empty v tv) (vv : v.isValue = true) :
+    (∃ t', HasType P Ctx.empty (pushValues μ l v).1 t' ∧ sub t' tl = true) ∧ StoreOk P (pushValues μ l v).2 := by
+  cases l with
+  | lref a t =>
+    cases hl
+    simp only [pushValues]
+    split
+    · rename_i items hx
+      split
+      · rename_i hfit
+        simp only [Store.listAt, Option.map_eq_some_iff, Option.filter_eq_some_iff, beq_iff_eq] at hx
+        obtain ⟨⟨t0, xs⟩, ⟨hget, ht0⟩, rfl⟩ := hx
+        simp only at ht0; subst ht0
+        obtain ⟨vi, ti, hti, sti⟩ := hμ.2.2.2 a _ _ hget
+        obtain ⟨tv', hv', stv⟩ := fits_typed (P := P) (Γ := Ctx.empty) hfit
+        obtain ⟨ei, hei, sei⟩ := element_mono sti rfl
+        obtain ⟨tc, htc, stc⟩ := concat_typed (.cons hv' .nil rfl) (by simp [isValue, vv]) rfl vi hti hei
+        refine ⟨⟨_, .lref, sub_refl _⟩, hμ.1, hμ.2.1, hμ.2.2.1, hμ.2.2.2.write hget
+          (concat_value (by simp [isValue, vv]) vi) htc (sub_trans stc ?_)⟩
+        simp only [sub_list]
+        exact join_least sei (join_least stv (sub_never _))
+      · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+    · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+  | _ => exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+
 theorem StoreOk.set {μ : Store} (hμ : StoreOk P μ) {x m t v tv} (hx : P.names x = some (m, t)) (hm : m ≠ .charged)
     (hv : v.isValue = true) (htv : HasType P Ctx.empty v tv) (st : sub tv t = true) :
     StoreOk P (μ.set x (.val v)) := by
@@ -167,18 +235,18 @@ theorem StoreOk.set {μ : Store} (hμ : StoreOk P μ) {x m t v tv} (hx : P.names
   · exact hμ.1 z mz tz hz
 
 theorem StoreOk.push {μ : Store} (hμ : StoreOk P μ) {ev h} (hh : HandlerOk P ev h) : StoreOk P (μ.push ev h) := by
-  refine ⟨hμ.1, hμ.2.1, fun p hp => ?_⟩
+  refine ⟨hμ.1, hμ.2.1, fun p hp => ?_, hμ.2.2.2⟩
   simp only [Store.push, Store.withHandlers, List.mem_cons] at hp
   rcases hp with rfl | hp
   · exact hh
-  · exact hμ.2.2 p hp
+  · exact hμ.2.2.1 p hp
 
 theorem StoreOk.outer {μ : Store} (hμ : StoreOk P μ) (k : Nat) : StoreOk P (μ.outer k) :=
-  ⟨hμ.1, hμ.2.1, fun p hp => hμ.2.2 p (List.mem_of_mem_drop hp)⟩
+  ⟨hμ.1, hμ.2.1, fun p hp => hμ.2.2.1 p (List.mem_of_mem_drop hp), hμ.2.2.2⟩
 
 /-- the handlers return to those of μ -/
 theorem StoreOk.restore {μ μ' : Store} (hμ' : StoreOk P μ') (hμ : StoreOk P μ) : StoreOk P (μ'.withHandlers μ.handlers) :=
-  ⟨hμ'.1, hμ'.2.1, hμ.2.2⟩
+  ⟨hμ'.1, hμ'.2.1, hμ.2.2.1, hμ'.2.2.2⟩
 
 /-- a handler run on a payload gives at most what an emit of its event gives -/
 theorem handler_typed {ev h v tv R} (hh : HandlerOk P ev h) (hR : P.effects ev = some R) (hv : v.isValue = true)
@@ -235,7 +303,11 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
   | add va vb =>
     intro t h hμ
     cases h with
-    | add ha hb => exact ⟨add_typed ha hb va vb, hμ⟩
+    | add ha hb =>
+      obtain ⟨ia, _, ha', sa⟩ := items_typed hμ.2.2.2 ha va
+      obtain ⟨ib, _, hb', sb⟩ := items_typed hμ.2.2.2 hb vb
+      obtain ⟨t', h', s'⟩ := add_typed ha' hb' ia ib
+      exact ⟨⟨t', h', sub_trans s' (plus_mono sa sb)⟩, hμ⟩
   | arith va vb =>
     intro t h hμ
     cases h with
@@ -262,9 +334,12 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     cases h with
     | index hl _ =>
       refine ⟨?_, hμ⟩
-      cases hn : nth l ((asInt i).getD 0) with
+      obtain ⟨il, _, hl', sl⟩ := items_typed hμ.2.2.2 hl vl
+      cases hn : nth (μ.items l) ((asInt i).getD 0) with
       | none => exact ⟨_, .error, sub_never _⟩
-      | some v => simpa using nth_typed _ vl hl hn
+      | some v =>
+        obtain ⟨tv, hv, sv⟩ := nth_typed _ il hl' hn
+        exact ⟨tv, hv, sub_trans sv (elementTy_mono sl)⟩
   | lam => intro t h hμ; cases h with | lam hb => exact ⟨⟨_, .clo hb, sub_refl _⟩, hμ⟩
   | @app y b v μ vv =>
     intro t h hμ
@@ -288,7 +363,11 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
   | append va vb =>
     intro t h hμ
     cases h with
-    | append ha hb => exact ⟨append_typed ha hb va vb, hμ⟩
+    | append ha hb =>
+      obtain ⟨ia, _, ha', sa⟩ := items_typed hμ.2.2.2 ha va
+      obtain ⟨ib, _, hb', sb⟩ := items_typed hμ.2.2.2 hb vb
+      obtain ⟨t', h', s'⟩ := append_typed ha' hb' ia ib
+      exact ⟨⟨t', h', sub_trans s' (by simpa using join_mono (listElem_mono sa) (listElem_mono sb))⟩, hμ⟩
   | assign hv =>
     intro t h hμ
     cases h with
@@ -361,7 +440,7 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     intro t h hμ
     cases h with
     | emit hR he =>
-      obtain ⟨t', ht', st⟩ := handler_typed (hμ.2.2 _ (lookupHandler_mem hl)) hR hv he
+      obtain ⟨t', ht', st⟩ := handler_typed (hμ.2.2.1 _ (lookupHandler_mem hl)) hR hv he
       exact ⟨⟨t', .scope ht', st⟩, hμ⟩
   | emitProgram hv _ hp =>
     intro t h hμ
@@ -387,6 +466,30 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     cases h with
     | forIn _ _ _ hd => exact ⟨⟨_, hd, sub_trans (join_upper_left _ _) (join_upper_right _ _)⟩, hμ⟩
   | forOther => intro t _ hμ; exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+  | @forRef y a t' b v μ _ =>
+    intro t h hμ
+    cases h with
+    | forIn hl sT hb hd =>
+      obtain ⟨il, _, hl', sl⟩ := items_typed hμ.2.2.2 hl rfl
+      exact ⟨⟨_, .forIn hl' (sub_trans (elementTy_mono sl) sT) hb hd, sub_refl _⟩, hμ⟩
+  | @broadcastRef f a t' μ =>
+    intro t h hμ
+    cases h with
+    | broadcast hf he hel hp =>
+      obtain ⟨il, _, he', se⟩ := items_typed hμ.2.2.2 he rfl
+      obtain ⟨a', hel', sa⟩ := element_mono se hel
+      exact ⟨⟨_, .broadcast hf he' hel' (sub_trans sa hp), sub_refl _⟩, hμ⟩
+  | @shareNew v t' μ vv _ hfit =>
+    intro t h hμ
+    cases h with
+    | share _ =>
+      obtain ⟨tv, hv, sv⟩ := fits_typed (P := P) (Γ := Ctx.empty) hfit
+      exact ⟨⟨_, .lref, sub_refl _⟩, hμ.1, hμ.2.1, hμ.2.2.1, hμ.2.2.2.alloc vv hv sv⟩
+  | shareBad => intro t _ hμ; exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+  | push vl vv =>
+    intro t h hμ
+    cases h with
+    | push hl hv => exact push_typed hμ hl vl hv vv
   | @forText y s b v μ _ =>
     intro t h hμ
     cases h with
@@ -497,10 +600,19 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     refine in_frame (.broadcast f) rfl (ih hΓ hμ) fun v => ?_
     rename_i hel _
     rw [value_list he v hel] at he
-    rcases list_value he v with rfl | ⟨hd, tl, rfl, vh, vt⟩
+    rcases list_value he v with rfl | ⟨hd, tl, rfl, vh, vt⟩ | ⟨a, t, rfl⟩
     · exact steps .broadcastNil
     · exact steps (.broadcastCons vh vt)
+    · exact steps .broadcastRef
   | ref => exact .inl rfl
+  | lref => exact .inl rfl
+  | @share _ e t _ _ ih =>
+    refine in_frame (.share t) rfl (ih hΓ hμ) fun v => ?_
+    cases hc : (isList e && fits e (.list t))
+    · exact steps (.shareBad v hc)
+    · simp only [Bool.and_eq_true] at hc; exact steps (.shareNew v hc.1 hc.2)
+  | @push _ l v _ _ _ _ ih1 ih2 =>
+    exact in_frame (.pushL v) rfl (ih1 hΓ hμ) fun vl => in_frame (.pushR l) vl (ih2 hΓ hμ) fun vv => steps (.push vl vv)
   | new => exact steps .new
   | @get _ e f _ _ ih => exact in_frame (.get f) rfl (ih hΓ hμ) fun v => steps (.get v)
   | @set _ e f v _ _ _ _ _ _ _ ih1 ih2 =>
@@ -533,7 +645,8 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     | nil => exact steps (.forNil vd)
     | cons h t => simp only [isValue, Bool.and_eq_true] at hv; exact steps (.forCons hv.1 hv.2 vd)
     | text s => exact steps (.forText vd)
-    | _ => exact steps (.forOther hv rfl rfl vd)
+    | lref a t => exact steps (.forRef vd)
+    | _ => exact steps (.forOther hv rfl rfl rfl vd)
   | @abort _ ev k e _ _ _ ih => exact in_frame (.abort ev k) rfl (ih hΓ hμ) fun v => .inr (.inr (.inl ⟨ev, k, e, rfl, v⟩))
 
 /-- any number of steps -/
