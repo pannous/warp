@@ -29,3 +29,12 @@ fn a_missing_or_unknown_argument_is_an_error() {
 	crate::common::fails_with("f(a, b) := a - b; f(b=1)", "needs a value for parameter a");
 	crate::common::fails_with("f(a) := a; f(a=1, c=2)", "f has no parameter c");
 }
+
+#[test]
+fn named_arguments_run_as_written() {
+	// P216: left to right as written, not in parameter order: h runs first (i=2), then g (i=21)
+	let counters = "global i = 0; g() := { i = i * 10 + 1; i }; h() := { i = i * 10 + 2; i }; f(a, b) := a * 100 + b; ";
+	is!(&format!("{counters}f(b=h(), a=g())"), 2102);
+	is!(&format!("{counters}f(a=g(), b=h())"), 112);
+	is!(&format!("{counters}k() := f(b=h(), a=g()); k()"), 2102);
+}
