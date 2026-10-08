@@ -30,6 +30,9 @@ const CASE_WORD: &str = "case";
 /// Kotlin's `when (x) { a -> 1; is T -> 2; else -> 3 }`, an if chain
 const WHEN_WORD: &str = "when";
 const ELSE_WORD: &str = "else";
+/// The listeners a `when` without arms is: of an event, of a condition
+const ON_WORD: &str = "on";
+const WHENEVER_WORD: &str = "whenever";
 const IS_WORD: &str = "is";
 /// The if chain a `when` arm adds, its conditions joined by `or`
 const WHEN_ARM: &str = "if CONDITION then VALUE else OTHERWISE";
@@ -135,6 +138,9 @@ fn forms(node: Node) -> Node {
 			let items = go_destructuring(items, &separator);
 			if let Some(chain) = when_chain(&items) {
 				return chain;
+			}
+			if let Some(listener) = when_listener(&items) {
+				return Node::List(listener, bracket, separator);
 			}
 			endless_loop(&items).unwrap_or_else(|| Node::List(arrow_cases(items), bracket, separator))
 		}
@@ -296,6 +302,19 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 		Some(crate::law::substitute(&crate::wasp_parser::parse(template), &bindings).drop_meta().clone())
 	});
 	chain
+}
+
+/// `when click {…}` is `on click {…}`, `when x > 3 {…}` is `whenever x > 3 {…}` (card signals-shape, user 2026-10-08):
+/// a `when` whose block holds no `->` arms listens, to the event a bare word names or to the condition otherwise
+fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
+	let [word, subject, body] = items else { return None };
+	let Node::List(statements, Bracket::Curly, _) = body.drop_meta() else { return None };
+	let has_arms = statements.iter().any(|statement| matches!(statement.drop_meta(), Node::Key(_, Op::Arrow, _)));
+	if !is_word(word, WHEN_WORD) || has_arms {
+		return None;
+	}
+	let listener = if matches!(subject.drop_meta(), Node::Symbol(_)) { ON_WORD } else { WHENEVER_WORD };
+	Some(vec![Node::Symbol(listener.to_string()), subject.clone(), body.clone()])
 }
 
 /// The patterns and value of a `when` arm: `5 -> 50`, `1, 2 -> 10`, `is Circle -> 3`, `else -> 0`
