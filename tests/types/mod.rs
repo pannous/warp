@@ -89,3 +89,4 @@ mod test_type_model;
 mod test_bool_assign;
 mod test_checked_call_kinds;
 mod test_class_field_type_phrases;
+mod test_shared_instances;
