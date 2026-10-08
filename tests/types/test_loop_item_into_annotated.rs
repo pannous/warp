@@ -10,3 +10,10 @@ fn a_mixed_loop_item_into_an_annotated_place_is_checked_at_run_time() {
 	is!("n: int = 0; for x in [1, 2] { n = x }; n", 2);
 	is!("n: int = 0; for x in [1, \"a\"] { if x is int { n = x } }; n", 1);
 }
+
+#[test]
+fn a_local_annotated_inside_a_loop_body_is_checked_too() {
+	fails_with("xs = [1, \"a\"]; i = 0; while i < 1 { n: int = 0; n = xs#2; i++ }", "not an int");
+	fails_with("for x in [1, \"a\"] { n: int = 0; n = x }", "not an int");
+	is!("s = 0; for x in [1, 2] { n: int = 0; n = x; s += n }; s", 3);
+}

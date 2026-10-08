@@ -265,6 +265,25 @@ needs `global x`) is refused as outside W0, since W0 reads at call time. Hole la
 hold anything, as in warp. `a, *mid, z = …` is refused; destructuring into names that hold values fails in warp
 (card destructure-existing).
 
+`a, b = 1, 2` (a tuple) exports each value into a hidden `·valueN_i` first, then assigns the names, so the values
+keep their static types and `a, b = b, a` swaps; names that hold values take plain assignments, checked against
+their declarations. A wrong count is refused (warp counts at compile time, W0 has no static count). warp skips the
+declaration check here: `a: int = 0; a, b = 2.5, 6` (card destructure-unchecked, KNOWN_HOLES).
+
+`a = b = 3` exports as `b = 3`, then `a = b` (each a first binding or an assignment). warp checks a chained
+declared name only at run time (`a: int = 0; a = b = 2.5`, card chain-unchecked), and `a = p.x = 5` gives `a` the
+object (card chain-field).
+
+## Maps
+
+`{a:1 b:2}` is an instance of one class `map` (exporter only, no new W0 type): its fields are every key the
+program writes, in a map literal or with `m.key = v`, all unannotated. That gives warp's map behaviour for free:
+maps share (P200b, the heap), `==` compares their keys and values (unset keys equal unset keys, so key order and
+`{a:1} == {a:1, b:2}` come out as in warp), `===` / `same` is identity, a new key `p.z = 5` is a field write, and a
+key the map was never given is W0's run-time "unset field" (warp: "no field"). A key the program never writes
+(`p={x:1}; p.y`) is not a field of `map`, so the exporter refuses it. Not modelled: computed keys `m[k]`, `m.keys`,
+methods (`get`, `remove`), `{}` subscripted by numbers (P34), typed maps (`map of int`).
+
 ## not, and, or
 
 No new forms: `not e` is `if e then no else yes`; `a and b` is `if a then b else a` and `a or b` is

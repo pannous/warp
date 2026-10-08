@@ -55,6 +55,9 @@ const BREAK_KEYWORD: &str = "break";
 const EVENT_LOCAL: &str = "event";
 /// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
 const EVENT_CLASS_SUFFIX: &str = "·event";
+/// Maps `{a:1}` (P200b: they share, like instances) are instances of one class `map` whose fields are every key the
+/// program writes, in a literal or with `m.key = v`; reading a key never written is W0's run-time "unset field"
+const MAP_CLASS: &str = "map";
 
 /// W0's answer for one program
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -188,6 +191,40 @@ fn event_class(event: &str) -> String {
 	format!("{event}{EVENT_CLASS_SUFFIX}")
 }
 
+/// `{a:1 b:2}`: its keys and values
+fn map_entries(node: &Node) -> Option<Vec<(String, &Node)>> {
+	let Node::List(items, Bracket::Curly, _) = node.drop_meta() else { return None };
+	items.iter().map(|item| match item.drop_meta() {
+		Node::Key(key, Op::Colon, value) if matches!(key.drop_meta(), Node::Symbol(_)) => Some((key.name(), value.as_ref())),
+		_ => None,
+	}).collect()
+}
+
+/// every key a map literal or a field write `x.key = v` names, when the program has a map literal
+fn map_keys(program: &Node) -> Option<Vec<String>> {
+	let mut has_map = false;
+	let mut keys: Vec<String> = Vec::new();
+	program.visit(&mut |part| {
+		let written: Vec<String> = match (map_entries(part), part) {
+			(Some(entries), _) => {
+				has_map = true;
+				entries.into_iter().map(|(key, _)| key).collect()
+			}
+			(None, Node::Key(target, Op::Assign, _)) => match target.drop_meta() {
+				Node::Key(_, Op::Dot, field) => vec![field.name()],
+				_ => vec![],
+			},
+			_ => vec![],
+		};
+		for key in written {
+			if !keys.contains(&key) {
+				keys.push(key);
+			}
+		}
+	});
+	has_map.then_some(keys)
+}
+
 fn is_word(node: &Node, word: &str) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(found) if found == word)
 }
@@ -237,15 +274,16 @@ fn function_definition(statement: &Node) -> Option<(&str, Vec<&Node>, &Node)> {
 }
 
 /// `a, b = xs` parses as the list `a, (b = xs)`: the names and the value
-fn destructuring(items: &[Node]) -> Option<(Vec<String>, &Node)> {
-	let (last, first) = items.split_last()?;
-	let Node::Key(target, Op::Assign, value) = last.drop_meta() else { return None };
-	let names: Option<Vec<String>> = first.iter().chain(std::iter::once(&**target)).map(|name| match name.drop_meta() {
+/// `a, b = xs` and `a, b = 1, 2`: the names and the values after `=` (one: a list to take apart)
+fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
+	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
+	let Node::Key(target, Op::Assign, value) = items[assignment].drop_meta() else { return None };
+	let names: Option<Vec<String>> = items[..assignment].iter().chain(std::iter::once(&**target)).map(|name| match name.drop_meta() {
 		// `*rest` takes the items between: outside W0
 		Node::Symbol(name) if !name.starts_with('*') => Some(name.clone()),
 		_ => None,
 	}).collect();
-	Some((names?, value))
+	Some((names?, std::iter::once(&**value).chain(&items[assignment + 1..]).collect()))
 }
 
 /// A function or lambda bound at main level: its name, parameters and body
@@ -558,6 +596,7 @@ impl Exporter {
 			self.globals.push(name.to_string());
 		});
 		let event_classes = self.collect_event_classes(program);
+		let program_node = program;
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
 		if let Some(why) = late_binding(&program, &self.globals) {
 			return Err(why);
@@ -592,6 +631,10 @@ impl Exporter {
 			}
 		}
 		argument_classes.extend(event_classes);
+		if let Some(keys) = map_keys(program_node) {
+			self.classes.insert(MAP_CLASS.to_string(), (vec![MAP_CLASS.to_string()], keys.into_iter().map(|key| (key, None)).collect()));
+			argument_classes.push(MAP_CLASS.to_string());
+		}
 		let mut items = argument_classes.iter().map(|class| self.class_definition(class)).collect::<Result<Vec<_>, String>>()?;
 		items.extend(cell_items);
 		for statement in program {
@@ -628,8 +671,11 @@ impl Exporter {
 				other => unsupported(other),
 			},
 			Node::List(items, Bracket::None, Separator::Colon) if destructuring(items).is_some() => {
-				let (names, value) = destructuring(items).expect("a destructuring");
-				self.destructure(&names, value)
+				let (names, values) = destructuring(items).expect("a destructuring");
+				match values[..] {
+					[list] => self.destructure(&names, list),
+					_ => self.assign_tuple(&names, &values),
+				}
 			}
 			// `let x = 1`, `shared n = 5` (one thread in W0): a variable; `int i = 2`: `i: int = 2`
 			Node::List(items, _, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))) => {
@@ -640,6 +686,11 @@ impl Exporter {
 					_ => Ok(format!(".statement ({})", self.expression(statement)?)),
 				}
 			}
+			// `a = b = 3`: `b = 3`, then `a = b`
+			Node::Key(target, Op::Assign, value) if matches!(value.drop_meta(), Node::Key(_, Op::Assign, _)) => {
+				let Node::Key(inner_target, _, _) = value.drop_meta() else { unreachable!("an assignment") };
+				Ok(format!("{},\n  {}", self.item(value)?, self.item(&Node::Key(target.clone(), Op::Assign, inner_target.clone()))?))
+			}
 			Node::Key(target, Op::Assign, value) if !self.is_bound(target) && !matches!(target.drop_meta(), Node::Key(_, Op::Dot, _)) => self.binding(target, ".var", value),
 			other => Ok(format!(".statement ({})", self.expression(other)?)),
 		}
@@ -647,23 +698,51 @@ impl Exporter {
 
 	/// `a, b = xs`: the hidden `·tupleN = xs`, its items counted (warp fails on a wrong number of values), then
 	/// `a = ·tupleN#1`, `b = ·tupleN#2`; several items in one
-	fn destructure(&mut self, names: &[String], value: &Node) -> Lean {
+	fn destructure(&mut self, names: &[String], list: &Node) -> Lean {
 		if let Some(bound) = names.iter().find(|name| self.names.contains_key(*name)) {
 			return Err(format!("not in W0: destructuring into {bound}, which holds a value (card destructure-existing)"));
 		}
 		self.hidden_names += 1;
 		let (tuple, count) = (format!("·tuple{}", self.hidden_names), format!("·count{}", self.hidden_names));
 		let mut items = vec![
-			format!(".bind {} .var none ({}) false", quoted(&tuple), self.expression(value)?),
+			format!(".bind {} .var none ({}) false", quoted(&tuple), self.expression(list)?),
 			format!(".bind {} .var none (.int 0) false", quoted(&count)),
 			format!(".statement (.forIn \"·item\" (.glob {}) (.assign {} (.add (.glob {}) (.int 1))))", quoted(&tuple), quoted(&count), quoted(&count)),
 			format!(".statement (.ite (.eq false (.glob {}) (.int {})) .unit (.error \"wrong number of values\"))", quoted(&count), names.len()),
 		];
 		for (position, name) in names.iter().enumerate() {
-			items.push(format!(".bind {} .var none (.index (.glob {}) (.int {})) {}", quoted(name), quoted(&tuple), position + 1, self.globals.contains(name)));
-			self.names.insert(name.clone(), None);
+			items.push(self.store(name, format!(".index (.glob {}) (.int {})", quoted(&tuple), position + 1)));
 		}
 		Ok(items.join(",\n  "))
+	}
+
+	/// `a, b = 1, 2`: each value in a hidden `·valueN_i` first, so `a, b = b, a` swaps, then into the names, which may
+	/// hold values already (checked against their declared types as any assignment)
+	fn assign_tuple(&mut self, names: &[String], values: &[&Node]) -> Lean {
+		if names.len() != values.len() {
+			return Err(format!("not in W0: {} values for {} names (warp counts them when it compiles)", values.len(), names.len()));
+		}
+		self.hidden_names += 1;
+		let hidden: Vec<String> = (1..=values.len()).map(|position| format!("·value{}_{position}", self.hidden_names)).collect();
+		let mut items = Vec::new();
+		for (name, value) in hidden.iter().zip(values) {
+			items.push(format!(".bind {} .var none ({}) false", quoted(name), self.expression(value)?));
+		}
+		for (name, value) in names.iter().zip(&hidden) {
+			items.push(self.store(name, format!(".glob {}", quoted(value))));
+		}
+		Ok(items.join(",\n  "))
+	}
+
+	/// a main-level name takes a value: its first binding, or an assignment checked against its declared type
+	fn store(&mut self, name: &str, value: String) -> String {
+		match self.names.get(name).cloned() {
+			Some(declared) => format!(".statement (.assign {} ({}))", quoted(name), declared.map_or(value.clone(), |declared| admitted(&declared, value))),
+			None => {
+				self.names.insert(name.to_string(), None);
+				format!(".bind {} .var none ({value}) {}", quoted(name), self.globals.contains(&name.to_string()))
+			}
+		}
 	}
 
 	fn is_bound(&self, target: &Node) -> bool {
@@ -846,6 +925,7 @@ impl Exporter {
 			Node::Symbol(name) if self.functions.get(name).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(name))),
 			Node::Symbol(name) if self.lambda_names.contains(name) => Err(format!("not in W0: {name} as a value (warp calls it; `function {name}` is the function)")),
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
+			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => self.instance(MAP_CLASS, map_entries(node).expect("a map")),
 			Node::List(items, Bracket::Square, _) => {
 				let elements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
 				Ok(elements?.iter().rev().fold(".nil".to_string(), |tail, head| format!(".cons ({head}) ({tail})")))
