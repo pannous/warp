@@ -806,7 +806,7 @@ impl Exporter {
 				let Node::Key(inner_target, _, _) = value.drop_meta() else { unreachable!("an assignment") };
 				Ok(format!("{},\n  {}", self.item(value)?, self.item(&Node::Key(target.clone(), Op::Assign, inner_target.clone()))?))
 			}
-			Node::Key(target, Op::Assign, value) if !self.is_bound(target) && !matches!(target.drop_meta(), Node::Key(_, Op::Dot, _)) => self.binding(target, ".var", value),
+			Node::Key(target, Op::Assign, value) if !self.is_bound(target) && !matches!(target.drop_meta(), Node::Key(_, Op::Dot | Op::Hash, _)) => self.binding(target, ".var", value),
 			other => Ok(format!(".statement ({})", self.expression(other)?)),
 		}
 	}
@@ -1214,6 +1214,10 @@ impl Exporter {
 			Node::Key(target, Op::Assign, value) => match target.drop_meta() {
 				Node::Symbol(name) => self.assignment(name, value),
 				Node::Key(object, Op::Dot, field) => Ok(format!(".set ({}) {} ({})", self.expression(object)?, quoted(&field.name()), self.expression(value)?)),
+				// `xs#i = v` writes into the shared list xs, checked against its element type when it runs
+				Node::Key(list, Op::Hash, index) if matches!(list.drop_meta(), Node::Symbol(name) if self.list_names.contains(name) && !self.cell_lists.contains(name)) => {
+					Ok(format!(".setAt ({}) ({}) ({})", self.expression(list)?, self.expression(index)?, self.expression(value)?))
+				}
 				_ => unsupported(node),
 			},
 			// `xs.add(v)` changes the shared list xs holds; a function local's list is a value: `xs = xs ++ [v]`

@@ -368,6 +368,14 @@ const CORPUS: &[&str] = &[
 	"xs = [1]; xs.add(\"ab\"); xs",
 	"xs: ints = [1]; xs.add(2); xs",
 	"xs: ints = [1]; xs.add(\"ab\"); xs",
+	// `xs#i = v` writes into the shared list: checked against its element type and its length when it runs
+	"xs = [1, 2]; xs#1 = 5; xs",
+	"xs = [1]; ys = xs; ys#1 = 7; xs",
+	"xs = [1]; xs#3 = 7; xs",
+	"xs = [1, 2]; xs#2 = \"ab\"; xs",
+	"xs = [1, 2]; xs[0] = 5; xs",
+	"xs = [1, 2]; v = (xs#1 = 9); v",
+	"xs: ints = [1]; xs#1 = \"ab\"; xs",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
@@ -381,6 +389,7 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	// a covariant alias's write: W0 checks it against the list's own element type when it runs, warp adds 2.5 to ints
 	("xs: ints = [1]; ys: numbers = xs; ys.add(2.5); xs", "p215-user"),
+	("xs: ints = [1, 2]; ys: numbers = xs; ys#1 = 2.5; xs", "p215-user"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";
