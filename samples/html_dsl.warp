@@ -1,11 +1,20 @@
 // HTML as a domain-specific language
-// warp's tagged blocks make markup natural
+// warp's tagged blocks make markup natural; the page is the program's value, the playground renders it
 
-html {
+fruits = ["Apple", "Banana", "Cherry"]
+
+html { lang: "en"
     head {
         title: "My Page"
         meta{ charset: "utf-8" }
-        link{ rel: "stylesheet" href: "style.css" }
+        style{ // css rules as they are written in css; link{ rel: "stylesheet" href: "style.css" } loads a sheet instead
+            body { font-family: sans-serif; margin: 0 }
+            header { background: darkslategray; color: white; padding: 8px 16px }
+            "nav a": { color: white; margin-right: 12px }
+            main { display: flex; gap: 24px; padding: 16px }
+            aside { border-left: 2px solid lightgray; padding-left: 16px }
+            footer { color: gray; padding: 0 16px }
+        }
     }
     body {
         header {
@@ -26,6 +35,10 @@ html {
                     li{ "Third item" }
                 }
             }
+            section {
+                h3: "Fruits" // dynamic content: a loop inside the markup
+                ul { for fruit in fruits { li: fruit } }
+            }
             aside {
                 h3: "Related"
                 ul {
@@ -39,8 +52,3 @@ html {
         }
     }
 }
-
-// Dynamic content with interpolation
-items = ["Apple", "Banana", "Cherry"]
-
-ul { for item in items { li: item } }

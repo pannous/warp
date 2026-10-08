@@ -1,6 +1,7 @@
 // Sudoku Solver
 // Backtracking algorithm
-// the grid is a flat list of 81 cells, row by row; lists are values, so solve returns the solved grid (or [] if none)
+// the grid is a flat list of 81 cells, row by row; lists are shared, so each try fills a copy and solve returns the
+// solved grid (or [] if none)
 
 def parse_grid(s) {
     cells = []
@@ -30,7 +31,7 @@ def solve(grid) {
         if grid#(i + 1) == 0 {
             for num in 1..10 {
                 if is_valid(grid, i//9, i % 9, num) {
-                    candidate = grid
+                    candidate = grid.copy()
                     candidate#(i + 1) = num
                     solved = solve(candidate)
                     if solved != [] { return solved }

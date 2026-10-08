@@ -87,8 +87,49 @@ function hostResult(program, action, what) {
 	}
 }
 
-// the values of a store: the session's (markup.js SESSION_STORE), else the program's
-const valuesOf = file => file === "warp-session" ? sessionValues : storedValues;
+// `database[k]`: the store of any file ending so (src/lowering/stored_values.rs DATABASE_STORE), kept in IndexedDB, which
+// Workers have too; its values are read before the program runs (loadDatabase: worker.js, site-worker.js, site.js) and
+// each change written back where the host keeps values (self.keepStored; the browser test suite keeps them in memory)
+const DATABASE_STORE = "database.json";
+const DATABASE = { name: "warp", version: 1, objects: "values" }; // the IndexedDB database and its object store
+const databaseValues = {};
+const isDatabase = file => file.endsWith(DATABASE_STORE);
+let databaseLoaded;
+
+// the values of a store: the session's (markup.js SESSION_STORE), the database's, else the program's
+const valuesOf = file => file === "warp-session" ? sessionValues : isDatabase(file) ? databaseValues : storedValues;
+
+// the IndexedDB object store of `database[k]` in a transaction of `mode`
+function databaseObjects(mode) {
+	return new Promise((resolve, reject) => {
+		const opening = indexedDB.open(DATABASE.name, DATABASE.version);
+		opening.onupgradeneeded = () => opening.result.createObjectStore(DATABASE.objects);
+		opening.onsuccess = () => resolve(opening.result.transaction(DATABASE.objects, mode).objectStore(DATABASE.objects));
+		opening.onerror = () => reject(opening.error);
+	});
+}
+
+const requested = request => new Promise((resolve, reject) => {
+	request.onsuccess = () => resolve(request.result);
+	request.onerror = () => reject(request.error);
+});
+
+// databaseValues from IndexedDB, once; none when it fails (loudly on the console)
+function loadDatabase() {
+	return databaseLoaded ??= databaseObjects("readonly")
+		.then(objects => Promise.all([requested(objects.getAllKeys()), requested(objects.getAll())]))
+		.then(([names, values]) => names.forEach((name, index) => { databaseValues[name] = values[index]; }))
+		.catch(failure => console.error("database values could not be read:", failure));
+}
+
+// a change of `database[k]` (value undefined: deleted), written to IndexedDB where the host keeps values
+function keep(name, value, file) {
+	if (!isDatabase(file)) return self.keepStored?.(name, value, file);
+	if (!self.keepStored) return;
+	databaseObjects("readwrite")
+		.then(objects => requested(value === undefined ? objects.delete(name) : objects.put(value, name)))
+		.catch(failure => console.error(`${name} could not be kept in the database:`, failure));
+}
 
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
@@ -117,9 +158,9 @@ addHostPart({
 		// session's, else the program's)
 		store: {
 			load: (name, fallback, file) => name in valuesOf(file) ? valuesOf(file)[name] : fallback,
-			save: (name, value, file) => { valuesOf(file)[name] = value; self.keepStored?.(name, value, file); return null; },
+			save: (name, value, file) => { valuesOf(file)[name] = value; keep(name, value, file); return null; },
 			// `delete local[k]` (kept as undefined: markup.js keepValue drops it), `keys(local)`
-			remove: (name, file) => { delete valuesOf(file)[name]; self.keepStored?.(name, undefined, file); return null; },
+			remove: (name, file) => { delete valuesOf(file)[name]; keep(name, undefined, file); return null; },
 			names: file => Object.keys(valuesOf(file)),
 		},
 		file: {

@@ -390,10 +390,13 @@ pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
 	crate::diagnostic::begin_program();
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
+		let source = program.clone();
 		let node = crate::folding::precompute(lower_for_emission(program)?);
+		let reflected = crate::reflection::meta_entries(&source, &node);
 		warn_about_run_time_blocks(&node)?;
-		// a final quantity's unit goes into the module's `warp.meta` section
-		choose_module(&node).map(|module| CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module })
+		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
+		let entries: Vec<_> = crate::units::static_units::result_units_entry().into_iter().chain(reflected).collect();
+		choose_module(&node).map(|module| CompiledModule { bytes: crate::meta_section::with_entries(module.bytes, entries), ..module })
 	})
 }
 

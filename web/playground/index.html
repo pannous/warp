@@ -26,6 +26,7 @@
 	<script src="codemirror-warp-mode.js"></script>
 	<script src="examples.js"></script>
 	<script src="samples.js" onerror="window.SAMPLES = {}"></script>
+	<script src="version.js" onerror="window.PLAYGROUND_VERSION = null"></script>
 	<script src="markup.js"></script>
 	<script src="markup-transitions.js"></script>
 	<script src="playground.js" defer></script>
@@ -44,6 +45,7 @@
 				<a href="https://github.com/pannous/warp#install" target="_blank" rel="noopener">get warp</a>
 			</p>
 			<p><a id="build" class="build"></a></p>
+			<p><a id="version" class="version" target="_blank" rel="noopener" hidden></a></p>
 			<div id="silenced" class="silenced" hidden>
 				<p>Silenced hints:</p>
 				<ul id="acknowledged"></ul>
@@ -54,6 +56,10 @@
 <main>
 	<details id="guide" class="guide-pane" open>
 		<summary>guide</summary>
+		<div class="guide-level" role="group" aria-label="guide level">
+			<button value="beginner" aria-pressed="true" title="every feature step by step">beginner</button>
+			<button value="expert" aria-pressed="false" title="the same chapters in short, for programmers">expert</button>
+		</div>
 		<div id="guide-chapters" class="guide-chapters">loading the guide…</div>
 	</details>
 	<div id="guide-resizer" class="resizer columns" role="separator" aria-orientation="vertical" aria-label="guide width" tabindex="0" title="drag to resize, double-click to reset"></div>

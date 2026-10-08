@@ -290,6 +290,9 @@ def addable (t : Ty) : Bool := sub t number || sub t text || t == any
 /-- what `-`, `*` and `<` take statically: numbers and a dynamic value -/
 def numeric (t : Ty) : Bool := sub t number || t == any
 
+/-- a text, or a value of unknown type (checked when it runs) -/
+def textual (t : Ty) : Bool := sub t text || t == any
+
 /-- a list type -/
 def isListTy : Ty → Bool
   | list _ => true

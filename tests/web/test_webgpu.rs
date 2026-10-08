@@ -69,3 +69,16 @@ fn a_value_that_is_no_number_says_so() {
 	let failed = eval("gpu_render(\"@fragment fn main() -> @location(0) vec4f { return vec4f(1.0); }\", 1, 1, {name: \"x\"})");
 	assert!(matches!(&failed, Node::Error(message) if message.to_string().contains("gpu_render") && message.to_string().contains("name")), "{failed:?}");
 }
+
+// card gpu-vectors (notes/gpu.md): over a linear float array the shader reads and writes the block in linear memory in
+// place, no list built (~10 ns an item instead of ~1 µs); the name it is assigned to is the same array
+#[test]
+fn a_compute_shader_runs_over_a_linear_array_in_place() {
+	let program = DOUBLING.replace("gpu_compute(shader, [1.5, 2.25, 3.0], 1)",
+		"linear xs = float[3]\nxs#1 = 1.5; xs#2 = 2.25; xs#3 = 3\nys = gpu_compute(shader, xs, 1)\n[xs#1, ys#2, xs#3, #ys]");
+	let computed = eval(&program);
+	if matches!(&computed, Node::Error(message) if message.to_string().contains("no WebGPU adapter")) {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert_eq!(computed.serialize(), "[3 4.5 6 3]");
+}

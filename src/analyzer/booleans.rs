@@ -12,17 +12,30 @@ thread_local! {
 	static BOOL_FUNCTIONS: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
 }
 
-/// `even(n) := n % 2 == 0`: the functions whose body ends in a bool, also through each other (`odd(n) := not even(n)`),
-/// for the emission of one program
+/// `even(n) := n % 2 == 0`: the functions whose body ends in a bool, also through each other (`odd(n) := not even(n)`)
+/// and themselves (`f(n) := if n == 0 then true else f(n - 1)`), for the emission of one program: every function is
+/// taken for one until its body shows otherwise
 pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::context::UserFunctionDef> + Clone) {
-	BOOL_FUNCTIONS.with(|known| known.borrow_mut().clear());
+	BOOL_FUNCTIONS.with(|known| *known.borrow_mut() = functions.clone().map(|function| function.name.clone()).collect());
 	loop {
-		let found: Vec<String> = functions.clone().filter(|function| !is_bool_function(&function.name) && is_boolean(&function.body, &parameter_scope(function))).map(|function| function.name.clone()).collect();
-		if found.is_empty() {
+		let refuted: Vec<String> = functions.clone().filter(|function| is_bool_function(&function.name) && !gives_bool(function)).map(|function| function.name.clone()).collect();
+		if refuted.is_empty() {
 			return;
 		}
-		BOOL_FUNCTIONS.with(|known| known.borrow_mut().extend(found));
+		BOOL_FUNCTIONS.with(|known| known.borrow_mut().retain(|name| !refuted.contains(name)));
 	}
+}
+
+/// The body ends in a bool and every `return` in it returns one
+fn gives_bool(function: &crate::context::UserFunctionDef) -> bool {
+	let scope = parameter_scope(function);
+	let mut returns_bool = true;
+	function.body.visit(&mut |node| if let Node::List(items, _, _) = node.drop_meta() {
+		if let [word, value] = items.as_slice() {
+			returns_bool &= word.drop_meta().name() != crate::lowering::tuples::RETURN || is_boolean(value, &scope);
+		}
+	});
+	returns_bool && is_boolean(&function.body, &scope)
 }
 
 /// The function's parameters declared bool (`f(b: bool) := b`), the rest unknown
@@ -46,13 +59,16 @@ pub fn is_boolean(node: &Node, scope: &Scope) -> bool {
 			_ if op.is_comparison() => true,
 			Op::Not => matches!(left.drop_meta(), Node::Empty),
 			Op::And | Op::Or => is_boolean(left, scope) && is_boolean(right, scope),
+			// `c ? yes : f(n)`, `if c then yes else f(n)`: both branches
+			Op::Question => matches!(right.drop_meta(), Node::Key(then, Op::Colon, otherwise) if is_boolean(then, scope) && is_boolean(otherwise, scope)),
+			Op::Else => matches!(left.drop_meta(), Node::Key(_, Op::Then, then) if is_boolean(then, scope)) && is_boolean(right, scope),
 			// `x: bool = 1` (P199): the value stored, a bool
 			Op::Assign | Op::Define => matches!(left.drop_meta(), Node::Symbol(name) if is_bool_variable(name, scope) || is_boolean(right, scope)),
 			_ => false,
 		},
 		Node::Symbol(name) => is_bool_variable(name, scope),
 		// `(x < 3)`, a braced body `def ok(x){x < 10}`
-		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 => is_boolean(&items[0], scope),
+		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 && is_boolean(&items[0], scope) => true,
 		Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if word.drop_meta().name() == crate::lowering::tuples::RETURN) => is_boolean(&items[1], scope),
 		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.last().is_some_and(|last| is_boolean(last, scope)),
 		Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if BOOL_CALLS.contains(&name.as_str()) || is_bool_function(name)),

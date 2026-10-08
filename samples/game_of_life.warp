@@ -1,6 +1,6 @@
 // Conway's Game of Life
 // Cellular automaton simulation on a torus (the edges wrap)
-// the grid is a flat list of cells, row by row; lists are values, so the grid is global for the functions to change it
+// the grid is a flat list of cells, row by row; the grid is global, shared by the functions
 
 width = 20
 height = 10
