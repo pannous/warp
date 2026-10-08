@@ -128,5 +128,9 @@ bo's row again, so it changes nothing after written-through changes; an instance
 4. Foreign keys and one-to-many (done eagerly, card orm), batched lazy loading.
 5. `transaction { }`.
 6. IndexedDB backend in the browser (async underneath: the page's host keeps a loaded mirror per table, like the
-   key-value store).
+   key-value store). Done simply (branch orm-updates): web/playground/host-files.js `table` keeps each table as
+   one value `table <file> <name>` = {types, rows: [{id, column…}]} of the `database[k]` store, so it is loaded
+   before the run and written back on every change. The browser-built compiler keeps a filter as the comprehension
+   over the rows (database_tables::queried is native-only), since the browser has no SQL. One value per table rewrites
+   the whole table on each change: fine for samples, slow for big tables (then one object store per table).
 7. Unit and type conversions in migrations, `@was` renames.

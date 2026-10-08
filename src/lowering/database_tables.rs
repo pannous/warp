@@ -431,6 +431,9 @@ fn has_id(body: &Node) -> bool {
 /// The registrations, inserts and field changes of the tables as their table calls, in every block; `open` the tables
 /// registered so far, as a foreign key reads the rows of its table
 fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Node {
+	if let Some(saved) = saved(&node, tables, file) {
+		return saved;
+	}
 	match node {
 		Node::List(statements, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			let statements = statements.into_iter().flat_map(|statement| table_statements(statement, tables, file, open)).collect();
@@ -441,7 +444,7 @@ fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &m
 }
 
 fn table_statements(statement: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Vec<Node> {
-	if let Some(lowered) = opened(&statement, tables, file, open).or_else(|| inserted(&statement, tables, file)).or_else(|| saved(&statement, tables, file)) {
+	if let Some(lowered) = opened(&statement, tables, file, open).or_else(|| inserted(&statement, tables, file)) {
 		return lowered;
 	}
 	let updates = written_through(&statement, tables, file);
@@ -572,9 +575,10 @@ fn column_update(table: &Table, instance: &str, column: &str, file: &str) -> Str
 		name = table.name, value = column_value(table, instance, column))
 }
 
-/// `save p`: every column of p's row written, the value p; an instance of a table's class without a row is an error
-fn saved(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Vec<Node>> {
-	let Node::List(parts, _, Separator::Space) = statement.drop_meta() else { return None };
+/// `save p`, anywhere (`print(save p)` of a standalone build too): every column of p's row written, the value p; an
+/// instance of a table's class without a row is an error
+fn saved(node: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Node> {
+	let Node::List(parts, _, Separator::Space) = node.drop_meta() else { return None };
 	let [word, value] = parts.as_slice() else { return None };
 	if word.drop_meta().name() != SAVE_WORD || tables.is_empty() {
 		return None;
@@ -585,5 +589,5 @@ fn saved(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Optio
 			class = table.class, name = variable, updates = updates.join("\n"))
 	});
 	let code = format!("{SAVED} = {VALUE_PLACEHOLDER}\n{writes}{SAVED}", writes = writes.collect::<String>());
-	Some(generated(&code, [(VALUE_PLACEHOLDER, value.clone())]).children())
+	Some(Node::List(generated(&code, [(VALUE_PLACEHOLDER, value.clone())]).children(), Bracket::Round, Separator::Semicolon))
 }
