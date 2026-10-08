@@ -1,6 +1,6 @@
 # The warp guide
 
-Learn warp one small step at a time. Press **try ▶** to run a snippet, then change it.
+Learn Warp one small step at a time. Press **try ▶** to run a snippet, then change it.
 
 ## Hello, world
 
@@ -570,7 +570,7 @@ Examples: "wasm components"; samples: wasm_interop
 
 ## Laws
 
-A law is a rule that must always hold. warp checks it for you.
+A law is a rule that must always hold. warp checks it for you (only if [Lean](https://github.com/leanprover/lean4) is installed.)
 
 ```warp => 9
 square(x) := x * x
