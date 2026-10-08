@@ -128,7 +128,7 @@ impl TypeManager {
 		self.types.ty().struct_(vec![
 			FieldType {
 				element_type: Val(ValType::I64),
-				mutable: false,
+				mutable: true, // mutable for a new field grown in place: objects are references (P200b)
 			}, // kind
 			FieldType {
 				element_type: Val(Ref(any_ref)),
