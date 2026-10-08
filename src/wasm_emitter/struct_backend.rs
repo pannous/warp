@@ -373,10 +373,11 @@ fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>, names: &m
 		Node::Key(target, op, value) if matches!(op, Op::Assign | Op::Define) || op.is_compound_assign() || is_update(op) => {
 			match target.drop_meta() {
 				// a field write `p = field_with(p, "x", v)` uses only v
-				Node::Symbol(name) => match entry_update(name, value) {
-					Some((_, written)) => return recurse(&written),
-					None => {}
-				},
+				Node::Symbol(name) => {
+					if let Some((_, written)) = entry_update(name, value) {
+						return recurse(&written);
+					}
+				}
 				Node::Key(object, Op::Hash, index) if matches!(object.drop_meta(), Node::Symbol(_)) => recurse(index),
 				other => recurse(other),
 			}
