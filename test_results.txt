@@ -623,6 +623,7 @@ PASSED:
   ✓ ffi::test_web_idl::a_member_the_interface_lacks_is_an_error_with_its_near_miss
   ✓ ffi::test_web_idl::a_page_has_local_storage_and_the_clipboard
   ✓ ffi::test_web_idl::an_attribute_is_read_not_called
+  ✓ ffi::test_web_idl::an_attributes_value_is_typed_by_its_interface
   ✓ ffi::test_web_idl::what_the_interface_declares_runs
   ✓ ffi_parser::tests::test_parse_int32_return
   ✓ ffi_parser::tests::test_parse_pointer_param
@@ -2446,6 +2447,10 @@ PASSED:
   ✓ types::test_be_definitions::test_be_defines_with_a_type
   ✓ types::test_block_data_paths::test_a_sibling_path_inside_a_block
   ✓ types::test_block_data_paths::test_the_top_level_form_still_reads_it
+  ✓ types::test_bool_assign::a_bool_parameter_refuses_other_ints
+  ✓ types::test_bool_assign::a_bool_variable_refuses_other_kinds
+  ✓ types::test_bool_assign::a_bool_variable_takes_bools_and_an_int_variable_takes_a_bool
+  ✓ types::test_bool_assign::one_and_zero_are_yes_and_no_everywhere
   ✓ types::test_bool_type::a_bool_of_unknown_static_type_is_tested_at_run_time
   ✓ types::test_bool_type::a_list_starting_with_a_bool_is_a_list
   ✓ types::test_bool_type::a_literal_bool_counts_in_arithmetic
@@ -3452,4 +3457,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3447 passed, 0 failed, 3447 total tested
+19 ignored, 3452 passed, 0 failed, 3452 total tested
