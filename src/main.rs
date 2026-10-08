@@ -34,6 +34,7 @@ const MACHINE_CODE_EXTENSION: &str = "cwasm";
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
 /// `warp run <file>`: the program runs, no executable is left (P105)
 const RUN_PREFIX: &str = "run ";
+const TEST_PREFIX: &str = "test ";
 const RUNTIME_STUB_NAME: &str = "warp-runtime";
 const RUNTIME_STUB_VARIABLE: &str = "WARP_RUNTIME_STUB";
 /// The crate of the stub in warp's source checkout
@@ -200,6 +201,17 @@ fn run_command(args: &[String]) {
                 std::process::exit(1);
             }
         }
+    } else if let Some(path) = arg_string.strip_prefix(TEST_PREFIX).filter(|path| path.ends_with(".wasp") || path.ends_with(".warp")) {
+        // P209, P210: the file's `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero
+        diagnostic::show_lines_of(&source_of(path));
+        let result = warp::pipeline::for_tests(|| eval(path));
+        let failed = matches!(result, Node::Error(_));
+        match result.drop_meta() {
+            Node::Text(summary) => println!("{summary}"),
+            Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => println!("{}", summary.drop_meta().serialize().trim_matches('"')),
+            other => show(other, ""),
+        }
+        std::process::exit(if failed { 1 } else { 0 });
     } else if arg_string.ends_with(".wasp") || arg_string.ends_with(".warp") {
         // P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
         let (only_run, path) = match arg_string.strip_prefix(RUN_PREFIX) {
@@ -233,7 +245,7 @@ fn run_command(args: &[String]) {
         }
     } else if arg_string == "test" || arg_string == "tests" {
         {
-            println!("Run tests with: cargo test");
+            println!("warp test <file.wasp> runs the tests of a program; warp's own tests run with: cargo test");
         }
     } else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
         println!("Wasp documentation can be found at https://github.com/pannous/warp/wiki");

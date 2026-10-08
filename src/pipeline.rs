@@ -114,6 +114,8 @@ thread_local! {
 	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
 	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
+	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// `run` with `flag` set on this thread
@@ -178,6 +180,15 @@ pub fn is_for_dev() -> bool {
 	FOR_DEV.with(|dev| dev.get())
 }
 
+/// `run` a program under `warp test`: its `test` lines and blocks run, its value is their summary (P209, P210)
+pub fn for_tests<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_TESTS, run)
+}
+
+pub fn is_for_tests() -> bool {
+	FOR_TESTS.with(|tests| tests.get())
+}
+
 /// A compiled program and the host capabilities its imports need.
 #[cfg_attr(not(feature = "native"), allow(dead_code))] // the browser host links every import itself
 #[derive(Clone)]
@@ -190,7 +201,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 84] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 85] = [
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -202,6 +213,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 84] = [
 	crate::markup_tags::lower_html_attributes,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
+	// `test C` and `test "name" { … }` run under `warp test` only, before library_words lowers their checks and tries
+	crate::lowering::test_blocks::lower,
 	// P179: `red is Color` of a variant without payload, before any pass lowers the type test
 	crate::lowering::sum_variants::lower,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`

@@ -1,0 +1,7 @@
+square(x) := x * x
+test square(3) == 9
+test "squares" {
+  check square(4) == 16
+  test square(0) == 0
+}
+square(5)
