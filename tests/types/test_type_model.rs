@@ -96,7 +96,6 @@ const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	("x: bool = 0; x = 1", "bool-literal-value"),
 	("f(b: bool) := b; f(1)", "bool-literal-value"),
 	("b = true; b = 1", "bool-literal-value"),
-	("class Point { x: int }; f(q: Point) := q.x = 7; p = Point(1); f(p); p.x", "instance-field"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";
