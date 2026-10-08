@@ -84,6 +84,7 @@ pub fn serve(port: u16, routes: &[Route], site: &[SiteFile], mut answer: impl Fn
 	for mut request in server.incoming_requests() {
 		let method = request.method().as_str().to_uppercase();
 		let (path, query) = request.url().split_once('?').map_or((request.url().to_string(), String::new()), |(path, query)| (path.to_string(), query.to_string()));
+		let path = percent_decoded(&path);
 		let mut body = String::new();
 		let _ = request.as_reader().read_to_string(&mut body);
 		let answered = match routes.iter().find(|route| route.method == method && route.path == path) {
@@ -110,6 +111,21 @@ fn site_file(site: &[SiteFile], method: &str, path: &str) -> Option<Answer> {
 pub fn value_of_body(body: String) -> Node {
 	serde_json::from_str::<serde_json::Value>(&body).ok().filter(|value| value.is_object() || value.is_array())
 		.map_or(Node::Text(body), |value| crate::foreign::node_of(&value))
+}
+
+/// `/rpc/route%C2%B7data%C2%B70` → `/rpc/route·data·0` (a browser's fetch encodes the path); an invalid escape stays
+fn percent_decoded(path: &str) -> String {
+	let bytes = path.as_bytes();
+	let mut decoded = Vec::with_capacity(bytes.len());
+	let mut index = 0;
+	while index < bytes.len() {
+		let escaped = (bytes[index] == b'%').then(|| path.get(index + 1..index + 3)).flatten().and_then(|hex| u8::from_str_radix(hex, 16).ok());
+		match escaped {
+			Some(byte) => { decoded.push(byte); index += 3; }
+			None => { decoded.push(bytes[index]); index += 1; }
+		}
+	}
+	String::from_utf8(decoded).unwrap_or_else(|_| path.to_string())
 }
 
 /// The request as the route's `request`: {method, path, query, body}, a JSON body parsed into its value
