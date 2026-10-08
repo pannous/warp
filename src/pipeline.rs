@@ -118,6 +118,8 @@ thread_local! {
 	static PRERENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
 	static SERVER_VALUES: std::cell::RefCell<Vec<Node>> = const { std::cell::RefCell::new(vec![]) };
+	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/serve.rs)
+	static SERVING_PORT: std::cell::Cell<Option<u16>> = const { std::cell::Cell::new(None) };
 	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
 	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -182,6 +184,19 @@ pub fn with_server_values<T>(values: Vec<Node>, run: impl FnOnce() -> T) -> T {
 	result
 }
 
+/// `run` compiling a program `warp serve` serves at the port: its server functions, its top-level `get`/`post` routes
+/// and its page, without a `serve PORT {…}` statement
+pub fn serving_at<T>(port: u16, run: impl FnOnce() -> T) -> T {
+	let before = SERVING_PORT.with(|current| current.replace(Some(port)));
+	let result = run();
+	SERVING_PORT.with(|current| current.set(before));
+	result
+}
+
+pub fn serving_port() -> Option<u16> {
+	SERVING_PORT.with(|port| port.get())
+}
+
 /// The first value of the page's `index`th call of a server function, ø when none was rendered
 pub fn server_value(index: usize) -> Node {
 	SERVER_VALUES.with(|values| values.borrow().get(index).cloned().unwrap_or(Node::Empty))
@@ -228,7 +243,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 89] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 90] = [
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -281,6 +296,9 @@ const SOURCE_PASSES: [fn(Node) -> Node; 89] = [
 	crate::type_aliases::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::traits::lower_trait_parameters,
+	// `people: [Person] = database.people`: the table's rows, inserts and field changes written through
+	// (database_tables.rs), before class_methods lowers the class (its row id) and stored_values reads `database.people`
+	crate::database_tables::lower,
 	// `p.fields`, `p.methods`, `dir(p)`: the class layout (reflection.rs), before class_methods lowers the class bodies
 	crate::reflection::lower_objects,
 	// methods in a class body become functions over the class before any pass reads the body as fields
@@ -419,7 +437,7 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let source = program.clone();
 		let node = crate::folding::precompute(lower_for_emission(program)?);
-		let reflected = crate::reflection::meta_entries(&source, &node);
+		let reflected = crate::reflection::meta_entries(&source, &node, code);
 		warn_about_run_time_blocks(&node)?;
 		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
 		let entries: Vec<_> = crate::units::static_units::result_units_entry().into_iter().chain(reflected).collect();

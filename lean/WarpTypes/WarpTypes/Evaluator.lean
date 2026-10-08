@@ -82,6 +82,12 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
       some (if isList e && fits e (.list t) then (.lref μ.lists.length t, μ.allocList t e) else (.error "type mismatch", μ))
     else stepIn (.share t) e μ (step P μ e)
   | .push l v => stepPair .pushL .pushR l v μ (step P μ l) (step P μ v) (some (pushValues μ l v))
+  | .setAt l i v =>
+    if l.isValue then
+      if i.isValue then
+        if v.isValue then some (setAtValues μ l i v) else stepIn (.setAtR l i) v μ (step P μ v)
+      else stepIn (.setAtI l v) i μ (step P μ i)
+    else stepIn (.setAtL i v) l μ (step P μ l)
   | .new p => some (.ref μ.heap.length p, μ.alloc p)
   | .get o f => if o.isValue then some (readField μ o f, μ) else stepIn (.get f) o μ (step P μ o)
   | .set o f v => stepPair (fun v => .setL f v) (fun o => .setR o f) o v μ (step P μ o) (step P μ v) (some (writeField μ o f v))
@@ -340,6 +346,17 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     intro μ s' hs
     exact stepPair_sound (L := .pushL) (R := .pushR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
       (fun vl vv hd => by cases hd; exact .push vl vv) hs
+  | setAt l i v ih1 ih2 ih3 =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · rename_i vl
+      split at hs
+      · rename_i vi
+        split at hs
+        · cases hs; exact .setAt vl vi (by assumption)
+        · exact stepIn_sound (F := .setAtR l i) (by simp [Frame.ready, vl, vi]) (fun _ => ih3) hs
+      · exact stepIn_sound (F := .setAtI l v) vl (fun _ => ih2) hs
+    · exact stepIn_sound (F := .setAtL i v) rfl (fun _ => ih1) hs
   | app f a ih1 ih2 =>
     intro μ s' hs
     exact stepPair_sound (L := .appL) (R := .appR) rfl id rfl (fun _ => ih1) (fun _ => ih2)

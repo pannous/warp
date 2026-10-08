@@ -1,0 +1,6 @@
+// P221 probe: the users table stays on the server, each user page asks POST /rpc/route·data·N for what it shows.
+// Seed: sqlite3 app.database.sqlite "create table users(id integer primary key, name text); insert into users(name) values('Ann'),('Bo')"
+class User{name: text}
+users: [User] = database.users
+route "/" { div{ p{ "home" } a{ href:"/users/1" "first" } } }
+route "/users/:id:int" { div{ h1{ "User " + users#id.name } a{ href:"/users/2" "second" } a{ href:"/" "home" } } }

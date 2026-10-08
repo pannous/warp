@@ -22,6 +22,12 @@ def callable : Ty → Bool
   | .fn _ | .never | .any => true
   | _ => false
 
+/-- a whole number, or a value of unknown type (checked when it runs) -/
+def wholeNumber (t : Ty) : Bool := sub t .int || t == .any
+
+/-- what `*` repeats statically: a text times a whole number, in either order (P1) -/
+def repeats (a b : Ty) : Bool := (textual a && wholeNumber b) || (wholeNumber a && textual b)
+
 def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
@@ -41,7 +47,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _ => none
   | .arith op a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some ta, some tb => if numeric ta && numeric tb then some (op.ty ta tb) else none
+    | some ta, some tb => if (numeric ta && numeric tb) || (op == .mul && repeats ta tb) then some (op.ty ta tb) else none
     | _, _ => none
   | .lt a b =>
     match typeOf P Γ a, typeOf P Γ b with
@@ -113,6 +119,10 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     match typeOf P Γ l, typeOf P Γ v with
     | some tl, some tv => if listy tl && consub tv (listElem tl) then some tl else none
     | _, _ => none
+  | .setAt l i v =>
+    match typeOf P Γ l, typeOf P Γ i, typeOf P Γ v with
+    | some tl, some ti, some tv => if listy tl && consub ti .number && consub tv (listElem tl) then some tv else none
+    | _, _, _ => none
   | .get e f => (typeOf P Γ e).bind fun te => if strictRead P te f then some (P.readTy te f) else none
   | .set e f v =>
     match typeOf P Γ e, typeOf P Γ v with
@@ -265,6 +275,13 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     cases hl : typeOf P Γ l <;> cases hv : typeOf P Γ v <;> simp only [typeOf, hl, hv] at h <;> try cases h
     split at h
     · cases h; exact .push (ih1 hl) (ih2 hv)
+    · cases h
+  | setAt l i v ih1 ih2 ih3 =>
+    intro Γ t h
+    cases hl : typeOf P Γ l <;> cases hi : typeOf P Γ i <;> cases hv : typeOf P Γ v <;>
+      simp only [typeOf, hl, hi, hv] at h <;> try cases h
+    split at h
+    · cases h; exact .setAt (ih1 hl) (ih2 hi) (ih3 hv)
     · cases h
   | get e f ih =>
     intro Γ t h; simp only [typeOf, Option.bind_eq_some_iff] at h
