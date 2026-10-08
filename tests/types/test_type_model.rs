@@ -329,6 +329,16 @@ const CORPUS: &[&str] = &[
 	"5 % 0",
 	"n = 7; n %= 3; n",
 	"\"a\" % 2",
+	// `sum` folds from 0; `.size`, `.count` and `.length` count; a local widens over the numbers it is given
+	"sum [1, 2, 3]",
+	"xs = [1, 2]; sum xs",
+	"sum 1..4",
+	"sum = 5; sum + 1",
+	"[1, 2, 3].size",
+	"xs = [1, 2]; xs.count",
+	"\"abc\".length",
+	"f() := { out = 1.5; for x in [2, 3] { out = out + x }; out }; f()",
+	"f() := { out = 0; out = \"a\"; out }; f()",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

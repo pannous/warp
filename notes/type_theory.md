@@ -467,3 +467,9 @@ ones those call, as if the program had written them (not the ones it defines its
 needs builtins outside W0 (upper, chars, split, ends_with, ord, sort). `min(a, b)` / `max(a, b)` export as
 `b < a ? b : a` / `a < b ? b : a`, a and b bound once (typed `any`). `<` orders texts by codepoints (`ltValues`,
 the checker's `textual`); `"a" < 1` stays out (a one-letter `"a"` is a codepoint in warp).
+`sum` comes along as the warp definition `sum(xs) := { out = 0; for x in xs { out = out + x }; out }` (used_modules.rs
+LIBRARY_WORDS: warp's sum folds from 0, `sum(["a", "b"])` is "0ab"); `.size`, `.count`, `.length` are `count`. A
+function local widens over the numbers it is given, as a main-level name does (P45); an annotated parameter's cell
+keeps its annotation (`Item.cell c (some t)`, P203). Elaboration types a loop variable by its list's element type
+(Expr.rewrite takes P), so `out + x` in a loop over floats is a number, not `any` cast to the local's first type.
+Card sum-empty: `sum []` prints the word sum.

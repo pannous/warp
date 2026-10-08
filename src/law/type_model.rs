@@ -67,6 +67,8 @@ const MAP_CLASS: &str = "map";
 /// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (x's first position from 1, else 0) walk the list
 /// with a `·tally` instance: its int fields hold the count or position and the current index
 const COUNT_WORD: &str = "count";
+/// `xs.size`, `xs.count`, `"abc".length`: `count xs`
+const SIZE_METHODS: [&str; 3] = ["size", "count", "length"];
 /// `min(a, b)` and `max(a, b)` of two values (lowering/min_max.rs): a comparison, each argument computed once
 const EXTREMA: [&str; 2] = ["min", "max"];
 const TALLY_CLASS: &str = "·tally";
@@ -694,14 +696,20 @@ impl Exporter {
 		let mut argument_classes = Vec::new();
 		let mut cell_items = Vec::new();
 		// first: a lifted nested function's parameter `y: outer·y` holds outer's cell
+		let mut declared_cells = vec![];
 		for statement in &program {
-			let Some((name, _, body)) = function_definition(statement) else { continue };
+			let Some((name, parameters, body)) = function_definition(statement) else { continue };
 			for local in assigned_locals(body, &self.globals) {
 				let class = cell_class(name, &local);
 				self.classes.insert(class.clone(), (vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]));
-				cell_items.push(format!(".cell {}", quoted(&class)));
+				declared_cells.push((class.clone(), parameters.iter().find(|parameter| parameter_name(parameter) == local).and_then(|parameter| parameter_type_word(parameter))));
 				self.cell_classes.push(class);
 			}
+		}
+		// an annotated parameter's cell keeps its type (P203); a cell parameter has none of its own
+		for (class, declared) in declared_cells {
+			let declared = declared.filter(|word| !self.cell_classes.contains(word));
+			cell_items.push(format!(".cell {} {}", quoted(&class), self.optional_type(declared.as_deref())?));
 		}
 		for statement in &program {
 			let Some((name, parameters, _)) = function_definition(statement) else { continue };
@@ -731,7 +739,7 @@ impl Exporter {
 		}
 		argument_classes.extend(event_classes);
 		let mut words_used = false;
-		program_node.visit(&mut |part| words_used |= is_word(part, COUNT_WORD) || is_word(part, IN_KEYWORD));
+		program_node.visit(&mut |part| words_used |= [COUNT_WORD, IN_KEYWORD].iter().chain(&SIZE_METHODS).any(|word| is_word(part, word)));
 		if words_used {
 			let fields = [CELL_FIELD, TALLY_INDEX].map(|field| (field.to_string(), Some("int".to_string())));
 			self.classes.insert(TALLY_CLASS.to_string(), (vec![TALLY_CLASS.to_string()], fields.to_vec()));
@@ -1204,6 +1212,7 @@ impl Exporter {
 					Ok(format!(".assign {} (.append (.glob {}) (.cons ({item}) .nil))", quoted(name), quoted(name)))
 				}
 				(_, Node::Symbol(field)) if self.is_field(field) => Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field))),
+				(_, Node::Symbol(method)) if SIZE_METHODS.contains(&method.as_str()) => self.tally(list, None, false),
 				_ => unsupported(node),
 			},
 			Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
