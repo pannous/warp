@@ -134,6 +134,12 @@ replaces that where the static type is known, modelled on map_backend.rs (typed 
   refuses `x:int=5; x=2.5` (big_int.rs emit_fits_declared, struct_backend.rs emit_field_value); `/=` still keeps an int
   an int. Open: a Node instance `P(0.5)` (card int-field). P126 texts inside containers print quoted everywhere (print, interpolation, string()): `P{x:1 name:"a"}`,
   `["a" "b"]`; a top-level `print "a"` still writes a.
+Upcast fields (P201/P203, card upcast-field, analyzer/upcast_fields.rs, on the source before class_methods):
+`s: Shape = Circle(…); s.r` (also a parameter `f(s: Shape)`, a variant through its sum type) is the compile error
+"Shape has no field r, only Circle has: match … or read (s as Circle).r". Checked only when a descendant has the
+member, so library methods and unknown names stay run-time lookups; a name tested in its scope (`if s is Circle`) is
+smart-cast and skipped. `s as Circle` is the checked downcast `(cast·value = s; if not (cast·value is Circle) raise …;
+cast·value)` (class_methods checked_cast), "s is no Circle".
 Shared instances (P200, card instance-field, lowering/shared_instances.rs): a function changing a field of a parameter
 (`q.x = 7`, `q.items.add(v)`, or passing q on to a function or method that does, found by a fixpoint) gives
 `[value, q]` (each `return v` too), and a call stores it back into a variable argument:
