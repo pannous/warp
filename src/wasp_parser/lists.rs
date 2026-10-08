@@ -341,7 +341,7 @@ impl WaspParser {
 				Node::List(items, bracket, sep)
 			}
 			Node::List(items, bracket, sep) => {
-				let mut transformed: Vec<Node> = without_ref_words(items).into_iter().map(Self::transform_fields_to_types).collect();
+				let mut transformed: Vec<Node> = with_type_phrases(without_ref_words(items)).into_iter().map(Self::transform_fields_to_types).collect();
 				// the line `left: ref Node?` is the one field once its `ref` is read
 				if bracket == Bracket::None && transformed.len() == 1 && matches!(transformed[0].drop_meta(), Node::Key(_, Op::Colon, _)) {
 					return transformed.remove(0);
@@ -396,6 +396,36 @@ fn without_ref_words(items: Vec<Node>) -> Vec<Node> {
 			(true, Node::Symbol(_)) => {
 				let Some(Node::Key(name, op, _)) = fields.pop().map(|field| field.drop_meta().clone()) else { unreachable!("checked") };
 				fields.push(Node::Key(name, op, Box::new(item)));
+			}
+			_ => fields.push(item),
+		}
+	}
+	fields
+}
+
+/// `items: list of text`: the words `of text` after a field's type continue it, the one type `list of text` (as
+/// `list<text>` is read); `list of list of int` too
+fn with_type_phrases(items: Vec<Node>) -> Vec<Node> {
+	let mut fields: Vec<Node> = Vec::with_capacity(items.len());
+	let mut items = items.into_iter().peekable();
+	while let Some(item) = items.next() {
+		let is_of = matches!(item.drop_meta(), Node::Symbol(word) if word == OF_WORD);
+		let field_type = match fields.last().map(Node::drop_meta) {
+			Some(Node::Key(_, Op::Colon, value)) => match value.drop_meta() {
+				Node::Symbol(type_name) => Some(type_name.clone()),
+				_ => None,
+			},
+			_ => None,
+		};
+		let element = items.peek().and_then(|next| match next.drop_meta() {
+			Node::Symbol(element) => Some(element.clone()),
+			_ => None,
+		});
+		match (is_of, field_type, element) {
+			(true, Some(type_name), Some(element)) => {
+				items.next();
+				let Some(Node::Key(name, op, _)) = fields.pop().map(|field| field.drop_meta().clone()) else { unreachable!("checked") };
+				fields.push(Node::Key(name, op, Box::new(Node::Symbol(format!("{type_name} {} {element}", OF_WORD)))));
 			}
 			_ => fields.push(item),
 		}

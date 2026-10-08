@@ -20,3 +20,12 @@ fn test_declared_list_parameters_take_the_list() {
 	assert_eq!(printed("total(xs:list):=count(xs); total [1 2 3]"), "3");
 	fails_with("inc(x:int):=x+1; inc \"abc\"", "inc needs an Int for parameter x");
 }
+
+// card typed-list-upper: a variable declared with a list type broadcasts like an untyped list variable
+#[test]
+fn a_declared_list_variable_broadcasts() {
+	assert_eq!(printed("names: texts = [\"hi\"]; upper names"), "[\"HI\"]");
+	assert_eq!(printed("names: texts = [\"hi\", \"yo\"]; upper names"), "[\"HI\" \"YO\"]");
+	assert_eq!(printed("names: list of text = [\"hi\"]; upper names"), "[\"HI\"]");
+	assert_eq!(printed("xs: ints = [1 2]; inc(x:int):=x+1; inc xs"), "[2 3]");
+}

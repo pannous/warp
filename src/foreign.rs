@@ -57,6 +57,9 @@ const operator = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a 
 	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
 	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
 const load = async name => name === "operator" ? operator : name in globalThis ? globalThis[name] : (() => { try { return require(name); } catch (failure) { return import(name); } })();
+// the answers own stdout: what a module prints (console.log) goes to stderr
+const reply = process.stdout.write.bind(process.stdout);
+process.stdout.write = process.stderr.write.bind(process.stderr);
 let pending = Promise.resolve();
 require("readline").createInterface({ input: process.stdin }).on("line", line => {
 	pending = pending.then(async () => {
@@ -73,7 +76,7 @@ require("readline").createInterface({ input: process.stdin }).on("line", line =>
 		} catch (failure) {
 			answer = { error: failure instanceof Error ? failure.name + ": " + failure.message : String(failure) };
 		}
-		process.stdout.write(JSON.stringify(answer) + "\n");
+		reply(JSON.stringify(answer) + "\n");
 	});
 });
 "#;

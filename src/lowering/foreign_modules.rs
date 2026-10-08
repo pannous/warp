@@ -10,7 +10,9 @@ use std::collections::HashMap;
 
 const USE_WORD: &str = "use";
 /// The runtimes a `use <runtime> <module>` names: Python, and JavaScript (node natively, the page in the browser)
-pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", "js", COMPONENT_RUNTIME];
+pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", JS_RUNTIME, COMPONENT_RUNTIME];
+/// JavaScript: its browser globals are typed through WebIDL (src/web_idl.rs)
+const JS_RUNTIME: &str = "js";
 /// `use wasm "lib.wasm" as lib`: a WebAssembly component (src/components.rs); its module is the file, found next to the
 /// program, and named after the file by default
 pub const COMPONENT_RUNTIME: &str = "wasm";
@@ -162,6 +164,19 @@ fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, argume
 	Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments], Bracket::Round, Separator::None)
 }
 
+/// `crypto.randomUuid()` of `use js crypto`: what WebIDL declares for that global instead (a module, not a held value)
+fn undeclared_in_web_idl(runtime: &str, module: &Node, member: &str, is_call: bool, arguments: &Node) -> Option<String> {
+	let Node::Text(global) = module else { return None };
+	if runtime != JS_RUNTIME {
+		return None;
+	}
+	let count = match arguments {
+		Node::List(items, _, _) => items.len(),
+		_ => 0,
+	};
+	crate::web_idl::check(global, member, is_call.then_some(count)).err()
+}
+
 /// `operator.member(arguments…)` in `runtime`
 fn operator_call(runtime: &str, member: &str, arguments: Vec<Node>) -> Node {
 	foreign_call(runtime, Node::Text(OPERATOR_MODULE.to_string()), member, true, Node::List(arguments, Bracket::Square, Separator::Space))
@@ -259,6 +274,9 @@ impl Foreign<'_> {
 					},
 					_ => return node,
 				};
+				if let Some(problem) = undeclared_in_web_idl(&runtime, &module, &member, is_call, &arguments) {
+					return crate::diagnostic::Diagnostic::at(&node, problem).into_error();
+				}
 				return foreign_call(&runtime, module, &member, is_call, arguments);
 			}
 			// `counter.increment(2)` of a handle a component gave: the method of its resource

@@ -68,6 +68,7 @@ pub mod components;
 pub mod component_builder;
 pub mod ffi;
 pub mod ffi_parser;
+pub mod web_idl;
 pub mod function;
 pub mod normalize;
 pub mod local;
