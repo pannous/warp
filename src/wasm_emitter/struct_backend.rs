@@ -354,7 +354,7 @@ impl WasmGcEmitter {
 }
 
 /// The body without its value when that is a bare variable (`…; p`): nothing changes it after, so its Node copy is it
-fn without_final_variable(body: &Node) -> Node {
+pub(super) fn without_final_variable(body: &Node) -> Node {
 	match body.drop_meta() {
 		Node::List(statements, bracket, separator) if matches!(separator, Separator::Semicolon | Separator::Newline)
 			&& statements.last().is_some_and(|last| matches!(last.drop_meta(), Node::Symbol(_))) => {
@@ -366,7 +366,7 @@ fn without_final_variable(body: &Node) -> Node {
 
 /// The variables a node uses as a whole value: not as an assignment's target, a field's object `p#x`, or an argument
 /// to a struct parameter
-fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>, names: &mut Vec<String>) {
+pub(super) fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>, names: &mut Vec<String>) {
 	let mut recurse = |child: &Node| used_whole(child, abi, names);
 	match node.drop_meta() {
 		Node::Symbol(name) => names.push(name.clone()),

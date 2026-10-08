@@ -1,8 +1,9 @@
 //! A map variable built by its own entries is a hash table: `m = {}` followed by `m[k] = v` with name keys (texts,
 //! symbols, characters) is a `$NodeMap`, an insertion-ordered key and value array plus open-addressing slots, so an
 //! entry is set and found in O(1) instead of copying and walking the cons list (field_with, map_get). The table never
-//! leaves its variable: wherever the program needs the map as a value it becomes the same Node the entries would have
-//! built (`{}` is ø, one entry is the entry itself, more are a curly list), a fresh copy, so value semantics hold.
+//! leaves its variable: a map is a reference (P200b), so a variable used as a whole value (`n = m`, `[m]`, an argument)
+//! stays the Node every holder shares; only a bare final `m` becomes the same Node the entries would have built
+//! (`{}` is ø, one entry is the entry itself, more are a curly list).
 //! A lookup it cannot answer (a missing key, a key no name) takes the generic way on that copy, with its errors.
 
 use super::WasmGcEmitter;
@@ -57,6 +58,10 @@ impl WasmGcEmitter {
 			}
 		});
 		excluded.extend(self.names_held_as_nodes(program));
+		// a map is a reference (P200b): one used whole (`n = m`, `[m]`, an argument) is the one Node every holder shares
+		let mut used_whole = vec![];
+		super::struct_backend::used_whole(&super::struct_backend::without_final_variable(program), &Default::default(), &mut used_whole);
+		excluded.extend(used_whole);
 		started.into_iter()
 			.filter(|name| keyed.contains(name) && !excluded.contains(name))
 			.filter(|name| self.scope.lookup(name).is_some_and(|local| !local.is_param))

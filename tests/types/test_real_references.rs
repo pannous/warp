@@ -1,6 +1,6 @@
 //! Class instances are references (P200, card real-references): every name and list item holding an instance sees a
-//! change of its fields, as in Python or JavaScript. A construction makes a new instance each time it runs. Maps and
-//! lists stay values.
+//! change of its fields, as in Python or JavaScript. A construction makes a new instance each time it runs. Maps share
+//! too, and a new field grows the same object (P200b); `copy()` makes an independent one.
 use crate::is;
 
 const POINT: &str = "class Point { x: int }; ";
@@ -34,6 +34,30 @@ fn each_construction_is_a_new_instance() {
 }
 
 #[test]
-fn maps_stay_values() {
-	is!("m = {a:1}; n = m; n.a = 2; m.a", 1);
+fn a_new_field_grows_the_same_instance() {
+	is!("class Point { x: int; y: int }; p = Point(1, 2); q = p; q.color = \"red\"; p.color", "red");
+	is!(&format!("{POINT}p = Point(1); ps = [p]; p.tag = 3; ps#1.tag"), 3);
+	is!(&format!("{POINT}f(q) := q.tag = 4; p = Point(1); f(p); p.tag"), 4);
+}
+
+#[test]
+fn maps_share() {
+	is!("m = {a:1}; n = m; n.a = 2; m.a", 2);
+	is!("m = {a:1, b:2}; n = m; n.b = 3; m.b", 3);
+	is!("m = {a:1}; n = m; n.c = 3; m.c", 3);
+	is!("m = {a:1, b:2}; n = m; n.c = 3; m.c", 3);
+	is!("m = {a:1}; f(q) := q.a = 5; f(m); m.a", 5);
+	is!("m = {a:1}; ms = [m]; m.a = 6; ms#1.a", 6);
+}
+
+#[test]
+fn a_map_built_by_its_entries_shares() {
+	is!("m = {}; m[\"a\"] = 1; n = m; n[\"a\"] = 2; m[\"a\"]", 2);
+	is!("m = {}; m[\"a\"] = 1; n = m; n[\"b\"] = 2; m[\"b\"]", 2);
+}
+
+#[test]
+fn copy_makes_an_independent_map() {
+	is!("m = {a:1}; n = m.copy(); n.a = 2; m.a", 1);
+	is!("m = {a:1, b:2}; n = m.copy(); n.c = 3; m", "{a:1 b:2}");
 }

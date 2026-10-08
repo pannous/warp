@@ -147,20 +147,21 @@ pub(super) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 	found
 }
 
-/// Does the body set an entry of the map variable (`m[k] = v`) or look one up in a loop, by a text key
+/// Does the body look an entry of the map parameter up in a loop by a text key, and never set one: a map is a
+/// reference (P200b), so `m[k] = v` must reach the caller's map, not a table copy
 pub(super) fn keys(body: &Node, name: &str) -> bool {
 	let is_name = |part: &Node| matches!(part.drop_meta(), Node::Symbol(symbol) if symbol == name);
 	let key_variables = key_variables(body);
 	let by_key = |index: &Node| looks_up_a_key(index, &key_variables);
-	let mut found = false;
+	let (mut looked_up, mut set) = (false, false);
 	body.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
-		found |= matches!(target.drop_meta(), Node::Key(map, Op::Hash, index) if is_name(map) && by_key(index));
-		found |= is_name(target) && field_update(value, name);
+		set |= matches!(target.drop_meta(), Node::Key(map, Op::Hash, _) if is_name(map));
+		set |= is_name(target) && crate::library_words::is_field_update_of(name, value);
 	});
 	body.visit(&mut |part| if let Node::Key(_, Op::While | Op::Do, _) = part {
-		part.visit(&mut |inner| found |= matches!(inner, Node::Key(map, Op::Hash, index) if is_name(map) && by_key(index)));
+		part.visit(&mut |inner| looked_up |= matches!(inner, Node::Key(map, Op::Hash, index) if is_name(map) && by_key(index)));
 	});
-	found
+	looked_up && !set
 }
 
 /// `field_with(m, "k", v)` of the variable m with a text key: the lowered `m["k"] = v`
