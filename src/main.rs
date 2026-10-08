@@ -49,6 +49,11 @@ const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 const TOOL_COMMAND: &str = "tool";
 /// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/dev_server.rs, card web-dev)
 const DEV_COMMAND: &str = "dev";
+/// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
+const SERVE_COMMAND: &str = "serve";
+const SERVE_PORT: u16 = 8080;
+/// The program `warp serve` serves when it is given none: the first of these in the current folder
+const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
 const ACKNOWLEDGEMENTS_FILE: &str = ".warp-acknowledged";
@@ -113,6 +118,35 @@ fn program_file(args: &[String]) -> Option<(bool, &str, &[String])> {
     Some((only_run, path.as_str(), &args[file + 1..]))
 }
 
+/// `warp serve [file] [port]`: the program file (app.warp or main.warp of the current folder when none is given) and
+/// the port (8080 when none is given)
+#[cfg(not(test))]
+fn served_program(arguments: &[String]) -> Result<(&str, u16), String> {
+    let (ports, files): (Vec<&String>, Vec<&String>) = arguments.iter().partition(|argument| argument.chars().all(|digit| digit.is_ascii_digit()));
+    let port = match ports.as_slice() {
+        [] => SERVE_PORT,
+        [port] => port.parse().map_err(|_| format!("{port} is no port"))?,
+        several => return Err(format!("one port, not {}", several.len())),
+    };
+    let file = match files.as_slice() {
+        [] => DEFAULT_PROGRAMS.iter().find(|file| file_exists(file)).copied().ok_or_else(|| format!("no program given and no {} here", DEFAULT_PROGRAMS.join(" or ")))?,
+        [file] => file.as_str(),
+        several => return Err(format!("one program, not {}", several.len())),
+    };
+    Ok((file, port))
+}
+
+/// The program served at the port until it is stopped; `reason` says why a plain `warp app.warp` serves
+#[cfg(not(test))]
+fn serve_file(path: &str, port: u16, reason: &str) -> ! {
+    let code = source_of(path);
+    if !warp::serve::serves_itself(&code) {
+        println!("serving http://localhost:{port} ({reason}`warp run {path}` runs it once without serving)");
+    }
+    diagnostic::show_lines_of(&code);
+    print_and_exit(warp::pipeline::serving_at(port, || eval(path)))
+}
+
 /// `warp test file.warp`: the program file whose tests run
 fn test_file(args: &[String]) -> Option<&str> {
     let path = args.get(2).filter(|path| path.ends_with(".wasp") || path.ends_with(".warp"))?;
@@ -122,11 +156,6 @@ fn test_file(args: &[String]) -> Option<&str> {
 /// What the command line asks for: a file, a subcommand (`eval`, `compile`, `verify`, `tool` …) or code to evaluate
 #[cfg(not(test))]
 fn run_command(args: &[String]) {
-    // CGI mode detection
-    if env::var("SERVER_SOFTWARE").is_ok() {
-        println!("Content-Type: text/plain\n");
-    }
-
     // Join args (skip program name)
     let arg_string: String = args.iter().skip(1).cloned().collect::<Vec<_>>().join(" ");
 
@@ -166,6 +195,14 @@ fn run_command(args: &[String]) {
             }
             Err(failure) => {
                 eprintln!("{failure}");
+                std::process::exit(1);
+            }
+        }
+    } else if args[1] == SERVE_COMMAND {
+        match served_program(&args[2..]) {
+            Ok((path, port)) => serve_file(path, port, ""),
+            Err(failure) => {
+                eprintln!("warp serve: {failure}");
                 std::process::exit(1);
             }
         }
@@ -237,6 +274,9 @@ fn run_command(args: &[String]) {
             eprintln!("Error: Could not read file '{}'", path);
         }
         warp_runtime::system_signals::allow_staying(); // a program with a live timer stays after main
+        if !only_run && warp::serve::serves(&source_of(path)) {
+            serve_file(path, SERVE_PORT, "routes found; ");
+        }
         diagnostic::show_lines_of(&source_of(path));
         let result = eval(path); // a file: its folder is in scope (D15)
         if !only_run && !matches!(result, Node::Error(_)) {
@@ -288,17 +328,6 @@ fn run_command(args: &[String]) {
         {
             println!("must compile with WEBAPP support");
             std::process::exit(-1);
-        }
-    } else if arg_string.starts_with("serv") || arg_string == "server" {
-        // CGI/server mode
-        println!("Content-Type: text/plain\n");
-        let prog = arg_string.strip_prefix("server ").or(arg_string.strip_prefix("serv ")).unwrap_or("");
-        let prog = source_of(prog);
-        if !prog.is_empty() {
-            let result = eval(&prog);
-            println!("{}", result.serialize());
-        } else {
-            println!("Warp compiled without server OR no program given!");
         }
     } else if arg_string == "lsp" {
         {
@@ -581,6 +610,7 @@ fn usage() {
     println!("  warp data <file>     Read untrusted data without evaluating it");
     println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
     println!("  warp dev <file> [port]  Serve the file's page, reloaded when it changes (port 8008)");
+    println!("  warp serve [file] [port]  Serve the program: its page, server functions and routes (app.warp, port 8080)");
     println!("  warp repl            Start interactive console");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");

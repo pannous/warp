@@ -1,0 +1,10 @@
+n = 1000000
+linear xs = float[n]
+linear ys = float[n]
+for i in 1 to n { xs#i = i / n; ys#i = 1 - i / n }
+t0 = clock()
+d = dot(xs, ys)
+t1 = clock()
+zs = xs .* ys
+t2 = clock()
+print "dot of \(n) items: \(d) in \(t1 - t0) ms; xs .* ys in \(t2 - t1) ms"

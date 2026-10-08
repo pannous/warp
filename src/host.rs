@@ -116,7 +116,7 @@ pub const HOST_WORDS: [&str; 59] = [GPU_COMPUTE, GPU_RENDER, GPU_COMPUTE_LINEAR,
 pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 59] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(GPU_COMPUTE, vec![node, node, I64], vec![node]), (GPU_RENDER, vec![node, I64, I64, node], vec![node]), (GPU_COMPUTE_LINEAR, vec![node, I64, I64], vec![I64]), (GPU_MAP_LINEAR, vec![node, I64, node, I64, I64], vec![I64]), (GPU_REDUCE_LINEAR, vec![node, I64, node, I64, I64], vec![I64]), (FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (PAGE_PATH, vec![], vec![node]), (NOTIFY, vec![node], vec![]), (CHANNEL_SEND, vec![node, node], vec![]),
+	[(GPU_COMPUTE, vec![node, node, I64], vec![node]), (GPU_RENDER, vec![node, I64, I64, node], vec![node]), (GPU_COMPUTE_LINEAR, vec![node, I64, I64], vec![I64]), (GPU_MAP_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]), (GPU_REDUCE_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]), (FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (PAGE_PATH, vec![], vec![node]), (NOTIFY, vec![node], vec![]), (CHANNEL_SEND, vec![node, node], vec![]),
 		(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (RANDOM_SEED, vec![I64], vec![]), (CLOCK, vec![], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_DAILY, vec![I64, I64, I64], vec![]), (SIGNAL_AT, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (SYSTEM_VALUE, vec![I32], vec![I64]), (EXIT, vec![I64], vec![]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
@@ -702,8 +702,8 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 /// The site of the program file being run, which a program whose last line shows a page serves at / (src/site.rs); a
 /// page that fails to build is said, and the routes are served without it
 #[cfg(feature = "native")]
-fn served_site(port: u16) -> Vec<crate::site::SiteFile> {
-	let Some(file) = crate::modules::program_file() else { return vec![] };
+fn served_site(port: u16) -> crate::site::ServedSite {
+	let Some(file) = crate::modules::program_file() else { return Default::default() };
 	let title = file.file_stem().map_or(String::new(), |stem| stem.to_string_lossy().to_string());
 	let rendered = std::fs::read_to_string(&file).map_err(|failure| failure.to_string()).and_then(|code| crate::site::served_files(&code, &title));
 	rendered.unwrap_or_else(|failure| {
@@ -896,22 +896,23 @@ fn gpu_compute_linear(mut caller: Caller<'_, HostState>, shader: HostNode, block
 
 /// `ys = xs.map(x => …) @gpu` (src/lowering/gpu_maps.rs): the kernel over the cells of the block `source`, then the
 /// values of the program's numbers it reads, written into the block `target` of the same count; 1, or 0 without an
-/// adapter (a warning, once), when the program maps on the CPU
+/// adapter (a warning, once), when the program maps on the CPU. `keeping` (gpu_maps.rs KEEP_RESULT, SOURCE_KEPT): the
+/// result's buffer stays on the GPU for a later map of it, the source's items come from such a buffer
 #[cfg(feature = "native")]
-fn gpu_map_linear(caller: Caller<'_, HostState>, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64) -> wasmtime::Result<i64> {
-	gpu_kernel_linear(caller, GPU_MAP_LINEAR, shader, source, values, target, workgroups, false)
+fn gpu_map_linear(caller: Caller<'_, HostState>, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64, keeping: i64) -> wasmtime::Result<i64> {
+	gpu_kernel_linear(caller, GPU_MAP_LINEAR, shader, source, values, target, workgroups, keeping, false)
 }
 
 /// `s = sum(xs.map(x => …) @gpu)`, min, max: as gpu_map_linear, but each workgroup leaves its partial result in a cell
 /// after the values, and those, the only ones read back, go into the block `target` of `workgroups` cells
 #[cfg(feature = "native")]
-fn gpu_reduce_linear(caller: Caller<'_, HostState>, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64) -> wasmtime::Result<i64> {
-	gpu_kernel_linear(caller, GPU_REDUCE_LINEAR, shader, source, values, target, workgroups, true)
+fn gpu_reduce_linear(caller: Caller<'_, HostState>, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64, keeping: i64) -> wasmtime::Result<i64> {
+	gpu_kernel_linear(caller, GPU_REDUCE_LINEAR, shader, source, values, target, workgroups, keeping, true)
 }
 
 #[cfg(feature = "native")]
 #[allow(clippy::too_many_arguments)]
-fn gpu_kernel_linear(mut caller: Caller<'_, HostState>, word: &'static str, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64, reduces: bool) -> wasmtime::Result<i64> {
+fn gpu_kernel_linear(mut caller: Caller<'_, HostState>, word: &'static str, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64, keeping: i64, reduces: bool) -> wasmtime::Result<i64> {
 	static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 	let failure = gpu_failure(word);
 	if let Err(problem) = crate::gpu::available() {
@@ -921,19 +922,22 @@ fn gpu_kernel_linear(mut caller: Caller<'_, HostState>, word: &'static str, shad
 		return Ok(0);
 	}
 	let shader = given_shader(&mut caller, shader, &failure)?;
-	let mut floats = linear_floats(&mut caller, source, &failure)?;
+	let kept = (keeping & crate::gpu_maps::SOURCE_KEPT != 0).then(|| crate::gpu::kept_count(source)).flatten();
+	let mut floats = if kept.is_some() { vec![] } else { linear_floats(&mut caller, source, &failure)? };
+	let items = kept.unwrap_or(floats.len());
 	for value in given_node(&mut caller, values)?.iter() {
 		match value.drop_meta() {
 			Node::Number(number) => floats.push(f64::from(*number) as f32),
 			other => return Err(failure(format!("the lambda reads {}, not a number", other.serialize()))),
 		}
 	}
-	let partials = floats.len();
+	let partials = kept.unwrap_or(0) + floats.len();
 	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
 	if reduces {
-		floats.resize(partials + workgroups as usize, 0.0);
+		floats.resize(floats.len() + workgroups as usize, 0.0);
 	}
-	let left = crate::gpu::compute_from(&shader, &floats, workgroups, if reduces { partials } else { 0 }).map_err(&failure)?;
+	let keeping = crate::gpu::Keeping { source: kept.map(|_| source), result: (keeping & crate::gpu_maps::KEEP_RESULT != 0).then_some((target, items)) };
+	let left = crate::gpu::compute_kept(&shader, &floats, workgroups, if reduces { partials } else { 0 }, keeping).map_err(&failure)?;
 	write_linear_floats(&mut caller, target, &left, &failure)?;
 	Ok(1)
 }

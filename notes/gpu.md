@@ -172,7 +172,15 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    probes/webgpu/threshold.sh, `sin(x) * exp(x)`, GC list copied in, ms): 10^5 GPU 4–27 / CPU 15, 10^6 20 / 140,
    10^7 170–200 / 2800–3500 (the CPU side builds the mapped GC list, then sums). Tests: test_webgpu
    a_reduction_of_a_gpu_map_reads_back_partial_results, a_reduction_of_a_gpu_map_takes_a_list_of_floats.
-   `dot` waits for list .* list (paired lists on the GPU).
+   dot (done, CPU on purpose, P214): `dot(xs, ys)` is `sum(xs .* ys)` fused into one loop (broadcasting.rs
+   PAIRED_SUM_TEMPLATE); of two linear float arrays it is linear_dotf (wasm_emitter/linear_arrays.rs), f64x2 lanes over
+   both blocks after a length check (shared_arrays.rs paired_with_linear, which also pairs `xs .* ys` of linear
+   arrays: before, the map read ys as one number, its block's address). Measured (release, 10^6, ms,
+   probes/webgpu/dot_linear.warp): item by item over a products list 200, fused 51, linear_dotf 2–3; GC lists fused 13.
+   No GPU dot: a multiply-add is ~1 ns an item in lanes, so uploading the two arrays (16 MB at 10^6) already costs
+   more than the CPU's whole dot. It pays only for data already on the GPU (a dot of two @gpu maps: kept buffers).
+   `float[n]` of a variable count was no list to broadcasting (`xs .* ys` was a float * list error): fixed.
+   Sample: samples/dot.warp.
    Browser (done, host-gpu.js gpu_kernel): the block's cells go to the task Worker as a transferred Float32Array and
    come back as raw f32 bytes in the shared buffer (writeSharedFloats, state FLOATS_STATE), only from the first cell
    needed (the partials of a reduction). Before, 10^6 floats went as a JS array and came back as JSON: 160–350 ms, slower
@@ -183,4 +191,9 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    measuring: the page keeps an old host-gpu.js in the browser cache; open it with `?nocache=<n>` in a new session.
    Native runs of the sample show 41 ms for the sum: its first GPU call creates the device (gpu.rs keeps it per
    process); warmed up (threshold.sh) it is 20 ms.
-   Open: a result both read on the CPU and mapped again on the GPU (a GPU buffer kept per block, skipping the upload).
+   Kept buffers (native): a result read on the CPU (ys#i, #ys, text holes) and then mapped or reduced @gpu again keeps
+   its storage buffer on the GPU (gpu.rs KEPT, the last 4 blocks); the later kernel copies from it instead of uploading.
+   gpu_maps.rs marked_kept sets the flags (6th argument of gpu_map_linear / gpu_reduce_linear: KEEP_RESULT 1,
+   SOURCE_KEPT 2); a write to ys or a call that hands it on between them drops both. 10^7 items, second map: 125–172 →
+   68–84 ms. Missing kept buffer → plain upload. The browser ignores the flag: each task Worker has its own device and
+   taskPool hands out any worker, so a kept buffer would need worker affinity (open).

@@ -89,17 +89,16 @@ impl WasmGcEmitter {
 		if let Some(entry) = self.closures.entries.get(&arity) {
 			return *entry;
 		}
-		let index = self.type_manager.types().len();
 		let node = self.nullable_node();
-		if self.typed_entry(arity) {
+		let index = if self.typed_entry(arity) {
 			let helper = &self.ctx.user_functions[&crate::closures::closure_call_name(arity)];
 			let number = |kind: Kind| if kind.is_float() { ValType::F64 } else { ValType::I64 };
 			let params = std::iter::once(node).chain(helper.params[1..].iter().map(|param| number(param_kind(param)))).collect::<Vec<_>>();
 			let result = number(helper.return_kind);
-			self.type_manager.types_mut().ty().function(params, vec![result]);
+			self.type_manager.function_type(params, vec![result])
 		} else {
-			self.type_manager.types_mut().ty().function(vec![node; arity + 1], vec![node]);
-		}
+			self.type_manager.function_type(vec![node; arity + 1], vec![node])
+		};
 		self.closures.entries.insert(arity, index);
 		index
 	}
@@ -118,9 +117,8 @@ impl WasmGcEmitter {
 		let starts_tasks = self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES);
 		if starts_tasks && !self.closures.entry_functions.is_empty() {
 			let node = self.nullable_node();
-			let (rebuild_type, captured_type) = (self.type_manager.types().len(), self.type_manager.types().len() + 1);
-			self.type_manager.types_mut().ty().function(vec![node, node], vec![node]);
-			self.type_manager.types_mut().ty().function(vec![node], vec![node]);
+			let rebuild_type = self.type_manager.function_type(vec![node, node], vec![node]);
+			let captured_type = self.type_manager.function_type(vec![node], vec![node]);
 			let (rebuild, captured) = (self.next_func_idx, self.next_func_idx + 1);
 			self.functions.function(rebuild_type);
 			self.functions.function(captured_type);
@@ -133,8 +131,7 @@ impl WasmGcEmitter {
 		let calls_foreign = self.ctx.ffi_imports.contains_key(crate::host::FOREIGN_CALL);
 		if calls_foreign && !self.closures.entry_functions.is_empty() {
 			let node = self.nullable_node();
-			let apply_type = self.type_manager.types().len();
-			self.type_manager.types_mut().ty().function(vec![node, node], vec![node]);
+			let apply_type = self.type_manager.function_type(vec![node, node], vec![node]);
 			self.functions.function(apply_type);
 			self.exports.export(CLOSURE_APPLY, ExportKind::Func, self.next_func_idx);
 			self.closures.apply = Some(self.next_func_idx);

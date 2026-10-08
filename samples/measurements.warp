@@ -1,0 +1,13 @@
+// Measurements with uncertainty: x ± r is an interval that flows through arithmetic
+length = 6.0 ± 0.3
+width = 2.0 ± 0.2
+area = length * width
+print "area: " + str(area) + " m²"
+print "between " + str(area.low) + " and " + str(area.high)
+
+// a comparison answers only when the whole interval agrees
+big = area certainly > 10
+maybe_huge = area possibly > 14
+if big then print "certainly more than 10 m²"
+if maybe_huge then print "possibly more than 14 m²"
+area.value

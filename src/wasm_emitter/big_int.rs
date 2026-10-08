@@ -581,8 +581,7 @@ impl WasmGcEmitter {
 			f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
 			f.instruction(&I::StructNew(node_type));
 		});
-		let idx = self.func_index("new_int");
-		self.exports.export("new_int", ExportKind::Func, idx);
+		self.export_runtime_function("new_int");
 	}
 
 	pub(super) fn emit_heap_get(&self, func: &mut Function, handle_local: u32) {

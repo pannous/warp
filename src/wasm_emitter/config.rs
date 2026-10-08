@@ -21,7 +21,7 @@ impl Default for EmitterConfig {
 	fn default() -> Self {
 		Self {
 			emit_all_functions: true,
-			emit_kind_globals: true,
+			emit_kind_globals: !crate::pipeline::is_for_a_page(), // a page's host reads kinds from get_kind, not these
 			emit_host_imports: false,
 			emit_wasi_imports: false,
 			emit_ffi_imports: false,

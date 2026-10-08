@@ -1,0 +1,23 @@
+// Typed lists: a declared element type, checked at every write
+// (the typing rules are machine-checked in lean/WarpTypes, notes/type_theory.md)
+
+scores: ints = [90, 75]
+scores.add(82)
+scores#1 = 95
+// scores.add("ab")  would not compile: ints hold whole numbers
+
+// lists are shared: another name sees every change
+best = scores
+best.add(100)
+print scores        // [95 75 82 100]
+
+// an undeclared list holds anything
+mixed = [1]
+mixed.add("two")
+print mixed         // [1 "two"]
+
+// a text repeats a whole number of times, in either order
+line = "-=" * 5
+print 3 * "ab"      // ababab
+print line
+scores.count

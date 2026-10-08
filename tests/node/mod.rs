@@ -7,3 +7,4 @@ mod test_node_add;
 mod test_empty_operands;
 mod test_comment_meta;
 mod test_index_serialization;
+mod test_text_operand_quotes; // card text-operand-quotes

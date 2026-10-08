@@ -30,11 +30,11 @@ const ALL_ITEM: &str = "all_item";
 /// Declared parameter kinds that take one element of a list (P50)
 const SCALAR_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint];
 /// `xs .op ys` of two lists (card gpu-vectors, notes/gpu.md): the lists held once, their items paired by index
-const PAIRED_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; (1 to COUNT).map(paired_index => paired_item))";
+pub(crate) const PAIRED_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; (1 to COUNT).map(paired_index => paired_item))";
 const PAIRED_ITEM: &str = "LEFT#paired_index + RIGHT#paired_index";
-const PAIRED_COUNT: &str = "(if #LEFT == #RIGHT then #LEFT else raise \"element-wise operator: the lists differ in length\")";
+pub(crate) const PAIRED_COUNT: &str = "(if #LEFT == #RIGHT then #LEFT else raise \"element-wise operator: the lists differ in length\")";
 /// `sum(xs .* ys)` and `sum(xs .* 3)` fused into one loop, no list of the products built (5–20× faster, notes/gpu.md)
-const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
+pub(crate) const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
 const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEMS { SUM = SUM + fused_item }; SUM)";
 const SUM_WORD: &str = "sum";
 /// `dot(xs, ys)` is `sum(xs .* ys)`, unless the program defines dot
@@ -347,6 +347,11 @@ fn broadcasting_call<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separ
 fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &mut HashMap<String, bool>) {
 	// `xs = []` (which parses as ø) is a list once the program appends to xs: `xs.add(i)`, `xs = xs + [i]`
 	let mut appended: HashSet<String> = HashSet::new();
+	// `float[n]` is the subscript `float#(n+1)` still: a zero-filled list unless float names a variable
+	let mut variables: HashSet<String> = HashSet::new();
+	node.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define, _) = part {
+		variables.extend(assigned_variable(target).map(|(name, _)| name.clone()));
+	});
 	node.visit(&mut |part| match part {
 		Node::Key(list, Op::Dot, call) => {
 			if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
@@ -376,6 +381,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 					_ if is_range(value) => true,
 					_ if element_wise_parts(value).is_some() => true,
 					_ if crate::analyzer::typed_array_value(value).is_some() => true,
+					Node::Key(element, Op::Hash, one_based) => crate::analyzer::zero_filled_subscript(element, one_based, &variables).is_some(),
 					Node::Empty => appended.contains(name),
 					// `xs = xs + [i]`
 					Node::Key(left, Op::Add, right) => matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)),
@@ -548,20 +554,12 @@ impl Broadcast {
 
 	/// Two lists, their items paired by index in `template`: a list of `left op right`, or their sum
 	fn paired(&self, receiver: Node, op: Op, operand: Node, template: &str) -> Node {
-		let named = self.namer();
-		let item = match crate::warp_parser::parse(&named(PAIRED_ITEM)).drop_meta() {
-			Node::Key(left, _, right) => Node::Key(left.clone(), op, right.clone()),
-			other => unreachable!("{other:?}"),
-		};
-		let bindings = HashMap::from([("paired_left".to_string(), receiver), ("paired_right".to_string(), operand), ("paired_item".to_string(), item)]);
-		crate::law::substitute(&crate::warp_parser::parse(&named(&template.replace("COUNT", PAIRED_COUNT))), &bindings)
+		paired_by(receiver, op, operand, template, self.namer())
 	}
 
 	/// The template's names made this rewrite's own: LEFT → paired_left_3 …
 	fn namer(&self) -> impl Fn(&str) -> String {
-		let count = self.paired.replace(self.paired.get() + 1);
-		move |text: &str| [("LEFT", "paired_left"), ("RIGHT", "paired_right"), ("SUM", "fused_sum"), ("ITEMS", "fused_items"), ("ITEM", "fused_item")]
-			.iter().fold(text.to_string(), |text, (placeholder, name)| text.replace(placeholder, &format!("{name}_{count}")))
+		named_by(self.paired.replace(self.paired.get() + 1).to_string())
 	}
 
 	/// `sum(xs .op ys)`, `sum(xs .op k)`: one loop adding the items, the element-wise list never built
@@ -668,7 +666,24 @@ fn ungrouped(node: &Node) -> &Node {
 	}
 }
 
-fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
+/// Two lists, their items paired by index in `template`: a list of `left op right`, or their sum; `named` makes the
+/// template's names the rewrite's own
+pub(crate) fn paired_by(receiver: Node, op: Op, operand: Node, template: &str, named: impl Fn(&str) -> String) -> Node {
+	let item = match crate::warp_parser::parse(&named(PAIRED_ITEM)).drop_meta() {
+		Node::Key(left, _, right) => Node::Key(left.clone(), op, right.clone()),
+		other => unreachable!("{other:?}"),
+	};
+	let bindings = HashMap::from([("paired_left".to_string(), receiver), ("paired_right".to_string(), operand), ("paired_item".to_string(), item)]);
+	crate::law::substitute(&crate::warp_parser::parse(&named(&template.replace("COUNT", PAIRED_COUNT))), &bindings)
+}
+
+/// The templates' names with `unique` appended: LEFT → paired_left_3 …
+pub(crate) fn named_by(unique: String) -> impl Fn(&str) -> String {
+	move |text: &str| [("LEFT", "paired_left"), ("RIGHT", "paired_right"), ("SUM", "fused_sum"), ("ITEMS", "fused_items"), ("ITEM", "fused_item")]
+		.iter().fold(text.to_string(), |text, (placeholder, name)| text.replace(placeholder, &format!("{name}_{unique}")))
+}
+
+pub(crate) fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
 	let Node::Key(receiver, Op::Dot, call) = node.drop_meta() else { return None };
 	let Node::List(items, Bracket::Round, _) = call.drop_meta() else { return None };
 	let [word, lambda] = items.as_slice() else { return None };

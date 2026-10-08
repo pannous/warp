@@ -45,3 +45,5 @@ data/
 !/samples/*/
 /samples/*.wasm
 /samples/*.wast
+# the database tables of samples/orm.warp (a run keeps them beside it), after the exception above
+samples/*.database.sqlite

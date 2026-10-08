@@ -24,6 +24,8 @@ const SHARED_COUNT: &str = crate::host::SHARED_WORDS[4];
 const COUNTING_WORDS: [&str; 3] = ["count", "length", "size"];
 const FLOAT_WORDS: [&str; 3] = ["float", "real", "double"];
 const MAP_WORD: &str = "map";
+const DOT_WORD: &str = "dot";
+const SUM_WORD: &str = "sum";
 
 /// `linear xs = int[n]`: an array in linear memory
 const LINEAR_WORD: &str = "linear";
@@ -78,7 +80,7 @@ fn element_words(kind: Shared) -> [&'static str; 3] {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = crate::gpu_maps::kept_on_gpu(node);
+	let mut node = crate::gpu_maps::kept_on_gpu(node);
 	let mut declared = HashMap::new();
 	let mut first_linear: Option<Node> = None;
 	node.visit(&mut |part| if let Some((name, _, shared)) = declaration(part) {
@@ -88,7 +90,9 @@ pub fn lower(node: Node) -> Node {
 		declared.insert(name, shared);
 	});
 	// a map of a map's result is one too: until no name is added
+	let (defines_dot, mut pairs) = (definitions(&node).contains_key(DOT_WORD), 0);
 	loop {
+		node = paired_with_linear(node, &declared, defines_dot, &mut pairs);
 		let results = float_map_results(&node, &declared);
 		if results.is_empty() {
 			break;
@@ -99,7 +103,8 @@ pub fn lower(node: Node) -> Node {
 	if (declared.is_empty() && !reduces_on_gpu(&node)) || matches!(node, Node::Error(_)) {
 		return node;
 	}
-	if let Some(linear) = first_linear {
+	// dot and `.*` of linear arrays stay in linear memory, the compiler does not pick it for them yet (card compiler-picks-dot)
+	if let Some(linear) = first_linear.filter(|_| pairs == 0) {
 		crate::normalize::set_position_of(&linear);
 		crate::diagnostic::educate_once(LINEAR_TOPIC, "linear xs = int[n]", "xs = int[n]",
 			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
@@ -273,15 +278,16 @@ impl Rewrite<'_> {
 					(Node::Symbol(_), Op::Assign) if let Some((reduction, map)) = crate::gpu_maps::gpu_reduction(&value)
 						&& let Some((array, _, kernel)) = gpu_kernel_map(&map) => {
 						let on_cpu = self.node(value.as_ref().clone(), function);
-						gpu_reduced(&target, reduction, &array, &kernel, on_cpu, &names)
+						gpu_reduced(&target, reduction, &array, &kernel, on_cpu, &names, crate::gpu_maps::keeping(&value))
 					}
 					// `ys = xs.map(x => …) @gpu` of a linear float array: the lambda as a WGSL kernel, the CPU's map without an adapter
 					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, lambda, kernel)) = gpu_kernel_map(&value) => {
+						let keeping = crate::gpu_maps::keeping(&value);
 						if is_linear_floats(&array, &names) {
-							gpu_mapped(&target, &array, &lambda, kernel)
+							gpu_mapped(&target, &array, &lambda, kernel, keeping)
 						} else {
 							let (copy, block) = copied_into_block(&target, &array);
-							Node::List(vec![copy, gpu_mapped(&target, &block, &lambda, kernel)], Bracket::None, Separator::Semicolon)
+							Node::List(vec![copy, gpu_mapped(&target, &block, &lambda, kernel, keeping)], Bracket::None, Separator::Semicolon)
 						}
 					}
 					// `ys = xs.map(x => x * 0.5 + 1)` of a linear float array: its float kernel makes ys, a new linear array
@@ -341,6 +347,7 @@ impl Rewrite<'_> {
 				}
 				match items.as_slice() {
 					[word, array] if COUNTING_WORDS.contains(&word.name().as_str()) && let Some(kind) = shared(array, &names) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
+					[word, left, right] if word.name() == crate::wasm_emitter::linear_arrays::LINEAR_DOT && is_linear_floats(left, &names) && is_linear_floats(right, &names) => builtin(&word.name(), vec![left.clone(), right.clone()]),
 					[word, shader, array, workgroups] if word.name() == crate::host::GPU_COMPUTE && is_linear_floats(array, &names) => {
 						builtin(crate::host::GPU_COMPUTE_LINEAR, vec![self.node(shader.clone(), function), array.clone(), self.node(workgroups.clone(), function)])
 					}
@@ -426,6 +433,58 @@ fn gpu_kernel_map(value: &Node) -> Option<(Node, Node, crate::gpu_maps::Kernel)>
 	Some((array, lambda, kernel))
 }
 
+/// `xs .op ys` with ys a linear array (or an element-wise expression of one): the items paired by index as
+/// broadcasting.rs pairs two lists, where the map would read ys as one number (its block's address); `dot(xs, ys)` of
+/// one is `sum(xs .* ys)`. `pairs` counts the pairings, naming each one's lists
+fn paired_with_linear(node: Node, names: &HashMap<String, Shared>, defines_dot: bool, pairs: &mut usize) -> Node {
+	use crate::broadcasting::{PAIRED_SUM_TEMPLATE, PAIRED_TEMPLATE};
+	let node = match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if !defines_dot && items.len() == 3 && items[0].name() == DOT_WORD && items[1..].iter().any(|list| is_linear_list(list, names)) => {
+			let product = crate::analyzer::element_wise(items[1].clone(), Op::Mul, items[2].clone());
+			Node::List(vec![Node::Symbol(SUM_WORD.into()), product], Bracket::Round, Separator::None)
+		}
+		_ => node,
+	};
+	let summed = match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 2 && items[0].name() == SUM_WORD => Some(items[1].clone()),
+		_ => None,
+	};
+	if let Some(paired) = summed.and_then(|product| paired_linear(&product, names, defines_dot, pairs, PAIRED_SUM_TEMPLATE)) {
+		return paired;
+	}
+	let node = node.map_children(|child| paired_with_linear(child, names, defines_dot, pairs));
+	paired_linear(&node, names, defines_dot, pairs, PAIRED_TEMPLATE).unwrap_or(node)
+}
+
+/// `receiver .op operand` of a linear operand, its items paired by index in `template`: the list, or its fused sum
+fn paired_linear(node: &Node, names: &HashMap<String, Shared>, defines_dot: bool, pairs: &mut usize, template: &str) -> Option<Node> {
+	use crate::broadcasting::{element_wise_parts, named_by, paired_by};
+	let (receiver, op, operand) = element_wise_parts(node).filter(|(_, _, operand)| is_linear_list(operand, names))?;
+	*pairs += 1;
+	if template == crate::broadcasting::PAIRED_SUM_TEMPLATE && op == Op::Mul && is_linear_floats(&receiver, names) && is_linear_floats(&operand, names) {
+		return Some(linear_dot(receiver, operand));
+	}
+	let (receiver, operand) = (paired_with_linear(receiver, names, defines_dot, pairs), paired_with_linear(operand, names, defines_dot, pairs));
+	Some(paired_by(receiver, op, operand, template, named_by(format!("linear_{pairs}"))))
+}
+
+/// `sum(xs .* ys)` of two linear float arrays: their lengths checked, then linear_dotf over both blocks
+fn linear_dot(left: Node, right: Node) -> Node {
+	use crate::wasm_emitter::linear_arrays::LINEAR_DOT;
+	let template = format!("({}; {LINEAR_DOT}(LEFT, RIGHT))", crate::broadcasting::PAIRED_COUNT).replace("LEFT", "dot_left").replace("RIGHT", "dot_right");
+	let bindings = HashMap::from([("dot_left".to_string(), left), ("dot_right".to_string(), right)]);
+	crate::law::substitute(&crate::warp_parser::parse(&template), &bindings)
+}
+
+/// A linear array, or an element-wise expression of one: `ys`, `(ys .* 2)`
+fn is_linear_list(node: &Node, names: &HashMap<String, Shared>) -> bool {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_linear_list(&items[0], names),
+		_ => shared(node, names).is_some_and(|kind| kind.storage == Storage::Linear)
+			|| crate::broadcasting::element_wise_parts(node).is_some_and(|(receiver, _, _)| is_linear_list(&receiver, names)),
+	}
+}
+
 /// Whether a name of `names` occurs in node
 fn mentions_any(node: &Node, names: &HashMap<String, Shared>) -> bool {
 	let mut found = false;
@@ -448,13 +507,13 @@ fn outer_values(kernel: &crate::gpu_maps::Kernel) -> Node {
 
 /// `s = sum(xs.map(f) @gpu)`, min, max: the kernel leaves each workgroup's partial result in a new block, which the CPU
 /// combines; `on_cpu`, the reduction as written, in f64 for few items or without an adapter
-fn gpu_reduced(target: &Node, reduction: crate::gpu_maps::Reduction, array: &Node, kernel: &crate::gpu_maps::Kernel, on_cpu: Node, names: &HashMap<String, Shared>) -> Node {
+fn gpu_reduced(target: &Node, reduction: crate::gpu_maps::Reduction, array: &Node, kernel: &crate::gpu_maps::Kernel, on_cpu: Node, names: &HashMap<String, Shared>, keeping: i64) -> Node {
 	use crate::wasm_emitter::linear_arrays::{LINEAR_COUNT, LINEAR_FLOAT_WORDS, LINEAR_NEW};
 	let [get, _, _] = LINEAR_FLOAT_WORDS;
 	let (size, fewest) = (crate::gpu_maps::WORKGROUP_SIZE, crate::gpu_maps::GPU_MAP_MIN_COUNT);
 	let combined = reduction.combined("reduce_value", &format!("{get}(reduce_partials, reduce_index)"));
 	let template = crate::warp_parser::parse(&format!("reduce_partials = {LINEAR_NEW}(({LINEAR_COUNT}(reduce_source) + {size} - 1)//{size}); \
-		reduce_target = if {LINEAR_COUNT}(reduce_source) < {fewest} or {}(gpu_shader, reduce_source, gpu_values, reduce_partials, {LINEAR_COUNT}(reduce_partials)) == 0 then reduce_on_cpu \
+		reduce_target = if {LINEAR_COUNT}(reduce_source) < {fewest} or {}(gpu_shader, reduce_source, gpu_values, reduce_partials, {LINEAR_COUNT}(reduce_partials), {keeping}) == 0 then reduce_on_cpu \
 		else (reduce_value = {get}(reduce_partials, 1); for reduce_index in 2 to {LINEAR_COUNT}(reduce_partials) {{ reduce_value = {combined} }}; reduce_value)", crate::host::GPU_REDUCE_LINEAR));
 	let (copy, source) = if is_linear_floats(array, names) { (None, array.clone()) } else {
 		let (copy, block) = copied_into_block(target, array);
@@ -487,11 +546,11 @@ fn copied_into_block(target: &Node, array: &Node) -> (Node, Node) {
 
 /// `ys = linear_new(count(xs))`, then the kernel maps xs's cells into ys's, given the values of the program's numbers it
 /// reads, or the CPU does: for few items or without an adapter
-fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, kernel: crate::gpu_maps::Kernel) -> Node {
+fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, kernel: crate::gpu_maps::Kernel, keeping: i64) -> Node {
 	use crate::wasm_emitter::linear_arrays::LINEAR_COUNT;
 	let size = crate::gpu_maps::WORKGROUP_SIZE;
 	let fewest = crate::gpu_maps::GPU_MAP_MIN_COUNT;
-	let mapped = format!("if {LINEAR_COUNT}(map_source) < {fewest} or {}(gpu_shader, map_source, gpu_values, map_target, ({LINEAR_COUNT}(map_source) + {size} - 1)//{size}) == 0 {{ map_loop }}", crate::host::GPU_MAP_LINEAR);
+	let mapped = format!("if {LINEAR_COUNT}(map_source) < {fewest} or {}(gpu_shader, map_source, gpu_values, map_target, ({LINEAR_COUNT}(map_source) + {size} - 1)//{size}, {keeping}) == 0 {{ map_loop }}", crate::host::GPU_MAP_LINEAR);
 	block_mapped(target, array, lambda, &mapped, &[("gpu_shader", Node::Text(kernel.map_shader())), ("gpu_values", outer_values(&kernel))])
 }
 

@@ -118,6 +118,8 @@ thread_local! {
 	static PRERENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
 	static SERVER_VALUES: std::cell::RefCell<Vec<Node>> = const { std::cell::RefCell::new(vec![]) };
+	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/serve.rs)
+	static SERVING_PORT: std::cell::Cell<Option<u16>> = const { std::cell::Cell::new(None) };
 	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
 	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -182,6 +184,19 @@ pub fn with_server_values<T>(values: Vec<Node>, run: impl FnOnce() -> T) -> T {
 	result
 }
 
+/// `run` compiling a program `warp serve` serves at the port: its server functions, its top-level `get`/`post` routes
+/// and its page, without a `serve PORT {…}` statement
+pub fn serving_at<T>(port: u16, run: impl FnOnce() -> T) -> T {
+	let before = SERVING_PORT.with(|current| current.replace(Some(port)));
+	let result = run();
+	SERVING_PORT.with(|current| current.set(before));
+	result
+}
+
+pub fn serving_port() -> Option<u16> {
+	SERVING_PORT.with(|port| port.get())
+}
+
 /// The first value of the page's `index`th call of a server function, ø when none was rendered
 pub fn server_value(index: usize) -> Node {
 	SERVER_VALUES.with(|values| values.borrow().get(index).cloned().unwrap_or(Node::Empty))
@@ -228,7 +243,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 90] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 91] = [
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -302,7 +317,7 @@ const SOURCE_PASSES: [fn(Node) -> Node; 90] = [
 	crate::routes::lower, crate::page_html::use_markup, crate::modules::resolve,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::reflection::lower_module_words,
-	crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
+	crate::uncertain::lower_certainty, crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
 	crate::getters::lower,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
@@ -357,6 +372,9 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	}
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
+	}
+	if let Some(unsaid) = crate::uncertain::check_orderings(&node) {
+		return Err(unsaid.into_error());
 	}
 	let node = crate::interpolation::lower(crate::injection::lower_templates(node)?);
 	let node = crate::function_equality::decide_comparisons(node);
@@ -422,7 +440,7 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let source = program.clone();
 		let node = crate::folding::precompute(lower_for_emission(program)?);
-		let reflected = crate::reflection::meta_entries(&source, &node);
+		let reflected = crate::reflection::meta_entries(&source, &node, code);
 		warn_about_run_time_blocks(&node)?;
 		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
 		let entries: Vec<_> = crate::units::static_units::result_units_entry().into_iter().chain(reflected).collect();

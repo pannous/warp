@@ -649,13 +649,34 @@ pub(crate) fn declare_global(program: Node, names: &[String]) -> Node {
 		single => (vec![single], Bracket::None, Separator::Newline),
 	};
 	for name in names {
-		let assigns = |item: &Node| matches!(item.drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(target) if target == name));
-		match items.iter().position(assigns) {
-			Some(index) => items[index] = as_global(items[index].clone()),
+		let assigns = |assignment: &&Node| matches!(assignment, Node::Key(target, Op::Assign, _) if declared_name(target) == Some(name));
+		let found = items.iter().enumerate().find_map(|(index, item)| statement_assignment(item).filter(assigns).map(|assignment| (index, assignment.clone())));
+		match found {
+			Some((index, assignment)) => items[index] = as_global(assignment),
 			None => items.insert(0, as_global(Node::Symbol(name.clone()))),
 		}
 	}
 	Node::List(items, bracket, separator)
+}
+
+/// The assignment a main-level statement makes: `k = v`, and of the constant `const k = v` (as `global const k = v`)
+fn statement_assignment(item: &Node) -> Option<&Node> {
+	match item.drop_meta() {
+		Node::List(items, _, _) => match items.as_slice() {
+			[keyword, assignment] if is_constant_keyword(keyword) => Some(assignment.drop_meta()),
+			_ => None,
+		},
+		assignment => Some(assignment),
+	}
+}
+
+/// The variable a declaration binds: `k` of `k` and of the typed `k: int`
+fn declared_name(target: &Node) -> Option<&String> {
+	match target.drop_meta() {
+		Node::Symbol(name) => Some(name),
+		Node::Key(name, Op::Colon, _) => declared_name(name),
+		_ => None,
+	}
 }
 
 /// Is the first mention of `name` in `body` a plain `name = value` not reading it (`primes = []`)? Then the body
@@ -718,7 +739,8 @@ pub(super) fn assignment_target_root(node: &Node) -> Option<&String> {
 		_ => return None,
 	};
 	let mut target = target.drop_meta();
-	while let Node::Key(container, Op::Hash | Op::Dot, _) = target {
+	// `xs#i`, `p.x`, and the declared `k: int`
+	while let Node::Key(container, Op::Hash | Op::Dot | Op::Colon, _) = target {
 		target = container.drop_meta();
 	}
 	match target {
