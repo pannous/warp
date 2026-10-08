@@ -105,3 +105,21 @@ fn the_dom_is_typed() {
 	eq!(warp::web_idl::result_interface("Document", "getElementById", true), Some("Element".to_string()));
 	eq!(warp::web_idl::result_interface("Document", "body", false), Some("HTMLElement".to_string()));
 }
+
+// the global object (self, globalThis; window on a page) has WindowOrWorkerGlobalScope's members typed: fetch gives a
+// Response (its promise awaited), atob a text; members it is not bundled with stay unchecked
+#[test]
+fn the_global_object_is_typed() {
+	is!("use js self; self.atob(\"aGk=\").upper()", "HI");
+	is!("use js globalThis; count globalThis.btoa(\"hi\")", 4);
+	fails_with("use js self; r = self.fetch(\"https://example.com\"); r.stauts", "(Response in WebIDL) has no member stauts; did you mean status");
+	eq!(warp::web_idl::result_interface("Window", "fetch", true), Some("Response".to_string()));
+	eq!(warp::web_idl::result_type("Response", "text", true), Some("text")); // Promise<USVString>
+	eq!(warp::web_idl::result_type("Response", "status", false), Some("int"));
+}
+
+#[cfg(not(feature = "native"))]
+#[test]
+fn a_worker_has_no_window() {
+	fails_with("use js window; window.atob(\"aGk=\")", "self is the Worker's global");
+}

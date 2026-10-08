@@ -16,8 +16,12 @@ const PAGE_SCOPE: &str = "Window";
 const PROGRAM_SCOPE: &str = PAGE_SCOPE;
 #[cfg(not(feature = "native"))]
 const PROGRAM_SCOPE: &str = "WorkerGlobalScope";
+/// The global object by its names (`window` only on a page): the scope itself, bundled only with the members warp
+/// types (WindowOrWorkerGlobalScope whole: fetch, setTimeout…), so a member it does not declare stays unchecked
+const SELF_GLOBALS: [&str; 3] = ["self", "globalThis", "window"];
+const PAGE_ONLY_SELF: &str = "window";
 /// What a program in a Worker writes for a page's global
-const WORKER_ALTERNATIVES: [(&str, &str); 2] = [("localStorage", "local[k] keeps values in the page's localStorage"), ("sessionStorage", "session[k] keeps values in its sessionStorage")];
+const WORKER_ALTERNATIVES: [(&str, &str); 3] = [("localStorage", "local[k] keeps values in the page's localStorage"), ("sessionStorage", "session[k] keeps values in its sessionStorage"), ("window", "self is the Worker's global")];
 /// Definitions that declare no members a program reaches
 const SKIPPED_KINDS: [&str; 4] = ["dictionary", "enum", "typedef", "callback"];
 const DEFINITION_WORDS: [&str; 4] = ["partial", "interface", "mixin", "namespace"];
@@ -72,6 +76,9 @@ fn definitions() -> &'static HashMap<String, Definition> {
 pub fn interface_of_global(global: &str, scope: &str) -> Option<String> {
 	if definitions().get(global).is_some_and(|definition| definition.namespace) {
 		return Some(global.to_string());
+	}
+	if SELF_GLOBALS.contains(&global) && (global != PAGE_ONLY_SELF || scope == PAGE_SCOPE) {
+		return Some(scope.to_string());
 	}
 	match members_of(scope).remove(global)? {
 		Member::Attribute(type_name) => Some(type_name.trim_end_matches('?').to_string()),
@@ -129,16 +136,17 @@ pub fn optional_result_type(interface: &str, member: &str, call: bool) -> Option
 	}
 }
 
-/// The WebIDL type of what `member` gives, when all its overloads agree
+/// The WebIDL type of what `member` gives, when all its overloads agree; a promise's value, which a foreign call awaits
 fn declared_result(interface: &str, member: &str, call: bool) -> Option<String> {
-	match (members_of(interface).remove(member)?, call) {
-		(Member::Attribute(type_name), false) => Some(type_name),
+	let declared = match (members_of(interface).remove(member)?, call) {
+		(Member::Attribute(type_name), false) => type_name,
 		(Member::Operation(overloads), true) => {
 			let returns: Vec<String> = overloads.into_iter().map(|overload| overload.returns).collect();
-			returns.iter().all(|other| *other == returns[0]).then(|| returns[0].clone())
+			returns.iter().all(|other| *other == returns[0]).then(|| returns[0].clone())?
 		}
-		_ => None,
-	}
+		_ => return None,
+	};
+	Some(declared.strip_prefix("Promise<").and_then(|promised| promised.strip_suffix('>')).map(str::to_string).unwrap_or(declared))
 }
 
 fn primitive_type(declared: &str) -> Option<&'static str> {
@@ -153,6 +161,9 @@ pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usiz
 		let derived = derived_interfaces(interface);
 		if let Some(declaring) = derived.iter().find(|derived| members_of(derived).contains_key(member)) {
 			return check_member(declaring, path, member, call);
+		}
+		if [PAGE_SCOPE, PROGRAM_SCOPE].contains(&interface) {
+			return Ok(()); // `window.innerWidth`: the scope is bundled in part
 		}
 		let mut names: Vec<String> = members.into_keys().collect();
 		names.extend(derived.iter().flat_map(|derived| members_of(derived).into_keys()));
