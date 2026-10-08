@@ -74,6 +74,11 @@ def isText : Expr → Bool
   | .text _ => true
   | _ => false
 
+def arithValues (op : ArithOp) (a b : Expr) : Expr :=
+  match asInt a, asInt b with
+  | some x, some y => .int (op.apply x y)
+  | _, _ => .num (op.apply (asNumber a) (asNumber b))
+
 def addValues (a b : Expr) : Expr :=
   if isText a || isText b then .text (render a ++ render b) else
   match asInt a, asInt b with
@@ -126,6 +131,7 @@ def fits (v : Expr) (t : Ty) : Bool :=
 inductive Frame where
   | consL (t : Expr) | consR (h : Expr)
   | addL (b : Expr) | addR (a : Expr)
+  | arithL (op : ArithOp) (b : Expr) | arithR (op : ArithOp) (a : Expr)
   | ltL (b : Expr) | ltR (a : Expr)
   | eqL (b : Expr) | eqR (a : Expr)
   | ite (a b : Expr)
@@ -148,6 +154,8 @@ def plug : Frame → Expr → Expr
   | consR h, e => .cons h e
   | addL b, e => .add e b
   | addR a, e => .add a e
+  | arithL op b, e => .arith op e b
+  | arithR op a, e => .arith op a e
   | ltL b, e => .lt e b
   | ltR a, e => .lt a e
   | eqL b, e => .eq e b
@@ -171,7 +179,7 @@ def plug : Frame → Expr → Expr
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
-  | consR h | addR h | ltR h | eqR h | indexR h | appendR h | setR h _ => h.isValue
+  | consR h | addR h | arithR _ h | ltR h | eqR h | indexR h | appendR h | setR h _ => h.isValue
   | _ => true
 
 end Frame
@@ -186,6 +194,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | readUnset {x μ} : μ x = some .unset → Step P (.glob x, μ) (.error "unset", μ)
   | readCharged {x b μ} : μ x = some (.charged b) → Step P (.glob x, μ) (b, μ)
   | add {a b μ} : a.isValue = true → b.isValue = true → Step P (.add a b, μ) (addValues a b, μ)
+  | arith {op a b μ} : a.isValue = true → b.isValue = true → Step P (.arith op a b, μ) (arithValues op a b, μ)
   | lt {a b μ} : a.isValue = true → b.isValue = true →
       Step P (.lt a b, μ) (.bool (decide (asNumber a < asNumber b)), μ)
   | eq {a b μ} : a.isValue = true → b.isValue = true → Step P (.eq a b, μ) (.bool (decide (a = b)), μ)

@@ -5,3 +5,4 @@ import WarpTypes.Semantics
 import WarpTypes.Lemmas
 import WarpTypes.Soundness
 import WarpTypes.Checker
+import WarpTypes.Evaluator

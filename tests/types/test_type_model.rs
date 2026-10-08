@@ -1,10 +1,10 @@
 //! Warp's type checks against W0, the Lean model of warp's type theory (notes/type_theory.md, lean/WarpTypes):
 //! the proofs must build without `sorry`, and warp must reject every program the model rejects, except the known
 //! holes, each with its card. A fixed hole fails the test until it is taken off the list.
-use warp::law::type_model::{admits_disagreements, axioms, export, model_sources, verdicts, warp_verdict, ModelVerdict};
+use warp::law::type_model::{admits_disagreements, axioms, export, model_sources, outcomes, verdicts, warp_value, warp_verdict, ModelVerdict};
 
 /// The soundness theorems the tie-in rests on
-const THEOREMS: [&str; 5] = ["Warp.progress", "Warp.preservation", "Warp.safety", "Warp.typeOf_sound", "Warp.check_safe"];
+const THEOREMS: [&str; 7] = ["Warp.progress", "Warp.preservation", "Warp.safety", "Warp.typeOf_sound", "Warp.check_safe", "Warp.step_sound", "Warp.run_sound"];
 /// The axioms of Lean's core logic; anything else (sorryAx above all) is an unproved assumption
 const STANDARD_AXIOMS: [&str; 3] = ["propext", "Quot.sound", "Classical.choice"];
 /// An unproved step: the `sorry` tactic, or a declared `axiom`
@@ -59,6 +59,9 @@ const CORPUS: &[&str] = &[
 	"if 1 < 2 then 1 else \"a\"",
 	"try error(\"no\") catch 1",
 	"x = 1; x == \"a\"",
+	"3 - 1",
+	"\"a\" - 1",
+	"2 * 2.5",
 	"b = true; b = 1",
 	"class Point { x: int; y: int }; p = Point(1, 2); p.x",
 	"class Point { x: int; y: int }; p = Point(1, 2); p.x = 5; p.x",
@@ -86,6 +89,14 @@ const KNOWN_HOLES: &[(&str, &str)] = &[
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
 const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub false", "boolean ← .int: warp admits true / W0 sub false"];
+
+/// Programs both accept whose values differ, each with its card
+const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
+	("class Point { x: int }; f(q: Point) := q.x = 7; p = Point(1); f(p); p.x", "instance-field"),
+];
+/// What the model gives for a program it rejects, and for a value it does not keep
+const REJECTED: &str = "rejected";
+const UNKEPT: &str = "?";
 
 #[test]
 fn test_type_model_is_proved() {
@@ -131,4 +142,24 @@ fn test_warp_admits_what_the_type_model_subtypes() {
 	crate::requires!(crate::common::LEAN);
 	let disagreements = admits_disagreements().unwrap_or_else(|why| panic!("the model does not answer:\n{why}"));
 	assert_eq!(disagreements, KNOWN_ADMITS_GAPS, "warp's admits and W0's Ty.sub differ");
+}
+
+#[test]
+fn test_warp_computes_what_the_type_model_computes() {
+	crate::requires!(crate::common::LEAN);
+	let programs: Vec<&str> = CORPUS.iter().copied().chain(KNOWN_VALUE_DIFFERENCES.iter().map(|(code, _)| *code)).collect();
+	let exported: Vec<String> = programs.iter().map(|code| export(code).unwrap_or_else(|why| panic!("{code}: {why}"))).collect();
+	let model = outcomes(&exported).unwrap_or_else(|why| panic!("the model does not answer:\n{why}"));
+	let mut differences = Vec::new();
+	for (code, model) in programs.iter().zip(model) {
+		let warp = warp_value(code);
+		let compared = model != REJECTED && model != UNKEPT && warp != UNKEPT;
+		let known = KNOWN_VALUE_DIFFERENCES.iter().find(|(known, _)| known == code).map(|(_, card)| card);
+		match (compared && model != warp, known) {
+			(true, None) => differences.push(format!("{code}: warp gives {warp}, the model {model}")),
+			(false, Some(card)) => differences.push(format!("{code}: values agree now (card {card}), take it off KNOWN_VALUE_DIFFERENCES")),
+			_ => {}
+		}
+	}
+	assert!(differences.is_empty(), "{}", differences.join("\n"));
 }

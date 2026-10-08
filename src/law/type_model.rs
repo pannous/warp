@@ -371,7 +371,9 @@ impl Exporter {
 				_ => unsupported(node),
 			},
 			Node::Key(left, Op::Add, right) if is_list_literal(left) || is_list_literal(right) => self.binary(".append", left, right),
-			Node::Key(left, Op::Add | Op::Sub | Op::Mul, right) if !left.is_nothing() => self.binary(".add", left, right),
+			Node::Key(left, Op::Add, right) if !left.is_nothing() => self.binary(".add", left, right),
+			Node::Key(left, Op::Sub, right) if !left.is_nothing() => self.binary(".arith .sub", left, right),
+			Node::Key(left, Op::Mul, right) => self.binary(".arith .mul", left, right),
 			Node::Key(left, Op::Lt | Op::Le, right) => self.binary(".lt", left, right),
 			Node::Key(left, Op::Gt | Op::Ge, right) => self.binary(".lt", right, left),
 			// `c is Color` parses as `c == Color`: a type test
@@ -430,6 +432,35 @@ pub fn admits_disagreements() -> Result<Vec<String>, String> {
 		let admits = crate::analyzer::admits(word, *kind);
 		(admits != sub).then(|| format!("{word} ← {value}: warp admits {admits} / W0 sub {sub}"))
 	}).collect())
+}
+
+/// What each exported program gives when the model runs it: `rejected`, `error`, a value as warp prints it, or `?`
+/// where the model does not keep the value (numbers other than ints, instances)
+pub fn outcomes(exported: &[String]) -> Result<Vec<String>, String> {
+	let requests: String = exported.iter().map(|items| format!("#eval IO.println (outcome {items})\n")).collect();
+	let output = ask_model("outcomes", &requests)?;
+	let lines: Vec<String> = output.lines().map(str::to_string).collect();
+	if lines.len() != exported.len() {
+		return Err(format!("the model answered {} of {} programs:\n{output}", lines.len(), exported.len()));
+	}
+	Ok(lines)
+}
+
+/// Warp's value of a program, printed as the model's `outcome` prints it (`?` for what the model does not keep)
+pub fn warp_value(code: &str) -> String {
+	fn shown(value: &Node) -> String {
+		match value.drop_meta() {
+			Node::Number(Number::Int(n)) => n.to_string(),
+			Node::True => "yes".to_string(),
+			Node::False => "no".to_string(),
+			Node::Text(text) => format!("\"{text}\""),
+			Node::Char(c) => format!("\"{c}\""),
+			Node::List(items, _, _) => format!("[{}]", items.iter().map(shown).collect::<Vec<_>>().join(" ")),
+			Node::Error(_) => "error".to_string(),
+			_ => "?".to_string(),
+		}
+	}
+	shown(&crate::pipeline::eval(code))
 }
 
 /// The axioms the named theorems rest on, as `#print axioms` lists them (a `sorry` shows as sorryAx)
