@@ -680,11 +680,20 @@ fn std_module(name: &str) -> Option<&'static str> {
 	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
 }
 
+/// Each standard module with the names it defines, in their order
+fn std_module_words() -> &'static [(&'static str, Vec<String>)] {
+	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
+	DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(declared_name).collect())).collect())
+}
+
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
 pub fn std_module_defining(word: &str) -> Option<&'static str> {
-	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
-	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(declared_name).collect())).collect());
-	defined.iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
+	std_module_words().iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
+}
+
+/// The names a standard module defines, in their order (`dir(time)`); None for no standard module
+pub fn std_module_definitions(module: &str) -> Option<&'static [String]> {
+	std_module_words().iter().find(|(name, _)| *name == module).map(|(_, names)| names.as_slice())
 }
 
 /// The texts of a list a standard module assigns at its top: `html_elements = ["html", …]` of markup; empty if missing
