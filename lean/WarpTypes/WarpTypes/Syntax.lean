@@ -10,17 +10,36 @@ inductive Mode where
   | var | const | charged
   deriving DecidableEq, Repr
 
-/-- `-`, `*` and `%`: numbers only, unlike `+` -/
+/-- `-`, `*`, `%` and `/`: numbers only, unlike `+` -/
 inductive ArithOp where
   | sub | mul
   /-- the Euclidean remainder: `-7 % 3` is 2, `7 % -3` is 1, as warp's -/
   | mod
+  /-- `6/2` is the int 3, `7/2` the number 3.5 -/
+  | div
   deriving DecidableEq, Repr
 
 def ArithOp.apply : ArithOp → Int → Int → Int
   | .sub, a, b => a - b
   | .mul, a, b => a * b
   | .mod, a, b => a % b
+  | .div, a, b => a / b
+
+/-- the dividend of `/` counts as a number: two ints divide to a fraction -/
+def ArithOp.widen : ArithOp → Ty → Ty
+  | .div, t => Ty.join t .number
+  | _, t => t
+
+theorem ArithOp.widen_mono (op : ArithOp) {a a' : Ty} (h : Ty.sub a' a = true) :
+    Ty.sub (op.widen a') (op.widen a) = true := by
+  cases op <;> simp only [widen] <;> first | exact h | exact Ty.join_mono h (Ty.sub_refl _)
+
+/-- the result type of an arithmetic operation -/
+def ArithOp.ty (op : ArithOp) (a b : Ty) : Ty := Ty.arithTy (op.widen a) b
+
+theorem ArithOp.ty_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true) (hb : Ty.sub b' b = true) :
+    Ty.sub (op.ty a' b') (op.ty a b) = true :=
+  Ty.arithTy_mono (op.widen_mono ha) hb
 
 inductive Expr where
   | bool (b : Bool)

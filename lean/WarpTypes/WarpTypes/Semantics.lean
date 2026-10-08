@@ -113,9 +113,9 @@ def isNumber : Expr → Bool
 
 def arithValues (op : ArithOp) (a b : Expr) : Expr :=
   if !(isNumber a && isNumber b) then .error "not a number" else
-  if op == .mod && asNumber b == 0 then .error "divide by zero" else
+  if (op == .mod || op == .div) && asNumber b == 0 then .error "divide by zero" else
   match asInt a, asInt b with
-  | some x, some y => .int (op.apply x y)
+  | some x, some y => if op == .div && x % y != 0 then .num (op.apply x y) else .int (op.apply x y)
   | _, _ => .num (op.apply (asNumber a) (asNumber b))
 
 def isList : Expr → Bool

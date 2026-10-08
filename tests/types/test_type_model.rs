@@ -339,6 +339,15 @@ const CORPUS: &[&str] = &[
 	"\"abc\".length",
 	"f() := { out = 1.5; for x in [2, 3] { out = out + x }; out }; f()",
 	"f() := { out = 0; out = \"a\"; out }; f()",
+	// `/`: ints that divide stay ints, others make a number; the model types every quotient a number
+	"6/2",
+	"-9 / 3",
+	"7/2",
+	"1/0",
+	"x = 7; x = x / 2; x",
+	"n: number = 7 / 2; n",
+	"y: int = 1; y = 7/2; y",
+	"\"ab\" / 2",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

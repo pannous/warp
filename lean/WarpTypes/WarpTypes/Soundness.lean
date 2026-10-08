@@ -27,8 +27,8 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
     exact ⟨_, .cons hh h' he', by simpa using join_mono (sub_refl _) se⟩
   case addL => cases h with | add ha hb => exact ⟨_, ha, fun h' s => ⟨_, .add h' hb, plus_mono s (sub_refl _)⟩⟩
   case addR => cases h with | add ha hb => exact ⟨_, hb, fun h' s => ⟨_, .add ha h', plus_mono (sub_refl _) s⟩⟩
-  case arithL => cases h with | arith ha hb => exact ⟨_, ha, fun h' s => ⟨_, .arith h' hb, arithTy_mono s (sub_refl _)⟩⟩
-  case arithR => cases h with | arith ha hb => exact ⟨_, hb, fun h' s => ⟨_, .arith ha h', arithTy_mono (sub_refl _) s⟩⟩
+  case arithL => cases h with | arith ha hb => exact ⟨_, ha, fun h' s => ⟨_, .arith h' hb, ArithOp.ty_mono _ s (sub_refl _)⟩⟩
+  case arithR => cases h with | arith ha hb => exact ⟨_, hb, fun h' s => ⟨_, .arith ha h', ArithOp.ty_mono _ (sub_refl _) s⟩⟩
   case ltL => cases h with | lt ha hb => exact ⟨_, ha, fun h' _ => ⟨_, .lt h' hb, sub_refl _⟩⟩
   case ltR => cases h with | lt ha hb => exact ⟨_, hb, fun h' _ => ⟨_, .lt ha h', sub_refl _⟩⟩
   case eqL => cases h with | eq ha hb => exact ⟨_, ha, fun h' _ => ⟨_, .eq h' hb, sub_refl _⟩⟩

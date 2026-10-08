@@ -35,7 +35,7 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- inference.rs arithmetic_kind; operands of other types raise when it runs (gradual: `HasType` means "cannot get
   stuck", the checker demands addable or numeric operands) -/
   | add {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.add a b) (plus ta tb)
-  | arith {Γ op a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.arith op a b) (arithTy ta tb)
+  | arith {Γ op a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.arith op a b) (op.ty ta tb)
   | lt {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.lt a b) .bool
   | eq {Γ s a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.eq s a b) .bool
   /-- any condition (truthiness); inference.rs branches_kind -/

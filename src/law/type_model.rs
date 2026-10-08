@@ -1239,6 +1239,7 @@ impl Exporter {
 			Node::Key(left, Op::Sub, right) if !left.is_nothing() => self.binary(".arith .sub", left, right),
 			Node::Key(left, Op::Mul, right) => self.binary(".arith .mul", left, right),
 			Node::Key(left, Op::Mod, right) => self.binary(".arith .mod", left, right),
+			Node::Key(left, Op::Div, right) => self.binary(".arith .div", left, right),
 			Node::Key(left, Op::Lt | Op::Le, right) => self.binary(".lt", left, right),
 			Node::Key(left, Op::Gt | Op::Ge, right) => self.binary(".lt", right, left),
 			// `c is Color` parses as `c == Color`: a type test
