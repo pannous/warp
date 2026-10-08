@@ -1,10 +1,7 @@
 // card std-implicit (notes/stdlib.md §8 "One implicit-use mechanism"): modules.rs brings the standard modules a program
 // needs without `use` from one table (a file URL → file, a page → markup, routes → router, a route's regular expression
 // → regex); the lowering passes write no `use` statements of their own
-use warp::host::with_page_path;
-use warp::markup::to_html;
 use warp::node::Node;
-use warp::wasm_emitter::eval;
 
 const ROUTED: &str = r#"route "/users/:id(\\d+)" { p{ "user " + id } }
 route "*" { p{ "not found" } }"#;
@@ -22,7 +19,11 @@ fn routes_and_pages_lower_without_use_statements() {
 }
 
 #[test]
+#[cfg(feature = "native")]
 fn routes_bring_router_and_regex_implicitly() {
+	use warp::host::with_page_path; // native only: the page path of a native render
+	use warp::markup::to_html;
+	use warp::wasm_emitter::eval;
 	assert_eq!(with_page_path("/users/7", || to_html(&eval(ROUTED))), "<p>user 7</p>");
 	assert_eq!(with_page_path("/users/bo", || to_html(&eval(ROUTED))), "<p>not found</p>");
 }
