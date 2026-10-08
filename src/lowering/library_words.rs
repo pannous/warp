@@ -238,17 +238,47 @@ fn raise_call(items: &[Node]) -> Option<Node> {
 	Some(Node::List(vec![Node::Symbol(crate::wasm_emitter::text_builtins::RAISE.to_string()), message], Bracket::Round, Separator::None))
 }
 
-/// The pass of `count x in y` (count_in), before the lambdas its rewrite uses are lowered and before `x in y` is membership
+/// The pass of `count x in y` (count_in), before the lambdas its rewrite uses are lowered and before `x in y` is membership;
+/// also `y.count(x)` and `count(y, x)` (card banana-count) unless the program defines its own count
 pub fn lower_count_in(node: Node) -> Node {
+	let mut found = Vec::new();
+	crate::function_values::definitions(&node, &mut found);
+	let library_count = !found.iter().any(|definition| definition.name == COUNT_WORD);
+	lower_counts(node, library_count)
+}
+
+fn lower_counts(node: Node, library_count: bool) -> Node {
+	let counted = |node: &Node| match node {
+		Node::List(items, bracket, _) => count_in(items).or_else(|| library_count.then(|| count_call(items, bracket)).flatten()),
+		Node::Key(receiver, Op::Dot, call) if library_count => count_method(receiver, call),
+		_ => None,
+	};
+	if let Some(occurrences) = counted(&node) {
+		return lower_counts(occurrences, library_count);
+	}
 	match node {
-		Node::List(items, bracket, separator) => match count_in(&items) {
-			Some(occurrences) => lower_count_in(occurrences),
-			None => Node::List(items.into_iter().map(lower_count_in).collect(), bracket, separator),
-		},
-		Node::Key(left, op, right) => Node::Key(Box::new(lower_count_in(*left)), op, Box::new(lower_count_in(*right))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_count_in(*node)), data },
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| lower_counts(item, library_count)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(lower_counts(*left, library_count)), op, Box::new(lower_counts(*right, library_count))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_counts(*node, library_count)), data },
 		other => other,
 	}
+}
+
+/// `count(y, x)` is `count x in y`
+fn count_call(items: &[Node], bracket: &Bracket) -> Option<Node> {
+	let [count, haystack, needle] = items else { return None };
+	(*bracket == Bracket::Round && is_marker(count, COUNT_WORD)).then(|| counted_in(count, needle, haystack)).flatten()
+}
+
+/// `y.count(x)` is `count x in y`
+fn count_method(receiver: &Node, call: &Node) -> Option<Node> {
+	let Node::List(items, _, _) = call.drop_meta() else { return None };
+	let [count, needle] = items.as_slice() else { return None };
+	is_marker(count, COUNT_WORD).then(|| counted_in(count, needle, receiver)).flatten()
+}
+
+fn counted_in(count: &Node, needle: &Node, haystack: &Node) -> Option<Node> {
+	count_in(&[count.clone(), needle.clone(), Node::Symbol(IN_WORD.to_string()), haystack.clone()])
 }
 
 /// `count x in y`: how often x occurs in y. A text of several characters counts as a substring of a text (`count "an"
