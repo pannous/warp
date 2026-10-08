@@ -66,6 +66,19 @@ notes/typed_lists.md). A function receiving `names` gets the value, so TypeScrip
 sound. In W0 this shows up as: no expression form mutates a value, only `x = e` changes the store, and `x = e`
 checks e against x's declared type. Preservation (below) is the proof.
 
+**Shared lists (P200b, P215; branch shared-lists, not yet in W0).** Once lists share like maps, the alias hole is
+real: `xs: [Circle] = [c]; ys: [Shape] = xs; ys.add(square); xs#2`. P215 closes it both ways. Plan for W0, after
+shared-lists is on main:
+- a list becomes a heap object like an instance: the value `lst a` points to a cell holding the items and the element
+  type the list was made with (its declared type, else its literal's element type); `xs.add(v)`, insert and
+  `xs#i = v` change the cell instead of assigning xs
+- each write checks v against the cell's element type at run time and is a loud error otherwise (P215's run-time half)
+- `lst a` is typed `list (tag a)`, so covariance stays: the heap invariant "every item of cell a fits tag a" is what
+  writes preserve, and `tag a ≤ τ` makes every read through a `list τ` alias fit τ
+- P215's compile-time half (a visible alias `ys: [Shape] = xs` of a non-fresh `[Circle]` is rejected unless ys is
+  read-only) is a checker rule on assignments whose source is not a fresh list; it must stay monotone (a join-based
+  premise, not `¬ sub`), or W0 keeps it as a known difference
+
 Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a list literal's elements, of `try σ catch τ`.
 `int ⊔ text = any`, `list int ⊔ list text = list any`, `never ⊔ τ = τ`. Code: inference.rs `branches_kind`.
 
