@@ -99,10 +99,10 @@ const hostFunctions = {
 	warn: (pointer, length) => warn(readString(pointer, length)),
 };
 
-// every import the module declares: the host functions above, anything else a stub that warns when called
-function importsOf(module) {
+// every import the module declares (reader.js importDescriptors): the host functions above, anything else a stub that warns when called
+function importsOf(bytes) {
 	const imports = {};
-	for (const { module: space, name, kind } of WebAssembly.Module.imports(module)) {
+	for (const { module: space, name, kind } of importDescriptors(bytes)) {
 		if (kind !== "function") throw new Error(`unsupported import ${space}.${name} (${kind})`);
 		const known = space === "host" && hostFunctions[name];
 		(imports[space] ??= {})[name] = known || ((...args) => {
@@ -120,8 +120,8 @@ async function preload(path) {
 }
 
 async function load() {
-	const [module] = await Promise.all([WebAssembly.compileStreaming(fetch(MODULE_URL)), ...PRELOADED_FILES.map(preload)]);
-	const instance = await WebAssembly.instantiate(module, importsOf(module));
+	const [bytes] = await Promise.all([fetch(MODULE_URL).then(response => response.arrayBuffer()), ...PRELOADED_FILES.map(preload)]);
+	const { instance } = await WebAssembly.instantiate(bytes, importsOf(bytes));
 	wasm = instance.exports;
 	const init = nodeResult(wasm.main());
 	if (init.kind === KIND_ERROR) throw new Error(init.text);

@@ -1,13 +1,14 @@
 //! card task-sample: Safari 27 throws "WebAssembly.Module.imports unable to produce import descriptors" (and the same
 //! for exports) for any module whose imported functions take or give a GC reference (anyref, eqref), so every task
 //! program failed in the playground before it started. The page reads import names from the module's bytes
-//! (host.js importDescriptors) and export names from the instance.
+//! (reader.js importDescriptors, shared with the uniscript page) and export names from the instance.
 const PLAYGROUND: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/web/playground");
+const PAGES: [&str; 2] = [PLAYGROUND, concat!(env!("CARGO_MANIFEST_DIR"), "/web/uniscript")];
 const REFLECTION_CALLS: [&str; 2] = ["WebAssembly.Module.imports(", "WebAssembly.Module.exports("];
 
 #[test]
 fn the_page_never_asks_the_engine_for_import_or_export_descriptors() {
-	let scripts = std::fs::read_dir(PLAYGROUND).unwrap().map(|entry| entry.unwrap().path()).filter(|path| path.extension().is_some_and(|extension| extension == "js"));
+	let scripts = PAGES.iter().flat_map(|page| std::fs::read_dir(page).unwrap()).map(|entry| entry.unwrap().path()).filter(|path| path.extension().is_some_and(|extension| extension == "js"));
 	let callers: Vec<String> = scripts.filter(|path| {
 		let source = std::fs::read_to_string(path).unwrap();
 		REFLECTION_CALLS.iter().any(|call| source.contains(call))
@@ -30,16 +31,16 @@ fn safaris_engine_reads_the_imports_of_a_task_program() {
 	let compiled = crate::common::warp_command().args(["compile", "--wasm"]).arg(&source).output().unwrap();
 	assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
 
-	let host = std::fs::read_to_string(format!("{PLAYGROUND}/host.js")).unwrap();
-	let start = host.find("const WASM_HEADER_BYTES").unwrap();
-	let end = start + host[start..].find("\n}\n").unwrap() + 2;
+	let reader_script = std::fs::read_to_string(format!("{PLAYGROUND}/reader.js")).unwrap();
+	let start = reader_script.find("const WASM_HEADER_BYTES").unwrap();
+	let end = start + reader_script[start..].find("\n}\n").unwrap() + 2;
 	let script = directory.join("safari_imports.js");
-	let reader = &host[start..end];
-	std::fs::write(&script, format!("const decode = bytes => String.fromCharCode(...bytes);\n{reader}\n\
+	let reader = &reader_script[start..end];
+	std::fs::write(&script, format!("const utf8Decoder = {{ decode: bytes => String.fromCharCode(...bytes) }};\n{reader}\n\
 		const bytes = read(arguments[0], 'binary');\n\
 		new WebAssembly.Module(bytes);\n\
-		print(importDescriptors(bytes).map(entry => entry.name).join(' '));\n")).unwrap();
+		print(importDescriptors(bytes).map(entry => entry.kind + ':' + entry.name).join(' '));\n")).unwrap();
 	let shown = std::process::Command::new(SAFARI_SHELL).arg(&script).arg("--").arg(source.with_extension("wasm")).output().unwrap();
 	let names = String::from_utf8_lossy(&shown.stdout);
-	assert!(shown.status.success() && names.contains("task_spawn"), "{names}{}", String::from_utf8_lossy(&shown.stderr));
+	assert!(shown.status.success() && names.contains("function:task_spawn"), "{names}{}", String::from_utf8_lossy(&shown.stderr));
 }

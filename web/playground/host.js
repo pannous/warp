@@ -73,44 +73,6 @@ function writeBytes(program, bytes) {
 	return [pointer, bytes.length];
 }
 
-// The {module, name} of each import a module's bytes declare, read from its import section. Not
-// WebAssembly.Module.imports: Safari 27 throws "unable to produce import descriptors" for any module importing a
-// function with a GC reference (anyref, eqref) in its signature, as the task words do (card task-sample)
-const WASM_HEADER_BYTES = 8;
-const IMPORT_SECTION = 2;
-const [IMPORT_FUNCTION, IMPORT_TABLE, IMPORT_MEMORY, IMPORT_GLOBAL, IMPORT_TAG] = [0, 1, 2, 3, 4];
-const REFERENCE_WITH_HEAP_TYPE = [0x63, 0x64]; // (ref null ht), (ref ht): a heap type follows
-const LIMITS_HAVE_MAXIMUM = 1;
-function importDescriptors(bytes) {
-	const view = new Uint8Array(bytes);
-	let at = WASM_HEADER_BYTES;
-	const number = () => {
-		let value = 0, shift = 0, byte;
-		do { byte = view[at++]; value += (byte & 0x7F) * 2 ** shift; shift += 7; } while (byte & 0x80);
-		return value;
-	};
-	const name = () => { const length = number(); return decode(view.subarray(at, at += length)); };
-	const valueType = () => { if (REFERENCE_WITH_HEAP_TYPE.includes(view[at++])) number(); };
-	const limits = () => { const flags = view[at++]; number(); if (flags & LIMITS_HAVE_MAXIMUM) number(); };
-	const skipDescription = {
-		[IMPORT_FUNCTION]: number,
-		[IMPORT_TABLE]: () => { valueType(); limits(); },
-		[IMPORT_MEMORY]: limits,
-		[IMPORT_GLOBAL]: () => { valueType(); at++; },
-		[IMPORT_TAG]: () => { at++; number(); },
-	};
-	while (at < view.length) {
-		const section = view[at++], size = number(), end = at + size;
-		if (section !== IMPORT_SECTION) { at = end; continue; }
-		return Array.from({ length: number() }, () => {
-			const entry = { module: name(), name: name() };
-			skipDescription[view[at++]]();
-			return entry;
-		});
-	}
-	return [];
-}
-
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
 // host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js. A built site
 // ships a part only when its module imports one of the part's words (src/site.rs HOST_PARTS); the playground's workers
