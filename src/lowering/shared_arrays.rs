@@ -78,6 +78,7 @@ fn element_words(kind: Shared) -> [&'static str; 3] {
 }
 
 pub fn lower(node: Node) -> Node {
+	let node = crate::gpu_maps::kept_on_gpu(node);
 	let mut declared = HashMap::new();
 	let mut first_linear: Option<Node> = None;
 	node.visit(&mut |part| if let Some((name, _, shared)) = declaration(part) {

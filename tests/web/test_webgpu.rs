@@ -145,3 +145,20 @@ fn a_gpu_map_takes_a_list_of_floats() {
 	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&checked)).serialize(), "yes");
 	assert_eq!(eval("ys = [0.5, 1.5].map(x => sin(x)) @gpu\n[#ys, ys#2 == sin(1.5)]").serialize(), "[2 yes]");
 }
+
+// card gpu-vectors: an @gpu map result used only as the source of later @gpu maps never comes back from the GPU: its
+// map is folded into theirs, one round trip; read on the CPU too, it is mapped on its own
+#[test]
+fn a_gpu_map_result_mapped_again_stays_on_the_gpu() {
+	use warp::diagnostic::{with_warning_mode, WarningMode};
+	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\nzs = ys.map(y => exp(y) + 1) @gpu\n";
+	let checked = format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < 0.00001");
+	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&checked)).serialize(), "yes");
+	let round_trips = |program: &str| warp::pipeline::lower(program).expect("a program").serialize().matches("gpu_map_linear").count();
+	assert_eq!(round_trips(&format!("{program}zs#1")), 1);
+	assert_eq!(round_trips(&format!("{program}zs#1 + ys#1")), 2);
+	// xs changed between the maps: ys keeps the items before the change
+	assert_eq!(round_trips(&program.replace("zs = ", "xs#1 = 5.0\nzs = ")), 2);
+	let light_after = program.replace("exp(y) + 1", "y * y + 1");
+	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&format!("{light_after}abs(zs#40000 - (sin(1) * sin(1) + 1)) < 0.00001"))).serialize(), "yes");
+}

@@ -54,6 +54,73 @@ fn composed(first: &Node, then: &Node) -> Option<Node> {
 	Some(Node::Key(parameter.clone(), Op::FatArrow, Box::new(body)))
 }
 
+/// `ys = xs.map(f) @gpu; zs = ys.map(g) @gpu`, ys read nowhere else: `zs = xs.map(f).map(g) @gpu`, so ys never comes
+/// back from the GPU (one round trip, notes/gpu.md). Only while nothing the map of ys reads (xs, the lambda's numbers)
+/// is written after it in the same statements
+pub fn kept_on_gpu(node: Node) -> Node {
+	let program = node.clone();
+	kept_in(node, &program)
+}
+
+fn kept_in(node: Node, program: &Node) -> Node {
+	let node = node.map_children(|child| kept_in(child, program));
+	let Node::List(mut statements, bracket, separator @ (crate::node::Separator::Semicolon | crate::node::Separator::Newline)) = node else { return node };
+	let mut index = 0;
+	while index < statements.len() {
+		match folded_into_consumers(&statements, index, program) {
+			Some(rewritten) => statements = rewritten,
+			None => index += 1,
+		}
+	}
+	Node::List(statements, bracket, separator)
+}
+
+/// The statements with statement `index`, an @gpu map whose result only later @gpu maps read, folded into those
+fn folded_into_consumers(statements: &[Node], index: usize, program: &Node) -> Option<Vec<Node>> {
+	let (name, value) = gpu_assignment(&statements[index])?;
+	let later = &statements[index + 1..];
+	let mut read = vec![];
+	value.drop_meta().visit(&mut |part| if let Node::Symbol(symbol) = part { read.push(symbol.clone()) });
+	if later.iter().any(|statement| read.iter().any(|symbol| writes(statement, symbol))) {
+		return None;
+	}
+	let mut uses = 0;
+	program.visit(&mut |part| uses += usize::from(matches!(part, Node::Symbol(symbol) if *symbol == name)));
+	let bare = value.drop_meta().clone();
+	let mut consumers = 0;
+	let rewritten: Vec<Node> = later.iter().map(|statement| match gpu_assignment(statement) {
+		Some((_, consumer)) if crate::parallel::map_call(&consumer).is_some_and(|(list, _)| matches!(list.drop_meta(), Node::Symbol(source) if *source == name)) => {
+			consumers += 1;
+			crate::library_words::substitute(statement.clone(), &name, &bare)
+		}
+		_ => statement.clone(),
+	}).collect();
+	let all_fold = rewritten.iter().zip(later).filter(|(new, old)| new != old).all(|(new, _)| {
+		gpu_assignment(new).and_then(|(_, value)| gpu_map(&value)).is_some_and(|(list, _)| crate::parallel::map_call(&list).is_none())
+	});
+	(consumers > 0 && uses == consumers + 1 && all_fold).then(|| [&statements[..index], &rewritten[..]].concat())
+}
+
+/// `ys = xs.map(f) @gpu`: ys and the map
+fn gpu_assignment(statement: &Node) -> Option<(String, Node)> {
+	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else { return None };
+	let Node::Symbol(name) = target.drop_meta() else { return None };
+	gpu_map(value).map(|_| (name.clone(), value.as_ref().clone()))
+}
+
+/// Whether `node` assigns `name` or one of its items
+fn writes(node: &Node, name: &str) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| if let Node::Key(target, op, _) = part {
+		let assigned = match target.drop_meta() {
+			Node::Key(list, Op::Hash, _) => list.drop_meta(),
+			other => other,
+		};
+		found |= (*op == Op::Assign || op.is_compound_assign()) && matches!(assigned, Node::Symbol(symbol) if symbol == name);
+	});
+	found
+}
+
 /// A lambda as a WGSL compute kernel: the shader, the program's numbers it reads (`outer`, appended to `data` after
 /// the items, in this order) and whether it is worth the GPU (math words, powers: `heavy`)
 pub(crate) struct Kernel {
