@@ -578,6 +578,7 @@ PASSED:
   ✓ ffi::test_foreign_handles::test_python_handles
   ✓ ffi::test_foreign_handles::test_python_numbers_stay_numbers
   ✓ ffi::test_foreign_js::test_an_unknown_js_member_is_loud
+  ✓ ffi::test_foreign_js::test_foreign_printing_keeps_the_answer_channel
   ✓ ffi::test_foreign_js::test_js_globals
   ✓ ffi::test_foreign_js::test_js_modules
   ✓ ffi::test_foreign_js::test_untrusted_code_gets_no_js
@@ -616,6 +617,11 @@ PASSED:
   ✓ ffi::test_wasi::test_fd_write_raw
   ✓ ffi::test_wasi::test_wasi_putf
   ✓ ffi::test_wasi::test_wasi_puti
+  ✓ ffi::test_web_idl::a_call_with_a_count_no_overload_takes_is_an_error
+  ✓ ffi::test_web_idl::a_global_without_webidl_stays_unchecked
+  ✓ ffi::test_web_idl::a_member_the_interface_lacks_is_an_error_with_its_near_miss
+  ✓ ffi::test_web_idl::an_attribute_is_read_not_called
+  ✓ ffi::test_web_idl::what_the_interface_declares_runs
   ✓ ffi_parser::tests::test_parse_int32_return
   ✓ ffi_parser::tests::test_parse_pointer_param
   ✓ ffi_parser::tests::test_parse_simple_function
@@ -687,6 +693,7 @@ PASSED:
   ✓ functions::test_broadcasting::test_function_broadcasts_over_pairs_keeping_keys
   ✓ functions::test_broadcasting::test_operators_do_not_broadcast
   ✓ functions::test_broadcasting::test_scalar_calls_and_list_functions_do_not_broadcast
+  ✓ functions::test_broadcasting_declared::a_declared_list_variable_broadcasts
   ✓ functions::test_broadcasting_declared::test_declared_list_parameters_take_the_list
   ✓ functions::test_broadcasting_declared::test_declared_scalar_parameters_broadcast
   ✓ functions::test_builtin_clash::a_cast_cannot_name_a_function
@@ -1177,6 +1184,7 @@ PASSED:
   ✓ lists::test_float_array_writes::walking_a_typed_array_reads_every_item
   ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
   ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
+  ✓ lists::test_generated_name_hints::comprehension_and_where_give_no_hint_about_their_list
   ✓ lists::test_global_comprehension::a_function_writes_a_float_into_a_global_list
   ✓ lists::test_global_comprehension::a_global_comprehension_list_takes_writes
   ✓ lists::test_global_typed_lists::a_global_array_a_function_writes_stays_an_array
@@ -2723,6 +2731,7 @@ PASSED:
   ✓ types::test_type_alias_fields::types_sample_runs
   ✓ types::test_type_colon_block::a_type_colon_block_declares_its_fields
   ✓ types::test_type_model::test_type_model_is_proved
+  ✓ types::test_type_model::test_warp_admits_what_the_type_model_subtypes
   ✓ types::test_type_model::test_warp_rejects_what_the_type_model_rejects
   ✓ types::test_type_name_definition_forms::test_define_operator_takes_the_same_slots_as_assign
   ✓ types::test_type_name_definition_forms::test_to_phrase_with_a_block_body
@@ -3440,4 +3449,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3435 passed, 0 failed, 3435 total tested
+19 ignored, 3444 passed, 0 failed, 3444 total tested
