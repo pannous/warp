@@ -32,6 +32,8 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
   case seq => cases h with | seq ha hb => exact ⟨_, ha, fun h' _ => ⟨_, .seq h' hb, sub_refl _⟩⟩
   case indexL => cases h with | index hl hi => exact ⟨_, hl, fun h' s => ⟨_, .index h' hi, elementTy_mono s⟩⟩
   case indexR => cases h with | index hl hi => exact ⟨_, hi, fun h' _ => ⟨_, .index hl h', sub_refl _⟩⟩
+  case rangeL => cases h with | range ha hb => exact ⟨_, ha, fun h' s => ⟨_, .range h' hb, by simpa [sub] using arithTy_mono s (sub_refl _)⟩⟩
+  case rangeR => cases h with | range ha hb => exact ⟨_, hb, fun h' s => ⟨_, .range ha h', by simpa [sub] using arithTy_mono (sub_refl _) s⟩⟩
   case appendL =>
     cases h with | append ha hb =>
     exact ⟨_, ha, fun h' s => ⟨_, .append h' hb, by simpa using join_mono (listElem_mono s) (sub_refl _)⟩⟩
@@ -251,6 +253,16 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
       cases hn : nth l ((asInt i).getD 0) with
       | none => exact ⟨_, .error, sub_never _⟩
       | some v => simpa using nth_typed _ vl hl hn
+  | @range a b μ _ _ =>
+    intro t h hμ
+    refine ⟨?_, hμ⟩
+    cases h with
+    | range =>
+      simp only [rangeValues]
+      split
+      · obtain ⟨e, ht, se⟩ := intList_typed (P := P) (Γ := Ctx.empty) _ _
+        exact ⟨_, ht, by simpa [sub] using sub_trans se (int_sub_arithTy _ _)⟩
+      · exact ⟨_, .error, sub_never _⟩
   | append va vb =>
     intro t h hμ
     cases h with
@@ -425,6 +437,8 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
   | @seq _ a b _ _ _ _ ih1 _ => exact in_frame (.seq b) rfl (ih1 hΓ hμ) fun va => steps (.seq va)
   | @index _ l i _ _ _ _ ih1 ih2 =>
     exact in_frame (.indexL i) rfl (ih1 hΓ hμ) fun vl => in_frame (.indexR l) vl (ih2 hΓ hμ) fun vi => steps (.index vl vi)
+  | @range _ a b _ _ _ _ ih1 ih2 =>
+    exact in_frame (.rangeL b) rfl (ih1 hΓ hμ) fun va => in_frame (.rangeR a) va (ih2 hΓ hμ) fun vb => steps (.range va vb)
   | @append _ a b _ _ _ _ ih1 ih2 =>
     exact in_frame (.appendL b) rfl (ih1 hΓ hμ) fun va => in_frame (.appendR a) va (ih2 hΓ hμ) fun vb => steps (.append va vb)
   | @assign _ x _ _ _ _ _ _ ih => exact in_frame (.assign x) rfl (ih hΓ hμ) fun v => steps (.assign v)

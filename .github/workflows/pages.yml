@@ -66,6 +66,8 @@ jobs:
         web/playground/build.sh served _site
     - name: Every tour example shows what it promises (examples.js) and no example or sample writes an error or warning to the console, in the collected site, else no deploy
       run: python3 web/playground/test_in_browser.py --examples --site _site
+    - name: The same in headless Firefox (the runner's own; firefox_driver.mjs), else no deploy
+      run: python3 web/playground/test_in_browser.py --examples --firefox --site _site
     - uses: actions/upload-pages-artifact@v3
       with:
         path: _site
@@ -90,3 +92,5 @@ jobs:
       run: npm install -g agent-browser && agent-browser install --with-deps
     - name: The live playground shows the tour and its console stays clean
       run: python3 web/playground/test_in_browser.py --examples --url https://warp.pannous.com/
+    - name: The same in headless Firefox
+      run: python3 web/playground/test_in_browser.py --examples --firefox --url https://warp.pannous.com/

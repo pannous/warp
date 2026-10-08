@@ -262,6 +262,18 @@ PASSED:
   ✓ control::test_reactive_ports::rxjs_node_qt_events
   ✓ control::test_reactive_ports::svelte_vue_solid_derivations
   ✓ control::test_reactive_ports::the_signals_note_example_runs
+  ✓ control::test_reflection_words::a_classes_methods
+  ✓ control::test_reflection_words::a_functions_effects_as_a_dot_form
+  ✓ control::test_reflection_words::a_functions_params
+  ✓ control::test_reflection_words::a_functions_signature
+  ✓ control::test_reflection_words::a_real_field_named_fields_wins
+  ✓ control::test_reflection_words::a_real_field_named_listeners_wins
+  ✓ control::test_reflection_words::an_events_listeners_as_a_dot_form
+  ✓ control::test_reflection_words::an_instances_class_and_type
+  ✓ control::test_reflection_words::an_instances_fields_and_their_aliases
+  ✓ control::test_reflection_words::dir_of_an_instance_a_class_and_a_map
+  ✓ control::test_reflection_words::inherited_fields_come_first
+  ✓ control::test_reflection_words::listeners_of_a_name_nothing_listens_to_is_loud
   ✓ control::test_relational_arms::a_comparison_without_its_left_side_is_an_error
   ✓ control::test_relational_arms::a_match_arm_compares_the_subject
   ✓ control::test_relational_arms::the_operator_value_stays
@@ -1462,6 +1474,8 @@ PASSED:
   ✓ modules::test_std_aliases::a_foreign_name_says_the_wasp_word
   ✓ modules::test_std_aliases::a_program_naming_the_module_keeps_it
   ✓ modules::test_std_aliases::foreign_standard_names_are_wasp_words
+  ✓ modules::test_std_args::args_are_the_words_after_the_program_file
+  ✓ modules::test_std_args::args_without_arguments_is_the_empty_list
   ✓ modules::test_std_collections::a_collection_without_its_use_names_the_module
   ✓ modules::test_std_collections::a_counter_counts
   ✓ modules::test_std_collections::a_deque_works_at_both_ends
@@ -1473,6 +1487,7 @@ PASSED:
   ✓ modules::test_std_collections::other_languages_class_names_are_the_collections
   ✓ modules::test_std_collections::other_languages_method_names_are_the_collections_methods
   ✓ modules::test_std_collections::the_size_of_an_instance_through_len_and_count
+  ✓ modules::test_std_coverage::every_library_word_is_called_by_a_test
   ✓ modules::test_std_file::a_file_url_loads_the_module_and_append_is_qualified
   ✓ modules::test_std_file::use_file_lists_a_folder
   ✓ modules::test_std_file::use_file_writes_appends_and_reads_back
@@ -1480,6 +1495,9 @@ PASSED:
   ✓ modules::test_std_file::write_and_exists_need_no_use
   ✓ modules::test_std_file_copy::a_copy_of_a_std_module_knows_the_foreign_names
   ✓ modules::test_std_hash::use_hash_gives_sha256_and_crc32
+  ✓ modules::test_std_implicit_use::a_page_brings_markup_implicitly
+  ✓ modules::test_std_implicit_use::routes_and_pages_lower_without_use_statements
+  ✓ modules::test_std_implicit_use::routes_bring_router_and_regex_implicitly
   ✓ modules::test_std_json::a_json_word_without_its_use_names_the_module
   ✓ modules::test_std_json::malformed_json_is_an_error_naming_it
   ✓ modules::test_std_json::use_json_parses_and_writes_json
@@ -1539,6 +1557,8 @@ PASSED:
   ✓ modules::test_std_random::use_random_seed_repeats_the_numbers
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
+  ✓ modules::test_std_shadowed_names::a_local_named_like_a_module_word_is_the_local
+  ✓ modules::test_std_shadowed_names::a_local_named_like_a_program_function_is_the_local
   ✓ modules::test_std_time::date_arithmetic
   ✓ modules::test_std_time::dates_of_milliseconds
   ✓ modules::test_std_time::format_duration_in_the_largest_units
@@ -1546,6 +1566,11 @@ PASSED:
   ✓ modules::test_std_time::use_time_formats_dates_and_times
   ✓ modules::test_std_time::use_time_knows_leap_years_and_month_lengths
   ✓ modules::test_std_time::use_time_parses_dates
+  ✓ modules::test_std_words::an_ordered_map_keeps_insertion_order
+  ✓ modules::test_std_words::draw_names_yellow_orange_purple
+  ✓ modules::test_std_words::json_of_an_instance_given_its_classes
+  ✓ modules::test_std_words::math_inverse_and_hyperbolic_words
+  ✓ modules::test_std_words::router_words_match_a_pattern_and_read_its_parameters
   ✓ modules::test_use_modules::a_program_variable_leaves_a_file_module_its_words
   ✓ modules::test_use_modules::a_quoted_path_uses_that_file
   ✓ modules::test_use_modules::module_function_locals_are_not_the_programs_variables
@@ -1887,6 +1912,8 @@ PASSED:
   ✓ numbers::test_units_followup::test_tolerance_in_a_unit
   ✓ numbers::test_units_followup::test_unit_sum_serializes_in_the_smallest_unit
   ✓ numbers::test_units_followup::test_value_with_tolerance_prints_back
+  ✓ numbers::test_units_nospace::test_constant_quantities_show_glued_and_read_back
+  ✓ numbers::test_units_nospace::test_run_time_quantities_show_glued_and_read_back
   ✓ numbers::test_zero_fill::a_computed_size_is_a_runtime_count
   ✓ numbers::test_zero_fill::a_large_zero_list_has_its_size
   ✓ numbers::test_zero_fill::a_zero_list_is_still_a_list_of_zeros
@@ -2765,6 +2792,7 @@ PASSED:
   ✓ types::test_list_element_types::list_fields_check_items_of_instances_of_unknown_class
   ✓ types::test_list_element_types::list_fields_check_run_time_items
   ✓ types::test_list_element_types::list_fields_check_their_items
+  ✓ types::test_loop_item_into_annotated::a_mixed_loop_item_into_an_annotated_place_is_checked_at_run_time
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
   ✓ types::test_mutating_methods::a_block_method_changes_its_object_and_gives_a_value
@@ -2809,6 +2837,10 @@ PASSED:
   ✓ types::test_recursive_fields::gc_struct_and_ref_are_wasm_spellings
   ✓ types::test_recursive_fields::ref_fields_on_their_own_lines
   ✓ types::test_repeated_type_parameters::repeated_type_words_number_their_parameters
+  ✓ types::test_same_identity::an_alias_is_the_same_object
+  ✓ types::test_same_identity::maps_and_lists_are_the_same_only_when_one
+  ✓ types::test_same_identity::same_is_the_word
+  ✓ types::test_same_identity::scalars_stay_type_and_value
   ✓ types::test_shared_instances::a_change_passes_through_other_functions_and_methods
   ✓ types::test_shared_instances::a_function_changes_a_field_of_the_instance_it_is_given
   ✓ types::test_shared_instances::a_new_value_of_the_parameter_stays_inside
@@ -3609,4 +3641,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3604 passed, 0 failed, 3604 total tested
+19 ignored, 3636 passed, 0 failed, 3636 total tested

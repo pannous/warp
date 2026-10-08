@@ -63,6 +63,12 @@ matches format pad json parse`; `today` and `args` read as symbols; `exec sh "�
 - Names: after `use list`, `zip(a, b)` and `list.zip(a, b)` both work; a program's own `zip` wins (as for prelude words).
 - A module word used without its `use`: the loud error naming the module, with the fix `use list`.
 
+### Coverage (card std-word)
+tests/modules/test_std_coverage.rs fails naming every lib/*.wasp word no test calls: a word is covered when a test
+(tests/**/*.rs or .wasp) names it, or a covered word's body calls it. src/ doesn't count: its alias tables
+(modules.rs `("acos", "arc_cosine")`) name words without calling them. A new lib word needs an is! test; the words
+nothing else tested are in tests/modules/test_std_words.rs (native and browser).
+
 ## 6. Steps (functions)
 Done (branch functions, 2026-10-07):
 1. `lib/<name>.wasp` embedded in warp (modules.rs STD_MODULES; std/ until P194 merged it into lib/, non-standard
@@ -192,7 +198,9 @@ run natively and in the browser.
    prelude word); `use os` brings env. Natively the file system (paths as read resolves them) and the environment; in
    the browser host.js keeps written files in memory while the page is open (read sees them first, then the served
    repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
-   method `xs.append(v)` a program using `use file` still needs (question Q6). args waits for a CLI way to pass them.
+   method `xs.append(v)` a program using `use file` still needs (question Q6). `use os; args` (card std-args): the words
+   after the program file, `warp run prog.wasp a b` gives ["a" "b"] (main.rs program_file → std_adapters
+   set_program_arguments), [] without any and in the browser; without `use os`, `args` is still the symbol.
 2. Done as A instead of B: hash: `use hash` brings sha256 (lowercase hex) and crc32 (a number) of a text's UTF-8
    bytes: sha2 and crc32fast natively (both already warp dependencies), a synchronous JS twin in host.js (crypto.subtle
    is asynchronous, a host call cannot wait); same values in both hosts (tests/modules/test_std_hash.rs). B (C modules

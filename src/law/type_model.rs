@@ -34,6 +34,9 @@ const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
 const FOR_KEYWORD: &str = "for";
+const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
+/// the one field of a function local's cell (`f·n`): `·` keeps it apart from the program's own fields
+const CELL_FIELD: &str = "·value";
 /// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
 const UNION_TYPE: &str = "(Ty.joinAll ";
 const UNION_JOINER: &str = " or ";
@@ -73,7 +76,7 @@ fn quoted(text: &str) -> String {
 /// `int`, `texts`, `list`: the W0 type a warp type word names
 fn type_of_word(word: &str) -> Option<String> {
 	let scalar = |word: &str| -> Option<&str> {
-		Some(match crate::type_kinds::canonical_type_name(word) {
+		Some(match crate::type_kinds::canonical_type_name(&word.to_lowercase()) {
 			"int" | "integer" | "long" => ".int",
 			"float" | "number" | "exact" => ".number",
 			"text" | "string" | "str" => ".text",
@@ -233,6 +236,43 @@ fn function_definition(statement: &Node) -> Option<(&str, Vec<&Node>, &Node)> {
 	}
 }
 
+/// `not e`: yes when e is falsy
+fn negation(lean: String) -> String {
+	format!(".ite ({lean}) (.bool false) (.bool true)")
+}
+
+/// The class of the cell a local of function holds its value in: `f·n` for n in f
+fn cell_class(function: &str, local: &str) -> String {
+	format!("{function}·{local}")
+}
+
+/// The names a function body assigns (`n = 0`, `n += 1`), in order of first assignment, but for its parameters and
+/// the given globals: its locals (functions2)
+fn assigned_locals(body: &Node, parameters: &[String], globals: &[String]) -> Vec<String> {
+	let mut locals: Vec<String> = vec![];
+	body.visit(&mut |part| {
+		if let Node::Key(target, op, _) = part {
+			match target.drop_meta() {
+				Node::Symbol(name) if (*op == Op::Assign || op.is_compound_assign()) && !parameters.contains(name) && !globals.contains(name) && !locals.contains(name) => locals.push(name.clone()),
+				_ => {}
+			}
+		}
+	});
+	locals
+}
+
+/// Whether the first value a function body gives local is a list (`out = []`, `out = [1]`)
+fn first_value_is_list(body: &Node, local: &str) -> bool {
+	let mut first = None;
+	body.visit(&mut |part| match part {
+		Node::Key(target, Op::Assign, value) if first.is_none() && matches!(target.drop_meta(), Node::Symbol(name) if name == local) => {
+			first = Some(is_list_literal(value) || matches!(value.drop_meta(), Node::Empty));
+		}
+		_ => {}
+	});
+	first.unwrap_or(false)
+}
+
 /// The parameter's type word: `int` of `y: int`, none for an unannotated `y`
 fn parameter_type_word(parameter: &Node) -> Option<String> {
 	match parameter.drop_meta() {
@@ -284,8 +324,11 @@ struct Exporter {
 	breaking: Vec<Option<String>>,
 	/// the names declared `global` anywhere in the program
 	globals: Vec<String>,
-	/// exporting a function body: there a name assigned without `global` is a new local (functions2)
-	in_function: bool,
+	/// the locals of the function being exported: each lives in a cell, a fresh instance of its class `f·n` per call
+	/// (W0's locals are bound by substitution, warp's change), whose one field takes the join of the values written
+	cells: Vec<String>,
+	/// the cell locals whose first value is a list: `xs.add(v)` appends to them
+	cell_lists: Vec<String>,
 }
 
 /// A class's ancestor chain and its own fields as (name, type word)
@@ -459,6 +502,7 @@ impl Exporter {
 		let event_classes = self.collect_event_classes(program);
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
 		let mut argument_classes = Vec::new();
+		let mut cell_items = Vec::new();
 		for statement in &program {
 			let Some((name, parameters, _)) = function_definition(statement) else { continue };
 			if self.functions.contains_key(name) {
@@ -477,8 +521,18 @@ impl Exporter {
 			};
 			self.functions.insert(name.to_string(), parameter_type);
 		}
+		for statement in &program {
+			let Some((name, parameters, body)) = function_definition(statement) else { continue };
+			let parameters: Vec<String> = parameters.iter().map(|parameter| self.parameter_type(parameter).map(|(parameter, _)| parameter)).collect::<Result<_, String>>()?;
+			for local in assigned_locals(body, &parameters, &self.globals) {
+				let class = cell_class(name, &local);
+				self.classes.insert(class.clone(), (vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]));
+				cell_items.push(format!(".cell {}", quoted(&class)));
+			}
+		}
 		argument_classes.extend(event_classes);
 		let mut items = argument_classes.iter().map(|class| self.class_definition(class)).collect::<Result<Vec<_>, String>>()?;
+		items.extend(cell_items);
 		for statement in program {
 			items.push(self.item(statement)?);
 		}
@@ -512,6 +566,15 @@ impl Exporter {
 				Node::Key(target, Op::Assign, value) => self.binding(target, ".const", value),
 				other => unsupported(other),
 			},
+			// `let x = 1`, `shared n = 5` (one thread in W0): a variable; `int i = 2`: `i: int = 2`
+			Node::List(items, _, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))) => {
+				let Node::Key(target, _, value) = items[1].drop_meta() else { unreachable!("an assignment") };
+				match items[0].drop_meta() {
+					Node::Symbol(word) if VARIABLE_KEYWORDS.contains(&word.as_str()) => self.binding(target, ".var", value),
+					Node::Symbol(word) if self.type_of(word).is_ok() => self.binding(&Node::Key(target.clone(), Op::Colon, Box::new(items[0].clone())), ".var", value),
+					_ => Ok(format!(".statement ({})", self.expression(statement)?)),
+				}
+			}
 			Node::Key(target, Op::Assign, value) if !self.is_bound(target) && !matches!(target.drop_meta(), Node::Key(_, Op::Dot, _)) => self.binding(target, ".var", value),
 			other => Ok(format!(".statement ({})", self.expression(other)?)),
 		}
@@ -574,14 +637,21 @@ impl Exporter {
 			[] => (UNIT_PARAMETER.to_string(), vec![], declared),
 			parameters => (arguments_class(name), parameters.iter().map(|parameter| parameter.drop_meta().name()).collect(), declared),
 		};
+		let parameters: Vec<String> = std::iter::once(parameter.clone()).chain(fields.iter().cloned()).collect();
+		let cells = assigned_locals(body, &parameters, &self.globals);
+		self.cell_lists = cells.iter().filter(|cell| first_value_is_list(body, cell)).cloned().collect();
+		self.cells = cells.clone();
 		self.locals.push(parameter.clone());
 		self.argument_fields = fields;
-		self.in_function = true;
 		let body = self.block(body);
-		self.in_function = false;
 		self.locals.pop();
 		self.argument_fields.clear();
-		Ok(format!(".function {} {} {parameter_type} ({})", quoted(name), quoted(&parameter), body?))
+		self.cells.clear();
+		let body = cells.iter().rev().fold(body?, |body, cell| {
+			let path = lean_strings(&[cell_class(name, cell)]);
+			format!(".letIn {} (.cls {path}) (.new {path}) ({body})", quoted(cell))
+		});
+		Ok(format!(".function {} {} {parameter_type} ({body})", quoted(name), quoted(&parameter)))
 	}
 
 	/// a function body: `{ a; b }` is the sequence
@@ -600,6 +670,9 @@ impl Exporter {
 	}
 
 	fn assignment(&mut self, name: &str, value: &Node) -> Lean {
+		if self.cells.iter().any(|cell| cell == name) {
+			return Ok(format!(".set (.loc {}) {} ({})", quoted(name), quoted(CELL_FIELD), self.expression(value)?));
+		}
 		let declared = self.names.get(name).cloned().flatten();
 		let value = match bool_literal(self.bool_names.contains(&name.to_string()).then_some(BOOL_TYPE), value) {
 			Some(yes_or_no) => yes_or_no,
@@ -608,9 +681,6 @@ impl Exporter {
 		if !self.names.contains_key(name) {
 			return Err(format!("not in W0: a first binding of {name} inside an expression"));
 		}
-		if self.in_function && !self.globals.iter().any(|global| global == name) {
-			return Err(format!("not in W0: {name} assigned in a function without `global {name}` (a local there)"));
-		}
 		Ok(format!(".assign {} ({value})", quoted(name)))
 	}
 
@@ -618,7 +688,7 @@ impl Exporter {
 	/// variable (type filters, unit walks) is not in W0, nor a main-level name (warp's loop assigns it, W0's shadows it)
 	fn for_loop(&mut self, variable: &Node, list: &Node, body: &Node) -> Lean {
 		let variable = match variable.drop_meta() {
-			Node::Symbol(name) if name != crate::lambdas::IMPLICIT_PARAMETER && type_of_word(name).is_none() && !self.names.contains_key(name) => name.clone(),
+			Node::Symbol(name) if name != crate::lambdas::IMPLICIT_PARAMETER && type_of_word(name).is_none() && !self.names.contains_key(name) && !self.cells.contains(name) => name.clone(),
 			_ => return Err(format!("not in W0: the loop variable {}", variable.serialize().trim())),
 		};
 		let list = self.expression(list)?;
@@ -626,6 +696,21 @@ impl Exporter {
 		let body = self.breaking_in(None, |exporter| exporter.block(body));
 		self.locals.pop();
 		Ok(format!(".forIn {} ({list}) ({})", quoted(&variable), body?))
+	}
+
+	/// a literal, a name (not a function's), or operators on such: evaluating it twice changes nothing
+	fn is_pure(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty => true,
+			Node::Symbol(name) => !self.functions.contains_key(name),
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_pure(&items[0]),
+			Node::Key(left, op, right) => !matches!(op, Op::Assign | Op::Define | Op::Dot) && !op.is_compound_assign() && self.is_pure(left) && self.is_pure(right),
+			_ => false,
+		}
+	}
+
+	fn cell_value(&self, cell: &str) -> String {
+		format!(".get (.loc {}) {}", quoted(cell), quoted(CELL_FIELD))
 	}
 
 	fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
@@ -641,6 +726,7 @@ impl Exporter {
 			Node::Text(text) => Ok(format!(".text {}", quoted(text))),
 			Node::Char(c) => Ok(format!(".text {}", quoted(&c.to_string()))), // `"a"` parses as a codepoint
 			Node::Empty => Ok(".nil".to_string()), // ø is the empty list (`xs = []` parses as ø)
+			Node::Symbol(name) if self.cells.contains(name) => Ok(self.cell_value(name)),
 			Node::Symbol(name) if self.argument_fields.contains(name) => {
 				Ok(format!(".get (.loc {}) {}", quoted(self.locals.last().expect("the arguments object")), quoted(name)))
 			}
@@ -675,6 +761,12 @@ impl Exporter {
 				},
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
 				[_, arguments @ ..] if arguments.iter().any(|argument| matches!(argument.drop_meta(), Node::Key(_, Op::Assign, _))) => Err(format!("not in W0: named arguments in {}", node.serialize().trim())),
+				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
+				[call, argument] if self.classes.contains_key(&arguments_class(&call.name())) && matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) => {
+					let Node::Key(first, _, second) = argument.drop_meta() else { unreachable!("a `to` pair") };
+					let arguments = self.construction(&arguments_class(&call.name()), &[first.as_ref().clone(), second.as_ref().clone()])?;
+					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
+				}
 				[call, arguments @ ..] if arguments.len() > 1 && self.classes.contains_key(&arguments_class(&call.name())) => {
 					let arguments = self.construction(&arguments_class(&call.name()), arguments)?;
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
@@ -701,6 +793,10 @@ impl Exporter {
 			},
 			// `xs.add(v)` is `xs = xs ++ [v]`: lists are values
 			Node::Key(list, Op::Dot, call) => match (list.drop_meta(), call.drop_meta()) {
+				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && self.cell_lists.contains(name) && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
+					let item = self.expression(&items[1])?;
+					Ok(format!(".set (.loc {}) {} (.append ({}) (.cons ({item}) .nil))", quoted(name), quoted(CELL_FIELD), self.cell_value(name)))
+				}
 				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
 					let item = self.expression(&items[1])?;
 					if !self.list_names.contains(name) {
@@ -740,9 +836,20 @@ impl Exporter {
 			Node::Key(left, Op::Eq, right) if matches!(right.drop_meta(), Node::Symbol(class) if self.classes.contains_key(class)) => Ok(format!(".isA ({}) {}", self.expression(left)?, quoted(&right.name()))),
 			Node::Key(left, op @ (Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical), right) => {
 				let compared = self.binary(if matches!(op, Op::Identical | Op::NotIdentical) { ".eq true" } else { ".eq false" }, left, right)?;
-				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { format!(".ite ({compared}) (.bool false) (.bool true)") } else { compared })
+				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { negation(compared) } else { compared })
 			}
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
+			Node::Key(empty, Op::Not, operand) if empty.is_nothing() => Ok(negation(self.expression(operand)?)),
+			// `a and b` is b when a is truthy, else a; `a or b` the other way round: a, free of effects, evaluated twice
+			Node::Key(left, op @ (Op::And | Op::Or), right) if self.is_pure(left) => {
+				let (left, right) = (self.expression(left)?, self.expression(right)?);
+				Ok(if *op == Op::And { format!(".ite ({left}) ({right}) ({left})") } else { format!(".ite ({left}) ({left}) ({right})") })
+			}
+			// `'a'..'e'`: letters, outside W0
+			Node::Key(from, Op::Range | Op::To, to) if [from, to].iter().any(|bound| matches!(bound.drop_meta(), Node::Text(_) | Node::Char(_))) => unsupported(node),
+			Node::Key(from, Op::Range, to) => self.binary(".range", from, to),
+			// `1 to 3` includes 3
+			Node::Key(from, Op::To, to) => Ok(format!(".range ({}) (.add ({}) (.int 1))", self.expression(from)?, self.expression(to)?)),
 			_ => unsupported(node),
 		}
 	}

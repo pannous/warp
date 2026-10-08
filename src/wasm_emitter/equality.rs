@@ -17,6 +17,8 @@ use crate::wasm_emitter::layout::BYTE;
 pub const VALUES_EQUAL: &str = "values_equal";
 pub const IS_META_ENTRY: &str = "is_meta_entry";
 pub const IS_TRUTHY: &str = "is_truthy";
+/// same_node(a, b): are two objects one (P208); two other values compare by value and boolness
+pub const SAME_NODE: &str = "same_node";
 
 impl WasmGcEmitter {
 	/// Values that only compare or test structurally: they have no numeric reading
@@ -71,6 +73,28 @@ impl WasmGcEmitter {
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
 		let by_value = |node: &Node| self.get_type(node) == Kind::Text || self.is_held_cell_value(node);
 		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right) || by_value(left) || by_value(right))
+	}
+
+	/// `a same b` / `a === b` of two values that may be objects (instances, maps, lists): are they one (P208)? The
+	/// sides and whether the question is negated (`!==`); texts, ø and numbers known as such are no objects, `===`
+	/// compares their type and value
+	pub(super) fn object_identity<'a>(&self, node: &'a Node) -> Option<(&'a Node, &'a Node, bool)> {
+		let Node::Key(left, op @ (Op::Identical | Op::NotIdentical), right) = node.drop_meta() else { return None };
+		let may_be_object = |side: &Node| !matches!(side.drop_meta(), Node::Empty | Node::Text(_))
+			&& (self.is_structural_operand(side) || self.get_type(side).is_ref())
+			&& !matches!(self.get_type(side), Kind::Text | Kind::Codepoint | Kind::Empty);
+		(may_be_object(left) && may_be_object(right)).then_some((left, right, *op == Op::NotIdentical))
+	}
+
+	/// Push i64 1/0: are the two objects one
+	pub(super) fn emit_object_identity(&mut self, func: &mut Function, (left, right, negated): (&Node, &Node, bool)) {
+		self.emit_node_instructions(func, left);
+		self.emit_node_instructions(func, right);
+		self.emit_call(func, SAME_NODE);
+		if negated {
+			func.instruction(&I::I32Eqz);
+		}
+		func.instruction(&I::I64ExtendI32U);
 	}
 
 	/// `a === b`: `a == b` of two values of the same type, else false (`!==` true): `0 === false` and `1 === 1.5` are
@@ -129,6 +153,29 @@ impl WasmGcEmitter {
 		if self.should_emit_function(IS_TRUTHY) {
 			self.emit_is_truthy();
 		}
+		if self.should_emit_function(SAME_NODE) {
+			self.emit_same_node();
+		}
+	}
+
+	fn emit_same_node(&mut self) {
+		let node_ref = Ref(self.node_ref(false));
+		let node_type = self.type_manager.node_type;
+		let kind_of = |f: &mut Function, local: u32| Self::emit_list(f, &[I::LocalGet(local), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
+		self.runtime_function(SAME_NODE, vec![node_ref, node_ref], vec![ValType::I32], vec![ValType::I64], |s, f| {
+			let (left, right, kind) = (0, 1, 2);
+			kind_of(f, left);
+			Self::emit_list(f, &[I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::Key as i64), I::I64Eq]);
+			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Eq, I::I32Or, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(left), I::LocalGet(right), I::RefEq, I::Return, I::End, I::LocalGet(left), I::LocalGet(right)]);
+			s.emit_call(f, VALUES_EQUAL);
+			for side in [left, right] {
+				kind_of(f, side);
+				f.instruction(&I::I64Const(crate::type_kinds::BOOL_KIND));
+				f.instruction(&I::I64Eq);
+			}
+			Self::emit_list(f, &[I::I32Eq, I::I32And]);
+		});
 	}
 
 	/// is_meta_entry(entry: anyref) -> i32: 1 for a meta entry `@name:value`, which is never a field, not counted and
