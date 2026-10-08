@@ -58,3 +58,4 @@ mod test_warp_serve; // P222
 mod test_route_data; // P221
 #[cfg(feature = "native")] // a server on a port and its SQLite tables
 mod test_served_tables; // card sample-server
+mod test_guide_sections; // card guide-lists

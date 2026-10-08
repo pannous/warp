@@ -12,6 +12,7 @@ const EXAMPLES_PREFIX = "Examples: ";
 const SAMPLES_SEPARATOR = "; samples: ";
 const SNIPPET_FENCE = /^```warp(?: => (.*))?$/;
 const PRINTED_FENCE = "```printed"; // right after a snippet: the lines it prints, shown above its value
+const SECTION_PREFIX = "### "; // a section inside a chapter: "### Whole lists at once" in Lists
 
 const chapterOfExample = new Map();
 const examplesOfChapter = new Map(); // in the guide's order: the example menu's groups
@@ -72,7 +73,7 @@ function paragraph(lines) {
 	return block;
 }
 
-// the Markdown subset guide.md uses: paragraphs, fences, `Examples:` lines; returns the chapter's elements
+// the Markdown subset guide.md uses: paragraphs, `###` sections, fences, `Examples:` lines; returns the chapter's elements
 function renderBody(lines, chapter) {
 	const blocks = [];
 	let text = [];
@@ -88,6 +89,9 @@ function renderBody(lines, chapter) {
 		} else if (line.startsWith(EXAMPLES_PREFIX)) {
 			flush();
 			blocks.push(exampleLinks(line, chapter));
+		} else if (line.startsWith(SECTION_PREFIX)) {
+			flush();
+			blocks.push(element("h3", { className: "guide-section" }, line.slice(SECTION_PREFIX.length)));
 		} else if (line.trim()) text.push(line);
 		else flush();
 	}
