@@ -261,8 +261,10 @@ is the symbol args (no CLI way to pass them); a std module's `use list` worked, 
      word inside an interpolation (`"\(zip(a, b))"`, `"\(x.round(2))"`) was missed by the loader
      (modules::template_holes); `declared_name` of a list `[a, b]` named b.
   3. **Modules** (`lib/<name>.wasp`): everything else, brought by `use`.
-- **One implicit-use mechanism**: modules.rs gets one table "word or form → module it brings" (file URL → file,
-  write/exists → file, a page → markup, routes → router); page_html.rs and routes.rs stop inserting `use` text.
+- **One implicit-use mechanism** (done, card std-implicit): modules.rs IMPLICIT_MODULES, one table "module → when the
+  program needs it" (file URL → file, a page → markup, routes → router, a route's regular expression → regex), and
+  PRELUDE_WORDS (write/exists → file); page_html.rs and routes.rs insert no `use` text
+  (tests/modules/test_std_implicit_use.rs).
 - **use forms**: `use a, b` and `use a b` load each; `from list import zip, unique` brings only those words (the
   others stay the loud error); `import list as l` later with the module manager.
 - **Modules calling modules** (done, card std-module-uses-module): a std module may `use` another (lib/text.wasp

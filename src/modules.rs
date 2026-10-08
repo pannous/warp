@@ -529,19 +529,16 @@ impl<'a> Loader<'a> {
 		}
 	}
 
-	/// The standard modules a program uses without `use`: the file module for a file URL (P183), the prelude words it
+	/// The standard modules a program uses without `use`: those IMPLICIT_MODULES picks for it, the prelude words it
 	/// mentions (P171); a module the program used is loaded already
 	fn implicit_std_modules(&mut self, program: &Node) -> Result<(), Node> {
-		let mut mentioned = HashSet::new();
-		let mut file_url = false;
-		program.visit(&mut |node| match node {
-			Node::Symbol(name) => { mentioned.insert(name.clone()); }
-			Node::Text(text) => file_url |= text.starts_with(FILE_URL_PREFIX),
-			_ => {}
-		});
-		if file_url {
-			self.use_std_module("file", std_module("file").expect("lib/file.wasp is embedded"))?;
+		for (module, needed) in IMPLICIT_MODULES {
+			if needed(program) {
+				self.use_std_module(module, std_module(module).expect("an implicit module is embedded"))?;
+			}
 		}
+		let mut mentioned = HashSet::new();
+		program.visit(&mut |node| if let Node::Symbol(name) = node { mentioned.insert(name.clone()); });
 		// a program's own `write(x, y)` wins
 		let own: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
 		for (module, words) in PRELUDE_WORDS {
@@ -781,8 +778,15 @@ const PRELUDE_MODULE: &str = "prelude";
 const QUALIFIER: char = '·';
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along
 const PRELUDE_WORDS: [(&str, &[&str]); 1] = [("file", &["write", "exists"])];
-/// P183: a file URL in the program loads the file module, no `use file` needed
 const FILE_URL_PREFIX: &str = "file://";
+/// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
+/// routes → router, a route's regular expression → regex (lowering/routes.rs)
+const IMPLICIT_MODULES: [(&str, fn(&Node) -> bool); 4] = [
+	("file", mentions_file_url),
+	("markup", |_| crate::pipeline::renders_itself()),
+	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some()),
+	("regex", |program| defined(program, crate::routes::PAGE_ROUTE_INDEX).is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))),
+];
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
 /// a note, when a used module defines that word
 const STD_ALIASES: [(&str, &str); 27] = [
@@ -1222,6 +1226,17 @@ fn is_explicit_path(name: &str) -> bool {
 /// A relative path that stays below its directory
 fn is_plain_relative_path(name: &str) -> bool {
 	Path::new(name).components().all(|component| matches!(component, std::path::Component::Normal(_)))
+}
+
+fn mentions_file_url(program: &Node) -> bool {
+	let mut file_url = false;
+	program.visit(&mut |node| if let Node::Text(text) = node { file_url |= text.starts_with(FILE_URL_PREFIX) });
+	file_url
+}
+
+/// The program's main-level definition of `name`
+fn defined(program: &Node, name: &str) -> Option<Node> {
+	statements(program.clone()).into_iter().find(|statement| declared_name(statement).as_deref() == Some(name))
 }
 
 fn statements(module: Node) -> Vec<Node> {
