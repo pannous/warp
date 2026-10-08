@@ -92,6 +92,10 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 
 /// Programs both accept whose values differ, each with its card
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
+	("x: bool = 1", "bool-literal-value"),
+	("x: bool = 0; x = 1", "bool-literal-value"),
+	("f(b: bool) := b; f(1)", "bool-literal-value"),
+	("b = true; b = 1", "bool-literal-value"),
 	("class Point { x: int }; f(q: Point) := q.x = 7; p = Point(1); f(p); p.x", "instance-field"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
@@ -147,7 +151,8 @@ fn test_warp_admits_what_the_type_model_subtypes() {
 #[test]
 fn test_warp_computes_what_the_type_model_computes() {
 	crate::requires!(crate::common::LEAN);
-	let programs: Vec<&str> = CORPUS.iter().copied().chain(KNOWN_VALUE_DIFFERENCES.iter().map(|(code, _)| *code)).collect();
+	let mut programs: Vec<&str> = CORPUS.to_vec();
+	programs.extend(KNOWN_VALUE_DIFFERENCES.iter().map(|(code, _)| *code).filter(|code| !CORPUS.contains(code)));
 	let exported: Vec<String> = programs.iter().map(|code| export(code).unwrap_or_else(|why| panic!("{code}: {why}"))).collect();
 	let model = outcomes(&exported).unwrap_or_else(|why| panic!("the model does not answer:\n{why}"));
 	let mut differences = Vec::new();
