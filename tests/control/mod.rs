@@ -35,6 +35,7 @@ mod test_times_count_once;
 mod test_top_level_block;
 mod test_trap_messages;
 mod test_try_else;
+mod test_try_finally;
 mod test_try_exits_and_naming;
 mod test_try_deep;
 mod test_while_paren_condition;
