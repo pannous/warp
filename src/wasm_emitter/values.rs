@@ -175,6 +175,12 @@ impl WasmGcEmitter {
 				}
 			}
 		}
+		if let [word, left, right, tolerance] = items {
+			if word.drop_meta().name() == crate::library_words::VALUES_SIMILAR {
+				self.emit_similarity(func, left, right, tolerance);
+				return true;
+			}
+		}
 		if let [word, dividend, divisor] = items {
 			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) {
 				self.emit_floor_quotient(func, dividend, divisor);

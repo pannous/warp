@@ -246,7 +246,7 @@ every word lives today and what still moves.
 | src/modules.rs STD_MODULES | embedded lib/*.wasp: memory net collections hash regex file json os list math text random map time matrix draw markup router i18n | 19 |
 | … PRELUDE_WORDS | module words global without `use`: file: write exists | 2 |
 | … STD_ALIASES, lowering/std_aliases.rs, welcome_forms QUALIFIED_WORDS | foreign and qualified names (OrderedDict, JSON.parse, file.append …) | 27 + 21 + 1 |
-| implicit uses | page_html.rs inserts `use markup`, routes.rs `use router`, markup.rs reads markup's lists at compile time | 2 |
+| … IMPLICIT_MODULES | modules a program needs without `use`: file (a file URL), markup (a page), router (routes), regex (a route's regular expression); markup.rs reads markup's lists at compile time | 4 |
 Words per module: math 45, list 38, text 26, markup 19, matrix 15, time 14, map 10, router 9, the rest fewer.
 lib/web.webidl is data for web_idl.rs, not a module. The playground has no prelude of its own (warp-70).
 
@@ -273,8 +273,8 @@ is the symbol args (no CLI way to pass them); a std module's `use list` worked, 
   program needs it" (file URL → file, a page → markup, routes → router, a route's regular expression → regex), and
   PRELUDE_WORDS (write/exists → file); page_html.rs and routes.rs insert no `use` text
   (tests/modules/test_std_implicit_use.rs).
-- **use forms**: `use a, b` and `use a b` load each; `from list import zip, unique` brings only those words (the
-  others stay the loud error); `import list as l` later with the module manager.
+- **use forms** (done, cards std-use, std-import): `use a, b` and `use a b` load each; `from list import zip, unique`
+  brings only those words (the others stay the loud error); `import list as l` later with the module manager.
 - **Modules calling modules** (done, card std-module-uses-module): a std module may `use` another (lib/text.wasp
   `use list`, camel_case calls drop). A module only std modules use is hidden from the program: modules.rs
   Loader::hidden_apart renames its words `lib·drop` in the std definitions, so the program's bare `drop` is the
