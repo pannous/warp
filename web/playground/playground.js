@@ -15,6 +15,8 @@ const PROGRAM_ORIGIN = "http://program.invalid";
 const TYPING_DELAY_MS = 300;
 const PENDING_VALUE = "…"; // the value shown from Run until the new one arrives
 const DEFAULT_EXAMPLE = "hello";
+const COMMIT_URL = "https://github.com/pannous/warp/commit/";
+const SHORT_COMMIT = 9;
 const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz picks a tour example or sample; the address shows the chosen one
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
@@ -527,6 +529,13 @@ function showBuildSwitch() {
 		title: debugBuild ? "warp.debug.wasm: Rust function names and lines in traces and the browser's debugger" : "warp.wasm, the small one" });
 }
 
+// the commit the page was built from (build.sh version.js), linked to it on GitHub
+function showVersion() {
+	if (!PLAYGROUND_VERSION) return;
+	const { commit, date } = PLAYGROUND_VERSION;
+	Object.assign($("version"), { href: `${COMMIT_URL}${commit}`, textContent: `version ${commit.slice(0, SHORT_COMMIT)} · ${date}`, hidden: false });
+}
+
 function downloadModule() {
 	if (!lastModule) return setStatus("no module yet: a constant result needs none");
 	const link = element("a", { href: URL.createObjectURL(new Blob([lastModule], { type: "application/wasm" })), download: "program.wasm" });
@@ -603,6 +612,7 @@ function initialize() {
 	$("download").onclick = downloadModule;
 	startResizers();
 	showBuildSwitch();
+	showVersion();
 	fillExamples();
 	startWorker();
 	const parameters = new URLSearchParams(location.search);
