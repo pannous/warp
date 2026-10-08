@@ -96,3 +96,10 @@ the signature. `x:km = q` checks it (P203: annotated code is strict) and x is th
 lazy block (blocks.rs is_computed). Still loud errors: `print p` or a whole object used anywhere but as the final value,
 aliases of an object (`q = p`), recursion with quantities. Quantities whose units are known only at run time (parsed
 input) would need the dynamic struct.
+
+## Stage 7 done (card units-p64): whole objects and aliases
+`print p`, `"${p}"` and `text_form(p)` of an object with quantity fields build its text at run time: the quantity fields
+come first, then the plain ones as an object of them prints them (`{dist:500 m name:"run"}`). A field of a mixed object
+is any-typed at run time, and its arithmetic has no text yet (card text-arithmetic), so the text uses `(p.dist as number)`.
+`q = p` and `ys = xs` copy the signatures (maps and lists are values). Recursion with quantities stays a loud error
+(card static-units, Later). wasp.units may move into card reflection's wasp.meta section (warp-a2).
