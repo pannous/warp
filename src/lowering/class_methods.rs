@@ -10,7 +10,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 /// The receiver parameter of a method
-const RECEIVER: &str = "self";
+pub(crate) const RECEIVER: &str = "self";
 /// Other names of the receiver in a method body
 const RECEIVER_ALIASES: [&str; 1] = ["this"];
 /// Suffixes of a field name that mark it optional or required (`left?`, `name!`)
@@ -1989,7 +1989,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 	let body = crate::injection::lower_templates(body).map(crate::interpolation::lower).unwrap_or_else(|error| error);
 	let body = receiver_reads(body, &readable);
 	let receiver = Node::Symbol(RECEIVER.to_string());
-	let changes = match changes_receiver(&body) {
+	let changes = match changes_fields_of(&body, RECEIVER) {
 		false => Change::None,
 		true if gives_value(&body) => Change::GivingValue,
 		true => Change::Itself,
@@ -2076,13 +2076,14 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 	}
 }
 
-/// Does the body assign a field of self (`self.n = …`, `n += 1`, `n++`) or change a list in one (`items.add(x)`)
-fn changes_receiver(body: &Node) -> bool {
+/// Does the body assign a field of the variable (`self.n = …`, `self.n += 1`, `self.n++`) or change a list in one
+/// (`self.items.add(x)`)
+pub(crate) fn changes_fields_of(body: &Node, variable: &str) -> bool {
 	let mut changes = false;
 	body.visit(&mut |part| {
 		changes |= match part {
-			Node::Key(target, Op::Dot, call) if is_receiver_field(target) => mutating_call(call),
-			Node::Key(target, op, _) => (*op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)) && is_receiver_field(target),
+			Node::Key(target, Op::Dot, call) if is_field_of(target, variable) => mutating_call(call),
+			Node::Key(target, op, _) => (*op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)) && is_field_of(target, variable),
 			_ => false,
 		};
 	});
@@ -2090,10 +2091,10 @@ fn changes_receiver(body: &Node) -> bool {
 }
 
 /// `self.items`, `self.stack.items`, an element `self.counts#i`
-fn is_receiver_field(target: &Node) -> bool {
+fn is_field_of(target: &Node, variable: &str) -> bool {
 	match target.drop_meta() {
-		Node::Key(object, Op::Dot, _) => matches!(object.drop_meta(), Node::Symbol(name) if name == RECEIVER) || is_receiver_field(object),
-		Node::Key(list, Op::Hash, _) => is_receiver_field(list),
+		Node::Key(object, Op::Dot, _) => matches!(object.drop_meta(), Node::Symbol(name) if name == variable) || is_field_of(object, variable),
+		Node::Key(list, Op::Hash, _) => is_field_of(list, variable),
 		_ => false,
 	}
 }

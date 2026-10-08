@@ -56,7 +56,8 @@ const plain = value => {
 const operator = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
 	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
 	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
-const load = async name => name === "operator" ? operator : name in globalThis ? globalThis[name] : (() => { try { return require(name); } catch (failure) { return import(name); } })();
+// `use js self` / `use js window`: node mirrors a page, its global object is globalThis
+const load = async name => name === "operator" ? operator : name === "self" || name === "window" ? globalThis : name in globalThis ? globalThis[name] : (() => { try { return require(name); } catch (failure) { return import(name); } })();
 // the answers own stdout: what a module prints (console.log) goes to stderr
 const reply = process.stdout.write.bind(process.stdout);
 process.stdout.write = process.stderr.write.bind(process.stderr);
@@ -67,11 +68,15 @@ require("readline").createInterface({ input: process.stdin }).on("line", line =>
 		let answer;
 		try {
 			let owner = null, value = typeof request.module === "object" ? unplain(request.module) : await load(request.module);
-			for (const part of request.member.split(".")) {
-				if (value?.[part] === undefined) throw new ReferenceError(`${request.module} has no ${request.member}`);
-				[owner, value] = [value, value[part]];
+			// member "": the module constructed, `new URL(…)` (lowering/foreign_modules.rs CONSTRUCTOR_MEMBER)
+			if (request.member === "") value = new value(...unplain(request.arguments));
+			else {
+				for (const part of request.member.split(".")) {
+					if (value?.[part] === undefined) throw new ReferenceError(`${request.module} has no ${request.member}`);
+					[owner, value] = [value, value[part]];
+				}
+				if (request.arguments !== null) value = await value.apply(owner, unplain(request.arguments));
 			}
-			if (request.arguments !== null) value = await value.apply(owner, unplain(request.arguments));
 			answer = { value: plain(value) };
 		} catch (failure) {
 			answer = { error: failure instanceof Error ? failure.name + ": " + failure.message : String(failure) };

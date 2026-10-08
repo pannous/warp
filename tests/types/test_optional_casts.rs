@@ -15,3 +15,11 @@ fn a_javascript_null_is_empty() {
 	is!("use js JSON; x = JSON.parse(\"null\") as text?; x == ø", 1);
 	is!("use js JSON; (JSON.parse(\"\\\"a\\\"\") as text?) + \"b\"", "ab");
 }
+
+// card fails-extract: a function whose body is ø returns ø (it was compiled as a number function)
+#[test]
+fn a_function_of_empty_returns_empty() {
+	is!("f() = ø; f() == ø", 1);
+	is!("f() := ø; 1", 1);
+	is!("f() = ø; (f() as text?) == ø", 1);
+}

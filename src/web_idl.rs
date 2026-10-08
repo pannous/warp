@@ -16,8 +16,12 @@ const PAGE_SCOPE: &str = "Window";
 const PROGRAM_SCOPE: &str = PAGE_SCOPE;
 #[cfg(not(feature = "native"))]
 const PROGRAM_SCOPE: &str = "WorkerGlobalScope";
+/// The global object by its names (`window` only on a page): the scope itself, bundled only with the members warp
+/// types (WindowOrWorkerGlobalScope whole: fetch, setTimeout…), so a member it does not declare stays unchecked
+const SELF_GLOBALS: [&str; 3] = ["self", "globalThis", "window"];
+const PAGE_ONLY_SELF: &str = "window";
 /// What a program in a Worker writes for a page's global
-const WORKER_ALTERNATIVES: [(&str, &str); 2] = [("localStorage", "local[k] keeps values in the page's localStorage"), ("sessionStorage", "session[k] keeps values in its sessionStorage")];
+const WORKER_ALTERNATIVES: [(&str, &str); 3] = [("localStorage", "local[k] keeps values in the page's localStorage"), ("sessionStorage", "session[k] keeps values in its sessionStorage"), ("window", "self is the Worker's global")];
 /// Definitions that declare no members a program reaches
 const SKIPPED_KINDS: [&str; 4] = ["dictionary", "enum", "typedef", "callback"];
 const DEFINITION_WORDS: [&str; 4] = ["partial", "interface", "mixin", "namespace"];
@@ -26,6 +30,11 @@ const SKIPPED_MEMBERS: [&str; 6] = ["const", "iterable", "maplike", "setlike", "
 /// Words before a member that do not change its name or arguments
 const QUALIFIERS: [&str; 7] = ["static", "stringifier", "getter", "setter", "deleter", "inherit", "readonly"];
 const VARIADIC: &str = "...";
+const CONSTRUCTOR: &str = "constructor";
+/// `canvas.getContext("2d")`: the interface of the context a literal context id gives (RenderingContext is their union)
+const CONTEXT_MEMBER: &str = "getContext";
+const CONTEXT_INTERFACES: [(&str, &str); 5] = [("2d", "CanvasRenderingContext2D"), ("bitmaprenderer", "ImageBitmapRenderingContext"),
+	("webgl", "WebGLRenderingContext"), ("webgl2", "WebGL2RenderingContext"), ("webgpu", "GPUCanvasContext")];
 /// WebIDL's primitive types as warp's (the typedefs among them as their spec defines them: DOMHighResTimeStamp is a
 /// double, EpochTimeStamp an unsigned long long)
 const PRIMITIVE_TYPES: [(&[&str], &str); 4] = [
@@ -61,6 +70,8 @@ struct Definition {
 	members: BTreeMap<String, Member>,
 	includes: Vec<String>,
 	namespace: bool,
+	/// each constructor overload's arguments (`new URL(url, base)`); none: not constructible
+	constructors: Vec<Vec<Argument>>,
 }
 
 fn definitions() -> &'static HashMap<String, Definition> {
@@ -72,6 +83,9 @@ fn definitions() -> &'static HashMap<String, Definition> {
 pub fn interface_of_global(global: &str, scope: &str) -> Option<String> {
 	if definitions().get(global).is_some_and(|definition| definition.namespace) {
 		return Some(global.to_string());
+	}
+	if SELF_GLOBALS.contains(&global) && (global != PAGE_ONLY_SELF || scope == PAGE_SCOPE) {
+		return Some(scope.to_string());
 	}
 	match members_of(scope).remove(global)? {
 		Member::Attribute(type_name) => Some(type_name.trim_end_matches('?').to_string()),
@@ -106,10 +120,11 @@ pub fn global_interface(global: &str) -> Result<Option<String>, String> {
 	}
 }
 
-/// The interface of an attribute's value (`navigator.clipboard`: Clipboard), when WebIDL declares it whole
-pub fn attribute_interface(interface: &str, member: &str) -> Option<String> {
-	let Member::Attribute(type_name) = members_of(interface).remove(member)? else { return None };
-	let type_name = type_name.trim_end_matches('?');
+/// The interface of what a member gives, read or called (`navigator.clipboard`: Clipboard,
+/// `document.getElementById(id)`: Element), when WebIDL declares it whole; a nullable one (`Element?`) too
+pub fn result_interface(interface: &str, member: &str, call: bool) -> Option<String> {
+	let declared = declared_result(interface, member, call)?;
+	let type_name = declared.trim_end_matches('?');
 	definitions().contains_key(type_name).then(|| type_name.to_string())
 }
 
@@ -128,16 +143,19 @@ pub fn optional_result_type(interface: &str, member: &str, call: bool) -> Option
 	}
 }
 
-/// The WebIDL type of what `member` gives, when all its overloads agree
+/// The WebIDL type of what `member` gives, when all its overloads agree; a promise's value, which a foreign call awaits
 fn declared_result(interface: &str, member: &str, call: bool) -> Option<String> {
-	match (members_of(interface).remove(member)?, call) {
-		(Member::Attribute(type_name), false) => Some(type_name),
+	// an Element's getContext is its HTMLCanvasElement's (check_member accepts the derived interfaces' members)
+	let declaring = || derived_interfaces(interface).into_iter().find_map(|derived| members_of(&derived).remove(member));
+	let declared = match (members_of(interface).remove(member).or_else(declaring)?, call) {
+		(Member::Attribute(type_name), false) => type_name,
 		(Member::Operation(overloads), true) => {
 			let returns: Vec<String> = overloads.into_iter().map(|overload| overload.returns).collect();
-			returns.iter().all(|other| *other == returns[0]).then(|| returns[0].clone())
+			returns.iter().all(|other| *other == returns[0]).then(|| returns[0].clone())?
 		}
-		_ => None,
-	}
+		_ => return None,
+	};
+	Some(declared.strip_prefix("Promise<").and_then(|promised| promised.strip_suffix('>')).map(str::to_string).unwrap_or(declared))
 }
 
 fn primitive_type(declared: &str) -> Option<&'static str> {
@@ -148,8 +166,18 @@ fn primitive_type(declared: &str) -> Option<&'static str> {
 pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usize>) -> Result<(), String> {
 	let mut members = members_of(interface);
 	let Some(declared) = members.remove(member) else {
-		let same_letters = members.keys().find(|name| name.eq_ignore_ascii_case(member)).cloned();
-		let near = same_letters.or_else(|| crate::extensions::strings::near_miss(member, members.into_keys())).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
+		// `document.getElementById(id).value`: an Element that is an HTMLInputElement at run time
+		let derived = derived_interfaces(interface);
+		if let Some(declaring) = derived.iter().find(|derived| members_of(derived).contains_key(member)) {
+			return check_member(declaring, path, member, call);
+		}
+		if [PAGE_SCOPE, PROGRAM_SCOPE].contains(&interface) {
+			return Ok(()); // `window.innerWidth`: the scope is bundled in part
+		}
+		let mut names: Vec<String> = members.into_keys().collect();
+		names.extend(derived.iter().flat_map(|derived| members_of(derived).into_keys()));
+		let same_letters = names.iter().find(|name| name.eq_ignore_ascii_case(member)).cloned();
+		let near = same_letters.or_else(|| crate::extensions::strings::near_miss(member, names)).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
 		return Err(format!("{path} ({interface} in WebIDL) has no member {member}{near}"));
 	};
 	match (declared, call) {
@@ -160,6 +188,54 @@ pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usiz
 		}
 		_ => Ok(()),
 	}
+}
+
+/// The interfaces deriving from `interface`, at any depth (HTMLInputElement of Element), sorted by name
+fn derived_interfaces(interface: &str) -> Vec<String> {
+	let derives = |name: &str| {
+		let mut parent = definitions().get(name).and_then(|definition| definition.parent.as_deref());
+		while let Some(ancestor) = parent {
+			if ancestor == interface {
+				return true;
+			}
+			parent = definitions().get(ancestor).and_then(|definition| definition.parent.as_deref());
+		}
+		false
+	};
+	let mut derived: Vec<String> = definitions().keys().filter(|name| derives(name)).cloned().collect();
+	derived.sort();
+	derived
+}
+
+/// `URL(text)` of `use js URL`, the constructor called (JavaScript's `new`): the interface the value is, None when
+/// WebIDL does not declare one of that name; Err for no constructor or an argument count none takes
+pub fn check_constructor(interface: &str, count: usize) -> Result<Option<String>, String> {
+	let Some(definition) = definitions().get(interface).filter(|definition| !definition.namespace) else { return Ok(None) };
+	if definition.constructors.is_empty() {
+		return Err(format!("{interface} has no constructor in WebIDL: its values come from the platform"));
+	}
+	if !definition.constructors.iter().any(|arguments| takes(arguments, count)) {
+		let forms: Vec<String> = definition.constructors.iter().map(|arguments| format!("{interface}({})", signature(arguments))).collect();
+		return Err(format!("{interface} takes {}, not {count} argument{}", forms.join(" or "), if count == 1 { "" } else { "s" }));
+	}
+	Ok(Some(interface.to_string()))
+}
+
+/// The interface `getContext(id)` gives for a literal id when the bundle declares it (`"2d"`: CanvasRenderingContext2D;
+/// an OffscreenCanvas's "2d" is OffscreenCanvasRenderingContext2D)
+pub fn context_interface(interface: &str, member: &str, context_id: &str) -> Option<String> {
+	if member != CONTEXT_MEMBER {
+		return None;
+	}
+	let (_, context) = CONTEXT_INTERFACES.iter().find(|(id, _)| *id == context_id)?;
+	let offscreen = format!("Offscreen{context}");
+	let context = if interface.starts_with("Offscreen") && definitions().contains_key(&offscreen) { offscreen } else { context.to_string() };
+	definitions().contains_key(&context).then_some(context)
+}
+
+/// Does WebIDL declare a constructor of `interface` (`URL(text)` is a URL)
+pub fn constructible(interface: &str) -> bool {
+	definitions().get(interface).is_some_and(|definition| !definition.constructors.is_empty())
 }
 
 /// A global of a page that the program's scope lacks (a Worker's: localStorage), else unchecked
@@ -211,7 +287,10 @@ fn parse(text: &str) -> HashMap<String, Definition> {
 		definition.namespace |= header.split_whitespace().any(|word| word == "namespace");
 		definition.parent = parent.or(definition.parent.take());
 		for member in split_top_level(body, ';') {
-			add_member(&mut definition.members, &member);
+			match without_extended_attributes(&member).trim().strip_prefix(CONSTRUCTOR) {
+				Some(signature) if signature.trim_start().starts_with('(') => definition.constructors.push(arguments_of(signature)),
+				_ => add_member(&mut definition.members, &member),
+			}
 		}
 	}
 	parsed
@@ -230,8 +309,7 @@ fn add_member(members: &mut BTreeMap<String, Member>, source: &str) {
 	match source.find('(') {
 		Some(open) if !source[..open].contains("attribute ") => {
 			let Some((returns, name)) = typed_name(&source[..open]) else { return }; // a nameless getter
-			let close = source.rfind(')').unwrap_or(source.len());
-			let arguments = split_top_level(&source[open + 1..close], ',').iter().filter_map(|argument| parse_argument(argument)).collect();
+			let arguments = arguments_of(&source[open..]);
 			match members.entry(name).or_insert_with(|| Member::Operation(vec![])) {
 				Member::Operation(overloads) => overloads.push(Overload { returns, arguments }),
 				Member::Attribute(_) => {}
@@ -244,6 +322,13 @@ fn add_member(members: &mut BTreeMap<String, Member>, source: &str) {
 			}
 		}
 	}
+}
+
+/// The arguments of `(DOMString url, optional DOMString base)`
+fn arguments_of(signature: &str) -> Vec<Argument> {
+	let open = signature.find('(').map_or(0, |open| open + 1);
+	let close = signature.rfind(')').unwrap_or(signature.len());
+	split_top_level(&signature[open..close], ',').iter().filter_map(|argument| parse_argument(argument)).collect()
 }
 
 /// `optional DOMString label = "default"`, `any... data`

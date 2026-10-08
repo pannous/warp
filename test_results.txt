@@ -265,6 +265,11 @@ PASSED:
   ✓ control::test_run_time_blocks::interpret_of_a_constant_block_runs_it_where_written
   ✓ control::test_run_time_blocks::interpret_runs_a_block_known_only_at_run_time
   ✓ control::test_run_time_blocks::running_a_run_time_block_is_the_eval_effect
+  ✓ control::test_scoped_handlers::a_block_handler_answers_emits_in_the_block
+  ✓ control::test_scoped_handlers::a_block_handler_answers_the_functions_the_block_calls
+  ✓ control::test_scoped_handlers::a_handler_emitting_its_own_event_reaches_the_next_handler_out
+  ✓ control::test_scoped_handlers::outside_any_block_the_program_handler_answers
+  ✓ control::test_scoped_handlers::the_innermost_handler_wins_and_ends_with_its_block
   ✓ control::test_shared_arrays::a_shared_array_is_a_list_as_a_whole
   ✓ control::test_shared_arrays::a_shared_array_of_floats
   ✓ control::test_shared_arrays::a_shared_array_reads_writes_and_adds
@@ -453,6 +458,8 @@ PASSED:
   ✓ control::test_undo_history::any_value_and_any_writer_has_a_history
   ✓ control::test_undo_history::redo_takes_back_an_undo_until_a_new_change
   ✓ control::test_undo_history::undo_steps_back_through_the_changes
+  ✓ control::test_unhandled_emits::a_handled_emit_does_not_warn
+  ✓ control::test_unhandled_emits::an_emit_nobody_handles_warns
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
   ✓ control::test_unwrap::test_unwrap_gives_the_value
   ✓ control::test_unwrap::test_unwrap_of_nothing_or_an_error_is_loud
@@ -479,6 +486,7 @@ PASSED:
   ✓ control::test_web_sockets::data_goes_as_json
   ✓ control::test_welcome_forms::loop_runs_until_break
   ✓ control::test_welcome_forms::match_cases_may_be_written_with_fat_arrows
+  ✓ control::test_when_signals::a_condition_when_notes_that_it_reacts_to_later_writes
   ✓ control::test_when_signals::when_a_condition_listens_like_whenever
   ✓ control::test_when_signals::when_an_event_listens_like_on
   ✓ control::test_when_signals::when_arms_stay_a_switch
@@ -621,6 +629,8 @@ PASSED:
   ✓ ffi::test_wasi::test_wasi_putf
   ✓ ffi::test_wasi::test_wasi_puti
   ✓ ffi::test_web_idl::a_call_with_a_count_no_overload_takes_is_an_error
+  ✓ ffi::test_web_idl::a_canvas_context_is_typed
+  ✓ ffi::test_web_idl::a_constructor_is_a_plain_call
   ✓ ffi::test_web_idl::a_declared_primitive_result_is_a_warp_value
   ✓ ffi::test_web_idl::a_foreign_calls_value_as_text
   ✓ ffi::test_web_idl::a_global_is_a_namespace_or_an_attribute_of_the_scope_not_an_interface
@@ -630,6 +640,8 @@ PASSED:
   ✓ ffi::test_web_idl::a_page_has_local_storage_and_the_clipboard
   ✓ ffi::test_web_idl::an_attribute_is_read_not_called
   ✓ ffi::test_web_idl::an_attributes_value_is_typed_by_its_interface
+  ✓ ffi::test_web_idl::the_dom_is_typed
+  ✓ ffi::test_web_idl::the_global_object_is_typed
   ✓ ffi::test_web_idl::what_the_interface_declares_runs
   ✓ ffi_parser::tests::test_parse_int32_return
   ✓ ffi_parser::tests::test_parse_pointer_param
@@ -807,6 +819,9 @@ PASSED:
   ✓ functions::test_effects::test_imports_follow_effects
   ✓ functions::test_empty_call::a_name_and_a_group_stay_symbols_and_defined_calls_run
   ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
+  ✓ functions::test_event_effects::a_block_handler_handles_its_event
+  ✓ functions::test_event_effects::a_declared_effect_set_reports_an_unhandled_event
+  ✓ functions::test_event_effects::an_emitted_event_is_a_named_effect
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
   ✓ functions::test_field_function_values::test_function_in_nested_object
@@ -1828,6 +1843,10 @@ PASSED:
   ✓ operators::test_in_position::in_gives_the_one_based_position
   ✓ operators::test_in_position::maps_and_has_keep_their_truth_value
   ✓ operators::test_in_position::the_position_never_warns
+  ✓ operators::test_increment_places::a_field_of_an_element_changes
+  ✓ operators::test_increment_places::a_nested_field_changes
+  ✓ operators::test_increment_places::an_element_increments
+  ✓ operators::test_increment_places::an_element_of_a_field_and_a_nested_element_change
   ✓ operators::test_infix_operand_names::test_infix_operands_named_left_and_right
   ✓ operators::test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
   ✓ operators::test_less_than_compare::test_generics_still_start_after_a_type_name
@@ -2074,6 +2093,7 @@ PASSED:
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_children::a_spaced_child_in_a_data_literal_is_a_child_node
+  ✓ parser::test_spaced_optional_type::an_optional_type_before_a_spaced_assignment
   ✓ parser::test_spaced_required_fields::spaced_fields_keep_the_required_mark
   ✓ parser::test_statement_phrases::after_reads_its_condition_up_to_return
   ✓ parser::test_statement_phrases::after_without_parentheses_waits_for_its_condition
@@ -2665,6 +2685,7 @@ PASSED:
   ✓ types::test_mutating_methods::a_method_setting_an_element_of_a_list_field_changes_its_object
   ✓ types::test_mutating_methods::pop_on_a_list_field
   ✓ types::test_mutating_methods::the_call_gives_the_changed_object
+  ✓ types::test_optional_casts::a_function_of_empty_returns_empty
   ✓ types::test_optional_casts::a_javascript_null_is_empty
   ✓ types::test_optional_casts::an_optional_cast_keeps_empty
   ✓ types::test_optional_number_fields::a_comment_after_an_optional_type_ends_the_field
@@ -2691,6 +2712,10 @@ PASSED:
   ✓ types::test_recursive_fields::gc_struct_and_ref_are_wasm_spellings
   ✓ types::test_recursive_fields::ref_fields_on_their_own_lines
   ✓ types::test_repeated_type_parameters::repeated_type_words_number_their_parameters
+  ✓ types::test_shared_instances::a_change_passes_through_other_functions_and_methods
+  ✓ types::test_shared_instances::a_function_changes_a_field_of_the_instance_it_is_given
+  ✓ types::test_shared_instances::a_new_value_of_the_parameter_stays_inside
+  ✓ types::test_shared_instances::the_function_still_gives_its_value
   ✓ types::test_sized_array_values::a_computed_count_before_a_type_word_is_a_typed_array
   ✓ types::test_spaced_construction::test_entry_named_like_a_variable_keeps_its_name
   ✓ types::test_spaced_construction::test_field_of_a_declared_type_reads_at_run_time
@@ -2783,8 +2808,10 @@ PASSED:
   ✓ types::test_type_of::test_type_symbol
   ✓ types::test_type_of::test_type_typed_variable
   ✓ types::test_type_of::test_type_without_parentheses
+  ✓ types::test_type_of_node_values::the_type_of_a_node_held_value_is_read_at_run_time
   ✓ types::test_type_of_real_variable::a_variable_holding_pi_is_real
   ✓ types::test_type_of_real_variable::an_expression_of_pi_is_real
+  ✓ types::test_type_static::the_type_of_a_variable_is_its_value_type
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
   ✓ types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is
   ✓ types::test_type_test_is_only::is_tests_types
@@ -3481,4 +3508,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3476 passed, 0 failed, 3476 total tested
+19 ignored, 3503 passed, 0 failed, 3503 total tested

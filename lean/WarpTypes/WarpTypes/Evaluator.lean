@@ -28,8 +28,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
     | none => none
   | .add a b => stepPair .addL .addR a b μ (step P μ a) (step P μ b) (some (addValues a b, μ))
   | .arith op a b => stepPair (.arithL op) (.arithR op) a b μ (step P μ a) (step P μ b) (some (arithValues op a b, μ))
-  | .lt a b => stepPair .ltL .ltR a b μ (step P μ a) (step P μ b)
-      (some (.bool (decide (asNumber a < asNumber b)), μ))
+  | .lt a b => stepPair .ltL .ltR a b μ (step P μ a) (step P μ b) (some (ltValues a b, μ))
   | .eq a b => stepPair .eqL .eqR a b μ (step P μ a) (step P μ b) (some (.bool (decide (a = b)), μ))
   | .ite c a b => if c.isValue then some (if truthy c then a else b, μ) else stepIn (.ite a b) c μ (step P μ c)
   | .loop c b => some (.ite c (.seq b (.loop c b)) .unit, μ)
@@ -47,8 +46,8 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
     match e with
     | .error _ => some (h, μ)
     | _ => if e.isValue then some (e, μ) else (step P μ e).map fun s => (.tryCatch s.1 h, s.2)
-  | .cast e t =>
-    if e.isValue then some (if fits e t then e else .error "type mismatch", μ) else stepIn (.cast t) e μ (step P μ e)
+  | .cast e ts =>
+    if e.isValue then some (if ts.any (fits e) then e else .error "type mismatch", μ) else stepIn (.cast ts) e μ (step P μ e)
   | .broadcast f e =>
     if e.isValue then
       match e with
@@ -166,11 +165,11 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
       · simp only [Option.map_eq_some_iff] at hs
         obtain ⟨⟨e', μ'⟩, he, rfl⟩ := hs
         exact .tryStep (ih he)
-  | cast e t ih =>
+  | cast e ts ih =>
     intro μ s' hs; simp only [step] at hs
     split at hs
     · cases hs; exact .cast (by assumption)
-    · exact stepIn_sound (F := .cast t) rfl (fun _ => ih) hs
+    · exact stepIn_sound (F := .cast ts) rfl (fun _ => ih) hs
   | broadcast f e ih =>
     intro μ s' hs; simp only [step] at hs
     split at hs
