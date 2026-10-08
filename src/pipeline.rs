@@ -190,7 +190,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 83] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 84] = [
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
