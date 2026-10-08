@@ -1,4 +1,4 @@
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn assigning_an_at_key_annotates_any_node_in_insertion_order() {

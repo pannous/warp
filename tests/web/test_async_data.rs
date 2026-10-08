@@ -33,8 +33,8 @@ fn a_failed_fetch_is_the_error() {
 
 #[test]
 fn a_body_that_is_no_json_is_the_text() {
-	let url = serve("200 OK", "hello wasp");
-	crate::is!(&program(&url, &format!("{UNTIL_ARRIVED}\nusers")), "hello wasp\n");
+	let url = serve("200 OK", "hello warp");
+	crate::is!(&program(&url, &format!("{UNTIL_ARRIVED}\nusers")), "hello warp\n");
 }
 
 #[test]

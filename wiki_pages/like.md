@@ -2,7 +2,7 @@
 
 `like` declares that values of one type may be used wherever another type is expected:
 
-```wasp
+```warp
 class photo{width:int height:int}
 class image{width:int height:int}
 image like photo
@@ -13,7 +13,7 @@ area(image{width:3 height:4})   // 12
 
 ## Duck typing, by design
 
-Wasp judges a value by what is done with it. How a place declared `photo`, a typed parameter `area(p:photo)` or a
+Warp judges a value by what is done with it. How a place declared `photo`, a typed parameter `area(p:photo)` or a
 typed variable `p:photo = …`, treats its value depends on how much the compiler knows about that value:
 
 | value | result |
@@ -32,7 +32,7 @@ one line.
 
 `image like photo` changes no value. The image stays an image and is still judged by its uses:
 
-```wasp
+```warp
 class photo{width:int height:int}
 class thumb{width:int}
 thumb like photo

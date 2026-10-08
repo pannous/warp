@@ -1,4 +1,4 @@
-//! `warp build --site app.wasp` (card web-ssr, notes/web_framework.md "Built sites"): a directory a static web server
+//! `warp build --site app.warp` (card web-ssr, notes/web_framework.md "Built sites"): a directory a static web server
 //! serves as it is. index.html holds the HTML of what the program shows, rendered at build time by the program itself
 //! (its export page·html, lowering/page_html.rs, run natively after main), so the page reads without JavaScript; app.wasm is the program, which the loader (web/playground/site.js)
 //! runs in the page to hydrate it: the DOM stays, the handlers of its elements run, and what they change is shown anew.
@@ -28,7 +28,7 @@ const WORKER_FILES: [Script; 3] = [
 	("coi-serviceworker.js", include_str!("../web/playground/coi-serviceworker.js")),
 ];
 /// The root's attribute listing the scripts of the program's Worker (site-thread.js WORKER_ATTRIBUTE)
-const WORKER_ATTRIBUTE: &str = "data-wasp-worker";
+const WORKER_ATTRIBUTE: &str = "data-warp-worker";
 const LIST_SEPARATOR: &str = ",";
 type Script = (&'static str, &'static str);
 const WASI_LIBRARY: &str = "wasi_snapshot_preview1";
@@ -70,7 +70,7 @@ pub const HOST_PARTS: [HostPart; 7] = [
 const PAGE_SIDE_PARTS: [&str; 1] = ["host-routes.js"];
 const LINE_COMMENT: &str = "//";
 /// The element holding the program's markup (site.js SITE_ROOT)
-const ROOT_ID: &str = "wasp-root";
+const ROOT_ID: &str = "warp-root";
 const PAGE_TEMPLATE: &str = r#"<!doctype html>
 <html>
 <head>

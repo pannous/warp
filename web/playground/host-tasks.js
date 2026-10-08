@@ -49,7 +49,7 @@ function prepareTaskPool(size = TASK_POOL_SIZE) {
 }
 
 // resolves once every task Worker of the pool has loaded: a run that starts before would run its tasks inline, where
-// `stop` cannot end one (samples/threads.wasp's endless spin hung the browser suite, card flaky-browser)
+// `stop` cannot end one (samples/threads.warp's endless spin hung the browser suite, card flaky-browser)
 function taskPoolReady() {
 	if (!hasTaskWorkers()) return Promise.resolve();
 	const deadline = performance.now() + TASK_POOL_WAIT_MS;
@@ -504,7 +504,7 @@ function fetchReply(holder, id) {
 	if (reply.error) return [null, reply.error];
 	const structure = structureOf(reply.body);
 	if (structure !== undefined) return [structure, null];
-	return [reply.body.endsWith("\n") ? reply.body : reply.body + "\n", null]; // wasp convention (src/host.rs fetch)
+	return [reply.body.endsWith("\n") ? reply.body : reply.body + "\n", null]; // warp convention (src/host.rs fetch)
 }
 
 // a JSON object or array of the text, undefined for any other text (src/web_server.rs value_of_body)

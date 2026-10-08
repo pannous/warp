@@ -1,6 +1,6 @@
 use crate::eq;
 use warp::int;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 use warp::Kind::Key;
 use warp::Node;
 use warp::Node::Empty;
@@ -69,7 +69,7 @@ fn test_colon_lists() {
 
 #[test]
 fn test_sample() {
-	let _result = parse("samples/comments.wasp");
+	let _result = parse("samples/comments.warp");
 }
 
 #[test]

@@ -4,5 +4,5 @@ use crate::is;
 
 #[test]
 fn use_net_posts_a_text() {
-	is!("use net; use json; answer = parse_json(post(\"https://httpbin.org/post\", \"hello wasp\")); answer.data", "hello wasp");
+	is!("use net; use json; answer = parse_json(post(\"https://httpbin.org/post\", \"hello warp\")); answer.data", "hello warp");
 }

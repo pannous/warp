@@ -12,7 +12,7 @@ fn symbol(name: &str) -> Node {
 fn an_emitted_event_is_a_named_effect() {
 	is!("compute() := emit ask\neffects of compute", symbol("ask"));
 	is!("compute() := emit ask\ntwice() := compute() + compute()\neffects of twice", symbol("ask"));
-	is!("compute() := { puts \"hi\"; emit ask }\neffects of compute", warp::wasp_parser::parse("(IO ask)"));
+	is!("compute() := { puts \"hi\"; emit ask }\neffects of compute", warp::warp_parser::parse("(IO ask)"));
 }
 
 #[test]

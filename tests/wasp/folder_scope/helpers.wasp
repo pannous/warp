@@ -1,4 +1,0 @@
-// twice needs plus from shapes.wasp: siblings see each other too
-twice(x) := plus(x, x)
-// also defined in shapes.wasp, but nothing uses it: no ambiguity
-unused_name := 2

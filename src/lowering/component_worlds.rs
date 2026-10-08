@@ -1,6 +1,6 @@
-//! A component's world (card wasm-interop-rest, samples/wasm_interop.wasp):
+//! A component's world (card wasm-interop-rest, samples/wasm_interop.warp):
 //! `component my_component { import host: { print: (string) -> () } export api: calculator }` declares what the
-//! component imports and exports. `warp build --wit` writes it as a WIT world, each wasp interface (`interface calculator
+//! component imports and exports. `warp build --wit` writes it as a WIT world, each warp interface (`interface calculator
 //! { add: (i32, i32) -> i32 }`) as a WIT interface. The declaration does nothing when the program runs.
 
 use crate::node::{Bracket, Node};
@@ -12,7 +12,7 @@ const IMPORT_WORD: &str = "import";
 const EXPORT_WORDS: [&str; 2] = ["export", "global"];
 const INTERFACE_WORD: &str = "interface";
 const PACKAGE_NAMESPACE: &str = "warp";
-/// wasp's type words in WIT
+/// warp's type words in WIT
 const WIT_TYPES: [(&str, &str); 16] = [
 	("i8", "s8"), ("i16", "s16"), ("i32", "s32"), ("i64", "s64"), ("int", "s64"), ("u8", "u8"), ("u16", "u16"), ("u32", "u32"),
 	("u64", "u64"), ("f32", "f32"), ("f64", "f64"), ("float", "f64"), ("bool", "bool"), ("char", "char"), ("string", "string"), ("text", "string"),
@@ -203,7 +203,7 @@ fn signature(member: &Node) -> Option<Signature> {
 
 fn wit_type(node: &Node) -> Option<String> {
 	let word = node.drop_meta().name();
-	WIT_TYPES.iter().find(|(wasp, _)| *wasp == word).map(|(_, wit)| wit.to_string())
+	WIT_TYPES.iter().find(|(warp, _)| *warp == word).map(|(_, wit)| wit.to_string())
 }
 
 fn statements(block: &Node) -> Vec<Node> {

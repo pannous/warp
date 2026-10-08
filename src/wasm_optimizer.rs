@@ -33,7 +33,7 @@ pub enum ExportMode {
 impl Default for ExportMode {
 	// fn default() -> Self { ExportMode::Library }
 	fn default() -> Self {
-		ExportMode::Executable { entry_points: ["main", "wasp_main", "_start"].map(String::from).to_vec() }
+		ExportMode::Executable { entry_points: ["main", "warp_main", "_start"].map(String::from).to_vec() }
 	}
 }
 
@@ -87,8 +87,8 @@ impl WasmOptimizer {
 			.duration_since(std::time::UNIX_EPOCH)
 			.map(|d| d.as_nanos())
 			.unwrap_or(0);
-		let input_path = std::env::temp_dir().join(format!("wasp_opt_input_{}_{}.wasm", id, ts));
-		let output_path = std::env::temp_dir().join(format!("wasp_opt_output_{}_{}.wasm", id, ts));
+		let input_path = std::env::temp_dir().join(format!("warp_opt_input_{}_{}.wasm", id, ts));
+		let output_path = std::env::temp_dir().join(format!("warp_opt_output_{}_{}.wasm", id, ts));
 
 		std::fs::write(&input_path, wasm_bytes)
 			.map_err(|e| format!("Failed to write temp input: {}", e))?;
@@ -129,8 +129,8 @@ impl WasmOptimizer {
 			.duration_since(std::time::UNIX_EPOCH)
 			.map(|d| d.as_nanos())
 			.unwrap_or(0);
-		let output = std::env::temp_dir().join(format!("wasp_metadce_output_{}_{}.wasm", id, ts));
-		let graph_path = std::env::temp_dir().join(format!("wasp_roots_{}_{}.json", id, ts));
+		let output = std::env::temp_dir().join(format!("warp_metadce_output_{}_{}.wasm", id, ts));
+		let graph_path = std::env::temp_dir().join(format!("warp_roots_{}_{}.json", id, ts));
 
 		// Build graph JSON for wasm-metadce
 		let graph = self.build_roots_graph(entry_points);

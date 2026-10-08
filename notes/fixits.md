@@ -35,9 +35,9 @@ in case the user did indeed intend something different". Builds the "Later: chan
 ## Inventory: every warning, its default reading and its fixes
 | warning / error (topic) | where | default (taken) | fixes offered |
 |---|---|---|---|
-| `a upto b` (upto) | wasp_parser `range_reading` | exclusive | `..<` exclusive, `...` inclusive |
-| `for i in 0..n-1` (kotlin-range) | same | exclusive (wasp) | `..<`, `...` (Kotlin's inclusive) |
-| `1 -1` (signed-operand) | wasp_parser `signed_number_starts_a_list` | the list | `1 (-1)` list (also inside `[…]`), `1 - 1` |
+| `a upto b` (upto) | warp_parser `range_reading` | exclusive | `..<` exclusive, `...` inclusive |
+| `for i in 0..n-1` (kotlin-range) | same | exclusive (warp) | `..<`, `...` (Kotlin's inclusive) |
+| `1 -1` (signed-operand) | warp_parser `signed_number_starts_a_list` | the list | `1 (-1)` list (also inside `[…]`), `1 - 1` |
 | `n = …` in a function, main has n (local-or-global) | analyzer `ask_local_or_global` | new local | `let n =` there; `global n=` at main's assignment |
 | `[x]*n` (list-times, error) | analyzer `list_times` | none | `n times [x]`, `[x].map(x => x*n)` |
 | `[1 2 3]+4` (list-plus, error) | analyzer `list_plus` | none | `[1 2 3] + [4]`, `[1 2 3] .+ 4` |
@@ -48,18 +48,18 @@ in case the user did indeed intend something different". Builds the "Later: chan
 | `render "hi"` with variants (overloads) | overloads.rs | first declared | `render "hi" as pdf`, `… as docx` |
 | `pirnt` names nothing (near-miss) | list_emitter `warn_near_miss` | the symbol | `data pirnt`, `print` |
 | `square 3 + square 4` (error) | analyzer `check_ambiguous_calls` | none | `square(3) + square(4)`, `square(3 + square(4))` |
-| `1==1==1` (error) | wasp_parser `chained_equality` | none | `1==1 and 1 == 1`, `(1==1) == 1` |
-| `3 & 4 == 4` (error) | wasp_parser `logic_mixed_with_comparison` | none | `3 & (4 == 4)`, `(3 & 4) == 4` |
-| `"a" as int` (error) | wasp_parser string literal | none | `codepoint('a') as int` (P74) |
+| `1==1==1` (error) | warp_parser `chained_equality` | none | `1==1 and 1 == 1`, `(1==1) == 1` |
+| `3 & 4 == 4` (error) | warp_parser `logic_mixed_with_comparison` | none | `3 & (4 == 4)`, `(3 & 4) == 4` |
+| `"a" as int` (error) | warp_parser string literal | none | `codepoint('a') as int` (P74) |
 | `'a' as float` (hint; the value is invalid_number) | wasm_emitter `emit_character_cast` | none | `codepoint('a') as float` |
 | `c and t or o` | analyzer lint | as written | `if c then t else o` |
 | `2 * 1.5 as int` | analyzer lint | the whole | `(2 * 1.5) as int`, `2 * 1.5:int` |
 | `-7 % 3` | analyzer lint | Euclidean | `-7 rem 3` (C/Java/JS) |
 | loop `it` hides the function's `it` (`for 1..3 {…}` and `for i in xs {…}`) | analyzer `hidden_function_it` | the loop's | `outer_it=it; for … {… outer_it …}` |
 | `(1, 2) == 1, 2` | tuples.rs | `((1,2) == 1), 2` | `(1, 2) == (1, 2)` |
-| `xs#1..3` | wasp_parser `hash_range_warning` | range from xs#1 | `xs#(1..3)` slice, `(xs#1)..3` |
+| `xs#1..3` | warp_parser `hash_range_warning` | range from xs#1 | `xs#(1..3)` slice, `(xs#1)..3` |
 | kebab data key `a-b:2`, a and b variables (P81) | analyzer `kebab_fixes` | the data key | `"a-b":2` (only when nothing reads `a-b` bare); the subtraction `a - b` at every bare read (the key quoted); the key renamed `a_b` at the key and every bare read |
-| `for int in xs`, `for Friend in xs`, `for (it>2) in xs` (for-filter) | wasp_parser `filtered_body` | the filter | the header `for x in xs.filter(x => x is int)` / `for it in xs.filter(it => it>2)`, the body unchanged (none when the body names the item by the type word) |
+| `for int in xs`, `for Friend in xs`, `for (it>2) in xs` (for-filter) | warp_parser `filtered_body` | the filter | the header `for x in xs.filter(x => x is int)` / `for it in xs.filter(it => it>2)`, the body unchanged (none when the body names the item by the type word) |
 | style hints, educate_once notes (`let`, `**`, quotes, `&&`, `len(x)`, `x == int`, `a.copy()`, `o.field`) | normalize, lowering | as written | the preferred form (when the text is literally in the source) |
 
 ## No fix yet (todo.md)

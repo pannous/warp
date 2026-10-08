@@ -7,7 +7,7 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::{is_step, mark_step};
-use crate::wasp_parser::while_do;
+use crate::warp_parser::while_do;
 
 const FOR_KEYWORD: &str = "for";
 const IN_KEYWORD: &str = "in";

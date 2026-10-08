@@ -1,0 +1,78 @@
+// Particle System
+// Physics simulation with gravity and collision, drawn with `use draw`: three bursts, simulated for a second, then
+// painted with their trails (animation frames: loop { …; show(); sleep(16) } in the playground; mouse input: card drawing-frames)
+use draw
+
+type Particle: {
+    x: float
+    y: float
+    vx: float
+    vy: float
+    life: float
+    color: int
+}
+
+global particles = []
+gravity = 0.08
+friction = 0.99
+width = 120
+height = 80
+
+def spawn(x, y, n) {
+    for _ in 0..n {
+        angle = random() * 2 * pi
+        speed = random() * 1.5 + 0.5
+        particles.push(Particle {
+            x: x
+            y: y
+            vx: cos(angle) * speed
+            vy: sin(angle) * speed - 1
+            life: 1.0
+            // warm colors
+            color: hsv(random() * 60 + 10, 1.0, 1.0)
+        })
+    }
+}
+
+// a particle one step later: warp's objects are values, so the step gives back the changed copy
+def moved(p) {
+    p.vy = p.vy + gravity
+    p.vx = p.vx * friction
+    p.vy = p.vy * friction
+    p.x = p.x + p.vx
+    p.y = p.y + p.vy
+    p.life = p.life - 0.015
+
+    // Bounce off walls
+    if p.x < 0 or p.x > width {
+        p.vx = -p.vx * 0.8
+        p.x = min(max(p.x, 0), width)
+    }
+    if p.y > height {
+        p.vy = -p.vy * 0.8
+        p.y = height
+    }
+    p
+}
+
+def update() {
+    particles = moved all particles
+}
+
+def render() {
+    for p in particles {
+        if p.life > 0 { circle(p.x, p.y, p.life + 0.5, with_alpha(p.color, p.life)) }
+    }
+}
+
+canvas(width, height)
+clear(black)
+spawn(30, 40, 25)
+spawn(60, 25, 25)
+spawn(90, 45, 25)
+for frame in 1 to 60 {
+    update()
+    if frame % 6 == 0 { render() }
+}
+show()
+count(particles)

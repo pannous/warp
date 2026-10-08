@@ -1,7 +1,7 @@
 // card global-comprehension: a global list built by a comprehension has the comprehension's element type, so
 // writing and reading it works as for a literal list (it was a cast failure)
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn a_global_comprehension_list_takes_writes() {

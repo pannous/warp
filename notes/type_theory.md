@@ -62,7 +62,7 @@ exact decimals/rationals (Kind::Int holding a ratio, wasm_emitter/exact.rs) and 
 Covariant lists are sound in warp because **lists are values**: `xs.add(v)` is the assignment `xs = xs ++ [v]` of a
 new list to the variable xs (node_with_at copies; typed lists copy on `ys = xs` when either side is updated,
 notes/typed_lists.md). A function receiving `names` gets the value, so TypeScript's hole (a `string[]` passed as
-`(string|number)[]` and a number pushed through the alias) cannot happen: probes/variance/widening_*.wasp are all
+`(string|number)[]` and a number pushed through the alias) cannot happen: probes/variance/widening_*.warp are all
 sound. In W0 this shows up as: no expression form mutates a value, only `x = e` changes the store, and `x = e`
 checks e against x's declared type. Preservation (below) is the proof.
 

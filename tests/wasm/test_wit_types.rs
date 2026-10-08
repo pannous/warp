@@ -1,7 +1,7 @@
-use warp::wasp_parser::{ParserOptions, WaspParser};
+use warp::warp_parser::{ParserOptions, WarpParser};
 
 fn parse_wit(code: &str) -> warp::Node {
-	WaspParser::parse_with_options(code, ParserOptions::wit())
+	WarpParser::parse_with_options(code, ParserOptions::wit())
 }
 
 #[test]

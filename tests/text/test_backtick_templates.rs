@@ -1,5 +1,5 @@
 // JavaScript template literals (card text-backtick): `Hello ${name}` is the text "Hello ${name}", holes interpolated,
-// newlines kept; a hint names the double quotes wasp writes it with
+// newlines kept; a hint names the double quotes warp writes it with
 use crate::is;
 
 #[test]

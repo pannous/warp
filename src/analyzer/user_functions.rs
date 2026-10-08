@@ -180,7 +180,7 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
 		return Some(Kind::List);
 	}
-	// `v:any`, as an untyped field: any value, held as a Node (lib/json.wasp's to_json takes what parse_json gives)
+	// `v:any`, as an untyped field: any value, held as a Node (lib/json.warp's to_json takes what parse_json gives)
 	// `x: int or text` (an inline union of builtin types, card inline-union) likewise
 	// `x:ø` / `x:nil` / `x:unit`: the empty type, ø is held as a Node
 	if matches!(type_node.drop_meta(), Node::Empty) || crate::type_tests::canonical_spec_word(&type_name) == crate::type_tests::EMPTY_TYPE {
@@ -341,7 +341,7 @@ fn call_of(node: &Node, word: &str) -> bool {
 }
 
 fn is_text(node: &Node) -> bool {
-	matches!(node, Node::Text(_) | Node::Char(_)) || call_of(node, crate::wasp_parser::TEXT_TIMES)
+	matches!(node, Node::Text(_) | Node::Char(_)) || call_of(node, crate::warp_parser::TEXT_TIMES)
 }
 
 /// The name joined by `+` to a value that `is_joined` accepts

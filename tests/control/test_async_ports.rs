@@ -1,4 +1,4 @@
-// Async cases of other systems in wasp's task syntax (probes/async_ports.md): JS Promise.all, Python asyncio.gather,
+// Async cases of other systems in warp's task syntax (probes/async_ports.md): JS Promise.all, Python asyncio.gather,
 // Kotlin async/await, Go goroutines with a WaitGroup
 use crate::is;
 

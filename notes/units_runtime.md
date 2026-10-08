@@ -67,14 +67,14 @@ built at run time (`xs.add(1 m)`), recursion with quantities.
 
 ## Later: `compile` of a program whose result is a quantity (refused today)
 A compiled module returns the SI amount; options to keep the unit:
-1. A custom section `wasp.units` naming the unit of `main`'s result (`m/s`, with the SI scale), read by wasm_reader and
+1. A custom section `warp.units` naming the unit of `main`'s result (`m/s`, with the SI scale), read by wasm_reader and
    any host that wants the quantity; the result stays a number, zero run-time cost, hosts that ignore it see SI amounts.
 2. `main` returns a GC struct `{amount, unit text}` (or the text `"5 km/h"`): self-describing for every host, but the
    result type changes for programs whose result is a quantity.
 Recommendation: 1, the names section already carries metadata this way ("use WASM names excessively").
 
 ## Stage 5 done (branch static-units-5): compiled quantities, whole lists
-Option 1 is implemented: a module whose result is a quantity carries the custom section `wasp.units` (`km:1 h:-1`),
+Option 1 is implemented: a module whose result is a quantity carries the custom section `warp.units` (`km:1 h:-1`),
 appended by the pipeline for eval and `compile` alike; wasm_reader (read_bytes, read_bytes_with_imports) and running a
 `.wasm` file read it back, so `warp compile …` then `warp out.wasm` prints `500 m`. A whole list of quantities prints and
 is a final value as the text `[100 cm 250 cm]` (`join(map(xs, …))` at run time). Still loud: lists grown at run time
@@ -82,15 +82,15 @@ is a final value as the text `[100 cm 250 cm]` (`join(map(xs, …))` at run time
 
 ## Revived on main (card units-p64, 2026-10-08)
 Stages 1-5 were cherry-picked onto main, about 2600 commits later. The playground's run_module (non-native) now reads
-`wasp.units` too. A unit word heading a call or command is no unit (`min(n, 3)`, `use m`): before this fix,
-lib/list.wasp take() was taken for a quantity function and dropped. Still loud errors, not yet metadata: a quantity in a
+`warp.units` too. A unit word heading a call or command is no unit (`min(n, 3)`, `use m`): before this fix,
+lib/list.warp take() was taken for a quantity function and dropped. Still loud errors, not yet metadata: a quantity in a
 map or object field (`{dist: d}`), `x:any = d`, `d.serialize()`, lists grown at run time. These need the unit at run time
 (the dynamic-struct alternative above): stage 6.
 
 ## Stage 6 done (card units-p64): objects, annotations, serialize, growing lists
 Static as well, without a run-time struct: a variable holding an object literal with quantity fields notes one signature
 per field (`p = {dist: 0 m}`), so `p.dist`, `p.dist += 250 m` and `p.dist = q` check and compute. A final object names
-its fields' units in `wasp.units` (`dist=m:1;t=s:1`), and reading it back makes those fields quantities. `x:any = q` keeps
+its fields' units in `warp.units` (`dist=m:1;t=s:1`), and reading it back makes those fields quantities. `x:any = q` keeps
 the signature. `x:km = q` checks it (P203: annotated code is strict) and x is then a plain number. `q.serialize()` and
 `serialize(q)` give the text `"4 m"`. `xs.add(q)` and `xs.push(q)` check the element signature. `dist: 5 m` is data, not a
 lazy block (blocks.rs is_computed). Still loud errors: `print p` or a whole object used anywhere but as the final value,
@@ -102,4 +102,5 @@ input) would need the dynamic struct.
 come first, then the plain ones as an object of them prints them (`{dist:500 m name:"run"}`). A field of a mixed object
 is any-typed at run time; its arithmetic has a text since card text-arithmetic (casts.rs: Kind::Data reads dynamically).
 `q = p` and `ys = xs` copy the signatures (maps and lists are values). Recursion with quantities stays a loud error
-(card static-units, Later). wasp.units may move into card reflection's wasp.meta section (warp-a2).
+(card static-units, Later). Since card reflection step 5 the text lives in the entry `units` of the module's one
+`warp.meta` section (src/meta_section.rs), byte for byte as it was in `warp.units`; the section name below is history.

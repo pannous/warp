@@ -1,4 +1,4 @@
-//! Card natural-phrases (samples/natural.wasp), undoable defaults: the list phrases of a method chain.
+//! Card natural-phrases (samples/natural.warp), undoable defaults: the list phrases of a method chain.
 //! `xs.keep only positive` is `xs where it > 0` (positive, negative, even, odd, or a function of the program),
 //! `xs.sort by size` sorts by the key, a function (the program's, a counting word) or else a field (`sort by price`),
 //! `xs.take first 10` is `xs.slice(0, 10)`. The parser reads a chain `xs.keep only positive.sort by size` as one list
@@ -97,7 +97,7 @@ fn phrase(method: &str, word: &str, receiver: Node, argument: &Node, context: &C
 fn condition(argument: &Node, context: &Context) -> Option<Node> {
 	let Node::Symbol(name) = argument.drop_meta() else { return None };
 	if let Some((_, condition)) = PROPERTIES.iter().find(|(property, _)| property == name) {
-		return Some(crate::wasp_parser::parse(condition));
+		return Some(crate::warp_parser::parse(condition));
 	}
 	context.user_functions.contains_key(name).then(|| call(name, symbol(crate::lambdas::IMPLICIT_PARAMETER)))
 }

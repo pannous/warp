@@ -1,7 +1,7 @@
-//! A standard module using another one (card std-module-uses-module, notes/stdlib.md §8): lib/text.wasp's camel_case
+//! A standard module using another one (card std-module-uses-module, notes/stdlib.md §8): lib/text.warp's camel_case
 //! calls list's drop; the program sees list's words only with its own `use list`
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn a_std_module_calls_another_modules_word() {

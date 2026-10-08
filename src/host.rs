@@ -84,7 +84,7 @@ pub const CHANNEL_PENDING: &str = "channel_pending";
 pub const CHANNEL_NEXT: &str = "channel_next";
 pub const CHANNEL_SEND: &str = "channel_send";
 /// std_pure(module, member, arguments) and std_io(…): the standard library's adapters (src/std_adapters.rs, host.js),
-/// called by the words of lib/<module>.wasp; std_pure's words have no effect (json), std_io's touch the outside
+/// called by the words of lib/<module>.warp; std_pure's words have no effect (json), std_io's touch the outside
 pub const STD_PURE: &str = "std_pure";
 pub const STD_IO: &str = "std_io";
 /// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web_server.rs), blocks while
@@ -189,7 +189,7 @@ pub struct HostState {
 	pub wasi: wasmtime_wasi::p1::WasiP1Ctx,
 	/// Whether this store runs a task's instance (tasks.rs): a raise there goes to the starting thread's handlers
 	pub in_task: bool,
-	/// The C pointers this run got (sqlite3 *, FILE *), handed to wasp as ids (notes/ffi_handles.md)
+	/// The C pointers this run got (sqlite3 *, FILE *), handed to warp as ids (notes/ffi_handles.md)
 	pub c_handles: crate::ffi::CHandles,
 	/// The WebAssembly modules the program imports, instantiated at their first call (wasm_modules.rs), by path
 	pub wasm_modules: std::collections::HashMap<String, wasmtime::Instance>,
@@ -343,7 +343,7 @@ fn run_wasm_simple(bytes: &[u8]) -> Result<i64> {
 pub fn fetch(url: &str, timeout: Duration) -> Result<String, String> {
 	let mut content = download_within(url, timeout).map_err(|reason| format!("fetch {url} failed: {reason}"))?;
 	if !content.ends_with('\n') {
-		content.push('\n'); // wasp convention
+		content.push('\n'); // warp convention
 	}
 	Ok(content)
 }
@@ -764,7 +764,7 @@ fn fetch_reply(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<H
 /// The oldest message the listener got, as the value it was sent as (ø when none waits)
 #[cfg(feature = "native")]
 fn channel_next(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<HostNode> {
-	let message = crate::web_sockets::next(id).unwrap_or_else(|| crate::channels::next(id).map(|text| crate::wasp_parser::parse(&text).drop_meta().clone()).unwrap_or(Node::Empty));
+	let message = crate::web_sockets::next(id).unwrap_or_else(|| crate::channels::next(id).map(|text| crate::warp_parser::parse(&text).drop_meta().clone()).unwrap_or(Node::Empty));
 	built_in_program(&mut caller, &message, "on message")
 }
 
@@ -809,7 +809,7 @@ fn built_in_program(caller: &mut Caller<'_, HostState>, value: &Node, word: &str
 	Ok(built.unwrap_anyref().copied())
 }
 
-/// `broadcast value on "chat"`: the value as wasp text to every listener of the channel
+/// `broadcast value on "chat"`: the value as warp text to every listener of the channel
 #[cfg(feature = "native")]
 fn channel_send(mut caller: Caller<'_, HostState>, channel: HostNode, message: HostNode) -> wasmtime::Result<()> {
 	let channel = given_node(&mut caller, channel)?;
@@ -820,7 +820,7 @@ fn channel_send(mut caller: Caller<'_, HostState>, channel: HostNode, message: H
 	crate::channels::send(&channel.name(), message.serialize().trim()).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))
 }
 
-/// `notify "text"`: a desktop notification of the text (a value other than a text as wasp writes it)
+/// `notify "text"`: a desktop notification of the text (a value other than a text as warp writes it)
 #[cfg(feature = "native")]
 fn notify(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Result<()> {
 	let text = match given_node(&mut caller, text)? {

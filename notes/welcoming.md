@@ -10,7 +10,7 @@ Limit (user, 2026-10-02): implement what a newcomer expects only where it does n
 text + number concatenation. Examples: `a[-1]` stays an error with a hint to `#-1` (silent wrap), `[x]*n` is an
 ambiguity error (Python repeats, NumPy multiplies; `n times [x]` repeats), mutating a main-level variable from a function needs `global`.
 
-"Educate" is a hint naming the preferred wasp form, never a refusal.
+"Educate" is a hint naming the preferred warp form, never a refusal.
 
 "Ask" (the name stayed, the question went) is an ambiguity record. USER DECISION 2026-10-03: "I really love the got it
 mechanism for the warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever
@@ -45,7 +45,7 @@ fields are a decision the writer states once, in one line). Implemented in src/l
 
 ## Field test 2026-10-02
 Agents wrote standard algorithms (sorting, life, sieve, levenshtein, queens/hanoi, dijkstra) in their natural
-Python/JS style: samples/<name>.wasp next to samples/<name>_idiomatic.wasp, tests in tests/test_algo_<name>.rs.
+Python/JS style: samples/<name>.warp next to samples/<name>_idiomatic.warp, tests in tests/test_algo_<name>.rs.
 Fix branches fix-<topic> carry the compiler changes.
 
 User decisions from that round:
@@ -66,14 +66,14 @@ User decisions from that round:
   preferred, reason)`): `trait Acknowledger` (`has_acknowledged` for a host's own list, `acknowledge` asked once per run
   after the warning or note), `set_acknowledger` / `with_acknowledger`; `TerminalAcknowledger` (`got it? [y …]`),
   `Acknowledging(topics)` for tests, the playground's page list (src/web.rs `PageAcknowledger`, report `notes`).
-  Remembered as `ack:<topic> = acknowledged` in `.wasp-acknowledged` (CLI, working directory). Non-interactive runs
+  Remembered as `ack:<topic> = acknowledged` in `.warp-acknowledged` (CLI, working directory). Non-interactive runs
   just show the warning, never block; `--no-ask` never prompts.
 - Scope (user, 2026-10-05): the prompt answers `GotIt::{This, All, No}`: `[y this / a all of this kind / n]`. "This"
   remembers one expression, `ack:<topic>@<expression> = acknowledged` (an Ask by its question, which names the
   expression; educate_once by its written text); "all" the topic. A `// got it` comment on a line silences the
   warnings and notes of that line (diagnostic::silenced_by_comment). The playground still acknowledges whole topics.
 - Users: `a upto b` (topic `upto`) and the for-header bound `0..n-1` (topic `kotlin-range`, Kotlin's `..` is inclusive),
-  both default exclusive, fallback Warning (src/wasp_parser.rs `range_reading`); `local-or-global` (src/analyzer.rs
+  both default exclusive, fallback Warning (src/warp_parser.rs `range_reading`); `local-or-global` (src/analyzer.rs
   `resolve_main_variable_assignments`, default a new local `let n = …`, explicit main's `global n = …`); `signed-operand`
   `1 -1` (default the list `[1 -1]`). Error fallback: `list-times` `[x]*n`, `insert-order`, `list-plus` `[1 2 3]+4`,
   `bare-list` `a=1 2 3`, `suffix-precedence` `1+2 squared`. Explicit forms (`..<`, `...`, `to`, `global n`, `[4]`, `.+`
@@ -102,9 +102,9 @@ declared constant before which it should be"): the named numbers (`pi`, `tau`, `
 constants, so `pi = …` / `pi := …` is the compile error "pi is a constant; fix: another name". A field
 `class circle{pi = 3}` or `class C{pi:int}` is the type's own field, no message: the type's methods read the field
 (`f() := pi * r`), everywhere else `pi` stays the constant (parser state `type_fields`).
-src/wasp_parser/atoms.rs `refuse_constant_assignment`, tests/welcoming/test_constant_shadowing.rs.
+src/warp_parser/atoms.rs `refuse_constant_assignment`, tests/welcoming/test_constant_shadowing.rs.
 
-Control flow as other languages write it (samples/control_flow.wasp, tests/control/test_match_guards_and_finally.rs):
+Control flow as other languages write it (samples/control_flow.warp, tests/control/test_match_guards_and_finally.rs):
 - match guards (Rust, Scala): `n if n < 0 => "negative"` binds n to the subject and holds when the condition does;
   a list pattern takes a guard too (`[a, b] if a > b => …`). switch.rs split_guard.
 - an assigned match `d = match v {k => …, _ => …}` parses as `match (v {…})`; welcome_forms turns its arrow cases into
@@ -112,7 +112,7 @@ Control flow as other languages write it (samples/control_flow.wasp, tests/contr
 - `try … catch/else/except … finally {Z}` (Java, Python): `(finally·N = try…; Z; finally·N)`, Z runs either way and
   the value stays the try's or the catch's. lookahead.rs with_finally. `try X finally Z` without a catch is not parsed.
 - `global a, b` (Python) declares both; several `global` lines in a block are no duplicate key.
-- English operator words are aliases (samples/natural.wasp, wiki/operator.md): `plus`, `minus`, `divided by`,
+- English operator words are aliases (samples/natural.warp, wiki/operator.md): `plus`, `minus`, `divided by`,
   `equals`, `is greater than`, `greater than`, `is less than`, `less than`, `is at least`, `is at most`, `through`
   (= `to`), `is in` (= `in`), `for each x in xs`; a word operator needs a blank after it, so `plus(a, b)` stays a call.
   `10 down to 1` is `reverse(1 to 10)`; letters make ranges (`'a' to 'e'`, `c to 'z'` counts codepoints).

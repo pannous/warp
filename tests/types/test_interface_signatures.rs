@@ -1,5 +1,5 @@
 //! An interface member typed as a function, as WIT and TypeScript write it (`add: (i32, i32) -> i32`), is an operation
-//! of that many parameters (samples/wasm_interop.wasp; it was 'trait calculator takes operations like `area`')
+//! of that many parameters (samples/wasm_interop.warp; it was 'trait calculator takes operations like `area`')
 use crate::is;
 
 #[test]

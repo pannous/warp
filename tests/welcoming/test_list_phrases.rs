@@ -1,8 +1,8 @@
-// Card natural-phrases (samples/natural.wasp): the list phrases `keep only`, `sort by`, `take first` of a method chain,
+// Card natural-phrases (samples/natural.warp): the list phrases `keep only`, `sort by`, `take first` of a method chain,
 // undoable defaults: `xs.keep only positive` is `xs where it > 0`, `xs.sort by size` sorts by the key, `xs.take first 2`
 // is `xs.slice(0, 2)`
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn keep_only_a_property() {

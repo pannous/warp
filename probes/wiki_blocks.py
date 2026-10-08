@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run every fenced code block of the wiki pages (```, ```wasp, ```warp) as a program through `warp eval` and list the
+"""Run every fenced code block of the wiki pages (```, ```warp, ```warp) as a program through `warp eval` and list the
 blocks that end in an error, with the error: which documented features do not run yet.
 Usage: [WARP=path/to/warp] probes/wiki_blocks.py [wiki/page.md …]   (default: every wiki page)"""
 import glob

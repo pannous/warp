@@ -1,14 +1,18 @@
-//! Page tests written in wasp (card web-testing, src/page_tests.rs): `test "…" { render …; click "…"; check … }` runs
+//! Page tests written in warp (card web-testing, src/page_tests.rs): `test "…" { render …; click "…"; check … }` runs
 //! on a headless page; the program's value counts the passed tests or names the failed ones
 use warp::node::Node;
-use warp::wasm_emitter::eval;
+
+/// The program run as `warp test` runs it: page tests run only then (P209)
+fn eval(code: &str) -> Node {
+	warp::pipeline::for_tests(|| warp::wasm_emitter::eval(code))
+}
 
 const COUNTER: &str = "def Counter(start) {\n\tcount = start\n\tdiv{ button{ on click { count += 1 } \"Add\" } p{ \"n \" + count } }\n}\n";
 
 #[test]
 fn passing_page_tests_are_counted() {
 	let tests = "test \"counter\" {\n\trender Counter(1)\n\tclick \"Add\"\n\tcheck text is \"Addn 2\"\n}\ntest \"form\" {\n\tname = \"\"\n\trender div{ input{ placeholder: \"name\" bind: name } p{ \"hi \" + name } }\n\tfill \"name\" with \"Ada\"\n\tcheck html.ends_with(\"<p>hi Ada</p></div>\")\n}\n";
-	assert_eq!(eval(&format!("{COUNTER}{tests}")), Node::Text("2 tests passed".to_string()));
+	assert_eq!(eval(&format!("{COUNTER}{tests}")), Node::Text("✓ 2 tests passed".to_string()));
 }
 
 #[test]
@@ -22,4 +26,10 @@ fn a_failing_check_names_its_test_and_the_page() {
 fn a_missing_button_fails_the_test() {
 	let outcome = eval(&format!("{COUNTER}test \"missing\" {{ render Counter(0); click \"Remove\" }}"));
 	assert!(matches!(&outcome, Node::Error(problem) if problem.serialize().contains("no element showing")), "{}", outcome.serialize());
+}
+
+#[test]
+fn a_plain_run_skips_page_tests() {
+	let program = format!("{COUNTER}test \"wrong\" {{ render Counter(0); check text is \"Addn 1\" }}\n7");
+	assert_eq!(warp::wasm_emitter::eval(&program).serialize(), "7");
 }

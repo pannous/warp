@@ -1,4 +1,4 @@
-//! A pinned package (packages.wasp `name: {repository: "git url", version: 1.2.3}`) is the clone of its version's tag,
+//! A pinned package (packages.warp `name: {repository: "git url", version: 1.2.3}`) is the clone of its version's tag,
 //! fetched once per machine into ~/.cache/warp/packages and linked as packages/<name>: no fetch per checkout or export.
 //! Each test fetches into its own packages directory below scratch/, whatever the checkout's packages/ holds.
 

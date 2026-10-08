@@ -9,10 +9,11 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 18] = [
+const BUILTIN_CALLS: [&str; 19] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
+	crate::library_words::VALUES_SIMILAR,
 ];
 
 const PRINT: &str = "print";
@@ -21,7 +22,7 @@ const PRINT_ARGUMENT_SEPARATOR: &str = " ";
 
 /// The value `print` writes: its one argument, or several joined by a space
 fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
-	match crate::wasp_parser::print_arguments_of(call, bracket).as_slice() {
+	match crate::warp_parser::print_arguments_of(call, bracket).as_slice() {
 		[single] => juxtaposed_text(single).unwrap_or_else(|| single.clone()),
 		several => super::joined_text(several, PRINT_ARGUMENT_SEPARATOR),
 	}
@@ -56,7 +57,7 @@ impl WasmGcEmitter {
 			|| type_word_kind(&name.to_lowercase()).is_some()
 			|| is_function_keyword(name)
 			|| name == PRINT
-			|| name == crate::wasp_parser::TEXT_TIMES
+			|| name == crate::warp_parser::TEXT_TIMES
 			|| BUILTIN_CALLS.contains(&name)
 			|| super::cells::CELL_WORDS.contains(&name)
 			|| crate::library_words::is_runtime_word(name)
@@ -134,7 +135,7 @@ impl WasmGcEmitter {
 	/// `n times "ab"`: the text repeated; anything but a text is refused
 	fn emit_text_times(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		let [word, count, repeated] = items else { return false };
-		if !matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::TEXT_TIMES) {
+		if !matches!(word.drop_meta(), Node::Symbol(name) if name == crate::warp_parser::TEXT_TIMES) {
 			return false;
 		}
 		match self.get_type(repeated) {
@@ -155,7 +156,7 @@ impl WasmGcEmitter {
 	pub(super) fn numeric_times(&self, node: &Node) -> Option<Node> {
 		let Node::List(items, _, _) = node.drop_meta() else { return None };
 		let [word, count, repeated] = items.as_slice() else { return None };
-		let is_times = matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::TEXT_TIMES);
+		let is_times = matches!(word.drop_meta(), Node::Symbol(name) if name == crate::warp_parser::TEXT_TIMES);
 		let kind = self.get_type(repeated);
 		if !is_times || !(kind.is_int() || kind.is_float()) {
 			return None;
@@ -243,7 +244,7 @@ impl WasmGcEmitter {
 		}
 
 		// Check for introspection and math functions; `[count, a]` lists two items; a global `count` does not hide the word
-		// (lib/markup.wasp's count(items) under a program's `count = 0`), a local one is an error (emit_shadowed_counting)
+		// (lib/markup.warp's count(items) under a program's `count = 0`), a local one is an error (emit_shadowed_counting)
 		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Colon) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
 				if self.emit_shadowed_counting(func, fn_name, &items[1]) || (self.scope.lookup(fn_name).is_none() && self.emit_introspection_fn(func, fn_name, &items[1])) {
@@ -268,8 +269,15 @@ impl WasmGcEmitter {
 				}
 			}
 		}
+		if let [word, left, right, tolerance] = items {
+			if word.drop_meta().name() == crate::library_words::VALUES_SIMILAR {
+				self.emit_similarity(func, left, right, tolerance);
+				self.emit_call(func, super::NEW_BOOL);
+				return;
+			}
+		}
 		if let [word, dividend, divisor] = items {
-			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) {
+			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::warp_parser::FLOOR_QUOTIENT) {
 				self.emit_floor_quotient(func, dividend, divisor);
 				self.emit_call(func, "new_int");
 				return;
@@ -451,7 +459,7 @@ impl WasmGcEmitter {
 	/// Returns true if the function was handled
 	/// `count = 0; count(users)`: a local variable named like a counting word, applied to a value, neither counts nor
 	/// lists quietly; the error names the variable (card count-shadowed). A global of that name leaves the word to the
-	/// functions, which call it (lib/markup.wasp's count(items))
+	/// functions, which call it (lib/markup.warp's count(items))
 	pub(super) fn emit_shadowed_counting(&mut self, func: &mut Function, name: &str, argument: &Node) -> bool {
 		let shadowed = self.scope.lookup(name).is_some() && !self.ctx.user_functions.contains_key(name) && crate::analyzer::counting_function(name, &self.ctx).is_some();
 		if shadowed {
@@ -649,7 +657,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The (position, value) of an insert: given by `at:`, else the one Int among the two arguments is the position;
-	/// two Ints are ambiguous (Python `insert(i, x)` vs wasp `insert(x, i)`): the user is asked, unanswered it is an error
+	/// two Ints are ambiguous (Python `insert(i, x)` vs warp `insert(x, i)`): the user is asked, unanswered it is an error
 	fn insert_position_and_value<'a>(&mut self, func: &mut Function, call: &str, first: &'a Node, second: &'a Node) -> Option<(&'a Node, &'a Node)> {
 		use crate::diagnostic::{ask, reading, Ask, Fallback};
 		if call == crate::analyzer::INSERT_AT_CALL {
@@ -665,8 +673,8 @@ impl WasmGcEmitter {
 				None
 			}
 			(true, true) => {
-				let question = Ask::new(INSERT_ORDER_TOPIC, format!("does insert({a}, {b}) put {b} at {a} (Python) or {a} at {b} (wasp)?"),
-					vec![reading("position first, as Python", &format!("insert({b}, at: {a})")), reading("value first, as wasp", &format!("insert({a}, at: {b})"))],
+				let question = Ask::new(INSERT_ORDER_TOPIC, format!("does insert({a}, {b}) put {b} at {a} (Python) or {a} at {b} (warp)?"),
+					vec![reading("position first, as Python", &format!("insert({b}, at: {a})")), reading("value first, as warp", &format!("insert({a}, at: {b})"))],
 					Fallback::Error).written(&format!("insert({a}, {b})")).at_node(first);
 				match ask(&question) {
 					Ok(0) => Some((first, second)),

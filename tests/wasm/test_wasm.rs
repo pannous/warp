@@ -1,7 +1,7 @@
 use warp::analyzer::analyze;
 use warp::extensions::{assert_throws, print};
 use warp::wasm_emitter::eval;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 use warp::Node;
 use warp::Node::{Empty, False, True};
 use crate::{is, eq, skip};
@@ -332,7 +332,7 @@ fn test_math_operators() {
 
 		is!(("3⁰"), 1); // get UNITY of set (1->e let cast ok?);
 		is!(("3¹"), 3);
-		is!(("3³"), 27); // define inside wasp!
+		is!(("3³"), 27); // define inside warp!
 		is!(("3⁴"), 9 * 9);
 	);
 
@@ -499,7 +499,7 @@ fn test_wasm_logic_primitives() {
 	is!("nil", Empty);
 }
 #[test]
-// the expected value mirrors the wasp source literal digit for digit
+// the expected value mirrors the warp source literal digit for digit
 #[allow(clippy::excessive_precision)]
 fn test_wasm_variables0() {
 	//	  (func $i (type 0) (result i32)  i32.const 123 return)  NO LOL
@@ -822,7 +822,7 @@ fn test_wasm_runtime_extension() {
 	skip!(
 
 		// WORKED before we moved these to test_functions.h
-		// todo activate in wasp-runtime-debug.wasm instead of wasp-runtime.wasm
+		// todo activate in warp-runtime-debug.wasm instead of warp-runtime.wasm
 		is!("test42+1", 43);
 		is!("test42i(1)", 43);
 
@@ -836,8 +836,8 @@ fn test_wasm_runtime_extension() {
 	);
 	//	functionSignatures["int"].returns(int32);
 	//	is!("printf!('123')", 123);
-	// works with ./wasp but breaks in webapp
-	// works with ./wasp but breaks now:
+	// works with ./warp but breaks in webapp
+	// works with ./warp but breaks now:
 
 	//	is!("okf(1)", 43);
 	//	is!("puts 'hello' 'world'", "hello world");
@@ -858,7 +858,7 @@ fn test_wasm_runtime_extension() {
 	//	is!("atoi0(string('123'))", 123);
 
 	//	is!("oki(1)", 43);
-	//	is!("puts('123'+'456');", 123456);// via import !via wasp!
+	//	is!("puts('123'+'456');", 123456);// via import !via warp!
 	//is!("grows := it * 2 ; grows(4)", 8);
 	//	assert!(Primitive::charp!=Valtype::pointer);
 
@@ -1129,9 +1129,9 @@ fn test_wasm_mutable_global_imports() {
 fn test_custom_operators() {
 	is!("suffix operator ⁰ := 1; 3⁰", 1); // get UNITY of set (1->e let cast ok?);
 	is!("suffix ⁰ := 1; 3⁰", 1); // get UNITY of set (1->e let cast ok?);
-	is!("suffix operator ³ := it*it*it; 3³", 27); // define inside wasp!
+	is!("suffix operator ³ := it*it*it; 3³", 27); // define inside warp!
 	is!("suffix operator ³ := it*it*it; .5³", 0.125); // user P53: 1 / 8 was Rust integer division (0)
-	is!("suffix ³ := it*it*it; 3³", 27); // define inside wasp!
+	is!("suffix ³ := it*it*it; 3³", 27); // define inside warp!
 
 	//	is!(("alias to let third : the = ³"),1);
 	//	is!(("3⁴"),9*9);
@@ -1157,7 +1157,7 @@ fn test_math_library() {
 	{
 		skip!(
 
-			// REGRESSION 2023-01-20 variable x-c in context wasp_main emitted as node data:
+			// REGRESSION 2023-01-20 variable x-c in context warp_main emitted as node data:
 			is!("x=3;y=4;c=1;r=5;((‖(x-c)^2+(y-c)^2‖<r)?10:255", 255);
 		);
 	}
@@ -1326,7 +1326,7 @@ fn test_auto_smarty() {
 #[ignore]
 fn test_arguments() {
 	is!("#params", 0); // no args, but create empty List anyway
-	                // todo add context to wasp variable $params
+	                // todo add context to warp variable $params
 }
 
 #[test]

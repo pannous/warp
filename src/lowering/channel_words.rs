@@ -80,7 +80,7 @@ fn with_listeners(node: Node, machine: &HashMap<String, i64>) -> Node {
 
 fn filled(template: &str, bindings: &[(&str, Node)]) -> Node {
 	let bindings: HashMap<String, Node> = bindings.iter().map(|(name, node)| (name.to_string(), node.clone())).collect();
-	crate::law::substitute(crate::wasp_parser::parse(template).drop_meta(), &bindings)
+	crate::law::substitute(crate::warp_parser::parse(template).drop_meta(), &bindings)
 }
 
 /// The variables assigned `channel()`, then the parameters of the functions called with a channel, until none is new

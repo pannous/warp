@@ -12,18 +12,16 @@ fn has_use_statement(program: &Node) -> bool {
 
 #[test]
 fn routes_and_pages_lower_without_use_statements() {
-	let routed = warp::routes::lower(warp::wasp_parser::parse(ROUTED));
+	let routed = warp::routes::lower(warp::warp_parser::parse(ROUTED));
 	assert!(!has_use_statement(&routed), "{}", routed.serialize());
-	let page = warp::pipeline::for_a_page(|| warp::page_html::use_markup(warp::wasp_parser::parse("p{ \"hi\" }")));
+	let page = warp::pipeline::for_a_page(|| warp::page_html::use_markup(warp::warp_parser::parse("p{ \"hi\" }")));
 	assert!(!has_use_statement(&page), "{}", page.serialize());
 }
 
+#[cfg(feature = "native")] // the page's path is a native host's
 #[test]
-#[cfg(feature = "native")]
 fn routes_bring_router_and_regex_implicitly() {
-	use warp::host::with_page_path; // native only: the page path of a native render
-	use warp::markup::to_html;
-	use warp::wasm_emitter::eval;
+	use warp::{host::with_page_path, markup::to_html, wasm_emitter::eval};
 	assert_eq!(with_page_path("/users/7", || to_html(&eval(ROUTED))), "<p>user 7</p>");
 	assert_eq!(with_page_path("/users/bo", || to_html(&eval(ROUTED))), "<p>not found</p>");
 }

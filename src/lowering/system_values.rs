@@ -45,7 +45,7 @@ pub fn name(program: Node) -> Node {
 	let Some(first_listener) = statements.iter().position(listens) else { return marked };
 	// right after the first listener: the program's last statement stays its value
 	let mut statements: Vec<Node> = statements.into_iter().map(with_percent_body).collect();
-	statements.insert(first_listener + 1, crate::wasp_parser::parse(KEEP_LISTENING));
+	statements.insert(first_listener + 1, crate::warp_parser::parse(KEEP_LISTENING));
 	Node::List(statements, bracket, separator)
 }
 
@@ -221,6 +221,6 @@ fn clipboard_method(call: &Node) -> Option<(String, Vec<Node>)> {
 
 /// `std_io("clipboard", "write", [text])`
 fn clipboard_write(text: Node) -> Node {
-	let call = crate::wasp_parser::parse(&format!("std_io(\"{CLIPBOARD}\", \"{CLIPBOARD_WRITE}\", [{TEXT_PLACEHOLDER}])"));
+	let call = crate::warp_parser::parse(&format!("std_io(\"{CLIPBOARD}\", \"{CLIPBOARD_WRITE}\", [{TEXT_PLACEHOLDER}])"));
 	crate::law::substitute(&call, &[(TEXT_PLACEHOLDER.to_string(), text)].into_iter().collect())
 }

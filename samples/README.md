@@ -1,73 +1,73 @@
-# Wasp Language Samples
+# Warp Language Samples
 
-This directory contains sample programs demonstrating various features of the Wasp language.
+This directory contains sample programs demonstrating various features of the Warp language.
 
 ## ✅ Working Samples (11)
 
 These samples compile and run successfully:
 
-- **simple.wasp** - Basic arithmetic: `3*3`
-- **fibonacci.wasp** - Fibonacci sequence using recursion
-- **factorial.wasp** - Factorial calculation  
-- **primes.wasp** - Prime number checking
-- **gcd.wasp** - Greatest common divisor using Euclidean algorithm
-- **sum.wasp** - Sum of numbers 1-10
-- **power.wasp** - Exponentiation using recursion
-- **collatz.wasp** - Collatz conjecture sequence
-- **ackermann.wasp** - Ackermann function (recursive)
-- **quadratic.wasp** - Quadratic formula with sqrt
-- **fizzbuzz.wasp** - Classic FizzBuzz problem
+- **simple.warp** - Basic arithmetic: `3*3`
+- **fibonacci.warp** - Fibonacci sequence using recursion
+- **factorial.warp** - Factorial calculation  
+- **primes.warp** - Prime number checking
+- **gcd.warp** - Greatest common divisor using Euclidean algorithm
+- **sum.warp** - Sum of numbers 1-10
+- **power.warp** - Exponentiation using recursion
+- **collatz.warp** - Collatz conjecture sequence
+- **ackermann.warp** - Ackermann function (recursive)
+- **quadratic.warp** - Quadratic formula with sqrt
+- **fizzbuzz.warp** - Classic FizzBuzz problem
 
 ## 🔧 Feature Requirements
 
 These samples need specific features to be implemented:
 
 ### String Operations
-- **hello.wasp** - String concatenation
-- **comments.wasp** - Comment parsing (parse-only demo)
+- **hello.warp** - String concatenation
+- **comments.warp** - Comment parsing (parse-only demo)
 
 ### Module System
-- **main.wasp** - Uses `#use lib` directive
-- **modules.wasp** - Module import/export
+- **main.warp** - Uses `#use lib` directive
+- **modules.warp** - Module import/export
 
 ### Advanced Math
-- **sine.wasp** - Needs τ and π constants, fraction literals
-- **calculator.wasp** - Complex expression parser
+- **sine.warp** - Needs τ and π constants, fraction literals
+- **calculator.warp** - Complex expression parser
 
 ### Advanced Language Features
-- **json_parser.wasp** - Complex string manipulation
-- **functions.wasp** - Higher-order functions, lambdas
-- **control_flow.wasp** - Pattern matching, try/catch
-- **async.wasp** - Async/await support
-- **binary_tree.wasp** - Type definitions, optional types
-- **quicksort.wasp** - Array filter, lambda functions
-- **mandelbrot.wasp** - 2D arrays, complex iteration
+- **json_parser.warp** - Complex string manipulation
+- **functions.warp** - Higher-order functions, lambdas
+- **control_flow.warp** - Pattern matching, try/catch
+- **async.warp** - Async/await support
+- **binary_tree.warp** - Type definitions, optional types
+- **quicksort.warp** - Array filter, lambda functions
+- **mandelbrot.warp** - 2D arrays, complex iteration
 
 ### Data Structure Demos
-- **data_structures.wasp** - Syntax examples (no executable output)
-- **types.wasp** - Type system examples
-- **html.wasp** - HTML generation
-- **html_dsl.wasp** - DSL demonstrations
+- **data_structures.warp** - Syntax examples (no executable output)
+- **types.warp** - Type system examples
+- **html.warp** - HTML generation
+- **html_dsl.warp** - DSL demonstrations
 
 ### Graphics & External Libraries  
-- **raylib_*.wasp** (8 files) - Raylib FFI examples
-- **webgpu.wasp** - WebGPU integration
-- **sdl_red_square.wasp** - SDL integration
-- **test_ffi*.wasp** (3 files) - FFI testing
+- **raylib_*.warp** (8 files) - Raylib FFI examples
+- **webgpu.warp** - WebGPU integration
+- **sdl_red_square.warp** - SDL integration
+- **test_ffi*.warp** (3 files) - FFI testing
 
 ### Complex Algorithms
-- **game_of_life.wasp** - Cellular automaton
-- **neural_net.wasp** - Neural network
-- **sudoku.wasp** - Sudoku solver
-- **raytracer.wasp** - Ray tracing
-- **particles.wasp** - Particle system
-- **snake.wasp** - Snake game
+- **game_of_life.warp** - Cellular automaton
+- **neural_net.warp** - Neural network
+- **sudoku.warp** - Sudoku solver
+- **raytracer.warp** - Ray tracing
+- **particles.warp** - Particle system
+- **snake.warp** - Snake game
 
 ## Running Samples
 
 ```bash
 # Run a working sample
-cargo run -- samples/fibonacci.wasp
+cargo run -- samples/fibonacci.warp
 
 # Or use the test suite
 cargo test --test test_samples
@@ -76,7 +76,7 @@ cargo test --test test_samples
 ## Adding New Samples
 
 When adding a new sample:
-1. Add it to `samples/` directory with `.wasp` extension
+1. Add it to `samples/` directory with `.warp` extension
 2. If it should work, add a test in `tests/programs/test_samples.rs`
 3. Use `#[ignore]` attribute with explanation if feature not yet implemented
 4. Update this README

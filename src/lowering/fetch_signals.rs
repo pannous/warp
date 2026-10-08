@@ -85,7 +85,7 @@ fn bindings(name: &str, url: &Node, id: usize) -> HashMap<String, Node> {
 
 /// The statements of a template with its placeholders bound
 fn instantiated(template: &str, bindings: &HashMap<String, Node>) -> Vec<Node> {
-	let (statements, _, _) = crate::variable_signals::main_statements(&crate::wasp_parser::parse(template));
+	let (statements, _, _) = crate::variable_signals::main_statements(&crate::warp_parser::parse(template));
 	statements.iter().map(|statement| crate::law::substitute(statement.drop_meta(), bindings)).collect()
 }
 

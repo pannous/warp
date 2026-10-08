@@ -1,5 +1,5 @@
 // `a or b` is a value (the first truthy operand), also as a function's result: `f() := "" or "d"` gave a WASM
-// validation failure or "cannot extract a numeric value" (found writing lib/extra/netbase.wasp, card netbase-package)
+// validation failure or "cannot extract a numeric value" (found writing lib/extra/netbase.warp, card netbase-package)
 use crate::is;
 
 #[test]

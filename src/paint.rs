@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// The gray levels of a nonzero pixel and of a zero one, as the playground draws them
 pub const INK: u8 = 29;
 pub const PAPER: u8 = 250;
-/// A pixel value from here on carries an alpha byte, 0xAARRGGBB: it is that color (lib/draw.wasp), any smaller nonzero
+/// A pixel value from here on carries an alpha byte, 0xAARRGGBB: it is that color (lib/draw.warp), any smaller nonzero
 /// value is ink (playground.js COLOR_FROM)
 pub const COLOR_FROM: u64 = 1 << 24;
 const FILE_STEM: &str = "paint";

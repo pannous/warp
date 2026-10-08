@@ -1,4 +1,4 @@
-//! The browser platform from wasp without glue (card web-apis, notes/web_framework.md "web-apis"): `notify "text"` is a
+//! The browser platform from warp without glue (card web-apis, notes/web_framework.md "web-apis"): `notify "text"` is a
 //! desktop notification (the browser's Notification in the playground, natively osascript / notify-send). Only the
 //! compiled call is checked here: a test run shows no notification
 use crate::common::imports_of;

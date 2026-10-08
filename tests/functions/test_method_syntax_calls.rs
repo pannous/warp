@@ -1,6 +1,6 @@
 use crate::is;
 
-// samples/neural_net.wasp `output.round(3)`: a called method x.f(args) on a value is the call f(x, args) when f is a
+// samples/neural_net.warp `output.round(3)`: a called method x.f(args) on a value is the call f(x, args) when f is a
 // rounding or libm function; was "undefined function: round". User functions: test_user_method_form
 
 #[test]

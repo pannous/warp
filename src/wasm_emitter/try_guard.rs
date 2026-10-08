@@ -1,5 +1,5 @@
 //! `try X else Y` catches a runtime error however deep inside X it happens (user decision #34), with the wasm
-//! exception-handling proposal: every runtime error function (`index_out_of_range`, …) throws the tag `wasp_error`
+//! exception-handling proposal: every runtime error function (`index_out_of_range`, …) throws the tag `warp_error`
 //! with its error id while a `try` is running, and traps as before otherwise, so an uncaught error keeps its message.
 //! `ran_without_error{statement}` runs the statement inside a `try_table` catching that tag: 1 when it finished, 0 when
 //! an error was thrown. The id of the caught error is dropped: the user decided against naming it (only
@@ -13,7 +13,7 @@ use Instruction as I;
 
 /// The marker call `try X else Y` lowers to (library_words::lower_try): `ran_without_error{try_tmp = X}`
 pub const RAN_WITHOUT_ERROR: &str = "ran_without_error";
-const ERROR_TAG_NAME: &str = "wasp_error";
+const ERROR_TAG_NAME: &str = "warp_error";
 const TRY_DEPTH_GLOBAL: &str = "try_depth";
 const CAUGHT_ERROR_GLOBAL: &str = "caught_error_id";
 /// `caught_error(finished, value)` (P67, library_words::lower_try_binding): the Error `catch e` binds: value when the
@@ -24,10 +24,10 @@ pub const CAUGHT_ERROR: &str = "caught_error";
 pub const RAN_WITHOUT_ABORT: &str = "ran_without_abort";
 /// `abort_to(i)`: block handler i ends its block, however deep the emit was
 pub const ABORT_TO: &str = "abort_to";
-const ABORT_TAG_NAME: &str = "wasp_abort";
+const ABORT_TAG_NAME: &str = "warp_abort";
 const ABORT_PAYLOAD_GLOBAL: &str = "aborting_handler";
 
-/// The tag an aborting handler throws, apart from wasp_error so no `try` catches it, and the global holding its payload
+/// The tag an aborting handler throws, apart from warp_error so no `try` catches it, and the global holding its payload
 /// while a block checks whether the abort is its own
 #[derive(Clone, Copy)]
 pub(super) struct AbortCatching {
@@ -52,7 +52,7 @@ pub(super) fn guards_errors(node: &Node) -> bool {
 }
 
 impl WasmGcEmitter {
-	/// Declare the tag `wasp_error(id: i32)` and the global `try_depth`, once
+	/// Declare the tag `warp_error(id: i32)` and the global `try_depth`, once
 	pub(super) fn declare_error_catching(&mut self) -> ErrorCatching {
 		if let Some(catching) = self.error_catching {
 			return catching;
@@ -80,7 +80,7 @@ impl WasmGcEmitter {
 		tag
 	}
 
-	/// Declare the tag `wasp_abort(handler: i32)` and the global its catcher reads the payload into, once
+	/// Declare the tag `warp_abort(handler: i32)` and the global its catcher reads the payload into, once
 	fn declare_abort_catching(&mut self) -> AbortCatching {
 		if let Some(catching) = self.abort_catching {
 			return catching;

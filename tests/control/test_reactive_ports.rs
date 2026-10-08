@@ -1,4 +1,4 @@
-// Reactive and event patterns of other systems in wasp's signal syntax (notes/signals.md, probes/reactive_ports.md):
+// Reactive and event patterns of other systems in warp's signal syntax (notes/signals.md, probes/reactive_ports.md):
 // Svelte, Vue, SolidJS, RxJS, C# events, Node EventEmitter, Qt signals/slots, DOM addEventListener
 use crate::is;
 
