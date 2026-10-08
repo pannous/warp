@@ -13,6 +13,13 @@ pub(crate) const WORKGROUP_SIZE: i64 = 256;
 /// Fewer items map on the CPU (card gpu-threshold, notes/gpu.md): the GPU's ~2 ms of setup and readback loses below
 /// ~3·10^4 items even against a heavy lambda (sin, cos: ~70–190 ns an item on the CPU, ~12 on the GPU)
 pub(crate) const GPU_MAP_MIN_COUNT: i64 = 32768;
+/// The attributes marking an @gpu map whose result stays on the GPU for a later map of it, and that later map
+const KEEP_RESULT_ATTRIBUTE: &str = "gpu_keep_result";
+const SOURCE_KEPT_ATTRIBUTE: &str = "gpu_source_kept";
+/// gpu_map_linear's and gpu_reduce_linear's last argument: keep the result's buffer on the GPU (under the target block's
+/// address), take the source's items from such a buffer (src/gpu.rs KEPT; uploaded from memory when none is kept)
+pub(crate) const KEEP_RESULT: i64 = 1;
+pub(crate) const SOURCE_KEPT: i64 = 2;
 /// The lambda's parameter as the kernel names it (the user's name could be a WGSL keyword)
 const KERNEL_ITEM: &str = "item";
 /// The math words WGSL has under the same name and meaning (warp's log is the natural logarithm, as WGSL's)
@@ -72,7 +79,73 @@ fn kept_in(node: Node, program: &Node) -> Node {
 			None => index += 1,
 		}
 	}
-	Node::List(statements, bracket, separator)
+	Node::List(marked_kept(statements), bracket, separator)
+}
+
+/// `ys = xs.map(f) @gpu; print ys#1; zs = ys.map(g) @gpu`: ys is read on the CPU, so it comes back, but its buffer stays on
+/// the GPU too, and the map of ys starts from it instead of uploading ys again. Only while the statements between read
+/// ys's items and nothing else (no write, no call handing ys on)
+fn marked_kept(mut statements: Vec<Node>) -> Vec<Node> {
+	for index in 0..statements.len() {
+		let Some((name, _)) = gpu_assignment(&statements[index]) else { continue };
+		let mut kept = false;
+		for statement in &mut statements[index + 1..] {
+			if maps_on_gpu(statement, &name) {
+				*statement = with_attribute_on_value(statement.clone(), SOURCE_KEPT_ATTRIBUTE);
+				kept = true;
+			} else if !reads_only_items(statement, &name) {
+				break;
+			}
+			if writes(statement, &name) {
+				break;
+			}
+		}
+		if kept {
+			statements[index] = with_attribute_on_value(statements[index].clone(), KEEP_RESULT_ATTRIBUTE);
+		}
+	}
+	statements
+}
+
+/// `zs = ys.map(g) @gpu` or `s = sum(ys.map(g) @gpu)` of ys
+fn maps_on_gpu(statement: &Node, name: &str) -> bool {
+	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else { return false };
+	let map = match gpu_reduction(value) {
+		Some((_, map)) => map,
+		None => value.as_ref().clone(),
+	};
+	matches!(target.drop_meta(), Node::Symbol(_)) && gpu_map(&map).is_some_and(|(list, _)| matches!(list.drop_meta(), Node::Symbol(source) if source == name))
+}
+
+/// Whether `node` uses `name` only for its items and count (`ys#i`, `#ys`, in text holes too)
+fn reads_only_items(node: &Node, name: &str) -> bool {
+	let holes = crate::interpolation::holes(node);
+	if !holes.is_empty() {
+		return holes.iter().all(|hole| reads_only_items(hole, name));
+	}
+	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == name);
+	match node.drop_meta() {
+		Node::Symbol(symbol) => symbol != name,
+		Node::Key(list, Op::Hash, index) if is_name(list) => reads_only_items(index, name),
+		Node::Key(empty, Op::Hash, list) if matches!(empty.drop_meta(), Node::Empty) && is_name(list) => true,
+		Node::Key(left, _, right) => reads_only_items(left, name) && reads_only_items(right, name),
+		Node::List(items, _, _) => items.iter().all(|item| reads_only_items(item, name)),
+		_ => true,
+	}
+}
+
+/// The assignment with `attribute` on its value
+fn with_attribute_on_value(statement: Node, attribute: &str) -> Node {
+	match statement {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_attribute_on_value(*node, attribute)), data },
+		Node::Key(target, op, value) => Node::Key(target, op, Box::new(value.with_attribute(attribute, Node::True))),
+		other => other,
+	}
+}
+
+/// The flags of an @gpu map's value for the host word: KEEP_RESULT, SOURCE_KEPT
+pub(crate) fn keeping(value: &Node) -> i64 {
+	[(KEEP_RESULT_ATTRIBUTE, KEEP_RESULT), (SOURCE_KEPT_ATTRIBUTE, SOURCE_KEPT)].iter().filter(|(attribute, _)| value.attribute(attribute).is_some()).map(|(_, flag)| flag).sum()
 }
 
 /// The statements with statement `index`, an @gpu map whose result only later @gpu maps read, folded into those
