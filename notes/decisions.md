@@ -5,6 +5,13 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- P221 (card route-sample, warp-functions; discussed in free form): one line serves both sides. A route such as
+  `route "/users/:id:int" { h1{ users#id } }` whose block reads server data (a database, files, secrets) runs on the
+  server: the first visit gets finished HTML, later in-app clicks fetch only the data and render in the browser
+  (like Next.js/SvelteKit); the compiler splits it, the user writes no JavaScript and nothing secret ships. Routes
+  that don't touch server data stay static. The browser never talks to the database itself. User: "both from your
+  single line YES!!". The single-page decision (2026-10-07) holds only for the playground web demo; real
+  applications can have as many pages and server routes as they want (user).
 - P217 (card plus-minus, warp-class): `5 ± 1` is an interval now (user: "I thought they are just interval"):
   worst-case bounds, `(5 ± 1) + (2 ± 1)` → `7 ± 2`, functions map the endpoints (`sqrt(4 ± 1)` → √3..√5).
   Gaussian propagation (Measurements.jl) comes later with an explicit form such as `5 ± 1σ` (user chose
